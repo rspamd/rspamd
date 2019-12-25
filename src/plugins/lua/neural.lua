@@ -1236,7 +1236,29 @@ local function process_rules_settings()
 
     lua_redis.register_prefix(selt.prefix, N,
         string.format('NN prefix for rule "%s"; settings id "%s"',
-            rule.prefix, selt.name), {persistent = true})
+            rule.prefix, selt.name), {
+          persistent = true,
+          type = 'zlist',
+        })
+    -- Versions
+    lua_redis.register_prefix(selt.prefix .. '_\\d+', N,
+        string.format('NN storage for rule "%s"; settings id "%s"',
+            rule.prefix, selt.name), {
+          persistent = true,
+          type = 'hash',
+        })
+    lua_redis.register_prefix(selt.prefix .. '_\\d+_spam', N,
+        string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
+            rule.prefix, selt.name), {
+          persistent = true,
+          type = 'list',
+        })
+    lua_redis.register_prefix(selt.prefix .. '_\\d+_ham', N,
+        string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
+            rule.prefix, selt.name), {
+          persistent = true,
+          type = 'list',
+        })
   end
 
   for _,rule in pairs(settings.rules) do

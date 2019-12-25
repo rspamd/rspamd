@@ -251,7 +251,9 @@ if opts then
       priority = 150
     })
     lua_redis.register_prefix(settings.key_prefix .. hostname, N,
-        "Redis history")
+        "Redis history", {
+          type = 'list',
+        })
     rspamd_plugins['history'] = {
       handler = handle_history_request
     }
