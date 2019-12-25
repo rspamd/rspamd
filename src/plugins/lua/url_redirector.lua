@@ -343,6 +343,16 @@ if opts then
       settings.redirector_hosts_map = lua_maps.map_add_from_ucl(settings.redirector_hosts_map,
           'set', 'Redirectors definitions')
 
+      lua_redis.register_prefix(settings.key_prefix .. '[a-z0-9]{32}', N,
+          'URL redirector hashes', {
+            type = 'string',
+          })
+      if settings.top_urls_key then
+        lua_redis.register_prefix(settings.top_urls_key, N,
+            'URL redirector top urls', {
+              type = 'zlist',
+            })
+      end
       local id = rspamd_config:register_symbol{
         name = 'URL_REDIRECTOR_CHECK',
         type = 'callback,prefilter',

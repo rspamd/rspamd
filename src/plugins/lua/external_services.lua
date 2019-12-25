@@ -17,6 +17,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_scanners = require("lua_scanners").filter('scanner')
 local common = require "lua_scanners/common"
@@ -142,6 +143,12 @@ local function add_scanner_rule(sym, opts)
 
   rule.redis_params = redis_params
 
+  lua_redis.register_prefix(rule.prefix .. '_*', N,
+      string.format('External services cache for rule "%s"',
+          rule.type), {
+        type = 'string',
+      })
+
   -- if any mime_part filter defined, do not scan all attachments
   if opts.mime_parts_filter_regex ~= nil
       or opts.mime_parts_filter_ext ~= nil then
@@ -185,7 +192,7 @@ end
 -- Registration
 local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
-  redis_params = rspamd_parse_redis_server(N)
+  redis_params = lua_redis.parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
     if type(m) == 'table' and m.servers then

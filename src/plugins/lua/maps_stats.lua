@@ -105,7 +105,17 @@ if opts then
 end
 
 redis_params = lua_redis.parse_redis_server(N, opts)
-
+-- XXX, this is a poor approach as not all maps are defined here...
+local tmaps = rspamd_config:get_maps()
+for _,m in ipairs(tmaps) do
+  if m:get_uri() ~= 'static' then
+    lua_redis.register_prefix(settings.prefix .. m:get_uri(), N,
+        'Maps stats data', {
+          type = 'zlist',
+          persistent = true,
+        })
+  end
+end
 
 if redis_params then
   rspamd_config:add_on_load(function (_, ev_base, worker)

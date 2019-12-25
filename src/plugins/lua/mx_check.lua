@@ -23,6 +23,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
 local N = "mx_check"
 local fun = require "fun"
 
@@ -267,15 +268,18 @@ if not (opts and type(opts) == 'table') then
   return
 end
 if opts then
-  redis_params = rspamd_parse_redis_server('mx_check')
+  redis_params = lua_redis.parse_redis_server('mx_check')
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'no redis servers are specified, disabling module')
     lua_util.disable_module(N, "redis")
     return
   end
-  for k,v in pairs(opts) do
-    settings[k] = v
-  end
+
+  settings = lua_util.override_defaults(settings, opts)
+  lua_redis.register_prefix(settings.key_prefix .. '*', N,
+      'MX check cache', {
+        type = 'string',
+      })
 
   local id = rspamd_config:register_symbol({
     name = settings.symbol_bad_mx,

@@ -464,6 +464,14 @@ if opts then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     rspamd_lua_utils.disable_module(N, "redis")
   else
+    lua_redis.register_prefix(settings.key_prefix .. 'b[a-z0-9]{20}', N,
+        'Greylisting elements (body hashes)"', {
+          type = 'string',
+        })
+    lua_redis.register_prefix(settings.key_prefix .. 'm[a-z0-9]{20}', N,
+        'Greylisting elements (meta hashes)"', {
+          type = 'string',
+        })
     rspamd_config:register_symbol({
       name = 'GREYLIST_SAVE',
       type = 'postfilter',

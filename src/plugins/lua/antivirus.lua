@@ -16,6 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_antivirus = require("lua_scanners").filter('antivirus')
 local common = require "lua_scanners/common"
@@ -119,6 +120,12 @@ local function add_antivirus_rule(sym, opts)
   rule.patterns = common.create_regex_table(opts.patterns or {})
   rule.patterns_fail = common.create_regex_table(opts.patterns_fail or {})
 
+  lua_redis.register_prefix(rule.prefix .. '_*', N,
+      string.format('Antivirus cache for rule "%s"',
+          rule.type), {
+        type = 'string',
+      })
+
   if opts.whitelist then
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
@@ -142,7 +149,7 @@ end
 -- Registration
 local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
-  redis_params = rspamd_parse_redis_server(N)
+  redis_params = lua_redis.parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
     if type(m) == 'table' then
