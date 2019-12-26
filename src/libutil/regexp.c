@@ -199,7 +199,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 		pcre2_jit_stack_assign (r->mcontext, NULL, global_re_cache->jstack);
 	}
 
-	if (r->re != r->raw_re && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+	if (r->raw_re && r->re != r->raw_re && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 		if (pcre2_jit_compile (r->raw_re, jit_flags) < 0) {
 			msg_debug ("jit compilation of %s is not supported", r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
@@ -209,6 +209,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 			msg_debug ("jit compilation of raw %s is not supported", r->pattern);
 		}
 		else if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+			g_assert (r->raw_mcontext != NULL);
 			pcre2_jit_stack_assign (r->raw_mcontext, NULL, global_re_cache->jstack);
 		}
 	}
