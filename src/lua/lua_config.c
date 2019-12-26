@@ -195,8 +195,10 @@ rspamd_config:add_map('http://example.com/map', "settings map", process_map)
 LUA_FUNCTION_DEF (config, get_classifier);
 /***
  * @method rspamd_config:register_symbol(table)
+ * Symbols configuration is static and should not be modified on flight
+ * Registering symbols is only guaranteed to be safe on lua plugin load,
+ * not in on_load, periodic or any other type of callbacks
  * Register symbol of a specified type in rspamd. This function accepts table of arguments:
- *
  * - `name`: name of symbol (can be missing for callback symbols)
  * - `callback`: function to be called for symbol's check (can be absent for virtual symbols)
  * - `weight`: weight of symbol (should normally be 1 or missing)

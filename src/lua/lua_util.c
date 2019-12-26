@@ -620,6 +620,14 @@ LUA_FUNCTION_DEF (util, parse_content_type);
  */
 LUA_FUNCTION_DEF (util, mime_header_encode);
 
+/***
+ *  @function util.nkeys(table)
+ * Returns number of keys in table
+ * @param {table} input table
+ * @return int or nil
+ */
+LUA_FUNCTION_DEF (util, nkeys);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),

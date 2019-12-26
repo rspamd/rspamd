@@ -200,6 +200,7 @@ end
  */
 LUA_FUNCTION_DEF (task, append_message);
 /***
+ * Consider using extract_specific_urls to reduce LUA GC load
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
  * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
