@@ -131,6 +131,11 @@ SPF EXTERNAL RELAY
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/external_relay.eml
   Should contain  ${result.stdout}  R_SPF_ALLOW (1.00)[+ip4:37.48.67.26]
 
+SPF UPPERCASE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@fail11.org.org.za
+  Check Rspamc  ${result}  R_SPF_ALLOW
+
 *** Keywords ***
 SPF Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
