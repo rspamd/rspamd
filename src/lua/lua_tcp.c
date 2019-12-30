@@ -1768,6 +1768,7 @@ lua_tcp_request (lua_State *L)
 		if (rspamd_session_blocked (session)) {
 			lua_tcp_push_error (cbd, TRUE, "async session is the blocked state");
 			TCP_RELEASE (cbd);
+			cbd->item = NULL; /* To avoid decrease with no watcher */
 			lua_pushboolean (L, FALSE);
 
 			return 1;
@@ -1784,6 +1785,7 @@ lua_tcp_request (lua_State *L)
 			lua_tcp_push_error (cbd, TRUE, "cannot connect to the host: %s", host);
 			lua_pushboolean (L, FALSE);
 
+			/* No reset of the item as watcher has been registered */
 			TCP_RELEASE (cbd);
 
 			return 1;
@@ -1795,7 +1797,7 @@ lua_tcp_request (lua_State *L)
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				lua_pushboolean (L, FALSE);
-
+				cbd->item = NULL; /* To avoid decrease with no watcher */
 				TCP_RELEASE (cbd);
 
 				return 1;
@@ -1809,6 +1811,7 @@ lua_tcp_request (lua_State *L)
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				lua_pushboolean (L, FALSE);
+				cbd->item = NULL; /* To avoid decrease with no watcher */
 
 				TCP_RELEASE (cbd);
 
