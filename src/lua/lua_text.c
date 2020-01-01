@@ -82,6 +82,14 @@ LUA_FUNCTION_DEF (text, span);
  */
 LUA_FUNCTION_DEF (text, lines);
 /***
+ * @method rspamd_text:split(regexp, [stringify])
+ * Returns an iter over all encounters of the specific regexp as rspamd_text objects or as strings if `stringify` is true
+ * @param {rspamd_regexp} regexp regexp (pcre syntax) used for splitting
+ * @param {boolean} stringify stringify lines
+ * @return {iterator} iterator triplet
+ */
+LUA_FUNCTION_DEF (text, split);
+/***
  * @method rspamd_text:at(pos)
  * Returns a byte at the position `pos`
  * @param {integer} pos index
@@ -112,6 +120,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
 		LUA_INTERFACE_DEF (text, lines),
+		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, bytes),
 		{"write", lua_text_save_in_file},
@@ -492,6 +501,163 @@ lua_text_lines (lua_State *L)
 
 	return 1;
 }
+
+static gint
+rspamd_lua_text_regexp_split (lua_State *L) {
+	struct rspamd_lua_text *t = lua_touserdata (L, lua_upvalueindex (1)),
+			*new_t;
+	struct rspamd_lua_regexp *re = *(struct rspamd_lua_regexp **)
+			lua_touserdata (L, lua_upvalueindex (2));
+	gboolean stringify = lua_toboolean (L, lua_upvalueindex (3));
+	gint64 pos = lua_tointeger (L, lua_upvalueindex (4));
+	gboolean matched;
+
+	if (pos < 0) {
+		return luaL_error (L, "invalid pos: %d", (gint) pos);
+	}
+
+	if (pos >= t->len) {
+		/* We are done */
+		return 0;
+	}
+
+	const gchar *start, *end, *old_start;
+
+	end = t->start + pos;
+
+	for (;;) {
+		old_start = end;
+
+		matched = rspamd_regexp_search (re->re, t->start, t->len, &start, &end, FALSE,
+				NULL);
+
+		if (matched) {
+			if (start - old_start > 0) {
+				if (stringify) {
+					lua_pushlstring (L, old_start, start - old_start);
+				}
+				else {
+					new_t = lua_newuserdata (L, sizeof (*t));
+					rspamd_lua_setclass (L, "rspamd{text}", -1);
+					new_t->start = old_start;
+					new_t->len = start - old_start;
+					new_t->flags = 0;
+				}
+
+				break;
+			}
+			else {
+				if (start == end) {
+					matched = FALSE;
+					break;
+				}
+				/*
+				 * All match separators (e.g. starting separator,
+				 * we need to skip it). Continue iterations.
+				 */
+			}
+		}
+		else {
+			/* No match, stop */
+			break;
+		}
+	}
+
+	if (!matched && (t->len > 0 && (end == NULL || end < t->start + t->len))) {
+		/* No more matches, but we might need to push the last element */
+		if (end == NULL) {
+			end = t->start;
+		}
+		/* No separators, need to push the whole remaining part */
+		if (stringify) {
+			lua_pushlstring (L, end, (t->start + t->len) - end);
+		}
+		else {
+			new_t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			new_t->start = end;
+			new_t->len = (t->start + t->len) - end;
+			new_t->flags = 0;
+		}
+
+		pos = t->len;
+	}
+	else {
+
+		pos = end - t->start;
+	}
+
+	/* Update pos */
+	lua_pushinteger (L, pos);
+	lua_replace (L, lua_upvalueindex (4));
+
+	return 1;
+}
+
+static gint
+lua_text_split (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	struct rspamd_lua_regexp *re;
+	gboolean stringify = FALSE, own_re = FALSE;
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		re = lua_check_regexp (L, 2);
+	}
+	else {
+		rspamd_regexp_t *c_re;
+		GError *err = NULL;
+
+		c_re = rspamd_regexp_new (lua_tostring (L, 2), NULL, &err);
+		if (c_re == NULL) {
+
+			gint ret = luaL_error (L, "cannot parse regexp: %s, error: %s",
+					lua_tostring (L, 2),
+					err == NULL ? "undefined" : err->message);
+			if (err) {
+				g_error_free (err);
+			}
+
+			return ret;
+		}
+
+		re = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+		re->re = c_re;
+		re->re_pattern = g_strdup (lua_tostring (L, 2));
+		re->module = rspamd_lua_get_module_name (L);
+		own_re = TRUE;
+	}
+
+	if (t && re) {
+		if (lua_isboolean (L, 3)) {
+			stringify = lua_toboolean (L, 3);
+		}
+
+		/* Upvalues */
+		lua_pushvalue (L, 1); /* text */
+
+		if (own_re) {
+			struct rspamd_lua_regexp **pre;
+			pre = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pre = re;
+		}
+		else {
+			lua_pushvalue (L, 2); /* regexp */
+		}
+
+		lua_pushboolean (L, stringify);
+		lua_pushinteger (L, 0); /* Current pos */
+		lua_pushcclosure (L, rspamd_lua_text_regexp_split, 4);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_text_at (lua_State *L)
