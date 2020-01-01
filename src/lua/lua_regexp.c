@@ -81,37 +81,6 @@ lua_check_regexp (lua_State * L, gint pos)
 	return ud ? *((struct rspamd_lua_regexp **)ud) : NULL;
 }
 
-static gchar *
-rspamd_lua_get_module_name (lua_State *L)
-{
-	lua_Debug d;
-	gchar *p;
-	gchar func_buf[128];
-
-	if (lua_getstack (L, 1, &d) == 1) {
-		(void) lua_getinfo (L, "Sl", &d);
-		if ((p = strrchr (d.short_src, '/')) == NULL) {
-			p = d.short_src;
-		}
-		else {
-			p++;
-		}
-
-		if (strlen (p) > 20) {
-			rspamd_snprintf (func_buf, sizeof (func_buf), "%10s...]:%d", p,
-					d.currentline);
-		}
-		else {
-			rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p,
-					d.currentline);
-		}
-
-		return g_strdup (func_buf);
-	}
-
-	return NULL;
-}
-
 /***
  * @function rspamd_regexp.create(pattern[, flags])
  * Creates new rspamd_regexp

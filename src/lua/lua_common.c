@@ -2347,3 +2347,34 @@ rspamd_lua_push_words (lua_State *L, GArray *words,
 
 	return 1;
 }
+
+gchar *
+rspamd_lua_get_module_name (lua_State *L)
+{
+	lua_Debug d;
+	gchar *p;
+	gchar func_buf[128];
+
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void) lua_getinfo (L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p++;
+		}
+
+		if (strlen (p) > 20) {
+			rspamd_snprintf (func_buf, sizeof (func_buf), "%10s...]:%d", p,
+					d.currentline);
+		}
+		else {
+			rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p,
+					d.currentline);
+		}
+
+		return g_strdup (func_buf);
+	}
+
+	return NULL;
+}

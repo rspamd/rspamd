@@ -559,6 +559,13 @@ enum rspamd_lua_words_type {
 gint rspamd_lua_push_words (lua_State *L, GArray *words,
 							enum rspamd_lua_words_type how);
 
+/**
+ * Returns newly allocated name for caller module name
+ * @param L
+ * @return
+ */
+gchar *rspamd_lua_get_module_name (lua_State *L);
+
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
 #define RSPAMD_LOCAL_CONFDIR_INDEX "LOCAL_CONFDIR"
