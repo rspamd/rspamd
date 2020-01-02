@@ -44,6 +44,7 @@ local report_settings = {
   smtp_port = 25,
   retries = 2,
   from_name = 'Rspamd',
+  msgid_from = 'rspamd',
 }
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
 To: {= rcpt =}
@@ -926,7 +927,7 @@ if opts['reporting'] == true then
               submitter = report_settings.domain,
               report_id = report_id,
               report_date = rspamd_util.time_to_string(rspamd_util.get_time()),
-              message_id = rspamd_util.random_hex(12) .. '@rspamd',
+              message_id = rspamd_util.random_hex(16) .. '@' .. report_settings.msgid_from,
               report_start = report_start,
               report_end = report_end
             }, true)
