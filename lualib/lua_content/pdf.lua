@@ -48,6 +48,26 @@ local pdf_patterns = {
       [[echo\s]],
       [[\/[A-Za-z]*#\d\d(?:[#A-Za-z<>/\s])]], -- Hex encode obfuscation
     }
+  },
+  start_object = {
+    patterns = {
+      [[\n\s*\d+ \d+ obj\r?\n]]
+    }
+  },
+  end_object = {
+    patterns = {
+      [=[\n\s*endobj[\r\n]]=]
+    }
+  },
+  start_stream = {
+    patterns = {
+      [[>\s*stream\r?\n]],
+    }
+  },
+  end_stream = {
+    patterns = {
+      [=[endstream[\r\n]]=]
+    }
   }
 }
 
@@ -68,7 +88,6 @@ local processors = {}
 local function compile_tries()
   local default_compile_flags = bit.bor(rspamd_trie.flags.re,
       rspamd_trie.flags.dot_all,
-      rspamd_trie.flags.single_match,
       rspamd_trie.flags.no_start)
   local function compile_pats(patterns, indexes, compile_flags)
     local strs = {}
@@ -92,6 +111,81 @@ compile_tries()
 
 local function extract_text_data(specific)
   return nil -- NYI
+end
+
+local function postprocess_pdf_objects(task, input, pdf)
+  local start_pos, end_pos = 1, 1
+
+  local objects = {}
+  local obj_count = 0
+
+  while start_pos < #pdf.start_objects and end_pos < #pdf.end_objects do
+    local first = pdf.start_objects[start_pos]
+    local last = pdf.end_objects[end_pos]
+
+    -- 8 is length of `endobject\n`
+    if first + 8 < last then
+      local len = last - first - 8
+      objects[obj_count + 1] = {
+        start = first,
+        len = len,
+        data = input:span(first, len)
+      }
+      obj_count = obj_count + 1
+      start_pos = start_pos + 1
+      end_pos = end_pos + 1
+    elseif start_pos > end_pos then
+      end_pos = end_pos + 1
+    end
+  end
+
+  -- Now we have objects and we need to attach streams that are in bounds
+  if pdf.start_streams and pdf.end_streams then
+    start_pos, end_pos = 1, 1
+
+    for _,obj in ipairs(objects) do
+      while start_pos < #pdf.start_streams and end_pos < #pdf.end_streams do
+        local first = pdf.start_streams[start_pos]
+        local last = pdf.end_streams[end_pos]
+        last = last - 10 -- Exclude endstream\n pattern
+        lua_util.debugm(N, task, "start: %s, end: %s; obj: %s-%s",
+            first, last, obj.start, obj.start + obj.len)
+        if first > obj.start and last < obj.start + obj.len and last > first then
+          -- In case if we have fake endstream :(
+          while pdf.end_streams[end_pos + 1] and pdf.end_streams[end_pos + 1] < obj.start + obj.len do
+            end_pos = end_pos + 1
+            last = pdf.end_streams[end_pos]
+          end
+          local len = last - first
+          obj.stream = {
+            start = first,
+            len = len,
+            data = input:span(first, len)
+          }
+          start_pos = start_pos + 1
+          end_pos = end_pos + 1
+          break
+        elseif first < obj.start then
+          start_pos = start_pos + 1
+        elseif last > obj.start + obj.len then
+          -- Not this object
+          break
+        else
+          start_pos = start_pos + 1
+          end_pos = end_pos + 1
+        end
+      end
+      if obj.stream then
+        lua_util.debugm(N, task, 'found object %s start %s len, %s stream start, %s stream length',
+            obj.start, obj.len, obj.stream.start, obj.stream.len)
+      else
+        lua_util.debugm(N, task, 'found object %s start %s len, no stream',
+            obj.start, obj.len)
+      end
+    end
+  end
+
+  pdf.objects = objects
 end
 
 local function process_pdf(input, _, task)
@@ -129,6 +223,11 @@ local function process_pdf(input, _, task)
       processor.processor_func(input, task, processor.offsets, pdf_output)
     end
 
+    if pdf_output.start_objects and pdf_output.end_objects then
+      -- Postprocess objects
+      postprocess_pdf_objects(task, input, pdf_output)
+    end
+
     return pdf_output
   end
 end
@@ -160,6 +259,32 @@ end
 processors.suspicious = function(_, task, _, output)
   lua_util.debugm(N, task, "pdf: found a suspicious pattern")
   output.suspicious = true
+end
+
+local function generic_table_inserter(positions, output, output_key)
+  if not output[output_key] then
+    output[output_key] = {}
+  end
+  local shift = #output[output_key]
+  for i,pos in ipairs(positions) do
+    output[output_key][i + shift] = pos[1]
+  end
+end
+
+processors.start_object = function(_, task, positions, output)
+  generic_table_inserter(positions, output, 'start_objects')
+end
+
+processors.end_object = function(_, task, positions, output)
+  generic_table_inserter(positions, output, 'end_objects')
+end
+
+processors.start_stream = function(_, task, positions, output)
+  generic_table_inserter(positions, output, 'start_streams')
+end
+
+processors.end_stream = function(_, task, positions, output)
+  generic_table_inserter(positions, output, 'end_streams')
 end
 
 exports.process = process_pdf
