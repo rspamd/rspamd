@@ -24,6 +24,7 @@ local bit = require "bit"
 local pdf_trie
 local N = "lua_content"
 local lua_util = require "lua_util"
+local rspamd_regexp = require "rspamd_regexp"
 local pdf_patterns = {
   trailer = {
     patterns = {
@@ -56,7 +57,7 @@ local pdf_patterns = {
   },
   end_object = {
     patterns = {
-      [=[\n\s*endobj[\r\n]]=]
+      [=[endobj[\r\n]]=]
     }
   },
   start_stream = {
@@ -84,6 +85,9 @@ local exports = {}
 ---- [{n1, pat_idx1}, ... {nn, pat_idxn}] where
 ---- pat_idxn is pattern index and n1 ... nn are match positions
 local processors = {}
+
+-- Used to match objects
+local object_re = rspamd_regexp.create_cached([=[/(\d+)\s+(\d+)\s+obj\s*/]=])
 
 local function compile_tries()
   local default_compile_flags = bit.bor(rspamd_trie.flags.re,
@@ -119,18 +123,36 @@ local function postprocess_pdf_objects(task, input, pdf)
   local objects = {}
   local obj_count = 0
 
-  while start_pos < #pdf.start_objects and end_pos < #pdf.end_objects do
+  while start_pos <= #pdf.start_objects and end_pos <= #pdf.end_objects do
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
 
-    -- 8 is length of `endobject\n`
-    if first + 8 < last then
-      local len = last - first - 8
-      objects[obj_count + 1] = {
-        start = first,
-        len = len,
-        data = input:span(first, len)
-      }
+    -- 7 is length of `endobj\n`
+    if first + 7 < last then
+      local len = last - first - 7
+
+      -- Also get the starting span and try to match it versus obj re to get numbers
+      local obj_line_potential = first - 32
+      if obj_line_potential < 1 then obj_line_potential = 1 end
+
+      if end_pos > 1 and pdf.end_objects[end_pos - 1] >= obj_line_potential then
+        obj_line_potential = pdf.end_objects[end_pos - 1] + 1
+      end
+
+      local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
+      local matches = object_re:search(obj_line_span, true, true)
+
+      if matches and matches[1] then
+        objects[obj_count + 1] = {
+          start = first,
+          len = len,
+          data = input:span(first, len),
+          major = matches[1][2],
+          minor = matches[1][3],
+        }
+
+      end
+
       obj_count = obj_count + 1
       start_pos = start_pos + 1
       end_pos = end_pos + 1
@@ -144,7 +166,7 @@ local function postprocess_pdf_objects(task, input, pdf)
     start_pos, end_pos = 1, 1
 
     for _,obj in ipairs(objects) do
-      while start_pos < #pdf.start_streams and end_pos < #pdf.end_streams do
+      while start_pos <= #pdf.start_streams and end_pos <= #pdf.end_streams do
         local first = pdf.start_streams[start_pos]
         local last = pdf.end_streams[end_pos]
         last = last - 10 -- Exclude endstream\n pattern
@@ -176,11 +198,11 @@ local function postprocess_pdf_objects(task, input, pdf)
         end
       end
       if obj.stream then
-        lua_util.debugm(N, task, 'found object %s start %s len, %s stream start, %s stream length',
-            obj.start, obj.len, obj.stream.start, obj.stream.len)
+        lua_util.debugm(N, task, 'found object %s:%s %s start %s len, %s stream start, %s stream length',
+            obj.major, obj.minor, obj.start, obj.len, obj.stream.start, obj.stream.len)
       else
-        lua_util.debugm(N, task, 'found object %s start %s len, no stream',
-            obj.start, obj.len)
+        lua_util.debugm(N, task, 'found object %s:%s %s start %s len, no stream',
+            obj.major, obj.minor, obj.start, obj.len)
       end
     end
   end
