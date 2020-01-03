@@ -25,6 +25,7 @@ local pdf_trie
 local N = "lua_content"
 local lua_util = require "lua_util"
 local rspamd_regexp = require "rspamd_regexp"
+local lpeg = require "lpeg"
 local pdf_patterns = {
   trailer = {
     patterns = {
@@ -85,6 +86,7 @@ local exports = {}
 ---- [{n1, pat_idx1}, ... {nn, pat_idxn}] where
 ---- pat_idxn is pattern index and n1 ... nn are match positions
 local processors = {}
+local pdf_grammar
 
 -- Used to match objects
 local object_re = rspamd_regexp.create_cached([=[/(\d+)\s+(\d+)\s+obj\s*/]=])
@@ -110,8 +112,78 @@ local function compile_tries()
   end
 end
 
+local function gen_grammar()
+  local P = lpeg.P
+  local R = lpeg.R
+  local S = lpeg.S
+  local V = lpeg.V
+  local C = lpeg.C
+  local D = R'09' -- Digits
+
+  -- Helper functions
+  local function pdf_hexstring_unescape(s)
+    local function ue(cc)
+      return string.char(tonumber(cc, 16))
+    end
+    if #s % 2 == 0 then
+      -- Sane hex string
+      return s:gsub('..', ue)
+    end
+
+    -- WTF hex string
+    -- Append '0' to it and unescape...
+    return s:sub(1, #s - 1):gsub('..' , ue) .. (s:sub(#s) .. '0'):gsub('..' , ue)
+  end
+
+  local function pdf_string_unescape(s)
+    return s
+  end
+
+  local function pdf_id_unescape(s)
+    return (s:gsub('#%d%d', function (cc)
+      return string.char(tonumber(cc:sub(2), 16))
+    end))
+  end
+
+  local delim = S'()<>[]{}/%'
+  local ws = S'\0 \r\n\t\f'
+  local hex = R'af' + R'AF' + D
+  -- Comments.
+  local eol = P'\r\n' + '\n'
+  local line = (1 - S'\r\n\f')^0 * eol^-1
+  local comment = P'%' * line
+
+  -- Numbers.
+  local sign = S'+-'^-1
+  local decimal = D^1
+  local float = D^1 * P'.' * D^0 + P'.' * D^1
+  local number = C(sign * (float + decimal)) / tonumber
+
+  -- String
+  local str = P{ "(" * C(((1 - S"()") + V(1))^0) / pdf_string_unescape * ")" }
+  local hexstr = P{"<" * C(hex^0) / pdf_hexstring_unescape * ">"}
+
+  -- Identifier
+  local id = P{'/' * C((1-(delim + ws))^1) / pdf_id_unescape}
+
+  -- Stupid references
+  local ref = lpeg.Ct{lpeg.Cc("%REF%") * C(D^1) * " " * C(D^1) * " " * "R"}
+
+  return P{
+    "EXPR";
+    EXPR = V("ELT")^0,
+    ELT = V("ARRAY") + V("DICT") + V("ATOM"),
+    ATOM = ws^0 * (comment + ref + number + V("STRING") + id) * ws^0,
+    DICT = "<<" * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ">>",
+    KV_PAIR = lpeg.Cg(id * ws^0 * V("ELT") * ws^0),
+    ARRAY = "[" * lpeg.Ct(V("ELT")^0) * "]",
+    STRING = P{str + hexstr},
+  }
+end
+
 -- Call immediately on require
 compile_tries()
+pdf_grammar = gen_grammar()
 
 local function extract_text_data(specific)
   return nil -- NYI
