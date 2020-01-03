@@ -20,6 +20,7 @@ limitations under the License.
 --]]
 
 local rspamd_trie = require "rspamd_trie"
+local rspamd_util = require "rspamd_util"
 local bit = require "bit"
 local pdf_trie
 local N = "lua_content"
@@ -86,7 +87,10 @@ local exports = {}
 ---- [{n1, pat_idx1}, ... {nn, pat_idxn}] where
 ---- pat_idxn is pattern index and n1 ... nn are match positions
 local processors = {}
+-- PDF objects grammar in LPEG style (performing table captures)
 local pdf_grammar
+
+local max_extraction_size = 512 * 1024 -- TODO: make it configurable
 
 -- Used to match objects
 local object_re = rspamd_regexp.create_cached([=[/(\d+)\s+(\d+)\s+obj\s*/]=])
@@ -192,11 +196,17 @@ local function extract_text_data(specific)
   return nil -- NYI
 end
 
+-- Generates index for major/minor pair
+local function obj_ref(major, minor)
+  return major * 10.0 + 1.0 / (minor + 1.0)
+end
+
 local function postprocess_pdf_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
 
   local objects = {}
   local obj_count = 0
+  pdf.ref = {} -- references table
 
   while start_pos <= #pdf.start_objects and end_pos <= #pdf.end_objects do
     local first = pdf.start_objects[start_pos]
@@ -222,8 +232,8 @@ local function postprocess_pdf_objects(task, input, pdf)
           start = first,
           len = len,
           data = input:span(first, len),
-          major = matches[1][2],
-          minor = matches[1][3],
+          major = tonumber(matches[1][2]),
+          minor = tonumber(matches[1][3]),
         }
 
       end
@@ -253,6 +263,10 @@ local function postprocess_pdf_objects(task, input, pdf)
             end_pos = end_pos + 1
             last = pdf.end_streams[end_pos]
           end
+          -- Strip the first \n
+          if input:at(first) == 10 then
+            first = first + 1
+          end
           local len = last - first
           obj.stream = {
             start = first,
@@ -275,9 +289,19 @@ local function postprocess_pdf_objects(task, input, pdf)
       if obj.stream then
         lua_util.debugm(N, task, 'found object %s:%s %s start %s len, %s stream start, %s stream length',
             obj.major, obj.minor, obj.start, obj.len, obj.stream.start, obj.stream.len)
-
+      else
+        lua_util.debugm(N, task, 'found object %s:%s %s start %s len, no stream',
+            obj.major, obj.minor, obj.start, obj.len)
+      end
+      if obj.major and obj.minor then
         -- Parse grammar
-        local obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
+        local obj_dict_span
+        if obj.stream then
+          obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
+        else
+          obj_dict_span = obj.data
+        end
+
         if obj_dict_span:len() < 1024 * 128 then
           local ret,obj_or_err = pcall(pdf_grammar.match, pdf_grammar, obj_dict_span)
 
@@ -293,14 +317,53 @@ local function postprocess_pdf_objects(task, input, pdf)
           lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
               obj.major, obj.minor, obj_dict_span:len())
         end
-      else
-        lua_util.debugm(N, task, 'found object %s:%s %s start %s len, no stream',
-            obj.major, obj.minor, obj.start, obj.len)
+        pdf.ref[obj_ref(obj.major, obj.minor)] = obj
+      end
+    end
+
+  end
+
+  pdf.objects = objects
+end
+
+-- Return indirect object reference (if needed)
+local function maybe_dereference_object(elt, pdf)
+  if type(elt) == 'table' and elt[1] == '%REF%' then
+    local ref = obj_ref(elt[2], elt[3])
+
+    if pdf.ref[ref] then
+      -- No recursion!
+      return pdf.ref[ref].dict
+    end
+  end
+
+  return elt
+end
+
+local function extract_pdf_objects(task, pdf)
+  local function maybe_extract_object(obj)
+    local dict = obj.dict
+    if dict.Filter and dict.Length then
+      local len = math.min(obj.stream.len,
+          tonumber(maybe_dereference_object(dict.Length, pdf)) or 0)
+      local real_stream = obj.stream.data:span(1, len)
+
+      if dict.Filter == 'FlateDecode' and real_stream:len() > 0 then
+        local uncompressed = rspamd_util.inflate(real_stream, max_extraction_size)
+
+        if uncompressed then
+          lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
+              obj.major, obj.minor, uncompressed, len, uncompressed:len())
+        end
       end
     end
   end
 
-  pdf.objects = objects
+  for _,obj in ipairs(pdf.objects or {}) do
+    if obj.stream and obj.dict then
+      maybe_extract_object(obj)
+    end
+  end
 end
 
 local function process_pdf(input, _, task)
@@ -341,6 +404,7 @@ local function process_pdf(input, _, task)
     if pdf_output.start_objects and pdf_output.end_objects then
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
+      extract_pdf_objects(task, pdf_output)
     end
 
     return pdf_output
