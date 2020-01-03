@@ -174,7 +174,7 @@ local function gen_grammar()
 
   return P{
     "EXPR";
-    EXPR = V("ELT")^0,
+    EXPR = ws^0 * V("ELT")^0 * ws^0,
     ELT = V("ARRAY") + V("DICT") + V("ATOM"),
     ATOM = ws^0 * (comment + boolean +ref + number + V("STRING") + id) * ws^0,
     DICT = "<<" * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ">>",
@@ -275,6 +275,24 @@ local function postprocess_pdf_objects(task, input, pdf)
       if obj.stream then
         lua_util.debugm(N, task, 'found object %s:%s %s start %s len, %s stream start, %s stream length',
             obj.major, obj.minor, obj.start, obj.len, obj.stream.start, obj.stream.len)
+
+        -- Parse grammar
+        local obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
+        if obj_dict_span:len() < 1024 * 128 then
+          local ret,obj_or_err = pcall(pdf_grammar.match, pdf_grammar, obj_dict_span)
+
+          if ret then
+            obj.dict = obj_or_err
+            lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+                obj.major, obj.minor, obj_or_err)
+          else
+            lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
+                obj.major, obj.minor, obj_or_err)
+          end
+        else
+          lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
+              obj.major, obj.minor, obj_dict_span:len())
+        end
       else
         lua_util.debugm(N, task, 'found object %s:%s %s start %s len, no stream',
             obj.major, obj.minor, obj.start, obj.len)
