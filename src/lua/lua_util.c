@@ -383,10 +383,11 @@ LUA_FUNCTION_DEF (util, zstd_compress);
 LUA_FUNCTION_DEF (util, zstd_decompress);
 
 /***
- * @function util.gzip_decompress(data)
+ * @function util.gzip_decompress(data, [size_limit])
  * Decompresses input using gzip algorithm
  *
  * @param {string/rspamd_text} data compressed data
+ * @param {integer} size_limit optional size limit
  * @return {error,rspamd_text} pair of error + decompressed text
  */
 LUA_FUNCTION_DEF (util, gzip_decompress);
@@ -2327,6 +2328,7 @@ lua_util_gzip_decompress (lua_State *L)
 	gint rc;
 	guchar *p;
 	gsize remain;
+	gssize size_limit = -1;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		t = &tmp;
@@ -2339,6 +2341,10 @@ lua_util_gzip_decompress (lua_State *L)
 
 	if (t == NULL || t->start == NULL) {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		size_limit = lua_tointeger (L, 2);
 	}
 
 	sz = t->len;
@@ -2385,10 +2391,21 @@ lua_util_gzip_decompress (lua_State *L)
 		res->len = strm.total_out;
 
 		if (strm.avail_out == 0 && strm.avail_in != 0) {
+
+			if (size_limit > 0 || res->len >= G_MAXUINT32 / 2) {
+				if (res->len > size_limit || res->len >= G_MAXUINT32 / 2) {
+					lua_pop (L, 1); /* Text will be freed here */
+					lua_pushnil (L);
+					inflateEnd (&strm);
+
+					return 1;
+				}
+			}
+
 			/* Need to allocate more */
 			remain = res->len;
-			res->start = g_realloc ((gpointer)res->start, strm.avail_in + sz);
-			sz = strm.avail_in + sz;
+			res->start = g_realloc ((gpointer)res->start, res->len * 2);
+			sz = res->len * 2;
 			p = (guchar *)res->start + remain;
 			remain = sz - remain;
 		}
