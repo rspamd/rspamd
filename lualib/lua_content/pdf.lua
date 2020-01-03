@@ -166,6 +166,9 @@ local function gen_grammar()
   -- Identifier
   local id = P{'/' * C((1-(delim + ws))^1) / pdf_id_unescape}
 
+  -- Booleans (who care about them?)
+  local boolean = C(P("true") + P("false"))
+
   -- Stupid references
   local ref = lpeg.Ct{lpeg.Cc("%REF%") * C(D^1) * " " * C(D^1) * " " * "R"}
 
@@ -173,7 +176,7 @@ local function gen_grammar()
     "EXPR";
     EXPR = V("ELT")^0,
     ELT = V("ARRAY") + V("DICT") + V("ATOM"),
-    ATOM = ws^0 * (comment + ref + number + V("STRING") + id) * ws^0,
+    ATOM = ws^0 * (comment + boolean +ref + number + V("STRING") + id) * ws^0,
     DICT = "<<" * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ">>",
     KV_PAIR = lpeg.Cg(id * ws^0 * V("ELT") * ws^0),
     ARRAY = "[" * lpeg.Ct(V("ELT")^0) * "]",
