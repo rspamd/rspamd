@@ -388,9 +388,19 @@ LUA_FUNCTION_DEF (util, zstd_decompress);
  *
  * @param {string/rspamd_text} data compressed data
  * @param {integer} size_limit optional size limit
- * @return {error,rspamd_text} pair of error + decompressed text
+ * @return {rspamd_text} decompressed text
  */
 LUA_FUNCTION_DEF (util, gzip_decompress);
+
+/***
+ * @function util.inflate(data, [size_limit])
+ * Decompresses input using inflate algorithm
+ *
+ * @param {string/rspamd_text} data compressed data
+ * @param {integer} size_limit optional size limit
+ * @return {rspamd_text} decompressed text
+ */
+LUA_FUNCTION_DEF (util, inflate);
 
 /***
  * @function util.gzip_compress(data)
@@ -663,6 +673,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, zstd_decompress),
 	LUA_INTERFACE_DEF (util, gzip_compress),
 	LUA_INTERFACE_DEF (util, gzip_decompress),
+	LUA_INTERFACE_DEF (util, inflate),
 	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
@@ -2319,7 +2330,7 @@ lua_util_gzip_compress (lua_State *L)
 
 
 static gint
-lua_util_gzip_decompress (lua_State *L)
+lua_util_zlib_inflate (lua_State *L, int windowBits)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res, tmp;
@@ -2351,7 +2362,7 @@ lua_util_gzip_decompress (lua_State *L)
 
 	memset (&strm, 0, sizeof (strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
-	rc = inflateInit2 (&strm, MAX_WBITS + 16);
+	rc = inflateInit2 (&strm, windowBits);
 
 	if (rc != Z_OK) {
 		return luaL_error (L, "cannot init zlib");
@@ -2372,7 +2383,7 @@ lua_util_gzip_decompress (lua_State *L)
 		strm.avail_out = remain;
 		strm.next_out = p;
 
-		rc = inflate (&strm, Z_FINISH);
+		rc = inflate (&strm, Z_NO_FLUSH);
 
 		if (rc != Z_OK && rc != Z_BUF_ERROR) {
 			if (rc == Z_STREAM_END) {
@@ -2414,9 +2425,19 @@ lua_util_gzip_decompress (lua_State *L)
 	inflateEnd (&strm);
 	res->len = strm.total_out;
 
-	return 2;
+	return 1;
+}
+static gint
+lua_util_gzip_decompress (lua_State *L)
+{
+	return lua_util_zlib_inflate (L, MAX_WBITS + 16);
 }
 
+static gint
+lua_util_inflate (lua_State *L)
+{
+	return lua_util_zlib_inflate (L, 0);
+}
 
 static gint
 lua_util_normalize_prob (lua_State *L)
