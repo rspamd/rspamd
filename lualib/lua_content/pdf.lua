@@ -181,9 +181,9 @@ local function gen_grammar()
     EXPR = ws^0 * V("ELT")^0 * ws^0,
     ELT = V("ARRAY") + V("DICT") + V("ATOM"),
     ATOM = ws^0 * (comment + boolean +ref + number + V("STRING") + id) * ws^0,
-    DICT = "<<" * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ">>",
+    DICT = "<<" * ws^0  * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ws^0 * ">>",
     KV_PAIR = lpeg.Cg(id * ws^0 * V("ELT") * ws^0),
-    ARRAY = "[" * lpeg.Ct(V("ELT")^0) * "]",
+    ARRAY = "[" * ws^0 * lpeg.Ct(V("ELT")^0) * ws^0 * "]",
     STRING = P{str + hexstr},
   }
 end
@@ -354,13 +354,20 @@ local function extract_pdf_objects(task, pdf)
         if uncompressed then
           lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
               obj.major, obj.minor, uncompressed, len, uncompressed:len())
+        else
+          lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
+              obj.major, obj.minor, len, dict.Filter)
         end
+      else
+
+        lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
+            obj.major, obj.minor, len, dict.Filter)
       end
     end
   end
 
   for _,obj in ipairs(pdf.objects or {}) do
-    if obj.stream and obj.dict then
+    if obj.stream and obj.dict and type(obj.dict) == 'table' then
       maybe_extract_object(obj)
     end
   end
@@ -401,10 +408,14 @@ local function process_pdf(input, _, task)
       processor.processor_func(input, task, processor.offsets, pdf_output)
     end
 
+    pdf_output.flags = {}
+
     if pdf_output.start_objects and pdf_output.end_objects then
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
       extract_pdf_objects(task, pdf_output)
+    else
+      pdf_output.flags.no_objects = true
     end
 
     return pdf_output
