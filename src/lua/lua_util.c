@@ -2356,9 +2356,15 @@ lua_util_zlib_inflate (lua_State *L, int windowBits)
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
 		size_limit = lua_tointeger (L, 2);
-	}
+		if (size_limit <= 0) {
+			return luaL_error (L, "invalid arguments (size_limit)");
+		}
 
-	sz = t->len;
+		sz = MIN (t->len * 2, size_limit);
+	}
+	else {
+		sz = t->len * 2;
+	}
 
 	memset (&strm, 0, sizeof (strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
@@ -2436,7 +2442,7 @@ lua_util_gzip_decompress (lua_State *L)
 static gint
 lua_util_inflate (lua_State *L)
 {
-	return lua_util_zlib_inflate (L, 0);
+	return lua_util_zlib_inflate (L, MAX_WBITS);
 }
 
 static gint
