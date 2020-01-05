@@ -201,6 +201,70 @@ local function obj_ref(major, minor)
   return major * 10.0 + 1.0 / (minor + 1.0)
 end
 
+-- Return indirect object reference (if needed)
+local function maybe_dereference_object(elt, pdf)
+  if type(elt) == 'table' and elt[1] == '%REF%' then
+    local ref = obj_ref(elt[2], elt[3])
+
+    if pdf.ref[ref] then
+      -- No recursion!
+      return pdf.ref[ref].dict
+    end
+  end
+
+  return elt
+end
+
+-- Enforced dereference
+local function dereference_object(elt, pdf)
+  if type(elt) == 'table' and elt[1] == '%REF%' then
+    local ref = obj_ref(elt[2], elt[3])
+
+    if pdf.ref[ref] then
+      -- Not a dict but the object!
+      return pdf.ref[ref]
+    end
+  end
+
+  return nil
+end
+
+local function process_dict(task, pdf, obj, dict)
+  if type(dict) == 'table' and dict.Type then
+    if dict.Type == 'FontDescriptor' then
+      obj.type = 'font'
+      obj.ignore = true
+
+      lua_util.debugm(N, task, "obj %s:%s is a font descriptor",
+         obj.major, obj.minor)
+
+      local stream_ref
+      if dict.FontFile then
+        stream_ref = dereference_object(dict.FontFile, pdf)
+      end
+      if dict.FontFile2 then
+        stream_ref = dereference_object(dict.FontFile2, pdf)
+      end
+      if dict.FontFile3 then
+        stream_ref = dereference_object(dict.FontFile3, pdf)
+      end
+
+      if stream_ref then
+        if not stream_ref.dict then
+          stream_ref.dict = {}
+        end
+        stream_ref.dict.type = 'font_data'
+        stream_ref.dict.ignore = true
+
+        lua_util.debugm(N, task, "obj %s:%s is a font data stream",
+            stream_ref.major, stream_ref.minor)
+      end
+    end
+  end
+end
+
+-- Processes PDF objects: extracts streams, object numbers, process outer grammar,
+-- augment object types
 local function postprocess_pdf_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
 
@@ -323,21 +387,14 @@ local function postprocess_pdf_objects(task, input, pdf)
 
   end
 
-  pdf.objects = objects
-end
-
--- Return indirect object reference (if needed)
-local function maybe_dereference_object(elt, pdf)
-  if type(elt) == 'table' and elt[1] == '%REF%' then
-    local ref = obj_ref(elt[2], elt[3])
-
-    if pdf.ref[ref] then
-      -- No recursion!
-      return pdf.ref[ref].dict
+  for _,obj in ipairs(objects) do
+    if obj.dict then
+      -- Types processing
+      process_dict(task, pdf, obj, obj.dict)
     end
   end
 
-  return elt
+  pdf.objects = objects
 end
 
 local function extract_pdf_objects(task, pdf)
@@ -367,7 +424,7 @@ local function extract_pdf_objects(task, pdf)
   end
 
   for _,obj in ipairs(pdf.objects or {}) do
-    if obj.stream and obj.dict and type(obj.dict) == 'table' then
+    if obj.stream and obj.dict and type(obj.dict) == 'table' and not obj.dict.ignore then
       maybe_extract_object(obj)
     end
   end
