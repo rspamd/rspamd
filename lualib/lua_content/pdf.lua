@@ -22,7 +22,6 @@ limitations under the License.
 local rspamd_trie = require "rspamd_trie"
 local rspamd_util = require "rspamd_util"
 local bit = require "bit"
-local pdf_trie
 local N = "lua_content"
 local lua_util = require "lua_util"
 local rspamd_regexp = require "rspamd_regexp"
@@ -74,12 +73,30 @@ local pdf_patterns = {
   }
 }
 
+local pdf_text_patterns = {
+  start = {
+    patterns = {
+      [[\s+BT\s+]]
+    }
+  },
+  stop = {
+    patterns = {
+      [[\s+ET\b]]
+    }
+  }
+}
+
 -- index[n] ->
 --  t[1] - pattern,
 --  t[2] - key in patterns table,
 --  t[3] - value in patterns table
 --  t[4] - local pattern index
 local pdf_indexes = {}
+local pdf_text_indexes = {}
+
+local pdf_trie
+local pdf_text_trie
+
 local exports = {}
 
 -- Used to process patterns found in PDF
@@ -89,7 +106,7 @@ local exports = {}
 local processors = {}
 -- PDF objects outer grammar in LPEG style (performing table captures)
 local pdf_outer_grammar
-local pdf_inner_grammar
+local pdf_text_grammar
 
 local max_extraction_size = 512 * 1024 -- TODO: make it configurable
 
@@ -114,6 +131,9 @@ local function compile_tries()
 
   if not pdf_trie then
     pdf_trie = compile_pats(pdf_patterns, pdf_indexes)
+  end
+  if not pdf_text_trie then
+    pdf_text_trie = compile_pats(pdf_text_patterns, pdf_text_indexes)
   end
 end
 
@@ -426,6 +446,7 @@ local function extract_pdf_objects(task, pdf)
         if uncompressed then
           lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
               obj.major, obj.minor, uncompressed, len, uncompressed:len())
+          obj.uncompressed = uncompressed
         else
           lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
               obj.major, obj.minor, len, dict.Filter)
@@ -441,6 +462,67 @@ local function extract_pdf_objects(task, pdf)
   for _,obj in ipairs(pdf.objects or {}) do
     if obj.stream and obj.dict and type(obj.dict) == 'table' and not obj.dict.ignore then
       maybe_extract_object(obj)
+    end
+  end
+end
+
+local function offsets_to_blocks(starts, ends, out)
+  local start_pos, end_pos = 1, 1
+
+  while start_pos <= #starts and end_pos <= #ends do
+    local first = starts[start_pos]
+    local last = ends[end_pos]
+
+    if first < last then
+      local len = last - first
+      out[#out + 1] = {
+        start = first,
+        len = len,
+      }
+      start_pos = start_pos + 1
+      end_pos = end_pos + 1
+    elseif start_pos > end_pos then
+      end_pos = end_pos + 1
+    else
+      -- Not ordered properly!
+      break
+    end
+  end
+end
+
+local function search_text(task, pdf)
+  for _,obj in ipairs(pdf.objects) do
+    if obj.uncompressed then
+      local matches = pdf_text_trie:match(obj.uncompressed)
+      if matches then
+        local text_blocks = {}
+        local starts = {}
+        local ends = {}
+
+        for npat,matched_positions in pairs(matches) do
+          if npat == 1 then
+            for _,pos in ipairs(matched_positions) do
+              starts[#starts + 1] = pos
+            end
+          else
+            for _,pos in ipairs(matched_positions) do
+              ends[#ends + 1] = pos
+            end
+          end
+        end
+
+        offsets_to_blocks(starts, ends, text_blocks)
+        for _,bl in ipairs(text_blocks) do
+          if bl.len > 2 then
+            -- To remove \s+ET\b pattern (it can leave trailing space or not but it doesn't matter)
+            bl.len = bl.len - 2
+          end
+
+          bl.data = obj.uncompressed:span(bl.start, bl.len)
+          lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+              obj.major, obj.minor, bl.data)
+        end
+      end
     end
   end
 end
@@ -486,6 +568,7 @@ local function process_pdf(input, _, task)
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
       extract_pdf_objects(task, pdf_output)
+      search_text(task, pdf_output)
     else
       pdf_output.flags.no_objects = true
     end
