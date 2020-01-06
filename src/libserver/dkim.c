@@ -1032,6 +1032,17 @@ rspamd_create_dkim_context (const gchar *sig,
 					if (!parser_funcs[param](ctx, c, tlen, err)) {
 						state = DKIM_STATE_ERROR;
 					}
+					if (state == DKIM_STATE_ERROR) {
+						/*
+						 * We need to return from here as state machine won't
+						 * do any more steps after p == end
+						 */
+						if (err) {
+							msg_info_dkim ("dkim parse failed: %e", *err);
+						}
+
+						return NULL;
+					}
 					/* Finish processing */
 					p++;
 				}
