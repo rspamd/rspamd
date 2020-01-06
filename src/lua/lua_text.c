@@ -196,13 +196,107 @@ lua_text_fromstring (lua_State *L)
 	return 1;
 }
 
+#define MAX_REC 10
+
+static void
+lua_text_tbl_length (lua_State *L, gsize dlen, gsize *dest, guint rec)
+{
+	gsize tblen, stlen;
+	struct rspamd_lua_text *elt;
+
+	if (rec > MAX_REC) {
+		luaL_error (L, "lua_text_tbl_length: recursion limit exceeded");
+
+		return;
+	}
+
+	tblen = rspamd_lua_table_size (L, -1);
+
+	for (gsize i = 0; i < tblen; i ++) {
+		lua_rawgeti (L, -1, i + 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+#if LUA_VERSION_NUM >= 502
+			stlen = lua_rawlen (L, -1);
+#else
+			stlen = lua_objlen (L, -1);
+#endif
+			(*dest) += stlen;
+		}
+		else if (lua_type (L, -1) == LUA_TUSERDATA){
+			elt = (struct rspamd_lua_text *)lua_touserdata (L, -1);
+
+			if (elt) {
+				(*dest) += elt->len;
+			}
+		}
+		else if (lua_type (L, -1) == LUA_TTABLE) {
+			lua_text_tbl_length (L, dlen, dest, rec + 1);
+		}
+
+		if (i != tblen - 1) {
+			(*dest) += dlen;
+		}
+
+		lua_pop (L, 1);
+	}
+}
+
+static void
+lua_text_tbl_append (lua_State *L,
+					 const gchar *delim,
+					 gsize dlen,
+					 gchar **dest,
+					 guint rec)
+{
+	const gchar *st;
+	gsize tblen, stlen;
+	struct rspamd_lua_text *elt;
+
+	if (rec > MAX_REC) {
+		luaL_error (L, "lua_text_tbl_length: recursion limit exceeded");
+
+		return;
+	}
+
+	tblen = rspamd_lua_table_size (L, -1);
+
+	for (guint i = 0; i < tblen; i ++) {
+		lua_rawgeti (L, -1, i + 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			st = lua_tolstring (L, -1, &stlen);
+			memcpy ((*dest), st, stlen);
+			(*dest) += stlen;
+		}
+		else if (lua_type (L, -1) == LUA_TUSERDATA){
+			elt = (struct rspamd_lua_text *)lua_touserdata (L, -1);
+
+			if (elt) {
+				memcpy ((*dest), elt->start, elt->len);
+				(*dest) += elt->len;
+			}
+		}
+		else if (lua_type (L, -1) == LUA_TTABLE) {
+			lua_text_tbl_append (L, delim, dlen, dest, rec + 1);
+		}
+
+		if (dlen && i != tblen - 1) {
+			memcpy ((*dest), delim, dlen);
+			(*dest) += dlen;
+		}
+
+		lua_pop (L, 1);
+	}
+}
+
 static gint
 lua_text_fromtable (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *delim = "", *st;
-	struct rspamd_lua_text *t, *elt;
-	gsize textlen = 0, dlen, stlen, tblen;
+	const gchar *delim = "";
+	struct rspamd_lua_text *t;
+	gsize textlen = 0, dlen, oldtop = lua_gettop (L);
 	gchar *dest;
 
 	if (!lua_istable (L, 1)) {
@@ -217,33 +311,9 @@ lua_text_fromtable (lua_State *L)
 	}
 
 	/* Calculate length needed */
-	tblen = rspamd_lua_table_size (L, 1);
-
-	for (guint i = 0; i < tblen; i ++) {
-		lua_rawgeti (L, 1, i + 1);
-
-		if (lua_type (L, -1) == LUA_TSTRING) {
-#if LUA_VERSION_NUM >= 502
-			stlen = lua_rawlen (L, -1);
-#else
-			stlen = lua_objlen (L, -1);
-#endif
-			textlen += stlen;
-		}
-		else {
-			elt = lua_check_text (L, -1);
-
-			if (elt) {
-				textlen += elt->len;
-			}
-		}
-
-		if (i != tblen - 1) {
-			textlen += dlen;
-		}
-
-		lua_pop (L, 1);
-	}
+	lua_pushvalue (L, 1);
+	lua_text_tbl_length (L, dlen, &textlen, 0);
+	lua_pop (L, 1);
 
 	/* Allocate new text */
 	t = lua_newuserdata (L, sizeof (*t));
@@ -253,30 +323,12 @@ lua_text_fromtable (lua_State *L)
 	t->flags = RSPAMD_TEXT_FLAG_OWN;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
-	for (guint i = 0; i < tblen; i ++) {
-		lua_rawgeti (L, 1, i + 1);
+	lua_pushvalue (L, 1);
+	lua_text_tbl_append (L, delim, dlen, &dest, 0);
+	lua_pop (L, 1); /* Table arg */
 
-		if (lua_type (L, -1) == LUA_TSTRING) {
-			st = lua_tolstring (L, -1, &stlen);
-			memcpy (dest, st, stlen);
-			dest += stlen;
-		}
-		else {
-			elt = lua_check_text (L, -1);
-
-			if (elt) {
-				memcpy (dest, elt->start, elt->len);
-				dest += elt->len;
-			}
-		}
-
-		if (dlen && i != tblen - 1) {
-			memcpy (dest, delim, dlen);
-			dest += dlen;
-		}
-
-		lua_pop (L, 1);
-	}
+	gint newtop = lua_gettop (L);
+	g_assert ( newtop== oldtop + 1);
 
 	return 1;
 }
