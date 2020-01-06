@@ -590,8 +590,8 @@ local function search_text(task, pdf)
           end
 
           bl.data = obj.uncompressed:span(bl.start, bl.len)
-          --lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-          --    obj.major, obj.minor, bl.data)
+          lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+              obj.major, obj.minor, bl.data)
 
           if bl.len < 10 * 1024 then
             local ret,obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
