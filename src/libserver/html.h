@@ -107,9 +107,9 @@ struct html_block {
 struct html_tag {
 	gint id;
 	gint flags;
-	guint content_length;
 	struct html_tag_component name;
-	const gchar *content;
+	guint content_length;
+	goffset content_offset;
 	GQueue *params;
 	gpointer extra; /** Additional data associated with tag (e.g. image) */
 	GNode *parent;
@@ -127,6 +127,7 @@ struct html_content {
 	guchar *tags_seen;
 	GPtrArray *images;
 	GPtrArray *blocks;
+	GByteArray *parsed;
 };
 
 /*

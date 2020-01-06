@@ -815,8 +815,6 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 						return TRUE;
 					}
 				}
-
-				parent->content_length += tag->content_length;
 			}
 
 			if (hc->total_tags < max_tags) {
@@ -2774,13 +2772,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				p ++;
 			}
 			else {
-				if (content_tag) {
-					if (content_tag->content == NULL) {
-						content_tag->content = c;
-					}
-
-					content_tag->content_length += p - c;
-				}
 				state = tag_begin;
 			}
 			break;
@@ -2798,24 +2789,35 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						if (need_decode) {
 							goffset old_offset = dest->len;
 
+							if (content_tag) {
+								if (content_tag->content_offset == 0) {
+									content_tag->content_offset = old_offset;
+								}
+							}
+
 							g_byte_array_append (dest, c, (p - c));
 
 							len = rspamd_html_decode_entitles_inplace (
 									dest->data + old_offset,
 									p - c);
 							dest->len = dest->len + len - (p - c);
+
+							if (content_tag) {
+								content_tag->content_length += len;
+							}
 						}
 						else {
 							len = p - c;
-							g_byte_array_append (dest, c, len);
-						}
 
-						if (content_tag) {
-							if (content_tag->content == NULL) {
-								content_tag->content = c;
+							if (content_tag) {
+								if (content_tag->content_offset == 0) {
+									content_tag->content_offset = dest->len;
+								}
+
+								content_tag->content_length += len;
 							}
 
-							content_tag->content_length += p - c + 1;
+							g_byte_array_append (dest, c, len);
 						}
 					}
 
@@ -2828,6 +2830,9 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						if (dest->len > 0 &&
 								!g_ascii_isspace (dest->data[dest->len - 1])) {
 							g_byte_array_append (dest, " ", 1);
+							if (content_tag) {
+								content_tag->content_length ++;
+							}
 						}
 						save_space = FALSE;
 					}
@@ -2839,24 +2844,34 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					if (need_decode) {
 						goffset old_offset = dest->len;
 
+						if (content_tag) {
+							if (content_tag->content_offset == 0) {
+								content_tag->content_offset = dest->len;
+							}
+						}
+
 						g_byte_array_append (dest, c, (p - c));
 						len = rspamd_html_decode_entitles_inplace (
 								dest->data + old_offset,
 								p - c);
 						dest->len = dest->len + len - (p - c);
+
+						if (content_tag) {
+							content_tag->content_length += len;
+						}
 					}
 					else {
 						len = p - c;
-						g_byte_array_append (dest, c, len);
-					}
 
+						if (content_tag) {
+							if (content_tag->content_offset == 0) {
+								content_tag->content_offset = dest->len;
+							}
 
-					if (content_tag) {
-						if (content_tag->content == NULL) {
-							content_tag->content = c;
+							content_tag->content_length += len;
 						}
 
-						content_tag->content_length += p - c;
+						g_byte_array_append (dest, c, len);
 					}
 				}
 
@@ -2874,10 +2889,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				c = p;
 				state = content_write;
 				continue;
-			}
-
-			if (content_tag) {
-				content_tag->content_length ++;
 			}
 
 			p ++;
@@ -2949,6 +2960,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				if (cur_tag->id == Tag_BR || cur_tag->id == Tag_HR) {
 					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
 						g_byte_array_append (dest, "\r\n", 2);
+
+						if (content_tag) {
+							content_tag->content_length += 2;
+						}
 					}
 					save_space = FALSE;
 				}
@@ -2958,6 +2973,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						cur_tag->id == Tag_DIV)) {
 					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
 						g_byte_array_append (dest, "\r\n", 2);
+
+						if (content_tag) {
+							content_tag->content_length += 2;
+						}
 					}
 					save_space = FALSE;
 				}
@@ -3106,6 +3125,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	}
 
 	g_queue_free (styles_blocks);
+	hc->parsed = dest;
 
 	return dest;
 }
