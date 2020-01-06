@@ -87,8 +87,9 @@ local exports = {}
 ---- [{n1, pat_idx1}, ... {nn, pat_idxn}] where
 ---- pat_idxn is pattern index and n1 ... nn are match positions
 local processors = {}
--- PDF objects grammar in LPEG style (performing table captures)
-local pdf_grammar
+-- PDF objects outer grammar in LPEG style (performing table captures)
+local pdf_outer_grammar
+local pdf_inner_grammar
 
 local max_extraction_size = 512 * 1024 -- TODO: make it configurable
 
@@ -116,13 +117,16 @@ local function compile_tries()
   end
 end
 
-local function gen_grammar()
+-- Returns a table with generic grammar elements for PDF
+local function generic_grammar_elts()
   local P = lpeg.P
   local R = lpeg.R
   local S = lpeg.S
   local V = lpeg.V
   local C = lpeg.C
   local D = R'09' -- Digits
+
+  local grammar_elts = {}
 
   -- Helper functions
   local function pdf_hexstring_unescape(s)
@@ -140,6 +144,7 @@ local function gen_grammar()
   end
 
   local function pdf_string_unescape(s)
+    -- TODO: add unescaping logic
     return s
   end
 
@@ -150,47 +155,57 @@ local function gen_grammar()
   end
 
   local delim = S'()<>[]{}/%'
-  local ws = S'\0 \r\n\t\f'
+  grammar_elts.ws = S'\0 \r\n\t\f'
   local hex = R'af' + R'AF' + D
   -- Comments.
   local eol = P'\r\n' + '\n'
   local line = (1 - S'\r\n\f')^0 * eol^-1
-  local comment = P'%' * line
+  grammar_elts.comment = P'%' * line
 
   -- Numbers.
   local sign = S'+-'^-1
   local decimal = D^1
   local float = D^1 * P'.' * D^0 + P'.' * D^1
-  local number = C(sign * (float + decimal)) / tonumber
+  grammar_elts.number = C(sign * (float + decimal)) / tonumber
 
   -- String
-  local str = P{ "(" * C(((1 - S"()") + V(1))^0) / pdf_string_unescape * ")" }
-  local hexstr = P{"<" * C(hex^0) / pdf_hexstring_unescape * ">"}
+  grammar_elts.str = P{ "(" * C(((1 - S"()") + V(1))^0) / pdf_string_unescape * ")" }
+  grammar_elts.hexstr = P{"<" * C(hex^0) / pdf_hexstring_unescape * ">"}
 
   -- Identifier
-  local id = P{'/' * C((1-(delim + ws))^1) / pdf_id_unescape}
+  grammar_elts.id = P{'/' * C((1-(delim + grammar_elts.ws))^1) / pdf_id_unescape}
 
   -- Booleans (who care about them?)
-  local boolean = C(P("true") + P("false"))
+  grammar_elts.boolean = C(P("true") + P("false"))
 
   -- Stupid references
-  local ref = lpeg.Ct{lpeg.Cc("%REF%") * C(D^1) * " " * C(D^1) * " " * "R"}
+  grammar_elts.ref = lpeg.Ct{lpeg.Cc("%REF%") * C(D^1) * " " * C(D^1) * " " * "R"}
 
-  return P{
+  return grammar_elts
+end
+
+
+-- Generates a grammar to parse outer elements (external objects in PDF notation)
+local function gen_outer_grammar()
+  local V = lpeg.V
+  local gen = generic_grammar_elts()
+
+  return lpeg.P{
     "EXPR";
-    EXPR = ws^0 * V("ELT")^0 * ws^0,
+    EXPR = gen.ws^0 * V("ELT")^0 * gen.ws^0,
     ELT = V("ARRAY") + V("DICT") + V("ATOM"),
-    ATOM = ws^0 * (comment + boolean +ref + number + V("STRING") + id) * ws^0,
-    DICT = "<<" * ws^0  * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * ws^0 * ">>",
-    KV_PAIR = lpeg.Cg(id * ws^0 * V("ELT") * ws^0),
-    ARRAY = "[" * ws^0 * lpeg.Ct(V("ELT")^0) * ws^0 * "]",
-    STRING = P{str + hexstr},
+    ATOM = gen.ws^0 * (gen.comment + gen.boolean + gen.ref +
+        gen.number + V("STRING") + gen.id) * gen.ws^0,
+    DICT = "<<" * gen.ws^0  * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * gen.ws^0 * ">>",
+    KV_PAIR = lpeg.Cg(gen.id * gen.ws^0 * V("ELT") * gen.ws^0),
+    ARRAY = "[" * gen.ws^0 * lpeg.Ct(V("ELT")^0) * gen.ws^0 * "]",
+    STRING = lpeg.P{gen.str + gen.hexstr},
   }
 end
 
 -- Call immediately on require
 compile_tries()
-pdf_grammar = gen_grammar()
+pdf_outer_grammar = gen_outer_grammar()
 
 local function extract_text_data(specific)
   return nil -- NYI
@@ -367,7 +382,7 @@ local function postprocess_pdf_objects(task, input, pdf)
         end
 
         if obj_dict_span:len() < 1024 * 128 then
-          local ret,obj_or_err = pcall(pdf_grammar.match, pdf_grammar, obj_dict_span)
+          local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
 
           if ret then
             obj.dict = obj_or_err
