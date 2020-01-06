@@ -21,6 +21,7 @@ limitations under the License.
 
 local rspamd_trie = require "rspamd_trie"
 local rspamd_util = require "rspamd_util"
+local rspamd_text = require "rspamd_text"
 local bit = require "bit"
 local N = "lua_content"
 local lua_util = require "lua_util"
@@ -53,7 +54,7 @@ local pdf_patterns = {
   },
   start_object = {
     patterns = {
-      [[\n\s*\d+ \d+ obj\r?\n]]
+      [=[[\r\n]\s*\d+ \d+ obj[\r\n]]=]
     }
   },
   end_object = {
@@ -63,7 +64,7 @@ local pdf_patterns = {
   },
   start_stream = {
     patterns = {
-      [[>\s*stream\r?\n]],
+      [=[>\s*stream[\r\n]]=],
     }
   },
   end_stream = {
@@ -76,12 +77,12 @@ local pdf_patterns = {
 local pdf_text_patterns = {
   start = {
     patterns = {
-      [[\s+BT\s+]]
+      [[\sBT\s]]
     }
   },
   stop = {
     patterns = {
-      [[\s+ET\b]]
+      [[\sET\b]]
     }
   }
 }
@@ -223,9 +224,77 @@ local function gen_outer_grammar()
   }
 end
 
+-- Graphic state in PDF
+local function gen_graphics_unary()
+  local P = lpeg.P
+  local S = lpeg.S
+
+  return P("q") + P("Q") + P("h") +
+    P("W") + P("W*") + S("SsFfBb") * P("*")^0 + P("n")
+
+end
+local function gen_graphics_binary()
+  local P = lpeg.P
+
+  return P("g") + P("G") + P("W") + P("J") +
+      P("j") + P("M") + P("ri") + P("gs") + P("i") +
+      P("CS") + P("cs")
+end
+local function gen_graphics_ternary()
+  local P = lpeg.P
+
+  return P("RG") + P("rg") + P("d")
+end
+local function gen_graphics_nary()
+  local P = lpeg.P
+
+  return P("SC") + P("sc") + P("SCN") + P("scn") + P("k") + P("K")
+end
+
+-- Generates a grammar to parse text blocks (between BT and ET)
+local function gen_text_grammar()
+  local V = lpeg.V
+  local P = lpeg.P
+  local C = lpeg.C
+  local gen = generic_grammar_elts()
+
+  local empty = ""
+  local unary_ops = C("T*") / "\n" +
+      C(gen_graphics_unary()) / empty
+  local binary_ops = P("Tc") + P("Tw") + P("Tz") + P("TL") + P("Tr") + P("Ts") +
+      gen_graphics_binary()
+  local ternary_ops = P("TD") + P("Td") + P("Tf") + gen_graphics_ternary()
+  local nary_op = P("Tm") + gen_graphics_nary()
+  local text_binary_op = P("Tj") + P("TJ") + P("'")
+  local text_quote_op = P('"')
+
+  return lpeg.P{
+    "EXPR";
+    EXPR = gen.ws^0 * lpeg.Ct(V("COMMAND")^0),
+    COMMAND = (V("UNARY") + V("BINARY") + V("TERNARY") + V("NARY") + V("TEXT") + gen.comment) * gen.ws^0,
+    UNARY = unary_ops,
+    BINARY = V("ARG") / empty * gen.ws^1 * binary_ops,
+    TERNARY = V("ARG") / empty * gen.ws^1 * V("ARG") / empty * gen.ws^1 * ternary_ops,
+    NARY = (gen.number / 0 * gen.ws^1)^1 * (gen.id / empty * gen.ws^0)^-1 * nary_op,
+    ARG = V("ARRAY") + V("DICT") + V("ATOM"),
+    ATOM = (gen.comment + gen.boolean + gen.ref +
+        gen.number + V("STRING") + gen.id),
+    DICT = "<<" * gen.ws^0  * lpeg.Cf(lpeg.Ct("") * V("KV_PAIR")^0, rawset) * gen.ws^0 * ">>",
+    KV_PAIR = lpeg.Cg(gen.id * gen.ws^0 * V("ARG") * gen.ws^0),
+    ARRAY = "[" * gen.ws^0 * lpeg.Ct(V("ARG")^0) * gen.ws^0 * "]",
+    STRING = lpeg.P{gen.str + gen.hexstr},
+    TEXT = (V("TEXT_ARG") * gen.ws^1 * text_binary_op) +
+        (V("ARG") / 0 * gen.ws^1 * V("ARG") / 0 * gen.ws^1 * V("TEXT_ARG") * gen.ws^1 * text_quote_op),
+    TEXT_ARG = lpeg.Ct(V("STRING")) + V("TEXT_ARRAY"),
+    TEXT_ARRAY = "[" *
+        lpeg.Ct(((gen.ws^0 * (gen.ws^0 * (gen.number / 0)^0 * gen.ws^0 * (gen.str + gen.hexstr)))^1)) * gen.ws^0 * "]",
+  }
+end
+
 -- Call immediately on require
 compile_tries()
 pdf_outer_grammar = gen_outer_grammar()
+pdf_text_grammar = gen_text_grammar()
 
 local function extract_text_data(specific)
   return nil -- NYI
@@ -363,7 +432,9 @@ local function postprocess_pdf_objects(task, input, pdf)
             last = pdf.end_streams[end_pos]
           end
           -- Strip the first \n
-          if input:at(first) == 10 then
+          while first < last do
+            local chr = input:at(first)
+            if chr ~= 13 and chr ~= 10 then break end
             first = first + 1
           end
           local len = last - first
@@ -519,8 +590,23 @@ local function search_text(task, pdf)
           end
 
           bl.data = obj.uncompressed:span(bl.start, bl.len)
-          lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-              obj.major, obj.minor, bl.data)
+          --lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+          --    obj.major, obj.minor, bl.data)
+
+          if bl.len < 10 * 1024 then
+            local ret,obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
+              bl.data)
+
+            if ret then
+              obj.text = rspamd_text.fromtable(obj_or_err)
+              lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+                  obj.major, obj.minor, obj.text)
+            else
+              lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
+                  obj.major, obj.minor, obj_or_err)
+            end
+
+          end
         end
       end
     end
