@@ -355,21 +355,30 @@ local function dereference_object(elt, pdf)
 end
 
 local function process_dict(task, pdf, obj, dict)
-  if type(dict) == 'table' then
+  if not obj.type and type(dict) == 'table' then
     if dict.Type and type(dict.Type) == 'string' then
       -- Common stuff
       obj.type = dict.Type
     else
-      -- Fucking pdf, we need to guess a type...
+      -- Fucking pdf, we need to guess a type (or ignore that crap)...
       lua_util.debugm(N, task, 'no explicit type for %s:%s',
           obj.major, obj.minor)
       if dict.Parent then
         -- Guess by parent
         local parent = dereference_object(dict.Parent, pdf)
 
-        if parent then
-          lua_util.debugm(N, task, 'guess type for %s:%s from parent %s:%s',
-              obj.major, obj.minor, parent.major, parent.minor)
+        if parent and parent.type then
+          if parent.type == 'Catalog' then
+            obj.type = 'Pages'
+          elseif parent.type == 'Pages' then
+            obj.type = 'Page'
+          end
+
+          if obj.type then
+            lua_util.debugm(N, task, 'guessed type for %s:%s (%s) from parent %s:%s (%s)',
+                obj.major, obj.minor, obj.type, parent.major, parent.minor, parent.type)
+
+          end
         end
       end
     end
@@ -384,9 +393,18 @@ local function process_dict(task, pdf, obj, dict)
       obj.contents = {}
 
       for _,c in ipairs(contents) do
-        obj.contents[#obj.contents + 1] = maybe_dereference_object(c, pdf, task)
+        local cobj = maybe_dereference_object(c, pdf, task)
+        if cobj then
+          obj.contents[#obj.contents + 1] = cobj
+          cobj.parent = obj
+          cobj.type = 'content'
+        end
       end
+
+      lua_util.debugm(N, task, 'found content objects for %s:%s -> %s',
+          obj.major, obj.minor, #obj.contents)
     end
+
     local resources = dict.Resources
     if resources and type(resources) == 'table' then
       obj.resources = resources
@@ -422,6 +440,9 @@ local function process_dict(task, pdf, obj, dict)
         end
       end
     end
+
+    lua_util.debugm(N, task, 'found resources for object %s:%s: %s',
+        obj.major, obj.minor, obj.resources)
 
     if dict.Type == 'FontDescriptor' then
 
@@ -639,8 +660,8 @@ local function extract_pdf_objects(task, pdf)
 
       if uncompressed then
         obj.uncompressed = uncompressed
-        lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
-            obj.major, obj.minor, uncompressed, len, uncompressed:len())
+        lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+            obj.major, obj.minor, len, uncompressed:len())
       else
         lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
             obj.major, obj.minor, len, dict.Filter)
@@ -681,51 +702,61 @@ end
 
 local function search_text(task, pdf)
   for _,obj in ipairs(pdf.objects) do
-    if obj.uncompressed then
-      local matches = pdf_text_trie:match(obj.uncompressed)
-      if matches then
-        local text_blocks = {}
-        local starts = {}
-        local ends = {}
+    if obj.type == 'Page' and obj.contents then
+      local text = {}
+      for _,tobj in ipairs(obj.contents) do
+        local matches = pdf_text_trie:match(tobj.uncompressed or '')
+        if matches then
+          local text_blocks = {}
+          local starts = {}
+          local ends = {}
 
-        for npat,matched_positions in pairs(matches) do
-          if npat == 1 then
-            for _,pos in ipairs(matched_positions) do
-              starts[#starts + 1] = pos
-            end
-          else
-            for _,pos in ipairs(matched_positions) do
-              ends[#ends + 1] = pos
-            end
-          end
-        end
-
-        offsets_to_blocks(starts, ends, text_blocks)
-        for _,bl in ipairs(text_blocks) do
-          if bl.len > 2 then
-            -- To remove \s+ET\b pattern (it can leave trailing space or not but it doesn't matter)
-            bl.len = bl.len - 2
-          end
-
-          bl.data = obj.uncompressed:span(bl.start, bl.len)
-          lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
-              obj.major, obj.minor, bl.data)
-
-          if bl.len < config.max_processing_size then
-            local ret,obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
-              bl.data)
-
-            if ret then
-              obj.text = rspamd_text.fromtable(obj_or_err)
-              lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
-                  obj.major, obj.minor, obj.text)
+          for npat,matched_positions in pairs(matches) do
+            if npat == 1 then
+              for _,pos in ipairs(matched_positions) do
+                starts[#starts + 1] = pos
+              end
             else
-              lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
-                  obj.major, obj.minor, obj_or_err)
+              for _,pos in ipairs(matched_positions) do
+                ends[#ends + 1] = pos
+              end
+            end
+          end
+
+          offsets_to_blocks(starts, ends, text_blocks)
+          for _,bl in ipairs(text_blocks) do
+            if bl.len > 2 then
+              -- To remove \s+ET\b pattern (it can leave trailing space or not but it doesn't matter)
+              bl.len = bl.len - 2
             end
 
+            bl.data = tobj.uncompressed:span(bl.start, bl.len)
+            --lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
+            --    tobj.major, tobj.minor, bl.data)
+
+            if bl.len < config.max_processing_size then
+              local ret,obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
+                  bl.data)
+
+              if ret then
+                text[#text + 1] = obj_or_err
+                lua_util.debugm(N, task, 'attached %s from content object %s:%s to %s:%s',
+                    obj_or_err, tobj.major, tobj.minor, obj.major, obj.minor)
+              else
+                lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
+                    obj.major, obj.minor, obj_or_err)
+              end
+
+            end
           end
         end
+      end
+
+      -- Join all text data together
+      if #text > 0 then
+        obj.text = rspamd_text.fromtable(text)
+        lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
+            obj.major, obj.minor, obj.text)
       end
     end
   end
