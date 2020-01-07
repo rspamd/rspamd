@@ -100,6 +100,12 @@ local pdf_text_trie
 
 local exports = {}
 
+local config = {
+  max_extraction_size = 512 * 1024,
+  max_processing_size = 32 * 1024,
+  enabled = true,
+}
+
 -- Used to process patterns found in PDF
 -- positions for functional processors should be a iter/table from trie matcher in form
 ---- [{n1, pat_idx1}, ... {nn, pat_idxn}] where
@@ -109,10 +115,16 @@ local processors = {}
 local pdf_outer_grammar
 local pdf_text_grammar
 
-local max_extraction_size = 512 * 1024 -- TODO: make it configurable
-
 -- Used to match objects
 local object_re = rspamd_regexp.create_cached([=[/(\d+)\s+(\d+)\s+obj\s*/]=])
+
+local function config_module()
+  local opts = rspamd_config:get_all_opt('lua_content')
+
+  if opts and opts.pdf then
+    config = lua_util.override_defaults(config, opts.pdf)
+  end
+end
 
 local function compile_tries()
   local default_compile_flags = bit.bor(rspamd_trie.flags.re,
@@ -229,26 +241,30 @@ local function gen_graphics_unary()
   local P = lpeg.P
   local S = lpeg.S
 
-  return P("q") + P("Q") + P("h") +
-    P("W") + P("W*") + S("SsFfBb") * P("*")^0 + P("n")
+  return P("q") + P("Q") + P("h")
+      + S("WSsFfBb") * P("*")^0 + P("n")
 
 end
 local function gen_graphics_binary()
   local P = lpeg.P
+  local S = lpeg.S
 
-  return P("g") + P("G") + P("W") + P("J") +
-      P("j") + P("M") + P("ri") + P("gs") + P("i") +
-      P("CS") + P("cs")
+  return S("gGwJjMi") +
+      P("M") + P("ri") + P("gs") +
+      P("CS") + P("cs") + P("sh")
 end
 local function gen_graphics_ternary()
   local P = lpeg.P
+  local S = lpeg.S
 
-  return P("RG") + P("rg") + P("d")
+  return P("d") + P("m") + S("lm")
 end
 local function gen_graphics_nary()
   local P = lpeg.P
+  local S = lpeg.S
 
-  return P("SC") + P("sc") + P("SCN") + P("scn") + P("k") + P("K")
+  return P("SC") + P("sc") + P("SCN") + P("scn") + P("k") + P("K") + P("re") + S("cvy") +
+      P("RG") + P("rg")
 end
 
 -- Generates a grammar to parse text blocks (between BT and ET)
@@ -293,6 +309,7 @@ end
 
 -- Call immediately on require
 compile_tries()
+config_module()
 pdf_outer_grammar = gen_outer_grammar()
 pdf_text_grammar = gen_text_grammar()
 
@@ -503,6 +520,33 @@ local function postprocess_pdf_objects(task, input, pdf)
   pdf.objects = objects
 end
 
+local function apply_pdf_filter(input, filt)
+  if filt == 'FlateDecode' then
+    return rspamd_util.inflate(input, config.max_extraction_size)
+  end
+
+  return nil
+end
+
+local function maybe_apply_filter(dict, data)
+  local uncompressed = data
+
+  if dict.Filter then
+    local filt = dict.Filter
+    if type(filt) == 'string' then
+      filt = {filt}
+    end
+
+    for _,f in ipairs(filt) do
+      uncompressed = apply_pdf_filter(uncompressed, f)
+
+      if not uncompressed then break end
+    end
+  end
+
+  return uncompressed
+end
+
 local function extract_pdf_objects(task, pdf)
   local function maybe_extract_object(obj)
     local dict = obj.dict
@@ -511,19 +555,13 @@ local function extract_pdf_objects(task, pdf)
           tonumber(maybe_dereference_object(dict.Length, pdf)) or 0)
       local real_stream = obj.stream.data:span(1, len)
 
-      if dict.Filter == 'FlateDecode' and real_stream:len() > 0 then
-        local uncompressed = rspamd_util.inflate(real_stream, max_extraction_size)
+      local uncompressed = maybe_apply_filter(dict, real_stream)
 
-        if uncompressed then
-          lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
-              obj.major, obj.minor, uncompressed, len, uncompressed:len())
-          obj.uncompressed = uncompressed
-        else
-          lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
-              obj.major, obj.minor, len, dict.Filter)
-        end
+      if uncompressed then
+        obj.uncompressed = uncompressed
+        lua_util.debugm(N, task, 'extracted object %s:%s: %s (%s -> %s)',
+            obj.major, obj.minor, uncompressed, len, uncompressed:len())
       else
-
         lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
             obj.major, obj.minor, len, dict.Filter)
       end
@@ -593,7 +631,7 @@ local function search_text(task, pdf)
           lua_util.debugm(N, task, 'extracted text from object %s:%s: %s',
               obj.major, obj.minor, bl.data)
 
-          if bl.len < 10 * 1024 then
+          if bl.len < config.max_processing_size then
             local ret,obj_or_err = pcall(pdf_text_grammar.match, pdf_text_grammar,
               bl.data)
 
@@ -614,6 +652,12 @@ local function search_text(task, pdf)
 end
 
 local function process_pdf(input, _, task)
+
+  if not config.enabled then
+    -- Skip processing
+    return {}
+  end
+
   local matches = pdf_trie:match(input)
 
   if matches then
