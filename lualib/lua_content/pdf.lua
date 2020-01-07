@@ -323,13 +323,17 @@ local function obj_ref(major, minor)
 end
 
 -- Return indirect object reference (if needed)
-local function maybe_dereference_object(elt, pdf)
+local function maybe_dereference_object(elt, pdf, task)
   if type(elt) == 'table' and elt[1] == '%REF%' then
     local ref = obj_ref(elt[2], elt[3])
 
     if pdf.ref[ref] then
       -- No recursion!
-      return pdf.ref[ref].dict
+      return pdf.ref[ref]
+    else
+      lua_util.debugm(N, task, 'cannot dereference %s:%s -> %s',
+          elt[2], elt[3], obj_ref(elt[2], elt[3]))
+      return nil
     end
   end
 
@@ -351,10 +355,75 @@ local function dereference_object(elt, pdf)
 end
 
 local function process_dict(task, pdf, obj, dict)
-  if type(dict) == 'table' and dict.Type then
+  if type(dict) == 'table' then
+    if dict.Type and type(dict.Type) == 'string' then
+      -- Common stuff
+      obj.type = dict.Type
+    else
+      -- Fucking pdf, we need to guess a type...
+      lua_util.debugm(N, task, 'no explicit type for %s:%s',
+          obj.major, obj.minor)
+      if dict.Parent then
+        -- Guess by parent
+        local parent = dereference_object(dict.Parent, pdf)
+
+        if parent then
+          lua_util.debugm(N, task, 'guess type for %s:%s from parent %s:%s',
+              obj.major, obj.minor, parent.major, parent.minor)
+        end
+      end
+    end
+
+    lua_util.debugm(N, task, 'process stream dictionary for object %s:%s -> %s',
+        obj.major, obj.minor, obj.type)
+    local contents = dict.Contents
+    if contents then
+      if type(contents) == 'table' and contents[1] == '%REF%' then
+        contents = {contents}
+      end
+      obj.contents = {}
+
+      for _,c in ipairs(contents) do
+        obj.contents[#obj.contents + 1] = maybe_dereference_object(c, pdf, task)
+      end
+    end
+    local resources = dict.Resources
+    if resources and type(resources) == 'table' then
+      obj.resources = resources
+    else
+      -- Fucking pdf: we need to inherit from parent
+      resources = {}
+      if dict.Parent then
+        local parent = maybe_dereference_object(dict.Parent, pdf, task)
+
+        if parent and type(parent) == 'table' and parent.dict then
+          if parent.resources then
+            lua_util.debugm(N, task, 'propagated resources from %s:%s to %s:%s',
+                parent.major, parent.minor, obj.major, obj.minor)
+            resources = parent.resources
+          end
+        end
+      end
+
+      obj.resources = resources
+    end
+
+    local fonts = obj.resources.Font
+
+    if fonts and type(fonts) == 'table' then
+      obj.fonts = {}
+      for k,v in pairs(fonts) do
+        obj.fonts[k] = maybe_dereference_object(v, pdf, task)
+
+        if obj.fonts[k] then
+          local font = obj.fonts[k]
+          lua_util.debugm(N, task, 'found font for object %s:%s -> %s',
+              obj.major, obj.minor, font)
+        end
+      end
+    end
+
     if dict.Type == 'FontDescriptor' then
-      obj.type = 'font'
-      obj.ignore = true
 
       lua_util.debugm(N, task, "obj %s:%s is a font descriptor",
          obj.major, obj.minor)
@@ -489,13 +558,24 @@ local function postprocess_pdf_objects(task, input, pdf)
           obj_dict_span = obj.data
         end
 
-        if obj_dict_span:len() < 1024 * 128 then
+        if obj_dict_span:len() < config.max_processing_size then
           local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
 
           if ret then
-            obj.dict = obj_or_err
-            lua_util.debugm(N, task, 'object %s:%s is parsed to: %s',
-                obj.major, obj.minor, obj_or_err)
+            if obj.stream then
+              obj.dict = obj_or_err
+              lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
+                  obj.major, obj.minor, obj_or_err)
+            else
+              -- Direct object
+              pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
+              if type(obj_or_err) == 'table' then
+                obj.dict = obj_or_err
+              end
+              obj.uncompressed = obj_or_err
+              lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
+                  obj.major, obj.minor, obj_or_err)
+            end
           else
             lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
                 obj.major, obj.minor, obj_or_err)
@@ -510,14 +590,14 @@ local function postprocess_pdf_objects(task, input, pdf)
 
   end
 
+  pdf.objects = objects
+
   for _,obj in ipairs(objects) do
     if obj.dict then
       -- Types processing
       process_dict(task, pdf, obj, obj.dict)
     end
   end
-
-  pdf.objects = objects
 end
 
 local function apply_pdf_filter(input, filt)
@@ -552,7 +632,7 @@ local function extract_pdf_objects(task, pdf)
     local dict = obj.dict
     if dict.Filter and dict.Length then
       local len = math.min(obj.stream.len,
-          tonumber(maybe_dereference_object(dict.Length, pdf)) or 0)
+          tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
       local real_stream = obj.stream.data:span(1, len)
 
       local uncompressed = maybe_apply_filter(dict, real_stream)
