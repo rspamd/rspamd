@@ -364,7 +364,7 @@ accept_socket (EV_P_ ev_io *w, int revents)
 		return;
 	}
 
-	session = g_malloc (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->magic = G_MAXINT64;
 	session->addr = addr;
 	session->fd = nfd;
