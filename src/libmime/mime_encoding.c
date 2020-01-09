@@ -36,7 +36,7 @@
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
 
 #define RSPAMD_CHARSET_CACHE_SIZE 32
-#define RSPAMD_CHARSET_MAX_CONTENT 128
+#define RSPAMD_CHARSET_MAX_CONTENT 512
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -625,27 +625,29 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 		 * corner cases
 		 */
 		if (content_check) {
-			real_charset = rspamd_mime_charset_find_by_content (in,
-					MIN (RSPAMD_CHARSET_MAX_CONTENT, len));
+			if (rspamd_fast_utf8_validate (in, len) != 0) {
+				real_charset = rspamd_mime_charset_find_by_content (in,
+						MIN (RSPAMD_CHARSET_MAX_CONTENT, len));
 
-			if (real_charset) {
+				if (real_charset) {
 
-				if (rspamd_regexp_match (utf_compatible_re,
-						real_charset, strlen (real_charset), TRUE)) {
-					RSPAMD_FTOK_ASSIGN (charset, UTF8_CHARSET);
+					if (rspamd_regexp_match (utf_compatible_re,
+							real_charset, strlen (real_charset), TRUE)) {
+						RSPAMD_FTOK_ASSIGN (charset, UTF8_CHARSET);
 
-					return TRUE;
+						return TRUE;
+					}
+					else {
+						charset->begin = real_charset;
+						charset->len = strlen (real_charset);
+
+						return FALSE;
+					}
 				}
-				else {
-					charset->begin = real_charset;
-					charset->len = strlen (real_charset);
 
-					return FALSE;
-				}
+				rspamd_mime_charset_utf_enforce (in, len);
 			}
 		}
-
-		rspamd_mime_charset_utf_enforce (in, len);
 
 		return TRUE;
 	}
