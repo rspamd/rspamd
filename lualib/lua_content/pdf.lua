@@ -386,8 +386,9 @@ local function process_dict(task, pdf, obj, dict)
     lua_util.debugm(N, task, 'process stream dictionary for object %s:%s -> %s',
         obj.major, obj.minor, obj.type)
     local contents = dict.Contents
-    if contents then
-      if type(contents) == 'table' and contents[1] == '%REF%' then
+    if contents and type(contents) == 'table' then
+      if contents[1] == '%REF%' then
+        -- Single reference
         contents = {contents}
       end
       obj.contents = {}
