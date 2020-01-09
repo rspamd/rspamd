@@ -231,6 +231,11 @@ if local_config.external_relay then
   end
 end
 
+if external_ip_spf.map then
+  local lua_maps = require "lua_maps"
+  external_ip_spf.map = lua_maps.map_add_from_ucl(external_ip_spf.map, "radix", "External IP SPF map")
+end
+
 for _,sym in pairs(local_config.symbols) do
   rspamd_config:register_symbol{
     name = sym,
