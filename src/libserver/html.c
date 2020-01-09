@@ -2790,7 +2790,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							goffset old_offset = dest->len;
 
 							if (content_tag) {
-								if (content_tag->content_offset == 0) {
+								if (content_tag->content_length == 0) {
 									content_tag->content_offset = old_offset;
 								}
 							}
@@ -2810,7 +2810,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							len = p - c;
 
 							if (content_tag) {
-								if (content_tag->content_offset == 0) {
+								if (content_tag->content_length == 0) {
 									content_tag->content_offset = dest->len;
 								}
 
@@ -2831,7 +2831,18 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								!g_ascii_isspace (dest->data[dest->len - 1])) {
 							g_byte_array_append (dest, " ", 1);
 							if (content_tag) {
-								content_tag->content_length ++;
+								if (content_tag->content_length == 0) {
+									/*
+									 * Special case
+									 * we have a space at the beginning but
+									 * we have no set content_offset
+									 * so we need to do it here
+									 */
+									content_tag->content_offset = dest->len;
+								}
+								else {
+									content_tag->content_length++;
+								}
 							}
 						}
 						save_space = FALSE;
@@ -2845,7 +2856,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						goffset old_offset = dest->len;
 
 						if (content_tag) {
-							if (content_tag->content_offset == 0) {
+							if (content_tag->content_length == 0) {
 								content_tag->content_offset = dest->len;
 							}
 						}
@@ -2864,7 +2875,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						len = p - c;
 
 						if (content_tag) {
-							if (content_tag->content_offset == 0) {
+							if (content_tag->content_length == 0) {
 								content_tag->content_offset = dest->len;
 							}
 
@@ -2962,7 +2973,18 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						g_byte_array_append (dest, "\r\n", 2);
 
 						if (content_tag) {
-							content_tag->content_length += 2;
+							if (content_tag->content_length == 0) {
+								/*
+								 * Special case
+								 * we have a \r\n at the beginning but
+								 * we have no set content_offset
+								 * so we need to do it here
+								 */
+								content_tag->content_offset = dest->len;
+							}
+							else {
+								content_tag->content_length += 2;
+							}
 						}
 					}
 					save_space = FALSE;
@@ -2975,7 +2997,18 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						g_byte_array_append (dest, "\r\n", 2);
 
 						if (content_tag) {
-							content_tag->content_length += 2;
+							if (content_tag->content_length == 0) {
+								/*
+								 * Special case
+								 * we have a \r\n at the beginning but
+								 * we have no set content_offset
+								 * so we need to get it here
+								 */
+								content_tag->content_offset = dest->len;
+							}
+							else {
+								content_tag->content_length += 2;
+							}
 						}
 					}
 					save_space = FALSE;
