@@ -11,6 +11,12 @@ ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
+SURBL resolve ip
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url7.eml
+  Should Contain  ${result.stdout}  URIBL_SBL_CSS (1.00)[example.ru
+  Should Contain  ${result.stdout}  URIBL_XBL (1.00)[example.ru
+  Should Contain  ${result.stdout}  URIBL_PBL (1.00)[example.ru
+
 SURBL Example.com domain
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url4.eml
   Should Contain  ${result.stdout}  RSPAMD_URIBL

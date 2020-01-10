@@ -2763,10 +2763,13 @@ lua_util_is_utf_outside_range(lua_State *L)
 				return 1;
 			}
 
-			rspamd_lru_hash_insert(validators, creation_hash_key, validator, 0, 0);
+			rspamd_lru_hash_insert(validators, creation_hash_key, validator,
+					0, 0);
 		}
 
-		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, NULL, &uc_err);
+		gint32 pos = 0;
+		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, &pos,
+				&uc_err);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

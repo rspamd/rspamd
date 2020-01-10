@@ -25,6 +25,8 @@ context("URL check functions", function()
     {"http://user:password@тест2.РФ:18 text", {"тест2.рф", "user"}},
     {"somebody@example.com", {"example.com", "somebody"}},
     {"https://127.0.0.1/abc text", {"127.0.0.1", nil}},
+    {"https:\\\\127.0.0.1/abc text", {"127.0.0.1", nil}},
+    {"https:\\\\127.0.0.1", {"127.0.0.1", nil}},
     {"https://127.0.0.1 text", {"127.0.0.1", nil}},
     {"https://[::1]:1", {"::1", nil}},
     {"https://user:password@[::1]:1", {"::1", nil}},
@@ -54,10 +56,10 @@ context("URL check functions", function()
   end
 
   cases = {
-    {"http://%30%78%63%30%2e%30%32%35%30.01", true, { --0xc0.0250.01
+    {"http:\\\\%30%78%63%30%2e%30%32%35%30.01", true, { --0xc0.0250.01
       host = '192.168.0.1',
     }},
-    {"http://www.google.com/foo?bar=baz#", true, {
+    {"http:/\\www.google.com/foo?bar=baz#", true, {
       host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'
     }},
     {"http://[www.google.com]/", false},
@@ -78,17 +80,17 @@ context("URL check functions", function()
     {"http://0.0xFFFFFF", true, {
       host = '0.255.255.255'
     }},
-    {"http://030052000001", true, {
+    {"http:/\\030052000001", true, {
       host = '192.168.0.1'
     }},
-    {"http://0xc0.052000001", true, {
+    {"http:\\/0xc0.052000001", true, {
       host = '192.168.0.1'
     }},
-    {"http://192.168.0.1.", true, {
-      host = '192.168.0.1'
+    {"http://192.168.0.1.?foo", true, {
+      host = '192.168.0.1', query = 'foo',
     }},
-    {"http://[::eeee:192.168.0.1]", true, {
-      host = '::eeee:c0a8:1'
+    {"http:/\\[::eeee:192.168.0.1]#test", true, {
+      host = '::eeee:c0a8:1', fragment = 'test'
     }},
     {"http://twitter.com#test", true, {
       host = 'twitter.com', fragment = 'test'

@@ -685,12 +685,14 @@ local check_encrypted_name = rspamd_config:register_symbol{
     local function check_part(part)
       if part:is_multipart() then
         local children = part:get_children() or {}
+        local text_kids = {}
 
         for _,cld in ipairs(children) do
           if cld:is_multipart() then
             check_part(cld)
           elseif cld:is_text() then
             seen_text = true
+            text_kids[#text_kids + 1] = cld
           else
             local type,subtype,_ = cld:get_type_full()
 
@@ -709,6 +711,17 @@ local check_encrypted_name = rspamd_config:register_symbol{
                 task:insert_result('ENCRYPTED_PGP', 1.0)
               elseif string.find(subtype:lower(), 'pgp%-signature') then
                 task:insert_result('SIGNED_PGP', 1.0)
+              end
+            end
+          end
+          if seen_text and seen_encrypted then
+            -- Ensure that our seen text is not really part of pgp #3205
+            for _,tp in ipairs(text_kids) do
+              local t,_ = tp:get_type()
+              seen_text = false -- reset temporary
+              if t and t == 'text' then
+                seen_text = true
+                break
               end
             end
           end

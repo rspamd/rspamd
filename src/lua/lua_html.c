@@ -663,7 +663,7 @@ lua_html_tag_get_content (lua_State *L)
 	struct rspamd_lua_text *t;
 
 	if (ltag) {
-		if (ltag->html && ltag->tag->content_offset && ltag->tag->content_length &&
+		if (ltag->html && ltag->tag->content_length &&
 				ltag->html->parsed->len >= ltag->tag->content_offset + ltag->tag->content_length) {
 			t = lua_newuserdata (L, sizeof (*t));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
