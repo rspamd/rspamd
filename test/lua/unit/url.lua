@@ -56,6 +56,15 @@ context("URL check functions", function()
   end
 
   cases = {
+    {"http:/\\[::eeee:192.168.0.1]/#test", true, {
+      host = '::eeee:c0a8:1', fragment = 'test'
+    }},
+    {"http:/\\[::eeee:192.168.0.1]#test", true, {
+      host = '::eeee:c0a8:1', fragment = 'test'
+    }},
+    {"http:/\\[::eeee:192.168.0.1]?test", true, {
+      host = '::eeee:c0a8:1', query = 'test'
+    }},
     {"http:\\\\%30%78%63%30%2e%30%32%35%30.01", true, { --0xc0.0250.01
       host = '192.168.0.1',
     }},
@@ -89,9 +98,6 @@ context("URL check functions", function()
     {"http://192.168.0.1.?foo", true, {
       host = '192.168.0.1', query = 'foo',
     }},
-    {"http:/\\[::eeee:192.168.0.1]#test", true, {
-      host = '::eeee:c0a8:1', fragment = 'test'
-    }},
     {"http://twitter.com#test", true, {
       host = 'twitter.com', fragment = 'test'
     }},
@@ -104,9 +110,9 @@ context("URL check functions", function()
   for i,c in ipairs(cases) do
     local res = url.create(pool, c[1])
 
-    test("Parse urls " .. i, function()
+    test("Parse url: " .. c[1], function()
       if c[2] then
-        assert_not_nil(res, "cannot parse " .. c[1])
+        assert_not_nil(res, "we are able to parse url: " .. c[1])
 
         local uf = res:to_table()
 
