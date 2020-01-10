@@ -1021,6 +1021,14 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					st = parse_path;
 					c = p + 1;
 				}
+				else if (*p == '?') {
+					st = parse_query;
+					c = p + 1;
+				}
+				else if (*p == '#') {
+					st = parse_part;
+					c = p + 1;
+				}
 				else if (p != last) {
 					goto out;
 				}
@@ -1358,6 +1366,14 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				c = p + 1;
 				st = parse_query;
+			}
+			else if (t == '#') {
+				/* No query, just fragment */
+				if (p - c != 0) {
+					SET_U (u, UF_PATH);
+				}
+				c = p + 1;
+				st = parse_part;
 			}
 			else if (is_url_end (t)) {
 				goto set;
