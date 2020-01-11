@@ -324,16 +324,21 @@ local function gen_rbl_callback(rule)
 
     if requests_table[req] then
       -- Duplicate request
-      if forced and not requests_table[req].forced then
-        requests_table[req].forced = true
+      local nreq = requests_table[req]
+      if forced and not nreq.forced then
+        nreq.forced = true
       end
+
+      return true,nreq -- Duplicate
     else
+      local nreq
+
       local resolve_ip = rule.resolve_ip and not is_ip
       if rule.process_script then
         local processed = rule.process_script(req, rule.rbl, task, resolve_ip)
 
         if processed then
-          local nreq = {
+          nreq = {
             forced = forced,
             n = processed,
             orig = req_str,
@@ -356,7 +361,7 @@ local function gen_rbl_callback(rule)
           to_resolve = orign
         end
 
-        local nreq = {
+        nreq = {
           forced = forced,
           n = to_resolve,
           orig = req_str,
@@ -365,7 +370,7 @@ local function gen_rbl_callback(rule)
         }
         requests_table[req] = nreq
       end
-
+      return false, nreq
     end
   end
 
@@ -712,15 +717,19 @@ local function gen_rbl_callback(rule)
     local nresolved = 0
 
     -- This is called when doing resolve_ip phase...
-    local function gen_rbl_ip_dns_callback(_)
+    local function gen_rbl_ip_dns_callback(orig_resolve_table_elt)
       return function(_, _, results, err)
         if not err then
           for _,dns_res in ipairs(results) do
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
-              add_dns_request(task, dns_res, false, true,
-                  resolved_req)
+              local dup,nreq = add_dns_request(task, dns_res, false, true,
+                  resolved_req, orig_resolve_table_elt.what)
+              -- Add original name
+              if not dup then
+                nreq.orig = nreq.orig .. ':' .. orig_resolve_table_elt.n
+              end
             end
           end
         end
@@ -759,7 +768,7 @@ local function gen_rbl_callback(rule)
           if r:resolve_a({
             task = task,
             name = req.n,
-            callback = gen_rbl_ip_dns_callback(req.orig),
+            callback = gen_rbl_ip_dns_callback(req),
             forced = req.forced
           }) then
             nresolved = nresolved + 1
