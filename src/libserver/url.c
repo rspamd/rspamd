@@ -1602,6 +1602,11 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 				uri->data);
 		uri->data = p;
 	}
+	else {
+		/* Add trailing slash if needed */
+		r += rspamd_snprintf (strbuf + r, slen - r, "/");
+	}
+
 	if (uri->querylen > 0) {
 		p = strbuf + r + 1;
 		r += rspamd_snprintf (strbuf + r, slen - r, "?%*s",
