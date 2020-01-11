@@ -456,7 +456,7 @@ local function expire_step(cls, ev_base, worker)
   lredis.exec_redis_script(cls.script,
       {ev_base = ev_base, is_write = true},
       redis_step_cb,
-      {'RS*_*', cls.expiry}
+      {'RS_*', cls.expiry}
   )
 end
 
