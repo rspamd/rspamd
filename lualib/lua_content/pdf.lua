@@ -54,7 +54,7 @@ local pdf_patterns = {
   },
   start_object = {
     patterns = {
-      [=[[\r\n]\s*\d+ \d+ obj[\r\n]]=]
+      [=[[\r\n\0]\s*\d+ \d+ obj[\r\n]]=]
     }
   },
   end_object = {
@@ -517,7 +517,10 @@ local function postprocess_pdf_objects(task, input, pdf)
       obj_count = obj_count + 1
       start_pos = start_pos + 1
       end_pos = end_pos + 1
-    elseif start_pos > end_pos then
+    elseif first > last then
+      end_pos = end_pos + 1
+    else
+      start_pos = start_pos + 1
       end_pos = end_pos + 1
     end
   end
