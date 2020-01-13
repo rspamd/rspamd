@@ -3677,13 +3677,13 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	}
 
 	if (url->querylen > 0) {
-		*d++ = '/';
+		*d++ = '?';
 		ENCODE_URL_COMPONENT ((guchar *)url->query, url->querylen,
 				RSPAMD_URL_FLAGS_QUERYSAFE);
 	}
 
 	if (url->fragmentlen > 0) {
-		*d++ = '/';
+		*d++ = '#';
 		ENCODE_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen,
 				RSPAMD_URL_FLAGS_FRAGMENTSAFE);
 	}
