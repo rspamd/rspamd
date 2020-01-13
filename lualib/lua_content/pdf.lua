@@ -54,7 +54,7 @@ local pdf_patterns = {
   },
   start_object = {
     patterns = {
-      [=[[\r\n\0]\s*\d+ \d+ obj[\r\n]]=]
+      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\r\n]]=]
     }
   },
   end_object = {
@@ -408,7 +408,7 @@ local function process_dict(task, pdf, obj, dict)
 
     local resources = dict.Resources
     if resources and type(resources) == 'table' then
-      obj.resources = resources
+      obj.resources = maybe_dereference_object(resources, pdf, task)
     else
       -- Fucking pdf: we need to inherit from parent
       resources = {}
