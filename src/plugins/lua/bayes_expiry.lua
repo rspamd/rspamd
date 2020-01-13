@@ -259,23 +259,26 @@ local expiry_script = [[
     0,0,0,0,0,0,0,0,0,0,0
 
   for _,key in ipairs(keys) do
-    local values = redis.call('HMGET', key, 'H', 'S')
-    local ham = tonumber(values[1]) or 0
-    local spam = tonumber(values[2]) or 0
-    local ttl = redis.call('TTL', key)
-    tokens[key] = {
-      ham,
-      spam,
-      ttl
-    }
-    local total = spam + ham
-    sum = sum + total
-    sum_squares = sum_squares + total * total
-    nelts = nelts + 1
+    local t = redis.call('TYPE', key)
+    if t == 'hash' then
+      local values = redis.call('HMGET', key, 'H', 'S')
+      local ham = tonumber(values[1]) or 0
+      local spam = tonumber(values[2]) or 0
+      local ttl = redis.call('TTL', key)
+      tokens[key] = {
+        ham,
+        spam,
+        ttl
+      }
+      local total = spam + ham
+      sum = sum + total
+      sum_squares = sum_squares + total * total
+      nelts = nelts + 1
 
-    for k,v in pairs({['ham']=ham, ['spam']=spam, ['total']=total}) do
-      if tonumber(v) > 19 then v = 20 end
-      occurr[k][v] = occurr[k][v] and occurr[k][v] + 1 or 1
+      for k,v in pairs({['ham']=ham, ['spam']=spam, ['total']=total}) do
+        if tonumber(v) > 19 then v = 20 end
+        occurr[k][v] = occurr[k][v] and occurr[k][v] + 1 or 1
+      end
     end
   end
 
