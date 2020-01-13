@@ -2244,6 +2244,7 @@ ucl_object_fromstring_common (const char *str, size_t len, enum ucl_string_flags
 				if (ucl_test_character (*p, UCL_CHARACTER_JSON_UNSAFE | UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 					switch (*p) {
 					case '\v':
+					case '\0':
 						escaped_len += 5;
 						break;
 					case ' ':
@@ -2278,6 +2279,14 @@ ucl_object_fromstring_common (const char *str, size_t len, enum ucl_string_flags
 						case '\f':
 							*d++ = '\\';
 							*d = 'f';
+							break;
+						case '\0':
+							*d++ = '\\';
+							*d++ = 'u';
+							*d++ = '0';
+							*d++ = '0';
+							*d++ = '0';
+							*d   = '0';
 							break;
 						case '\v':
 							*d++ = '\\';

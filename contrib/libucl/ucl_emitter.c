@@ -756,6 +756,9 @@ ucl_elt_string_write_json (const char *str, size_t size,
 				func->ucl_emitter_append_len (c, len, func->ud);
 			}
 			switch (*p) {
+			case '\0':
+				func->ucl_emitter_append_len ("\\u0000", 6, func->ud);
+				break;
 			case '\n':
 				func->ucl_emitter_append_len ("\\n", 2, func->ud);
 				break;
