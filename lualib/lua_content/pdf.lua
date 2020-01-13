@@ -695,7 +695,7 @@ local function offsets_to_blocks(starts, ends, out)
       }
       start_pos = start_pos + 1
       end_pos = end_pos + 1
-    elseif start_pos > end_pos then
+    elseif first > last then
       end_pos = end_pos + 1
     else
       -- Not ordered properly!
