@@ -205,15 +205,15 @@ rspamd_redis_conn_timeout (EV_P_ ev_timer *w, int revents)
 	if (conn->state == RSPAMD_REDIS_POOL_CONN_INACTIVE) {
 		msg_debug_rpool ("scheduled soft removal of connection %p, refcount: %d",
 				conn->ctx, conn->ref.refcount);
-		redisAsyncCommand (conn->ctx, rspamd_redis_on_quit, conn, "QUIT");
-		conn->state = RSPAMD_REDIS_POOL_CONN_FINALISING;
-		ev_timer_again (EV_A_ w);
-
 		/* Prevent reusing */
 		if (conn->entry) {
 			g_queue_unlink (conn->elt->inactive, conn->entry);
 			conn->entry = NULL;
 		}
+
+		conn->state = RSPAMD_REDIS_POOL_CONN_FINALISING;
+		ev_timer_again (EV_A_ w);
+		redisAsyncCommand (conn->ctx, rspamd_redis_on_quit, conn, "QUIT");
 	}
 	else {
 		/* Finalising by timeout */
