@@ -477,6 +477,7 @@ rspamd_lua_text_push_line (lua_State *L,
 		struct rspamd_lua_text *ntext;
 
 		ntext = lua_newuserdata (L, sizeof (*ntext));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		ntext->start = start;
 		ntext->len = len;
 		ntext->flags = 0; /* Not own as it must be owned by a top object */
