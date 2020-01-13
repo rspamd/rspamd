@@ -479,6 +479,74 @@ local function process_dict(task, pdf, obj, dict)
   end
 end
 
+local function apply_pdf_filter(input, filt)
+  if filt == 'FlateDecode' then
+    return rspamd_util.inflate(input, config.max_extraction_size)
+  end
+
+  return nil
+end
+
+local function maybe_apply_filter(dict, data)
+  local uncompressed = data
+
+  if dict.Filter then
+    local filt = dict.Filter
+    if type(filt) == 'string' then
+      filt = {filt}
+    end
+
+    for _,f in ipairs(filt) do
+      uncompressed = apply_pdf_filter(uncompressed, f)
+
+      if not uncompressed then break end
+    end
+  end
+
+  return uncompressed
+end
+
+local function maybe_extract_object_stream(obj, pdf, task)
+  local dict = obj.dict
+  if dict.Filter and dict.Length then
+    local len = math.min(obj.stream.len,
+        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
+    local real_stream = obj.stream.data:span(1, len)
+
+    local uncompressed = maybe_apply_filter(dict, real_stream)
+
+    if uncompressed then
+      obj.uncompressed = uncompressed
+      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+          obj.major, obj.minor, len, uncompressed:len())
+      return obj.uncompressed
+    else
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
+          obj.major, obj.minor, len, dict.Filter)
+    end
+  end
+end
+
+-- This function is intended to unpack objects from ObjStm crappy structure
+local compound_obj_grammar
+local function compound_obj_grammar_gen()
+  if not compound_obj_grammar then
+    local gen = generic_grammar_elts()
+    compound_obj_grammar = gen.ws^0 * (gen.comment * gen.ws^1)^0 *
+        lpeg.Ct(lpeg.Ct(gen.number * gen.ws^1 * gen.number * gen.ws^0)^1)
+  end
+end
+local function pdf_compound_object_unpack(obj, uncompressed, pdf, task)
+  -- First, we need to parse data line by line likely to find a line
+  -- that consists of pairs of numbers
+  compound_obj_grammar_gen()
+  local elts = compound_obj_grammar:match(uncompressed)
+  if elts and #elts > 0 then
+    lua_util.debugm(N, task, 'compound elts: %s',
+        elts)
+  end
+end
+
 -- PDF 1.5 ObjStmt
 local function extract_pdf_compound_objects(task, pdf)
   for _,obj in ipairs(pdf.objects or {}) do
@@ -492,7 +560,13 @@ local function extract_pdf_compound_objects(task, pdf)
         if nobjs and first then
           local extend = maybe_dereference_object(obj.dict.Extends, pdf, task)
           lua_util.debugm(N, task, 'extract ObjStm with %s objects (%s first) %s extend',
-              nobjs, first, extend)
+              nobjs, first, obj.dict.Extends)
+
+          local uncompressed = maybe_extract_object_stream(obj, pdf, task)
+
+          if uncompressed then
+            pdf_compound_object_unpack(obj, uncompressed, pdf, task)
+          end
         else
           lua_util.debugm(N, task, 'ObjStm object %s:%s has bad dict: %s',
               obj.major, obj.minor, obj.dict)
@@ -668,53 +742,6 @@ local function postprocess_pdf_objects(task, input, pdf)
     if obj.dict then
       -- Types processing
       process_dict(task, pdf, obj, obj.dict)
-    end
-  end
-end
-
-local function apply_pdf_filter(input, filt)
-  if filt == 'FlateDecode' then
-    return rspamd_util.inflate(input, config.max_extraction_size)
-  end
-
-  return nil
-end
-
-local function maybe_apply_filter(dict, data)
-  local uncompressed = data
-
-  if dict.Filter then
-    local filt = dict.Filter
-    if type(filt) == 'string' then
-      filt = {filt}
-    end
-
-    for _,f in ipairs(filt) do
-      uncompressed = apply_pdf_filter(uncompressed, f)
-
-      if not uncompressed then break end
-    end
-  end
-
-  return uncompressed
-end
-
-local function maybe_extract_object_stream(obj, pdf, task)
-  local dict = obj.dict
-  if dict.Filter and dict.Length then
-    local len = math.min(obj.stream.len,
-        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
-    local real_stream = obj.stream.data:span(1, len)
-
-    local uncompressed = maybe_apply_filter(dict, real_stream)
-
-    if uncompressed then
-      obj.uncompressed = uncompressed
-      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
-          obj.major, obj.minor, len, uncompressed:len())
-    else
-      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
-          obj.major, obj.minor, len, dict.Filter)
     end
   end
 end
