@@ -279,15 +279,17 @@ local function gen_text_grammar()
       C(gen_graphics_unary()) / empty
   local binary_ops = P("Tc") + P("Tw") + P("Tz") + P("TL") + P("Tr") + P("Ts") +
       gen_graphics_binary()
-  local ternary_ops = P("TD") + P("Td") + P("Tf") + gen_graphics_ternary()
+  local ternary_ops = P("TD") + P("Td") + gen_graphics_ternary()
   local nary_op = P("Tm") + gen_graphics_nary()
   local text_binary_op = P("Tj") + P("TJ") + P("'")
   local text_quote_op = P('"')
+  local font_op = P("Tf")
 
   return lpeg.P{
     "EXPR";
     EXPR = gen.ws^0 * lpeg.Ct(V("COMMAND")^0),
-    COMMAND = (V("UNARY") + V("BINARY") + V("TERNARY") + V("NARY") + V("TEXT") + gen.comment) * gen.ws^0,
+    COMMAND = (V("UNARY") + V("BINARY") + V("TERNARY") + V("NARY") + V("TEXT") +
+        V("FONT") + gen.comment) * gen.ws^0,
     UNARY = unary_ops,
     BINARY = V("ARG") / empty * gen.ws^1 * binary_ops,
     TERNARY = V("ARG") / empty * gen.ws^1 * V("ARG") / empty * gen.ws^1 * ternary_ops,
@@ -301,6 +303,8 @@ local function gen_text_grammar()
     STRING = lpeg.P{gen.str + gen.hexstr},
     TEXT = (V("TEXT_ARG") * gen.ws^1 * text_binary_op) +
         (V("ARG") / 0 * gen.ws^1 * V("ARG") / 0 * gen.ws^1 * V("TEXT_ARG") * gen.ws^1 * text_quote_op),
+    FONT = (V("FONT_ARG") * gen.ws^1 * (gen.number / 0) * gen.ws^1 * font_op),
+    FONT_ARG = lpeg.Ct(lpeg.Cc("%font%") * gen.id),
     TEXT_ARG = lpeg.Ct(V("STRING")) + V("TEXT_ARRAY"),
     TEXT_ARRAY = "[" *
         lpeg.Ct(((gen.ws^0 * (gen.ws^0 * (gen.number / 0)^0 * gen.ws^0 * (gen.str + gen.hexstr)))^1)) * gen.ws^0 * "]",
@@ -475,15 +479,34 @@ local function process_dict(task, pdf, obj, dict)
   end
 end
 
--- Processes PDF objects: extracts streams, object numbers, process outer grammar,
--- augment object types
-local function postprocess_pdf_objects(task, input, pdf)
+-- PDF 1.5 ObjStmt
+local function extract_pdf_compound_objects(task, pdf)
+  for _,obj in ipairs(pdf.objects or {}) do
+    if obj.stream and obj.dict and type(obj.dict) == 'table' then
+      local t = obj.dict.Type
+      if t and t == 'ObjStm' then
+        -- We are in troubles sir...
+        local nobjs = tonumber(maybe_dereference_object(obj.dict.N, pdf, task))
+        local first = tonumber(maybe_dereference_object(obj.dict.First, pdf, task))
+
+        if nobjs and first then
+          local extend = maybe_dereference_object(obj.dict.Extends, pdf, task)
+          lua_util.debugm(N, task, 'extract ObjStm with %s objects (%s first) %s extend',
+              nobjs, first, extend)
+        else
+          lua_util.debugm(N, task, 'ObjStm object %s:%s has bad dict: %s',
+              obj.major, obj.minor, obj.dict)
+        end
+      end
+    end
+  end
+end
+
+-- This function arranges starts and ends of all objects and process them into initial
+-- set of objects
+local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
-
-  local objects = {}
   local obj_count = 0
-  pdf.ref = {} -- references table
-
   while start_pos <= #pdf.start_objects and end_pos <= #pdf.end_objects do
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
@@ -504,14 +527,20 @@ local function postprocess_pdf_objects(task, input, pdf)
       local matches = object_re:search(obj_line_span, true, true)
 
       if matches and matches[1] then
-        objects[obj_count + 1] = {
+        local nobj = {
           start = first,
           len = len,
           data = input:span(first, len),
           major = tonumber(matches[1][2]),
           minor = tonumber(matches[1][3]),
         }
-
+        pdf.objects[obj_count + 1] = nobj
+        if nobj.major and nobj.minor then
+          -- Add reference
+          local ref = obj_ref(nobj.major, nobj.minor)
+          nobj.ref = ref -- Our internal reference
+          pdf.ref[ref] = nobj
+        end
       end
 
       obj_count = obj_count + 1
@@ -524,12 +553,51 @@ local function postprocess_pdf_objects(task, input, pdf)
       end_pos = end_pos + 1
     end
   end
+end
 
-  -- Now we have objects and we need to attach streams that are in bounds
+local function parse_object_grammar(obj, task, pdf)
+  -- Parse grammar
+  local obj_dict_span
+  if obj.stream then
+    obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
+  else
+    obj_dict_span = obj.data
+  end
+
+  if obj_dict_span:len() < config.max_processing_size then
+    local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
+
+    if ret then
+      if obj.stream then
+        obj.dict = obj_or_err
+        lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
+            obj.major, obj.minor, obj_or_err)
+      else
+        -- Direct object
+        pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
+        if type(obj_or_err) == 'table' then
+          obj.dict = obj_or_err
+        end
+        obj.uncompressed = obj_or_err
+        lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
+            obj.major, obj.minor, obj_or_err)
+      end
+    else
+      lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
+          obj.major, obj.minor, obj_or_err)
+    end
+  else
+    lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
+        obj.major, obj.minor, obj_dict_span:len())
+  end
+end
+
+-- This function attaches streams to objects and processes outer pdf grammar
+local function attach_pdf_streams(task, input, pdf)
   if pdf.start_streams and pdf.end_streams then
-    start_pos, end_pos = 1, 1
+    local start_pos, end_pos = 1, 1
 
-    for _,obj in ipairs(objects) do
+    for _,obj in ipairs(pdf.objects) do
       while start_pos <= #pdf.start_streams and end_pos <= #pdf.end_streams do
         local first = pdf.start_streams[start_pos]
         local last = pdf.end_streams[end_pos]
@@ -574,50 +642,29 @@ local function postprocess_pdf_objects(task, input, pdf)
         lua_util.debugm(N, task, 'found object %s:%s %s start %s len, no stream',
             obj.major, obj.minor, obj.start, obj.len)
       end
-      if obj.major and obj.minor then
-        -- Parse grammar
-        local obj_dict_span
-        if obj.stream then
-          obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
-        else
-          obj_dict_span = obj.data
-        end
-
-        if obj_dict_span:len() < config.max_processing_size then
-          local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
-
-          if ret then
-            if obj.stream then
-              obj.dict = obj_or_err
-              lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
-                  obj.major, obj.minor, obj_or_err)
-            else
-              -- Direct object
-              pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
-              if type(obj_or_err) == 'table' then
-                obj.dict = obj_or_err
-              end
-              obj.uncompressed = obj_or_err
-              lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
-                  obj.major, obj.minor, obj_or_err)
-            end
-          else
-            lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
-                obj.major, obj.minor, obj_or_err)
-          end
-        else
-          lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
-              obj.major, obj.minor, obj_dict_span:len())
-        end
-        pdf.ref[obj_ref(obj.major, obj.minor)] = obj
-      end
     end
-
   end
+end
 
-  pdf.objects = objects
+-- Processes PDF objects: extracts streams, object numbers, process outer grammar,
+-- augment object types
+local function postprocess_pdf_objects(task, input, pdf)
+  pdf.objects = {} -- objects table
+  pdf.ref = {} -- references table
+  extract_outer_objects(task, input, pdf)
 
-  for _,obj in ipairs(objects) do
+  -- Now we have objects and we need to attach streams that are in bounds
+  attach_pdf_streams(task, input, pdf)
+  -- Parse grammar for outer objects
+  for _,obj in ipairs(pdf.objects) do
+    if obj.ref then
+      parse_object_grammar(obj, task, pdf)
+    end
+  end
+  extract_pdf_compound_objects(task, pdf)
+
+  -- Now we might probably have all objects being processed
+  for _,obj in ipairs(pdf.objects) do
     if obj.dict then
       -- Types processing
       process_dict(task, pdf, obj, obj.dict)
@@ -652,30 +699,22 @@ local function maybe_apply_filter(dict, data)
   return uncompressed
 end
 
-local function extract_pdf_objects(task, pdf)
-  local function maybe_extract_object(obj)
-    local dict = obj.dict
-    if dict.Filter and dict.Length then
-      local len = math.min(obj.stream.len,
-          tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
-      local real_stream = obj.stream.data:span(1, len)
+local function maybe_extract_object_stream(obj, pdf, task)
+  local dict = obj.dict
+  if dict.Filter and dict.Length then
+    local len = math.min(obj.stream.len,
+        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
+    local real_stream = obj.stream.data:span(1, len)
 
-      local uncompressed = maybe_apply_filter(dict, real_stream)
+    local uncompressed = maybe_apply_filter(dict, real_stream)
 
-      if uncompressed then
-        obj.uncompressed = uncompressed
-        lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
-            obj.major, obj.minor, len, uncompressed:len())
-      else
-        lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
-            obj.major, obj.minor, len, dict.Filter)
-      end
-    end
-  end
-
-  for _,obj in ipairs(pdf.objects or {}) do
-    if obj.stream and obj.dict and type(obj.dict) == 'table' and not obj.dict.ignore then
-      maybe_extract_object(obj)
+    if uncompressed then
+      obj.uncompressed = uncompressed
+      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+          obj.major, obj.minor, len, uncompressed:len())
+    else
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
+          obj.major, obj.minor, len, dict.Filter)
     end
   end
 end
@@ -709,6 +748,7 @@ local function search_text(task, pdf)
     if obj.type == 'Page' and obj.contents then
       local text = {}
       for _,tobj in ipairs(obj.contents) do
+        maybe_extract_object_stream(tobj, pdf, task)
         local matches = pdf_text_trie:match(tobj.uncompressed or '')
         if matches then
           local text_blocks = {}
@@ -812,7 +852,6 @@ local function process_pdf(input, _, task)
     if pdf_output.start_objects and pdf_output.end_objects then
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
-      extract_pdf_objects(task, pdf_output)
       search_text(task, pdf_output)
     else
       pdf_output.flags.no_objects = true
