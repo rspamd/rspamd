@@ -217,6 +217,7 @@ rspamd_redis_conn_timeout (EV_P_ ev_timer *w, int revents)
 	}
 	else {
 		/* Finalising by timeout */
+		ev_timer_stop (EV_A_ w);
 		msg_debug_rpool ("final removal of connection %p, refcount: %d",
 				conn->ctx, conn->ref.refcount);
 		REF_RELEASE (conn);
