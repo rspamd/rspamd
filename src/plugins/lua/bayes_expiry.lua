@@ -259,7 +259,7 @@ local expiry_script = [[
     0,0,0,0,0,0,0,0,0,0,0
 
   for _,key in ipairs(keys) do
-    local t = redis.call('TYPE', key)
+    local t = redis.call('TYPE', key)["ok"]
     if t == 'hash' then
       local values = redis.call('HMGET', key, 'H', 'S')
       local ham = tonumber(values[1]) or 0
