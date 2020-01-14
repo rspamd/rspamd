@@ -358,6 +358,46 @@ local function dereference_object(elt, pdf)
   return nil
 end
 
+local function parse_object_grammar(obj, task, pdf)
+  -- Parse grammar
+  local obj_dict_span
+  if obj.stream then
+    obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
+  else
+    obj_dict_span = obj.data
+  end
+
+  if obj_dict_span:len() < config.max_processing_size then
+    local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
+
+    if ret then
+      if obj.stream then
+        obj.dict = obj_or_err
+        lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
+            obj.major, obj.minor, obj_or_err)
+      else
+        -- Direct object
+        pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
+        if type(obj_or_err) == 'table' then
+          obj.dict = obj_or_err
+          obj.uncompressed = obj_or_err
+          lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
+              obj.major, obj.minor, obj_or_err)
+        else
+          lua_util.debugm(N, task, 'direct object %s:%s cannot be parsed: %s',
+              obj.major, obj.minor, obj_dict_span)
+        end
+      end
+    else
+      lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
+          obj.major, obj.minor, obj_or_err)
+    end
+  else
+    lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
+        obj.major, obj.minor, obj_dict_span:len())
+  end
+end
+
 local function process_dict(task, pdf, obj, dict)
   if not obj.type and type(dict) == 'table' then
     if dict.Type and type(dict.Type) == 'string' then
@@ -535,15 +575,45 @@ local function compound_obj_grammar_gen()
     compound_obj_grammar = gen.ws^0 * (gen.comment * gen.ws^1)^0 *
         lpeg.Ct(lpeg.Ct(gen.number * gen.ws^1 * gen.number * gen.ws^0)^1)
   end
+
+  return compound_obj_grammar
 end
-local function pdf_compound_object_unpack(obj, uncompressed, pdf, task)
+local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
   -- First, we need to parse data line by line likely to find a line
   -- that consists of pairs of numbers
   compound_obj_grammar_gen()
   local elts = compound_obj_grammar:match(uncompressed)
   if elts and #elts > 0 then
-    lua_util.debugm(N, task, 'compound elts: %s',
-        elts)
+    lua_util.debugm(N, task, 'compound elts (chunk length %s): %s',
+        #uncompressed, elts)
+
+    for i,pair in ipairs(elts) do
+      local obj_number,offset = pair[1], pair[2]
+
+      offset = offset + first
+      if offset < #uncompressed then
+        local span_len
+        if i == #elts then
+          span_len = #uncompressed - offset
+        else
+          span_len = (elts[i + 1][2] + first) - offset
+        end
+
+        if span_len > 0 then
+          local obj = {
+            major = obj_number,
+            minor = 0, -- Implicit
+            data = uncompressed:span(offset + 1, span_len),
+            ref = obj_ref(obj_number, 0)
+          }
+          parse_object_grammar(obj, task, pdf)
+
+          if obj.dict then
+            pdf.objects[#pdf.objects + 1] = obj
+          end
+        end
+      end
+    end
   end
 end
 
@@ -558,14 +628,14 @@ local function extract_pdf_compound_objects(task, pdf)
         local first = tonumber(maybe_dereference_object(obj.dict.First, pdf, task))
 
         if nobjs and first then
-          local extend = maybe_dereference_object(obj.dict.Extends, pdf, task)
+          --local extend = maybe_dereference_object(obj.dict.Extends, pdf, task)
           lua_util.debugm(N, task, 'extract ObjStm with %s objects (%s first) %s extend',
               nobjs, first, obj.dict.Extends)
 
           local uncompressed = maybe_extract_object_stream(obj, pdf, task)
 
           if uncompressed then
-            pdf_compound_object_unpack(obj, uncompressed, pdf, task)
+            pdf_compound_object_unpack(obj, uncompressed, pdf, task, first)
           end
         else
           lua_util.debugm(N, task, 'ObjStm object %s:%s has bad dict: %s',
@@ -626,43 +696,6 @@ local function extract_outer_objects(task, input, pdf)
       start_pos = start_pos + 1
       end_pos = end_pos + 1
     end
-  end
-end
-
-local function parse_object_grammar(obj, task, pdf)
-  -- Parse grammar
-  local obj_dict_span
-  if obj.stream then
-    obj_dict_span = obj.data:span(1, obj.stream.start - obj.start)
-  else
-    obj_dict_span = obj.data
-  end
-
-  if obj_dict_span:len() < config.max_processing_size then
-    local ret,obj_or_err = pcall(pdf_outer_grammar.match, pdf_outer_grammar, obj_dict_span)
-
-    if ret then
-      if obj.stream then
-        obj.dict = obj_or_err
-        lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
-            obj.major, obj.minor, obj_or_err)
-      else
-        -- Direct object
-        pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
-        if type(obj_or_err) == 'table' then
-          obj.dict = obj_or_err
-        end
-        obj.uncompressed = obj_or_err
-        lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
-            obj.major, obj.minor, obj_or_err)
-      end
-    else
-      lua_util.debugm(N, task, 'object %s:%s cannot be parsed: %s',
-          obj.major, obj.minor, obj_or_err)
-    end
-  else
-    lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
-        obj.major, obj.minor, obj_dict_span:len())
   end
 end
 
