@@ -56,6 +56,9 @@ context("URL check functions", function()
   end
 
   cases = {
+    {'http://example.net/?arg=%23#fragment', true, {
+      host = 'example.net', fragment = 'fragment'
+    }},
     {"http:/\\[::eeee:192.168.0.1]/#test", true, {
       host = '::eeee:c0a8:1', fragment = 'test'
     }},
