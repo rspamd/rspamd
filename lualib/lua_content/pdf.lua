@@ -22,6 +22,7 @@ limitations under the License.
 local rspamd_trie = require "rspamd_trie"
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
+local rspamd_url = require "rspamd_url"
 local bit = require "bit"
 local N = "lua_content"
 local lua_util = require "lua_util"
@@ -866,6 +867,40 @@ local function search_text(task, pdf)
   end
 end
 
+-- This function searches objects for `/URI` key and parses it's content
+local function search_urls(task, pdf)
+  local function recursive_object_traverse(obj, dict, rec)
+    if rec > 10 then
+      lua_util.debugm(N, task, 'object %s:%s recurses too much',
+          obj.major, obj.minor)
+      return
+    end
+
+    for k,v in pairs(dict) do
+      if type(v) == 'table' then
+        recursive_object_traverse(obj, v, rec + 1)
+      elseif k == 'URI' then
+        v = maybe_dereference_object(v, pdf, task)
+        if type(v) == 'string' then
+          local url =  rspamd_url.create(task:get_mempool(), v)
+
+          if url then
+            lua_util.debugm(N, task, 'found url %s in object %s:%s',
+                v, obj.major, obj.minor)
+            task:inject_url(url)
+          end
+        end
+      end
+    end
+  end
+
+  for _,obj in ipairs(pdf.objects) do
+    if obj.dict then
+      recursive_object_traverse(obj, obj.dict, 0)
+    end
+  end
+end
+
 local function process_pdf(input, _, task)
 
   if not config.enabled then
@@ -913,6 +948,7 @@ local function process_pdf(input, _, task)
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
       search_text(task, pdf_output)
+      search_urls(task, pdf_output)
     else
       pdf_output.flags.no_objects = true
     end
