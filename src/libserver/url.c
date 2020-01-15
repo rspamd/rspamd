@@ -1810,7 +1810,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		old_shift = uri->hostlen;
 		uri->hostlen -= shift;
 		memmove (uri->host + uri->hostlen, uri->host + old_shift,
-				uri->datalen + uri->querylen + uri->fragmentlen);
+				uri->datalen + uri->querylen + uri->fragmentlen + 1);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
 		break;
@@ -1825,7 +1825,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		old_shift = uri->datalen;
 		uri->datalen -= shift;
 		memmove (uri->data + uri->datalen, uri->data + old_shift,
-				uri->querylen + uri->fragmentlen);
+				uri->querylen + uri->fragmentlen + 1);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
 		break;
@@ -1840,7 +1840,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		old_shift = uri->querylen;
 		uri->querylen -= shift;
 		memmove (uri->query + uri->querylen, uri->query + old_shift,
-				uri->fragmentlen);
+				uri->fragmentlen + 1);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
 		break;
