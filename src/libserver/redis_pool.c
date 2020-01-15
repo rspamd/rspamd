@@ -185,13 +185,18 @@ rspamd_redis_on_quit (redisAsyncContext *c, gpointer r, gpointer priv)
 	msg_debug_rpool ("quit command reply for the connection %p, refcount: %d",
 			conn->ctx, conn->ref.refcount);
 	/*
-	 * We now schedule timer to enforce removal after callback is executed
-	 * to prevent races. But actually, the connection will likely be freed by
-	 * hiredis itself. It is quite brain damaged logic but it is better to
-	 * deal with it... Dtor will definitely stop this timer.
+	 * The connection will be freed by hiredis itself as we are here merely after
+	 * quit command has succeeded and we have timer being set already.
+	 * The problem is that when this callback is called, our connection is likely
+	 * dead, so probably even on_disconnect callback has been already called...
+	 *
+	 * Hence, the connection might already be freed, so even (conn) pointer may be
+	 * inaccessible.
+	 *
+	 * TODO: Use refcounts to prevent this stuff to happen, the problem is how
+	 * to handle Redis timeout on `quit` command in fact... The good thing is that
+	 * it will not likely happen.
 	 */
-	conn->timeout.repeat = 0.1;
-	ev_timer_again (conn->elt->pool->event_loop, &conn->timeout);
 }
 
 static void
