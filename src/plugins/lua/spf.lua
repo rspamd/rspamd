@@ -89,7 +89,7 @@ local function spf_check_callback(task)
     local found = false
 
     for i,hdr in ipairs(rh) do
-      if hdr.real_ip and hdr.real_ip == local_config.external_relay then
+      if hdr.real_ip and local_config.external_relay:get_key(hdr.real_ip) then
         -- We can use the next header as a source of IP address
         if rh[i + 1] then
           local nhdr = rh[i + 1]
@@ -219,16 +219,10 @@ if local_config.whitelist then
 end
 
 if local_config.external_relay then
-  local rspamd_ip = require "rspamd_ip"
-  local ip = rspamd_ip.from_string(local_config.external_relay)
+  local lua_maps = require "lua_maps"
 
-  if not ip or not ip:is_valid() then
-    rspamd_logger.errx(rspamd_config, "invalid external relay IP: %s",
-        local_config.external_relay)
-    local_config.external_relay = nil
-  else
-    local_config.external_relay = ip
-  end
+  local_config.external_relay = lua_maps.map_add_from_ucl(local_config.external_relay,
+   "radix", "External IP SPF map")
 end
 
 for _,sym in pairs(local_config.symbols) do
