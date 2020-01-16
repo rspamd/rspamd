@@ -706,9 +706,7 @@ LUA_FUNCTION_DEF (task, disable_symbol);
  *
  * * `format` - a format of date returned:
  * 	- `message` - returns a mime date as integer (unix timestamp)
- * 	- `message_str` - returns a mime date as string (UTC format)
  * 	- `connect` - returns a unix timestamp of a connection to rspamd
- * 	- `connect_str` - returns connection time in UTC format
  * * `gmt` - returns date in `GMT` timezone (normal for unix timestamps)
  *
  * By default this function returns connection time in numeric format.
@@ -4746,8 +4744,7 @@ lua_task_process_ann_tokens (lua_State *L)
 enum lua_date_type {
 	DATE_CONNECT = 0,
 	DATE_MESSAGE,
-	DATE_CONNECT_STRING,
-	DATE_MESSAGE_STRING
+	DATE_INVALID
 };
 
 static enum lua_date_type
@@ -4758,7 +4755,7 @@ lua_task_detect_date_type (struct rspamd_task *task,
 
 	if (lua_type (L, idx) == LUA_TNUMBER) {
 		gint num = lua_tonumber (L, idx);
-		if (num >= DATE_CONNECT && num <= DATE_MESSAGE_STRING) {
+		if (num >= DATE_CONNECT && num < DATE_INVALID) {
 			return num;
 		}
 	}
@@ -4774,10 +4771,6 @@ lua_task_detect_date_type (struct rspamd_task *task,
 		if (str) {
 			if (g_ascii_strcasecmp (str, "message") == 0) {
 				type = DATE_MESSAGE;
-			} else if (g_ascii_strcasecmp (str, "connect_str") == 0) {
-				type = DATE_CONNECT_STRING;
-			} else if (g_ascii_strcasecmp (str, "message_str") == 0) {
-				type = DATE_MESSAGE_STRING;
 			}
 		}
 		else {
@@ -4815,7 +4808,7 @@ lua_task_get_date (lua_State *L)
 			type = lua_task_detect_date_type (task, L, 2, &gmt);
 		}
 		/* Get GMT date and store it to time_t */
-		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
+		if (type == DATE_CONNECT) {
 			tim = task->task_timestamp;
 
 			if (!gmt) {
@@ -4828,7 +4821,8 @@ lua_task_get_date (lua_State *L)
 				t.tm_gmtoff = 0;
 #endif
 				t.tm_isdst = 0;
-				tim = mktime (&t);
+				/* Preserve fractional part as Lua is aware of it */
+				tim = mktime (&t) + (tim - tt);
 			}
 		}
 		else {
@@ -4857,18 +4851,7 @@ lua_task_get_date (lua_State *L)
 			}
 		}
 
-		if (type == DATE_CONNECT || type == DATE_MESSAGE) {
-			lua_pushnumber (L, tim);
-		}
-		else {
-			GTimeVal tv;
-			gchar *out;
-
-			double_to_tv (tim, &tv);
-			out = g_time_val_to_iso8601 (&tv);
-			lua_pushstring (L, out);
-			g_free (out);
-		}
+		lua_pushnumber (L, tim);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
