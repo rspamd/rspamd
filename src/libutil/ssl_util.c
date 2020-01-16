@@ -401,7 +401,7 @@ rspamd_tls_set_error (gint retcode, const gchar *stage, GError **err)
 
 		err_code = last_err;
 
-		if (reason->str[reason->len - 1] == ',') {
+		if (reason->len > 0 && reason->str[reason->len - 1] == ',') {
 			reason->str[reason->len - 1] = '\0';
 			reason->len --;
 		}
