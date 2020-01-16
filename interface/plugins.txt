@@ -1,2 +1,0 @@
-https://github.com/valums/file-uploader/
-https://github.com/flot/flot
