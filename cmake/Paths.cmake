@@ -5,7 +5,6 @@
 # RUNDIR - for runtime files
 # DBDIR - for static files
 # LOGDIR - for log files
-# EXAMPLESDIR - for examples files
 
 IF(NOT CONFDIR)
     SET(CONFDIR "${CMAKE_INSTALL_PREFIX}/etc/rspamd")
@@ -34,10 +33,6 @@ ENDIF(NOT LOGDIR)
 IF(NOT SHAREDIR)
     SET(SHAREDIR "${CMAKE_INSTALL_PREFIX}/share/rspamd")
 ENDIF(NOT SHAREDIR)
-
-IF(NOT EXAMPLESDIR)
-    SET(EXAMPLESDIR "${CMAKE_INSTALL_PREFIX}/share/examples/rspamd")
-ENDIF(NOT EXAMPLESDIR)
 
 IF(NOT LUALIBDIR)
     SET(LUALIBDIR "${SHAREDIR}/lualib")
