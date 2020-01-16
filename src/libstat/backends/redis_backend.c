@@ -1780,7 +1780,7 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	}
 
 	if (rt->err) {
-		msg_info_task ("cannot retreive stat tokens from Redis: %e", rt->err);
+		msg_info_task ("cannot retrieve stat tokens from Redis: %e", rt->err);
 		g_error_free (rt->err);
 		rt->err = NULL;
 
