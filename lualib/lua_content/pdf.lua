@@ -359,6 +359,58 @@ local function dereference_object(elt, pdf)
   return nil
 end
 
+-- Apply PDF stream filter
+local function apply_pdf_filter(input, filt)
+  if filt == 'FlateDecode' then
+    return rspamd_util.inflate(input, config.max_extraction_size)
+  end
+
+  return nil
+end
+
+-- Conditionally apply a pipeline of stream filters and return uncompressed data
+local function maybe_apply_filter(dict, data)
+  local uncompressed = data
+
+  if dict.Filter then
+    local filt = dict.Filter
+    if type(filt) == 'string' then
+      filt = {filt}
+    end
+
+    for _,f in ipairs(filt) do
+      uncompressed = apply_pdf_filter(uncompressed, f)
+
+      if not uncompressed then break end
+    end
+  end
+
+  return uncompressed
+end
+
+-- Conditionally extract stream data from object and attach it as obj.uncompressed
+local function maybe_extract_object_stream(obj, pdf, task)
+  local dict = obj.dict
+  if dict.Filter and dict.Length then
+    local len = math.min(obj.stream.len,
+        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
+    local real_stream = obj.stream.data:span(1, len)
+
+    local uncompressed = maybe_apply_filter(dict, real_stream)
+
+    if uncompressed then
+      obj.uncompressed = uncompressed
+      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+          obj.major, obj.minor, len, uncompressed:len())
+      return obj.uncompressed
+    else
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
+          obj.major, obj.minor, len, dict.Filter)
+    end
+  end
+end
+
+
 local function parse_object_grammar(obj, task, pdf)
   -- Parse grammar
   local obj_dict_span
@@ -385,8 +437,8 @@ local function parse_object_grammar(obj, task, pdf)
           lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
               obj.major, obj.minor, obj_or_err)
         else
-          lua_util.debugm(N, task, 'direct object %s:%s cannot be parsed: %s',
-              obj.major, obj.minor, obj_dict_span)
+          obj.dict = {}
+          obj.uncompressed = obj_or_err
         end
       end
     else
@@ -396,6 +448,24 @@ local function parse_object_grammar(obj, task, pdf)
   else
     lua_util.debugm(N, task, 'object %s:%s cannot be parsed: too large %s',
         obj.major, obj.minor, obj_dict_span:len())
+  end
+end
+
+-- Extracts font data and process /ToUnicode mappings
+local function process_font(task, pdf, font, fname)
+  local dict = font
+  if font.dict then
+    dict = font.dict
+  end
+
+  if type(dict) == 'table' and dict.ToUnicode then
+    local cmap = maybe_dereference_object(dict.ToUnicode, pdf, task)
+
+    if cmap and cmap.dict then
+      maybe_extract_object_stream(cmap, pdf, task)
+      lua_util.debugm(N, task, 'found cmap for font %s: %s',
+          fname, cmap.uncompressed)
+    end
   end
 end
 
@@ -481,8 +551,9 @@ local function process_dict(task, pdf, obj, dict)
 
         if obj.fonts[k] then
           local font = obj.fonts[k]
-          lua_util.debugm(N, task, 'found font for object %s:%s -> %s',
-              obj.major, obj.minor, font)
+          process_font(task, pdf, font, k)
+          lua_util.debugm(N, task, 'found font "%s" for object %s:%s -> %s',
+              k, obj.major, obj.minor, font)
         end
       end
     end
@@ -516,54 +587,6 @@ local function process_dict(task, pdf, obj, dict)
         lua_util.debugm(N, task, "obj %s:%s is a font data stream",
             stream_ref.major, stream_ref.minor)
       end
-    end
-  end
-end
-
-local function apply_pdf_filter(input, filt)
-  if filt == 'FlateDecode' then
-    return rspamd_util.inflate(input, config.max_extraction_size)
-  end
-
-  return nil
-end
-
-local function maybe_apply_filter(dict, data)
-  local uncompressed = data
-
-  if dict.Filter then
-    local filt = dict.Filter
-    if type(filt) == 'string' then
-      filt = {filt}
-    end
-
-    for _,f in ipairs(filt) do
-      uncompressed = apply_pdf_filter(uncompressed, f)
-
-      if not uncompressed then break end
-    end
-  end
-
-  return uncompressed
-end
-
-local function maybe_extract_object_stream(obj, pdf, task)
-  local dict = obj.dict
-  if dict.Filter and dict.Length then
-    local len = math.min(obj.stream.len,
-        tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
-    local real_stream = obj.stream.data:span(1, len)
-
-    local uncompressed = maybe_apply_filter(dict, real_stream)
-
-    if uncompressed then
-      obj.uncompressed = uncompressed
-      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
-          obj.major, obj.minor, len, uncompressed:len())
-      return obj.uncompressed
-    else
-      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
-          obj.major, obj.minor, len, dict.Filter)
     end
   end
 end
