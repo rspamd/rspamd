@@ -3038,6 +3038,7 @@ rspamd_symcache_delayed_item_cb (EV_P_ ev_timer *w, int what)
 	task = cbd->task;
 	checkpoint = task->checkpoint;
 	checkpoint->has_slow = FALSE;
+	cbd->event = NULL;
 	ev_timer_stop (EV_A_ w);
 
 	/* Process all reverse dependencies */
@@ -3073,7 +3074,12 @@ rspamd_delayed_timer_dtor (gpointer d)
 	struct rspamd_symcache_delayed_cbdata *cbd =
 			(struct rspamd_symcache_delayed_cbdata *)d;
 
-	ev_timer_stop (cbd->task->event_loop, &cbd->tm);
+	if (cbd->event) {
+		ev_timer_stop (cbd->task->event_loop, &cbd->tm);
+		/* Event has not been executed */
+		rspamd_session_remove_event (cbd->task->s, NULL, cbd);
+		cbd->event = NULL;
+	}
 }
 
 /**
@@ -3088,6 +3094,7 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	struct rspamd_symcache_dynamic_item *dyn_item;
 	gdouble diff;
 	guint i;
+	gboolean enable_slow_timer = FALSE;
 	const gdouble slow_diff_limit = 300;
 
 	/* Sanity checks */
@@ -3121,9 +3128,19 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 				dyn_item->start_msec);
 
 		if (diff > slow_diff_limit) {
-			msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
-					diff);
-			checkpoint->has_slow = TRUE;
+
+			if (!checkpoint->has_slow) {
+				checkpoint->has_slow = TRUE;
+				enable_slow_timer = TRUE;
+				msg_info_task ("slow rule: %s(%d): %.2f ms; enable slow timer delay",
+						item->symbol, item->id,
+						diff);
+			}
+			else {
+				msg_info_task ("slow rule: %s(%d): %.2f ms",
+						item->symbol, item->id,
+						diff);
+			}
 		}
 
 		if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
@@ -3135,7 +3152,7 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 		}
 	}
 
-	if (checkpoint->has_slow) {
+	if (enable_slow_timer) {
 		struct rspamd_symcache_delayed_cbdata *cbd = rspamd_mempool_alloc (task->task_pool,
 				sizeof (*cbd));
 		/* Add timer to allow something else to be executed */
