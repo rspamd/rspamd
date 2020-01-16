@@ -610,9 +610,11 @@ static void
 rspamadm_lua_run_repl (lua_State *L, bool is_batch)
 {
 	gchar *input;
+#ifdef WITH_LUA_REPL
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
 	gsize i;
+#endif
 
 	for (;;) {
 #ifndef WITH_LUA_REPL
@@ -1004,10 +1006,14 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	rx_instance = replxx_init ();
 #endif
 	if (!batch) {
+#ifdef WITH_LUA_REPL
 		replxx_set_max_history_size (rx_instance, max_history);
 		replxx_history_load (rx_instance, histfile);
+#endif
 		rspamadm_lua_run_repl (L, false);
+#ifdef WITH_LUA_REPL
 		replxx_history_save (rx_instance, histfile);
+#endif
 	} else {
 		rspamadm_lua_run_repl (L, true);
 	}
