@@ -211,9 +211,9 @@ local function prepare_dkim_signing(N, task, settings)
   end
 
   local function is_skip_sign()
-    return (settings.sign_networks and not is_sign_networks) and
-        (settings.auth_only and not is_authed) and
-        (settings.sign_local and not is_local)
+    return not (settings.sign_networks and is_sign_networks) and
+        not (settings.auth_only and is_authed) and
+        not (settings.sign_local and is_local)
   end
 
   if hdom then
