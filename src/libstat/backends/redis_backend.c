@@ -846,9 +846,10 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 {
 	struct rspamd_redis_stat_elt *redis_elt = (struct rspamd_redis_stat_elt *)priv;
 	struct rspamd_redis_stat_cbdata *cbdata;
-	redisReply *reply = r, *elt;
+	redisReply *reply = r, *more_elt, *elts, *elt;
 	gchar **pk, *k;
 	guint i, processed = 0;
+	gboolean more = false;
 
 	cbdata = redis_elt->cbdata;
 
@@ -860,10 +861,17 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0 && r != NULL) {
 		if (reply->type == REDIS_REPLY_ARRAY) {
-			g_ptr_array_set_size (cbdata->cur_keys, reply->elements);
+			more_elt = reply->element[0];
+			elts = reply->element[1];
 
-			for (i = 0; i < reply->elements; i ++) {
-				elt = reply->element[i];
+			if (more_elt != NULL && more_elt->str != NULL && strcmp (more_elt->str, "0") != 0) {
+				more = true;
+			}
+
+			g_ptr_array_set_size (cbdata->cur_keys, elts->elements);
+
+			for (i = 0; i < elts->elements; i ++) {
+				elt = elts->element[i];
 
 				if (elt->type == REDIS_REPLY_STRING) {
 					pk = (gchar **)&g_ptr_array_index (cbdata->cur_keys, i);
@@ -912,30 +920,40 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 		}
 
-		/* Set up the required keys */
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "revision", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "used", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "total", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "size", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
-				"symbol", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
-				"type", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
-				"languages", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
-				"users", 0, false);
+		if (more) {
+			/* Get more stat keys */
+			redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
+					"SSCAN %s_keys %s COUNT 1000",
+					cbdata->elt->ctx->stcf->symbol, more_elt->str);
 
-		rspamd_upstream_ok (cbdata->selected);
+			cbdata->inflight += 1;
+		}
+		else {
+			/* Set up the required keys */
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "revision", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "used", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "total", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "size", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
+					"symbol", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
+					"type", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
+					"languages", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
+					"users", 0, false);
 
-		if (cbdata->inflight == 0) {
-			rspamd_redis_async_cbdata_cleanup (cbdata);
-			redis_elt->cbdata = NULL;
+			rspamd_upstream_ok (cbdata->selected);
+
+			if (cbdata->inflight == 0) {
+				rspamd_redis_async_cbdata_cleanup (cbdata);
+				redis_elt->cbdata = NULL;
+			}
 		}
 	}
 	else {
@@ -1029,7 +1047,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	/* Get keys in redis that match our symbol */
 	rspamd_redis_maybe_auth (ctx, cbdata->redis);
 	redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
-			"SMEMBERS %s_keys",
+			"SSCAN %s_keys 0 COUNT 1000",
 			ctx->stcf->symbol);
 }
 
