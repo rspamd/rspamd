@@ -2075,6 +2075,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 				if (checkpoint->has_slow) {
 					/* Delay */
+					checkpoint->has_slow = FALSE;
+
 					return FALSE;
 				}
 				/* Check priorities */
@@ -2118,6 +2120,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 				/* Check priorities */
 				if (checkpoint->has_slow) {
 					/* Delay */
+					checkpoint->has_slow = FALSE;
+
 					return FALSE;
 				}
 
@@ -2176,6 +2180,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 				if (checkpoint->has_slow) {
 					/* Delay */
+					checkpoint->has_slow = FALSE;
+
 					return FALSE;
 				}
 			}
@@ -2214,6 +2220,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 				if (checkpoint->has_slow) {
 					/* Delay */
+					checkpoint->has_slow = FALSE;
+
 					return FALSE;
 				}
 
@@ -2252,6 +2260,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 				/* Check priorities */
 				if (checkpoint->has_slow) {
 					/* Delay */
+					checkpoint->has_slow = FALSE;
+
 					return FALSE;
 				}
 
