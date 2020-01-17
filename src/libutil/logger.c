@@ -334,6 +334,15 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 			openlog ("rspamd", LOG_NDELAY | LOG_PID,
 					rspamd_log->log_facility);
 			rspamd_log->no_lock = TRUE;
+			if (rspamd_log->fd != -1) {
+				/*
+				 * Postponed closing (e.g. when we switch from
+				 * LOG_FILE to LOG_SYSLOG)
+				 */
+				close (rspamd_log->fd);
+			}
+#else
+			return -1;
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
