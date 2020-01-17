@@ -1812,7 +1812,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->hostlen;
 		uri->hostlen -= shift;
-		remain = (uri->urllen - (uri->host - uri->string)) - uri->hostlen;
+		remain = (uri->urllen - (uri->host - uri->string)) - old_shift;
 		g_assert (remain >= 0);
 		memmove (uri->host + uri->hostlen, uri->host + old_shift,
 				remain);
@@ -1829,7 +1829,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->datalen;
 		uri->datalen -= shift;
-		remain = (uri->urllen - (uri->data - uri->string)) - uri->datalen;
+		remain = (uri->urllen - (uri->data - uri->string)) - old_shift;
 		g_assert (remain >= 0);
 		memmove (uri->data + uri->datalen, uri->data + old_shift,
 				remain);
@@ -1846,7 +1846,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->querylen;
 		uri->querylen -= shift;
-		remain = (uri->urllen - (uri->query - uri->string)) - uri->querylen;
+		remain = (uri->urllen - (uri->query - uri->string)) - old_shift;
 		g_assert (remain >= 0);
 		memmove (uri->query + uri->querylen, uri->query + old_shift,
 				remain);
