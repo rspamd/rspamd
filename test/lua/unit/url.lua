@@ -56,6 +56,10 @@ context("URL check functions", function()
   end
 
   cases = {
+    {'http://example.net/hello%20world.php?arg=x#fragment', true, {
+      host = 'example.net', fragment = 'fragment', query = 'arg=x',
+      path = 'hello world.php',
+    }},
     {'http://example.net/?arg=%23#fragment', true, {
       host = 'example.net', fragment = 'fragment', query = 'arg=#',
     }},

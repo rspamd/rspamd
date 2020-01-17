@@ -1781,6 +1781,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		enum http_parser_url_fields field)
 {
 	guint old_shift, shift = 0;
+	gint remain;
 
 	/* Shift remaining data */
 	switch (field) {
@@ -1794,8 +1795,10 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->protocollen;
 		uri->protocollen -= shift;
+		remain = uri->urllen - uri->protocollen;
+		g_assert (remain >= 0);
 		memmove (uri->string + uri->protocollen, uri->string + old_shift,
-				uri->urllen - uri->protocollen);
+				remain);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_SCHEMAENCODED;
 		break;
@@ -1809,8 +1812,10 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->hostlen;
 		uri->hostlen -= shift;
+		remain = (uri->urllen - (uri->host - uri->string)) - uri->hostlen;
+		g_assert (remain >= 0);
 		memmove (uri->host + uri->hostlen, uri->host + old_shift,
-				uri->datalen + uri->querylen + uri->fragmentlen + 1);
+				remain);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
 		break;
@@ -1824,8 +1829,10 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->datalen;
 		uri->datalen -= shift;
+		remain = (uri->urllen - (uri->data - uri->string)) - uri->datalen;
+		g_assert (remain >= 0);
 		memmove (uri->data + uri->datalen, uri->data + old_shift,
-				uri->querylen + uri->fragmentlen + 1);
+				remain);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
 		break;
@@ -1839,8 +1846,10 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->querylen;
 		uri->querylen -= shift;
+		remain = (uri->urllen - (uri->query - uri->string)) - uri->querylen;
+		g_assert (remain >= 0);
 		memmove (uri->query + uri->querylen, uri->query + old_shift,
-				uri->fragmentlen + 1);
+				remain);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
 		break;
