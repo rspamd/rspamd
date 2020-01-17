@@ -11,7 +11,7 @@
 
 #include "config.h"
 
-#if !defined(LPEG_DEBUG)
+#if !defined(LPEG_DEBUG) && !defined(NDEBUG)
 #define NDEBUG
 #endif
 

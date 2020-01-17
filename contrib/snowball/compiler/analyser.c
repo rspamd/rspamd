@@ -207,8 +207,7 @@ static void check_name_type(struct analyser * a, struct name * p, int type) {
         case 'i': if (p->type == t_integer) return; break;
         case 'b': if (p->type == t_boolean) return; break;
         case 'R': if (p->type == t_grouping) return;
-        case 'r': if (p->type == t_routine ||
-                      p->type == t_external) return; break;
+        case 'r': if (p->type == t_routine || p->type == t_external) return; break;
         case 'g': if (p->type == t_grouping) return; break;
     }
     error2(a, 33, type);
@@ -856,9 +855,9 @@ extern void read_program(struct analyser * a) {
         until (q == 0) {
             switch(q->type) {
                 case t_external: case t_routine:
-                    if (q->used && q->definition == 0) error4(a, q); break;
+                    if (q->used && q->definition == 0) { error4(a, q); } break;
                 case t_grouping:
-                    if (q->used && q->grouping == 0) error4(a, q); break;
+                    if (q->used && q->grouping == 0) { error4(a, q); } break;
             }
             q = q->next;
         }
