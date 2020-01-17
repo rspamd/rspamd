@@ -3033,6 +3033,20 @@ struct rspamd_symcache_delayed_cbdata {
 };
 
 static void
+rspamd_symcache_delayed_item_fin (gpointer ud)
+{
+	struct rspamd_symcache_delayed_cbdata *cbd =
+			(struct rspamd_symcache_delayed_cbdata *)ud;
+	struct rspamd_task *task;
+	struct cache_savepoint *checkpoint;
+
+	task = cbd->task;
+	checkpoint = task->checkpoint;
+	checkpoint->has_slow = FALSE;
+	ev_timer_stop (task->event_loop, &cbd->tm);
+}
+
+static void
 rspamd_symcache_delayed_item_cb (EV_P_ ev_timer *w, int what)
 {
 	struct rspamd_symcache_delayed_cbdata *cbd =
@@ -3047,9 +3061,11 @@ rspamd_symcache_delayed_item_cb (EV_P_ ev_timer *w, int what)
 	item = cbd->item;
 	task = cbd->task;
 	checkpoint = task->checkpoint;
-	checkpoint->has_slow = FALSE;
 	cbd->event = NULL;
-	ev_timer_stop (EV_A_ w);
+
+	/* Timer will be stopped here */
+	rspamd_session_remove_event (task->s,
+			rspamd_symcache_delayed_item_fin, cbd);
 
 	/* Process all reverse dependencies */
 	PTR_ARRAY_FOREACH (item->rdeps, i, rdep) {
@@ -3074,8 +3090,6 @@ rspamd_symcache_delayed_item_cb (EV_P_ ev_timer *w, int what)
 			}
 		}
 	}
-
-	rspamd_session_remove_event (task->s, NULL, cbd);
 }
 
 static void
@@ -3085,9 +3099,9 @@ rspamd_delayed_timer_dtor (gpointer d)
 			(struct rspamd_symcache_delayed_cbdata *)d;
 
 	if (cbd->event) {
-		ev_timer_stop (cbd->task->event_loop, &cbd->tm);
 		/* Event has not been executed */
-		rspamd_session_remove_event (cbd->task->s, NULL, cbd);
+		rspamd_session_remove_event (cbd->task->s,
+				rspamd_symcache_delayed_item_fin, cbd);
 		cbd->event = NULL;
 	}
 }
@@ -3163,12 +3177,13 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	}
 
 	if (enable_slow_timer) {
-		struct rspamd_symcache_delayed_cbdata *cbd = rspamd_mempool_alloc (task->task_pool,
-				sizeof (*cbd));
+		struct rspamd_symcache_delayed_cbdata *cbd =
+				rspamd_mempool_alloc (task->task_pool,sizeof (*cbd));
 		/* Add timer to allow something else to be executed */
 		ev_timer *tm = &cbd->tm;
 
-		cbd->event = rspamd_session_add_event (task->s, NULL, cbd,
+		cbd->event = rspamd_session_add_event (task->s,
+				rspamd_symcache_delayed_item_fin, cbd,
 				"symcache");
 
 		/*
