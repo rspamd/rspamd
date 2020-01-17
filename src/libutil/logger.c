@@ -303,11 +303,28 @@ rspamd_try_open_log_fd (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 gint
 rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
+	gint nfd;
+
 	if (!rspamd_log->opened) {
+
 		switch (rspamd_log->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Dup stderr fd to simplify processing */
-			rspamd_log->fd = dup (STDERR_FILENO);
+			nfd = dup (STDERR_FILENO);
+
+			if (nfd == -1) {
+				return -1;
+			}
+			if (rspamd_log->fd != -1) {
+				/*
+				 * Postponed closing (e.g. when we switch from
+				 * LOG_FILE to LOG_CONSOLE)
+				 */
+				close (rspamd_log->fd);
+			}
+
+			rspamd_log->fd = nfd;
+
 			if (isatty (STDERR_FILENO)) {
 				rspamd_log->flags |= RSPAMD_LOG_FLAG_TTY;
 			}
@@ -320,12 +337,21 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
-			rspamd_log->fd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
+			nfd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
 
-			if (rspamd_log->fd == -1) {
+			if (nfd == -1) {
 				return -1;
 			}
 
+			if (rspamd_log->fd != -1) {
+				/*
+				 * Postponed closing (e.g. when we switch from
+				 * LOG_CONSOLE to LOG_FILE)
+				 */
+				close (rspamd_log->fd);
+			}
+
+			rspamd_log->fd = nfd;
 			rspamd_log->no_lock = TRUE;
 			break;
 		default:
@@ -405,12 +431,18 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 				}
 #endif
 				close (rspamd_log->fd);
+				rspamd_log->fd = -1;
 			}
 			break;
 		case RSPAMD_LOG_CONSOLE:
-			if (rspamd_log->fd != -1) {
-				close (rspamd_log->fd);
-			}
+			/*
+			 * Console logging is special: it is usually a last resort when
+			 * we have errors or something like that.
+			 *
+			 * Hence, we need to postpone it's closing to the moment
+			 * when we open (in a reliable matter!) a new logging
+			 * facility.
+			 */
 			break;
 		}
 
@@ -496,6 +528,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 
 	if (plogger == NULL || *plogger == NULL) {
 		logger = g_malloc0 (sizeof (rspamd_logger_t));
+		logger->fd = -1;
 
 		if (cfg->log_error_elts > 0 && pool) {
 			logger->errlog = rspamd_mempool_alloc0_shared (pool,
