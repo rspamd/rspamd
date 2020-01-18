@@ -1,11 +1,17 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --with systemd
+	dh $@ --with systemd --parallel
 
 .PHONY: override_dh_strip
 
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 export ASAN_OPTIONS=detect_leaks=0
+
+ifneq ($(filter $(DEB_TARGET_ARCH),amd64 i386),)
+	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
+else
+	ENABLE_HYPERSCAN :=
+endif
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
@@ -27,7 +33,8 @@ override_dh_auto_configure:
 		-DENABLE_LUAJIT=ON \
 		-DENABLE_TORCH=ON \
 		-DENABLE_LIBUNWIND=ON \
-		-DWANT_SYSTEMD_UNITS=ON
+		-DWANT_SYSTEMD_UNITS=ON \
+		$(ENABLE_HYPERSCAN)
 
 override_dh_makeshlibs:
 	dh_makeshlibs -Xrspamd-actrie
