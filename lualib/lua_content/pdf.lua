@@ -89,6 +89,21 @@ local pdf_text_patterns = {
   }
 }
 
+local pdf_cmap_patterns = {
+  start = {
+    patterns = {
+      [[\d\s+beginbfchar\s]],
+      [[\d\s+beginbfrange\s]]
+    }
+  },
+  stop = {
+    patterns = {
+      [[\sendbfrange\b]],
+      [[\sendbchar\b]]
+    }
+  }
+}
+
 -- index[n] ->
 --  t[1] - pattern,
 --  t[2] - key in patterns table,
@@ -96,9 +111,11 @@ local pdf_text_patterns = {
 --  t[4] - local pattern index
 local pdf_indexes = {}
 local pdf_text_indexes = {}
+local pdf_cmap_indexes = {}
 
 local pdf_trie
 local pdf_text_trie
+local pdf_cmap_trie
 
 local exports = {}
 
@@ -149,6 +166,9 @@ local function compile_tries()
   end
   if not pdf_text_trie then
     pdf_text_trie = compile_pats(pdf_text_patterns, pdf_text_indexes)
+  end
+  if not pdf_cmap_trie then
+    pdf_cmap_trie = compile_pats(pdf_cmap_patterns, pdf_cmap_indexes)
   end
 end
 
@@ -313,6 +333,7 @@ local function gen_text_grammar()
   }
 end
 
+
 -- Call immediately on require
 compile_tries()
 config_module()
@@ -392,7 +413,7 @@ end
 -- Conditionally extract stream data from object and attach it as obj.uncompressed
 local function maybe_extract_object_stream(obj, pdf, task)
   local dict = obj.dict
-  if dict.Filter and dict.Length then
+  if dict.Length then
     local len = math.min(obj.stream.len,
         tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
     local real_stream = obj.stream.data:span(1, len)
@@ -453,6 +474,7 @@ local function parse_object_grammar(obj, task, pdf)
 end
 
 -- Extracts font data and process /ToUnicode mappings
+-- NYI in fact as cmap is ridiculously stupid and complicated
 local function process_font(task, pdf, font, fname)
   local dict = font
   if font.dict then
@@ -466,6 +488,48 @@ local function process_font(task, pdf, font, fname)
       maybe_extract_object_stream(cmap, pdf, task)
       lua_util.debugm(N, task, 'found cmap for font %s: %s',
           fname, cmap.uncompressed)
+    end
+  end
+end
+
+-- Extract interesting stuff, e.g. javascript
+local function process_action(task, pdf, obj)
+  if obj.dict and obj.dict.JS then
+    local js = maybe_dereference_object(obj.dict.JS, pdf, task)
+
+    if js then
+      if type(js) == 'table' then
+        local extracted_js = maybe_extract_object_stream(js, pdf, task)
+
+        if not extracted_js then
+          lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+              obj.major, obj.minor, js)
+        else
+          js = extracted_js
+        end
+      end
+
+      if type(js) == 'string' then
+        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
+            obj.major, obj.minor, js)
+        if not pdf.scripts then
+          pdf.scripts = {}
+        end
+        pdf.scripts[#pdf.scripts + 1] = rspamd_text.fromstring(js)
+      elseif type(js) == 'userdata' then
+        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
+            obj.major, obj.minor, js)
+        if not pdf.scripts then
+          pdf.scripts = {}
+        end
+        pdf.scripts[#pdf.scripts + 1] = js
+      else
+        lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+            obj.major, obj.minor, js)
+      end
+    else
+      lua_util.debugm(N, task, 'no JS attribute in action %s:%s',
+          obj.major, obj.minor)
     end
   end
 end
@@ -497,6 +561,10 @@ local function process_dict(task, pdf, obj, dict)
           end
         end
       end
+    end
+
+    if not obj.type then
+      return
     end
 
     lua_util.debugm(N, task, 'process stream dictionary for object %s:%s -> %s',
@@ -568,7 +636,7 @@ local function process_dict(task, pdf, obj, dict)
     lua_util.debugm(N, task, 'found resources for object %s:%s: %s',
         obj.major, obj.minor, obj.resources)
 
-    if dict.Type == 'FontDescriptor' then
+    if obj.type == 'FontDescriptor' then
 
       lua_util.debugm(N, task, "obj %s:%s is a font descriptor",
          obj.major, obj.minor)
@@ -594,6 +662,8 @@ local function process_dict(task, pdf, obj, dict)
         lua_util.debugm(N, task, "obj %s:%s is a font data stream",
             stream_ref.major, stream_ref.minor)
       end
+    elseif obj.type == 'Action' then
+      process_action(task, pdf, obj)
     end
   end
 end
@@ -925,7 +995,7 @@ local function search_urls(task, pdf)
   end
 
   for _,obj in ipairs(pdf.objects) do
-    if obj.dict then
+    if obj.dict and type(obj.dict) == 'table' then
       recursive_object_traverse(obj, obj.dict, 0)
     end
   end
