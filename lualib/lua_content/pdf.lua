@@ -23,6 +23,7 @@ local rspamd_trie = require "rspamd_trie"
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
 local rspamd_url = require "rspamd_url"
+local rspamd_logger = require "rspamd_logger"
 local bit = require "bit"
 local N = "lua_content"
 local lua_util = require "lua_util"
@@ -524,6 +525,12 @@ local function process_dict(task, pdf, obj, dict)
     local resources = dict.Resources
     if resources and type(resources) == 'table' then
       obj.resources = maybe_dereference_object(resources, pdf, task)
+
+      if type(obj.resources) ~= 'table' then
+        rspamd_logger.infox(task, 'cannot parse resources from pdf: %s returned by grammar',
+            obj.resources)
+        obj.resources = {}
+      end
     else
       -- Fucking pdf: we need to inherit from parent
       resources = {}
