@@ -20,18 +20,14 @@ override_dh_auto_configure:
 		-DDBDIR=/var/lib/rspamd \
 		-DLOGDIR=/var/log/rspamd \
 		-DSHAREDIR=/usr/share/rspamd \
-		-DEXAMPLESDIR=/usr/share/doc/rspamd/examples \
 		-DLIBDIR=/usr/lib/rspamd \
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
 		-DCMAKE_BUILD_TYPE=ReleaseWithDebInfo \
 		-DDEBIAN_BUILD=1 \
-		-DINSTALL_EXAMPLES=ON \
 		-DENABLE_JEMALLOC=ON \
-		-DENABLE_GD=OFF \
 		-DENABLE_PCRE2=OFF \
 		-DENABLE_LUAJIT=ON \
-		-DENABLE_TORCH=ON \
 		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON \
 		$(ENABLE_HYPERSCAN)
