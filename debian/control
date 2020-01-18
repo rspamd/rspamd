@@ -3,9 +3,7 @@ Section: mail
 Priority: extra
 Maintainer: Mikhail Gusarov <dottedmag@debian.org>
 Build-Depends: cmake,
-               debhelper (>= 9),
-               dh-systemd,
-               dpkg-dev (>= 1.16.1~),
+               debhelper (>= 10),
                libcurl4-openssl-dev,
                libglib2.0-dev (>= 2.16.0),
                libhyperscan-dev [amd64 i386],
