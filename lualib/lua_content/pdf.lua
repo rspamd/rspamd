@@ -201,7 +201,24 @@ local function generic_grammar_elts()
   end
 
   local function pdf_string_unescape(s)
-    -- TODO: add unescaping logic
+    local function ue_single(cc)
+      if cc == '\\r' then
+        return '\r'
+      elseif cc == '\\n' then
+        return '\n'
+      else
+        return cc:gsub(2, 2)
+      end
+    end
+    -- simple unescape \char
+    s = s:gsub('\\[^%d]', ue_single)
+    -- unescape octal
+    local function ue_octal(cc)
+      -- Replace unknown stuff with '?'
+      return string.char(tonumber(cc:sub(2), 8) or 63)
+    end
+    s = s:gsub('\\%d%d?%d?', ue_octal)
+
     return s
   end
 
@@ -226,7 +243,7 @@ local function generic_grammar_elts()
   grammar_elts.number = C(sign * (float + decimal)) / tonumber
 
   -- String
-  grammar_elts.str = P{ "(" * C(((1 - S"()") + V(1))^0) / pdf_string_unescape * ")" }
+  grammar_elts.str = P{ "(" * C(((1 - S"()\\") + (P '\\' * 1) + V(1))^0) / pdf_string_unescape * ")" }
   grammar_elts.hexstr = P{"<" * C(hex^0) / pdf_hexstring_unescape * ">"}
 
   -- Identifier
