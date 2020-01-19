@@ -122,6 +122,8 @@ local exports = {}
 local config = {
   max_extraction_size = 512 * 1024,
   max_processing_size = 32 * 1024,
+  text_extraction = false, -- NYI feature
+  url_extraction = true,
   enabled = true,
 }
 
@@ -626,7 +628,11 @@ local function process_dict(task, pdf, obj, dict)
 
         if obj.fonts[k] then
           local font = obj.fonts[k]
-          process_font(task, pdf, font, k)
+
+          if config.text_extraction then
+            process_font(task, pdf, font, k)
+          end
+
           lua_util.debugm(N, task, 'found font "%s" for object %s:%s -> %s',
               k, obj.major, obj.minor, font)
         end
@@ -1047,8 +1053,12 @@ local function process_pdf(input, _, task)
     if pdf_output.start_objects and pdf_output.end_objects then
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
-      search_text(task, pdf_output)
-      search_urls(task, pdf_output)
+      if config.text_extraction then
+        search_text(task, pdf_output)
+      end
+      if config.url_extraction then
+        search_urls(task, pdf_output)
+      end
     else
       pdf_output.flags.no_objects = true
     end
