@@ -524,7 +524,7 @@ local function process_action(task, pdf, obj)
         if not pdf.scripts then
           pdf.scripts = {}
         end
-        obj.js = rspamd_text.fromstring(js)
+        obj.js = rspamd_text.fromstring(js):exclude_chars('%n%c')
         pdf.scripts[#pdf.scripts + 1] = obj.js
         lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
             obj.major, obj.minor, obj.js)
@@ -532,10 +532,10 @@ local function process_action(task, pdf, obj)
         if not pdf.scripts then
           pdf.scripts = {}
         end
-        obj.js = js
-        pdf.scripts[#pdf.scripts + 1] = js
+        obj.js = js:exclude_chars('%n%c')
+        pdf.scripts[#pdf.scripts + 1] = obj.js
         lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-            obj.major, obj.minor, js)
+            obj.major, obj.minor, obj.js)
       else
         lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
             obj.major, obj.minor, js)
