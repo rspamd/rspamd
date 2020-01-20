@@ -1,5 +1,8 @@
 #!/bin/sh
+# Creates a tarball with the concatenation of a git tree and the submodules.
+# Hidden files such as .gitignore are skipped.
 
+# GNU tar
 TAR=${2:-"tar"}
 
 if [ $# -lt 1 ] ; then
@@ -10,24 +13,17 @@ fi
 FNAME=$1
 PREFIX=`basename $FNAME | sed -e 's/\.tar.*$//'`
 
-OUT=""
-while true ; do
-	_mktemp=`which mktemp`
-	if [ F"$_mktemp" != "F" ] ; then
-		OUT=`$_mktemp /tmp/files-XXXXXXXX`
-		break
-	else
-		OUT="/tmp/files-`strings -7 /dev/urandom | head -1 | sed -e 's/[^[:alnum:]]//g'`"
-	fi
-	if [ ! -f "$OUT" ] ; then break ; fi
-done
+ALL_TAR=$(mktemp) || { echo "mktemp is missing!"; exit 1; }
+TMP_TAR=$(mktemp) || { echo "mktemp is missing!"; exit 1; }
+trap 'rm -f "$TMP_TAR" "$ALL_TAR"' EXIT
 
-git ls-files > $OUT
-SUBMODULES=`git submodule | cut -d ' ' -f 3`
+# Create tarball for main repo contents.
+git archive --prefix="$PREFIX/" HEAD ":!.*" ":!**/.*" > "$ALL_TAR"
 
-for sub in $SUBMODULES ; do
-	(cd $sub && git ls-files | sed -e "s|^|$sub/|" >> $OUT)
-done
+# Append submodule contents, if any.
+export PREFIX TMP_TAR ALL_TAR
+git submodule --quiet foreach --recursive \
+	'git archive --prefix="$PREFIX/$displaypath/" HEAD ":!.*" ":!**/.*" > "$TMP_TAR";
+	 tar Af "$ALL_TAR" "$TMP_TAR"'
 
-${TAR} -c --exclude='.[^/]*' --exclude='*.xz' --exclude='*.gz' --no-recursion --transform "s|^|$PREFIX/|" -a -T $OUT -v -f $FNAME
-rm -f $OUT
+xz < "$ALL_TAR" > "$FNAME"
