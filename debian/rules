@@ -7,7 +7,15 @@
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 export ASAN_OPTIONS=detect_leaks=0
 
-ifneq ($(filter $(DEB_TARGET_ARCH),amd64 i386),)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
+	ENABLE_LUAJIT := ON
+else
+	ENABLE_LUAJIT := OFF
+endif
+
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 i386),)
 	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
 else
 	ENABLE_HYPERSCAN :=
@@ -27,7 +35,7 @@ override_dh_auto_configure:
 		-DDEBIAN_BUILD=1 \
 		-DENABLE_JEMALLOC=ON \
 		-DENABLE_PCRE2=OFF \
-		-DENABLE_LUAJIT=ON \
+		-DENABLE_LUAJIT=$(ENABLE_LUAJIT) \
 		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON \
 		$(ENABLE_HYPERSCAN)
