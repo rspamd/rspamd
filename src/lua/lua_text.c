@@ -942,6 +942,54 @@ lua_text_exclude_chars (lua_State *L)
 
 		/* Fill pattern bitset */
 		memset (byteset, 0, sizeof byteset);
+
+		while (patlen > 0) {
+			if (*pat == '%') {
+				pat ++;
+				patlen --;
+
+				if (patlen > 0) {
+					/*
+					 * This stuff assumes little endian, but GSIZE_FROM_LE should
+					 * deal with proper conversion
+					 */
+					switch (*pat) {
+					case '%':
+						BITOP (byteset, *(guchar *) pat, |=);
+						break;
+					case 's':
+						/* "\r\n\t\f " */
+						byteset[0] |= GSIZE_FROM_LE (0x100003600);
+						break;
+					case 'n':
+						/* newlines: "\r\n" */
+						byteset[0] |= GSIZE_FROM_LE (0x2400);
+						break;
+					case '8':
+						/* 8 bit characters */
+						byteset[2] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
+						byteset[3] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
+						break;
+					case 'c':
+						/* Non printable (control) characters */
+						byteset[0] |= GSIZE_FROM_LE (0xffffffff);
+						/* Del character */
+						byteset[1] |= GSIZE_FROM_LE (0x8000000000000000);
+						break;
+					}
+				}
+				else {
+					/* Last '%' */
+					BITOP (byteset, (guchar)'%', |=);
+				}
+			}
+			else {
+				BITOP (byteset, *(guchar *)pat, |=);
+			}
+
+			pat ++;
+			patlen --;
+		}
 		for (; patlen > 0 && BITOP (byteset, *(guchar *)pat, |=); pat++, patlen --);
 
 		p = t->start;
