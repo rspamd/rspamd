@@ -103,6 +103,15 @@ LUA_FUNCTION_DEF (text, at);
  */
 LUA_FUNCTION_DEF (text, bytes);
 LUA_FUNCTION_DEF (text, take_ownership);
+/***
+ * @method rspamd_text:exclude_chars(set_to_exclude, [always_copy])
+ * Returns a text (if owned, then the original text is modified, if not, then it is copied and owned)
+ * where all chars from `set_to_exclude` are removed
+ * @param {string} set_to_exclude characters to exclude
+ * @param {boolean} always_copy always copy the source text
+ * @return {tspamd_text} modified or copied text
+ */
+LUA_FUNCTION_DEF (text, exclude_chars);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 
@@ -123,6 +132,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, bytes),
+		LUA_INTERFACE_DEF (text, exclude_chars),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -886,6 +896,73 @@ lua_text_wipe (lua_State *L)
 	}
 
 	return 0;
+}
+
+#define BITOP(a,b,op) \
+		((a)[(gsize)(b)/(8*sizeof *(a))] op (gsize)1<<((gsize)(b)%(8*sizeof *(a))))
+
+static gint
+lua_text_exclude_chars (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gssize patlen;
+	const gchar *pat = lua_tolstring (L, 2, &patlen), *p, *end;
+	gchar *dest, *d;
+	gsize byteset[32 / sizeof(gsize)]; /* Bitset for ascii */
+	gboolean copy = TRUE;
+	guint *plen;
+
+	if (t != NULL && pat && patlen > 0) {
+		if (lua_isboolean (L, 3)) {
+			copy = lua_toboolean (L, 3);
+		}
+		else if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			copy = FALSE;
+		}
+
+		if (!copy) {
+			dest = (gchar *)t->start;
+			plen = &t->len;
+			lua_pushvalue (L, 1); /* Push text as a result */
+		}
+		else {
+			/* We need to copy read only text */
+			struct rspamd_lua_text *nt;
+
+			dest = g_malloc (t->len);
+			nt = lua_newuserdata (L, sizeof (*nt));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			nt->len = t->len;
+			nt->flags = RSPAMD_TEXT_FLAG_OWN;
+			memcpy (dest, t->start, t->len);
+			nt->start = dest;
+			plen = &nt->len;
+		}
+
+		/* Fill pattern bitset */
+		memset (byteset, 0, sizeof byteset);
+		for (; patlen > 0 && BITOP (byteset, *(guchar *)pat, |=); pat++, patlen --);
+
+		p = t->start;
+		end = t->start + t->len;
+		d = dest;
+
+		while (p < end) {
+			if (!BITOP (byteset, *(guchar *)p, &)) {
+				*d++ = *p;
+			}
+
+			p ++;
+		}
+
+		*(plen) = d - dest;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
