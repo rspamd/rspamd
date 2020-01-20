@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all reproducible=+fixfilepath
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 export ASAN_OPTIONS=detect_leaks=0
 
