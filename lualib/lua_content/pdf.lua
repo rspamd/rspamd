@@ -35,18 +35,6 @@ local pdf_patterns = {
       [[\ntrailer\r?\n]]
     }
   },
-  javascript = {
-    patterns = {
-      [[\/JS(?:[\s/><])]],
-      [[\/JavaScript(?:[\s/><])]],
-    }
-  },
-  openaction = {
-    patterns = {
-      [[\/OpenAction(?:[\s/><])]],
-      [[\/AA(?:[\s/><])]],
-    }
-  },
   suspicious = {
     patterns = {
       [[netsh\s]],
@@ -471,13 +459,14 @@ local function parse_object_grammar(obj, task, pdf)
             obj.major, obj.minor, obj_or_err)
       else
         -- Direct object
-        pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
         if type(obj_or_err) == 'table' then
           obj.dict = obj_or_err
           obj.uncompressed = obj_or_err
           lua_util.debugm(N, task, 'direct object %s:%s is parsed to: %s',
               obj.major, obj.minor, obj_or_err)
+          pdf.ref[obj_ref(obj.major, obj.minor)] = obj
         else
+          pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
           obj.dict = {}
           obj.uncompressed = obj_or_err
         end
@@ -511,9 +500,12 @@ local function process_font(task, pdf, font, fname)
   end
 end
 
--- Extract interesting stuff, e.g. javascript
+-- Forward declaration
+local process_dict
+
+-- Extract interesting stuff from /Action, e.g. javascript
 local function process_action(task, pdf, obj)
-  if obj.dict and obj.dict.JS then
+  if not obj.js and (obj.dict and obj.dict.JS) then
     local js = maybe_dereference_object(obj.dict.JS, pdf, task)
 
     if js then
@@ -529,19 +521,21 @@ local function process_action(task, pdf, obj)
       end
 
       if type(js) == 'string' then
-        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-            obj.major, obj.minor, js)
         if not pdf.scripts then
           pdf.scripts = {}
         end
-        pdf.scripts[#pdf.scripts + 1] = rspamd_text.fromstring(js)
+        obj.js = rspamd_text.fromstring(js)
+        pdf.scripts[#pdf.scripts + 1] = obj.js
+        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
+            obj.major, obj.minor, obj.js)
       elseif type(js) == 'userdata' then
-        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-            obj.major, obj.minor, js)
         if not pdf.scripts then
           pdf.scripts = {}
         end
+        obj.js = js
         pdf.scripts[#pdf.scripts + 1] = js
+        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
+            obj.major, obj.minor, js)
       else
         lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
             obj.major, obj.minor, js)
@@ -553,40 +547,46 @@ local function process_action(task, pdf, obj)
   end
 end
 
-local function process_dict(task, pdf, obj, dict)
+-- Extract interesting stuff from /Catalog, e.g. javascript in /OpenAction
+local function process_catalog(task, pdf, obj)
+  if obj.dict and obj.dict.OpenAction then
+    local action = maybe_dereference_object(obj.dict.OpenAction, pdf, task)
+
+    if action and type(action) == 'table' then
+      -- This also processes action js (if not already processed)
+      process_dict(task, pdf, action, action.dict)
+      if action.js then
+        lua_util.debugm(N, task, 'found openaction JS in %s:%s: %s',
+            obj.major, obj.minor, action.js)
+        pdf.openaction = action.js
+      else
+        lua_util.debugm(N, task, 'no JS in openaction %s:%s: %s',
+            obj.major, obj.minor, action)
+      end
+    else
+      lua_util.debugm(N, task, 'cannot find openaction %s:%s: %s -> %s',
+          obj.major, obj.minor, obj.dict.OpenAction, action)
+    end
+  else
+    lua_util.debugm(N, task, 'no openaction in catalog %s:%s',
+        obj.major, obj.minor)
+  end
+end
+
+process_dict = function(task, pdf, obj, dict)
   if not obj.type and type(dict) == 'table' then
     if dict.Type and type(dict.Type) == 'string' then
       -- Common stuff
       obj.type = dict.Type
-    else
-      -- Fucking pdf, we need to guess a type (or ignore that crap)...
-      lua_util.debugm(N, task, 'no explicit type for %s:%s',
-          obj.major, obj.minor)
-      if dict.Parent then
-        -- Guess by parent
-        local parent = dereference_object(dict.Parent, pdf)
-
-        if parent and parent.type then
-          if parent.type == 'Catalog' then
-            obj.type = 'Pages'
-          elseif parent.type == 'Pages' then
-            obj.type = 'Page'
-          end
-
-          if obj.type then
-            lua_util.debugm(N, task, 'guessed type for %s:%s (%s) from parent %s:%s (%s)',
-                obj.major, obj.minor, obj.type, parent.major, parent.minor, parent.type)
-
-          end
-        end
-      end
     end
 
     if not obj.type then
+      lua_util.debugm(N, task, 'no type for %s:%s',
+          obj.major, obj.minor)
       return
     end
 
-    lua_util.debugm(N, task, 'process stream dictionary for object %s:%s -> %s',
+    lua_util.debugm(N, task, 'processed stream dictionary for object %s:%s -> %s',
         obj.major, obj.minor, obj.type)
     local contents = dict.Contents
     if contents and type(contents) == 'table' then
@@ -617,6 +617,8 @@ local function process_dict(task, pdf, obj, dict)
         rspamd_logger.infox(task, 'cannot parse resources from pdf: %s returned by grammar',
             obj.resources)
         obj.resources = {}
+      elseif obj.resources.dict then
+        obj.resources = obj.resources.dict
       end
     else
       -- Fucking pdf: we need to inherit from parent
@@ -648,19 +650,17 @@ local function process_dict(task, pdf, obj, dict)
 
           if config.text_extraction then
             process_font(task, pdf, font, k)
+            lua_util.debugm(N, task, 'found font "%s" for object %s:%s -> %s',
+                k, obj.major, obj.minor, font)
           end
-
-          lua_util.debugm(N, task, 'found font "%s" for object %s:%s -> %s',
-              k, obj.major, obj.minor, font)
         end
       end
     end
 
-    lua_util.debugm(N, task, 'found resources for object %s:%s: %s',
-        obj.major, obj.minor, obj.resources)
+    lua_util.debugm(N, task, 'found resources for object %s:%s (%s): %s',
+        obj.major, obj.minor, obj.type, obj.resources)
 
     if obj.type == 'FontDescriptor' then
-
       lua_util.debugm(N, task, "obj %s:%s is a font descriptor",
          obj.major, obj.minor)
 
@@ -687,8 +687,10 @@ local function process_dict(task, pdf, obj, dict)
       end
     elseif obj.type == 'Action' then
       process_action(task, pdf, obj)
+    elseif obj.type == 'Catalog' then
+      process_catalog(task, pdf, obj)
     end
-  end
+  end -- Already processed dict (obj.type is not empty)
 end
 
 -- This function is intended to unpack objects from ObjStm crappy structure
@@ -1096,16 +1098,6 @@ processors.trailer = function(input, task, positions, output)
       output.encrypted = true
     end
   end
-end
-
-processors.javascript = function(_, task, _, output)
-  lua_util.debugm(N, task, "pdf: found javascript tag")
-  output.javascript = true
-end
-
-processors.openaction = function(_, task, _, output)
-  lua_util.debugm(N, task, "pdf: found openaction tag")
-  output.openaction = true
 end
 
 processors.suspicious = function(_, task, _, output)
