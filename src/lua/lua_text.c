@@ -107,6 +107,14 @@ LUA_FUNCTION_DEF (text, take_ownership);
  * @method rspamd_text:exclude_chars(set_to_exclude, [always_copy])
  * Returns a text (if owned, then the original text is modified, if not, then it is copied and owned)
  * where all chars from `set_to_exclude` are removed
+ * Patterns supported:
+ *
+ * - %s - all space characters
+ * - %n - all newline characters
+ * - %c - all control characters (it includes 8bit characters and spaces)
+ * - %8 - all 8 bit characters
+ * - %% - just a percent character
+ *
  * @param {string} set_to_exclude characters to exclude
  * @param {boolean} always_copy always copy the source text
  * @return {tspamd_text} modified or copied text
