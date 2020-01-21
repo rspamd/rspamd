@@ -30,8 +30,9 @@ override_dh_auto_configure:
 		-DLIBDIR=/usr/lib/rspamd \
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
-		-DCMAKE_BUILD_TYPE=ReleaseWithDebInfo \
+		-DCMAKE_BUILD_TYPE=None \
 		-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+		-DENABLE_LTO=ON \
 		-DDEBIAN_BUILD=1 \
 		-DENABLE_JEMALLOC=ON \
 		-DENABLE_PCRE2=OFF \
