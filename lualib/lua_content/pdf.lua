@@ -44,7 +44,7 @@ local pdf_patterns = {
   },
   start_object = {
     patterns = {
-      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\r\n<]]=]
+      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\s<]]=]
     }
   },
   end_object = {
@@ -503,9 +503,40 @@ end
 -- Forward declaration
 local process_dict
 
+-- This function processes javascript string and returns JS hash and JS rspamd_text
+local function process_javascript(task, pdf, js)
+  local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
+  if type(js) == 'string' then
+    js = rspamd_text.fromstring(js):exclude_chars('%n%c')
+  elseif type(js) == 'userdata' then
+    js = js:exclude_chars('%n%c')
+  else
+    return nil
+  end
+
+  local hash = rspamd_cryptobox_hash.create(js)
+  local bin_hash = hash:bin()
+
+  if not pdf.scripts then
+    pdf.scripts = {}
+  end
+
+  if pdf.scripts[bin_hash] then
+    -- Duplicate
+    return pdf.scripts[bin_hash]
+  end
+
+  local njs = {
+    data = js,
+    hash = rspamd_util.encode_base32(bin_hash),
+  }
+  pdf.scripts[bin_hash] = njs
+  return njs
+end
+
 -- Extract interesting stuff from /Action, e.g. javascript
 local function process_action(task, pdf, obj)
-  if not obj.js and (obj.dict and obj.dict.JS) then
+  if not (obj.js or obj.launch) and (obj.dict and obj.dict.JS) then
     local js = maybe_dereference_object(obj.dict.JS, pdf, task)
 
     if js then
@@ -520,27 +551,34 @@ local function process_action(task, pdf, obj)
         end
       end
 
-      if type(js) == 'string' then
-        if not pdf.scripts then
-          pdf.scripts = {}
-        end
-        obj.js = rspamd_text.fromstring(js):exclude_chars('%n%c')
-        pdf.scripts[#pdf.scripts + 1] = obj.js
-        lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-            obj.major, obj.minor, obj.js)
-      elseif type(js) == 'userdata' then
-        if not pdf.scripts then
-          pdf.scripts = {}
-        end
-        obj.js = js:exclude_chars('%n%c')
-        pdf.scripts[#pdf.scripts + 1] = obj.js
+      js = process_javascript(task, pdf, js)
+      if js then
+        obj.js = js
         lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
             obj.major, obj.minor, obj.js)
       else
         lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
             obj.major, obj.minor, js)
       end
+    elseif obj.dict.F then
+      local launch = maybe_dereference_object(obj.dict.F, pdf, task)
+
+      if launch then
+        if type(launch) == 'string' then
+          obj.launch = rspamd_text.fromstring(launch):exclude_chars('%n%c')
+          lua_util.debugm(N, task, 'extracted launch from %s:%s: %s',
+              obj.major, obj.minor, obj.launch)
+        elseif type(launch) == 'userdata' then
+          obj.launch = launch:exclude_chars('%n%c')
+          lua_util.debugm(N, task, 'extracted launch from %s:%s: %s',
+              obj.major, obj.minor, obj.launch)
+        else
+          lua_util.debugm(N, task, 'invalid type for launch from %s:%s: %s',
+              obj.major, obj.minor, launch)
+        end
+      end
     else
+
       lua_util.debugm(N, task, 'no JS attribute in action %s:%s',
           obj.major, obj.minor)
     end
@@ -549,27 +587,37 @@ end
 
 -- Extract interesting stuff from /Catalog, e.g. javascript in /OpenAction
 local function process_catalog(task, pdf, obj)
-  if obj.dict and obj.dict.OpenAction then
-    local action = maybe_dereference_object(obj.dict.OpenAction, pdf, task)
+  if obj.dict then
+    if obj.dict.OpenAction then
+      local action = maybe_dereference_object(obj.dict.OpenAction, pdf, task)
 
-    if action and type(action) == 'table' then
-      -- This also processes action js (if not already processed)
-      process_dict(task, pdf, action, action.dict)
-      if action.js then
-        lua_util.debugm(N, task, 'found openaction JS in %s:%s: %s',
-            obj.major, obj.minor, action.js)
-        pdf.openaction = action.js
+      if action and type(action) == 'table' then
+        -- This also processes action js (if not already processed)
+        process_dict(task, pdf, action, action.dict)
+        if action.js then
+          lua_util.debugm(N, task, 'found openaction JS in %s:%s: %s',
+              obj.major, obj.minor, action.js)
+          pdf.openaction = action.js
+        elseif action.launch then
+          lua_util.debugm(N, task, 'found openaction launch in %s:%s: %s',
+              obj.major, obj.minor, action.launch)
+          pdf.launch = action.launch
+        else
+          lua_util.debugm(N, task, 'no JS in openaction %s:%s: %s',
+              obj.major, obj.minor, action)
+        end
       else
-        lua_util.debugm(N, task, 'no JS in openaction %s:%s: %s',
-            obj.major, obj.minor, action)
+        lua_util.debugm(N, task, 'cannot find openaction %s:%s: %s -> %s',
+            obj.major, obj.minor, obj.dict.OpenAction, action)
       end
     else
-      lua_util.debugm(N, task, 'cannot find openaction %s:%s: %s -> %s',
-          obj.major, obj.minor, obj.dict.OpenAction, action)
+      lua_util.debugm(N, task, 'no openaction in catalog %s:%s',
+          obj.major, obj.minor)
     end
-  else
-    lua_util.debugm(N, task, 'no openaction in catalog %s:%s',
-        obj.major, obj.minor)
+    if obj.dict.AA then
+      -- Additional action
+
+    end
   end
 end
 
@@ -581,9 +629,16 @@ process_dict = function(task, pdf, obj, dict)
     end
 
     if not obj.type then
-      lua_util.debugm(N, task, 'no type for %s:%s',
-          obj.major, obj.minor)
-      return
+
+      if obj.dict.S and obj.dict.JS then
+        obj.type = 'Javascript'
+        lua_util.debugm(N, task, 'implicit type for Javascript object %s:%s',
+            obj.major, obj.minor)
+      else
+        lua_util.debugm(N, task, 'no type for %s:%s',
+            obj.major, obj.minor)
+        return
+      end
     end
 
     lua_util.debugm(N, task, 'processed stream dictionary for object %s:%s -> %s',
@@ -689,6 +744,31 @@ process_dict = function(task, pdf, obj, dict)
       process_action(task, pdf, obj)
     elseif obj.type == 'Catalog' then
       process_catalog(task, pdf, obj)
+    elseif obj.type == 'Javascript' then
+      local js = maybe_dereference_object(obj.dict.JS, pdf, task)
+
+      if js then
+        if type(js) == 'table' then
+          local extracted_js = maybe_extract_object_stream(js, pdf, task)
+
+          if not extracted_js then
+            lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+                obj.major, obj.minor, js)
+          else
+            js = extracted_js
+          end
+        end
+
+        js = process_javascript(task, pdf, js)
+        if js then
+          obj.js = js
+          lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
+              obj.major, obj.minor, obj.js)
+        else
+          lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+              obj.major, obj.minor, js)
+        end
+      end
     end
   end -- Already processed dict (obj.type is not empty)
 end
