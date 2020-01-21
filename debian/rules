@@ -1,17 +1,24 @@
 #!/usr/bin/make -f
-%:
-	dh $@ --with systemd --parallel
 
-.PHONY: override_dh_strip
-
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all reproducible=+fixfilepath
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 export ASAN_OPTIONS=detect_leaks=0
 
-ifneq ($(filter $(DEB_TARGET_ARCH),amd64 i386),)
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
+	ENABLE_LUAJIT := ON
+else
+	ENABLE_LUAJIT := OFF
+endif
+
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 i386),)
 	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
 else
 	ENABLE_HYPERSCAN :=
 endif
+%:
+	dh $@ --with systemd --parallel
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
@@ -23,20 +30,22 @@ override_dh_auto_configure:
 		-DLIBDIR=/usr/lib/rspamd \
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
-		-DCMAKE_BUILD_TYPE=ReleaseWithDebInfo \
+		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+		-DENABLE_LTO=ON \
 		-DDEBIAN_BUILD=1 \
 		-DENABLE_JEMALLOC=ON \
 		-DENABLE_PCRE2=OFF \
-		-DENABLE_LUAJIT=ON \
+		-DENABLE_LUAJIT=$(ENABLE_LUAJIT) \
 		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON \
 		$(ENABLE_HYPERSCAN)
 
-override_dh_makeshlibs:
-	dh_makeshlibs -Xrspamd-actrie
-
 override_dh_strip:
 	dh_strip --dbg-package=rspamd-dbg
+
+override_dh_makeshlibs:
+	dh_makeshlibs -Xrspamd-actrie
 
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/rspamd

@@ -19,7 +19,8 @@
 #include "lua/lua_thread_pool.h"
 #include "unix-std.h"
 
-static const char *lua_src = BUILDROOT "/test/lua/pcall_test.lua";
+static const char *lua_src_name = "lua/pcall_test.lua";
+extern gchar *argv0_dirname;
 
 extern struct rspamd_main *rspamd_main;
 
@@ -126,12 +127,15 @@ void
 rspamd_lua_lua_pcall_vs_resume_test_func (void)
 {
 	lua_State *L = rspamd_main->cfg->lua_state;
+	gchar *lua_src;
 	gdouble t1, reference;
 
+	lua_src = g_build_filename (argv0_dirname, lua_src_name, NULL);
 	if (luaL_dofile (L, lua_src) != 0) {
 		msg_err ("failed to load test file: %s ", lua_tostring (L, -1));
 		g_assert (0);
 	}
+	g_free (lua_src);
 
 	gint function_call = luaL_ref (L, LUA_REGISTRYINDEX);
 

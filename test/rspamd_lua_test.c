@@ -23,9 +23,10 @@
 #include <glob.h>
 #endif
 
-static const char *lua_src = BUILDROOT "/test/lua/tests.lua";
+static const char *lua_src_name = "lua/tests.lua";
 extern gchar *lua_test;
 extern gchar *lua_test_case;
+extern gchar *argv0_dirname;
 extern struct rspamd_main *rspamd_main;
 
 static int
@@ -59,7 +60,7 @@ void
 rspamd_lua_test_func (void)
 {
 	lua_State *L = (lua_State *)rspamd_main->cfg->lua_state;
-	gchar *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
+	gchar *lua_src, *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
 	const gchar *old_path;
 	glob_t globbuf;
 	gint i, len;
@@ -75,11 +76,13 @@ rspamd_lua_test_func (void)
 
 	rspamd_printf ("Starting lua tests\n");
 
+	lua_src = g_build_filename (argv0_dirname, lua_src_name, NULL);
 	if ((rp = realpath (lua_src, rp_buf)) == NULL) {
 		msg_err ("cannot find path %s: %s",
 				lua_src, strerror (errno));
 		g_assert (0);
 	}
+	g_free (lua_src);
 
 	tmp = g_strdup (rp);
 	dir = dirname (tmp);

@@ -50,7 +50,8 @@ CHECK_LIBRARY_EXISTS(m ceil "" HAVE_LIBM)
 CONFIGURE_FILE(config.h.in libev-config.h)
 
 ADD_LIBRARY(rspamd-ev SHARED ${LIBEVSRC})
-ADD_DEFINITIONS("-DEV_CONFIG_H=\"${CMAKE_CURRENT_BINARY_DIR}/libev-config.h\""
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
+ADD_DEFINITIONS("-DEV_CONFIG_H=\"libev-config.h\""
 		-DEV_MULTIPLICITY=1
 		-DEV_USE_FLOOR=1
 		-DEV_NO_THREADS=1 # We do not have threads in Rspamd!

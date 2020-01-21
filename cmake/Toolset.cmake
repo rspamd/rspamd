@@ -166,9 +166,16 @@ else ()
 endif()
 
 
+if (CMAKE_BUILD_TYPE_UC MATCHES "RELEASE|RELWITHDEBINFO")
+  set(ENABLE_LTO_INIT ON)
+else()
+  set(ENABLE_LTO_INIT OFF)
+endif()
+option(ENABLE_LTO       "Build rspamd with Link Time Optimization if supported [default: ${ENABLE_LTO_INIT}]" ${ENABLE_LTO_INIT})
+
 if (CMAKE_BUILD_TYPE_UC MATCHES "COVERAGE")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-elseif (CMAKE_BUILD_TYPE_UC MATCHES "RELEASE")
+elseif (ENABLE_LTO)
     if (${CMAKE_VERSION} VERSION_GREATER "3.9.0")
         cmake_policy (SET CMP0069 NEW)
         include (CheckIPOSupported)

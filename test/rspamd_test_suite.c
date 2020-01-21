@@ -12,6 +12,7 @@ worker_t *workers[] = { NULL };
 gchar *lua_test = NULL;
 gchar *lua_test_case = NULL;
 gboolean verbose = FALSE;
+gchar *argv0_dirname = NULL;
 
 static GOptionEntry entries[] =
 {
@@ -44,6 +45,8 @@ main (int argc, char **argv)
 	(void)rspamd_log_open (rspamd_main->logger);
 
 	g_test_init (&argc, &argv, NULL);
+
+	argv0_dirname = g_path_get_dirname (argv[0]);
 
 	context = g_option_context_new ("- run rspamd test");
 	g_option_context_add_main_entries (context, entries, NULL);
