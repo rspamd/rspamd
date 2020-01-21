@@ -1,16 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
-use Getopt::Std;
 
 my $progname = $0;
-
-my $include_path = '../';
-our($opt_f);
-
-getopts('f');
-if ($opt_f) {
-	$include_path = '';
-}
 
 if (scalar @ARGV < 4 || scalar @ARGV > 5) {
   print "Usage: $progname <outfile> <C source directory> <modules description file> <source list file> [<extn>]\n";
@@ -109,7 +100,7 @@ EOS
     foreach $lang (@algorithms) {
         my $hashref = $algorithm_encs{$lang};
         foreach $enc (sort keys (%$hashref)) {
-            print OUT "#include \"${include_path}$c_src_dir/stem_${enc}_$lang.h\"\n";
+            print OUT "#include \"../$c_src_dir/stem_${enc}_$lang.h\"\n";
         }
     }
 
