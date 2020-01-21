@@ -614,10 +614,6 @@ local function process_catalog(task, pdf, obj)
       lua_util.debugm(N, task, 'no openaction in catalog %s:%s',
           obj.major, obj.minor)
     end
-    if obj.dict.AA then
-      -- Additional action
-
-    end
   end
 end
 
