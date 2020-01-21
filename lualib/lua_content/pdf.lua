@@ -44,7 +44,7 @@ local pdf_patterns = {
   },
   start_object = {
     patterns = {
-      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\r\n]]=]
+      [=[[\r\n\0]\s*\d+\s+\d+\s+obj[\r\n<]]=]
     }
   },
   end_object = {
