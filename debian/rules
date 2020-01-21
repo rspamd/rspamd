@@ -12,6 +12,9 @@ else
 	ENABLE_LUAJIT := OFF
 endif
 
+# Can be filled by a build system
+EXTRA_ARGS :=
+
 ifneq ($(filter $(DEB_HOST_ARCH),amd64 i386),)
 	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
 else
@@ -35,11 +38,12 @@ override_dh_auto_configure:
 		-DENABLE_LTO=ON \
 		-DDEBIAN_BUILD=1 \
 		-DENABLE_JEMALLOC=ON \
-		-DENABLE_PCRE2=OFF \
+		-DENABLE_PCRE2=ON \
 		-DENABLE_LUAJIT=$(ENABLE_LUAJIT) \
 		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON \
-		$(ENABLE_HYPERSCAN)
+		$(ENABLE_HYPERSCAN) \
+		$(EXTRA_ARGS)
 
 override_dh_strip:
 	dh_strip --dbg-package=rspamd-dbg
