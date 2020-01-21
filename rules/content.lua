@@ -24,12 +24,9 @@ local function process_pdf_specific(task, part, specific)
     end
   end
 
-  if specific.javascript then
+  if specific.openaction and #specific.openaction > 10 then
     task:insert_result('PDF_JAVASCRIPT', 1.0, part:get_filename())
-    suspicious_factor = suspicious_factor + 0.1
-    if specific.openaction then
-      suspicious_factor = suspicious_factor + 0.5
-    end
+    suspicious_factor = suspicious_factor + 0.5
   end
 
   if specific.suspicious then
