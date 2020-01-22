@@ -307,6 +307,15 @@ exports.check_mime_part = function(task, part, rule_id)
     return true,false
   end
 
+  if part:is_specific() then
+    local sp = part:get_specific()
+
+    if type(sp) == 'table' and sp.fuzzy_hashes then
+      lua_util.debugm(N, task, 'check specific part %s', part:get_id())
+      return true,false
+    end
+  end
+
   if part:is_attachment() then
     return mime_types_check(task, part, rule)
   end

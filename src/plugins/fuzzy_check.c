@@ -112,6 +112,7 @@ struct fuzzy_ctx {
 enum fuzzy_result_type {
 	FUZZY_RESULT_TXT,
 	FUZZY_RESULT_IMG,
+	FUZZY_RESULT_CONTENT,
 	FUZZY_RESULT_BIN
 };
 
@@ -155,6 +156,7 @@ struct fuzzy_learn_session {
 #define FUZZY_CMD_FLAG_REPLIED (1 << 0)
 #define FUZZY_CMD_FLAG_SENT (1 << 1)
 #define FUZZY_CMD_FLAG_IMAGE (1 << 2)
+#define FUZZY_CMD_FLAG_CONTENT (1 << 3)
 
 #define FUZZY_CHECK_FLAG_NOIMAGES (1 << 0)
 #define FUZZY_CHECK_FLAG_NOATTACHMENTS (1 << 1)
@@ -1943,24 +1945,32 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 
 	nval = fuzzy_normalize (rep->v1.value, weight);
 
-	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
-		if (!io->part || io->part->parsed_data.len <= short_image_limit) {
-			nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
-		}
+	if (io) {
+		if ((io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+			if (!io->part || io->part->parsed_data.len <= short_image_limit) {
+				nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
+			}
 
-		type = "img";
-		res->type = FUZZY_RESULT_IMG;
-	}
-	else {
-		/* Calc real probability */
-		nval *= sqrtf (rep->v1.prob);
-
-		if (cmd->shingles_count > 0) {
-			type = "txt";
-			res->type = FUZZY_RESULT_TXT;
+			type = "img";
+			res->type = FUZZY_RESULT_IMG;
 		}
 		else {
-			res->type = FUZZY_RESULT_BIN;
+			/* Calc real probability */
+			nval *= sqrtf (rep->v1.prob);
+
+			if (cmd->shingles_count > 0) {
+				type = "txt";
+				res->type = FUZZY_RESULT_TXT;
+			}
+			else {
+				if (io->flags & FUZZY_CMD_FLAG_CONTENT) {
+					type = "content";
+					res->type = FUZZY_RESULT_CONTENT;
+				}
+				else {
+					res->type = FUZZY_RESULT_BIN;
+				}
+			}
 		}
 	}
 
@@ -2484,18 +2494,23 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 
 				ftype = "bin";
 
-				if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
-					ftype = "img";
-				}
-				else if (cmd->shingles_count > 0) {
-					ftype = "txt";
-				}
+				if (io) {
+					if ((io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+						ftype = "img";
+					}
+					else if (io->flags & FUZZY_CMD_FLAG_CONTENT) {
+						ftype = "content";
+					}
+					else if (cmd->shingles_count > 0) {
+						ftype = "txt";
+					}
 
-				if (io->cmd.cmd == FUZZY_WRITE) {
-					op = "added";
-				}
-				else if (io->cmd.cmd == FUZZY_DEL) {
-					op = "deleted";
+					if (io->cmd.cmd == FUZZY_WRITE) {
+						op = "added";
+					}
+					else if (io->cmd.cmd == FUZZY_DEL) {
+						op = "deleted";
+					}
 				}
 
 				if (rep->v1.prob > 0.5) {
@@ -2740,6 +2755,68 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							image->parent->digest,
 							mime_part);
 					io->flags |= FUZZY_CMD_FLAG_IMAGE;
+				}
+				else if (mime_part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA) {
+					const struct rspamd_lua_specific_part *lua_spec;
+
+					lua_spec = &mime_part->specific.lua_specific;
+
+					if (lua_spec->type == RSPAMD_LUA_PART_TABLE) {
+						lua_State *L = (lua_State *)task->cfg->lua_state;
+						gint old_top;
+
+						old_top = lua_gettop (L);
+						/* Push table */
+						lua_rawgeti (L, LUA_REGISTRYINDEX, lua_spec->cbref);
+						lua_pushstring (L, "fuzzy_hashes");
+						lua_gettable (L, -2);
+
+						if (lua_type (L, -1) == LUA_TTABLE) {
+
+							for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+								const gchar *h = NULL;
+								gsize hlen = 0;
+
+								if (lua_isstring (L, -1)) {
+									h = lua_tolstring (L, -1, &hlen);
+								}
+								else if (lua_type (L, -1) == LUA_TUSERDATA) {
+									struct rspamd_lua_text *t;
+
+									t = lua_check_text (L, -1);
+
+									if (t) {
+										h = t->start;
+										hlen = t->len;
+									}
+ 								}
+
+								if (hlen == rspamd_cryptobox_HASHBYTES) {
+									io = fuzzy_cmd_from_data_part (rule, c,
+											flag, value,
+											task->task_pool,
+											(guchar *)h,
+											mime_part);
+
+									if (io) {
+										io->flags |= FUZZY_CMD_FLAG_CONTENT;
+										g_ptr_array_add (res, io);
+									}
+								}
+							}
+						}
+
+						lua_settop (L, old_top);
+
+						/*
+						 * Add part itself as well
+						 */
+						io = fuzzy_cmd_from_data_part (rule, c,
+								flag, value,
+								task->task_pool,
+								mime_part->digest,
+								mime_part);
+					}
 				}
 				else {
 					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
