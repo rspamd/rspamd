@@ -16,6 +16,7 @@
 
 #include "lua_common.h"
 #include "libcryptobox/cryptobox.h"
+#include "contrib/fastutf8/fastutf8.h"
 #include "unix-std.h"
 
 /***
@@ -120,6 +121,20 @@ LUA_FUNCTION_DEF (text, take_ownership);
  * @return {tspamd_text} modified or copied text
  */
 LUA_FUNCTION_DEF (text, exclude_chars);
+/***
+ * @method rspamd_text:oneline([always_copy])
+ * Returns a text (if owned, then the original text is modified, if not, then it is copied and owned)
+ * where the following transformations are made:
+ * - All spaces sequences are replaced with a single space
+ * - All newlines sequences are replaced with a single space
+ * - Trailing and leading spaces are removed
+ * - Control characters are excluded
+ * - UTF8 sequences are normalised
+ *
+ * @param {boolean} always_copy always copy the source text
+ * @return {tspamd_text} modified or copied text
+ */
+LUA_FUNCTION_DEF (text, oneline);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 
@@ -141,6 +156,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, bytes),
 		LUA_INTERFACE_DEF (text, exclude_chars),
+		LUA_INTERFACE_DEF (text, oneline),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -1010,6 +1026,146 @@ lua_text_exclude_chars (lua_State *L)
 			}
 
 			p ++;
+		}
+
+		*(plen) = d - dest;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_oneline (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	const gchar *p, *end;
+	gchar *dest, *d;
+	gsize byteset[32 / sizeof(gsize)]; /* Bitset for ascii */
+	gboolean copy = TRUE, seen_8bit = FALSE;
+	guint *plen;
+
+	if (t != NULL) {
+		if (lua_isboolean (L, 2)) {
+			copy = lua_toboolean (L, 2);
+		}
+		else if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			copy = FALSE;
+		}
+
+		if (!copy) {
+			dest = (gchar *)t->start;
+			plen = &t->len;
+			lua_pushvalue (L, 1); /* Push text as a result */
+		}
+		else {
+			/* We need to copy read only text */
+			struct rspamd_lua_text *nt;
+
+			dest = g_malloc (t->len);
+			nt = lua_newuserdata (L, sizeof (*nt));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			nt->len = t->len;
+			nt->flags = RSPAMD_TEXT_FLAG_OWN;
+			memcpy (dest, t->start, t->len);
+			nt->start = dest;
+			plen = &nt->len;
+		}
+
+		/* Fill pattern bitset */
+		memset (byteset, 0, sizeof byteset);
+		/* All spaces */
+		byteset[0] |= GSIZE_FROM_LE (0x100003600);
+		/* Control characters */
+		byteset[0] |= GSIZE_FROM_LE (0xffffffff);
+		/* Del character */
+		byteset[1] |= GSIZE_FROM_LE (0x8000000000000000);
+		/* 8 bit characters */
+		byteset[2] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
+		byteset[3] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
+
+		p = t->start;
+		end = t->start + t->len;
+		d = dest;
+
+		while (p < end) {
+			if (!BITOP (byteset, *(guchar *)p, &)) {
+				*d++ = *p;
+			}
+			else {
+				if ((*(guchar *)p) & 0x80) {
+					seen_8bit = TRUE;
+					*d++ = *p;
+				}
+				else {
+					if (*p == ' ') {
+						if (d != dest) {
+							*d++ = *p++;
+						}
+
+						while (p < end && g_ascii_isspace (*p)) {
+							p ++;
+						}
+
+						continue; /* To avoid p++ */
+					}
+					else if (*p == '\r' || *p == '\n') {
+						if (d != dest) {
+							*d++ = ' ';
+							p ++;
+						}
+
+						while (p < end && g_ascii_isspace (*p)) {
+							p ++;
+						}
+
+						continue; /* To avoid p++ */
+					}
+				}
+			}
+
+			p ++;
+		}
+
+		while (d > dest && g_ascii_isspace (*(d - 1))) {
+			d --;
+		}
+
+		if (seen_8bit) {
+			if (rspamd_fast_utf8_validate (dest, d - dest) != 0) {
+				/* Need to make it valid :( */
+				UChar32 uc;
+				goffset err_offset;
+				gsize remain = d - dest;
+				gchar *nd = dest;
+
+				while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (nd, remain)) > 0) {
+					gint i = 0;
+
+					err_offset --; /* As it returns it 1 indexed */
+					nd += err_offset;
+					remain -= err_offset;
+
+					/* Each invalid character of input requires 3 bytes of output (+2 bytes) */
+					while (i < remain) {
+						gint old_pos = i;
+						U8_NEXT (nd, i, remain, uc);
+
+						if (uc < 0) {
+							nd[old_pos] = '?';
+						}
+						else {
+							break;
+						}
+					}
+
+					nd += i;
+					remain -= i;
+				}
+			}
 		}
 
 		*(plen) = d - dest;
