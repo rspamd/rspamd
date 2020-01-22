@@ -507,9 +507,9 @@ local process_dict
 local function process_javascript(task, pdf, js)
   local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
   if type(js) == 'string' then
-    js = rspamd_text.fromstring(js):exclude_chars('%n%c')
+    js = rspamd_text.fromstring(js):oneline()
   elseif type(js) == 'userdata' then
-    js = js:exclude_chars('%n%c')
+    js = js:oneline()
   else
     return nil
   end
