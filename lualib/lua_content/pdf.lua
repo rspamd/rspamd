@@ -113,6 +113,9 @@ local config = {
   text_extraction = false, -- NYI feature
   url_extraction = true,
   enabled = true,
+  js_fuzzy = true, -- Generate fuzzy hashes from PDF javascripts
+  min_js_fuzzy = 32, -- Minimum size of js to be considered as a fuzzy
+  openaction_fuzzy_only = false, -- Generate fuzzy from all scripts
 }
 
 -- Used to process patterns found in PDF
@@ -529,6 +532,7 @@ local function process_javascript(task, pdf, js)
   local njs = {
     data = js,
     hash = rspamd_util.encode_base32(bin_hash),
+    bin_hash = bin_hash,
   }
   pdf.scripts[bin_hash] = njs
   return njs
@@ -555,7 +559,7 @@ local function process_action(task, pdf, obj)
       if js then
         obj.js = js
         lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-            obj.major, obj.minor, obj.js)
+            obj.major, obj.minor, obj.js.data)
       else
         lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
             obj.major, obj.minor, js)
@@ -759,7 +763,7 @@ process_dict = function(task, pdf, obj, dict)
         if js then
           obj.js = js
           lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
-              obj.major, obj.minor, obj.js)
+              obj.major, obj.minor, obj.js.data)
         else
           lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
               obj.major, obj.minor, js)
@@ -1153,6 +1157,36 @@ local function process_pdf(input, _, task)
       end
       if config.url_extraction then
         search_urls(task, pdf_output)
+      end
+
+      if config.js_fuzzy and pdf_output.scripts then
+        pdf_output.fuzzy_hashes = {}
+        if config.openaction_fuzzy_only then
+          -- OpenAction only
+          if pdf_output.openaction and pdf_output.openaction.bin_hash then
+            if config.min_js_fuzzy and #pdf_output.openaction.data >= config.min_js_fuzzy then
+              lua_util.debugm(N, task, "pdf: add fuzzy hash from openaction: %s",
+                  pdf_output.openaction.hash)
+              table.insert(pdf_output.fuzzy_hashes, pdf_output.openaction.bin_hash)
+            else
+              lua_util.debugm(N, task, "pdf: skip fuzzy hash from Javascript: %s, too short: %s",
+                  pdf_output.openaction.hash, #pdf_output.openaction.data)
+            end
+          end
+        else
+          -- All hashes
+          for h,sc in pairs(pdf_output.scripts) do
+            if config.min_js_fuzzy and #sc.data >= config.min_js_fuzzy then
+              lua_util.debugm(N, task, "pdf: add fuzzy hash from Javascript: %s",
+                  sc.hash)
+              table.insert(pdf_output.fuzzy_hashes, h)
+            else
+              lua_util.debugm(N, task, "pdf: skip fuzzy hash from Javascript: %s, too short: %s",
+                  sc.hash, #sc.data)
+            end
+          end
+
+        end
       end
     else
       pdf_output.flags.no_objects = true
