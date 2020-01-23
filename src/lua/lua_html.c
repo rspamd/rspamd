@@ -470,7 +470,15 @@ lua_html_node_foreach_cb (GNode *n, gpointer d)
 		rspamd_lua_setclass (ud->L, "rspamd{html_tag}", -1);
 		lua_pushinteger (ud->L, tag->content_length);
 
-		if (lua_pcall (ud->L, 2, 1, 0) != 0) {
+		/* Leaf flag */
+		if (g_node_first_child (n)) {
+			lua_pushboolean (ud->L, false);
+		}
+		else {
+			lua_pushboolean (ud->L, true);
+		}
+
+		if (lua_pcall (ud->L, 3, 1, 0) != 0) {
 			msg_err ("error in foreach_tag callback: %s", lua_tostring (ud->L, -1));
 			lua_pop (ud->L, 1);
 			return TRUE;
