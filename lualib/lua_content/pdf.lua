@@ -377,20 +377,6 @@ local function maybe_dereference_object(elt, pdf, task)
   return elt
 end
 
--- Enforced dereference
-local function dereference_object(elt, pdf)
-  if type(elt) == 'table' and elt[1] == '%REF%' then
-    local ref = obj_ref(elt[2], elt[3])
-
-    if pdf.ref[ref] then
-      -- Not a dict but the object!
-      return pdf.ref[ref]
-    end
-  end
-
-  return nil
-end
-
 -- Apply PDF stream filter
 local function apply_pdf_filter(input, filt)
   if filt == 'FlateDecode' then
