@@ -58,9 +58,7 @@ local function spamtrap_cb(task)
     if settings['learn_spam'] then
       task:set_flag("learn_spam")
     end
-    task:insert_result(settings['symbol'],
-      settings['score'],
-      rcpt)
+    task:insert_result(settings['symbol'], 1, rcpt)
 
     if settings['action'] then
       rspamd_logger.infox(task, 'spamtrap found: <%s>', rcpt)
