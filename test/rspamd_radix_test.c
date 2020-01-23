@@ -215,6 +215,7 @@ rspamd_radix_test_func (void)
 		guint32 mask;
 		guint8 addr6[16];
 		guint32 mask6;
+		guint8 addr64[16];
 	} *addrs;
 	gsize nelts, i, check;
 	gint lc;
@@ -226,6 +227,7 @@ rspamd_radix_test_func (void)
 
 	rspamd_btrie_test_vec ();
 	rspamd_radix_test_vec ();
+	rspamd_random_seed_fast ();
 
 	nelts = max_elts;
 	/* First of all we generate many elements and push them to the array */
@@ -233,14 +235,16 @@ rspamd_radix_test_func (void)
 
 	for (i = 0; i < nelts; i ++) {
 		addrs[i].addr = ottery_rand_uint32 ();
+		memset (addrs[i].addr64, 0, 10);
+		memcpy (addrs[i].addr64 + 12, &addrs[i].addr, 4);
 		addrs[i].mask = masks[ottery_rand_range(G_N_ELEMENTS (masks) - 1)];
 		ottery_rand_bytes (addrs[i].addr6, sizeof(addrs[i].addr6));
-		addrs[i].mask6 = ottery_rand_range(128);
+		addrs[i].mask6 = ottery_rand_range(128 - 16) + 16;
 	}
 
-	pool = rspamd_mempool_new (65536, "btrie", 0);
+	pool = rspamd_mempool_new (65536, "btrie6", 0);
 	btrie = btrie_init (pool);
-	msg_notice ("btrie performance (%z elts)", nelts);
+	msg_notice ("btrie performance ipv6 only (%z elts)", nelts);
 
 	ts1 = rspamd_get_ticks (TRUE);
 	for (i = 0; i < nelts; i ++) {
@@ -250,14 +254,15 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1);
 
-	msg_notice ("Added %hz elements in %.0f ticks", nelts, diff);
+	msg_notice ("Added %hz elements in %.0f ticks (%.2f ticks per element)",
+			nelts, diff, diff / (double)nelts);
 
 	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
 		for (i = 0; i < nelts / lookup_divisor; i ++) {
-			check = ottery_rand_range (nelts - 1);
+			check = rspamd_random_uint64_fast () % nelts;
 
-			if (btrie_lookup (btrie, addrs[check].addr6, sizeof (addrs[check].addr6))
+			if (btrie_lookup (btrie, addrs[check].addr6, sizeof (addrs[check].addr6) * 8)
 					== NULL) {
 				char ipbuf[INET6_ADDRSTRLEN + 1];
 
@@ -275,64 +280,103 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1);
 
-	msg_notice ("Checked %hz elements in %.0f ticks",
-			nelts * lookup_cycles / lookup_divisor, diff);
+	msg_notice ("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
+			nelts * lookup_cycles / lookup_divisor, diff,
+			diff / ((gdouble)nelts * lookup_cycles / lookup_divisor));
+	rspamd_mempool_delete (pool);
 
-	msg_notice ("new radix performance (%z elts)", nelts);
+	/*
+	 * IPv4 part
+	 */
+	pool = rspamd_mempool_new (65536, "btrie4", 0);
+	btrie = btrie_init (pool);
+	msg_notice ("btrie performance ipv4 only (%z elts)", nelts);
+
 	ts1 = rspamd_get_ticks (TRUE);
-
 	for (i = 0; i < nelts; i ++) {
-		radix_insert_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6),
-				128 - addrs[i].mask6, i + 1);
+		btrie_add_prefix (btrie, (guchar *)&addrs[i].addr,
+				addrs[i].mask, GSIZE_TO_POINTER (i + 1));
 	}
-
 	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1);
 
-	msg_notice ("Added %hz elements in %.0f ticks", nelts, diff);
-	diff = 0;
+	msg_notice ("Added %hz elements in %.0f ticks (%.2f ticks per element)",
+			nelts, diff, diff / (double)nelts);
 
+	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
 		for (i = 0; i < nelts / lookup_divisor; i ++) {
-			check = ottery_rand_range (nelts - 1);
+			check = rspamd_random_uint64_fast () % nelts;
 
-			ts1 = rspamd_get_ticks (TRUE);
-
-			if (radix_find_compressed (comp_tree, addrs[check].addr6,
-					sizeof (addrs[check].addr6))
-					== RADIX_NO_VALUE) {
+			if (btrie_lookup (btrie, (guchar *)&addrs[check].addr, sizeof (addrs[check].addr) * 8)
+				== NULL) {
 				char ipbuf[INET6_ADDRSTRLEN + 1];
 
 				all_good = FALSE;
 
-				inet_ntop(AF_INET6, addrs[check].addr6, ipbuf, sizeof(ipbuf));
-				msg_notice("BAD: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+				inet_ntop(AF_INET, (guchar *)&addrs[check].addr, ipbuf, sizeof(ipbuf));
+				msg_notice("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 						ipbuf,
-						addrs[check].mask6);
+						addrs[check].mask);
+				all_good = FALSE;
 			}
-
-			ts2 = rspamd_get_ticks (TRUE);
-			diff += ts2 - ts1;
 		}
 	}
-#if 1
-	if (!all_good) {
-		for (i = 0; i < nelts; i ++) {
-			/* Used to write bad random vector */
-			char ipbuf[INET6_ADDRSTRLEN + 1];
-			inet_ntop(AF_INET6, addrs[i].addr6, ipbuf, sizeof(ipbuf));
-			msg_notice("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
-					ipbuf,
-					addrs[i].mask6);
-		}
-	}
-#endif
-
 	g_assert (all_good);
+	ts2 = rspamd_get_ticks (TRUE);
+	diff = (ts2 - ts1);
 
-	msg_notice ("Checked %hz elements in %.0f ticks",
-			nelts * lookup_cycles / lookup_divisor, diff);
-	radix_destroy_compressed (comp_tree);
+	msg_notice ("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
+			nelts * lookup_cycles / lookup_divisor, diff,
+			diff / ((gdouble)nelts * lookup_cycles / lookup_divisor));
+	rspamd_mempool_delete (pool);
+
+	/*
+	 * IPv4 -> IPv6 mapped
+	 */
+	pool = rspamd_mempool_new (65536, "btrie4map", 0);
+	btrie = btrie_init (pool);
+	msg_notice ("btrie performance ipv4 + ipv6map (%z elts)", nelts);
+
+	ts1 = rspamd_get_ticks (TRUE);
+	for (i = 0; i < nelts; i ++) {
+
+		btrie_add_prefix (btrie, addrs[i].addr64,
+				addrs[i].mask + 96, GSIZE_TO_POINTER (i + 1));
+	}
+	ts2 = rspamd_get_ticks (TRUE);
+	diff = (ts2 - ts1);
+
+	msg_notice ("Added %hz elements in %.0f ticks (%.2f ticks per element)",
+			nelts, diff, diff / (double)nelts);
+
+	ts1 = rspamd_get_ticks (TRUE);
+	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
+		for (i = 0; i < nelts / lookup_divisor; i ++) {
+			check = rspamd_random_uint64_fast () % nelts;
+
+			if (btrie_lookup (btrie, addrs[check].addr64,
+					sizeof (addrs[check].addr64) * 8) == NULL) {
+				char ipbuf[INET6_ADDRSTRLEN + 1];
+
+				all_good = FALSE;
+
+				inet_ntop(AF_INET, (guchar *)&addrs[check].addr, ipbuf, sizeof(ipbuf));
+				msg_notice("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+						ipbuf,
+						addrs[check].mask);
+				all_good = FALSE;
+			}
+		}
+	}
+	g_assert (all_good);
+	ts2 = rspamd_get_ticks (TRUE);
+	diff = (ts2 - ts1);
+
+	msg_notice ("Checked %hz elements in %.0f ticks (%.2f ticks per lookup)",
+			nelts * lookup_cycles / lookup_divisor, diff,
+			diff / ((gdouble)nelts * lookup_cycles / lookup_divisor));
+	rspamd_mempool_delete (pool);
 
 	g_free (addrs);
 }
