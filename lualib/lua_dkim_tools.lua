@@ -156,7 +156,7 @@ local function prepare_dkim_signing(N, task, settings)
     is_local = true
   end
 
-  if settings.auth_only and auser then
+  if settings.sign_authenticated and auser then
     lua_util.debugm(N, task, 'user is authenticated')
     is_authed = true
   elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
@@ -167,7 +167,7 @@ local function prepare_dkim_signing(N, task, settings)
   elseif settings.sign_inbound and not is_local and not auser then
     lua_util.debugm(N, task, 'mail was sent to us')
   else
-    lua_util.debugm(N, task, 'ignoring unauthenticated mail')
+    lua_util.debugm(N, task, 'mail is ineligible for signing')
     return false,{}
   end
 
@@ -212,7 +212,7 @@ local function prepare_dkim_signing(N, task, settings)
 
   local function is_skip_sign()
     return not (settings.sign_networks and is_sign_networks) and
-        not (settings.auth_only and is_authed) and
+        not (settings.sign_authenticated and is_authed) and
         not (settings.sign_local and is_local)
   end
 

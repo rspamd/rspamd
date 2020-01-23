@@ -444,6 +444,18 @@ return function(cfg)
     end
   end
 
+  -- DKIM signing/ARC legacy
+  for _, mod in ipairs({'dkim_signing', 'arc'}) do
+    if cfg[mod] then
+      if cfg[mod].auth_only ~= nil then
+        if cfg[mod].sign_authenticated ~= nil then
+	  logger.warnx(rspamd_config, 'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only', cfg[mod].auth_only, cfg[mod].sign_authenticated, mod)
+        end
+        cfg.[mod].sign_authenticated = cfg.[mod].auth_only
+      end
+    end
+  end
+
   if cfg.dkim and cfg.dkim.sign_headers and type(cfg.dkim.sign_headers) == 'table' then
     -- Flatten
     cfg.dkim.sign_headers = table.concat(cfg.dkim.sign_headers, ':')

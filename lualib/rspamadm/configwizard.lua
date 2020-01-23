@@ -277,7 +277,7 @@ local function setup_dkim_signing(cfg, changes)
   local sign_type = readline_default('Enter your choice (1, 2, 3, 4) [default: 1]: ', '1')
   local sign_networks
   local allow_mismatch
-  local auth_only
+  local sign_authenticated
   local use_esld
   local sign_domain = 'pet luacheck'
 
@@ -311,11 +311,11 @@ local function setup_dkim_signing(cfg, changes)
   end
 
   if sign_type ~= '3' then
-    auth_only = ask_yes_no(
-        string.format('Do you want to sign mail from %s only? ',
+    sign_authenticated = ask_yes_no(
+        string.format('Do you want to sign mail from %s? ',
             highlight('authenticated users')), true)
   else
-    auth_only = true
+    sign_authenticated = true
   end
 
   if fun.any(function(s) return s == sign_domain end, defined_auth_types) then
@@ -416,7 +416,7 @@ local function setup_dkim_signing(cfg, changes)
   end
 
   res_tbl.use_esld = use_esld
-  res_tbl.auth_only = auth_only
+  res_tbl.sign_authenticated = sign_authenticated
 end
 
 local function check_redis_classifier(cls, changes)
