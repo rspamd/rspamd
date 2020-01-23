@@ -715,32 +715,7 @@ process_dict = function(task, pdf, obj, dict)
     lua_util.debugm(N, task, 'found resources for object %s:%s (%s): %s',
         obj.major, obj.minor, obj.type, obj.resources)
 
-    if obj.type == 'FontDescriptor' then
-      lua_util.debugm(N, task, "obj %s:%s is a font descriptor",
-         obj.major, obj.minor)
-
-      local stream_ref
-      if dict.FontFile then
-        stream_ref = dereference_object(dict.FontFile, pdf)
-      end
-      if dict.FontFile2 then
-        stream_ref = dereference_object(dict.FontFile2, pdf)
-      end
-      if dict.FontFile3 then
-        stream_ref = dereference_object(dict.FontFile3, pdf)
-      end
-
-      if stream_ref then
-        if not stream_ref.dict then
-          stream_ref.dict = {}
-        end
-        stream_ref.dict.type = 'font_data'
-        stream_ref.dict.ignore = true
-
-        lua_util.debugm(N, task, "obj %s:%s is a font data stream",
-            stream_ref.major, stream_ref.minor)
-      end
-    elseif obj.type == 'Action' then
+    if obj.type == 'Action' then
       process_action(task, pdf, obj)
     elseif obj.type == 'Catalog' then
       process_catalog(task, pdf, obj)
