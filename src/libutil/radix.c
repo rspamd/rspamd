@@ -171,6 +171,7 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 {
 	const guchar *key;
 	guint klen = 0;
+	guchar buf[16];
 
 	if (addr == NULL) {
 		return RADIX_NO_VALUE;
@@ -179,6 +180,17 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 	key = rspamd_inet_address_get_hash_key (addr, &klen);
 
 	if (key && klen) {
+		if (klen == 4) {
+			/* Map to ipv6 */
+			memset (buf, 0, 10);
+			buf[10] = 0xffu;
+			buf[11] = 0xffu;
+			memcpy (buf + 12, key, klen);
+
+			key = buf;
+			klen = sizeof (buf);
+		}
+
 		return radix_find_compressed (tree, key, klen);
 	}
 
@@ -190,10 +202,12 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 		radix_compressed_t *tree, gconstpointer value, gboolean resolve)
 {
 	gchar *token, *ipnet, *err_str, **strv, **cur, *brace;
-	struct in_addr ina;
-	struct in6_addr ina6;
+	union {
+		struct in_addr ina;
+		struct in6_addr ina6;
+		guchar buf[16];
+	} addr_buf;
 	guint k = G_MAXINT;
-	gpointer key;
 	gint af;
 	gint res = 0, r;
 	struct addrinfo hints, *ai_res, *cur_ai;
@@ -234,7 +248,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				token ++;
 				*brace = '\0';
 
-				if (inet_pton (AF_INET6, token, &ina6) == 1) {
+				if (inet_pton (AF_INET6, token, &addr_buf.ina6) == 1) {
 					af = AF_INET6;
 				}
 				else {
@@ -252,10 +266,10 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			}
 		}
 		else {
-			if (inet_pton (AF_INET, token, &ina) == 1) {
+			if (inet_pton (AF_INET, token, &addr_buf.ina) == 1) {
 				af = AF_INET;
 			}
-			else if (inet_pton (AF_INET6, token, &ina6) == 1) {
+			else if (inet_pton (AF_INET6, token, &addr_buf.ina6) == 1) {
 				af = AF_INET6;
 			}
 			else {
@@ -278,14 +292,17 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 									k = 32;
 								}
 
-								key = rspamd_mempool_alloc (tree->pool,
-										sizeof (sin->sin_addr));
-								memcpy (key, &sin->sin_addr,
-										sizeof (sin->sin_addr));
+								/* Convert to IPv4 mapped IPv6 */
+								memset(addr_buf.buf, 0, 10);
+								addr_buf.buf[10] = 0xffu;
+								addr_buf.buf[11] = 0xffu;
+								memcpy (addr_buf.buf + 12,
+										&sin->sin_addr, 4);
+
 								radix_insert_compressed (tree,
-										key,
-										sizeof (sin->sin_addr),
-										32 - k, (uintptr_t)value);
+										addr_buf.buf,
+										sizeof (addr_buf.buf),
+										128 - k, (uintptr_t)value);
 								res ++;
 							}
 							else if (cur_ai->ai_family == AF_INET6) {
@@ -296,14 +313,11 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 									k = 128;
 								}
 
-
-								key = rspamd_mempool_alloc (tree->pool,
-										sizeof (sin6->sin6_addr));
-								memcpy (key, &sin6->sin6_addr,
+								memcpy (addr_buf.buf, &sin6->sin6_addr,
 										sizeof (sin6->sin6_addr));
 								radix_insert_compressed (tree,
-										key,
-										sizeof (sin6->sin6_addr),
+										addr_buf.buf,
+										sizeof (addr_buf.buf),
 										128 - k, (uintptr_t)value);
 								res ++;
 							}
@@ -333,11 +347,13 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				k = 32;
 			}
 
-
-			key = rspamd_mempool_alloc (tree->pool, sizeof (ina));
-			memcpy (key, &ina, sizeof (ina));
-			radix_insert_compressed (tree, key, sizeof (ina),
-					32 - k, (uintptr_t)value);
+			/* Move to the last part of the address */
+			memmove (addr_buf.buf, addr_buf.buf + 12, 4);
+			memset (addr_buf.buf, 0, 10);
+			addr_buf.buf[10] = 0xffu;
+			addr_buf.buf[11] = 0xffu;
+			radix_insert_compressed (tree, addr_buf.buf, sizeof (addr_buf.buf),
+					128 - k, (uintptr_t)value);
 			res ++;
 		}
 		else if (af == AF_INET6){
@@ -345,9 +361,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				k = 128;
 			}
 
-			key = rspamd_mempool_alloc (tree->pool, sizeof (ina6));
-			memcpy (key, &ina6, sizeof (ina6));
-			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6),
+			radix_insert_compressed (tree, addr_buf.buf, sizeof (addr_buf),
 					128 - k, (uintptr_t)value);
 			res ++;
 		}
