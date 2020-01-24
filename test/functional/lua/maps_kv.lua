@@ -26,11 +26,11 @@ rspamd_config:register_symbol({
       if (radix_map:get_key(rspamd_ip.from_string(sip[i])) ~= expected[i]) then
         local rip = rspamd_ip.from_string(sip[i])
         local val = radix_map:get_key(rip)
-        return true, rspamd_logger.slog('get_key(%s) [%s] -> %s [%s] [expected %s]', rip, type(rip), val, type(val), expected[i])
+        return true, rspamd_logger.slog('plain: get_key(%s) [%s] -> %s [%s] [expected %s]', rip, type(rip), val, type(val), expected[i])
       end
       if (radix_map:get_key(sip[i]) ~= expected[i]) then
         local val = radix_map:get_key(sip[i])
-        return true, rspamd_logger.slog('get_key(%s) [%s] -> %s [%s] [expected %s]', sip[i], type(sip[i]), val, type(val), expected[i])
+        return true, rspamd_logger.slog('string: get_key(%s) [%s] -> %s [%s] [expected %s]', sip[i], type(sip[i]), val, type(val), expected[i])
       end
     end
     return true, 'no worry'

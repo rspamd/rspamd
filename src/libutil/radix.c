@@ -302,7 +302,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 								radix_insert_compressed (tree,
 										addr_buf.buf,
 										sizeof (addr_buf.buf),
-										128 - k, (uintptr_t)value);
+										32 - k, (uintptr_t)value);
 								res ++;
 							}
 							else if (cur_ai->ai_family == AF_INET6) {
@@ -348,12 +348,12 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			}
 
 			/* Move to the last part of the address */
-			memmove (addr_buf.buf, addr_buf.buf + 12, 4);
+			memmove (addr_buf.buf + 12, &addr_buf.ina, 4);
 			memset (addr_buf.buf, 0, 10);
 			addr_buf.buf[10] = 0xffu;
 			addr_buf.buf[11] = 0xffu;
 			radix_insert_compressed (tree, addr_buf.buf, sizeof (addr_buf.buf),
-					128 - k, (uintptr_t)value);
+					32 - k, (uintptr_t)value);
 			res ++;
 		}
 		else if (af == AF_INET6){
