@@ -299,10 +299,12 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 								memcpy (addr_buf.buf + 12,
 										&sin->sin_addr, 4);
 
+								k += 96;
+
 								radix_insert_compressed (tree,
 										addr_buf.buf,
 										sizeof (addr_buf.buf),
-										32 - k, (uintptr_t)value);
+										128 - k, (uintptr_t)value);
 								res ++;
 							}
 							else if (cur_ai->ai_family == AF_INET6) {
@@ -352,8 +354,9 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			memset (addr_buf.buf, 0, 10);
 			addr_buf.buf[10] = 0xffu;
 			addr_buf.buf[11] = 0xffu;
+			k += 96;
 			radix_insert_compressed (tree, addr_buf.buf, sizeof (addr_buf.buf),
-					32 - k, (uintptr_t)value);
+					128 - k, (uintptr_t)value);
 			res ++;
 		}
 		else if (af == AF_INET6){
