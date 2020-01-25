@@ -449,7 +449,9 @@ return function(cfg)
     if cfg[mod] then
       if cfg[mod].auth_only ~= nil then
         if cfg[mod].sign_authenticated ~= nil then
-	  logger.warnx(rspamd_config, 'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only', cfg[mod].auth_only, cfg[mod].sign_authenticated, mod)
+          logger.warnx(rspamd_config,
+              'both auth_only (%s) and sign_authenticated (%s) for %s are specified, prefer auth_only',
+              cfg[mod].auth_only, cfg[mod].sign_authenticated, mod)
         end
         cfg[mod].sign_authenticated = cfg[mod].auth_only
       end
