@@ -829,9 +829,9 @@ local function extract_outer_objects(task, input, pdf)
       -- Also get the starting span and try to match it versus obj re to get numbers
       local obj_line_potential = first - 32
       if obj_line_potential < 1 then obj_line_potential = 1 end
-
-      if end_pos > 1 and pdf.end_objects[end_pos - 1] >= obj_line_potential then
-        obj_line_potential = pdf.end_objects[end_pos - 1] + 1
+      local prev_obj_end = pdf.end_objects[end_pos - 1]
+      if end_pos > 1 and prev_obj_end >= obj_line_potential and prev_obj_end < first then
+        obj_line_potential = prev_obj_end + 1
       end
 
       local obj_line_span = input:span(obj_line_potential, first - obj_line_potential + 1)
