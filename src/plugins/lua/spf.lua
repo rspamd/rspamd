@@ -42,7 +42,7 @@ spf {
   # Disable all IPv6 lookups
   disable_ipv6 = false;
   # Use IP address from a received header produced by this relay (using by attribute)
-  external_relay = "192.168.1.1";
+  external_relay = ["192.168.1.1"];
 }
   ]])
   return
