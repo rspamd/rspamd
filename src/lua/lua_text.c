@@ -460,7 +460,8 @@ lua_text_span (lua_State *L)
 		if (len == -1) {
 			len = t->len - (start - 1);
 		}
-		else if (len > (t->len - (start - 1))) {
+
+		if (len < 0 || (len > (t->len - (start - 1)))) {
 			return luaL_error (L, "invalid length");
 		}
 
