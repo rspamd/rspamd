@@ -152,6 +152,7 @@ local function configure_module()
         local raction = lua_util.list_to_hash(sett.require_action)
         local honor = lua_util.list_to_hash(sett.honor_action)
         local check_local = sett.check_local
+        local group = sett.group
         local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(),
           message, subject, raction, honor, lim, least, check_local)
         if cb and atoms then
@@ -163,6 +164,9 @@ local function configure_module()
             t.type = 'normal'
           end
           t.name = 'FORCE_ACTION_' .. name
+          if type(group) == 'string' then
+            t.group = group
+          end
           t.callback = cb
           t.flags = 'empty'
           rspamd_config:register_symbol(t)
