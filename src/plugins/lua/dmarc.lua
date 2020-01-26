@@ -1382,6 +1382,13 @@ rspamd_config:register_symbol({
   type = 'virtual'
 })
 rspamd_config:register_symbol({
+  name = dmarc_symbols['badpolicy'],
+  parent = id,
+  group = 'policies',
+  groups = {'dmarc'},
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
   name = dmarc_symbols['na'],
   parent = id,
   group = 'policies',
