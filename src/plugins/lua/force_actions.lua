@@ -30,7 +30,7 @@ local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 
-local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, least)
+local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, least, check_local)
 
   local function parse_atom(str)
     local atom = table.concat(fun.totable(fun.take_while(function(c)
@@ -62,6 +62,12 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
   end
 
   return function(task)
+    if type(check_local) == 'boolean' then
+      local ip_addr = task:get_from_ip()
+      if ip_addr and check_local ~= ip_addr:is_local() then
+        return false
+      end
+    end
 
     local cact = task:get_metric_action('default')
     if cact == act then
@@ -145,8 +151,9 @@ local function configure_module()
         local least = sett.least or false
         local raction = lua_util.list_to_hash(sett.require_action)
         local honor = lua_util.list_to_hash(sett.honor_action)
+        local check_local = sett.check_local
         local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(),
-          message, subject, raction, honor, lim, least)
+          message, subject, raction, honor, lim, least, check_local)
         if cb and atoms then
           local t = {}
           if (raction or honor) then
