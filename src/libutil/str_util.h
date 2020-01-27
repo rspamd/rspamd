@@ -440,39 +440,7 @@ gsize rspamd_memspn (const gchar *s, const gchar *e, gsize len);
  */
 #define rspamd_is_aligned(p, n) (((uintptr_t)(p) & ((uintptr_t)(n) - 1)) == 0)
 #define rspamd_is_aligned_as(p, v) rspamd_is_aligned(p, _Alignof(__typeof((v))))
-
-static inline gboolean
-rspamd_str_has_8bit (const guchar *beg, gsize len)
-{
-	unsigned long *w;
-	gsize i, leftover;
-
-	if (rspamd_is_aligned_as (beg, *w)) {
-		leftover = len % sizeof (*w);
-		w = (unsigned long *) beg;
-
-		for (i = 0; i < len / sizeof (*w); i++) {
-			if (rspamd_str_hasmore (*w, 127)) {
-				return TRUE;
-			}
-
-			w++;
-		}
-
-		beg = (const guchar *) w;
-	}
-	else {
-		leftover = len;
-	}
-
-	for (i = 0; i < leftover; i++) {
-		if (beg[i] > 127) {
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
+gboolean rspamd_str_has_8bit (const guchar *beg, gsize len);
 
 struct UConverter;
 

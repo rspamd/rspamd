@@ -3325,3 +3325,74 @@ rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
 
 	return res;
 }
+
+#if defined(__x86_64__)
+#include <x86intrin.h>
+#endif
+
+static inline gboolean
+rspamd_str_has_8bit_u64 (const guchar *beg, gsize len)
+{
+	guint8 orb = 0;
+
+	if (len >= 16) {
+		const guchar *nextd = beg+8;
+		guint64 n1 = 0, n2 = 0;
+
+		do {
+			n1 |= *(const guint64 *)beg;
+			n2 |= *(const guint64 *)nextd;
+			beg += 16;
+			nextd += 16;
+			len -= 16;
+		} while (len >= 16);
+
+		/*
+		 * Idea from Benny Halevy <bhalevy@scylladb.com>
+		 * - 7-th bit set   ==> orb = !(non-zero) - 1 = 0 - 1 = 0xFF
+		 * - 7-th bit clear ==> orb = !0 - 1          = 1 - 1 = 0x00
+		 */
+		orb = !((n1 | n2) & 0x8080808080808080ULL) - 1;
+	}
+
+	while (len--) {
+		orb |= *beg++;
+	}
+
+	return orb >= 0x80;
+}
+
+gboolean
+rspamd_str_has_8bit (const guchar *beg, gsize len)
+{
+#if defined(__x86_64__)
+	if (len >= 32) {
+		const uint8_t *nextd = beg + 16;
+
+		__m128i n1 = _mm_set1_epi8 (0), n2;
+
+		n2 = n1;
+
+		while (len >= 32) {
+			__m128i xmm1 = _mm_lddqu_si128 ((const __m128i *)beg);
+			__m128i xmm2 = _mm_lddqu_si128 ((const __m128i *)nextd);
+
+			n1 = _mm_or_si128 (n1, xmm1);
+			n2 = _mm_or_si128 (n2, xmm2);
+
+			beg += 32;
+			nextd += 32;
+			len -= 32;
+		}
+
+		n1 = _mm_or_si128 (n1, n2);
+
+		/* We assume 2 complement here */
+		if (_mm_movemask_epi8 (n1)) {
+			return TRUE;
+		}
+	}
+#endif
+
+	return rspamd_str_has_8bit_u64 (beg, len);
+}
