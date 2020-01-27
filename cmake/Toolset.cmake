@@ -150,11 +150,7 @@ if (COMPILER_GCC)
     set (CMAKE_CXX_FLAGS_DEBUG         "${CMAKE_CXX_FLAGS_DEBUG} -Og ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
 else ()
     # Clang flags
-    if (LINKER_NAME MATCHES "lld")
-        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-5")
-    else ()
-        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
-    endif ()
+    set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
     set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
     set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
 
