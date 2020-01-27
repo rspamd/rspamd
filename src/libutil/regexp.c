@@ -708,6 +708,11 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		mcontext = re->mcontext;
 	}
 
+	if (r == NULL) {
+		/* Invalid regexp type for the specified input */
+		return FALSE;
+	}
+
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
 
 #ifdef HAVE_PCRE_JIT
