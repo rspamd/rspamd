@@ -2006,19 +2006,21 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 
 		if (re_class->type_len > 0) {
 			msg_info_re_cache (
-					"compiled class %s(%*s) to cache %6s, %d regexps",
+					"compiled class %s(%*s) to cache %6s, %d/%d regexps",
 					rspamd_re_cache_type_to_string (re_class->type),
 					(gint) re_class->type_len - 1,
 					re_class->type_data,
 					re_class->hash,
-					n);
+					n,
+					(gint)g_hash_table_size (re_class->re));
 		}
 		else {
 			msg_info_re_cache (
-					"compiled class %s to cache %6s, %d regexps",
+					"compiled class %s to cache %6s, %d/%d regexps",
 					rspamd_re_cache_type_to_string (re_class->type),
 					re_class->hash,
-					n);
+					n,
+					(gint)g_hash_table_size (re_class->re));
 		}
 
 		cbdata->total += n;
@@ -2026,25 +2028,42 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		g_free (hs_serialized);
 		g_free (hs_ids);
 		g_free (hs_flags);
+
+		/* Now rename temporary file to the new .hs file */
+		rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
+				G_DIR_SEPARATOR, re_class->hash);
+
+		if (rename (path, npath) == -1) {
+			err = g_error_new (rspamd_re_cache_quark (),
+					errno,
+					"cannot rename %s to %s: %s",
+					path, npath, strerror (errno));
+			unlink (path);
+			close (fd);
+
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			return;
+		}
+
+		close (fd);
 	}
-
-	/* Now rename temporary file to the new .hs file */
-	rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
-			G_DIR_SEPARATOR, re_class->hash);
-
-	if (rename (path, npath) == -1) {
+	else {
 		err = g_error_new (rspamd_re_cache_quark (),
 				errno,
-				"cannot rename %s to %s: %s",
-				path, npath, strerror (errno));
+				"no suitable regular expressions %s (%d original): "
+				"remove temporary file %s",
+				rspamd_re_cache_type_to_string (re_class->type),
+				(gint)g_hash_table_size (re_class->re),
+				path);
 		unlink (path);
 		close (fd);
 
 		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
-		return;
+		unlink (path);
+		close (fd);
 	}
 
-	close (fd);
+	/* Continue process */
 	ev_timer_again (EV_A_ w);
 }
 

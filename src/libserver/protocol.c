@@ -1462,7 +1462,6 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		dkim_sigs = rspamd_mempool_get_variable (task->task_pool,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
-
 		if (dkim_sigs) {
 			if (dkim_sigs->next) {
 				/* Multiple DKIM signatures */
