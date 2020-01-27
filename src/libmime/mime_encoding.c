@@ -724,10 +724,15 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			}
 		}
 		else {
-			/*
-			 * We have detected some charset, but we don't know which one
-			 */
-			valid_utf8 = FALSE;
+			text_part->real_charset = charset;
+
+			if (strcmp (charset, UTF8_CHARSET) != 0) {
+				/*
+				 * We have detected some charset, but we don't know which one,
+				 * so we need to reset valid utf8 flag and enforce it later
+				 */
+				valid_utf8 = FALSE;
+			}
 		}
 	}
 
