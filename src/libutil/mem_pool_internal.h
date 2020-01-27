@@ -41,6 +41,7 @@ struct rspamd_mempool_entry_point {
 	gchar src[ENTRY_LEN];
 	guint32 cur_suggestion;
 	guint32 cur_elts;
+	guint32 cur_vars;
 	struct entry_elt elts[ENTRY_NELTS];
 };
 
@@ -55,11 +56,21 @@ struct _pool_destructors {
 	struct _pool_destructors *next;
 };
 
+
+struct rspamd_mempool_variable {
+	gpointer data;
+	rspamd_mempool_destruct_t dtor;
+};
+
+KHASH_INIT (rspamd_mempool_vars_hash,
+		guint32, struct rspamd_mempool_variable, 1,
+		kh_int_hash_func, kh_int_hash_equal);
+
 struct rspamd_mempool_specific {
 	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
 	struct _pool_destructors *dtors_head, *dtors_tail;
 	GPtrArray *trash_stack;
-	GHashTable *variables;                  /**< private memory pool variables			*/
+	khash_t(rspamd_mempool_vars_hash) *variables;
 	struct rspamd_mempool_entry_point *entry;
 	gsize elt_len;                            /**< size of an element						*/
 	gsize used_memory;

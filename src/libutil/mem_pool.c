@@ -773,7 +773,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 				pool->priv->elt_len,
 				pool->priv->used_memory,
 				pool->priv->wasted_memory,
-				pool->priv->variables ? g_hash_table_size (pool->priv->variables) : (gsize)0,
+				pool->priv->variables ? (gsize)kh_size (pool->priv->variables) : (gsize)0,
 				ndtor);
 
 		GHashTableIter it;
@@ -847,7 +847,45 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	}
 
 	if (pool->priv->variables) {
-		g_hash_table_destroy (pool->priv->variables);
+		struct rspamd_mempool_variable *var;
+		kh_foreach_value_ptr (pool->priv->variables, var, {
+			if (var->dtor) {
+				var->dtor (var->data);
+			}
+		});
+
+		if (pool->priv->entry && pool->priv->entry->cur_vars <
+			kh_size (pool->priv->variables)) {
+			/*
+			 * Increase preallocated size in two cases:
+			 * 1) Our previous guess was zero
+			 * 2) Our new variables count is not more than twice larger than
+			 * previous count
+			 * 3) Our variables count is less than some hard limit
+			 */
+			static const guint max_preallocated_vars = 512;
+
+			guint cur_size = kh_size (pool->priv->variables);
+			guint old_guess = pool->priv->entry->cur_vars;
+			guint new_guess;
+
+			if (old_guess == 0) {
+				new_guess = MIN (cur_size, max_preallocated_vars);
+			}
+			else {
+				if (old_guess * 2 < cur_size) {
+					new_guess = MIN (cur_size, max_preallocated_vars);
+				}
+				else {
+					/* Too large step */
+					new_guess = MIN (old_guess * 2, max_preallocated_vars);
+				}
+			}
+
+			pool->priv->entry->cur_vars = new_guess;
+		}
+
+		kh_destroy (rspamd_mempool_vars_hash, pool->priv->variables);
 	}
 
 	if (pool->priv->trash_stack) {
@@ -1107,20 +1145,41 @@ rspamd_mempool_wunlock_rwlock (rspamd_mempool_rwlock_t * lock)
 }
 #endif
 
+#define RSPAMD_MEMPOOL_VARS_HASH_SEED 0xb32ad7c55eb2e647ULL
 void
 rspamd_mempool_set_variable (rspamd_mempool_t *pool,
-	const gchar *name,
-	gpointer value,
-	rspamd_mempool_destruct_t destructor)
+							 const gchar *name,
+							 gpointer value,
+							 rspamd_mempool_destruct_t destructor)
 {
 	if (pool->priv->variables == NULL) {
-		pool->priv->variables = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+
+		pool->priv->variables = kh_init (rspamd_mempool_vars_hash);
+
+		if (pool->priv->entry->cur_vars > 0) {
+			/* Preallocate */
+			kh_resize (rspamd_mempool_vars_hash,
+					pool->priv->variables,
+					pool->priv->entry->cur_vars);
+		}
 	}
 
-	g_hash_table_insert (pool->priv->variables, rspamd_mempool_strdup (pool,
-		name), value);
-	if (destructor != NULL) {
-		rspamd_mempool_add_destructor (pool, destructor, value);
+	gint hv = rspamd_cryptobox_fast_hash (name, strlen (name),
+			RSPAMD_MEMPOOL_VARS_HASH_SEED);
+	khiter_t it;
+	gint r;
+
+	it = kh_put (rspamd_mempool_vars_hash, pool->priv->variables, hv, &r);
+
+	if (it == kh_end (pool->priv->variables)) {
+		g_assert_not_reached ();
+	}
+	else {
+		struct rspamd_mempool_variable *pvar;
+
+		pvar = &kh_val (pool->priv->variables, it);
+		pvar->data = value;
+		pvar->dtor = destructor;
 	}
 }
 
@@ -1131,14 +1190,43 @@ rspamd_mempool_get_variable (rspamd_mempool_t *pool, const gchar *name)
 		return NULL;
 	}
 
-	return g_hash_table_lookup (pool->priv->variables, name);
+	khiter_t it;
+	gint hv = rspamd_cryptobox_fast_hash (name, strlen (name),
+			RSPAMD_MEMPOOL_VARS_HASH_SEED);
+
+	it = kh_get (rspamd_mempool_vars_hash, pool->priv->variables, hv);
+
+	if (it != kh_end (pool->priv->variables)) {
+		struct rspamd_mempool_variable *pvar;
+
+		pvar = &kh_val (pool->priv->variables, it);
+		return pvar->data;
+	}
+
+	return NULL;
 }
 
 void
 rspamd_mempool_remove_variable (rspamd_mempool_t *pool, const gchar *name)
 {
 	if (pool->priv->variables != NULL) {
-		g_hash_table_remove (pool->priv->variables, name);
+		khiter_t it;
+		gint hv = rspamd_cryptobox_fast_hash (name, strlen (name),
+				RSPAMD_MEMPOOL_VARS_HASH_SEED);
+
+		it = kh_get (rspamd_mempool_vars_hash, pool->priv->variables, hv);
+
+		if (it != kh_end (pool->priv->variables)) {
+			struct rspamd_mempool_variable *pvar;
+
+			pvar = &kh_val (pool->priv->variables, it);
+
+			if (pvar->dtor) {
+				pvar->dtor (pvar->data);
+			}
+
+			kh_del (rspamd_mempool_vars_hash, pool->priv->variables, it);
+		}
 	}
 }
 
