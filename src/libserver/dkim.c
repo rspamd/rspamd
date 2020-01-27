@@ -2586,7 +2586,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 
-	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res == DKIM_CONTINUE) {
+	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res && res->rcode == DKIM_CONTINUE) {
 		switch (ctx->cv) {
 		case RSPAMD_ARC_INVALID:
 			msg_info_dkim ("arc seal is invalid i=%d", ctx->common.idx);
