@@ -3374,8 +3374,8 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 		n2 = n1;
 
 		while (len >= 32) {
-			__m128i xmm1 = _mm_lddqu_si128 ((const __m128i *)beg);
-			__m128i xmm2 = _mm_lddqu_si128 ((const __m128i *)nextd);
+			__m128i xmm1 = _mm_loadu_si128 ((const __m128i *)beg);
+			__m128i xmm2 = _mm_loadu_si128 ((const __m128i *)nextd);
 
 			n1 = _mm_or_si128 (n1, xmm1);
 			n2 = _mm_or_si128 (n2, xmm2);
