@@ -469,6 +469,7 @@ struct rspamd_config {
 	guint lua_gc_pause;                                /**< lua gc pause										*/
 	guint full_gc_iters;                            /**< iterations between full gc cycle					*/
 	guint max_lua_urls;                             /**< maximum number of urls to be passed to Lua			*/
+	guint max_urls;                                 /**< maximum number of urls to be processed in general	*/
 	guint max_blas_threads;                         /**< maximum threads for openblas when learning ANN		*/
 	guint max_opts_len;                             /**< maximum length for all options for a symbol		*/
 

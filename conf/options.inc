@@ -28,6 +28,7 @@ check_all_filters = false;
 # Default settings
 dns_max_requests = 64;
 max_lua_urls = 1024;
+max_urls = 10240;
 
 dns {
     timeout = 1s;
