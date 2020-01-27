@@ -715,6 +715,53 @@ rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
 	memset (e->elts, 0, sizeof (e->elts));
 }
 
+static void
+rspamd_mempool_variables_cleanup (rspamd_mempool_t * pool)
+{
+	if (pool->priv->variables) {
+		struct rspamd_mempool_variable *var;
+		kh_foreach_value_ptr (pool->priv->variables, var, {
+			if (var->dtor) {
+				var->dtor (var->data);
+			}
+		});
+
+		if (pool->priv->entry && pool->priv->entry->cur_vars <
+								 kh_size (pool->priv->variables)) {
+			/*
+			 * Increase preallocated size in two cases:
+			 * 1) Our previous guess was zero
+			 * 2) Our new variables count is not more than twice larger than
+			 * previous count
+			 * 3) Our variables count is less than some hard limit
+			 */
+			static const guint max_preallocated_vars = 512;
+
+			guint cur_size = kh_size (pool->priv->variables);
+			guint old_guess = pool->priv->entry->cur_vars;
+			guint new_guess;
+
+			if (old_guess == 0) {
+				new_guess = MIN (cur_size, max_preallocated_vars);
+			}
+			else {
+				if (old_guess * 2 < cur_size) {
+					new_guess = MIN (cur_size, max_preallocated_vars);
+				}
+				else {
+					/* Too large step */
+					new_guess = MIN (old_guess * 2, max_preallocated_vars);
+				}
+			}
+
+			pool->priv->entry->cur_vars = new_guess;
+		}
+
+		kh_destroy (rspamd_mempool_vars_hash, pool->priv->variables);
+		pool->priv->variables = NULL;
+	}
+}
+
 void
 rspamd_mempool_destructors_enforce (rspamd_mempool_t *pool)
 {
@@ -730,6 +777,8 @@ rspamd_mempool_destructors_enforce (rspamd_mempool_t *pool)
 	}
 
 	pool->priv->dtors_head = pool->priv->dtors_tail = NULL;
+
+	rspamd_mempool_variables_cleanup (pool);
 
 	POOL_MTX_UNLOCK ();
 }
@@ -824,6 +873,17 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 		}
 	}
 
+	rspamd_mempool_variables_cleanup (pool);
+
+	if (pool->priv->trash_stack) {
+		for (i = 0; i < pool->priv->trash_stack->len; i++) {
+			ptr = g_ptr_array_index (pool->priv->trash_stack, i);
+			g_free (ptr);
+		}
+
+		g_ptr_array_free (pool->priv->trash_stack, TRUE);
+	}
+
 	for (i = 0; i < G_N_ELEMENTS (pool->priv->pools); i ++) {
 		if (pool->priv->pools[i]) {
 			LL_FOREACH_SAFE (pool->priv->pools[i], cur, tmp) {
@@ -844,57 +904,6 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 				}
 			}
 		}
-	}
-
-	if (pool->priv->variables) {
-		struct rspamd_mempool_variable *var;
-		kh_foreach_value_ptr (pool->priv->variables, var, {
-			if (var->dtor) {
-				var->dtor (var->data);
-			}
-		});
-
-		if (pool->priv->entry && pool->priv->entry->cur_vars <
-			kh_size (pool->priv->variables)) {
-			/*
-			 * Increase preallocated size in two cases:
-			 * 1) Our previous guess was zero
-			 * 2) Our new variables count is not more than twice larger than
-			 * previous count
-			 * 3) Our variables count is less than some hard limit
-			 */
-			static const guint max_preallocated_vars = 512;
-
-			guint cur_size = kh_size (pool->priv->variables);
-			guint old_guess = pool->priv->entry->cur_vars;
-			guint new_guess;
-
-			if (old_guess == 0) {
-				new_guess = MIN (cur_size, max_preallocated_vars);
-			}
-			else {
-				if (old_guess * 2 < cur_size) {
-					new_guess = MIN (cur_size, max_preallocated_vars);
-				}
-				else {
-					/* Too large step */
-					new_guess = MIN (old_guess * 2, max_preallocated_vars);
-				}
-			}
-
-			pool->priv->entry->cur_vars = new_guess;
-		}
-
-		kh_destroy (rspamd_mempool_vars_hash, pool->priv->variables);
-	}
-
-	if (pool->priv->trash_stack) {
-		for (i = 0; i < pool->priv->trash_stack->len; i++) {
-			ptr = g_ptr_array_index (pool->priv->trash_stack, i);
-			g_free (ptr);
-		}
-
-		g_ptr_array_free (pool->priv->trash_stack, TRUE);
 	}
 
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
