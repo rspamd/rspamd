@@ -1570,6 +1570,67 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 	}
 }
 
+static void
+rspamd_milter_extract_single_header (struct rspamd_milter_session *session,
+						  const gchar *hdr, const ucl_object_t *obj)
+{
+	GString *hname, *hvalue;
+	struct rspamd_milter_private *priv = session->priv;
+	gint idx = -1;
+	const ucl_object_t *val;
+
+	val = ucl_object_lookup (obj, "value");
+
+	if (val && ucl_object_type (val) == UCL_STRING) {
+		const ucl_object_t *idx_obj;
+		gboolean has_idx = FALSE;
+
+		idx_obj = ucl_object_lookup_any (obj, "order",
+				"index", NULL);
+
+		if (idx_obj) {
+			idx = ucl_object_toint (idx_obj);
+			has_idx = TRUE;
+		}
+
+		hname = g_string_new (hdr);
+		hvalue = g_string_new (ucl_object_tostring (val));
+
+		if (has_idx) {
+			if (idx >= 0) {
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_INSHEADER,
+						idx,
+						hname, hvalue);
+			}
+			else {
+				/* Calculate negative offset */
+
+				if (-idx <= priv->cur_hdr) {
+					rspamd_milter_send_action (session,
+							RSPAMD_MILTER_INSHEADER,
+							priv->cur_hdr + idx + 1,
+							hname, hvalue);
+				}
+				else {
+					rspamd_milter_send_action (session,
+							RSPAMD_MILTER_INSHEADER,
+							0,
+							hname, hvalue);
+				}
+			}
+		}
+		else {
+			rspamd_milter_send_action (session,
+					RSPAMD_MILTER_ADDHEADER,
+					hname, hvalue);
+		}
+
+		g_string_free (hname, TRUE);
+		g_string_free (hvalue, TRUE);
+	}
+}
+
 /*
  * Returns `TRUE` if action has been processed internally by this function
  */
@@ -1581,7 +1642,6 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 	ucl_object_iter_t it;
 	struct rspamd_milter_private *priv = session->priv;
 	GString *hname, *hvalue;
-	gint idx = -1;
 
 	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
 		elt = ucl_object_lookup (obj, "remove_headers");
@@ -1628,58 +1688,23 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 						g_string_free (hvalue, TRUE);
 					}
 					else if (ucl_object_type (cur_elt) == UCL_OBJECT) {
-						const ucl_object_t *val;
+						rspamd_milter_extract_single_header (session,
+								ucl_object_key (cur), cur_elt);
+					}
+					else if (ucl_object_type (cur_elt) == UCL_ARRAY) {
+						/* Multiple values for the same key */
+						ucl_object_iter_t *array_it;
+						const ucl_object_t *array_elt;
 
-						val = ucl_object_lookup (cur_elt, "value");
+						array_it = ucl_object_iterate_new (cur_elt);
 
-						if (val && ucl_object_type (val) == UCL_STRING) {
-							const ucl_object_t *idx_obj;
-							gboolean has_idx = FALSE;
-
-							idx_obj = ucl_object_lookup_any (cur_elt, "order",
-									"index", NULL);
-
-							if (idx_obj) {
-								idx = ucl_object_toint (idx_obj);
-								has_idx = TRUE;
-							}
-
-							hname = g_string_new (ucl_object_key (cur));
-							hvalue = g_string_new (ucl_object_tostring (val));
-
-							if (has_idx) {
-								if (idx >= 0) {
-									rspamd_milter_send_action (session,
-											RSPAMD_MILTER_INSHEADER,
-											idx,
-											hname, hvalue);
-								}
-								else {
-									/* Calculate negative offset */
-
-									if (-idx <= priv->cur_hdr) {
-										rspamd_milter_send_action (session,
-												RSPAMD_MILTER_INSHEADER,
-												priv->cur_hdr + idx + 1,
-												hname, hvalue);
-									}
-									else {
-										rspamd_milter_send_action (session,
-												RSPAMD_MILTER_INSHEADER,
-												0,
-												hname, hvalue);
-									}
-								}
-							}
-							else {
-								rspamd_milter_send_action (session,
-										RSPAMD_MILTER_ADDHEADER,
-										hname, hvalue);
-							}
-
-							g_string_free (hname, TRUE);
-							g_string_free (hvalue, TRUE);
+						while ((array_elt = ucl_object_iterate_safe (array_it,
+								true)) != NULL) {
+							rspamd_milter_extract_single_header (session,
+									ucl_object_key (cur), array_elt);
 						}
+
+						ucl_object_iterate_free (array_it);
 					}
 				}
 
