@@ -5382,6 +5382,53 @@ lua_task_set_milter_reply (lua_State *L)
 				RSPAMD_MEMPOOL_MILTER_REPLY);
 
 		if (prev) {
+			/*
+			 * We need to be very special about the add_headers part
+			 * If we want to insert some existing object, such as
+			 * add_headers = {
+			 *   hdr = {value = val1, order = 1},
+			 * }
+			 *
+			 * and new header has something similar:
+			 * add_headers = {
+			 *   hdr = {value = val2, order = 1},
+			 * }
+			 *
+			 * then we need to convert it to an array...
+			 *
+			 * add_headers = {
+			 *   hdr = [{value = val1, order = 1}, {value = val2, order = 1}],
+			 * }
+			 *
+			 * UCL itself cannot do it directly. So the trick is to extract the
+			 * original object, pack it into an array and then insert it back.
+			 *
+			 * I wish there was a simplier way to do it...
+			 */
+			const ucl_object_t *add_hdrs = ucl_object_lookup (prev, "add_headers");
+			const ucl_object_t *nadd_hdrs = ucl_object_lookup (reply, "add_headers");
+
+			if (add_hdrs && nadd_hdrs) {
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+
+				while ((cur = ucl_object_iterate (nadd_hdrs, &it, true)) != NULL) {
+					gsize klen;
+					const gchar *key = ucl_object_keyl (cur, &klen);
+					const ucl_object_t *existing;
+
+					existing = ucl_object_lookup_len (add_hdrs, key, klen);
+
+					if (existing && ucl_object_type (existing) != UCL_ARRAY) {
+						ucl_object_t *ar = ucl_object_typed_new (UCL_ARRAY);
+
+						ucl_array_append (ar, ucl_object_ref (existing));
+						ucl_object_replace_key ((ucl_object_t *)add_hdrs,
+								ar, key, klen, false);
+					}
+				}
+			}
+
 			ucl_object_merge (prev, reply, false);
 			ucl_object_unref (reply);
 		}
