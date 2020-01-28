@@ -44,13 +44,30 @@ local settings = {
   use_esld = true,
   use_redis = false,
   key_prefix = 'dkim_keys', -- default hash name
+  use_milter_headers = false, -- use milter headers instead of `dkim_signature`
 }
 
 local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign
 
+local function insert_sign_results(task, ret, hdr)
+  if settings.use_milter_headers then
+    task:set_milter_reply({
+      add_headers = {
+        ['DKIM-Signature'] = {order = 1, value = hdr},
+      }
+    })
+  end
+  if ret then
+    task:insert_result(settings.symbol, 1.0)
+  end
+end
+
 local function do_sign(task, p)
+  if settings.use_milter_headers then
+    p.no_cache = true -- Disable caching in rspamd_mempool
+  end
   if settings.check_pubkey then
     local resolve_name = p.selector .. "._domainkey." .. p.domain
     task:get_resolver():resolve_txt({
@@ -69,18 +86,14 @@ local function do_sign(task, p)
               p.domain, p.selector, err)
         end
 
-        local sret, _ = sign_func(task, p)
-        if sret then
-          task:insert_result(settings.symbol, 1.0)
-        end
+        local sret, hdr = sign_func(task, p)
+        insert_sign_results(task, sret, hdr)
       end,
       forced = true
     })
   else
-    local sret, _ = sign_func(task, p)
-    if sret then
-      task:insert_result(settings.symbol, 1.0)
-    end
+    local sret, hdr = sign_func(task, p)
+    insert_sign_results(task, sret, hdr)
   end
 end
 
