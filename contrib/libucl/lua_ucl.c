@@ -343,24 +343,30 @@ ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 	}
 
 	if (!found_mt) {
-		/* Check for array */
+		/* Check for array (it is all inefficient) */
 		lua_pushnil (L);
+
 		while (lua_next (L, idx) != 0) {
-			if (lua_type (L, -2) == LUA_TNUMBER) {
-				double num = lua_tonumber (L, -2);
+			lua_pushvalue (L, -2);
+
+			if (lua_type (L, -1) == LUA_TNUMBER) {
+				double num = lua_tonumber (L, -1);
 				if (num == (int) num) {
 					if (num > max) {
 						max = num;
 					}
-				} else {
+				}
+				else {
 					/* Keys are not integer */
 					is_array = false;
 				}
-			} else {
+			}
+			else {
 				/* Keys are not numeric */
 				is_array = false;
 			}
-			lua_pop (L, 1);
+
+			lua_pop (L, 2);
 			nelts ++;
 		}
 	}
