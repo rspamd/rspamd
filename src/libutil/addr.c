@@ -146,34 +146,39 @@ static void
 rspamd_ip_check_ipv6 (void)
 {
 	if (ipv6_status == RSPAMD_IPV6_UNDEFINED) {
-		gint s, r;
-		struct sockaddr_in6 sin6;
-		const struct in6_addr ip6_local = IN6ADDR_LOOPBACK_INIT;
+		gint s;
 
 		s = socket (AF_INET6, SOCK_STREAM, 0);
+
 		if (s == -1) {
 			ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
 		}
 		else {
 			/*
-			 * Some systems allow ipv6 sockets creating but not binding,
-			 * so here we try to bind to some local address and check, whether it
-			 * is possible
+			 * Try to check /proc if we are on Linux (the common case)
 			 */
-			memset (&sin6, 0, sizeof (sin6));
-			sin6.sin6_family = AF_INET6;
-			sin6.sin6_port = rspamd_random_uint64_fast () % 40000 + 20000;
-			sin6.sin6_addr = ip6_local;
-
-			r = bind (s, (struct sockaddr *)&sin6, sizeof (sin6));
-			if (r == -1 && errno != EADDRINUSE) {
-				ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
-			}
-			else {
-				ipv6_status = RSPAMD_IPV6_SUPPORTED;
-			}
+			struct stat st;
 
 			close (s);
+
+			if (stat ("/proc/net/dev", &st) != -1) {
+				if (stat ("/proc/net/if_inet6", &st) != -1) {
+					if (st.st_size != 0) {
+						ipv6_status = RSPAMD_IPV6_SUPPORTED;
+					}
+					else {
+						/* Empty file, no ipv6 configuration at all */
+						ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
+					}
+				}
+				else {
+					ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
+				}
+			}
+			else {
+				/* Not a Linux, so we assume it supports ipv6 somehow... */
+				ipv6_status = RSPAMD_IPV6_SUPPORTED;
+			}
 		}
 	}
 }
