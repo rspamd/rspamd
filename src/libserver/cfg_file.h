@@ -431,6 +431,7 @@ struct rspamd_config {
 
 	gdouble monitored_interval;                     /**< interval between monitored checks					*/
 	gboolean disable_monitored;                     /**< disable monitoring completely						*/
+	gboolean fips_mode;                             /**< turn on fips mode for openssl						*/
 
 	struct rspamd_symcache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/

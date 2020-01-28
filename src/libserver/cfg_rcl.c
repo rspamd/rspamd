@@ -1952,6 +1952,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Disable monitoring completely");
 		rspamd_rcl_add_default_handler (sub,
+				"fips_mode",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, fips_mode),
+				0,
+				"Enable FIPS 140-2 mode in OpenSSL");
+		rspamd_rcl_add_default_handler (sub,
 				"dynamic_conf",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),

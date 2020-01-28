@@ -368,8 +368,8 @@ gpointer rspamd_init_ssl_ctx_noverify (void);
 /**
  * Configure libraries
  */
-void rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
-						 struct rspamd_config *cfg);
+gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
+							 struct rspamd_config *cfg);
 
 /**
  * Reset and initialize decompressor
