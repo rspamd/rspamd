@@ -1837,7 +1837,7 @@ lua_task_insert_result (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *symbol_name, *param;
+	const gchar *symbol_name;
 	double weight;
 	struct rspamd_symbol_result *s;
 	enum rspamd_symbol_insert_flags flags = RSPAMD_SYMBOL_INSERT_DEFAULT;
@@ -1868,17 +1868,43 @@ lua_task_insert_result (lua_State * L)
 				gint ltype = lua_type (L, i);
 
 				if (ltype == LUA_TSTRING) {
-					param = luaL_checkstring (L, i);
-					rspamd_task_add_result_option (task, s, param);
+					gsize optlen;
+					const char *opt = lua_tolstring (L, i, &optlen);
+
+					rspamd_task_add_result_option (task, s, opt, optlen);
+				}
+				else if (ltype == LUA_TUSERDATA) {
+					struct rspamd_lua_text *t = lua_check_text (L, i);
+
+					if (t) {
+						rspamd_task_add_result_option (task, s, t->start,
+								t->len);
+					}
 				}
 				else if (ltype == LUA_TTABLE) {
-					lua_pushvalue (L, i);
-					lua_pushnil (L);
+					gsize objlen = rspamd_lua_table_size (L, i);
 
-					while (lua_next (L, -2)) {
-						if (lua_isstring (L, -1)) {
-							param = lua_tostring (L, -1);
-							rspamd_task_add_result_option (task, s, param);
+					for (guint j = 1; j <= objlen; j ++) {
+						lua_rawgeti (L, i, j);
+
+						if (lua_type (L, -1) == LUA_TSTRING) {
+							gsize optlen;
+							const char *opt = lua_tolstring (L, -1, &optlen);
+
+							rspamd_task_add_result_option (task, s, opt, optlen);
+						}
+						else if (lua_type (L, -1) == LUA_TUSERDATA) {
+							struct rspamd_lua_text *t = lua_check_text (L, -1);
+
+							if (t) {
+								rspamd_task_add_result_option (task, s, t->start,
+										t->len);
+							}
+							else {
+								return luaL_error (L, "not rspamd_text option in a table "
+													  "when adding symbol  %s: %s type",
+										s->name);
+							}
 						}
 						else {
 							const gchar *tname = lua_typename (L, lua_type (L, -1));
@@ -1891,8 +1917,6 @@ lua_task_insert_result (lua_State * L)
 
 						lua_pop (L, 1);
 					}
-
-					lua_pop (L, 1);
 				}
 				else if (ltype == LUA_TNIL) {
 					/* We have received a NULL option, it is not good but not a fatal error */
@@ -1923,7 +1947,7 @@ lua_task_adjust_result (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *symbol_name, *param;
+	const gchar *symbol_name;
 	struct rspamd_scan_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
 	double weight;
@@ -1956,20 +1980,42 @@ lua_task_adjust_result (lua_State * L)
 		if (s) {
 			for (i = 4; i <= top; i++) {
 				if (lua_type (L, i) == LUA_TSTRING) {
-					param = luaL_checkstring (L, i);
-					rspamd_task_add_result_option (task, s, param);
+					gsize optlen;
+					const char *opt = lua_tolstring (L, i, &optlen);
+
+					rspamd_task_add_result_option (task, s, opt, optlen);
+				}
+				else if (lua_type (L, i) == LUA_TUSERDATA) {
+					struct rspamd_lua_text *t = lua_check_text (L, i);
+
+					if (t) {
+						rspamd_task_add_result_option (task, s, t->start,
+								t->len);
+					}
 				}
 				else if (lua_type (L, i) == LUA_TTABLE) {
-					lua_pushvalue (L, i);
-					lua_pushnil (L);
+					gsize objlen = rspamd_lua_table_size (L, i);
 
-					while (lua_next (L, -2)) {
-						param = lua_tostring (L, -1);
-						rspamd_task_add_result_option (task, s, param);
+					for (guint j = 1; j <= objlen; j ++) {
+						lua_rawgeti (L, i, j);
+
+						if (lua_type (L, -1) == LUA_TSTRING) {
+							gsize optlen;
+							const char *opt = lua_tolstring (L, -1, &optlen);
+
+							rspamd_task_add_result_option (task, s, opt, optlen);
+						}
+						else if (lua_type (L, -1) == LUA_TUSERDATA) {
+							struct rspamd_lua_text *t = lua_check_text (L, -1);
+
+							if (t) {
+								rspamd_task_add_result_option (task, s, t->start,
+										t->len);
+							}
+						}
+
 						lua_pop (L, 1);
 					}
-
-					lua_pop (L, 1);
 				}
 			}
 		}
@@ -4374,7 +4420,7 @@ lua_push_symbol_result (lua_State *L,
 			lua_createtable (L, kh_size (s->options), 0);
 
 			DL_FOREACH (s->opts_head, opt) {
-				lua_pushstring (L, (const char*)opt->option);
+				lua_pushlstring (L, opt->option, opt->optlen);
 				lua_rawseti (L, -2, j++);
 			}
 

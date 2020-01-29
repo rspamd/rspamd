@@ -1137,7 +1137,8 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 						j = 0;
 
 						DL_FOREACH (sym->opts_head, opt) {
-							rspamd_printf_fstring (&symbuf, "%s;", opt->option);
+							rspamd_printf_fstring (&symbuf, "%*s;",
+									(gint)opt->optlen, opt->option);
 
 							if (j >= max_log_elts) {
 								rspamd_printf_fstring (&symbuf, "...;");

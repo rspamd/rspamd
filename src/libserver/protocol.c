@@ -1130,7 +1130,8 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_symbol_result 
 		ar = ucl_object_typed_new (UCL_ARRAY);
 
 		DL_FOREACH (sym->opts_head, opt) {
-			ucl_array_append (ar, ucl_object_fromstring (opt->option));
+			ucl_array_append (ar, ucl_object_fromstring_common (opt->option,
+					opt->optlen, 0));
 		}
 
 		ucl_object_insert_key (obj, ar, "options", 0, false);

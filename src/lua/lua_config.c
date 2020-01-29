@@ -1267,24 +1267,45 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 
 					for (i = level + first_opt; i <= last_pos; i++) {
 						if (lua_type (L, i) == LUA_TSTRING) {
-							const char *opt = lua_tostring (L, i);
+							gsize optlen;
+							const char *opt = lua_tolstring (L, i, &optlen);
 
-							rspamd_task_add_result_option (task, s, opt);
+							rspamd_task_add_result_option (task, s, opt, optlen);
+						}
+						else if (lua_type (L, i) == LUA_TUSERDATA) {
+							struct rspamd_lua_text *t = lua_check_text (L, i);
+
+							if (t) {
+								rspamd_task_add_result_option (task, s, t->start,
+										t->len);
+							}
 						}
 						else if (lua_type (L, i) == LUA_TTABLE) {
-							lua_pushvalue (L, i);
+							gsize objlen = rspamd_lua_table_size (L, i);
 
-							for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-								const char *opt = lua_tostring (L, -1);
+							for (guint j = 1; j <= objlen; j ++) {
+								lua_rawgeti (L, i, j);
 
-								rspamd_task_add_result_option (task, s, opt);
+								if (lua_type (L, -1) == LUA_TSTRING) {
+									gsize optlen;
+									const char *opt = lua_tolstring (L, -1, &optlen);
+
+									rspamd_task_add_result_option (task, s, opt, optlen);
+								}
+								else if (lua_type (L, -1) == LUA_TUSERDATA) {
+									struct rspamd_lua_text *t = lua_check_text (L, -1);
+
+									if (t) {
+										rspamd_task_add_result_option (task, s, t->start,
+												t->len);
+									}
+								}
+
+								lua_pop (L, 1);
 							}
-
-							lua_pop (L, 1);
 						}
 					}
 				}
-
 			}
 
 			lua_pop (L, nresults);
@@ -1403,20 +1424,42 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 
 				for (i = cd->stack_level + first_opt; i <= last_pos; i++) {
 					if (lua_type (L, i) == LUA_TSTRING) {
-						const char *opt = lua_tostring (L, i);
+						gsize optlen;
+						const char *opt = lua_tolstring (L, i, &optlen);
 
-						rspamd_task_add_result_option (task, s, opt);
+						rspamd_task_add_result_option (task, s, opt, optlen);
+					}
+					else if (lua_type (L, i) == LUA_TUSERDATA) {
+						struct rspamd_lua_text *t = lua_check_text (L, i);
+
+						if (t) {
+							rspamd_task_add_result_option (task, s, t->start,
+									t->len);
+						}
 					}
 					else if (lua_type (L, i) == LUA_TTABLE) {
-						lua_pushvalue (L, i);
+						gsize objlen = rspamd_lua_table_size (L, i);
 
-						for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-							const char *opt = lua_tostring (L, -1);
+						for (guint j = 1; j <= objlen; j ++) {
+							lua_rawgeti (L, i, j);
 
-							rspamd_task_add_result_option (task, s, opt);
+							if (lua_type (L, -1) == LUA_TSTRING) {
+								gsize optlen;
+								const char *opt = lua_tolstring (L, -1, &optlen);
+
+								rspamd_task_add_result_option (task, s, opt, optlen);
+							}
+							else if (lua_type (L, -1) == LUA_TUSERDATA) {
+								struct rspamd_lua_text *t = lua_check_text (L, -1);
+
+								if (t) {
+									rspamd_task_add_result_option (task, s, t->start,
+											t->len);
+								}
+							}
+
+							lua_pop (L, 1);
 						}
-
-						lua_pop (L, 1);
 					}
 				}
 			}

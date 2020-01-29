@@ -251,7 +251,11 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 
 			DL_FOREACH (ms->opts_head, opt) {
 				if (cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN) {
-					if (strcmp (opt->option, cur_opt->data.match) == 0) {
+					gsize mlen = strlen (cur_opt->data.match);
+
+					if (opt->optlen == mlen &&
+						memcmp (opt->option, cur_opt->data.match, mlen) == 0) {
+
 						found = true;
 
 						break;
@@ -259,7 +263,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				}
 				else {
 					if (rspamd_regexp_match (cur_opt->data.re,
-							opt->option, 0, FALSE)) {
+							opt->option, opt->optlen, FALSE)) {
 						found = true;
 
 						break;
