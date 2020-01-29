@@ -293,7 +293,7 @@ insert_metric_result (struct rspamd_task *task,
 		s->nshots ++;
 
 		if (opt) {
-			rspamd_task_add_result_option (task, s, opt);
+			rspamd_task_add_result_option (task, s, opt, strlen (opt));
 		}
 
 		/* Adjust diff */
@@ -459,7 +459,9 @@ insert_metric_result (struct rspamd_task *task,
 			s->score = 0;
 		}
 
-		rspamd_task_add_result_option (task, s, opt);
+		if (opt) {
+			rspamd_task_add_result_option (task, s, opt, strlen (opt));
+		}
 	}
 
 	msg_debug_metric ("final insertion for symbol %s, score %.2f, factor: %f",
@@ -503,12 +505,13 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 
 gboolean
 rspamd_task_add_result_option (struct rspamd_task *task,
-		struct rspamd_symbol_result *s, const gchar *val)
+							   struct rspamd_symbol_result *s,
+							   const gchar *val,
+							   gsize vlen)
 {
-	struct rspamd_symbol_option *opt;
+	struct rspamd_symbol_option *opt, srch;
 	gboolean ret = FALSE;
 	gchar *opt_cpy = NULL;
-	gsize vlen;
 	khiter_t k;
 	gint r;
 
@@ -523,8 +526,6 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 		if (!s->options) {
 			s->options = kh_init (rspamd_options_hash);
 		}
-
-		vlen = strlen (val);
 
 		if (vlen + s->opts_len > task->cfg->max_opts_len) {
 			/* Add truncated option */
@@ -544,7 +545,9 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 		if (!(s->sym && (s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
 				kh_size (s->options) < task->cfg->default_max_shots) {
 			/* Append new options */
-			k = kh_get (rspamd_options_hash, s->options, val);
+			srch.option = (gchar *)val;
+			srch.optlen = vlen;
+			k = kh_get (rspamd_options_hash, s->options, &srch);
 
 			if (k == kh_end (s->options)) {
 				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
@@ -553,9 +556,10 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 					opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
 				}
 
-				k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
+				opt->optlen = vlen;
+				opt->option = opt_cpy;
 
-				kh_value (s->options, k) = opt;
+				k = kh_put (rspamd_options_hash, s->options, opt, &r);
 				opt->option = opt_cpy;
 				DL_APPEND (s->opts_head, opt);
 

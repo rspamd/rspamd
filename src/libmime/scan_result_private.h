@@ -12,7 +12,23 @@
 extern "C" {
 #endif
 
-KHASH_MAP_INIT_STR (rspamd_options_hash, struct rspamd_symbol_option *);
+#define RSPAMD_OPTS_SEED 0x9f1f608628a4fefbULL
+#define rspamd_symopt_hash(opt) (rspamd_cryptobox_fast_hash ( \
+		((struct rspamd_symbol_option *)opt)->option, \
+		((struct rspamd_symbol_option *)opt)->optlen, RSPAMD_OPTS_SEED))
+static inline bool
+rspamd_symopt_equal (const struct rspamd_symbol_option *o1,
+		const struct rspamd_symbol_option *o2)
+{
+	if (o1->optlen == o2->optlen) {
+		return (memcmp (o1->option, o2->option, o1->optlen) == 0);
+	}
+
+	return false;
+}
+
+KHASH_INIT (rspamd_options_hash, struct rspamd_symbol_option *, char,
+		0, rspamd_symopt_hash, rspamd_symopt_equal);
 /**
  * Result of metric processing
  */
