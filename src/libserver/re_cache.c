@@ -673,7 +673,8 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re, struct rspamd_task *task,
 		const guchar **in, guint *lens,
 		guint count,
-		gboolean is_raw)
+		gboolean is_raw,
+		gboolean *processed_hyperscan)
 {
 
 	guint64 re_id;
@@ -751,6 +752,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 				}
 				else {
 					ret = rt->results[re_id];
+					*processed_hyperscan = TRUE;
 				}
 			}
 		}
@@ -769,6 +771,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 			}
 			else {
 				ret = rt->results[re_id];
+				*processed_hyperscan = TRUE;
 			}
 		}
 	}
@@ -788,7 +791,7 @@ rspamd_re_cache_finish_class (struct rspamd_task *task,
 	guint64 re_id;
 	guint found = 0;
 
-	/* Set all bits unchecked */
+	/* Set all bits that are not checked and included in hyperscan to 1 */
 	for (i = 0; i < re_class->nhs; i++) {
 		re_id = re_class->hs_ids[i];
 
@@ -802,8 +805,9 @@ rspamd_re_cache_finish_class (struct rspamd_task *task,
 		}
 	}
 
-	msg_debug_re_task ("finished hyperscan for class %s, %d (of %d) matches found",
-			class_name, found, re_class->nhs);
+	msg_debug_re_task ("finished hyperscan for class %s; %d "
+					   "matches found; %d hyperscan supported regexps; %d total regexps",
+			class_name, found, re_class->nhs, (gint)g_hash_table_size (re_class->re));
 #endif
 }
 
@@ -977,7 +981,8 @@ rspamd_re_cache_process_headers_list (struct rspamd_task *task,
 									  rspamd_regexp_t *re,
 									  struct rspamd_re_class *re_class,
 									  struct rspamd_mime_header *rh,
-									  gboolean is_strong)
+									  gboolean is_strong,
+									  gboolean *processed_hyperscan)
 {
 	const guchar **scvec, *in;
 	gboolean raw = FALSE;
@@ -1024,7 +1029,7 @@ rspamd_re_cache_process_headers_list (struct rspamd_task *task,
 
 	if (i > 0) {
 		ret = rspamd_re_cache_process_regexp_data (rt, re,
-				task, scvec, lenvec, i, raw);
+				task, scvec, lenvec, i, raw, processed_hyperscan);
 		msg_debug_re_task ("checking header %s regexp: %s=%*s -> %d",
 				re_class->type_data,
 				rspamd_regexp_get_pattern (re),
@@ -1053,7 +1058,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	const gchar *in;
 	const guchar **scvec;
 	guint *lenvec;
-	gboolean raw = FALSE;
+	gboolean raw = FALSE, processed_hyperscan = FALSE;
 	struct rspamd_mime_text_part *text_part;
 	struct rspamd_mime_part *mime_part;
 	struct rspamd_url *url;
@@ -1076,7 +1081,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 		if (rh) {
 			ret = rspamd_re_cache_process_headers_list (task, rt, re,
-					re_class, rh, is_strong);
+					re_class, rh, is_strong, &processed_hyperscan);
 			msg_debug_re_task ("checked header(%s) regexp: %s -> %d",
 					(const char *)re_class->type_data,
 					rspamd_regexp_get_pattern (re),
@@ -1088,7 +1093,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		in = MESSAGE_FIELD (task, raw_headers_content).begin;
 		len = MESSAGE_FIELD (task, raw_headers_content).len;
 		ret = rspamd_re_cache_process_regexp_data (rt, re,
-				task, (const guchar **)&in, &len, 1, raw);
+				task, (const guchar **)&in, &len, 1, raw, &processed_hyperscan);
 		msg_debug_re_task ("checked allheader regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
@@ -1099,7 +1104,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 			if (rh) {
 				ret += rspamd_re_cache_process_headers_list (task, rt, re,
-						re_class, rh, is_strong);
+						re_class, rh, is_strong, &processed_hyperscan);
 			}
 			msg_debug_re_task ("checked mime header(%s) regexp: %s -> %d",
 					(const char *)re_class->type_data,
@@ -1151,7 +1156,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, cnt, raw);
+					task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 			msg_debug_re_task ("checked mime regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
@@ -1194,7 +1199,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, i, raw);
+					task, scvec, lenvec, i, raw, &processed_hyperscan);
 			msg_debug_re_task ("checked url regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
@@ -1207,7 +1212,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		len = task->msg.len;
 
 		ret = rspamd_re_cache_process_regexp_data (rt, re, task,
-				(const guchar **)&in, &len, 1, raw);
+				(const guchar **)&in, &len, 1, raw, &processed_hyperscan);
 		msg_debug_re_task ("checked rawbody regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
@@ -1256,7 +1261,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 
 		ret = rspamd_re_cache_process_regexp_data (rt, re,
-				task, scvec, lenvec, cnt, raw);
+				task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 		msg_debug_re_task ("checked sa body regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		g_free (scvec);
@@ -1293,7 +1298,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, cnt, raw);
+					task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 			msg_debug_re_task ("checked sa rawbody regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
@@ -1336,7 +1341,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 
 				ret = rspamd_re_cache_process_regexp_data (rt, re,
-						task, scvec, lenvec, cnt, raw);
+						task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 
 				msg_debug_re_task ("checked sa words regexp: %s -> %d",
 						rspamd_regexp_get_pattern (re), ret);
@@ -1352,7 +1357,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				&lenvec, &cnt)) {
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, cnt, raw);
+					task, scvec, lenvec, cnt, raw, &processed_hyperscan);
 			msg_debug_re_task ("checked selector(%s) regexp: %s -> %d",
 					re_class->type_data,
 					rspamd_regexp_get_pattern (re), ret);
@@ -1367,7 +1372,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	}
 
 #if WITH_HYPERSCAN
-	if (!rt->cache->disable_hyperscan && rt->has_hs) {
+	if (processed_hyperscan) {
 		rspamd_re_cache_finish_class (task, rt, re_class, class_name);
 	}
 #endif
