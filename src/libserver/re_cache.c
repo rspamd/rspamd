@@ -1077,9 +1077,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		if (rh) {
 			ret = rspamd_re_cache_process_headers_list (task, rt, re,
 					re_class, rh, is_strong);
-			msg_debug_re_task ("checked header regexp: %s (%s) -> %d",
-					rspamd_regexp_get_pattern (re),
+			msg_debug_re_task ("checked header(%s) regexp: %s -> %d",
 					(const char *)re_class->type_data,
+					rspamd_regexp_get_pattern (re),
 					ret);
 		}
 		break;
@@ -1101,9 +1101,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				ret += rspamd_re_cache_process_headers_list (task, rt, re,
 						re_class, rh, is_strong);
 			}
-			msg_debug_re_task ("checked mime header regexp: %s (%s) -> %d",
-					rspamd_regexp_get_pattern (re),
+			msg_debug_re_task ("checked mime header(%s) regexp: %s -> %d",
 					(const char *)re_class->type_data,
+					rspamd_regexp_get_pattern (re),
 					ret);
 		}
 		break;
@@ -1353,7 +1353,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, cnt, raw);
-			msg_debug_re_task ("checked selector (%s) regexp: %s -> %d",
+			msg_debug_re_task ("checked selector(%s) regexp: %s -> %d",
 					re_class->type_data,
 					rspamd_regexp_get_pattern (re), ret);
 
