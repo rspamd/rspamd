@@ -803,7 +803,7 @@ rspamd_re_cache_finish_class (struct rspamd_task *task,
 	}
 
 	msg_debug_re_task ("finished hyperscan for class %s, %d (of %d) matches found",
-			class_name, re_class->nhs);
+			class_name, found, re_class->nhs);
 #endif
 }
 
