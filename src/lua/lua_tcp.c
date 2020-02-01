@@ -396,7 +396,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 	}
 
 	if (hdl->type == LUA_WANT_READ) {
-		msg_debug_tcp ("switch from read handler");
+		msg_debug_tcp ("switch from read handler %d", hdl->h.r.cbref);
 		if (hdl->h.r.cbref && hdl->h.r.cbref != -1) {
 			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.r.cbref);
 		}
@@ -406,7 +406,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else if (hdl->type == LUA_WANT_WRITE) {
-		msg_debug_tcp ("switch from write handler");
+		msg_debug_tcp ("switch from write handler %d", hdl->h.r.cbref);
 		if (hdl->h.w.cbref && hdl->h.w.cbref != -1) {
 			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
 		}
@@ -602,11 +602,14 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 				break;
 			}
 			else {
-				/* Shift to another callback to inform about fatal error */
+				/* Shift to another callback to inform about non fatal error */
+				msg_debug_tcp ("non fatal error find matching callback");
+				lua_tcp_shift_handler (cbd);
 				continue;
 			}
 		}
 		else {
+			msg_debug_tcp ("fatal error rollback all handlers");
 			lua_tcp_shift_handler (cbd);
 		}
 	}
@@ -735,7 +738,8 @@ lua_tcp_resume_thread (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	}
 
 	lua_tcp_shift_handler (cbd);
-	lua_thread_pool_set_running_entry (cbd->cfg->lua_thread_pool, cbd->thread);
+	lua_thread_pool_set_running_entry (cbd->cfg->lua_thread_pool,
+			cbd->thread);
 
 	if (cbd->item) {
 		rspamd_symcache_set_cur_item (cbd->task, cbd->item);
@@ -1015,7 +1019,7 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 			lua_tcp_push_error (cbd, TRUE, "IO read error: connection terminated");
 		}
 
-		lua_tcp_plan_handler_event (cbd, FALSE, TRUE);
+		lua_tcp_plan_handler_event (cbd, FALSE, FALSE);
 	}
 	else {
 		/* An error occurred */
@@ -1027,10 +1031,18 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 		}
 
 		/* Fatal error */
-		lua_tcp_push_error (cbd, TRUE, "IO read error while trying to read data: %s",
-				strerror (errno));
+		cbd->eof = TRUE;
+		if (cbd->in->len > 0) {
+			/* We have some data to process */
+			lua_tcp_process_read_handler (cbd, rh, TRUE);
+		}
+		else {
+			lua_tcp_push_error (cbd, TRUE,
+					"IO read error while trying to read data: %s",
+					strerror (errno));
+		}
 
-		TCP_RELEASE (cbd);
+		lua_tcp_plan_handler_event (cbd, FALSE, FALSE);
 	}
 }
 
@@ -1155,7 +1167,6 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 				if (lua_tcp_process_read_handler (cbd, &hdl->h.r, FALSE)) {
 					if (!IS_SYNC(cbd)) {
 						/* We can go to the next handler */
-						lua_tcp_shift_handler (cbd);
 						lua_tcp_plan_handler_event (cbd, can_read, can_write);
 					}
 				}
