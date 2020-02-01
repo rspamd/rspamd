@@ -136,7 +136,6 @@ local function avast_check(task, content, digest, rule)
 
     -- Dialog stages closures
     local avast_helo_cb
-    local avast_helo_done_cb
     local avast_scan_cb
     local avast_scan_done_cb
 
