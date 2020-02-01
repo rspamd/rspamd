@@ -44,6 +44,7 @@ local function avast_config(opts)
     servers = nil, -- e.g. /var/run/avast/scan.sock
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
+    tmpdir = '/tmp',
   }
 
   avast_conf = lua_util.override_defaults(avast_conf, opts)
@@ -92,7 +93,7 @@ local function avast_check(task, content, digest, rule)
       stop_pattern = CRLF,
       host = addr:to_string(),
       port = addr:get_port(),
-      timeout = rule['timeout'],
+      timeout = rule.timeout,
       task = task
     }
 
@@ -157,11 +158,14 @@ local function avast_check(task, content, digest, rule)
       addr = upstream:get_addr()
       tcp_opts.callback = avast_helo_cb
 
-      tcp_conn = tcp.request(tcp_opts)
+      local is_succ, err = tcp.request(tcp_opts)
 
-      if not tcp_conn then
-        rspamd_logger.infox(task, 'cannot create connection to avast server: %s',
-          tostring(addr))
+      if not is_succ then
+        rspamd_logger.infox(task, 'cannot create connection to avast server: %s (%s)',
+            addr:to_string(true), err)
+      else
+        lua_util.debugm(rule.log_prefix, task, 'established connection to %s; retransmits=%s',
+            addr:to_string(true), retransmits)
       end
     end
 
@@ -169,10 +173,12 @@ local function avast_check(task, content, digest, rule)
       if err then
         if tcp_conn then
           tcp_conn:close()
+          tcp_conn = nil
+
+          rspamd_logger.infox(task, 'failed to request to avast (%s): %s',
+              addr:to_string(true), err)
+          maybe_retransmit()
         end
-        rspamd_logger.infox(task, 'failed to write request to avast (%s): %s',
-            tostring(addr), err)
-        maybe_retransmit()
 
         return false
       end
@@ -182,14 +188,10 @@ local function avast_check(task, content, digest, rule)
 
 
     -- Define callbacks
-    avast_helo_cb = function (merr)
+    avast_helo_cb = function (merr, mdata, conn)
       -- Called when we have established a connection but not read anything
-      if no_connection_error(merr) then
-        tcp_conn:add_read(avast_helo_done_cb, CRLF)
-      end
-    end
+      tcp_conn = conn
 
-    avast_helo_done_cb = function(merr, mdata)
       if no_connection_error(merr) then
         -- Check mdata to ensure that it starts with 220
         if #mdata > 3 and tostring(mdata:span(1, 3)) == '220' then
@@ -201,6 +203,7 @@ local function avast_check(task, content, digest, rule)
       end
     end
 
+
     avast_scan_cb = function(merr)
       -- Called when we have send request to avast and are waiting for reply
       if no_connection_error(merr) then
@@ -210,16 +213,23 @@ local function avast_check(task, content, digest, rule)
 
     avast_scan_done_cb = function(merr, mdata)
       if no_connection_error(merr) then
+        lua_util.debugm(rule.log_prefix, task, 'got reply from avast: %s',
+            mdata)
         if #mdata > 4 then
-          local beg = tostring(mdata:span(1, 4))
+          local beg = tostring(mdata:span(1, 3))
 
           if beg == '210' then
             -- Ignore 210, fire another read
-            tcp_conn:add_read(avast_scan_done_cb, CRLF)
+            if tcp_conn then
+              tcp_conn:add_read(avast_scan_done_cb, CRLF)
+            end
           elseif beg == '200' then
             -- Final line
             upstream:ok()
-            tcp_conn:close()
+            if tcp_conn then
+              tcp_conn:close()
+              tcp_conn = nil
+            end
           else
             -- Check line using regular expressions
             local cached
@@ -265,7 +275,9 @@ local function avast_check(task, content, digest, rule)
               rspamd_logger.errx(task, '%s: unexpected reply: %s', rule.log_prefix, mdata)
             end
             -- Read more
-            tcp_conn:add_read(avast_scan_done_cb, CRLF)
+            if tcp_conn then
+              tcp_conn:add_read(avast_scan_done_cb, CRLF)
+            end
           end
         end
       end

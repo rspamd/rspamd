@@ -38,6 +38,7 @@ require_scanner('kaspersky_se')
 require_scanner('savapi')
 require_scanner('sophos')
 require_scanner('virustotal')
+require_scanner('avast')
 
 -- Other scanners
 require_scanner('dcc')
