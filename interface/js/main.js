@@ -6,7 +6,6 @@ requirejs.config({
         app: "../app",
         jquery: "jquery-3.4.1.min",
         visibility: "visibility.min",
-        humanize: "humanize.min",
         bootstrap: "bootstrap.min",
         d3: "d3.min",
         d3evolution: "d3evolution.min",

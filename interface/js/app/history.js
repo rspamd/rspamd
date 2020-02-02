@@ -22,10 +22,10 @@
  THE SOFTWARE.
  */
 
-/* global FooTable:false */
+/* global d3:false FooTable:false */
 
-define(["jquery", "footable", "humanize"],
-    function ($, _, Humanize) {
+define(["jquery", "footable"],
+    function ($) {
         "use strict";
         var ui = {};
         var prevVersion = null;
@@ -157,7 +157,7 @@ define(["jquery", "footable", "humanize"],
                     "font-size": "11px",
                     "minwidth": 50,
                 },
-                formatter: Humanize.compactInteger
+                formatter: d3.format(".3~s")
             }, {
                 name: "time_real",
                 title: "Scan time",
@@ -245,7 +245,7 @@ define(["jquery", "footable", "humanize"],
                     "width": 120,
                     "maxWidth": 120
                 },
-                formatter: Humanize.compactInteger
+                formatter: d3.format(".3~s")
             }, {
                 name: "scan_time",
                 title: "Scan time",
