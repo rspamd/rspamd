@@ -13,12 +13,43 @@
     shape-rendering: crispEdges;
 }
 .d3evolution .grid path {
-  stroke-width: 0;
+    stroke-width: 0;
 }
 .d3evolution .axis,
 .d3evolution .legend {
     font-size: 12px;
 }
+.d3evolution .legend .value {
+    font-size: 10px;
+}
+.d3evolution .cursor-time {
+    font-size: 10px;
+}
+.d3evolution .cursor {
+    shape-rendering: crispEdges;
+}
+.d3evolution .cursor .background {
+    stroke: white;
+}
+.d3evolution .cursor .foreground {
+    stroke-dasharray: 4, 2;
+}
+.d3evolution .cursor .x.foreground {
+    stroke: blue;
+}
+.d3evolution .cursor circle {
+    shape-rendering: geometricPrecision;
+}
+.d3evolution .cursor circle.foreground {
+    stroke-dasharray: none;
+    stroke: black;
+    opacity: .5;
+}
+/*
+path.path {
+    shape-rendering: crispEdges;
+}
+*/
 .d3evolution .axis path,
 .d3evolution .axis line {
     fill: none;
@@ -28,7 +59,7 @@
 .d3evolution .legend circle {
     stroke-width: 2px;
 }
-.d3evolution .path-null{
+.d3evolution .path-null {
     fill: steelblue;
     fill-opacity: .1;
 }
