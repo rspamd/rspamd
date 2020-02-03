@@ -4586,8 +4586,10 @@ lua_task_get_symbols_all (lua_State *L)
 			lua_createtable (L, kh_size (mres->symbols), 0);
 
 			kh_foreach_value_ptr (mres->symbols, s, {
-				lua_push_symbol_result (L, task, s->name, s, FALSE, TRUE);
-				lua_rawseti (L, -2, i++);
+				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+					lua_push_symbol_result (L, task, s->name, s, FALSE, TRUE);
+					lua_rawseti (L, -2, i++);
+				}
 			});
 		}
 	}
@@ -4708,11 +4710,16 @@ tokens_foreach_cb (struct rspamd_symcache_item *item, gpointer ud)
 	}
 
 	if ((s = rspamd_task_find_symbol_result (cbd->task, sym)) != NULL) {
-		if (cbd->normalize) {
-			lua_pushnumber (cbd->L, tanh (s->score));
+		if (s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) {
+			lua_pushnumber (cbd->L, 0.0);
 		}
 		else {
-			lua_pushnumber (cbd->L, s->score);
+			if (cbd->normalize) {
+				lua_pushnumber (cbd->L, tanh (s->score));
+			}
+			else {
+				lua_pushnumber (cbd->L, s->score);
+			}
 		}
 	}
 	else {
