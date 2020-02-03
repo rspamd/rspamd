@@ -253,6 +253,18 @@ local function check_ip_setting(expected, ip)
   return false
 end
 
+local function priority_to_string(pri)
+  if pri then
+    if pri >= 3 then
+      return "high"
+    elseif pri >= 2 then
+      return "medium"
+    end
+  end
+
+  return "low"
+end
+
 -- Check limit for a task
 local function check_settings(task)
   local function check_specific_setting(rule, matched)
@@ -296,20 +308,21 @@ local function check_settings(task)
     if query_apply then
       if id_elt then
         apply_settings(task, query_apply, id_elt.id)
-        rspamd_logger.infox(task, "applied settings id %s(%s)",
-            id_elt.name, id_elt.id)
+        rspamd_logger.infox(task, "applied settings id %s(%s); priority %s",
+            id_elt.name, id_elt.id, priority_to_string(priority))
       else
         apply_settings(task, query_apply, nil)
-        rspamd_logger.infox(task, "applied settings from query")
+        rspamd_logger.infox(task, "applied settings from query; priority %s",
+            priority_to_string(priority))
       end
     end
   end
 
   local min_pri = 1
   if query_apply then
-    if priority > min_pri then
-      -- Do not check lower priorities
-      min_pri = priority
+    if priority >= min_pri then
+      -- Do not check lower or equal priorities
+      min_pri = priority + 1
     end
 
     if priority > max_pri then
@@ -347,10 +360,11 @@ local function check_settings(task)
               if not cached or not cached.settings or not cached.settings.apply then
                 rspamd_logger.errx(task, 'unregistered settings id found: %s!', s.rule.id)
               else
-                rspamd_logger.infox(task, "<%s> apply static settings %s (id = %s); %s matched",
+                rspamd_logger.infox(task, "<%s> apply static settings %s (id = %s); %s matched; priority %s",
                     task:get_message_id(),
                     cached.name, s.rule.id,
-                    table.concat(matched, ','))
+                    table.concat(matched, ','),
+                    priority_to_string(pri))
                 apply_settings(task, cached.settings.apply, s.rule.id)
               end
 

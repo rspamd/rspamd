@@ -5593,8 +5593,11 @@ lua_task_set_settings_id (lua_State *L)
 
 		if (task->settings_elt) {
 			if (task->settings_elt->id != id) {
-				return luaL_error (L, "settings id has been already set to %d (%s)",
-						task->settings_elt->id, task->settings_elt->name);
+				return luaL_error (L, "settings id has been already set to %d (%s); "
+						  "trying to set it to %d",
+						task->settings_elt->id,
+						task->settings_elt->name,
+						id);
 			}
 		}
 		else {
