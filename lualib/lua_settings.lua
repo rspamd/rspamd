@@ -240,6 +240,7 @@ local function register_settings_id(str, settings)
   else
     known_ids[numeric_id] = {
       name = str,
+      id = numeric_id,
       settings = transform_settings_maybe(settings, str),
       symbols = {}
     }

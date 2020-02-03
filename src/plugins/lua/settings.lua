@@ -95,8 +95,12 @@ local function apply_settings(task, to_apply, id)
   end
 end
 
--- Checks for overridden settings within query params and returns 'true' if
--- settings are overridden
+-- Checks for overridden settings within query params and returns 3 values:
+-- * Apply element
+-- * Settings ID element if found
+-- * Priority of the settings according to the place where it is found
+--
+-- If no override has been found, it returns `false`
 local function check_query_settings(task)
   -- Try 'settings' attribute
   local settings_id = task:get_settings_id()
@@ -111,9 +115,9 @@ local function check_query_settings(task)
             tostring(settings_id))
       end
       local settings_obj = parser:get_object()
-      apply_settings(task, settings_obj, nil)
 
-      return true
+      -- Treat as low priority
+      return settings_obj,nil,1
     else
       rspamd_logger.errx(task, 'Parse error: %s', err)
     end
@@ -145,8 +149,8 @@ local function check_query_settings(task)
 
       if not settings_id then
         rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-        apply_settings(task, nset, nil)
-        return true
+        -- Maxscore is low priority
+        return nset, nil, 1
       end
     end
   end
@@ -164,24 +168,19 @@ local function check_query_settings(task)
         if nset then
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
-        apply_settings(task, elt['apply'], settings_id)
-        rspamd_logger.infox(task, "applied settings id %s(%s)",
-            cached.name, settings_id)
-        return true
+        return elt.apply, cached, cached.priority or 1
       end
     else
       rspamd_logger.warnx(task, 'no settings id "%s" has been found', settings_id)
       if nset then
         rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-        apply_settings(task, nset, nil)
-        return true
+        return nset, nil, 1
       end
     end
   else
     if nset then
       rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-      apply_settings(task, nset, nil)
-      return true
+      return nset, nil, 1
     end
   end
 
@@ -291,19 +290,46 @@ local function check_settings(task)
   end
 
   -- Check if we have override as query argument
-  if check_query_settings(task) then
-    return
+  local query_apply,id_elt,priority = check_query_settings(task)
+
+  local function maybe_apply_query_settings()
+    if query_apply then
+      if id_elt then
+        apply_settings(task, query_apply, id_elt.id)
+        rspamd_logger.infox(task, "applied settings id %s(%s)",
+            id_elt.name, id_elt.id)
+      else
+        apply_settings(task, query_apply, nil)
+        rspamd_logger.infox(task, "applied settings from query")
+      end
+    end
+  end
+
+  local min_pri = 1
+  if query_apply then
+    if priority > min_pri then
+      -- Do not check lower priorities
+      min_pri = priority
+    end
+
+    if priority > max_pri then
+      -- Our internal priorities are lower then a priority from query, so no need to check
+      maybe_apply_query_settings()
+
+      return
+    end
   end
 
   -- Do not waste resources
   if not settings_initialized then
+    maybe_apply_query_settings()
     return
   end
 
   -- Match rules according their order
   local applied = false
 
-  for pri = max_pri,1,-1 do
+  for pri = max_pri,min_pri,-1 do
     if not applied and settings[pri] then
       for _,s in ipairs(settings[pri]) do
         local matched = {}
@@ -346,6 +372,10 @@ local function check_settings(task)
         end
       end
     end
+  end
+
+  if not applied then
+    maybe_apply_query_settings()
   end
 
 end
