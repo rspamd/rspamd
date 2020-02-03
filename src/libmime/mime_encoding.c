@@ -659,6 +659,10 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	rspamd_ftok_t charset_tok;
 	struct rspamd_mime_part *part = text_part->mime_part;
 
+	if (rspamd_str_has_8bit (text_part->raw.begin, text_part->raw.len)) {
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_8BIT_RAW;
+	}
+
 	/* Allocate copy storage */
 	part_content = g_byte_array_sized_new (text_part->parsed.len);
 	memcpy (part_content->data, text_part->parsed.begin, text_part->parsed.len);

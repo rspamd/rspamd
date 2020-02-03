@@ -625,7 +625,7 @@ lua_textpart_has_8bit_raw (lua_State * L)
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 
 	if (part) {
-		if (part->flags & RSPAMD_MIME_TEXT_PART_FLAG_8BIT) {
+		if (part->flags & RSPAMD_MIME_TEXT_PART_FLAG_8BIT_RAW) {
 			lua_pushboolean (L, TRUE);
 		}
 		else {
