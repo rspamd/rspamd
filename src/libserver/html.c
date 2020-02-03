@@ -506,7 +506,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 	/* Leftover */
 	if (state == 1 && h > e) {
 		/* Unfinished entity, copy as is */
-		if (end - t > h - e) {
+		if (end - t >= h - e) {
 			memmove (t, e, h - e);
 			t += h - e;
 		}
@@ -1511,7 +1511,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 					orig_len = len;
 					len += hc->base_url->urllen;
 
-					if (hc->base_url->string[hc->base_url->urllen - 1] != '/') {
+					if (hc->base_url->datalen == 0) {
 						need_slash = TRUE;
 						len ++;
 					}
