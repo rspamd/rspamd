@@ -450,10 +450,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 {
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean has_ip = FALSE, seen_settings_header = FALSE;
-	struct rspamd_http_header *header, *h, *htmp;
+	struct rspamd_http_header *header, *h;
 	gchar *ntok;
 
-	HASH_ITER (hh, msg->headers, header, htmp) {
+	kh_foreach_value (msg->headers, header, {
 		DL_FOREACH (header, h) {
 			ntok = rspamd_mempool_ftokdup (task->task_pool, &h->name);
 			hn_tok = rspamd_mempool_alloc (task->task_pool, sizeof (*hn_tok));
@@ -702,7 +702,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 			rspamd_task_add_request_header (task, hn_tok, hv_tok);
 		}
-	}
+	}); /* End of kh_foreach_value */
 
 	if (seen_settings_header && task->settings_elt) {
 		msg_warn_task ("ignore settings id %s as settings header is also presented",

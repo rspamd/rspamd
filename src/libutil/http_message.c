@@ -39,6 +39,7 @@ rspamd_http_new_message (enum rspamd_http_message_type type)
 	new->port = 80;
 	new->type = type;
 	new->method = HTTP_INVALID;
+	new->headers = kh_init (rspamd_http_headers_hash);
 
 	REF_INIT_RETAIN (new, rspamd_http_message_free);
 
@@ -468,18 +469,16 @@ rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 void
 rspamd_http_message_free (struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *hdr, *htmp, *hcur, *hcurtmp;
+	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 
-
-	HASH_ITER (hh, msg->headers, hdr, htmp) {
-		HASH_DEL (msg->headers, hdr);
-
+	kh_foreach_value (msg->headers, hdr, {
 		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
 			rspamd_fstring_free (hcur->combined);
 			g_free (hcur);
 		}
-	}
+	});
 
+	kh_destroy (rspamd_http_headers_hash, msg->headers);
 	rspamd_http_message_storage_cleanup (msg);
 
 	if (msg->url != NULL) {
@@ -520,8 +519,10 @@ rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
 									const gchar *value,
 									gsize len)
 {
-	struct rspamd_http_header *hdr, *found = NULL;
+	struct rspamd_http_header *hdr, *found;
 	guint nlen, vlen;
+	khiter_t k;
+	gint r;
 
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_malloc0 (sizeof (struct rspamd_http_header));
@@ -535,12 +536,15 @@ rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
 
-		HASH_FIND (hh, msg->headers, hdr->name.begin,
-				hdr->name.len, found);
+		k = kh_put (rspamd_http_headers_hash, msg->headers, &hdr->name,
+				&r);
 
-		if (found == NULL) {
-			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name.begin,
-					hdr->name.len, hdr);
+		if (r != 0) {
+			kh_value (msg->headers, k) = hdr;
+			found = NULL;
+		}
+		else {
+			found = kh_value (msg->headers, k);
 		}
 
 		DL_APPEND (found, hdr);
@@ -564,6 +568,8 @@ rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
 {
 	struct rspamd_http_header *hdr, *found = NULL;
 	guint nlen, vlen;
+	khiter_t k;
+	gint r;
 
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_malloc0 (sizeof (struct rspamd_http_header));
@@ -576,12 +582,15 @@ rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
 		hdr->value.begin = hdr->combined->str + nlen + 2;
 		hdr->value.len = vlen;
 
-		HASH_FIND (hh, msg->headers, hdr->name.begin,
-				hdr->name.len, found);
+		k = kh_put (rspamd_http_headers_hash, msg->headers, &hdr->name,
+				&r);
 
-		if (found == NULL) {
-			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name.begin,
-					hdr->name.len, hdr);
+		if (r != 0) {
+			kh_value (msg->headers, k) = hdr;
+			found = NULL;
+		}
+		else {
+			found = kh_value (msg->headers, k);
 		}
 
 		DL_APPEND (found, hdr);
@@ -592,15 +601,19 @@ const rspamd_ftok_t *
 rspamd_http_message_find_header (struct rspamd_http_message *msg,
 								 const gchar *name)
 {
-	struct rspamd_http_header *hdr;
 	const rspamd_ftok_t *res = NULL;
+	rspamd_ftok_t srch;
 	guint slen = strlen (name);
+	khiter_t k;
 
 	if (msg != NULL) {
-		HASH_FIND (hh, msg->headers, name, slen, hdr);
+		srch.begin = name;
+		srch.len = slen;
 
-		if (hdr) {
-			res = &hdr->value;
+		k = kh_get (rspamd_http_headers_hash, msg->headers, &srch);
+
+		if (k != kh_end (msg->headers)) {
+			res = &(kh_value (msg->headers, k)->value);
 		}
 	}
 
@@ -614,14 +627,23 @@ rspamd_http_message_find_header_multiple (
 {
 	GPtrArray *res = NULL;
 	struct rspamd_http_header *hdr, *cur;
+	rspamd_ftok_t srch;
+	khiter_t k;
+	guint cnt = 0;
 
 	guint slen = strlen (name);
 
 	if (msg != NULL) {
-		HASH_FIND (hh, msg->headers, name, slen, hdr);
+		srch.begin = name;
+		srch.len = slen;
 
-		if (hdr) {
-			res = g_ptr_array_sized_new (4);
+		k = kh_get (rspamd_http_headers_hash, msg->headers, &srch);
+
+		if (k != kh_end (msg->headers)) {
+			hdr = kh_value (msg->headers, k);
+
+			LL_COUNT (hdr, cur, cnt);
+			res = g_ptr_array_sized_new (cnt);
 
 			LL_FOREACH (hdr, cur) {
 				g_ptr_array_add (res, &cur->value);
@@ -641,12 +663,18 @@ rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 	gboolean res = FALSE;
 	guint slen = strlen (name);
+	rspamd_ftok_t srch;
+	khiter_t k;
 
 	if (msg != NULL) {
-		HASH_FIND (hh, msg->headers, name, slen, hdr);
+		srch.begin = name;
+		srch.len = slen;
 
-		if (hdr) {
-			HASH_DEL (msg->headers, hdr);
+		k = kh_get (rspamd_http_headers_hash, msg->headers, &srch);
+
+		if (k != kh_end (msg->headers)) {
+			hdr = kh_value (msg->headers, k);
+			kh_del (rspamd_http_headers_hash, msg->headers, k);
 			res = TRUE;
 
 			DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {

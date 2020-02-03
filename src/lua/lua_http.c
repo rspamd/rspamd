@@ -221,7 +221,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
-	struct rspamd_http_header *h, *htmp;
+	struct rspamd_http_header *h;
 	const gchar *body;
 	gsize body_len;
 
@@ -275,7 +275,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	/* Headers */
 	lua_newtable (L);
 
-	HASH_ITER (hh, msg->headers, h, htmp) {
+	kh_foreach_value (msg->headers, h, {
 		/*
 		 * Lowercase header name, as Lua cannot search in caseless matter
 		 */
@@ -283,7 +283,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_pushlstring (L, h->name.begin, h->name.len);
 		lua_pushlstring (L, h->value.begin, h->value.len);
 		lua_settable (L, -3);
-	}
+	});
 
 	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
@@ -313,7 +313,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 	lua_State *L = cbd->thread->lua_state;
 	const gchar *body;
 	gsize body_len;
-	struct rspamd_http_header *h, *htmp;
+	struct rspamd_http_header *h;
 
 	if (err) {
 		lua_pushstring (L, err);
@@ -363,7 +363,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 		lua_pushliteral (L, "headers");
 		lua_newtable (L);
 
-		HASH_ITER (hh, msg->headers, h, htmp) {
+		kh_foreach_value (msg->headers, h, {
 			/*
 			 * Lowercase header name, as Lua cannot search in caseless matter
 			 */
@@ -371,7 +371,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 			lua_pushlstring (L, h->name.begin, h->name.len);
 			lua_pushlstring (L, h->value.begin, h->value.len);
 			lua_settable (L, -3);
-		}
+		});
 
 		lua_settable (L, -3);
 	}

@@ -1277,11 +1277,11 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 static void
 rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *h, *htmp;
+	struct rspamd_http_header *h;
 
-	HASH_ITER (hh, msg->headers, h, htmp) {
+	kh_foreach_value (msg->headers, h, {
 		rspamd_fprintf (out, "%T: %T\n", &h->name, &h->value);
-	}
+	});
 
 	rspamd_fprintf (out, "\n");
 }

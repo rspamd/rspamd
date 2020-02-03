@@ -24,8 +24,6 @@
 #include "ref.h"
 #include "upstream.h"
 #include "khash.h"
-#define HASH_CASELESS
-#include "uthash_strcase.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -38,9 +36,12 @@ struct rspamd_http_header {
 	rspamd_fstring_t *combined;
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;
-	UT_hash_handle hh;
 	struct rspamd_http_header *prev, *next;
 };
+
+KHASH_INIT (rspamd_http_headers_hash, rspamd_ftok_t *,
+		struct rspamd_http_header *, 1,
+		rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
 
 /**
  * HTTP message structure, used for requests and replies
@@ -49,7 +50,7 @@ struct rspamd_http_message {
 	rspamd_fstring_t *url;
 	GString *host;
 	rspamd_fstring_t *status;
-	struct rspamd_http_header *headers;
+	khash_t (rspamd_http_headers_hash) *headers;
 
 	struct _rspamd_body_buf_s {
 		/* Data start */
