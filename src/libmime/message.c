@@ -46,11 +46,13 @@
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 
 static const gchar gtube_pattern_reject[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
-		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+				"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 static const gchar gtube_pattern_add_header[] = "YJS*C4JDBQADN1.NSBN3*2IDNEN*"
-		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+				"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 static const gchar gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNEN*"
-		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+				"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const gchar gtube_pattern_no_action[] = "AJS*C4JDBQADN1.NSBN3*2IDNEN*"
+				"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const guint64 words_hash_seed = 0xdeadbabe;
 
@@ -616,6 +618,16 @@ rspamd_multipattern_gtube_cb (struct rspamd_multipattern *mp,
 		gsize len,
 		void *context)
 {
+	struct rspamd_task *task = (struct rspamd_task *)context;
+
+	if (strnum > 0) {
+		if (task->cfg->enable_test_patterns) {
+			return strnum + 1;
+		}
+
+		return 0;
+	}
+
 	return strnum + 1; /* To distinguish from zero */
 }
 
@@ -639,6 +651,9 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 		rspamd_multipattern_add_pattern (gtube_matcher,
 				gtube_pattern_rewrite_subject,
 				RSPAMD_MULTIPATTERN_DEFAULT);
+		rspamd_multipattern_add_pattern (gtube_matcher,
+				gtube_pattern_no_action,
+				RSPAMD_MULTIPATTERN_DEFAULT);
 
 		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
 	}
@@ -647,21 +662,27 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 			part->utf_content->len <= max_check_size) {
 		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->utf_content->data,
 				part->utf_content->len,
-				rspamd_multipattern_gtube_cb, NULL, NULL)) > 0) {
+				rspamd_multipattern_gtube_cb, task, NULL)) > 0) {
 
 			switch (ret) {
 			case 1:
 				act = METRIC_ACTION_REJECT;
 				break;
 			case 2:
+				g_assert (task->cfg->enable_test_patterns);
 				act = METRIC_ACTION_ADD_HEADER;
 				break;
 			case 3:
+				g_assert (task->cfg->enable_test_patterns);
 				act = METRIC_ACTION_REWRITE_SUBJECT;
+				break;
+			case 4:
+				g_assert (task->cfg->enable_test_patterns);
+				act = METRIC_ACTION_NOACTION;
 				break;
 			}
 
-			if (act != METRIC_ACTION_NOACTION) {
+			if (ret != 0) {
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
 				msg_info_task (
