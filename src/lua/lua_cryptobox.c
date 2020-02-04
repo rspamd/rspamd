@@ -965,21 +965,21 @@ rspamd_lua_hash_create (const gchar *type)
 		if (g_ascii_strcasecmp (type, "md5") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_md5 ());
 			/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 			EVP_MD_CTX_set_flags (h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
 #endif
-			EVP_DigestInit (h->content.c, EVP_md5 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha1") == 0 ||
 					g_ascii_strcasecmp (type, "sha") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
 			/* Should never ever be used for crypto/security purposes! */
+			EVP_DigestInit (h->content.c, EVP_sha1 ());
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 			EVP_MD_CTX_set_flags (h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
 #endif
-			EVP_DigestInit (h->content.c, EVP_sha1 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha256") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
