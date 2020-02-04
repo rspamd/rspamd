@@ -435,7 +435,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 	flags = ucl_object_lookup (top, "flags");
 
-	if (type != NULL && ucl_object_type (type) == UCL_ARRAY) {
+	if (flags != NULL && ucl_object_type (flags) == UCL_ARRAY) {
 		ucl_object_iter_t it = NULL;
 		const ucl_object_t *cur;
 

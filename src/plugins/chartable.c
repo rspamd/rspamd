@@ -22,11 +22,13 @@
  *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
  */
 
+
 #include "config.h"
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libstat/stat_api.h"
 #include "libstat/tokenizers/tokenizers.h"
+#include "libmime/lang_detection.h"
 
 #include "unicode/utf8.h"
 #include "unicode/uchar.h"
@@ -357,7 +359,8 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 								   gboolean is_url,
 								   guint *ncap,
 								   struct chartable_ctx *chartable_module_ctx,
-								   const gchar *lang)
+								   const gchar *lang,
+								   gboolean ignore_diacritics)
 {
 	const UChar32 *p, *end;
 	gdouble badness = 0.0;
@@ -388,13 +391,15 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		sc = ublock_getCode (uc);
 		cat = u_charType (uc);
 
-		if (cat == U_NON_SPACING_MARK ||
-			(sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
-			(sc == UBLOCK_LATIN_EXTENDED_A) ||
-			(sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) ||
-			(sc == UBLOCK_LATIN_EXTENDED_B) ||
-			(sc == UBLOCK_COMBINING_DIACRITICAL_MARKS)) {
-			nspecial ++;
+		if (!ignore_diacritics) {
+			if (cat == U_NON_SPACING_MARK ||
+				(sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
+				(sc == UBLOCK_LATIN_EXTENDED_A) ||
+				(sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) ||
+				(sc == UBLOCK_LATIN_EXTENDED_B) ||
+				(sc == UBLOCK_COMBINING_DIACRITICAL_MARKS)) {
+				nspecial++;
+			}
 		}
 
 		if (u_isalpha (uc)) {
@@ -469,14 +474,9 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 	}
 
 	if (nspecial > 0) {
-		if (lang) {
-			if (strcmp (lang, "en") == 0) {
-				/* Diacritic is always bad for English */
-				badness += nspecial;
-			}
-			else if (nspecial > 1) {
-				badness += (nspecial - 1.0) / 2.0;
-			}
+		if (!ignore_diacritics) {
+			/* Count diacritics  */
+			badness += nspecial;
 		}
 		else if (nspecial > 1) {
 			badness += (nspecial - 1.0) / 2.0;
@@ -589,7 +589,8 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 static void
 rspamd_chartable_process_part (struct rspamd_task *task,
 							   struct rspamd_mime_text_part *part,
-							   struct chartable_ctx *chartable_module_ctx)
+							   struct chartable_ctx *chartable_module_ctx,
+							   gboolean ignore_diacritics)
 {
 	rspamd_stat_token_t *w;
 	guint i, ncap = 0;
@@ -607,7 +608,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 
 			if (w->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-						&ncap, chartable_module_ctx, part->language);
+						&ncap, chartable_module_ctx, part->language, ignore_diacritics);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, w,
@@ -645,10 +646,23 @@ chartable_symbol_callback (struct rspamd_task *task,
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
 	const gchar *language = NULL;
+	gboolean ignore_diacritics = FALSE;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
-		rspamd_chartable_process_part (task, part, chartable_module_ctx);
-		language = part->language;
+		if (part->languages && part->languages->len > 0) {
+			struct rspamd_lang_detector_res *lang =
+					(struct rspamd_lang_detector_res *)g_ptr_array_index (part->languages, 0);
+			gint flags;
+
+			flags = rspamd_language_detector_elt_flags (lang->elt);
+
+			if (flags & RS_LANGUAGE_DIACRITICS) {
+				ignore_diacritics = TRUE;
+			}
+		}
+
+		rspamd_chartable_process_part (task, part, chartable_module_ctx,
+				ignore_diacritics);
 	}
 
 	if (task->meta_words != NULL) {
@@ -659,7 +673,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		for (i = 0; i < arlen; i++) {
 			w = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
 			cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-					NULL, chartable_module_ctx, language);
+					NULL, chartable_module_ctx, language, ignore_diacritics);
 		}
 
 		cur_score /= (gdouble)arlen;
