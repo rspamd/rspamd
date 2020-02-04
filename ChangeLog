@@ -1,3 +1,58 @@
+2.3: 04 Feb 2020
+  * [Conf] SPF is no longer a C module
+  * [Conf] Update spamtrap map path example
+  * [CritFix] Fix html entities decoding
+  * [CritFix] Fix re cache when mix of pcre and hyperscan is used
+  * [Feature] Allow milter code to deal with multiple headers
+  * [Feature] Antivirus: Add avast support
+  * [Feature] Dkim_signing: Allow to sign via milter_headers
+  * [Feature] Implement content hashes
+  * [Feature] Lua_text: Add regexp split iterator method
+  * [Feature] Lua_text: Implement flattening of the input tables
+  * [Feature] Send quit command to Redis
+  * [Feature] Speed up is_ascii function
+  * [Feature] Spf: Add external_relay option
+  * [Fix] Avoid double escaping
+  * [Fix] Fix O(N^2) algorithm
+  * [Fix] Fix arc seal validation
+  * [Fix] Fix base tag processing according to stupid HTML renderer behaviour
+  * [Fix] Fix dealing with `\0` in ucl strings and JSON
+  * [Fix] Fix gpg parts misdetection
+  * [Fix] Fix ignored symbols exporting
+  * [Fix] Fix processing of numeric url's
+  * [Fix] Fix processing of the closed tcp connections
+  * [Fix] Fix regexp type check for pcre2
+  * [Fix] Fix urls encode function
+  * [Fix] Fix urls shifting when doing decode to include separators
+  * [Fix] Fix white on white rule and add is_leaf flag
+  * [Fix] Further fixes in charset detection
+  * [Fix] Ignore diacritics in chartable module for specific languages
+  * [Fix] Limit size of symbols options by max_opts_len option
+  * [Fix] More fixes in html tag content calculations
+  * [Fix] Plug memory leak in fuzzy storage
+  * [Fix] Process high priority settings even if settings/id has been specified
+  * [Fix] Select a different upstream on last retransmit
+  * [Fix] Treat soft hyphen as zero width space
+  * [Fix] Try harder to watch the lifetime of the key_stat
+  * [Fix] Use ipv6-mapped-ipv4 addresses in radix trie
+  * [Project] Add logic to break execution when processing symbols*
+  * [Project] Add methods to set specific content for mime parts from Lua
+  * [Project] Lua_content: support PDF files
+  * [Project] Move dns_tool to using of the rspamd_spf from FFI module
+  * [Project] Preliminary SPF plugin in Lua
+  * [Project] Show debug stat for memory pool
+  * [Project] Some rework about specific data that is now tagged
+  * [Project] Start reworking of the mempool structure
+  * [Rework] Allow to add userdata as symbols options
+  * [Rework] Change mime part specifics handling
+  * [Rework] Move LRU SPF cache from spf plugin
+  * [Rework] Rework HTML tags content attachment
+  * [Rework] Rework options hash structure
+  * [Rework] Start lua_content library
+  * [Rework] Stop using of uthash for http headers
+  * [Rework] Use faster hashing approach for memory pools variables
+  * [Rules] Add PDF related rules
+
 2.2: 19 Nov 2019
   * [Conf] Antivirus: Fix the default config
   * [Feature] Add verdict library in lua
