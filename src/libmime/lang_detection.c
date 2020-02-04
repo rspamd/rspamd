@@ -70,13 +70,6 @@ static const gchar *tier1_langs[] = {
 		"pt", "ru", "pl", "tk", "th", "ar"
 };
 
-enum rspamd_language_elt_flags {
-	RS_LANGUAGE_DEFAULT = 0,
-	RS_LANGUAGE_LATIN = (1 << 0),
-	RS_LANGUAGE_TIER1 = (1 << 3),
-	RS_LANGUAGE_TIER0 = (1 << 4),
-};
-
 enum rspamd_language_category {
 	RSPAMD_LANGUAGE_LATIN = 0,
 	RSPAMD_LANGUAGE_CYRILLIC,
@@ -87,7 +80,7 @@ enum rspamd_language_category {
 
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
-	enum rspamd_language_elt_flags flags;
+	gint flags; /* enum rspamd_language_elt_flags */
 	enum rspamd_language_category category;
 	guint trigramms_words;
 	guint stop_words;
@@ -353,7 +346,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 {
 	struct ucl_parser *parser;
 	ucl_object_t *top;
-	const ucl_object_t *freqs, *n_words, *cur, *type;
+	const ucl_object_t *freqs, *n_words, *cur, *type, *flags;
 	ucl_object_iter_t it = NULL;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	struct rspamd_language_elt *nelt;
@@ -437,6 +430,29 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			ucl_object_unref (top);
 
 			return;
+		}
+	}
+
+	flags = ucl_object_lookup (top, "flags");
+
+	if (type != NULL && ucl_object_type (type) == UCL_ARRAY) {
+		ucl_object_iter_t it = NULL;
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate (flags, &it, true)) != NULL) {
+			const gchar *fl = ucl_object_tostring (cur);
+
+			if (cur) {
+				if (strcmp (fl, "diacritics") == 0) {
+					nelt->flags |= RS_LANGUAGE_DIACRITICS;
+				}
+				else {
+					msg_debug_config ("unknown flag %s of language %s", fl, nelt->name);
+				}
+			}
+			else {
+				msg_debug_config ("unknown flags type of language %s", nelt->name);
+			}
 		}
 	}
 
@@ -1902,4 +1918,14 @@ rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
 	}
 
 	return FALSE;
+}
+
+gint
+rspamd_language_detector_elt_flags (const struct rspamd_language_elt *elt)
+{
+	if (elt) {
+		return elt->flags;
+	}
+
+	return 0;
 }
