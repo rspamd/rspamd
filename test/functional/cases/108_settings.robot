@@ -9,6 +9,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${MESSAGE_PRIORITY}      ${TESTDIR}/messages/priority.eml
 ${MESSAGE_7BIT}      ${TESTDIR}/messages/utf.eml
 ${MESSAGE_CUSTOM_HDR}      ${TESTDIR}/messages/empty-plain-text.eml
 ${MESSAGE_ABSENT_MIME}      ${TESTDIR}/messages/ed25519.eml
@@ -220,6 +221,11 @@ SETTINGS ID - VIRTUAL DEP
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+PRIORITY
+  ${result} =  Scan Message With Rspamc  ${MESSAGE_PRIORITY}  --header  Settings-Id=id_virtual_group  --from  user@test.com
+  Should Contain  ${result.stdout}  PRIORITY_2
+
 
 *** Keywords ***
 Settings Setup
