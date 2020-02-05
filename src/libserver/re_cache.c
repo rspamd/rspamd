@@ -2079,12 +2079,12 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				rspamd_re_cache_type_to_string (re_class->type),
 				(gint)g_hash_table_size (re_class->re),
 				path);
-		unlink (path);
-		close (fd);
 
-		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
 		unlink (path);
 		close (fd);
+		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+
+		return;
 	}
 
 	/* Continue process */
