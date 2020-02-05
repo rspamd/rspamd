@@ -810,7 +810,7 @@ LUA_FUNCTION_DEF (task, set_settings);
  * Set users settings id for a task (must be registered previously)
  * @available 2.0+
  * @param {number} id numeric id
- * @return {boolean} true if settings id has been set
+ * @return {boolean} true if settings id has been replaced from the existing one
  */
 LUA_FUNCTION_DEF (task, set_settings_id);
 
@@ -5591,25 +5591,23 @@ lua_task_set_settings_id (lua_State *L)
 
 	if (task != NULL && id != 0) {
 
+		struct rspamd_config_settings_elt *selt =
+				rspamd_config_find_settings_id_ref (task->cfg, id);
+
+		if (selt == NULL) {
+			return luaL_error (L, "settings id %u is unknown", id);
+		}
 		if (task->settings_elt) {
-			if (task->settings_elt->id != id) {
-				return luaL_error (L, "settings id has been already set to %d (%s); "
-						  "trying to set it to %d",
-						task->settings_elt->id,
-						task->settings_elt->name,
-						id);
-			}
+			/* Overwrite existing settings from Lua */
+			REF_RELEASE (task->settings_elt);
+			lua_pushboolean (L, true);
 		}
 		else {
-			task->settings_elt = rspamd_config_find_settings_id_ref (task->cfg,
-					id);
-
-			if (!task->settings_elt) {
-				return luaL_error (L, "settings id %u is unknown", id);
-			}
+			lua_pushboolean (L, false);
 		}
 
-		lua_pushboolean (L, true);
+		task->settings_elt = selt;
+
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
