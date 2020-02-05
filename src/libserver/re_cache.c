@@ -2345,6 +2345,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache_elt *elt;
 	struct stat st;
+	gboolean has_valid = FALSE;
 
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -2368,7 +2369,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			if (map == MAP_FAILED) {
 				msg_err_re_cache ("cannot mmap %s: %s", path, strerror (errno));
 				close (fd);
-				return FALSE;
+				continue;
 			}
 
 			close (fd);
@@ -2384,7 +2385,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				msg_err_re_cache ("bad number of expressions in %s: %d",
 						path, n);
 				munmap (map, st.st_size);
-				return FALSE;
+				continue;
 			}
 
 			total += n;
@@ -2422,7 +2423,11 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				g_free (hs_ids);
 				g_free (hs_flags);
 
-				return FALSE;
+				re_class->hs_ids = NULL;
+				re_class->hs_scratch = NULL;
+				re_class->hs_db = NULL;
+
+				continue;
 			}
 
 			munmap (map, st.st_size);
@@ -2449,18 +2454,24 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			re_class->hs_ids = hs_ids;
 			g_free (hs_flags);
 			re_class->nhs = n;
+			has_valid = TRUE;
 		}
 		else {
 			msg_err_re_cache ("invalid hyperscan hash file '%s'",
 					path);
-			return FALSE;
+			continue;
 		}
 	}
 
-	msg_info_re_cache ("hyperscan database of %d regexps has been loaded", total);
-	cache->hyperscan_loaded = TRUE;
+	if (has_valid) {
+		msg_info_re_cache ("hyperscan database of %d regexps has been loaded", total);
+	}
+	else {
+		msg_info_re_cache ("hyperscan database has NOT been loaded; no valid expressions");
+	}
+	cache->hyperscan_loaded = has_valid;
 
-	return TRUE;
+	return has_valid;
 #endif
 }
 
