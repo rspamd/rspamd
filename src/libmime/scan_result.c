@@ -550,17 +550,18 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			k = kh_get (rspamd_options_hash, s->options, &srch);
 
 			if (k == kh_end (s->options)) {
-				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
+				gchar *dst_cpy;
 
-				if (opt_cpy == NULL) {
-					opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
-				}
+				opt = rspamd_mempool_alloc0 (task->task_pool,
+						sizeof (*opt) + vlen + 1);
 
+				dst_cpy = ((gchar *)opt) + sizeof (*opt);
+				memcpy (dst_cpy, val, vlen);
+				dst_cpy[vlen] = '\0';
 				opt->optlen = vlen;
-				opt->option = opt_cpy;
+				opt->option = dst_cpy;
 
-				k = kh_put (rspamd_options_hash, s->options, opt, &r);
-				opt->option = opt_cpy;
+				kh_put (rspamd_options_hash, s->options, opt, &r);
 				DL_APPEND (s->opts_head, opt);
 
 				ret = TRUE;
