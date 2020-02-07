@@ -78,7 +78,7 @@ local function process_func(elt, task)
 
   local res = elt.expr:process(process_atom)
 
-  if res then
+  if res > 0 then
     return res,matched
   end
 

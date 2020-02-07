@@ -32,8 +32,8 @@ worker_t hs_helper_worker = {
 		"hs_helper",                /* Name */
 		init_hs_helper,             /* Init function */
 		start_hs_helper,            /* Start function */
-		RSPAMD_WORKER_UNIQUE|RSPAMD_WORKER_KILLABLE|RSPAMD_WORKER_ALWAYS_START,
-		RSPAMD_WORKER_SOCKET_NONE,  /* No socket */
+		RSPAMD_WORKER_UNIQUE|RSPAMD_WORKER_KILLABLE|RSPAMD_WORKER_ALWAYS_START|RSPAMD_WORKER_NO_TERMINATE_DELAY,
+		RSPAMD_WORKER_SOCKET_NONE,
 		RSPAMD_WORKER_VER           /* Version info */
 };
 

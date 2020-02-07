@@ -2347,6 +2347,21 @@ rspamd_dkim_check_bh_cached (struct rspamd_dkim_common_ctx *ctx,
 	return res;
 }
 
+static const char *
+rspamd_dkim_type_to_string (enum rspamd_dkim_type t)
+{
+	switch (t) {
+	case RSPAMD_DKIM_NORMAL:
+		return "dkim";
+	case RSPAMD_DKIM_ARC_SIG:
+		return "arc_sig";
+	case RSPAMD_DKIM_ARC_SEAL:
+	default:
+		return "arc_seal";
+
+	}
+}
+
 /**
  * Check task for dkim context using dkim key
  * @param ctx dkim verify context
@@ -2445,8 +2460,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		/* Check bh field */
 		if (memcmp (ctx->bh, cached_bh->digest_normal, ctx->bhlen) != 0) {
 			msg_info_dkim (
-					"dkim: bh value mismatch: got %*Bs, expected %*Bs; "
+					"%s: bh value mismatch: got %*Bs, expected %*Bs; "
 					"body length %d->%d; d=%s; s=%s",
+					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)dlen, cached_bh->digest_normal,
 					(gint)dlen, ctx->bh,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
@@ -2581,8 +2597,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			res->fail_reason = "rsa verify failed";
 
 			msg_info_dkim (
-					"dkim: RSA verification failure: got %*Bs, expected %*Bs; "
+					"%s: RSA verification failure: got %*Bs, expected %*Bs; "
 					"body length %d->%d; headers length %d; d=%s; s=%s",
+					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)dlen, raw_digest,
 					(gint)dlen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
@@ -2594,8 +2611,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		if (ECDSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_ecdsa) != 1) {
 			msg_info_dkim (
-					"dkim: ECDSA verification failure: got %*Bs, expected %*Bs; "
+					"%s: ECDSA verification failure: got %*Bs, expected %*Bs; "
 					"body length %d->%d; headers length %d; d=%s; s=%s",
+					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)dlen, raw_digest,
 					(gint)dlen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
@@ -2610,8 +2628,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		if (!rspamd_cryptobox_verify (ctx->b, ctx->blen, raw_digest, dlen,
 				key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_info_dkim (
-					"dkim: EDDSA verification failure: got %*Bs, expected %*Bs; "
+					"%s: EDDSA verification failure: got %*Bs, expected %*Bs; "
 					"body length %d->%d; headers length %d; d=%s; s=%s",
+					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)dlen, raw_digest,
 					(gint)dlen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,

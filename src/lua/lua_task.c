@@ -6269,7 +6269,7 @@ lua_task_headers_foreach (lua_State *L)
 			if (MESSAGE_FIELD (task, headers_order)) {
 				hdr = MESSAGE_FIELD (task, headers_order);
 
-				LL_FOREACH (hdr, cur) {
+				LL_FOREACH2 (hdr, cur, ord_next) {
 					if (re && re->re) {
 						if (!rspamd_regexp_match (re->re, cur->name,
 								strlen (cur->name), FALSE)) {

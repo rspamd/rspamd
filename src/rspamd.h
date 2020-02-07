@@ -64,6 +64,7 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_ALWAYS_START = (1 << 4),
 	RSPAMD_WORKER_SCANNER = (1 << 5),
 	RSPAMD_WORKER_CONTROLLER = (1 << 6),
+	RSPAMD_WORKER_NO_TERMINATE_DELAY = (1 << 7),
 };
 
 struct rspamd_worker_accept_event {
@@ -107,7 +108,7 @@ struct rspamd_worker {
 	struct rspamd_worker_accept_event *accept_events; /**< socket events				*/
 	struct rspamd_worker_conf *cf;  /**< worker config data								*/
 	gpointer ctx;                   /**< worker's specific data							*/
-	enum rspamd_worker_flags flags; /**< worker's flags									*/
+	gint flags;                     /**< worker's flags (enum rspamd_worker_flags)		*/
 	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
 	                                                   [1] is used by a worker			*/
 	gint srv_pipe[2];               /**< used by workers to request something from the

@@ -227,7 +227,6 @@ struct rspamd_worker_conf {
 	guint64 rlimit_maxcore;                         /**< maximum core file size								*/
 	GHashTable *params;                             /**< params for worker									*/
 	GQueue *active_workers;                         /**< linked list of spawned workers						*/
-	gboolean has_socket;                            /**< whether we should make listening socket in main process */
 	gpointer *ctx;                                  /**< worker's context									*/
 	ucl_object_t *options;                          /**< other worker's options								*/
 	struct rspamd_worker_lua_script *scripts;       /**< registered lua scripts								*/
