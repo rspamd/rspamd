@@ -23,7 +23,10 @@ enum rspamd_log_flags {
 
 typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
 								   const gchar *function,
-								   gint level_flags, const gchar *message, gpointer arg);
+								   gint level_flags,
+								   const gchar *message,
+								   gsize mlen,
+								   gpointer arg);
 
 typedef struct rspamd_logger_s rspamd_logger_t;
 

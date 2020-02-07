@@ -101,6 +101,7 @@ struct rspamd_logger_s {
 	struct rspamd_radix_map_helper *debug_ip;
 	guint64 last_line_cksum;
 	gchar *saved_message;
+	gsize saved_mlen;
 	gchar *saved_function;
 	gchar *saved_module;
 	gchar *saved_id;
@@ -116,12 +117,12 @@ static struct rspamd_log_modules *log_modules = NULL;
 
 static void syslog_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
-		gint log_level, const gchar *message,
+		gint log_level, const gchar *message, gsize mlen,
 		gpointer arg);
 
 static void file_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
-		gint log_level, const gchar *message,
+		gint log_level, const gchar *message, gsize mlen,
 		gpointer arg);
 
 guint rspamd_task_log_id = (guint)-1;
@@ -378,20 +379,24 @@ static void
 rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log)
 {
 	gchar tmpbuf[256];
+	gssize r;
+
 	if (rspamd_log->opened) {
 		if (rspamd_log->type == RSPAMD_LOG_FILE) {
 			if (rspamd_log->repeats > REPEATS_MIN) {
-				rspamd_snprintf (tmpbuf,
+				r = rspamd_snprintf (tmpbuf,
 						sizeof (tmpbuf),
 						"Last message repeated %ud times",
 						rspamd_log->repeats);
 				rspamd_log->repeats = 0;
+
 				if (rspamd_log->saved_message) {
 					file_log_function (rspamd_log->saved_module,
 							rspamd_log->saved_id,
 							rspamd_log->saved_function,
 							rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 							rspamd_log->saved_message,
+							rspamd_log->saved_mlen,
 							rspamd_log);
 
 					g_free (rspamd_log->saved_message);
@@ -403,11 +408,13 @@ rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log)
 					rspamd_log->saved_module = NULL;
 					rspamd_log->saved_id = NULL;
 				}
+
 				/* It is safe to use temporary buffer here as it is not static */
 				file_log_function (NULL, NULL,
 						G_STRFUNC,
 						rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 						tmpbuf,
+						r,
 						rspamd_log);
 			}
 		}
@@ -711,7 +718,7 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 }
 
 static gchar *
-rspamd_log_encrypt_message (const gchar *begin, const gchar *end,
+rspamd_log_encrypt_message (const gchar *begin, const gchar *end, gsize *enc_len,
 		rspamd_logger_t *rspamd_log)
 {
 	guchar *out;
@@ -742,7 +749,7 @@ rspamd_log_encrypt_message (const gchar *begin, const gchar *end,
 	g_assert (comp != NULL);
 	rspamd_cryptobox_encrypt_nm_inplace (p, end - begin, nonce, comp, mac,
 			RSPAMD_CRYPTOBOX_MODE_25519);
-	b64 = rspamd_encode_base64 (out, inlen, 0, NULL);
+	b64 = rspamd_encode_base64 (out, inlen, 0, enc_len);
 	g_free (out);
 
 	return b64;
@@ -818,8 +825,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
-			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			fprintf (stderr, "%s\n", logbuf);
+			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+			rspamd_fprintf (stderr, "%*s\n", (gint)(end - logbuf), logbuf);
 		}
 	}
 	else {
@@ -835,12 +842,15 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
 				gchar *encrypted;
+				gsize enc_len;
 
-				encrypted = rspamd_log_encrypt_message (logbuf, end, rspamd_log);
+				encrypted = rspamd_log_encrypt_message (logbuf, end, &enc_len,
+						rspamd_log);
 				rspamd_log->log_func (module, id,
 						function,
 						level_flags,
 						encrypted,
+						enc_len,
 						rspamd_log);
 				g_free (encrypted);
 			}
@@ -849,6 +859,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 						function,
 						level_flags,
 						logbuf,
+						end - logbuf,
 						rspamd_log);
 			}
 
@@ -978,6 +989,7 @@ syslog_log_function (const gchar *module, const gchar *id,
 		const gchar *function,
 		gint level_flags,
 		const gchar *message,
+		gsize mlen,
 		gpointer arg)
 {
 	rspamd_logger_t *rspamd_log = arg;
@@ -1007,11 +1019,11 @@ syslog_log_function (const gchar *module, const gchar *id,
 		}
 	}
 
-	syslog (syslog_level, "<%.*s>; %s; %s: %s",
+	syslog (syslog_level, "<%.*s>; %s; %s: %*.s",
 			LOG_ID, id != NULL ? id : "",
 			module != NULL ? module : "",
 			function != NULL ? function : "",
-			message);
+			(gint)mlen, message);
 #endif
 }
 
@@ -1045,6 +1057,7 @@ file_log_function (const gchar *module, const gchar *id,
 		const gchar *function,
 		gint level_flags,
 		const gchar *message,
+		gsize mlen,
 		gpointer arg)
 {
 	static gchar timebuf[64], modulebuf[64];
@@ -1055,7 +1068,7 @@ file_log_function (const gchar *module, const gchar *id,
 	struct iovec iov[6];
 	gulong r = 0, mr = 0;
 	guint64 cksum;
-	size_t mlen, mremain;
+	size_t mremain;
 	const gchar *cptype = NULL;
 	gboolean got_time = FALSE;
 	rspamd_logger_t *rspamd_log = arg;
@@ -1079,7 +1092,6 @@ file_log_function (const gchar *module, const gchar *id,
 
 	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
 		/* Check repeats */
-		mlen = strlen (message);
 		cksum = rspamd_log_calculate_cksum (message, mlen);
 
 		if (cksum == rspamd_log->last_line_cksum) {
@@ -1088,8 +1100,10 @@ file_log_function (const gchar *module, const gchar *id,
 					REPEATS_MAX) {
 				/* Do not log anything */
 				if (rspamd_log->saved_message == NULL) {
-					rspamd_log->saved_message = g_strdup (message);
 					rspamd_log->saved_function = g_strdup (function);
+					rspamd_log->saved_mlen = mlen;
+					rspamd_log->saved_message = g_malloc (mlen);
+					memcpy (rspamd_log->saved_message, message, mlen);
 
 					if (module) {
 						rspamd_log->saved_module = g_strdup (module);
@@ -1105,7 +1119,7 @@ file_log_function (const gchar *module, const gchar *id,
 				return;
 			}
 			else if (rspamd_log->repeats > REPEATS_MAX) {
-				rspamd_snprintf (tmpbuf,
+				gssize r = rspamd_snprintf (tmpbuf,
 						sizeof (tmpbuf),
 						"Last message repeated %ud times",
 						rspamd_log->repeats);
@@ -1117,6 +1131,7 @@ file_log_function (const gchar *module, const gchar *id,
 							rspamd_log->saved_function,
 							rspamd_log->saved_loglevel,
 							rspamd_log->saved_message,
+							rspamd_log->saved_mlen,
 							arg);
 
 					g_free (rspamd_log->saved_message);
@@ -1129,17 +1144,23 @@ file_log_function (const gchar *module, const gchar *id,
 					rspamd_log->saved_id = NULL;
 				}
 
+				/* Two messages */
 				file_log_function ("logger", NULL,
 						G_STRFUNC,
 						rspamd_log->saved_loglevel,
 						tmpbuf,
+						r,
 						arg);
+
 				file_log_function (module, id,
 						function,
 						level_flags,
 						message,
+						mlen,
 						arg);
+
 				rspamd_log->repeats = REPEATS_MIN + 1;
+
 				return;
 			}
 		}
@@ -1147,7 +1168,7 @@ file_log_function (const gchar *module, const gchar *id,
 			/* Reset counter if new message differs from saved message */
 			rspamd_log->last_line_cksum = cksum;
 			if (rspamd_log->repeats > REPEATS_MIN) {
-				rspamd_snprintf (tmpbuf,
+				gssize r = rspamd_snprintf (tmpbuf,
 						sizeof (tmpbuf),
 						"Last message repeated %ud times",
 						rspamd_log->repeats);
@@ -1159,6 +1180,7 @@ file_log_function (const gchar *module, const gchar *id,
 							rspamd_log->saved_function,
 							rspamd_log->saved_loglevel,
 							rspamd_log->saved_message,
+							rspamd_log->saved_mlen,
 							arg);
 
 					g_free (rspamd_log->saved_message);
@@ -1175,12 +1197,14 @@ file_log_function (const gchar *module, const gchar *id,
 						G_STRFUNC,
 						level_flags,
 						tmpbuf,
+						r,
 						arg);
 				/* It is safe to use temporary buffer here as it is not static */
 				file_log_function (module, id,
 						function,
 						level_flags,
 						message,
+						mlen,
 						arg);
 				return;
 			}
@@ -1283,7 +1307,6 @@ file_log_function (const gchar *module, const gchar *id,
 	}
 	else {
 		/* Rspamadm logging version */
-		mlen = strlen (message);
 
 		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
 			if (level_flags & (G_LOG_LEVEL_INFO|G_LOG_LEVEL_MESSAGE)) {
@@ -1371,6 +1394,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
+				end - logbuf,
 				rspamd_log);
 	}
 }
@@ -1406,6 +1430,7 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
+				end - logbuf,
 				rspamd_log);
 	}
 }
@@ -1442,6 +1467,7 @@ rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
+				end - logbuf,
 				rspamd_log);
 	}
 }
@@ -1463,6 +1489,7 @@ rspamd_glib_log_function (const gchar *log_domain,
 				NULL,
 				log_level,
 				message,
+				strlen (message),
 				rspamd_log);
 	}
 }
