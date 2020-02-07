@@ -23,10 +23,6 @@
 #include "cryptobox.h"
 #include "utlist.h"
 #include "unix-std.h"
-/* sysexits */
-#ifdef HAVE_SYSEXITS_H
-#include <sysexits.h>
-#endif
 /* pwd and grp */
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -59,8 +55,6 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <src/libserver/rspamd_control.h>
-
 #endif
 
 #include "sqlite3.h"

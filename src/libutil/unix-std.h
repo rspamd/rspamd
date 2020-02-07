@@ -47,11 +47,6 @@
 #include <unistd.h>
 #endif
 
-/* sysexits */
-#ifdef HAVE_SYSEXITS_H
-#include <sysexits.h>
-#endif
-
 /* strings */
 #ifdef HAVE_STRINGS_H
 #include <strings.h>

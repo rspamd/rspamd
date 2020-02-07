@@ -50,7 +50,6 @@
 #cmakedefine HAVE_LIBUTIL_H      1
 #cmakedefine HAVE_LOCALE_H       1
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
-#cmakedefine HAVE_MATH_H         1
 #cmakedefine HAVE_MAXPATHLEN     1
 #cmakedefine HAVE_FMEMOPEN       1
 #cmakedefine HAVE_MEMSET_S       1
@@ -106,7 +105,6 @@
 #cmakedefine HAVE_STRINGS_H      1
 #cmakedefine HAVE_STRING_H       1
 #cmakedefine HAVE_STROPS_H       1
-#cmakedefine HAVE_SYSEXITS_H     1
 #cmakedefine HAVE_SYSLOG_H       1
 #cmakedefine HAVE_SYS_CDEFS_H    1
 #cmakedefine HAVE_SYS_ENDIAN_H   1
@@ -145,7 +143,6 @@
 #cmakedefine WITH_HIREDIS        1
 #cmakedefine WITH_HYPERSCAN      1
 #cmakedefine WITH_JEMALLOC       1
-#cmakedefine WITH_JUDY           1
 #cmakedefine WITH_LUA            1
 #cmakedefine WITH_LUAJIT         1
 #cmakedefine WITH_PCRE2          1
@@ -430,5 +427,7 @@ extern uint64_t ottery_rand_uint64(void);
 #endif
 
 #define HAVE_OPENSSL             1
+#define HAVE_MATH_H              1
+
 
 #endif
