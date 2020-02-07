@@ -12,6 +12,7 @@ ${FLAG1_SYMBOL}  R_TEST_FUZZY_DENIED
 ${FLAG2_NUMBER}  51
 ${FLAG2_SYMBOL}  R_TEST_FUZZY_WHITE
 @{MESSAGES}      ${TESTDIR}/messages/spam_message.eml  ${TESTDIR}/messages/zip.eml
+@{MESSAGES_SKIP}  ${TESTDIR}/messages/priority.eml
 @{RANDOM_MESSAGES}  ${TESTDIR}/messages/bad_message.eml  ${TESTDIR}/messages/zip-doublebad.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -19,6 +20,16 @@ ${SETTINGS_FUZZY_WORKER}  ${EMPTY}
 ${SETTINGS_FUZZY_CHECK}  ${EMPTY}
 
 *** Keywords ***
+Fuzzy Skip Add Test Base
+  [Arguments]  ${message}
+  Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
+  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -w  10  -f
+  ...  ${FLAG1_NUMBER}  fuzzy_add  ${message}
+  Check Rspamc  ${result}
+  Sync Fuzzy Storage
+  ${result} =  Scan Message With Rspamc  ${message}
+  Should Not Contain  ${result.stdout}  R_TEST_FUZZY_DENIED
+
 Fuzzy Add Test
   [Arguments]  ${message}
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
@@ -129,6 +140,11 @@ Fuzzy Setup Keyed Xxhash
 
 Fuzzy Setup Encrypted Siphash
   Fuzzy Setup Encrypted  siphash
+
+Fuzzy Skip Hash Test Message
+  FOR  ${i}  IN  @{MESSAGES_SKIP}
+    Fuzzy Skip Add Test Base  ${i}
+  END
 
 Fuzzy Multimessage Add Test
   FOR  ${i}  IN  @{MESSAGES}
