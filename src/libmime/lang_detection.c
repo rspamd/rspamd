@@ -1484,13 +1484,15 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 static inline void
 rspamd_language_detector_set_language (struct rspamd_task *task,
 									   struct rspamd_mime_text_part *part,
-									   const gchar *code)
+									   const gchar *code,
+									   struct rspamd_language_elt *elt)
 {
 	struct rspamd_lang_detector_res *r;
 
 	r = rspamd_mempool_alloc0 (task->task_pool, sizeof (*r));
 	r->prob = 1.0;
 	r->lang = code;
+	r->elt = elt;
 
 	if (part->languages == NULL) {
 		part->languages = g_ptr_array_sized_new (1);
@@ -1515,7 +1517,7 @@ rspamd_language_detector_try_uniscript (struct rspamd_task *task,
 				msg_debug_lang_det ("set language based on unicode script %s",
 						unicode_langs[i].lang);
 				rspamd_language_detector_set_language (task, part,
-						unicode_langs[i].lang);
+						unicode_langs[i].lang, NULL);
 
 				return TRUE;
 			}
@@ -1533,7 +1535,7 @@ rspamd_language_detector_try_uniscript (struct rspamd_task *task,
 					msg_debug_lang_det ("set language based on unicode script %s",
 							unicode_langs[i].lang);
 					rspamd_language_detector_set_language (task, part,
-							unicode_langs[i].lang);
+							unicode_langs[i].lang, NULL);
 
 					return TRUE;
 				}
@@ -1545,7 +1547,7 @@ rspamd_language_detector_try_uniscript (struct rspamd_task *task,
 		msg_debug_lang_det ("guess chinese based on CJK characters: %d chinese, %d special",
 				nchinese, nspecial);
 		rspamd_language_detector_set_language (task, part,
-				"zh-CN");
+				"zh-CN", NULL);
 
 		return TRUE;
 	}
@@ -1680,8 +1682,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 	if (kh_size (cbdata.res) > 0) {
 		gint cur_matches;
 		double max_rate = G_MINDOUBLE;
-		const gchar *sel = NULL;
-		struct rspamd_language_elt *cur_lang;
+		struct rspamd_language_elt *cur_lang, *sel = NULL;
 
 		kh_foreach (cbdata.res, cur_lang, cur_matches, {
 			if (cur_matches < stop_words_threshold) {
@@ -1692,7 +1693,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 
 			if (rate > max_rate) {
 				max_rate = rate;
-				sel = cur_lang->name;
+				sel = cur_lang;
 			}
 			msg_debug_lang_det ("found %d stop words from %s: %3f rate",
 					cur_matches, cur_lang->name, rate);
@@ -1702,7 +1703,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 			msg_debug_lang_det ("set language based on stop words script %s, %.3f found",
 					sel, max_rate);
 			rspamd_language_detector_set_language (task, part,
-					sel);
+					sel->name, sel);
 
 			ret = TRUE;
 		}
@@ -1761,17 +1762,17 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 					(int)default_short_text_limit);
 			switch (cat) {
 			case RSPAMD_LANGUAGE_CYRILLIC:
-				rspamd_language_detector_set_language (task, part, "ru");
+				rspamd_language_detector_set_language (task, part, "ru", NULL);
 				break;
 			case RSPAMD_LANGUAGE_DEVANAGARI:
-				rspamd_language_detector_set_language (task, part, "hi");
+				rspamd_language_detector_set_language (task, part, "hi", NULL);
 				break;
 			case RSPAMD_LANGUAGE_ARAB:
-				rspamd_language_detector_set_language (task, part, "ar");
+				rspamd_language_detector_set_language (task, part, "ar", NULL);
 				break;
 			default:
 			case RSPAMD_LANGUAGE_LATIN:
-				rspamd_language_detector_set_language (task, part, "en");
+				rspamd_language_detector_set_language (task, part, "en", NULL);
 				break;
 			}
 			msg_debug_lang_det ("set %s language based on symbols category",
@@ -1792,7 +1793,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 
 			if (r == rs_detect_none) {
 				msg_debug_lang_det ("no trigramms found, fallback to english");
-				rspamd_language_detector_set_language (task, part, "en");
+				rspamd_language_detector_set_language (task, part, "en", NULL);
 			} else if (r == rs_detect_multiple) {
 				/* Check our guess */
 
@@ -1873,7 +1874,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 			ret = TRUE;
 		}
 		else if (part->languages == NULL) {
-			rspamd_language_detector_set_language (task, part, "en");
+			rspamd_language_detector_set_language (task, part, "en", NULL);
 		}
 
 		kh_destroy (rspamd_candidates_hash, candidates);
