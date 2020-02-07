@@ -258,8 +258,13 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 		static ev_timer shutdown_ev, shutdown_check_ev;
 		ev_tstamp shutdown_ts;
 
-		shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
-				sigh->worker->srv->cfg->task_timeout * 2.0);
+		if (sigh->worker->flags & RSPAMD_WORKER_NO_TERMINATE_DELAY) {
+			shutdown_ts = 0.0;
+		}
+		else {
+			shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
+					sigh->worker->srv->cfg->task_timeout * 2.0);
+		}
 
 		rspamd_worker_ignore_signal (sigh);
 		sigh->worker->state = rspamd_worker_state_terminating;
@@ -277,11 +282,14 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				shutdown_ts, 0.0);
 		ev_timer_start (sigh->event_loop, &shutdown_ev);
 
-		/* This timer checks if we are ready to die and is called frequently */
-		shutdown_check_ev.data = sigh->worker;
-		ev_timer_init (&shutdown_check_ev, rspamd_worker_shutdown_check,
-				0.5, 0.5);
-		ev_timer_start (sigh->event_loop, &shutdown_check_ev);
+		if (!(sigh->worker->flags & RSPAMD_WORKER_NO_TERMINATE_DELAY)) {
+			/* This timer checks if we are ready to die and is called frequently */
+			shutdown_check_ev.data = sigh->worker;
+			ev_timer_init (&shutdown_check_ev, rspamd_worker_shutdown_check,
+					0.5, 0.5);
+			ev_timer_start (sigh->event_loop, &shutdown_check_ev);
+		}
+
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 
@@ -311,8 +319,13 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 		static ev_timer shutdown_ev, shutdown_check_ev;
 		ev_tstamp shutdown_ts;
 
-		shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
-				sigh->worker->srv->cfg->task_timeout * 2.0);
+		if (sigh->worker->flags & RSPAMD_WORKER_NO_TERMINATE_DELAY) {
+			shutdown_ts = 0.0;
+		}
+		else {
+			shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
+					sigh->worker->srv->cfg->task_timeout * 2.0);
+		}
 
 		rspamd_worker_ignore_signal (sigh);
 		sigh->worker->state = rspamd_worker_state_terminating;
@@ -334,13 +347,16 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 					shutdown_ts, 0.0);
 			ev_timer_start (sigh->event_loop, &shutdown_ev);
 
-			/* This timer checks if we are ready to die and is called frequently */
-			shutdown_check_ev.data = sigh->worker;
-			ev_timer_init (&shutdown_check_ev, rspamd_worker_shutdown_check,
-					0.5, 0.5);
-			ev_timer_start (sigh->event_loop, &shutdown_check_ev);
+			if (!(sigh->worker->flags & RSPAMD_WORKER_NO_TERMINATE_DELAY)) {
+				/* This timer checks if we are ready to die and is called frequently */
+				shutdown_check_ev.data = sigh->worker;
+				ev_timer_init (&shutdown_check_ev, rspamd_worker_shutdown_check,
+						0.5, 0.5);
+				ev_timer_start (sigh->event_loop, &shutdown_check_ev);
+			}
 		}
 		else {
+			/* Flag to die has been already set */
 			ev_break (sigh->event_loop, EVBREAK_ALL);
 		}
 	}
