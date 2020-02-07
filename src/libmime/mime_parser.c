@@ -707,6 +707,11 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 					npart->raw_headers_str,
 					npart->raw_headers_len,
 					FALSE);
+
+			/* Preserve the natural order */
+			if (npart->headers_order) {
+				LL_REVERSE2 (npart->headers_order, ord_next);
+			}
 		}
 
 		hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
@@ -1265,6 +1270,11 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 						TRUE);
 				npart->raw_headers = rspamd_message_headers_ref (
 						MESSAGE_FIELD (task, raw_headers));
+
+				/* Preserve the natural order */
+				if (MESSAGE_FIELD (task, headers_order)) {
+					LL_REVERSE2 (MESSAGE_FIELD (task, headers_order), ord_next);
+				}
 			}
 
 			hdr = rspamd_message_get_header_from_hash (
@@ -1290,6 +1300,11 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 							TRUE);
 					npart->raw_headers = rspamd_message_headers_ref (
 							MESSAGE_FIELD (task, raw_headers));
+
+					/* Preserve the natural order */
+					if (MESSAGE_FIELD (task, headers_order)) {
+						LL_REVERSE2 (MESSAGE_FIELD (task, headers_order), ord_next);
+					}
 				}
 
 				hdr = rspamd_message_get_header_from_hash (
@@ -1341,6 +1356,11 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 						npart->raw_headers_str,
 						npart->raw_headers_len,
 						FALSE);
+
+				/* Preserve the natural order */
+				if (npart->headers_order) {
+					LL_REVERSE2 (npart->headers_order, ord_next);
+				}
 			}
 
 			hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
