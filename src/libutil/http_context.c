@@ -92,6 +92,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	static const gdouble default_rotate_time = 120;
 	static const gdouble default_keepalive_interval = 65;
 	static const gchar *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
+	static const gchar *default_server_hdr = "rspamd/" RSPAMD_VERSION_FULL;
 
 	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->config.kp_cache_size_client = default_kp_size;
@@ -99,6 +100,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	ctx->config.client_key_rotate_time = default_rotate_time;
 	ctx->config.user_agent = default_user_agent;
 	ctx->config.keepalive_interval = default_keepalive_interval;
+	ctx->config.server_hdr = default_server_hdr;
 	ctx->ups_ctx = ups_ctx;
 
 	if (cfg) {
@@ -240,6 +242,17 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 
 				if (ctx->config.user_agent && strlen (ctx->config.user_agent) == 0) {
 					ctx->config.user_agent = NULL;
+				}
+			}
+
+			const ucl_object_t *server_hdr;
+			server_hdr = ucl_object_lookup (client_obj, "server_hdr");
+
+			if (server_hdr) {
+				ctx->config.server_hdr = ucl_object_tostring (server_hdr);
+
+				if (ctx->config.server_hdr && strlen (ctx->config.server_hdr) == 0) {
+					ctx->config.server_hdr = "";
 				}
 			}
 

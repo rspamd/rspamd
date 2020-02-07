@@ -1713,7 +1713,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 											"Date: %s\r\n"
 											"Content-Length: %z\r\n"
 											"Content-Type: %s", /* NO \r\n at the end ! */
-									msg->code, &status, "rspamd/" RVERSION,
+									msg->code, &status, priv->ctx->config.server_hdr,
 									datebuf,
 									bodylen, mime_type);
 				}
@@ -1725,7 +1725,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 											"Server: %s\r\n"
 											"Date: %s\r\n"
 											"Content-Length: %z", /* NO \r\n at the end ! */
-									msg->code, &status, "rspamd/" RVERSION,
+									msg->code, &status, priv->ctx->config.server_hdr,
 									datebuf,
 									bodylen);
 				}
@@ -1734,10 +1734,11 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 				rspamd_printf_fstring (buf,
 						"HTTP/1.1 200 OK\r\n"
 						"Connection: close\r\n"
-						"Server: rspamd\r\n"
+						"Server: %s\r\n"
 						"Date: %s\r\n"
 						"Content-Length: %z\r\n"
 						"Content-Type: application/octet-stream\r\n",
+						priv->ctx->config.server_hdr,
 						datebuf, enclen);
 			}
 			else {
@@ -1750,7 +1751,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 											"Date: %s\r\n"
 											"Content-Length: %z\r\n"
 											"Content-Type: %s\r\n",
-									msg->code, &status, "rspamd/" RVERSION,
+									msg->code, &status, priv->ctx->config.server_hdr,
 									datebuf,
 									bodylen, mime_type);
 				}
@@ -1762,7 +1763,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 											"Server: %s\r\n"
 											"Date: %s\r\n"
 											"Content-Length: %z\r\n",
-									msg->code, &status, "rspamd/" RVERSION,
+									msg->code, &status, priv->ctx->config.server_hdr,
 									datebuf,
 									bodylen);
 				}

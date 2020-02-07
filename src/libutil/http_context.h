@@ -40,6 +40,7 @@ struct rspamd_http_context_cfg {
 	gdouble client_key_rotate_time;
 	const gchar *user_agent;
 	const gchar *http_proxy;
+	const gchar *server_hdr;
 };
 
 /**
@@ -49,7 +50,8 @@ struct rspamd_http_context_cfg {
  * @return new context used for both client and server HTTP connections
  */
 struct rspamd_http_context *rspamd_http_context_create (struct rspamd_config *cfg,
-														struct ev_loop *ev_base, struct upstream_ctx *ctx);
+														struct ev_loop *ev_base,
+														struct upstream_ctx *ctx);
 
 struct rspamd_http_context *rspamd_http_context_create_config (
 		struct rspamd_http_context_cfg *cfg,
