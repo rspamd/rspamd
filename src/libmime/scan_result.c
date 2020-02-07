@@ -503,6 +503,104 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 	return s;
 }
 
+static gchar *
+rspamd_task_option_safe_copy (struct rspamd_task *task,
+							  const gchar *val,
+							  gsize vlen,
+							  gsize *outlen)
+{
+	const gchar *p, *end;
+	off_t r;
+	UChar32 uc;
+
+	p = val;
+	end = val + vlen;
+	vlen = 0; /* Reuse */
+
+	while (p < end) {
+		if (*p & 0x80) {
+			UChar32 uc;
+			gint off = 0;
+
+			U8_NEXT (p, off, end - p, uc);
+
+			if (uc > 0) {
+				if (u_isprint (uc)) {
+					vlen += off;
+				}
+				else {
+					/* We will replace it with 0xFFFD */
+					vlen += MAX (off, 3);
+				}
+			}
+			else {
+				vlen += MAX (off, 3);
+			}
+
+			p += off;
+		}
+		else if (!g_ascii_isprint (*p)) {
+			/* Another 0xFFFD */
+			vlen += 3;
+			p ++;
+		}
+		else {
+			p ++;
+			vlen ++;
+		}
+	}
+
+	gchar *dest, *d;
+
+	dest = rspamd_mempool_alloc (task->task_pool, vlen + 1);
+	d = dest;
+	p = val;
+
+	while (p < end) {
+		if (*p & 0x80) {
+			UChar32 uc;
+			gint off = 0;
+
+			U8_NEXT (p, off, end - p, uc);
+
+			if (uc > 0) {
+				if (u_isprint (uc)) {
+					memcpy (d, p, off);
+					d += off;
+				}
+				else {
+					/* We will replace it with 0xFFFD */
+					*d++ = '\357';
+					*d++ = '\277';
+					*d++ = '\275';
+				}
+			}
+			else {
+				*d++ = '\357';
+				*d++ = '\277';
+				*d++ = '\275';
+			}
+
+			p += off;
+		}
+		else if (!g_ascii_isprint (*p)) {
+			/* Another 0xFFFD */
+			*d++ = '\357';
+			*d++ = '\277';
+			*d++ = '\275';
+			p ++;
+		}
+		else {
+			*d++ = *p++;
+		}
+	}
+
+	*d = '\0';
+	*(outlen) = d - dest;
+
+	return dest;
+}
+
 gboolean
 rspamd_task_add_result_option (struct rspamd_task *task,
 							   struct rspamd_symbol_result *s,
@@ -512,6 +610,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	struct rspamd_symbol_option *opt, srch;
 	gboolean ret = FALSE;
 	gchar *opt_cpy = NULL;
+	gsize cpy_len;
 	khiter_t k;
 	gint r;
 
@@ -536,30 +635,18 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			s->opts_len = -1;
 		}
 
-		if (rspamd_fast_utf8_validate (val, vlen) != 0) {
-			opt_cpy = rspamd_str_make_utf_valid (val, vlen, &vlen,
-					task->task_pool);
-			val = opt_cpy;
-		}
-
 		if (!(s->sym && (s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
 				kh_size (s->options) < task->cfg->default_max_shots) {
+			opt_cpy = rspamd_task_option_safe_copy (task, val, vlen, &cpy_len);
 			/* Append new options */
-			srch.option = (gchar *)val;
-			srch.optlen = vlen;
+			srch.option = (gchar *)opt_cpy;
+			srch.optlen = cpy_len;
 			k = kh_get (rspamd_options_hash, s->options, &srch);
 
 			if (k == kh_end (s->options)) {
-				gchar *dst_cpy;
-
-				opt = rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (*opt) + vlen + 1);
-
-				dst_cpy = ((gchar *)opt) + sizeof (*opt);
-				memcpy (dst_cpy, val, vlen);
-				dst_cpy[vlen] = '\0';
-				opt->optlen = vlen;
-				opt->option = dst_cpy;
+				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
+				opt->optlen = cpy_len;
+				opt->option = opt_cpy;
 
 				kh_put (rspamd_options_hash, s->options, opt, &r);
 				DL_APPEND (s->opts_head, opt);
