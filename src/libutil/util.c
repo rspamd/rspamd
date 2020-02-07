@@ -2484,6 +2484,7 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		}
 
 		if (cfg->fips_mode) {
+#ifdef HAVE_FIPS_MODE
 			int mode = FIPS_mode ();
 			unsigned long err = (unsigned long)-1;
 
@@ -2505,6 +2506,9 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			else {
 				msg_info_config ("OpenSSL FIPS mode is enabled");
 			}
+#else
+			msg_warn_config ("SSL FIPS mode is enabled but not supported by OpenSSL library!");
+#endif
 		}
 
 		if (cfg->ssl_ca_path) {
