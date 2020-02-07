@@ -1701,7 +1701,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 
 		if (max_rate > 0 && sel) {
 			msg_debug_lang_det ("set language based on stop words script %s, %.3f found",
-					sel, max_rate);
+					sel->name, max_rate);
 			rspamd_language_detector_set_language (task, part,
 					sel->name, sel);
 
