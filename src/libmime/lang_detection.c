@@ -446,6 +446,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				if (strcmp (fl, "diacritics") == 0) {
 					nelt->flags |= RS_LANGUAGE_DIACRITICS;
 				}
+				else if (strcmp (fl, "ascii") == 0) {
+					nelt->flags |= RS_LANGUAGE_ASCII;
+				}
 				else {
 					msg_debug_config ("unknown flag %s of language %s", fl, nelt->name);
 				}
@@ -1668,7 +1671,8 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 	struct rspamd_stop_word_elt *elt;
 	struct rspamd_sw_cbdata cbdata;
 	gboolean ret = FALSE;
-	static const int stop_words_threshold = 4;
+	static const int stop_words_threshold = 4, /* minimum stop words count */
+			strong_confidence_threshold = 10 /* we are sure that this is enough */;
 
 	elt = &d->stop_words[cat];
 	cbdata.res = kh_init (rspamd_sw_hash);
@@ -1683,10 +1687,43 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 		gint cur_matches;
 		double max_rate = G_MINDOUBLE;
 		struct rspamd_language_elt *cur_lang, *sel = NULL;
+		gboolean ignore_ascii = FALSE, ignore_latin = FALSE;
 
+		again:
 		kh_foreach (cbdata.res, cur_lang, cur_matches, {
+			if (!ignore_ascii && (cur_lang->flags & RS_LANGUAGE_DIACRITICS)) {
+				/* Restart matches */
+				ignore_ascii = TRUE;
+				sel = NULL;
+				max_rate = G_MINDOUBLE;
+				msg_debug_lang_det ("ignore ascii after finding %d stop words from %s",
+						cur_matches, cur_lang->name);
+				goto again;
+			}
+
+			if (!ignore_latin && cur_lang->category != RSPAMD_LANGUAGE_LATIN) {
+				/* Restart matches */
+				ignore_latin = TRUE;
+				sel = NULL;
+				max_rate = G_MINDOUBLE;
+				msg_debug_lang_det ("ignore latin after finding stop %d words from %s",
+						cur_matches, cur_lang->name);
+				goto again;
+			}
+
 			if (cur_matches < stop_words_threshold) {
 				continue;
+			}
+
+			if (cur_matches < strong_confidence_threshold) {
+				/* Ignore mixed languages when not enough confidence */
+				if (ignore_ascii && (cur_lang->flags & RS_LANGUAGE_ASCII)) {
+					continue;
+				}
+
+				if (ignore_latin && cur_lang->category == RSPAMD_LANGUAGE_LATIN) {
+					continue;
+				}
 			}
 
 			double rate = (double)cur_matches / (double)cur_lang->stop_words;
@@ -1695,6 +1732,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 				max_rate = rate;
 				sel = cur_lang;
 			}
+
 			msg_debug_lang_det ("found %d stop words from %s: %3f rate",
 					cur_matches, cur_lang->name, rate);
 		});

@@ -56,6 +56,7 @@ enum rspamd_language_elt_flags {
 	RS_LANGUAGE_TIER1 = (1 << 3),
 	RS_LANGUAGE_TIER0 = (1 << 4),
 	RS_LANGUAGE_DIACRITICS = (1 << 5),
+	RS_LANGUAGE_ASCII = (1 << 6),
 };
 
 struct rspamd_lang_detector_res {
