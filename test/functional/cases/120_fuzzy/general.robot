@@ -12,3 +12,6 @@ Fuzzy Delete
 
 Fuzzy Overwrite
   Fuzzy Multimessage Overwrite Test
+
+Fuzzy Skip Hash Test
+  Fuzzy Skip Hash Test Message
