@@ -21,6 +21,7 @@ ${SETTINGS_FUZZY_CHECK}  ${EMPTY}
 
 *** Keywords ***
 Fuzzy Skip Add Test Base
+  Create File  ${TMPDIR}/skip_hash.map
   [Arguments]  ${message}
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -w  10  -f
@@ -28,7 +29,12 @@ Fuzzy Skip Add Test Base
   Check Rspamc  ${result}
   Sync Fuzzy Storage
   ${result} =  Scan Message With Rspamc  ${message}
-  Should Not Contain  ${result.stdout}  R_TEST_FUZZY_DENIED
+  Create File  ${TMPDIR}/test.map
+  Should Contain  ${result.stdout}  R_TEST_FUZZY_DENIED
+  Append To File  ${TMPDIR}/skip_hash.map  670cfcba72a87bab689958a8af5c22593dc17c907836c7c26a74d1bb49add25adfa45a5f172e3af82c9c638e8eb5fc860c22c7e966e61a459165ef0b9e1acc89
+  ${result} =  Scan Message With Rspamc  ${message}
+  Check Rspamc  ${result}  R_TEST_FUZZY_DENIED inverse=1
+
 
 Fuzzy Add Test
   [Arguments]  ${message}
