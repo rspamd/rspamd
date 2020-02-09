@@ -35,7 +35,6 @@ Fuzzy Skip Add Test Base
   ${result} =  Scan Message With Rspamc  ${message}
   Check Rspamc  ${result}  R_TEST_FUZZY_DENIED  inverse=1
 
-
 Fuzzy Add Test
   [Arguments]  ${message}
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
