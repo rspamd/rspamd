@@ -33,7 +33,7 @@ Fuzzy Skip Add Test Base
   Should Contain  ${result.stdout}  R_TEST_FUZZY_DENIED
   Append To File  ${TMPDIR}/skip_hash.map  670cfcba72a87bab689958a8af5c22593dc17c907836c7c26a74d1bb49add25adfa45a5f172e3af82c9c638e8eb5fc860c22c7e966e61a459165ef0b9e1acc89
   ${result} =  Scan Message With Rspamc  ${message}
-  Check Rspamc  ${result}  R_TEST_FUZZY_DENIED inverse=1
+  Check Rspamc  ${result}  R_TEST_FUZZY_DENIED  inverse=1
 
 
 Fuzzy Add Test
