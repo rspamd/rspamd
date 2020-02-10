@@ -15,7 +15,7 @@
  */
 #include "rspamadm.h"
 #include "libutil/util.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
 

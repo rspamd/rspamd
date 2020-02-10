@@ -21,7 +21,7 @@
 #include "libutil/fstring.h"
 #include "libutil/mem_pool.h"
 #include "libutil/util.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "libutil/http_connection.h"
 #include "libutil/upstream.h"
 #include "libutil/radix.h"

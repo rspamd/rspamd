@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "libutil/sqlite_utils.h"
 #include "unix-std.h"
 

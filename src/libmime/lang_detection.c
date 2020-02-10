@@ -15,7 +15,7 @@
  */
 
 #include "lang_detection.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "libcryptobox/cryptobox.h"
 #include "libutil/multipattern.h"
 #include "ucl.h"

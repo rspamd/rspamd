@@ -17,7 +17,7 @@
 #include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "libutil/printf.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "utlist.h"
 #include "unix-std.h"
 

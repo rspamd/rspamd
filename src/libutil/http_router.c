@@ -19,7 +19,7 @@
 #include "libutil/http_private.h"
 #include "libutil/regexp.h"
 #include "libutil/printf.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "utlist.h"
 #include "unix-std.h"
 

@@ -16,7 +16,7 @@
 
 #include "config.h"
 #include "libutil/util.h"
-#include "libutil/logger.h"
+#include "libserver/logger.h"
 #include "ssl_util.h"
 #include "unix-std.h"
 

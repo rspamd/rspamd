@@ -7,22 +7,25 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/dns.c
 				${CMAKE_CURRENT_SOURCE_DIR}/dynamic_cfg.c
 				${CMAKE_CURRENT_SOURCE_DIR}/async_session.c
-				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend.c
-				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend_sqlite.c
+				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend.c
+				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_sqlite.c
+				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_redis.c
 				${CMAKE_CURRENT_SOURCE_DIR}/html.c
 				${CMAKE_CURRENT_SOURCE_DIR}/milter.c
 				${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
 				${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
 				${CMAKE_CURRENT_SOURCE_DIR}/re_cache.c
+				${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.c
 				${CMAKE_CURRENT_SOURCE_DIR}/roll_history.c
 				${CMAKE_CURRENT_SOURCE_DIR}/spf.c
 				${CMAKE_CURRENT_SOURCE_DIR}/rspamd_symcache.c
 				${CMAKE_CURRENT_SOURCE_DIR}/task.c
 				${CMAKE_CURRENT_SOURCE_DIR}/url.c
-				${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c)
-
-LIST(APPEND LIBRSPAMDSERVERSRC "${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend_redis.c")
-LIST(APPEND LIBRSPAMDSERVERSRC "${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.c")
+				${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c
+				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.c
+				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_file.c
+				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_syslog.c
+				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_console.c)
 
 # Librspamd-server
 SET(RSPAMD_SERVER ${LIBRSPAMDSERVERSRC} PARENT_SCOPE)

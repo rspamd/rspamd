@@ -24,7 +24,7 @@
 #include "map.h"
 #include "map_helpers.h"
 #include "fuzzy_wire.h"
-#include "fuzzy_backend.h"
+#include "libserver/fuzzy_backend/fuzzy_backend.h"
 #include "ottery.h"
 #include "ref.h"
 #include "xxhash.h"
