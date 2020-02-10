@@ -4299,7 +4299,7 @@ lua_config_init_subsystem (lua_State *L)
 				struct ev_loop *ev_base = lua_check_ev_base (L, 3);
 
 				if (ev_base) {
-					cfg->dns_resolver = rspamd_dns_resolver_init (rspamd_logger_get_singleton (),
+					cfg->dns_resolver = rspamd_dns_resolver_init (rspamd_log_default_logger (),
 							ev_base,
 							cfg);
 				}

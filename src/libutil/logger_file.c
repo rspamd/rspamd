@@ -261,44 +261,42 @@ rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log,
 	gchar tmpbuf[256];
 	gssize r;
 
-	if (rspamd_log->opened) {
-		if (priv->repeats > REPEATS_MIN) {
-			r = rspamd_snprintf (tmpbuf,
-					sizeof (tmpbuf),
-					"Last message repeated %ud times",
-					priv->repeats - REPEATS_MIN);
-			priv->repeats = 0;
+	if (priv->repeats > REPEATS_MIN) {
+		r = rspamd_snprintf (tmpbuf,
+				sizeof (tmpbuf),
+				"Last message repeated %ud times",
+				priv->repeats - REPEATS_MIN);
+		priv->repeats = 0;
 
-			if (priv->saved_message) {
-				rspamd_log_file_log (priv->saved_module,
-						priv->saved_id,
-						priv->saved_function,
-						priv->saved_loglevel | RSPAMD_LOG_FORCED,
-						priv->saved_message,
-						priv->saved_mlen,
-						rspamd_log,
-						priv);
-
-				g_free (priv->saved_message);
-				g_free (priv->saved_function);
-				g_free (priv->saved_module);
-				g_free (priv->saved_id);
-				priv->saved_message = NULL;
-				priv->saved_function = NULL;
-				priv->saved_module = NULL;
-				priv->saved_id = NULL;
-			}
-
-			/* It is safe to use temporary buffer here as it is not static */
-			rspamd_log_file_log (NULL, NULL,
-					G_STRFUNC,
+		if (priv->saved_message) {
+			rspamd_log_file_log (priv->saved_module,
+					priv->saved_id,
+					priv->saved_function,
 					priv->saved_loglevel | RSPAMD_LOG_FORCED,
-					tmpbuf,
-					r,
+					priv->saved_message,
+					priv->saved_mlen,
 					rspamd_log,
 					priv);
-			rspamd_log_flush (rspamd_log, priv);
+
+			g_free (priv->saved_message);
+			g_free (priv->saved_function);
+			g_free (priv->saved_module);
+			g_free (priv->saved_id);
+			priv->saved_message = NULL;
+			priv->saved_function = NULL;
+			priv->saved_module = NULL;
+			priv->saved_id = NULL;
 		}
+
+		/* It is safe to use temporary buffer here as it is not static */
+		rspamd_log_file_log (NULL, NULL,
+				G_STRFUNC,
+				priv->saved_loglevel | RSPAMD_LOG_FORCED,
+				tmpbuf,
+				r,
+				rspamd_log,
+				priv);
+		rspamd_log_flush (rspamd_log, priv);
 	}
 }
 
@@ -340,7 +338,7 @@ rspamd_log_file_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 {
 	struct rspamd_file_logger_priv *priv;
 
-	if (!cfg->cfg_name) {
+	if (!cfg || !cfg->cfg_name) {
 		g_set_error (err, FILE_LOG_QUARK, EINVAL,
 				"no log file specified");
 		return NULL;
@@ -584,4 +582,16 @@ rspamd_log_file_reload (rspamd_logger_t *logger, struct rspamd_config *cfg,
 	}
 
 	return npriv;
+}
+
+bool
+rspamd_log_file_on_fork (rspamd_logger_t *logger, struct rspamd_config *cfg,
+							  gpointer arg, GError **err)
+{
+	struct rspamd_file_logger_priv *priv = (struct rspamd_file_logger_priv *)arg;
+
+	rspamd_log_reset_repeated (logger, priv);
+	rspamd_log_flush (logger, priv);
+
+	return true;
 }

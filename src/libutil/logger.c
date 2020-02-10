@@ -24,6 +24,7 @@
 
 
 static rspamd_logger_t *default_logger = NULL;
+static rspamd_logger_t *emergency_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
 
 guint rspamd_task_log_id = (guint)-1;
@@ -32,267 +33,189 @@ RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
 	rspamd_task_log_id = rspamd_logger_add_debug_module("task");
 }
 
-
-/* Logging utility functions */
-gint
-rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+rspamd_logger_t *
+rspamd_log_default_logger (void)
 {
-	gint nfd;
-
-	if (!rspamd_log->opened) {
-
-		switch (rspamd_log->log_type) {
-		case RSPAMD_LOG_CONSOLE:
-			/* Dup stderr fd to simplify processing */
-			nfd = dup (STDERR_FILENO);
-
-			if (nfd == -1) {
-				return -1;
-			}
-			if (rspamd_log->fd != -1) {
-				/*
-				 * Postponed closing (e.g. when we switch from
-				 * LOG_FILE to LOG_CONSOLE)
-				 */
-				close (rspamd_log->fd);
-			}
-
-			rspamd_log->fd = nfd;
-
-			if (isatty (STDERR_FILENO)) {
-				rspamd_log->flags |= RSPAMD_LOG_FLAG_TTY;
-			}
-			break;
-		case RSPAMD_LOG_SYSLOG:
-#ifdef HAVE_SYSLOG_H
-			openlog ("rspamd", LOG_NDELAY | LOG_PID,
-					rspamd_log->log_facility);
-			rspamd_log->no_lock = TRUE;
-			if (rspamd_log->fd != -1) {
-				/*
-				 * Postponed closing (e.g. when we switch from
-				 * LOG_FILE to LOG_SYSLOG)
-				 */
-				close (rspamd_log->fd);
-			}
-#else
-			return -1;
-#endif
-			break;
-		case RSPAMD_LOG_FILE:
-			nfd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
-
-			if (nfd == -1) {
-				return -1;
-			}
-
-			if (rspamd_log->fd != -1) {
-				/*
-				 * Postponed closing (e.g. when we switch from
-				 * LOG_CONSOLE to LOG_FILE)
-				 */
-				close (rspamd_log->fd);
-			}
-
-			rspamd_log->fd = nfd;
-			rspamd_log->no_lock = TRUE;
-			break;
-		default:
-			return -1;
-		}
-
-		rspamd_log->opened = TRUE;
-		rspamd_log->enabled = TRUE;
-	}
-
-	return 0;
+	return default_logger;
 }
 
+rspamd_logger_t *
+rspamd_log_emergency_logger (void)
+{
+	return emergency_logger;
+}
 
 void
-rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t uid, gid_t gid)
+rspamd_log_set_log_level (rspamd_logger_t *logger, gint level)
 {
+	g_assert (logger != NULL);
 
-	rspamd_log_flush (rspamd_log);
-	rspamd_log_reset_repeated (rspamd_log);
-
-	if (rspamd_log->opened) {
-		switch (rspamd_log->type) {
-		case RSPAMD_LOG_SYSLOG:
-#ifdef HAVE_SYSLOG_H
-			closelog ();
-#endif
-			break;
-		case RSPAMD_LOG_FILE:
-			if (rspamd_log->fd != -1) {
-#if _POSIX_SYNCHRONIZED_IO > 0
-				if (fdatasync (rspamd_log->fd) == -1) {
-					msg_err ("error syncing log file: %s", strerror (errno));
-				}
-#else
-				if (fsync (rspamd_log->fd) == -1) {
-					msg_err ("error syncing log file: %s", strerror (errno));
-				}
-#endif
-				close (rspamd_log->fd);
-				rspamd_log->fd = -1;
-			}
-			break;
-		case RSPAMD_LOG_CONSOLE:
-			/*
-			 * Console logging is special: it is usually a last resort when
-			 * we have errors or something like that.
-			 *
-			 * Hence, we need to postpone it's closing to the moment
-			 * when we open (in a reliable matter!) a new logging
-			 * facility.
-			 */
-			break;
-		}
-
-		rspamd_log->enabled = FALSE;
-		rspamd_log->opened = FALSE;
-	}
-
-	if (termination) {
-		g_free (rspamd_log->log_file);
-		rspamd_log->log_file = NULL;
-		g_free (rspamd_log);
-	}
+	logger->log_level = level;
 }
 
-gint
-rspamd_log_reopen_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
-{
-	if (rspamd_log->type == RSPAMD_LOG_FILE) {
-		rspamd_log_flush (rspamd_log);
-		rspamd_log_reset_repeated (rspamd_log);
-
-		gint newfd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
-
-		if (newfd != -1) {
-			rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
-			rspamd_log->fd = newfd;
-
-			rspamd_log->opened = TRUE;
-			rspamd_log->enabled = TRUE;
-		}
-
-		/* Do nothing, use old settings */
-	}
-	else {
-		/* Straightforward */
-		rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
-
-		if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
-			return 0;
-		}
-	}
-
-	return -1;
-}
-
-/**
- * Open log file or initialize other structures
- */
-gint
-rspamd_log_open (rspamd_logger_t *logger)
-{
-	return rspamd_log_open_priv (logger, -1, -1);
-}
-
-/**
- * Close log file or destroy other structures
- */
 void
-rspamd_log_close (rspamd_logger_t *logger, gboolean termination)
+rspamd_log_set_log_flags (rspamd_logger_t *logger, gint flags)
 {
-	rspamd_log_close_priv (logger, termination, -1, -1);
+	g_assert (logger != NULL);
+
+	logger->flags = flags;
 }
 
-/**
- * Close and open log again
- */
-gint
-rspamd_log_reopen (rspamd_logger_t *logger)
-{
-	return rspamd_log_reopen_priv (logger, -1, -1);
-}
-
-/*
- * Setup logger
- */
 void
-rspamd_set_logger (struct rspamd_config *cfg,
-		GQuark ptype,
-		rspamd_logger_t **plogger,
-		rspamd_mempool_t *pool)
+rspamd_log_close (rspamd_logger_t *logger)
+{
+	g_assert (logger != NULL);
+
+	if (logger->debug_ip) {
+		rspamd_map_helper_destroy_radix (logger->debug_ip);
+	}
+
+	if (logger->pk) {
+		rspamd_pubkey_unref (logger->pk);
+	}
+
+	if (logger->keypair) {
+		rspamd_keypair_unref (logger->keypair);
+	}
+
+	logger->ops.dtor (logger, logger->ops.specific);
+
+	/* TODO: Do we really need that ? */
+	if (logger == default_logger) {
+		default_logger = NULL;
+	}
+
+	if (logger == emergency_logger) {
+		emergency_logger = NULL;
+	}
+
+	if (!logger->pool) {
+		g_free (logger);
+	}
+}
+
+bool
+rspamd_log_reopen (rspamd_logger_t *rspamd_log,  struct rspamd_config *cfg,
+				   uid_t uid, gid_t gid)
+{
+	void *nspec;
+	GError *err = NULL;
+
+	g_assert (rspamd_log != NULL);
+
+	nspec = rspamd_log->ops.reload (rspamd_log, cfg, rspamd_log->ops.specific,
+			uid, gid, &err);
+}
+
+static void
+rspamd_emergency_logger_dtor (gpointer d)
+{
+	rspamd_logger_t *logger = (rspamd_logger_t *)d;
+
+	rspamd_log_close (logger);
+}
+
+rspamd_logger_t *
+rspamd_log_init (rspamd_mempool_t *pool)
 {
 	rspamd_logger_t *logger;
+	GError *err = NULL;
 
-	if (plogger == NULL || *plogger == NULL) {
-		logger = g_malloc0 (sizeof (rspamd_logger_t));
-		logger->fd = -1;
+	g_assert (default_logger == NULL);
+	g_assert (emergency_logger == NULL);
 
-		if (cfg->log_error_elts > 0 && pool) {
-			logger->errlog = rspamd_mempool_alloc0_shared (pool,
-					sizeof (*logger->errlog));
-			logger->errlog->pool = pool;
-			logger->errlog->max_elts = cfg->log_error_elts;
-			logger->errlog->elt_len = cfg->log_error_elt_maxlen;
-			logger->errlog->elts = rspamd_mempool_alloc0_shared (pool,
-					sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
-					cfg->log_error_elt_maxlen * cfg->log_error_elts);
-		}
-
-		if (pool) {
-			logger->mtx = rspamd_mempool_get_mutex (pool);
-		}
-
-		if (plogger) {
-			*plogger = logger;
-		}
+	if (pool) {
+		logger = rspamd_mempool_alloc0 (pool, sizeof (rspamd_logger_t));
+		logger->mtx = rspamd_mempool_get_mutex (pool);
 	}
 	else {
-		logger = *plogger;
+		logger = g_malloc0 (sizeof (rspamd_logger_t));
 	}
 
-	logger->type = cfg->log_type;
-	logger->pid = getpid ();
-	logger->process_type = ptype;
+
+	logger->pool = pool;
+	logger->process_type = "main";
+
+	const struct rspamd_logger_funcs *funcs = &console_log_funcs;
+	memcpy (&logger->ops, funcs, sizeof (*funcs));
+
+	logger->ops.specific = logger->ops.init (logger, NULL, -1, -1, &err);
+
+	if (logger->ops.specific == NULL) {
+		rspamd_fprintf (stderr, "fatal error: cannot init console logging: %e\n",
+				err);
+		g_error_free (err);
+
+		exit (EXIT_FAILURE);
+	}
+
+	default_logger = logger;
+	emergency_logger = logger;
+
+	rspamd_mempool_add_destructor (pool, rspamd_emergency_logger_dtor,
+			emergency_logger);
+
+	return logger;
+}
+
+rspamd_logger_t *
+rspamd_log_open_specific (rspamd_mempool_t *pool,
+						  struct rspamd_config *cfg,
+						  const gchar *ptype,
+						  uid_t uid, gid_t gid)
+{
+	rspamd_logger_t *logger;
+	GError *err = NULL;
+
+	g_assert (default_logger == NULL);
+	g_assert (emergency_logger == NULL);
+
+	if (pool) {
+		logger = rspamd_mempool_alloc0 (pool, sizeof (rspamd_logger_t));
+		logger->mtx = rspamd_mempool_get_mutex (pool);
+	}
+	else {
+		logger = g_malloc0 (sizeof (rspamd_logger_t));
+	}
+
+	logger->pool = pool;
+
+	if (cfg->log_error_elts > 0 && pool) {
+		logger->errlog = rspamd_mempool_alloc0_shared (pool,
+				sizeof (*logger->errlog));
+		logger->errlog->pool = pool;
+		logger->errlog->max_elts = cfg->log_error_elts;
+		logger->errlog->elt_len = cfg->log_error_elt_maxlen;
+		logger->errlog->elts = rspamd_mempool_alloc0_shared (pool,
+				sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
+				cfg->log_error_elt_maxlen * cfg->log_error_elts);
+	}
+
+	const struct rspamd_logger_funcs *funcs = NULL;
 
 	switch (cfg->log_type) {
-		case RSPAMD_LOG_CONSOLE:
-			logger->log_func = file_log_function;
-			break;
-		case RSPAMD_LOG_SYSLOG:
-			logger->log_func = syslog_log_function;
-			break;
-		case RSPAMD_LOG_FILE:
-			logger->log_func = file_log_function;
-			break;
+	case RSPAMD_LOG_CONSOLE:
+		funcs = &console_log_funcs;
+		break;
+	case RSPAMD_LOG_SYSLOG:
+		funcs = &syslog_log_funcs;
+		break;
+	case RSPAMD_LOG_FILE:
+		funcs = &file_log_funcs;
+		break;
 	}
 
-	logger->log_type = cfg->log_type;
+	g_assert (funcs != NULL);
+	memcpy (&logger->ops, funcs, sizeof (*funcs));
+
+	logger->pid = getpid ();
+	logger->process_type = ptype;
 
 	if (!(logger->flags & RSPAMD_LOG_FLAG_ENFORCED)) {
 		logger->log_level = cfg->log_level;
 	}
 
-	logger->log_buffered = cfg->log_buffered;
-	logger->log_silent_workers = cfg->log_silent_workers;
-	logger->log_buf_size = cfg->log_buf_size;
-
-	if (logger->log_file) {
-		g_free (logger->log_file);
-		logger->log_file = NULL;
-	}
-	if (cfg->log_file) {
-		logger->log_file = g_strdup (cfg->log_file);
-	}
-
 	logger->flags = cfg->log_flags;
-
 
 	/* Set up conditional logging */
 	if (cfg->debug_ip_map != NULL) {
@@ -309,20 +232,6 @@ rspamd_set_logger (struct rspamd_config *cfg,
 				NULL,
 				NULL);
 	}
-	else if (logger->debug_ip) {
-		rspamd_map_helper_destroy_radix (logger->debug_ip);
-		logger->debug_ip = NULL;
-	}
-
-	if (logger->pk) {
-		rspamd_pubkey_unref (logger->pk);
-	}
-	logger->pk = NULL;
-
-	if (logger->keypair) {
-		rspamd_keypair_unref (logger->keypair);
-	}
-	logger->keypair = NULL;
 
 	if (cfg->log_encryption_key) {
 		logger->pk = rspamd_pubkey_ref (cfg->log_encryption_key);
@@ -334,14 +243,29 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	default_logger = logger;
 }
 
+
 /**
  * Used after fork() for updating structure params
  */
 void
-rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
+rspamd_log_on_fork (GQuark ptype, struct rspamd_config *cfg,
+					rspamd_logger_t *logger)
 {
-	rspamd_log->pid = getpid ();
-	rspamd_log->process_type = g_quark_to_string (ptype);
+	logger->pid = getpid ();
+	logger->process_type = g_quark_to_string (ptype);
+
+	if (logger->ops.on_fork) {
+		GError *err = NULL;
+
+		bool ret = logger->ops.on_fork (logger, cfg, logger->ops.specific, &err);
+
+		if (!ret && emergency_logger) {
+			rspamd_common_log_function (emergency_logger, G_LOG_LEVEL_CRITICAL,
+					"logger", NULL, G_STRFUNC,
+					"cannot update logging on fork: %e", err);
+			g_error_free (err);
+		}
+	}
 }
 
 static inline gboolean
@@ -455,13 +379,14 @@ rspamd_log_write_ringbuffer (rspamd_logger_t *rspamd_log,
 	g_atomic_int_set (&elt->completed, 1);
 }
 
-void
+bool
 rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
 		const gchar *fmt, va_list args)
 {
 	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
 	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
+	bool ret = false;
 
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		rspamd_log = default_logger;
@@ -491,23 +416,23 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 
 				encrypted = rspamd_log_encrypt_message (logbuf, end, &enc_len,
 						rspamd_log);
-				rspamd_log->log_func (module, id,
+				ret = rspamd_log->ops.log (module, id,
 						function,
 						level_flags,
 						encrypted,
 						enc_len,
 						rspamd_log,
-						rspamd_log->log_arg);
+						rspamd_log->ops.specific);
 				g_free (encrypted);
 			}
 			else {
-				rspamd_log->log_func (module, id,
+				ret = rspamd_log->ops.log (module, id,
 						function,
 						level_flags,
 						logbuf,
 						end - logbuf,
 						rspamd_log,
-						rspamd_log->log_arg);
+						rspamd_log->ops.specific);
 			}
 
 			switch (level) {
@@ -530,12 +455,14 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 			}
 		}
 	}
+
+	return ret;
 }
 
 /**
  * This log functions select real logger and write message if level is less or equal to configured log level
  */
-void
+bool
 rspamd_common_log_function (rspamd_logger_t *rspamd_log,
 		gint level_flags,
 		const gchar *module, const gchar *id,
@@ -546,19 +473,21 @@ rspamd_common_log_function (rspamd_logger_t *rspamd_log,
 	va_list vp;
 
 	va_start (vp, fmt);
-	rspamd_common_logv (rspamd_log, level_flags, module, id, function, fmt, vp);
+	bool ret = rspamd_common_logv (rspamd_log, level_flags, module, id, function, fmt, vp);
 	va_end (vp);
+
+	return ret;
 }
 
-void
+bool
 rspamd_default_logv (gint level_flags, const gchar *module, const gchar *id,
 		const gchar *function,
 		const gchar *fmt, va_list args)
 {
-	rspamd_common_logv (NULL, level_flags, module, id, function, fmt, args);
+	return rspamd_common_logv (NULL, level_flags, module, id, function, fmt, args);
 }
 
-void
+bool
 rspamd_default_log_function (gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...)
@@ -567,56 +496,12 @@ rspamd_default_log_function (gint level_flags,
 	va_list vp;
 
 	va_start (vp, fmt);
-	rspamd_default_logv (level_flags, module, id, function, fmt, vp);
+	bool ret = rspamd_default_logv (level_flags, module, id, function, fmt, vp);
 	va_end (vp);
+
+	return ret;
 }
 
-
-/**
- * Syslog interface for logging
- */
-static void
-syslog_log_function (const gchar *module, const gchar *id,
-		const gchar *function,
-		gint level_flags,
-		const gchar *message,
-		gsize mlen,
-		rspamd_logger_t *rspamd_log,
-		gpointer arg)
-{
-#ifdef HAVE_SYSLOG_H
-	struct {
-		GLogLevelFlags glib_level;
-		gint syslog_level;
-	} levels_match[] = {
-			{G_LOG_LEVEL_DEBUG, LOG_DEBUG},
-			{G_LOG_LEVEL_INFO, LOG_INFO},
-			{G_LOG_LEVEL_WARNING, LOG_WARNING},
-			{G_LOG_LEVEL_CRITICAL, LOG_ERR}
-	};
-	unsigned i;
-	gint syslog_level;
-
-	if (!(level_flags & RSPAMD_LOG_FORCED) && !rspamd_log->enabled) {
-		return;
-	}
-	/* Detect level */
-	syslog_level = LOG_DEBUG;
-
-	for (i = 0; i < G_N_ELEMENTS (levels_match); i ++) {
-		if (level_flags & levels_match[i].glib_level) {
-			syslog_level = levels_match[i].syslog_level;
-			break;
-		}
-	}
-
-	syslog (syslog_level, "<%.*s>; %s; %s: %*.s",
-			LOG_ID, id != NULL ? id : "",
-			module != NULL ? module : "",
-			function != NULL ? function : "",
-			(gint)mlen, message);
-#endif
-}
 
 /**
  * Main file interface for logging
@@ -624,7 +509,7 @@ syslog_log_function (const gchar *module, const gchar *id,
 /**
  * Write log line depending on ip
  */
-void
+bool
 rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...)
@@ -645,7 +530,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		if (rspamd_log->debug_ip && addr != NULL) {
 			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip,
 					addr) == NULL) {
-				return;
+				return false;
 			}
 		}
 
@@ -653,17 +538,19 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		va_end (vp);
-		rspamd_log->log_func (module, id,
+		return rspamd_log->ops.log (module, id,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
 				rspamd_log,
-				rspamd_log->log_arg);
+				rspamd_log->ops.specific);
 	}
+
+	return false;
 }
 
-void
+bool
 rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 		rspamd_inet_addr_t *addr,
 		guint mod_id, const gchar *module, const gchar *id,
@@ -682,7 +569,7 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 		if (rspamd_log->debug_ip && addr != NULL) {
 			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip, addr)
 					== NULL) {
-				return;
+				return false;
 			}
 		}
 
@@ -690,17 +577,19 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		va_end (vp);
-		rspamd_log->log_func (module, id,
+		return rspamd_log->ops.log (module, id,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
 				rspamd_log,
-				rspamd_log->log_arg);
+				rspamd_log->ops.specific);
 	}
+
+	return false;
 }
 
-void
+bool
 rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 							   rspamd_inet_addr_t *addr,
 							   guint mod_id, const gchar *module, guint64 id,
@@ -719,7 +608,7 @@ rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 		if (rspamd_log->debug_ip && addr != NULL) {
 			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip, addr)
 				== NULL) {
-				return;
+				return false;
 			}
 		}
 
@@ -728,14 +617,16 @@ rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		va_end (vp);
-		rspamd_log->log_func (module, idbuf,
+		return rspamd_log->ops.log (module, idbuf,
 				function,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
 				rspamd_log,
-				rspamd_log->log_arg);
+				rspamd_log->ops.specific);
 	}
+
+	return false;
 }
 
 /**
@@ -751,13 +642,13 @@ rspamd_glib_log_function (const gchar *log_domain,
 
 	if (rspamd_log->enabled &&
 			rspamd_logger_need_log (rspamd_log, log_level, -1)) {
-		rspamd_log->log_func ("glib", NULL,
+		rspamd_log->ops.log ("glib", NULL,
 				NULL,
 				log_level,
 				message,
 				strlen (message),
 				rspamd_log,
-				rspamd_log->log_arg);
+				rspamd_log->ops.specific);
 	}
 }
 
@@ -951,26 +842,8 @@ rspamd_logger_configure_modules (GHashTable *mods_enabled)
 	}
 }
 
-rspamd_logger_t*
-rspamd_logger_get_singleton (void)
-{
-	return default_logger;
-}
-
 struct rspamd_logger_funcs*
 rspamd_logger_set_log_function (rspamd_logger_t *logger,
-								struct rspamd_logger_funcs *nfuncs);
+								struct rspamd_logger_funcs *nfuncs)
 {
-	if (logger == NULL) {
-		logger = default_logger;
-	}
-
-	g_assert (logger != NULL);
-
-	rspamd_log_func_t old_func = logger->log_func;
-
-	logger->log_func = nfunc;
-	logger->log_arg = narg;
-
-	return old_func;
 }

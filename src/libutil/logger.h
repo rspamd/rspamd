@@ -33,6 +33,10 @@ typedef void * (*rspamd_log_init_func) (rspamd_logger_t *logger,
 										struct rspamd_config *cfg,
 										uid_t uid, gid_t gid,
 										GError **err);
+typedef bool (*rspamd_log_on_fork_func) (rspamd_logger_t *logger,
+										 struct rspamd_config *cfg,
+										 gpointer arg,
+										 GError **err);
 typedef void* (*rspamd_log_reload_func) (rspamd_logger_t *logger,
 										struct rspamd_config *cfg,
 										gpointer arg,
@@ -46,59 +50,74 @@ struct rspamd_logger_funcs {
 	rspamd_log_reload_func reload;
 	rspamd_log_dtor_func dtor;
 	rspamd_log_func_t log;
+	rspamd_log_on_fork_func on_fork;
 	gpointer specific;
 };
 
 #define RSPAMD_LOGBUF_SIZE 8192
 
 /**
- * Init logger
+ * Opens a new (initial) logger with console type
+ * This logger is also used as an emergency logger
+ * @return new rspamd logger object
  */
-void rspamd_set_logger (struct rspamd_config *cfg,
-						GQuark ptype,
-						rspamd_logger_t **plogger,
-						rspamd_mempool_t *pool);
+rspamd_logger_t * rspamd_log_open_emergency (rspamd_mempool_t *pool);
 
 /**
- * Open log file or initialize other structures
+ * Open specific (configured logging)
+ * @param pool
+ * @param config
+ * @param uid
+ * @param gid
+ * @return
  */
-bool rspamd_log_open (rspamd_logger_t *logger);
+rspamd_logger_t * rspamd_log_open_specific (rspamd_mempool_t *pool,
+											struct rspamd_config *config,
+											const gchar *ptype,
+											uid_t uid, gid_t gid);
+
+/**
+ * Set log level (from GLogLevelFlags)
+ * @param logger
+ * @param level
+ */
+void rspamd_log_set_log_level (rspamd_logger_t *logger, gint level);
+/**
+ * Set log flags (from enum rspamd_log_flags)
+ * @param logger
+ * @param flags
+ */
+void rspamd_log_set_log_flags (rspamd_logger_t *logger, gint flags);
 
 /**
  * Close log file or destroy other structures
  */
-bool rspamd_log_close (rspamd_logger_t *logger, gboolean termination);
+void rspamd_log_close (rspamd_logger_t *logger);
 
-/**
- * Close and open log again
- */
-bool rspamd_log_reopen (rspamd_logger_t *logger);
 
-/**
- * Open log file or initialize other structures for privileged processes
- */
-bool rspamd_log_open_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 
-/**
- * Close log file or destroy other structures for privileged processes
- */
-void rspamd_log_close_priv (rspamd_logger_t *logger, gboolean termination, uid_t uid, gid_t gid);
+rspamd_logger_t * rspamd_log_default_logger (void);
+rspamd_logger_t * rspamd_log_emergency_logger (void);
 
 /**
  * Close and open log again for privileged processes
  */
-bool rspamd_log_reopen_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+bool rspamd_log_reopen (rspamd_logger_t *logger, struct rspamd_config *cfg,
+						uid_t uid, gid_t gid);
 
 /**
  * Set log pid
  */
-void rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *logger);
+void rspamd_log_on_fork (GQuark ptype, struct rspamd_config *cfg,
+						 rspamd_logger_t *logger);
 
 /**
  * Log function that is compatible for glib messages
  */
 void rspamd_glib_log_function (const gchar *log_domain,
-							   GLogLevelFlags log_level, const gchar *message, gpointer arg);
+							   GLogLevelFlags log_level,
+							   const gchar *message,
+							   gpointer arg);
 
 /**
  * Log function for printing glib assertions
@@ -206,12 +225,6 @@ const guint64 *rspamd_log_counters (rspamd_logger_t *logger);
  * @return
  */
 ucl_object_t *rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
-
-/**
- * Returns the current logger object
- * @return
- */
-rspamd_logger_t *rspamd_logger_get_singleton (void);
 
 /**
  * Sets new logger functions and initialise logging if needed

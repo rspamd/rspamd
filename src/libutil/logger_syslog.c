@@ -34,6 +34,12 @@ rspamd_log_syslog_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 {
 	struct rspamd_syslog_logger_priv *priv;
 
+	if (!cfg) {
+		g_set_error (err, SYSLOG_LOG_QUARK, EINVAL,
+				"no log config specified");
+		return NULL;
+	}
+
 	priv = g_malloc0 (sizeof (*priv));
 
 	priv->log_facility = cfg->log_facility;

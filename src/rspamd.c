@@ -1237,7 +1237,7 @@ main (gint argc, gchar **argv, gchar **env)
 	type = g_quark_from_static_string ("main");
 
 	/* First set logger to console logger */
-	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rspamd_main->logger = rspamd_log_init (rspamd_main->server_pool);
 	rspamd_set_logger (rspamd_main->cfg, type,
 			&rspamd_main->logger, rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
@@ -1337,9 +1337,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Set title */
 	setproctitle ("main process");
-
-	/* Flush log */
-	rspamd_log_flush (rspamd_main->logger);
 
 	/* Open control socket if needed */
 	control_fd = -1;

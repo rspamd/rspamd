@@ -70,12 +70,12 @@ struct rspamd_logger_s {
 	gboolean enabled;
 	gboolean is_debug;
 	gboolean no_lock;
-	gboolean opened;
 
 	pid_t pid;
 	const gchar *process_type;
 	struct rspamd_radix_map_helper *debug_ip;
 	rspamd_mempool_mutex_t *mtx;
+	rspamd_mempool_t *pool;
 	guint64 log_cnt[4];
 };
 
@@ -98,12 +98,15 @@ bool rspamd_log_file_log (const gchar *module, const gchar *id,
 						  gsize mlen,
 						  rspamd_logger_t *rspamd_log,
 						  gpointer arg);
+bool rspamd_log_file_on_fork (rspamd_logger_t *logger, struct rspamd_config *cfg,
+							   gpointer arg, GError **err);
 
 const static struct rspamd_logger_funcs file_log_funcs = {
 		.init = rspamd_log_file_init,
 		.dtor = rspamd_log_file_dtor,
 		.reload = rspamd_log_file_reload,
 		.log = rspamd_log_file_log,
+		.on_fork = rspamd_log_file_on_fork,
 };
 
 /*
@@ -127,6 +130,7 @@ const static struct rspamd_logger_funcs syslog_log_funcs = {
 		.dtor = rspamd_log_syslog_dtor,
 		.reload = rspamd_log_syslog_reload,
 		.log = rspamd_log_syslog_log,
+		.on_fork = NULL,
 };
 
 /*
@@ -150,6 +154,7 @@ const static struct rspamd_logger_funcs console_log_funcs = {
 		.dtor = rspamd_log_console_dtor,
 		.reload = rspamd_log_console_reload,
 		.log = rspamd_log_console_log,
+		.on_fork = NULL,
 };
 
 #endif

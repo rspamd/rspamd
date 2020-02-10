@@ -63,7 +63,7 @@ rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 
 	priv = g_malloc0 (sizeof (*priv));
 	priv->log_color = (logger->flags & RSPAMD_LOG_FLAG_COLOR);
-	priv->log_rspamadm (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM);
+	priv->log_rspamadm = (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM);
 
 	if (priv->log_rspamadm) {
 		priv->fd = dup (STDOUT_FILENO);
@@ -78,7 +78,7 @@ rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 		g_set_error (err, CONSOLE_LOG_QUARK, errno,
 				"open_log: cannot dup console fd: %s, %s\n",
 				strerror (errno));
-		rspamd_log_console_dtor (priv);
+		rspamd_log_console_dtor (logger, priv);
 
 		return NULL;
 	}
