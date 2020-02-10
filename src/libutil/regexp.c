@@ -19,6 +19,7 @@
 #include "ref.h"
 #include "util.h"
 #include "rspamd.h"
+#include "contrib/fastutf8/fastutf8.h"
 
 #ifndef WITH_PCRE2
 /* Normal pcre path */
@@ -576,11 +577,11 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		r = re->re;
 		ext = re->extra;
 #if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
-		if (g_utf8_validate (mt, remain, NULL)) {
+		if (rspamd_fast_utf8_validate (mt, remain) == 0) {
 			st = global_re_cache->jstack;
 		}
 		else {
-			msg_err ("bad utf8 input for JIT re");
+			msg_err ("bad utf8 input for JIT re '%s'", re->pattern);
 			return FALSE;
 		}
 #endif
@@ -717,8 +718,8 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 #ifdef HAVE_PCRE_JIT
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT) && can_jit) {
-		if (re->re != re->raw_re && !g_utf8_validate (mt, remain, NULL)) {
-			msg_err ("bad utf8 input for JIT re");
+		if (re->re != re->raw_re && rspamd_fast_utf8_validate (mt, remain) != 0) {
+			msg_err ("bad utf8 input for JIT re '%s'", re->pattern);
 			return FALSE;
 		}
 

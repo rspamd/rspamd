@@ -15,6 +15,7 @@
  */
 #include "fstring.h"
 #include "str_util.h"
+#include "contrib/fastutf8/fastutf8.h"
 
 
 #ifdef WITH_JEMALLOC
@@ -274,7 +275,7 @@ rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 
 	if (is_utf) {
 		while (end < str->begin + str->len) {
-			if (!g_utf8_validate (p, str->len, &end)) {
+			if (rspamd_fast_utf8_validate (p, str->len) != 0) {
 				return rspamd_fstrhash_lc (str, FALSE);
 			}
 			while (p < end) {
