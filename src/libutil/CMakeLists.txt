@@ -11,6 +11,7 @@ SET(LIBRSPAMDUTILSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/http_router.c
 				${CMAKE_CURRENT_SOURCE_DIR}/http_context.c
 				${CMAKE_CURRENT_SOURCE_DIR}/logger.c
+				${CMAKE_CURRENT_SOURCE_DIR}/logger_file.c
 				${CMAKE_CURRENT_SOURCE_DIR}/map.c
 				${CMAKE_CURRENT_SOURCE_DIR}/map_helpers.c
 				${CMAKE_CURRENT_SOURCE_DIR}/mem_pool.c

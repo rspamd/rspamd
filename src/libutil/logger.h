@@ -29,6 +29,25 @@ typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
 								   gsize mlen,
 								   rspamd_logger_t *logger,
 								   gpointer arg);
+typedef void * (*rspamd_log_init_func) (rspamd_logger_t *logger,
+										struct rspamd_config *cfg,
+										uid_t uid, gid_t gid,
+										GError **err);
+typedef void* (*rspamd_log_reload_func) (rspamd_logger_t *logger,
+										struct rspamd_config *cfg,
+										gpointer arg,
+										uid_t uid, gid_t gid,
+										GError **err);
+typedef void (*rspamd_log_dtor_func) (rspamd_logger_t *logger,
+										gpointer arg);
+
+struct rspamd_logger_funcs {
+	rspamd_log_init_func init;
+	rspamd_log_reload_func reload;
+	rspamd_log_dtor_func dtor;
+	rspamd_log_func_t log;
+	gpointer specific;
+};
 
 #define RSPAMD_LOGBUF_SIZE 8192
 
@@ -200,17 +219,13 @@ ucl_object_t *rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
 rspamd_logger_t *rspamd_logger_get_singleton (void);
 
 /**
- * Sets new logging function
+ * Sets new logger functions and initialise logging if needed
  * @param logger
- * @param nfunc
- * @param narg
- * @param old_arg
- * @return old log function and old log function arg in (*old_arg)
+ * @param nfuncs
+ * @return static pointer to the old functions (so this function is not reentrant)
  */
-rspamd_log_func_t rspamd_logger_set_log_function (rspamd_logger_t *logger,
-												   rspamd_log_func_t nfunc,
-												   gpointer narg,
-												   gpointer *old_arg);
+struct rspamd_logger_funcs* rspamd_logger_set_log_function (rspamd_logger_t *logger,
+															struct rspamd_logger_funcs *nfuncs);
 
 /* Typical functions */
 
