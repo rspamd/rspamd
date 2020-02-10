@@ -22,7 +22,7 @@ enum rspamd_log_flags {
 };
 
 typedef struct rspamd_logger_s rspamd_logger_t;
-typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
+typedef bool (*rspamd_log_func_t) (const gchar *module, const gchar *id,
 								   const gchar *function,
 								   gint level_flags,
 								   const gchar *message,
@@ -62,22 +62,22 @@ void rspamd_set_logger (struct rspamd_config *cfg,
 /**
  * Open log file or initialize other structures
  */
-gint rspamd_log_open (rspamd_logger_t *logger);
+bool rspamd_log_open (rspamd_logger_t *logger);
 
 /**
  * Close log file or destroy other structures
  */
-void rspamd_log_close (rspamd_logger_t *logger, gboolean termination);
+bool rspamd_log_close (rspamd_logger_t *logger, gboolean termination);
 
 /**
  * Close and open log again
  */
-gint rspamd_log_reopen (rspamd_logger_t *logger);
+bool rspamd_log_reopen (rspamd_logger_t *logger);
 
 /**
  * Open log file or initialize other structures for privileged processes
  */
-gint rspamd_log_open_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+bool rspamd_log_open_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 
 /**
  * Close log file or destroy other structures for privileged processes
@@ -87,17 +87,12 @@ void rspamd_log_close_priv (rspamd_logger_t *logger, gboolean termination, uid_t
 /**
  * Close and open log again for privileged processes
  */
-gint rspamd_log_reopen_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+bool rspamd_log_reopen_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 
 /**
  * Set log pid
  */
 void rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *logger);
-
-/**
- * Flush log buffer for some types of logging
- */
-void rspamd_log_flush (rspamd_logger_t *logger);
 
 /**
  * Log function that is compatible for glib messages
@@ -113,12 +108,12 @@ void rspamd_glib_printerr_function (const gchar *message);
 /**
  * Function with variable number of arguments support
  */
-void rspamd_common_log_function (rspamd_logger_t *logger,
+bool rspamd_common_log_function (rspamd_logger_t *logger,
 								 gint level_flags,
 								 const gchar *module, const gchar *id,
 								 const gchar *function, const gchar *fmt, ...);
 
-void rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
+bool rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
 						 const gchar *module, const gchar *id, const gchar *function,
 						 const gchar *fmt, va_list args);
 
@@ -149,16 +144,16 @@ void rspamd_logger_configure_modules (GHashTable *mods_enabled);
 /**
  * Conditional debug function
  */
-void rspamd_conditional_debug (rspamd_logger_t *logger,
+bool rspamd_conditional_debug (rspamd_logger_t *logger,
 							   rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
 							   const gchar *function, const gchar *fmt, ...);
 
-void rspamd_conditional_debug_fast (rspamd_logger_t *logger,
+bool rspamd_conditional_debug_fast (rspamd_logger_t *logger,
 									rspamd_inet_addr_t *addr,
 									guint mod_id,
 									const gchar *module, const gchar *id,
 									const gchar *function, const gchar *fmt, ...);
-void rspamd_conditional_debug_fast_num_id (rspamd_logger_t *logger,
+bool rspamd_conditional_debug_fast_num_id (rspamd_logger_t *logger,
 									rspamd_inet_addr_t *addr,
 									guint mod_id,
 									const gchar *module, guint64 id,
@@ -167,7 +162,7 @@ void rspamd_conditional_debug_fast_num_id (rspamd_logger_t *logger,
 /**
  * Function with variable number of arguments support that uses static default logger
  */
-void rspamd_default_log_function (gint level_flags,
+bool rspamd_default_log_function (gint level_flags,
 								  const gchar *module, const gchar *id,
 								  const gchar *function,
 								  const gchar *fmt,
@@ -180,7 +175,7 @@ void rspamd_default_log_function (gint level_flags,
  * @param fmt
  * @param args
  */
-void rspamd_default_logv (gint level_flags,
+bool rspamd_default_logv (gint level_flags,
 						  const gchar *module, const gchar *id,
 						  const gchar *function,
 						  const gchar *fmt,

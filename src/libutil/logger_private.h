@@ -60,7 +60,6 @@ struct rspamd_logger_error_log {
  */
 struct rspamd_logger_s {
 	struct rspamd_logger_funcs ops;
-	gint log_facility;
 	gint log_level;
 
 	struct rspamd_logger_error_log *errlog;
@@ -74,9 +73,10 @@ struct rspamd_logger_s {
 	gboolean opened;
 
 	pid_t pid;
-	GQuark process_type;
+	const gchar *process_type;
 	struct rspamd_radix_map_helper *debug_ip;
 	rspamd_mempool_mutex_t *mtx;
+	guint64 log_cnt[4];
 };
 
 /*
@@ -91,7 +91,7 @@ void * rspamd_log_file_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 void * rspamd_log_file_reload (rspamd_logger_t *logger, struct rspamd_config *cfg,
 							   gpointer arg, uid_t uid, gid_t gid, GError **err);
 void rspamd_log_file_dtor (rspamd_logger_t *logger, gpointer arg);
-void rspamd_log_file_log (const gchar *module, const gchar *id,
+bool rspamd_log_file_log (const gchar *module, const gchar *id,
 						  const gchar *function,
 						  gint level_flags,
 						  const gchar *message,
@@ -104,6 +104,52 @@ const static struct rspamd_logger_funcs file_log_funcs = {
 		.dtor = rspamd_log_file_dtor,
 		.reload = rspamd_log_file_reload,
 		.log = rspamd_log_file_log,
+};
+
+/*
+ * Syslog logging
+ */
+void * rspamd_log_syslog_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
+							 uid_t uid, gid_t gid, GError **err);
+void * rspamd_log_syslog_reload (rspamd_logger_t *logger, struct rspamd_config *cfg,
+							   gpointer arg, uid_t uid, gid_t gid, GError **err);
+void rspamd_log_syslog_dtor (rspamd_logger_t *logger, gpointer arg);
+bool rspamd_log_syslog_log (const gchar *module, const gchar *id,
+						  const gchar *function,
+						  gint level_flags,
+						  const gchar *message,
+						  gsize mlen,
+						  rspamd_logger_t *rspamd_log,
+						  gpointer arg);
+
+const static struct rspamd_logger_funcs syslog_log_funcs = {
+		.init = rspamd_log_syslog_init,
+		.dtor = rspamd_log_syslog_dtor,
+		.reload = rspamd_log_syslog_reload,
+		.log = rspamd_log_syslog_log,
+};
+
+/*
+ * Console logging
+ */
+void * rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
+							   uid_t uid, gid_t gid, GError **err);
+void * rspamd_log_console_reload (rspamd_logger_t *logger, struct rspamd_config *cfg,
+								 gpointer arg, uid_t uid, gid_t gid, GError **err);
+void rspamd_log_console_dtor (rspamd_logger_t *logger, gpointer arg);
+bool rspamd_log_console_log (const gchar *module, const gchar *id,
+							const gchar *function,
+							gint level_flags,
+							const gchar *message,
+							gsize mlen,
+							rspamd_logger_t *rspamd_log,
+							gpointer arg);
+
+const static struct rspamd_logger_funcs console_log_funcs = {
+		.init = rspamd_log_console_init,
+		.dtor = rspamd_log_console_dtor,
+		.reload = rspamd_log_console_reload,
+		.log = rspamd_log_console_log,
 };
 
 #endif

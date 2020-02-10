@@ -22,10 +22,6 @@
 #include "unix-std.h"
 #include "logger_private.h"
 
-#ifdef HAVE_SYSLOG_H
-#include <syslog.h>
-#endif
-
 
 static rspamd_logger_t *default_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
@@ -278,7 +274,6 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	}
 
 	logger->log_type = cfg->log_type;
-	logger->log_facility = cfg->log_facility;
 
 	if (!(logger->flags & RSPAMD_LOG_FLAG_ENFORCED)) {
 		logger->log_level = cfg->log_level;
@@ -346,39 +341,7 @@ void
 rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
 {
 	rspamd_log->pid = getpid ();
-	rspamd_log->process_type = ptype;
-
-	/* We also need to clear all messages pending */
-	if (rspamd_log->repeats > 0) {
-		rspamd_log->repeats = 0;
-		if (rspamd_log->saved_message) {
-			g_free (rspamd_log->saved_message);
-			g_free (rspamd_log->saved_function);
-			g_free (rspamd_log->saved_module);
-			g_free (rspamd_log->saved_id);
-			rspamd_log->saved_message = NULL;
-			rspamd_log->saved_function = NULL;
-			rspamd_log->saved_module = NULL;
-			rspamd_log->saved_id = NULL;
-		}
-	}
-}
-
-/**
- * Flush logging buffer
- */
-void
-rspamd_log_flush (rspamd_logger_t *rspamd_log)
-{
-	if (rspamd_log->is_buffered &&
-		(rspamd_log->type == RSPAMD_LOG_CONSOLE ||
-		 rspamd_log->type == RSPAMD_LOG_FILE)) {
-		direct_write_log_line (rspamd_log,
-				rspamd_log->io_buf.buf,
-				rspamd_log->io_buf.used,
-				FALSE, rspamd_log->log_level);
-		rspamd_log->io_buf.used = 0;
-	}
+	rspamd_log->process_type = g_quark_to_string (ptype);
 }
 
 static inline gboolean
