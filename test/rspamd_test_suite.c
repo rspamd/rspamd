@@ -37,12 +37,6 @@ main (int argc, char **argv)
 	cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_main->cfg = cfg;
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
-	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	cfg->log_level = G_LOG_LEVEL_MESSAGE;
-
-	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"),
-			&rspamd_main->logger, rspamd_main->server_pool);
-	(void)rspamd_log_open (rspamd_main->logger);
 
 	g_test_init (&argc, &argv, NULL);
 
@@ -57,17 +51,24 @@ main (int argc, char **argv)
 		exit (1);
 	}
 
+	/* Setup logger */
+	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
+
+	/* Setup logger */
+	if (verbose || g_test_verbose ()) {
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
+		rspamd_log_set_log_flags (rspamd_main->logger,
+				RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED|RSPAMD_LOG_FLAG_RSPAMADM);
+	}
+	else {
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+		rspamd_log_set_log_flags (rspamd_main->logger,RSPAMD_LOG_FLAG_RSPAMADM);
+	}
+
 	rspamd_lua_set_path ((lua_State *)cfg->lua_state, NULL, NULL);
 	event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 	rspamd_stat_init (cfg, event_loop);
 	rspamd_url_init (NULL);
-
-	if (g_test_verbose ()) {
-		cfg->log_level = G_LOG_LEVEL_DEBUG;
-		rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"),
-				&rspamd_main->logger, rspamd_main->server_pool);
-		(void)rspamd_log_reopen (rspamd_main->logger);
-	}
 
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
