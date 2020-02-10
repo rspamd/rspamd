@@ -69,6 +69,7 @@ struct rspamd_logger_error_log {
  */
 struct rspamd_logger_s {
 	rspamd_log_func_t log_func;
+	gpointer log_arg;
 	enum rspamd_log_type log_type;
 	gint log_facility;
 	gint log_level;
@@ -116,14 +117,16 @@ static rspamd_logger_t *default_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
 
 static void syslog_log_function (const gchar *module,
-		const gchar *id, const gchar *function,
-		gint log_level, const gchar *message, gsize mlen,
-		gpointer arg);
+								 const gchar *id, const gchar *function,
+								 gint log_level, const gchar *message, gsize mlen,
+								 rspamd_logger_t *logger,
+								 gpointer arg);
 
 static void file_log_function (const gchar *module,
-		const gchar *id, const gchar *function,
-		gint log_level, const gchar *message, gsize mlen,
-		gpointer arg);
+							   const gchar *id, const gchar *function,
+							   gint log_level, const gchar *message, gsize mlen,
+							   rspamd_logger_t *logger,
+							   gpointer arg);
 
 guint rspamd_task_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
@@ -397,7 +400,8 @@ rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log)
 							rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 							rspamd_log->saved_message,
 							rspamd_log->saved_mlen,
-							rspamd_log);
+							rspamd_log,
+							rspamd_log->log_arg);
 
 					g_free (rspamd_log->saved_message);
 					g_free (rspamd_log->saved_function);
@@ -415,7 +419,8 @@ rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log)
 						rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 						tmpbuf,
 						r,
-						rspamd_log);
+						rspamd_log,
+						rspamd_log->log_arg);
 			}
 		}
 	}
@@ -851,7 +856,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 						level_flags,
 						encrypted,
 						enc_len,
-						rspamd_log);
+						rspamd_log,
+						rspamd_log->log_arg);
 				g_free (encrypted);
 			}
 			else {
@@ -860,7 +866,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 						level_flags,
 						logbuf,
 						end - logbuf,
-						rspamd_log);
+						rspamd_log,
+						rspamd_log->log_arg);
 			}
 
 			switch (level) {
@@ -990,9 +997,9 @@ syslog_log_function (const gchar *module, const gchar *id,
 		gint level_flags,
 		const gchar *message,
 		gsize mlen,
+		rspamd_logger_t *rspamd_log,
 		gpointer arg)
 {
-	rspamd_logger_t *rspamd_log = arg;
 #ifdef HAVE_SYSLOG_H
 	struct {
 		GLogLevelFlags glib_level;
@@ -1058,6 +1065,7 @@ file_log_function (const gchar *module, const gchar *id,
 		gint level_flags,
 		const gchar *message,
 		gsize mlen,
+		rspamd_logger_t *rspamd_log,
 		gpointer arg)
 {
 	static gchar timebuf[64], modulebuf[64];
@@ -1071,7 +1079,6 @@ file_log_function (const gchar *module, const gchar *id,
 	size_t mremain;
 	const gchar *cptype = NULL;
 	gboolean got_time = FALSE;
-	rspamd_logger_t *rspamd_log = arg;
 
 	if (!(level_flags & RSPAMD_LOG_FORCED) && !rspamd_log->enabled) {
 		return;
@@ -1132,6 +1139,7 @@ file_log_function (const gchar *module, const gchar *id,
 							rspamd_log->saved_loglevel,
 							rspamd_log->saved_message,
 							rspamd_log->saved_mlen,
+							rspamd_log,
 							arg);
 
 					g_free (rspamd_log->saved_message);
@@ -1150,6 +1158,7 @@ file_log_function (const gchar *module, const gchar *id,
 						rspamd_log->saved_loglevel,
 						tmpbuf,
 						r,
+						rspamd_log,
 						arg);
 
 				file_log_function (module, id,
@@ -1157,6 +1166,7 @@ file_log_function (const gchar *module, const gchar *id,
 						level_flags,
 						message,
 						mlen,
+						rspamd_log,
 						arg);
 
 				rspamd_log->repeats = REPEATS_MIN + 1;
@@ -1181,6 +1191,7 @@ file_log_function (const gchar *module, const gchar *id,
 							rspamd_log->saved_loglevel,
 							rspamd_log->saved_message,
 							rspamd_log->saved_mlen,
+							rspamd_log,
 							arg);
 
 					g_free (rspamd_log->saved_message);
@@ -1198,6 +1209,7 @@ file_log_function (const gchar *module, const gchar *id,
 						level_flags,
 						tmpbuf,
 						r,
+						rspamd_log,
 						arg);
 				/* It is safe to use temporary buffer here as it is not static */
 				file_log_function (module, id,
@@ -1205,6 +1217,7 @@ file_log_function (const gchar *module, const gchar *id,
 						level_flags,
 						message,
 						mlen,
+						rspamd_log,
 						arg);
 				return;
 			}
@@ -1395,7 +1408,8 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
-				rspamd_log);
+				rspamd_log,
+				rspamd_log->log_arg);
 	}
 }
 
@@ -1431,7 +1445,8 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
-				rspamd_log);
+				rspamd_log,
+				rspamd_log->log_arg);
 	}
 }
 
@@ -1468,7 +1483,8 @@ rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
 				end - logbuf,
-				rspamd_log);
+				rspamd_log,
+				rspamd_log->log_arg);
 	}
 }
 
@@ -1481,7 +1497,7 @@ rspamd_glib_log_function (const gchar *log_domain,
 		const gchar *message,
 		gpointer arg)
 {
-	rspamd_logger_t *rspamd_log = arg;
+	rspamd_logger_t *rspamd_log = (rspamd_logger_t *)arg;
 
 	if (rspamd_log->enabled &&
 			rspamd_logger_need_log (rspamd_log, log_level, -1)) {
@@ -1490,7 +1506,8 @@ rspamd_glib_log_function (const gchar *log_domain,
 				log_level,
 				message,
 				strlen (message),
-				rspamd_log);
+				rspamd_log,
+				rspamd_log->log_arg);
 	}
 }
 
@@ -1688,4 +1705,28 @@ rspamd_logger_t*
 rspamd_logger_get_singleton (void)
 {
 	return default_logger;
+}
+
+rspamd_log_func_t
+rspamd_logger_set_log_function (rspamd_logger_t *logger,
+								rspamd_log_func_t nfunc,
+								gpointer narg,
+								gpointer *old_arg)
+{
+	if (logger == NULL) {
+		logger = default_logger;
+	}
+
+	g_assert (logger != NULL);
+
+	if (old_arg) {
+		*old_arg = logger->log_arg;
+	}
+
+	rspamd_log_func_t old_func = logger->log_func;
+
+	logger->log_func = nfunc;
+	logger->log_arg = narg;
+
+	return old_func;
 }

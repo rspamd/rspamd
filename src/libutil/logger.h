@@ -21,14 +21,14 @@ enum rspamd_log_flags {
 	RSPAMD_LOG_LEVEL_MASK = ~(RSPAMD_LOG_FORCED | RSPAMD_LOG_ENCRYPTED)
 };
 
+typedef struct rspamd_logger_s rspamd_logger_t;
 typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
 								   const gchar *function,
 								   gint level_flags,
 								   const gchar *message,
 								   gsize mlen,
+								   rspamd_logger_t *logger,
 								   gpointer arg);
-
-typedef struct rspamd_logger_s rspamd_logger_t;
 
 #define RSPAMD_LOGBUF_SIZE 8192
 
@@ -198,6 +198,19 @@ ucl_object_t *rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
  * @return
  */
 rspamd_logger_t *rspamd_logger_get_singleton (void);
+
+/**
+ * Sets new logging function
+ * @param logger
+ * @param nfunc
+ * @param narg
+ * @param old_arg
+ * @return old log function and old log function arg in (*old_arg)
+ */
+rspamd_log_func_t rspamd_logger_set_log_function (rspamd_logger_t *logger,
+												   rspamd_log_func_t nfunc,
+												   gpointer narg,
+												   gpointer *old_arg);
 
 /* Typical functions */
 
