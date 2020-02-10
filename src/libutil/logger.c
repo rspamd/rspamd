@@ -194,15 +194,24 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 
 	logger->pool = pool;
 
-	if (cfg->log_error_elts > 0 && pool) {
-		logger->errlog = rspamd_mempool_alloc0_shared (pool,
-				sizeof (*logger->errlog));
-		logger->errlog->pool = pool;
-		logger->errlog->max_elts = cfg->log_error_elts;
-		logger->errlog->elt_len = cfg->log_error_elt_maxlen;
-		logger->errlog->elts = rspamd_mempool_alloc0_shared (pool,
-				sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
-				cfg->log_error_elt_maxlen * cfg->log_error_elts);
+	if (cfg) {
+		if (cfg->log_error_elts > 0 && pool) {
+			logger->errlog = rspamd_mempool_alloc0_shared (pool,
+					sizeof (*logger->errlog));
+			logger->errlog->pool = pool;
+			logger->errlog->max_elts = cfg->log_error_elts;
+			logger->errlog->elt_len = cfg->log_error_elt_maxlen;
+			logger->errlog->elts = rspamd_mempool_alloc0_shared (pool,
+					sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
+					cfg->log_error_elt_maxlen * cfg->log_error_elts);
+		}
+
+		logger->log_level = cfg->log_level;
+		logger->flags = cfg->log_flags;
+
+		if (!(logger->flags & RSPAMD_LOG_FLAG_ENFORCED)) {
+			logger->log_level = cfg->log_level;
+		}
 	}
 
 	const struct rspamd_logger_funcs *funcs = NULL;
@@ -235,34 +244,31 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 
 	logger->pid = getpid ();
 	logger->process_type = ptype;
-
-	if (!(logger->flags & RSPAMD_LOG_FLAG_ENFORCED)) {
-		logger->log_level = cfg->log_level;
-	}
-
-	logger->flags = cfg->log_flags;
+	logger->enabled = TRUE;
 
 	/* Set up conditional logging */
-	if (cfg->debug_ip_map != NULL) {
-		/* Try to add it as map first of all */
-		if (logger->debug_ip) {
-			rspamd_map_helper_destroy_radix (logger->debug_ip);
+	if (cfg) {
+		if (cfg->debug_ip_map != NULL) {
+			/* Try to add it as map first of all */
+			if (logger->debug_ip) {
+				rspamd_map_helper_destroy_radix (logger->debug_ip);
+			}
+
+			logger->debug_ip = NULL;
+			rspamd_config_radix_from_ucl (cfg,
+					cfg->debug_ip_map,
+					"IP addresses for which debug logs are enabled",
+					&logger->debug_ip,
+					NULL,
+					NULL);
 		}
 
-		logger->debug_ip = NULL;
-		rspamd_config_radix_from_ucl (cfg,
-				cfg->debug_ip_map,
-				"IP addresses for which debug logs are enabled",
-				&logger->debug_ip,
-				NULL,
-				NULL);
-	}
-
-	if (cfg->log_encryption_key) {
-		logger->pk = rspamd_pubkey_ref (cfg->log_encryption_key);
-		logger->keypair = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
-				RSPAMD_CRYPTOBOX_MODE_25519);
-		rspamd_pubkey_calculate_nm (logger->pk, logger->keypair);
+		if (cfg->log_encryption_key) {
+			logger->pk = rspamd_pubkey_ref (cfg->log_encryption_key);
+			logger->keypair = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+					RSPAMD_CRYPTOBOX_MODE_25519);
+			rspamd_pubkey_calculate_nm (logger->pk, logger->keypair);
+		}
 	}
 
 	default_logger = logger;

@@ -85,10 +85,10 @@ rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 
 	if (isatty (priv->fd)) {
 		priv->log_tty = true;
-
-		if (priv->log_color) {
-			priv->log_color = false;
-		}
+	}
+	else if (priv->log_color) {
+		/* Disable colors for not a tty */
+		priv->log_color = false;
 	}
 
 	return priv;
