@@ -305,6 +305,14 @@ context("Selectors test", function()
       selector = "words('full'):2",
       expect = {{'hello', 'world', '', 'mail', 'me'}}
     },
+    ["header X-Test first"] = {
+      selector = "header(X-Test, full).first",
+      expect = {"1"}
+    },
+    ["header X-Test last"] = {
+      selector = "header(X-Test, full).last",
+      expect = {"3"}
+    },
   }
 
   for case_name, case in pairs(cases) do
@@ -332,6 +340,9 @@ To: <nobody@example.com>, <no-one@example.com>
 Date: Wed, 19 Sep 2018 14:36:51 +0100 (BST)
 subject: Second, lower-cased header subject
 Subject: Test subject
+X-Test: 1
+X-Test: 2
+X-Test: 3
 Content-Type: multipart/alternative;
     boundary="_000_6be055295eab48a5af7ad4022f33e2d0_"
 
