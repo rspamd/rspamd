@@ -380,7 +380,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			p++;
 			break;
 		case 'R':
-			result->type = RSPAMD_RE_RAWHEADER;
+			result->type = RSPAMD_RE_ALLHEADER;
 			p++;
 			break;
 		case 'B':
