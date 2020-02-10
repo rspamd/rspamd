@@ -305,7 +305,7 @@ rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 {
 	struct rspamd_main *rspamd_main = sigh->worker->srv;
 
-	rspamd_log_reopen (sigh->worker->srv->logger);
+	rspamd_log_reopen (sigh->worker->srv->logger, rspamd_main->cfg, -1, -1);
 	msg_info_main ("logging reinitialised");
 
 	/* Get more signals */
@@ -996,9 +996,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	switch (wrk->pid) {
 	case 0:
 		/* Update pid for logging */
-		rspamd_log_update_pid (cf->type, rspamd_main->logger);
-		/* To avoid atomic writes issue */
-		rspamd_log_reopen (rspamd_main->logger);
+		rspamd_log_on_fork (cf->type, rspamd_main->cfg, rspamd_main->logger);
 		wrk->pid = getpid ();
 
 		/* Init PRNG after fork */
@@ -1047,17 +1045,10 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 			rspamd_pidfile_close (rspamd_main->pfh);
 		}
 
-		/* Do silent log reopen to avoid collisions */
-		rspamd_log_close (rspamd_main->logger, FALSE);
-
-
 		if (rspamd_main->cfg->log_silent_workers) {
-			rspamd_main->cfg->log_level = G_LOG_LEVEL_MESSAGE;
-			rspamd_set_logger (rspamd_main->cfg, cf->type,
-					&rspamd_main->logger, rspamd_main->server_pool);
+			rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
 		}
 
-		rspamd_log_open (rspamd_main->logger);
 		wrk->start_time = rspamd_get_calendar_ticks ();
 
 		if (cf->bind_conf) {
@@ -1075,8 +1066,9 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_socket_nonblocking (wrk->control_pipe[1]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[1]);
 		rspamd_main->cfg->cur_worker = wrk;
-		/* Execute worker */
+		/* Execute worker (this function should not return normally!) */
 		cf->worker->worker_start_func (wrk);
+		/* To distinguish from normal termination */
 		exit (EXIT_FAILURE);
 		break;
 	case -1:
@@ -1167,7 +1159,7 @@ rspamd_hard_terminate (struct rspamd_main *rspamd_main)
 
 	msg_err_main ("shutting down Rspamd due to fatal error");
 
-	rspamd_log_close (rspamd_main->logger, TRUE);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_FAILURE);
 }
 

@@ -3685,7 +3685,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_hash_table_unref (ctx->custom_commands);
 
 	REF_RELEASE (ctx->cfg);
-	rspamd_log_close (worker->srv->logger, TRUE);
+	rspamd_log_close (worker->srv->logger);
 
 	exit (EXIT_SUCCESS);
 }

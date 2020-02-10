@@ -66,6 +66,12 @@ rspamd_log_close (rspamd_logger_t *logger)
 {
 	g_assert (logger != NULL);
 
+	if (logger->closed) {
+		return;
+	}
+
+	logger->closed = TRUE;
+
 	if (logger->debug_ip) {
 		rspamd_map_helper_destroy_radix (logger->debug_ip);
 	}
@@ -105,6 +111,15 @@ rspamd_log_reopen (rspamd_logger_t *rspamd_log,  struct rspamd_config *cfg,
 
 	nspec = rspamd_log->ops.reload (rspamd_log, cfg, rspamd_log->ops.specific,
 			uid, gid, &err);
+
+	if (nspec != NULL) {
+		rspamd_log->ops.specific = nspec;
+	}
+	else {
+
+	}
+
+	return nspec != NULL;
 }
 
 static void
@@ -116,7 +131,7 @@ rspamd_emergency_logger_dtor (gpointer d)
 }
 
 rspamd_logger_t *
-rspamd_log_init (rspamd_mempool_t *pool)
+rspamd_log_open_emergency (rspamd_mempool_t *pool)
 {
 	rspamd_logger_t *logger;
 	GError *err = NULL;
@@ -167,8 +182,7 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 	rspamd_logger_t *logger;
 	GError *err = NULL;
 
-	g_assert (default_logger == NULL);
-	g_assert (emergency_logger == NULL);
+	g_assert (emergency_logger != NULL);
 
 	if (pool) {
 		logger = rspamd_mempool_alloc0 (pool, sizeof (rspamd_logger_t));
@@ -208,6 +222,17 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 	g_assert (funcs != NULL);
 	memcpy (&logger->ops, funcs, sizeof (*funcs));
 
+	logger->ops.specific = logger->ops.init (logger, cfg, uid, gid, &err);
+
+	if (logger->ops.specific == NULL) {
+		rspamd_common_log_function (emergency_logger, G_LOG_LEVEL_CRITICAL,
+				"logger", NULL, G_STRFUNC,
+				"cannot open specific logger: %e", err);
+		g_error_free (err);
+
+		return NULL;
+	}
+
 	logger->pid = getpid ();
 	logger->process_type = ptype;
 
@@ -241,6 +266,8 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 	}
 
 	default_logger = logger;
+
+	return logger;
 }
 
 
@@ -358,7 +385,7 @@ rspamd_log_write_ringbuffer (rspamd_logger_t *rspamd_log,
 	}
 
 	elt->pid = rspamd_log->pid;
-	elt->ptype = rspamd_log->process_type;
+	elt->ptype = g_quark_from_string (rspamd_log->process_type);
 	elt->ts = rspamd_get_calendar_ticks ();
 
 	if (id) {
@@ -846,4 +873,7 @@ struct rspamd_logger_funcs*
 rspamd_logger_set_log_function (rspamd_logger_t *logger,
 								struct rspamd_logger_funcs *nfuncs)
 {
+	/* TODO: write this */
+
+	return NULL;
 }

@@ -76,7 +76,7 @@ rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 
 	if (priv->fd == -1) {
 		g_set_error (err, CONSOLE_LOG_QUARK, errno,
-				"open_log: cannot dup console fd: %s, %s\n",
+				"open_log: cannot dup console fd: %s\n",
 				strerror (errno));
 		rspamd_log_console_dtor (logger, priv);
 
@@ -85,6 +85,10 @@ rspamd_log_console_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 
 	if (isatty (priv->fd)) {
 		priv->log_tty = true;
+
+		if (priv->log_color) {
+			priv->log_color = false;
+		}
 	}
 
 	return priv;

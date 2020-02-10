@@ -817,7 +817,7 @@ lua_worker_spawn_process (lua_State *L)
 		gint rc;
 		gchar inbuf[4];
 
-		rspamd_log_update_pid (w->cf->type, w->srv->logger);
+		rspamd_log_on_fork (w->cf->type, w->srv->cfg, w->srv->logger);
 		rc = ottery_init (w->srv->cfg->libs_ctx->ottery_cfg);
 
 		if (rc != OTTERY_ERR_NONE) {

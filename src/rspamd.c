@@ -257,12 +257,18 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rspamd_main = ud;
 
-	rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
-			&rspamd_main->logger, rspamd_main->server_pool);
+	rspamd_main->logger = rspamd_log_open_specific (rspamd_main->server_pool,
+			rspamd_main->cfg,
+			"main",
+			rspamd_main->workers_uid,
+			rspamd_main->workers_gid);
 
-	if (rspamd_log_open_priv (rspamd_main->logger,
-			rspamd_main->workers_uid, rspamd_main->workers_gid) == -1) {
-		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
+	if (rspamd_main->logger == NULL) {
+		/*
+		 * XXX:
+		 * Error has been already logged (in fact,
+		 * we might fall back to console logger here)
+		 */
 		exit (EXIT_FAILURE);
 	}
 
@@ -287,24 +293,18 @@ reread_config (struct rspamd_main *rspamd_main)
 	tmp_cfg->cfg_name = cfg_file;
 	old_cfg = rspamd_main->cfg;
 	rspamd_main->cfg = tmp_cfg;
+	rspamd_logger_t *old_logger = rspamd_main->logger;
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE, load_opts, TRUE)) {
 		rspamd_main->cfg = old_cfg;
-		rspamd_log_close_priv (rspamd_main->logger,
-					FALSE,
-					rspamd_main->workers_uid,
-					rspamd_main->workers_gid);
-		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
-				&rspamd_main->logger, rspamd_main->server_pool);
-		rspamd_log_open_priv (rspamd_main->logger,
-					rspamd_main->workers_uid,
-					rspamd_main->workers_gid);
+		rspamd_main->logger = old_logger;
 		msg_err_main ("cannot parse new config file, revert to old one");
 		REF_RELEASE (tmp_cfg);
 
 		return FALSE;
 	}
 	else {
+		rspamd_log_close (old_logger);
 		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
 		rspamd_main->cfg->rspamd_user = rspamd_user;
@@ -975,7 +975,8 @@ rspamd_usr1_handler (struct ev_loop *loop, ev_signal *w, int revents)
 	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
 
 	if (!rspamd_main->wanna_die) {
-		rspamd_log_reopen_priv (rspamd_main->logger,
+		rspamd_log_reopen (rspamd_main->logger,
+				rspamd_main->cfg,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
 		msg_info_main ("logging reinitialised");
@@ -1028,12 +1029,6 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 				" is requested to reload configuration");
 		/* Detach existing workers and stop their heartbeats */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
-
-		/* Close log to avoid FDs leak, as reread_config will re-init logging */
-		rspamd_log_close_priv (rspamd_main->logger,
-				FALSE,
-				rspamd_main->workers_uid,
-				rspamd_main->workers_gid);
 
 		if (reread_config (rspamd_main)) {
 			msg_info_main ("kill old workers");
@@ -1237,10 +1232,16 @@ main (gint argc, gchar **argv, gchar **env)
 	type = g_quark_from_static_string ("main");
 
 	/* First set logger to console logger */
-	rspamd_main->logger = rspamd_log_init (rspamd_main->server_pool);
-	rspamd_set_logger (rspamd_main->cfg, type,
-			&rspamd_main->logger, rspamd_main->server_pool);
-	(void) rspamd_log_open (rspamd_main->logger);
+	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
+	g_assert (rspamd_main->logger != NULL);
+
+	if (is_debug) {
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
+	}
+	else {
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+	}
+
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 
@@ -1255,10 +1256,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
-
-	rspamd_log_close_priv (rspamd_main->logger, FALSE,
-			rspamd_main->workers_uid, rspamd_main->workers_gid);
-
 	sqlite3_initialize ();
 
 	/* Load config */
@@ -1274,7 +1271,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Force debug log */
 	if (is_debug) {
-		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
 	}
 
 	/* Create rolling history */
@@ -1452,7 +1449,7 @@ main (gint argc, gchar **argv, gchar **env)
 	msg_info_main ("terminating...");
 
 	REF_RELEASE (rspamd_main->cfg);
-	rspamd_log_close (rspamd_main->logger, TRUE);
+	rspamd_log_close (rspamd_main->logger);
 	g_hash_table_unref (rspamd_main->spairs);
 	g_hash_table_unref (rspamd_main->workers);
 	rspamd_mempool_delete (rspamd_main->server_pool);

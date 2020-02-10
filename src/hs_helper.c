@@ -344,7 +344,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	ev_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();
 
-	rspamd_log_close (worker->srv->logger, TRUE);
+	rspamd_log_close (worker->srv->logger);
 	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);

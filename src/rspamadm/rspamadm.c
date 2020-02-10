@@ -439,20 +439,18 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Setup logger */
+	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
+
+	/* Setup logger */
 	if (verbose) {
-		cfg->log_level = G_LOG_LEVEL_DEBUG;
-		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED;
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
+		rspamd_log_set_log_flags (rspamd_main->logger,
+				RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED|RSPAMD_LOG_FLAG_RSPAMADM);
 	}
 	else {
-		cfg->log_level = G_LOG_LEVEL_MESSAGE;
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+		rspamd_log_set_log_flags (rspamd_main->logger,RSPAMD_LOG_FLAG_RSPAMADM);
 	}
-
-	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	/* Avoid timestamps printing */
-	cfg->log_flags |= RSPAMD_LOG_FLAG_RSPAMADM;
-	rspamd_set_logger (cfg, process_quark, &rspamd_main->logger,
-			rspamd_main->server_pool);
-	(void) rspamd_log_open (rspamd_main->logger);
 
 	rspamd_main->event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 
@@ -616,7 +614,7 @@ end:
 	rspamd_dns_resolver_deinit (resolver);
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_http_context_free (rspamd_main->http_ctx);
-	rspamd_log_close (rspamd_main->logger, TRUE);
+	rspamd_log_close (rspamd_main->logger);
 	rspamd_url_deinit ();
 	g_ptr_array_free (all_commands, TRUE);
 	ev_loop_destroy (rspamd_main->event_loop);

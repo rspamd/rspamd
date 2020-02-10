@@ -67,6 +67,7 @@ struct rspamd_logger_s {
 	struct rspamd_cryptobox_keypair *keypair;
 
 	guint flags;
+	gboolean closed;
 	gboolean enabled;
 	gboolean is_debug;
 	gboolean no_lock;

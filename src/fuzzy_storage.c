@@ -2100,7 +2100,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	REF_RELEASE (ctx->cfg);
-	rspamd_log_close (worker->srv->logger, TRUE);
+	rspamd_log_close (worker->srv->logger);
 
 	exit (EXIT_SUCCESS);
 }
