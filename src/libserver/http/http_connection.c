@@ -26,7 +26,7 @@
 #include "keypair_private.h"
 #include "cryptobox.h"
 #include "libutil/libev_helper.h"
-#include "libutil/ssl_util.h"
+#include "libserver/ssl_util.h"
 #include "libserver/url.h"
 
 #include "contrib/mumhash/mum.h"

@@ -20,8 +20,6 @@ extern "C" {
 #endif
 
 struct rspamd_config;
-struct rspamd_main;
-struct workq;
 
 /**
  * Create generic socket
@@ -64,31 +62,11 @@ gint rspamd_socket_unix (const gchar *,
 gint rspamd_socket (const gchar *credits, guint16 port, gint type,
 					gboolean async, gboolean is_server, gboolean try_resolve);
 
-/**
- * Make a universal sockets
- * @param credits host, ip or path to unix socket (several items may be separated by ',')
- * @param port port (used for network sockets)
- * @param type type of socket (SO_STREAM or SO_DGRAM)
- * @param async make this socket asynced
- * @param is_server make this socket as server socket
- * @param try_resolve try name resolution for a socket (BLOCKING)
- */
-GList *rspamd_sockets_list (const gchar *credits,
-							guint16 port,
-							gint type,
-							gboolean async,
-							gboolean is_server,
-							gboolean try_resolve);
 
 /*
  * Create socketpair
  */
 gboolean rspamd_socketpair (gint pair[2], gboolean is_stream);
-
-/*
- * Write pid to file
- */
-gint rspamd_write_pid (struct rspamd_main *);
 
 /*
  * Make specified socket non-blocking
@@ -118,17 +96,12 @@ void rspamd_signals_init (struct sigaction *sa, void (*sig_handler) (gint,
 void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint));
 #endif
 
-/*
- * Send specified signal to each worker
- */
-void rspamd_pass_signal (GHashTable *, gint);
-
 #ifndef HAVE_SETPROCTITLE
 
 /*
  * Process title utility functions
  */
-gint init_title (struct rspamd_main *, gint argc, gchar *argv[], gchar *envp[]);
+gint init_title (rspamd_mempool_t *pool, gint argc, gchar *argv[], gchar *envp[]);
 
 gint setproctitle (const gchar *fmt, ...);
 
@@ -186,13 +159,6 @@ rspamd_log_check_time (gdouble start, gdouble end, gint resolution);
 gboolean rspamd_file_lock (gint fd, gboolean async);
 
 gboolean rspamd_file_unlock (gint fd, gboolean async);
-
-/*
- * Google perf-tools initialization function
- */
-void gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr);
-
-void gperf_profiler_stop (void);
 
 /*
  * Workarounds for older versions of glib
@@ -354,39 +320,6 @@ void rspamd_gerror_free_maybe (gpointer p);
  */
 void rspamd_gstring_free_soft (gpointer p);
 
-struct rspamd_external_libs_ctx;
-
-/**
- * Initialize rspamd libraries
- */
-struct rspamd_external_libs_ctx *rspamd_init_libs (void);
-
-gpointer rspamd_init_ssl_ctx (void);
-
-gpointer rspamd_init_ssl_ctx_noverify (void);
-
-/**
- * Configure libraries
- */
-gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
-							 struct rspamd_config *cfg);
-
-/**
- * Reset and initialize decompressor
- * @param ctx
- */
-gboolean rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx);
-
-/**
- * Reset and initialize compressor
- * @param ctx
- */
-gboolean rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx);
-
-/**
- * Destroy external libraries context
- */
-void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);
 
 /**
  * Returns some statically initialized random hash seed
@@ -544,6 +477,25 @@ double rspamd_set_counter_ema (struct rspamd_counter_data *cd,
  */
 double rspamd_set_counter (struct rspamd_counter_data *cd,
 						   gdouble value);
+
+enum rspamd_pbkdf_version_id {
+	RSPAMD_PBKDF_ID_V1 = 1,
+	RSPAMD_PBKDF_ID_V2 = 2,
+	RSPAMD_PBKDF_ID_MAX
+};
+
+struct rspamd_controller_pbkdf {
+	const char *name;
+	const char *alias;
+	const char *description;
+	int type; /* enum rspamd_cryptobox_pbkdf_type */
+	gint id;
+	guint complexity;
+	gsize salt_len;
+	gsize key_len;
+};
+
+extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
 #ifdef  __cplusplus
 }

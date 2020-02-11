@@ -16,7 +16,10 @@
 #include "config.h"
 #include "addr.h"
 #include "util.h"
-#include "map_helpers.h"
+/*
+ * TODO: fix this cross dependency!
+ */
+#include "libserver/maps/map_helpers.h"
 #include "logger.h"
 #include "cryptobox.h"
 #include "unix-std.h"

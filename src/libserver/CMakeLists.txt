@@ -18,6 +18,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.c
 				${CMAKE_CURRENT_SOURCE_DIR}/roll_history.c
 				${CMAKE_CURRENT_SOURCE_DIR}/spf.c
+				${CMAKE_CURRENT_SOURCE_DIR}/ssl_util.c
 				${CMAKE_CURRENT_SOURCE_DIR}/rspamd_symcache.c
 				${CMAKE_CURRENT_SOURCE_DIR}/task.c
 				${CMAKE_CURRENT_SOURCE_DIR}/url.c
@@ -25,7 +26,14 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger.c
 				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_file.c
 				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_syslog.c
-				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_console.c)
+				${CMAKE_CURRENT_SOURCE_DIR}/logger/logger_console.c
+				${CMAKE_CURRENT_SOURCE_DIR}/http/http_util.c
+				${CMAKE_CURRENT_SOURCE_DIR}/http/http_message.c
+				${CMAKE_CURRENT_SOURCE_DIR}/http/http_connection.c
+				${CMAKE_CURRENT_SOURCE_DIR}/http/http_router.c
+				${CMAKE_CURRENT_SOURCE_DIR}/http/http_context.c
+				${CMAKE_CURRENT_SOURCE_DIR}/maps/map.c
+				${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c)
 
 # Librspamd-server
 SET(RSPAMD_SERVER ${LIBRSPAMDSERVERSRC} PARENT_SCOPE)

@@ -15,7 +15,7 @@
  */
 #include "config.h"
 #include "rspamd.h"
-#include "libutil/map.h"
+#include "libserver/maps/map.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
@@ -44,9 +44,6 @@
 #endif
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
-#endif
-#ifdef WITH_GPERF_TOOLS
-#include <gperftools/profiler.h>
 #endif
 #ifdef HAVE_STROPS_H
 #include <stropts.h>
@@ -199,6 +196,35 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 
 	cfg->pid_file = rspamd_pidfile;
 	g_option_context_free (context);
+}
+
+static int
+rspamd_write_pid (struct rspamd_main *main)
+{
+	pid_t pid;
+
+	if (main->cfg->pid_file == NULL) {
+		return -1;
+	}
+	main->pfh = rspamd_pidfile_open (main->cfg->pid_file, 0644, &pid);
+
+	if (main->pfh == NULL) {
+		return -1;
+	}
+
+	if (main->is_privilleged) {
+		/* Force root user as owner of pid file */
+#ifdef HAVE_PIDFILE_FILENO
+		if (fchown (pidfile_fileno (main->pfh), 0, 0) == -1) {
+#else
+		if (fchown (main->pfh->pf_fd, 0, 0) == -1) {
+#endif
+		}
+	}
+
+	rspamd_pidfile_write (main->pfh);
+
+	return 0;
 }
 
 /* Detect privilleged mode */
@@ -489,6 +515,21 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 	}
 
 	return result;
+}
+
+static void
+pass_signal_cb (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_worker *cur = value;
+	gint signo = GPOINTER_TO_INT (ud);
+
+	kill (cur->pid, signo);
+}
+
+static void
+rspamd_pass_signal (GHashTable * workers, gint signo)
+{
+	g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 static inline uintptr_t
@@ -1188,7 +1229,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 #ifndef HAVE_SETPROCTITLE
-	init_title (rspamd_main, argc, argv, env);
+	init_title (rspamd_main->server_pool, argc, argv, env);
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
@@ -1278,8 +1319,6 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool,
 			rspamd_main->cfg->history_rows, rspamd_main->cfg);
 
-	gperf_profiler_init (rspamd_main->cfg, "main");
-
 	msg_info_main ("rspamd "
 			RVERSION
 			" is starting, build id: "
@@ -1361,9 +1400,6 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->history_file);
 	}
 
-#if defined(WITH_GPERF_TOOLS)
-	ProfilerStop ();
-#endif
 	/* Spawn workers */
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 

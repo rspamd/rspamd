@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 #include "http_message.h"
-#include "libutil/http_connection.h"
-#include "libutil/http_private.h"
+#include "http_connection.h"
+#include "http_private.h"
 #include "libutil/printf.h"
 #include "libserver/logger.h"
 #include "utlist.h"

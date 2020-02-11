@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "util.h"
-#include "http_connection.h"
+#include "libserver/http/http_connection.h"
 #include "rspamd.h"
 
 #ifdef  __cplusplus

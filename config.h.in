@@ -146,7 +146,6 @@
 #cmakedefine WITH_LUA            1
 #cmakedefine WITH_LUAJIT         1
 #cmakedefine WITH_PCRE2          1
-#cmakedefine WITH_PROFILER       1
 #cmakedefine WITH_SNOWBALL       1
 #cmakedefine WITH_SQLITE         1
 #cmakedefine WITH_SYSTEM_HIREDIS 1

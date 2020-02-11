@@ -88,15 +88,6 @@ else ()
     endif ()
 endif ()
 
-# Google performance tools
-option (ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
-if (ENABLE_GPERF_TOOLS MATCHES "ON")
-    ProcessPackage(GPERF LIBRARY profiler INCLUDE profiler.h INCLUDE_SUFFIXES include/google
-            ROOT ${GPERF_ROOT_DIR})
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
-    set (WITH_GPERF_TOOLS 1)
-endif (ENABLE_GPERF_TOOLS MATCHES "ON")
 
 # Legacy options support
 option (ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)

@@ -22,7 +22,7 @@
 #include "libutil/mem_pool.h"
 #include "libutil/util.h"
 #include "libserver/logger.h"
-#include "libutil/http_connection.h"
+#include "libserver/http/http_connection.h"
 #include "libutil/upstream.h"
 #include "libutil/radix.h"
 #include "libserver/cfg_file.h"
@@ -55,6 +55,8 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
+
+struct rspamd_main;
 
 enum rspamd_worker_flags {
 	RSPAMD_WORKER_HAS_SOCKET = (1 << 0),
@@ -150,17 +152,6 @@ struct rspamd_worker_signal_handler {
 	struct ev_loop *event_loop;
 	struct rspamd_worker *worker;
 	struct rspamd_worker_signal_handler_elt *cb;
-};
-
-struct rspamd_controller_pbkdf {
-	const char *name;
-	const char *alias;
-	const char *description;
-	enum rspamd_cryptobox_pbkdf_type type;
-	gint id;
-	guint complexity;
-	gsize salt_len;
-	gsize key_len;
 };
 
 /**
@@ -386,14 +377,6 @@ void register_custom_controller_command (const gchar *name,
 										 controller_func_t handler,
 										 gboolean privilleged,
 										 gboolean require_message);
-
-enum rspamd_pbkdf_version_id {
-	RSPAMD_PBKDF_ID_V1 = 1,
-	RSPAMD_PBKDF_ID_V2 = 2,
-	RSPAMD_PBKDF_ID_MAX
-};
-
-extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
 #ifdef  __cplusplus
 }

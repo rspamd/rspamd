@@ -229,9 +229,7 @@ rspamd_http_start_servers (pid_t *sfd, rspamd_inet_addr_t *addr,
 		g_assert (sfd[i] != -1);
 
 		if (sfd[i] == 0) {
-			gperf_profiler_init (NULL, "plain-http-server");
 			rspamd_http_server_func (fd, "/tmp/", addr, serv_key, c);
-			gperf_profiler_stop ();
 			exit (EXIT_SUCCESS);
 		}
 	}

@@ -15,35 +15,17 @@
  */
 #include "config.h"
 #include "util.h"
-#include "cfg_file.h"
-#include "rspamd.h"
 #include "unix-std.h"
 
 #include "xxhash.h"
 #include "ottery.h"
 #include "cryptobox.h"
-#include "libutil/map.h"
-#define ZSTD_STATIC_LINKING_ONLY
-#include "contrib/zstd/zstd.h"
-#include "contrib/zstd/zdict.h"
-
-#ifdef HAVE_OPENSSL
-#include <openssl/rand.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/ssl.h>
-#include <openssl/conf.h>
-#include <openssl/engine.h>
-#endif
 
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
 #endif
 #ifdef HAVE_READPASSPHRASE_H
 #include <readpassphrase.h>
-#endif
-#ifdef HAVE_LOCALE_H
-#include <locale.h>
 #endif
 /* libutil */
 #ifdef HAVE_LIBUTIL_H
@@ -54,9 +36,6 @@
 #include <mach/mach_init.h>
 #include <mach/thread_act.h>
 #include <mach/mach_port.h>
-#endif
-#ifdef WITH_GPERF_TOOLS
-#include <gperftools/profiler.h>
 #endif
 /* poll */
 #ifdef HAVE_POLL_H
@@ -83,10 +62,8 @@
 #include <math.h> /* for pow */
 #include <glob.h> /* in fact, we require this file ultimately */
 
-#include "cryptobox.h"
 #include "zlib.h"
 #include "contrib/uthash/utlist.h"
-#include "contrib/fastutf8/fastutf8.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -95,6 +72,9 @@
 /* Default connect timeout for sync sockets */
 #define CONNECT_TIMEOUT 3
 
+/*
+ * Should be defined in a single point
+ */
 const struct rspamd_controller_pbkdf pbkdf_list[] = {
 		{
 				.name = "PBKDF2-blake2b",
@@ -126,7 +106,6 @@ rspamd_socket_nonblocking (gint fd)
 	ofl = fcntl (fd, F_GETFL, 0);
 
 	if (fcntl (fd, F_SETFL, ofl | O_NONBLOCK) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
@@ -140,7 +119,6 @@ rspamd_socket_blocking (gint fd)
 	ofl = fcntl (fd, F_GETFL, 0);
 
 	if (fcntl (fd, F_SETFL, ofl & (~O_NONBLOCK)) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 	return 0;
@@ -171,13 +149,11 @@ rspamd_socket_create (gint af, gint type, gint protocol, gboolean async)
 
 	fd = socket (af, type, protocol);
 	if (fd == -1) {
-		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
 		return -1;
 	}
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		close (fd);
 		return -1;
 	}
@@ -209,25 +185,12 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 		}
 
 		if (is_server) {
-			if (setsockopt (fd,
-					SOL_SOCKET,
-					SO_REUSEADDR,
-					(const void *)&on,
-					sizeof (gint)) == -1) {
-				msg_warn ("setsockopt failed: %d, '%s'", errno,
-						strerror (errno));
-			}
+			(void)setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
+					sizeof (gint));
 #ifdef HAVE_IPV6_V6ONLY
 			if (cur->ai_family == AF_INET6) {
-				if (setsockopt (fd,
-						IPPROTO_IPV6,
-						IPV6_V6ONLY,
-						(const void *)&on,
-						sizeof (gint)) == -1) {
-
-					msg_warn ("setsockopt failed: %d, '%s'", errno,
-							strerror (errno));
-				}
+				setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *)&on,
+						sizeof (gint));
 			}
 #endif
 			r = bind (fd, cur->ai_addr, cur->ai_addrlen);
@@ -238,8 +201,6 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 
 		if (r == -1) {
 			if (errno != EINPROGRESS) {
-				msg_warn ("bind/connect failed: %d, '%s'", errno,
-					strerror (errno));
 				goto out;
 			}
 			if (!async) {
@@ -247,7 +208,6 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 				if (rspamd_socket_poll (fd, CONNECT_TIMEOUT * 1000,
 					POLLOUT) <= 0) {
 					errno = ETIMEDOUT;
-					msg_warn ("bind/connect failed: timeout");
 					goto out;
 				}
 				else {
@@ -329,15 +289,10 @@ rspamd_socket_unix (const gchar *path,
 		if (lstat (addr->sun_path, &st) != -1) {
 			if (S_ISSOCK (st.st_mode)) {
 				if (unlink (addr->sun_path) == -1) {
-					msg_warn ("unlink %s failed: %d, '%s'",
-						addr->sun_path,
-						errno,
-						strerror (errno));
 					goto out;
 				}
 			}
 			else {
-				msg_warn ("%s is not a socket", addr->sun_path);
 				goto out;
 			}
 		}
@@ -345,10 +300,6 @@ rspamd_socket_unix (const gchar *path,
 	fd = socket (PF_LOCAL, type, 0);
 
 	if (fd == -1) {
-		msg_warn ("socket failed %s: %d, '%s'",
-			addr->sun_path,
-			errno,
-			strerror (errno));
 		return -1;
 	}
 
@@ -358,17 +309,11 @@ rspamd_socket_unix (const gchar *path,
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed %s: %d, '%s'", addr->sun_path, errno,
-			strerror (errno));
 		goto out;
 	}
 	if (is_server) {
-		if (setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
-			sizeof (gint)) == -1) {
-			msg_warn ("setsockopt failed: %d, '%s'", errno,
-					strerror (errno));
-		}
-
+		(void)setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
+			sizeof (gint));
 		r = bind (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 	else {
@@ -377,17 +322,12 @@ rspamd_socket_unix (const gchar *path,
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed %s: %d, '%s'",
-				addr->sun_path,
-				errno,
-				strerror (errno));
 			goto out;
 		}
 		if (!async) {
 			/* Try to poll */
 			if (rspamd_socket_poll (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
 				errno = ETIMEDOUT;
-				msg_warn ("bind/connect failed %s: timeout", addr->sun_path);
 				goto out;
 			}
 			else {
@@ -496,137 +436,9 @@ rspamd_socket (const gchar *credits, guint16 port,
 			return r;
 		}
 		else {
-			msg_err ("address resolution for %s failed: %s",
-				credits,
-				gai_strerror (r));
 			return -1;
 		}
 	}
-}
-
-/**
- * Make universal stream socket
- * @param credits host, ip or path to unix socket
- * @param port port (used for network sockets)
- * @param async make this socket asynced
- * @param is_server make this socket as server socket
- * @param try_resolve try name resolution for a socket (BLOCKING)
- */
-GList *
-rspamd_sockets_list (const gchar *credits, guint16 port,
-	gint type, gboolean async, gboolean is_server, gboolean try_resolve)
-{
-	struct sockaddr_un un;
-	struct stat st;
-	struct addrinfo hints, *res;
-	gint r, fd = -1, serrno;
-	gchar portbuf[8], **strv, **cur;
-	GList *result = NULL, *rcur;
-	gpointer ptr;
-
-	strv = g_strsplit_set (credits, ",", -1);
-	if (strv == NULL) {
-		msg_err ("invalid sockets credentials: %s", credits);
-		return NULL;
-	}
-	cur = strv;
-	while (*cur != NULL) {
-		if (*credits == '/') {
-			if (is_server) {
-				fd = rspamd_socket_unix (credits, &un, type, is_server, async);
-			}
-			else {
-				r = stat (credits, &st);
-				if (r == -1) {
-					/* Unix socket doesn't exists it must be created first */
-					errno = ENOENT;
-					goto err;
-				}
-				else {
-					if ((st.st_mode & S_IFSOCK) == 0) {
-						/* Path is not valid socket */
-						errno = EINVAL;
-						goto err;
-					}
-					else {
-						fd = rspamd_socket_unix (credits,
-								&un,
-								type,
-								is_server,
-								async);
-					}
-				}
-			}
-			if (fd != -1) {
-				ptr = GINT_TO_POINTER (fd);
-				result = g_list_prepend (result, ptr);
-				fd = -1;
-			}
-			else {
-				goto err;
-			}
-		}
-		else {
-			/* TCP related part */
-			memset (&hints, 0, sizeof (hints));
-			hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
-			hints.ai_socktype = type; /* Type of the socket */
-			hints.ai_flags = is_server ? AI_PASSIVE : 0;
-			hints.ai_protocol = 0;           /* Any protocol */
-			hints.ai_canonname = NULL;
-			hints.ai_addr = NULL;
-			hints.ai_next = NULL;
-
-			if (!try_resolve) {
-				hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
-			}
-
-			rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
-			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-				LL_SORT2 (res, rspamd_prefer_v4_hack, ai_next);
-				fd = rspamd_inet_socket_create (type, res, is_server, async,
-						&result);
-				freeaddrinfo (res);
-
-				if (result == NULL) {
-					goto err;
-				}
-			}
-			else {
-				msg_err ("address resolution for %s failed: %s",
-					credits,
-					gai_strerror (r));
-				goto err;
-			}
-		}
-
-		cur++;
-	}
-
-	g_strfreev (strv);
-	return result;
-
-err:
-	g_strfreev (strv);
-	serrno = errno;
-	rcur = result;
-	while (rcur != NULL) {
-		ptr = rcur->data;
-		fd = GPOINTER_TO_INT (ptr);
-
-		if (fd != -1) {
-			close (fd);
-		}
-
-		rcur = g_list_next (rcur);
-	}
-
-	if (result != NULL) {
-		g_list_free (result);
-	}
-
-	errno = serrno;
-	return NULL;
 }
 
 gboolean
@@ -639,9 +451,6 @@ rspamd_socketpair (gint pair[2], gboolean is_stream)
 		r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
 
 		if (r == -1) {
-			msg_warn ("seqpacket socketpair failed: %d, '%s'",
-					errno,
-					strerror (errno));
 			r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
 		}
 #else
@@ -653,18 +462,14 @@ rspamd_socketpair (gint pair[2], gboolean is_stream)
 	}
 
 	if (r == -1) {
-		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (
-				errno));
 		return -1;
 	}
 
 	/* Set close on exec */
 	if (fcntl (pair[0], F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 	if (fcntl (pair[1], F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 		goto out;
 	}
 
@@ -677,37 +482,6 @@ out:
 	errno = serrno;
 
 	return FALSE;
-}
-
-gint
-rspamd_write_pid (struct rspamd_main *main)
-{
-	pid_t pid;
-
-	if (main->cfg->pid_file == NULL) {
-		return -1;
-	}
-	main->pfh = rspamd_pidfile_open (main->cfg->pid_file, 0644, &pid);
-
-	if (main->pfh == NULL) {
-		return -1;
-	}
-
-	if (main->is_privilleged) {
-		/* Force root user as owner of pid file */
-#ifdef HAVE_PIDFILE_FILENO
-		if (fchown (pidfile_fileno (main->pfh), 0, 0) == -1) {
-#else
-		if (fchown (main->pfh->pf_fd, 0, 0) == -1) {
-#endif
-			msg_err ("cannot chown of pidfile %s to 0:0 user",
-				main->cfg->pid_file);
-		}
-	}
-
-	rspamd_pidfile_write (main->pfh);
-
-	return 0;
 }
 
 #ifdef HAVE_SA_SIGINFO
@@ -767,21 +541,6 @@ rspamd_signals_init (struct sigaction *signals, void (*sig_handler)(gint))
 	sigpipe_act.sa_handler = SIG_IGN;
 	sigpipe_act.sa_flags = 0;
 	sigaction (SIGPIPE, &sigpipe_act, NULL);
-}
-
-static void
-pass_signal_cb (gpointer key, gpointer value, gpointer ud)
-{
-	struct rspamd_worker *cur = value;
-	gint signo = GPOINTER_TO_INT (ud);
-
-	kill (cur->pid, signo);
-}
-
-void
-rspamd_pass_signal (GHashTable * workers, gint signo)
-{
-	g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 #ifndef HAVE_SETPROCTITLE
@@ -881,14 +640,14 @@ void rspamd_darwin_title_dtor (void *ud)
 }
 
 static void
-rspamd_darwin_init_title (struct rspamd_main *rspamd_main)
+rspamd_darwin_init_title (rspamd_mempool_t *pool)
 {
 	struct rspamd_osx_handles *hdls;
 	/* Assumed that pthreads are already linked */
 	*(void **)(&dynamic_pthread_setname_np) =
 			dlsym (RTLD_DEFAULT, "pthread_setname_np");
 
-	hdls = rspamd_mempool_alloc0 (rspamd_main->server_pool, sizeof (*hdls));
+	hdls = rspamd_mempool_alloc0 (pool, sizeof (*hdls));
 
 	hdls->application_services_handle = dlopen("/System/Library/Frameworks/"
 										 "ApplicationServices.framework/"
@@ -985,7 +744,7 @@ rspamd_darwin_init_title (struct rspamd_main *rspamd_main)
 		goto out;
 	}
 
-	rspamd_mempool_add_destructor (rspamd_main->server_pool,
+	rspamd_mempool_add_destructor (pool,
 			rspamd_darwin_title_dtor, hdls);
 
 	return;
@@ -997,7 +756,7 @@ out:
 #endif
 
 gint
-init_title (struct rspamd_main *rspamd_main,
+init_title (rspamd_mempool_t *pool,
 		gint argc, gchar *argv[], gchar *envp[])
 {
 #ifdef LINUX
@@ -1054,10 +813,10 @@ init_title (struct rspamd_main *rspamd_main,
 	title_buffer = begin_of_buffer;
 	title_buffer_size = end_of_buffer - begin_of_buffer;
 
-	rspamd_mempool_add_destructor (rspamd_main->server_pool,
+	rspamd_mempool_add_destructor (pool,
 			rspamd_title_dtor, new_environ);
 #elif defined(__APPLE__)
-	rspamd_darwin_init_title (rspamd_main);
+	rspamd_darwin_init_title (pool);
 #endif
 
 	return 0;
@@ -1451,56 +1210,6 @@ rspamd_log_check_time (gdouble start, gdouble end, gint resolution)
 }
 
 
-void
-gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
-{
-#if defined(WITH_GPERF_TOOLS)
-	gchar prof_path[PATH_MAX];
-	const gchar *prefix;
-
-	if (getenv ("CPUPROFILE")) {
-
-		/* disable inherited Profiler enabled in master process */
-		ProfilerStop ();
-	}
-
-	if (cfg != NULL) {
-		/* Try to create temp directory for gmon.out and chdir to it */
-		if (cfg->profile_path == NULL) {
-			cfg->profile_path =
-				g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
-		}
-
-		prefix = cfg->profile_path;
-	}
-	else {
-		prefix = "/tmp/rspamd-profile";
-	}
-
-	snprintf (prof_path,
-		sizeof (prof_path),
-		"%s-%s.%d",
-		prefix,
-		descr,
-		(gint)getpid ());
-	if (ProfilerStart (prof_path)) {
-		/* start ITIMER_PROF timer */
-		ProfilerRegisterThread ();
-	}
-	else {
-		msg_warn ("cannot start google perftools profiler");
-	}
-#endif
-}
-
-void
-gperf_profiler_stop (void)
-{
-#if defined(WITH_GPERF_TOOLS)
-	ProfilerStop ();
-#endif
-}
-
 #ifdef HAVE_FLOCK
 /* Flock version */
 gboolean
@@ -1518,10 +1227,6 @@ rspamd_file_lock (gint fd, gboolean async)
 	if (flock (fd, flags) == -1) {
 		if (async && errno == EAGAIN) {
 			return FALSE;
-		}
-
-		if (errno != ENOTSUP) {
-			msg_warn ("lock on file failed: %s", strerror (errno));
 		}
 
 		return FALSE;
@@ -1545,10 +1250,6 @@ rspamd_file_unlock (gint fd, gboolean async)
 	if (flock (fd, flags) == -1) {
 		if (async && errno == EAGAIN) {
 			return FALSE;
-		}
-
-		if (errno != ENOTSUP) {
-			msg_warn ("unlock on file failed: %s", strerror (errno));
 		}
 
 		return FALSE;
@@ -1900,9 +1601,8 @@ restart:
 		errno = ENOTTY;
 		return 0;
 	}
-	if (fcntl (input, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
-	}
+
+	(void)fcntl (input, F_SETFD, FD_CLOEXEC);
 
 	/* Turn echo off */
 	if (tcgetattr (input, &oterm) != 0) {
@@ -2171,8 +1871,6 @@ rspamd_shmem_mkstemp (gchar *pattern)
 			break;
 		}
 		else if (errno != EEXIST) {
-			msg_err ("%s: failed to create temp shmem %s: %s",
-							G_STRLOC, nbuf, strerror (errno));
 			g_free (nbuf);
 
 			return -1;
@@ -2223,197 +1921,6 @@ void rspamd_gerror_free_maybe (gpointer p)
 
 
 
-static void
-rspamd_openssl_maybe_init (void)
-{
-	static gboolean openssl_initialized = FALSE;
-
-	if (!openssl_initialized) {
-		ERR_load_crypto_strings ();
-		SSL_load_error_strings ();
-
-		OpenSSL_add_all_algorithms ();
-		OpenSSL_add_all_digests ();
-		OpenSSL_add_all_ciphers ();
-
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
-		ENGINE_load_builtin_engines ();
-#endif
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-		SSL_library_init ();
-#else
-		OPENSSL_init_ssl (0, NULL);
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-		OPENSSL_config (NULL);
-#endif
-		if (RAND_status () == 0) {
-			guchar seed[128];
-
-			/* Try to use ottery to seed rand */
-			ottery_rand_bytes (seed, sizeof (seed));
-			RAND_seed (seed, sizeof (seed));
-			rspamd_explicit_memzero (seed, sizeof (seed));
-		}
-
-		openssl_initialized = TRUE;
-	}
-}
-
-gpointer
-rspamd_init_ssl_ctx (void)
-{
-	SSL_CTX *ssl_ctx;
-	gint ssl_options;
-
-	rspamd_openssl_maybe_init ();
-
-	ssl_ctx = SSL_CTX_new (SSLv23_method ());
-	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER, NULL);
-	SSL_CTX_set_verify_depth (ssl_ctx, 4);
-	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
-
-#ifdef SSL_OP_NO_COMPRESSION
-	ssl_options |= SSL_OP_NO_COMPRESSION;
-#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
-	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
-#endif
-
-	SSL_CTX_set_options (ssl_ctx, ssl_options);
-
-	return ssl_ctx;
-}
-
-gpointer rspamd_init_ssl_ctx_noverify (void)
-{
-	SSL_CTX *ssl_ctx_noverify;
-	gint ssl_options;
-
-	rspamd_openssl_maybe_init ();
-
-	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
-
-#ifdef SSL_OP_NO_COMPRESSION
-	ssl_options |= SSL_OP_NO_COMPRESSION;
-#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
-	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
-#endif
-
-	ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
-	SSL_CTX_set_verify (ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
-	SSL_CTX_set_options (ssl_ctx_noverify, ssl_options);
-#ifdef SSL_SESS_CACHE_BOTH
-	SSL_CTX_set_session_cache_mode (ssl_ctx_noverify, SSL_SESS_CACHE_BOTH);
-#endif
-
-	return ssl_ctx_noverify;
-}
-
-
-struct rspamd_external_libs_ctx *
-rspamd_init_libs (void)
-{
-	struct rlimit rlim;
-	struct rspamd_external_libs_ctx *ctx;
-	struct ottery_config *ottery_cfg;
-
-	ctx = g_malloc0 (sizeof (*ctx));
-	ctx->crypto_ctx = rspamd_cryptobox_init ();
-	ottery_cfg = g_malloc0 (ottery_get_sizeof_config ());
-	ottery_config_init (ottery_cfg);
-	ctx->ottery_cfg = ottery_cfg;
-
-	rspamd_openssl_maybe_init ();
-
-	/* Check if we have rdrand */
-	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
-		ottery_config_disable_entropy_sources (ottery_cfg,
-				OTTERY_ENTROPY_SRC_RDRAND);
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
-		RAND_set_rand_engine (NULL);
-#endif
-	}
-
-	/* Configure utf8 library */
-	guint utf8_flags = 0;
-
-	if ((ctx->crypto_ctx->cpu_config & CPUID_SSE41)) {
-		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_SSE41;
-	}
-	if ((ctx->crypto_ctx->cpu_config & CPUID_AVX2)) {
-		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_AVX2;
-	}
-
-	rspamd_fast_utf8_library_init (utf8_flags);
-
-	g_assert (ottery_init (ottery_cfg) == 0);
-
-#ifdef HAVE_LOCALE_H
-	if (getenv ("LANG") == NULL) {
-		setlocale (LC_ALL, "C");
-		setlocale (LC_CTYPE, "C");
-		setlocale (LC_MESSAGES, "C");
-		setlocale (LC_TIME, "C");
-	}
-	else {
-		/* Just set the default locale */
-		setlocale (LC_ALL, "");
-		/* But for some issues we still want C locale */
-		setlocale (LC_NUMERIC, "C");
-	}
-#endif
-
-	ctx->ssl_ctx = rspamd_init_ssl_ctx ();
-	ctx->ssl_ctx_noverify = rspamd_init_ssl_ctx_noverify ();
-	rspamd_random_seed_fast ();
-
-	/* Set stack size for pcre */
-	getrlimit (RLIMIT_STACK, &rlim);
-	rlim.rlim_cur = 100 * 1024 * 1024;
-	rlim.rlim_max = rlim.rlim_cur;
-	setrlimit (RLIMIT_STACK, &rlim);
-
-	ctx->local_addrs = rspamd_inet_library_init ();
-	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
-
-	return ctx;
-}
-
-static struct zstd_dictionary *
-rspamd_open_zstd_dictionary (const char *path)
-{
-	struct zstd_dictionary *dict;
-
-	dict = g_malloc0 (sizeof (*dict));
-	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size, TRUE);
-
-	if (dict->dict == NULL) {
-		g_free (dict);
-
-		return NULL;
-	}
-
-	dict->id = ZDICT_getDictID (dict->dict, dict->size);
-
-	if (dict->id == 0) {
-		g_free (dict);
-
-		return NULL;
-	}
-
-	return dict;
-}
-
-static void
-rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
-{
-	if (dict) {
-		munmap (dict->dict, dict->size);
-		g_free (dict);
-	}
-}
-
 #ifdef HAVE_CBLAS
 #ifdef HAVE_CBLAS_H
 #include "cblas.h"
@@ -2431,218 +1938,6 @@ RSPAMD_CONSTRUCTOR (openblas_stupidity_fix_ctor)
 	openblas_set_num_threads (1);
 }
 #endif
-
-gboolean
-rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
-		struct rspamd_config *cfg)
-{
-	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
-	size_t r;
-	gboolean ret = TRUE;
-
-	g_assert (cfg != NULL);
-
-	if (ctx != NULL) {
-		if (cfg->local_addrs) {
-			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
-					"Local addresses",
-					ctx->local_addrs,
-					NULL,
-					NULL);
-		}
-
-		rspamd_free_zstd_dictionary (ctx->in_dict);
-		rspamd_free_zstd_dictionary (ctx->out_dict);
-
-		if (ctx->out_zstream) {
-			ZSTD_freeCStream (ctx->out_zstream);
-			ctx->out_zstream = NULL;
-		}
-
-		if (ctx->in_zstream) {
-			ZSTD_freeDStream (ctx->in_zstream);
-			ctx->in_zstream = NULL;
-		}
-
-		if (cfg->zstd_input_dictionary) {
-			ctx->in_dict = rspamd_open_zstd_dictionary (
-					cfg->zstd_input_dictionary);
-
-			if (ctx->in_dict == NULL) {
-				msg_err_config ("cannot open zstd dictionary in %s",
-						cfg->zstd_input_dictionary);
-			}
-		}
-		if (cfg->zstd_output_dictionary) {
-			ctx->out_dict = rspamd_open_zstd_dictionary (
-					cfg->zstd_output_dictionary);
-
-			if (ctx->out_dict == NULL) {
-				msg_err_config ("cannot open zstd dictionary in %s",
-						cfg->zstd_output_dictionary);
-			}
-		}
-
-		if (cfg->fips_mode) {
-#ifdef HAVE_FIPS_MODE
-			int mode = FIPS_mode ();
-			unsigned long err = (unsigned long)-1;
-
-			/* Toggle FIPS mode */
-			if (mode == 0) {
-				if (FIPS_mode_set (1) != 1) {
-					err = ERR_get_error ();
-				}
-			}
-			else {
-				msg_info_config ("OpenSSL FIPS mode is already enabled");
-			}
-
-			if (err != (unsigned long)-1) {
-				msg_err_config ("FIPS_mode_set failed: %s",
-						ERR_error_string (err, NULL));
-				ret = FALSE;
-			}
-			else {
-				msg_info_config ("OpenSSL FIPS mode is enabled");
-			}
-#else
-			msg_warn_config ("SSL FIPS mode is enabled but not supported by OpenSSL library!");
-#endif
-		}
-
-		if (cfg->ssl_ca_path) {
-			if (SSL_CTX_load_verify_locations (ctx->ssl_ctx, cfg->ssl_ca_path,
-					NULL) != 1) {
-				msg_err_config ("cannot load CA certs from %s: %s",
-						cfg->ssl_ca_path,
-						ERR_error_string (ERR_get_error (), NULL));
-			}
-		}
-		else {
-			msg_debug_config ("ssl_ca_path is not set, using default CA path");
-			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
-		}
-
-		if (cfg->ssl_ciphers) {
-			if (SSL_CTX_set_cipher_list (ctx->ssl_ctx, cfg->ssl_ciphers) != 1) {
-				msg_err_config (
-						"cannot set ciphers set to %s: %s; fallback to %s",
-						cfg->ssl_ciphers,
-						ERR_error_string (ERR_get_error (), NULL),
-						secure_ciphers);
-				/* Default settings */
-				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
-			}
-		}
-
-		/* Init decompression */
-		ctx->in_zstream = ZSTD_createDStream ();
-		r = ZSTD_initDStream (ctx->in_zstream);
-
-		if (ZSTD_isError (r)) {
-			msg_err ("cannot init decompression stream: %s",
-					ZSTD_getErrorName (r));
-			ZSTD_freeDStream (ctx->in_zstream);
-			ctx->in_zstream = NULL;
-		}
-
-		/* Init compression */
-		ctx->out_zstream = ZSTD_createCStream ();
-		r = ZSTD_initCStream (ctx->out_zstream, 1);
-
-		if (ZSTD_isError (r)) {
-			msg_err ("cannot init compression stream: %s",
-					ZSTD_getErrorName (r));
-			ZSTD_freeCStream (ctx->out_zstream);
-			ctx->out_zstream = NULL;
-		}
-#ifdef HAVE_CBLAS
-		openblas_set_num_threads (cfg->max_blas_threads);
-#endif
-	}
-
-	return ret;
-}
-
-gboolean
-rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
-{
-	gsize r;
-
-	if (ctx->in_zstream == NULL) {
-		return FALSE;
-	}
-	else {
-		r = ZSTD_resetDStream (ctx->in_zstream);
-
-		if (ZSTD_isError (r)) {
-			msg_err ("cannot init decompression stream: %s",
-					ZSTD_getErrorName (r));
-			ZSTD_freeDStream (ctx->in_zstream);
-			ctx->in_zstream = NULL;
-
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-gboolean
-rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
-{
-	gsize r;
-
-	if (ctx->out_zstream == NULL) {
-		return FALSE;
-	}
-	else {
-		/* Dictionary will be reused automatically if specified */
-		r = ZSTD_resetCStream (ctx->out_zstream, 0);
-
-		if (ZSTD_isError (r)) {
-			msg_err ("cannot init compression stream: %s",
-					ZSTD_getErrorName (r));
-			ZSTD_freeCStream (ctx->out_zstream);
-			ctx->out_zstream = NULL;
-
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-void
-rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
-{
-	if (ctx != NULL) {
-		g_free (ctx->ottery_cfg);
-
-#ifdef HAVE_OPENSSL
-		EVP_cleanup ();
-		ERR_free_strings ();
-		SSL_CTX_free (ctx->ssl_ctx);
-		SSL_CTX_free (ctx->ssl_ctx_noverify);
-#endif
-		rspamd_inet_library_destroy ();
-		rspamd_free_zstd_dictionary (ctx->in_dict);
-		rspamd_free_zstd_dictionary (ctx->out_dict);
-
-		if (ctx->out_zstream) {
-			ZSTD_freeCStream (ctx->out_zstream);
-		}
-
-		if (ctx->in_zstream) {
-			ZSTD_freeDStream (ctx->in_zstream);
-		}
-
-		rspamd_cryptobox_deinit (ctx->crypto_ctx);
-
-		g_free (ctx);
-	}
-}
 
 guint64
 rspamd_hash_seed (void)

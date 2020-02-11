@@ -26,7 +26,7 @@
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"
 #include "libstat/stat_api.h"
-#include "libutil/map_helpers.h"
+#include "libserver/maps/map_helpers.h"
 
 #include <math.h>
 

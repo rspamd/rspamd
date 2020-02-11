@@ -510,8 +510,6 @@ rspamd_task_option_safe_copy (struct rspamd_task *task,
 							  gsize *outlen)
 {
 	const gchar *p, *end;
-	off_t r;
-	UChar32 uc;
 
 	p = val;
 	end = val + vlen;

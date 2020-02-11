@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "libutil/http_util.h"
+#include "libserver/http/http_util.h"
 #include "libutil/printf.h"
 #include "libutil/util.h"
 

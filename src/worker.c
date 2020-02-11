@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "libutil/util.h"
-#include "libutil/map.h"
+#include "libserver/maps/map.h"
 #include "libutil/upstream.h"
 #include "libserver/protocol.h"
 #include "libserver/cfg_file.h"
@@ -31,7 +31,7 @@
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
 #include "worker_private.h"
-#include "libutil/http_private.h"
+#include "libserver/http/http_private.h"
 #include "libserver/cfg_file_private.h"
 #include <math.h>
 #include "unix-std.h"

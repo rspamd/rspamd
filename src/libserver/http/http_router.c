@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "libutil/http_router.h"
-#include "libutil/http_connection.h"
-#include "libutil/http_private.h"
+#include "http_router.h"
+#include "http_connection.h"
+#include "http_private.h"
 #include "libutil/regexp.h"
 #include "libutil/printf.h"
 #include "libserver/logger.h"

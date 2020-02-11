@@ -15,7 +15,7 @@
  */
 #include "config.h"
 #include "rspamd.h"
-#include "map.h"
+#include "libserver/maps/map.h"
 #include "scan_result.h"
 #include "dynamic_cfg.h"
 #include "unix-std.h"

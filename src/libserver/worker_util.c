@@ -21,15 +21,12 @@
 #include "utlist.h"
 #include "ottery.h"
 #include "rspamd_control.h"
-#include "libutil/map.h"
-#include "libutil/map_private.h"
-#include "libutil/http_private.h"
-#include "libutil/http_router.h"
+#include "libserver/maps/map.h"
+#include "libserver/maps/map_private.h"
+#include "libserver/http/http_private.h"
+#include "libserver/http/http_router.h"
 #include "libutil/rrd.h"
 
-#ifdef WITH_GPERF_TOOLS
-#include <gperftools/profiler.h>
-#endif
 /* sys/resource.h */
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
@@ -218,9 +215,6 @@ rspamd_worker_on_delayed_shutdown (EV_P_ ev_timer *w, int revents)
 	worker->state = rspamd_worker_wanna_die;
 	ev_timer_stop (EV_A_ w);
 	ev_break (loop, EVBREAK_ALL);
-#ifdef WITH_GPERF_TOOLS
-	ProfilerStop ();
-#endif
 }
 
 static void
@@ -480,13 +474,6 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
 	struct rspamd_worker_accept_event *accept_ev;
-
-#ifdef WITH_PROFILER
-	extern void _start (void), etext (void);
-	monstartup ((u_long) & _start, (u_long) & etext);
-#endif
-
-	gperf_profiler_init (worker->srv->cfg, name);
 
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);

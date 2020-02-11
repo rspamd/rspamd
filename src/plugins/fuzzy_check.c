@@ -32,8 +32,8 @@
 
 #include "config.h"
 #include "libmime/message.h"
-#include "libutil/map.h"
-#include "libutil/map_helpers.h"
+#include "libserver/maps/map.h"
+#include "libserver/maps/map_helpers.h"
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
 #include "libserver/mempool_vars_internal.h"
@@ -42,11 +42,10 @@
 #include "ottery.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
-#include "libutil/http_private.h"
-#include "libutil/http_router.h"
+#include "libserver/http/http_private.h"
+#include "libserver/http/http_router.h"
 #include "libstat/stat_api.h"
 #include <math.h>
-#include <src/libmime/message.h>
 #include "libutil/libev_helper.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"

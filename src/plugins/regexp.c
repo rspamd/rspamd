@@ -22,7 +22,7 @@
 #include "libmime/message.h"
 #include "expression.h"
 #include "mime_expressions.h"
-#include "libutil/map.h"
+#include "libserver/maps/map.h"
 #include "lua/lua_common.h"
 
 static const guint64 rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;

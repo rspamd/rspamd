@@ -15,7 +15,7 @@
  */
 #include "lua_common.h"
 #include "lua_thread_pool.h"
-#include "libutil/ssl_util.h"
+#include "libserver/ssl_util.h"
 #include "utlist.h"
 #include "unix-std.h"
 #include <math.h>

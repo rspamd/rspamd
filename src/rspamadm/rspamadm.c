@@ -475,7 +475,6 @@ main (gint argc, gchar **argv, gchar **env)
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");
 
 	L = cfg->lua_state;

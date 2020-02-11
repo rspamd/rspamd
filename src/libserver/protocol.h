@@ -8,7 +8,7 @@
 
 #include "config.h"
 #include "scan_result.h"
-#include "http_connection.h"
+#include "libserver/http/http_connection.h"
 #include "task.h"
 
 #ifdef  __cplusplus

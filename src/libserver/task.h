@@ -17,7 +17,7 @@
 #define TASK_H_
 
 #include "config.h"
-#include "http_connection.h"
+#include "libserver/http/http_connection.h"
 #include "async_session.h"
 #include "util.h"
 #include "mem_pool.h"

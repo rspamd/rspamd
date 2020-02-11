@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "libutil/map.h"
-#include "libutil/map_private.h"
+#include "libserver/maps/map.h"
+#include "libserver/maps/map_private.h"
 
 /***
  * @module rspamd_logger

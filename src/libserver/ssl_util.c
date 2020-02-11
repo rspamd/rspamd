@@ -922,3 +922,52 @@ rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 		}
 	}
 }
+
+gpointer
+rspamd_init_ssl_ctx (void)
+{
+	SSL_CTX *ssl_ctx;
+	gint ssl_options;
+
+	rspamd_openssl_maybe_init ();
+
+	ssl_ctx = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER, NULL);
+	SSL_CTX_set_verify_depth (ssl_ctx, 4);
+	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+
+#ifdef SSL_OP_NO_COMPRESSION
+	ssl_options |= SSL_OP_NO_COMPRESSION;
+#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
+	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
+#endif
+
+	SSL_CTX_set_options (ssl_ctx, ssl_options);
+
+	return ssl_ctx;
+}
+
+gpointer rspamd_init_ssl_ctx_noverify (void)
+{
+	SSL_CTX *ssl_ctx_noverify;
+	gint ssl_options;
+
+	rspamd_openssl_maybe_init ();
+
+	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+
+#ifdef SSL_OP_NO_COMPRESSION
+	ssl_options |= SSL_OP_NO_COMPRESSION;
+#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
+	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
+#endif
+
+	ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
+	SSL_CTX_set_options (ssl_ctx_noverify, ssl_options);
+#ifdef SSL_SESS_CACHE_BOTH
+	SSL_CTX_set_session_cache_mode (ssl_ctx_noverify, SSL_SESS_CACHE_BOTH);
+#endif
+
+	return ssl_ctx_noverify;
+}

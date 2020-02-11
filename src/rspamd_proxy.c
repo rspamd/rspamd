@@ -15,10 +15,10 @@
  */
 #include "config.h"
 #include "libutil/util.h"
-#include "libutil/map.h"
+#include "libserver/maps/map.h"
 #include "libutil/upstream.h"
-#include "libutil/http_connection.h"
-#include "libutil/http_private.h"
+#include "libserver/http/http_connection.h"
+#include "libserver/http/http_private.h"
 #include "libserver/protocol.h"
 #include "libserver/protocol_internal.h"
 #include "libserver/cfg_file.h"

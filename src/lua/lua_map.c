@@ -15,9 +15,9 @@
  */
 
 #include "lua_common.h"
-#include "libutil/map.h"
-#include "libutil/map_helpers.h"
-#include "libutil/map_private.h"
+#include "libserver/maps/map.h"
+#include "libserver/maps/map_helpers.h"
+#include "libserver/maps/map_private.h"
 #include "contrib/libucl/lua_ucl.h"
 
 /***

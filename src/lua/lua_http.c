@@ -15,7 +15,7 @@
  */
 #include "lua_common.h"
 #include "lua_thread_pool.h"
-#include "http_private.h"
+#include "libserver/http/http_private.h"
 #include "ref.h"
 #include "unix-std.h"
 #include "zlib.h"

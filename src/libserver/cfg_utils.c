@@ -21,9 +21,9 @@
 #include "scan_result.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
-#include "map.h"
-#include "map_helpers.h"
-#include "map_private.h"
+#include "maps/map.h"
+#include "maps/map_helpers.h"
+#include "maps/map_private.h"
 #include "dynamic_cfg.h"
 #include "utlist.h"
 #include "stat_api.h"
@@ -31,6 +31,26 @@
 #include "libutil/multipattern.h"
 #include "monitored.h"
 #include "ref.h"
+#include "cryptobox.h"
+#include "ssl_util.h"
+#include "contrib/libottery/ottery.h"
+#include "contrib/fastutf8/fastutf8.h"
+
+#define ZSTD_STATIC_LINKING_ONLY
+#include "contrib/zstd/zstd.h"
+#include "contrib/zstd/zdict.h"
+
+#ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/ssl.h>
+#include <openssl/conf.h>
+#include <openssl/engine.h>
+#endif
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#endif
 #include <math.h>
 
 #define DEFAULT_SCORE 10.0
@@ -2614,4 +2634,357 @@ rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective)
 	SET_EFFECTIVE (FALSE);
 	return "unknown";
 #undef SET_EFFECTIVE
+}
+
+static void
+rspamd_openssl_maybe_init (void)
+{
+	static gboolean openssl_initialized = FALSE;
+
+	if (!openssl_initialized) {
+		ERR_load_crypto_strings ();
+		SSL_load_error_strings ();
+
+		OpenSSL_add_all_algorithms ();
+		OpenSSL_add_all_digests ();
+		OpenSSL_add_all_ciphers ();
+
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+		ENGINE_load_builtin_engines ();
+#endif
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		SSL_library_init ();
+#else
+		OPENSSL_init_ssl (0, NULL);
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		OPENSSL_config (NULL);
+#endif
+		if (RAND_status () == 0) {
+			guchar seed[128];
+
+			/* Try to use ottery to seed rand */
+			ottery_rand_bytes (seed, sizeof (seed));
+			RAND_seed (seed, sizeof (seed));
+			rspamd_explicit_memzero (seed, sizeof (seed));
+		}
+
+		openssl_initialized = TRUE;
+	}
+}
+
+struct rspamd_external_libs_ctx *
+rspamd_init_libs (void)
+{
+	struct rlimit rlim;
+	struct rspamd_external_libs_ctx *ctx;
+	struct ottery_config *ottery_cfg;
+
+	ctx = g_malloc0 (sizeof (*ctx));
+	ctx->crypto_ctx = rspamd_cryptobox_init ();
+	ottery_cfg = g_malloc0 (ottery_get_sizeof_config ());
+	ottery_config_init (ottery_cfg);
+	ctx->ottery_cfg = ottery_cfg;
+
+	rspamd_openssl_maybe_init ();
+
+	/* Check if we have rdrand */
+	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
+		ottery_config_disable_entropy_sources (ottery_cfg,
+				OTTERY_ENTROPY_SRC_RDRAND);
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+		RAND_set_rand_engine (NULL);
+#endif
+	}
+
+	/* Configure utf8 library */
+	guint utf8_flags = 0;
+
+	if ((ctx->crypto_ctx->cpu_config & CPUID_SSE41)) {
+		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_SSE41;
+	}
+	if ((ctx->crypto_ctx->cpu_config & CPUID_AVX2)) {
+		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_AVX2;
+	}
+
+	rspamd_fast_utf8_library_init (utf8_flags);
+
+	g_assert (ottery_init (ottery_cfg) == 0);
+
+#ifdef HAVE_LOCALE_H
+	if (getenv ("LANG") == NULL) {
+		setlocale (LC_ALL, "C");
+		setlocale (LC_CTYPE, "C");
+		setlocale (LC_MESSAGES, "C");
+		setlocale (LC_TIME, "C");
+	}
+	else {
+		/* Just set the default locale */
+		setlocale (LC_ALL, "");
+		/* But for some issues we still want C locale */
+		setlocale (LC_NUMERIC, "C");
+	}
+#endif
+
+	ctx->ssl_ctx = rspamd_init_ssl_ctx ();
+	ctx->ssl_ctx_noverify = rspamd_init_ssl_ctx_noverify ();
+	rspamd_random_seed_fast ();
+
+	/* Set stack size for pcre */
+	getrlimit (RLIMIT_STACK, &rlim);
+	rlim.rlim_cur = 100 * 1024 * 1024;
+	rlim.rlim_max = rlim.rlim_cur;
+	setrlimit (RLIMIT_STACK, &rlim);
+
+	ctx->local_addrs = rspamd_inet_library_init ();
+	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
+
+	return ctx;
+}
+
+static struct zstd_dictionary *
+rspamd_open_zstd_dictionary (const char *path)
+{
+	struct zstd_dictionary *dict;
+
+	dict = g_malloc0 (sizeof (*dict));
+	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size, TRUE);
+
+	if (dict->dict == NULL) {
+		g_free (dict);
+
+		return NULL;
+	}
+
+	dict->id = ZDICT_getDictID (dict->dict, dict->size);
+
+	if (dict->id == 0) {
+		g_free (dict);
+
+		return NULL;
+	}
+
+	return dict;
+}
+
+static void
+rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
+{
+	if (dict) {
+		munmap (dict->dict, dict->size);
+		g_free (dict);
+	}
+}
+
+gboolean
+rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
+					struct rspamd_config *cfg)
+{
+	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+	size_t r;
+	gboolean ret = TRUE;
+
+	g_assert (cfg != NULL);
+
+	if (ctx != NULL) {
+		if (cfg->local_addrs) {
+			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
+					"Local addresses",
+					ctx->local_addrs,
+					NULL,
+					NULL);
+		}
+
+		rspamd_free_zstd_dictionary (ctx->in_dict);
+		rspamd_free_zstd_dictionary (ctx->out_dict);
+
+		if (ctx->out_zstream) {
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+		}
+
+		if (ctx->in_zstream) {
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+		}
+
+		if (cfg->zstd_input_dictionary) {
+			ctx->in_dict = rspamd_open_zstd_dictionary (
+					cfg->zstd_input_dictionary);
+
+			if (ctx->in_dict == NULL) {
+				msg_err_config ("cannot open zstd dictionary in %s",
+						cfg->zstd_input_dictionary);
+			}
+		}
+		if (cfg->zstd_output_dictionary) {
+			ctx->out_dict = rspamd_open_zstd_dictionary (
+					cfg->zstd_output_dictionary);
+
+			if (ctx->out_dict == NULL) {
+				msg_err_config ("cannot open zstd dictionary in %s",
+						cfg->zstd_output_dictionary);
+			}
+		}
+
+		if (cfg->fips_mode) {
+#ifdef HAVE_FIPS_MODE
+			int mode = FIPS_mode ();
+			unsigned long err = (unsigned long)-1;
+
+			/* Toggle FIPS mode */
+			if (mode == 0) {
+				if (FIPS_mode_set (1) != 1) {
+					err = ERR_get_error ();
+				}
+			}
+			else {
+				msg_info_config ("OpenSSL FIPS mode is already enabled");
+			}
+
+			if (err != (unsigned long)-1) {
+				msg_err_config ("FIPS_mode_set failed: %s",
+						ERR_error_string (err, NULL));
+				ret = FALSE;
+			}
+			else {
+				msg_info_config ("OpenSSL FIPS mode is enabled");
+			}
+#else
+			msg_warn_config ("SSL FIPS mode is enabled but not supported by OpenSSL library!");
+#endif
+		}
+
+		if (cfg->ssl_ca_path) {
+			if (SSL_CTX_load_verify_locations (ctx->ssl_ctx, cfg->ssl_ca_path,
+					NULL) != 1) {
+				msg_err_config ("cannot load CA certs from %s: %s",
+						cfg->ssl_ca_path,
+						ERR_error_string (ERR_get_error (), NULL));
+			}
+		}
+		else {
+			msg_debug_config ("ssl_ca_path is not set, using default CA path");
+			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
+		}
+
+		if (cfg->ssl_ciphers) {
+			if (SSL_CTX_set_cipher_list (ctx->ssl_ctx, cfg->ssl_ciphers) != 1) {
+				msg_err_config (
+						"cannot set ciphers set to %s: %s; fallback to %s",
+						cfg->ssl_ciphers,
+						ERR_error_string (ERR_get_error (), NULL),
+						secure_ciphers);
+				/* Default settings */
+				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
+			}
+		}
+
+		/* Init decompression */
+		ctx->in_zstream = ZSTD_createDStream ();
+		r = ZSTD_initDStream (ctx->in_zstream);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init decompression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+		}
+
+		/* Init compression */
+		ctx->out_zstream = ZSTD_createCStream ();
+		r = ZSTD_initCStream (ctx->out_zstream, 1);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init compression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+		}
+#ifdef HAVE_CBLAS
+		openblas_set_num_threads (cfg->max_blas_threads);
+#endif
+	}
+
+	return ret;
+}
+
+gboolean
+rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
+{
+	gsize r;
+
+	if (ctx->in_zstream == NULL) {
+		return FALSE;
+	}
+	else {
+		r = ZSTD_resetDStream (ctx->in_zstream);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init decompression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
+{
+	gsize r;
+
+	if (ctx->out_zstream == NULL) {
+		return FALSE;
+	}
+	else {
+		/* Dictionary will be reused automatically if specified */
+		r = ZSTD_resetCStream (ctx->out_zstream, 0);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init compression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+void
+rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
+{
+	if (ctx != NULL) {
+		g_free (ctx->ottery_cfg);
+
+#ifdef HAVE_OPENSSL
+		EVP_cleanup ();
+		ERR_free_strings ();
+		SSL_CTX_free (ctx->ssl_ctx);
+		SSL_CTX_free (ctx->ssl_ctx_noverify);
+#endif
+		rspamd_inet_library_destroy ();
+		rspamd_free_zstd_dictionary (ctx->in_dict);
+		rspamd_free_zstd_dictionary (ctx->out_dict);
+
+		if (ctx->out_zstream) {
+			ZSTD_freeCStream (ctx->out_zstream);
+		}
+
+		if (ctx->in_zstream) {
+			ZSTD_freeDStream (ctx->in_zstream);
+		}
+
+		rspamd_cryptobox_deinit (ctx->crypto_ctx);
+
+		g_free (ctx);
+	}
 }

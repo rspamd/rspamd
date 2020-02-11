@@ -17,7 +17,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "utlist.h"
-#include "http_private.h"
+#include "libserver/http/http_private.h"
 #include "worker_private.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"

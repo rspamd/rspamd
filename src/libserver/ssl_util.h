@@ -94,6 +94,9 @@ gssize rspamd_ssl_writev (struct rspamd_ssl_connection *conn, struct iovec *iov,
  */
 void rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn);
 
+gpointer rspamd_init_ssl_ctx (void);
+gpointer rspamd_init_ssl_ctx_noverify (void);
+
 #ifdef  __cplusplus
 }
 #endif

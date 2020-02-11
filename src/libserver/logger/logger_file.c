@@ -89,7 +89,6 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 					   gboolean is_iov,
 					   gint level_flags)
 {
-	gchar errmsg[128];
 	struct iovec *iov;
 	const gchar *line;
 	glong r;

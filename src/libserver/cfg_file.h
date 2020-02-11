@@ -821,6 +821,36 @@ struct rspamd_action *rspamd_config_get_action_by_type (struct rspamd_config *cf
 int rspamd_config_ev_backend_get (struct rspamd_config *cfg);
 const gchar * rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective);
 
+struct rspamd_external_libs_ctx;
+
+/**
+ * Initialize rspamd libraries
+ */
+struct rspamd_external_libs_ctx *rspamd_init_libs (void);
+
+/**
+ * Reset and initialize decompressor
+ * @param ctx
+ */
+gboolean rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx);
+
+/**
+ * Reset and initialize compressor
+ * @param ctx
+ */
+gboolean rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx);
+
+/**
+ * Destroy external libraries context
+ */
+void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);
+
+/**
+ * Configure libraries
+ */
+gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
+							 struct rspamd_config *cfg);
+
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
