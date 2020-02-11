@@ -51,6 +51,9 @@
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
 #include <math.h>
 
 #define DEFAULT_SCORE 10.0
