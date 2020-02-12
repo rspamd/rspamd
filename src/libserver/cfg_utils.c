@@ -2639,7 +2639,7 @@ rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective)
 #undef SET_EFFECTIVE
 }
 
-static void
+void
 rspamd_openssl_maybe_init (void)
 {
 	static gboolean openssl_initialized = FALSE;
@@ -2802,7 +2802,7 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		if (cfg->local_addrs) {
 			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
 					"Local addresses",
-					ctx->local_addrs,
+					(struct rspamd_radix_map_helper **)ctx->local_addrs,
 					NULL,
 					NULL);
 		}
