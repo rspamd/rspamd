@@ -846,6 +846,12 @@ gboolean rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx);
 void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);
 
 /**
+ * Returns TRUE if an address belongs to some local address
+ */
+gboolean rspamd_ip_is_local_cfg (struct rspamd_config *cfg,
+		const rspamd_inet_addr_t *addr);
+
+/**
  * Configure libraries
  */
 gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,

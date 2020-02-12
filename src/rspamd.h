@@ -354,10 +354,8 @@ struct zstd_dictionary {
 	guint id;
 };
 
-struct rspamd_radix_map_helper;
-
 struct rspamd_external_libs_ctx {
-	struct rspamd_radix_map_helper **local_addrs;
+	void **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;

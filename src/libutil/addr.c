@@ -16,10 +16,6 @@
 #include "config.h"
 #include "addr.h"
 #include "util.h"
-/*
- * TODO: fix this cross dependency!
- */
-#include "libserver/maps/map_helpers.h"
 #include "logger.h"
 #include "cryptobox.h"
 #include "unix-std.h"
@@ -32,7 +28,7 @@
 #include <grp.h>
 #endif
 
-static struct rspamd_radix_map_helper *local_addrs;
+static void *local_addrs;
 
 enum {
 	RSPAMD_IPV6_UNDEFINED = 0,
@@ -1879,8 +1875,7 @@ rspamd_inet_address_port_equal (gconstpointer a, gconstpointer b)
 #endif
 
 gboolean
-rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
-		gboolean check_laddrs)
+rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 {
 	if (addr == NULL) {
 		return FALSE;
@@ -1904,21 +1899,21 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
 				return TRUE;
 			}
 		}
-
-		if (check_laddrs && local_addrs) {
-			if (rspamd_match_radix_map_addr (local_addrs, addr) != NULL) {
-				return TRUE;
-			}
-		}
 	}
 
 	return FALSE;
 }
 
-struct rspamd_radix_map_helper **
+void **
 rspamd_inet_library_init (void)
 {
 	return &local_addrs;
+}
+
+void *
+rspamd_inet_library_get_lib_ctx (void)
+{
+	return local_addrs;
 }
 
 void

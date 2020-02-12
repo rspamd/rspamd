@@ -371,7 +371,7 @@ accept_socket (EV_P_ ev_io *w, int revents)
 	session->ctx = ctx;
 	session->worker = worker;
 
-	if (ctx->encrypted_only && !rspamd_inet_address_is_local (addr, FALSE)) {
+	if (ctx->encrypted_only && !rspamd_inet_address_is_local (addr)) {
 		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 	}
 

@@ -17,6 +17,7 @@
 #include "libutil/util.h"
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
+#include "libserver/cfg_file.h"
 #include "rspamdclient.h"
 #include "utlist.h"
 #include "unix-std.h"
@@ -166,17 +167,6 @@ static GOptionEntry entries[] =
 	{ "user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
 	   "Use specific User-Agent instead of \"rspamc\"", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
-};
-
-/* Copy to avoid linking with librspamdserver */
-enum rspamd_action_type {
-	METRIC_ACTION_REJECT = 0,
-	METRIC_ACTION_SOFT_REJECT,
-	METRIC_ACTION_REWRITE_SUBJECT,
-	METRIC_ACTION_ADD_HEADER,
-	METRIC_ACTION_GREYLIST,
-	METRIC_ACTION_NOACTION,
-	METRIC_ACTION_MAX
 };
 
 static void rspamc_symbols_output (FILE *out, ucl_object_t *obj);

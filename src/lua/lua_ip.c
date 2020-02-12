@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "libserver/maps/map_helpers.h"
 
 /***
  * @module rspamd_ip
@@ -530,8 +531,24 @@ lua_ip_is_local (lua_State *L)
 			check_laddrs = lua_toboolean (L, 2);
 		}
 
-		lua_pushboolean (L, rspamd_inet_address_is_local (ip->addr,
-				check_laddrs));
+		if ( rspamd_inet_address_is_local (ip->addr)) {
+			lua_pushboolean (L, true);
+
+			return 1;
+		}
+		else if (check_laddrs) {
+			struct rspamd_radix_map_helper *local_addrs =
+					rspamd_inet_library_get_lib_ctx ();
+			if (local_addrs) {
+				if (rspamd_match_radix_map_addr (local_addrs, ip->addr) != NULL) {
+					lua_pushboolean (L, true);
+
+					return 1;
+				}
+			}
+		}
+
+		lua_pushboolean (L, false);
 	}
 	else {
 		lua_pushnil (L);

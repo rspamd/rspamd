@@ -2999,3 +2999,26 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		g_free (ctx);
 	}
 }
+
+gboolean
+rspamd_ip_is_local_cfg (struct rspamd_config *cfg,
+								 const rspamd_inet_addr_t *addr)
+{
+	struct rspamd_radix_map_helper *local_addrs = NULL;
+
+	if (cfg && cfg->libs_ctx) {
+		local_addrs = *(struct rspamd_radix_map_helper**)cfg->libs_ctx->local_addrs;
+	}
+
+	if (rspamd_inet_address_is_local (addr)) {
+		return TRUE;
+	}
+
+	if (local_addrs) {
+		if (rspamd_match_radix_map_addr (local_addrs, addr) != NULL) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}

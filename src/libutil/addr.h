@@ -44,10 +44,19 @@ extern "C" {
  */
 typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
 
-struct rspamd_radix_map_helper;
-
-struct rspamd_radix_map_helper **rspamd_inet_library_init (void);
-
+/**
+ * Returns pointer storage for global singleton (map for local addresses)
+ * @return
+ */
+void **rspamd_inet_library_init (void);
+/**
+ * Returns local addresses singleton
+ * @return
+ */
+void *rspamd_inet_library_get_lib_ctx (void);
+/**
+ * Cleanup library (currently it does nothing)
+ */
 void rspamd_inet_library_destroy (void);
 
 /**
@@ -323,8 +332,7 @@ gboolean rspamd_inet_address_port_equal (gconstpointer a, gconstpointer b);
 /**
  * Returns TRUE if an address belongs to some local address
  */
-gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
-									   gboolean check_laddrs);
+gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr);
 
 /**
  * Returns size of storage required to store a complete IP address
