@@ -178,6 +178,23 @@ end
 
 local dmarc_grammar = gen_dmarc_grammar()
 
+local function dmarc_key_value_case(elts)
+  if type(elts) ~= "table" then
+    return elts
+  end
+  local result = {}
+  for k, v in pairs(elts) do
+    k = k:lower()
+    if k ~= "v" then
+      v = v:lower()
+    end
+
+    result[k] = v
+  end
+
+  return result
+end
+
 local function dmarc_report(task, spf_ok, dkim_ok, disposition,
     sampled_out, hfromdom, spfdom, dres, spf_result)
   local ip = task:get_from_ip()
@@ -228,6 +245,8 @@ local function dmarc_check_record(task, record, is_tld)
       record, is_tld, elts)
 
   if elts then
+    elts = dmarc_key_value_case(elts)
+
     local dkim_pol = elts['adkim']
     if dkim_pol then
       if dkim_pol == 's' then
@@ -1129,7 +1148,7 @@ if opts['reporting'] == true then
                 failed_policy = true
               elseif elts then
                 found_policy = true
-                policy = elts
+                policy = dmarc_key_value_case(elts)
               end
             end
             if not found_policy then
