@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <contrib/http-parser/http_parser.h>
 #include "http_context.h"
 #include "http_private.h"
 #include "keypair.h"
@@ -22,6 +21,7 @@
 #include "cfg_file.h"
 #include "contrib/libottery/ottery.h"
 #include "contrib/http-parser/http_parser.h"
+#include "ssl_util.h"
 #include "rspamd.h"
 #include "libev_helper.h"
 

@@ -19,11 +19,15 @@
 #include "libserver/logger.h"
 #include "ssl_util.h"
 #include "unix-std.h"
+#include "cryptobox.h"
+#include "contrib/libottery/ottery.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/conf.h>
+#include <openssl/evp.h>
+#include <openssl/engine.h>
 #include <openssl/x509v3.h>
 
 enum rspamd_ssl_state {
@@ -970,4 +974,42 @@ gpointer rspamd_init_ssl_ctx_noverify (void)
 #endif
 
 	return ssl_ctx_noverify;
+}
+
+void
+rspamd_openssl_maybe_init (void)
+{
+	static gboolean openssl_initialized = FALSE;
+
+	if (!openssl_initialized) {
+		ERR_load_crypto_strings ();
+		SSL_load_error_strings ();
+
+		OpenSSL_add_all_algorithms ();
+		OpenSSL_add_all_digests ();
+		OpenSSL_add_all_ciphers ();
+
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+		ENGINE_load_builtin_engines ();
+#endif
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		SSL_library_init ();
+#else
+		OPENSSL_init_ssl (0, NULL);
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		OPENSSL_config (NULL);
+#endif
+		if (RAND_status () == 0) {
+			guchar seed[128];
+
+			/* Try to use ottery to seed rand */
+			ottery_rand_bytes (seed, sizeof (seed));
+			RAND_seed (seed, sizeof (seed));
+			rspamd_explicit_memzero (seed, sizeof (seed));
+		}
+
+		openssl_initialized = TRUE;
+	}
 }

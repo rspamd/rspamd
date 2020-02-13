@@ -856,7 +856,6 @@ gboolean rspamd_ip_is_local_cfg (struct rspamd_config *cfg,
  */
 gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 							 struct rspamd_config *cfg);
-void rspamd_openssl_maybe_init (void);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \

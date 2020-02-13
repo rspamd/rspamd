@@ -96,6 +96,7 @@ void rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn);
 
 gpointer rspamd_init_ssl_ctx (void);
 gpointer rspamd_init_ssl_ctx_noverify (void);
+void rspamd_openssl_maybe_init (void);
 
 #ifdef  __cplusplus
 }
