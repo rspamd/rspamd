@@ -1164,8 +1164,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_RE_URL:
-		cnt = g_hash_table_size (MESSAGE_FIELD (task, urls)) +
-				g_hash_table_size (MESSAGE_FIELD (task, emails));
+		cnt = g_hash_table_size (MESSAGE_FIELD (task, urls));
 
 		if (cnt > 0) {
 			scvec = g_malloc (sizeof (*scvec) * cnt);
@@ -1185,6 +1184,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 			}
 
+#if 0
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
@@ -1197,10 +1197,41 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					lenvec[i++] = len;
 				}
 			}
-
+#endif
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, i, raw, &processed_hyperscan);
 			msg_debug_re_task ("checked url regexp: %s -> %d",
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
+		}
+		break;
+	case RSPAMD_RE_EMAIL:
+		cnt = g_hash_table_size (MESSAGE_FIELD (task, emails));
+
+		if (cnt > 0) {
+			scvec = g_malloc (sizeof (*scvec) * cnt);
+			lenvec = g_malloc (sizeof (*lenvec) * cnt);
+			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
+			i = 0;
+			raw = FALSE;
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				url = v;
+
+				if (url->userlen == 0 || url->hostlen == 0) {
+					continue;
+				}
+
+				in = url->user;
+				len = url->userlen + 1 + url->hostlen;
+				scvec[i] = (guchar *) in;
+				lenvec[i++] = len;
+			}
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task, scvec, lenvec, i, raw, &processed_hyperscan);
+			msg_debug_re_task ("checked email regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
 			g_free (lenvec);
@@ -1534,11 +1565,14 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_URL:
 		ret = "url";
 		break;
+	case RSPAMD_RE_EMAIL:
+		ret = "email";
+		break;
 	case RSPAMD_RE_SABODY:
 		ret = "sa body";
 		break;
 	case RSPAMD_RE_SARAWBODY:
-		ret = "sa body";
+		ret = "sa raw body";
 		break;
 	case RSPAMD_RE_SELECTOR:
 		ret = "selector";
@@ -1596,6 +1630,9 @@ rspamd_re_cache_type_from_string (const char *str)
 		case G_GUINT64_CONSTANT(0x286edbe164c791d2): /* url */
 		case G_GUINT64_CONSTANT(0x7D9ACDF6685661A1): /* uri */
 			ret = RSPAMD_RE_URL;
+			break;
+		case G_GUINT64_CONSTANT (0x7e232b0f60b571be): /* email */
+			ret = RSPAMD_RE_EMAIL;
 			break;
 		case G_GUINT64_CONSTANT(0x796d62205a8778c7): /* allheader */
 			ret = RSPAMD_RE_ALLHEADER;
