@@ -91,7 +91,7 @@ rspamd_log_syslog_log (const gchar *module, const gchar *id,
 		}
 	}
 
-	syslog (syslog_level, "<%.*s>; %s; %s: %*.s",
+	syslog (syslog_level, "<%.*s>; %s; %s: %.*s",
 			LOG_ID, id != NULL ? id : "",
 			module != NULL ? module : "",
 			function != NULL ? function : "",
