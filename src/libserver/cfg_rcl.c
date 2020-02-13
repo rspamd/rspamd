@@ -2854,11 +2854,17 @@ rspamd_rcl_parse_struct_string (rspamd_mempool_t *pool,
 		rspamd_snprintf (*target, num_str_len, "%s",
 				((gboolean)obj->value.iv) ? "true" : "false");
 		break;
+	case UCL_NULL:
+		/* String is enforced to be null */
+		*target = NULL;
+		break;
 	default:
 		g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"cannot convert object or array to string");
+			"cannot convert %s to string in option %s",
+			ucl_object_type_to_string (ucl_object_type (obj)),
+			ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2887,9 +2893,11 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 		target.i32p = (gint32 *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert param to integer");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.i32p = val;
@@ -2898,9 +2906,11 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 		target.i64p = (gint64 *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert param to integer");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.i64p = val;
@@ -2909,9 +2919,11 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 		target.sp = (gsize *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert param to integer");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.sp = val;
@@ -2920,9 +2932,11 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 		target.i16p = (gint16 *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert param to integer");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.i16p = val;
@@ -2933,7 +2947,9 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"cannot convert param to integer");
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.up = val;
@@ -2942,9 +2958,11 @@ rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 		target.ip = (gint *)(((gchar *)pd->user_struct) + pd->offset);
 		if (!ucl_object_toint_safe (obj, &val)) {
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert param to integer");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert %s to integer in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		*target.ip = val;
@@ -2967,9 +2985,11 @@ rspamd_rcl_parse_struct_double (rspamd_mempool_t *pool,
 
 	if (!ucl_object_todouble_safe (obj, target)) {
 		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot convert param %s to double", ucl_object_key (obj));
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot convert %s to double in option %s",
+				ucl_object_type_to_string (ucl_object_type (obj)),
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2995,9 +3015,11 @@ rspamd_rcl_parse_struct_time (rspamd_mempool_t *pool,
 
 	if (!ucl_object_todouble_safe (obj, &val)) {
 		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-				"cannot convert param %s to double", ucl_object_key (obj));
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot convert %s to double in option %s",
+				ucl_object_type_to_string (ucl_object_type (obj)),
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -3027,9 +3049,11 @@ rspamd_rcl_parse_struct_time (rspamd_mempool_t *pool,
 	}
 	else {
 		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"invalid flags to parse time value in %s", ucl_object_key (obj));
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot convert %s to time in option %s",
+				ucl_object_type_to_string (ucl_object_type (obj)),
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -3219,7 +3243,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"cannot convert an object or array to string: %s",
+					"cannot convert %s to a string list in option %s",
+					ucl_object_type_to_string (ucl_object_type (obj)),
 					ucl_object_key (obj));
 			ucl_object_iterate_free (iter);
 
@@ -3295,7 +3320,8 @@ rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"cannot convert an object to boolean: %s",
+				"cannot convert %s to boolean in option %s",
+				ucl_object_type_to_string (ucl_object_type (obj)),
 				ucl_object_key (obj));
 		return FALSE;
 	}
@@ -3337,7 +3363,8 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"cannot convert an object to inet address: %s",
+				"cannot convert %s to inet address in option %s",
+				ucl_object_type_to_string (ucl_object_type (obj)),
 				ucl_object_key (obj));
 		return FALSE;
 	}
