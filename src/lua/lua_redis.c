@@ -102,11 +102,18 @@ struct lua_redis_userdata {
 	struct rspamd_config *cfg;
 	struct rspamd_redis_pool *pool;
 	gchar *server;
+	const gchar *log_tag;
 	struct lua_redis_request_specific_userdata *specific;
 	gdouble timeout;
 	guint16 port;
 	guint16 terminated;
 };
+
+#define msg_debug_lua_redis(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_lua_redis_log_id, "lua_redis", ud->log_tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+INIT_LOG_MODULE(lua_redis)
 
 #define LUA_REDIS_SPECIFIC_REPLIED (1 << 0)
 /* session was finished */
@@ -180,7 +187,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 	struct redisAsyncContext *ac;
 
 	ud = &ctx->async;
-	msg_debug ("desctructing %p", ctx);
+	msg_debug_lua_redis ("desctructing %p", ctx);
 
 	if (ud->ctx) {
 
@@ -250,13 +257,15 @@ static void
 lua_redis_fin (void *arg)
 {
 	struct lua_redis_request_specific_userdata *sp_ud = arg;
+	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx;
 
 	ctx = sp_ud->ctx;
+	ud = sp_ud->c;
 
 	ev_timer_stop (sp_ud->ctx->async.event_loop, &sp_ud->timeout_ev);
 
-	msg_debug ("finished redis query %p from session %p", sp_ud, ctx);
+	msg_debug_lua_redis ("finished redis query %p from session %p", sp_ud, ctx);
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_FINISHED;
 
 	REDIS_RELEASE (ctx);
@@ -437,7 +446,8 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		return;
 	}
 
-	msg_debug ("got reply from redis %p for query %p", sp_ud->c->ctx, sp_ud);
+	msg_debug_lua_redis ("got reply from redis %p for query %p", sp_ud->c->ctx,
+			sp_ud);
 
 	REDIS_RETAIN (ctx);
 
@@ -574,7 +584,7 @@ lua_redis_callback_sync (redisAsyncContext *ac, gpointer r, gpointer priv)
 	}
 
 	ev_timer_stop (ud->event_loop, &sp_ud->timeout_ev);
-	msg_debug ("got reply from redis: %p for query %p", ac, sp_ud);
+	msg_debug_lua_redis ("got reply from redis: %p for query %p", ac, sp_ud);
 
 	struct lua_redis_result *result = g_malloc0 (sizeof *result);
 
@@ -649,10 +659,13 @@ lua_redis_timeout_sync (EV_P_ ev_timer *w, int revents)
 {
 	struct lua_redis_request_specific_userdata *sp_ud =
 			(struct lua_redis_request_specific_userdata *)w->data;
-	struct lua_redis_ctx *ctx = sp_ud->ctx;
+	struct lua_redis_ctx *ctx;
+	struct lua_redis_userdata *ud;
 	redisAsyncContext *ac;
 
-	msg_debug ("timeout while querying redis server: %p, redis: %p", sp_ud,
+	ud = sp_ud->c;
+	ctx = sp_ud->ctx;
+	msg_debug_lua_redis ("timeout while querying redis server: %p, redis: %p", sp_ud,
 			sp_ud->c->ctx);
 
 	if (sp_ud->c->ctx) {
@@ -678,6 +691,7 @@ lua_redis_timeout (EV_P_ ev_timer *w, int revents)
 {
 	struct lua_redis_request_specific_userdata *sp_ud =
 			(struct lua_redis_request_specific_userdata *)w->data;
+	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx;
 	redisAsyncContext *ac;
 
@@ -686,9 +700,10 @@ lua_redis_timeout (EV_P_ ev_timer *w, int revents)
 	}
 
 	ctx = sp_ud->ctx;
+	ud = sp_ud->c;
 
 	REDIS_RETAIN (ctx);
-	msg_debug ("timeout while querying redis server: %p, redis: %p", sp_ud,
+	msg_debug_lua_redis ("timeout while querying redis server: %p, redis: %p", sp_ud,
 			sp_ud->c->ctx);
 	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, TRUE);
 
@@ -815,7 +830,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
 	const gchar *host;
-	const gchar *password = NULL, *dbname = NULL;
+	const gchar *password = NULL, *dbname = NULL, *log_tag = NULL;
 	gint cbref = -1;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
@@ -839,6 +854,10 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			lua_gettable (L, -2);
 			if (lua_type (L, -1) == LUA_TUSERDATA) {
 				cfg = lua_check_config (L, -1);
+
+				if (cfg) {
+					log_tag = cfg->cfg_pool->tag.uid;
+				}
 			}
 			lua_pop (L, 1);
 
@@ -870,7 +889,9 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			cfg = task->cfg;
 			session = task->s;
 			ev_base = task->event_loop;
+			log_tag = task->task_pool->tag.uid;
 			ret = TRUE;
+
 		}
 
 		if (pcbref) {
@@ -962,6 +983,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			ud->pool = cfg->redis_pool;
 			ud->event_loop = ev_base;
 			ud->task = task;
+			ud->log_tag = log_tag;
 
 			if (task) {
 				ud->item = rspamd_symcache_get_cur_item (task);
@@ -1008,6 +1030,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			return NULL;
 		}
 
+		msg_debug_lua_redis ("opened redis connection %p", ctx);
 
 		return ctx;
 	}
