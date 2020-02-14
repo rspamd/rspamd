@@ -1335,9 +1335,14 @@ main (gint argc, gchar **argv, gchar **env)
 	msg_info_main ("libottery prf: %s", ottery_get_impl_name ());
 
 	/* Daemonize */
-	if (!no_fork && daemon (0, 0) == -1) {
-		rspamd_fprintf (stderr, "Cannot daemonize\n");
-		exit (-errno);
+	if (!no_fork) {
+		if (daemon (0, 0) == -1) {
+			msg_err_main ("cannot daemonize: %s", strerror (errno));
+			exit (-errno);
+		}
+
+		/* Close emergency logger */
+		rspamd_log_close (rspamd_log_emergency_logger ());
 	}
 
 	/* Write info */

@@ -182,8 +182,6 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 	rspamd_logger_t *logger;
 	GError *err = NULL;
 
-	g_assert (emergency_logger != NULL);
-
 	if (pool) {
 		logger = rspamd_mempool_alloc0 (pool, sizeof (rspamd_logger_t));
 		logger->mtx = rspamd_mempool_get_mutex (pool);
@@ -233,7 +231,7 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 
 	logger->ops.specific = logger->ops.init (logger, cfg, uid, gid, &err);
 
-	if (logger->ops.specific == NULL) {
+	if (emergency_logger && logger->ops.specific == NULL) {
 		rspamd_common_log_function (emergency_logger, G_LOG_LEVEL_CRITICAL,
 				"logger", NULL, G_STRFUNC,
 				"cannot open specific logger: %e", err);
