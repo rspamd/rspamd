@@ -67,7 +67,8 @@ local function maybe_adjust_type(data,mtype)
     {'ipnet;', 'radix'},
     {'set;', 'set'},
     {'hash;', 'hash'},
-    {'plain;', 'hash'}
+    {'plain;', 'hash'},
+    {'cdb;', 'cdb'},
   }
 
   for _,t in ipairs(known_types) do

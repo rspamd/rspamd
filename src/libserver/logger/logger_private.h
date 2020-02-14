@@ -16,6 +16,8 @@
 #ifndef RSPAMD_LOGGER_PRIVATE_H
 #define RSPAMD_LOGGER_PRIVATE_H
 
+#include "logger.h"
+
 /* How much message should be repeated before it is count to be repeated one */
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300

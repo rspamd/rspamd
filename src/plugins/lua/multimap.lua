@@ -439,27 +439,7 @@ local function multimap_callback(task, rule)
 
     local ret = false
 
-    if r['cdb'] then
-      if type(r.cdb) == 'string' then
-        local rspamd_cdb = require "rspamd_cdb"
-        local cdb = rspamd_cdb.create(r.cdb, task:get_ev_base())
-
-        if not cdb then
-          rspamd_logger.infox(task, 'cannot open cdb file %s', r.cdb)
-
-          return false
-        else
-          r.cdb = cdb
-        end
-      end
-      local srch = value
-      if type(value) == 'userdata' then
-        if value.class == 'rspamd{ip}' then
-          srch = value:tostring()
-        end
-      end
-      ret = r.cdb:lookup(srch)
-    elseif r.redis_key then
+    if r.redis_key then
       -- Deal with hash name here: it can be either plain string or a selector
       if type(r.redis_key) == 'string' then
         ret = multimap_query_redis(r.redis_key, task, value, callback)
@@ -1094,11 +1074,7 @@ local function add_multimap_rule(key, newrule)
       newrule.selector = selector
     end
   end
-  -- Check cdb flag
-  if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
-    newrule['cdb'] = newrule['map']
-    ret = true
-  elseif type(newrule['map']) == 'string' and
+  if type(newrule['map']) == 'string' and
       string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
