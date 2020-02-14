@@ -13,6 +13,8 @@ extern "C" {
 #define G_LOG_LEVEL_USER_SHIFT 8
 #endif
 
+#define RSPAMD_LOG_ID_LEN 6
+
 struct rspamd_config;
 
 enum rspamd_log_flags {

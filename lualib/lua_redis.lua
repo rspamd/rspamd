@@ -1031,7 +1031,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
   end
 
   lutil.debugm(N, cfg, 'perform taskless request to redis server' ..
-      ' (host=%s, timeout=%s): cmd: %s', options.host,
+      ' (host=%s, timeout=%s): cmd: %s', options.host:tostring(true),
       options.timeout, options.cmd)
   local ret,conn = rspamd_redis.make_request(options)
   if not ret then

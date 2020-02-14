@@ -102,7 +102,7 @@ struct lua_redis_userdata {
 	struct rspamd_config *cfg;
 	struct rspamd_redis_pool *pool;
 	gchar *server;
-	const gchar *log_tag;
+	gchar log_tag[RSPAMD_LOG_ID_LEN + 1];
 	struct lua_redis_request_specific_userdata *specific;
 	gdouble timeout;
 	guint16 port;
@@ -265,7 +265,8 @@ lua_redis_fin (void *arg)
 
 	ev_timer_stop (sp_ud->ctx->async.event_loop, &sp_ud->timeout_ev);
 
-	msg_debug_lua_redis ("finished redis query %p from session %p", sp_ud, ctx);
+	msg_debug_lua_redis ("finished redis query %p from session %p; refcount=%d",
+			sp_ud, ctx, ctx->ref.refcount);
 	sp_ud->flags |= LUA_REDIS_SPECIFIC_FINISHED;
 
 	REDIS_RELEASE (ctx);
@@ -485,6 +486,8 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		ud->ctx = NULL;
 
 		if (ac) {
+			msg_debug_lua_redis ("release redis connection ud=%p; ctx=%p; refcount=%d",
+					ud, ctx, ctx->ref.refcount);
 			rspamd_redis_pool_release_connection (ud->pool, ac,
 					(ctx->flags & LUA_REDIS_NO_POOL) ?
 					RSPAMD_REDIS_RELEASE_ENFORCE : RSPAMD_REDIS_RELEASE_DEFAULT);
@@ -829,7 +832,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 	struct lua_redis_userdata *ud = NULL;
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
-	const gchar *host;
+	const gchar *host = NULL;
 	const gchar *password = NULL, *dbname = NULL, *log_tag = NULL;
 	gint cbref = -1;
 	struct rspamd_config *cfg = NULL;
@@ -854,10 +857,6 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			lua_gettable (L, -2);
 			if (lua_type (L, -1) == LUA_TUSERDATA) {
 				cfg = lua_check_config (L, -1);
-
-				if (cfg) {
-					log_tag = cfg->cfg_pool->tag.uid;
-				}
 			}
 			lua_pop (L, 1);
 
@@ -913,6 +912,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			addr = lua_check_ip (L, -1);
+			host = rspamd_inet_address_to_string_pretty (addr->addr);
 		}
 		else if (lua_type (L, -1) == LUA_TSTRING) {
 			host = lua_tostring (L, -1);
@@ -983,7 +983,16 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			ud->pool = cfg->redis_pool;
 			ud->event_loop = ev_base;
 			ud->task = task;
-			ud->log_tag = log_tag;
+
+			if (log_tag) {
+				rspamd_strlcpy (ud->log_tag, log_tag, sizeof (ud->log_tag));
+			}
+			else {
+				/* Use pointer itself as a tag */
+				rspamd_snprintf (ud->log_tag, sizeof (ud->log_tag),
+						"%ud",
+						(int)rspamd_cryptobox_fast_hash (&ud, sizeof (ud), 0));
+			}
 
 			if (task) {
 				ud->item = rspamd_symcache_get_cur_item (task);
@@ -1030,7 +1039,8 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			return NULL;
 		}
 
-		msg_debug_lua_redis ("opened redis connection %p", ctx);
+		msg_debug_lua_redis ("opened redis connection host=%s; ctx=%p; ud=%p",
+				host, ctx, ud);
 
 		return ctx;
 	}

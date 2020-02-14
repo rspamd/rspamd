@@ -526,7 +526,7 @@ rspamd_log_file_log (const gchar *module, const gchar *id,
 
 	if (id != NULL) {
 		guint slen = strlen (id);
-		slen = MIN (LOG_ID, slen);
+		slen = MIN (RSPAMD_LOG_ID_LEN, slen);
 		mr = rspamd_snprintf (m, mremain, "<%*.s>; ", slen,
 				id);
 		m += mr;

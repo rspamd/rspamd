@@ -19,7 +19,6 @@
 /* How much message should be repeated before it is count to be repeated one */
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300
-#define LOG_ID 6
 #define LOGBUF_LEN 8192
 
 struct rspamd_log_module {
@@ -39,7 +38,7 @@ struct rspamd_logger_error_elt {
 	GQuark ptype;
 	pid_t pid;
 	gdouble ts;
-	gchar id[LOG_ID + 1];
+	gchar id[RSPAMD_LOG_ID_LEN + 1];
 	gchar module[9];
 	gchar message[];
 };
