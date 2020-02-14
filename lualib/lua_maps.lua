@@ -69,6 +69,7 @@ local function maybe_adjust_type(data,mtype)
     {'hash;', 'hash'},
     {'plain;', 'hash'},
     {'cdb;', 'cdb'},
+    {'cdb:/', 'cdb'},
   }
 
   for _,t in ipairs(known_types) do
