@@ -1180,7 +1180,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 			   rspamd_ucl_fin_cb,
 			   rspamd_ucl_dtor_cb,
 			   (void **)pcbdata,
-			   NULL) != NULL;
+			   NULL, RSPAMD_MAP_DEFAULT) != NULL;
 }
 
 /*
@@ -2240,7 +2240,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 						rspamd_radix_fin,
 						rspamd_radix_dtor,
 						(void **)target,
-						worker) == NULL) {
+						worker, RSPAMD_MAP_DEFAULT) == NULL) {
 					g_set_error (err,
 							g_quark_from_static_string ("rspamd-config"),
 							EINVAL, "bad map definition %s for %s", str,
@@ -2267,7 +2267,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 					rspamd_radix_fin,
 					rspamd_radix_dtor,
 					(void **)target,
-					worker) == NULL) {
+					worker, RSPAMD_MAP_DEFAULT) == NULL) {
 				g_set_error (err,
 						g_quark_from_static_string ("rspamd-config"),
 						EINVAL, "bad map object for %s", ucl_object_key (obj));

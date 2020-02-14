@@ -361,7 +361,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
 				(void **)&rule->skip_map,
-				NULL);
+				NULL, RSPAMD_MAP_DEFAULT);
 	}
 
 	if ((value = ucl_object_lookup (obj, "headers")) != NULL) {
@@ -1987,7 +1987,8 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 			rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
 				hexbuf, sizeof (hexbuf) - 1);
 			hexbuf[sizeof (hexbuf) - 1] = '\0';
-			if (rspamd_match_hash_map (session->rule->skip_map, hexbuf)) {
+			if (rspamd_match_hash_map (session->rule->skip_map, hexbuf,
+					sizeof (hexbuf) - 1)) {
 				return;
 			}
 		}

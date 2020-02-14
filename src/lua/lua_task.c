@@ -6382,7 +6382,7 @@ lua_lookup_words_array (lua_State *L,
 		case RSPAMD_LUA_MAP_SET:
 		case RSPAMD_LUA_MAP_HASH:
 			/* We know that tok->normalized is zero terminated in fact */
-			if (rspamd_match_hash_map (map->data.hash, key)) {
+			if (rspamd_match_hash_map (map->data.hash, key, keylen)) {
 				matched = TRUE;
 			}
 			break;

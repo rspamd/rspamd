@@ -61,6 +61,12 @@ struct map_cb_data {
  */
 gboolean rspamd_map_is_map (const gchar *map_line);
 
+enum rspamd_map_flags {
+	RSPAMD_MAP_DEFAULT = 0,
+	RSPAMD_MAP_FILE_ONLY = 1u << 0u,
+	RSPAMD_MAP_FILE_NO_READ = 1u << 1u,
+};
+
 /**
  * Add map from line
  */
@@ -71,7 +77,8 @@ struct rspamd_map *rspamd_map_add (struct rspamd_config *cfg,
 								   map_fin_cb_t fin_callback,
 								   map_dtor_t dtor,
 								   void **user_data,
-								   struct rspamd_worker *worker);
+								   struct rspamd_worker *worker,
+								   int flags);
 
 /**
  * Add map from ucl
@@ -83,7 +90,8 @@ struct rspamd_map *rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 											map_fin_cb_t fin_callback,
 											map_dtor_t dtor,
 											void **user_data,
-											struct rspamd_worker *worker);
+											struct rspamd_worker *worker,
+											int flags);
 
 enum rspamd_map_watch_type {
 	RSPAMD_MAP_WATCH_MIN = 9,

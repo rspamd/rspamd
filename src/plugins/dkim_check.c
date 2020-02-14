@@ -446,7 +446,7 @@ dkim_module_config (struct rspamd_config *cfg)
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
 				(void **)&dkim_module_ctx->dkim_domains,
-				NULL)) {
+				NULL, RSPAMD_MAP_DEFAULT)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 				ucl_object_tostring (value));
 		}
@@ -463,7 +463,7 @@ dkim_module_config (struct rspamd_config *cfg)
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
 				(void **)&dkim_module_ctx->dkim_domains,
-				NULL)) {
+				NULL, RSPAMD_MAP_DEFAULT)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 					ucl_object_tostring (value));
 		}
@@ -950,9 +950,12 @@ dkim_module_check (struct dkim_check_result *res)
 
 			if (dkim_module_ctx->dkim_domains != NULL) {
 				/* Perform strict check */
+				const gchar *domain = rspamd_dkim_get_domain (cur->ctx);
+
 				if ((strict_value =
 						rspamd_match_hash_map (dkim_module_ctx->dkim_domains,
-								rspamd_dkim_get_domain (cur->ctx))) != NULL) {
+								domain,
+								strlen (domain))) != NULL) {
 					if (!dkim_module_parse_strict (strict_value, &cur->mult_allow,
 							&cur->mult_deny)) {
 						cur->mult_allow = dkim_module_ctx->strict_multiplier;
@@ -1212,11 +1215,12 @@ dkim_symbol_callback (struct rspamd_task *task,
 			else {
 				/* Get key */
 				cur->ctx = ctx;
+				const gchar *domain = rspamd_dkim_get_domain (cur->ctx);
 
 				if (dkim_module_ctx->trusted_only &&
 						(dkim_module_ctx->dkim_domains == NULL ||
 								rspamd_match_hash_map (dkim_module_ctx->dkim_domains,
-										rspamd_dkim_get_domain (ctx)) == NULL)) {
+										domain, strlen (domain)) == NULL)) {
 					msg_debug_task ("skip dkim check for %s domain",
 							rspamd_dkim_get_domain (ctx));
 

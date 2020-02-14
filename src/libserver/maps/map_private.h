@@ -155,10 +155,11 @@ struct rspamd_map {
 	ev_tstamp timeout;
 	gdouble poll_timeout;
 	time_t next_check;
-	gboolean active_http;
-	gboolean non_trivial; /* E.g. has http backends in active mode */
-	gboolean file_only; /* No HTTP backends found */
-	gboolean static_only; /* No need to check */
+	bool active_http;
+	bool non_trivial; /* E.g. has http backends in active mode */
+	bool file_only; /* No HTTP backends found */
+	bool static_only; /* No need to check */
+	bool no_file_read; /* Do not read files */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	gchar tag[MEMPOOL_UID_LEN];

@@ -38,6 +38,7 @@ extern "C" {
 struct rspamd_radix_map_helper;
 struct rspamd_hash_map_helper;
 struct rspamd_regexp_map_helper;
+struct rspamd_cdb_map_helper;
 struct rspamd_map_helper_value;
 
 enum rspamd_regexp_map_flags {
@@ -74,6 +75,18 @@ gchar *rspamd_kv_list_read (
 void rspamd_kv_list_fin (struct map_cb_data *data, void **target);
 
 void rspamd_kv_list_dtor (struct map_cb_data *data);
+
+/**
+ * Cdb is a cdb mapped file with shared data
+ * chunk must be filename!
+ */
+gchar *rspamd_cdb_list_read (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final);
+void rspamd_cdb_list_fin (struct map_cb_data *data, void **target);
+void rspamd_cdb_list_dtor (struct map_cb_data *data);
 
 /**
  * Regexp list is a list of regular expressions
@@ -149,7 +162,17 @@ GPtrArray *rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
  * @return
  */
 gconstpointer rspamd_match_hash_map (struct rspamd_hash_map_helper *map,
-									 const gchar *in);
+									 const gchar *in, gsize len);
+
+/**
+ * Find value matching specific key in a cdb map
+ * @param map
+ * @param in
+ * @param len
+ * @return rspamd_ftok_t pointer (allocated in a static buffer!)
+ */
+gconstpointer rspamd_match_cdb_map (struct rspamd_cdb_map_helper *map,
+									 const gchar *in, gsize len);
 
 /**
  * Find value matching specific key in a hash map

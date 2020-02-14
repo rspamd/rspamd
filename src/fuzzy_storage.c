@@ -936,7 +936,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 					hexbuf, sizeof (hexbuf) - 1);
 				hexbuf[sizeof (hexbuf) - 1] = '\0';
 
-				if (rspamd_match_hash_map (session->ctx->skip_hashes, hexbuf)) {
+				if (rspamd_match_hash_map (session->ctx->skip_hashes,
+						hexbuf, sizeof (hexbuf) - 1)) {
 					result.v1.value = 401;
 					result.v1.prob = 0.0f;
 
@@ -2010,7 +2011,7 @@ start_fuzzy (struct rspamd_worker *worker)
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
 				(void **)&ctx->skip_hashes,
-				worker)) == NULL) {
+				worker, RSPAMD_MAP_DEFAULT)) == NULL) {
 			msg_warn_config ("cannot load hashes list from %s",
 					ucl_object_tostring (ctx->skip_map));
 		}

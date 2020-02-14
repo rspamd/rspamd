@@ -788,72 +788,79 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 	}
 
 	if (len > 0) {
-		if (bk->is_compressed) {
-			bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
+		if (map->no_file_read) {
+			/* We just call read callback with backend name */
+			map->read_callback (data->filename, strlen (data->filename),
+					&periodic->cbdata, TRUE);
+		}
+		else {
+			if (bk->is_compressed) {
+				bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
 
-			if (bytes == NULL) {
-				msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
-				return FALSE;
-			}
-
-			ZSTD_DStream *zstream;
-			ZSTD_inBuffer zin;
-			ZSTD_outBuffer zout;
-			guchar *out;
-			gsize outlen, r;
-
-			zstream = ZSTD_createDStream ();
-			ZSTD_initDStream (zstream);
-
-			zin.pos = 0;
-			zin.src = bytes;
-			zin.size = len;
-
-			if ((outlen = ZSTD_getDecompressedSize (zin.src, zin.size)) == 0) {
-				outlen = ZSTD_DStreamOutSize ();
-			}
-
-			out = g_malloc (outlen);
-
-			zout.dst = out;
-			zout.pos = 0;
-			zout.size = outlen;
-
-			while (zin.pos < zin.size) {
-				r = ZSTD_decompressStream (zstream, &zout, &zin);
-
-				if (ZSTD_isError (r)) {
-					msg_err_map ("%s: cannot decompress data: %s",
-							data->filename,
-							ZSTD_getErrorName (r));
-					ZSTD_freeDStream (zstream);
-					g_free (out);
-					munmap (bytes, len);
+				if (bytes == NULL) {
+					msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
 					return FALSE;
 				}
 
-				if (zout.pos == zout.size) {
-					/* We need to extend output buffer */
-					zout.size = zout.size * 2 + 1;
-					out = g_realloc (zout.dst, zout.size);
-					zout.dst = out;
+				ZSTD_DStream *zstream;
+				ZSTD_inBuffer zin;
+				ZSTD_outBuffer zout;
+				guchar *out;
+				gsize outlen, r;
+
+				zstream = ZSTD_createDStream ();
+				ZSTD_initDStream (zstream);
+
+				zin.pos = 0;
+				zin.src = bytes;
+				zin.size = len;
+
+				if ((outlen = ZSTD_getDecompressedSize (zin.src, zin.size)) == 0) {
+					outlen = ZSTD_DStreamOutSize ();
 				}
+
+				out = g_malloc (outlen);
+
+				zout.dst = out;
+				zout.pos = 0;
+				zout.size = outlen;
+
+				while (zin.pos < zin.size) {
+					r = ZSTD_decompressStream (zstream, &zout, &zin);
+
+					if (ZSTD_isError (r)) {
+						msg_err_map ("%s: cannot decompress data: %s",
+								data->filename,
+								ZSTD_getErrorName (r));
+						ZSTD_freeDStream (zstream);
+						g_free (out);
+						munmap (bytes, len);
+						return FALSE;
+					}
+
+					if (zout.pos == zout.size) {
+						/* We need to extend output buffer */
+						zout.size = zout.size * 2 + 1;
+						out = g_realloc (zout.dst, zout.size);
+						zout.dst = out;
+					}
+				}
+
+				ZSTD_freeDStream (zstream);
+				msg_info_map ("%s: read map data, %z bytes compressed, "
+							  "%z uncompressed)", data->filename,
+						len, zout.pos);
+				map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
+				g_free (out);
+
+				munmap (bytes, len);
 			}
-
-			ZSTD_freeDStream (zstream);
-			msg_info_map ("%s: read map data, %z bytes compressed, "
-					"%z uncompressed)", data->filename,
-					len, zout.pos);
-			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
-			g_free (out);
-
-			munmap (bytes, len);
-		}
-		else {
-			/* Perform buffered read: fail-safe */
-			if (!read_map_file_chunks (map, &periodic->cbdata, data->filename,
-					len, 0)) {
-				return FALSE;
+			else {
+				/* Perform buffered read: fail-safe */
+				if (!read_map_file_chunks (map, &periodic->cbdata, data->filename,
+						len, 0)) {
+					return FALSE;
+				}
 			}
 		}
 	}
@@ -2610,7 +2617,8 @@ rspamd_map_add (struct rspamd_config *cfg,
 				map_fin_cb_t fin_callback,
 				map_dtor_t dtor,
 				void **user_data,
-				struct rspamd_worker *worker)
+				struct rspamd_worker *worker,
+				int flags)
 {
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
@@ -2642,6 +2650,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 			map->backends);
 	g_ptr_array_add (map->backends, bk);
 	map->name = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
+	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
 
 	if (bk->protocol == MAP_PROTO_FILE) {
 		map->poll_timeout = (cfg->map_timeout * cfg->map_file_watch_multiplier);
@@ -2685,7 +2694,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 						 map_fin_cb_t fin_callback,
 						 map_dtor_t dtor,
 						 void **user_data,
-						 struct rspamd_worker *worker)
+						 struct rspamd_worker *worker,
+						 gint flags)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *elt;
@@ -2698,7 +2708,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	if (ucl_object_type (obj) == UCL_STRING) {
 		/* Just a plain string */
 		return rspamd_map_add (cfg, ucl_object_tostring (obj), description,
-				read_callback, fin_callback, dtor, user_data, worker);
+				read_callback, fin_callback, dtor, user_data, worker, flags);
 	}
 
 	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
@@ -2712,6 +2722,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->backends = g_ptr_array_new ();
 	map->wrk = worker;
+	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
 			map->backends);
 	map->poll_timeout = cfg->map_timeout;

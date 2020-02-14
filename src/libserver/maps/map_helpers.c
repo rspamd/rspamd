@@ -21,6 +21,7 @@
 #include "rspamd.h"
 #include "cryptobox.h"
 #include "contrib/fastutf8/fastutf8.h"
+#include "contrib/cdb/cdb.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -56,6 +57,12 @@ struct rspamd_hash_map_helper {
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) *htb;
 	rspamd_cryptobox_fast_hash_state_t hst;
+};
+
+struct rspamd_cdb_map_helper {
+	GQueue cdbs;
+	rspamd_cryptobox_fast_hash_state_t hst;
+	gsize total_size;
 };
 
 struct rspamd_regexp_map_helper {
@@ -1332,7 +1339,8 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 }
 
 gconstpointer
-rspamd_match_hash_map (struct rspamd_hash_map_helper *map, const gchar *in)
+rspamd_match_hash_map (struct rspamd_hash_map_helper *map, const gchar *in,
+		gsize len)
 {
 	khiter_t k;
 	struct rspamd_map_helper_value *val;
@@ -1391,6 +1399,176 @@ rspamd_match_radix_map_addr (struct rspamd_radix_map_helper *map,
 		val->hits ++;
 
 		return val->value;
+	}
+
+	return NULL;
+}
+
+
+/*
+ * CBD stuff
+ */
+
+struct rspamd_cdb_map_helper *
+rspamd_map_helper_new_cdb (struct rspamd_map *map)
+{
+	struct rspamd_cdb_map_helper *n;
+
+	n = g_malloc0 (sizeof (*n));
+	n->cdbs = (GQueue)G_QUEUE_INIT;
+
+	rspamd_cryptobox_fast_hash_init (&n->hst, map_hash_seed);
+
+	return n;
+}
+
+void
+rspamd_map_helper_destroy_cdb (struct rspamd_cdb_map_helper *c)
+{
+	if (c == NULL) {
+		return;
+	}
+
+	GList *cur = c->cdbs.head;
+
+	while (cur) {
+		struct cdb *cdb = (struct cdb *)cur->data;
+
+		cdb_free (cdb);
+		g_free (cdb->filename);
+		close (cdb->cdb_fd);
+		g_free (cdb);
+
+		cur = g_list_next (cur);
+	}
+
+	g_queue_clear (&c->cdbs);
+
+	g_free (c);
+}
+
+gchar *
+rspamd_cdb_list_read (gchar *chunk,
+					  gint len,
+					  struct map_cb_data *data,
+					  gboolean final)
+{
+	struct rspamd_cdb_map_helper *cdb_data;
+	struct cdb *found = NULL;
+	struct rspamd_map *map = data->map;
+
+	g_assert (map->no_file_read);
+
+	if (data->cur_data == NULL) {
+		cdb_data = rspamd_map_helper_new_cdb (data->map);
+		data->cur_data = cdb_data;
+	}
+	else {
+		cdb_data = (struct rspamd_cdb_map_helper *)data->cur_data;
+	}
+
+	GList *cur = cdb_data->cdbs.head;
+
+	while (cur) {
+		struct cdb *elt = (struct cdb *)cur->data;
+
+		if (strcmp (elt->filename, chunk) == 0) {
+			found = elt;
+			break;
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	if (found == NULL) {
+		/* New cdb */
+		gint fd;
+		struct cdb *cdb;
+
+		fd = rspamd_file_xopen (chunk, O_RDONLY, 0, TRUE);
+
+		if (fd == -1) {
+			msg_err_map ("cannot open cdb map from %s: %s", chunk, strerror (errno));
+
+			return NULL;
+		}
+
+		cdb = g_malloc0 (sizeof (struct cdb));
+
+		if (cdb_init (cdb, fd) == -1) {
+			msg_err_map ("cannot init cdb map from %s: %s", chunk, strerror (errno));
+
+			return NULL;
+		}
+
+		cdb->filename = g_strdup (chunk);
+		g_queue_push_tail (&cdb_data->cdbs, cdb);
+		cdb_data->total_size += cdb->cdb_fsize;
+		rspamd_cryptobox_fast_hash_update (&cdb_data->hst, chunk, len);
+	}
+
+	return chunk + len;
+}
+
+void
+rspamd_cdb_list_fin (struct map_cb_data *data, void **target)
+{
+	struct rspamd_map *map = data->map;
+	struct rspamd_cdb_map_helper *cdb_data;
+
+	if (data->cur_data) {
+		cdb_data = (struct rspamd_cdb_map_helper *)data->cur_data;
+		msg_info_map ("read cdb of %Hz size", cdb_data->total_size);
+		data->map->traverse_function = NULL;
+		data->map->nelts = 0;
+		data->map->digest = rspamd_cryptobox_fast_hash_final (&cdb_data->hst);
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		cdb_data = (struct rspamd_cdb_map_helper *)data->prev_data;
+		rspamd_map_helper_destroy_cdb (cdb_data);
+	}
+}
+void
+rspamd_cdb_list_dtor (struct map_cb_data *data)
+{
+	if (data->cur_data) {
+		rspamd_map_helper_destroy_cdb (data->cur_data);
+	}
+}
+
+gconstpointer
+rspamd_match_cdb_map (struct rspamd_cdb_map_helper *map,
+					  const gchar *in, gsize inlen)
+{
+	if (map == NULL || map->cdbs.head == NULL) {
+		return NULL;
+	}
+
+	GList *cur = map->cdbs.head;
+	static rspamd_ftok_t found;
+
+	while (cur) {
+		struct cdb *cdb = (struct cdb *)cur->data;
+
+		if (cdb_find (cdb, in, inlen) > 0) {
+			/* Extract and push value to lua as string */
+			unsigned vlen;
+			gconstpointer vpos;
+
+			vpos = cdb->cdb_mem + cdb_datapos (cdb);
+			vlen = cdb_datalen (cdb);
+			found.len = vlen;
+			found.begin = vpos;
+
+			return &found; /* Do not reuse! */
+		}
+
+		cur = g_list_next (cur);
 	}
 
 	return NULL;
