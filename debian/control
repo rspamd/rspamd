@@ -1,7 +1,7 @@
 Source: rspamd
 Section: mail
 Priority: extra
-Maintainer: Mikhail Gusarov <dottedmag@debian.org>
+Maintainer: Vsevolod Stakhov <vsevolod@highsecure.ru>
 Build-Depends: cmake,
                debhelper (>= 10),
                libcurl4-openssl-dev,
@@ -21,7 +21,7 @@ Build-Depends: cmake,
                zlib1g-dev
 Standards-Version: 3.9.6
 Homepage: https://rspamd.com
-Vcs-Git: git://github.com/vstakhov/rspamd.git
+Vcs-Git: https://github.com/vstakhov/rspamd.git
 Vcs-Browser: https://github.com/vstakhov/rspamd
 
 Package: rspamd
