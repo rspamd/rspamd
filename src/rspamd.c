@@ -433,15 +433,15 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 }
 
 static GList *
-systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
+systemd_get_socket (struct rspamd_main *rspamd_main, const gchar *fdname)
 {
-	int sock, num_passed, flags;
+	int number, sock, num_passed, flags;
 	GList *result = NULL;
 	const gchar *e;
-	gchar *err;
+	gchar **fdnames;
+	gchar *end;
 	struct stat st;
-	/* XXX: can we trust the current choice ? */
-	static const int sd_listen_fds_start = 3;
+	static const int sd_listen_fds_start = 3;   /* SD_LISTEN_FDS_START */
 	struct rspamd_worker_listen_socket *ls;
 
 	union {
@@ -451,11 +451,39 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 	socklen_t slen = sizeof (addr_storage);
 	gint stype;
 
+	number = strtoul (fdname, &end, 10);
+	if (end != NULL && *end != '\0') {
+		/* Cannot parse as number, assume a name in LISTEN_FDNAMES. */
+		e = getenv ("LISTEN_FDNAMES");
+		if (!e) {
+			msg_err_main ("cannot get systemd variable 'LISTEN_FDNAMES'");
+			errno = ENOENT;
+			return NULL;
+		}
+
+		fdnames = g_strsplit (e, ":", -1);
+		for (number = 0; fdnames[number]; number++) {
+			if (!strcmp (fdnames[number], fdname)) {
+				break;
+			}
+		}
+		if (!fdnames[number]) {
+			number = -1;
+		}
+		g_strfreev (fdnames);
+	}
+
+	if (number < 0) {
+		msg_warn_main ("cannot find systemd socket: %s", fdname);
+		errno = ENOENT;
+		return NULL;
+	}
+
 	e = getenv ("LISTEN_FDS");
 	if (e != NULL) {
 		errno = 0;
-		num_passed = strtoul (e, &err, 10);
-		if ((err == NULL || *err == '\0') && num_passed > number) {
+		num_passed = strtoul (e, &end, 10);
+		if ((end == NULL || *end == '\0') && num_passed > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
 				msg_warn_main ("cannot stat systemd descriptor %d", sock);
@@ -506,7 +534,7 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 		else if (num_passed <= number) {
 			msg_err_main ("systemd LISTEN_FDS does not contain the expected fd: %d",
 					num_passed);
-			errno = EOVERFLOW;
+			errno = EINVAL;
 		}
 	}
 	else {
@@ -543,8 +571,8 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 
 	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 	if (cf->is_systemd) {
-		rspamd_cryptobox_fast_hash_update (&st, "systemd", sizeof ("systemd"));
-		rspamd_cryptobox_fast_hash_update (&st, &cf->cnt, sizeof (cf->cnt));
+		/* Something like 'systemd:0' or 'systemd:controller'. */
+		rspamd_cryptobox_fast_hash_update (&st, cf->name, strlen (cf->name));
 	}
 	else {
 		rspamd_cryptobox_fast_hash_update (&st, cf->name, strlen (cf->name));
@@ -643,7 +671,8 @@ spawn_workers (struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 									cf->worker->listen_type);
 						}
 						else {
-							ls = systemd_get_socket (rspamd_main, bcf->cnt);
+							ls = systemd_get_socket (rspamd_main,
+									g_ptr_array_index (bcf->addrs, 0));
 						}
 
 						if (ls == NULL) {
