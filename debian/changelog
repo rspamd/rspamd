@@ -1,40 +1,5 @@
-rspamd (1.0.2) unstable; urgency=low
+rspamd (2.4) unstable; urgency=low
 
   * New release.
 
- -- Mikhail Gusarov <dottedmag@debian.org>  Thu, 17 Sep 2015 15:17:32 +0100
-
-rspamd (0.9.4) unstable; urgency=low
-
-  * New release:
-    - Fix Build-Depends to let buildd pick up lua 5.1 on architectures
-      without luajit (Closes: #785800)
-
- -- Mikhail Gusarov <dottedmag@debian.org>  Thu, 21 May 2015 09:26:18 +0200
-
-rspamd (0.9.3) unstable; urgency=low
-
-  * New release:
-    - Use lua 5.1 if luajit is not available.
-
- -- Mikhail Gusarov <dottedmag@debian.org>  Tue, 19 May 2015 15:25:54 +0200
-
-rspamd (0.9.1) unstable; urgency=low
-
-  * New release.
-
- -- Mikhail Gusarov <dottedmag@debian.org>  Sun, 17 May 2015 17:46:32 +0200
-
-rspamd (0.8.3) unstable; urgency=low
-
-  * New release.
-  * systemd socket-activated service.
-  * Bump Standards-Version, no changes required.
-
- -- Mikhail Gusarov <dottedmag@debian.org>  Sun, 08 Mar 2015 22:38:55 +0100
-
-rspamd (0.6.9) unstable; urgency=low
-
-  * Initial release (Closes: #683746)
-
- -- Mikhail Gusarov <dottedmag@debian.org>  Sun, 23 Mar 2014 19:04:13 +0100
+ -- Vsevolod Stakhov <vsevolod@highsecure.ru>  Fri, 14 Feb 2020 23:10:27 +0000
