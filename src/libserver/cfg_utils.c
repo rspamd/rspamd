@@ -98,7 +98,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
-	gchar *err;
+	const gchar *fdname;
 	gboolean ret = TRUE;
 
 	if (str == NULL) {
@@ -112,11 +112,13 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 
 	if (g_ascii_strncasecmp (str, "systemd:", sizeof ("systemd:") - 1) == 0) {
 		/* The actual socket will be passed by systemd environment */
+		fdname = str + sizeof ("systemd:") - 1;
 		cnf->is_systemd = TRUE;
-		cnf->cnt = strtoul (str + sizeof ("systemd:") - 1, &err, 10);
-		cnf->addrs = g_ptr_array_new ();
+		cnf->addrs = g_ptr_array_new_full (1, g_free);
 
-		if (err == NULL || *err == '\0') {
+		if (fdname[0]) {
+			g_ptr_array_add (cnf->addrs, g_strdup (fdname));
+			cnf->cnt = cnf->addrs->len;
 			cnf->name = g_strdup (str);
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
