@@ -20,6 +20,7 @@ limitations under the License.
 --]]
 
 local rspamd_util = require "rspamd_util"
+local rspamd_text = require "rspamd_text"
 
 local exports = {}
 
@@ -63,8 +64,19 @@ exports.add_text_footer = function(task, html_footer, text_footer)
       ct = 'text/html'
     end
 
+    local encode_func = function(input)
+      return rspamd_util.encode_qp(input, 80, task:get_newlines_type())
+    end
+
     if part:get_cte() == '7bit' then
       cte = '7bit'
+      encode_func = function(input)
+        if type(input) == 'userdata' then
+          return input
+        else
+          return rspamd_text.fromstring(input)
+        end
+      end
     end
 
     if is_multipart then
@@ -82,13 +94,11 @@ exports.add_text_footer = function(task, html_footer, text_footer)
       content = string.format('%s%s',
           content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
           footer)
-      out[#out + 1] = {rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()), true}
+      out[#out + 1] = {encode_func(content), true}
       out[#out + 1] = ''
     else
       content = content .. footer
-      out[#out + 1] = {rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()), true}
+      out[#out + 1] = {encode_func(content), true}
       out[#out + 1] = ''
     end
 
@@ -140,7 +150,6 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
   local boundaries = {}
   local cur_boundary
-
   for _,part in ipairs(task:get_parts()) do
     local boundary = part:get_boundary()
     if part:is_multipart() then
