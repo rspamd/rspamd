@@ -501,6 +501,25 @@ rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 						pname_end, c, c + qlen);
 			}
 
+			if (*p == '"') {
+				p ++;
+
+				if (p == end) {
+					/* Last quote: done... */
+					break;
+				}
+
+				if (*p == ';') {
+					p ++;
+					state = parse_space;
+					next_state = parse_param_name;
+					pname_start = NULL;
+					pname_end = NULL;
+					continue;
+				}
+			}
+
+			/* We should not normally be here in fact */
 			if (g_ascii_isspace (*p)) {
 				state = parse_space;
 				next_state = parse_param_name;
