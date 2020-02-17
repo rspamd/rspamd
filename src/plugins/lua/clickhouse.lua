@@ -843,7 +843,7 @@ local function clickhouse_collect(task)
   -- Extra columns
   if #settings.extra_columns > 0 then
     for _,col in ipairs(settings.extra_columns) do
-      local elts = col.selector(task)
+      local elts = col.real_selector(task)
 
       if elts then
         table.insert(row, elts)
@@ -1337,12 +1337,13 @@ if opts then
             settings.extra_columns[col_name] = nil
           else
             if not col_data.default_value then
-              if col_data.type:lower():match('Array') then
+              if col_data.type:lower():match('^array') then
                 col_data.default_value = {}
               else
                 col_data.default_value = ''
               end
             end
+            col_data.real_selector = selector
           end
         end
       end
