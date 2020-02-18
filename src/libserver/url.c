@@ -2580,6 +2580,12 @@ url_email_start (struct url_callback_data *cb,
 		/* We have mailto:// at the beginning */
 		match->m_begin = pos;
 
+		if (pos >= cb->begin + 1) {
+			match->st = *(pos - 1);
+		}
+		else {
+			match->st = '\0';
+		}
 	}
 	else {
 		/* Just '@' */
@@ -2593,12 +2599,7 @@ url_email_start (struct url_callback_data *cb,
 			/* Just @ at the start of input */
 			return FALSE;
 		}
-	}
 
-	if (pos >= cb->begin + 1) {
-		match->st = *(pos - 1);
-	}
-	else {
 		match->st = '\0';
 	}
 
@@ -2647,7 +2648,7 @@ url_email_end (struct url_callback_data *cb,
 		 */
 		g_assert (*pos == '@');
 
-		if (pos >= cb->end - 2 || pos <= cb->begin + 1) {
+		if (pos >= cb->end - 2 || pos < cb->begin + 1) {
 			/* Boundary violation */
 			return FALSE;
 		}
