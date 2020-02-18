@@ -512,9 +512,11 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 		*o++ = '/';
 		break;
 	default:
+#if 0
 		if (o > path + 1 && *(o - 1) == '/') {
 			o --;
 		}
+#endif
 		break;
 	}
 
