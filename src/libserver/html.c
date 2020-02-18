@@ -342,9 +342,10 @@ guint
 rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 {
 	goffset l, rep_len;
-	gchar *t = s, *h = s, *e = s, *end_ptr;
+	gchar *t = s, *h = s, *e = s, *end_ptr, old_c;
 	const gchar *end;
 	const gchar *entity;
+	gboolean seen_hash = FALSE, seen_digit_only = FALSE, seen_hex = FALSE;
 	gint state = 0, base;
 	UChar32 uc;
 	khiter_t k;
@@ -364,6 +365,9 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 		case 0:
 			if (*h == '&') {
 				state = 1;
+				seen_hash = FALSE;
+				seen_hex = FALSE;
+				seen_digit_only = FALSE;
 				e = h;
 				h++;
 				continue;
@@ -376,15 +380,17 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 			break;
 		case 1:
 			if (*h == ';' && h > e) {
+decode_entity:
 				/* Determine base */
 				/* First find in entities table */
+				old_c = *h;
 				*h = '\0';
 				entity = e + 1;
 				uc = 0;
 
 				if (*entity != '#') {
 					k = kh_get (entity_by_name, html_entity_by_name, entity);
-					*h = ';';
+					*h = old_c;
 
 					if (k != kh_end (html_entity_by_name)) {
 						if (kh_val (html_entity_by_name, k)) {
@@ -429,7 +435,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						*h = ';';
+						*h = old_c;
 
 						if (end - t > h - e + 1) {
 							memmove (t, e, h - e + 1);
@@ -438,7 +444,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 					}
 					else {
 						/* Search for a replacement */
-						*h = ';';
+						*h = old_c;
 						k = kh_get (entity_by_number, html_entity_by_number, uc);
 
 						if (k != kh_end (html_entity_by_number)) {
@@ -480,6 +486,11 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 								t += h - e + 1;
 							}
 						}
+
+						if (end - t > 0 && old_c != ';') {
+							/* Fuck email clients, fuck them */
+							*t++ = old_c;
+						}
 					}
 				}
 
@@ -495,6 +506,27 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 				}
 
 				e = h;
+			}
+			else if (*h == '#') {
+				seen_hash = TRUE;
+
+				if (h + 1 < end && h[1] == 'x') {
+					seen_hex = TRUE;
+					/* Skip one more character */
+					h ++;
+				}
+			}
+			else if (g_ascii_isdigit (*h) || (seen_hex && g_ascii_isxdigit (*h))) {
+				seen_digit_only = TRUE;
+			}
+			else {
+				if (seen_digit_only && seen_hash && h > e) {
+					/* We have seen some digits, so we can try to decode, eh */
+					/* Fuck retarded email clients... */
+					goto decode_entity;
+				}
+
+				seen_digit_only = FALSE;
 			}
 
 			h++;
