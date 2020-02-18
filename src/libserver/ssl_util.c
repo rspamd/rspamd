@@ -656,10 +656,22 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		gpointer handler_data)
 {
 	gint ret;
+	SSL_SESSION *session = NULL;
 
 	g_assert (conn != NULL);
 
 	conn->ssl = SSL_new (conn->ssl_ctx->s);
+
+	if (hostname) {
+		session = rspamd_lru_hash_lookup (conn->ssl_ctx->sessions, hostname,
+				ev_now (conn->event_loop));
+
+	}
+
+	if (session) {
+		SSL_set_session (conn->ssl, session);
+	}
+
 	SSL_set_app_data (conn->ssl, conn);
 	msg_debug_ssl ("new ssl connection %p; session reused=%s",
 			conn->ssl, SSL_session_reused (conn->ssl) ? "true" : "false");
@@ -946,12 +958,16 @@ rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 static int
 rspamd_ssl_new_client_session (SSL *ssl, SSL_SESSION *sess)
 {
-	struct rspamd_ssl_ctx *ctx;
 	struct rspamd_ssl_connection *conn;
 
 	conn = SSL_get_app_data (ssl);
 
-	msg_debug_ssl ("hui: got new session from %p", conn);
+	if (conn->hostname) {
+		rspamd_lru_hash_insert (conn->ssl_ctx->sessions,
+				g_strdup (conn->hostname), SSL_get1_session (ssl),
+				ev_now (conn->event_loop), SSL_CTX_get_timeout (conn->ssl_ctx->s));
+		msg_debug_ssl ("saved new session for %s: %p", conn->hostname, conn);
+	}
 
 	return 0;
 }
