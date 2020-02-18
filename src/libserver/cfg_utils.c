@@ -2755,7 +2755,6 @@ gboolean
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 					struct rspamd_config *cfg)
 {
-	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 	size_t r;
 	gboolean ret = TRUE;
 
@@ -2830,30 +2829,8 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 #endif
 		}
 
-		if (cfg->ssl_ca_path) {
-			if (SSL_CTX_load_verify_locations (ctx->ssl_ctx, cfg->ssl_ca_path,
-					NULL) != 1) {
-				msg_err_config ("cannot load CA certs from %s: %s",
-						cfg->ssl_ca_path,
-						ERR_error_string (ERR_get_error (), NULL));
-			}
-		}
-		else {
-			msg_debug_config ("ssl_ca_path is not set, using default CA path");
-			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
-		}
-
-		if (cfg->ssl_ciphers) {
-			if (SSL_CTX_set_cipher_list (ctx->ssl_ctx, cfg->ssl_ciphers) != 1) {
-				msg_err_config (
-						"cannot set ciphers set to %s: %s; fallback to %s",
-						cfg->ssl_ciphers,
-						ERR_error_string (ERR_get_error (), NULL),
-						secure_ciphers);
-				/* Default settings */
-				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
-			}
-		}
+		rspamd_ssl_ctx_config (cfg, ctx->ssl_ctx);
+		rspamd_ssl_ctx_config (cfg, ctx->ssl_ctx_noverify);
 
 		/* Init decompression */
 		ctx->in_zstream = ZSTD_createDStream ();
@@ -2942,8 +2919,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 #ifdef HAVE_OPENSSL
 		EVP_cleanup ();
 		ERR_free_strings ();
-		SSL_CTX_free (ctx->ssl_ctx);
-		SSL_CTX_free (ctx->ssl_ctx_noverify);
+		rspamd_ssl_ctx_free (ctx->ssl_ctx);
+		rspamd_ssl_ctx_free (ctx->ssl_ctx_noverify);
 #endif
 		rspamd_inet_library_destroy ();
 		rspamd_free_zstd_dictionary (ctx->in_dict);
