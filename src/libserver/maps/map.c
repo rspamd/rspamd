@@ -1063,7 +1063,14 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 		timeout = map->poll_timeout;
 
 		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
-			timeout = 0.0;
+			if (map->active_http) {
+				/* Spill maps load to get better chances to hit ssl cache */
+				timeout = rspamd_time_jitter (0.0, 2.0);
+			}
+			else {
+				timeout = 0.0;
+			}
+
 			reason = "init scheduled check";
 		}
 		else {
