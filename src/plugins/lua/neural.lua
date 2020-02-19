@@ -1208,8 +1208,8 @@ local function process_rules_settings()
     if profile then
       -- Use static user defined profile
       -- Ensure that we have an array...
-      lua_util.debugm(N, rspamd_config, "use static profile for %s (%s)",
-          rule.prefix, selt.name)
+      lua_util.debugm(N, rspamd_config, "use static profile for %s (%s): %s",
+          rule.prefix, selt.name, profile)
       if not profile[1] then profile = lua_util.keys(profile) end
       selt.symbols = profile
     else
@@ -1261,7 +1261,7 @@ local function process_rules_settings()
         })
   end
 
-  for _,rule in pairs(settings.rules) do
+  for k,rule in pairs(settings.rules) do
     if not rule.allowed_settings then
       rule.allowed_settings = {}
     elseif rule.allowed_settings == 'all' then
@@ -1273,7 +1273,7 @@ local function process_rules_settings()
     rule.allowed_settings = lua_util.list_to_hash(rule.allowed_settings)
 
     -- Check if we can work without settings
-    if type(rule.default) ~= 'boolean' then
+    if k == 'default' or type(rule.default) ~= 'boolean' then
       rule.default = true
     end
 
