@@ -44,6 +44,7 @@ end
 -- * out: new content (body only)
 -- * need_rewrite_ct: boolean field that means if we must rewrite content type
 -- * new_ct: new content type (type => string, subtype => string)
+-- * new_cte: new content-transfer encoding (string)
 --]]
 exports.add_text_footer = function(task, html_footer, text_footer)
   local newline_s = newline(task)
@@ -84,6 +85,8 @@ exports.add_text_footer = function(task, html_footer, text_footer)
           'Content-Transfer-Encoding: %s',
           ct, newline_s, cte)
       out[#out + 1] = ''
+    else
+      res.new_cte = cte
     end
 
     local content = tostring(tp:get_content('raw_utf') or '')

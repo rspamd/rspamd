@@ -690,7 +690,7 @@ local function modify_handler(opts)
           return
         elseif name:lower() == 'content-transfer-encoding' then
           out[#out + 1] = string.format('%s: %s',
-              'Content-Transfer-Encoding', 'quoted-printable')
+              'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
           seen_cte = true
           return
         end
@@ -712,7 +712,7 @@ local function modify_handler(opts)
 
     if not seen_cte and rewrite.need_rewrite_ct then
       out[#out + 1] = string.format('%s: %s',
-          'Content-Transfer-Encoding', 'quoted-printable')
+          'Content-Transfer-Encoding', rewrite.new_cte or 'quoted-printable')
     end
 
     -- End of headers
