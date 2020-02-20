@@ -84,6 +84,7 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
 
       if type(message) == 'string' then
         task:set_pre_result(act, message, N, nil, nil, flags)
+
       else
         task:set_pre_result(act, nil, N, nil, nil, flags)
       end

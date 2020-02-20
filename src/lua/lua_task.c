@@ -158,7 +158,7 @@ LUA_FUNCTION_DEF (task, insert_result);
  */
 LUA_FUNCTION_DEF (task, adjust_result);
 /***
- * @method task:set_pre_result(action, description)
+ * @method task:set_pre_result(action, [message, [module], [score], [priority], [flags])
  * Sets pre-result for a task. It is used in pre-filters to specify early result
  * of the task scanned. If a pre-filter sets some result, then further processing
  * may be skipped. For selecting action it is possible to use global table
@@ -170,12 +170,16 @@ LUA_FUNCTION_DEF (task, adjust_result);
  * - `greylist`: greylist message
  * - `accept` or `no action`: whitelist message
  * @param {rspamd_action or string} action a numeric or string action value
- * @param {string} description optional description
+ * @param {string} message action message
+ * @param {string} module optional module name
+ * @param {number/nil} score optional explicit score
+ * @param {number/nil} priority optional explicit priority
+ * @param {string/nil} flags optional flags (e.g. 'least' for least action)
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
 	if gr and gr == 'greylist' then
-		task:set_pre_result(rspamd_actions['greylist'], 'Greylisting required')
+		task:set_pre_result('soft reject', 'Greylisting required')
 	end
 end
  */
