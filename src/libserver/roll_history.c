@@ -160,7 +160,7 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 	else {
 		row->score = metric_res->score;
-		action = rspamd_check_action_metric (task);
+		action = rspamd_check_action_metric (task, NULL);
 		row->action = action->action_type;
 		row->required_score = rspamd_task_get_required_score (task, metric_res);
 		cbdata.pos = row->symbols;

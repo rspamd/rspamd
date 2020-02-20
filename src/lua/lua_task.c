@@ -2116,6 +2116,9 @@ lua_task_set_pre_result (lua_State * L)
 			if (strstr (fl_str, "least") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_LEAST;
 			}
+			else if (strstr (fl_str, "no_smtp_message") != NULL) {
+				flags |= RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE;
+			}
 		}
 
 
@@ -5853,7 +5856,7 @@ lua_task_get_metric_result (lua_State *L)
 		lua_pushnumber (L, metric_res->score);
 		lua_settable (L, -3);
 
-		action = rspamd_check_action_metric (task);
+		action = rspamd_check_action_metric (task, NULL);
 
 		if (action) {
 			lua_pushstring (L, "action");
@@ -5924,7 +5927,7 @@ lua_task_get_metric_action (lua_State *L)
 	struct rspamd_action *action;
 
 	if (task) {
-		action = rspamd_check_action_metric (task);
+		action = rspamd_check_action_metric (task, NULL);
 		lua_pushstring (L, action->name);
 	}
 	else {

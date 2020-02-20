@@ -669,12 +669,13 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 }
 
 struct rspamd_action*
-rspamd_check_action_metric (struct rspamd_task *task)
+rspamd_check_action_metric (struct rspamd_task *task,
+							struct rspamd_passthrough_result **ppr)
 {
 	struct rspamd_action_result *action_lim,
 			*noaction = NULL;
 	struct rspamd_action *selected_action = NULL, *least_action = NULL;
-	struct rspamd_passthrough_result *pr;
+	struct rspamd_passthrough_result *pr, *sel_pr = NULL;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
 	struct rspamd_scan_result *mres = task->result;
@@ -694,6 +695,10 @@ rspamd_check_action_metric (struct rspamd_task *task)
 						else {
 							mres->score = sc;
 						}
+					}
+
+					if (ppr) {
+						*ppr = pr;
 					}
 
 					return selected_action;
@@ -721,10 +726,12 @@ rspamd_check_action_metric (struct rspamd_task *task)
 						else {
 							sc = selected_action->threshold;
 							max_score = sc;
+							sel_pr = pr;
 						}
 					}
 					else {
 						max_score = sc;
+						sel_pr = pr;
 					}
 				}
 			}
@@ -767,15 +774,29 @@ rspamd_check_action_metric (struct rspamd_task *task)
 						selected_action->action_type != METRIC_ACTION_DISCARD) {
 					/* Override score based action with least action */
 					selected_action = least_action;
+
+					if (ppr) {
+						*ppr = sel_pr;
+					}
 				}
 			}
 			else {
 				/* Adjust score if needed */
-				mres->score = MAX (max_score, mres->score);
+				if (max_score > mres->score) {
+					if (ppr) {
+						*ppr = sel_pr;
+					}
+
+					mres->score = max_score;
+				}
 			}
 		}
 
 		return selected_action;
+	}
+
+	if (ppr) {
+		*ppr = sel_pr;
 	}
 
 	return noaction->action;

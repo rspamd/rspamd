@@ -52,6 +52,7 @@ struct rspamd_symbol_result {
 #define RSPAMD_PASSTHROUGH_CRITICAL 3
 
 #define RSPAMD_PASSTHROUGH_LEAST (1u << 0u)
+#define RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE (1u << 0u)
 
 struct rspamd_passthrough_result {
 	struct rspamd_action *action;
@@ -183,7 +184,8 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
  * @param task
  * @return
  */
-struct rspamd_action *rspamd_check_action_metric (struct rspamd_task *task);
+struct rspamd_action *rspamd_check_action_metric (struct rspamd_task *task,
+												  struct rspamd_passthrough_result **ppr);
 
 #ifdef  __cplusplus
 }

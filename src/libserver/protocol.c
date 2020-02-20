@@ -1167,8 +1167,9 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 	struct rspamd_action *action;
 	ucl_object_t *obj = NULL, *sobj;
 	const gchar *subject;
+	struct rspamd_passthrough_result *pr = NULL;
 
-	action = rspamd_check_action_metric (task);
+	action = rspamd_check_action_metric (task, &pr);
 	is_spam = !(action->flags & RSPAMD_ACTION_HAM);
 
 	if (task->cmd == CMD_CHECK) {
@@ -1179,6 +1180,16 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 	}
 	else {
 		obj = top;
+	}
+
+	if (pr && pr->message && !(pr->flags & RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE)) {
+		/* Add smtp message if it does not exists: see #3269 for details */
+		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
+			ucl_object_insert_key (task->messages,
+					ucl_object_fromstring_common (pr->message, 0, UCL_STRING_RAW),
+					"smtp_message", 0,
+					false);
+		}
 	}
 
 	ucl_object_insert_key (obj,
@@ -1734,13 +1745,13 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 end:
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
 		/* Update stat for default metric */
+
 		msg_debug_protocol ("skip stats update due to no_stat flag");
 		metric_res = task->result;
 
 		if (metric_res != NULL) {
 
-			action = rspamd_check_action_metric (task);
-
+			action = rspamd_check_action_metric (task, NULL);
 			/* TODO: handle custom actions in stats */
 			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
 					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
