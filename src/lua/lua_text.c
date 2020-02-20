@@ -34,6 +34,15 @@
  * @return {rspamd_text} resulting text
  */
 LUA_FUNCTION_DEF (text, fromstring);
+
+/**
+ * @function rspamd_text.null()
+ * Creates rspamd_text with NULL pointer for testing purposes
+ * @param {string} str string to use
+ * @return {rspamd_text} resulting text
+ */
+LUA_FUNCTION_DEF (text, null);
+
 /**
  * @function rspamd_text.fromtable(tbl[, delim])
  * Same as `table.concat` but generates rspamd_text instead of the Lua string
@@ -140,7 +149,10 @@ LUA_FUNCTION_DEF (text, eq);
 
 static const struct luaL_reg textlib_f[] = {
 		LUA_INTERFACE_DEF (text, fromstring),
+		{"from_string", lua_text_fromstring},
 		LUA_INTERFACE_DEF (text, fromtable),
+		{"from_table", lua_text_fromtable},
+		LUA_INTERFACE_DEF (text, null),
 		{NULL, NULL}
 };
 
@@ -226,6 +238,16 @@ lua_text_fromstring (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
+
+	return 1;
+}
+
+static gint
+lua_text_null (lua_State *L)
+{
+	LUA_TRACE_POINT;
+
+	lua_new_text (L, NULL, 0, false);
 
 	return 1;
 }
