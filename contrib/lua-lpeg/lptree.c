@@ -1167,12 +1167,26 @@ static int lp_match (lua_State *L) {
   else if (lua_type (L, SUBJIDX) == LUA_TUSERDATA) {
   	struct rspamd_lua_text *t = lua_check_text (L, SUBJIDX);
   	if (!t) {
+#ifdef LPEG_LUD_WORKAROUND
+		lpeg_free_mem_low (capture);
+#endif
 		return luaL_error (L, "invalid argument (not a text)");
   	}
   	s = t->start;
   	l = t->len;
+
+  	if (s == NULL) {
+		lua_pushnil(L);
+#ifdef LPEG_LUD_WORKAROUND
+		lpeg_free_mem_low (capture);
+#endif
+		return 1;
+  	}
   }
   else {
+#ifdef LPEG_LUD_WORKAROUND
+  	lpeg_free_mem_low (capture);
+#endif
   	return luaL_error (L, "invalid argument");
   }
   size_t i = initposition(L, l);
