@@ -1532,7 +1532,7 @@ rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk)
 }
 
 gboolean
-rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
+rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, bool strict)
 {
 	GList *cur;
 	module_t *mod, **pmod;
@@ -1583,8 +1583,12 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 			}
 			else {
 				if (!mod->module_config_func (cfg)) {
-					msg_info_config ("config of %s failed!", mod->name);
+					msg_err_config ("config of %s failed", mod->name);
 					ret = FALSE;
+
+					if (strict) {
+						return FALSE;
+					}
 				}
 			}
 		}
@@ -1596,7 +1600,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 		cur = g_list_next (cur);
 	}
 
-	ret = rspamd_init_lua_filters (cfg, 0) && ret;
+	ret = rspamd_init_lua_filters (cfg, 0, strict) && ret;
 
 	return ret;
 }

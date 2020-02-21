@@ -341,7 +341,7 @@ reread_config (struct rspamd_main *rspamd_main)
 		 * modules and merely afterwards to init modules
 		 */
 		rspamd_lua_post_load_config (tmp_cfg);
-		rspamd_init_filters (tmp_cfg, TRUE);
+		rspamd_init_filters (tmp_cfg, true, false);
 
 		/* Do post-load actions */
 		rspamd_config_post_load (tmp_cfg,
@@ -944,7 +944,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 		rspamd_lua_post_load_config (cfg);
 
 		if (init_modules) {
-			rspamd_init_filters (cfg, reload);
+			rspamd_init_filters (cfg, reload, false);
 		}
 
 		/* Do post-load actions */

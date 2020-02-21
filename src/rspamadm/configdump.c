@@ -285,13 +285,8 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		/* Do post-load actions */
 		rspamd_lua_post_load_config (cfg);
 
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
-			ret = FALSE;
-		}
-
-		if (ret) {
-			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
-		}
+		(void)rspamd_init_filters (rspamd_main->cfg, false, false);
+		rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 	}
 
 	if (ret) {

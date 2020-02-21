@@ -656,7 +656,7 @@ void rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
  * @param reconfig
  * @return
  */
-gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
+gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, bool strict);
 
 /**
  * Add new symbol to the metric

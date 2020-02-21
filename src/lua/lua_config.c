@@ -4257,7 +4257,7 @@ lua_config_init_modules (lua_State *L)
 
 	if (cfg != NULL) {
 		rspamd_lua_post_load_config (cfg);
-		lua_pushboolean (L, rspamd_init_filters (cfg, FALSE));
+		lua_pushboolean (L, rspamd_init_filters (cfg, false, false));
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4282,7 +4282,7 @@ lua_config_init_subsystem (lua_State *L)
 		for (i = 0; i < nparts; i ++) {
 			if (strcmp (parts[i], "filters") == 0) {
 				rspamd_lua_post_load_config (cfg);
-				rspamd_init_filters (cfg, FALSE);
+				rspamd_init_filters (cfg, false, false);
 			}
 			else if (strcmp (parts[i], "langdet") == 0) {
 				if (!cfg->lang_det) {

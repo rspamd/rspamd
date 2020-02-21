@@ -884,7 +884,7 @@ lua_util_process_message (lua_State *L)
 
 	if (cfg != NULL && message != NULL) {
 		base = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
-		rspamd_init_filters (cfg, FALSE);
+		rspamd_init_filters (cfg, false, false);
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, base, FALSE);
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
 		rspamd_strlcpy ((gpointer)task->msg.begin, message, mlen);

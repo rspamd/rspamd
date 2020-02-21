@@ -140,7 +140,7 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		/* Do post-load actions */
 		rspamd_lua_post_load_config (cfg);
 
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
+		if (!rspamd_init_filters (rspamd_main->cfg, false, strict)) {
 			ret = FALSE;
 		}
 

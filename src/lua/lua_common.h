@@ -203,7 +203,7 @@ rspamd_plugins_table_push_elt (lua_State *L, const gchar *field_name,
  * Load and initialize lua plugins
  */
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load);
+rspamd_init_lua_filters (struct rspamd_config *cfg, bool force_load, bool strict);
 
 /**
  * Initialize new locked lua_State structure

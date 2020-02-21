@@ -1075,7 +1075,7 @@ rspamd_plugins_table_push_elt (lua_State *L, const gchar *field_name,
 }
 
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
+rspamd_init_lua_filters (struct rspamd_config *cfg, bool force_load, bool strict)
 {
 	struct rspamd_config **pcfg;
 	GList *cur;
@@ -1119,6 +1119,10 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 				rspamd_plugins_table_push_elt (L, "disabled_failed",
 						module->name);
 
+				if (strict) {
+					return FALSE;
+				}
+
 				cur = g_list_next (cur);
 				continue;
 			}
@@ -1143,6 +1147,10 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 				munmap (data, fsize);
 				g_free (lua_fname);
 
+				if (strict) {
+					return FALSE;
+				}
+
 				cur = g_list_next (cur);
 				continue;
 			}
@@ -1158,6 +1166,10 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 				lua_settop (L, err_idx - 1);
 				rspamd_plugins_table_push_elt (L, "disabled_failed",
 						module->name);
+
+				if (strict) {
+					return FALSE;
+				}
 
 				cur = g_list_next (cur);
 				continue;
