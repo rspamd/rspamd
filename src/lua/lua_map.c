@@ -129,6 +129,7 @@ static const struct luaL_reg maplib_m[] = {
 struct lua_map_callback_data {
 	lua_State *L;
 	gint ref;
+	gboolean opaque;
 	rspamd_fstring_t *data;
 	struct rspamd_lua_map *lua_map;
 };
@@ -442,7 +443,19 @@ lua_map_fin (struct map_cb_data *data, void **target)
 	}
 	else if (cbdata->data != NULL && cbdata->data->len != 0) {
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
-		lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
+
+		if (cbdata->opaque) {
+			lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
+		}
+		else {
+			struct rspamd_lua_text *t;
+
+			t = lua_newuserdata (cbdata->L, sizeof (*t));
+			t->flags = 0;
+			t->len = cbdata->data->len;
+			t->start = cbdata->data->str;
+		}
+
 		pmap = lua_newuserdata (cbdata->L, sizeof (void *));
 		*pmap = cbdata->lua_map;
 		rspamd_lua_setclass (cbdata->L, "rspamd{map}", -1);
@@ -493,14 +506,15 @@ lua_config_add_map (lua_State *L)
 	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
+	gboolean opaque_data = FALSE;
 	int cbidx = -1, ret;
 	GError *err = NULL;
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-				"*url=O;description=S;callback=F;type=S",
-				&map_obj, &description, &cbidx, &type)) {
+				"*url=O;description=S;callback=F;type=S;opaque_data=B",
+				&map_obj, &description, &cbidx, &type, &opaque_data)) {
 			ret = luaL_error (L, "invalid table arguments: %s", err->message);
 			g_error_free (err);
 			if (map_obj) {
@@ -529,6 +543,7 @@ lua_config_add_map (lua_State *L)
 			cbdata->data = NULL;
 			cbdata->lua_map = map;
 			cbdata->ref = cbidx;
+			cbdata->opaque = opaque_data;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
 					lua_map_read,

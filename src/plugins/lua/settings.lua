@@ -1036,9 +1036,9 @@ end
 
 -- Parse settings map from the ucl line
 local settings_map_pool
-local function process_settings_map(string)
+local function process_settings_map(map_text)
   local parser = ucl.parser()
-  local res,err = parser:parse_string(string)
+  local res,err = parser:parse_string(map_text)
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
   else
@@ -1162,7 +1162,13 @@ local set_section = rspamd_config:get_all_opt("settings")
 
 if set_section and set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
-  if not rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
+  local map_attrs = {
+    url = set_section[1],
+    description = "settings map",
+    callback = process_settings_map,
+    opaque_data = true
+  }
+  if not rspamd_config:add_map(map_attrs) then
     rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
 elseif set_section and type(set_section) == "table" then
