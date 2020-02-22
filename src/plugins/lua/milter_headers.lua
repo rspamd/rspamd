@@ -56,6 +56,7 @@ local settings = {
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
       remove = 0,
+      hostname = nil, -- Get the local computer host name
     },
     ['x-rspamd-queue-id'] = {
       header = 'X-Rspamd-Queue-Id',
@@ -295,7 +296,8 @@ local function milter_headers(task)
     if settings.routines['x-rspamd-server'].remove then
       remove[settings.routines['x-rspamd-server'].header] = settings.routines['x-rspamd-server'].remove
     end
-    add[settings.routines['x-rspamd-server'].header] = HOSTNAME
+    local hostname = settings.routines['x-rspamd-server'].hostname
+    add[settings.routines['x-rspamd-server'].header] = hostname and hostname or HOSTNAME
   end
 
   routines['x-spamd-bar'] = function()
