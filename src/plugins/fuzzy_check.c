@@ -2008,6 +2008,8 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	if (map != NULL || !session->rule->skip_unknown) {
 		GList *fuzzy_var;
 		rspamd_fstring_t *hex_result;
+		gchar timebuf[64];
+		struct tm tm_split;
 
 		if (session->rule->skip_map) {
 			rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
@@ -2023,10 +2025,17 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 				hexbuf, sizeof (hexbuf) - 1);
 		hexbuf[sizeof (hexbuf) - 1] = '\0';
 
+		rspamd_gmtime (rep->ts, &tm_split);
+		rspamd_snprintf (timebuf, sizeof (timebuf), "%02d.%02d.%4d %02d:%02d:%02d GMT",
+				tm_split.tm_mday,
+				tm_split.tm_mon,
+				tm_split.tm_year + 1900,
+				tm_split.tm_hour, tm_split.tm_min, tm_split.tm_sec);
+
 		if (is_fuzzy) {
 			msg_info_task (
 					"found fuzzy hash(%s) %s (%*xs requested) with weight: "
-					"%.2f, probability %.2f, in list: %s:%d%s",
+					"%.2f, probability %.2f, in list: %s:%d%s; added on %s",
 					type,
 					hexbuf,
 					(gint) sizeof (cmd->digest), cmd->digest,
@@ -2034,19 +2043,21 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 					(gdouble) rep->v1.prob,
 					symbol,
 					rep->v1.flag,
-					map == NULL ? "(unknown)" : "");
+					map == NULL ? "(unknown)" : "",
+					timebuf);
 		}
 		else {
 			msg_info_task (
 					"found exact fuzzy hash(%s) %s with weight: "
-					"%.2f, probability %.2f, in list: %s:%d%s",
+					"%.2f, probability %.2f, in list: %s:%d%s; added on %s",
 					type,
 					hexbuf,
 					nval,
 					(gdouble) rep->v1.prob,
 					symbol,
 					rep->v1.flag,
-					map == NULL ? "(unknown)" : "");
+					map == NULL ? "(unknown)" : "",
+					timebuf);
 		}
 
 		rspamd_snprintf (buf,
