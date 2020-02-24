@@ -39,6 +39,7 @@ trie:match('some big text', trie_callback)
 
 /* Suffix trie */
 LUA_FUNCTION_DEF (trie, create);
+LUA_FUNCTION_DEF (trie, has_hyperscan);
 LUA_FUNCTION_DEF (trie, match);
 LUA_FUNCTION_DEF (trie, search_mime);
 LUA_FUNCTION_DEF (trie, search_rawmsg);
@@ -56,6 +57,7 @@ static const struct luaL_reg trielib_m[] = {
 };
 static const struct luaL_reg trielib_f[] = {
 	LUA_INTERFACE_DEF (trie, create),
+	LUA_INTERFACE_DEF (trie, has_hyperscan),
 	{NULL, NULL}
 };
 
@@ -78,6 +80,19 @@ lua_trie_destroy (lua_State *L)
 	}
 
 	return 0;
+}
+
+/***
+ * function trie.has_hyperscan()
+ * Checks for hyperscan support
+ *
+ * @return {bool} true if hyperscan is supported
+ */
+static gint
+lua_trie_has_hyperscan (lua_State *L)
+{
+	lua_pushboolean (L, rspamd_multipattern_has_hyperscan ());
+	return 1;
 }
 
 /***
