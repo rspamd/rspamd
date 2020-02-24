@@ -72,6 +72,10 @@ local function maybe_adjust_type(data,mtype)
     {'cdb:/', 'cdb'},
   }
 
+  if mtype == 'callback' then
+    return mtype
+  end
+
   for _,t in ipairs(known_types) do
     if check_prefix(t[1], t[2]) then
       return data,mtype
