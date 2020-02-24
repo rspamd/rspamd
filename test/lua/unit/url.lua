@@ -2,7 +2,9 @@
 
 context("URL check functions", function()
   local mpool = require("rspamd_mempool")
+  local lua_urls_compose = require "lua_urls_compose"
   local url = require("rspamd_url")
+  local lua_util = require("lua_util")
   local logger = require("rspamd_logger")
   local test_helper = require("rspamd_test_helper")
   local ffi = require("ffi")
@@ -175,6 +177,34 @@ context("URL check functions", function()
       ffi.C.rspamd_http_normalize_path_inplace(buf, #v[1], sizbuf)
       local res = ffi.string(buf, tonumber(sizbuf[0]))
       assert_equal(v[2], res, 'expected ' .. v[2] .. ' but got ' .. res .. ' in path ' .. v[1])
+    end)
+  end
+
+  cases = {
+    {'example.com', 'example.com'},
+    {'baz.example.com', 'baz.example.com'},
+    {'3.baz.example.com', 'baz.example.com'},
+    {'bar.example.com', 'example.com'},
+    {'foo.example.com', 'foo.example.com'},
+    {'3.foo.example.com', '3.foo.example.com'},
+    {'foo.com', 'foo.com'},
+    {'bar.foo.com', 'foo.com'},
+  }
+
+  local excl_rules1 = {
+      'example.com',
+      '*.foo.example.com',
+      '!bar.example.com'
+  }
+
+  local comp_rules = lua_urls_compose.inject_composition_rules(rspamd_config, excl_rules1)
+
+  for _,v in ipairs(cases) do
+    test("URL composition " .. v[1], function()
+      local u = url.create(pool, v[1])
+      assert_not_nil(u, "we are able to parse url: " .. v[1])
+      local res = comp_rules:process_url(nil, u:get_tld(), u:get_host())
+      assert_equal(v[2], res, 'expected ' .. v[2] .. ' but got ' .. res .. ' in url ' .. v[1])
     end)
   end
 end)
