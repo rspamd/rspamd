@@ -611,7 +611,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		g_assert_not_reached ();
 	}
 
-	part->id = MESSAGE_FIELD (task, parts)->len;
+	part->part_number = MESSAGE_FIELD (task, parts)->len;
 	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	msg_debug_mime ("parsed data part %T/%T of length %z (%z orig), %s cte",
 			&part->ct->type, &part->ct->subtype, part->parsed_data.len,
@@ -945,7 +945,7 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 		return RSPAMD_MIME_PARSE_NESTING;
 	}
 
-	part->id = MESSAGE_FIELD (task, parts)->len;
+	part->part_number = MESSAGE_FIELD (task, parts)->len;
 	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	st->nesting ++;
 	rspamd_mime_part_get_cte (task, part->raw_headers, part, FALSE);

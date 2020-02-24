@@ -97,7 +97,7 @@ struct rspamd_mime_part {
 	enum rspamd_cte cte;
 	guint flags;
 	enum rspamd_mime_part_type part_type;
-	guint id;
+	guint part_number;
 
 	union {
 		struct rspamd_mime_multipart *mp;
