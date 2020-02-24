@@ -127,8 +127,18 @@ end
 
 local xml_grammar = gen_xml_grammar()
 
-local function escape_xml(goo)
-  return xml_grammar:match(goo)
+local function escape_xml(input)
+  if type(input) == 'string' or type(input) == 'userdata' then
+    return xml_grammar:match(input)
+  else
+    input = tostring(input)
+
+    if input then
+      return xml_grammar:match(input)
+    end
+  end
+
+  return ''
 end
 
 -- Default port for redis upstreams
