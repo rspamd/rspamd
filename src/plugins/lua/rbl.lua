@@ -431,7 +431,13 @@ local function gen_rbl_callback(rule)
         -- We check merely mime from
         mime_from_domain = ((task:get_from('mime') or E)[1] or E).domain
         if mime_from_domain then
-          mime_from_domain = rspamd_util.get_tld(mime_from_domain)
+          local mime_from_domain_tld = rspamd_util.get_tld(mime_from_domain)
+
+          if rule.url_compose_map then
+            mime_from_domain = rule.url_compose_map:process_url(task, mime_from_domain_tld, mime_from_domain)
+          else
+            mime_from_domain = mime_from_domain_tld
+          end
         end
       end
 
@@ -447,6 +453,10 @@ local function gen_rbl_callback(rule)
             if not rule.dkim_domainonly then
               -- Adjust
               domain_tld = rspamd_util.get_tld(domain)
+
+              if rule.url_compose_map then
+                domain_tld = rule.url_compose_map:process_url(task, domain_tld, domain)
+              end
             end
 
             if mime_from_domain and mime_from_domain == domain_tld then
@@ -455,7 +465,11 @@ local function gen_rbl_callback(rule)
             end
           else
             if rule.dkim_domainonly then
-              add_dns_request(task, rspamd_util.get_tld(domain),
+              local domain_tld = rspamd_util.get_tld(domain)
+              if rule.url_compose_map then
+                domain_tld = rule.url_compose_map:process_url(task, domain_tld, domain)
+              end
+              add_dns_request(task, domain_tld,
                   false, false, requests_table, 'dkim', whitelist)
             else
               add_dns_request(task, domain, false, false, requests_table,
@@ -484,7 +498,11 @@ local function gen_rbl_callback(rule)
     local urls = lua_util.extract_specific_urls(ex_params)
 
     for _,u in ipairs(urls) do
-      add_dns_request(task, u:get_tld(), false,
+      local url_tld = u:get_tld()
+      if rule.url_compose_map then
+        url_tld = rule.url_compose_map:process_url(task, url_tld, u:get_host())
+      end
+      add_dns_request(task, url_tld, false,
           false, requests_table, 'url', whitelist)
     end
 
@@ -598,8 +616,19 @@ local function gen_rbl_callback(rule)
     local emails = lua_util.extract_specific_urls(ex_params)
 
     for _,email in ipairs(emails) do
+      local domain
+      if rule.emails_domainonly then
+        if rule.url_compose_map then
+          domain = rule.url_compose_map:process_url(task, email:get_tld(), email:get_host())
+        else
+          domain = email:get_tld()
+        end
+      else
+        domain = email:get_host()
+      end
+
       local email_tbl = {
-        domain = (rule.emails_domainonly and email:get_tld()) or email:get_host(),
+        domain = domain,
         user = email:get_user(),
         addr = tostring(email),
       }
@@ -865,6 +894,16 @@ local function add_rbl(key, rbl, global_opts)
         def_type, rbl.symbol)
   end
 
+  if rbl.url_compose_map then
+    local lua_urls_compose = require "lua_urls_compose"
+    rbl.url_compose_map = lua_urls_compose.add_composition_map(rspamd_config, rbl.url_compose_map)
+
+    if rbl.url_compose_map then
+      rspamd_logger.infox(rspamd_config, 'added url composition map for RBL %s',
+          rbl.symbol)
+    end
+  end
+
   if not rbl.whitelist and global_opts.url_whitelist and
       (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) and
       not (rbl.from or rbl.received) then
@@ -1077,6 +1116,7 @@ local rule_schema_tbl = {
       ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
   ):is_optional(),
   whitelist = lua_maps.map_schema:is_optional(),
+  url_compose_map = lua_maps.map_schema:is_optional(),
   local_exclude_ip_map = ts.string:is_optional(),
   hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
   hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
