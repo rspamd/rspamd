@@ -554,7 +554,7 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 			}
 		}
 
-		if (found_elts != 2) {
+		if (found_elts < 2) {
 			if (session->cmd->shingles_count > 0 && !session->shingles_checked) {
 				/* We also need to check all shingles here */
 				rspamd_fuzzy_backend_check_shingles (session);
