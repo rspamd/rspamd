@@ -444,9 +444,6 @@ rspamd_fuzzy_stat_callback (EV_P_ ev_timer *w, int revents)
 static void
 fuzzy_update_version_callback (guint64 ver, void *ud)
 {
-	msg_info ("updated fuzzy storage from %s: version: %d",
-			(const char *)ud, (gint)ver);
-	g_free (ud);
 }
 
 static void
@@ -467,14 +464,17 @@ rspamd_fuzzy_updates_cb (gboolean success,
 	if (success) {
 		rspamd_fuzzy_backend_count (ctx->backend, fuzzy_count_callback, ctx);
 
-		msg_info ("successfully updated fuzzy storage: %d updates in queue; "
+		msg_info ("successfully updated fuzzy storage %s: %d updates in queue; "
 				  "%d pending currently; "
-				  "%d added, %d deleted, %d extended, %d duplicates",
+				  "%d added; %d deleted; %d extended; %d duplicates",
+				ctx->worker->cf->bind_conf ?
+					 ctx->worker->cf->bind_conf->bind_line :
+					 "unknown",
 				cbdata->updates_pending->len,
 				ctx->updates_pending->len,
 				nadded, ndeleted, nextended, nignored);
 		rspamd_fuzzy_backend_version (ctx->backend, source,
-				fuzzy_update_version_callback, g_strdup (source));
+				fuzzy_update_version_callback, NULL);
 		ctx->updates_failed = 0;
 
 		if (cbdata->final || ctx->worker->state != rspamd_worker_state_running) {
@@ -484,8 +484,11 @@ rspamd_fuzzy_updates_cb (gboolean success,
 	}
 	else {
 		if (++ctx->updates_failed > ctx->updates_maxfail) {
-			msg_err ("cannot commit update transaction to fuzzy backend, discard "
+			msg_err ("cannot commit update transaction to fuzzy backend %s, discard "
 					 "%ud updates after %d retries",
+					ctx->worker->cf->bind_conf ?
+						ctx->worker->cf->bind_conf->bind_line :
+						"unknown",
 					cbdata->updates_pending->len,
 					ctx->updates_maxfail);
 			ctx->updates_failed = 0;
@@ -496,9 +499,12 @@ rspamd_fuzzy_updates_cb (gboolean success,
 			}
 		}
 		else {
-			msg_err ("cannot commit update transaction to fuzzy backend, "
+			msg_err ("cannot commit update transaction to fuzzy backend %s; "
 					 "%ud updates are still left; %ud currently pending;"
 					 " %d updates left",
+					ctx->worker->cf->bind_conf ?
+						ctx->worker->cf->bind_conf->bind_line :
+						"unknown",
 					cbdata->updates_pending->len,
 					ctx->updates_pending->len,
 					ctx->updates_maxfail - ctx->updates_failed);
@@ -511,7 +517,6 @@ rspamd_fuzzy_updates_cb (gboolean success,
 				/* Try one more time */
 				rspamd_fuzzy_process_updates_queue (cbdata->ctx, cbdata->source,
 						cbdata->final);
-
 			}
 		}
 	}
