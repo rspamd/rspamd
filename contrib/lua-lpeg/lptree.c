@@ -1187,7 +1187,8 @@ static int lp_match (lua_State *L) {
 #ifdef LPEG_LUD_WORKAROUND
   	lpeg_free_mem_low (capture);
 #endif
-  	return luaL_error (L, "invalid argument");
+  	return luaL_error (L, "invalid argument: %s",
+  			lua_typename (L, lua_type (L, SUBJIDX)));
   }
   size_t i = initposition(L, l);
   int ptop = lua_gettop(L), rs;
