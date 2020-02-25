@@ -442,7 +442,6 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 		flags = URL_FLAG_NOHTML | URL_FLAG_TLD_MATCH;
 
-#ifndef WITH_HYPERSCAN
 		if (linebuf[0] == '*') {
 			flags |= URL_FLAG_STAR_MATCH;
 			p = strchr (linebuf, '.');
@@ -456,9 +455,6 @@ rspamd_url_parse_tld_file (const gchar *fname,
 		else {
 			p = linebuf;
 		}
-#else
-		p = linebuf;
-#endif
 
 		m.flags = flags;
 		rspamd_multipattern_add_pattern (url_scanner->search_trie, p,
@@ -1552,6 +1548,9 @@ rspamd_tld_trie_callback (struct rspamd_multipattern *mp,
 		if (*p == '.') {
 			ndots--;
 			pos = p + 1;
+		}
+		else {
+			pos = p;
 		}
 
 		p--;

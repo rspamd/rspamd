@@ -108,7 +108,6 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 	 */
 
 	if (pattern[0] == '*') {
-		len = slen + 4;
 		p = strchr (pattern, '.');
 
 		if (p == NULL) {
@@ -119,12 +118,13 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 			p ++;
 		}
 
-		prefix = ".*.";
+		prefix = "\\.";
+		len = slen + strlen (prefix);
 	}
 	else {
-		len = slen + 1;
-		prefix = ".";
+		prefix = "\\.";
 		p = pattern;
+		len = slen + strlen (prefix);
 	}
 
 	res = g_malloc (len + 1);
@@ -208,7 +208,7 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 			tmp = rspamd_multipattern_escape_tld_hyperscan (pattern, len, &tlen);
 
 			ret = rspamd_str_regexp_escape (tmp, tlen, dst_len,
-					gl_flags|RSPAMD_REGEXP_ESCAPE_GLOB);
+					gl_flags|RSPAMD_REGEXP_ESCAPE_RE);
 			g_free (tmp);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_RE) {
