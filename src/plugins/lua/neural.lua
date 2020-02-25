@@ -103,7 +103,7 @@ end
 local redis_lua_script_can_store_train_vec = [[
   local prefix = KEYS[1]
   local locked = redis.call('HGET', prefix, 'lock')
-  if locked then return {tostring(-1),'locked by another process: ' .. locked} end
+  if locked then return {tostring(-1),'locked by another process till: ' .. locked} end
   local nspam = 0
   local nham = 0
   local lim = tonumber(KEYS[3])
@@ -726,6 +726,7 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
     worker:spawn_process{
       func = train,
       on_complete = ann_trained,
+      proctitle = string.format("ANN train for %s/%s", rule.prefix, set.name),
     }
   end
   -- Spawn learn and register lock extension
