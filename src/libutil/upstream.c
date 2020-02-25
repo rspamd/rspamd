@@ -1049,6 +1049,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 			ret = rspamd_parse_host_port_priority (str, &addrs,
 					&upstream->weight,
 					&upstream->name, def_port,
+					FALSE,
 					ups->ctx ? ups->ctx->pool : NULL);
 		}
 		break;

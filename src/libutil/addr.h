@@ -274,7 +274,9 @@ enum rspamd_parse_host_port_result {
 enum rspamd_parse_host_port_result
 rspamd_parse_host_port_priority (const gchar *str,
 								 GPtrArray **addrs,
-								 guint *priority, gchar **name, guint default_port,
+								 guint *priority, gchar **name,
+								 guint default_port,
+								 gboolean allow_listen,
 								 rspamd_mempool_t *pool);
 
 /**

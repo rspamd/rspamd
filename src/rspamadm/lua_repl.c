@@ -925,7 +925,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		struct rspamadm_lua_repl_context *ctx;
 
 		if (rspamd_parse_host_port_priority (serve, &addrs, NULL, &name,
-				10000, NULL) == RSPAMD_PARSE_ADDR_FAIL) {
+				10000, TRUE, NULL) == RSPAMD_PARSE_ADDR_FAIL) {
 			fprintf (stderr, "cannot listen on %s", serve);
 			exit (EXIT_FAILURE);
 		}

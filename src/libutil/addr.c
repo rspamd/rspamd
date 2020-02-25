@@ -1345,6 +1345,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 								 guint *priority,
 								 gchar **name_ptr,
 								 guint default_port,
+								 gboolean allow_listen,
 								 rspamd_mempool_t *pool)
 {
 	gchar portbuf[8];
@@ -1352,6 +1353,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 	gsize namelen;
 	rspamd_inet_addr_t *cur_addr = NULL;
 	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
+	union sa_union su;
 
 	/*
 	 * In this function, we can have several possibilities:
@@ -1361,19 +1363,62 @@ rspamd_parse_host_port_priority (const gchar *str,
 	 * 4) ip|host[:port[:priority]]
 	 */
 
-	if (str[0] == '*') {
-		if (!rspamd_check_port_priority (str + 1, default_port, priority,
+	if (allow_listen && str[0] == '*') {
+		bool v4_any = true, v6_any = true;
+
+		p = &str[1];
+
+		if (g_ascii_strncasecmp (p, "v4", 2) == 0) {
+			p += 2;
+			name = "*v4";
+			v6_any = false;
+		}
+		else if (g_ascii_strncasecmp (p, "v6", 2) == 0) {
+			p += 2;
+			name = "*v6";
+			v4_any = false;
+		}
+		else {
+			name = "*";
+		}
+
+		if (!rspamd_check_port_priority (p, default_port, priority,
 				portbuf, sizeof (portbuf), pool)) {
 			return ret;
 		}
 
-		if (rspamd_resolve_addrs (str, 0, addrs, portbuf, AI_PASSIVE, pool)
-				== RSPAMD_PARSE_ADDR_FAIL) {
-			return ret;
+		if (*addrs == NULL) {
+			*addrs = g_ptr_array_new_full (1,
+					(GDestroyNotify) rspamd_inet_address_free);
+
+			if (pool != NULL) {
+				rspamd_mempool_add_destructor (pool,
+						rspamd_ptr_array_free_hard, *addrs);
+			}
 		}
 
-		name = "*";
-		namelen = 1;
+		if (v4_any) {
+			cur_addr = rspamd_inet_addr_create (AF_INET, pool);
+			rspamd_parse_inet_address_ip4 ("0.0.0.0",
+					sizeof ("0.0.0.0") - 1, &su.s4.sin_addr);
+			memcpy (&cur_addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+					sizeof (struct in_addr));
+			rspamd_inet_address_set_port (cur_addr,
+					strtoul (portbuf, NULL, 10));
+			g_ptr_array_add (*addrs, cur_addr);
+		}
+		if (v6_any) {
+			cur_addr = rspamd_inet_addr_create (AF_INET6, pool);
+			rspamd_parse_inet_address_ip6 ("::",
+					sizeof ("::") - 1, &su.s6.sin6_addr);
+			memcpy (&cur_addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+					sizeof (struct in6_addr));
+			rspamd_inet_address_set_port (cur_addr,
+					strtoul (portbuf, NULL, 10));
+			g_ptr_array_add (*addrs, cur_addr);
+		}
+
+		namelen = strlen (name);
 		ret = RSPAMD_PARSE_ADDR_NUMERIC; /* No resolution here */
 	}
 	else if (str[0] == '[') {
