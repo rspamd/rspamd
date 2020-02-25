@@ -162,13 +162,7 @@ rspamd_ip_check_ipv6 (void)
 
 			if (stat ("/proc/net/dev", &st) != -1) {
 				if (stat ("/proc/net/if_inet6", &st) != -1) {
-					if (st.st_size != 0) {
-						ipv6_status = RSPAMD_IPV6_SUPPORTED;
-					}
-					else {
-						/* Empty file, no ipv6 configuration at all */
-						ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
-					}
+					ipv6_status = RSPAMD_IPV6_SUPPORTED;
 				}
 				else {
 					ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
