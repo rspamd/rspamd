@@ -200,6 +200,7 @@ local redis_maybe_lock_id = nil
 -- key4 - profile as JSON
 -- key5 - expire in seconds
 -- key6 - current time
+-- key7 - old key
 local redis_lua_script_save_unlock = [[
   local now = tonumber(KEYS[6])
   redis.call('ZADD', KEYS[2], now, KEYS[4])
@@ -207,6 +208,7 @@ local redis_lua_script_save_unlock = [[
   redis.call('DEL', KEYS[1] .. '_spam')
   redis.call('DEL', KEYS[1] .. '_ham')
   redis.call('HDEL', KEYS[1], 'lock')
+  redis.call('HDEL', KEYS[7], 'lock')
   redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
   return 1
 ]]
@@ -470,8 +472,8 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           )
         else
           -- Negative result returned
-          rspamd_logger.infox(task, "cannot learn %s ANN %s:%s: %s (%s vectors stored)",
-              learn_type, rule.prefix, set.name, reason, -tonumber(nsamples))
+          rspamd_logger.infox(task, "cannot learn %s ANN %s:%s; redis_key: %s: %s (%s vectors stored)",
+              learn_type, rule.prefix, set.name, set.ann.redis_key, reason, -tonumber(nsamples))
         end
       else
         if err then
@@ -485,22 +487,34 @@ local function ann_push_task_result(rule, task, verdict, score, set)
       end
     end
 
-    if not set.ann then
-      -- Need to create or load a profile corresponding to the current configuration
-      set.ann = new_ann_profile(task, rule, set, 0)
-    end
     -- Check if we can learn
-    lua_redis.exec_redis_script(redis_can_store_train_vec_id,
-        {task = task, is_write = true},
-        can_train_cb,
-        {
-          set.ann.redis_key,
-          learn_type,
-          tostring(train_opts.max_trains),
-          tostring(math.random()),
-        })
+    if set.can_store_vectors then
+      if not set.ann then
+        -- Need to create or load a profile corresponding to the current configuration
+        set.ann = new_ann_profile(task, rule, set, 0)
+        lua_util.debugm(N, task,
+            'requested new profile for %s, set.ann is missing',
+            set.name)
+      end
+
+      lua_redis.exec_redis_script(redis_can_store_train_vec_id,
+          {task = task, is_write = true},
+          can_train_cb,
+          {
+            set.ann.redis_key,
+            learn_type,
+            tostring(train_opts.max_trains),
+            tostring(math.random()),
+          })
+    else
+      lua_util.debugm(N, task,
+          'do not push data to key %s: train condition not satisfied; reason: not checked existing ANNs',
+          set.ann.redis_key)
+    end
   else
-    lua_util.debugm(N, task, 'do not push data: train condition not satisfied; reason: %s',
+    lua_util.debugm(N, task,
+        'do not push data to key %s: train condition not satisfied; reason: %s',
+        set.ann.redis_key,
         skip_reason)
   end
 end
@@ -719,6 +733,7 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
              profile_serialized,
              tostring(rule.ann_expire),
              tostring(os.time()),
+             ann_key, -- old key to unlock...
             })
       end
     end
@@ -1108,10 +1123,12 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
       if err then
         rspamd_logger.errx(cfg, 'cannot get ANNs list from redis: %s',
             err)
+        set.can_store_vectors = true
       elseif type(data) == 'table' then
         lua_util.debugm(N, cfg, '%s: process element %s:%s',
             what, rule.prefix, set.name)
         process_callback(worker, ev_base, rule, set, fun.map(load_ann_profile, data))
+        set.can_store_vectors = true
       end
     end
 
