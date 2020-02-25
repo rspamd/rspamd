@@ -4774,9 +4774,10 @@ lua_task_process_ann_tokens (lua_State *L)
 			sres = rspamd_task_find_symbol_result (task, sym);
 
 			if (sres && !(sres->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+
 				if (!isnan (sres->score) && !isinf (sres->score) &&
-					!(rspamd_symcache_item_flags (sres->sym->cache_item) &
-					  SYMBOL_TYPE_NOSTAT)) {
+						(!sres->sym ||
+							!(rspamd_symcache_item_flags (sres->sym->cache_item) & SYMBOL_TYPE_NOSTAT))) {
 
 					lua_pushnumber (L, fabs (tanh (sres->score)));
 					lua_rawseti (L, 3, offset + 1);
