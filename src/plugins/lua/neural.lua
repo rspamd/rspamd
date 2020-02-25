@@ -247,7 +247,7 @@ local function result_to_vector(task, profile)
     vec[i] = v
   end
 
-  task:process_ann_tokens(profile.symbols, vec, #mt)
+  task:process_ann_tokens(profile.symbols, vec, #mt, 0.1)
 
   return vec
 end

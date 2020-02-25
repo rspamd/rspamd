@@ -673,11 +673,12 @@ LUA_FUNCTION_DEF (task, get_symbols_numeric);
 LUA_FUNCTION_DEF (task, get_symbols_tokens);
 
 /***
- * @method task:process_ann_tokens(symbols, ann_tokens, offset)
+ * @method task:process_ann_tokens(symbols, ann_tokens, offset, [min])
  * Processes ann tokens
  * @param {table|string} symbols list of symbols in this profile
  * @param {table|number} ann_tokens list of tokens (including metatokens)
  * @param {integer} offset offset for symbols token (#metatokens)
+ * @param {number} min minimum value for symbols found (e.g. for 0 score symbols)
  * @return nothing
  */
 LUA_FUNCTION_DEF (task, process_ann_tokens);
@@ -4760,9 +4761,13 @@ lua_task_process_ann_tokens (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gint offset = luaL_checkinteger (L, 4);
+	gdouble min_score = 0.0;
 
 	if (task && lua_istable (L, 2) && lua_istable (L, 3)) {
 		guint symlen = rspamd_lua_table_size (L, 2);
+		if (lua_isnumber (L, 5)) {
+			min_score = lua_tonumber (L, 5);
+		}
 
 		for (guint i = 1; i <= symlen; i ++, offset ++) {
 			const gchar *sym;
@@ -4778,8 +4783,10 @@ lua_task_process_ann_tokens (lua_State *L)
 				if (!isnan (sres->score) && !isinf (sres->score) &&
 						(!sres->sym ||
 							!(rspamd_symcache_item_flags (sres->sym->cache_item) & SYMBOL_TYPE_NOSTAT))) {
+					gdouble norm_score = fabs (tanh (sres->score));
 
-					lua_pushnumber (L, fabs (tanh (sres->score)));
+
+					lua_pushnumber (L, MAX (min_score , norm_score));
 					lua_rawseti (L, 3, offset + 1);
 				}
 			}
