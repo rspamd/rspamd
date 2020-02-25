@@ -1293,7 +1293,11 @@ local function process_rules_settings()
     -- We set table rule.settings[id] -> { name = name, symbols = symbols, digest = digest }
     for s,_ in pairs(rule.allowed_settings) do
       -- Here, we have a name, set of symbols and
-      local selt = lua_settings.settings_by_id(s)
+      local settings_id = s
+      if type(settings_id) ~= 'number' then
+        settings_id = lua_settings.numeric_settings_id(s)
+      end
+      local selt = lua_settings.settings_by_id(settings_id)
 
       local nelt = {
         symbols = selt.symbols, -- Already sorted
@@ -1308,16 +1312,16 @@ local function process_rules_settings()
             lua_util.debugm(N, rspamd_config,
                 'added reference from settings id %s to %s; same symbols',
                 nelt.name, ex.name)
-            rule.settings[s] = id
+            rule.settings[settings_id] = id
             nelt = nil
           end
         end
       end
 
       if nelt then
-        rule.settings[s] = nelt
-        lua_util.debugm(N, rspamd_config, 'added new settings id %s to %s',
-            nelt.name, rule.prefix)
+        rule.settings[settings_id] = nelt
+        lua_util.debugm(N, rspamd_config, 'added new settings id %s(%s) to %s',
+            nelt.name, settings_id, rule.prefix)
       end
     end
   end

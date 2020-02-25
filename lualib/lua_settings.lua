@@ -170,6 +170,8 @@ local function numeric_settings_id(str)
   return ret
 end
 
+exports.numeric_settings_id = numeric_settings_id
+
 -- Used to do the following:
 -- If there is a group of symbols_allowed, it checks if that is an array
 -- If that is a hash table then we transform it to a normal list, probably adding symbols to adjust scores
