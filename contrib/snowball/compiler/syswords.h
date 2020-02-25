@@ -1,5 +1,5 @@
-static const struct system_word vocab[80+1] = {
-  { 0, (const byte *)"", 80+1},
+static const struct system_word vocab[82+1] = {
+  { 0, (const byte *)"", 82+1},
 
   { 1, (const byte *)"$",             c_dollar },
   { 1, (const byte *)"(",             c_bra },
@@ -36,6 +36,7 @@ static const struct system_word vocab[80+1] = {
   { 3, (const byte *)"get",           c_get },
   { 3, (const byte *)"hex",           c_hex },
   { 3, (const byte *)"hop",           c_hop },
+  { 3, (const byte *)"len",           c_len },
   { 3, (const byte *)"non",           c_non },
   { 3, (const byte *)"not",           c_not },
   { 3, (const byte *)"set",           c_set },
@@ -49,6 +50,7 @@ static const struct system_word vocab[80+1] = {
   { 4, (const byte *)"true",          c_true },
   { 5, (const byte *)"among",         c_among },
   { 5, (const byte *)"false",         c_false },
+  { 5, (const byte *)"lenof",         c_lenof },
   { 5, (const byte *)"limit",         c_limit },
   { 5, (const byte *)"unset",         c_unset },
   { 6, (const byte *)"atmark",        c_atmark },

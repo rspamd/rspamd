@@ -57,9 +57,19 @@ extern symbol * create_b(int n) {
     return p;
 }
 
-extern void report_b(FILE * out, symbol * p) {
+extern void report_b(FILE * out, const symbol * p) {
     int i;
-    for (i = 0; i < SIZE(p); i++) fprintf(out, "%c", p[i]);
+    for (i = 0; i < SIZE(p); i++) {
+        if (p[i] > 255) {
+            printf("In report_b, can't convert p[%d] to char because it's 0x%02x\n", i, (int)p[i]);
+            exit(1);
+        }
+        putc(p[i], out);
+    }
+}
+
+extern void output_str(FILE * outfile, struct str * str) {
+    report_b(outfile, str_data(str));
 }
 
 extern void lose_b(symbol * p) {
@@ -74,19 +84,19 @@ extern symbol * increase_capacity(symbol * p, int n) {
     lose_b(p); return q;
 }
 
-extern symbol * move_to_b(symbol * p, int n, symbol * q) {
+extern symbol * move_to_b(symbol * p, int n, const symbol * q) {
     int x = n - CAPACITY(p);
     if (x > 0) p = increase_capacity(p, x);
     memmove(p, q, n * sizeof(symbol)); SIZE(p) = n; return p;
 }
 
-extern symbol * add_to_b(symbol * p, int n, symbol * q) {
+extern symbol * add_to_b(symbol * p, int n, const symbol * q) {
     int x = SIZE(p) + n - CAPACITY(p);
     if (x > 0) p = increase_capacity(p, x);
     memmove(p + SIZE(p), q, n * sizeof(symbol)); SIZE(p) += n; return p;
 }
 
-extern symbol * copy_b(symbol * p) {
+extern symbol * copy_b(const symbol * p) {
     int n = SIZE(p);
     symbol * q = create_b(n);
     move_to_b(q, n, p);
@@ -97,7 +107,7 @@ int space_count = 0;
 
 extern void * check_malloc(int n) {
     space_count++;
-    return calloc(1, n);
+    return malloc(n);
 }
 
 extern void check_free(void * p) {
@@ -107,18 +117,18 @@ extern void check_free(void * p) {
 
 /* To convert a block to a zero terminated string:  */
 
-extern char * b_to_s(symbol * p) {
+extern char * b_to_s(const symbol * p) {
     int n = SIZE(p);
-    char * s = (char *)calloc(1, n + 1);
+    char * s = (char *)malloc(n + 1);
     {
         int i;
         for (i = 0; i < n; i++) {
-	    if (p[i] > 255) {
-		printf("In b_to_s, can't convert p[%d] to char because it's 0x%02x\n", i, (int)p[i]);
-		exit(1);
-	    }
-	    s[i] = (char)p[i];
-	}
+            if (p[i] > 255) {
+                printf("In b_to_s, can't convert p[%d] to char because it's 0x%02x\n", i, (int)p[i]);
+                exit(1);
+            }
+            s[i] = (char)p[i];
+        }
     }
     s[n] = 0;
     return s;
@@ -153,9 +163,9 @@ struct str {
 };
 
 /* Create a new string. */
-extern struct str * str_new() {
+extern struct str * str_new(void) {
 
-    struct str * output = (struct str *) calloc(1, sizeof(struct str));
+    struct str * output = (struct str *) malloc(sizeof(struct str));
     output->data = create_b(0);
     return output;
 }
@@ -168,7 +178,7 @@ extern void str_delete(struct str * str) {
 }
 
 /* Append a str to this str. */
-extern void str_append(struct str * str, struct str * add) {
+extern void str_append(struct str * str, const struct str * add) {
 
     symbol * q = add->data;
     str->data = add_to_b(str->data, SIZE(q), q);
@@ -183,12 +193,19 @@ extern void str_append_ch(struct str * str, char add) {
 }
 
 /* Append a low level block to a str. */
-extern void str_append_b(struct str * str, symbol * q) {
+extern void str_append_b(struct str * str, const symbol * q) {
 
     str->data = add_to_b(str->data, SIZE(q), q);
 }
 
-/* Append a (char *, null teminated) string to a str. */
+/* Append the tail of a low level block to a str. */
+extern void str_append_b_tail(struct str * str, const symbol * q, int skip) {
+    if (skip < 0 || skip >= SIZE(q)) return;
+
+    str->data = add_to_b(str->data, SIZE(q) - skip, q + skip);
+}
+
+/* Append a (char *, null terminated) string to a str. */
 extern void str_append_string(struct str * str, const char * s) {
 
     str->data = add_s_to_b(str->data, s);
@@ -209,14 +226,14 @@ extern void str_clear(struct str * str) {
 }
 
 /* Set a string */
-extern void str_assign(struct str * str, char * s) {
+extern void str_assign(struct str * str, const char * s) {
 
     str_clear(str);
     str_append_string(str, s);
 }
 
 /* Copy a string. */
-extern struct str * str_copy(struct str * old) {
+extern struct str * str_copy(const struct str * old) {
 
     struct str * newstr = str_new();
     str_append(newstr, old);
@@ -224,15 +241,23 @@ extern struct str * str_copy(struct str * old) {
 }
 
 /* Get the data stored in this str. */
-extern symbol * str_data(struct str * str) {
+extern symbol * str_data(const struct str * str) {
 
     return str->data;
 }
 
 /* Get the length of the str. */
-extern int str_len(struct str * str) {
+extern int str_len(const struct str * str) {
 
     return SIZE(str->data);
+}
+
+/* Get the last character of the str.
+ *
+ * Or -1 if the string is empty.
+ */
+extern int str_back(const struct str *str) {
+    return SIZE(str->data) ? str->data[SIZE(str->data) - 1] : -1;
 }
 
 extern int get_utf8(const symbol * p, int * slot) {
@@ -260,4 +285,3 @@ extern int put_utf8(int ch, symbol * p) {
     p[1] = ((ch >> 6) & 0x3F) | 0x80;
     p[2] = (ch & 0x3F) | 0x80; return 3;
 }
-
