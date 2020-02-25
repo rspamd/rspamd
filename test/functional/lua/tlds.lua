@@ -13,10 +13,10 @@ rspamd_config:register_symbol({
       'example.com',
       'example.co.za',
       'example.in.net',
-      'example.kawasaki.jp',
+      'example.star.kawasaki.jp',
       'example.net',
       'example.net.in',
-      'example.nom.br',
+      'example.star.nom.br',
       'example.org',
       'example.org.ac',
       'example.ru.com',
@@ -34,22 +34,24 @@ rspamd_config:register_symbol({
         for _, p in ipairs(prefixes) do
           local test = rspamd_util.get_tld(p .. d)
           if (test ~= d) then
-            table.insert(worry, 'util.get_tld:' .. p .. d .. ':' .. test)
+            local opt = string.format('util.get_tld:p=%s;d=%s;got=%s', p, d, test)
+            table.insert(worry, opt)
             return
           end
           local u = rspamd_url.create(pool, p .. d)
           test = u:get_tld()
           if (test ~= d) then
-            table.insert(worry, 'url.get_tld:' .. p .. d .. ':' .. test)
+            local opt = string.format('url.create:p=%s;d=%s;got=%s', p, d, test)
+            table.insert(worry, opt)
             return
           end
         end
       end)()
     end
     if (#worry == 0) then
-      return true, "no worry"
+      return true, 1.0, "no worry"
     else
-      return true, table.concat(worry, ",")
+      return true, 1.0, worry
     end
   end
 })
