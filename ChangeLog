@@ -1,3 +1,35 @@
+2.4: 26 Feb 2020
+  * [CritFix] Fix parsing of the content type attributes
+  * [Feature] Clickhouse: Add extra columns support
+  * [Feature] Rbl: Add url_compose_map option for RBL rules
+  * [Fix] 'R' flag is for all headers regexp
+  * [Fix] Allow to reset settings id from Lua (e.g. because of the priority)
+  * [Fix] Avoid collisions in mempool variables by changing fuzzy caching logic
+  * [Fix] Avoid strdup usage for symbols options
+  * [Fix] Do not trust stat(2) it lies
+  * [Fix] Filter all options for symbols to have sane characters
+  * [Fix] Fix all headers iteration
+  * [Fix] Fix allowed_settings for neural
+  * [Fix] Fix listen socket parsing
+  * [Fix] Fix maps expressions evaluation
+  * [Fix] Fix sentinel connections leak by using async connections
+  * [Fix] Fix smtp message on passthrough result
+  * [Fix] Fix tld compositon rules
+  * [Fix] Fuzzy_storage: Do not check for shingles if a direct hash has been found
+  * [Fix] Lua_mime: Do not perform QP encoding for 7bit parts
+  * [Fix] Neural: Distinguish missing symbols from symbols with low scores
+  * [Fix] Support listening on systemd sockets by name
+  * [Project] Add lua_urls_compose library
+  * [Project] Allow to set a custom log function to the logger
+  * [Project] CDB maps: Start making cdb a first class citizen
+  * [Project] Clickhouse: Add extra columns concept
+  * [Project] Fix urls composition rules, add unit tests
+  * [Project] Unify cdb maps
+  * [Rework] Logger infrastructure rework
+  * [Rework] Refactor libraries structure
+  * [Rework] Rework SSL caching
+  * [Rework] Update snowball stemmer to 2.0 and remove all crap aside of UTF8
+
 2.3: 04 Feb 2020
   * [Conf] SPF is no longer a C module
   * [Conf] Update spamtrap map path example
