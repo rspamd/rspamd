@@ -149,27 +149,29 @@ local formatters = {
   email_alert = function(task, rule, extra)
     local meta = get_general_metadata(task, true)
     local display_emails = {}
+    local mail_targets = {}
     meta.mail_from = rule.mail_from or settings.mail_from
-    local mail_targets = rule.mail_to or settings.mail_to
-    if type(mail_targets) ~= 'table' then
-      table.insert(display_emails, string.format('<%s>', mail_targets))
-      mail_targets = {[mail_targets] = true}
+    local mail_rcpt = rule.mail_to or settings.mail_to
+    if type(mail_rcpt) ~= 'table' then
+      table.insert(display_emails, string.format('<%s>', mail_rcpt))
+      table.insert(mail_targets, mail_rcpt)
     else
-      for _, e in ipairs(mail_targets) do
+      for _, e in ipairs(mail_rcpt) do
         table.insert(display_emails, string.format('<%s>', e))
+        table.insert(mail_targets, mail_rcpt)
       end
     end
     if rule.email_alert_sender then
       local x = task:get_from('smtp')
       if x and string.len(x[1].addr) > 0 then
-        mail_targets[x] = true
+        table.insert(mail_targets, x)
         table.insert(display_emails, string.format('<%s>', x[1].addr))
       end
     end
     if rule.email_alert_user then
       local x = task:get_user()
       if x then
-        mail_targets[x] = true
+        table.insert(mail_targets, x)
         table.insert(display_emails, string.format('<%s>', x))
       end
     end
@@ -178,7 +180,7 @@ local formatters = {
       if x then
         for _, e in ipairs(x) do
           if string.len(e.addr) > 0 then
-            mail_targets[e.addr] = true
+            table.insert(mail_targets, e.addr)
             table.insert(display_emails, string.format('<%s>', e.addr))
           end
         end
@@ -304,7 +306,7 @@ local pushers = {
       host = rule.smtp,
       port = rule.smtp_port or settings.smtp_port or 25,
       from = rule.mail_from or settings.mail_from,
-      recipients = rule.mail_to,
+      recipients = extra.mail_targets,
       helo = rule.helo or settings.helo,
       timeout = rule.timeout or settings.timeout,
     }, formatted, sendmail_cb)
