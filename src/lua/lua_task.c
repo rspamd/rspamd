@@ -3729,7 +3729,7 @@ lua_task_get_from (lua_State *L)
 			break;
 		}
 
-		if (addrs) {
+		if (addrs && addrs->len > 0 {
 			lua_push_emails_address_list (L, addrs, what & ~RSPAMD_ADDRESS_MASK);
 		}
 		else if (addr) {
