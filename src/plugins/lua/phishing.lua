@@ -423,7 +423,7 @@ local function openphish_json_cb(string)
   pool:destroy()
 end
 
-local function openphish_plain_cb(string)
+local function openphish_plain_cb(s)
   local nelts = 0
   local new_data = {}
   local rspamd_mempool = require "rspamd_mempool"
@@ -435,7 +435,7 @@ local function openphish_plain_cb(string)
     end
   end
 
-  rspamd_str_split_fun(string, '\n', openphish_elt_parser)
+  rspamd_str_split_fun(s, '\n', openphish_elt_parser)
 
   openphish_data = new_data
   rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
@@ -492,13 +492,15 @@ if opts then
           type = 'callback',
           url = openphish_map,
           callback = openphish_plain_cb,
-          description = 'Open phishing feed map (see https://www.openphish.com for details)'
+          description = 'Open phishing feed map (see https://www.openphish.com for details)',
+          opaque_data = true,
         })
       else
         openphish_hash = rspamd_config:add_map({
             type = 'callback',
             url = openphish_map,
             callback = openphish_json_cb,
+            opaque_data = true,
             description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
           })
       end

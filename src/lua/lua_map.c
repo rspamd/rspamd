@@ -444,13 +444,14 @@ lua_map_fin (struct map_cb_data *data, void **target)
 	else if (cbdata->data != NULL && cbdata->data->len != 0) {
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
 
-		if (cbdata->opaque) {
+		if (!cbdata->opaque) {
 			lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
 		}
 		else {
 			struct rspamd_lua_text *t;
 
 			t = lua_newuserdata (cbdata->L, sizeof (*t));
+			rspamd_lua_setclass (cbdata->L, "rspamd{text}", -1);
 			t->flags = 0;
 			t->len = cbdata->data->len;
 			t->start = cbdata->data->str;
