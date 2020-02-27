@@ -508,13 +508,12 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           })
     else
       lua_util.debugm(N, task,
-          'do not push data to key %s: train condition not satisfied; reason: not checked existing ANNs',
-          set.ann.redis_key)
+          'do not push data: train condition not satisfied; reason: not checked existing ANNs')
     end
   else
     lua_util.debugm(N, task,
         'do not push data to key %s: train condition not satisfied; reason: %s',
-        set.ann.redis_key,
+        (set.ann or {}).redis_key,
         skip_reason)
   end
 end
