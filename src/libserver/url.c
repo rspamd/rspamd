@@ -536,6 +536,11 @@ rspamd_url_init (const gchar *tld_file)
 		ret = rspamd_url_parse_tld_file (tld_file, url_scanner);
 	}
 
+	if (url_scanner->matchers->len > 1000) {
+		msg_info ("start compiling of %d TLD suffixes; it might take a long time",
+				url_scanner->matchers->len);
+	}
+
 	if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
 		msg_err ("cannot compile tld patterns, url matching will be "
 				 "broken completely: %e", err);
