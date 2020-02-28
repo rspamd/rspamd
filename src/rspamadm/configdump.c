@@ -331,7 +331,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 						"one_shot", strlen ("one_shot"), false);
 				ucl_object_insert_key (gr_ucl,
 						ucl_object_fromdouble (gr->max_score),
-						"max_score", strlen ("one_shot"), false);
+						"max_score", strlen ("max_score"), false);
 				ucl_object_insert_key (gr_ucl,
 						ucl_object_fromstring (gr->description),
 						"description", strlen ("description"), false);
