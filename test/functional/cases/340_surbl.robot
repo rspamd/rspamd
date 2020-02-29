@@ -153,8 +153,7 @@ SURBL html entity&shy
 
 SURBL url compose map
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url11.eml
-  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[very.dirty.sanchez.com:url]
-  Should Not Contain  ${result.stdout}  not.dirty.sanchez.com
+  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[4.very.dirty.sanchez.com:url, clean.dirty.sanchez.com:url]
 
 *** Keywords ***
 Surbl Setup
