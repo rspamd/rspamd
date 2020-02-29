@@ -104,21 +104,21 @@ WHITELIST
   Should Not Contain  ${result.stdout}  DBL_SPAM (
   Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
 
-EMAILBL full adress & domain only
+EMAILBL full address & domain only
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
 
-EMAILBL full subdomain adress
+EMAILBL full subdomain address
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext2.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
 
-EMAILBL full subdomain adress & domain only
+EMAILBL full subdomain address & domain only
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext3.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (0.00)[baddomain.com:email]
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (0.00)[user.subdomain.baddomain.com:email]
 
-EMAILBL REPLY TO full adress
+EMAILBL REPLY TO full address
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
   Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
@@ -128,7 +128,7 @@ EMAILBL REPLY TO domain only
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
   Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
 
-EMAILBL REPLY TO full subdomain adress
+EMAILBL REPLY TO full subdomain address
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replytosubdomain.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
   Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
@@ -153,10 +153,8 @@ SURBL html entity&shy
 
 SURBL url compose map
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url11.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[very.dirty.sanchez.com:url]
+  Should Not Contain  ${result.stdout}  not.dirty.sanchez.com
 
 *** Keywords ***
 Surbl Setup
