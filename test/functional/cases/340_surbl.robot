@@ -151,9 +151,17 @@ SURBL html entity&shy
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url10.eml
   Should Contain  ${result.stdout}  RSPAMD_URIBL
 
-SURBL url compose map
+SURBL url compose map 1
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url11.eml
-  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[4.very.dirty.sanchez.com:url, clean.dirty.sanchez.com:url]
+  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[clean.dirty.sanchez.com:url]
+
+SURBL url compose map 2
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url12.eml
+  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[4.very.dirty.sanchez.com:url]
+
+SURBL url compose map 3
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url13.eml
+  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[41.black.sanchez.com:url]
 
 *** Keywords ***
 Surbl Setup
