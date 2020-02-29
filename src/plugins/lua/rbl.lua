@@ -484,6 +484,11 @@ local function gen_rbl_callback(rule)
   end
 
   local function check_urls(task, requests_table, whitelist)
+    local esld_lim = 1
+
+    if rule.url_compose_map then
+      esld_lim = nil -- Avoid esld limit as we use custom composition rules
+    end
     local ex_params = {
       task = task,
       limit = rule.requests_limit,
@@ -491,7 +496,7 @@ local function gen_rbl_callback(rule)
       ignore_ip = rule.no_ip,
       need_images = rule.images,
       need_emails = false,
-      esld_limit = 1,
+      esld_limit = esld_lim,
       no_cache = true,
     }
 
@@ -609,7 +614,9 @@ local function gen_rbl_callback(rule)
     }
 
     if rule.emails_domainonly then
-      ex_params.esld_limit = 1
+      if not rule.url_compose_map then
+        ex_params.esld_limit = 1
+      end
       ex_params.prefix = 'rbl_email_domainonly'
     end
 
