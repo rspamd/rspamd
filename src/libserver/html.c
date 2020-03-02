@@ -1302,6 +1302,11 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		else if (*in == '/' && *(in + 1) == '>') {
 			tag->flags |= FL_CLOSED;
 		}
+		else {
+			/* No space, proceed immediately to the attribute name */
+			state = parse_attr_name;
+			*savep = in;
+		}
 		break;
 
 	case spaces_after_param:
