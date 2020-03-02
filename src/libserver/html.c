@@ -1147,9 +1147,35 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			state = parse_equal;
 		}
 		else if (!g_ascii_isspace (*in)) {
-			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-			tag->flags |= FL_BROKEN;
-			state = ignore_bad_tag;
+			/*
+			 * HTML defines that crap could still be restored and
+			 * calculated somehow... So we have to follow this stupid behaviour
+			 */
+			/*
+			 * TODO: estimate what insane things do email clients in each case
+			 */
+			if (*in == '>') {
+				/*
+				 * Attribtute name followed by end of tag
+				 * Should be okay (empty attribute). The rest is handled outside
+				 * this automata.
+				 */
+
+			}
+			else if (*in == '"' || *in == '\'') {
+				/* Attribute followed by quote... Missing '=' ? Dunno, need to test */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				tag->flags |= FL_BROKEN;
+				state = ignore_bad_tag;
+			}
+			else {
+				/*
+				 * Just start another attribute ignoring an empty attributes for
+				 * now. We don't use them in fact...
+				 */
+				state = parse_attr_name;
+				*savep = in;
+			}
 		}
 		break;
 
