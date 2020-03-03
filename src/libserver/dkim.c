@@ -1914,6 +1914,7 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 {
 	const gchar *p;
 	guint remain = ctx->len ? ctx->len : (guint)(end - start);
+	guint total_len = end - start;
 	gboolean need_crlf = FALSE;
 
 	if (start == NULL) {
@@ -1948,10 +1949,32 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 				while (rspamd_dkim_simple_body_step (ctx, ctx->body_hash,
 						&start, end - start, &remain));
 
+				/*
+				 * If we have l= tag then we cannot add crlf...
+				 */
 				if (need_crlf) {
+					/* l is evil... */
+					if (ctx->len == 0) {
+						remain = 2;
+					}
+					else {
+						if (ctx->len <= total_len) {
+							/* We don't have enough l to add \r\n */
+							remain = 0;
+						}
+						else {
+							if (ctx->len - total_len >= 2) {
+								remain = 2;
+							}
+							else {
+								remain = ctx->len - total_len;
+							}
+						}
+					}
+
 					start = "\r\n";
 					end = start + 2;
-					remain = 2;
+
 					rspamd_dkim_simple_body_step (ctx, ctx->body_hash,
 							&start, end - start, &remain);
 				}
