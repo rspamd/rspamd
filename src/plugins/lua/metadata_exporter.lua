@@ -144,7 +144,7 @@ end
 
 local formatters = {
   default = function(task)
-    return task:get_content()
+    return task:get_content(), {}
   end,
   email_alert = function(task, rule, extra)
     local meta = get_general_metadata(task, true)
@@ -306,7 +306,7 @@ local pushers = {
       host = rule.smtp,
       port = rule.smtp_port or settings.smtp_port or 25,
       from = rule.mail_from or settings.mail_from,
-      recipients = extra.mail_targets,
+      recipients = extra.mail_targets or rule.mail_to or settings.mail_to,
       helo = rule.helo or settings.helo,
       timeout = rule.timeout or settings.timeout,
     }, formatted, sendmail_cb)
