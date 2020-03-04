@@ -796,7 +796,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		/* Preallocate stack (small opt) */
 		lua_checkstack (L, err_idx + 9);
 		/* function */
-		lua_rawgeti (L, LUA_REGISTRYINDEX, session->ctx->lua_pre_handler_cbref);
+		lua_rawgeti (L, LUA_REGISTRYINDEX, session->ctx->lua_post_handler_cbref);
 		/* client IP */
 		rspamd_lua_ip_push (L, session->addr);
 		/* client command */
@@ -825,6 +825,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 			 * if it is true, then we need to read the former ones:
 			 * 2-nd will be reply code
 			 * 3-rd will be probability (or 0.0 if missing)
+			 * 4-th value is flag (or default flag if missing)
 			 */
 			ret = lua_toboolean (L, err_idx + 1);
 
@@ -837,6 +838,10 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 				}
 				else {
 					result->v1.prob = 0.0f;
+				}
+
+				if (lua_isnumber (L, err_idx + 4)) {
+					result->v1.flag = lua_tointeger (L, err_idx + 4);
 				}
 
 				lua_settop (L, 0);
