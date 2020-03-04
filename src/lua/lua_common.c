@@ -197,6 +197,24 @@ rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 	lua_setmetatable (L, objidx);
 }
 
+void
+rspamd_lua_add_metamethod (lua_State *L, const gchar *classname,
+								luaL_Reg *meth)
+{
+	khiter_t k;
+
+	k = kh_get (lua_class_set, lua_classes, classname);
+
+	g_assert (k != kh_end (lua_classes));
+	/* get metatable identified by pointer */
+	lua_rawgetp (L, LUA_REGISTRYINDEX,
+			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+
+	lua_pushcfunction (L, meth->func);
+	lua_setfield (L, -2, meth->name);
+	lua_pop (L, 1); /* remove metatable */
+}
+
 /* assume that table is at the top */
 void
 rspamd_lua_table_set (lua_State * L, const gchar *index, const gchar *value)

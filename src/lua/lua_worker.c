@@ -47,6 +47,7 @@ LUA_FUNCTION_DEF (worker, add_control_handler);
 
 const luaL_reg worker_reg[] = {
 		LUA_INTERFACE_DEF (worker, get_name),
+		{"get_type", lua_worker_get_name},
 		LUA_INTERFACE_DEF (worker, get_stat),
 		LUA_INTERFACE_DEF (worker, get_index),
 		LUA_INTERFACE_DEF (worker, get_count),

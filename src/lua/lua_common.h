@@ -162,6 +162,15 @@ void rspamd_lua_new_class (lua_State *L,
 void rspamd_lua_setclass (lua_State *L, const gchar *classname, gint objidx);
 
 /**
+ * Adds a new field to the class (metatable) identified by `classname`
+ * @param L
+ * @param classname
+ * @param meth
+ */
+void rspamd_lua_add_metamethod (lua_State *L, const gchar *classname,
+		luaL_Reg *meth);
+
+/**
  * Set index of table to value (like t['index'] = value)
  */
 void rspamd_lua_table_set (lua_State *L, const gchar *index, const gchar *value);
