@@ -639,7 +639,7 @@ process_dict = function(task, pdf, obj, dict)
 
       for _,c in ipairs(contents) do
         local cobj = maybe_dereference_object(c, pdf, task)
-        if cobj then
+        if cobj and type(cobj) == 'table' then
           obj.contents[#obj.contents + 1] = cobj
           cobj.parent = obj
           cobj.type = 'content'
@@ -766,7 +766,7 @@ local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
           span_len = (elts[i + 1][2] + first) - offset
         end
 
-        if span_len > 0 then
+        if span_len > 0 and offset + span_len < #uncompressed then
           local obj = {
             major = obj_number,
             minor = 0, -- Implicit
