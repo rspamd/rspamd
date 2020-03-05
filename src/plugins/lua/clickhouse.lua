@@ -164,19 +164,19 @@ local migrations = {
   [1] = {
     -- Move to a wide fat table
     [[ALTER TABLE rspamd
-      ADD COLUMN `Attachments.FileName` Array(String) AFTER ListId,
-      ADD COLUMN `Attachments.ContentType` Array(String) AFTER `Attachments.FileName`,
-      ADD COLUMN `Attachments.Length` Array(UInt32) AFTER `Attachments.ContentType`,
-      ADD COLUMN `Attachments.Digest` Array(FixedString(16)) AFTER `Attachments.Length`,
-      ADD COLUMN `Urls.Tld` Array(String) AFTER `Attachments.Digest`,
-      ADD COLUMN `Urls.Url` Array(String) AFTER `Urls.Tld`,
-      ADD COLUMN Emails Array(String) AFTER `Urls.Url`,
-      ADD COLUMN ASN UInt32 AFTER Emails,
-      ADD COLUMN Country FixedString(2) AFTER ASN,
-      ADD COLUMN IPNet String AFTER Country,
-      ADD COLUMN `Symbols.Names` Array(String) AFTER IPNet,
-      ADD COLUMN `Symbols.Scores` Array(Float64) AFTER `Symbols.Names`,
-      ADD COLUMN `Symbols.Options` Array(String) AFTER `Symbols.Scores`]],
+      ADD COLUMN IF NOT EXISTS `Attachments.FileName` Array(String) AFTER ListId,
+      ADD COLUMN IF NOT EXISTS `Attachments.ContentType` Array(String) AFTER `Attachments.FileName`,
+      ADD COLUMN IF NOT EXISTS `Attachments.Length` Array(UInt32) AFTER `Attachments.ContentType`,
+      ADD COLUMN IF NOT EXISTS `Attachments.Digest` Array(FixedString(16)) AFTER `Attachments.Length`,
+      ADD COLUMN IF NOT EXISTS `Urls.Tld` Array(String) AFTER `Attachments.Digest`,
+      ADD COLUMN IF NOT EXISTS `Urls.Url` Array(String) AFTER `Urls.Tld`,
+      ADD COLUMN IF NOT EXISTS Emails Array(String) AFTER `Urls.Url`,
+      ADD COLUMN IF NOT EXISTS ASN UInt32 AFTER Emails,
+      ADD COLUMN IF NOT EXISTS Country FixedString(2) AFTER ASN,
+      ADD COLUMN IF NOT EXISTS IPNet String AFTER Country,
+      ADD COLUMN IF NOT EXISTS `Symbols.Names` Array(String) AFTER IPNet,
+      ADD COLUMN IF NOT EXISTS `Symbols.Scores` Array(Float64) AFTER `Symbols.Names`,
+      ADD COLUMN IF NOT EXISTS `Symbols.Options` Array(String) AFTER `Symbols.Scores`]],
     -- Add explicit version
     [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
     [[INSERT INTO rspamd_version (Version) Values (2)]],
@@ -184,25 +184,25 @@ local migrations = {
   [2] = {
     -- Add `Subject` column
     [[ALTER TABLE rspamd
-      ADD COLUMN Subject String AFTER ListId]],
+      ADD COLUMN IF NOT EXISTS Subject String AFTER ListId]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (3)]],
   },
   [3] = {
     [[ALTER TABLE rspamd
-      ADD COLUMN IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown' AFTER IsDmarc,
+      ADD COLUMN IF NOT EXISTS IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown' AFTER IsDmarc,
       MODIFY COLUMN IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'dnsfail' = 3, 'na' = 4) DEFAULT 'unknown',
       MODIFY COLUMN IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'softfail' = 3, 'na' = 4, 'quarantine' = 5) DEFAULT 'unknown',
-      ADD COLUMN MimeRecipients Array(String) AFTER RcptDomain,
-      ADD COLUMN MessageId String AFTER MimeRecipients,
-      ADD COLUMN ScanTimeReal UInt32 AFTER `Symbols.Options`,
-      ADD COLUMN ScanTimeVirtual UInt32 AFTER ScanTimeReal]],
+      ADD COLUMN IF NOT EXISTS MimeRecipients Array(String) AFTER RcptDomain,
+      ADD COLUMN IF NOT EXISTS MessageId String AFTER MimeRecipients,
+      ADD COLUMN IF NOT EXISTS ScanTimeReal UInt32 AFTER `Symbols.Options`,
+      ADD COLUMN IF NOT EXISTS ScanTimeVirtual UInt32 AFTER ScanTimeReal]],
     -- Add aliases
     [[ALTER TABLE rspamd
-      ADD COLUMN SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)),
-      ADD COLUMN SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
-      ADD COLUMN MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
-      ADD COLUMN MIMERcpt ALIAS MimeRecipients[1]
+      ADD COLUMN IF NOT EXISTS SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)),
+      ADD COLUMN IF NOT EXISTS SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
+      ADD COLUMN IF NOT EXISTS MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
+      ADD COLUMN IF NOT EXISTS MIMERcpt ALIAS MimeRecipients[1]
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (4)]],
@@ -210,15 +210,15 @@ local migrations = {
   [4] = {
     [[ALTER TABLE rspamd
       MODIFY COLUMN Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
-      ADD COLUMN CustomAction String AFTER Action
+      ADD IF NOT EXISTS COLUMN CustomAction String AFTER Action
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (5)]],
   },
   [5] = {
     [[ALTER TABLE rspamd
-      ADD COLUMN AuthUser String AFTER ScanTimeVirtual,
-      ADD COLUMN SettingsId LowCardinality(String) AFTER AuthUser
+      ADD COLUMN IF NOT EXISTS AuthUser String AFTER ScanTimeVirtual,
+      ADD COLUMN IF NOT EXISTS SettingsId LowCardinality(String) AFTER AuthUser
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (6)]],
@@ -226,8 +226,8 @@ local migrations = {
   [6] = {
     -- Add new columns
     [[ALTER TABLE rspamd
-      ADD COLUMN Helo String AFTER IP,
-      ADD COLUMN SMTPRecipients Array(String) AFTER RcptDomain
+      ADD COLUMN IF NOT EXISTS Helo String AFTER IP,
+      ADD COLUMN IF NOT EXISTS SMTPRecipients Array(String) AFTER RcptDomain
     ]],
     -- Modify SMTPRcpt alias
     [[
@@ -240,8 +240,8 @@ local migrations = {
   [7] = {
     -- Add new columns
     [[ALTER TABLE rspamd
-      ADD COLUMN `Groups.Names` Array(LowCardinality(String)) AFTER `Symbols.Options`,
-      ADD COLUMN `Groups.Scores` Array(Float32) AFTER `Groups.Names`
+      ADD COLUMN IF NOT EXISTS `Groups.Names` Array(LowCardinality(String)) AFTER `Symbols.Options`,
+      ADD COLUMN IF NOT EXISTS `Groups.Scores` Array(Float32) AFTER `Groups.Names`
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (8)]],
