@@ -262,7 +262,7 @@ rspamd_tokenize_exception (struct rspamd_process_exception *ex, GArray *res)
 		uri = ex->ptr;
 
 		if (uri && uri->tldlen > 0) {
-			token.original.begin = uri->tld;
+			token.original.begin = rspamd_url_tld_unsafe (uri);
 			token.original.len = uri->tldlen;
 
 		}

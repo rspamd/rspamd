@@ -878,11 +878,13 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 	ucl_object_insert_key (obj, elt, "url", 0, false);
 
 	if (url->tldlen > 0) {
-		elt = ucl_object_fromstring_common (url->tld, url->tldlen, 0);
+		elt = ucl_object_fromstring_common (rspamd_url_tld_unsafe (url),
+				url->tldlen, 0);
 		ucl_object_insert_key (obj, elt, "tld", 0, false);
 	}
 	if (url->hostlen > 0) {
-		elt = ucl_object_fromstring_common (rspamd_url_host_unsafe (url), url->hostlen, 0);
+		elt = ucl_object_fromstring_common (rspamd_url_host_unsafe (url),
+				url->hostlen, 0);
 		ucl_object_insert_key (obj, elt, "host", 0, false);
 	}
 

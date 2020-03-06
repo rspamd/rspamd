@@ -704,14 +704,14 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 
 				/* Apply the same logic for TLD */
 				disp_tok.len = text_url->tldlen;
-				disp_tok.begin = text_url->tld;
+				disp_tok.begin = rspamd_url_tld_unsafe (text_url);
 #if U_ICU_VERSION_MAJOR_NUM >= 46
-				if (rspamd_substring_search_caseless (text_url->tld,
+				if (rspamd_substring_search_caseless (rspamd_url_tld_unsafe (text_url),
 						text_url->tldlen, "xn--", 4) != -1) {
 					idn_hbuf = rspamd_mempool_alloc (pool, text_url->tldlen * 2 + 1);
 					/* We need to convert it to the normal value first */
 					disp_tok.len = uidna_nameToUnicodeUTF8 (udn,
-							text_url->tld, text_url->tldlen,
+							rspamd_url_tld_unsafe (text_url), text_url->tldlen,
 							idn_hbuf, text_url->tldlen * 2 + 1, &uinfo, &uc_err);
 
 					if (uc_err != U_ZERO_ERROR) {
@@ -725,14 +725,14 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 				}
 #endif
 				href_tok.len = href_url->tldlen;
-				href_tok.begin = href_url->tld;
+				href_tok.begin = rspamd_url_tld_unsafe (href_url);
 #if U_ICU_VERSION_MAJOR_NUM >= 46
-				if (rspamd_substring_search_caseless (href_url->tld,
+				if (rspamd_substring_search_caseless (rspamd_url_tld_unsafe (href_url),
 						href_url->tldlen, "xn--", 4) != -1) {
 					idn_hbuf = rspamd_mempool_alloc (pool, href_url->tldlen * 2 + 1);
 					/* We need to convert it to the normal value first */
 					href_tok.len = uidna_nameToUnicodeUTF8 (udn,
-							href_url->tld, href_url->tldlen,
+							rspamd_url_tld_unsafe (href_url), href_url->tldlen,
 							idn_hbuf, href_url->tldlen * 2 + 1, &uinfo, &uc_err);
 
 					if (uc_err != U_ZERO_ERROR) {

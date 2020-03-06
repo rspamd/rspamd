@@ -53,15 +53,7 @@ struct rspamd_url {
 	guint datashift;
 	guint queryshift;
 	guint fragmentshift;
-
-	gchar *tld;
-	gchar *visible_part;
-
-	struct rspamd_url *phished_url;
-
-	guint urllen;
-	guint rawlen;
-	guint32 flags;
+	guint tldshift;
 
 	guint16 protocollen;
 	guint16 userlen;
@@ -70,8 +62,14 @@ struct rspamd_url {
 	guint16 querylen;
 	guint16 fragmentlen;
 	guint16 tldlen;
-
 	guint16 count;
+
+	guint urllen;
+	guint rawlen;
+	guint32 flags;
+
+	gchar *visible_part;
+	struct rspamd_url *phished_url;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -79,6 +77,7 @@ struct rspamd_url {
 
 #define rspamd_url_host(u) ((u)->hostlen > 0 ? (u)->string + (u)->hostshift : NULL)
 #define rspamd_url_host_unsafe(u) ((u)->string + (u)->hostshift)
+#define rspamd_url_tld_unsafe(u) ((u)->string + (u)->tldshift)
 
 #define rspamd_url_data_unsafe(u) ((u)->string + (u)->datashift)
 #define rspamd_url_query_unsafe(u) ((u)->string + (u)->queryshift)

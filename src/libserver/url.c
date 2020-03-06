@@ -1561,7 +1561,7 @@ rspamd_tld_trie_callback (struct rspamd_multipattern *mp,
 
 	if ((ndots == 0 || p == start - 1) &&
 			url->tldlen < rspamd_url_host_unsafe (url) + url->hostlen - pos) {
-		url->tld = (gchar *) pos;
+		url->tldshift = (pos - url->string);
 		url->tldlen = rspamd_url_host_unsafe (url) + url->hostlen - pos;
 	}
 
@@ -1590,11 +1590,11 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 			(gint)(uri->hostshift),
 			uri->string);
 	uri->hostshift = r;
+	uri->tldshift = r;
 	start_offset = strbuf + r;
 	inet_ntop (af, addr, strbuf + r, slen - r + 1);
 	uri->hostlen = strlen (start_offset);
 	r += uri->hostlen;
-	uri->tld = (const gchar *)start_offset;
 	uri->tldlen = uri->hostlen;
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 
@@ -2214,7 +2214,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 			} else {
 				if (!rspamd_url_is_ip (uri, pool)) {
 					/* Assume tld equal to host */
-					uri->tld = rspamd_url_host_unsafe (uri);
+					uri->tldshift = uri->hostshift;
 					uri->tldlen = uri->hostlen;
 				}
 			}
@@ -2241,11 +2241,11 @@ rspamd_url_parse (struct rspamd_url *uri,
 		rspamd_telephone_normalise_inplace (uri);
 
 		if (rspamd_url_host_unsafe (uri)[0] == '+') {
-			uri->tld = rspamd_url_host_unsafe (uri) + 1;
+			uri->tldshift = uri->hostshift + 1;
 			uri->tldlen = uri->hostlen - 1;
 		}
 		else {
-			uri->tld = rspamd_url_host_unsafe (uri);
+			uri->tldshift = uri->hostshift;
 			uri->tldlen = uri->hostlen;
 		}
 	}

@@ -560,7 +560,7 @@ lua_url_get_tld (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->tldlen > 0) {
-		lua_pushlstring (L, url->url->tld, url->url->tldlen);
+		lua_pushlstring (L, rspamd_url_tld_unsafe (url->url), url->url->tldlen);
 	}
 	else {
 		lua_pushnil (L);
@@ -672,7 +672,7 @@ lua_url_to_table (lua_State *L)
 
 		if (u->tldlen > 0) {
 			lua_pushstring (L, "tld");
-			lua_pushlstring (L, u->tld, u->tldlen);
+			lua_pushlstring (L, rspamd_url_tld_unsafe (u), u->tldlen);
 			lua_settable (L, -3);
 		}
 
