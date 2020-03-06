@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "khash.h"
 #include "fstring.h"
 
 #ifdef  __cplusplus
@@ -280,6 +281,27 @@ const gchar *rspamd_url_protocol_name (enum rspamd_url_protocol proto);
  * @return
  */
 enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
+
+/* Defines sets of urls indexed by url as is */
+KHASH_DECLARE (rspamd_url_hash, struct rspamd_url *, char);
+KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
+
+/* Convenience functions for url sets */
+/**
+ * Add an url to set or increase the existing url count
+ * @param set
+ * @param u
+ * @return true if a new url has been added
+ */
+bool rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
+		struct rspamd_url *u);
+/**
+ * Checks if a url is in set
+ * @param set
+ * @param u
+ * @return
+ */
+bool rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
 
 #ifdef  __cplusplus
 }

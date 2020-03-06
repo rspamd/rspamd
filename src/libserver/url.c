@@ -214,6 +214,12 @@ struct url_matcher static_matchers[] = {
 				URL_FLAG_NOHTML}
 };
 
+/* Hash table implementation */
+__KHASH_IMPL (rspamd_url_hash, kh_inline,struct rspamd_url *, char, false,
+		rspamd_url_hash, rspamd_urls_cmp);
+__KHASH_IMPL (rspamd_url_host_hash, kh_inline,struct rspamd_url *, char, false,
+		rspamd_url_host_hash, rspamd_urls_host_cmp);
+
 struct url_callback_data {
 	const gchar *begin;
 	gchar *url_str;
@@ -3374,7 +3380,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	return TRUE;
 }
 
-guint
+inline guint
 rspamd_url_hash (gconstpointer u)
 {
 	const struct rspamd_url *url = u;
@@ -3387,7 +3393,7 @@ rspamd_url_hash (gconstpointer u)
 	return 0;
 }
 
-guint
+inline guint
 rspamd_url_host_hash (gconstpointer u)
 {
 	const struct rspamd_url *url = u;
@@ -3401,7 +3407,7 @@ rspamd_url_host_hash (gconstpointer u)
 	return 0;
 }
 
-guint
+inline guint
 rspamd_email_hash (gconstpointer u)
 {
 	const struct rspamd_url *url = u;
@@ -3421,7 +3427,7 @@ rspamd_email_hash (gconstpointer u)
 }
 
 /* Compare two emails for building emails tree */
-gboolean
+inline gboolean
 rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
@@ -3450,7 +3456,7 @@ rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 	return FALSE;
 }
 
-gboolean
+inline gboolean
 rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
@@ -3466,7 +3472,7 @@ rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 	return r == 0;
 }
 
-gboolean
+inline gboolean
 rspamd_urls_host_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
@@ -3805,4 +3811,39 @@ rspamd_url_protocol_from_string (const gchar *str)
 	}
 
 	return ret;
+}
+
+
+bool
+rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
+									 struct rspamd_url *u)
+{
+	khiter_t k;
+	gint r;
+
+	k = kh_put (rspamd_url_hash, set, u, &r);
+
+	if (r == 0) {
+		struct rspamd_url *ex = kh_key (set, k);
+
+		ex->count ++;
+
+		return false;
+	}
+
+	return true;
+}
+
+bool
+rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u)
+{
+	khiter_t k;
+
+	k = kh_get (rspamd_url_hash, set, u);
+
+	if (k == kh_end (set)) {
+		return false;
+	}
+
+	return true;
 }
