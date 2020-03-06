@@ -198,8 +198,8 @@ lua_url_get_user (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
-	if (url != NULL && url->url->user != NULL) {
-		lua_pushlstring (L, url->url->user, url->url->userlen);
+	if (url != NULL && rspamd_url_user (url->url) != NULL) {
+		lua_pushlstring (L, rspamd_url_user (url->url), url->url->userlen);
 	}
 	else {
 		lua_pushnil (L);
@@ -307,7 +307,10 @@ lua_url_tostring (lua_State *L)
 		if (url->url->protocol == PROTOCOL_MAILTO) {
 			gchar *tmp = g_malloc (url->url->userlen + 1 +
 								   url->url->hostlen);
-			memcpy (tmp, url->url->user, url->url->userlen);
+			if (url->url->userlen) {
+				memcpy (tmp, url->url->string + url->url->usershift, url->url->userlen);
+			}
+
 			tmp[url->url->userlen] = '@';
 			memcpy (tmp + url->url->userlen + 1, url->url->host,
 					url->url->hostlen);
@@ -675,7 +678,7 @@ lua_url_to_table (lua_State *L)
 
 		if (u->userlen > 0) {
 			lua_pushstring (L, "user");
-			lua_pushlstring (L, u->user, u->userlen);
+			lua_pushlstring (L, rspamd_url_user (u), u->userlen);
 			lua_settable (L, -3);
 		}
 

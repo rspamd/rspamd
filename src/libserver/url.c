@@ -1874,7 +1874,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 	switch (field) {
 	case UF_SCHEMA:
 		if (uri->userlen > 0) {
-			uri->user -= shift;
+			uri->usershift -= shift;
 		}
 		if (uri->hostlen > 0) {
 			uri->host -= shift;
@@ -2038,7 +2038,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 				uri->fragmentlen = complen;
 				break;
 			case UF_USERINFO:
-				uri->user = comp;
+				uri->usershift = u.field_data[i].off;
 				uri->userlen = complen;
 				break;
 			default:
@@ -3382,7 +3382,7 @@ rspamd_email_hash (gconstpointer u)
 	}
 
 	if (url->userlen > 0) {
-		rspamd_cryptobox_fast_hash_update (&st, url->user, url->userlen);
+		rspamd_cryptobox_fast_hash_update (&st, rspamd_url_user_unsafe(url), url->userlen);
 	}
 
 	return (guint)rspamd_cryptobox_fast_hash_final (&st);
@@ -3404,8 +3404,9 @@ rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 				return FALSE;
 			}
 			else {
-				return rspamd_lc_cmp (u1->user, u2->user, u1->userlen) ==
-						0;
+				return (rspamd_lc_cmp (rspamd_url_user_unsafe(u1),
+						rspamd_url_user_unsafe(u2),
+						u1->userlen) == 0);
 			}
 		}
 		else {
@@ -3606,7 +3607,7 @@ static const unsigned char rspamd_url_encoding_classes[256] = {
 
 #define CHECK_URL_COMPONENT(beg, len, flags) do { \
 	for (i = 0; i < (len); i ++) { \
-		if ((rspamd_url_encoding_classes[(beg)[i]] & (flags)) == 0) { \
+		if ((rspamd_url_encoding_classes[(guchar)(beg)[i]] & (flags)) == 0) { \
 			dlen += 2; \
 		} \
 	} \
@@ -3614,10 +3615,10 @@ static const unsigned char rspamd_url_encoding_classes[256] = {
 
 #define ENCODE_URL_COMPONENT(beg, len, flags) do { \
 	for (i = 0; i < (len) && dend > d; i ++) { \
-		if ((rspamd_url_encoding_classes[(beg)[i]] & (flags)) == 0) { \
+		if ((rspamd_url_encoding_classes[(guchar)(beg)[i]] & (flags)) == 0) { \
 			*d++ = '%'; \
-			*d++ = hexdigests[((beg)[i] >> 4) & 0xf]; \
-			*d++ = hexdigests[(beg)[i] & 0xf]; \
+			*d++ = hexdigests[(guchar)((beg)[i] >> 4) & 0xf]; \
+			*d++ = hexdigests[(guchar)(beg)[i] & 0xf]; \
 		} \
 		else { \
 			*d++ = (beg)[i]; \
@@ -3638,7 +3639,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 
 	CHECK_URL_COMPONENT ((guchar *)url->host, url->hostlen,
 			RSPAMD_URL_FLAGS_HOSTSAFE);
-	CHECK_URL_COMPONENT ((guchar *)url->user, url->userlen,
+	CHECK_URL_COMPONENT (rspamd_url_user_unsafe(url), url->userlen,
 			RSPAMD_URL_FLAGS_USERSAFE);
 	CHECK_URL_COMPONENT ((guchar *)url->data, url->datalen,
 			RSPAMD_URL_FLAGS_PATHSAFE);
@@ -3677,7 +3678,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	}
 
 	if (url->userlen > 0) {
-		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen,
+		ENCODE_URL_COMPONENT (rspamd_url_user_unsafe (url), url->userlen,
 				RSPAMD_URL_FLAGS_USERSAFE);
 		*d++ = ':';
 	}

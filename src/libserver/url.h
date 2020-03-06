@@ -47,7 +47,9 @@ struct rspamd_url {
 	guint protocol;
 	guint port;
 
-	gchar *user;
+	guint usershift;
+	guint userlen;
+
 	gchar *host;
 	gchar *data;
 	gchar *query;
@@ -58,7 +60,6 @@ struct rspamd_url {
 	struct rspamd_url *phished_url;
 
 	guint protocollen;
-	guint userlen;
 	guint hostlen;
 	guint datalen;
 	guint querylen;
@@ -70,6 +71,9 @@ struct rspamd_url {
 	enum rspamd_url_flags flags;
 	guint count;
 };
+
+#define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
+#define rspamd_url_user_unsafe(u) ((u)->string + (u)->usershift)
 
 enum uri_errno {
 	URI_ERRNO_OK = 0,           /* Parsing went well */

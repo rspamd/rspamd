@@ -1223,7 +1223,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					continue;
 				}
 
-				in = url->user;
+				in = rspamd_url_user_unsafe (url);
 				len = url->userlen + 1 + url->hostlen;
 				scvec[i] = (guchar *) in;
 				lenvec[i++] = len;
