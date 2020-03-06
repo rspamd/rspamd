@@ -40,10 +40,31 @@
 			<li role="presentation"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab">Scan<span class="learn" style="display: none;">/Learn</span></a></li>
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
-    <ul class="nav navbar-nav nav-pills pull-right" style="display: none;">
-      <li><a href="#" role="button" data-toggle="button" id="refresh"><i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Refresh</a></li>
-      <li><a href="#" role="button" data-toggle="button" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a></li>
-    </ul>
+    	<form class="navbar-form navbar-right" style="display: none;">
+			<div class="btn-group">
+				<a href="#" class="btn btn-default" role="button" data-toggle="button" id="refresh"><i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Refresh</a>
+				<button class="btn btn-default dropdown-toggle" data-toggle="dropdown" id="autoRefresh">
+					<span id="countdown">--:--</span> <span class="caret"></span>
+				</button>
+				<ul class="dropdown-menu">
+					<li class="preset"><a href="#" data-value=null>Disable</a></li>
+					<li class="preset divider" role="separator"></li>
+					<li class="preset active"><a href="#" data-value="10000">10 seconds</a></li>
+					<li class="preset"><a href="#" data-value="30000">30 seconds</a></li>
+					<li class="preset divider" role="separator"></li>
+					<li class="preset"><a href="#" data-value="60000">1 minute</a></li>
+					<li class="preset"><a href="#" data-value="600000">10 minutes</a></li>
+					<li class="preset"><a href="#" data-value="1800000">30 minutes</a></li>
+					<li class="preset divider" role="separator"></li>
+					<li class="preset"><a href="#" data-value="3600000">1 hour</a></li>
+
+					<li class="dynamic"><a href="#" data-value=null>Disable</a></li>
+					<li class="dynamic divider" role="separator"></li>
+					<li class="dynamic active"><a href="#" id="dynamic-item" data-value="3600000">1 hour</a></li>
+				</ul>
+			</div>
+			<a href="#" class="btn btn-default" role="button" data-toggle="button" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a>
+		</form>
 	</div>
 </nav>
 

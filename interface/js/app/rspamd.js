@@ -94,23 +94,68 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             tab_id = "#" + $(".navbar-nav .active > a").attr("id");
         }
 
+        $("#autoRefresh").hide();
+        $(".btn-group .btn:visible").last().addClass("radius-right");
+
+        function setAutoRefresh(refreshInterval, timer, callback) {
+            function countdown(interval) {
+                Visibility.stop(timer_id.countdown);
+                if (!interval) {
+                    $("#countdown").text("--:--");
+                    return;
+                }
+
+                var timeLeft = interval;
+                $("#countdown").text("00:00");
+                timer_id.countdown = Visibility.every(1000, 1000, function () {
+                    timeLeft -= 1000;
+                    $("#countdown").text(new Date(timeLeft).toISOString().substr(14, 5));
+                    if (timeLeft <= 0) Visibility.stop(timer_id.countdown);
+                });
+            }
+
+            $(".btn-group .btn:visible").last().removeClass("radius-right");
+            $("#autoRefresh").show();
+
+            countdown(refreshInterval);
+            if (!refreshInterval) return;
+            timer_id[timer] = Visibility.every(refreshInterval, function () {
+                countdown(refreshInterval);
+                callback();
+            });
+        }
+
         switch (tab_id) {
             case "#status_nav":
-                tab_stat.statWidgets(ui, graphs, checked_server);
-                timer_id.status = Visibility.every(10000, function () {
-                    tab_stat.statWidgets(ui, graphs, checked_server);
-                });
+                (function () {
+                    var refreshInterval = $(".dropdown-menu li.active.preset a").data("value");
+                    setAutoRefresh(refreshInterval, "status",
+                        function () { return tab_stat.statWidgets(ui, graphs, checked_server); });
+                    if (refreshInterval) tab_stat.statWidgets(ui, graphs, checked_server);
+
+                    $(".preset").show();
+                    $(".dynamic").hide();
+                }());
                 break;
             case "#throughput_nav":
-                tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
+                (function () {
+                    var step = {
+                        day: 60000,
+                        week: 300000
+                    };
+                    var refreshInterval = step[selData] || 3600000;
+                    $("#dynamic-item").text((refreshInterval / 60000) + " min");
 
-                var autoRefresh = {
-                    day: 60000,
-                    week: 300000
-                };
-                timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                    tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
-                });
+                    if (!$(".dropdown-menu li.active.dynamic a").data("value")) {
+                        refreshInterval = null;
+                    }
+                    setAutoRefresh(refreshInterval, "throughput",
+                        function () { return tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData); });
+                    if (refreshInterval) tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
+
+                    $(".preset").hide();
+                    $(".dynamic").show();
+                }());
                 break;
             case "#configuration_nav":
                 tab_config.getActions(ui, checked_server);
@@ -233,7 +278,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             $("#errors-history").show();
         }
 
-        var buttons = $("#navBar .pull-right");
+        var buttons = $("#navBar form.navbar-right");
         $("#mainUI").show();
         $(buttons).show();
         $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
@@ -357,6 +402,14 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         $("a[data-toggle=\"button\"]").on("click", function (e) {
             var tab_id = "#" + $(e.target).attr("id");
             tabClick(tab_id);
+        });
+        $(".dropdown-menu li a").click(function (e) {
+            e.preventDefault();
+            var classList = $(this).parent().attr("class");
+            var menuClass = (/\b(?:dynamic|preset)\b/).exec(classList)[0];
+            $(".dropdown-menu li.active." + menuClass).removeClass("active");
+            $(this).parent("li").addClass("active");
+            tabClick("#refresh");
         });
 
         $("#selSrv").change(function () {

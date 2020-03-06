@@ -39,6 +39,10 @@ textarea {
 .navbar-brand > img {
     height: 50px;
 }
+.btn-group > .btn.btn-default.radius-right {
+    border-top-right-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+}
 .chart-content {
     text-align: center;
 }
