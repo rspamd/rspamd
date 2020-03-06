@@ -1631,7 +1631,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str,
+		if (rspamd_url_find (pool, rspamd_url_query_unsafe (url), url->querylen, &url_str,
 				RSPAMD_URL_FIND_ALL,
 				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
@@ -1646,7 +1646,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 			if (rc == URI_ERRNO_OK &&
 					query_url->hostlen > 0) {
 				msg_debug_html ("found url %s in query of url"
-						" %*s", url_str, url->querylen, url->query);
+						" %*s", url_str, url->querylen, rspamd_url_query_unsafe (url));
 
 				if (query_url->protocol == PROTOCOL_MAILTO) {
 					target_tbl = tbl_emails;

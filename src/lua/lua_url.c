@@ -220,7 +220,7 @@ lua_url_get_path (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->datalen > 0) {
-		lua_pushlstring (L, url->url->data, url->url->datalen);
+		lua_pushlstring (L, rspamd_url_data_unsafe (url->url), url->url->datalen);
 	}
 	else {
 		lua_pushnil (L);
@@ -241,7 +241,7 @@ lua_url_get_query (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->querylen > 0) {
-		lua_pushlstring (L, url->url->query, url->url->querylen);
+		lua_pushlstring (L, rspamd_url_query_unsafe (url->url), url->url->querylen);
 	}
 	else {
 		lua_pushnil (L);
@@ -262,7 +262,7 @@ lua_url_get_fragment (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->fragmentlen > 0) {
-		lua_pushlstring (L, url->url->fragment, url->url->fragmentlen);
+		lua_pushlstring (L, rspamd_url_fragment_unsafe (url->url), url->url->fragmentlen);
 	}
 	else {
 		lua_pushnil (L);
@@ -684,19 +684,19 @@ lua_url_to_table (lua_State *L)
 
 		if (u->datalen > 0) {
 			lua_pushstring (L, "path");
-			lua_pushlstring (L, u->data, u->datalen);
+			lua_pushlstring (L, rspamd_url_data_unsafe (u), u->datalen);
 			lua_settable (L, -3);
 		}
 
 		if (u->querylen > 0) {
 			lua_pushstring (L, "query");
-			lua_pushlstring (L, u->query, u->querylen);
+			lua_pushlstring (L, rspamd_url_query_unsafe (u), u->querylen);
 			lua_settable (L, -3);
 		}
 
 		if (u->fragmentlen > 0) {
 			lua_pushstring (L, "fragment");
-			lua_pushlstring (L, u->fragment, u->fragmentlen);
+			lua_pushlstring (L, rspamd_url_fragment_unsafe (u), u->fragmentlen);
 			lua_settable (L, -3);
 		}
 

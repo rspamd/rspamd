@@ -44,33 +44,34 @@ struct rspamd_url_tag {
 struct rspamd_url {
 	gchar *raw;
 	gchar *string;
-	guint protocol;
-	guint port;
+
+	guint16 protocol;
+	guint16 port;
 
 	guint usershift;
-	guint userlen;
-
 	guint hostshift;
-	guint hostlen;
+	guint datashift;
+	guint queryshift;
+	guint fragmentshift;
 
-	gchar *data;
-	gchar *query;
-	gchar *fragment;
 	gchar *tld;
 	gchar *visible_part;
 
 	struct rspamd_url *phished_url;
 
-	guint protocollen;
-	guint datalen;
-	guint querylen;
-	guint fragmentlen;
-	guint tldlen;
 	guint urllen;
 	guint rawlen;
+	guint32 flags;
 
-	enum rspamd_url_flags flags;
-	guint count;
+	guint16 protocollen;
+	guint16 userlen;
+	guint16 hostlen;
+	guint16 datalen;
+	guint16 querylen;
+	guint16 fragmentlen;
+	guint16 tldlen;
+
+	guint16 count;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -78,6 +79,10 @@ struct rspamd_url {
 
 #define rspamd_url_host(u) ((u)->hostlen > 0 ? (u)->string + (u)->hostshift : NULL)
 #define rspamd_url_host_unsafe(u) ((u)->string + (u)->hostshift)
+
+#define rspamd_url_data_unsafe(u) ((u)->string + (u)->datashift)
+#define rspamd_url_query_unsafe(u) ((u)->string + (u)->queryshift)
+#define rspamd_url_fragment_unsafe(u) ((u)->string + (u)->fragmentshift)
 
 enum uri_errno {
 	URI_ERRNO_OK = 0,           /* Parsing went well */
@@ -97,7 +102,7 @@ enum rspamd_url_protocol {
 	PROTOCOL_HTTPS = 1u << 3u,
 	PROTOCOL_MAILTO = 1u << 4u,
 	PROTOCOL_TELEPHONE = 1u << 5u,
-	PROTOCOL_UNKNOWN = 1u << 31u,
+	PROTOCOL_UNKNOWN = 1u << 15u,
 };
 
 enum rspamd_url_parse_flags {
