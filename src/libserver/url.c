@@ -1526,12 +1526,12 @@ rspamd_tld_trie_callback (struct rspamd_multipattern *mp,
 
 	pos = text + match_start;
 	p = pos - 1;
-	start = url->host;
+	start = rspamd_url_host_unsafe (url);
 
 	if (*pos != '.' || match_pos != (gint) url->hostlen) {
 		/* Something weird has been found */
 		if (match_pos == (gint) url->hostlen - 1) {
-			pos = url->host + match_pos;
+			pos = rspamd_url_host_unsafe (url) + match_pos;
 			if (*pos == '.') {
 				/* This is dot at the end of domain */
 				url->hostlen--;
@@ -1560,9 +1560,9 @@ rspamd_tld_trie_callback (struct rspamd_multipattern *mp,
 	}
 
 	if ((ndots == 0 || p == start - 1) &&
-			url->tldlen < url->host + url->hostlen - pos) {
+			url->tldlen < rspamd_url_host_unsafe (url) + url->hostlen - pos) {
 		url->tld = (gchar *) pos;
-		url->tldlen = url->host + url->hostlen - pos;
+		url->tldlen = rspamd_url_host_unsafe (url) + url->hostlen - pos;
 	}
 
 	return 0;
@@ -1586,13 +1586,13 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 	/* Allocate new string to build it from IP */
 	strbuf = rspamd_mempool_alloc (pool, slen + 1);
 	r += rspamd_snprintf (strbuf + r, slen - r, "%*s",
-			(gint)(uri->host - uri->string),
+			(gint)(uri->hostshift),
 			uri->string);
-	uri->host = strbuf + r;
+	uri->hostshift = r;
 	inet_ntop (af, addr, strbuf + r, slen - r + 1);
-	uri->hostlen = strlen (uri->host);
+	uri->hostlen = strlen (rspamd_url_host_unsafe (uri));
 	r += uri->hostlen;
-	uri->tld = uri->host;
+	uri->tld = rspamd_url_host_unsafe (uri);
 	uri->tldlen = uri->hostlen;
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 
@@ -1638,7 +1638,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 	gboolean ret = FALSE, check_num = TRUE;
 	guint32 n, dots, t = 0, i = 0, shift, nshift;
 
-	p = uri->host;
+	p = rspamd_url_host_unsafe (uri);
 	end = p + uri->hostlen;
 
 	if (*p == '[' && *(end - 1) == ']') {
@@ -1814,9 +1814,10 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 
 		old_shift = uri->hostlen;
 		uri->hostlen -= shift;
-		remain = (uri->urllen - (uri->host - uri->string)) - old_shift;
+		remain = (uri->urllen - (uri->hostshift)) - old_shift;
 		g_assert (remain >= 0);
-		memmove (uri->host + uri->hostlen, uri->host + old_shift,
+		memmove (rspamd_url_host_unsafe (uri) + uri->hostlen,
+				rspamd_url_host_unsafe (uri) + old_shift,
 				remain);
 		uri->urllen -= shift;
 		uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
@@ -1877,7 +1878,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 			uri->usershift -= shift;
 		}
 		if (uri->hostlen > 0) {
-			uri->host -= shift;
+			uri->hostshift -= shift;
 		}
 		/* Go forward */
 	case UF_HOST:
@@ -1908,9 +1909,9 @@ rspamd_telephone_normalise_inplace (struct rspamd_url *uri)
 	gint i = 0, w, orig_len;
 	UChar32 uc;
 
-	t = uri->host;
+	t = rspamd_url_host_unsafe (uri);
 	h = t;
-	end = uri->host + uri->hostlen;
+	end = t + uri->hostlen;
 	orig_len = uri->hostlen;
 
 	if (*h == '+') {
@@ -1931,7 +1932,7 @@ rspamd_telephone_normalise_inplace (struct rspamd_url *uri)
 		h += i;
 	}
 
-	uri->hostlen = t - uri->host;
+	uri->hostlen = t - rspamd_url_host_unsafe (uri);
 	uri->urllen -= (orig_len - uri->hostlen);
 }
 
@@ -2022,7 +2023,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 				uri->protocollen = u.field_data[i].len;
 				break;
 			case UF_HOST:
-				uri->host = comp;
+				uri->hostshift = u.field_data[i].off;
 				uri->hostlen = complen;
 				break;
 			case UF_PATH:
@@ -2059,16 +2060,20 @@ rspamd_url_parse (struct rspamd_url *uri,
 			uri->string,
 			uri->protocollen);
 	rspamd_url_shift (uri, unquoted_len, UF_SCHEMA);
-	unquoted_len = rspamd_url_decode (uri->host, uri->host, uri->hostlen);
+	unquoted_len = rspamd_url_decode (rspamd_url_host_unsafe (uri),
+			rspamd_url_host_unsafe (uri), uri->hostlen);
 
-	if (rspamd_normalise_unicode_inplace (pool, uri->host, &unquoted_len)) {
+	if (rspamd_normalise_unicode_inplace (pool,
+			rspamd_url_host_unsafe (uri), &unquoted_len)) {
 		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
 	}
 
 
 	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
 		/* Ensure that hostname starts with something sane (exclude numeric urls) */
-		if (!(is_domain_start (uri->host[0]) || uri->host[0] == ':')) {
+		const gchar* host = rspamd_url_host_unsafe (uri);
+
+		if (!(is_domain_start (host[0]) || host[0] == ':')) {
 			return URI_ERRNO_BAD_FORMAT;
 		}
 	}
@@ -2093,7 +2098,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 	struct UConverter *utf8_conv = rspamd_get_utf8_converter ();
 
 	utf16_len = ucnv_toUChars (utf8_conv, utf16_hostname, uri->hostlen,
-			uri->host, uri->hostlen, &uc_err);
+			rspamd_url_host_unsafe (uri), uri->hostlen, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
 
@@ -2110,7 +2115,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 	}
 
 	/* Convert back to utf8, sigh... */
-	norm_utf8_len = ucnv_fromUChars (utf8_conv, uri->host, uri->hostlen,
+	norm_utf8_len = ucnv_fromUChars (utf8_conv,
+			rspamd_url_host_unsafe (uri), uri->hostlen,
 			norm_utf16, norm_utf16_len, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
@@ -2154,7 +2160,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 	}
 
 	rspamd_str_lc (uri->string, uri->protocollen);
-	unquoted_len = rspamd_str_lc_utf8 (uri->host, uri->hostlen);
+	unquoted_len = rspamd_str_lc_utf8 (rspamd_url_host_unsafe (uri), uri->hostlen);
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
@@ -2172,7 +2178,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
 		/* Find TLD part */
 		rspamd_multipattern_lookup (url_scanner->search_trie,
-				uri->host, uri->hostlen,
+				rspamd_url_host_unsafe (uri), uri->hostlen,
 				rspamd_tld_trie_callback, uri, NULL);
 
 		if (uri->tldlen == 0) {
@@ -2184,7 +2190,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 			} else {
 				if (!rspamd_url_is_ip (uri, pool)) {
 					/* Assume tld equal to host */
-					uri->tld = uri->host;
+					uri->tld = rspamd_url_host_unsafe (uri);
 					uri->tldlen = uri->hostlen;
 				}
 			}
@@ -2194,7 +2200,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 		if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_FTP) &&
 			uri->protocollen > 0 && uri->urllen > uri->protocollen + 2) {
 
-			gchar *pos = &uri->string[uri->protocollen], *host_start = uri->host;
+			gchar *pos = &uri->string[uri->protocollen],
+					*host_start = rspamd_url_host_unsafe (uri);
 
 			while (pos < host_start) {
 				if (*pos == '\\') {
@@ -2209,12 +2216,12 @@ rspamd_url_parse (struct rspamd_url *uri,
 		/* We need to normalise phone number: remove all spaces and braces */
 		rspamd_telephone_normalise_inplace (uri);
 
-		if (uri->host[0] == '+') {
-			uri->tld = uri->host + 1;
+		if (rspamd_url_host_unsafe (uri)[0] == '+') {
+			uri->tld = rspamd_url_host_unsafe (uri) + 1;
 			uri->tldlen = uri->hostlen - 1;
 		}
 		else {
-			uri->tld = uri->host;
+			uri->tld = rspamd_url_host_unsafe (uri);
 			uri->tldlen = uri->hostlen;
 		}
 	}
@@ -3362,7 +3369,8 @@ rspamd_url_host_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 
 	if (url->hostlen > 0) {
-		return (guint)rspamd_cryptobox_fast_hash (url->host, url->hostlen,
+		return (guint)rspamd_cryptobox_fast_hash (rspamd_url_host_unsafe (url),
+				url->hostlen,
 				rspamd_hash_seed ());
 	}
 
@@ -3378,7 +3386,7 @@ rspamd_email_hash (gconstpointer u)
 	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 
 	if (url->hostlen > 0) {
-		rspamd_cryptobox_fast_hash_update (&st, url->host, url->hostlen);
+		rspamd_cryptobox_fast_hash_update (&st, rspamd_url_host_unsafe (url), url->hostlen);
 	}
 
 	if (url->userlen > 0) {
@@ -3399,7 +3407,8 @@ rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 		return FALSE;
 	}
 	else {
-		if ((r = rspamd_lc_cmp (u1->host, u2->host, u1->hostlen)) == 0) {
+		if ((r = rspamd_lc_cmp (rspamd_url_host_unsafe (u1),
+				rspamd_url_host_unsafe (u2), u1->hostlen)) == 0) {
 			if (u1->userlen != u2->userlen || u1->userlen == 0) {
 				return FALSE;
 			}
@@ -3443,7 +3452,8 @@ rspamd_urls_host_cmp (gconstpointer a, gconstpointer b)
 		return FALSE;
 	}
 	else {
-		r = memcmp (u1->host, u2->host, u1->hostlen);
+		r = memcmp (rspamd_url_host_unsafe (u1), rspamd_url_host_unsafe (u2),
+				u1->hostlen);
 	}
 
 	return r == 0;
@@ -3637,7 +3647,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 
 	g_assert (pdlen != NULL && url != NULL && pool != NULL);
 
-	CHECK_URL_COMPONENT ((guchar *)url->host, url->hostlen,
+	CHECK_URL_COMPONENT (rspamd_url_host_unsafe (url), url->hostlen,
 			RSPAMD_URL_FLAGS_HOSTSAFE);
 	CHECK_URL_COMPONENT (rspamd_url_user_unsafe(url), url->userlen,
 			RSPAMD_URL_FLAGS_USERSAFE);
@@ -3683,7 +3693,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 		*d++ = ':';
 	}
 
-	ENCODE_URL_COMPONENT ((guchar *)url->host, url->hostlen,
+	ENCODE_URL_COMPONENT (rspamd_url_host_unsafe (url), url->hostlen,
 			RSPAMD_URL_FLAGS_HOSTSAFE);
 
 	if (url->datalen > 0) {

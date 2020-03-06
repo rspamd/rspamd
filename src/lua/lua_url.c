@@ -158,8 +158,8 @@ lua_url_get_host (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
-	if (url != NULL) {
-		lua_pushlstring (L, url->url->host, url->url->hostlen);
+	if (url != NULL && url->url && url->url->hostlen > 0) {
+		lua_pushlstring (L, rspamd_url_host (url->url), url->url->hostlen);
 	}
 	else {
 		lua_pushnil (L);
@@ -312,7 +312,7 @@ lua_url_tostring (lua_State *L)
 			}
 
 			tmp[url->url->userlen] = '@';
-			memcpy (tmp + url->url->userlen + 1, url->url->host,
+			memcpy (tmp + url->url->userlen + 1, rspamd_url_host_unsafe (url->url),
 					url->url->hostlen);
 
 			lua_pushlstring (L, tmp, url->url->userlen + 1 + url->url->hostlen);
@@ -660,7 +660,7 @@ lua_url_to_table (lua_State *L)
 
 		if (u->hostlen > 0) {
 			lua_pushstring (L, "host");
-			lua_pushlstring (L, u->host, u->hostlen);
+			lua_pushlstring (L, rspamd_url_host_unsafe (u), u->hostlen);
 			lua_settable (L, -3);
 		}
 

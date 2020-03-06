@@ -882,7 +882,7 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 		ucl_object_insert_key (obj, elt, "tld", 0, false);
 	}
 	if (url->hostlen > 0) {
-		elt = ucl_object_fromstring_common (url->host, url->hostlen, 0);
+		elt = ucl_object_fromstring_common (rspamd_url_host_unsafe (url), url->hostlen, 0);
 		ucl_object_insert_key (obj, elt, "host", 0, false);
 	}
 
@@ -925,11 +925,14 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 
 			goffset err_offset;
 
-			if ((err_offset = rspamd_fast_utf8_validate (url->host, url->hostlen)) == 0) {
-				obj = ucl_object_fromstring_common (url->host, url->hostlen, 0);
+			if ((err_offset = rspamd_fast_utf8_validate (rspamd_url_host_unsafe (url),
+					url->hostlen)) == 0) {
+				obj = ucl_object_fromstring_common (rspamd_url_host_unsafe (url),
+						url->hostlen, 0);
 			}
 			else {
-				obj = ucl_object_fromstring_common (url->host, err_offset - 1, 0);
+				obj = ucl_object_fromstring_common (rspamd_url_host_unsafe (url),
+						err_offset - 1, 0);
 			}
 		}
 		else {

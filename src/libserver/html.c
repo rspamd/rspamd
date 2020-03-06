@@ -658,14 +658,14 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 
 		if (rc == URI_ERRNO_OK) {
 			disp_tok.len = text_url->hostlen;
-			disp_tok.begin = text_url->host;
+			disp_tok.begin = rspamd_url_host_unsafe (text_url);
 #if U_ICU_VERSION_MAJOR_NUM >= 46
-			if (rspamd_substring_search_caseless (text_url->host,
+			if (rspamd_substring_search_caseless (rspamd_url_host_unsafe (text_url),
 					text_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, text_url->hostlen * 2 + 1);
 				/* We need to convert it to the normal value first */
 				disp_tok.len = uidna_nameToUnicodeUTF8 (udn,
-						text_url->host, text_url->hostlen,
+						rspamd_url_host_unsafe (text_url), text_url->hostlen,
 						idn_hbuf, text_url->hostlen * 2 + 1, &uinfo, &uc_err);
 
 				if (uc_err != U_ZERO_ERROR) {
@@ -679,14 +679,14 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			}
 #endif
 			href_tok.len = href_url->hostlen;
-			href_tok.begin = href_url->host;
+			href_tok.begin = rspamd_url_host_unsafe (href_url);
 #if U_ICU_VERSION_MAJOR_NUM >= 46
-			if (rspamd_substring_search_caseless (href_url->host,
+			if (rspamd_substring_search_caseless (rspamd_url_host_unsafe (href_url),
 					href_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, href_url->hostlen * 2 + 1);
 				/* We need to convert it to the normal value first */
 				href_tok.len = uidna_nameToUnicodeUTF8 (udn,
-						href_url->host, href_url->hostlen,
+						rspamd_url_host_unsafe (href_url), href_url->hostlen,
 						idn_hbuf, href_url->hostlen * 2 + 1, &uinfo, &uc_err);
 
 				if (uc_err != U_ZERO_ERROR) {
@@ -1594,7 +1594,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 					buf = rspamd_mempool_alloc (pool, len + 1);
 					rspamd_snprintf (buf, len + 1, "%*s://%*s/%*s",
 							hc->base_url->protocollen, hc->base_url->string,
-							hc->base_url->hostlen, hc->base_url->host,
+							hc->base_url->hostlen, rspamd_url_host_unsafe (hc->base_url),
 							(gint)orig_len, start);
 					start = buf;
 				}
