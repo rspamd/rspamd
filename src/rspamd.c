@@ -706,8 +706,13 @@ spawn_workers (struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 					spawn_worker_type (rspamd_main, ev_base, cf);
 				}
 				else {
-					msg_err_main ("cannot create listen socket for %s at %s",
-							g_quark_to_string (cf->type), cf->bind_conf->name);
+					if (cf->bind_conf == NULL) {
+						msg_err_main ("cannot create listen socket for %s",
+								g_quark_to_string (cf->type));
+					} else {
+						msg_err_main ("cannot create listen socket for %s at %s",
+								g_quark_to_string (cf->type), cf->bind_conf->name);
+					}
 
 					rspamd_hard_terminate (rspamd_main);
 					g_assert_not_reached ();
