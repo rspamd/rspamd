@@ -280,6 +280,15 @@ KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
  */
 bool rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
 		struct rspamd_url *u);
+
+/**
+ * Same as rspamd_url_set_add_or_increase but returns the existing url if found
+ * @param set
+ * @param u
+ * @return
+ */
+struct rspamd_url * rspamd_url_set_add_or_return (khash_t (rspamd_url_hash) *set,
+												  struct rspamd_url *u);
 /**
  * Helper for url host set
  * @param set

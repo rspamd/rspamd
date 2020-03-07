@@ -3297,7 +3297,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 {
 	struct rspamd_task *task = ud;
 	gchar *url_str = NULL;
-	struct rspamd_url *query_url, *existing;
+	struct rspamd_url *query_url;
 	gint rc;
 	gboolean prefix_added;
 
@@ -3781,6 +3781,26 @@ rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
 	return true;
 }
 
+struct rspamd_url *
+rspamd_url_set_add_or_return (khash_t (rspamd_url_hash) *set,
+								struct rspamd_url *u)
+{
+	khiter_t k;
+	gint r;
+
+	if (set) {
+		k = kh_put (rspamd_url_hash, set, u, &r);
+
+		if (r == 0) {
+			struct rspamd_url *ex = kh_key (set, k);
+
+			return ex;
+		}
+	}
+
+	return NULL;
+}
+
 bool
 rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
 								struct rspamd_url *u)
@@ -3788,13 +3808,17 @@ rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
 	khiter_t k;
 	gint r;
 
-	k = kh_put (rspamd_url_host_hash, set, u, &r);
+	if (set) {
+		k = kh_put (rspamd_url_host_hash, set, u, &r);
 
-	if (r == 0) {
-		return false;
+		if (r == 0) {
+			return false;
+		}
+
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 bool
@@ -3802,13 +3826,17 @@ rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u)
 {
 	khiter_t k;
 
-	k = kh_get (rspamd_url_hash, set, u);
+	if (set) {
+		k = kh_get (rspamd_url_hash, set, u);
 
-	if (k == kh_end (set)) {
-		return false;
+		if (k == kh_end (set)) {
+			return false;
+		}
+
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 bool
@@ -3816,11 +3844,15 @@ rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url 
 {
 	khiter_t k;
 
-	k = kh_get (rspamd_url_hash, set, u);
+	if (set) {
+		k = kh_get (rspamd_url_host_hash, set, u);
 
-	if (k == kh_end (set)) {
-		return false;
+		if (k == kh_end (set)) {
+			return false;
+		}
+
+		return true;
 	}
 
-	return true;
+	return false;
 }

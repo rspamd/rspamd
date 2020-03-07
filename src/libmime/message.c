@@ -758,8 +758,7 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			text_part->html,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
-			MESSAGE_FIELD (task, urls),
-			MESSAGE_FIELD (task, emails));
+			MESSAGE_FIELD (task, urls));
 
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
