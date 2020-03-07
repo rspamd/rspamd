@@ -148,6 +148,11 @@ rspamd_parse_var (const gchar *option_name,
 		v = g_strdup (t + 1);
 		*t = '\0';
 
+		if (ucl_vars == NULL) {
+			ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
+					rspamd_strcase_equal, g_free, g_free);
+		}
+
 		g_hash_table_insert (ucl_vars, k, v);
 	}
 	else {
