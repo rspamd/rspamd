@@ -141,7 +141,8 @@ GByteArray *rspamd_html_process_part (rspamd_mempool_t *pool,
 
 GByteArray *rspamd_html_process_part_full (rspamd_mempool_t *pool,
 										   struct html_content *hc,
-										   GByteArray *in, GList **exceptions, GHashTable *urls, GHashTable *emails);
+										   GByteArray *in, GList **exceptions,
+										   GHashTable *urls, GHashTable *emails);
 
 /*
  * Returns true if a specified tag has been seen in a part

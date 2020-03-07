@@ -225,21 +225,6 @@ gboolean rspamd_url_task_subject_callback (struct rspamd_url *url,
 									   gsize start_offset,
 									   gsize end_offset, gpointer ud);
 
-guint rspamd_url_hash (gconstpointer u);
-
-guint rspamd_email_hash (gconstpointer u);
-
-guint rspamd_url_host_hash (gconstpointer u);
-
-
-/* Compare two emails for building emails hash */
-gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
-
-/* Compare two urls for building emails hash */
-gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
-
-gboolean rspamd_urls_host_cmp (gconstpointer a, gconstpointer b);
-
 /**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
  * @param dst
@@ -296,12 +281,21 @@ KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
 bool rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
 		struct rspamd_url *u);
 /**
+ * Helper for url host set
+ * @param set
+ * @param u
+ * @return
+ */
+bool rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
+									 struct rspamd_url *u);
+/**
  * Checks if a url is in set
  * @param set
  * @param u
  * @return
  */
 bool rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
+bool rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u);
 
 #ifdef  __cplusplus
 }

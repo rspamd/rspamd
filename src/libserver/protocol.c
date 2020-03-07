@@ -861,7 +861,7 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 /* Structure for writing tree data */
 struct tree_cb_data {
 	ucl_object_t *top;
-	GHashTable *seen;
+	khash_t (rspamd_url_host_hash) *seen;
 	struct rspamd_task *task;
 };
 
@@ -908,10 +908,8 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
  * Callback for writing urls
  */
 static void
-urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
+urls_protocol_cb (struct rspamd_url *url, struct tree_cb_data *cb)
 {
-	struct tree_cb_data *cb = ud;
-	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 	struct rspamd_task *task = cb->task;
 	const gchar *user_field = "unknown", *encoded = NULL;
@@ -921,7 +919,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 
 	if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS)) {
 		if (url->hostlen > 0) {
-			if (g_hash_table_lookup (cb->seen, url)) {
+			if (rspamd_url_host_set_has (cb->seen, url)) {
 				return;
 			}
 
@@ -941,7 +939,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			return;
 		}
 
-		g_hash_table_insert (cb->seen, url, url);
+		rspamd_url_host_set_add (cb->seen, url);
 	}
 	else {
 		encoded = rspamd_url_encode (url, &enclen, task->task_pool);
@@ -975,28 +973,32 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 }
 
 static ucl_object_t *
-rspamd_urls_tree_ucl (GHashTable *input, struct rspamd_task *task)
+rspamd_urls_tree_ucl (khash_t (rspamd_url_hash) *set,
+		struct rspamd_task *task)
 {
 	struct tree_cb_data cb;
 	ucl_object_t *obj;
+	struct rspamd_url *u;
 
 	obj = ucl_object_typed_new (UCL_ARRAY);
 	cb.top = obj;
 	cb.task = task;
-	cb.seen = g_hash_table_new (rspamd_url_host_hash, rspamd_urls_host_cmp);
+	cb.seen = kh_init (rspamd_url_host_hash);
 
-	g_hash_table_foreach (input, urls_protocol_cb, &cb);
+	kh_foreach_key (set, u, {
+		if (!(u->protocol & PROTOCOL_MAILTO)) {
+			urls_protocol_cb (u, &cb);
+		}
+	});
 
-	g_hash_table_unref (cb.seen);
+	kh_destroy (rspamd_url_host_hash, cb.seen);
 
 	return obj;
 }
 
 static void
-emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
+emails_protocol_cb (struct rspamd_url *url, struct tree_cb_data *cb)
 {
-	struct tree_cb_data *cb = ud;
-	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 
 	if (url->userlen > 0 && url->hostlen > 0) {
@@ -1007,16 +1009,23 @@ emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 }
 
 static ucl_object_t *
-rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
+rspamd_emails_tree_ucl (khash_t (rspamd_url_hash) *set,
+						struct rspamd_task *task)
 {
 	struct tree_cb_data cb;
 	ucl_object_t *obj;
+	struct rspamd_url *u;
 
 	obj = ucl_object_typed_new (UCL_ARRAY);
 	cb.top = obj;
 	cb.task = task;
 
-	g_hash_table_foreach (input, emails_protocol_cb, &cb);
+	kh_foreach_key (set, u, {
+		if ((u->protocol & PROTOCOL_MAILTO)) {
+			emails_protocol_cb (u, &cb);
+		}
+	});
+
 
 	return obj;
 }
@@ -1446,15 +1455,12 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_URLS && task->message) {
-		if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
+		if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
 			ucl_object_insert_key (top,
 					rspamd_urls_tree_ucl (MESSAGE_FIELD (task, urls), task),
 					"urls", 0, false);
-		}
-
-		if (g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
 			ucl_object_insert_key (top,
-					rspamd_emails_tree_ucl (MESSAGE_FIELD (task, emails), task),
+					rspamd_emails_tree_ucl (MESSAGE_FIELD (task, urls), task),
 					"emails", 0, false);
 		}
 	}

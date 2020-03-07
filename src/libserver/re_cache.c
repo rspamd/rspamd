@@ -1053,7 +1053,6 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		gboolean is_strong)
 {
 	guint ret = 0, i, re_id;
-	GHashTableIter it;
 	struct rspamd_mime_header *rh;
 	const gchar *in;
 	const guchar **scvec;
@@ -1062,7 +1061,6 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	struct rspamd_mime_text_part *text_part;
 	struct rspamd_mime_part *mime_part;
 	struct rspamd_url *url;
-	gpointer k, v;
 	guint len, cnt;
 	const gchar *class_name;
 
@@ -1164,17 +1162,18 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_RE_URL:
-		cnt = g_hash_table_size (MESSAGE_FIELD (task, urls));
+		cnt = kh_size (MESSAGE_FIELD (task, urls));
 
 		if (cnt > 0) {
 			scvec = g_malloc (sizeof (*scvec) * cnt);
 			lenvec = g_malloc (sizeof (*lenvec) * cnt);
-			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, urls));
 			i = 0;
 			raw = FALSE;
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				url = v;
+			kh_foreach_key (MESSAGE_FIELD (task, urls), url, {
+				if ((url->protocol & PROTOCOL_MAILTO)) {
+					continue;
+				}
 				in = url->string;
 				len = url->urllen;
 
@@ -1182,7 +1181,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					scvec[i] = (guchar *) in;
 					lenvec[i++] = len;
 				}
-			}
+			});
 
 #if 0
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
@@ -1207,18 +1206,19 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_RE_EMAIL:
-		cnt = g_hash_table_size (MESSAGE_FIELD (task, emails));
+		cnt = kh_size (MESSAGE_FIELD (task, urls));
 
 		if (cnt > 0) {
 			scvec = g_malloc (sizeof (*scvec) * cnt);
 			lenvec = g_malloc (sizeof (*lenvec) * cnt);
-			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
 			i = 0;
 			raw = FALSE;
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				url = v;
+			kh_foreach_key (MESSAGE_FIELD (task, urls), url, {
 
+				if (!(url->protocol & PROTOCOL_MAILTO)) {
+					continue;
+				}
 				if (url->userlen == 0 || url->hostlen == 0) {
 					continue;
 				}
@@ -1227,7 +1227,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				len = url->userlen + 1 + url->hostlen;
 				scvec[i] = (guchar *) in;
 				lenvec[i++] = len;
-			}
+			});
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, i, raw, &processed_hyperscan);

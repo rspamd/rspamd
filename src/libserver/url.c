@@ -214,6 +214,13 @@ struct url_matcher static_matchers[] = {
 				URL_FLAG_NOHTML}
 };
 
+
+static inline khint_t rspamd_url_hash (struct rspamd_url *u);
+
+static inline khint_t rspamd_url_host_hash (struct rspamd_url * u);
+static inline bool rspamd_urls_cmp (struct rspamd_url *a, struct rspamd_url *b);
+static inline bool rspamd_urls_host_cmp (struct rspamd_url *a, struct rspamd_url *b);
+
 /* Hash table implementation */
 __KHASH_IMPL (rspamd_url_hash, kh_inline,struct rspamd_url *, char, false,
 		rspamd_url_hash, rspamd_urls_cmp);
@@ -3116,7 +3123,6 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	struct rspamd_task *task;
 	gchar *url_str = NULL;
 	struct rspamd_url *query_url, *existing;
-	GHashTable *target_tbl = NULL;
 	gint rc;
 	gboolean prefix_added;
 
@@ -3141,36 +3147,23 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	}
 
 	if (url->protocol == PROTOCOL_MAILTO) {
-		if (url->userlen > 0) {
-			target_tbl = MESSAGE_FIELD (task, emails);
+		if (url->userlen == 0) {
+			return FALSE;
 		}
 	}
-	else {
-		target_tbl = MESSAGE_FIELD (task, urls);
-	}
+	/* Also check max urls */
+	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
+		if (kh_size (MESSAGE_FIELD (task, urls)) > cbd->task->cfg->max_urls) {
+			msg_err_task ("part has too many URLs, we cannot process more: "
+						  "%d urls extracted ",
+					(guint)kh_size (MESSAGE_FIELD (task, urls)));
 
-	if (target_tbl) {
-		/* Also check max urls */
-		if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
-			if (g_hash_table_size (target_tbl) > cbd->task->cfg->max_urls) {
-				msg_err_task ("part has too many URLs, we cannot process more: "
-							  "%d urls extracted ",
-						(guint)g_hash_table_size (target_tbl));
-
-				return FALSE;
-			}
-		}
-
-		if ((existing = g_hash_table_lookup (target_tbl, url)) == NULL) {
-			url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
-			g_hash_table_insert (target_tbl, url, url);
-		}
-		else {
-			existing->count++;
+			return FALSE;
 		}
 	}
 
-	target_tbl = NULL;
+	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
 
 	cbd->part->exceptions = g_list_prepend (
 			cbd->part->exceptions,
@@ -3178,7 +3171,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find (task->task_pool, rspamd_url_query_unsafe (url), url->querylen,
+		if (rspamd_url_find (task->task_pool,
+				rspamd_url_query_unsafe (url), url->querylen,
 				&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));
@@ -3198,23 +3192,13 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 				}
 
 				if (query_url->protocol == PROTOCOL_MAILTO) {
-					if (query_url->userlen > 0) {
-						target_tbl = MESSAGE_FIELD (task, emails);
+					if (query_url->userlen == 0) {
+						return TRUE;
 					}
-				}
-				else {
-					target_tbl = MESSAGE_FIELD (task, urls);
 				}
 
-				if (target_tbl) {
-					if ((existing = g_hash_table_lookup (target_tbl, query_url)) == NULL) {
-						url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
-						g_hash_table_insert (target_tbl, query_url, query_url);
-					}
-					else {
-						existing->count++;
-					}
-				}
+				query_url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
+				rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), query_url);
 			}
 		}
 	}
@@ -3321,26 +3305,12 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED|RSPAMD_URL_FLAG_SUBJECT;
 
 	if (url->protocol == PROTOCOL_MAILTO) {
-		if (url->userlen > 0 && url->hostlen > 0) {
-			if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, emails),
-					url)) == NULL) {
-				g_hash_table_insert (MESSAGE_FIELD (task, emails), url,
-						url);
-			}
-			else {
-				existing->count ++;
-			}
+		if (url->userlen == 0) {
+			return FALSE;
 		}
 	}
-	else {
-		if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
-				url)) == NULL) {
-			g_hash_table_insert (MESSAGE_FIELD (task, urls), url, url);
-		}
-		else {
-			existing->count ++;
-		}
-	}
+
+	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
@@ -3364,15 +3334,14 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
 				}
 
-				if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
-						query_url)) == NULL) {
-					g_hash_table_insert (MESSAGE_FIELD (task, urls),
-							query_url,
-							query_url);
+				if (query_url->protocol == PROTOCOL_MAILTO) {
+					if (query_url->userlen == 0) {
+						return TRUE;
+					}
 				}
-				else {
-					existing->count ++;
-				}
+
+				rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls),
+						query_url);
 			}
 		}
 	}
@@ -3380,26 +3349,22 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	return TRUE;
 }
 
-inline guint
-rspamd_url_hash (gconstpointer u)
+static inline khint_t
+rspamd_url_hash (struct rspamd_url *url)
 {
-	const struct rspamd_url *url = u;
-
 	if (url->urllen > 0) {
-		return (guint)rspamd_cryptobox_fast_hash (url->string, url->urllen,
+		return (khint_t)rspamd_cryptobox_fast_hash (url->string, url->urllen,
 				rspamd_hash_seed ());
 	}
 
 	return 0;
 }
 
-inline guint
-rspamd_url_host_hash (gconstpointer u)
+static inline khint_t
+rspamd_url_host_hash (struct rspamd_url *url)
 {
-	const struct rspamd_url *url = u;
-
 	if (url->hostlen > 0) {
-		return (guint)rspamd_cryptobox_fast_hash (rspamd_url_host_unsafe (url),
+		return (khint_t)rspamd_cryptobox_fast_hash (rspamd_url_host_unsafe (url),
 				url->hostlen,
 				rspamd_hash_seed ());
 	}
@@ -3407,30 +3372,10 @@ rspamd_url_host_hash (gconstpointer u)
 	return 0;
 }
 
-inline guint
-rspamd_email_hash (gconstpointer u)
-{
-	const struct rspamd_url *url = u;
-	rspamd_cryptobox_fast_hash_state_t st;
-
-	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
-
-	if (url->hostlen > 0) {
-		rspamd_cryptobox_fast_hash_update (&st, rspamd_url_host_unsafe (url), url->hostlen);
-	}
-
-	if (url->userlen > 0) {
-		rspamd_cryptobox_fast_hash_update (&st, rspamd_url_user_unsafe(url), url->userlen);
-	}
-
-	return (guint)rspamd_cryptobox_fast_hash_final (&st);
-}
-
 /* Compare two emails for building emails tree */
-inline gboolean
-rspamd_emails_cmp (gconstpointer a, gconstpointer b)
+static inline bool
+rspamd_emails_cmp (struct rspamd_url *u1, struct rspamd_url *u2)
 {
-	const struct rspamd_url *u1 = a, *u2 = b;
 	gint r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
@@ -3456,30 +3401,32 @@ rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 	return FALSE;
 }
 
-inline gboolean
-rspamd_urls_cmp (gconstpointer a, gconstpointer b)
+static inline bool
+rspamd_urls_cmp (struct rspamd_url *u1, struct rspamd_url *u2)
 {
-	const struct rspamd_url *u1 = a, *u2 = b;
 	int r = 0;
 
-	if (u1->urllen != u2->urllen) {
-		return FALSE;
+	if (u1->protocol != u2->protocol || u1->urllen != u2->urllen) {
+		return false;
 	}
 	else {
+		if (u1->protocol & PROTOCOL_MAILTO) {
+			return rspamd_emails_cmp (u1, u2);
+		}
+
 		r = memcmp (u1->string, u2->string, u1->urllen);
 	}
 
 	return r == 0;
 }
 
-inline gboolean
-rspamd_urls_host_cmp (gconstpointer a, gconstpointer b)
+static inline bool
+rspamd_urls_host_cmp (struct rspamd_url *u1, struct rspamd_url *u2)
 {
-	const struct rspamd_url *u1 = a, *u2 = b;
 	int r = 0;
 
 	if (u1->hostlen != u2->hostlen) {
-		return FALSE;
+		return false;
 	}
 	else {
 		r = memcmp (rspamd_url_host_unsafe (u1), rspamd_url_host_unsafe (u2),
@@ -3835,7 +3782,37 @@ rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
 }
 
 bool
+rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
+								struct rspamd_url *u)
+{
+	khiter_t k;
+	gint r;
+
+	k = kh_put (rspamd_url_host_hash, set, u, &r);
+
+	if (r == 0) {
+		return false;
+	}
+
+	return true;
+}
+
+bool
 rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u)
+{
+	khiter_t k;
+
+	k = kh_get (rspamd_url_hash, set, u);
+
+	if (k == kh_end (set)) {
+		return false;
+	}
+
+	return true;
+}
+
+bool
+rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u)
 {
 	khiter_t k;
 

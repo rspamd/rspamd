@@ -1048,8 +1048,7 @@ rspamd_message_dtor (struct rspamd_message *msg)
 	g_ptr_array_unref (msg->text_parts);
 	g_ptr_array_unref (msg->parts);
 
-	g_hash_table_unref (msg->urls);
-	g_hash_table_unref (msg->emails);
+	kh_destroy (rspamd_url_hash, msg->urls);
 }
 
 struct rspamd_message*
@@ -1060,10 +1059,7 @@ rspamd_message_new (struct rspamd_task *task)
 	msg = rspamd_mempool_alloc0 (task->task_pool, sizeof (*msg));
 
 	msg->raw_headers = rspamd_message_headers_new ();
-
-	msg->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
-	msg->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
-
+	msg->urls = kh_init (rspamd_url_hash);
 	msg->parts = g_ptr_array_sized_new (4);
 	msg->text_parts = g_ptr_array_sized_new (2);
 	msg->task = task;
