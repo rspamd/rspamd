@@ -375,8 +375,12 @@ typedef off_t goffset;
 #  endif
 #elif defined(__GNUC__)
 /* GCC based */
-#  if __has_attribute(__no_sanitize_address__)
-#    define RSPAMD_NO_SANITIZE __attribute__((no_sanitize_address))
+#  if defined(__has_attribute)
+#    if __has_attribute(__no_sanitize_address__)
+#      define RSPAMD_NO_SANITIZE __attribute__((no_sanitize_address))
+#    else
+#      define RSPAMD_NO_SANITIZE
+#    endif
 #  else
 #    define RSPAMD_NO_SANITIZE
 #  endif
