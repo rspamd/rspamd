@@ -2482,14 +2482,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 		/* Check bh field */
 		if (memcmp (ctx->bh, cached_bh->digest_normal, ctx->bhlen) != 0) {
-			msg_info_dkim (
-					"%s: bh value mismatch: got %*Bs, expected %*Bs; "
-					"body length %d->%d; d=%s; s=%s",
-					rspamd_dkim_type_to_string (ctx->common.type),
-					(gint)dlen, cached_bh->digest_normal,
+			msg_debug_dkim (
+					"bh value mismatch: %*xs versus %*xs, try add LF; try adding CRLF",
 					(gint)dlen, ctx->bh,
-					(gint)(body_end - body_start), ctx->common.body_canonicalised,
-					ctx->domain, ctx->selector);
+					(gint)dlen, raw_digest);
+
 			if (cpy_ctx) {
 				/* Try add CRLF */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -2506,7 +2503,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 				if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
 					msg_debug_dkim (
-							"bh value mismatch: %*xs versus %*xs, try add LF",
+							"bh value mismatch after added CRLF: %*xs versus %*xs, try add LF",
 							(gint)dlen, ctx->bh,
 							(gint)dlen, raw_digest);
 
@@ -2524,47 +2521,35 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 					memcpy (cached_bh->digest_cr, raw_digest, sizeof (raw_digest));
 
 					if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-						msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+						msg_debug_dkim ("bh value mismatch after added LF: %*xs versus %*xs",
 								(gint)dlen, ctx->bh,
 								(gint)dlen, raw_digest);
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-						EVP_MD_CTX_cleanup (cpy_ctx);
-#else
-						EVP_MD_CTX_reset (cpy_ctx);
-#endif
 						res->fail_reason = "body hash did not verify";
 						res->rcode = DKIM_REJECT;
-						EVP_MD_CTX_destroy (cpy_ctx);
-
-						return res;
 					}
 				}
 			}
 			else if (cached_bh->digest_crlf) {
 				if (memcmp (ctx->bh, cached_bh->digest_crlf, ctx->bhlen) != 0) {
-					msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+					msg_debug_dkim ("bh value mismatch after added CRLF: %*xs versus %*xs",
 							(gint)dlen, ctx->bh,
 							(gint)dlen, cached_bh->digest_crlf);
 
 					if (cached_bh->digest_cr) {
 						if (memcmp (ctx->bh, cached_bh->digest_cr, ctx->bhlen) != 0) {
 							msg_debug_dkim (
-									"bh value mismatch: %*xs versus %*xs",
+									"bh value mismatch after added LF: %*xs versus %*xs",
 									(gint)dlen, ctx->bh,
 									(gint)dlen, cached_bh->digest_cr);
 
 							res->fail_reason = "body hash did not verify";
 							res->rcode = DKIM_REJECT;
-
-							return res;
 						}
 					}
 					else {
 
 						res->fail_reason = "body hash did not verify";
 						res->rcode = DKIM_REJECT;
-
-						return res;
 					}
 				}
 			}
@@ -2575,8 +2560,6 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 						(gint)dlen, cached_bh->digest_normal);
 				res->fail_reason = "body hash did not verify";
 				res->rcode = DKIM_REJECT;
-
-				return res;
 			}
 		}
 
@@ -2587,6 +2570,19 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			EVP_MD_CTX_reset (cpy_ctx);
 #endif
 			EVP_MD_CTX_destroy (cpy_ctx);
+		}
+
+		if (res->rcode == DKIM_REJECT) {
+			msg_info_dkim (
+					"%s: bh value mismatch: got %*Bs, expected %*Bs; "
+					"body length %d->%d; d=%s; s=%s",
+					rspamd_dkim_type_to_string (ctx->common.type),
+					(gint)dlen, cached_bh->digest_normal,
+					(gint)dlen, ctx->bh,
+					(gint)(body_end - body_start), ctx->common.body_canonicalised,
+					ctx->domain, ctx->selector);
+
+			return res;
 		}
 	}
 
