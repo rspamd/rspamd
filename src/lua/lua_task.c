@@ -2249,6 +2249,7 @@ lua_task_get_urls (lua_State * L)
 	static const gint default_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
 			PROTOCOL_FILE|PROTOCOL_FTP;
 	const gchar *cache_name = "emails+urls";
+	struct rspamd_url *u;
 	gboolean need_images = FALSE;
 	gsize sz, max_urls = 0;
 
@@ -2336,8 +2337,7 @@ lua_task_get_urls (lua_State * L)
 				cache_name = "emails+urls";
 			}
 
-			sz = g_hash_table_size (MESSAGE_FIELD (task, urls)) +
-					g_hash_table_size (MESSAGE_FIELD (task, emails));
+			sz = kh_size (MESSAGE_FIELD (task, urls));
 
 			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
 
@@ -2345,20 +2345,17 @@ lua_task_get_urls (lua_State * L)
 				/* Can use cached version */
 				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
-					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
-							lua_tree_url_callback, &cb);
-					g_hash_table_foreach (MESSAGE_FIELD (task, emails),
-							lua_tree_url_callback, &cb);
-
+					kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+						lua_tree_url_callback (u, u, &cb);
+					});
 					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
 				lua_createtable (L, sz, 0);
-				g_hash_table_foreach (MESSAGE_FIELD (task, urls),
-						lua_tree_url_callback, &cb);
-				g_hash_table_foreach (MESSAGE_FIELD (task, emails),
-						lua_tree_url_callback, &cb);
+				kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+					lua_tree_url_callback (u, u, &cb);
+				});
 			}
 
 		}
@@ -2370,21 +2367,27 @@ lua_task_get_urls (lua_State * L)
 				cache_name = "urls";
 			}
 
-			sz = g_hash_table_size (MESSAGE_FIELD (task, urls));
+			sz = kh_size (MESSAGE_FIELD (task, urls));
 			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
 
 			if (protocols_mask == (default_mask)) {
 				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
-					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
-							lua_tree_url_callback, &cb);
+					kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+						if (!(u->protocol & PROTOCOL_MAILTO)) {
+							lua_tree_url_callback (u, u, &cb);
+						}
+					});
 					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
 				lua_createtable (L, sz, 0);
-				g_hash_table_foreach (MESSAGE_FIELD (task, urls),
-						lua_tree_url_callback, &cb);
+				kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+					if (!(u->protocol & PROTOCOL_MAILTO)) {
+						lua_tree_url_callback (u, u, &cb);
+					}
+				});
 			}
 		}
 	}
@@ -2409,13 +2412,8 @@ lua_task_has_urls (lua_State * L)
 				need_emails = lua_toboolean (L, 2);
 			}
 
-			if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
-				sz += g_hash_table_size (MESSAGE_FIELD (task, urls));
-				ret = TRUE;
-			}
-
-			if (need_emails && g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
-				sz += g_hash_table_size (MESSAGE_FIELD (task, emails));
+			if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
+				sz += kh_size (MESSAGE_FIELD (task, urls));
 				ret = TRUE;
 			}
 		}
@@ -2438,15 +2436,7 @@ lua_task_inject_url (lua_State * L)
 	struct rspamd_lua_url *url = lua_check_url (L, 2);
 
 	if (task && task->message && url && url->url) {
-		struct rspamd_url *existing;
-
-		if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
-				url->url)) == NULL) {
-			g_hash_table_insert (MESSAGE_FIELD (task, urls), url->url, url->url);
-		}
-		else {
-			existing->count ++;
-		}
+		rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url->url);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2538,16 +2528,21 @@ lua_task_get_emails (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
+	struct rspamd_url *u;
 
 	if (task) {
 		if (task->message) {
-			lua_createtable (L, g_hash_table_size (MESSAGE_FIELD (task, emails)), 0);
+			lua_createtable (L, kh_size (MESSAGE_FIELD (task, urls)), 0);
 			memset (&cb, 0, sizeof (cb));
 			cb.i = 1;
 			cb.L = L;
 			cb.mask = PROTOCOL_MAILTO;
-			g_hash_table_foreach (MESSAGE_FIELD (task, emails),
-					lua_tree_url_callback, &cb);
+
+			kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+				if ((u->protocol & PROTOCOL_MAILTO)) {
+					lua_tree_url_callback (u, u, &cb);
+				}
+			});
 		}
 		else {
 			lua_newtable (L);

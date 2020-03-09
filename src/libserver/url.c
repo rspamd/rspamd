@@ -3122,7 +3122,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	struct rspamd_process_exception *ex;
 	struct rspamd_task *task;
 	gchar *url_str = NULL;
-	struct rspamd_url *query_url, *existing;
+	struct rspamd_url *query_url;
 	gint rc;
 	gboolean prefix_added;
 
