@@ -818,6 +818,8 @@ rspamd_stat_learn (struct rspamd_task *task,
 
 	if (stage == RSPAMD_TASK_STAGE_LEARN_PRE) {
 		/* Process classifiers */
+		rspamd_stat_preprocess (st_ctx, task, TRUE);
+
 		if (!rspamd_stat_cache_check (st_ctx, task, classifier, spam, err)) {
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}

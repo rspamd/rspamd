@@ -483,6 +483,11 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
              * abort with an error, but simply ignore it because the client
              * doesn't know what the server will spit out over the wire. */
             c->reader->fn->freeObject(reply);
+			/* Proceed with free'ing when redisAsyncFree() was called. */
+			if (c->flags & REDIS_FREEING) {
+				__redisAsyncFree(ac);
+				return;
+			}
         }
     }
 
