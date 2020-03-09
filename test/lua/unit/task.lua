@@ -51,7 +51,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({actual = fun.totable(fun.map(function(u)
+    assert_rspamd_table_eq_sorted({actual = fun.totable(fun.map(function(u)
       return u:get_host()
     end, task:get_urls())), expect = {
       'evil.com', 'example.com'
@@ -65,7 +65,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({
+    assert_rspamd_table_eq_sorted({
       actual = fun.totable(fun.map(function(u)
         return u:get_host()
       end, task:get_urls())),
@@ -82,7 +82,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({
+    assert_rspamd_table_eq_sorted({
       actual = fun.totable(fun.map(function(u)
         return u:get_host()
       end, task:get_urls())),
@@ -100,7 +100,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({
+    assert_rspamd_table_eq_sorted({
       actual = fun.totable(fun.map(function(u)
         return u:get_host()
       end, task:get_urls())),
@@ -122,7 +122,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({
+    assert_rspamd_table_eq_sorted({
       actual = fun.totable(fun.map(function(u)
         return u:get_host()
       end, task:get_urls())),
@@ -148,7 +148,7 @@ Thank you,
     local res,task = rspamd_task.load_from_string(msg)
     assert_true(res, "failed to load message")
     task:process_message()
-    assert_rspamd_table_eq({
+    assert_rspamd_table_eq_sorted({
       actual = fun.totable(fun.map(function(u)
         return u:get_host()
       end, task:get_urls())),

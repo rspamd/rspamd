@@ -17,6 +17,10 @@ local function rspamd_assert_table_equals(tbl)
   return util.table_cmp(tbl.expect, tbl.actual)
 end
 
+local function rspamd_assert_table_equals_sorted(tbl)
+  return util.table_cmp(table.sort(tbl.expect), table.sort(tbl.actual))
+end
+
 local function table_keys_sorted(t)
   local keys = {}
 
@@ -123,3 +127,6 @@ end
 telescope.make_assertion("rspamd_eq",       rspamd_assert_equals_msg, rspamd_assert_equals)
 -- telescope.make_assertion("rspamd_table_eq", rspamd_assert_equals_msg, rspamd_assert_table_equals)
 telescope.make_assertion("rspamd_table_eq", rspamd_assert_table_diff_msg, rspamd_assert_table_equals)
+telescope.make_assertion("rspamd_table_eq_sorted", rspamd_assert_table_diff_msg,
+    rspamd_assert_table_equals_sorted)
+
