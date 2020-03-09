@@ -486,7 +486,9 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_shingles_callback,
 			session, session->nargs,
 			(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
-		msg_err ("cannot execute redis command: %s", session->ctx->errstr);
+		msg_err ("cannot execute redis command on %s: %s",
+				rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
+				session->ctx->errstr);
 
 		if (session->callback.cb_check) {
 			memset (&rep, 0, sizeof (rep));
@@ -579,7 +581,9 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 		}
 
 		if (c->errstr) {
-			msg_err_redis_session ("error getting hashes: %s", c->errstr);
+			msg_err_redis_session ("error getting hashes on %s: %s",
+					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
+					c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
@@ -718,7 +722,9 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 		}
 
 		if (c->errstr) {
-			msg_err_redis_session ("error getting count: %s", c->errstr);
+			msg_err_redis_session ("error getting count on %s: %s",
+					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
+					c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
@@ -841,7 +847,9 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 		}
 
 		if (c->errstr) {
-			msg_err_redis_session ("error getting version: %s", c->errstr);
+			msg_err_redis_session ("error getting version on %s: %s",
+					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
+					c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
@@ -1331,7 +1339,9 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 		}
 
 		if (c->errstr) {
-			msg_err_redis_session ("error sending update to redis: %s", c->errstr);
+			msg_err_redis_session ("error sending update to redis %s: %s",
+					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
+					c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
