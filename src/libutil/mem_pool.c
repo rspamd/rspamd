@@ -1186,6 +1186,15 @@ rspamd_mempool_set_variable (rspamd_mempool_t *pool,
 	else {
 		struct rspamd_mempool_variable *pvar;
 
+		if (r == 0) {
+			/* Existing entry, maybe need cleanup */
+			pvar = &kh_val (pool->priv->variables, it);
+
+			if (pvar->dtor) {
+				pvar->dtor (pvar->data);
+			}
+		}
+
 		pvar = &kh_val (pool->priv->variables, it);
 		pvar->data = value;
 		pvar->dtor = destructor;
