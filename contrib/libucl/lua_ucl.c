@@ -74,8 +74,9 @@ func = "huh";
 #define UCL_ARRAY_TYPE_META "ucl.type.array"
 #define UCL_IMPL_ARRAY_TYPE_META "ucl.type.impl_array"
 
-static int ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj);
-static int ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj, bool allow_array);
+static int ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj, int flags);
+static int ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj, int flags);
+static int ucl_object_push_lua_common (lua_State *L, const ucl_object_t *obj, int flags);
 static ucl_object_t* ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags);
 static ucl_object_t* ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_flags_t flags);
 
@@ -89,10 +90,10 @@ static void *ucl_null;
  */
 static void
 ucl_object_lua_push_element (lua_State *L, const char *key,
-		const ucl_object_t *obj)
+		const ucl_object_t *obj, int flags)
 {
 	lua_pushstring (L, key);
-	ucl_object_push_lua (L, obj, true);
+	ucl_object_push_lua_common (L, obj, flags);
 	lua_settable (L, -3);
 }
 
@@ -132,6 +133,12 @@ lua_ucl_userdata_emitter (void *ud)
 	return fd->ret;
 }
 
+enum lua_ucl_push_flags {
+	LUA_UCL_DEFAULT_FLAGS = 0,
+	LUA_UCL_ALLOW_ARRAY = (1u << 0u),
+	LUA_UCL_CONVERT_NIL = (1u << 1u),
+};
+
 /**
  * Push a single object to lua
  * @param L
@@ -140,21 +147,21 @@ lua_ucl_userdata_emitter (void *ud)
  */
 static int
 ucl_object_lua_push_object (lua_State *L, const ucl_object_t *obj,
-		bool allow_array)
+		int flags)
 {
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
-	if (allow_array && obj->next != NULL) {
+	if ((flags & LUA_UCL_ALLOW_ARRAY) && obj->next != NULL) {
 		/* Actually we need to push this as an array */
-		return ucl_object_lua_push_array (L, obj);
+		return ucl_object_lua_push_array (L, obj, flags);
 	}
 
 	lua_createtable (L, 0, obj->len);
 	it = NULL;
 
 	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
-		ucl_object_lua_push_element (L, ucl_object_key (cur), cur);
+		ucl_object_lua_push_element (L, ucl_object_key (cur), cur, flags);
 	}
 
 	luaL_getmetatable (L, UCL_OBJECT_TYPE_META);
@@ -170,7 +177,7 @@ ucl_object_lua_push_object (lua_State *L, const ucl_object_t *obj,
  * @return
  */
 static int
-ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
+ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj, int flags)
 {
 	const ucl_object_t *cur;
 	ucl_object_iter_t it;
@@ -182,7 +189,7 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 		lua_createtable (L, nelt, 0);
 
 		while ((cur = ucl_object_iterate_safe (it, true))) {
-			ucl_object_push_lua (L, cur, false);
+			ucl_object_push_lua (L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
 			lua_rawseti (L, -2, i);
 			i ++;
 		}
@@ -201,7 +208,7 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 		lua_createtable (L, nelt, 0);
 
 		LL_FOREACH (obj, cur) {
-			ucl_object_push_lua (L, cur, false);
+			ucl_object_push_lua (L, cur, (flags & ~LUA_UCL_ALLOW_ARRAY));
 			lua_rawseti (L, -2, i);
 			i ++;
 		}
@@ -218,13 +225,13 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
  */
 static int
 ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj,
-		bool allow_array)
+		int flags)
 {
 	struct ucl_lua_funcdata *fd;
 
-	if (allow_array && obj->next != NULL) {
+	if ((flags & LUA_UCL_ALLOW_ARRAY) && obj->next != NULL) {
 		/* Actually we need to push this as an array */
-		return ucl_object_lua_push_array (L, obj);
+		return ucl_object_lua_push_array (L, obj, flags);
 	}
 
 	switch (obj->type) {
@@ -246,7 +253,12 @@ ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj,
 		lua_pushnumber (L, ucl_obj_todouble (obj));
 		break;
 	case UCL_NULL:
-		lua_getfield (L, LUA_REGISTRYINDEX, "ucl.null");
+		if (flags & LUA_UCL_CONVERT_NIL) {
+			lua_pushboolean (L, false);
+		}
+		else {
+			lua_getfield (L, LUA_REGISTRYINDEX, "ucl.null");
+		}
 		break;
 	case UCL_USERDATA:
 		fd = (struct ucl_lua_funcdata *)obj->value.ud;
@@ -258,6 +270,19 @@ ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj,
 	}
 
 	return 1;
+}
+
+static int
+ucl_object_push_lua_common (lua_State *L, const ucl_object_t *obj, int flags)
+{
+	switch (obj->type) {
+	case UCL_OBJECT:
+		return ucl_object_lua_push_object (L, obj, flags);
+	case UCL_ARRAY:
+		return ucl_object_lua_push_array (L, obj, flags);
+	default:
+		return ucl_object_lua_push_scalar (L, obj, flags);
+	}
 }
 
 /***
@@ -278,14 +303,16 @@ ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj,
 int
 ucl_object_push_lua (lua_State *L, const ucl_object_t *obj, bool allow_array)
 {
-	switch (obj->type) {
-	case UCL_OBJECT:
-		return ucl_object_lua_push_object (L, obj, allow_array);
-	case UCL_ARRAY:
-		return ucl_object_lua_push_array (L, obj);
-	default:
-		return ucl_object_lua_push_scalar (L, obj, allow_array);
-	}
+	return ucl_object_push_lua_common (L, obj,
+			allow_array ? LUA_UCL_ALLOW_ARRAY : LUA_UCL_DEFAULT_FLAGS);
+}
+
+int
+ucl_object_push_lua_filter_nil (lua_State *L, const ucl_object_t *obj, bool allow_array)
+{
+	return ucl_object_push_lua_common (L, obj,
+			allow_array ? (LUA_UCL_ALLOW_ARRAY|LUA_UCL_CONVERT_NIL) :
+			(LUA_UCL_DEFAULT_FLAGS|LUA_UCL_CONVERT_NIL));
 }
 
 /**
