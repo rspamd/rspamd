@@ -2630,7 +2630,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 	g_assert (pool != NULL);
 
 	rspamd_html_library_init ();
-	hc->tags_seen = rspamd_mempool_alloc0 (pool, NBYTES (G_N_ELEMENTS (tag_defs)));
+	hc->tags_seen = rspamd_mempool_alloc0 (pool, NBYTES (N_TAGS));
 
 	/* Set white background color by default */
 	hc->bgcolor.d.comp.alpha = 0;
