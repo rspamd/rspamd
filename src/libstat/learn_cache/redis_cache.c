@@ -227,7 +227,7 @@ rspamd_stat_cache_redis_generate_id (struct rspamd_task *task)
 	rspamd_encode_base32_buf (out, sizeof (out), b32out,
 			sizeof (out) * 8 / 5 + 2);
 	g_assert (b32out != NULL);
-	rspamd_mempool_set_variable (task->task_pool, "words_hash", b32out, g_free);
+	rspamd_mempool_set_variable (task->task_pool, "words_hash", b32out, NULL);
 }
 
 gpointer
