@@ -1035,7 +1035,7 @@ lua_config_get_all_opt (lua_State * L)
 
 					while ((cur_elt = ucl_object_iterate_safe (it, true))) {
 						lua_pushstring (L, ucl_object_key (cur_elt));
-						ucl_object_push_lua_filter_nil (L, cur_elt, true);
+						ucl_object_push_lua (L, cur_elt, true);
 						lua_settable (L, -3);
 					}
 				}
@@ -1050,7 +1050,7 @@ lua_config_get_all_opt (lua_State * L)
 
 				LL_FOREACH (obj, cur) {
 					lua_pushinteger (L, i++);
-					ucl_object_push_lua_filter_nil (L, cur, true);
+					ucl_object_push_lua (L, cur, true);
 					lua_settable (L, -3);
 				}
 
