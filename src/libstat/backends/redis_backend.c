@@ -866,6 +866,13 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 				more = true;
 			}
 
+			/* Clear the existing stuff */
+			PTR_ARRAY_FOREACH (cbdata->cur_keys, i, k) {
+				if (k) {
+					g_free (k);
+				}
+			}
+
 			g_ptr_array_set_size (cbdata->cur_keys, elts->elements);
 
 			for (i = 0; i < elts->elements; i ++) {
@@ -877,12 +884,14 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 					rspamd_strlcpy (*pk, elt->str, elt->len + 1);
 					processed ++;
 				}
+				else {
+					pk = (gchar **)&g_ptr_array_index (cbdata->cur_keys, i);
+					*pk = NULL;
+				}
 			}
 
 			if (processed) {
-				for (i = 0; i < cbdata->cur_keys->len; i ++) {
-					k = (gchar *)g_ptr_array_index (cbdata->cur_keys, i);
-
+				PTR_ARRAY_FOREACH (cbdata->cur_keys, i, k) {
 					if (k) {
 						const gchar *learned_key = "learns";
 
@@ -1038,7 +1047,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	cbdata->inflight = 1;
 	cbdata->cur = ucl_object_typed_new (UCL_OBJECT);
 	cbdata->elt = redis_elt;
-	cbdata->cur_keys = g_ptr_array_new ();
+	cbdata->cur_keys = g_ptr_array_sized_new (1000);
 	redis_elt->cbdata = cbdata;
 
 	/* XXX: deal with timeouts maybe */
