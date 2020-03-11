@@ -223,10 +223,15 @@ rspamd_stat_cache_redis_generate_id (struct rspamd_task *task)
 	rspamd_cryptobox_hash_final (&st, out);
 
 	b32out = rspamd_mempool_alloc (task->task_pool,
+			sizeof (out) * 8 / 5 + 3);
+	i = rspamd_encode_base32_buf (out, sizeof (out), b32out,
 			sizeof (out) * 8 / 5 + 2);
-	rspamd_encode_base32_buf (out, sizeof (out), b32out,
-			sizeof (out) * 8 / 5 + 2);
-	g_assert (b32out != NULL);
+
+	if (i > 0) {
+		/* Zero terminate */
+		b32out[i] = '\0';
+	}
+
 	rspamd_mempool_set_variable (task->task_pool, "words_hash", b32out, NULL);
 }
 
