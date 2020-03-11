@@ -38,16 +38,16 @@ RBL FROM HIT WL
 
 EMAILBL Compose Map 1
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url14.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[user.dirty.sanchez.com:email]
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[dirty.sanchez.com:email]
 
 EMAILBL Compose Map 2
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url15.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[4.very.dirty.sanchez.com:email]
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[very.dirty.sanchez.com:email]
 
 EMAILBL Compose Map 3
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url16.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[41.black.sanchez.com:email]
-
+  
 
 *** Keywords ***
 Rbl Setup
