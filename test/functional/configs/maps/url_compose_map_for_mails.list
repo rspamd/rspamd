@@ -1,1 +1,3 @@
-!very.clean.exclude.com
+*.dirty.sanchez.com
+!admin.dirty.sanchez.com
+41.black.sanchez.com
