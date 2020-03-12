@@ -82,6 +82,13 @@ static ucl_object_t* ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_f
 
 static void *ucl_null;
 
+
+enum lua_ucl_push_flags {
+	LUA_UCL_DEFAULT_FLAGS = 0,
+	LUA_UCL_ALLOW_ARRAY = (1u << 0u),
+	LUA_UCL_CONVERT_NIL = (1u << 1u),
+};
+
 /**
  * Push a single element of an object to lua
  * @param L
@@ -93,7 +100,7 @@ ucl_object_lua_push_element (lua_State *L, const char *key,
 		const ucl_object_t *obj, int flags)
 {
 	lua_pushstring (L, key);
-	ucl_object_push_lua_common (L, obj, flags);
+	ucl_object_push_lua_common (L, obj, flags|LUA_UCL_ALLOW_ARRAY);
 	lua_settable (L, -3);
 }
 
@@ -132,12 +139,6 @@ lua_ucl_userdata_emitter (void *ud)
 
 	return fd->ret;
 }
-
-enum lua_ucl_push_flags {
-	LUA_UCL_DEFAULT_FLAGS = 0,
-	LUA_UCL_ALLOW_ARRAY = (1u << 0u),
-	LUA_UCL_CONVERT_NIL = (1u << 1u),
-};
 
 /**
  * Push a single object to lua
