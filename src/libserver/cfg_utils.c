@@ -1625,6 +1625,7 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 		score = 0.0;
 		/* Also set priority to 0 to allow override by anything */
 		sym_def->priority = 0;
+		flags |= RSPAMD_SYMBOL_FLAG_UNSCORED;
 	}
 	else {
 		sym_def->priority = priority;
@@ -1725,7 +1726,8 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			}
 		}
 
-		if (sym_def->priority > priority) {
+		if (sym_def->priority > priority &&
+			(isnan(score) || !(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNSCORED))) {
 			msg_debug_config ("symbol %s has been already registered with "
 					"priority %ud, do not override (new priority: %ud)",
 					symbol,
@@ -1759,6 +1761,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 				*sym_def->weight_ptr = score;
 				sym_def->score = score;
 				sym_def->priority = priority;
+				sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
 			}
 
 			sym_def->flags = flags;

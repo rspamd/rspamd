@@ -2049,7 +2049,7 @@ lua_config_register_symbol (lua_State * L)
 			}
 			else {
 				rspamd_config_add_symbol (cfg, name,
-						0.0, description, group, flags,
+						NAN, description, group, flags,
 						0, nshots);
 			}
 
@@ -2314,7 +2314,7 @@ lua_config_set_metric_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *description = NULL,
 			*group = NULL, *name = NULL, *flags_str = NULL;
-	double weight;
+	double score;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	gdouble priority = 0.0;
@@ -2329,7 +2329,7 @@ lua_config_set_metric_symbol (lua_State * L)
 					"*name=S;score=N;description=S;"
 					"group=S;one_shot=B;one_param=B;priority=N;flags=S;"
 					"nshots=I",
-					&name, &weight, &description,
+					&name, &score, &description,
 					&group, &one_shot, &one_param,
 					&priority, &flags_str, &nshots)) {
 				msg_err_config ("bad arguments: %e", err);
@@ -2340,7 +2340,7 @@ lua_config_set_metric_symbol (lua_State * L)
 		}
 		else {
 			name = luaL_checkstring (L, 2);
-			weight = luaL_checknumber (L, 3);
+			score = luaL_checknumber (L, 3);
 
 			if (lua_gettop (L) > 3 && lua_type (L, 4) == LUA_TSTRING) {
 				description = luaL_checkstring (L, 4);
@@ -2380,7 +2380,7 @@ lua_config_set_metric_symbol (lua_State * L)
 		}
 
 		rspamd_config_add_symbol (cfg, name,
-				weight, description, group, flags, (guint) priority, nshots);
+				score, description, group, flags, (guint) priority, nshots);
 
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
@@ -2786,7 +2786,8 @@ lua_config_newindex (lua_State *L)
 			 * Now check if a symbol has not been registered in any metric and
 			 * insert default value if applicable
 			 */
-			if (g_hash_table_lookup (cfg->symbols, name) == NULL) {
+			struct rspamd_symbol *sym = g_hash_table_lookup (cfg->symbols, name);
+			if (sym == NULL || (sym->flags & RSPAMD_SYMBOL_FLAG_UNSCORED)) {
 				nshots = cfg->default_max_shots;
 
 				lua_pushstring (L, "score");
@@ -2794,6 +2795,10 @@ lua_config_newindex (lua_State *L)
 				if (lua_type (L, -1) == LUA_TNUMBER) {
 					score = lua_tonumber (L, -1);
 
+					if (sym) {
+						/* Reset unscored flag */
+						sym->flags &= ~RSPAMD_SYMBOL_FLAG_UNSCORED;
+					}
 				}
 				lua_pop (L, 1);
 
@@ -2843,7 +2848,7 @@ lua_config_newindex (lua_State *L)
 					}
 					else if (group) {
 						/* Add with zero score */
-						rspamd_config_add_symbol (cfg, name, 0.0,
+						rspamd_config_add_symbol (cfg, name, NAN,
 								description, group, flags, 0, nshots);
 					}
 
