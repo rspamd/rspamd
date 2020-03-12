@@ -3057,7 +3057,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 						if (url != NULL) {
 
 							if (url_set != NULL) {
-								if (!rspamd_url_set_add_or_increase (url_set, url)) {
+								if (rspamd_url_set_add_or_increase (url_set, url)) {
 									rspamd_process_html_url (pool, url, url_set);
 								}
 							}
