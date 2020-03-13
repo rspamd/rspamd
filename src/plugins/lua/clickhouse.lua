@@ -1140,7 +1140,7 @@ local function add_extra_columns(upstream, ev_base, cfg)
       local col = settings.extra_columns[i]
       local prev_column
       if i == 1 then
-        prev_column = 'Digest'
+        prev_column = 'MIMERcpt'
       else
         prev_column = settings.extra_columns[i - 1].name
       end
