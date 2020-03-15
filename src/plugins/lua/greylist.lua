@@ -36,6 +36,25 @@ greylist {
 --]]
 
 if confighelp then
+  rspamd_config:add_example(nil, 'greylist',
+      "Performs adaptive greylisting using Redis",
+      [[
+greylist {
+  expire = 1d; # Buckets expire (1 day by default)
+  timeout = 5m; # Greylisting timeout
+  key_prefix = 'rg'; # Redis prefix
+  max_data_len = 10k; # Use boy hash up to this value of bytes for greylisting
+  message = 'Try again later'; # Default greylisting message
+  symbol = 'GREYLIST'; # Append symbol
+  action = 'soft reject'; # Default action change (for Exim use `greylist`)
+  whitelist_symbols = []; # Skip greylisting if one of the following symbols has been found
+  ipv4_mask = 19; # Mask bits for ipv4
+  ipv6_mask = 64; # Mask bits for ipv6
+  report_time = false; # Tell when greylisting is expired (appended to `message`)
+  check_local = false; # Greylist local messages
+  check_authed = false; # Greylist authenticated users
+}
+  ]])
   return
 end
 
