@@ -4771,6 +4771,16 @@ lua_task_process_ann_tokens (lua_State *L)
 			lua_rawgeti (L, 2, i);
 			sym = lua_tostring (L, -1);
 
+			/*
+			 * TODO: this cycle involves one hash lookup per symbol in a profile
+			 * Basically, in a common case that would be a table of all symbols
+			 * So we need to do N_symbols hash lookups which is not optimal
+			 * The optimal solution is to convert [sym1, sym2, ... symn] profile
+			 * to a set {sym1 = true, sym2 = true, ...} and then for each
+			 * resulting symbol check this table.
+			 *
+			 * That would lead to N_results lookups which is usually MUCH smaller
+			 */
 			sres = rspamd_task_find_symbol_result (task, sym);
 
 			if (sres && !(sres->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
@@ -4778,8 +4788,33 @@ lua_task_process_ann_tokens (lua_State *L)
 				if (!isnan (sres->score) && !isinf (sres->score) &&
 						(!sres->sym ||
 							!(rspamd_symcache_item_flags (sres->sym->cache_item) & SYMBOL_TYPE_NOSTAT))) {
-					gdouble norm_score = fabs (tanh (sres->score));
 
+					gdouble norm_score;
+
+					if (!isnan (sres->sym->score)) {
+						if (sres->sym->score == 0) {
+
+							if (sres->score == 0) {
+								/* Binary symbol */
+								norm_score = 1.0;
+							}
+							else {
+								norm_score = fabs (tanh (sres->score));
+							}
+						}
+						else {
+							/* Get dynamic weight */
+							norm_score = fabs (sres->score / sres->sym->score);
+
+							if (norm_score > 1.0) {
+								/* Multiple hits, we assume them as a single one */
+								norm_score = 1.0;
+							}
+						}
+					}
+					else {
+						norm_score = fabs (tanh (sres->score));
+					}
 
 					lua_pushnumber (L, MAX (min_score , norm_score));
 					lua_rawseti (L, 3, offset + 1);
