@@ -1126,6 +1126,7 @@ lua_redis_make_request (lua_State *L)
 			REDIS_RETAIN (ctx); /* Cleared by fin event */
 			ctx->cmds_pending ++;
 			sp_ud->timeout_ev.data = sp_ud;
+			ev_now_update_if_cheap ((struct ev_loop *)ud->event_loop);
 			ev_timer_init (&sp_ud->timeout_ev, lua_redis_timeout, timeout, 0.0);
 			ev_timer_start (ud->event_loop, &sp_ud->timeout_ev);
 			ret = TRUE;

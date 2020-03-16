@@ -420,6 +420,7 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 					else {
 						/* Add timeout */
 						session->timeout.data = session;
+						ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 						ev_timer_init (&session->timeout,
 								rspamd_fuzzy_redis_timeout,
 								session->backend->timeout, 0.0);
@@ -500,6 +501,7 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	else {
 		/* Add timeout */
 		session->timeout.data = session;
+		ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 		ev_timer_init (&session->timeout,
 				rspamd_fuzzy_redis_timeout,
 				session->backend->timeout, 0.0);
@@ -677,6 +679,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 		else {
 			/* Add timeout */
 			session->timeout.data = session;
+			ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 			ev_timer_init (&session->timeout,
 					rspamd_fuzzy_redis_timeout,
 					session->backend->timeout, 0.0);
@@ -802,6 +805,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 		else {
 			/* Add timeout */
 			session->timeout.data = session;
+			ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 			ev_timer_init (&session->timeout,
 					rspamd_fuzzy_redis_timeout,
 					session->backend->timeout, 0.0);
@@ -928,6 +932,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 		else {
 			/* Add timeout */
 			session->timeout.data = session;
+			ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 			ev_timer_init (&session->timeout,
 					rspamd_fuzzy_redis_timeout,
 					session->backend->timeout, 0.0);
@@ -1554,6 +1559,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		else {
 			/* Add timeout */
 			session->timeout.data = session;
+			ev_now_update_if_cheap ((struct ev_loop *)session->event_loop);
 			ev_timer_init (&session->timeout,
 					rspamd_fuzzy_redis_timeout,
 					session->backend->timeout, 0.0);
