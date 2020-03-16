@@ -741,8 +741,9 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	if (text_part->real_charset == NULL) {
-		msg_info_task ("<%s>: has invalid charset; original: %T",
-				MESSAGE_FIELD_CHECK (task, message_id), &part->ct->charset);
+		msg_info_task ("<%s>: has invalid charset; original charset: %T; Content-Type: \"%s\"",
+				MESSAGE_FIELD_CHECK (task, message_id), &part->ct->charset,
+				part->ct->cpy);
 		SET_PART_RAW (text_part);
 		text_part->utf_raw_content = part_content;
 
