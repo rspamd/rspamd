@@ -1386,7 +1386,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (is_url_end (t)) {
+			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end (t)) {
 				goto set;
 			}
 			else if (is_lwsp (t)) {
@@ -1410,7 +1410,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (is_url_end (t)) {
+			else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end (t)) {
 				goto set;
 			}
 			else if (is_lwsp (t)) {
@@ -1427,7 +1427,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			p++;
 			break;
 		case parse_part:
-			if (is_url_end (t)) {
+			if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end (t)) {
 				goto set;
 			}
 			else if (is_lwsp (t)) {
