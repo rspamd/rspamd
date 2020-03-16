@@ -54,10 +54,12 @@ Check Neural SPAM INVERSE
 
 *** Keywords ***
 Neural Setup
+  ${TMPDIR} =    Make Temporary Directory
+  Set Suite Variable        ${TMPDIR}
+  Run Redis
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/neural.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
-  Run Redis
 
 Neural Teardown
   Shutdown Process With Children  ${REDIS_PID}
