@@ -1059,7 +1059,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
             -- at least (10 * (1 - 0.25)) = 8 trains
 
             local max_len = math.max(lua_util.unpack(lua_util.values(lens)))
-            local len_bias_check_pred = function(l)
+            local len_bias_check_pred = function(_, l)
               return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
             end
             if max_len >= rule.train.max_trains and fun.all(len_bias_check_pred, lens) then
@@ -1077,6 +1077,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
             rspamd_logger.debugm(N, rspamd_config,
                 'checked %s vectors in ANN %s: %s vectors; %s required, need to check other class vectors',
                 what, ann_key, ntrains, rule.train.max_trains)
+            cont_cb()
           end
         end
       end
