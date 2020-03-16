@@ -1051,7 +1051,6 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
           local ntrains = tonumber(data) or 0
           lens[what] = ntrains
           if is_final then
-            local unpack = rawget(table, "unpack") or unpack
             -- Ensure that we have the following:
             -- one class has reached max_trains
             -- other class(es) are at least as full as classes_bias
@@ -1059,7 +1058,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
             -- one class must have 10 or more trains whilst another should have
             -- at least (10 * (1 - 0.25)) = 8 trains
 
-            local max_len = math.max(unpack(lens))
+            local max_len = math.max(lua_util.unpack(lua_util.values(lens)))
             local len_bias_check_pred = function(l)
               return l >= rule.train.max_trains * (1.0 - rule.train.classes_bias)
             end
