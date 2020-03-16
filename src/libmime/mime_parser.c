@@ -199,7 +199,8 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
 {
 	const guint check_len = 128;
-	guint real_len, nspaces = 0, neqsign = 0, n8bit = 0, nqpencoded = 0;
+	guint real_len, nspaces = 0, neqsign = 0, n8bit = 0, nqpencoded = 0,
+		padeqsign = 0, nupper = 0, nlower = 0;
 	gboolean b64_chars = TRUE;
 	const guchar *p, *end;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
@@ -239,18 +240,24 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		}
 	}
 
+	/* Skip trailing spaces */
+	while (end > p && g_ascii_isspace (*(end - 1))) {
+		end --;
+	}
+
 	if (end > p + 2) {
 		if (*(end - 1) == '=') {
-			neqsign ++;
+			padeqsign ++;
 			end --;
 		}
 
 		if (*(end - 1) == '=') {
-			neqsign ++;
+			padeqsign ++;
 			end --;
 		}
 	}
 
+	/* Adjust end to analyse only first characters */
 	if (end - p > real_len) {
 		end = p + real_len;
 	}
@@ -260,6 +267,7 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 			nspaces ++;
 		}
 		else if (*p == '=') {
+			b64_chars = FALSE; /* Eqsign must not be inside base64 */
 			neqsign ++;
 			p ++;
 
@@ -277,12 +285,74 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		else if (!(g_ascii_isalnum (*p) || *p == '/' || *p == '+')) {
 			b64_chars = FALSE;
 		}
+		else if (g_ascii_isupper (*p)) {
+			nupper ++;
+		}
+		else if (g_ascii_islower (*p)) {
+			nlower ++;
+		}
 
 		p ++;
 	}
 
-	if (b64_chars && neqsign < 2 && nspaces == 0) {
-		ret = RSPAMD_CTE_B64;
+	if (b64_chars && neqsign <= 2 && nspaces == 0) {
+		/* Need more thinking */
+
+		if (part->raw_data.len > 80) {
+			if (padeqsign > 0) {
+				ret = RSPAMD_CTE_B64;
+			}
+			else {
+				/* We have a large piece of data with no spaces and base64
+				 * symbols only, no padding is detected as well...
+				 *
+				 * There is a small chance that our first 128 characters
+				 * are either some garbage or it is a base64 with no padding
+				 * (e.g. when it is not needed)
+				 */
+				if (nupper > 1 && nlower > 1) {
+					/*
+					 * We have both uppercase and lowercase letters, so it can be
+					 * base64
+					 */
+					ret = RSPAMD_CTE_B64;
+				}
+				else {
+					ret = RSPAMD_CTE_7BIT;
+				}
+			}
+		}
+		else {
+
+			if (((end - (const guchar *)part->raw_data.begin) + padeqsign) % 4 == 0) {
+				if (padeqsign == 0) {
+					/*
+					 * It can be either base64 or plain text, hard to say
+					 * Let's assume that if we have > 1 uppercase it is
+					 * likely base64
+					 */
+					if (nupper > 1 && nlower > 1) {
+						ret = RSPAMD_CTE_B64;
+					}
+					else {
+						ret = RSPAMD_CTE_7BIT;
+					}
+
+				}
+				else {
+					ret = RSPAMD_CTE_B64;
+				}
+			}
+			else {
+				/* No way */
+				if (padeqsign == 1 || padeqsign == 2) {
+					ret = RSPAMD_CTE_B64;
+				}
+				else {
+					ret = RSPAMD_CTE_7BIT;
+				}
+			}
+		}
 	}
 	else if (n8bit == 0) {
 		if (neqsign > 2 && nqpencoded > 2) {
@@ -297,6 +367,7 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 	}
 
 	msg_debug_mime ("detected cte: %s", rspamd_cte_to_string (ret));
+
 	return ret;
 }
 
