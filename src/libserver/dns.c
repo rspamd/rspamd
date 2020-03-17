@@ -15,6 +15,7 @@
  */
 
 
+#include <contrib/librdns/rdns.h>
 #include "config.h"
 #include "dns.h"
 #include "rspamd.h"
@@ -641,12 +642,115 @@ rspamd_process_fake_reply (struct rspamd_config *cfg,
 	ucl_object_iterate_free (it);
 }
 
+static bool
+rspamd_dns_read_hosts_file (struct rspamd_config *cfg,
+							struct rspamd_dns_resolver *dns_resolver,
+							const gchar *fname)
+{
+	gchar *linebuf = NULL;
+	gsize buflen = 0;
+	gssize r;
+	FILE *fp;
+	guint nadded = 0;
+
+	fp = fopen (fname, "r");
+
+	if (fp == NULL) {
+		/* Hack to reduce noise */
+		if (strcmp (fname, "/etc/hosts") == 0) {
+			msg_info_config ("cannot open hosts file %s: %s", fname,
+					strerror (errno));
+		}
+		else {
+			msg_err_config ("cannot open hosts file %s: %s", fname,
+					strerror (errno));
+		}
+
+		return false;
+	}
+
+	while ((r = getline (&linebuf, &buflen, fp)) > 0) {
+		if (linebuf[0] == '#' || g_ascii_isspace (linebuf[0])) {
+			/* Skip comment or empty line */
+			continue;
+		}
+
+		g_strchomp (linebuf);
+
+		gchar **elts = g_strsplit_set (linebuf, " \t\v", -1);
+		rspamd_inet_addr_t *addr;
+
+		if (!rspamd_parse_inet_address (&addr, elts[0], strlen (elts[0]),
+				RSPAMD_INET_ADDRESS_PARSE_REMOTE|RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
+			msg_warn_config ("bad hosts file line: %s; cannot parse address", linebuf);
+		}
+		else {
+			/* Add all FQDN + aliases if any */
+			gchar **cur_name = &elts[1];
+
+			while (*cur_name) {
+				if (strlen (*cur_name) == 0) {
+					cur_name ++;
+					continue;
+				}
+
+				if (*cur_name[0] == '#') {
+					/* Start of the comment */
+					break;
+				}
+
+				struct rdns_reply_entry *rep;
+				rep = calloc (1, sizeof (*rep));
+				g_assert (rep != NULL);
+
+				rep->ttl = 0;
+
+				if (rspamd_inet_address_get_af (addr) == AF_INET) {
+					socklen_t unused;
+					const struct sockaddr_in *sin = (const struct sockaddr_in *)
+							rspamd_inet_address_get_sa (addr, &unused);
+					rep->type = RDNS_REQUEST_A;
+					memcpy (&rep->content.a.addr, &sin->sin_addr,
+							sizeof (rep->content.a.addr));
+				}
+				else {
+					socklen_t unused;
+					const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *)
+							rspamd_inet_address_get_sa (addr, &unused);
+					rep->type = RDNS_REQUEST_AAAA;
+					memcpy (&rep->content.aaa.addr, &sin6->sin6_addr,
+							sizeof (rep->content.aaa.addr));
+				}
+
+				rep->next = NULL;
+				rep->prev = rep;
+				rdns_resolver_set_fake_reply (dns_resolver->r,
+						g_strdup (*cur_name), rep->type, RDNS_RC_NOERROR, rep);
+				msg_debug_config ("added fake record %s -> %s from hosts file %s",
+						*cur_name, rspamd_inet_address_to_string (addr), fname);
+				cur_name ++;
+				nadded ++;
+			}
+
+			rspamd_inet_address_free (addr);
+		}
+
+		g_strfreev (elts);
+	}
+
+	msg_info_config ("processed host file %s; %d records added", fname, nadded);
+	fclose (fp);
+
+	return true;
+}
+
 static void
 rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 								struct rspamd_dns_resolver *dns_resolver,
 								const ucl_object_t *dns_section)
 {
-	const ucl_object_t *fake_replies, *fails_cache_size, *fails_cache_time;
+	const ucl_object_t *fake_replies, *fails_cache_size, *fails_cache_time,
+		*hosts;
 	static const ev_tstamp default_fails_cache_time = 10.0;
 
 	/* Process fake replies */
@@ -659,6 +763,21 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 		DL_FOREACH (fake_replies, cur_arr) {
 			rspamd_process_fake_reply (cfg, dns_resolver, cur_arr);
 		}
+	}
+
+	hosts = ucl_object_lookup (dns_section, "hosts");
+	if (hosts == NULL) {
+		/* Read normal `/etc/hosts` file */
+		rspamd_dns_read_hosts_file (cfg, dns_resolver, "/etc/hosts");
+	}
+	else if (ucl_object_type (hosts) == UCL_NULL) {
+
+	}
+	else if (ucl_object_type (hosts) == UCL_STRING) {
+
+	}
+	else if (ucl_object_type (hosts) == UCL_ARRAY) {
+
 	}
 
 	fails_cache_size = ucl_object_lookup (dns_section, "fails_cache_size");
