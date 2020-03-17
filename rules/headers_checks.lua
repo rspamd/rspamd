@@ -338,44 +338,37 @@ local check_mime_id = rspamd_config:register_symbol{
   group = 'headers',
   score = 0.0,
   callback = function(task)
-    local parts = task:get_parts()
-    if not parts then return false end
-
-    -- Make sure there is a MIME-Version header
-    local mv = task:get_header('MIME-Version')
+    -- Check if there is a MIME-Version header
     local missing_mime = false
-    if (not mv) then
+    if not task:get_header('MIME-Version') then
       missing_mime = true
+    end
+
+    -- Check presense of MIME specific headers
+    local ct_header = task:get_header('Content-Type')
+    local cte_header = task:get_header('Content-Transfer-Encoding')
+
+    -- Add the symbol if we have MIME headers, but no MIME-Version
+    -- (do not add the symbol for RFC822 messages)
+    if (ct_header or cte_header) and missing_mime then
+      task:insert_result('MISSING_MIME_VERSION', 1.0)
     end
 
     local found_ma = false
     local found_plain = false
     local found_html = false
-    local cte_7bit = false
 
-    for _,p in ipairs(parts) do
-      local mtype,subtype = p:get_type()
+    for _, p in ipairs(task:get_parts()) do
+      local mtype, subtype = p:get_type()
       local ctype = mtype:lower() .. '/' .. subtype:lower()
       if (ctype == 'multipart/alternative') then
         found_ma = true
       end
       if (ctype == 'text/plain') then
-        if p:get_cte() == '7bit' then
-          cte_7bit = true
-        end
         found_plain = true
       end
       if (ctype == 'text/html') then
-        if p:get_cte() == '7bit' then
-          cte_7bit = true
-        end
         found_html = true
-      end
-    end
-
-    if missing_mime then
-      if not (not found_ma and ((found_plain or found_html) and cte_7bit)) then
-        task:insert_result('MISSING_MIME_VERSION', 1.0)
       end
     end
 
@@ -395,7 +388,7 @@ rspamd_config:register_symbol{
   score = 2.0,
   parent = check_mime_id,
   type = 'virtual',
-  description = 'MIME-Version header is missing',
+  description = 'MIME-Version header is missing in MIME message',
   group = 'headers',
 }
 rspamd_config:register_symbol{
