@@ -766,18 +766,32 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 	}
 
 	hosts = ucl_object_lookup (dns_section, "hosts");
+
 	if (hosts == NULL) {
 		/* Read normal `/etc/hosts` file */
 		rspamd_dns_read_hosts_file (cfg, dns_resolver, "/etc/hosts");
 	}
 	else if (ucl_object_type (hosts) == UCL_NULL) {
-
+		/* Do nothing, hosts are explicitly disabled */
 	}
 	else if (ucl_object_type (hosts) == UCL_STRING) {
-
+		if (!rspamd_dns_read_hosts_file (cfg, dns_resolver, ucl_object_tostring (hosts))) {
+			msg_err_config ("cannot read hosts file %s", ucl_object_tostring (hosts));
+		}
 	}
 	else if (ucl_object_type (hosts) == UCL_ARRAY) {
+		const ucl_object_t *cur;
+		ucl_object_iter_t it = NULL;
 
+		while ((cur = ucl_object_iterate (hosts, &it, true)) != NULL) {
+			if (!rspamd_dns_read_hosts_file (cfg, dns_resolver, ucl_object_tostring (cur))) {
+				msg_err_config ("cannot read hosts file %s", ucl_object_tostring (cur));
+			}
+		}
+	}
+	else {
+		msg_err_config ("invalid type for hosts parameter: %s",
+				ucl_object_type_to_string (ucl_object_type (hosts)));
 	}
 
 	fails_cache_size = ucl_object_lookup (dns_section, "fails_cache_size");
