@@ -4791,7 +4791,7 @@ lua_task_process_ann_tokens (lua_State *L)
 
 					gdouble norm_score;
 
-					if (!isnan (sres->sym->score)) {
+					if (sres->sym && !isnan (sres->sym->score)) {
 						if (sres->sym->score == 0) {
 
 							if (sres->score == 0) {
