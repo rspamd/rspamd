@@ -623,6 +623,10 @@ is_domain_start (int p)
 	return FALSE;
 }
 
+static const guint max_domain_length = 253;
+static const guint max_dns_label = 63;
+static const guint max_email_user = 64;
+
 static gint
 rspamd_mailto_parse (struct http_parser_url *u,
 					 const gchar *str, gsize len,
@@ -653,6 +657,10 @@ rspamd_mailto_parse (struct http_parser_url *u,
 
 	while (p < last) {
 		t = *p;
+
+		if (p - str > max_email_user + max_domain_length + 1) {
+			goto out;
+		}
 
 		switch (st) {
 			case parse_mailto:
@@ -725,6 +733,9 @@ rspamd_mailto_parse (struct http_parser_url *u,
 				else if (!is_mailsafe (t)) {
 					goto out;
 				}
+				else if (p - c > max_email_user) {
+					goto out;
+				}
 				p++;
 				break;
 			case parse_at:
@@ -737,6 +748,9 @@ rspamd_mailto_parse (struct http_parser_url *u,
 					st = parse_suffix_question;
 				}
 				else if (!is_domain (t) && t != '.' && t != '_') {
+					goto out;
+				}
+				else if (p - c > max_domain_length) {
 					goto out;
 				}
 				p++;
@@ -809,6 +823,10 @@ rspamd_telephone_parse (struct http_parser_url *u,
 
 	while (p < last) {
 		t = *p;
+
+		if (p - str > max_email_user) {
+			goto out;
+		}
 
 		switch (st) {
 		case parse_protocol:
@@ -926,7 +944,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 {
 	const gchar *p = str, *c = str, *last = str + len, *slash = NULL,
 			*password_start = NULL, *user_start = NULL;
-	gchar t;
+	gchar t = 0;
 	UChar32 uc;
 	glong pt;
 	gint ret = 1;
@@ -1075,6 +1093,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			else if (!g_ascii_isgraph (t)) {
 				goto out;
 			}
+			else if (p - c > max_email_user) {
+				goto out;
+			}
+
 			p++;
 			break;
 		case parse_multiple_at:
@@ -1130,6 +1152,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			else if (!g_ascii_isgraph (t)) {
 				goto out;
 			}
+			else if (p - c > max_domain_length) {
+				goto out;
+			}
 			p++;
 			break;
 		case parse_at:
@@ -1157,6 +1182,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			}
 			break;
 		case parse_domain:
+			if (p - c > max_domain_length) {
+				/* Too large domain */
+				goto out;
+			}
 			if (t == '/' || t == ':' || t == '?' || t == '#') {
 				if (p - c == 0) {
 					goto out;
@@ -1175,7 +1204,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					st = parse_part;
 					c = p + 1;
 				}
-				else if (!user_seen) {
+				else if (t == ':' && !user_seen) {
 					/*
 					 * Here we can have both port and password, hence we need
 					 * to apply some heuristic here
@@ -1193,7 +1222,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				p++;
 			}
 			else {
-				if (is_url_end (t)) {
+				if (is_url_end (t) || is_url_start (t)) {
 					goto set;
 				}
 				else if (*p == '@' && !user_seen) {
@@ -2615,6 +2644,7 @@ url_web_end (struct url_callback_data *cb,
 	}
 
 	match->m_len = (last - pos);
+	cb->fin = last + 1;
 
 	return TRUE;
 }
@@ -2909,7 +2939,10 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 		}
 
 		cb->start = m.m_begin;
-		cb->fin = pos;
+
+		if (pos > cb->fin) {
+			cb->fin = pos;
+		}
 
 		return 1;
 	}
@@ -3047,7 +3080,11 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		}
 
 		cb->start = m.m_begin;
-		cb->fin = pos;
+
+		if (pos > cb->fin) {
+			cb->fin = pos;
+		}
+
 		url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		g_strstrip (cb->url_str);
 		rc = rspamd_url_parse (url, cb->url_str,
