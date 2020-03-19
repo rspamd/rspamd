@@ -496,12 +496,12 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 			rspamd_multipattern_add_pattern (url_scanner->search_trie_strict,
 					static_matchers[i].pattern,
 					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|
-							RSPAMD_MULTIPATTERN_RE|RSPAMD_MULTIPATTERN_TLD);
+							RSPAMD_MULTIPATTERN_RE);
 		}
 		else {
 			rspamd_multipattern_add_pattern (url_scanner->search_trie_strict,
 					static_matchers[i].pattern,
-					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|RSPAMD_MULTIPATTERN_TLD);
+					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 		}
 	}
 
@@ -513,12 +513,12 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 				rspamd_multipattern_add_pattern (url_scanner->search_trie_full,
 						static_matchers[i].pattern,
 						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|
-						RSPAMD_MULTIPATTERN_RE|RSPAMD_MULTIPATTERN_TLD);
+						RSPAMD_MULTIPATTERN_RE);
 			}
 			else {
 				rspamd_multipattern_add_pattern (url_scanner->search_trie_full,
 						static_matchers[i].pattern,
-						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|RSPAMD_MULTIPATTERN_TLD);
+						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 			}
 		}
 		g_array_append_vals (sc->matchers_full, static_matchers, n);
@@ -558,14 +558,14 @@ rspamd_url_init (const gchar *tld_file)
 			sizeof (struct url_matcher), G_N_ELEMENTS (static_matchers));
 	url_scanner->search_trie_strict = rspamd_multipattern_create_sized (
 			G_N_ELEMENTS (static_matchers),
-			RSPAMD_MULTIPATTERN_TLD|RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+			RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 
 	if (tld_file) {
 		/* Reserve larger multipattern */
 		url_scanner->matchers_full = g_array_sized_new (FALSE, TRUE,
 				sizeof (struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized (13000,
-				RSPAMD_MULTIPATTERN_TLD|RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 	}
 	else {
 		url_scanner->matchers_full = NULL;
@@ -3173,6 +3173,8 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	}
 	else {
 		cb->url_str = NULL;
+		/* Continue search if no pattern has been found */
+		return 0;
 	}
 
 	/* Continue search if required (return 0 means continue) */

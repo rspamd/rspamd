@@ -83,7 +83,9 @@ context("URL check functions", function()
     {"http:/\\www.google.com/foo?bar=baz#", true, {
       host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'
     }},
-    {"http://[www.google.com]/", false},
+    {"http://[www.google.com]/", true, {
+      host = 'www.google.com',
+    }},
     {"<test.com", true, {
       host = 'test.com', tld = 'test.com',
     }},

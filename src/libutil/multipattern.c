@@ -103,7 +103,7 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 	/*
 	 * We understand the following cases
 	 * 1) blah -> .blah\b
-	 * 2) *.blah -> ..*\\.blah\b
+	 * 2) *.blah -> ..*\\.blah\b|$
 	 * 3) ???
 	 */
 
@@ -127,7 +127,7 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 		len = slen + strlen (prefix);
 	}
 
-	suffix = "\\b";
+	suffix = "(:?\\b|$)";
 	len += strlen (suffix);
 
 	res = g_malloc (len + 1);
@@ -329,26 +329,27 @@ rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
 	if (rspamd_hs_check ()) {
 		gchar *np;
 		gint fl = HS_FLAG_SOM_LEFTMOST;
+		gint adjusted_flags = mp->flags | flags;
 
-		if (mp->flags & RSPAMD_MULTIPATTERN_ICASE) {
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_ICASE) {
 			fl |= HS_FLAG_CASELESS;
 		}
-		if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
-			if (mp->flags & RSPAMD_MULTIPATTERN_TLD) {
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_UTF8) {
+			if (adjusted_flags & RSPAMD_MULTIPATTERN_TLD) {
 				fl |= HS_FLAG_UTF8;
 			}
 			else {
 				fl |= HS_FLAG_UTF8 | HS_FLAG_UCP;
 			}
 		}
-		if (mp->flags & RSPAMD_MULTIPATTERN_DOTALL) {
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_DOTALL) {
 			fl |= HS_FLAG_DOTALL;
 		}
-		if (mp->flags & RSPAMD_MULTIPATTERN_SINGLEMATCH) {
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_SINGLEMATCH) {
 			fl |= HS_FLAG_SINGLEMATCH;
 			fl &= ~HS_FLAG_SOM_LEFTMOST; /* According to hyperscan docs */
 		}
-		if (mp->flags & RSPAMD_MULTIPATTERN_NO_START) {
+		if (adjusted_flags & RSPAMD_MULTIPATTERN_NO_START) {
 			fl &= ~HS_FLAG_SOM_LEFTMOST;
 		}
 
