@@ -334,7 +334,12 @@ rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
 			fl |= HS_FLAG_CASELESS;
 		}
 		if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
-			fl |= HS_FLAG_UTF8|HS_FLAG_UCP;
+			if (mp->flags & RSPAMD_MULTIPATTERN_TLD) {
+				fl |= HS_FLAG_UTF8;
+			}
+			else {
+				fl |= HS_FLAG_UTF8 | HS_FLAG_UCP;
+			}
 		}
 		if (mp->flags & RSPAMD_MULTIPATTERN_DOTALL) {
 			fl |= HS_FLAG_DOTALL;
