@@ -97,13 +97,13 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 		gsize *dst_len)
 {
 	gsize len;
-	const gchar *p, *prefix;
+	const gchar *p, *prefix, *suffix;
 	gchar *res;
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> .blah
-	 * 2) *.blah -> ..*\\.blah
+	 * 1) blah -> .blah\b
+	 * 2) *.blah -> ..*\\.blah\b
 	 * 3) ???
 	 */
 
@@ -127,9 +127,13 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 		len = slen + strlen (prefix);
 	}
 
+	suffix = "\\b";
+	len += strlen (suffix);
+
 	res = g_malloc (len + 1);
 	slen = rspamd_strlcpy (res, prefix, len + 1);
 	slen += rspamd_strlcpy (res + slen, p, len + 1 - slen);
+	slen += rspamd_strlcpy (res + slen, suffix, len + 1 - slen);
 
 	*dst_len = slen;
 
