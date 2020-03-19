@@ -2611,53 +2611,47 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	case RSPAMD_DKIM_KEY_RSA:
 		if (RSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_rsa) != 1) {
-			msg_debug_dkim ("rsa verify failed");
+			msg_debug_dkim ("headers rsa verify failed");
 			res->rcode = DKIM_REJECT;
-			res->fail_reason = "rsa verify failed";
+			res->fail_reason = "headers rsa verify failed";
 
 			msg_info_dkim (
-					"%s: RSA verification failure: got %*Bs, expected %*Bs; "
-					"body length %d->%d; headers length %d; d=%s; s=%s",
+					"%s: headers RSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
-					(gint)dlen, raw_digest,
-					(gint)ctx->blen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector);
+					ctx->domain, ctx->selector, ctx->dkim_header);
 		}
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
 		if (ECDSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_ecdsa) != 1) {
 			msg_info_dkim (
-					"%s: ECDSA verification failure: got %*Bs, expected %*Bs; "
-					"body length %d->%d; headers length %d; d=%s; s=%s",
+					"%s: headers ECDSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
-					(gint)dlen, raw_digest,
-					(gint)ctx->blen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector);
-			msg_debug_dkim ("ecdsa verify failed");
+					ctx->domain, ctx->selector, ctx->dkim_header);
+			msg_debug_dkim ("headers ecdsa verify failed");
 			res->rcode = DKIM_REJECT;
-			res->fail_reason = "ecdsa verify failed";
+			res->fail_reason = "headers ecdsa verify failed";
 		}
 		break;
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify (ctx->b, ctx->blen, raw_digest, dlen,
 				key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_info_dkim (
-					"%s: EDDSA verification failure: got %*Bs, expected %*Bs; "
-					"body length %d->%d; headers length %d; d=%s; s=%s",
+					"%s: headers EDDSA verification failure; "
+					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
-					(gint)dlen, raw_digest,
-					(gint)ctx->blen, ctx->b,
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector);
-			msg_debug_dkim ("eddsa verify failed");
+					ctx->domain, ctx->selector, ctx->dkim_header);
+			msg_debug_dkim ("headers eddsa verify failed");
 			res->rcode = DKIM_REJECT;
-			res->fail_reason = "eddsa verify failed";
+			res->fail_reason = "headers eddsa verify failed";
 		}
 		break;
 	}
