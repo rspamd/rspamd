@@ -585,7 +585,7 @@ rspamd_url_init (const gchar *tld_file)
 
 	if (!rspamd_multipattern_compile (url_scanner->search_trie_strict, &err)) {
 		msg_err ("cannot compile url matcher static patterns, fatal error: %e", err);
-		g_abort ();
+		abort ();
 	}
 
 	if (url_scanner->search_trie_full) {
