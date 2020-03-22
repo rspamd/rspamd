@@ -1615,57 +1615,56 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	return NULL;
 }
 
+struct rspamd_html_url_query_cbd {
+	rspamd_mempool_t *pool;
+	khash_t (rspamd_url_hash) *url_set;
+	struct rspamd_url *url;
+};
+
+static gboolean
+rspamd_html_url_query_callback (struct rspamd_url *url, gsize start_offset,
+						   gsize end_offset, gpointer ud)
+{
+	struct rspamd_html_url_query_cbd *cbd =
+			(struct rspamd_html_url_query_cbd *)ud;
+	rspamd_mempool_t *pool;
+
+	pool = cbd->pool;
+
+	if (url->protocol == PROTOCOL_MAILTO) {
+		if (url->userlen == 0) {
+			return FALSE;
+		}
+	}
+
+	msg_debug_html ("found url %s in query of url"
+					" %*s", url->string,
+					cbd->url->querylen, rspamd_url_query_unsafe (cbd->url));
+
+	url->flags |= RSPAMD_URL_FLAG_QUERY;
+	rspamd_url_set_add_or_increase (cbd->url_set, url);
+
+	return TRUE;
+}
+
 static void
 rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 						 khash_t (rspamd_url_hash) *url_set)
 {
-	struct rspamd_url *query_url;
-	gchar *url_str;
-	gint rc;
-	gboolean prefix_added;
-
 	if (url->flags & RSPAMD_URL_FLAG_UNNORMALISED) {
 		url->flags |= RSPAMD_URL_FLAG_OBSCURED;
 	}
 
 	if (url->querylen > 0) {
+		struct rspamd_html_url_query_cbd qcbd;
 
-		if (rspamd_url_find (pool, rspamd_url_query_unsafe (url), url->querylen, &url_str,
-				RSPAMD_URL_FIND_ALL,
-				NULL, &prefix_added)) {
-			query_url = rspamd_mempool_alloc0 (pool,
-					sizeof (struct rspamd_url));
+		qcbd.pool = pool;
+		qcbd.url_set = url_set;
 
-			rc = rspamd_url_parse (query_url,
-					url_str,
-					strlen (url_str),
-					pool,
-					RSPAMD_URL_PARSE_TEXT);
-
-			if (rc == URI_ERRNO_OK &&
-					query_url->hostlen > 0) {
-				msg_debug_html ("found url %s in query of url"
-						" %*s", url_str, url->querylen, rspamd_url_query_unsafe (url));
-
-				if (prefix_added) {
-					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
-				}
-
-				if (query_url->flags
-						& (RSPAMD_URL_FLAG_UNNORMALISED|RSPAMD_URL_FLAG_OBSCURED|
-							RSPAMD_URL_FLAG_NUMERIC)) {
-					/* Set obscured flag if query url is bad */
-					url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
-
-				/* And vice-versa */
-				if (url->flags & RSPAMD_URL_FLAG_OBSCURED) {
-					query_url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
-
-				rspamd_url_set_add_or_increase (url_set, query_url);
-			}
-		}
+		rspamd_url_find_multiple(pool,
+				rspamd_url_query_unsafe (url), url->querylen,
+				RSPAMD_URL_FIND_ALL, NULL,
+				rspamd_html_url_query_callback, &qcbd);
 	}
 }
 

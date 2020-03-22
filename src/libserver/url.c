@@ -3253,10 +3253,6 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 			(struct rspamd_url_mimepart_cbdata *)ud;
 	struct rspamd_process_exception *ex;
 	struct rspamd_task *task;
-	gchar *url_str = NULL;
-	struct rspamd_url *query_url;
-	gint rc;
-	gboolean prefix_added;
 
 	task = cbd->task;
 	ex = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_process_exception));
