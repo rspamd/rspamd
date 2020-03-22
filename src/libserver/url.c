@@ -3214,10 +3214,43 @@ struct rspamd_url_mimepart_cbdata {
 };
 
 static gboolean
+rspamd_url_query_callback (struct rspamd_url *url, gsize start_offset,
+						   gsize end_offset, gpointer ud)
+{
+	struct rspamd_url_mimepart_cbdata *cbd =
+			(struct rspamd_url_mimepart_cbdata *)ud;
+	struct rspamd_task *task;
+
+	task = cbd->task;
+
+	if (url->protocol == PROTOCOL_MAILTO) {
+		if (url->userlen == 0) {
+			return FALSE;
+		}
+	}
+	/* Also check max urls */
+	if (cbd->task->cfg && cbd->task->cfg->max_urls > 0) {
+		if (kh_size (MESSAGE_FIELD (task, urls)) > cbd->task->cfg->max_urls) {
+			msg_err_task ("part has too many URLs, we cannot process more: "
+						  "%d urls extracted ",
+					(guint)kh_size (MESSAGE_FIELD (task, urls)));
+
+			return FALSE;
+		}
+	}
+
+	url->flags |= RSPAMD_URL_FLAG_QUERY;
+	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
-	struct rspamd_url_mimepart_cbdata *cbd = ud;
+	struct rspamd_url_mimepart_cbdata *cbd =
+			(struct rspamd_url_mimepart_cbdata *)ud;
 	struct rspamd_process_exception *ex;
 	struct rspamd_task *task;
 	gchar *url_str = NULL;
@@ -3270,36 +3303,10 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find (task->task_pool,
+		rspamd_url_find_multiple (task->task_pool,
 				rspamd_url_query_unsafe (url), url->querylen,
-				&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
-			query_url = rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct rspamd_url));
-			rc = rspamd_url_parse (query_url,
-					url_str,
-					strlen (url_str),
-					task->task_pool,
-					RSPAMD_URL_PARSE_TEXT);
-
-			if (rc == URI_ERRNO_OK &&
-					query_url->hostlen > 0) {
-				msg_debug_task ("found url %s in query of url"
-						" %*s", url_str, url->querylen, rspamd_url_query_unsafe (url));
-
-				if (prefix_added) {
-					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
-				}
-
-				if (query_url->protocol == PROTOCOL_MAILTO) {
-					if (query_url->userlen == 0) {
-						return TRUE;
-					}
-				}
-
-				query_url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
-				rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), query_url);
-			}
-		}
+				RSPAMD_URL_FIND_ALL, NULL,
+				rspamd_url_query_callback, cbd);
 	}
 
 	return TRUE;
