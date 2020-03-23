@@ -904,6 +904,14 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				}
 				break;
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
+				/* Load RE cache to provide it for new forks */
+				if (rspamd_re_cache_is_hs_loaded (srv->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
+						cmd.cmd.hs_loaded.forced) {
+					rspamd_re_cache_load_hyperscan (
+							srv->cfg->re_cache,
+							cmd.cmd.hs_loaded.cache_dir);
+				}
+
 				/* Broadcast command to all workers */
 				memset (&wcmd, 0, sizeof (wcmd));
 				wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
