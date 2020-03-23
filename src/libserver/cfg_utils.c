@@ -888,6 +888,10 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 
 		/* Init re cache */
 		rspamd_re_cache_init (cfg->re_cache, cfg);
+
+		/* Try load Hypersan */
+		rspamd_re_cache_load_hyperscan (cfg->re_cache,
+				cfg->hs_cache_dir ? cfg->hs_cache_dir :  RSPAMD_DBDIR "/");
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {

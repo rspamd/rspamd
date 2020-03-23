@@ -90,12 +90,20 @@ void rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 void rspamd_re_cache_init (struct rspamd_re_cache *cache,
 						   struct rspamd_config *cfg);
 
+enum rspamd_hyperscan_status {
+	RSPAMD_HYPERSCAN_UNKNOWN = 0,
+	RSPAMD_HYPERSCAN_UNSUPPORTED,
+	RSPAMD_HYPERSCAN_LOADED_PARTIAL,
+	RSPAMD_HYPERSCAN_LOADED_FULL,
+	RSPAMD_HYPERSCAN_LOAD_ERROR,
+};
+
 /**
  * Returns true when hyperscan is loaded
  * @param cache
  * @return
  */
-gboolean rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache);
+enum rspamd_hyperscan_status rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache);
 
 /**
  * Get runtime data for a cache
@@ -173,7 +181,6 @@ gint rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 										void (*cb)(guint ncompiled, GError *err, void *cbd),
 										void *cbd);
 
-
 /**
  * Returns TRUE if the specified file is valid hyperscan cache
  */
@@ -183,8 +190,9 @@ gboolean rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 /**
  * Loads all hyperscan regexps precompiled
  */
-gboolean rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
-										 const char *cache_dir);
+enum rspamd_hyperscan_status rspamd_re_cache_load_hyperscan (
+		struct rspamd_re_cache *cache,
+		const char *cache_dir);
 
 /**
  * Registers lua selector in the cache
