@@ -1660,6 +1660,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 		qcbd.pool = pool;
 		qcbd.url_set = url_set;
+		qcbd.url = url;
 
 		rspamd_url_find_multiple(pool,
 				rspamd_url_query_unsafe (url), url->querylen,
