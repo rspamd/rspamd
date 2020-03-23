@@ -887,21 +887,8 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 		}
 	}
 	else {
-		if (mime_part->parent_part) {
-			struct rspamd_mime_part *parent = mime_part->parent_part;
-
-			if (IS_PART_MULTIPART (parent) && parent->specific.mp->children->len == 2) {
-				/* Do not extract urls from HTML at all */
-			}
-			else {
-				rspamd_url_text_extract (task->task_pool, task, text_part,
-						RSPAMD_URL_FIND_STRICT);
-			}
-		}
-		else {
-			rspamd_url_text_extract (task->task_pool, task, text_part,
-					RSPAMD_URL_FIND_STRICT);
-		}
+		rspamd_url_text_extract (task->task_pool, task, text_part,
+				RSPAMD_URL_FIND_STRICT);
 	}
 
 	if (text_part->exceptions) {

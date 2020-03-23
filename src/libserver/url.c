@@ -63,10 +63,10 @@ typedef struct url_match_s {
 	gchar st;
 } url_match_t;
 
-#define URL_FLAG_NOHTML (1 << 0)
-#define URL_FLAG_TLD_MATCH (1 << 1)
-#define URL_FLAG_STAR_MATCH (1 << 2)
-#define URL_FLAG_REGEXP (1 << 3)
+#define URL_FLAG_NOHTML (1u << 0u)
+#define URL_FLAG_TLD_MATCH (1u << 1u)
+#define URL_FLAG_STAR_MATCH (1u << 2u)
+#define URL_FLAG_REGEXP (1u << 3u)
 
 struct url_callback_data;
 
@@ -206,12 +206,12 @@ struct url_matcher static_matchers[] = {
 		{"sip:",      "",          url_web_start,   url_web_end,
 				0},
 		{"www.",      "http://",   url_web_start,   url_web_end,
-				URL_FLAG_NOHTML},
+				0},
 		{"ftp.",      "ftp://",    url_web_start,   url_web_end,
-				URL_FLAG_NOHTML},
+				0},
 		/* Likely emails */
 		{"@",         "mailto://", url_email_start, url_email_end,
-				URL_FLAG_NOHTML}
+				0}
 };
 
 
