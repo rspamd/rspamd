@@ -2366,7 +2366,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 enum rspamd_hyperscan_status
 rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
-		const char *cache_dir)
+		const char *cache_dir, bool try_load)
 {
 	g_assert (cache != NULL);
 	g_assert (cache_dir != NULL);
@@ -2391,7 +2391,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, FALSE, FALSE)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, try_load, FALSE)) {
 			msg_debug_re_cache ("load hyperscan database from '%s'",
 					re_class->hash);
 
@@ -2404,7 +2404,13 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
 			if (map == MAP_FAILED) {
-				msg_err_re_cache ("cannot mmap %s: %s", path, strerror (errno));
+				if (!try_load) {
+					msg_err_re_cache ("cannot mmap %s: %s", path, strerror (errno));
+				}
+				else {
+					msg_debug_re_cache ("cannot mmap %s: %s", path, strerror (errno));
+				}
+
 				close (fd);
 				all_valid = FALSE;
 				continue;
@@ -2420,8 +2426,15 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 							RSPAMD_HS_MAGIC_LEN + /* header */
 							sizeof (cache->plt) > (gsize)st.st_size) {
 				/* Some wrong amount of regexps */
-				msg_err_re_cache ("bad number of expressions in %s: %d",
-						path, n);
+				if (!try_load) {
+					msg_err_re_cache ("bad number of expressions in %s: %d",
+							path, n);
+				}
+				else {
+					msg_debug_re_cache ("bad number of expressions in %s: %d",
+							path, n);
+				}
+
 				munmap (map, st.st_size);
 				all_valid = FALSE;
 				continue;
@@ -2457,7 +2470,12 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 
 			if ((ret = hs_deserialize_database (p, end - p, &re_class->hs_db))
 					!= HS_SUCCESS) {
-				msg_err_re_cache ("bad hs database in %s: %d", path, ret);
+				if (!try_load) {
+					msg_err_re_cache ("bad hs database in %s: %d", path, ret);
+				}
+				else {
+					msg_debug_re_cache ("bad hs database in %s: %d", path, ret);
+				}
 				munmap (map, st.st_size);
 				g_free (hs_ids);
 				g_free (hs_flags);
@@ -2501,8 +2519,14 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			}
 		}
 		else {
-			msg_err_re_cache ("invalid hyperscan hash file '%s'",
-					path);
+			if (!try_load) {
+				msg_err_re_cache ("invalid hyperscan hash file '%s'",
+						path);
+			}
+			else {
+				msg_debug_re_cache ("invalid hyperscan hash file '%s'",
+						path);
+			}
 			all_valid = FALSE;
 			continue;
 		}

@@ -1597,7 +1597,7 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 				(rspamd_re_cache_is_hs_loaded (cache) != RSPAMD_HYPERSCAN_LOADED_FULL) ?
 				"new db" : "forced update");
 		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan (
-				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir);
+				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir, false);
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {

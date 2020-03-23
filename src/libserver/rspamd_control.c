@@ -909,7 +909,8 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 						cmd.cmd.hs_loaded.forced) {
 					rspamd_re_cache_load_hyperscan (
 							srv->cfg->re_cache,
-							cmd.cmd.hs_loaded.cache_dir);
+							cmd.cmd.hs_loaded.cache_dir,
+							false);
 				}
 
 				/* Broadcast command to all workers */
