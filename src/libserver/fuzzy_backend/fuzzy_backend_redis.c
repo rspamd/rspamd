@@ -104,12 +104,16 @@ rspamd_redis_get_servers (struct rspamd_fuzzy_backend_redis *ctx,
 						  const gchar *what)
 {
 	lua_State *L = ctx->L;
-	struct upstream_list *res;
+	struct upstream_list *res = NULL;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->conf_ref);
 	lua_pushstring (L, what);
 	lua_gettable (L, -2);
-	res = *((struct upstream_list**)lua_touserdata (L, -1));
+
+	if (lua_type (L, -1) == LUA_TUSERDATA) {
+		res = *((struct upstream_list **) lua_touserdata (L, -1));
+	}
+
 	lua_settop (L, 0);
 
 	return res;
@@ -610,6 +614,16 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
+	ups = rspamd_redis_get_servers (backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			memset (&rep, 0, sizeof (rep));
+			cb (&rep, ud);
+		}
+
+		return;
+	}
+
 	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
@@ -642,7 +656,6 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 	session->argv_lens[4] = 1;
 	g_string_free (key, FALSE); /* Do not free underlying array */
 
-	ups = rspamd_redis_get_servers (backend, "read_servers");
 	up = rspamd_upstream_get (ups,
 			RSPAMD_UPSTREAM_ROUND_ROBIN,
 			NULL,
@@ -750,6 +763,15 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
+	ups = rspamd_redis_get_servers (backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			cb (0, ud);
+		}
+
+		return;
+	}
+
 	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
@@ -770,7 +792,6 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 	session->argv_lens[1] = key->len;
 	g_string_free (key, FALSE); /* Do not free underlying array */
 
-	ups = rspamd_redis_get_servers (backend, "read_servers");
 	up = rspamd_upstream_get (ups,
 			RSPAMD_UPSTREAM_ROUND_ROBIN,
 			NULL,
@@ -877,6 +898,15 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
+	ups = rspamd_redis_get_servers (backend, "read_servers");
+	if (!ups) {
+		if (cb) {
+			cb (0, ud);
+		}
+
+		return;
+	}
+
 	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
@@ -897,7 +927,6 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 	session->argv_lens[1] = key->len;
 	g_string_free (key, FALSE); /* Do not free underlying array */
 
-	ups = rspamd_redis_get_servers (backend, "read_servers");
 	up = rspamd_upstream_get (ups,
 			RSPAMD_UPSTREAM_ROUND_ROBIN,
 			NULL,
@@ -1374,6 +1403,15 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
+	ups = rspamd_redis_get_servers (backend, "write_servers");
+	if (!ups) {
+		if (cb) {
+			cb (FALSE, 0, 0, 0, 0, ud);
+		}
+
+		return;
+	}
+
 	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
@@ -1452,7 +1490,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	session->cbdata = ud;
 	session->command = RSPAMD_FUZZY_REDIS_COMMAND_UPDATES;
 	session->cmd = cmd;
-	session->prob = 1.0;
+	session->prob = 1.0f;
 	session->event_loop = rspamd_fuzzy_backend_event_base (bk);
 
 	/* First of all check digest */
@@ -1460,7 +1498,6 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	session->argv = g_malloc0 (sizeof (gchar *) * session->nargs);
 	session->argv_lens = g_malloc0 (sizeof (gsize) * session->nargs);
 
-	ups = rspamd_redis_get_servers (backend, "write_servers");
 	up = rspamd_upstream_get (ups,
 			RSPAMD_UPSTREAM_MASTER_SLAVE,
 			NULL,
