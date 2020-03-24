@@ -2580,11 +2580,11 @@ int
 rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 {
 	if (cfg == NULL || cfg->events_backend == NULL) {
-		return ev_supported_backends ();
+		return ev_supported_backends () & ~EVBACKEND_IOURING;
 	}
 
 	if (strcmp (cfg->events_backend, "auto") == 0) {
-		return ev_supported_backends ();
+		return ev_supported_backends () & ~EVBACKEND_IOURING;
 	}
 	else if (strcmp (cfg->events_backend, "epoll") == 0) {
 		if (ev_supported_backends () & EVBACKEND_EPOLL) {
@@ -2617,7 +2617,7 @@ rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 				cfg->events_backend);
 	}
 
-	return EVBACKEND_ALL;
+	return ev_supported_backends () & ~EVBACKEND_IOURING;
 }
 
 const gchar *
