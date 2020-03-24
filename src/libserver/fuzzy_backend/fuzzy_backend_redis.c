@@ -113,6 +113,17 @@ rspamd_redis_get_servers (struct rspamd_fuzzy_backend_redis *ctx,
 	if (lua_type (L, -1) == LUA_TUSERDATA) {
 		res = *((struct upstream_list **) lua_touserdata (L, -1));
 	}
+	else {
+		struct lua_logger_trace tr;
+		gchar outbuf[8192];
+
+		memset (&tr, 0, sizeof (tr));
+		lua_logger_out_type (L, -2, outbuf, sizeof (outbuf) - 1, &tr,
+				LUA_ESCAPE_UNPRINTABLE);
+
+		msg_err ("cannot get %s upstreams for Redis fuzzy storage %s; table content: %s",
+				what, ctx->id, outbuf);
+	}
 
 	lua_settop (L, 0);
 
