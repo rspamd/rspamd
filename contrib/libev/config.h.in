@@ -24,11 +24,20 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #cmakedefine HAVE_INTTYPES_H 1
 
+/* Define to 1 if linux/fs.h defined kernel_rwf_t */
+#cmakedefine HAVE_KERNEL_RWF_T 1
+
 /* Define to 1 if you have the `kqueue' function. */
 #cmakedefine HAVE_KQUEUE 1
 
 /* Define to 1 if you have the `rt' library (-lrt). */
 #cmakedefine HAVE_LIBRT 1
+
+/* Define to 1 if you have the <linux/aio_abi.h> header file. */
+#cmakedefine HAVE_LINUX_AIO_ABI_H 1
+
+/* Define to 1 if you have the <linux/fs.h> header file. */
+#cmakedefine HAVE_LINUX_FS_H 1
 
 /* Define to 1 if you have the <memory.h> header file. */
 #cmakedefine HAVE_MEMORY_H 1
@@ -87,18 +96,14 @@
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #cmakedefine HAVE_SYS_STAT_H 1
 
+/* Define to 1 if you have the <sys/timerfd.h> header file. */
+#cmakedefine HAVE_SYS_TIMERFD_H 1
+
 /* Define to 1 if you have the <sys/types.h> header file. */
 #cmakedefine HAVE_SYS_TYPES_H 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #cmakedefine HAVE_UNISTD_H 1
 
-
-/* Define to the version of this package. */
-#define PACKAGE_VERSION 4.25
-
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
-
-/* Version number of package */
-#undef VERSION

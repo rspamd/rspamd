@@ -2631,6 +2631,14 @@ rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective)
 	}
 
 	if (ev_backend & EVBACKEND_EPOLL) {
+		if (ev_backend & EVBACKEND_IOURING) {
+			SET_EFFECTIVE (TRUE);
+			return "epoll+io_uring";
+		}
+		if (ev_backend & EVBACKEND_LINUXAIO) {
+			SET_EFFECTIVE (TRUE);
+			return "epoll+aio";
+		}
 		SET_EFFECTIVE (TRUE);
 		return "epoll";
 	}
