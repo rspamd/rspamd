@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2020, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -214,26 +214,28 @@ local function arc_callback(task)
   task:cache_set('arc-sigs', cbdata.sigs)
   task:cache_set('arc-seals', cbdata.seals)
 
-  local function arc_seal_cb(_, res, err, domain)
-    cbdata.checked = cbdata.checked + 1
-    lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
-        res, err, cbdata.checked)
+  local function gen_arc_seal_cb(sig)
+    return function (_, res, err, domain)
+      cbdata.checked = cbdata.checked + 1
+      lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
+          res, err, cbdata.checked)
 
-    if not res then
-      cbdata.res = 'fail'
-      if err and domain then
-        table.insert(cbdata.errors, string.format('sig:%s:%s', domain, err))
+      if not res then
+        cbdata.res = 'fail'
+        if err and domain then
+          table.insert(cbdata.errors, string.format('sig:%s:%s', domain, err))
+        end
       end
-    end
 
-    if cbdata.checked == #arc_sig_headers then
-      if cbdata.res == 'success' then
-        task:insert_result(arc_symbols['allow'], 1.0, 'i=' ..
-            tostring(cbdata.checked))
-      else
-        task:insert_result(arc_symbols['reject'], 1.0,
-          rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
-            cbdata.errors))
+      if cbdata.checked == #arc_sig_headers then
+        if cbdata.res == 'success' then
+          task:insert_result(arc_symbols.allow, 1.0, string.format('%s:s=%s:i=%d',
+              domain, sig.s, cbdata.checked))
+        else
+          task:insert_result(arc_symbols.reject, 1.0,
+              rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
+                  cbdata.errors))
+        end
       end
     end
   end
@@ -253,10 +255,11 @@ local function arc_callback(task)
       cbdata.checked = 0
       fun.each(
         function(sig)
-          local ret, lerr = dkim_verify(task, sig.header, arc_seal_cb, 'arc-seal')
+          local ret, lerr = dkim_verify(task, sig.header, gen_arc_seal_cb(sig), 'arc-seal')
           if not ret then
             cbdata.res = 'fail'
-            table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', lerr))
+            table.insert(cbdata.errors, string.format('seal:%s:s=%s:i=%s:%s',
+                sig.d or '', sig.s or '', sig.i or '', lerr))
             cbdata.checked = cbdata.checked + 1
             lua_util.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
               sig.d, ret, lerr, cbdata.checked)
