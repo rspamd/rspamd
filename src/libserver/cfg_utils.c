@@ -2579,12 +2579,13 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 int
 rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 {
+#define AUTO_BACKEND (ev_supported_backends () & ~EVBACKEND_IOURING)
 	if (cfg == NULL || cfg->events_backend == NULL) {
-		return ev_supported_backends () & ~EVBACKEND_IOURING;
+		return AUTO_BACKEND;
 	}
 
 	if (strcmp (cfg->events_backend, "auto") == 0) {
-		return ev_supported_backends () & ~EVBACKEND_IOURING;
+		return AUTO_BACKEND;
 	}
 	else if (strcmp (cfg->events_backend, "epoll") == 0) {
 		if (ev_supported_backends () & EVBACKEND_EPOLL) {
@@ -2593,7 +2594,17 @@ rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 		else {
 			msg_warn_config ("unsupported events_backend: %s; defaulting to auto",
 					cfg->events_backend);
-			return ev_supported_backends ();
+			return AUTO_BACKEND;
+		}
+	}
+	else if (strcmp (cfg->events_backend, "iouring") == 0) {
+		if (ev_supported_backends () & EVBACKEND_IOURING) {
+			return EVBACKEND_IOURING;
+		}
+		else {
+			msg_warn_config ("unsupported events_backend: %s; defaulting to auto",
+					cfg->events_backend);
+			return AUTO_BACKEND;
 		}
 	}
 	else if (strcmp (cfg->events_backend, "kqueue") == 0) {
@@ -2603,7 +2614,7 @@ rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 		else {
 			msg_warn_config ("unsupported events_backend: %s; defaulting to auto",
 					cfg->events_backend);
-			return ev_supported_backends ();
+			return AUTO_BACKEND;
 		}
 	}
 	else if (strcmp (cfg->events_backend, "poll") == 0) {
@@ -2617,7 +2628,7 @@ rspamd_config_ev_backend_get (struct rspamd_config *cfg)
 				cfg->events_backend);
 	}
 
-	return ev_supported_backends () & ~EVBACKEND_IOURING;
+	return AUTO_BACKEND;
 }
 
 const gchar *
@@ -2630,15 +2641,22 @@ rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective)
 		return "auto";
 	}
 
+	if (ev_backend & EVBACKEND_IOURING) {
+		SET_EFFECTIVE (TRUE);
+		return "epoll+io_uring";
+	}
+	if (ev_backend & EVBACKEND_LINUXAIO) {
+		SET_EFFECTIVE (TRUE);
+		return "epoll+aio";
+	}if (ev_backend & EVBACKEND_IOURING) {
+		SET_EFFECTIVE (TRUE);
+		return "epoll+io_uring";
+	}
+	if (ev_backend & EVBACKEND_LINUXAIO) {
+		SET_EFFECTIVE (TRUE);
+		return "epoll+aio";
+	}
 	if (ev_backend & EVBACKEND_EPOLL) {
-		if (ev_backend & EVBACKEND_IOURING) {
-			SET_EFFECTIVE (TRUE);
-			return "epoll+io_uring";
-		}
-		if (ev_backend & EVBACKEND_LINUXAIO) {
-			SET_EFFECTIVE (TRUE);
-			return "epoll+aio";
-		}
 		SET_EFFECTIVE (TRUE);
 		return "epoll";
 	}
