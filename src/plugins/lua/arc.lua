@@ -88,6 +88,7 @@ local settings = {
   use_redis = false,
   key_prefix = 'arc_keys', -- default hash name
   reuse_auth_results = false, -- Reuse the existing authentication results
+  whitelisted_signers_map = nil, -- Trusted signers domains
 }
 
 -- To match normal AR
@@ -180,7 +181,8 @@ local function arc_callback(task)
     sigs = {},
     checked = 0,
     res = 'success',
-    errors = {}
+    errors = {},
+    allowed_by_trusted = false
   }
 
   parse_arc_header(arc_seal_headers, cbdata.seals)
@@ -224,6 +226,14 @@ local function arc_callback(task)
         cbdata.res = 'fail'
         if err and domain then
           table.insert(cbdata.errors, string.format('sig:%s:%s', domain, err))
+        end
+      end
+
+      if settings.whitelisted_signers_map and cbdata.res == 'success' then
+        if settings.whitelisted_signers_map:get_key(sig.d) then
+          -- Whitelisted signer has been found in a valid chain
+          task:insert_result(arc_symbols.trusted_allow, 1.0,
+              string.format('%s:s=%s:i=%d', domain, sig.s, cbdata.checked))
         end
       end
 
@@ -396,6 +406,24 @@ rspamd_config:register_symbol({
   group = 'policies',
   groups = {'arc'},
 })
+
+if settings.whitelisted_signers_map then
+  local lua_maps = require "lua_maps"
+  settings.whitelisted_signers_map = lua_maps.map_add_from_ucl(settings.whitelisted_signers_map,
+      'set',
+      'ARC trusted signers domains')
+  if settings.whitelisted_signers_map then
+    arc_symbols.trusted_allow = arc_symbols.trusted_allow or 'ARC_ALLOW_TRUSTED'
+    rspamd_config:register_symbol({
+      name = arc_symbols.trusted_allow,
+      parent = id,
+      type = 'virtual',
+      score = -2.0,
+      group = 'policies',
+      groups = {'arc'},
+    })
+  end
+end
 
 rspamd_config:register_dependency('ARC_CALLBACK', symbols['spf_allow_symbol'])
 rspamd_config:register_dependency('ARC_CALLBACK', symbols['dkim_allow_symbol'])
