@@ -63,6 +63,9 @@
 /* Define to 1 if you have the `signalfd' function. */
 #cmakedefine HAVE_SIGNALFD 1
 
+/* Define to 1 if you have the `timerfd_create' function. */
+#cmakedefine HAVE_TIMERFD 1
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #cmakedefine HAVE_STDINT_H 1
 

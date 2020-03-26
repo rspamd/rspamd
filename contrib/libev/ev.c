@@ -184,7 +184,7 @@
 #  define EV_USE_EVENTFD 0
 # endif
 
-# if HAVE_SYS_TIMERFD_H
+# if HAVE_SYS_TIMERFD_H && HAVE_TIMERFD
 #  ifndef EV_USE_TIMERFD
 #   define EV_USE_TIMERFD EV_FEATURE_OS
 #  endif
