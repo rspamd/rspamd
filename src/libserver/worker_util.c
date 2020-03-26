@@ -479,8 +479,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);
 
-	event_loop = ev_loop_new (rspamd_config_ev_backend_get (worker->srv->cfg) |
-			EVFLAG_SIGNALFD);
+	event_loop = ev_loop_new (rspamd_config_ev_backend_get (worker->srv->cfg));
 
 	worker->srv->event_loop = event_loop;
 

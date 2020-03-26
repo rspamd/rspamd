@@ -1449,8 +1449,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	/* Init event base */
-	event_loop = ev_default_loop (EVFLAG_SIGNALFD|
-			rspamd_config_ev_backend_get (rspamd_main->cfg));
+	event_loop = ev_default_loop (rspamd_config_ev_backend_get (rspamd_main->cfg));
 	rspamd_main->event_loop = event_loop;
 
 	if (event_loop) {
