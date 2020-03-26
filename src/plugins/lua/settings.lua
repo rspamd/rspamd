@@ -1038,7 +1038,14 @@ end
 local settings_map_pool
 local function process_settings_map(map_text)
   local parser = ucl.parser()
-  local res,err = parser:parse_string(map_text)
+  local res,err
+
+  if type(map_text) == 'string' then
+    res,err = parser:parse_string(map_text)
+  else
+    res,err = parser:parse_text(map_text)
+  end
+
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
   else
