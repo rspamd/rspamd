@@ -121,6 +121,7 @@ struct rspamd_worker {
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	ev_child cld_ev;                /**< to allow reaping								*/
 	rspamd_worker_term_cb term_handler; /**< custom term handler						*/
+	GHashTable *control_events_pending; /**< control events pending indexed by ptr		*/
 };
 
 struct rspamd_abstract_worker_ctx {

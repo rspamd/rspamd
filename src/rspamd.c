@@ -1181,6 +1181,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	}
 
 	REF_RELEASE (wrk->cf);
+	g_hash_table_unref (wrk->control_events_pending);
 	g_free (wrk);
 }
 

@@ -274,6 +274,12 @@ enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
  */
 const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
 
+/**
+ * Used to cleanup pending events
+ * @param p
+ */
+void rspamd_pending_control_free (gpointer p);
+
 #ifdef  __cplusplus
 }
 #endif

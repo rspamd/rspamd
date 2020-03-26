@@ -466,6 +466,7 @@ rspamd_worker_init_signals (struct rspamd_worker *worker,
 			rspamd_worker_usr2_handler, NULL);
 }
 
+
 struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 					   rspamd_accept_handler hdl)
@@ -979,6 +980,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->pid = fork ();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
 	wrk->term_handler = term_handler;
+	wrk->control_events_pending = g_hash_table_new_full (g_direct_hash, g_direct_equal,
+			NULL, rspamd_pending_control_free);
 
 	switch (wrk->pid) {
 	case 0:
