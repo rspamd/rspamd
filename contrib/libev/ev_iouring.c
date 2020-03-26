@@ -255,7 +255,7 @@ struct io_uring_sqe *
 iouring_sqe_get (EV_P)
 {
   unsigned tail;
-  
+
   for (;;)
     {
       tail = EV_SQ_VAR (tail);
@@ -295,8 +295,9 @@ iouring_sqe_submit (EV_P_ struct io_uring_sqe *sqe)
   EV_SQ_ARRAY [idx] = idx;
   ECB_MEMORY_FENCE_RELEASE;
   ++EV_SQ_VAR (tail);
-  /*ECB_MEMORY_FENCE_RELEASE; /* for the time being we assume this is not needed */
+  // ECB_MEMORY_FENCE_RELEASE; /* for the time being we assume this is not needed */
   ++iouring_to_submit;
+  return sqe;
 }
 
 /*****************************************************************************/
@@ -328,6 +329,8 @@ iouring_internal_destroy (EV_P)
       ev_ref (EV_A);
       ev_io_stop (EV_A_ &iouring_tfd_w);
     }
+
+  return 0;
 }
 
 ecb_cold
@@ -603,7 +606,7 @@ static int
 iouring_handle_cq (EV_P)
 {
   unsigned head, tail, mask;
-  
+
   head = EV_CQ_VAR (head);
   ECB_MEMORY_FENCE_ACQUIRE;
   tail = EV_CQ_VAR (tail);
