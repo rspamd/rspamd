@@ -151,7 +151,7 @@ local function get_general_metadata(task, flatten, no_content)
     r.header_date = process_header('date')
     r.message_id = task:get_message_id()
     if variables then
-      for k, v in pairs(variables) do
+      for k, _ in pairs(variables) do
         r[k] = variables[k](task)
       end
     end
