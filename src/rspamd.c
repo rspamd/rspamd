@@ -769,6 +769,7 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 		w->state = rspamd_worker_state_terminating;
 		kill (w->pid, SIGUSR2);
 		ev_io_stop (rspamd_main->event_loop, &w->srv_ev);
+		g_hash_table_remove_all (w->control_events_pending);
 		msg_info_main ("send signal to worker %P", w->pid);
 	}
 	else {
@@ -1141,6 +1142,8 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 
 	/* Remove dead child form children list */
 	g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk->pid));
+	g_hash_table_remove_all (wrk->control_events_pending);
+
 	if (wrk->srv_pipe[0] != -1) {
 		/* Ugly workaround */
 		if (wrk->tmp_data) {

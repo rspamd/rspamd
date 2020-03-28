@@ -427,11 +427,17 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		wrk = v;
 
+		/* No control pipe */
 		if (wrk->control_pipe[0] == -1) {
 			continue;
 		}
 
 		if (except_pid != 0 && wrk->pid == except_pid) {
+			continue;
+		}
+
+		/* Worker is terminating, do not bother sending stuff */
+		if (wrk->state == rspamd_worker_state_terminating) {
 			continue;
 		}
 
