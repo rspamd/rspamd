@@ -129,7 +129,6 @@ static redisAsyncContext *redisAsyncInitialize(redisContext *c) {
 
     ac->onConnect = NULL;
     ac->onDisconnect = NULL;
-    ac->disconnectCbdata = NULL;
 
     ac->replies.head = NULL;
     ac->replies.tail = NULL;
@@ -216,10 +215,9 @@ int redisAsyncSetConnectCallback(redisAsyncContext *ac, redisConnectCallback *fn
     return REDIS_ERR;
 }
 
-int redisAsyncSetDisconnectCallback(redisAsyncContext *ac, redisDisconnectCallback *fn, void *cbdata) {
+int redisAsyncSetDisconnectCallback(redisAsyncContext *ac, redisDisconnectCallback *fn) {
     if (ac->onDisconnect == NULL) {
         ac->onDisconnect = fn;
-        ac->disconnectCbdata = cbdata;
         return REDIS_OK;
     }
     return REDIS_ERR;
@@ -308,10 +306,10 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
      * this context, the status will always be REDIS_OK. */
     if (ac->onDisconnect && (c->flags & REDIS_CONNECTED)) {
         if (c->flags & REDIS_FREEING) {
-            ac->onDisconnect(ac,REDIS_OK,ac->disconnectCbdata);
+            ac->onDisconnect(ac,REDIS_OK);
         } else {
             c->flags |= REDIS_FREEING;
-            ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR,ac->disconnectCbdata);
+            ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR);
         }
     }
 
