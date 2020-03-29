@@ -53,8 +53,9 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 		struct rspamd_http_keepalive_cbdata *cbd;
 
 		cbd = (struct rspamd_http_keepalive_cbdata *)cur->data;
-		rspamd_http_connection_unref (cbd->conn);
+		/* unref call closes fd, so we need to remove ev watcher first! */
 		rspamd_ev_watcher_stop (cbd->ctx->event_loop, &cbd->ev);
+		rspamd_http_connection_unref (cbd->conn);
 		g_free (cbd);
 
 		cur = cur->next;
