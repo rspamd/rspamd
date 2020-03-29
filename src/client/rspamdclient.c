@@ -478,7 +478,7 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 		if (conn->req != NULL) {
 			rspamd_client_request_free (conn->req);
 		}
-		close (conn->fd);
+
 		if (conn->key) {
 			rspamd_pubkey_unref (conn->key);
 		}
