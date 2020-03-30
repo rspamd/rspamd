@@ -49,4 +49,8 @@ if (SANITIZE)
         message (FATAL_ERROR "Unknown sanitizer type: ${SANITIZE}")
     endif ()
     message (STATUS "Add sanitizer: ${SANITIZE}")
+    # Disable sanitizing on make stage e.g. for snowball compiler
+    set (ENV{ASAN_OPTIONS} "detect_leaks=0")
+    message (STATUS "Sanitizer CFLAGS: ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
+    message (STATUS "Sanitizer CXXFLAGS: ${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
 endif()
