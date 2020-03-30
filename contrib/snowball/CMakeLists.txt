@@ -37,14 +37,14 @@ MACRO(gen_stem IN ENCODING)
 		SET(_input "${CMAKE_CURRENT_SOURCE_DIR}/algorithms/${_it}.sbl")
 		IF(${_in_enc} STREQUAL "Unicode" AND NOT EXISTS ${_input})
 			ADD_CUSTOM_COMMAND(OUTPUT ${_source}
-				COMMAND ${CMAKE_CURRENT_BINARY_DIR}/snowball  "${CMAKE_CURRENT_SOURCE_DIR}/algorithms/${_it}/stem_ISO_8859_1.sbl" -o ${_base} -eprefix ${_it}_${ENCODING}_ -r ../runtime -u
+				COMMAND env "ASAN_OPTIONS=detect_leaks=0" ${CMAKE_CURRENT_BINARY_DIR}/snowball  "${CMAKE_CURRENT_SOURCE_DIR}/algorithms/${_it}/stem_ISO_8859_1.sbl" -o ${_base} -eprefix ${_it}_${ENCODING}_ -r ../runtime -u
 				DEPENDS snowball)
 			LIST(APPEND STEMMER_SOURCES ${_source})
 
 		ELSE()
 		IF(EXISTS "${_input}")
 			ADD_CUSTOM_COMMAND(OUTPUT ${_source}
-				COMMAND ${CMAKE_CURRENT_BINARY_DIR}/snowball ${_input} -o ${_base} -eprefix ${_it}_${ENCODING}_ -r ../runtime -u
+				COMMAND env "ASAN_OPTIONS=detect_leaks=0" ${CMAKE_CURRENT_BINARY_DIR}/snowball ${_input} -o ${_base} -eprefix ${_it}_${ENCODING}_ -r ../runtime -u
 				DEPENDS snowball)
 			LIST(APPEND STEMMER_SOURCES ${_source})
 		ENDIF()
