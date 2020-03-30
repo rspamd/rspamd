@@ -492,8 +492,9 @@ rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
 			cbdata->conn->keepalive_hash_key->host,
 			cbdata->queue->length);
-	rspamd_http_connection_unref (cbdata->conn);
+	/* unref call closes fd, so we need to remove ev watcher first! */
 	rspamd_ev_watcher_stop (cbdata->ctx->event_loop, &cbdata->ev);
+	rspamd_http_connection_unref (cbdata->conn);
 	g_free (cbdata);
 }
 
