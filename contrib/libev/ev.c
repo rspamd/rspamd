@@ -5662,6 +5662,12 @@ ev_now_update_if_cheap (EV_P) EV_NOEXCEPT
 	if (have_cheap_timer) time_update (EV_A_ 1e100);
 }
 
+int
+ev_active_cnt (EV_P) EV_NOEXCEPT
+{
+	return activecnt;
+}
+
 #if EV_MULTIPLICITY
   #include "ev_wrap.h"
 #endif
