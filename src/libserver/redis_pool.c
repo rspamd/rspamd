@@ -401,11 +401,30 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 			g_assert (conn->state != RSPAMD_REDIS_POOL_CONN_ACTIVE);
 
 			if (conn->ctx->err == REDIS_OK) {
-				ev_timer_stop (elt->pool->event_loop, &conn->timeout);
-				conn->state = RSPAMD_REDIS_POOL_CONN_ACTIVE;
-				g_queue_push_tail_link (elt->active, conn_entry);
-				msg_debug_rpool ("reused existing connection to %s:%d: %p",
-						ip, port, conn->ctx);
+				/* Also check SO_ERROR */
+				gint err;
+				socklen_t len = sizeof (gint);
+
+				if (getsockopt (conn->ctx->c.fd, SOL_SOCKET, SO_ERROR,
+						(void *) &err, &len) == -1) {
+					err = errno;
+				}
+
+				if (err != 0) {
+					g_list_free (conn->entry);
+					conn->entry = NULL;
+					REF_RELEASE (conn);
+					conn = rspamd_redis_pool_new_connection (pool, elt,
+							db, password, ip, port);
+				}
+				else {
+
+					ev_timer_stop (elt->pool->event_loop, &conn->timeout);
+					conn->state = RSPAMD_REDIS_POOL_CONN_ACTIVE;
+					g_queue_push_tail_link (elt->active, conn_entry);
+					msg_debug_rpool ("reused existing connection to %s:%d: %p",
+							ip, port, conn->ctx);
+				}
 			}
 			else {
 				g_list_free (conn->entry);

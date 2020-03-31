@@ -423,7 +423,7 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 			conn = cbd->conn;
 			g_free (cbd);
 
-			if (getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len) == -1) {
+			if (getsockopt (conn->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len) == -1) {
 				err = errno;
 			}
 
