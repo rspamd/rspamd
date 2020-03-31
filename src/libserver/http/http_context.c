@@ -588,8 +588,10 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 	cbdata = g_malloc0 (sizeof (*cbdata));
 
 	cbdata->conn = rspamd_http_connection_ref (conn);
-	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
-	cbdata->link = conn->keepalive_hash_key->conns.tail;
+	/* Use stack like approach to that would easy reading */
+	g_queue_push_head (&conn->keepalive_hash_key->conns, cbdata);
+	cbdata->link = conn->keepalive_hash_key->conns.head;
+
 	cbdata->queue = &conn->keepalive_hash_key->conns;
 	cbdata->ctx = ctx;
 	conn->finished = FALSE;
