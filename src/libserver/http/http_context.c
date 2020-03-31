@@ -415,11 +415,31 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 		if (g_queue_get_length (conns) > 0) {
 			struct rspamd_http_keepalive_cbdata *cbd;
 			struct rspamd_http_connection *conn;
+			gint err;
+			socklen_t len = sizeof (gint);
 
 			cbd = g_queue_pop_head (conns);
 			rspamd_ev_watcher_stop (ctx->event_loop, &cbd->ev);
 			conn = cbd->conn;
 			g_free (cbd);
+
+			if (getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len) == -1) {
+				err = errno;
+			}
+
+			if (err != 0) {
+				rspamd_http_connection_unref (conn);
+
+				msg_debug_http_context ("invalid reused keepalive element %s (%s); "
+							"%s error; "
+							"%d connections queued",
+						rspamd_inet_address_to_string_pretty (phk->addr),
+						phk->host,
+						g_strerror (err),
+						conns->length);
+
+				return NULL;
+			}
 
 			msg_debug_http_context ("reused keepalive element %s (%s), %d connections queued",
 					rspamd_inet_address_to_string_pretty (phk->addr),
