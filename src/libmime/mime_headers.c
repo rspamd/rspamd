@@ -366,7 +366,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 				}
 			}
 			/* Strip last space that can be added by \r\n parsing */
-			if (*(tp - 1) == ' ') {
+			if (tp > tmp && *(tp - 1) == ' ') {
 				tp--;
 			}
 
