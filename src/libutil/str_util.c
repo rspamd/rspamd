@@ -1875,16 +1875,13 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 					}
 					else {
 						/*
-						 * newline wsp+ \r <nwsp>, hence:
-						 * c -> eoh
-						 * p + 1 -> body start
+						 * <nline> <wsp>+ \r <nwsp>.
+						 * It is an empty header likely, so we can go further...
+						 * https://tools.ietf.org/html/rfc2822#section-4.2
 						 */
-						if (body_start) {
-							/* \r\n\r\n */
-							*body_start = p - input->str + 1;
-						}
-
-						return c - input->str;
+						c = p;
+						p ++;
+						state = got_cr;
 					}
 				}
 				else {
@@ -1899,33 +1896,36 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			else if (*p == '\n') {
 				/* Perform lookahead due to #2349 */
 				if (end - p > 1) {
+					/* Continue folding with an empty line */
 					if (p[1] == ' ' || p[1] == '\t') {
 						c = p;
 						p ++;
 						state = obs_fws;
 					}
 					else if (p[1] == '\r') {
+						/* WTF state: we have seen spaces, \n and then it follows \r */
 						c = p;
 						p ++;
 						state = got_lf;
 					}
 					else if (p[1] == '\n') {
+						/*
+						 * Switching to got_lf state here will let us to finish
+						 * the cycle.
+						 */
 						c = p;
 						p ++;
 						state = got_lf;
 					}
 					else {
 						/*
-						 * newline wsp+ \n <nwsp>, hence:
-						 * c -> eoh
-						 * p + 1 -> body start
+						 * <nline> <wsp>+ \n <nwsp>.
+						 * It is an empty header likely, so we can go further...
+						 * https://tools.ietf.org/html/rfc2822#section-4.2
 						 */
-						if (body_start) {
-							/* \r\n\r\n */
-							*body_start = p - input->str + 1;
-						}
-
-						return c - input->str;
+						c = p;
+						p ++;
+						state = got_lf;
 					}
 
 				}
