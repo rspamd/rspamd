@@ -1,3 +1,44 @@
+2.5: 01 Apr 2020
+  * [Conf] Mark Rspamd emailbl as ignore whitelist
+  * [Conf] RBL: Add missing emails = true option
+  * [Feature] Add support for scripts in fuzzy storage
+  * [Feature] Arc: Add whitelisted_signers_map option
+  * [Feature] Implement hosts file processing
+  * [Feature] Neural: Introduce classes bias that allows non-equal classes learning
+  * [Feature] Update libev to 4.33
+  * [Fix] Another brain damage html standard adoptions
+  * [Fix] Another fix for brain damaged obs-fws state
+  * [Fix] Fix flags that caused force_actions failure
+  * [Fix] Fix logging issue
+  * [Fix] Fix lua symbols scores registration when config does not define scores
+  * [Fix] Fix opaque maps logic
+  * [Fix] Fix parsing of the html tags with no spaces after attributes
+  * [Fix] Fix some corner cases in urls parsing, add limits
+  * [Fix] Fix tlds extraction if custom composition rules are used
+  * [Fix] Fix variables replacement in mempool
+  * [Fix] Improve base64 detection
+  * [Fix] Normalize dynamic scores in ANN correctly
+  * [Fix] Plug memory leak introduced by #3153
+  * [Fix] Stat_redis_backend: Fix memory leak and simplify learn path
+  * [Fix] Try hard to deal with ghost workers
+  * [Fix] metadata_exporter default formatter
+  * [Rework] Change the way to extract URLs when dealing with alternative parts
+  * [Rework] Fix various url extraction issues
+  * [Rework] Re cache: Load compiled hyperscan in the main process as well
+  * [Rework] Re cache: Load hyperscan early
+  * [Rework] Rework URL structure: adjust tld part
+  * [Rework] Rework URL structure: host field
+  * [Rework] Rework URL structure: more structure optimisations
+  * [Rework] Rework URL structure: user field
+  * [Rework] URL: Another update for urls extraction logic
+  * [Rework] Urls: Improve query urls handling
+  * [Rework] Urls: adopt html related stuff
+  * [Rework] Urls: more rework of the urls sets
+  * [Rework] Urls: process query urls in HTML urls correctly
+  * [Rework] Urls: rework urls hash structure
+  * [Rework] Urls: update lua libraries
+  * [Rework] Use multiple search tries for different url extraction types
+
 2.4: 26 Feb 2020
   * [CritFix] Fix parsing of the content type attributes
   * [Feature] Clickhouse: Add extra columns support
