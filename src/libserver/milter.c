@@ -847,9 +847,23 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			/* We might need some more data in buffer for further steps */
 			if (priv->parser.datalen >
 					RSPAMD_MILTER_MESSAGE_CHUNK * 2) {
-				err = g_error_new (rspamd_milter_quark (), E2BIG,
-						"Command length is too big: %zd",
-						priv->parser.datalen);
+				/* Check if we have HTTP input instead of milter */
+				if (priv->parser.buf->len > sizeof ("GET") &&
+						memcmp (priv->parser.buf->str, "GET", 3) == 0) {
+					err = g_error_new (rspamd_milter_quark (), EINVAL,
+							"HTTP GET request is not supported in milter mode");
+				}
+				else if (priv->parser.buf->len > sizeof ("POST") &&
+					 memcmp (priv->parser.buf->str, "POST", 4) == 0) {
+					err = g_error_new (rspamd_milter_quark (), EINVAL,
+							"HTTP POST request is not supported in milter mode");
+				}
+				else {
+					err = g_error_new (rspamd_milter_quark (), E2BIG,
+							"Command length is too big: %zd",
+							priv->parser.datalen);
+				}
+
 				rspamd_milter_on_protocol_error (session, priv, err);
 
 				return FALSE;
