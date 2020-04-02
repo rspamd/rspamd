@@ -857,7 +857,8 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 							 struct rspamd_proxy_backend_connection *conn,
 							 lua_State *L, gint parser_ref,
 							 struct rspamd_http_message *msg,
-							 goffset *body_offset)
+							 goffset *body_offset,
+							 const rspamd_ftok_t *ct)
 {
 	struct ucl_parser *parser;
 	gint err_idx;
@@ -906,23 +907,28 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 		lua_settop (L, 0);
 	}
 	else {
-		parser = ucl_parser_new (0);
+		rspamd_ftok_t json_ct;
+		RSPAMD_FTOK_ASSIGN (&json_ct, "application/json");
 
-		if (!ucl_parser_add_chunk (parser, in, inlen)) {
-			gchar *encoded;
+		if (ct && rspamd_ftok_casecmp (ct, &json_ct) == 0) {
+			parser = ucl_parser_new (0);
 
-			encoded = rspamd_encode_base64 (in, inlen, 0, NULL);
-			msg_err_session ("cannot parse input: %s", ucl_parser_get_error (
-					parser));
-			msg_err_session ("input encoded: %s", encoded);
+			if (!ucl_parser_add_chunk (parser, in, inlen)) {
+				gchar *encoded;
+
+				encoded = rspamd_encode_base64 (in, inlen, 0, NULL);
+				msg_err_session ("cannot parse input: %s", ucl_parser_get_error (
+						parser));
+				msg_err_session ("input encoded: %s", encoded);
+				ucl_parser_free (parser);
+				g_free (encoded);
+
+				return FALSE;
+			}
+
+			conn->results = ucl_parser_get_object (parser);
 			ucl_parser_free (parser);
-			g_free (encoded);
-
-			return FALSE;
 		}
-
-		conn->results = ucl_parser_get_object (parser);
-		ucl_parser_free (parser);
 	}
 
 	return TRUE;
@@ -1313,13 +1319,15 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
 	struct rspamd_proxy_session *session;
+	const rspamd_ftok_t *orig_ct;
 
 	session = bk_conn->s;
 
 	proxy_request_decompress (msg);
+	orig_ct = rspamd_http_message_find_header (msg, "Content-Type");
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			bk_conn->parser_from_ref, msg, NULL)) {
+			bk_conn->parser_from_ref, msg, NULL, orig_ct)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
 				bk_conn->name,
 				rspamd_inet_address_to_string (
@@ -1554,18 +1562,27 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
 	struct rspamd_proxy_session *session, *nsession;
 	rspamd_fstring_t *reply;
+	const rspamd_ftok_t *orig_ct;
 	goffset body_offset = -1;
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
 	proxy_request_decompress (msg);
 
+	/*
+	 * These are likely set by an http library, so we will double these headers
+	 * if they are not removed
+	 */
 	rspamd_http_message_remove_header (msg, "Content-Length");
+	rspamd_http_message_remove_header (msg, "Connection");
+	rspamd_http_message_remove_header (msg, "Date");
+	rspamd_http_message_remove_header (msg, "Server");
 	rspamd_http_message_remove_header (msg, "Key");
+	orig_ct = rspamd_http_message_find_header (msg, "Content-Type");
 	rspamd_http_connection_reset (session->master_conn->backend_conn);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			bk_conn->parser_from_ref, msg, &body_offset)) {
+			bk_conn->parser_from_ref, msg, &body_offset, orig_ct)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
 
@@ -1587,7 +1604,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 			msg->method = HTTP_SYMBOLS;
 		}
 		else {
-			msg_warn_session ("cannot parse results from the master backend, "
+			msg_debug_session ("cannot parse results from the master backend, "
 					"return them as is");
 		}
 	}
@@ -1611,8 +1628,16 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_http_message_free (msg);
 	}
 	else {
+		const gchar *passed_ct = NULL;
+
+		if (orig_ct) {
+			passed_ct = rspamd_mempool_ftokdup (session->pool, orig_ct);
+			/* Remove original */
+			rspamd_http_message_remove_header (msg, "Content-Type");
+		}
+
 		rspamd_http_connection_write_message (session->client_conn,
-				msg, NULL, NULL, session,
+				msg, NULL, passed_ct, session,
 				bk_conn->timeout);
 	}
 
