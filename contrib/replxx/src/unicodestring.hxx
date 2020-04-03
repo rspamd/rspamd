@@ -2,6 +2,7 @@
 #define REPLXX_UNICODESTRING_HXX_INCLUDED
 
 #include <vector>
+#include <string>
 #include <cstring>
 
 #include "conversion.hxx"

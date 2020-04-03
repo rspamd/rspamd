@@ -2,7 +2,10 @@
 #include <string>
 #include <cstring>
 #include <cctype>
-#include <locale.h>
+#include <clocale>
+
+#include "unicode/utf8.h"
+
 
 #include "conversion.hxx"
 
@@ -44,20 +47,26 @@ bool is8BitEncoding( is_8bit_encoding() );
 ConversionResult copyString8to32(char32_t* dst, int dstSize, int& dstCount, const char* src) {
 	ConversionResult res = ConversionResult::conversionOK;
 	if ( ! locale::is8BitEncoding ) {
-		const UTF8* sourceStart = reinterpret_cast<const UTF8*>(src);
-		const UTF8* sourceEnd = sourceStart + strlen(src);
-		UTF32* targetStart = reinterpret_cast<UTF32*>(dst);
-		UTF32* targetEnd = targetStart + dstSize;
+		auto sourceStart = reinterpret_cast<const unsigned char*>(src);
+		auto slen = strlen(src);
+		auto targetStart = reinterpret_cast<UChar32*>(dst);
+		int i = 0, j = 0;
 
-		res = ConvertUTF8toUTF32(
-				&sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion);
+		while (i < slen && j < dstSize) {
+			UChar32 uc;
+			U8_NEXT (sourceStart, i, slen, uc);
 
-		if (res == conversionOK) {
-			dstCount = targetStart - reinterpret_cast<UTF32*>(dst);
-
-			if (dstCount < dstSize) {
-				*targetStart = 0;
+			if (uc <= 0) {
+				/* Replace with 0xFFFD */
+				uc = 0x0000FFFD;
 			}
+			targetStart[j++] = uc;
+		}
+
+		dstCount = j;
+
+		if (j < dstSize) {
+			targetStart[j] = 0;
 		}
 	} else {
 		for ( dstCount = 0; ( dstCount < dstSize ) && src[dstCount]; ++ dstCount ) {
@@ -77,22 +86,24 @@ void copyString32to8(
 	char* dst, int dstSize, const char32_t* src, int srcSize, int* dstCount
 ) {
 	if ( ! locale::is8BitEncoding ) {
-		const UTF32* sourceStart = reinterpret_cast<const UTF32*>(src);
-		const UTF32* sourceEnd = sourceStart + srcSize;
-		UTF8* targetStart = reinterpret_cast<UTF8*>(dst);
-		UTF8* targetEnd = targetStart + dstSize;
+		int j = 0;
+		UBool is_error = 0;
 
-		ConversionResult res = ConvertUTF32toUTF8(
-				&sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion);
+		for (auto i = 0; i < srcSize; i ++) {
+			U8_APPEND (dst, j, dstSize, src[i], is_error);
 
-		if (res == conversionOK) {
-			int resCount( targetStart - reinterpret_cast<UTF8*>( dst ) );
-
-			if ( resCount < dstSize ) {
-				*targetStart = 0;
+			if (is_error) {
+				break;
 			}
-			if ( dstCount ) {
-				*dstCount = resCount;
+		}
+
+		if (!is_error) {
+			if (dstCount) {
+				*dstCount = j;
+			}
+
+			if (j < dstSize) {
+				dst[j] = '\0';
 			}
 		}
 	} else {

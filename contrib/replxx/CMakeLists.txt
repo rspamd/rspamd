@@ -52,7 +52,6 @@ endif()
 set(
 	REPLXX_SOURCES
 	src/conversion.cxx
-	src/ConvertUTF.cpp
 	src/escape.cxx
 	src/history.cxx
 	src/replxx_impl.cxx
