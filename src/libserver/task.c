@@ -111,7 +111,8 @@ rspamd_task_new (struct rspamd_worker *worker,
 	new_task->request_headers = kh_init (rspamd_req_headers_hash);
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME);
-	new_task->result = rspamd_create_metric_result (new_task);
+	/* Default results chain */
+	rspamd_create_metric_result (new_task, NULL, -1);
 
 	new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);

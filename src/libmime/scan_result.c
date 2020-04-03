@@ -43,6 +43,10 @@ rspamd_scan_result_dtor (gpointer d)
 
 	rspamd_set_counter_ema (&symbols_count, kh_size (r->symbols), 0.5);
 
+	if (r->symbol_cbref != -1) {
+		luaL_unref (r->task->cfg->lua_state, LUA_REGISTRYINDEX, r->symbol_cbref);
+	}
+
 	kh_foreach_value (r->symbols, sres, {
 		if (sres.options) {
 			kh_destroy (rspamd_options_hash, sres.options);
@@ -53,21 +57,19 @@ rspamd_scan_result_dtor (gpointer d)
 }
 
 struct rspamd_scan_result *
-rspamd_create_metric_result (struct rspamd_task *task)
+rspamd_create_metric_result (struct rspamd_task *task,
+							 const gchar *name, gint lua_sym_cbref)
 {
 	struct rspamd_scan_result *metric_res;
 	guint i;
-
-	metric_res = task->result;
-
-	if (metric_res != NULL) {
-		return metric_res;
-	}
 
 	metric_res = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_scan_result));
 	metric_res->symbols = kh_init (rspamd_symbols_hash);
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
+	metric_res->name = name;
+	metric_res->symbol_cbref = lua_sym_cbref;
+	metric_res->task = task;
 
 	/* Optimize allocation */
 	kh_resize (rspamd_symbols_group_hash, metric_res->sym_groups, 4);
@@ -101,6 +103,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_scan_result_dtor,
 			metric_res);
+	DL_APPEND (task->result, metric_res);
 
 	return metric_res;
 }

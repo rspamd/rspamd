@@ -40,7 +40,7 @@ struct rspamd_symbol_result {
 	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
 	struct rspamd_symbol *sym;                     /**< symbol configuration					*/
-	gssize opts_len; /**< total size of all options (negative if truncated option is added) */
+	gssize opts_len;                               /**< total size of all options (negative if truncated option is added) */
 	guint nshots;
 	enum rspamd_symbol_result_flags flags;
 };
@@ -77,14 +77,18 @@ struct rspamd_scan_result {
 	double score;                                    /**< total score							*/
 	double grow_factor;                                /**< current grow factor					*/
 	struct rspamd_passthrough_result *passthrough_result;
-	guint npositive;
-	guint nnegative;
 	double positive_score;
 	double negative_score;
 	struct kh_rspamd_symbols_hash_s *symbols;            /**< symbols of metric						*/
 	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
 	struct rspamd_action_result *actions_limits;
+	const gchar *name;                                 /**< for named results, NULL is the default result */
+	struct rspamd_task *task;                          /**< back reference */
+	gint symbol_cbref;                                 /**< lua function that defines if a symbol can be inserted, -1 if unused */
 	guint nactions;
+	guint npositive;
+	guint nnegative;
+	struct rspamd_scan_result *prev, *next;           /**< double linked list of results */
 };
 
 /**
@@ -92,7 +96,8 @@ struct rspamd_scan_result {
  * @param task task object
  * @return metric result or NULL if metric `name` has not been found
  */
-struct rspamd_scan_result *rspamd_create_metric_result (struct rspamd_task *task);
+struct rspamd_scan_result *rspamd_create_metric_result (struct rspamd_task *task,
+		const gchar *name, gint lua_sym_cbref);
 
 /**
  * Adds a new passthrough result to a task
