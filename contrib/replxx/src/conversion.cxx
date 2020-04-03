@@ -90,7 +90,7 @@ void copyString32to8(
 		UBool is_error = 0;
 
 		for (auto i = 0; i < srcSize; i ++) {
-			U8_APPEND (dst, j, dstSize, src[i], is_error);
+			U8_APPEND ((uint8_t *)dst, j, dstSize, src[i], is_error);
 
 			if (is_error) {
 				break;
