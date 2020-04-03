@@ -143,8 +143,8 @@ local function oletools_check(task, content, digest, rule)
           lua_util.debugm(rule.name, task, '%s: no stop word: add_read - #json: %s / current packet: %s',
             rule.log_prefix, #json_response, #data)
           conn:add_read(oletools_callback)
-        else
 
+        else
           local ucl_parser = ucl.parser()
           local ok, ucl_err = ucl_parser:parse_string(tostring(json_response))
           if not ok then
@@ -169,125 +169,153 @@ local function oletools_check(task, content, digest, rule)
             [9] = 'RETURN_ENCRYPTED',
           }
 
-          if result[1].error ~= nil then
-            rspamd_logger.errx(task, '%s: ERROR found: %s', rule.log_prefix,
-                result[1].error)
-            if result[1].error == 'File too small' then
-              common.save_cache(task, digest, rule, 'OK')
-              common.log_clean(task, rule, 'File too small to be scanned for macros')
-            else
-              oletools_requery(result[1].error)
-            end
-          elseif result[3]['return_code'] == 9 then
-            rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
-            common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[result[3]['return_code']], 0.0, 'encrypted')
-            common.save_cache(task, digest, rule, 'encrypted')
-          elseif result[3]['return_code'] == 5 then
-            rspamd_logger.warnx(task, '%s: olefy could not open the file - error: %s', rule.log_prefix,
-                result[2]['message'])
-            common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[result[3]['return_code']], 0.0, 'fail')
-          elseif result[3]['return_code'] > 6 then
-            rspamd_logger.errx(task, '%s: Error Returned: %s',
-                rule.log_prefix, oletools_rc[result[3]['return_code']])
-            rspamd_logger.errx(task, '%s: Error message: %s',
-                rule.log_prefix, result[2]['message'])
-            common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[result[3]['return_code']], 0.0, 'fail')
-          elseif result[3]['return_code'] > 1 then
-            rspamd_logger.errx(task, '%s: Error message: %s',
-                rule.log_prefix, result[2]['message'])
-            oletools_requery(oletools_rc[result[3]['return_code']])
-          elseif type(result[2]['analysis']) == 'table' and #result[2]['analysis'] == 0
-              and #result[2]['macros'] == 0 then
-            rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
-            common.yield_result(task, rule, 'oletools unhandled error', 0.0, 'fail')
-          elseif type(result[2]['analysis']) ~= 'table' and #result[2]['macros'] == 0 then
-            common.save_cache(task, digest, rule, 'OK')
-            common.log_clean(task, rule, 'No macro found')
-          elseif #result[2]['macros'] > 0 then
-            -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
-            -- H=Hex strings, B=Base64 strings, D=Dridex strings, V=VBA strings
-            local m_exist = 'M'
-            local m_autoexec = '-'
-            local m_suspicious = '-'
-            local m_iocs = '-'
-            local m_hex = '-'
-            local m_base64 = '-'
-            local m_dridex = '-'
-            local m_vba = '-'
+          -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
+          -- H=Hex strings, B=Base64 strings, D=Dridex strings, V=VBA strings
+          local analysis_cat_table = {
+            macro_exist = '-',
+            autoexec = '-',
+            suspicious = '-',
+            iocs = '-',
+            hex = '-',
+            base64 = '-',
+            dridex = '-',
+            vba = '-'
+          }
+          local analysis_keyword_table = {}
 
-            lua_util.debugm(rule.name, task,
-                '%s: filename: %s', rule.log_prefix, result[2]['file'])
-            lua_util.debugm(rule.name, task,
-                '%s: type: %s', rule.log_prefix, result[2]['type'])
+          for _, v in ipairs(result) do
 
-            for _,m in ipairs(result[2]['macros']) do
-              lua_util.debugm(rule.name, task, '%s: macros found - code: %s, ole_stream: %s, '..
-                  'vba_filename: %s', rule.log_prefix, m.code, m.ole_stream, m.vba_filename)
-            end
+            if v.error ~= nil and v.type ~= 'error' then
+              -- olefy, not oletools error
+              rspamd_logger.errx(task, '%s: ERROR found: %s', rule.log_prefix,
+                  v.error)
+              if v.error == 'File too small' then
+                common.save_cache(task, digest, rule, 'OK')
+                common.log_clean(task, rule, 'File too small to be scanned for macros')
+                return
+              else
+                oletools_requery(v.error)
+              end
 
-            local analysis_keyword_table = {}
+            elseif tostring(v.type) == "MetaInformation" and v.version ~= nil then
+              -- if MetaInformation section - check and print script and version
 
-            for _,a in ipairs(result[2]['analysis']) do
-              lua_util.debugm(rule.name, task, '%s: threat found - type: %s, keyword: %s, '..
-                  'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
-              if a.type == 'AutoExec' then
-                m_autoexec = 'A'
-                table.insert(analysis_keyword_table, a.keyword)
-              elseif a.type == 'Suspicious' then
-                if rule.extended == true or
-                  (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
-                then
-                  m_suspicious = 'S'
-                  table.insert(analysis_keyword_table, a.keyword)
+              lua_util.debugm(N, task, '%s: version: %s %s', rule.log_prefix,
+                  tostring(v.script_name), tostring(v.version))
+
+            elseif tostring(v.type) == "MetaInformation" and v.return_code ~= nil then
+              -- if MetaInformation section - check return_code
+
+              local oletools_rc_code = tonumber(v.return_code)
+              if oletools_rc_code == 9 then
+                rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
+                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'encrypted')
+                common.save_cache(task, digest, rule, 'encrypted')
+                return
+              elseif oletools_rc_code == 5 then
+                rspamd_logger.warnx(task, '%s: olefy could not open the file - error: %s', rule.log_prefix,
+                    result[2]['message'])
+                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'fail')
+                return
+              elseif oletools_rc_code > 6 then
+                rspamd_logger.errx(task, '%s: MetaInfo section error code: %s',
+                    rule.log_prefix, oletools_rc[oletools_rc_code])
+                rspamd_logger.errx(task, '%s: MetaInfo section message: %s',
+                    rule.log_prefix, result[2]['message'])
+                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'fail')
+                return
+              elseif oletools_rc_code > 1 then
+                rspamd_logger.errx(task, '%s: Error message: %s',
+                    rule.log_prefix, result[2]['message'])
+                oletools_requery(oletools_rc[oletools_rc_code])
+              end
+
+            elseif tostring(v.type) == "error" then
+              -- error section found - check message
+              rspamd_logger.errx(task, '%s: Error section error code: %s',
+                  rule.log_prefix, v.error)
+              rspamd_logger.errx(task, '%s: Error section message: %s',
+                  rule.log_prefix, v.message)
+              --common.yield_result(task, rule, 'failed - err: ' .. v.error, 0.0, 'fail')
+
+            elseif type(v.analysis) == 'table' and type(v.macros) == 'table'  then
+              -- analysis + macro found - evaluate response
+
+              if type(v.analysis) == 'table' and #v.analysis == 0 and #v.macros == 0 then
+                rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
+                oletools_requery('oletools unhandled error')
+
+              elseif #v.macros > 0 then
+
+                analysis_cat_table.macro_exist = 'M'
+
+                lua_util.debugm(rule.name, task,
+                    '%s: filename: %s', rule.log_prefix, result[2]['file'])
+                lua_util.debugm(rule.name, task,
+                    '%s: type: %s', rule.log_prefix, result[2]['type'])
+
+                for _,m in ipairs(v.macros) do
+                  lua_util.debugm(rule.name, task, '%s: macros found - code: %s, ole_stream: %s, '..
+                      'vba_filename: %s', rule.log_prefix, m.code, m.ole_stream, m.vba_filename)
                 end
-              elseif a.type == 'IOC' then
-                m_iocs = 'I'
-              elseif a.type == 'Hex strings' then
-                m_hex = 'H'
-              elseif a.type == 'Base64 strings' then
-                m_base64 = 'B'
-              elseif a.type == 'Dridex strings' then
-                m_dridex = 'D'
-              elseif a.type == 'VBA strings' then
-                m_vba = 'V'
+
+                for _,a in ipairs(v.analysis) do
+                  lua_util.debugm(rule.name, task, '%s: threat found - type: %s, keyword: %s, '..
+                      'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
+                  if a.type == 'AutoExec' then
+                    analysis_cat_table.autoexec = 'A'
+                    table.insert(analysis_keyword_table, a.keyword)
+                  elseif a.type == 'Suspicious' then
+                    if rule.extended == true or
+                      (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
+                    then
+                      analysis_cat_table.suspicious = 'S'
+                      table.insert(analysis_keyword_table, a.keyword)
+                    end
+                  elseif a.type == 'IOC' then
+                    analysis_cat_table.iocs = 'I'
+                  elseif a.type == 'Hex strings' then
+                    analysis_cat_table.hex = 'H'
+                  elseif a.type == 'Base64 strings' then
+                    analysis_cat_table.base64 = 'B'
+                  elseif a.type == 'Dridex strings' then
+                    analysis_cat_table.dridex = 'D'
+                  elseif a.type == 'VBA strings' then
+                    analysis_cat_table.vba = 'V'
+                  end
+                end
               end
             end
+          end
 
-            --lua_util.debugm(N, task, '%s: analysis_keyword_table: %s', rule.log_prefix, analysis_keyword_table)
+          lua_util.debugm(N, task, '%s: analysis_keyword_table: %s', rule.log_prefix, analysis_keyword_table)
+          lua_util.debugm(N, task, '%s: analysis_cat_table: %s', rule.log_prefix, analysis_cat_table)
 
-            if rule.extended == false and m_autoexec == 'A' and m_suspicious == 'S' then
-              -- use single string as virus name
-              local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
-              lua_util.debugm(rule.name, task, '%s: threat result: %s', rule.log_prefix, threat)
-              common.yield_result(task, rule, threat, rule.default_score)
-              common.save_cache(task, digest, rule, threat, rule.default_score)
+          if rule.extended == false and analysis_cat_table.autoexec == 'A' and analysis_cat_table.suspicious == 'S' then
+            -- use single string as virus name
+            local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
+            lua_util.debugm(rule.name, task, '%s: threat result: %s', rule.log_prefix, threat)
+            common.yield_result(task, rule, threat, rule.default_score)
+            common.save_cache(task, digest, rule, threat, rule.default_score)
 
-            elseif rule.extended == true and #analysis_keyword_table > 0 then
-              -- report any flags (types) and any most keywords as individual virus name
+          elseif rule.extended == true and #analysis_keyword_table > 0 then
+            -- report any flags (types) and any most keywords as individual virus name
 
-              local flags = m_exist ..
-                  m_autoexec ..
-                  m_suspicious ..
-                  m_iocs ..
-                  m_hex ..
-                  m_base64 ..
-                  m_dridex ..
-                  m_vba
-              table.insert(analysis_keyword_table, 1, flags)
+            table.insert(analysis_keyword_table, 1, table.concat(analysis_cat_table))
 
-              lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
-                  rule.log_prefix, table.concat(analysis_keyword_table, ','))
+            lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
+                rule.log_prefix, table.concat(analysis_keyword_table, ','))
 
-              common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
-              common.save_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
-            else
-              common.save_cache(task, digest, rule, 'OK')
-              common.log_clean(task, rule, 'Scanned Macro is OK')
-            end
+            common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
+            common.save_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
+
+          elseif analysis_cat_table.macro_exist == '-' and #analysis_keyword_table == 0 then
+            common.save_cache(task, digest, rule, 'OK')
+            common.log_clean(task, rule, 'No macro found')
 
           else
-            rspamd_logger.warnx(task, '%s: unhandled response', rule.log_prefix)
-            common.yield_result(task, rule, 'unhandled error', 0.0, 'fail')
+            common.save_cache(task, digest, rule, 'OK')
+            common.log_clean(task, rule, 'Scanned Macro is OK')
           end
         end
       end
