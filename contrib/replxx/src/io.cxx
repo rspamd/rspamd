@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <array>
+#include <stdexcept>
 
 #ifdef _WIN32
 
