@@ -175,6 +175,7 @@ option(ENABLE_LTO       "Build rspamd with Link Time Optimization if supported [
 
 if (CMAKE_BUILD_TYPE_UC MATCHES "COVERAGE")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    message (STATUS "IPO not enabled for COVERAGE build")
 elseif (ENABLE_LTO)
     if (${CMAKE_VERSION} VERSION_GREATER "3.9.0")
         cmake_policy (SET CMP0069 NEW)
@@ -187,6 +188,8 @@ elseif (ENABLE_LTO)
             message(WARNING "IPO is not supported: ${LTO_DIAG}")
         endif ()
     endif ()
+else ()
+    message (STATUS "IPO not enabled for the ${CMAKE_BUILD_TYPE} build")
 endif ()
 
 message (STATUS "Final CFLAGS: ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
