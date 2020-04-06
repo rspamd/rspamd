@@ -26,10 +26,16 @@
 #include <stdarg.h>
 #include "dns_private.h"
 
+#ifdef __GNUC__
+__attribute__((format(printf, 4, 0)))
+#endif
 void rdns_logger_internal (void *log_data, enum rdns_log_level level,
 		const char *function, const char *format,
 		va_list args);
 
+#ifdef __GNUC__
+__attribute__((format(printf, 4, 5)))
+#endif
 void rdns_logger_helper (struct rdns_resolver *resolver,
 		enum rdns_log_level level,
 		const char *function, const char *format, ...);

@@ -758,14 +758,14 @@ rdns_make_request_full (
 			type = req->requested_names[i].type;
 			if (queries > 1) {
 				if (!rdns_add_rr (req, cur_name, clen, type, &comp)) {
-					rdns_err ("cannot add rr", cur_name);
+					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
 					rnds_compression_free (comp);
 					return NULL;
 				}
 			} else {
 				if (!rdns_add_rr (req, cur_name, clen, type, NULL)) {
-					rdns_err ("cannot add rr", cur_name);
+					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
 					rnds_compression_free (comp);
 					return NULL;
