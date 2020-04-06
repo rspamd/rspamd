@@ -2408,3 +2408,91 @@ rspamd_lua_get_module_name (lua_State *L)
 
 	return NULL;
 }
+
+bool
+rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
+								 gint nret, const gchar *args, GError **err, ...)
+{
+	va_list ap;
+	const gchar *argp = args, *classname;
+	gint err_idx, nargs = 0;
+	gpointer *cls_ptr;
+	gsize sz;
+
+	/* Error function */
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	va_start (ap, err);
+	/* Called function */
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbref);
+	/*
+	 * Possible arguments
+	 * - i - lua_integer, argument - gint64
+	 * - n - lua_number, argument - gdouble
+	 * - s - lua_string, argument - const gchar * (zero terminated)
+	 * - l - lua_lstring, argument - (size_t + const gchar *) pair
+	 * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
+	 * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
+	 * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
+	 */
+	while (*argp) {
+		switch (*argp) {
+		case 'i':
+			lua_pushinteger (L, va_arg (ap, gint64));
+			nargs ++;
+			break;
+		case 'n':
+			lua_pushnumber (L, va_arg (ap, gdouble));
+			nargs ++;
+			break;
+		case 's':
+			lua_pushstring (L, va_arg (ap, const gchar *));
+			nargs ++;
+			break;
+		case 'l':
+			sz = va_arg (ap, gsize);
+			lua_pushlstring (L, va_arg (ap, const gchar *), sz);
+			nargs ++;
+			break;
+		case 'b':
+			lua_pushboolean (L, va_arg (ap, gboolean));
+			nargs ++;
+			break;
+		case 'u':
+			classname = va_arg (ap, const gchar *);
+			cls_ptr = (gpointer *)lua_newuserdata (L, sizeof (gpointer));
+			*cls_ptr = va_arg (ap, gpointer);
+			rspamd_lua_setclass (L, classname, -1);
+			nargs ++;
+			break;
+		case 'f':
+			lua_pushvalue (L, va_arg (ap, gint));
+			nargs ++;
+			break;
+		default:
+			lua_settop (L, err_idx - 1);
+			g_set_error (err, lua_error_quark (), EINVAL,
+					"invalid argument character: %c at %s",
+					*argp, argp);
+
+			return false;
+		}
+
+		argp ++;
+	}
+
+	if (lua_pcall (L, nargs, nret, err_idx) != 0) {
+		g_set_error (err, lua_error_quark (), EBADF,
+				"error when calling lua function from %s: %s",
+				strloc, lua_tostring (L, -1));
+		lua_settop (L, err_idx - 1);
+
+		return false;
+	}
+
+	lua_remove (L, err_idx);
+	va_end (ap);
+
+	return true;
+}

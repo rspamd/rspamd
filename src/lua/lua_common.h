@@ -577,6 +577,27 @@ gint rspamd_lua_push_words (lua_State *L, GArray *words,
  */
 gchar *rspamd_lua_get_module_name (lua_State *L);
 
+/**
+ * Call Lua function in a universal way. Arguments string:
+ * - i - lua_integer, argument - gint64
+ * - n - lua_number, argument - gdouble
+ * - s - lua_string, argument - const gchar * (zero terminated)
+ * - l - lua_lstring, argument - (size_t + const gchar *) pair
+ * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
+ * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
+ * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
+ * @param L lua state
+ * @param cbref LUA_REGISTRY reference
+ * @param strloc where this function is called from
+ * @param nret number of results (or LUA_MULTRET)
+ * @param args arguments format string
+ * @param err error to promote
+ * @param ... arguments
+ * @return true of pcall returned 0, false + err otherwise
+ */
+bool rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
+		gint nret, const gchar *args, GError **err, ...);
+
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
 #define RSPAMD_LOCAL_CONFDIR_INDEX "LOCAL_CONFDIR"
