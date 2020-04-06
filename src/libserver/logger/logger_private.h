@@ -103,7 +103,7 @@ bool rspamd_log_file_log (const gchar *module, const gchar *id,
 bool rspamd_log_file_on_fork (rspamd_logger_t *logger, struct rspamd_config *cfg,
 							   gpointer arg, GError **err);
 
-const static struct rspamd_logger_funcs file_log_funcs = {
+static const struct rspamd_logger_funcs file_log_funcs = {
 		.init = rspamd_log_file_init,
 		.dtor = rspamd_log_file_dtor,
 		.reload = rspamd_log_file_reload,
@@ -127,7 +127,7 @@ bool rspamd_log_syslog_log (const gchar *module, const gchar *id,
 						  rspamd_logger_t *rspamd_log,
 						  gpointer arg);
 
-const static struct rspamd_logger_funcs syslog_log_funcs = {
+static const struct rspamd_logger_funcs syslog_log_funcs = {
 		.init = rspamd_log_syslog_init,
 		.dtor = rspamd_log_syslog_dtor,
 		.reload = rspamd_log_syslog_reload,
@@ -151,7 +151,7 @@ bool rspamd_log_console_log (const gchar *module, const gchar *id,
 							rspamd_logger_t *rspamd_log,
 							gpointer arg);
 
-const static struct rspamd_logger_funcs console_log_funcs = {
+static const struct rspamd_logger_funcs console_log_funcs = {
 		.init = rspamd_log_console_init,
 		.dtor = rspamd_log_console_dtor,
 		.reload = rspamd_log_console_reload,
