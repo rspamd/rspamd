@@ -1080,9 +1080,29 @@ LUA_FUNCTION_DEF (task, lookup_words);
 /**
  * @method task:topointer()
  *
- * Returns raw C pointer (lightuserdata) associated with task
+ * Returns raw C pointer (lightuserdata) associated with task. This might be
+ * broken with luajit and GC64, use with caution.
  */
 LUA_FUNCTION_DEF (task, topointer);
+
+/**
+ * @method task:add_named_result(name, symbol_control_function)
+ *
+ * Adds a new named result for this task. symbol_control_function is a callback
+ * called with 3 parameters:
+ * `function(task, symbol, result_name)` and it should return boolean that
+ * specifies if this symbol should be added to this named result.
+ * @param {string} name for this result
+ * @param {function} symbol_control_function predicate for symbols
+ */
+LUA_FUNCTION_DEF (task, add_named_result);
+
+/***
+ * @method task:get_dns_req()
+ * Get number of dns requests being sent in the task
+ * @return {number} number of DNS requests
+ */
+LUA_FUNCTION_DEF (task, get_dns_req);
 
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, create),
@@ -6507,6 +6527,26 @@ lua_task_topointer (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_task_add_named_result (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *name = luaL_checkstring (L, 2);
+	gint cbref;
+
+	if (task && name && lua_isfunction (L, 3)) {
+		lua_pushvalue (L, 3);
+		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		rspamd_create_metric_result (task, name, cbref);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 

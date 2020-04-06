@@ -67,7 +67,14 @@ rspamd_create_metric_result (struct rspamd_task *task,
 			sizeof (struct rspamd_scan_result));
 	metric_res->symbols = kh_init (rspamd_symbols_hash);
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
-	metric_res->name = name;
+
+	if (name) {
+		metric_res->name = rspamd_mempool_strdup (task->task_pool, name);
+	}
+	else {
+		metric_res->name = NULL;
+	}
+
 	metric_res->symbol_cbref = lua_sym_cbref;
 	metric_res->task = task;
 
