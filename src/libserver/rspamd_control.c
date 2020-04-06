@@ -781,7 +781,7 @@ rspamd_control_ignore_io_handler (int fd, short what, void *ud)
 	struct rspamd_control_reply rep;
 
 	/* At this point we just ignore replies from the workers */
-	(void)read (fd, &rep, sizeof (rep));
+	(void) !read (fd, &rep, sizeof (rep));
 	rspamd_control_stop_pending (elt);
 }
 
@@ -793,7 +793,7 @@ rspamd_control_log_pipe_io_handler (int fd, short what, void *ud)
 	struct rspamd_control_reply rep;
 
 	/* At this point we just ignore replies from the workers */
-	(void) read (fd, &rep, sizeof (rep));
+	(void) !read (fd, &rep, sizeof (rep));
 	rspamd_control_stop_pending (elt);
 }
 

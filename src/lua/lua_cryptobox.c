@@ -1008,7 +1008,7 @@ rspamd_lua_hash_create (const gchar *type)
 		}
 		else if (g_ascii_strcasecmp (type, "blake2") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
-			posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
+			(void) !posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
 					sizeof (*h->content.h));
 			g_assert (h->content.h != NULL);
 			rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
@@ -1045,7 +1045,7 @@ rspamd_lua_hash_create (const gchar *type)
 	}
 	else {
 		h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
-		posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
+		(void) !posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
 				sizeof (*h->content.h));
 		g_assert (h->content.h != NULL);
 		rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
