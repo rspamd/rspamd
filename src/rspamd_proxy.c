@@ -2282,6 +2282,7 @@ adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
 	}
 }
 
+__attribute__((noreturn))
 void
 start_rspamd_proxy (struct rspamd_worker *worker)
 {

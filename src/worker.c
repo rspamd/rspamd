@@ -477,6 +477,7 @@ init_worker (struct rspamd_config *cfg)
 /*
  * Start worker process
  */
+__attribute__((noreturn))
 void
 start_worker (struct rspamd_worker *worker)
 {

@@ -190,6 +190,7 @@ rspamadm_confighelp_search_word (const ucl_object_t *obj, const gchar *str)
 	return res;
 }
 
+__attribute__((noreturn))
 static void
 rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {

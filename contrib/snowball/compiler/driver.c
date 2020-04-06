@@ -25,6 +25,7 @@ static int eq(const char * s1, const char * s2) {
     return strcmp(s1, s2) == 0;
 }
 
+__attribute__((noreturn))
 static void print_arglist(int exit_code) {
     FILE * f = exit_code ? stderr : stdout;
     fprintf(f, "Usage: snowball SOURCE_FILE... [OPTIONS]\n\n"

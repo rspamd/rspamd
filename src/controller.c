@@ -3477,6 +3477,7 @@ rspamd_controller_register_plugins_paths (struct rspamd_controller_worker_ctx *c
 /*
  * Start worker process
  */
+__attribute__((noreturn))
 void
 start_controller_worker (struct rspamd_worker *worker)
 {
