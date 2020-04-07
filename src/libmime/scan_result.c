@@ -887,3 +887,22 @@ rspamd_task_symbol_result_foreach (struct rspamd_task *task,
 		});
 	}
 }
+
+struct rspamd_scan_result *
+rspamd_find_metric_result (struct rspamd_task *task,
+						   const gchar *name)
+{
+	struct rspamd_scan_result *res;
+
+	if (name == NULL) {
+		return task->result;
+	}
+
+	DL_FOREACH (task->result, res) {
+		if (res->name && strcmp (res->name, name) == 0) {
+			return res;
+		}
+	}
+
+	return NULL;
+}

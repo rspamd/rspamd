@@ -100,6 +100,15 @@ struct rspamd_scan_result *rspamd_create_metric_result (struct rspamd_task *task
 		const gchar *name, gint lua_sym_cbref);
 
 /**
+ * Find result with a specific name (NULL means the default result)
+ * @param task
+ * @param name
+ * @return
+ */
+struct rspamd_scan_result *rspamd_find_metric_result (struct rspamd_task *task,
+													  const gchar *name);
+
+/**
  * Adds a new passthrough result to a task
  * @param task
  * @param action
