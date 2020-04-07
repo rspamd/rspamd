@@ -419,6 +419,8 @@ local function gen_rbl_callback(rule)
 
     add_dns_request(task, helo, true, false, requests_table,
         'helo', whitelist)
+    
+    return true
   end
 
   local function check_dkim(task, requests_table, whitelist)
