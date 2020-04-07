@@ -881,7 +881,7 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 		id = g_array_index (cl->statfiles_ids, gint, i);
 		st = g_ptr_array_index (st_ctx->statfiles, id);
 
-		if (rspamd_task_find_symbol_result (task, st->stcf->symbol)) {
+		if (rspamd_task_find_symbol_result (task, st->stcf->symbol, NULL)) {
 			if (is_spam == !!st->stcf->is_spam) {
 				msg_debug_bayes ("do not autolearn %s as symbol %s is already "
 						"added", is_spam ? "spam" : "ham", st->stcf->symbol);

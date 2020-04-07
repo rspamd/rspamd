@@ -2328,7 +2328,7 @@ rspamd_has_symbol_expr (struct rspamd_task *task,
 
 	symbol_str = (const gchar *)sym_arg->data;
 
-	if (rspamd_task_find_symbol_result (task, symbol_str)) {
+	if (rspamd_task_find_symbol_result (task, symbol_str, NULL)) {
 		return TRUE;
 	}
 

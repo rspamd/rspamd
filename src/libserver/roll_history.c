@@ -165,7 +165,7 @@ rspamd_roll_history_update (struct roll_history *history,
 		row->required_score = rspamd_task_get_required_score (task, metric_res);
 		cbdata.pos = row->symbols;
 		cbdata.remain = sizeof (row->symbols);
-		rspamd_task_symbol_result_foreach (task,
+		rspamd_task_symbol_result_foreach (task, NULL,
 				roll_history_symbols_callback,
 				&cbdata);
 		if (cbdata.remain > 0) {

@@ -847,19 +847,22 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	return noaction->action;
 }
 
-struct rspamd_symbol_result*
-rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym)
+struct rspamd_symbol_result *
+rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
+		struct rspamd_scan_result *result)
 {
 	struct rspamd_symbol_result *res = NULL;
 	khiter_t k;
 
+	if (result == NULL) {
+		/* Use default result */
+		result = task->result;
+	}
 
-	if (task->result) {
-		k = kh_get (rspamd_symbols_hash, task->result->symbols, sym);
+	k = kh_get (rspamd_symbols_hash, result->symbols, sym);
 
-		if (k != kh_end (task->result->symbols)) {
-			res = &kh_value (task->result->symbols, k);
-		}
+	if (k != kh_end (result->symbols)) {
+		res = &kh_value (result->symbols, k);
 	}
 
 	return res;
@@ -867,14 +870,19 @@ rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym)
 
 void
 rspamd_task_symbol_result_foreach (struct rspamd_task *task,
-										GHFunc func,
-										gpointer ud)
+								   struct rspamd_scan_result *result, GHFunc func,
+								   gpointer ud)
 {
 	const gchar *kk;
 	struct rspamd_symbol_result res;
 
-	if (func && task->result) {
-		kh_foreach (task->result->symbols, kk, res, {
+	if (result == NULL) {
+		/* Use default result */
+		result = task->result;
+	}
+
+	if (func) {
+		kh_foreach (result->symbols, kk, res, {
 			func ((gpointer)kk, (gpointer)&res, ud);
 		});
 	}

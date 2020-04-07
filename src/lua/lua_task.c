@@ -1986,7 +1986,7 @@ lua_task_adjust_result (lua_State * L)
 		metric_res = task->result;
 
 		if (metric_res) {
-			s = rspamd_task_find_symbol_result (task, symbol_name);
+			s = rspamd_task_find_symbol_result (task, symbol_name, NULL);
 		}
 		else {
 			return luaL_error (L, "no metric result");
@@ -4383,7 +4383,7 @@ lua_push_symbol_result (lua_State *L,
 		metric_res = task->result;
 
 		if (metric_res) {
-			s = rspamd_task_find_symbol_result (task, symbol);
+			s = rspamd_task_find_symbol_result (task, symbol, NULL);
 		}
 	}
 	else {
@@ -4493,7 +4493,7 @@ lua_task_has_symbol (lua_State *L)
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
-		found = (rspamd_task_find_symbol_result (task, symbol) != NULL);
+		found = (rspamd_task_find_symbol_result (task, symbol, NULL) != NULL);
 		lua_pushboolean (L, found);
 	}
 	else {
@@ -4724,7 +4724,7 @@ tokens_foreach_cb (struct rspamd_symcache_item *item, gpointer ud)
 		return;
 	}
 
-	if ((s = rspamd_task_find_symbol_result (cbd->task, sym)) != NULL) {
+	if ((s = rspamd_task_find_symbol_result (cbd->task, sym, NULL)) != NULL) {
 		if (s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) {
 			lua_pushnumber (cbd->L, 0.0);
 		}
@@ -4801,7 +4801,7 @@ lua_task_process_ann_tokens (lua_State *L)
 			 *
 			 * That would lead to N_results lookups which is usually MUCH smaller
 			 */
-			sres = rspamd_task_find_symbol_result (task, sym);
+			sres = rspamd_task_find_symbol_result (task, sym, NULL);
 
 			if (sres && !(sres->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 

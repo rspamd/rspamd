@@ -159,8 +159,9 @@ gboolean rspamd_task_add_result_option (struct rspamd_task *task,
  * @param sym
  * @return
  */
-struct rspamd_symbol_result *rspamd_task_find_symbol_result (
-		struct rspamd_task *task, const char *sym);
+struct rspamd_symbol_result *
+rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
+		struct rspamd_scan_result *result);
 
 /**
  * Compatibility function to iterate on symbols hash
@@ -168,8 +169,7 @@ struct rspamd_symbol_result *rspamd_task_find_symbol_result (
  * @param func
  * @param ud
  */
-void rspamd_task_symbol_result_foreach (struct rspamd_task *task,
-										GHFunc func,
+void rspamd_task_symbol_result_foreach (struct rspamd_task *task, struct rspamd_scan_result *result, GHFunc func,
 										gpointer ud);
 
 /**
