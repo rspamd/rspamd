@@ -1331,8 +1331,14 @@ if opts then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)
         else
+          local is_array = false
+
+          if col_data.type:lower():match('^array') then
+            is_array = true
+          end
+
           local selector = lua_selectors.create_selector_closure(rspamd_config,
-              col_data.selector, col_data.delimiter or '', false)
+              col_data.selector, col_data.delimiter or '', is_array)
 
           if not selector then
             rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: bad selector: %s',
@@ -1341,7 +1347,7 @@ if opts then
             settings.extra_columns[col_name] = nil
           else
             if not col_data.default_value then
-              if col_data.type:lower():match('^array') then
+              if is_array then
                 col_data.default_value = {}
               else
                 col_data.default_value = ''
