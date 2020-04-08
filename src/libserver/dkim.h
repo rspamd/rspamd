@@ -269,6 +269,13 @@ rspamd_dkim_key_t *rspamd_dkim_make_key (const gchar *keydata, guint keylen,
 										 GError **err);
 
 /**
+ * Returns key id for dkim key (first 7 bytes of base64 representation)
+ * @param key
+ * @return
+ */
+const gchar *rspamd_dkim_key_id (rspamd_dkim_key_t *key);
+
+/**
  * Parse DKIM public key from a TXT record
  * @param txt
  * @param keylen

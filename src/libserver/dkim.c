@@ -146,20 +146,23 @@ struct rspamd_dkim_context_s {
 	const gchar *dkim_header;
 };
 
+#define RSPAMD_DKIM_KEY_ID_LEN 8
+
 struct rspamd_dkim_key_s {
 	guint8 *keydata;
 	gsize keylen;
 	gsize decoded_len;
-	guint ttl;
+	gchar key_id[RSPAMD_DKIM_KEY_ID_LEN];
 	union {
 		RSA *key_rsa;
 		EC_KEY *key_ecdsa;
 		guchar *key_eddsa;
 	} key;
-	enum rspamd_dkim_key_type type;
 	BIO *key_bio;
 	EVP_PKEY *key_evp;
 	time_t mtime;
+	guint ttl;
+	enum rspamd_dkim_key_type type;
 	ref_entry_t ref;
 };
 
@@ -1289,6 +1292,8 @@ rspamd_dkim_make_key (const gchar *keydata,
 	key->keylen = keylen;
 	key->type = type;
 
+	rspamd_strlcpy (key->key_id, keydata, MIN (keylen, sizeof (key->key_id)));
+
 	rspamd_cryptobox_base64_decode (keydata, keylen, key->keydata,
 			&key->decoded_len);
 
@@ -1360,6 +1365,16 @@ rspamd_dkim_make_key (const gchar *keydata,
 	}
 
 	return key;
+}
+
+const gchar *
+rspamd_dkim_key_id (rspamd_dkim_key_t *key)
+{
+	if (key) {
+		return key->key_id;
+	}
+
+	return NULL;
 }
 
 /**
@@ -2617,11 +2632,13 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 			msg_info_dkim (
 					"%s: headers RSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector, ctx->dkim_header);
+					ctx->domain, ctx->selector,
+					rspamd_dkim_key_id (key),
+					ctx->dkim_header);
 		}
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
@@ -2629,11 +2646,13 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 				key->key.key_ecdsa) != 1) {
 			msg_info_dkim (
 					"%s: headers ECDSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector, ctx->dkim_header);
+					ctx->domain, ctx->selector,
+					rspamd_dkim_key_id (key),
+					ctx->dkim_header);
 			msg_debug_dkim ("headers ecdsa verify failed");
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers ecdsa verify failed";
@@ -2644,11 +2663,13 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 				key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_info_dkim (
 					"%s: headers EDDSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key=%s; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
-					ctx->domain, ctx->selector, ctx->dkim_header);
+					ctx->domain, ctx->selector,
+					rspamd_dkim_key_id (key),
+					ctx->dkim_header);
 			msg_debug_dkim ("headers eddsa verify failed");
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers eddsa verify failed";
@@ -2657,7 +2678,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 
-	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res && res->rcode == DKIM_CONTINUE) {
+	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res->rcode == DKIM_CONTINUE) {
 		switch (ctx->cv) {
 		case RSPAMD_ARC_INVALID:
 			msg_info_dkim ("arc seal is invalid i=%d", ctx->common.idx);
