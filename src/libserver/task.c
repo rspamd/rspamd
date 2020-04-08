@@ -748,7 +748,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_COMPOSITES:
-		rspamd_make_composites (task);
+		rspamd_composites_process_task (task);
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
@@ -807,7 +807,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
 		/* Second run of composites processing before idempotent filters */
-		rspamd_make_composites (task);
+		rspamd_composites_process_task (task);
 		break;
 
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:

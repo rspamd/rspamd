@@ -52,7 +52,7 @@ struct rspamd_composite {
  * Process all results and form composite metrics from existent metrics as it is defined in config
  * @param task worker's task that present message from user
  */
-void rspamd_make_composites (struct rspamd_task *task);
+void rspamd_composites_process_task (struct rspamd_task *task);
 
 enum rspamd_composite_policy rspamd_composite_policy_from_str (const gchar *string);
 
