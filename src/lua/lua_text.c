@@ -27,7 +27,7 @@
  * You can convert rspamd_text into string but it will copy data.
  */
 
-/**
+/***
  * @function rspamd_text.fromstring(str)
  * Creates rspamd_text from Lua string (copied to the text)
  * @param {string} str string to use
@@ -35,7 +35,7 @@
  */
 LUA_FUNCTION_DEF (text, fromstring);
 
-/**
+/***
  * @function rspamd_text.null()
  * Creates rspamd_text with NULL pointer for testing purposes
  * @param {string} str string to use
@@ -43,7 +43,7 @@ LUA_FUNCTION_DEF (text, fromstring);
  */
 LUA_FUNCTION_DEF (text, null);
 
-/**
+/***
  * @function rspamd_text.fromtable(tbl[, delim])
  * Same as `table.concat` but generates rspamd_text instead of the Lua string
  * @param {table} tbl table to use
