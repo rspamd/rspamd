@@ -282,11 +282,13 @@ LUA_FUNCTION_DEF (config, get_symbol_flags);
 LUA_FUNCTION_DEF (config, add_symbol_flags);
 
 /**
- * @method rspamd_config:register_re_selector(name, selector_str)
+ * @method rspamd_config:register_re_selector(name, selector_str, [delimiter, [flatten]])
  * Registers selector with the specific name to use in regular expressions in form
  * name=/re/$ or name=/re/{selector}
  * @param {string} name name of the selector
- * @param {selector_str} selector string
+ * @param {string} selector_str selector definition
+ * @param {string} delimiter delimiter to use when joining strings if flatten is false
+ * @param {bool} flatten if true then selector will return a table of captures instead of a single string
  * @return true if selector has been registered
  */
 LUA_FUNCTION_DEF (config, register_re_selector);
@@ -4338,12 +4340,17 @@ lua_config_register_re_selector (lua_State *L)
 	const gchar *name = luaL_checkstring (L, 2);
 	const gchar *selector_str = luaL_checkstring (L, 3);
 	const gchar *delimiter = "";
+	bool flatten = false;
 	gint top = lua_gettop (L);
 	bool res = false;
 
 	if (cfg && name && selector_str) {
 		if (lua_gettop (L) >= 4) {
 			delimiter = luaL_checkstring (L, 4);
+
+			if (lua_isboolean (L, 5)) {
+				flatten = lua_toboolean (L, 5);
+			}
 		}
 
 		if (luaL_dostring (L, "return require \"lua_selectors\"") != 0) {
@@ -4380,8 +4387,9 @@ lua_config_register_re_selector (lua_State *L)
 					*pcfg = cfg;
 					lua_pushstring (L, selector_str);
 					lua_pushstring (L, delimiter);
+					lua_pushboolean (L, flatten);
 
-					if ((ret = lua_pcall (L, 3, 1, err_idx)) != 0) {
+					if ((ret = lua_pcall (L, 4, 1, err_idx)) != 0) {
 						msg_err_config ("call to create_selector_closure lua "
 										"script failed (%d): %s", ret,
 										lua_tostring (L, -1));

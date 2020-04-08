@@ -486,7 +486,7 @@ exports.flatten_selectors = function(selectors)
 end
 
 --[[[
--- @function lua_selectors.create_closure(cfg, selector_str, delimiter='')
+-- @function lua_selectors.create_closure(cfg, selector_str, delimiter='', flatten=false)
 --]]
 exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten)
   local selector = exports.parse_selector(cfg, selector_str)
