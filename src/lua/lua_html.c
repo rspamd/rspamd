@@ -271,7 +271,7 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 	struct lua_html_tag *ltag;
 	struct rspamd_url **purl;
 
-	lua_newtable (L);
+	lua_createtable (L, 0, 7);
 
 	if (img->src) {
 		lua_pushstring (L, "src");
@@ -334,21 +334,20 @@ lua_html_get_images (lua_State *L)
 	guint i;
 
 	if (hc != NULL) {
-		lua_newtable (L);
+		if (hc->images) {
+			lua_createtable (L, hc->images->len, 0);
 
-		if (hc->images && hc->images->len > 0) {
-			for (i = 0; i < hc->images->len; i ++) {
-				img = g_ptr_array_index (hc->images, i);
+			PTR_ARRAY_FOREACH (hc->images, i, img) {
 				lua_html_push_image (L, img);
 				lua_rawseti (L, -2, i + 1);
 			}
 		}
 		else {
-			lua_pushnil (L);
+			lua_newtable (L);
 		}
 	}
 	else {
-		lua_pushnil (L);
+		lua_newtable (L);
 	}
 
 	return 1;
