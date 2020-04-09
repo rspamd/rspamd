@@ -180,7 +180,7 @@ gchar *rspamd_encode_base32 (const guchar *in, gsize inlen,
  * @param inlen input length
  * @return freshly allocated base32 decoded value or NULL if input is invalid
  */
-guchar *rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
+guchar *rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen, enum rspamd_base32_type type);
 
 /**
  * Encode string using base32 encoding
@@ -201,8 +201,8 @@ gint rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
  * @param outlen output buf len
  * @return decoded len if in is valid base32 and `outlen` is enough to encode `inlen`
  */
-gint rspamd_decode_base32_buf (const gchar *in, gsize inlen,
-							   guchar *out, gsize outlen);
+gint rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out,
+		gsize outlen, enum rspamd_base32_type type);
 
 /**
  * Encode string using hex encoding

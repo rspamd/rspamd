@@ -114,7 +114,7 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 
 			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 				key = rspamd_decode_base32 (ucl_object_tostring (elt),
-						0, &keylen);
+						0, &keylen, RSPAMD_BASE32_DEFAULT);
 				if (keylen < sizeof (rspamd_sipkey_t)) {
 					msg_warn ("siphash key is too short: %z", keylen);
 					g_free (key);

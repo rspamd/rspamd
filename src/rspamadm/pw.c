@@ -257,7 +257,7 @@ rspamadm_pw_check (void)
 	if (salt != NULL && hash != NULL) {
 
 		/* decode salt */
-		salt_decoded = rspamd_decode_base32 (salt, salt_len, &salt_len);
+		salt_decoded = rspamd_decode_base32 (salt, salt_len, &salt_len, RSPAMD_BASE32_DEFAULT);
 
 		if (salt_decoded == NULL || salt_len != pbkdf->salt_len) {
 			/* We have some unknown salt here */
@@ -266,7 +266,7 @@ rspamadm_pw_check (void)
 			exit (EXIT_FAILURE);
 		}
 
-		key_decoded = rspamd_decode_base32 (hash, key_len, &key_len);
+		key_decoded = rspamd_decode_base32 (hash, key_len, &key_len, RSPAMD_BASE32_DEFAULT);
 
 		if (key_decoded == NULL || key_len != pbkdf->key_len) {
 			/* We have some unknown salt here */

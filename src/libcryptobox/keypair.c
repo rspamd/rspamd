@@ -336,7 +336,7 @@ rspamd_pubkey_from_base32 (const gchar *b32,
 		len = strlen (b32);
 	}
 
-	decoded = rspamd_decode_base32 (b32, len, &dlen);
+	decoded = rspamd_decode_base32 (b32, len, &dlen, RSPAMD_BASE32_DEFAULT);
 
 	if (decoded == NULL) {
 		return NULL;
@@ -736,7 +736,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		dec_len = rspamd_decode_hex_buf (str, ucl_len, target, len);
 	}
 	else {
-		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len);
+		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
 	}
 
 	if (dec_len != (gint)len) {
@@ -752,7 +752,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		dec_len = rspamd_decode_hex_buf (str, ucl_len, target, len);
 	}
 	else {
-		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len);
+		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len, RSPAMD_BASE32_DEFAULT);
 	}
 
 	if (dec_len != (gint)len) {

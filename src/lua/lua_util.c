@@ -1217,7 +1217,7 @@ lua_util_decode_base32 (lua_State *L)
 	if (s != NULL) {
 		t = lua_newuserdata (L, sizeof (*t));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = rspamd_decode_base32 (s, inlen, &outlen);
+		t->start = rspamd_decode_base32 (s, inlen, &outlen, RSPAMD_BASE32_DEFAULT);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}

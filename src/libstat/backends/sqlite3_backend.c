@@ -1053,7 +1053,7 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	}
 	else {
 		/* Need to decode */
-		copied_conf = rspamd_decode_base32 (tk_conf, sz, len);
+		copied_conf = rspamd_decode_base32 (tk_conf, sz, len, RSPAMD_BASE32_DEFAULT);
 		g_free (tk_conf);
 		rspamd_mempool_add_destructor (rt->task->task_pool, g_free, copied_conf);
 	}
