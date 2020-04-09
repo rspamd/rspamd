@@ -543,7 +543,9 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 		enum rspamd_base32_type type)
 {
 	static const char b32_default[] = "ybndrfg8ejkmcpqxot1uwisza345h769",
-		b32_bleach[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l", *b32;
+		b32_bleach[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l",
+		b32_rfc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+		*b32;
 	gchar *o, *end;
 	gsize i;
 	gint remain = -1, x;
@@ -557,6 +559,9 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 		break;
 	case RSPAMD_BASE32_BLEACH:
 		b32 = b32_bleach;
+		break;
+	case RSPAMD_BASE32_RFC:
+		b32 = b32_rfc;
 		break;
 	default:
 		g_assert_not_reached ();

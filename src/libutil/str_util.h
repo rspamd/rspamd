@@ -161,7 +161,8 @@ guchar *rspamd_decode_hex (const gchar *in, gsize inlen);
 enum rspamd_base32_type {
 	RSPAMD_BASE32_DEFAULT = 0,
 	RSPAMD_BASE32_ZBASE = 0,
-	RSPAMD_BASE32_BLEACH
+	RSPAMD_BASE32_BLEACH,
+	RSPAMD_BASE32_RFC,
 };
 
 /**
