@@ -346,7 +346,7 @@ rspamd_rrd_calculate_checksum (struct rspamd_rrd_file *file)
 
 		rspamd_cryptobox_hash_final (&st, sigbuf);
 
-		file->id = rspamd_encode_base32 (sigbuf, sizeof (sigbuf));
+		file->id = rspamd_encode_base32 (sigbuf, sizeof (sigbuf), RSPAMD_BASE32_DEFAULT);
 	}
 }
 

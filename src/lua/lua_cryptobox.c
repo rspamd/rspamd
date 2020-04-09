@@ -839,7 +839,7 @@ lua_cryptobox_signature_base32 (lua_State *L)
 	gchar *encoded;
 
 	if (sig) {
-		encoded = rspamd_encode_base32 (sig->str, sig->len);
+		encoded = rspamd_encode_base32 (sig->str, sig->len, RSPAMD_BASE32_DEFAULT);
 		lua_pushstring (L, encoded);
 		g_free (encoded);
 	}
@@ -1392,7 +1392,7 @@ lua_cryptobox_hash_base32 (lua_State *L)
 			}
 		}
 
-		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32));
+		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32), RSPAMD_BASE32_DEFAULT);
 		lua_pushstring (L, out_b32);
 		h->is_finished = TRUE;
 	}
@@ -2247,8 +2247,8 @@ lua_cryptobox_pbkdf (lua_State *L)
 			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity,
 			pbkdf->type);
 
-	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
-	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
+	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len, RSPAMD_BASE32_DEFAULT);
+	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len, RSPAMD_BASE32_DEFAULT);
 
 	result = g_string_new ("");
 	rspamd_printf_gstring (result, "$%d$%s$%s", pbkdf->id, encoded_salt,

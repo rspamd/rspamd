@@ -180,7 +180,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	rspamd_cryptobox_hash_final (&hst, hout);
-	b32_hout = rspamd_encode_base32 (hout, sizeof (hout));
+	b32_hout = rspamd_encode_base32 (hout, sizeof (hout), RSPAMD_BASE32_DEFAULT);
 	/*
 	 * We need to strip it to 32 characters providing ~160 bits of
 	 * hash distribution

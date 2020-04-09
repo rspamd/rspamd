@@ -1175,7 +1175,7 @@ lua_util_encode_base32 (lua_State *L)
 		lua_pushnil (L);
 	}
 	else {
-		out = rspamd_encode_base32 (s, inlen);
+		out = rspamd_encode_base32 (s, inlen, RSPAMD_BASE32_DEFAULT);
 
 		if (out != NULL) {
 			t = lua_newuserdata (L, sizeof (*t));

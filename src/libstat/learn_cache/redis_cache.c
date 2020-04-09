@@ -225,7 +225,7 @@ rspamd_stat_cache_redis_generate_id (struct rspamd_task *task)
 	b32out = rspamd_mempool_alloc (task->task_pool,
 			sizeof (out) * 8 / 5 + 3);
 	i = rspamd_encode_base32_buf (out, sizeof (out), b32out,
-			sizeof (out) * 8 / 5 + 2);
+			sizeof (out) * 8 / 5 + 2, RSPAMD_BASE32_DEFAULT);
 
 	if (i > 0) {
 		/* Zero terminate */

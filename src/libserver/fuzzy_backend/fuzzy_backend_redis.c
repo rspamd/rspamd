@@ -283,7 +283,7 @@ rspamd_fuzzy_backend_init_redis (struct rspamd_fuzzy_backend *bk,
 	}
 
 	rspamd_cryptobox_hash_final (&st, id_hash);
-	backend->id = rspamd_encode_base32 (id_hash, sizeof (id_hash));
+	backend->id = rspamd_encode_base32 (id_hash, sizeof (id_hash), RSPAMD_BASE32_DEFAULT);
 
 	return backend;
 }

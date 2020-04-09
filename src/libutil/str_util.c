@@ -539,16 +539,29 @@ rspamd_str_pool_copy (gconstpointer data, gpointer ud)
  */
 
 gint
-rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
-		gsize outlen)
+rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outlen,
+		enum rspamd_base32_type type)
 {
-	static const char b32[]="ybndrfg8ejkmcpqxot1uwisza345h769";
+	static const char b32_default[] = "ybndrfg8ejkmcpqxot1uwisza345h769",
+		b32_bleach[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l", *b32;
 	gchar *o, *end;
 	gsize i;
 	gint remain = -1, x;
 
 	end = out + outlen;
 	o = out;
+
+	switch (type) {
+	case RSPAMD_BASE32_DEFAULT:
+		b32 = b32_default;
+		break;
+	case RSPAMD_BASE32_BLEACH:
+		b32 = b32_bleach;
+		break;
+	default:
+		g_assert_not_reached ();
+		abort ();
+	}
 
 	for (i = 0; i < inlen && o < end - 1; i++) {
 		switch (i % 5) {
@@ -603,14 +616,15 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
 }
 
 gchar *
-rspamd_encode_base32 (const guchar *in, gsize inlen)
+rspamd_encode_base32 (const guchar *in, gsize inlen, enum rspamd_base32_type type)
 {
 	gsize allocated_len = inlen * 8 / 5 + 2;
 	gchar *out;
 	gint outlen;
 
 	out = g_malloc (allocated_len);
-	outlen = rspamd_encode_base32_buf (in, inlen, out, allocated_len - 1);
+	outlen = rspamd_encode_base32_buf (in, inlen, out,
+			allocated_len - 1, type);
 
 	if (outlen >= 0) {
 		out[outlen] = 0;

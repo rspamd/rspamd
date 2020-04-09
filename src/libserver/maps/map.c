@@ -2582,7 +2582,7 @@ rspamd_map_calculate_hash (struct rspamd_map *map)
 	}
 
 	rspamd_cryptobox_hash_final (&st, cksum);
-	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
+	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum), RSPAMD_BASE32_DEFAULT);
 	rspamd_strlcpy (map->tag, cksum_encoded, sizeof (map->tag));
 	g_free (cksum_encoded);
 }

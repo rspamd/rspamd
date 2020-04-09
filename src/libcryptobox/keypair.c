@@ -546,7 +546,7 @@ rspamd_keypair_print_component (guchar *data, gsize datalen,
 		g_string_set_size (res, res->len + b32_len);
 		res->len -= b32_len;
 		olen = rspamd_encode_base32_buf (data, datalen, res->str + res->len,
-				res->len + b32_len - 1);
+				res->len + b32_len - 1, RSPAMD_BASE32_DEFAULT);
 
 		if (olen > 0) {
 			res->len += olen;

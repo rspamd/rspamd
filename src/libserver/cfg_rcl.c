@@ -3783,7 +3783,7 @@ rspamd_config_calculate_cksum (struct rspamd_config *cfg)
 	ucl_object_emit_full (cfg->rcl_obj, UCL_EMIT_MSGPACK,
 			&f, cfg->config_comments);
 	rspamd_cryptobox_hash_final (&hs, cksumbuf);
-	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
+	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf), RSPAMD_BASE32_DEFAULT);
 	/* Also change the tag of cfg pool to be equal to the checksum */
 	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
 			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));

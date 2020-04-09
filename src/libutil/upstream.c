@@ -1130,8 +1130,8 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 	guint h = rspamd_cryptobox_fast_hash (upstream->name,
 			strlen (upstream->name), 0);
 	memset (upstream->uid, 0, sizeof (upstream->uid));
-	rspamd_encode_base32_buf ((const guchar *)&h, sizeof (h),
-			upstream->uid, sizeof (upstream->uid) - 1);
+	rspamd_encode_base32_buf ((const guchar *) &h, sizeof (h),
+			upstream->uid, sizeof (upstream->uid) - 1, RSPAMD_BASE32_DEFAULT);
 
 	msg_debug_upstream ("added upstream %s (%s)", upstream->name,
 			upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE ? "numeric ip" : "DNS name");

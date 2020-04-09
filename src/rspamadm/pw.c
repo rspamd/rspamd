@@ -134,8 +134,8 @@ rspamadm_pw_encrypt (char *password)
 			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity,
 			pbkdf->type);
 
-	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
-	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
+	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len, RSPAMD_BASE32_DEFAULT);
+	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len, RSPAMD_BASE32_DEFAULT);
 
 	result = g_string_new ("");
 	rspamd_printf_gstring (result, "$%d$%s$%s", pbkdf->id, encoded_salt,

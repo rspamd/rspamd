@@ -502,7 +502,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, &sz);
 
 		/* Encode to base32 */
-		tok_conf_encoded = rspamd_encode_base32 (tk_conf, sz);
+		tok_conf_encoded = rspamd_encode_base32 (tk_conf, sz, RSPAMD_BASE32_DEFAULT);
 
 		if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
