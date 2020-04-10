@@ -845,6 +845,10 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen,
 	else {
 		g_free (res);
 
+		if (outlen) {
+			*outlen = 0;
+		}
+
 		return NULL;
 	}
 
