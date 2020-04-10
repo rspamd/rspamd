@@ -94,16 +94,18 @@ LUA_FUNCTION_DEF (util, decode_qp);
 LUA_FUNCTION_DEF (util, decode_base64);
 
 /***
- * @function util.encode_base32(input)
+ * @function util.encode_base32(input, [b32type = 'default'])
  * Encodes data in base32 breaking lines if needed
  * @param {text or string} input input data
+ * @param {string} b32type base32 type (default, bleach, rfc)
  * @return {rspamd_text} encoded data chunk
  */
 LUA_FUNCTION_DEF (util, encode_base32);
 /***
- * @function util.decode_base32(input)
+ * @function util.decode_base32(input, [b32type = 'default'])
  * Decodes data from base32 ignoring whitespace characters
  * @param {text or string} input data to decode
+ * @param {string} b32type base32 type (default, bleach, rfc)
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF (util, decode_base32);
@@ -1157,6 +1159,7 @@ lua_util_encode_base32 (lua_State *L)
 	struct rspamd_lua_text *t;
 	const gchar *s = NULL;
 	gchar *out;
+	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
 	gsize inlen, outlen;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
@@ -1171,11 +1174,19 @@ lua_util_encode_base32 (lua_State *L)
 		}
 	}
 
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		btype = rspamd_base32_decode_type_from_str (lua_tostring (L, 2));
+
+		if (btype == RSPAMD_BASE32_INVALID) {
+			return luaL_error (L, "invalid b32 type: %s", lua_tostring (L, 2));
+		}
+	}
+
 	if (s == NULL) {
-		lua_pushnil (L);
+		return luaL_error (L, "invalid arguments");
 	}
 	else {
-		out = rspamd_encode_base32 (s, inlen, RSPAMD_BASE32_DEFAULT);
+		out = rspamd_encode_base32 (s, inlen, btype);
 
 		if (out != NULL) {
 			t = lua_newuserdata (L, sizeof (*t));
@@ -1201,6 +1212,7 @@ lua_util_decode_base32 (lua_State *L)
 	struct rspamd_lua_text *t;
 	const gchar *s = NULL;
 	gsize inlen, outlen;
+	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		s = luaL_checklstring (L, 1, &inlen);
@@ -1214,10 +1226,18 @@ lua_util_decode_base32 (lua_State *L)
 		}
 	}
 
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		btype = rspamd_base32_decode_type_from_str (lua_tostring (L, 2));
+
+		if (btype == RSPAMD_BASE32_INVALID) {
+			return luaL_error (L, "invalid b32 type: %s", lua_tostring (L, 2));
+		}
+	}
+
 	if (s != NULL) {
 		t = lua_newuserdata (L, sizeof (*t));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = rspamd_decode_base32 (s, inlen, &outlen, RSPAMD_BASE32_DEFAULT);
+		t->start = rspamd_decode_base32 (s, inlen, &outlen, btype);
 		t->len = outlen;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}

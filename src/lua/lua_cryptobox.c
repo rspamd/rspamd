@@ -827,8 +827,9 @@ lua_cryptobox_signature_hex (lua_State *L)
 }
 
 /***
- * @method cryptobox_signature:base32()
+ * @method cryptobox_signature:base32([b32type='default'])
  * Return base32 encoded signature string
+ * @param {string} b32type base32 type (default, bleach, rfc)
  * @return {string} raw value of signature
  */
 static gint
@@ -837,9 +838,18 @@ lua_cryptobox_signature_base32 (lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 	gchar *encoded;
+	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		btype = rspamd_base32_decode_type_from_str (lua_tostring (L, 2));
+
+		if (btype == RSPAMD_BASE32_INVALID) {
+			return luaL_error (L, "invalid b32 type: %s", lua_tostring (L, 2));
+		}
+	}
 
 	if (sig) {
-		encoded = rspamd_encode_base32 (sig->str, sig->len, RSPAMD_BASE32_DEFAULT);
+		encoded = rspamd_encode_base32 (sig->str, sig->len, btype);
 		lua_pushstring (L, encoded);
 		g_free (encoded);
 	}
@@ -1365,8 +1375,9 @@ lua_cryptobox_hash_hex (lua_State *L)
 }
 
 /***
- * @method cryptobox_hash:base32()
- * Finalizes hash and return it as zbase32 string
+ * @method cryptobox_hash:base32([b32type])
+ * Finalizes hash and return it as zbase32 (by default) string
+ * @param {string} b32type base32 type (default, bleach, rfc)
  * @return {string} base32 value of hash
  */
 static gint
@@ -1379,6 +1390,16 @@ lua_cryptobox_hash_base32 (lua_State *L)
 	guint dlen;
 
 	if (h && !h->is_finished) {
+		enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
+
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			btype = rspamd_base32_decode_type_from_str (lua_tostring (L, 2));
+
+			if (btype == RSPAMD_BASE32_INVALID) {
+				return luaL_error (L, "invalid b32 type: %s", lua_tostring (L, 2));
+			}
+		}
+
 		memset (out_b32, 0, sizeof (out_b32));
 		lua_cryptobox_hash_finish (h, out, &dlen);
 		r = out;
@@ -1392,7 +1413,7 @@ lua_cryptobox_hash_base32 (lua_State *L)
 			}
 		}
 
-		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32), RSPAMD_BASE32_DEFAULT);
+		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32), btype);
 		lua_pushstring (L, out_b32);
 		h->is_finished = TRUE;
 	}
