@@ -163,7 +163,15 @@ enum rspamd_base32_type {
 	RSPAMD_BASE32_ZBASE = 0,
 	RSPAMD_BASE32_BLEACH,
 	RSPAMD_BASE32_RFC,
+	RSPAMD_BASE32_INVALID = -1,
 };
+
+/**
+ * Returns base32 type from a string or RSPAMD_BASE32_INVALID
+ * @param str
+ * @return
+ */
+enum rspamd_base32_type rspamd_base32_decode_type_from_str (const gchar *str);
 
 /**
  * Encode string using base32 encoding

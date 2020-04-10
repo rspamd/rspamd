@@ -642,6 +642,28 @@ rspamd_encode_base32 (const guchar *in, gsize inlen, enum rspamd_base32_type typ
 	return NULL;
 }
 
+enum rspamd_base32_type
+rspamd_base32_decode_type_from_str (const gchar *str)
+{
+	enum rspamd_base32_type ret = RSPAMD_BASE32_INVALID;
+
+	if (str == NULL) {
+		return RSPAMD_BASE32_DEFAULT;
+	}
+
+	if (strcmp (str, "default") == 0 || strcmp (str, "zbase") == 0) {
+		ret = RSPAMD_BASE32_ZBASE;
+	}
+	else if (strcmp (str, "bleach") == 0) {
+		ret = RSPAMD_BASE32_BLEACH;
+	}
+	else if (strcmp (str, "rfc") == 0) {
+		ret = RSPAMD_BASE32_RFC;
+	}
+
+	return ret;
+}
+
 static const guchar b32_dec_zbase[] = {
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
