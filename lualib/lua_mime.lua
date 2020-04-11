@@ -309,7 +309,7 @@ exports.full_extensions_map = {
   {"bas", "text/plain"},
   {"bcpio", "application/x-bcpio"},
   {"bin", "application/octet-stream"},
-  {"bmp", "image/bmp"},
+  {"bmp", {"image/bmp", "image/x-ms-bmp"}},
   {"c", "text/plain"},
   {"cab", "application/octet-stream"},
   {"caf", "audio/x-caf"},
