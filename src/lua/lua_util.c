@@ -2321,7 +2321,8 @@ lua_util_gzip_compress (lua_State *L)
 				break;
 			}
 			else {
-				msg_err ("cannot compress data: %s", zError (rc));
+				msg_err ("cannot compress data: %s (last error: %s)",
+						zError (rc), strm.msg);
 				lua_pop (L, 1); /* Text will be freed here */
 				lua_pushnil (L);
 				deflateEnd (&strm);
@@ -2388,6 +2389,15 @@ lua_util_zlib_inflate (lua_State *L, int windowBits)
 
 	memset (&strm, 0, sizeof (strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
+
+	/* Here are dragons to distinguish between raw deflate and zlib */
+	if (windowBits == MAX_WBITS && t->len > 0) {
+		if ((int)(unsigned char)t->start[0] != 0x78) {
+			/* Assume raw deflate */
+			windowBits = -windowBits;
+		}
+	}
+
 	rc = inflateInit2 (&strm, windowBits);
 
 	if (rc != Z_OK) {
@@ -2416,7 +2426,8 @@ lua_util_zlib_inflate (lua_State *L, int windowBits)
 				break;
 			}
 			else {
-				msg_err ("cannot decompress data: %s", zError (rc));
+				msg_err ("cannot decompress data: %s (last error: %s)",
+						zError (rc), strm.msg);
 				lua_pop (L, 1); /* Text will be freed here */
 				lua_pushnil (L);
 				inflateEnd (&strm);
