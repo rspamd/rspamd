@@ -2392,7 +2392,7 @@ lua_util_zlib_inflate (lua_State *L, int windowBits)
 
 	/* Here are dragons to distinguish between raw deflate and zlib */
 	if (windowBits == MAX_WBITS && t->len > 0) {
-		if ((int)(unsigned char)t->start[0] != 0x78) {
+		if ((int)(unsigned char)((t->start[0] << 4)) != 0x80) {
 			/* Assume raw deflate */
 			windowBits = -windowBits;
 		}
