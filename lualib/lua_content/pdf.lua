@@ -408,6 +408,10 @@ end
 
 -- Conditionally extract stream data from object and attach it as obj.uncompressed
 local function maybe_extract_object_stream(obj, pdf, task)
+  if pdf.encrypted then
+    -- TODO add decryption some day
+    return nil
+  end
   local dict = obj.dict
   if dict.Length then
     local len = math.min(obj.stream.len,
@@ -607,6 +611,17 @@ local function process_catalog(task, pdf, obj)
   end
 end
 
+local function process_xref(task, pdf, obj)
+  if obj.dict then
+    if obj.dict.Encrypt then
+      local encrypt = maybe_dereference_object(obj.dict.Encrypt, pdf, task)
+      lua_util.debugm(N, task, 'found encrypt: %s in xref object %s:%s',
+          encrypt, obj.major, obj.minor)
+      pdf.encrypted = true
+    end
+  end
+end
+
 process_dict = function(task, pdf, obj, dict)
   if not obj.type and type(dict) == 'table' then
     if dict.Type and type(dict.Type) == 'string' then
@@ -705,6 +720,9 @@ process_dict = function(task, pdf, obj, dict)
       process_action(task, pdf, obj)
     elseif obj.type == 'Catalog' then
       process_catalog(task, pdf, obj)
+    elseif obj.type == 'XRef' then
+      -- XRef stream instead of trailer from PDF 1.5 (thanks Adobe)
+      process_xref(task, pdf, obj)
     elseif obj.type == 'Javascript' then
       local js = maybe_dereference_object(obj.dict.JS, pdf, task)
 
