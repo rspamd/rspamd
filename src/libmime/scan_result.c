@@ -897,6 +897,9 @@ rspamd_find_metric_result (struct rspamd_task *task,
 	if (name == NULL) {
 		return task->result;
 	}
+	else if (strcmp (name, "default") == 0) {
+		return task->result;
+	}
 
 	DL_FOREACH (task->result, res) {
 		if (res->name && strcmp (res->name, name) == 0) {
