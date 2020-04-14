@@ -29,6 +29,7 @@ local lua_util = require "lua_util"
 local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
+local lua_selectors = require "lua_selectors"
 
 local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, least)
 
@@ -63,6 +64,66 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
 
   return function(task)
 
+    local function fill_vars(repl, var_class, var_payload)
+      -- fill template vars prefixed with 
+      --  'selector::' => fill with value extracted by a selector
+      --  'symbol::'   => fill with matching symbol option string(s)
+      --  'task::'     => fill with matching task attribute
+      --                   (only queue_id and uid allowed)
+
+      if var_class == "selector" then
+        local selector = lua_selectors.create_selector_closure(rspamd_config, var_payload, '', true)
+        if not selector then 
+          rspamd_logger.errx(rspamd_config, 'could not create selector [%1]', var_payload)
+          return "((could not create selector))"
+        end
+        local extracted = selector(task)
+        if extracted then
+          -- replace non ascii chars
+          if type(extracted) == 'table' then
+            extracted = table.concat(extracted, ',')
+          end
+          extracted = string.gsub(extracted, '[\128-\255]', '?')
+        else
+          rspamd_logger.errx(rspamd_config, 'could not extract value with selector [%1]', var_payload)
+          extracted = '((error extracting value))'
+        end
+        return extracted
+      end
+
+      if var_class == "symbol" then
+        local symb_opts
+        local symb_strs = {}
+        if task:has_symbol(var_payload) then
+          local symb_tbl = task:get_symbol(var_payload)
+          for _,symb in ipairs(symb_tbl) do
+            local symb_opts = symb.options
+            if symb_opts then
+              -- replace non ascii chars
+              symb_strs[#symb_strs+1] = string.gsub(table.concat(symb_opts, ','), '[\128-\255]', '?')
+            end
+          end
+          symb_str = table.concat(symb_strs, ',')
+        else
+          symb_str = '((symbol not found))'
+        end
+        return symb_str
+      end
+
+      -- NOTE-TO-VSTAKHOV: would it make sense to export task:get_queue_id and task:get_uid as selector data definition?
+      if var_class == "task" then
+        local attr_val = '((unknown task attribute))'
+        if var_payload == 'queue_id' then
+          attr_val = task:get_queue_id()
+        elseif var_payload == 'uid' then
+          attr_val = task:get_uid()
+        end
+        return attr_val
+      end
+
+    end 
+
+
     local cact = task:get_metric_action('default')
     if cact == act then
       return false
@@ -83,6 +144,8 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
       if least then flags = "least" end
 
       if type(message) == 'string' then
+        -- fill vars in return message
+        message = string.gsub(message, '(${(.-)::(.-)})', fill_vars)
         task:set_pre_result(act, message, N, nil, nil, flags)
 
       else
