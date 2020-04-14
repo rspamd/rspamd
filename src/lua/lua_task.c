@@ -4589,6 +4589,10 @@ lua_task_get_symbols (lua_State *L)
 	if (task) {
 		mres = task->result;
 
+		if (lua_isstring (L, 2)) {
+			mres = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
 		if (mres) {
 			lua_createtable (L, kh_size (mres->symbols), 0);
 			lua_createtable (L, kh_size (mres->symbols), 0);
@@ -4628,6 +4632,10 @@ lua_task_get_symbols_all (lua_State *L)
 	if (task) {
 		mres = task->result;
 
+		if (lua_isstring (L, 2)) {
+			mres = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
 		if (mres) {
 			found = TRUE;
 			lua_createtable (L, kh_size (mres->symbols), 0);
@@ -4663,6 +4671,10 @@ lua_task_get_symbols_numeric (lua_State *L)
 
 	if (task) {
 		mres = task->result;
+
+		if (lua_isstring (L, 2)) {
+			mres = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
 
 		if (mres) {
 			lua_createtable (L, kh_size (mres->symbols), 0);
@@ -4712,6 +4724,10 @@ lua_task_get_groups (lua_State *L)
 		}
 		else {
 			need_private = !(task->cfg->public_groups_only);
+		}
+
+		if (lua_isstring (L, 3)) {
+			mres = rspamd_find_metric_result (task, lua_tostring (L, 3));
 		}
 
 		lua_createtable (L, 0, kh_size (mres->sym_groups));
@@ -5923,6 +5939,10 @@ lua_task_get_metric_result (lua_State *L)
 	if (task) {
 		metric_res = task->result;
 
+		if (lua_isstring (L, 2)) {
+			metric_res = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
 		/* Fields added:
 		 * - `score`: current score
 		 * - `action`: current action as a string
@@ -5938,7 +5958,7 @@ lua_task_get_metric_result (lua_State *L)
 		lua_pushnumber (L, metric_res->score);
 		lua_settable (L, -3);
 
-		action = rspamd_check_action_metric (task, NULL, NULL);
+		action = rspamd_check_action_metric (task, NULL, metric_res);
 
 		if (action) {
 			lua_pushstring (L, "action");
@@ -5982,7 +6002,13 @@ lua_task_get_metric_score (lua_State *L)
 	struct rspamd_scan_result *metric_res;
 
 	if (task) {
-		if ((metric_res = task->result) != NULL) {
+		metric_res = task->result;
+
+		if (lua_isstring (L, 2)) {
+			metric_res = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
+		if (metric_res != NULL) {
 			lua_createtable (L, 2, 0);
 			lua_pushnumber (L, isnan (metric_res->score) ? 0.0 : metric_res->score);
 			rs = rspamd_task_get_required_score (task, metric_res);
@@ -6009,7 +6035,13 @@ lua_task_get_metric_action (lua_State *L)
 	struct rspamd_action *action;
 
 	if (task) {
-		action = rspamd_check_action_metric (task, NULL, NULL);
+		struct rspamd_scan_result *mres = task->result;
+
+		if (lua_isstring (L, 2)) {
+			mres = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
+		action = rspamd_check_action_metric (task, NULL, mres);
 		lua_pushstring (L, action->name);
 	}
 	else {
@@ -6035,7 +6067,13 @@ lua_task_set_metric_score (lua_State *L)
 	}
 
 	if (task) {
-		if ((metric_res = task->result) != NULL) {
+		metric_res = task->result;
+
+		if (lua_isstring (L, 4)) {
+			metric_res = rspamd_find_metric_result (task, lua_tostring (L, 4));
+		}
+
+		if (metric_res != NULL) {
 			msg_debug_task ("set metric score from %.2f to %.2f",
 				metric_res->score, nscore);
 			metric_res->score = nscore;
