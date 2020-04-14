@@ -3941,11 +3941,10 @@ bool
 rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
 								struct rspamd_url *u)
 {
-	khiter_t k;
 	gint r;
 
 	if (set) {
-		k = kh_put (rspamd_url_host_hash, set, u, &r);
+		kh_put (rspamd_url_host_hash, set, u, &r);
 
 		if (r == 0) {
 			return false;

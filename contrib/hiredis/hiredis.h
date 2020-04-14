@@ -125,7 +125,13 @@ redisReader *redisReaderCreate(void);
 void freeReplyObject(void *reply);
 
 /* Functions to format a command according to the protocol. */
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 0)))
+#endif
 int redisvFormatCommand(char **target, const char *format, va_list ap);
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
 int redisFormatCommand(char **target, const char *format, ...);
 int redisFormatCommandArgv(char **target, int argc, const char **argv, const size_t *argvlen);
 int redisFormatSdsCommandArgv(sds *target, int argc, const char ** argv, const size_t *argvlen);
@@ -204,7 +210,13 @@ int redisAppendFormattedCommand(redisContext *c, const char *cmd, size_t len);
 
 /* Write a command to the output buffer. Use these functions in blocking mode
  * to get a pipeline of commands. */
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 0)))
+#endif
 int redisvAppendCommand(redisContext *c, const char *format, va_list ap);
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
 int redisAppendCommand(redisContext *c, const char *format, ...);
 int redisAppendCommandArgv(redisContext *c, int argc, const char **argv, const size_t *argvlen);
 
@@ -213,7 +225,13 @@ int redisAppendCommandArgv(redisContext *c, int argc, const char **argv, const s
  * NULL if there was an error in performing the request, otherwise it will
  * return the reply. In a non-blocking context, it is identical to calling
  * only redisAppendCommand and will always return NULL. */
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 0)))
+#endif
 void *redisvCommand(redisContext *c, const char *format, va_list ap);
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
 void *redisCommand(redisContext *c, const char *format, ...);
 void *redisCommandArgv(redisContext *c, int argc, const char **argv, const size_t *argvlen);
 

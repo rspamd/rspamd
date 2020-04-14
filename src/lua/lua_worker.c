@@ -746,7 +746,7 @@ rspamd_lua_subprocess_io (EV_P_ ev_io *w, int revents)
 			/* Write reply to the child */
 			rspamd_socket_blocking (cbdata->sp[0]);
 			memset (rep, 0, sizeof (rep));
-			(void)write (cbdata->sp[0], rep, sizeof (rep));
+			(void) !write (cbdata->sp[0], rep, sizeof (rep));
 		}
 	}
 }

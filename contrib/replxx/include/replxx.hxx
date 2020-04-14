@@ -370,6 +370,9 @@ public:
 	 *
 	 * \param fmt - printf style format.
 	 */
+#ifdef __GNUC__
+	__attribute__((format(printf, 2, 3)))
+#endif
 	void print( char const* fmt, ... );
 
 	/*! \brief Schedule an emulated key press event.

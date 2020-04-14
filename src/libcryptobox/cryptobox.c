@@ -93,6 +93,7 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 static sig_atomic_t ok = 0;
 static jmp_buf j;
 
+__attribute__((noreturn))
 static void
 rspamd_cryptobox_ill_handler (int signo)
 {

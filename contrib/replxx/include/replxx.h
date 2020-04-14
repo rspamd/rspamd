@@ -356,6 +356,9 @@ REPLXX_IMPEXP void replxx_set_state( Replxx*, ReplxxState* state );
  *
  * \param fmt - printf style format.
  */
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
 REPLXX_IMPEXP int replxx_print( Replxx*, char const* fmt, ... );
 
 /*! \brief Schedule an emulated key press event.

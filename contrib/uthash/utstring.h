@@ -120,6 +120,9 @@ do {                                                             \
 
 #define utstring_body(s) ((s)->d)
 
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 0)))
+#endif
 _UNUSED_ static void utstring_printf_va(UT_string *s, const char *fmt, va_list ap) {
    int n;
    va_list cp;

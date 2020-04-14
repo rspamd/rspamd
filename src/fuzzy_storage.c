@@ -2120,6 +2120,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 /*
  * Start worker process
  */
+__attribute__((noreturn))
 void
 start_fuzzy (struct rspamd_worker *worker)
 {

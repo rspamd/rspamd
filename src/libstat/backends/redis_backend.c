@@ -372,6 +372,12 @@ rspamd_redis_maybe_auth (struct redis_stat_ctx *ctx, redisAsyncContext *redis)
 	}
 }
 
+// the `b` conversion type character is unknown to gcc
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat"
+#pragma GCC diagnostic ignored "-Wformat-extra-args"
+#endif
 static rspamd_fstring_t *
 rspamd_redis_tokens_to_query (struct rspamd_task *task,
 		struct redis_stat_runtime *rt,
@@ -625,6 +631,9 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 
 	return out;
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 static void
 rspamd_redis_store_stat_signature (struct rspamd_task *task,

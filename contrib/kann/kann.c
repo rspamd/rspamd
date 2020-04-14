@@ -496,7 +496,7 @@ kann_t *kann_load_fp(FILE *fp)
 	kann_t *ann;
 	int n_var, n_const;
 
-	fread(magic, 1, 4, fp);
+	(void) !fread(magic, 1, 4, fp);
 	if (strncmp(magic, KANN_MAGIC, 4) != 0) {
 		fclose(fp);
 		return 0;
@@ -508,8 +508,8 @@ kann_t *kann_load_fp(FILE *fp)
 	ann->x = (float*)malloc(n_var * sizeof(float));
 	ann->g = (float*)calloc(n_var, sizeof(float));
 	ann->c = (float*)malloc(n_const * sizeof(float));
-	fread(ann->x, sizeof(float), n_var, fp);
-	fread(ann->c, sizeof(float), n_const, fp);
+	(void) !fread(ann->x, sizeof(float), n_var, fp);
+	(void) !fread(ann->c, sizeof(float), n_const, fp);
 	kad_ext_sync(ann->n, ann->v, ann->x, ann->g, ann->c);
 	return ann;
 }

@@ -138,6 +138,9 @@ struct rdns_resolver {
 	struct rdns_plugin *curve_plugin;
 	struct rdns_fake_reply *fake_elts;
 
+#ifdef __GNUC__
+	__attribute__((format(printf, 4, 0)))
+#endif
 	rdns_log_function logger;
 	void *log_data;
 	enum rdns_log_level log_level;

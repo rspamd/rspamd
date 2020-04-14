@@ -230,6 +230,7 @@ rspamadm_dump_section_obj (struct rspamd_config *cfg,
 	}
 }
 
+__attribute__((noreturn))
 static void
 rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
