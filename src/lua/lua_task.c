@@ -169,6 +169,16 @@ LUA_FUNCTION_DEF (task, adjust_result);
  * - `rewrite subject`: rewrite subject to spam subject
  * - `greylist`: greylist message
  * - `accept` or `no action`: whitelist message
+ *
+ * This function also accepts a table from Rspamd 2.6 with the following keys:
+ * - action: string required
+ * - message: string
+ * - module: string
+ * - score: number
+ * - priority: integer
+ * - flags: flags sring
+ * - result: named result if needed
+ *
  * @param {rspamd_action or string} action a numeric or string action value
  * @param {string} message action message
  * @param {string} module optional module name
@@ -2058,7 +2068,8 @@ lua_task_set_pre_result (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *message = NULL, *module = NULL;
+	const gchar *message = NULL, *module = NULL, *fl_str = NULL, *act_str = NULL,
+		*res_name = NULL;
 	gdouble score = NAN;
 	struct rspamd_action *action;
 	guint priority = RSPAMD_PASSTHROUGH_NORMAL, flags = 0;
@@ -2070,24 +2081,60 @@ lua_task_set_pre_result (lua_State * L)
 			return 0;
 		}
 
-		if (lua_type (L, 2) == LUA_TSTRING) {
-			const gchar *act_name = lua_tostring (L, 2);
-			gint internal_type;
+		if (lua_type (L, 2) == LUA_TTABLE) {
+			GError *err = NULL;
 
-			if (strcmp (act_name, "accept") == 0) {
-				/* Compatibility! */
-				act_name = "no action";
-			}
-			else if (rspamd_action_from_str (act_name, &internal_type)) {
-				/* Compatibility! */
-				act_name = rspamd_action_to_str (internal_type);
-			}
+			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+					"*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
+					&act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
+				gint ret = luaL_error (L, "invald arguments: %s", err->message);
+				g_error_free (err);
 
-			action = rspamd_config_get_action (task->cfg, act_name);
+				return ret;
+			}
 		}
 		else {
-			return luaL_error (L, "invalid arguments");
+			if (lua_type (L, 2) == LUA_TSTRING) {
+				act_str = lua_tostring (L, 2);
+			}
+			else {
+				return luaL_error (L, "invalid arguments");
+			}
+
+			if (lua_type (L, 3) == LUA_TSTRING) {
+				message = lua_tostring (L, 3);
+			}
+
+			if (lua_type (L, 4) == LUA_TSTRING) {
+				module = lua_tostring (L, 4);
+			}
+
+			if (lua_type (L, 5) == LUA_TNUMBER) {
+				score = lua_tonumber (L, 5);
+			}
+
+			if (lua_type (L, 6) == LUA_TNUMBER) {
+				priority = lua_tonumber (L, 6);
+			}
+
+			if (lua_type (L, 7) == LUA_TSTRING) {
+				fl_str = lua_tostring (L, 7);
+			}
 		}
+
+		gint internal_type;
+
+		if (strcmp (act_str, "accept") == 0) {
+			/* Compatibility! */
+			act_str = "no action";
+		}
+		else if (rspamd_action_from_str (act_str, &internal_type)) {
+			/* Compatibility! */
+			act_str = rspamd_action_to_str (internal_type);
+		}
+
+		action = rspamd_config_get_action (task->cfg, act_str);
 
 		if (action == NULL) {
 			struct rspamd_action *tmp;
@@ -2100,32 +2147,16 @@ lua_task_set_pre_result (lua_State * L)
 			return luaL_error (L, "unknown action %s", lua_tostring (L, 2));
 		}
 
-		if (lua_type (L, 3) == LUA_TSTRING) {
-			message = lua_tostring (L, 3);
+		if (module == NULL) {
+			module = "Unknown lua";
 		}
-		else {
+
+		if (message == NULL) {
 			message = "unknown reason";
 			flags |= RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE;
 		}
 
-		if (lua_type (L, 4) == LUA_TSTRING) {
-			module = lua_tostring (L, 4);
-		}
-		else {
-			module = "Unknown lua";
-		}
-
-		if (lua_type (L, 5) == LUA_TNUMBER) {
-			score = lua_tonumber (L, 5);
-		}
-
-		if (lua_type (L, 6) == LUA_TNUMBER) {
-			priority = lua_tonumber (L, 6);
-		}
-
-		if (lua_type (L, 7) == LUA_TSTRING) {
-			const gchar *fl_str = lua_tostring (L, 7);
-
+		if (fl_str != NULL) {
 			if (strstr (fl_str, "least") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_LEAST;
 			}
@@ -2141,11 +2172,12 @@ lua_task_set_pre_result (lua_State * L)
 				score,
 				rspamd_mempool_strdup (task->task_pool, message),
 				rspamd_mempool_strdup (task->task_pool, module),
-				flags, NULL);
+				flags,
+				rspamd_find_metric_result (task, res_name));
 
 		/* Don't classify or filter message if pre-filter sets results */
 
-		if (!(flags & RSPAMD_PASSTHROUGH_LEAST)) {
+		if (res_name == NULL && !(flags & RSPAMD_PASSTHROUGH_LEAST)) {
 			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
