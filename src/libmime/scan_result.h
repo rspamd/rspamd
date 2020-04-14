@@ -118,12 +118,10 @@ struct rspamd_scan_result *rspamd_find_metric_result (struct rspamd_task *task,
  * @param module
  */
 void rspamd_add_passthrough_result (struct rspamd_task *task,
-									struct rspamd_action *action,
-									guint priority,
-									double target_score,
-									const gchar *message,
-									const gchar *module,
-									guint flags);
+									struct rspamd_action *action, guint priority,
+									double target_score, const gchar *message,
+									const gchar *module, guint flags,
+									struct rspamd_scan_result *scan_result);
 
 enum rspamd_symbol_insert_flags {
 	RSPAMD_SYMBOL_INSERT_DEFAULT = 0,
@@ -178,7 +176,9 @@ rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
  * @param func
  * @param ud
  */
-void rspamd_task_symbol_result_foreach (struct rspamd_task *task, struct rspamd_scan_result *result, GHFunc func,
+void rspamd_task_symbol_result_foreach (struct rspamd_task *task,
+										struct rspamd_scan_result *result,
+										GHFunc func,
 										gpointer ud);
 
 /**
@@ -199,7 +199,8 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
  * @return
  */
 struct rspamd_action *rspamd_check_action_metric (struct rspamd_task *task,
-												  struct rspamd_passthrough_result **ppr);
+												  struct rspamd_passthrough_result **ppr,
+												  struct rspamd_scan_result *scan_result);
 
 #ifdef  __cplusplus
 }

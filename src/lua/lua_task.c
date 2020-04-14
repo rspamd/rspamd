@@ -2141,7 +2141,7 @@ lua_task_set_pre_result (lua_State * L)
 				score,
 				rspamd_mempool_strdup (task->task_pool, message),
 				rspamd_mempool_strdup (task->task_pool, module),
-				flags);
+				flags, NULL);
 
 		/* Don't classify or filter message if pre-filter sets results */
 
@@ -5906,7 +5906,7 @@ lua_task_get_metric_result (lua_State *L)
 		lua_pushnumber (L, metric_res->score);
 		lua_settable (L, -3);
 
-		action = rspamd_check_action_metric (task, NULL);
+		action = rspamd_check_action_metric (task, NULL, NULL);
 
 		if (action) {
 			lua_pushstring (L, "action");
@@ -5977,7 +5977,7 @@ lua_task_get_metric_action (lua_State *L)
 	struct rspamd_action *action;
 
 	if (task) {
-		action = rspamd_check_action_metric (task, NULL);
+		action = rspamd_check_action_metric (task, NULL, NULL);
 		lua_pushstring (L, action->name);
 	}
 	else {

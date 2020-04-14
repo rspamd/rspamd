@@ -1077,7 +1077,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	khiter_t k;
 
 	mres = task->result;
-	act = rspamd_check_action_metric (task, NULL);
+	act = rspamd_check_action_metric (task, NULL, NULL);
 
 	if (mres != NULL) {
 		switch (lf->type) {
@@ -1876,7 +1876,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;
 
-			action = rspamd_check_action_metric (task, NULL);
+			action = rspamd_check_action_metric (task, NULL, NULL);
 
 			if (action->action_type != METRIC_ACTION_REJECT) {
 				soft_reject = rspamd_config_get_action_by_type (task->cfg,
@@ -1887,7 +1887,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 						NAN,
 						"timeout processing message",
 						"task timeout",
-						0);
+						0, NULL);
 			}
 		}
 
@@ -1905,7 +1905,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;
 
-			action = rspamd_check_action_metric (task, NULL);
+			action = rspamd_check_action_metric (task, NULL, NULL);
 
 			if (action->action_type != METRIC_ACTION_REJECT) {
 				soft_reject = rspamd_config_get_action_by_type (task->cfg,
@@ -1916,7 +1916,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 						NAN,
 						"timeout post-processing message",
 						"task timeout",
-						0);
+						0, NULL);
 			}
 		}
 

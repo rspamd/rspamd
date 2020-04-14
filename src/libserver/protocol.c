@@ -1182,7 +1182,7 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 	const gchar *subject;
 	struct rspamd_passthrough_result *pr = NULL;
 
-	action = rspamd_check_action_metric (task, &pr);
+	action = rspamd_check_action_metric (task, &pr, NULL);
 	is_spam = !(action->flags & RSPAMD_ACTION_HAM);
 
 	if (task->cmd == CMD_CHECK) {
@@ -1761,7 +1761,7 @@ end:
 
 		if (metric_res != NULL) {
 
-			action = rspamd_check_action_metric (task, NULL);
+			action = rspamd_check_action_metric (task, NULL, NULL);
 			/* TODO: handle custom actions in stats */
 			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
 					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {

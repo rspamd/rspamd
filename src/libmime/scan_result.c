@@ -123,18 +123,15 @@ rspamd_pr_sort (const struct rspamd_passthrough_result *pra,
 }
 
 void
-rspamd_add_passthrough_result (struct rspamd_task *task,
-									struct rspamd_action *action,
-									guint priority,
-									double target_score,
-									const gchar *message,
-									const gchar *module,
-									guint flags)
+rspamd_add_passthrough_result (struct rspamd_task *task, struct rspamd_action *action, guint priority,
+							   double target_score, const gchar *message, const gchar *module, guint flags,
+							   struct rspamd_scan_result *scan_result)
 {
-	struct rspamd_scan_result *metric_res;
 	struct rspamd_passthrough_result *pr;
 
-	metric_res = task->result;
+	if (scan_result == NULL) {
+		scan_result = task->result;
+	}
 
 	pr = rspamd_mempool_alloc (task->task_pool, sizeof (*pr));
 	pr->action = action;
@@ -144,8 +141,8 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 	pr->target_score = target_score;
 	pr->flags = flags;
 
-	DL_APPEND (metric_res->passthrough_result, pr);
-	DL_SORT (metric_res->passthrough_result, rspamd_pr_sort);
+	DL_APPEND (scan_result->passthrough_result, pr);
+	DL_SORT (scan_result->passthrough_result, rspamd_pr_sort);
 
 	if (!isnan (target_score)) {
 
@@ -713,9 +710,10 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	return ret;
 }
 
-struct rspamd_action*
+struct rspamd_action *
 rspamd_check_action_metric (struct rspamd_task *task,
-							struct rspamd_passthrough_result **ppr)
+							struct rspamd_passthrough_result **ppr,
+							struct rspamd_scan_result *scan_result)
 {
 	struct rspamd_action_result *action_lim,
 			*noaction = NULL;
@@ -723,11 +721,14 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	struct rspamd_passthrough_result *pr, *sel_pr = NULL;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
-	struct rspamd_scan_result *mres = task->result;
 	gboolean seen_least = FALSE;
 
-	if (mres->passthrough_result != NULL)  {
-		DL_FOREACH (mres->passthrough_result, pr) {
+	if (scan_result == NULL) {
+		scan_result = task->result;
+	}
+
+	if (scan_result->passthrough_result != NULL)  {
+		DL_FOREACH (scan_result->passthrough_result, pr) {
 			if (!seen_least || !(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
 				sc = pr->target_score;
 				selected_action = pr->action;
@@ -735,10 +736,10 @@ rspamd_check_action_metric (struct rspamd_task *task,
 				if (!(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
 					if (!isnan (sc)) {
 						if (pr->action->action_type == METRIC_ACTION_NOACTION) {
-							mres->score = MIN (sc, mres->score);
+							scan_result->score = MIN (sc, scan_result->score);
 						}
 						else {
-							mres->score = sc;
+							scan_result->score = sc;
 						}
 					}
 
@@ -782,13 +783,12 @@ rspamd_check_action_metric (struct rspamd_task *task,
 			}
 		}
 	}
-	/* We are not certain about the results during processing */
 
 	/*
 	 * Select result by score
 	 */
-	for (i = mres->nactions - 1; i >= 0; i--) {
-		action_lim = &mres->actions_limits[i];
+	for (i = scan_result->nactions - 1; i >= 0; i--) {
+		action_lim = &scan_result->actions_limits[i];
 		sc = action_lim->cur_limit;
 
 		if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {
@@ -800,7 +800,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 			continue;
 		}
 
-		if (mres->score >= sc && sc > max_score) {
+		if (scan_result->score >= sc && sc > max_score) {
 			selected_action = action_lim->action;
 			max_score = sc;
 		}
@@ -813,7 +813,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	if (selected_action) {
 
 		if (seen_least) {
-
+			/* Adjust least action */
 			if (least_action->flags & RSPAMD_ACTION_NO_THRESHOLD) {
 				if (selected_action->action_type != METRIC_ACTION_REJECT &&
 						selected_action->action_type != METRIC_ACTION_DISCARD) {
@@ -827,12 +827,12 @@ rspamd_check_action_metric (struct rspamd_task *task,
 			}
 			else {
 				/* Adjust score if needed */
-				if (max_score > mres->score) {
+				if (max_score > scan_result->score) {
 					if (ppr) {
 						*ppr = sel_pr;
 					}
 
-					mres->score = max_score;
+					scan_result->score = max_score;
 				}
 			}
 		}
