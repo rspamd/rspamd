@@ -1449,6 +1449,38 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				}
 				break;
 
+			case 'i':
+				if (t == LUA_TNUMBER) {
+					*(va_arg (ap, gint32 *)) = lua_tointeger (L, idx);
+				}
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
+					failed = TRUE;
+					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
+						*(va_arg (ap, gint32 *)) = 0;
+					}
+					else {
+						(void)va_arg (ap, gint32 *);
+					}
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+							" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, idx)),
+							"int64");
+					va_end (ap);
+
+					return FALSE;
+				}
+				if (is_table) {
+					lua_pop (L, 1);
+				}
+				break;
+
 			case 'F':
 				if (t == LUA_TFUNCTION) {
 					if (!is_table) {

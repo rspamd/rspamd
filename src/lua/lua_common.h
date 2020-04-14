@@ -411,18 +411,20 @@ enum rspamd_lua_parse_arguments_flags {
  * [*]key=S|I|N|B|V|U{a-z};[key=...]
  * - S - const char *
  * - I - gint64_t
+ * - i - int32_t
  * - N - double
- * - B - boolean
+ * - B - gboolean
  * - V - size_t + const char *
  * - U{classname} - userdata of the following class (stored in gpointer)
  * - F - function
  * - O - ucl_object_t *
+ * - D - same as N but argument is set to NAN not to 0.0
  *
  * If any of keys is prefixed with `*` then it is treated as required argument
  * @param L lua state
  * @param pos at which pos start extraction
  * @param err error pointer
- * @param how extraction type
+ * @param how extraction type (IGNORE_MISSING means that default values will not be set)
  * @param extraction_pattern static pattern
  * @return TRUE if a table has been parsed
  */
