@@ -39,6 +39,15 @@ struct rspamd_image {
  */
 void rspamd_images_process (struct rspamd_task *task);
 
+/**
+ * Process image if possible in a single mime part
+ * @param task
+ * @param part
+ * @return
+ */
+bool rspamd_images_process_mime_part_maybe (struct rspamd_task *task,
+		struct rspamd_mime_part *part);
+
 /*
  * Link embedded images to the HTML parts
  */

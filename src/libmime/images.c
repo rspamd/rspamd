@@ -43,7 +43,24 @@ static const guint8 jpg_sig_exif[] = {0xff, 0xe1};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
-static void process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
+static bool process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
+
+
+bool
+rspamd_images_process_mime_part_maybe (struct rspamd_task *task,
+											struct rspamd_mime_part *part)
+{
+	if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
+		if (part->detected_type &&
+			strcmp (part->detected_type, "image") == 0 &&
+			part->parsed_data.len > 0) {
+
+			return process_image (task, part);
+		}
+	}
+
+	return false;
+}
 
 void
 rspamd_images_process (struct rspamd_task *task)
@@ -52,14 +69,7 @@ rspamd_images_process (struct rspamd_task *task)
 	struct rspamd_mime_part *part;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
-			if (part->detected_type &&
-				strcmp (part->detected_type, "image") == 0 &&
-				part->parsed_data.len > 0) {
-
-				process_image (task, part);
-			}
-		}
+		rspamd_images_process_mime_part_maybe (task, part);
 	}
 
 }
@@ -592,7 +602,7 @@ rspamd_maybe_process_image (rspamd_mempool_t *pool,
 	return img;
 }
 
-static void
+static bool
 process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	struct rspamd_image *img;
@@ -612,7 +622,11 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 
 		part->part_type = RSPAMD_MIME_PART_IMAGE;
 		part->specific.img = img;
+
+		return true;
 	}
+
+	return false;
 }
 
 const gchar *

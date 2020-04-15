@@ -1464,6 +1464,10 @@ rspamd_message_process (struct rspamd_task *task)
 			lua_settop (L, funcs_top);
 		}
 
+		/* Try to detect image before checking for text */
+		rspamd_images_process_mime_part_maybe (task, part);
+
+		/* Still no content detected, try text heuristic */
 		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
 			rspamd_message_process_text_part_maybe (task, part);
 		}
@@ -1601,7 +1605,6 @@ rspamd_message_process (struct rspamd_task *task)
 		}
 	}
 
-	rspamd_images_process (task);
 	rspamd_images_link (task);
 
 	rspamd_tokenize_meta_words (task);
