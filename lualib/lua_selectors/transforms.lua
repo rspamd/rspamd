@@ -143,6 +143,10 @@ local transform_function = {
         s = h:hex()
       elseif encoding == 'base32' then
         s = h:base32()
+      elseif encoding == 'bleach32' then
+        s = h:base32('bleach')
+      elseif encoding == 'rbase32' then
+        s = h:base32('rfc')
       elseif encoding == 'base64' then
         s = h:base64()
       end
@@ -150,7 +154,7 @@ local transform_function = {
       return s,'string'
     end,
     ['description'] = [[Create a digest from a string.
-The first argument is encoding (`hex`, `base32`, `base64`),
+The first argument is encoding (`hex`, `base32` (and forms `bleach32`, `rbase32`), `base64`),
 the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
     ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
                        ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
