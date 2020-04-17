@@ -296,12 +296,17 @@ local function gen_rbl_callback(rule)
 
     -- Maybe whitelisted by some other rbl rule
     if whitelist then
-      local wl_what = whitelist[req_str]
-      if wl_what then
+      local wl = whitelist[req_str]
+      if wl then
         lua_util.debugm(N, task,
-            'whitelisted %s on %s by %s rbl rule (%s checked)',
-            req_str, wl_what, what)
-        return wl_what == what
+            'whitelisted %s on %s by %s (%s) rbl rule (%s checked)',
+            req_str, wl.type, wl.symbol, what)
+        if wl.type == what then
+          -- Add symbol option (0.0 / 0.0 is used to denounce NAN that prevents score modification)
+          task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
+
+          return true
+        end
       end
     end
 
@@ -1191,7 +1196,10 @@ local function rbl_callback_white(task)
         lua_util.debugm(N, task,'found whitelist from %s: %s(%s)', w,
             elt, what)
         if elt and what then
-          whitelisted_elements[elt] = what
+          whitelisted_elements[elt] = {
+            type = what,
+            symbol = w,
+          }
         end
       end
     end
