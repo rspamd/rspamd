@@ -299,8 +299,8 @@ local function gen_rbl_callback(rule)
       local wl = whitelist[req_str]
       if wl then
         lua_util.debugm(N, task,
-            'whitelisted %s on %s by %s (%s) rbl rule (%s checked)',
-            req_str, wl.type, wl.symbol, what)
+            'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
+            req_str, wl.type, wl.symbol, what, wl.type)
         if wl.type == what then
           -- Add symbol option (0.0 / 0.0 is used to denounce NAN that prevents score modification)
           task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
