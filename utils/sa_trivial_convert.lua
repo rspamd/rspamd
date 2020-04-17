@@ -52,7 +52,7 @@ local function handle_header_def(hline, cur_rule)
       fun.each(function(func)
           if func == 'addr' then
             cur_param['function'] = function(str)
-              local addr_parsed = util.parse_addr(str)
+              local addr_parsed = util.parse_mail_address(str)
               local ret = {}
               if addr_parsed then
                 for _,elt in ipairs(addr_parsed) do
@@ -66,7 +66,7 @@ local function handle_header_def(hline, cur_rule)
             end
           elseif func == 'name' then
             cur_param['function'] = function(str)
-              local addr_parsed = util.parse_addr(str)
+              local addr_parsed = util.parse_mail_address(str)
               local ret = {}
               if addr_parsed then
                 for _,elt in ipairs(addr_parsed) do

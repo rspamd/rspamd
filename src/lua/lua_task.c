@@ -519,6 +519,14 @@ LUA_FUNCTION_DEF (task, has_from);
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
+ * - `flags` - table with following keys set to true if given condition fulfilled:
+ *   - [valid] - valid SMTP address in conformity with https://tools.ietf.org/html/rfc5321#section-4.1.
+ *   - [ip] - domain is IPv4/IPv6 address
+ *   - [braced] - angled `<blah@foo.com>` address
+ *   - [quoted] - quoted user part
+ *   - [empty] - empty address
+ *   - [backslash] - user part contains backslash
+ *   - [8bit] - contains 8bit characters
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
  * @return {address} sender or `nil`
  */
