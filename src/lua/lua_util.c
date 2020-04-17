@@ -651,6 +651,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, humanize_number),
 	LUA_INTERFACE_DEF (util, get_tld),
 	LUA_INTERFACE_DEF (util, glob),
+	{"parse_addr", lua_util_parse_mail_address},
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
 	LUA_INTERFACE_DEF (util, lower_utf8),
@@ -1459,6 +1460,51 @@ lua_util_levenshtein_distance (lua_State *L)
 	}
 
 	lua_pushinteger (L, dist);
+
+	return 1;
+}
+
+static gint
+lua_util_parse_addr (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	GPtrArray *addrs;
+	gsize len;
+	const gchar *str = luaL_checklstring (L, 1, &len);
+	rspamd_mempool_t *pool;
+	gboolean own_pool = FALSE;
+
+	if (str) {
+
+		if (lua_type (L, 2) == LUA_TUSERDATA) {
+			pool = rspamd_lua_check_mempool (L, 2);
+
+			if (pool == NULL) {
+				return luaL_error (L, "invalid arguments");
+			}
+		}
+		else {
+			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+					"lua util", 0);
+			own_pool = TRUE;
+		}
+
+		addrs = rspamd_email_address_from_mime (pool, str, len, NULL);
+
+		if (addrs == NULL) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_push_emails_address_list (L, addrs, 0);
+		}
+
+		if (own_pool) {
+			rspamd_mempool_delete (pool);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }
