@@ -419,21 +419,12 @@ The first argument must be header name.]],
   ['symbol'] = {
     ['get_value'] = function(task, args)
       local symbol = task:get_symbol(args[1])
-      if args[2] and symbol then
-	if args[2] == 'options' then
-	  -- concat options tables to avoid table representation strings produced by implicit conversion
-          return fun.map(function(r) return table.concat(r[args[2]], ', ') end, symbol), 'string_list'
-	elseif args[2] == 'score' then
-	  -- only userdata_list seems to work for scores
-          return fun.map(function(r) return r[args[2]] end, symbol), 'userdata_list'
-	else
-          return fun.map(function(r) return r[args[2]] end, symbol), 'string_list'
-	end
+      if symbol then
+        return symbol[1],'table'
       end
-      return symbol,'table_list'
     end,
-    ['description'] = [[Get specific symbol. The first argument must be the symbol name. If no second argument is specified, returns a list of symbol tables. Otherwise the second argument specifies the attribute which is returned as list (`options`, `score` or `group`)]],
-    ['args_schema'] = {ts.string, ts.one_of{'options','score','group'}:is_optional()}
+    ['description'] = [[Get specific symbol. The first argument must be the symbol name. Returns the symbol table. See task:get_symbol()]],
+    ['args_schema'] = {ts.string}
   },
 
 }

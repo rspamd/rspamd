@@ -111,7 +111,6 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
         -- process selector expressions in the message
         message = string.gsub(message, '(${(.-)})', process_message_selectors)
         task:set_pre_result(act, message, N, nil, nil, flags)
-
       else
         task:set_pre_result(act, nil, N, nil, nil, flags)
       end
