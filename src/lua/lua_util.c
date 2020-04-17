@@ -153,14 +153,25 @@ LUA_FUNCTION_DEF (util, parse_html);
 LUA_FUNCTION_DEF (util, levenshtein_distance);
 
 /***
- * @function util.parse_addr(str)
+ * @function util.parse_addr(str, [pool])
  * Parse rfc822 address to components. Returns a table of components:
- *
+   *
  * - `name`: name of address (e.g. Some User)
  * - `addr`: address part (e.g. user@example.com)
- *
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ * - `flags` - table with following keys set to true if given condition fulfilled:
+ *   - [valid] - valid SMTP address in conformity with https://tools.ietf.org/html/rfc5321#section-4.1.
+ *   - [ip] - domain is IPv4/IPv6 address
+ *   - [braced] - angled `<blah@foo.com>` address
+ *   - [quoted] - quoted user part
+ *   - [empty] - empty address
+ *   - [backslash] - user part contains backslash
+ *   - [8bit] - contains 8bit characters
+ **
  * @param {string} str input string
- * @return {table} resulting table of components
+ * @param {rspamd_mempool} pool memory pool to use
+ * @return {table/tables} parsed list of mail addresses 
  */
 LUA_FUNCTION_DEF (util, parse_addr);
 
@@ -213,13 +224,21 @@ LUA_FUNCTION_DEF (util, get_tld);
 LUA_FUNCTION_DEF (util, glob);
 
 /***
- * @function util.parse_mail_address(str, pool)
+ * @function util.parse_mail_address(str, [pool])
  * Parses email address and returns a table of tables in the following format:
  *
  * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
+ * - `flags` - table with following keys set to true if given condition fulfilled:
+ *   - [valid] - valid SMTP address in conformity with https://tools.ietf.org/html/rfc5321#section-4.1.
+ *   - [ip] - domain is IPv4/IPv6 address
+ *   - [braced] - angled `<blah@foo.com>` address
+ *   - [quoted] - quoted user part
+ *   - [empty] - empty address
+ *   - [backslash] - user part contains backslash
+ *   - [8bit] - contains 8bit characters
  *
  * @param {string} str input string
  * @param {rspamd_mempool} pool memory pool to use
