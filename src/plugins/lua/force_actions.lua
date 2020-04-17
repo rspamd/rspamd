@@ -23,6 +23,7 @@ end
 
 local E = {}
 local N = 'force_actions'
+local selector_cache = {}
 
 local fun = require "fun"
 local lua_util = require "lua_util"
