@@ -413,6 +413,18 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['args_schema'] = {(ts.number + ts.string / tonumber),
                        (ts.number + ts.string / tonumber):is_optional()}
   },
+  -- Returns the string with all non ascii chars replaced
+  ['to_ascii'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _)
+      return string.gsub(inp, '[\128-\255]', '?'), 'string'
+    end,
+    ['description'] = 'Returns the string with all non-ascii bytes replaced with `?`',
+  },
+
 }
 
 transform_function.match = transform_function.regexp

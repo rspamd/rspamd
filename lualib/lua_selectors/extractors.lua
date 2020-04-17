@@ -388,6 +388,54 @@ The first argument must be header name.]],
   ]],
     ['args_schema'] = { ts.one_of { 'stem', 'raw', 'norm', 'full' }:is_optional()},
   },
+  -- Get queue ID
+  ['queueid'] = {
+    ['get_value'] = function(task)
+      local queueid = task:get_queue_id()
+      if queueid then return queueid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get queue ID]],
+  },
+  -- Get ID of the task being processed
+  ['uid'] = {
+    ['get_value'] = function(task)
+      local uid = task:get_uid()
+      if uid then return uid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get ID of the task being processed]],
+  },
+  -- Get message ID of the task being processed
+  ['messageid'] = {
+    ['get_value'] = function(task)
+      local mid = task:get_message_id()
+      if mid then return mid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get message ID]],
+  },
+  -- Get specific symbol
+  ['symbol'] = {
+    ['get_value'] = function(task, args)
+      local symbol = task:get_symbol(args[1])
+      if args[2] and symbol then
+	if args[2] == 'options' then
+	  -- concat options tables to avoid table representation strings produced by implicit conversion
+          return fun.map(function(r) return table.concat(r[args[2]], ', ') end, symbol), 'string_list'
+	elseif args[2] == 'score' then
+	  -- only userdata_list seems to work for scores
+          return fun.map(function(r) return r[args[2]] end, symbol), 'userdata_list'
+	else
+          return fun.map(function(r) return r[args[2]] end, symbol), 'string_list'
+	end
+      end
+      return symbol,'table_list'
+    end,
+    ['description'] = [[Get specific symbol. The first argument must be the symbol name. If no second argument is specified, returns a list of symbol tables. Otherwise the second argument specifies the attribute which is returned as list (`options`, `score` or `group`)]],
+    ['args_schema'] = {ts.string, ts.one_of{'options','score','group'}:is_optional()}
+  },
+
 }
 
 return extractors
