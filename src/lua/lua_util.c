@@ -153,29 +153,6 @@ LUA_FUNCTION_DEF (util, parse_html);
 LUA_FUNCTION_DEF (util, levenshtein_distance);
 
 /***
- * @function util.parse_addr(str, [pool])
- * Parse rfc822 address to components. Returns a table of components:
-   *
- * - `name`: name of address (e.g. Some User)
- * - `addr`: address part (e.g. user@example.com)
- * - `user` - user part (if present) of the address, e.g. `blah`
- * - `domain` - domain part (if present), e.g. `foo.com`
- * - `flags` - table with following keys set to true if given condition fulfilled:
- *   - [valid] - valid SMTP address in conformity with https://tools.ietf.org/html/rfc5321#section-4.1.
- *   - [ip] - domain is IPv4/IPv6 address
- *   - [braced] - angled `<blah@foo.com>` address
- *   - [quoted] - quoted user part
- *   - [empty] - empty address
- *   - [backslash] - user part contains backslash
- *   - [8bit] - contains 8bit characters
- **
- * @param {string} str input string
- * @param {rspamd_mempool} pool memory pool to use
- * @return {table/tables} parsed list of mail addresses 
- */
-LUA_FUNCTION_DEF (util, parse_addr);
-
-/***
  * @function util.fold_header(name, value, [how, [stop_chars]])
  * Fold rfc822 header according to the folding rules
  *
@@ -669,7 +646,6 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, tanh),
 	LUA_INTERFACE_DEF (util, parse_html),
 	LUA_INTERFACE_DEF (util, levenshtein_distance),
-	LUA_INTERFACE_DEF (util, parse_addr),
 	LUA_INTERFACE_DEF (util, fold_header),
 	LUA_INTERFACE_DEF (util, is_uppercase),
 	LUA_INTERFACE_DEF (util, humanize_number),
@@ -1483,51 +1459,6 @@ lua_util_levenshtein_distance (lua_State *L)
 	}
 
 	lua_pushinteger (L, dist);
-
-	return 1;
-}
-
-static gint
-lua_util_parse_addr (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	GPtrArray *addrs;
-	gsize len;
-	const gchar *str = luaL_checklstring (L, 1, &len);
-	rspamd_mempool_t *pool;
-	gboolean own_pool = FALSE;
-
-	if (str) {
-
-		if (lua_type (L, 2) == LUA_TUSERDATA) {
-			pool = rspamd_lua_check_mempool (L, 2);
-
-			if (pool == NULL) {
-				return luaL_error (L, "invalid arguments");
-			}
-		}
-		else {
-			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-					"lua util", 0);
-			own_pool = TRUE;
-		}
-
-		addrs = rspamd_email_address_from_mime (pool, str, len, NULL);
-
-		if (addrs == NULL) {
-			lua_pushnil (L);
-		}
-		else {
-			lua_push_emails_address_list (L, addrs, 0);
-		}
-
-		if (own_pool) {
-			rspamd_mempool_delete (pool);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
 
 	return 1;
 }
