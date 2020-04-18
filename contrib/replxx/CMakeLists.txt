@@ -73,5 +73,6 @@ target_include_directories(
 )
 set( TARGETS ${TARGETS} rspamd-replxx )
 target_compile_definitions(rspamd-replxx PRIVATE REPLXX_BUILDING_DLL)
+target_link_libraries(rspamd-replxx "${RSPAMD_REQUIRED_LIBRARIES}")
 
 install( TARGETS ${TARGETS} LIBRARY DESTINATION ${RSPAMD_LIBDIR})
