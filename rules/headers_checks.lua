@@ -626,7 +626,13 @@ local check_from_id = rspamd_config:register_symbol{
   callback = function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
+    if (envfrom and envfrom[1] and not envfrom[1]["flags"]["valid"]) then
+      task:insert_result('ENVFROM_INVALID', 1.0)
+    end
     if (from and from[1]) then
+      if not (from[1]["flags"]["valid"]) then
+        task:insert_result('FROM_INVALID', 1.0)
+      end
       if (from[1].name == nil or from[1].name == '' ) then
         task:insert_result('FROM_NO_DN', 1.0)
       elseif (from[1].name and
@@ -672,6 +678,22 @@ local check_from_id = rspamd_config:register_symbol{
   end
 }
 
+rspamd_config:register_symbol{
+  name = 'ENVFROM_INVALID',
+  score = 2.0,
+  group = 'headers',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'Envelope from does not have a valid format',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_INVALID',
+  score = 2.0,
+  group = 'headers',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header does not have a valid format',
+}
 rspamd_config:register_symbol{
   name = 'FROM_NO_DN',
   score = 0.0,
