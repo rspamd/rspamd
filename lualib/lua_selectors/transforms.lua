@@ -417,6 +417,25 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['args_schema'] = {(ts.number + ts.string / tonumber),
                        (ts.number + ts.string / tonumber):is_optional()}
   },
+  -- Returns the string(s) with all non ascii chars replaced
+  ['to_ascii'] = {
+    ['types'] = {
+      ['string'] = true,
+      ['list'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      if type(inp) == 'table' then
+        return fun.map( function(s) return string.gsub(tostring(s), '[\128-\255]', args[1] or '?') end , inp), 'string_list'
+      else 
+        return string.gsub(tostring(inp), '[\128-\255]', '?'), 'string'
+      end
+	  
+    end,
+    ['description'] = 'Returns the string with all non-ascii bytes replaced with the character given as second argument or `?`',
+    ['args_schema'] = {ts.string:is_optional()}
+  },
+
 }
 
 transform_function.match = transform_function.regexp

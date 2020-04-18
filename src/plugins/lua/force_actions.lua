@@ -23,12 +23,14 @@ end
 
 local E = {}
 local N = 'force_actions'
+local selector_cache = {}
 
 local fun = require "fun"
 local lua_util = require "lua_util"
 local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
+local lua_selectors = require "lua_selectors"
 
 local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, least)
 
@@ -63,6 +65,29 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
 
   return function(task)
 
+    local function process_message_selectors(repl, selector_expr)
+      -- create/reuse selector to extract value for this placeholder
+      local selector = selector_cache[selector_expr]
+      if not selector then
+      	selector_cache[selector_expr] = lua_selectors.create_selector_closure(rspamd_config, selector_expr, '', true)
+        selector = selector_cache[selector_expr]
+        if not selector then 
+          rspamd_logger.errx(task, 'could not create selector [%1]', selector_expr)
+          return "((could not create selector))"
+        end
+      end
+      local extracted = selector(task)
+      if extracted then
+        if type(extracted) == 'table' then
+          extracted = table.concat(extracted, ',')
+        end
+      else
+        rspamd_logger.errx(task, 'could not extract value with selector [%1]', selector_expr)
+        extracted = '((error extracting value))'
+      end
+      return extracted
+    end 
+
     local cact = task:get_metric_action('default')
     if cact == act then
       return false
@@ -83,8 +108,9 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
       if least then flags = "least" end
 
       if type(message) == 'string' then
+        -- process selector expressions in the message
+        message = string.gsub(message, '(${(.-)})', process_message_selectors)
         task:set_pre_result(act, message, N, nil, nil, flags)
-
       else
         task:set_pre_result(act, nil, N, nil, nil, flags)
       end

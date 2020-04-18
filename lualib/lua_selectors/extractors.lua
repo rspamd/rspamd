@@ -388,6 +388,45 @@ The first argument must be header name.]],
   ]],
     ['args_schema'] = { ts.one_of { 'stem', 'raw', 'norm', 'full' }:is_optional()},
   },
+  -- Get queue ID
+  ['queueid'] = {
+    ['get_value'] = function(task)
+      local queueid = task:get_queue_id()
+      if queueid then return queueid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get queue ID]],
+  },
+  -- Get ID of the task being processed
+  ['uid'] = {
+    ['get_value'] = function(task)
+      local uid = task:get_uid()
+      if uid then return uid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get ID of the task being processed]],
+  },
+  -- Get message ID of the task being processed
+  ['messageid'] = {
+    ['get_value'] = function(task)
+      local mid = task:get_message_id()
+      if mid then return mid,'string' end
+      return nil
+    end,
+    ['description'] = [[Get message ID]],
+  },
+  -- Get specific symbol
+  ['symbol'] = {
+    ['get_value'] = function(task, args)
+      local symbol = task:get_symbol(args[1])
+      if symbol then
+        return symbol[1],'table'
+      end
+    end,
+    ['description'] = [[Get specific symbol. The first argument must be the symbol name. Returns the symbol table. See task:get_symbol()]],
+    ['args_schema'] = {ts.string}
+  },
+
 }
 
 return extractors
