@@ -176,7 +176,7 @@ LUA_FUNCTION_DEF (task, adjust_result);
  * - module: string
  * - score: number
  * - priority: integer
- * - flags: flags sring
+ * - flags: flags string
  * - result: named result if needed
  *
  * @param {rspamd_action or string} action a numeric or string action value
