@@ -515,6 +515,7 @@ LUA_FUNCTION_DEF (task, has_from);
  * @method task:get_from([type])
  * Return SMTP or MIME sender for a task. This function returns an internet address which one is a table with the following structure:
  *
+ * - `raw` - the original value without any processing
  * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
@@ -3310,8 +3311,18 @@ static void
 lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 {
 	if (addr) {
-		lua_createtable (L, 0, 4);
+		lua_createtable (L, 0, 5);
 
+		if (addr->raw_len > 0) {
+			lua_pushstring (L, "raw");
+			lua_pushlstring (L, addr->raw, addr->raw_len);
+			lua_settable (L, -3);
+		}
+		else {
+			lua_pushstring (L, "raw");
+			lua_pushstring (L, "");
+			lua_settable (L, -3);
+		}
 		if (addr->addr_len > 0) {
 			lua_pushstring (L, "addr");
 			lua_pushlstring (L, addr->addr, addr->addr_len);
