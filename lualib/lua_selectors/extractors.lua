@@ -423,7 +423,8 @@ The first argument must be header name.]],
         return symbol[1],'table'
       end
     end,
-    ['description'] = [[Get specific symbol. The first argument must be the symbol name. Returns the symbol table. See task:get_symbol()]],
+    ['description'] = 'Get specific symbol. The first argument must be the symbol name. ' ..
+      'Returns the symbol table. See task:get_symbol()',
     ['args_schema'] = {ts.string}
   },
 
