@@ -69,7 +69,7 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
       -- create/reuse selector to extract value for this placeholder
       local selector = selector_cache[selector_expr]
       if not selector then
-      	selector_cache[selector_expr] = lua_selectors.create_selector_closure(rspamd_config, selector_expr, '', true)
+        selector_cache[selector_expr] = lua_selectors.create_selector_closure(rspamd_config, selector_expr, '', true)
         selector = selector_cache[selector_expr]
         if not selector then 
           rspamd_logger.errx(task, 'could not create selector [%1]', selector_expr)
