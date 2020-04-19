@@ -68,6 +68,7 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
   local symbol
   local threat_table = {}
   local threat_info
+  local flags
 
   -- This should be more generic
   if not is_fail then
@@ -112,11 +113,14 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
 
   if rule.action and is_fail ~= 'fail' and not all_whitelisted then
     threat_table = table.concat(threat_table, '; ')
+    if rule.action ~= 'reject' then
+      flags = 'least'
+    end
     task:set_pre_result(rule.action,
         lua_util.template(rule.message or 'Rejected', {
           SCANNER = rule.name,
           VIRUS = threat_table,
-        }), rule.name, nil, nil, 'least')
+        }), rule.name, nil, nil, flags)
   end
 end
 
