@@ -970,6 +970,10 @@ local function add_rbl(key, rbl, global_opts)
       }
       if not rbl.is_whitelist and rbl.ignore_whitelist == false then
         table.insert(black_symbols, rbl.symbol)
+      else
+        lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
+            'rbl.ignore_whitelist = %s',
+            rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
       end
     end
 
