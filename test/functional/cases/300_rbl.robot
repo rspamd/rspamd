@@ -35,7 +35,7 @@ RBL RECEIVED HIT
 RBL FROM HIT WL
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.4
   Check Rspamc  ${result}  FAKE_RBL_CODE_2  inverse=True
-  Should Contain  ${result.stdout}  FAKE_WL_RBL_CODE_2 (1.00)[4.3.2.4:from, FAKE_RBL_UNKNOWN]
+  Should Contain  ${result.stdout}  FAKE_WL_RBL_CODE_2 (1.00)[4.3.2.4:from]
 
 EMAILBL Compose Map 1
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url14.eml
