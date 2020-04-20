@@ -307,8 +307,9 @@ local function gen_rbl_callback(rule)
             'whitelisted request to %s by %s (%s) rbl rule (%s checked type, %s whitelist type)',
             req_str, wl.type, wl.symbol, what, wl.type)
         if wl.type == what then
-          -- Add symbol option (0.0 / 0.0 is used to denounce NAN that prevents score modification)
-          task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
+          -- This was decided to be a bad idea as in case of whitelisting a request to blacklist
+          -- is not even sent
+          --task:adjust_result(wl.symbol, 0.0 / 0.0, rule.symbol)
 
           return true
         end
