@@ -954,7 +954,7 @@ local function add_rbl(key, rbl, global_opts)
           name = prefix .. '_' .. rbl.symbol,
         }
       end
-      if not rbl.is_whitelist and rbl.ignore_whitelist == false then
+      if not (rbl.is_whitelist or rbl.ignore_whitelist) then
         table.insert(black_symbols, rbl.symbol .. '_CHECK')
       else
         lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
@@ -968,7 +968,7 @@ local function add_rbl(key, rbl, global_opts)
         name = rbl.symbol,
         flags = table.concat(flags_tbl, ',')
       }
-      if not rbl.is_whitelist and rbl.ignore_whitelist == false then
+      if not (rbl.is_whitelist or rbl.ignore_whitelist) then
         table.insert(black_symbols, rbl.symbol)
       else
         lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
@@ -1022,7 +1022,7 @@ local function add_rbl(key, rbl, global_opts)
             table.insert(white_symbols, s)
           end
         else
-          if rbl.ignore_whitelist == false then
+          if not rbl.ignore_whitelist then
             table.insert(black_symbols, s)
           end
         end
