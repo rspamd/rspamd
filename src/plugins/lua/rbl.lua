@@ -282,7 +282,12 @@ end
 
 local function gen_rbl_callback(rule)
   local function is_whitelisted(task, req, req_str, whitelist, what)
-    if rule.ignore_whitelist then return false end
+    if rule.ignore_whitelist then
+      lua_util.debugm(N, task,
+          'ignore whitelisting checks to %s by %s: ignore whitelist is being set',
+          req_str, rule.symbol)
+      return false
+    end
 
     if rule.whitelist then
       if rule.whitelist:get_key(req) then
@@ -951,6 +956,10 @@ local function add_rbl(key, rbl, global_opts)
       end
       if not rbl.is_whitelist and rbl.ignore_whitelist == false then
         table.insert(black_symbols, rbl.symbol .. '_CHECK')
+      else
+        lua_util.debugm(N, rspamd_config, 'rule %s ignores whitelists: rbl.is_whitelist = %s, ' ..
+            'rbl.ignore_whitelist = %s',
+            rbl.symbol, rbl.is_whitelist, rbl.ignore_whitelist)
       end
     else
       id = rspamd_config:register_symbol{
