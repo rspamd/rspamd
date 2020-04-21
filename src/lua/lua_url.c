@@ -933,7 +933,8 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = (struct rspamd_url *)value;
 	struct lua_tree_cb_data *cb = ud;
 
-	if ((url->protocol & cb->protocols_mask) && (url->flags & cb->flags_mask)) {
+	if ((url->protocol & cb->protocols_mask) && (url->flags == 0 ||
+			(url->flags & cb->flags_mask))) {
 
 		if (cb->skip_prob > 0) {
 			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
