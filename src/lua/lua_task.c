@@ -2256,6 +2256,8 @@ lua_task_get_urls (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 	struct rspamd_url *u;
+	static const gint default_protocols_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
+											   PROTOCOL_FILE|PROTOCOL_FTP;
 	gsize sz, max_urls = 0;
 
 	if (task) {
@@ -2269,15 +2271,15 @@ lua_task_get_urls (lua_State * L)
 			return 1;
 		}
 
-		if (!lua_url_cbdata_fill (L, 2, &cb)) {
+		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
+		if (!lua_url_cbdata_fill (L, 2, &cb, default_protocols_mask,
+				(~RSPAMD_URL_FLAG_CONTENT), max_urls)) {
 			return luaL_error (L, "invalid arguments");
 		}
 
-		memset (&cb, 0, sizeof (cb));
-
 		sz = kh_size (MESSAGE_FIELD (task, urls));
 		sz = lua_url_adjust_skip_prob (task->task_timestamp,
-				MESSAGE_FIELD (task, digest), &cb, sz, max_urls);
+				MESSAGE_FIELD (task, digest), &cb, sz);
 
 		lua_createtable (L, sz, 0);
 
@@ -2425,20 +2427,26 @@ lua_task_get_emails (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 	struct rspamd_url *u;
+	gsize max_urls = 0, sz;
 
 	if (task) {
 		if (task->message) {
-			lua_createtable (L, kh_size (MESSAGE_FIELD (task, urls)), 0);
-			memset (&cb, 0, sizeof (cb));
-			cb.i = 1;
-			cb.L = L;
-			cb.mask = PROTOCOL_MAILTO;
+			if (!lua_url_cbdata_fill (L, 2, &cb, PROTOCOL_MAILTO,
+					(~RSPAMD_URL_FLAG_CONTENT), max_urls)) {
+				return luaL_error (L, "invalid arguments");
+			}
+
+			sz = kh_size (MESSAGE_FIELD (task, urls));
+			sz = lua_url_adjust_skip_prob (task->task_timestamp,
+					MESSAGE_FIELD (task, digest), &cb, sz);
+
+			lua_createtable (L, sz, 0);
 
 			kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-				if ((u->protocol & PROTOCOL_MAILTO)) {
-					lua_tree_url_callback (u, u, &cb);
-				}
+				lua_tree_url_callback (u, u, &cb);
 			});
+
+			lua_url_cbdata_dtor (&cb);
 		}
 		else {
 			lua_newtable (L);

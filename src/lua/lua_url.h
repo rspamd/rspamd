@@ -26,8 +26,9 @@ struct lua_tree_cb_data {
 	lua_State *L;
 	int i;
 	int metatable_pos;
-	gint mask;
-	gint need_images;
+	guint flags_mask;
+	guint protocols_mask;
+	gsize max_urls;
 	gdouble skip_prob;
 	guint64 xoroshiro_state[4];
 };
@@ -41,7 +42,11 @@ void lua_tree_url_callback (gpointer key, gpointer value, gpointer ud);
  * @param cbd
  * @return
  */
-gboolean lua_url_cbdata_fill (lua_State *L, gint pos, struct lua_tree_cb_data *cbd);
+gboolean lua_url_cbdata_fill (lua_State *L, gint pos,
+							  struct lua_tree_cb_data *cbd,
+							  guint default_protocols,
+							  guint default_flags,
+							  gsize max_urls);
 
 /**
  * Cleanup url cbdata
@@ -61,8 +66,7 @@ void lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd);
 gsize lua_url_adjust_skip_prob (gdouble timestamp,
 								guchar *digest,
 								struct lua_tree_cb_data *cb,
-								gsize sz,
-								gsize max_urls);
+								gsize sz);
 
 #ifdef  __cplusplus
 }
