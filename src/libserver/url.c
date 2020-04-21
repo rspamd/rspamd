@@ -214,6 +214,35 @@ struct url_matcher static_matchers[] = {
 				0}
 };
 
+struct rspamd_url_flag_name {
+	const gchar *name;
+	gint flag;
+	gint hash;
+} url_flag_names[] = {
+		{"phished", RSPAMD_URL_FLAG_PHISHED, -1},
+		{"numeric", RSPAMD_URL_FLAG_NUMERIC, -1},
+		{"obscured", RSPAMD_URL_FLAG_OBSCURED, -1},
+		{"redirected", RSPAMD_URL_FLAG_REDIRECTED, -1},
+		{"html_displayed", RSPAMD_URL_FLAG_HTML_DISPLAYED, -1},
+		{"text", RSPAMD_URL_FLAG_FROM_TEXT, -1},
+		{"subject", RSPAMD_URL_FLAG_SUBJECT, -1},
+		{"host_encoded", RSPAMD_URL_FLAG_HOSTENCODED, -1},
+		{"schema_encoded", RSPAMD_URL_FLAG_SCHEMAENCODED, -1},
+		{"path_encoded", RSPAMD_URL_FLAG_PATHENCODED, -1},
+		{"query_encoded", RSPAMD_URL_FLAG_QUERYENCODED, -1},
+		{"missing_slahes", RSPAMD_URL_FLAG_MISSINGSLASHES, -1},
+		{"idn", RSPAMD_URL_FLAG_IDN, -1},
+		{"has_port", RSPAMD_URL_FLAG_HAS_PORT, -1},
+		{"has_user", RSPAMD_URL_FLAG_HAS_USER, -1},
+		{"schemaless", RSPAMD_URL_FLAG_SCHEMALESS, -1},
+		{"unnormalised", RSPAMD_URL_FLAG_UNNORMALISED, -1},
+		{"zw_spaces", RSPAMD_URL_FLAG_ZW_SPACES, -1},
+		{"url_displayed", RSPAMD_URL_FLAG_DISPLAY_URL, -1},
+		{"image", RSPAMD_URL_FLAG_IMAGE, -1},
+		{"query", RSPAMD_URL_FLAG_QUERY, -1},
+		{"content", RSPAMD_URL_FLAG_CONTENT, -1}
+};
+
 
 static inline khint_t rspamd_url_hash (struct rspamd_url *u);
 
@@ -610,6 +639,26 @@ rspamd_url_init (const gchar *tld_file)
 					url_scanner->matchers_strict->len);
 		}
 	}
+
+	/* Generate hashes for flags */
+	for (gint i = 0; i < G_N_ELEMENTS (url_flag_names); i ++) {
+		url_flag_names[i].hash =
+				rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+						url_flag_names[i].name,
+						strlen (url_flag_names[i].name), 0);
+	}
+	/* Ensure that we have no hashes collisions O(N^2) but this array is small */
+	for (gint i = 0; i < G_N_ELEMENTS (url_flag_names) - 1; i ++) {
+		for (gint j = i + 1; j < G_N_ELEMENTS (url_flag_names); j ++) {
+			if (url_flag_names[i].hash == url_flag_names[j].hash) {
+				msg_err ("collision: both %s and %s map to %d",
+						url_flag_names[i].name, url_flag_names[j].name,
+						url_flag_names[i].hash);
+				abort ();
+			}
+		}
+	}
+
 }
 
 #define SET_U(u, field) do {                                                \
@@ -3990,4 +4039,34 @@ rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url 
 	}
 
 	return false;
+}
+
+bool
+rspamd_url_flag_from_string (const gchar *str, gint *flag)
+{
+	gint h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+			str, strlen (str), 0);
+
+	for (int i = 0; i < G_N_ELEMENTS (url_flag_names); i ++) {
+		if (url_flag_names[i].hash == h) {
+			*flag |= url_flag_names[i].flag;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+const gchar *
+rspamd_url_flag_to_string (int flag)
+{
+	for (int i = 0; i < G_N_ELEMENTS (url_flag_names); i ++) {
+		if (url_flag_names[i].flag & flag) {
+			return url_flag_names[i].name;
+		}
+	}
+
+	return NULL;
 }

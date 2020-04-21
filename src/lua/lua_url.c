@@ -728,6 +728,7 @@ lua_url_create (lua_State *L)
 	const gchar *text;
 	size_t length;
 	gboolean own_pool = FALSE;
+	struct rspamd_lua_url *u;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		pool = rspamd_lua_check_mempool (L, 1);
@@ -753,6 +754,26 @@ lua_url_create (lua_State *L)
 		if (lua_type (L, -1) != LUA_TUSERDATA) {
 			/* URL is actually not found */
 			lua_pushnil (L);
+
+			return 1;
+		}
+
+		u = (struct rspamd_lua_url *)lua_touserdata (L, -1);
+
+		if (lua_type (L, 3) == LUA_TTABLE) {
+			/* Add flags */
+			for (lua_pushnil (L); lua_next (L, 3); lua_pop (L, 1)) {
+				int nmask = 0;
+				const gchar *fname = lua_tostring (L, -1);
+
+				if (rspamd_url_flag_from_string (fname, &nmask)) {
+					u->url->flags |= nmask;
+				}
+				else {
+					lua_pop (L, 1);
+					return luaL_error (L, "invalid flag: %s", fname);
+				}
+			}
 		}
 	}
 
@@ -854,9 +875,9 @@ lua_url_all (lua_State *L)
  * - `image`: URL is from src attribute of img HTML tag
  * @return {table} URL flags
  */
-#define PUSH_FLAG(fl, name) do { \
+#define PUSH_FLAG(fl) do { \
 	if (flags & (fl)) { \
-		lua_pushstring (L, (name)); \
+		lua_pushstring (L, rspamd_url_flag_to_string (fl)); \
 		lua_pushboolean (L, true); \
 		lua_settable (L, -3); \
 	} \
@@ -874,26 +895,27 @@ lua_url_get_flags (lua_State *L)
 
 		lua_createtable (L, 0, 4);
 
-		PUSH_FLAG (RSPAMD_URL_FLAG_PHISHED, "phished");
-		PUSH_FLAG (RSPAMD_URL_FLAG_NUMERIC, "numeric");
-		PUSH_FLAG (RSPAMD_URL_FLAG_OBSCURED, "obscured");
-		PUSH_FLAG (RSPAMD_URL_FLAG_REDIRECTED, "redirected");
-		PUSH_FLAG (RSPAMD_URL_FLAG_HTML_DISPLAYED, "html_displayed");
-		PUSH_FLAG (RSPAMD_URL_FLAG_FROM_TEXT, "text");
-		PUSH_FLAG (RSPAMD_URL_FLAG_SUBJECT, "subject");
-		PUSH_FLAG (RSPAMD_URL_FLAG_HOSTENCODED, "host_encoded");
-		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMAENCODED, "schema_encoded");
-		PUSH_FLAG (RSPAMD_URL_FLAG_PATHENCODED, "path_encoded");
-		PUSH_FLAG (RSPAMD_URL_FLAG_QUERYENCODED, "query_encoded");
-		PUSH_FLAG (RSPAMD_URL_FLAG_MISSINGSLASHES, "missing_slahes");
-		PUSH_FLAG (RSPAMD_URL_FLAG_IDN, "idn");
-		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_PORT, "has_port");
-		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER, "has_user");
-		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS, "schemaless");
-		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED, "unnormalised");
-		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES, "zw_spaces");
-		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL, "url_displayed");
-		PUSH_FLAG (RSPAMD_URL_FLAG_IMAGE, "image");
+		PUSH_FLAG (RSPAMD_URL_FLAG_PHISHED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_NUMERIC);
+		PUSH_FLAG (RSPAMD_URL_FLAG_OBSCURED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_REDIRECTED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_HTML_DISPLAYED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_FROM_TEXT);
+		PUSH_FLAG (RSPAMD_URL_FLAG_SUBJECT);
+		PUSH_FLAG (RSPAMD_URL_FLAG_HOSTENCODED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMAENCODED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_PATHENCODED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_QUERYENCODED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_MISSINGSLASHES);
+		PUSH_FLAG (RSPAMD_URL_FLAG_IDN);
+		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_PORT);
+		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER);
+		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS);
+		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED);
+		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES);
+		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL);
+		PUSH_FLAG (RSPAMD_URL_FLAG_IMAGE);
+		PUSH_FLAG (RSPAMD_URL_FLAG_CONTENT);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

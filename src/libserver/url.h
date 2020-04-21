@@ -36,6 +36,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_DISPLAY_URL = 1u << 18u,
 	RSPAMD_URL_FLAG_IMAGE = 1u << 19u,
 	RSPAMD_URL_FLAG_QUERY = 1u << 20u,
+	RSPAMD_URL_FLAG_CONTENT = 1u << 21u,
 };
 
 struct rspamd_url_tag {
@@ -267,6 +268,21 @@ const gchar *rspamd_url_protocol_name (enum rspamd_url_protocol proto);
  * @return
  */
 enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
+
+/**
+ * Converts string to a url flag
+ * @param str
+ * @param flag
+ * @return
+ */
+bool rspamd_url_flag_from_string (const gchar *str, gint *flag);
+
+/**
+ * Converts url flag to a string
+ * @param flag
+ * @return
+ */
+const gchar * rspamd_url_flag_to_string (int flag);
 
 /* Defines sets of urls indexed by url as is */
 KHASH_DECLARE (rspamd_url_hash, struct rspamd_url *, char);
