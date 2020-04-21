@@ -715,7 +715,7 @@ lua_url_to_table (lua_State *L)
 
 
 /***
- * @function url.create([mempool,] str)
+ * @function url.create([mempool,] str, [{flags_table}])
  * @param {rspamd_mempool} memory pool for URL, e.g. `task:get_mempool()`
  * @param {string} text that contains URL (can also contain other stuff)
  * @return {url} new url object that exists as long as the corresponding mempool exists
