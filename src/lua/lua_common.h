@@ -605,6 +605,19 @@ gchar *rspamd_lua_get_module_name (lua_State *L);
 bool rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 		gint nret, const gchar *args, GError **err, ...);
 
+/**
+ * Wrapper for lua_geti from lua 5.3
+ * @param L
+ * @param index
+ * @param i
+ * @return
+ */
+#if defined( LUA_VERSION_NUM ) && LUA_VERSION_NUM <= 502
+gint rspamd_lua_geti (lua_State *L, int index, int i);
+#else
+#define rspamd_lua_geti lua_geti
+#endif
+
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
 #define RSPAMD_LOCAL_CONFDIR_INDEX "LOCAL_CONFDIR"

@@ -2540,3 +2540,15 @@ rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 
 	return true;
 }
+
+#if defined( LUA_VERSION_NUM ) && LUA_VERSION_NUM <= 502
+gint
+rspamd_lua_geti (lua_State *L, int pos, int i)
+{
+	pos = lua_absindex (L, pos);
+	lua_pushinteger (L, i);
+	lua_gettable (L, pos);
+
+	return lua_type (L, -1);
+}
+#endif
