@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "contrib/uthash/utlist.h"
+#include "lua_url.h"
+
 
 /***
  * @module rspamd_url
@@ -902,6 +903,148 @@ lua_url_get_flags (lua_State *L)
 }
 
 #undef PUSH_FLAG
+
+void
+lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_lua_url *lua_url;
+	struct rspamd_url *url = (struct rspamd_url *)value;
+	struct lua_tree_cb_data *cb = ud;
+
+	if (url->protocol & cb->mask) {
+		if (!cb->need_images && (url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+			return;
+		}
+
+		if (cb->skip_prob > 0) {
+			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
+
+			if (coin < cb->skip_prob) {
+				return;
+			}
+		}
+
+		lua_url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
+		lua_pushvalue (cb->L, cb->metatable_pos);
+		lua_setmetatable (cb->L, -2);
+		lua_url->url = url;
+		lua_rawseti (cb->L, -2, cb->i++);
+	}
+}
+
+gboolean
+lua_url_cbdata_fill (lua_State *L, gint pos, struct lua_tree_cb_data *cbd)
+{
+	gboolean need_images = FALSE;
+	gint protocols_mask = 0;
+	static const gint default_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
+									 PROTOCOL_FILE|PROTOCOL_FTP;
+	gint pos_arg_type = lua_type (L, pos);
+
+	if (pos_arg_type == LUA_TBOOLEAN) {
+		protocols_mask = default_mask;
+		if (lua_toboolean (L, 2)) {
+			protocols_mask |= PROTOCOL_MAILTO;
+		}
+	}
+	else if (pos_arg_type == LUA_TTABLE) {
+		for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
+			int nmask;
+			const gchar *pname = lua_tostring (L, -1);
+
+			nmask = rspamd_url_protocol_from_string (pname);
+
+			if (nmask != PROTOCOL_UNKNOWN) {
+				protocols_mask |= nmask;
+			}
+			else {
+				msg_info ("bad url protocol: %s", pname);
+				return FALSE;
+			}
+		}
+	}
+	else if (pos_arg_type == LUA_TSTRING) {
+		const gchar *plist = lua_tostring (L, pos);
+		gchar **strvec;
+		gchar * const *cvec;
+
+		strvec = g_strsplit_set (plist, ",;", -1);
+		cvec = strvec;
+
+		while (*cvec) {
+			int nmask;
+
+			nmask = rspamd_url_protocol_from_string (*cvec);
+
+			if (nmask != PROTOCOL_UNKNOWN) {
+				protocols_mask |= nmask;
+			}
+			else {
+				msg_info ("bad url protocol: %s", *cvec);
+				return FALSE;
+			}
+
+			cvec ++;
+		}
+
+		g_strfreev (strvec);
+	}
+	else if (pos_arg_type == LUA_TNONE || pos_arg_type == LUA_TNIL) {
+		protocols_mask = default_mask;
+	}
+	else {
+		return FALSE;
+	}
+
+	if (lua_type (L, pos + 1) == LUA_TBOOLEAN) {
+		need_images = lua_toboolean (L, pos + 1);
+	}
+
+	memset (cbd, 0, sizeof (*cbd));
+
+	cbd->i = 1;
+	cbd->L = L;
+	cbd->mask = protocols_mask;
+	cbd->need_images = need_images;
+
+	/* This needs to be removed from the stack */
+	rspamd_lua_class_metatable (L, "rspamd{url}");
+	cbd->metatable_pos = lua_gettop (L);
+	(void)lua_checkstack (L, cbd->metatable_pos + 4);
+
+	return TRUE;
+}
+
+void
+lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd)
+{
+	if (cbd->metatable_pos != -1) {
+		lua_remove (cbd->L, cbd->metatable_pos);
+	}
+}
+
+gsize
+lua_url_adjust_skip_prob (gdouble timestamp,
+						  guchar *digest,
+						  struct lua_tree_cb_data *cb,
+						  gsize sz,
+						  gsize max_urls)
+{
+	if (max_urls > 0 && sz > max_urls) {
+		cb->skip_prob = 1.0 - ((gdouble)max_urls) / (gdouble)sz;
+		/*
+		 * Use task dependent probabilistic seed to ensure that
+		 * consequent task:get_urls return the same list of urls
+		 */
+		memcpy (&cb->xoroshiro_state[0], &timestamp,
+				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (timestamp)));
+		memcpy (&cb->xoroshiro_state[1], digest,
+				sizeof (cb->xoroshiro_state[1]) * 3);
+		sz = max_urls;
+	}
+
+	return sz;
+}
 
 static gint
 lua_load_url (lua_State * L)

@@ -198,6 +198,18 @@ rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 }
 
 void
+rspamd_lua_class_metatable (lua_State *L, const gchar *classname)
+{
+	khiter_t k;
+
+	k = kh_get (lua_class_set, lua_classes, classname);
+
+	g_assert (k != kh_end (lua_classes));
+	lua_rawgetp (L, LUA_REGISTRYINDEX,
+			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+}
+
+void
 rspamd_lua_add_metamethod (lua_State *L, const gchar *classname,
 								luaL_Reg *meth)
 {

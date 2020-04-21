@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_url.h"
+
 #include "message.h"
 #include "images.h"
 #include "archives.h"
@@ -2245,61 +2247,7 @@ lua_task_append_message (lua_State * L)
 	return 0;
 }
 
-struct lua_tree_cb_data {
-	lua_State *L;
-	int i;
-	gint mask;
-	gint need_images;
-	gdouble skip_prob;
-	guint64 xoroshiro_state[4];
-};
 
-static void
-lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
-{
-	struct rspamd_lua_url *lua_url;
-	struct rspamd_url *url = (struct rspamd_url *)value;
-	struct lua_tree_cb_data *cb = ud;
-
-	if (url->protocol & cb->mask) {
-		if (!cb->need_images && (url->flags & RSPAMD_URL_FLAG_IMAGE)) {
-			return;
-		}
-
-		if (cb->skip_prob > 0) {
-			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
-
-			if (coin < cb->skip_prob) {
-				return;
-			}
-		}
-
-		lua_url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
-		rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
-		lua_url->url = url;
-		lua_rawseti (cb->L, -2, cb->i++);
-	}
-}
-
-static inline gsize
-lua_task_urls_adjust_skip_prob (struct rspamd_task *task,
-		struct lua_tree_cb_data *cb, gsize sz, gsize max_urls)
-{
-	if (max_urls > 0 && sz > max_urls) {
-		cb->skip_prob = 1.0 - ((gdouble)max_urls) / (gdouble)sz;
-		/*
-		 * Use task dependent probabilistic seed to ensure that
-		 * consequent task:get_urls return the same list of urls
-		 */
-		memcpy (&cb->xoroshiro_state[0], &task->task_timestamp,
-				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (task->task_timestamp)));
-		memcpy (&cb->xoroshiro_state[1], MESSAGE_FIELD (task, digest),
-				sizeof (cb->xoroshiro_state[1]) * 3);
-		sz = max_urls;
-	}
-
-	return sz;
-}
 
 static gint
 lua_task_get_urls (lua_State * L)
@@ -2307,12 +2255,7 @@ lua_task_get_urls (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
-	gint protocols_mask = 0;
-	static const gint default_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
-			PROTOCOL_FILE|PROTOCOL_FTP;
-	const gchar *cache_name = "emails+urls";
 	struct rspamd_url *u;
-	gboolean need_images = FALSE;
 	gsize sz, max_urls = 0;
 
 	if (task) {
@@ -2326,135 +2269,26 @@ lua_task_get_urls (lua_State * L)
 			return 1;
 		}
 
-		if (lua_gettop (L) >= 2) {
-			if (lua_type (L, 2) == LUA_TBOOLEAN) {
-				protocols_mask = default_mask;
-				if (lua_toboolean (L, 2)) {
-					protocols_mask |= PROTOCOL_MAILTO;
-				}
-			}
-			else if (lua_type (L, 2) == LUA_TTABLE) {
-				for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
-					int nmask;
-					const gchar *pname = lua_tostring (L, -1);
-
-					nmask = rspamd_url_protocol_from_string (pname);
-
-					if (nmask != PROTOCOL_UNKNOWN) {
-						protocols_mask |= nmask;
-					}
-					else {
-						msg_info ("bad url protocol: %s", pname);
-					}
-				}
-			}
-			else if (lua_type (L, 2) == LUA_TSTRING) {
-				const gchar *plist = lua_tostring (L, 2);
-				gchar **strvec;
-				gchar * const *cvec;
-
-				strvec = g_strsplit_set (plist, ",;", -1);
-				cvec = strvec;
-
-				while (*cvec) {
-					int nmask;
-
-					nmask = rspamd_url_protocol_from_string (*cvec);
-
-					if (nmask != PROTOCOL_UNKNOWN) {
-						protocols_mask |= nmask;
-					}
-					else {
-						msg_info ("bad url protocol: %s", *cvec);
-					}
-
-					cvec ++;
-				}
-
-				g_strfreev (strvec);
-			}
-			else {
-				protocols_mask = default_mask;
-			}
-
-			if (lua_type (L, 3) == LUA_TBOOLEAN) {
-				need_images = lua_toboolean (L, 3);
-			}
-		}
-		else {
-			protocols_mask = default_mask;
+		if (!lua_url_cbdata_fill (L, 2, &cb)) {
+			return luaL_error (L, "invalid arguments");
 		}
 
 		memset (&cb, 0, sizeof (cb));
-		cb.i = 1;
-		cb.L = L;
-		cb.mask = protocols_mask;
-		cb.need_images = need_images;
 
-		if (protocols_mask & PROTOCOL_MAILTO) {
-			if (need_images) {
-				cache_name = "emails+urls+img";
-			}
-			else {
-				cache_name = "emails+urls";
-			}
+		sz = kh_size (MESSAGE_FIELD (task, urls));
+		sz = lua_url_adjust_skip_prob (task->task_timestamp,
+				MESSAGE_FIELD (task, digest), &cb, sz, max_urls);
 
-			sz = kh_size (MESSAGE_FIELD (task, urls));
+		lua_createtable (L, sz, 0);
 
-			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
+		kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
+			lua_tree_url_callback (u, u, &cb);
+		});
 
-			if (protocols_mask == (default_mask|PROTOCOL_MAILTO)) {
-				/* Can use cached version */
-				if (!lua_task_get_cached (L, task, cache_name)) {
-					lua_createtable (L, sz, 0);
-					kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-						lua_tree_url_callback (u, u, &cb);
-					});
-					lua_task_set_cached (L, task, cache_name, -1);
-				}
-			}
-			else {
-				lua_createtable (L, sz, 0);
-				kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-					lua_tree_url_callback (u, u, &cb);
-				});
-			}
-
-		}
-		else {
-			if (need_images) {
-				cache_name = "urls+img";
-			}
-			else {
-				cache_name = "urls";
-			}
-
-			sz = kh_size (MESSAGE_FIELD (task, urls));
-			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
-
-			if (protocols_mask == (default_mask)) {
-				if (!lua_task_get_cached (L, task, cache_name)) {
-					lua_createtable (L, sz, 0);
-					kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-						if (!(u->protocol & PROTOCOL_MAILTO)) {
-							lua_tree_url_callback (u, u, &cb);
-						}
-					});
-					lua_task_set_cached (L, task, cache_name, -1);
-				}
-			}
-			else {
-				lua_createtable (L, sz, 0);
-				kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-					if (!(u->protocol & PROTOCOL_MAILTO)) {
-						lua_tree_url_callback (u, u, &cb);
-					}
-				});
-			}
-		}
+		lua_url_cbdata_dtor (&cb);
 	}
 	else {
-		return luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments, no task");
 	}
 
 	return 1;

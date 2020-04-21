@@ -63,11 +63,9 @@ static inline void lua_rawsetp (lua_State *L, int i, const void *p) {
 #endif
 
 /* Interface definitions */
-#define LUA_FUNCTION_DEF(class, name) static int lua_ ## class ## _ ## name ( \
-		lua_State * L)
-#define LUA_PUBLIC_FUNCTION_DEF(class, name) int lua_ ## class ## _ ## name ( \
-		lua_State * L)
-#define LUA_INTERFACE_DEF(class, name) { # name, lua_ ## class ## _ ## name }
+#define LUA_FUNCTION_DEF(class, name) static int lua_##class##_##name (lua_State * L)
+#define LUA_PUBLIC_FUNCTION_DEF(class, name) int lua_##class##_##name (lua_State * L)
+#define LUA_INTERFACE_DEF(class, name) { #name, lua_##class##_##name }
 
 #ifdef  __cplusplus
 extern "C" {
@@ -160,6 +158,13 @@ void rspamd_lua_new_class (lua_State *L,
  * Set class name for object at @param objidx position
  */
 void rspamd_lua_setclass (lua_State *L, const gchar *classname, gint objidx);
+
+/**
+ * Pushes the metatable for specific class on top of the stack
+ * @param L
+ * @param classname
+ */
+void rspamd_lua_class_metatable (lua_State *L, const gchar *classname);
 
 /**
  * Adds a new field to the class (metatable) identified by `classname`
