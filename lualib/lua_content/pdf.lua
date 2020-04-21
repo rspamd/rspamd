@@ -1066,7 +1066,7 @@ local function search_urls(task, pdf)
       elseif k == 'URI' then
         v = maybe_dereference_object(v, pdf, task)
         if type(v) == 'string' then
-          local url =  rspamd_url.create(task:get_mempool(), v)
+          local url =  rspamd_url.create(task:get_mempool(), v, {'content'})
 
           if url then
             lua_util.debugm(N, task, 'found url %s in object %s:%s',
