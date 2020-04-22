@@ -3642,6 +3642,10 @@ start_controller_worker (struct rspamd_worker *worker)
 				"Access-Control-Allow-Origin", "*");
 	}
 
+	/* Disable all results caching, see #3330 */
+	rspamd_http_router_add_header (ctx->http,
+			"Cache-Control", "no-store");
+
 	rspamd_http_router_set_unknown_handler (ctx->http,
 			rspamd_controller_handle_unknown);
 
