@@ -146,13 +146,13 @@ local function cache_url(task, orig_url, url, key, param)
     true, -- is write
     redis_set_cb, --callback
     'SETEX', -- command
-    {key, tostring(settings.expire), url} -- arguments
+    {key, tostring(settings.expire), str_url} -- arguments
   )
 
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to cache results')
   else
-    conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', url})
+    conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', str_url})
   end
 end
 
