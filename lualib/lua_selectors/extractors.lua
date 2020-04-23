@@ -418,15 +418,17 @@ The first argument must be header name.]],
   -- Get specific symbol
   ['symbol'] = {
     ['get_value'] = function(task, args)
-      local symbol = task:get_symbol(args[1])
+      local symbol = task:get_symbol(args[1], args[2])
       if symbol then
         return symbol[1],'table'
       end
     end,
     ['description'] = 'Get specific symbol. The first argument must be the symbol name. ' ..
+      'The second argument is an optional shadow result name. ' ..
       'Returns the symbol table. See task:get_symbol()',
-    ['args_schema'] = {ts.string}
+    ['args_schema'] = {ts.string, ts.string:is_optional()}
   },
+
 
 }
 
