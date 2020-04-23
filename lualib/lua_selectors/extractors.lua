@@ -428,8 +428,18 @@ The first argument must be header name.]],
       'Returns the symbol table. See task:get_symbol()',
     ['args_schema'] = {ts.string, ts.string:is_optional()}
   },
-
-
+  -- Get full scan result
+  ['scan_result'] = {
+    ['get_value'] = function(task, args)
+      local res = task:get_metric_result(args[1])
+      if res then
+        return res,'table'
+      end
+    end,
+    ['description'] = 'Get full scan result (either default or shadow if shadow result name is specified)' ..
+        'Returns the result table. See task:get_metric_result()',
+    ['args_schema'] = {ts.string:is_optional()}
+  },
 }
 
 return extractors
