@@ -642,7 +642,7 @@ LUA_FUNCTION_DEF (task, get_archives);
  */
 LUA_FUNCTION_DEF (task, get_dkim_results);
 /***
- * @method task:get_symbol(name)
+ * @method task:get_symbol(name, [shadow_result_name])
  * Searches for a symbol `name` in all metrics results and returns a list of tables
  * one per metric that describes the symbol inserted. Please note that this function
  * is intended to return values for **inserted** symbols, so if this symbol was not
@@ -654,7 +654,7 @@ LUA_FUNCTION_DEF (task, get_dkim_results);
  * - `options` - a table of strings representing options of a symbol
  * - `group` - a group of symbol (or 'ungrouped')
  * @param {string} name symbol's name
- * @return {list of tables} list of tables or nil if symbol was not found in any metric
+ * @return {list of tables} list of tables or nil if symbol was not found
  */
 LUA_FUNCTION_DEF (task, get_symbol);
 /***
@@ -664,7 +664,7 @@ LUA_FUNCTION_DEF (task, get_symbol);
  */
 LUA_FUNCTION_DEF (task, get_symbols_all);
 /***
- * @method task:get_symbols()
+ * @method task:get_symbols([shadow_result_name])
  * Returns array of all symbols matched for this task
  * @return {table, table} table of strings with symbols names + table of theirs scores
  */
@@ -704,7 +704,7 @@ LUA_FUNCTION_DEF (task, get_symbols_tokens);
 LUA_FUNCTION_DEF (task, process_ann_tokens);
 
 /***
- * @method task:has_symbol(name)
+ * @method task:has_symbol(name, [shadow_result_name])
  * Fast path to check if a specified symbol is in the task's results
  * @param {string} name symbol's name
  * @return {boolean} `true` if symbol has been found
@@ -4250,25 +4250,26 @@ lua_task_get_dkim_results (lua_State *L)
 
 static inline gboolean
 lua_push_symbol_result (lua_State *L,
-		struct rspamd_task *task,
-		const gchar *symbol,
-		struct rspamd_symbol_result *symbol_result,
-		gboolean add_metric,
-		gboolean add_name)
+						struct rspamd_task *task,
+						const gchar *symbol,
+						struct rspamd_symbol_result *symbol_result,
+						struct rspamd_scan_result *metric_res,
+						gboolean add_metric,
+						gboolean add_name)
 {
-	struct rspamd_scan_result *metric_res;
+
 	struct rspamd_symbol_result *s = NULL;
 	struct rspamd_symbol_option *opt;
 	struct rspamd_symbols_group *sym_group;
 	guint i;
-	gint j = 1, e = 4;
+	gint j = 1, table_fields_cnt = 4;
+
+	if (!metric_res) {
+		metric_res = task->result;
+	}
 
 	if (!symbol_result) {
-		metric_res = task->result;
-
-		if (metric_res) {
-			s = rspamd_task_find_symbol_result (task, symbol, NULL);
-		}
+		s = rspamd_task_find_symbol_result (task, symbol, metric_res);
 	}
 	else {
 		s = symbol_result;
@@ -4276,13 +4277,13 @@ lua_push_symbol_result (lua_State *L,
 
 	if (s) {
 		if (add_metric) {
-			e++;
+			table_fields_cnt++;
 		}
 		if (add_name) {
-			e++;
+			table_fields_cnt++;
 		}
 
-		lua_createtable (L, 0, e);
+		lua_createtable (L, 0, table_fields_cnt);
 
 		if (add_name) {
 			lua_pushstring (L, "name");
@@ -4339,16 +4340,27 @@ lua_task_get_symbol (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
 	gboolean found = FALSE;
-	gint i = 1;
 
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
+		struct rspamd_scan_result *sres = NULL;
+
+		if (lua_isstring (L, 3)) {
+			sres = rspamd_find_metric_result (task, lua_tostring (L, 3));
+
+			if (sres == NULL) {
+				return luaL_error (L, "invalid scan result: %s",
+						lua_tostring (L, 3));
+			}
+		}
+
+		/* Always push as a table for compatibility :( */
 		lua_createtable (L, 1, 0);
 
 		if ((found = lua_push_symbol_result (L, task, symbol,
-				NULL, TRUE, FALSE))) {
-			lua_rawseti (L, -2, i++);
+				NULL, sres, TRUE, FALSE))) {
+			lua_rawseti (L, -2, 1);
 		}
 		else {
 			/* Pop table */
@@ -4377,7 +4389,13 @@ lua_task_has_symbol (lua_State *L)
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
-		found = (rspamd_task_find_symbol_result (task, symbol, NULL) != NULL);
+		if (lua_isstring (L, 3)) {
+			found = (rspamd_task_find_symbol_result (task, symbol,
+					rspamd_find_metric_result (task, lua_tostring (L, 3))) != NULL);
+		}
+		else {
+			found = (rspamd_task_find_symbol_result (task, symbol, NULL) != NULL);
+		}
 		lua_pushboolean (L, found);
 	}
 	else {
@@ -4494,7 +4512,7 @@ lua_task_get_symbols_all (lua_State *L)
 
 			kh_foreach_value_ptr (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					lua_push_symbol_result (L, task, s->name, s, FALSE, TRUE);
+					lua_push_symbol_result (L, task, s->name, s, mres, FALSE, TRUE);
 					lua_rawseti (L, -2, i++);
 				}
 			});
