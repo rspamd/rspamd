@@ -23,6 +23,7 @@ local rspamd_logger = require 'rspamd_logger'
 local hash = require 'rspamd_cryptobox_hash'
 local lua_util = require 'lua_util'
 local lua_redis = require 'lua_redis'
+local fun = require "fun"
 
 -- A plugin that implements replies check using redis
 
@@ -65,16 +66,21 @@ end
 
 local function replies_check(task)
   local function check_recipient(stored_rcpt)
-    local real_rcpt = task:get_principal_recipient()
+    local rcpts = task:get_recipients('mime')
 
-    if real_rcpt then
-      local real_rcpt_h = make_key(real_rcpt:lower(), 8)
-      if real_rcpt_h == stored_rcpt then
+    if rcpts then
+      local predicate = function(input_rcpt)
+        local real_rcpt_h = make_key(input_rcpt:lower(), 8)
+
+        return real_rcpt_h == stored_rcpt
+      end
+
+      if fun.any(predicate, rcpts) then
         return true
       end
 
-      rspamd_logger.infox(task, 'ignoring reply as recipient %s is not matching hash %s',
-          real_rcpt, stored_rcpt)
+      rspamd_logger.infox(task, 'ignoring reply as no recipients are matching hash %s',
+          stored_rcpt)
     else
       rspamd_logger.infox(task, 'ignoring reply as recipient cannot be detected for hash %s',
           stored_rcpt)
