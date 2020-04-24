@@ -3467,7 +3467,10 @@ rspamd_controller_register_plugin_path (lua_State *L,
 	rspamd_http_router_add_path (ctx->http,
 			full_path->str,
 			rspamd_controller_handle_lua_plugin);
-	g_hash_table_insert (ctx->plugins, rspamd_ftok_map (full_path), cbd);
+	rspamd_ftok_t *key_tok = rspamd_ftok_map (full_path);
+	/* Truncate stupid \0 symbol to enable lookup */
+	key_tok->len --;
+	g_hash_table_insert (ctx->plugins, key_tok, cbd);
 }
 
 static void
