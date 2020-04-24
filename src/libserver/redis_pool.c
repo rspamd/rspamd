@@ -258,10 +258,9 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 }
 
 static void
-rspamd_redis_pool_on_disconnect (const struct redisAsyncContext *ac, int status,
-		void *ud)
+rspamd_redis_pool_on_disconnect (const struct redisAsyncContext *ac, int status)
 {
-	struct rspamd_redis_pool_connection *conn = ud;
+	struct rspamd_redis_pool_connection *conn = ac->data;
 
 	/*
 	 * Here, we know that redis itself will free this connection
@@ -313,13 +312,13 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			g_hash_table_insert (elt->pool->elts_by_ctx, ctx, conn);
 			g_queue_push_head_link (elt->active, conn->entry);
 			conn->ctx = ctx;
+			ctx->data = conn;
 			rspamd_random_hex (conn->tag, sizeof (conn->tag));
 			REF_INIT_RETAIN (conn, rspamd_redis_pool_conn_dtor);
 			msg_debug_rpool ("created new connection to %s:%d: %p", ip, port, ctx);
 
 			redisLibevAttach (pool->event_loop, ctx);
-			redisAsyncSetDisconnectCallback (ctx, rspamd_redis_pool_on_disconnect,
-					conn);
+			redisAsyncSetDisconnectCallback (ctx, rspamd_redis_pool_on_disconnect);
 
 			if (password) {
 				redisAsyncCommand (ctx, NULL, NULL,
