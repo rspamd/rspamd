@@ -204,6 +204,7 @@ LUA_FUNCTION_DEF (util, glob);
  * @function util.parse_mail_address(str, [pool])
  * Parses email address and returns a table of tables in the following format:
  *
+ * - `raw` - the original value without any processing
  * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
