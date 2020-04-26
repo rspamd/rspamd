@@ -626,33 +626,41 @@ local check_from_id = rspamd_config:register_symbol{
   callback = function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
-    if (from and from[1] and (from[1].name == nil or from[1].name == '' )) then
-      task:insert_result('FROM_NO_DN', 1.0)
-    elseif (from and from[1] and from[1].name and
-            util.strequal_caseless(from[1].name, from[1].addr)) then
-      task:insert_result('FROM_DN_EQ_ADDR', 1.0)
-    elseif (from and from[1] and from[1].name and from[1].name ~= '') then
-      task:insert_result('FROM_HAS_DN', 1.0)
-      -- Look for Mr/Mrs/Dr titles
-      local n = from[1].name:lower()
-      local match, match_end
-      match, match_end = n:find('^mrs?[%.%s]')
-      if match then
-        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
-      end
-      match, match_end = n:find('^dr[%.%s]')
-      if match then
-        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
-      end
-      -- Check for excess spaces
-      if n:find('%s%s') then
-        task:insert_result('FROM_NAME_EXCESS_SPACE', 1.0)
-      end
+    if (envfrom and envfrom[1] and not envfrom[1]["flags"]["valid"]) then
+      task:insert_result('ENVFROM_INVALID', 1.0)
     end
-    if (envfrom and from and envfrom[1] and from[1] and
+    if (from and from[1]) then
+      if not (from[1]["flags"]["valid"]) then
+        task:insert_result('FROM_INVALID', 1.0)
+      end
+      if (from[1].name == nil or from[1].name == '' ) then
+        task:insert_result('FROM_NO_DN', 1.0)
+      elseif (from[1].name and
+            util.strequal_caseless(from[1].name, from[1].addr)) then
+        task:insert_result('FROM_DN_EQ_ADDR', 1.0)
+      elseif (from[1].name and from[1].name ~= '') then
+        task:insert_result('FROM_HAS_DN', 1.0)
+        -- Look for Mr/Mrs/Dr titles
+        local n = from[1].name:lower()
+        local match, match_end
+        match, match_end = n:find('^mrs?[%.%s]')
+        if match then
+          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+        end
+        match, match_end = n:find('^dr[%.%s]')
+        if match then
+          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+        end
+        -- Check for excess spaces
+        if n:find('%s%s') then
+          task:insert_result('FROM_NAME_EXCESS_SPACE', 1.0)
+        end
+      end
+      if (envfrom and envfrom[1] and
         util.strequal_caseless(envfrom[1].addr, from[1].addr))
-    then
-      task:insert_result('FROM_EQ_ENVFROM', 1.0)
+      then
+        task:insert_result('FROM_EQ_ENVFROM', 1.0)
+      end
     elseif (envfrom and envfrom[1] and envfrom[1].addr) then
       task:insert_result('FROM_NEQ_ENVFROM', 1.0, ((from or E)[1] or E).addr or '', envfrom[1].addr)
     end
@@ -670,6 +678,22 @@ local check_from_id = rspamd_config:register_symbol{
   end
 }
 
+rspamd_config:register_symbol{
+  name = 'ENVFROM_INVALID',
+  score = 2.0,
+  group = 'headers',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'Envelope from does not have a valid format',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_INVALID',
+  score = 2.0,
+  group = 'headers',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header does not have a valid format',
+}
 rspamd_config:register_symbol{
   name = 'FROM_NO_DN',
   score = 0.0,
