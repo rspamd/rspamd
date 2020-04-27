@@ -1076,7 +1076,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 		blen = 0;
 
 		while (p < end) {
-			if (*p == '\r' || *p == '\n') {
+			if (g_ascii_isspace (*p)) {
 				break;
 			}
 			else if (*p != '-') {
