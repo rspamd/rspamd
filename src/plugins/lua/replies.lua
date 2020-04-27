@@ -306,7 +306,7 @@ if opts then
       type = 'prefilter',
       flags = 'nostat',
       callback = replies_check,
-      priority = 10,
+      priority = 9,
       group = "replies"
     })
     rspamd_config:register_symbol({
