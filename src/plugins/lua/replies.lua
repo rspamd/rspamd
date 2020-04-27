@@ -69,13 +69,13 @@ local function replies_check(task)
     local rcpts = task:get_recipients('mime')
 
     if rcpts then
-      local predicate = function(input_rcpt)
+      local filter_predicate = function(input_rcpt)
         local real_rcpt_h = make_key(input_rcpt:lower(), 8)
 
         return real_rcpt_h == stored_rcpt
       end
 
-      if fun.any(predicate, rcpts) then
+      if fun.any(filter_predicate, fun.map(function(rcpt) return rcpt.addr or '' end, rcpts)) then
         return true
       end
 
