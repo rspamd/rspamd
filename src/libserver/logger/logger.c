@@ -853,6 +853,8 @@ rspamd_logger_configure_modules (GHashTable *mods_enabled)
 	gpointer k, v;
 	guint id;
 
+	/* Clear all in bitset_allocated -> this are bytes not bits */
+	memset (log_modules->bitset, 0, log_modules->bitset_allocated);
 	/* On first iteration, we go through all modules enabled and add missing ones */
 	g_hash_table_iter_init (&it, mods_enabled);
 
