@@ -1108,19 +1108,26 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			if (bend < end) {
+			while (bend < end) {
 				if (*bend == '\r') {
-					bend++;
+					bend ++;
 
 					/* \r\n */
 					if (bend < end && *bend == '\n') {
-						bend++;
+						bend ++;
 					}
 				}
-				else {
+				else if (*bend == '\n') {
 					/* \n */
-					bend++;
+					bend ++;
 				}
+				else if (g_ascii_isspace (*bend)){
+					/* Spaces in the same line, skip them */
+					bend ++;
+					continue;
+				}
+
+				break;
 			}
 
 			b.boundary = p - st->start - 2;
