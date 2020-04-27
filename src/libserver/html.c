@@ -263,25 +263,26 @@ rspamd_html_library_init (void)
 }
 
 static gboolean
-rspamd_html_check_balance (GNode * node, GNode ** cur_level)
+rspamd_html_check_balance (struct html_tag *arg, GNode ** cur_level)
 {
-	struct html_tag *arg = node->data, *tmp;
+	struct html_tag *tmp;
 	GNode *cur;
 
 	if (arg->flags & FL_CLOSING) {
 		/* First of all check whether this tag is closing tag for parent node */
-		cur = node->parent;
+		cur = *cur_level;
+
 		while (cur && cur->data) {
 			tmp = cur->data;
+
 			if (tmp->id == arg->id &&
 				(tmp->flags & FL_CLOSED) == 0) {
 				tmp->flags |= FL_CLOSED;
-				/* Destroy current node as we find corresponding parent node */
-				g_node_destroy (node);
 				/* Change level */
 				*cur_level = cur->parent;
 				return TRUE;
 			}
+
 			cur = cur->parent;
 		}
 	}
@@ -805,19 +806,17 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 			}
 
 			if (hc->total_tags < max_tags) {
-				nnode = g_node_new (tag);
-				g_node_append (*cur_level, nnode);
-
-				if (!rspamd_html_check_balance (nnode, cur_level)) {
-					msg_debug_html (
-							"mark part as unbalanced as it has not pairable closing tags");
-					hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
-					*balanced = FALSE;
+				if (!rspamd_html_check_balance (tag, cur_level)) {
+					if (!(hc->flags & RSPAMD_HTML_FLAG_UNBALANCED)) {
+						msg_debug_html (
+								"mark part as unbalanced as it has not pairable closing tags");
+						hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+						*balanced = FALSE;
+					}
 				} else {
+					hc->total_tags ++;
 					*balanced = TRUE;
 				}
-
-				hc->total_tags ++;
 			}
 		}
 		else {
