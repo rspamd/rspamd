@@ -85,10 +85,10 @@ if rule then
 
   local id = rspamd_config:register_symbol({
     name = 'P0F_CHECK',
-    type = 'prefilter,nostat',
+    type = 'prefilter',
     callback = check_p0f,
     priority = 8,
-    flags = 'empty',
+    flags = 'empty,nostat',
     group = N
   })
 

@@ -1149,10 +1149,10 @@ if redis_section then
   fun.each(function(id, h)
     rspamd_config:register_symbol({
       name = 'REDIS_SETTINGS' .. tostring(id),
-      type = 'prefilter,nostat',
+      type = 'prefilter',
       callback = gen_redis_callback(h, id),
       priority = 10,
-      flags = 'empty',
+      flags = 'empty,nostat',
     })
   end, redis_key_handlers)
 end

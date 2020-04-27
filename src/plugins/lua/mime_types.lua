@@ -573,7 +573,8 @@ if opts then
     local id = rspamd_config:register_symbol({
       name = 'MIME_TYPES_CALLBACK',
       callback = check_mime_type,
-      type = 'callback,nostat',
+      type = 'callback',
+      flags = 'nostat',
       group = 'mime_types',
     })
 
@@ -633,10 +634,11 @@ if opts then
       group = 'mime_types',
     })
     rspamd_config:register_symbol({
-      type = 'virtual,nostat',
+      type = 'virtual',
       name = 'MIME_TRACE',
       parent = id,
       group = 'mime_types',
+      flags = 'nostat',
       score = 0,
     })
   else

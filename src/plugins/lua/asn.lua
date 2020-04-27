@@ -126,10 +126,10 @@ end
 if configure_asn_module() then
   local id = rspamd_config:register_symbol({
     name = 'ASN_CHECK',
-    type = 'prefilter,nostat',
+    type = 'prefilter',
     callback = asn_check,
     priority = 8,
-    flags = 'empty',
+    flags = 'empty,nostat',
   })
   if options['symbol'] then
     rspamd_config:register_symbol({

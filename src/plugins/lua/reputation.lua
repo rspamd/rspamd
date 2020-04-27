@@ -1197,7 +1197,8 @@ local function parse_rule(name, tbl)
     -- Also register a postfilter
     rspamd_config:register_symbol{
       name = rule.symbol .. '_POST',
-      type = 'postfilter,nostat',
+      type = 'postfilter',
+      flags = 'nostat',
       callback = callback_gen(reputation_postfilter_cb, rule),
     }
   end

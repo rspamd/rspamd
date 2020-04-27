@@ -1390,7 +1390,8 @@ end
 
 local id = rspamd_config:register_symbol({
   name = 'NEURAL_CHECK',
-  type = 'postfilter,nostat',
+  type = 'postfilter',
+  flags = 'nostat',
   priority = 6,
   callback = ann_scores_filter
 })
@@ -1426,7 +1427,8 @@ for k,r in pairs(rules) do
   })
   rspamd_config:register_symbol({
     name = rule_elt.symbol_spam,
-    type = 'virtual,nostat',
+    type = 'virtual',
+    flags = 'nostat',
     parent = id
   })
 
@@ -1438,14 +1440,16 @@ for k,r in pairs(rules) do
   })
   rspamd_config:register_symbol({
     name = rule_elt.symbol_ham,
-    type = 'virtual,nostat',
+    type = 'virtual',
+    flags = 'nostat',
     parent = id
   })
 end
 
 rspamd_config:register_symbol({
   name = 'NEURAL_LEARN',
-  type = 'idempotent,nostat,explicit_disable',
+  type = 'idempotent',
+  flags = 'nostat,explicit_disable',
   priority = 5,
   callback = ann_push_vector
 })

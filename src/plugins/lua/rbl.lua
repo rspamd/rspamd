@@ -990,7 +990,8 @@ local function add_rbl(key, rbl, global_opts)
 
     -- Failure symbol
     rspamd_config:register_symbol{
-      type = 'virtual,nostat',
+      type = 'virtual',
+      flags = 'nostat',
       name = rbl.symbol .. '_FAIL',
       parent = id,
       score = 0.0,

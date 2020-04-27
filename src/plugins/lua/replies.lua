@@ -279,8 +279,9 @@ if opts then
 
       local id = rspamd_config:register_symbol({
         name = 'REPLIES_CHECK',
-        type = 'prefilter,nostat',
+        type = 'prefilter',
         callback = replies_check_cookie,
+        flags = 'nostat',
         priority = 10,
         group = "replies"
       })
@@ -302,7 +303,8 @@ if opts then
     })
     local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',
-      type = 'prefilter,nostat',
+      type = 'prefilter',
+      flags = 'nostat',
       callback = replies_check,
       priority = 10,
       group = "replies"
