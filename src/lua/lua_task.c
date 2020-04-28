@@ -6609,13 +6609,21 @@ lua_archive_get_files (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
-	guint i;
+	guint i, max_files = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		lua_createtable (L, arch->files->len, 0);
+		if (lua_isnumber (L, 2)) {
+			max_files = lua_tointeger (L, 2);
+			max_files = MIN (arch->files->len, max_files);
+		}
+		else {
+			max_files = arch->files->len;
+		}
 
-		for (i = 0; i < arch->files->len; i ++) {
+		lua_createtable (L, max_files, 0);
+
+		for (i = 0; i < max_files; i ++) {
 			f = g_ptr_array_index (arch->files, i);
 
 			lua_pushlstring (L, f->fname->str, f->fname->len);
@@ -6634,13 +6642,21 @@ lua_archive_get_files_full (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
-	guint i;
+	guint i, max_files = 0;
 	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
-		lua_createtable (L, arch->files->len, 0);
+		if (lua_isnumber (L, 2)) {
+			max_files = lua_tointeger (L, 2);
+			max_files = MIN (arch->files->len, max_files);
+		}
+		else {
+			max_files = arch->files->len;
+		}
 
-		for (i = 0; i < arch->files->len; i ++) {
+		lua_createtable (L, max_files, 0);
+
+		for (i = 0; i < max_files; i ++) {
 			f = g_ptr_array_index (arch->files, i);
 
 			lua_createtable (L, 0, 4);
