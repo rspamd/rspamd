@@ -709,6 +709,11 @@ rspamd_content_type_parse (const gchar *in,
 
 		if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
+
+			RSPAMD_FTOK_ASSIGN (&srch, "encrypted");
+			if (rspamd_ftok_casecmp (&res->subtype, &srch) == 0) {
+				res->flags |= RSPAMD_CONTENT_TYPE_ENCRYPTED;
+			}
 		}
 		else {
 			RSPAMD_FTOK_ASSIGN (&srch, "text");

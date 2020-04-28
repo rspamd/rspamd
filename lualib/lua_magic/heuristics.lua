@@ -377,6 +377,19 @@ exports.text_part_heuristic = function(part, log_obj)
     return true
   end
 
+  local parent = part:get_parent()
+
+  if parent then
+    local parent_type,parent_subtype = parent:get_type()
+
+    if parent_type == 'multipart' and parent_subtype == 'encrypted' then
+      -- Skip text heuristics for encrypted parts
+      lua_util.debugm(N, log_obj, "text part check: parent is encrypted, not a text part")
+
+      return false
+    end
+  end
+
   local content = part:get_content()
   local clen = #content
   local is_text
