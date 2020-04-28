@@ -877,7 +877,7 @@ local function multimap_callback(task, rule)
 
       for _,p in fun.iter(fun.filter(filter_parts, parts)) do
         if filter_archive(p) then
-          local fnames = p:get_archive():get_files()
+          local fnames = p:get_archive():get_files(1000)
 
           for _,fn in ipairs(fnames) do
             match_filename(rule, fn)

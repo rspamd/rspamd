@@ -434,7 +434,7 @@ local function check_mime_type(task)
           end
 
           if check then
-            local fl = arch:get_files_full()
+            local fl = arch:get_files_full(1000)
 
             local nfiles = #fl
 

@@ -411,7 +411,7 @@ local function check_parts_match(task, rule)
       -- check filenames in archives
       if p:is_archive() then
         local arch = p:get_archive()
-        local filelist = arch:get_files_full()
+        local filelist = arch:get_files_full(1000)
         for _,f in ipairs(filelist) do
           ext,ext2 = gen_extension(f.name)
           if match_filter(task, ext, rule.mime_parts_filter_ext)

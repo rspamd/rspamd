@@ -267,7 +267,7 @@ local function detect_archive_flaw(part, arch, log_obj)
 
   if arch_type == 'zip' then
     -- Find specific files/folders in zip file
-    local files = arch:get_files() or {}
+    local files = arch:get_files(100) or {}
     for _,file in ipairs(files) do
       if file == '[Content_Types].xml' then
         add_msoffice_confidence(10)
