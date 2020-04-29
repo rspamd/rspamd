@@ -2274,7 +2274,7 @@ lua_task_get_urls (lua_State * L)
 
 		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
 		if (!lua_url_cbdata_fill (L, 2, &cb, default_protocols_mask,
-				(~RSPAMD_URL_FLAG_CONTENT), max_urls)) {
+				~(RSPAMD_URL_FLAG_CONTENT|RSPAMD_URL_FLAG_IMAGE), max_urls)) {
 			return luaL_error (L, "invalid arguments");
 		}
 
@@ -2433,7 +2433,7 @@ lua_task_get_emails (lua_State * L)
 	if (task) {
 		if (task->message) {
 			if (!lua_url_cbdata_fill (L, 2, &cb, PROTOCOL_MAILTO,
-					(~RSPAMD_URL_FLAG_CONTENT), max_urls)) {
+					~(RSPAMD_URL_FLAG_CONTENT|RSPAMD_URL_FLAG_IMAGE), max_urls)) {
 				return luaL_error (L, "invalid arguments");
 			}
 

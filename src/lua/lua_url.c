@@ -1035,6 +1035,9 @@ lua_url_cbdata_fill (lua_State *L,
 					flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
 				}
 			}
+			else {
+				flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
+			}
 			lua_pop (L, 1);
 
 			lua_getfield (L, pos, "content");
@@ -1045,6 +1048,9 @@ lua_url_cbdata_fill (lua_State *L,
 				else {
 					flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
 				}
+			}
+			else {
+				flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
 			}
 			lua_pop (L, 1);
 
