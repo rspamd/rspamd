@@ -189,6 +189,11 @@ khash_t(tag_by_name) *html_tag_by_name;
 khash_t(tag_by_id) *html_tag_by_id;
 khash_t(color_by_name) *html_color_by_name;
 
+static struct rspamd_url *rspamd_html_process_url (rspamd_mempool_t *pool,
+												   const gchar *start, guint len,
+												   struct html_tag_component *comp,
+												   bool is_image);
+
 static void
 rspamd_html_library_init (void)
 {
@@ -1356,7 +1361,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 struct rspamd_url *
 rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
-		struct html_tag_component *comp)
+		struct html_tag_component *comp, bool is_image)
 {
 	struct rspamd_url *url;
 	guint saved_flags = 0;
@@ -1500,7 +1505,8 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
+	rc = rspamd_url_parse (url, decoded, dlen, pool,
+			is_image ? RSPAMD_URL_PARSE_TEXT :RSPAMD_URL_PARSE_HREF);
 
 	/* Filter some completely damaged urls */
 	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&
@@ -1599,7 +1605,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				}
 			}
 
-			url = rspamd_html_process_url (pool, start, len, comp);
+			url = rspamd_html_process_url (pool, start, len, comp, false);
 
 			if (url && tag->extra == NULL) {
 				tag->extra = url;
@@ -1764,7 +1770,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 					if (img->src) {
 
 						img->url = rspamd_html_process_url (pool,
-								img->src, fstr.len, NULL);
+								img->src, fstr.len, NULL, true);
 
 						if (img->url) {
 							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;

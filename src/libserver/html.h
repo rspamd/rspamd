@@ -172,9 +172,6 @@ gint rspamd_html_tag_by_name (const gchar *name);
  * @param comp
  * @return
  */
-struct rspamd_url *rspamd_html_process_url (rspamd_mempool_t *pool,
-											const gchar *start, guint len,
-											struct html_tag_component *comp);
 
 #ifdef  __cplusplus
 }
