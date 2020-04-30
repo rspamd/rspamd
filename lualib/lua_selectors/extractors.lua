@@ -136,8 +136,8 @@ uses any type by default)]],
       local digests = {}
       for _,p in ipairs(parts) do
         if p:get_filename() then
-          if not args[2] or args[2] == 'blake2' then
-            -- Optimise as we already have this hash
+          if #args == 0 then
+            -- Optimise as we already have this hash in the API
             table.insert(digests, p:get_digest())
           else
             table.insert(digests, common.create_digest(p:get_content('raw_parsed'), args))

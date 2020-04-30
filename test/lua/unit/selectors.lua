@@ -118,14 +118,43 @@ context("Selectors test", function()
     },
 
     ["to"] = {
-                selector = "to",
-                expect = {"nobody@example.com"}},
+      selector = "to",
+      expect = {"nobody@example.com"}},
 
     ["attachments"] = {
-                selector = "attachments",
-                expect = {{"ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160",
-                          "ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160"
-                          }}},
+      selector = "attachments",
+      expect = {{"ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160",
+                 "ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160"
+                }}
+    },
+
+    ["attachments blake2 base32"] = {
+      selector = "attachments('base32', 'blake2')",
+      expect = {{"qqr41dwakt3uwhucxmxsypjiifi8er3gzqhyc3r48fw1ij9dp8b8x8nyyscmoe6tpmp1r4eafezguezurazo87ecs48cw5bfm9udyob",
+                 "qqr41dwakt3uwhucxmxsypjiifi8er3gzqhyc3r48fw1ij9dp8b8x8nyyscmoe6tpmp1r4eafezguezurazo87ecs48cw5bfm9udyob"
+                }}
+    },
+
+    ["attachments blake2 base64"] = {
+      selector = "attachments('base64', 'blake2')",
+      expect = {{"zhEtB8Uq5kn5ZG89C1qqtdSDSDbXccAy0adQWdMf7YTzjgDAsgWRj201STTCBV0z0Z0EX3g6YlYfRnco688BYA==",
+                 "zhEtB8Uq5kn5ZG89C1qqtdSDSDbXccAy0adQWdMf7YTzjgDAsgWRj201STTCBV0z0Z0EX3g6YlYfRnco688BYA=="
+                }}
+    },
+
+    ["attachments blake2 rfc base32"] = {
+      selector = "attachments('rbase32', 'blake2')",
+      expect = {{"OOE2SDUYKRZTU4TMPLPWANJVVFVHIEZGXO4AMZE2HFUSVJ7DNHBHPHCAAWMLQI6RNLNSE2IYFIXGTIXTEYXQH5IMW2HMU3BFL7TDAQB",
+                 "OOE2SDUYKRZTU4TMPLPWANJVVFVHIEZGXO4AMZE2HFUSVJ7DNHBHPHCAAWMLQI6RNLNSE2IYFIXGTIXTEYXQH5IMW2HMU3BFL7TDAQB"
+                }}
+    },
+
+    ["attachments md5 rfc base32"] = {
+      selector = "attachments('rbase32', 'md5')",
+      expect = {{"6SL2VQAR4SSOVYNNYUZ744JRAB",
+                 "6SL2VQAR4SSOVYNNYUZ744JRAB"
+                }}
+    },
 
     ["attachments id"] = {
                 selector = "attachments.id",
