@@ -1200,10 +1200,16 @@ lua_text_oneline (lua_State *L)
 	return 1;
 }
 
+/* Used to distinguish lua text metatable */
+static const guint rspamd_lua_text_cookie = 0x2b21ef6fU;
+
 static gint
 lua_load_text (lua_State * L)
 {
 	lua_newtable (L);
+	lua_pushstring (L, "cookie");
+	lua_pushnumber (L, rspamd_lua_text_cookie);
+	lua_settable (L, -3);
 	luaL_register (L, NULL, textlib_f);
 
 	return 1;
@@ -1213,6 +1219,9 @@ void
 luaopen_text (lua_State *L)
 {
 	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
+	lua_pushstring (L, "cookie");
+	lua_pushnumber (L, rspamd_lua_text_cookie);
+	lua_settable (L, -3);
 	lua_pop (L, 1);
 
 	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
