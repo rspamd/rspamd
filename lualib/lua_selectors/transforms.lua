@@ -18,6 +18,7 @@ local fun = require 'fun'
 local lua_util = require "lua_util"
 local ts = require("tableshape").types
 local logger = require 'rspamd_logger'
+local common = require "lua_selectors/common"
 local M = "selectors"
 
 local maps = require "lua_selectors/maps"
@@ -133,31 +134,13 @@ local transform_function = {
     },
     ['map_type'] = 'hash',
     ['process'] = function(inp, _, args)
-      local hash = require 'rspamd_cryptobox_hash'
-      local encoding = args[1] or 'hex'
-      local ht = args[2] or 'blake2'
-      local h = hash:create_specific(ht):update(inp)
-      local s
 
-      if encoding == 'hex' then
-        s = h:hex()
-      elseif encoding == 'base32' then
-        s = h:base32()
-      elseif encoding == 'bleach32' then
-        s = h:base32('bleach')
-      elseif encoding == 'rbase32' then
-        s = h:base32('rfc')
-      elseif encoding == 'base64' then
-        s = h:base64()
-      end
-
-      return s,'string'
+      return common.create_digest(inp, args),'string'
     end,
     ['description'] = [[Create a digest from a string.
 The first argument is encoding (`hex`, `base32` (and forms `bleach32`, `rbase32`), `base64`),
 the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
-    ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
-                       ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
+    ['args_schema'] = common.digest_schema()
   },
   -- Extracts substring
   ['substring'] = {
@@ -430,7 +413,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
           function(s)
             return string.gsub(tostring(s), '[\128-\255]', args[1] or '?')
           end, inp), 'string_list'
-      else 
+      else
         return string.gsub(tostring(inp), '[\128-\255]', '?'), 'string'
       end
     end,
