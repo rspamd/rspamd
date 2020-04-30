@@ -134,12 +134,9 @@ uses any type by default)]],
     ['get_value'] = function(task, args)
       local parts = task:get_parts() or E
       local digests = {}
-
-      if #args > 0 then
-        for _,p in ipairs(parts) do
-          if p:get_filename() then
-            table.insert(digests, common.create_digest(p:get_content('raw_parsed'), args))
-          end
+      for _,p in ipairs(parts) do
+        if p:get_filename() then
+          table.insert(digests, common.create_digest(p:get_content('raw_parsed'), args))
         end
       end
 

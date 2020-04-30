@@ -16,6 +16,9 @@ limitations under the License.
 
 local ts = require("tableshape").types
 local exports = {}
+local cr_hash = require 'rspamd_cryptobox_hash'
+
+local blake2b_key = cr_hash.create_specific('blake2'):update('rspamd'):bin()
 
 local function digest_schema()
   return {ts.one_of{'hex', 'base32', 'bleach32', 'rbase32', 'base64'}:is_optional(),
@@ -25,11 +28,18 @@ end
 exports.digest_schema = digest_schema
 
 local function create_digest(data, args)
-  local hash = require 'rspamd_cryptobox_hash'
+
   local encoding = args[1] or 'hex'
   local ht = args[2] or 'blake2'
-  local h = hash:create_specific(ht):update(data)
-  local s
+
+  local h, s
+
+  if ht == 'blake2' then
+    -- Hack to be compatible with various 'get_digest' methods
+    h = cr_hash.create_keyed(blake2b_key):update(data)
+  else
+    h = cr_hash.create_specific(ht):update(data)
+  end
 
   if encoding == 'hex' then
     s = h:hex()
