@@ -55,6 +55,26 @@ PDF javascript
   ${result} =  Scan Message With Rspamc  ${MESSAGE7}
   Check Rspamc  ${result}  PDF_JAVASCRIPT
 
+BITCOIN ADDR
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
+  Should Contain  ${result.stdout}  BITCOIN_ADDR
+
+RCVD_COUNT_ONE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
+  Should Contain  ${result.stdout}  RCVD_COUNT_ONE
+
+RCVD_COUNT_FIVE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/yand_forward.eml
+  Should Contain  ${result.stdout}  RCVD_COUNT_FIVE
+
+RCVD_COUNT_SEVEN
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rcvd7.eml
+  Should Contain  ${result.stdout}  RCVD_COUNT_SEVEN
+
+FROM_NEQ_ENVFROM
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/yand_forward.eml
+  Should Contain  ${result.stdout}  FROM_NEQ_ENVFROM
+
 
 *** Keywords ***
 Rules Setup

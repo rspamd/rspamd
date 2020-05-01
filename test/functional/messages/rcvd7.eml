@@ -1,0 +1,34 @@
+Return-Path: <test@test.ru>
+Received: from mx7.mail.testler.ru ([] verified)
+  by mail2006.testler.ru (testlerMail 6.1 SMTP 6.1a7)
+  with ESMTP id 60578244 for test@test.com; Mon, 27 Apr 2020 19:45:05 +0300
+Received: from forward106p.mail.test.net (forward106p.mail.test.net [])
+	by mx7.mail.testler.ru (Postfix) with ESMTP id 9B38C6E043A
+	for <test@test.com>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from forward101p.mail.test.net (forward106p.mail.test.net [])
+	by mx7.mail.testler.ru (Postfix) with ESMTP id 9B38C6E043A
+	for <test@test.com>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from forward100p.mail.test.net (forward106p.mail.test.net [])
+	by mx7.mail.testler.ru (Postfix) with ESMTP id 9B38C6E043A
+	for <test@test.com>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from forward106p.mail.test.net (forward106p.mail.test.net [])
+	by resmtp2.mail.testler.ru (resmtp/testler) with ESMTP id j51GAaUB;
+	Mon, 27 Apr 2020 16:45:05 +0000
+Received: from forward102q.mail.test.net (forward102q.mail.test.net [])
+	by forward106p.mail.test.net (test) with ESMTP id 71D441C81C0C
+	for <test@test.com>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from mxback10q.mail.test.net (mxback10q.mail.test.net [])
+	by forward102q.mail.test.net (test) with ESMTP id 6E2CA7F20010
+	for <test@test.com>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+From: test@test.ru
+Envelope-From: test@test.ru
+To: <test@test.ru>, 
+	<test@test.com>
+In-Reply-To: <878111588005719@mail.test.ru>
+Subject: Fwd: 123
+MIME-Version: 1.0
+X-Mailer: test [ http://test.ru ] 5.0
+Date: Mon, 27 Apr 2020 19:45:05 +0300
+Message-Id: <906211588005891@mail.test.ru>
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
