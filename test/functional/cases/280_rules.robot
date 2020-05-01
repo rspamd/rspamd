@@ -15,6 +15,7 @@ ${MESSAGE4}      ${TESTDIR}/messages/broken_richtext.eml
 ${MESSAGE5}      ${TESTDIR}/messages/badboundary.eml
 ${MESSAGE6}      ${TESTDIR}/messages/pdf_encrypted.eml
 ${MESSAGE7}      ${TESTDIR}/messages/pdf_js.eml
+${MESSAGE8}      ${TESTDIR}/messages/yand_forward.eml
 ${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 ${RSPAMD_SCOPE}  Test
 
@@ -72,8 +73,8 @@ RCVD_COUNT_SEVEN
   Should Contain  ${result.stdout}  RCVD_COUNT_SEVEN
 
 FROM_NEQ_ENVFROM
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/yand_forward.eml
-  Should Contain  ${result.stdout}  FROM_NEQ_ENVFROM
+  ${result} =  Scan Message With Rspamc  ${MESSAGE8}  --from  test@test.net
+  Check Rspamc  ${result}  FROM_NEQ_ENVFROM
 
 
 *** Keywords ***
