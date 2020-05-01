@@ -37,6 +37,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_IMAGE = 1u << 19u,
 	RSPAMD_URL_FLAG_QUERY = 1u << 20u,
 	RSPAMD_URL_FLAG_CONTENT = 1u << 21u,
+	RSPAMD_URL_FLAG_NO_TLD = 1u << 22u,
 };
 
 struct rspamd_url_tag {

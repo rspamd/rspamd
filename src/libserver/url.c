@@ -240,7 +240,8 @@ struct rspamd_url_flag_name {
 		{"url_displayed", RSPAMD_URL_FLAG_DISPLAY_URL, -1},
 		{"image", RSPAMD_URL_FLAG_IMAGE, -1},
 		{"query", RSPAMD_URL_FLAG_QUERY, -1},
-		{"content", RSPAMD_URL_FLAG_CONTENT, -1}
+		{"content", RSPAMD_URL_FLAG_CONTENT, -1},
+		{"no_tld", RSPAMD_URL_FLAG_NO_TLD, -1},
 };
 
 
@@ -2348,6 +2349,12 @@ rspamd_url_parse (struct rspamd_url *uri,
 					uri->tldshift = uri->hostshift;
 					uri->tldlen = uri->hostlen;
 				}
+				else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
+					/* Ignore urls with both no schema and no tld */
+					return URI_ERRNO_TLD_MISSING;
+				}
+
+				uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
 			}
 		}
 
