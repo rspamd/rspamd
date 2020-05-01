@@ -656,13 +656,14 @@ local check_from_id = rspamd_config:register_symbol{
           task:insert_result('FROM_NAME_EXCESS_SPACE', 1.0)
         end
       end
-      if (envfrom and envfrom[1] and
-        util.strequal_caseless(envfrom[1].addr, from[1].addr))
-      then
-        task:insert_result('FROM_EQ_ENVFROM', 1.0)
+
+      if envfrom then
+        if util.strequal_caseless(envfrom[1].addr, from[1].addr) then
+          task:insert_result('FROM_EQ_ENVFROM', 1.0)
+        elseif envfrom[1].addr ~= '' then
+          task:insert_result('FROM_NEQ_ENVFROM', 1.0, from[1].addr, envfrom[1].addr)
+        end
       end
-    elseif (envfrom and envfrom[1] and envfrom[1].addr) then
-      task:insert_result('FROM_NEQ_ENVFROM', 1.0, ((from or E)[1] or E).addr or '', envfrom[1].addr)
     end
 
     local to = task:get_recipients(2)
