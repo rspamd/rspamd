@@ -1,0 +1,31 @@
+Return-Path: <test@test.eu>
+Received: from mx7.test.ru ([0.0.0.0] verified)
+  by mail.test.ru (test mail)
+  with ESMTP id 60578244
+  (envelope-from <test@test.net>)
+  for test@test.ru; Mon, 27 Apr 2020 19:45:05 +0300
+Received: from forward106p.test.eu (forward106p.test.eu [])
+	by mail.test.ru (Postfix) with ESMTP id 9B38C6E043A
+	(envelope-from <test@test.net>)
+	for <test@test.ru>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from forward106p.test.eu (forward106p.test.eu [])
+	by test.ru (test) with ESMTP id j51GAaUB;
+	Mon, 27 Apr 2020 16:45:05 +0000
+Received: from forward102q.test.eu (forward102q.test.eu [])
+	by forward106p.test.eu (test) with ESMTP id 71D441C81C0C
+	(envelope-from <test@test.net>)
+	for <test@test.ru>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+Received: from mxback10q.test.eu (mxback10q.test.eu [])
+	by forward102q.test.eu (test) with ESMTP id 6E2CA7F20010
+	(envelope-from <test@test.net>)
+	for <test@test.ru>; Mon, 27 Apr 2020 19:45:05 +0300 (MSK)
+From: test@test.eu
+Envelope-From: test@test.net
+To: <test@test.ru>, 
+	<test@test.com>
+In-Reply-To: <test@test.eu>
+Subject: Fwd: 123
+MIME-Version: 1.0
+Date: Mon, 27 Apr 2020 19:45:05 +0300
+
+lsakdlsa;dk
