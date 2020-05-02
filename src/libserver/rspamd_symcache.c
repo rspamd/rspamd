@@ -104,6 +104,7 @@ struct rspamd_symcache_item {
 	guint64 last_count;
 	struct rspamd_counter_data *cd;
 	gchar *symbol;
+	const gchar *type_descr;
 	gint type;
 
 	/* Callback data */
@@ -1019,6 +1020,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 							gint parent)
 {
 	struct rspamd_symcache_item *item = NULL;
+	const gchar *type_str = "normal";
 
 	g_assert (cache != NULL);
 
@@ -1097,6 +1099,8 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		g_assert (parent == -1);
 
 		if (item->type & SYMBOL_TYPE_PREFILTER) {
+			type_str = "prefilter";
+
 			if (item->type & SYMBOL_TYPE_EMPTY) {
 				/* Executed before mime parsing stage */
 				g_ptr_array_add (cache->prefilters_empty, item);
@@ -1108,10 +1112,12 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			}
 		}
 		else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
+			type_str = "idempotent";
 			g_ptr_array_add (cache->idempotent, item);
 			item->container = cache->idempotent;
 		}
 		else if (item->type & SYMBOL_TYPE_POSTFILTER) {
+			type_str = "postfilter";
 			g_ptr_array_add (cache->postfilters, item);
 			item->container = cache->postfilters;
 		}
@@ -1144,6 +1150,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->id = cache->items_by_id->len;
 			g_ptr_array_add (cache->items_by_id, item);
 			item->container = cache->composites;
+			type_str = "composite";
 		}
 		else if (item->type & SYMBOL_TYPE_CLASSIFIER) {
 			/* Treat it as normal symbol to allow enable/disable */
@@ -1154,6 +1161,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->specific.normal.func = NULL;
 			item->specific.normal.user_data = NULL;
 			item->specific.normal.condition_cb = -1;
+			type_str = "classifier";
 		}
 		else {
 			item->is_virtual = TRUE;
@@ -1164,6 +1172,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			g_ptr_array_add (cache->virtual, item);
 			item->container = cache->virtual;
 			/* Not added to items_by_id, handled by parent */
+			type_str = "virtual";
 		}
 	}
 
@@ -1185,16 +1194,17 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 
 	if (name != NULL) {
 		item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
-		msg_debug_cache ("used items: %d, added symbol: %s, %d",
-				cache->used_items, name, item->id);
+		msg_debug_cache ("used items: %d, added symbol: %s, %d; symbol type: %s",
+				cache->used_items, name, item->id, type_str);
 	} else {
 		g_assert (func != NULL);
-		msg_debug_cache ("used items: %d, added unnamed symbol: %d",
-				cache->used_items, item->id);
+		msg_debug_cache ("used items: %d, added unnamed symbol: %d; symbol type: %s",
+				cache->used_items, item->id, type_str);
 	}
 
 	item->deps = g_ptr_array_new ();
 	item->rdeps = g_ptr_array_new ();
+	item->type_descr = type_str;
 	rspamd_mempool_add_destructor (cache->static_pool,
 			rspamd_ptr_array_free_hard, item->deps);
 	rspamd_mempool_add_destructor (cache->static_pool,
@@ -1609,8 +1619,8 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
 
 		if (!item->enabled) {
-			msg_debug_cache_task ("skipping %s of %s as it is permanently disabled",
-					what, item->symbol);
+			msg_debug_cache_task ("skipping %s of %s as it is permanently disabled; symbol type=%s",
+					what, item->symbol, item->type_descr);
 
 			return FALSE;
 		}
@@ -1620,8 +1630,8 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			 */
 			if (exec_only) {
 				msg_debug_cache_task ("skipping check of %s as it cannot be "
-									  "executed for this task type",
-						item->symbol);
+									  "executed for this task type; symbol type=%s",
+						item->symbol, item->type_descr);
 
 				return FALSE;
 			}
@@ -1636,10 +1646,11 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			rspamd_symcache_check_id_list (&item->forbidden_ids,
 					id)) {
 			msg_debug_cache_task ("deny %s of %s as it is forbidden for "
-						 "settings id %ud",
+						 "settings id %ud; symbol type=%s",
 						 what,
 						 item->symbol,
-						 id);
+						 id,
+						 item->type_descr);
 
 			return FALSE;
 		}
@@ -1651,9 +1662,11 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 
 				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
 					msg_debug_cache_task ("allow execution of %s settings id %ud "
-										  "allows implicit execution of the symbols",
+										  "allows implicit execution of the symbols;"
+										  "symbol type=%s",
 							item->symbol,
-							id);
+							id,
+							item->type_descr);
 
 					return TRUE;
 				}
@@ -1668,25 +1681,29 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 				}
 
 				msg_debug_cache_task ("deny %s of %s as it is not listed "
-									  "as allowed for settings id %ud",
+									  "as allowed for settings id %ud; symbol type=%s",
 						what,
 						item->symbol,
-						id);
+						id,
+						item->type_descr);
 				return FALSE;
 			}
 		}
 		else {
 			msg_debug_cache_task ("allow %s of %s for "
-								  "settings id %ud as it can be only disabled explicitly",
+								  "settings id %ud as it can be only disabled explicitly;"
+								  " symbol type=%s",
 					what,
 					item->symbol,
-					id);
+					id,
+					item->type_descr);
 		}
 	}
 	else if (item->type & SYMBOL_TYPE_EXPLICIT_ENABLE) {
-		msg_debug_cache_task ("deny %s of %s as it must be explicitly enabled",
+		msg_debug_cache_task ("deny %s of %s as it must be explicitly enabled; symbol type=%s",
 				what,
-				item->symbol);
+				item->symbol,
+				item->type_descr);
 		return FALSE;
 	}
 
@@ -1753,13 +1770,15 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 		}
 
 		if (!check) {
-			msg_debug_cache_task ("skipping check of %s as its start condition is false",
-					item->symbol);
+			msg_debug_cache_task ("skipping check of %s as its start condition is false; "
+								  "symbol type = %s",
+					item->symbol, item->type_descr);
 		}
 	}
 
 	if (check) {
-		msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
+		msg_debug_cache_task ("execute %s, %d; symbol type = %s", item->symbol,
+				item->id, item->type_descr);
 
 		if (checkpoint->profile) {
 			ev_now_update_if_cheap (task->event_loop);
