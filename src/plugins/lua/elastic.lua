@@ -71,7 +71,7 @@ local function elastic_send_data(task)
   local tbl = {}
   for _,value in pairs(rows) do
     table.insert(tbl, '{ "index" : { "_index" : "'..es_index..
-        '", "_type" : "logs" ,"pipeline": "rspamd-geoip"} }')
+        '", "_type" : "_doc" ,"pipeline": "rspamd-geoip"} }')
     table.insert(tbl, ucl.to_format(value, 'json-compact'))
   end
 
