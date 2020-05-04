@@ -144,6 +144,29 @@ LUA_FUNCTION_DEF (text, exclude_chars);
  * @return {tspamd_text} modified or copied text
  */
 LUA_FUNCTION_DEF (text, oneline);
+/***
+ * @method rspamd_text:base32([b32type])
+ * Returns a text encoded in base32 (new rspamd_text is allocated)
+ *
+ * @param {string} b32type base32 type (default, bleach, rfc)
+ * @return {tspamd_text} new text encoded in base32
+ */
+LUA_FUNCTION_DEF (text, base32);
+/***
+ * @method rspamd_text:base64([line_length])
+ * Returns a text encoded in base64 (new rspamd_text is allocated)
+ *
+ * @param {number} line_length return text splited with newlines up to this attribute
+ * @return {tspamd_text} new text encoded in base64
+ */
+LUA_FUNCTION_DEF (text, base64);
+/***
+ * @method rspamd_text:hex()
+ * Returns a text encoded in hex (new rspamd_text is allocated)
+ *
+ * @return {tspamd_text} new text encoded in hex
+ */
+LUA_FUNCTION_DEF (text, hex);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 
@@ -169,6 +192,9 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, bytes),
 		LUA_INTERFACE_DEF (text, exclude_chars),
 		LUA_INTERFACE_DEF (text, oneline),
+		LUA_INTERFACE_DEF (text, base32),
+		LUA_INTERFACE_DEF (text, base64),
+		LUA_INTERFACE_DEF (text, hex),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -947,6 +973,80 @@ lua_text_wipe (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_text_base32 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1), *out;
+	enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
+
+	if (t != NULL) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			btype = rspamd_base32_decode_type_from_str (lua_tostring (L, 2));
+
+			if (btype == RSPAMD_BASE32_INVALID) {
+				return luaL_error (L, "invalid b32 type: %s", lua_tostring (L, 2));
+			}
+		}
+
+		out = lua_new_text (L, NULL, t->len * 8 / 5 + 2, TRUE);
+		out->len = rspamd_encode_base32_buf (t->start, t->len, (gchar *)out->start,
+				out->len, btype);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_base64 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1), *out;
+	gsize line_len = 0;
+
+	if (t != NULL) {
+		if (lua_type (L, 2) == LUA_TNUMBER) {
+			line_len = lua_tointeger (L, 2);
+		}
+
+		gsize sz_len;
+
+		out = lua_newuserdata (L, sizeof (*t));
+		out->flags = RSPAMD_TEXT_FLAG_OWN;
+		out->start = rspamd_encode_base64_common (t->start, t->len,
+				line_len, &sz_len, line_len != 0, RSPAMD_TASK_NEWLINES_CRLF);
+		out->len = sz_len;
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_hex (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1), *out;
+
+	if (t != NULL) {
+
+		out = lua_new_text (L, NULL, t->len * 2, TRUE);
+		out->len = rspamd_encode_hex_buf (t->start, t->len, (gchar *)out->start,
+				out->len);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 #define BITOP(a,b,op) \
