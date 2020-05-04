@@ -198,7 +198,11 @@ lua_new_text (lua_State *L, const gchar *start, gsize len, gboolean own)
 
 		if (len > 0) {
 			storage = g_malloc (len);
-			memcpy (storage, start, len);
+
+			if (start != NULL) {
+				memcpy (storage, start, len);
+			}
+
 			t->start = storage;
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
