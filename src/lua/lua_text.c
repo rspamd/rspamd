@@ -42,6 +42,13 @@ LUA_FUNCTION_DEF (text, fromstring);
  * @return {rspamd_text} resulting text
  */
 LUA_FUNCTION_DEF (text, null);
+/***
+ * @function rspamd_text.randombytes(nbytes)
+ * Creates rspamd_text with random bytes inside (raw bytes)
+ * @param {number} nbytes number of random bytes generated
+ * @return {rspamd_text} random bytes text
+ */
+LUA_FUNCTION_DEF (text, randombytes);
 
 /***
  * @function rspamd_text.fromtable(tbl[, delim])
@@ -176,6 +183,7 @@ static const struct luaL_reg textlib_f[] = {
 		LUA_INTERFACE_DEF (text, fromtable),
 		{"from_table", lua_text_fromtable},
 		LUA_INTERFACE_DEF (text, null),
+		LUA_INTERFACE_DEF (text, randombytes),
 		{NULL, NULL}
 };
 
@@ -278,6 +286,20 @@ lua_text_null (lua_State *L)
 	LUA_TRACE_POINT;
 
 	lua_new_text (L, NULL, 0, false);
+
+	return 1;
+}
+
+static gint
+lua_text_randombytes (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	guint nbytes = luaL_checkinteger (L, 1);
+	struct rspamd_lua_text *out;
+
+	out = lua_new_text (L, NULL, nbytes, TRUE);
+	randombytes_buf ((char *)out->start, nbytes);
+	out->len = nbytes;
 
 	return 1;
 }
