@@ -160,10 +160,12 @@ LUA_FUNCTION_DEF (text, oneline);
  */
 LUA_FUNCTION_DEF (text, base32);
 /***
- * @method rspamd_text:base64([line_length])
+ * @method rspamd_text:base64([line_length, [nline, [fold]]])
  * Returns a text encoded in base64 (new rspamd_text is allocated)
  *
  * @param {number} line_length return text splited with newlines up to this attribute
+ * @param {string} nline newline type: `cr`, `lf`, `crlf`
+ * @param {boolean} fold use folding when splitting into lines (false by default)
  * @return {tspamd_text} new text encoded in base64
  */
 LUA_FUNCTION_DEF (text, base64);
@@ -1030,10 +1032,35 @@ lua_text_base64 (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1), *out;
 	gsize line_len = 0;
+	gboolean fold = FALSE;
 
 	if (t != NULL) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
 			line_len = lua_tointeger (L, 2);
+
+			if (line_len <= 8) {
+				return luaL_error (L, "too small line length (at least 8 is required)");
+			}
+		}
+
+		enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 3);
+
+			if (g_ascii_strcasecmp (how_str, "cr") == 0) {
+				how = RSPAMD_TASK_NEWLINES_CR;
+			}
+			else if (g_ascii_strcasecmp (how_str, "lf") == 0) {
+				how = RSPAMD_TASK_NEWLINES_LF;
+			}
+			else if (g_ascii_strcasecmp (how_str, "crlf") != 0) {
+				return luaL_error (L, "invalid newline style: %s", how_str);
+			}
+		}
+
+		if (lua_type (L, 4) == LUA_TBOOLEAN) {
+			fold = lua_toboolean (L, 4);
 		}
 
 		gsize sz_len;
@@ -1041,7 +1068,7 @@ lua_text_base64 (lua_State *L)
 		out = lua_newuserdata (L, sizeof (*t));
 		out->flags = RSPAMD_TEXT_FLAG_OWN;
 		out->start = rspamd_encode_base64_common (t->start, t->len,
-				line_len, &sz_len, line_len != 0, RSPAMD_TASK_NEWLINES_CRLF);
+				line_len, &sz_len, fold, how);
 		out->len = sz_len;
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 	}
