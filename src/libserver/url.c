@@ -3296,7 +3296,13 @@ rspamd_url_query_callback (struct rspamd_url *url, gsize start_offset,
 	}
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
-	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
+
+
+	if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url)) {
+		if (cbd->part && cbd->part->mime_part->urls) {
+			g_ptr_array_add (cbd->part->mime_part->urls, url);
+		}
+	}
 
 	return TRUE;
 }
@@ -3347,7 +3353,11 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	}
 
 	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
-	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
+
+	if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url) &&
+			cbd->part->mime_part->urls) {
+		g_ptr_array_add (cbd->part->mime_part->urls, url);
+	}
 
 	cbd->part->exceptions = g_list_prepend (
 			cbd->part->exceptions,

@@ -758,7 +758,8 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			text_part->html,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
-			MESSAGE_FIELD (task, urls));
+			MESSAGE_FIELD (task, urls),
+			text_part->mime_part->urls);
 
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
@@ -925,6 +926,7 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->parsed_data.begin = start;
 	part->parsed_data.len = len;
 	part->part_number = MESSAGE_FIELD (task, parts)->len;
+	part->urls = g_ptr_array_new ();
 	part->raw_headers = rspamd_message_headers_new ();
 	part->headers_order = NULL;
 
@@ -1051,6 +1053,10 @@ rspamd_message_dtor (struct rspamd_message *msg)
 			luaL_unref (msg->task->cfg->lua_state,
 					LUA_REGISTRYINDEX,
 					p->specific.lua_specific.cbref);
+		}
+
+		if (p->urls) {
+			g_ptr_array_unref (p->urls);
 		}
 	}
 

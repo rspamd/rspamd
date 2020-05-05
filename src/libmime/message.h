@@ -91,6 +91,7 @@ struct rspamd_mime_part {
 
 	struct rspamd_mime_header *headers_order;
 	struct rspamd_mime_headers_table *raw_headers;
+	GPtrArray *urls;
 
 	gchar *raw_headers_str;
 	gsize raw_headers_len;
