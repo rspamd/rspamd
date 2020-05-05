@@ -589,7 +589,8 @@ local function gen_rbl_callback(rule)
 
   local function check_email_table(task, email_tbl, requests_table, whitelist, what)
     lua_util.remove_email_aliases(email_tbl)
-    email_tbl.addr = email_tbl.addr:lower()
+    email_tbl.domain = email_tbl.domain:lower()
+    email_tbl.user = email_tbl.user:lower()
 
     if rule.emails_domainonly then
       add_dns_request(task, email_tbl.domain, false, false, requests_table,
