@@ -345,14 +345,14 @@ rspamd_config.HAS_ATTACHMENT = {
 
 -- Requires freemail maps loaded in multimap
 local function freemail_reply_neq_from(task)
-  local frt = task:get_symbol('FREEMAIL_REPLYTO')
-  local ff  = task:get_symbol('FREEMAIL_FROM')
-  if (frt and ff and frt['options'] and ff['options'] and
-      frt['options'][1] ~= ff['options'][1])
-  then
-    return true
+  if not task:has_symbol('FREEMAIL_REPLYTO') or not task:has_symbol('FREEMAIL_FROM') then
+    return false
   end
-  return false
+  local frt = task:get_symbol('FREEMAIL_REPLYTO')
+  local ff = task:get_symbol('FREEMAIL_FROM')
+  local frt_opts = frt[1]['options']
+  local ff_opts = ff[1]['options']
+  return ( frt_opts and ff_opts and frt_opts[1] ~= ff_opts[1] )
 end
 
 rspamd_config:register_symbol({
