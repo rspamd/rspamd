@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <src/libmime/message.h>
 #include "lua_common.h"
+#include "lua_url.h"
 #include "libmime/message.h"
 #include "libmime/lang_detection.h"
 #include "libstat/stat_api.h"
@@ -544,6 +544,15 @@ LUA_FUNCTION_DEF (mimepart, set_specific);
  */
 LUA_FUNCTION_DEF (mimepart, is_specific);
 
+/***
+ * @method mime_part:get_urls([need_emails|list_protos][, need_images])
+ * Get all URLs found in a mime part. Telephone urls and emails are not included unless explicitly asked in `list_protos`
+ * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_images return urls from images (<img src=...>) as well
+ * @return {table rspamd_url} list of all urls found
+ */
+LUA_FUNCTION_DEF (mimepart, get_urls);
+
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
 	LUA_INTERFACE_DEF (mimepart, get_raw_content),
@@ -569,6 +578,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_message),
 	LUA_INTERFACE_DEF (mimepart, get_children),
 	LUA_INTERFACE_DEF (mimepart, get_parent),
+	LUA_INTERFACE_DEF (mimepart, get_urls),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, is_attachment),
@@ -2065,6 +2075,46 @@ lua_mimepart_get_specific (lua_State * L)
 	else {
 		lua_rawgeti (L, LUA_REGISTRYINDEX, part->specific.lua_specific.cbref);
 	}
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_urls (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	struct lua_tree_cb_data cb;
+	struct rspamd_url *u;
+	static const gint default_protocols_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
+											   PROTOCOL_FILE|PROTOCOL_FTP;
+	gsize sz, max_urls = 0, i;
+
+	if (part->urls == NULL) {
+		lua_newtable (L);
+
+		return 1;
+	}
+
+	if (!lua_url_cbdata_fill (L, 2, &cb, default_protocols_mask,
+			~(0), max_urls)) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	sz = part->urls->len;
+
+	lua_createtable (L, sz, 0);
+
+	PTR_ARRAY_FOREACH (part->urls, i, u) {
+		lua_tree_url_callback (u, u, &cb);
+	}
+
+	lua_url_cbdata_dtor (&cb);
 
 	return 1;
 }
