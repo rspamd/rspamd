@@ -509,6 +509,7 @@ local function gen_rbl_callback(rule)
       ignore_ip = rule.no_ip,
       need_images = rule.images,
       need_emails = false,
+      need_content = rule.content_urls or false,
       esld_limit = esld_lim,
       no_cache = true,
     }
@@ -1155,6 +1156,7 @@ local rule_schema_tbl = {
   process_script = ts.string:is_optional(),
   emails_delimiter = ts.string:is_optional(),
   ignore_defaults = ts.boolean:is_optional(),
+  content_urls = ts.boolean:is_optional(),
   disable_monitoring = ts.boolean:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
 }
