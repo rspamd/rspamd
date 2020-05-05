@@ -2661,7 +2661,7 @@ lua_cryptobox_secretbox_decrypt (lua_State *L)
 			TRUE);
 	gint text_pos = lua_gettop (L);
 
-	if (crypto_secretbox_easy ((guchar *)out->start, in, inlen,
+	if (crypto_secretbox_open_easy ((guchar *)out->start, in, inlen,
 			nonce, sbox->sk) == 0) {
 		lua_pushboolean (L, true);
 		lua_pushvalue (L, text_pos); /* Prevent gc by copying in stack */
@@ -2717,7 +2717,7 @@ static gint
 lua_load_cryptobox_secretbox (lua_State * L)
 {
 	lua_newtable (L);
-	luaL_register (L, NULL, cryptoboxhashlib_f);
+	luaL_register (L, NULL, cryptoboxsecretboxlib_f);
 
 	return 1;
 }
