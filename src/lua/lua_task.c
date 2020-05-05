@@ -2333,9 +2333,21 @@ lua_task_inject_url (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_url *url = lua_check_url (L, 2);
+	struct rspamd_mime_part *mpart = NULL;
+
+	if (lua_isuserdata (L, 3)) {
+		/* We also have a mime part there */
+		mpart = *((struct rspamd_mime_part **)rspamd_lua_check_udata_maybe (L,
+				3, "rspamd{mimepart}"));
+	}
 
 	if (task && task->message && url && url->url) {
-		rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url->url);
+		if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url->url)) {
+			if (mpart && mpart->urls) {
+				/* Also add url to the mime part */
+				g_ptr_array_add (mpart->urls, url->url);
+			}
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

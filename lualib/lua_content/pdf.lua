@@ -1052,7 +1052,7 @@ local function search_text(task, pdf)
 end
 
 -- This function searches objects for `/URI` key and parses it's content
-local function search_urls(task, pdf)
+local function search_urls(task, pdf, mpart)
   local function recursive_object_traverse(obj, dict, rec)
     if rec > 10 then
       lua_util.debugm(N, task, 'object %s:%s recurses too much',
@@ -1071,7 +1071,7 @@ local function search_urls(task, pdf)
           if url then
             lua_util.debugm(N, task, 'found url %s in object %s:%s',
                 v, obj.major, obj.minor)
-            task:inject_url(url)
+            task:inject_url(url, mpart)
           end
         end
       end
@@ -1085,7 +1085,7 @@ local function search_urls(task, pdf)
   end
 end
 
-local function process_pdf(input, _, task)
+local function process_pdf(input, mpart, task)
 
   if not config.enabled then
     -- Skip processing
@@ -1135,7 +1135,7 @@ local function process_pdf(input, _, task)
         search_text(task, pdf_output)
       end
       if config.url_extraction then
-        search_urls(task, pdf_output)
+        search_urls(task, pdf_output, mpart)
       end
 
       if config.js_fuzzy and pdf_output.scripts then
