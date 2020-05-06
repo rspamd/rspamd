@@ -2542,20 +2542,21 @@ lua_cryptobox_secretbox_gc (lua_State *L)
 }
 
 /***
- * @method rspamd_cryptobox_secretbox:encrypt(input)
+ * @method rspamd_cryptobox_secretbox:encrypt(input, [nonce])
  * Encrypts data using secretbox. MAC is prepended to the message
  * @param {string/text} input input to encrypt
+ * @param {string/text} nonce optional nonce (must be 1 - 192 bits length)
  * @param {table} params optional parameters - NYI
- * @return {rspamd_text},{rspamd_text} nonce + output with mac
+ * @return {rspamd_text},{rspamd_text} output with mac + nonce or just output if nonce is there
  */
 static gint
 lua_cryptobox_secretbox_encrypt (lua_State *L)
 {
-	const gchar *in;
-	gsize inlen;
+	const gchar *in, *nonce;
+	gsize inlen, nlen;
 	struct rspamd_lua_cryptobox_secretbox *sbox =
 			lua_check_cryptobox_secretbox (L, 1);
-	struct rspamd_lua_text *out, *nonce;
+	struct rspamd_lua_text *out;
 
 	if (sbox == NULL) {
 		return luaL_error (L, "invalid arguments");
@@ -2578,18 +2579,59 @@ lua_cryptobox_secretbox_encrypt (lua_State *L)
 		return luaL_error (L, "invalid arguments; userdata or string are expected");
 	}
 
-	nonce = lua_new_text (L, NULL, crypto_secretbox_NONCEBYTES, TRUE);
-	out = lua_new_text (L, NULL, inlen + crypto_secretbox_MACBYTES,
-			TRUE);
+	/* Nonce part */
+	if (!lua_isnoneornil (L, 3)) {
+		if (lua_isstring (L, 3)) {
+			nonce = lua_tolstring (L, 3, &nlen);
+		}
+		else if (lua_isuserdata (L, 3)) {
+			struct rspamd_lua_text *t = lua_check_text (L, 3);
 
-	randombytes_buf ((guchar *)nonce->start, nonce->len);
-	crypto_secretbox_easy ((guchar *)out->start, in, inlen, nonce->start, sbox->sk);
+			if (!t) {
+				return luaL_error (L, "invalid arguments; userdata is not text");
+			}
 
-	return 2;
+			nonce = t->start;
+			nlen = t->len;
+		}
+		else {
+			return luaL_error (L, "invalid arguments; userdata or string are expected");
+		}
+
+		if (nlen < 1 || nlen > crypto_secretbox_NONCEBYTES) {
+			return luaL_error (L, "bad nonce");
+		}
+
+		guchar real_nonce[crypto_secretbox_NONCEBYTES];
+
+		memset (real_nonce, 0, sizeof (real_nonce));
+		memcpy (real_nonce, nonce, nlen);
+
+		out = lua_new_text (L, NULL, inlen + crypto_secretbox_MACBYTES,
+				TRUE);
+		crypto_secretbox_easy ((guchar *)out->start, in, inlen,
+				nonce, sbox->sk);
+
+		return 1;
+	}
+	else {
+		/* Random nonce */
+		struct rspamd_lua_text *random_nonce;
+
+		out = lua_new_text (L, NULL, inlen + crypto_secretbox_MACBYTES,
+				TRUE);
+		random_nonce = lua_new_text (L, NULL, crypto_secretbox_NONCEBYTES, TRUE);
+
+		randombytes_buf ((guchar *)random_nonce->start, random_nonce->len);
+		crypto_secretbox_easy ((guchar *)out->start, in, inlen,
+				random_nonce->start, sbox->sk);
+
+		return 2; /* output + random nonce */
+	}
 }
 
 /***
- * @method rspamd_cryptobox_secretbox:decrypt(nonce, input)
+ * @method rspamd_cryptobox_secretbox:decrypt(input, nonce)
  * Decrypts data using secretbox
  * @param {string/text} nonce nonce used to encrypt
  * @param {string/text} input input to decrypt
@@ -2609,30 +2651,12 @@ lua_cryptobox_secretbox_decrypt (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	/* Nonce argument */
+	/* Input argument */
 	if (lua_isstring (L, 2)) {
-		nonce = lua_tolstring (L, 2, &nlen);
+		in = lua_tolstring (L, 2, &inlen);
 	}
 	else if (lua_isuserdata (L, 2)) {
 		struct rspamd_lua_text *t = lua_check_text (L, 2);
-
-		if (!t) {
-			return luaL_error (L, "invalid arguments; userdata is not text");
-		}
-
-		nonce = t->start;
-		nlen = t->len;
-	}
-	else {
-		return luaL_error (L, "invalid arguments; userdata or string are expected");
-	}
-
-	/* Input argument */
-	if (lua_isstring (L, 3)) {
-		in = lua_tolstring (L, 3, &inlen);
-	}
-	else if (lua_isuserdata (L, 3)) {
-		struct rspamd_lua_text *t = lua_check_text (L, 3);
 
 		if (!t) {
 			return luaL_error (L, "invalid arguments; userdata is not text");
@@ -2645,7 +2669,26 @@ lua_cryptobox_secretbox_decrypt (lua_State *L)
 		return luaL_error (L, "invalid arguments; userdata or string are expected");
 	}
 
-	if (nlen != crypto_secretbox_NONCEBYTES) {
+	/* Nonce argument */
+	if (lua_isstring (L, 3)) {
+		nonce = lua_tolstring (L, 3, &nlen);
+	}
+	else if (lua_isuserdata (L, 3)) {
+		struct rspamd_lua_text *t = lua_check_text (L, 3);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments; userdata is not text");
+		}
+
+		nonce = t->start;
+		nlen = t->len;
+	}
+	else {
+		return luaL_error (L, "invalid arguments; userdata or string are expected");
+	}
+
+
+	if (nlen < 1 || nlen > crypto_secretbox_NONCEBYTES) {
 		lua_pushboolean (L, false);
 		lua_pushstring (L, "invalid nonce");
 		return 2;
@@ -2656,6 +2699,11 @@ lua_cryptobox_secretbox_decrypt (lua_State *L)
 		lua_pushstring (L, "too short");
 		return 2;
 	}
+
+	guchar real_nonce[crypto_secretbox_NONCEBYTES];
+
+	memset (real_nonce, 0, sizeof (real_nonce));
+	memcpy (real_nonce, nonce, nlen);
 
 	out = lua_new_text (L, NULL, inlen - crypto_secretbox_MACBYTES,
 			TRUE);
