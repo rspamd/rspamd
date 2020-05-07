@@ -264,6 +264,7 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 	gint fd;
 
 	fd = rspamd_socket (name, port, SOCK_STREAM, TRUE, FALSE, TRUE);
+
 	if (fd == -1) {
 		return NULL;
 	}
@@ -285,7 +286,7 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 	}
 
 	/* Pass socket ownership */
-	rspamd_http_connection_own_socket (conn);
+	rspamd_http_connection_own_socket (conn->http_conn);
 	conn->server_name = g_string_new (name);
 
 	if (port != 0) {
