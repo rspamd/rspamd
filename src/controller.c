@@ -563,13 +563,15 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 		}
 
-		msg_info_session ("absent password has been specified");
+		msg_info_session ("absent password has been specified; source ip: %s",
+				rspamd_inet_address_to_string_pretty (session->from_addr));
 		ret = FALSE;
 	}
 	else {
 		if (rspamd_ftok_cstr_equal (password, "q1", FALSE) ||
 				rspamd_ftok_cstr_equal (password, "q2", FALSE)) {
-			msg_info_session ("deny default password for remote access");
+			msg_info_session ("deny default password for remote access; source ip: %s",
+					rspamd_inet_address_to_string_pretty (session->from_addr));
 			ret = FALSE;
 			goto end;
 		}
@@ -603,7 +605,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 			else {
 				msg_warn_session (
-						"no password to check while executing a privileged command");
+						"no password to check while executing a privileged command; source ip: %s",
+						rspamd_inet_address_to_string_pretty (session->from_addr));
 				ret = FALSE;
 			}
 
@@ -673,7 +676,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 	}
 
 	if (check_normal == FALSE && check_enable == FALSE) {
-		msg_info ("absent or incorrect password has been specified");
+		msg_info ("absent or incorrect password has been specified; source ip: %s",
+				rspamd_inet_address_to_string_pretty (session->from_addr));
 		ret = FALSE;
 	}
 
