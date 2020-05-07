@@ -203,6 +203,12 @@ void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 									 struct rspamd_cryptobox_keypair *key);
 
 /**
+ * Transfer ownership on socket to an HTTP connection
+ * @param conn
+ */
+void rspamd_http_connection_own_socket (struct rspamd_http_connection *conn);
+
+/**
  * Get peer's public key
  * @param conn connection structure
  * @return pubkey structure or NULL
