@@ -279,7 +279,15 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 			0,
 			fd);
 
+	if (!conn->http_conn) {
+		rspamd_client_destroy (conn);
+		return NULL;
+	}
+
+	/* Pass socket ownership */
+	rspamd_http_connection_own_socket (conn);
 	conn->server_name = g_string_new (name);
+
 	if (port != 0) {
 		rspamd_printf_gstring (conn->server_name, ":%d", (int)port);
 	}
@@ -474,7 +482,10 @@ void
 rspamd_client_destroy (struct rspamd_client_connection *conn)
 {
 	if (conn != NULL) {
-		rspamd_http_connection_unref (conn->http_conn);
+		if (conn->http_conn) {
+			rspamd_http_connection_unref (conn->http_conn);
+		}
+
 		if (conn->req != NULL) {
 			rspamd_client_request_free (conn->req);
 		}
@@ -482,9 +493,11 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 		if (conn->key) {
 			rspamd_pubkey_unref (conn->key);
 		}
+
 		if (conn->keypair) {
 			rspamd_keypair_unref (conn->keypair);
 		}
+
 		g_string_free (conn->server_name, TRUE);
 		g_free (conn);
 	}
