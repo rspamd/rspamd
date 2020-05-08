@@ -1094,9 +1094,6 @@ local default_options = {
   ['default_exclude_private_ips'] = true,
   ['default_exclude_users'] = false,
   ['default_exclude_local'] = true,
-  ['default_is_whitelist'] = false,
-  ['default_ignore_whitelist'] = false,
-  ['default_resolve_ip'] = false,
   ['default_no_ip'] = false,
   ['default_images'] = false,
   ['default_replyto'] = false,
@@ -1156,6 +1153,11 @@ local rule_schema_tbl = {
   process_script = ts.string:is_optional(),
   emails_delimiter = ts.string:is_optional(),
   ignore_defaults = ts.boolean:is_optional(),
+  ignore_default = ts.boolean:is_optional(), -- alias
+  ignore_whitelist = ts.boolean:is_optional(),
+  ignore_whitelists = ts.boolean:is_optional(), -- alias
+  is_whitelist = ts.boolean:is_optional(),
+  resolve_ip = ts.boolean:is_optional(),
   content_urls = ts.boolean:is_optional(),
   disable_monitoring = ts.boolean:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
@@ -1171,6 +1173,13 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
+    -- Aliases
+    if type(rbl.ignore_default) == 'boolean' then
+      rbl.ignore_defaults = rbl.ignore_default
+    end
+    if type(rbl.ignore_whitelists) == 'boolean' then
+      rbl.ignore_whitelist = rbl.ignore_whitelists
+    end
     -- Propagate default options from opts to rule
     if not rbl.ignore_defaults then
       for default_opt_key,_ in pairs(default_options) do
