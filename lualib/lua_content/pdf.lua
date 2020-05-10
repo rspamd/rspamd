@@ -459,6 +459,8 @@ local function parse_object_grammar(obj, task, pdf)
               obj.major, obj.minor, obj_or_err)
           pdf.ref[obj_ref(obj.major, obj.minor)] = obj
         else
+          lua_util.debugm(N, task, 'direct object %s:%s is parsed to raw data: %s',
+              obj.major, obj.minor, obj_or_err)
           pdf.ref[obj_ref(obj.major, obj.minor)] = obj_or_err
           obj.dict = {}
           obj.uncompressed = obj_or_err
@@ -841,8 +843,8 @@ local function extract_outer_objects(task, input, pdf)
     local last = pdf.end_objects[end_pos]
 
     -- 7 is length of `endobj\n`
-    if first + 7 < last then
-      local len = last - first - 7
+    if first + 6 < last then
+      local len = last - first - 6
 
       -- Also get the starting span and try to match it versus obj re to get numbers
       local obj_line_potential = first - 32
