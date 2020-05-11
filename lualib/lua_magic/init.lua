@@ -152,7 +152,7 @@ end
 
 process_patterns(rspamd_config)
 
-local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_obj, res)
+local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_obj, res, part)
   local matches = trie:match(chunk)
 
   local last = tlen
@@ -210,7 +210,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
             pattern.ext, pos, offset)
         if match_position(pos + offset, position) then
           if match.heuristic then
-            local ext,weight = match.heuristic(input, log_obj)
+            local ext,weight = match.heuristic(input, log_obj, pos + offset, part)
 
             if ext then
               add_result(weight, ext)
@@ -225,6 +225,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
     elseif match.positions then
       -- Match all positions
       local all_right = true
+      local matched_pos = 0
       for _,position in ipairs(match.positions) do
         local matched = false
         for _,pos in ipairs(matched_positions) do
@@ -232,6 +233,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
               pattern.ext, pos, offset)
           if not match_position(pos + offset, position) then
             matched = true
+            matched_pos = pos
             break
           end
         end
@@ -243,7 +245,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
 
       if all_right then
         if match.heuristic then
-          local ext,weight = match.heuristic(input, log_obj)
+          local ext,weight = match.heuristic(input, log_obj, matched_pos + offset, part)
 
           if ext then
             add_result(weight, ext)
@@ -273,8 +275,9 @@ local function process_detected(res)
   return nil
 end
 
-exports.detect = function(input, log_obj)
+exports.detect = function(part, log_obj)
   if not log_obj then log_obj = rspamd_config end
+  local input = part:get_content()
 
   local res = {}
 
@@ -291,13 +294,13 @@ exports.detect = function(input, log_obj)
     if inplen > min_tail_offset then
       local tail = input:span(inplen - min_tail_offset, min_tail_offset)
       match_chunk(tail, input, inplen, inplen - min_tail_offset,
-          compiled_tail_patterns, tail_patterns, log_obj, res)
+          compiled_tail_patterns, tail_patterns, log_obj, res, part)
     end
 
     -- Try short match
     local head = input:span(1, math.min(max_short_offset, inplen))
     match_chunk(head, input, inplen, 0,
-        compiled_short_patterns, short_patterns, log_obj, res)
+        compiled_short_patterns, short_patterns, log_obj, res, part)
 
     -- Check if we have enough data or go to long patterns
     local extensions,confidence = process_detected(res)
@@ -316,13 +319,13 @@ exports.detect = function(input, log_obj)
       local offset1, offset2 = 0, inplen - exports.chunk_size
 
       match_chunk(chunk1, input, inplen,
-          offset1, compiled_patterns, processed_patterns, log_obj, res)
+          offset1, compiled_patterns, processed_patterns, log_obj, res, part)
       match_chunk(chunk2, input, inplen,
-          offset2, compiled_patterns, processed_patterns, log_obj, res)
+          offset2, compiled_patterns, processed_patterns, log_obj, res, part)
     else
       -- Input is short enough to match it at all
       match_chunk(input, input, inplen, 0,
-          compiled_patterns, processed_patterns, log_obj, res)
+          compiled_patterns, processed_patterns, log_obj, res, part)
     end
   else
     -- Table input is NYI
@@ -346,7 +349,7 @@ exports.detect_mime_part = function(part, log_obj)
     return ext,types[ext]
   end
 
-  ext = exports.detect(part:get_content(), log_obj)
+  ext = exports.detect(part, log_obj)
 
   if ext then
     return ext,types[ext]

@@ -147,7 +147,7 @@ end
 -- Call immediately on require
 compile_tries()
 
-local function detect_ole_format(input, log_obj)
+local function detect_ole_format(input, log_obj, _, part)
   local inplen = #input
   if inplen < 0x31 + 4 then
     lua_util.debugm(N, log_obj, "short length: %s", inplen)
@@ -245,7 +245,7 @@ local function process_top_detected(res)
   return nil
 end
 
-local function detect_archive_flaw(part, arch, log_obj)
+local function detect_archive_flaw(part, arch, log_obj, _)
   local arch_type = arch:get_type()
   local res = {
     docx = 0,
@@ -312,7 +312,7 @@ local function detect_archive_flaw(part, arch, log_obj)
   return arch_type:lower(),40
 end
 
-exports.mime_part_heuristic = function(part, log_obj)
+exports.mime_part_heuristic = function(part, log_obj, _)
   if part:is_archive() then
     local arch = part:get_archive()
     return detect_archive_flaw(part, arch, log_obj)
@@ -321,7 +321,7 @@ exports.mime_part_heuristic = function(part, log_obj)
   return nil
 end
 
-exports.text_part_heuristic = function(part, log_obj)
+exports.text_part_heuristic = function(part, log_obj, _)
   -- We get some span of data and check it
   local function is_span_text(span)
     local function rough_utf8_check(bytes, idx, remain)
@@ -434,6 +434,21 @@ exports.text_part_heuristic = function(part, log_obj)
       return 'txt',40
     end
   end
+end
+
+exports.pdf_format_heuristic = function(input, log_obj, pos, part)
+  local weight = 10
+  local ext = string.match(part:get_filename() or '', '%.([^.]+)$')
+  -- If we found a pattern at the beginning
+  if pos <= 10 then
+    weight = weight + 30
+  end
+  -- If the announced extension is `pdf`
+  if ext and ext:lower() == 'pdf' then
+    weight = weight + 30
+  end
+
+  return 'pdf',weight
 end
 
 return exports
