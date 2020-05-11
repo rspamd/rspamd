@@ -26,13 +26,13 @@ local patterns = {
     -- These are alternatives
     matches = {
       {
-        string = [[^%PDF-\d]],
+        string = [[%PDF-[12]\.\d]],
         position = {'<=', 1024},
         weight = 60,
         heuristic = heuristics.pdf_format_heuristic
       },
       {
-        string = [[^%FDF-\d]],
+        string = [[%FDF-[12]\.\d]],
         position = {'<=', 1024},
         weight = 60,
         heuristic = heuristics.pdf_format_heuristic
