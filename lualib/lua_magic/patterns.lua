@@ -32,12 +32,6 @@ local patterns = {
         heuristic = heuristics.pdf_format_heuristic
       },
       {
-        string = [[^\012%PDF-\d]],
-        position = {'<=', 1024},
-        weight = 60,
-        heuristic = heuristics.pdf_format_heuristic
-      },
-      {
         string = [[^%FDF-\d]],
         position = {'<=', 1024},
         weight = 60,
