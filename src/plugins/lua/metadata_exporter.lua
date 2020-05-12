@@ -63,6 +63,18 @@ Score: $score
 Symbols: $symbols]],
 }
 
+local variables = {
+  content = function(task)
+   return task:get_content():str()
+  end,
+  uid = function(task)
+    return string.sub(task:get_uid(), 1,6)
+  end,
+  our_boundary = function(task)
+    return "----=_MIME_BOUNDARY_" .. rspamd_util.random_hex(15)
+  end,
+}
+
 local function get_general_metadata(task, flatten, no_content)
   local r = {}
   local ip = task:get_from_ip()
@@ -138,6 +150,11 @@ local function get_general_metadata(task, flatten, no_content)
     r.header_subject = process_header('subject')
     r.header_date = process_header('date')
     r.message_id = task:get_message_id()
+    if variables then
+      for k, _ in pairs(variables) do
+        r[k] = variables[k](task)
+      end
+    end
   end
   return r
 end
@@ -329,6 +346,13 @@ local process_settings = {
     if type(val) == 'table' then
       for k, v in pairs(val) do
         pushers[k] = assert(load(v))()
+      end
+    end
+  end,
+  custom_variables = function(val)
+    if type(val) == 'table' then
+      for k, v in pairs(val) do
+        variables[k] = assert(load(v))()
       end
     end
   end,
