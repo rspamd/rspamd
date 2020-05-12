@@ -44,7 +44,7 @@ local function icap_config(opts)
     scan_text_mime = false,
     scan_image_mime = false,
     scheme = "scan",
-    default_port = 4020,
+    default_port = 1344,
     timeout = 10.0,
     log_clean = false,
     retransmits = 2,
