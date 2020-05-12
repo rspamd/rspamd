@@ -152,7 +152,7 @@ typedef struct Charset {
 #define testchar(st,c)	(((int)(st)[((c) >> 3)] & (1 << ((c) & 7))))
 
 /* Special workaround for luajit */
-#if defined(WITH_LUAJIT) && !(defined(_X86_) || defined(__x86_64__) || defined(__i386__))
+#if defined(WITH_LUAJIT) && !(defined(_X86_) || defined(__x86_64__) || defined(__i386__) || defined(__powerpc__))
 # define LPEG_LUD_WORKAROUND 1
 void * lpeg_allocate_mem_low(size_t sz);
 void lpeg_free_mem_low(void *p);
