@@ -125,6 +125,14 @@ LUA_FUNCTION_DEF (text, at);
  * @return {table|integer} bytes in the array (as unsigned char)
  */
 LUA_FUNCTION_DEF (text, bytes);
+/***
+ * @method rspamd_text:lower([is_utf, [inplace]])
+ * Return a new text with lowercased characters, if is_utf is true then Rspamd applies utf8 lowercase
+ * @param {boolean} is_utf apply utf8 lowercase
+ * @param {boolean} inplace lowercase the original text
+ * @return rspamd_text} new rspamd_text (or the original text if inplace) with lowercased letters
+ */
+LUA_FUNCTION_DEF (text, lower);
 LUA_FUNCTION_DEF (text, take_ownership);
 /***
  * @method rspamd_text:exclude_chars(set_to_exclude, [always_copy])
@@ -207,6 +215,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, bytes),
+		LUA_INTERFACE_DEF (text, lower),
 		LUA_INTERFACE_DEF (text, exclude_chars),
 		LUA_INTERFACE_DEF (text, oneline),
 		LUA_INTERFACE_DEF (text, base32),
@@ -1414,6 +1423,43 @@ lua_text_oneline (lua_State *L)
 		}
 
 		*(plen) = d - dest;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_lower (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1), *nt;
+	gboolean is_utf8 = FALSE, is_inplace = FALSE;
+
+	if (t != NULL) {
+		if (lua_isboolean (L, 2)) {
+			is_utf8 = lua_toboolean (L, 2);
+		}
+		if (lua_isboolean (L, 3)) {
+			is_inplace = lua_toboolean (L, 3);
+		}
+
+		if (is_inplace) {
+			nt = t;
+			lua_pushvalue (L, 1);
+		}
+		else {
+			nt = lua_new_text (L, t->start, t->len, TRUE);
+		}
+
+		if (!is_utf8) {
+			rspamd_str_lc ((gchar *) nt->start, nt->len);
+		}
+		else {
+			rspamd_str_lc_utf8 ((gchar *) nt->start, nt->len);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
