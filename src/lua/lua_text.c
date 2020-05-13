@@ -92,6 +92,12 @@ LUA_FUNCTION_DEF (text, save_in_file);
  */
 LUA_FUNCTION_DEF (text, span);
 /***
+ * @method rspamd_text:sub(start[, len])
+ * Returns a substrin for lua_text similar to string.sub from Lua
+ * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
+ */
+LUA_FUNCTION_DEF (text, sub);
+/***
  * @method rspamd_text:lines([stringify])
  * Returns an iter over all lines as rspamd_text objects or as strings if `stringify` is true
  * @param {boolean} stringify stringify lines
@@ -196,6 +202,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, take_ownership),
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
+		LUA_INTERFACE_DEF (text, sub),
 		LUA_INTERFACE_DEF (text, lines),
 		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
@@ -551,6 +558,68 @@ lua_text_span (lua_State *L)
 			return luaL_error (L, "invalid arguments: start offset %d "
 						 "is larger than text len %d", (int)start, (int)t->len);
 		}
+	}
+
+	return 1;
+}
+
+/* Helpers to behave exactly as Lua does */
+static inline gsize
+relative_pos_start (gint pos, gsize len)
+{
+	if (pos > 0) {
+		return pos;
+	}
+	else if (pos == 0) {
+		return 1;
+	}
+	else if (pos < -((gint) len)) {
+		return 1;
+	}
+
+	/* Negative pos inside str */
+	return len + ((gsize)pos) + 1;
+}
+
+static inline gsize
+relative_pos_end (gint pos, gsize len)
+{
+	if (pos > (gint)len) {
+		return len;
+	}
+	else if (pos >= 0) {
+		return (size_t) pos;
+	}
+	else if (pos < -((gint)len)) {
+		return 0;
+	}
+
+	return len + ((gsize)pos) + 1;
+}
+
+static gint
+lua_text_sub (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t) {
+		size_t start = relative_pos_start (luaL_checkinteger (L, 2),
+				t->len);
+		size_t end = relative_pos_end (luaL_optinteger (L, 3, -1),
+				t->len);
+
+
+		if (start <= end) {
+			lua_new_text (L, t->start + (start - 1),
+					(end - start) + 1, FALSE);
+		}
+		else {
+			lua_new_text (L, "", 0, TRUE);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
