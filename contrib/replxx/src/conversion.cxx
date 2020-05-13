@@ -54,9 +54,21 @@ ConversionResult copyString8to32(char32_t* dst, int dstSize, int& dstCount, cons
 
 		while (i < slen && j < dstSize) {
 			UChar32 uc;
+			auto prev_i = i;
 			U8_NEXT (sourceStart, i, slen, uc);
 
 			if (uc <= 0) {
+				if (U8_IS_LEAD (sourceStart[prev_i])) {
+					auto lead_byte = sourceStart[prev_i];
+					auto trailing_bytes = (((uint8_t)(lead_byte)>=0xc2)+
+							((uint8_t)(lead_byte)>=0xe0)+
+							((uint8_t)(lead_byte)>=0xf0));
+
+					if (trailing_bytes + i > slen) {
+						return ConversionResult::sourceExhausted;
+					}
+				}
+
 				/* Replace with 0xFFFD */
 				uc = 0x0000FFFD;
 			}
