@@ -34,10 +34,13 @@ local logger = require 'rspamd_logger'
 local fun = require 'fun'
 local lua_util = require "lua_util"
 local M = "selectors"
+local rspamd_text = require "rspamd_text"
 local E = {}
 
 local extractors = require "lua_selectors/extractors"
 local transform_function = require "lua_selectors/transforms"
+
+local text_cookie = rspamd_text.cookie
 
 local function pure_type(ltype)
   return ltype:match('^(.*)_list$')
@@ -66,6 +69,13 @@ local function process_selector(task, sel)
       end
 
       return logger.slog("%s", ud_or_table),'string'
+    elseif t == 'userdata' then
+      if t.cookie and t.cookie == text_cookie then
+        -- Preserve opaque
+        return ud_or_table,'string'
+      else
+        return tostring(ud_or_table),'string'
+      end
     else
       return tostring(ud_or_table),'string'
     end
