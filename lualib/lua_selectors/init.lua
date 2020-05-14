@@ -102,7 +102,7 @@ local function process_selector(task, sel)
     if meth.types[etype] then
       lua_util.debugm(M, task, 'apply method `%s` to %s',
           meth.name, etype)
-      input,etype = meth.process(input, etype)
+      input,etype = meth.process(input, etype, meth.args)
     else
       local pt = pure_type(etype)
 
@@ -342,7 +342,7 @@ exports.parse_selector = function(cfg, str)
               return inp[method_name],'string'
             else
               -- We call method unpacking arguments and dropping all but the first result returned
-              local ret = (inp[method_name](inp, unpack_function(args)))
+              local ret = (inp[method_name](inp, unpack_function(args or E)))
               local ret_type = type(ret)
               -- Now apply types heuristic
               if ret_type == 'string' then
