@@ -513,7 +513,7 @@ lua_regexp_search (lua_State *L)
 		}
 
 		if (data && len > 0) {
-			if (lua_gettop (L) >= 4) {
+			if (lua_gettop (L) >= 4 && lua_toboolean (L, 4)) {
 				capture = TRUE;
 				captures = g_array_new (FALSE, TRUE,
 						sizeof (struct rspamd_re_capture));
