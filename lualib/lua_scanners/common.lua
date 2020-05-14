@@ -325,11 +325,15 @@ local function create_regex_table(patterns)
   return regex_table
 end
 
-local function match_filter(task, found, patterns)
-  if type(patterns) ~= 'table' or not found then return false end
+local function match_filter(task, rule, found, patterns, pat_type)
+  if type(patterns) ~= 'table' or not found then
+    return false
+  end
   if not patterns[1] then
     for _, pat in pairs(patterns) do
-      if pat:match(found) then
+      if pat_type == 'ext' and tostring(pat) == tostring(found) then
+        return true
+      elseif pat_type == 'regex' and pat:match(found) then
         return true
       end
     end
@@ -337,7 +341,9 @@ local function match_filter(task, found, patterns)
   else
     for _, p in ipairs(patterns) do
       for _, pat in ipairs(p) do
-        if pat:match(found) then
+        if pat_type == 'ext' and tostring(pat) == tostring(found) then
+          return true
+        elseif pat_type == 'regex' and pat:match(found) then
           return true
         end
       end
@@ -366,37 +372,28 @@ local function check_parts_match(task, rule)
     local detected_ext = p:get_detected_ext()
     local fname = p:get_filename()
     local ext, ext2
-    local extension_check = false
-    local content_type_check = false
-    local attachment_check = false
-    local text_part_min_words_check = true
 
     if rule.scan_all_mime_parts == false then
     -- check file extension and filename regex matching
+      --lua_util.debugm(rule.name, task, '%s: filename: |%s|%s|', rule.log_prefix, fname)
       if fname ~= nil then
         ext,ext2 = gen_extension(fname)
-        if match_filter(task, ext, rule.mime_parts_filter_ext)
-          or match_filter(task, ext2, rule.mime_parts_filter_ext)  then
-          lua_util.debugm(rule.name, task, '%s: extension matched: %s',
-              rule.log_prefix, ext)
-          extension_check = true
-        end
-        if match_filter(task, detected_ext, rule.mime_parts_filter_ext) then
-          lua_util.debugm(rule.name, task, '%s: detected extension matched: %s',
-              rule.log_prefix, detected_ext)
-          extension_check = true
-          ext = detected_ext
-        end
-        if match_filter(task, fname, rule.mime_parts_filter_regex) then
-          content_type_check = true
+        --lua_util.debugm(rule.name, task, '%s: extension, fname: |%s|%s|%s|', rule.log_prefix, ext, ext2, fname)
+        if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
+            or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
+          return true
+        elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex, 'regex') then
+          lua_util.debugm(rule.name, task, '%s: filname regex matched', rule.log_prefix)
+          return true
         end
       end
       -- check content type string regex matching
       if mtype ~= nil and msubtype ~= nil then
         local ct = string.format('%s/%s', mtype, msubtype):lower()
-        if match_filter(task, ct, rule.mime_parts_filter_regex) then
+        if match_filter(task, rule, ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex content-type: %s', rule.log_prefix, ct)
-          content_type_check = true
+          return true
         end
       end
       -- check detected content type (libmagic) regex matching
@@ -405,7 +402,7 @@ local function check_parts_match(task, rule)
         if match_filter(task, magic.ct, rule.mime_parts_filter_regex) then
           lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
               rule.log_prefix, magic.ct)
-          content_type_check = true
+          return true
         end
       end
       -- check filenames in archives
@@ -414,41 +411,44 @@ local function check_parts_match(task, rule)
         local filelist = arch:get_files_full(1000)
         for _,f in ipairs(filelist) do
           ext,ext2 = gen_extension(f.name)
-          if match_filter(task, ext, rule.mime_parts_filter_ext)
-            or match_filter(task, ext2, rule.mime_parts_filter_ext) then
-            lua_util.debugm(rule.name, task, '%s: extension matched in archive: %s', rule.log_prefix, ext)
-            extension_check = true
-          end
-          if match_filter(task, f.name, rule.mime_parts_filter_regex) then
-            content_type_check = true
+          if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
+              or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
+            lua_util.debugm(rule.name, task, '%s: extension matched in archive: |%s|%s|', rule.log_prefix, ext, ext2)
+            --lua_util.debugm(rule.name, task, '%s: extension matched in archive: %s', rule.log_prefix, ext)
+            return true
+          elseif match_filter(task, rule, f.name, rule.mime_parts_filter_regex, 'regex') then
+            lua_util.debugm(rule.name, task, '%s: filename regex matched in archive', rule.log_prefix)
+            return true
           end
         end
       end
     end
 
     -- check text_part has more words than text_part_min_words_check
-    if rule.text_part_min_words and p:is_text() then
-      text_part_min_words_check = p:get_words_count() >= tonumber(rule.text_part_min_words)
+    if rule.scan_text_mime and rule.text_part_min_words and p:is_text() and
+        p:get_words_count() >= tonumber(rule.text_part_min_words) then
+      return true
     end
+
+    if rule.scan_image_mime and p:is_image() then
+      return true
+    end
+
     if rule.scan_all_mime_parts ~= false then
       if detected_ext then
         -- We know what to scan!
         local magic = lua_magic_types[detected_ext] or {}
 
         if p:is_attachment() or magic.av_check ~= false then
-          extension_check = true
+          return true
         end
-      else
+      elseif p:is_attachment() then
         -- Just rely on attachment property
-        extension_check = p:is_attachment()
+        return true
       end
     end
 
-    return (rule.scan_image_mime and p:is_image())
-        or (rule.scan_text_mime and text_part_min_words_check)
-        or attachment_check
-        or extension_check
-        or content_type_check
+    return false
   end
 
   return fun.filter(filter_func, task:get_parts())
