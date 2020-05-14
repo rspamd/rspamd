@@ -350,6 +350,10 @@ context("Selectors test", function()
       selector = "header('Subject'):gsub('a', 'b')",
       expect = {"Second, lower-cbsed hebder subject"}
     },
+    ["header regexp first"] = {
+      selector = "header('Subject').regexp('.*').first",
+      expect = {"Second, lower-cased header subject"}
+    },
   }
 
   for case_name, case in pairs(cases) do

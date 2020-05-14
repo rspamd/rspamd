@@ -202,16 +202,24 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       local res = re:search(inp, false, true)
 
       if res then
-        if #res == 1 then
-          return res[1],'string'
+        -- Map all results in a single list
+        local flattened_table = {}
+        local function flatten_table(tbl)
+          for _, v in ipairs(tbl) do
+            if type(v) == 'table' then
+              flatten_table(v)
+            else
+              table.insert(flattened_table, v)
+            end
+          end
         end
-
-        return res,'string_list'
+        flatten_table(res)
+        return flattened_table,'string_list'
       end
 
       return nil
     end,
-    ['description'] = 'Regexp matching',
+    ['description'] = 'Regexp matching, returns all matches flattened in a single list',
     ['args_schema'] = {ts.string}
   },
   -- Returns a value if it exists in some map (or acts like a `filter` function)
