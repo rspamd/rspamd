@@ -132,9 +132,8 @@ local transform_function = {
     ['types'] = {
       ['string'] = true
     },
-    ['map_type'] = 'hash',
+    ['map_type'] = 'string',
     ['process'] = function(inp, _, args)
-
       return common.create_digest(inp, args),'string'
     end,
     ['description'] = [[Create a digest from a string.
