@@ -342,6 +342,14 @@ context("Selectors test", function()
       selector = "header(X-Test, full).last",
       expect = {"3"}
     },
+    ["header lower digest substring"] = {
+      selector = "header('Subject').lower.digest('hex').substring(1, 16)",
+      expect = {"736ad5f50fc95d73"}
+    },
+    ["header gsub"] = {
+      selector = "header('Subject'):gsub('a', 'b')",
+      expect = {"Second, lower-cbsed hebder subject"}
+    },
   }
 
   for case_name, case in pairs(cases) do
