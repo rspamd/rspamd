@@ -632,7 +632,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 			*end = mt + ovec[1];
 		}
 
-		if (captures != NULL && rc > 1) {
+		if (captures != NULL && rc >= 1) {
 			struct rspamd_re_capture *elt;
 
 			g_assert (g_array_get_element_size (captures) ==
@@ -746,7 +746,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 			*end = mt + ovec[1];
 		}
 
-		if (captures != NULL && novec > 1) {
+		if (captures != NULL && novec >= 1) {
 			struct rspamd_re_capture *elt;
 
 			g_assert (g_array_get_element_size (captures) ==
