@@ -65,6 +65,7 @@ local function make_key(goop, sz, prefix)
 end
 
 local function replies_check(task)
+  local in_reply_to
   local function check_recipient(stored_rcpt)
     local rcpts = task:get_recipients('mime')
 
@@ -76,14 +77,15 @@ local function replies_check(task)
       end
 
       if fun.any(filter_predicate, fun.map(function(rcpt) return rcpt.addr or '' end, rcpts)) then
+        lua_util.debugm(N, task, 'reply to %s validated', in_reply_to)
         return true
       end
 
-      rspamd_logger.infox(task, 'ignoring reply as no recipients are matching hash %s',
-          stored_rcpt)
+      rspamd_logger.infox(task, 'ignoring reply to %s as no recipients are matching hash %s',
+          in_reply_to, stored_rcpt)
     else
-      rspamd_logger.infox(task, 'ignoring reply as recipient cannot be detected for hash %s',
-          stored_rcpt)
+      rspamd_logger.infox(task, 'ignoring reply to %s as recipient cannot be detected for hash %s',
+          in_reply_to, stored_rcpt)
     end
 
     return false
@@ -110,12 +112,12 @@ local function replies_check(task)
     end
   end
   -- If in-reply-to header not present return
-  local irt = task:get_header_raw('in-reply-to')
-  if irt == nil then
+  in_reply_to = task:get_header_raw('in-reply-to')
+  if not in_reply_to then
     return
   end
   -- Create hash of in-reply-to and query redis
-  local key = make_key(irt, settings.key_size, settings.key_prefix)
+  local key = make_key(in_reply_to, settings.key_size, settings.key_prefix)
 
   local ret = lua_redis.redis_make_request(task,
     redis_params, -- connect params
@@ -153,19 +155,20 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id, settings.key_size, settings.key_prefix)
-  lua_util.debugm(N, task, 'storing message-id for replies check')
 
-  local value = task:get_reply_sender()
+  local sender = task:get_reply_sender()
 
-  if value then
-    value = make_key(value:lower(), 8)
+  if sender then
+    sender_hash = make_key(sender:lower(), 8)
+    lua_util.debugm(N, task, 'storing id: %s (%s), reply-to: %s (%s) for replies check',
+                      msg_id, key, sender, sender_hash)
     local ret = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         key, -- hash key
         true, -- is write
         redis_set_cb, --callback
         'PSETEX', -- command
-        {key, tostring(math.floor(settings['expire'] * 1000)), value:lower()} -- arguments
+        {key, tostring(math.floor(settings['expire'] * 1000)), sender_hash} -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, "redis request wasn't scheduled")
