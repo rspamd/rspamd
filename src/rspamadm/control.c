@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "rspamd.h"
 #include "rspamadm.h"
+#include "cfg_file.h"
+#include "cfg_rcl.h"
 #include "cryptobox.h"
 #include "printf.h"
 #include "libserver/http/http_connection.h"
@@ -25,7 +28,12 @@
 #include "libutil/util.h"
 #include "lua/lua_common.h"
 
-static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
+extern struct rspamd_main *rspamd_main;
+/* Defined in modules.c */
+extern module_t *modules[];
+extern worker_t *workers[];
+
+static gchar *control_path = NULL;
 static gboolean json = FALSE;
 static gboolean ucl = TRUE;
 static gboolean compact = FALSE;
@@ -76,7 +84,7 @@ rspamadm_control_help (gboolean full_help, const struct rspamadm_command *cmd)
 				"-c: output compacted json\n"
 				"-j: output linted json\n"
 				"-u: output ucl (default)\n"
-				"-s: use the following socket instead of " RSPAMD_DBDIR "/rspamd.sock\n"
+				"-s: use the following socket instead of configured one\n"
 				"-t: set IO timeout (1.0 seconds default)\n"
 				"--help: shows available options and commands\n\n"
 				"Supported commands:\n"
@@ -171,6 +179,20 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;
 	static struct rspamadm_control_cbdata cbdata;
+	struct rspamd_config *cfg = rspamd_main->cfg;
+
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
+	cfg->cfg_name = FIXED_CONFIG_FILE;
+
+	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL, rspamd_main,
+			ucl_vars, FALSE, lua_env)) {
+		control_path = RSPAMD_DBDIR "/rspamd.sock";
+	}
+	else
+	{
+		control_path = cfg->control_socket_path;
+	}
 
 	context = g_option_context_new (
 			"control - manage rspamd main control interface");
