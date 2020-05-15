@@ -159,7 +159,7 @@ local function replies_set(task)
   local sender = task:get_reply_sender()
 
   if sender then
-    sender_hash = make_key(sender:lower(), 8)
+    local sender_hash = make_key(sender:lower(), 8)
     lua_util.debugm(N, task, 'storing id: %s (%s), reply-to: %s (%s) for replies check',
                       msg_id, key, sender, sender_hash)
     local ret = lua_redis.redis_make_request(task,
