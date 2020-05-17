@@ -68,7 +68,6 @@ INCLUDE(CMakeParseArguments)
 INCLUDE(FindArch)
 INCLUDE(AsmOp)
 INCLUDE(FindRagel)
-INCLUDE(FindLua)
 INCLUDE(ProcessPackage)
 
 IF(NOT RAGEL_FOUND)
@@ -122,29 +121,53 @@ INCLUDE(OSDep)
 # Now find libraries and headers
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "m")
 IF(ENABLE_LUAJIT MATCHES "ON")
-	#ProcessPackage(LUAJIT luajit)
-	SET(WITH_LUA 1)
-	FindLua(VERSION_MAJOR "5" VERSION_MINOR "1" ROOT "${LUA_ROOT}")
-	IF(NOT LUA_FOUND)
-		MESSAGE(FATAL_ERROR "Lua not found, lua support is required")
-	ELSE(NOT LUA_FOUND)
-		SET(WITH_LUA 1)
-		INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
-	ENDIF(NOT LUA_FOUND)
+	ProcessPackage(LIBLUAJIT LIBRARY	"luajit"
+										"luajit-2.0"
+										"luajit2.0"
+			INCLUDE luajit.h INCLUDE_SUFFIXES
+										"include/luajit-2.0"
+										"include/luajit-2.1"
+										"include/luajit"
+			ROOT ${LUA_ROOT}
+			MODULES luajit)
+	SET(WITH_LUAJIT 1)
 ELSE(ENABLE_LUAJIT MATCHES "ON")
-	FindLua(VERSION_MAJOR "5" VERSION_MINOR "3" ROOT "${LUA_ROOT}")
-	IF(NOT LUA_FOUND)
-		FindLua(VERSION_MAJOR "5" VERSION_MINOR "2" ROOT "${LUA_ROOT}")
-		IF(NOT LUA_FOUND)
-				FindLua(VERSION_MAJOR "5" VERSION_MINOR "1" ROOT "${LUA_ROOT}")
-		ENDIF(NOT LUA_FOUND)
-	ENDIF(NOT LUA_FOUND)
-	IF(NOT LUA_FOUND)
-			MESSAGE(FATAL_ERROR "Lua not found, lua support is required")
-	ELSE(NOT LUA_FOUND)
-			SET(WITH_LUA 1)
-			INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
-	ENDIF(NOT LUA_FOUND)
+
+	ProcessPackage(LIBLUA LIBRARY	"lua"
+			"lua-5.3"
+			INCLUDE lua.h INCLUDE_SUFFIXES
+			"include/lua-5.3"
+			"include/lua5.3"
+			"include/lua53"
+			"include/lua"
+			ROOT ${LUA_ROOT}
+			MODULES lua53
+			OPTIONAL)
+
+	IF (NOT LIBLUA_FOUND)
+		ProcessPackage(LIBLUA LIBRARY	"lua"
+				"lua-5.2"
+				INCLUDE lua.h INCLUDE_SUFFIXES
+				"include/lua-5.2"
+				"include/lua5.2"
+				"include/lua52"
+				"include/lua"
+				ROOT ${LUA_ROOT}
+				MODULES lua52
+				OPTIONAL)
+
+		IF (NOT LIBLUA_FOUND)
+			ProcessPackage(LIBLUA LIBRARY	"lua"
+					"lua-5.1"
+					INCLUDE lua.h INCLUDE_SUFFIXES
+					"include/lua-5.1"
+					"include/lua5.1"
+					"include/lua51"
+					"include/lua"
+					ROOT ${LUA_ROOT}
+					MODULES lua51)
+		ENDIF()
+	ENDIF()
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 IF(ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
