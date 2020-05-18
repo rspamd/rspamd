@@ -933,8 +933,18 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = (struct rspamd_url *)value;
 	struct lua_tree_cb_data *cb = ud;
 
-	if ((url->protocol & cb->protocols_mask) == url->protocol &&
-		(url->flags == (url->flags & cb->flags_mask))) {
+	if ((url->protocol & cb->protocols_mask) == url->protocol) {
+
+		if (cb->flags_mode == url_flags_mode_include_any) {
+			if (url->flags != (url->flags & cb->flags_mask)) {
+				return;
+			}
+		}
+		else {
+			if ((url->flags & cb->flags_mask) != cb->flags_mask) {
+				return;
+			}
+		}
 
 		if (cb->skip_prob > 0) {
 			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
@@ -966,6 +976,9 @@ lua_url_cbdata_fill (lua_State *L,
 	guint flags_mask = default_flags;
 	gboolean seen_flags = FALSE, seen_protocols = FALSE;
 
+	memset (cbd, 0, sizeof (*cbd));
+	cbd->flags_mode = url_flags_mode_include_any;
+
 	if (pos_arg_type == LUA_TBOOLEAN) {
 		protocols_mask = default_protocols;
 		if (lua_toboolean (L, 2)) {
@@ -980,6 +993,21 @@ lua_url_cbdata_fill (lua_State *L,
 			if (lua_istable (L, -1)) {
 				gint top = lua_gettop (L);
 
+				lua_getfield (L, pos, "flags_mode");
+				if (lua_isstring (L, -1)) {
+					const gchar *mode_str = lua_tostring (L, -1);
+
+					if (strcmp (mode_str, "explicit") == 0) {
+						cbd->flags_mode = url_flags_mode_include_explicit;
+						/*
+						 * Ignore default flags in this mode and include
+						 * merely flags specified by a caller
+						 */
+						flags_mask = 0;
+					}
+				}
+				lua_pop (L, 1);
+
 				for (lua_pushnil (L); lua_next (L, top); lua_pop (L, 1)) {
 					int nmask = 0;
 					const gchar *fname = lua_tostring (L, -1);
@@ -993,6 +1021,7 @@ lua_url_cbdata_fill (lua_State *L,
 						return FALSE;
 					}
 				}
+
 				seen_flags = TRUE;
 			}
 			else {
@@ -1135,8 +1164,6 @@ lua_url_cbdata_fill (lua_State *L,
 			flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
 		}
 	}
-
-	memset (cbd, 0, sizeof (*cbd));
 
 	cbd->i = 1;
 	cbd->L = L;

@@ -28,6 +28,10 @@ struct lua_tree_cb_data {
 	int metatable_pos;
 	guint flags_mask;
 	guint protocols_mask;
+	enum {
+		url_flags_mode_include_any,
+		url_flags_mode_include_explicit,
+	} flags_mode;
 	gsize max_urls;
 	gdouble skip_prob;
 	guint64 xoroshiro_state[4];
