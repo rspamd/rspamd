@@ -122,11 +122,14 @@ INCLUDE(OSDep)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "m")
 IF(ENABLE_LUAJIT MATCHES "ON")
 	ProcessPackage(LIBLUAJIT LIBRARY	"luajit"
+										"luajit-2.1"
+										"luajit2.1"
 										"luajit-2.0"
 										"luajit2.0"
+										"luajit-5.1"
 			INCLUDE luajit.h INCLUDE_SUFFIXES
-										"include/luajit-2.0"
 										"include/luajit-2.1"
+										"include/luajit-2.0"
 										"include/luajit"
 			ROOT ${LUA_ROOT}
 			MODULES luajit)
@@ -144,7 +147,7 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 			MODULES lua53
 			OPTIONAL)
 
-	IF (NOT LIBLUA_FOUND)
+	IF (NOT WITH_LIBLUA)
 		ProcessPackage(LIBLUA LIBRARY	"lua"
 				"lua-5.2"
 				INCLUDE lua.h INCLUDE_SUFFIXES
@@ -156,7 +159,7 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 				MODULES lua52
 				OPTIONAL)
 
-		IF (NOT LIBLUA_FOUND)
+		IF (NOT WITH_LIBLUA)
 			ProcessPackage(LIBLUA LIBRARY	"lua"
 					"lua-5.1"
 					INCLUDE lua.h INCLUDE_SUFFIXES
