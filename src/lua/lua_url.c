@@ -964,6 +964,7 @@ lua_url_cbdata_fill (lua_State *L,
 
 	gint pos_arg_type = lua_type (L, pos);
 	guint flags_mask = default_flags;
+	gboolean seen_flags = FALSE, seen_protocols = FALSE;
 
 	if (pos_arg_type == LUA_TBOOLEAN) {
 		protocols_mask = default_protocols;
@@ -977,7 +978,9 @@ lua_url_cbdata_fill (lua_State *L,
 
 			lua_getfield (L, pos, "flags");
 			if (lua_istable (L, -1)) {
-				for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
+				gint top = lua_gettop (L);
+
+				for (lua_pushnil (L); lua_next (L, top); lua_pop (L, 1)) {
 					int nmask = 0;
 					const gchar *fname = lua_tostring (L, -1);
 
@@ -990,6 +993,7 @@ lua_url_cbdata_fill (lua_State *L,
 						return FALSE;
 					}
 				}
+				seen_flags = TRUE;
 			}
 			else {
 				flags_mask |= default_flags;
@@ -998,7 +1002,9 @@ lua_url_cbdata_fill (lua_State *L,
 
 			lua_getfield (L, pos, "protocols");
 			if (lua_istable (L, -1)) {
-				for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
+				gint top = lua_gettop (L);
+
+				for (lua_pushnil (L); lua_next (L, top); lua_pop (L, 1)) {
 					int nmask;
 					const gchar *pname = lua_tostring (L, -1);
 
@@ -1012,47 +1018,54 @@ lua_url_cbdata_fill (lua_State *L,
 						return FALSE;
 					}
 				}
+				seen_protocols = TRUE;
 			}
 			else {
 				protocols_mask = default_protocols;
 			}
 			lua_pop (L, 1);
 
-			lua_getfield (L, pos, "emails");
-			if (lua_isboolean (L, -1)) {
-				if (lua_toboolean (L, -1)) {
-					protocols_mask |= PROTOCOL_MAILTO;
+			if (!seen_protocols) {
+				lua_getfield (L, pos, "emails");
+				if (lua_isboolean (L, -1)) {
+					if (lua_toboolean (L, -1)) {
+						protocols_mask |= PROTOCOL_MAILTO;
+					}
 				}
+				lua_pop (L, 1);
 			}
-			lua_pop (L, 1);
 
-			lua_getfield (L, pos, "images");
-			if (lua_isboolean (L, -1)) {
-				if (lua_toboolean (L, -1)) {
-					flags_mask |= RSPAMD_URL_FLAG_IMAGE;
+			if (!seen_flags) {
+				lua_getfield (L, pos, "images");
+				if (lua_isboolean (L, -1)) {
+					if (lua_toboolean (L, -1)) {
+						flags_mask |= RSPAMD_URL_FLAG_IMAGE;
+					}
+					else {
+						flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
+					}
 				}
 				else {
 					flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
 				}
+				lua_pop (L, 1);
 			}
-			else {
-				flags_mask &= ~RSPAMD_URL_FLAG_IMAGE;
-			}
-			lua_pop (L, 1);
 
-			lua_getfield (L, pos, "content");
-			if (lua_isboolean (L, -1)) {
-				if (lua_toboolean (L, -1)) {
-					flags_mask |= RSPAMD_URL_FLAG_CONTENT;
+			if (!seen_flags) {
+				lua_getfield (L, pos, "content");
+				if (lua_isboolean (L, -1)) {
+					if (lua_toboolean (L, -1)) {
+						flags_mask |= RSPAMD_URL_FLAG_CONTENT;
+					}
+					else {
+						flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
+					}
 				}
 				else {
 					flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
 				}
+				lua_pop (L, 1);
 			}
-			else {
-				flags_mask &= ~RSPAMD_URL_FLAG_CONTENT;
-			}
-			lua_pop (L, 1);
 
 			lua_getfield (L, pos, "max_urls");
 			if (lua_isnumber (L, -1)) {
