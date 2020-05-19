@@ -292,7 +292,7 @@ rspamd_protocol_process_recipients (struct rspamd_task *task,
 			else if (*p == ',' && start_addr != NULL && p > start_addr) {
 				/* We have finished address, check what we have */
 				addr = rspamd_email_address_from_smtp (start_addr,
-						p - start_addr);
+						p - start_addr, -1);
 
 				if (addr) {
 					if (task->rcpt_envelope == NULL) {
@@ -322,7 +322,7 @@ rspamd_protocol_process_recipients (struct rspamd_task *task,
 	if (start_addr && p > start_addr) {
 		switch (state) {
 		case normal_string:
-			addr = rspamd_email_address_from_smtp (start_addr, end - start_addr);
+			addr = rspamd_email_address_from_smtp (start_addr, end - start_addr, -1);
 
 			if (addr) {
 				if (task->rcpt_envelope == NULL) {
@@ -495,7 +495,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				IF_HEADER (FROM_HEADER) {
 					task->from_envelope = rspamd_email_address_from_smtp (
 							hv_tok->begin,
-							hv_tok->len);
+							hv_tok->len, -1);
 					msg_debug_protocol ("read from header, value: %T", hv_tok);
 
 					if (!task->from_envelope) {

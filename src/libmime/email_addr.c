@@ -48,7 +48,7 @@ rspamd_email_address_unescape (struct rspamd_email_address *addr)
 }
 
 struct rspamd_email_address *
-rspamd_email_address_from_smtp (const gchar *str, guint len)
+rspamd_email_address_from_smtp (const gchar *str, guint len, gint max_elements)
 {
 	struct rspamd_email_address addr, *ret;
 	gsize nlen;
@@ -203,9 +203,20 @@ static inline gboolean
 rspamd_email_address_check_and_add (const gchar *start, gsize len,
 									GPtrArray *res,
 									rspamd_mempool_t *pool,
-									GString *ns)
+									GString *ns,
+									gint max_elements)
 {
 	struct rspamd_email_address addr;
+
+	g_assert (res != NULL);
+
+	if (max_elements > 0 && res->len >= max_elements) {
+		msg_info_pool_check ("reached maximum number of elements %d when adding %v",
+				max_elements,
+				ns);
+
+		return FALSE;
+	}
 
 	/* The whole email is likely address */
 	memset (&addr, 0, sizeof (addr));
@@ -231,9 +242,10 @@ rspamd_email_address_check_and_add (const gchar *start, gsize len,
 }
 
 GPtrArray *
-rspamd_email_address_from_mime (rspamd_mempool_t *pool,
-		const gchar *hdr, guint len,
-		GPtrArray *src)
+rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
+								guint len,
+								GPtrArray *src,
+								gint max_elements)
 {
 	GPtrArray *res = src;
 	gboolean seen_at = FALSE;
@@ -252,6 +264,11 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		res = g_ptr_array_sized_new (2);
 		rspamd_mempool_add_destructor (pool, rspamd_email_address_list_destroy,
 				res);
+	}
+	else if (max_elements > 0 && res->len >= max_elements) {
+		msg_info_pool_check ("reached maximum number of elements %d", max_elements);
+
+		return res;
 	}
 
 	ns = g_string_sized_new (len);
@@ -371,7 +388,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					}
 
 					if (!rspamd_email_address_check_and_add (c, t - c + 1,
-							res, pool, ns)) {
+							res, pool, ns, max_elements)) {
 						rspamd_email_address_add (pool, res, NULL, ns);
 					}
 
@@ -407,7 +424,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		case parse_addr:
 			if (*p == '>') {
 				if (!rspamd_email_address_check_and_add (c, p - c + 1,
-						res, pool, ns)) {
+						res, pool, ns, max_elements)) {
 					rspamd_email_address_add (pool, res, NULL, ns);
 				}
 
@@ -447,7 +464,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				if (seen_at) {
 					/* The whole email is likely address */
 					if (!rspamd_email_address_check_and_add (c, p - c,
-							res, pool, ns)) {
+							res, pool, ns, max_elements)) {
 						if (res->len == 0) {
 							rspamd_email_address_add (pool, res, NULL, ns);
 						}
@@ -469,7 +486,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 	case parse_addr:
 		if (p > c) {
 			if (!rspamd_email_address_check_and_add (c, p - c,
-					res, pool, ns)) {
+					res, pool, ns, max_elements)) {
 				if (res->len == 0) {
 					rspamd_email_address_add (pool, res, NULL, ns);
 				}

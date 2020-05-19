@@ -3392,7 +3392,7 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 		if (ucl_object_type (cur) == UCL_STRING) {
 			val = ucl_object_tostring (obj);
 			tmp_addr = rspamd_email_address_from_mime (pool, val,
-					strlen (val), tmp_addr);
+					strlen (val), tmp_addr, -1);
 		}
 		else {
 			g_set_error (err,

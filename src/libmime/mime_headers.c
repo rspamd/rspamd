@@ -62,25 +62,25 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 	case 0x76F31A09F4352521ULL:	/* to */
 		MESSAGE_FIELD (task, rcpt_mime) = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded),
-				MESSAGE_FIELD (task, rcpt_mime));
+				MESSAGE_FIELD (task, rcpt_mime), -1);
 		rh->flags |= RSPAMD_HEADER_TO|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x7EB117C1480B76ULL:	/* cc */
 		MESSAGE_FIELD (task, rcpt_mime) = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded),
-				MESSAGE_FIELD (task, rcpt_mime));
+				MESSAGE_FIELD (task, rcpt_mime), -1);
 		rh->flags |= RSPAMD_HEADER_CC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0xE4923E11C4989C8DULL:	/* bcc */
 		MESSAGE_FIELD (task, rcpt_mime) = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded),
-				MESSAGE_FIELD (task, rcpt_mime));
+				MESSAGE_FIELD (task, rcpt_mime), -1);
 		rh->flags |= RSPAMD_HEADER_BCC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x41E1985EDC1CBDE4ULL:	/* from */
 		MESSAGE_FIELD (task, from_mime) = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded),
-				MESSAGE_FIELD (task, from_mime));
+				MESSAGE_FIELD (task, from_mime), -1);
 		rh->flags |= RSPAMD_HEADER_FROM|RSPAMD_HEADER_SENDER|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x43A558FC7C240226ULL:	/* message-id */ {
@@ -129,7 +129,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 	case 0xEE4AA2EAAC61D6F4ULL:	/* return-path */
 		if (task->from_envelope == NULL) {
 			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
-					strlen (rh->decoded));
+					strlen (rh->decoded), -1);
 		}
 		rh->flags = RSPAMD_HEADER_RETURN_PATH|RSPAMD_HEADER_UNIQUE;
 		break;

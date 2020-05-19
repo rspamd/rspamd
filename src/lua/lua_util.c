@@ -1650,7 +1650,7 @@ lua_util_parse_mail_address (lua_State *L)
 			own_pool = TRUE;
 		}
 
-		addrs = rspamd_email_address_from_mime (pool, str, len, NULL);
+		addrs = rspamd_email_address_from_mime (pool, str, len, NULL, -1);
 
 		if (addrs == NULL) {
 			lua_pushnil (L);
