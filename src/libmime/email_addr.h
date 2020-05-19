@@ -67,9 +67,7 @@ struct rspamd_task;
  * @param len length of string
  * @return
  */
-struct rspamd_email_address *rspamd_email_address_from_smtp (const gchar *str,
-		guint len,
-		gint max_elements);
+struct rspamd_email_address *rspamd_email_address_from_smtp (const gchar *str, guint len);
 
 /**
  * Parses email address from the mime header, decodes names and return the array

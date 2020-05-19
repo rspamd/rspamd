@@ -48,7 +48,7 @@ rspamd_email_address_unescape (struct rspamd_email_address *addr)
 }
 
 struct rspamd_email_address *
-rspamd_email_address_from_smtp (const gchar *str, guint len, gint max_elements)
+rspamd_email_address_from_smtp (const gchar *str, guint len)
 {
 	struct rspamd_email_address addr, *ret;
 	gsize nlen;
