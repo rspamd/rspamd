@@ -405,8 +405,11 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 				rspamd_symcache_set_cur_item (ud->task, ud->item);
 			}
 
-			if (lua_pcall (cbs.L, 2, 0, err_idx) != 0) {
-				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
+			gint ret = lua_pcall (cbs.L, 2, 0, err_idx);
+
+			if (ret != 0) {
+				msg_info ("call to lua_redis callback failed (%d): %s",
+						ret, lua_tostring (cbs.L, -1));
 			}
 
 			lua_settop (L, err_idx - 1);

@@ -442,6 +442,10 @@ lua_map_fin (struct map_cb_data *data, void **target)
 		msg_err_map ("map has no callback set");
 	}
 	else if (cbdata->data != NULL && cbdata->data->len != 0) {
+
+		lua_pushcfunction (cbdata->L, &rspamd_lua_traceback);
+		int err_idx = lua_gettop (cbdata->L);
+
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
 
 		if (!cbdata->opaque) {
@@ -461,11 +465,15 @@ lua_map_fin (struct map_cb_data *data, void **target)
 		*pmap = cbdata->lua_map;
 		rspamd_lua_setclass (cbdata->L, "rspamd{map}", -1);
 
-		if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
-			msg_info_map ("call to %s failed: %s", "local function",
+		gint ret = lua_pcall (cbdata->L, 2, 0, err_idx);
+
+		if (ret != 0) {
+			msg_info_map ("call to %s failed (%d): %s", "map fin function",
+				ret,
 				lua_tostring (cbdata->L, -1));
-			lua_pop (cbdata->L, 1);
 		}
+
+		lua_settop (cbdata->L, err_idx - 1);
 	}
 
 	cbdata->data = rspamd_fstring_assign (cbdata->data, "", 0);
