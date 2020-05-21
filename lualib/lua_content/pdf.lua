@@ -838,6 +838,10 @@ end
 local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
   local obj_count = 0
+
+  lua_util.debugm(N, task, "pdf: extract objects from %s start positions and %s end positions",
+      #pdf.start_objects, #pdf.end_objects)
+
   while start_pos <= #pdf.start_objects and end_pos <= #pdf.end_objects do
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
@@ -1181,12 +1185,23 @@ end
 processors.trailer = function(input, task, positions, output)
   local last_pos = positions[#positions]
 
+  lua_util.debugm(N, task, 'pdf: process trailer at position %s (%s total length)',
+      last_pos, #input)
+
   local last_span = input:span(last_pos[1])
+  local lines_checked = 0
   for line in last_span:lines(true) do
     if line:find('/Encrypt ') then
       lua_util.debugm(N, task, "pdf: found encrypted line in trailer: %s",
           line)
       output.encrypted = true
+      break
+    end
+    lines_checked = lines_checked + 1
+
+    if lines_checked > 100 then
+      lua_util.debugm(N, task, "pdf: trailer has too many lines, stop checking")
+      break
     end
   end
 end
