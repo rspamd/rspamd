@@ -1350,8 +1350,14 @@ if opts then
     if settings.extra_columns then
       -- Check sanity and create selector closures
       local lua_selectors = require "lua_selectors"
+      local columns_transformed = {}
+      local need_sort = false
+      -- Select traverse function depending on what we have
+      local iter_func = settings.extra_columns[1] and ipairs or pairs
 
-      for col_name,col_data in pairs(settings.extra_columns) do
+      for col_name,col_data in iter_func(settings.extra_columns) do
+        -- Array based extra columns
+        if col_data.name then col_name = col_data.name end
         if not col_data.selector or not col_data.type then
           rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: no type or no selector',
               col_name)
@@ -1368,8 +1374,6 @@ if opts then
           if not selector then
             rspamd_logger.errx(rspamd_config, 'cannot add clickhouse extra row %s: bad selector: %s',
                 col_name, col_data.selector)
-            -- Remove column
-            settings.extra_columns[col_name] = nil
           else
             if not col_data.default_value then
               if is_array then
@@ -1379,20 +1383,22 @@ if opts then
               end
             end
             col_data.real_selector = selector
+            if not col_data.name then
+              col_data.name = col_name
+              need_sort = true
+            end
+            table.insert(columns_transformed, col_data)
           end
         end
       end
 
       -- Convert extra columns from a map to an array sorted by column name to
       -- preserve strict order when doing altering
-      local extra_cols = {}
-      for col_name,col_data in pairs(settings.extra_columns) do
-        local nelt = lua_util.shallowcopy(col_data)
-        nelt.name = col_name
-        extra_cols[#extra_cols + 1] = nelt
+      if need_sort then
+        rspamd_logger.infox(rspamd_config, 'sort extra columns as they are not configured as an array')
+        table.sort(columns_transformed, function(c1, c2) return c1.name < c2.name end)
       end
-      table.sort(extra_cols, function(c1, c2) return c1.name < c2.name end)
-      settings.extra_columns = extra_cols
+      settings.extra_columns = columns_transformed
     end
 
     rspamd_config:register_symbol({
