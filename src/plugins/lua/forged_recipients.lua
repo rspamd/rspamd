@@ -36,13 +36,21 @@ local function check_forged_headers(task)
 
   if not smtp_rcpt then return end
   if #smtp_rcpt == 0 then return end
-  local mime_rcpt = task:get_recipients(2)
+
+  local mime_rcpt = task:get_recipients({'mime','orig'})
+
   if not mime_rcpt then
     return
   elseif #mime_rcpt == 0 then
     return
   end
+
   -- Find pair for each smtp recipient in To or Cc headers
+  -- This cycle has O(N^2) complexity so it is better to limit number of iterations
+  if #smtp_rcpt > 100 or #mime_rcpt > 100 then
+    return
+  end
+
   for _,sr in ipairs(smtp_rcpt) do
     res = false
     for _,mr in ipairs(mime_rcpt) do
