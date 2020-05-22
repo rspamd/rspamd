@@ -914,7 +914,6 @@ local function attach_pdf_streams(task, input, pdf)
   if pdf.start_streams and pdf.end_streams then
     local start_pos, end_pos = 1, 1
     local max_start_pos, max_end_pos
-    local obj_count = 0
 
     max_start_pos = math.min(config.max_pdf_objects, #pdf.start_streams)
     max_end_pos = math.min(config.max_pdf_objects, #pdf.end_streams)
