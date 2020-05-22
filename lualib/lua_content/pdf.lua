@@ -116,6 +116,9 @@ local config = {
   js_fuzzy = true, -- Generate fuzzy hashes from PDF javascripts
   min_js_fuzzy = 32, -- Minimum size of js to be considered as a fuzzy
   openaction_fuzzy_only = false, -- Generate fuzzy from all scripts
+  max_pdf_objects = 10000, -- Maximum number of objects to be considered
+  max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
+  max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
 }
 
 -- Used to process patterns found in PDF
@@ -837,12 +840,15 @@ end
 -- set of objects
 local function extract_outer_objects(task, input, pdf)
   local start_pos, end_pos = 1, 1
+  local max_start_pos, max_end_pos
   local obj_count = 0
 
+  max_start_pos = math.min(config.max_pdf_objects, #pdf.start_objects)
+  max_end_pos = math.min(config.max_pdf_objects, #pdf.end_objects)
   lua_util.debugm(N, task, "pdf: extract objects from %s start positions and %s end positions",
-      #pdf.start_objects, #pdf.end_objects)
+      max_start_pos, max_end_pos)
 
-  while start_pos <= #pdf.start_objects and end_pos <= #pdf.end_objects do
+  while start_pos <= max_start_pos and end_pos <= max_end_pos do
     local first = pdf.start_objects[start_pos]
     local last = pdf.end_objects[end_pos]
 
@@ -894,9 +900,14 @@ end
 local function attach_pdf_streams(task, input, pdf)
   if pdf.start_streams and pdf.end_streams then
     local start_pos, end_pos = 1, 1
+    local max_start_pos, max_end_pos
+    local obj_count = 0
+
+    max_start_pos = math.min(config.max_pdf_objects, #pdf.start_streams)
+    max_end_pos = math.min(config.max_pdf_objects, #pdf.end_streams)
 
     for _,obj in ipairs(pdf.objects) do
-      while start_pos <= #pdf.start_streams and end_pos <= #pdf.end_streams do
+      while start_pos <= max_start_pos and end_pos <= max_end_pos do
         local first = pdf.start_streams[start_pos]
         local last = pdf.end_streams[end_pos]
         last = last - 10 -- Exclude endstream\n pattern
@@ -1135,6 +1146,11 @@ local function process_pdf(input, mpart, task)
     pdf_output.flags = {}
 
     if pdf_output.start_objects and pdf_output.end_objects then
+      if #pdf_output.start_objects > config.max_pdf_objects then
+        pdf_output.many_objects = #pdf_output.start_objects
+        -- Trim
+      end
+
       -- Postprocess objects
       postprocess_pdf_objects(task, input, pdf_output)
       if config.text_extraction then
@@ -1188,6 +1204,11 @@ processors.trailer = function(input, task, positions, output)
   lua_util.debugm(N, task, 'pdf: process trailer at position %s (%s total length)',
       last_pos, #input)
 
+  if last_pos[1] > config.max_pdf_trailer then
+    output.long_trailer = #input - last_pos[1]
+    return
+  end
+
   local last_span = input:span(last_pos[1])
   local lines_checked = 0
   for line in last_span:lines(true) do
@@ -1199,8 +1220,9 @@ processors.trailer = function(input, task, positions, output)
     end
     lines_checked = lines_checked + 1
 
-    if lines_checked > 100 then
+    if lines_checked > config.max_pdf_trailer_lines then
       lua_util.debugm(N, task, "pdf: trailer has too many lines, stop checking")
+      output.long_trailer = #input - last_pos[1]
       break
     end
   end
