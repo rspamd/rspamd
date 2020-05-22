@@ -119,6 +119,7 @@ local config = {
   max_pdf_objects = 10000, -- Maximum number of objects to be considered
   max_pdf_trailer = 10 * 1024 * 1024, -- Maximum trailer size (to avoid abuse)
   max_pdf_trailer_lines = 100, -- Maximum number of lines in pdf trailer
+  pdf_process_timeout = 1.0, -- Timeout in seconds for processing
 }
 
 -- Used to process patterns found in PDF
@@ -809,7 +810,19 @@ end
 
 -- PDF 1.5 ObjStmt
 local function extract_pdf_compound_objects(task, pdf)
-  for _,obj in ipairs(pdf.objects or {}) do
+  for i,obj in ipairs(pdf.objects or {}) do
+    if i > 0 and i % 100 == 0 then
+      local now = rspamd_util.get_ticks()
+
+      if now >= pdf.end_timestamp then
+        pdf.timeout_processing = now - pdf.start_timestamp
+
+        lua_util.debugm(N, task, 'pdf: timeout processing compound objects after spending %s seconds, ' ..
+            '%s elements processed',
+            pdf.timeout_processing, i)
+        break
+      end
+    end
     if obj.stream and obj.dict and type(obj.dict) == 'table' then
       local t = obj.dict.Type
       if t and t == 'ObjStm' then
@@ -965,17 +978,47 @@ local function postprocess_pdf_objects(task, input, pdf)
   -- Now we have objects and we need to attach streams that are in bounds
   attach_pdf_streams(task, input, pdf)
   -- Parse grammar for outer objects
-  for _,obj in ipairs(pdf.objects) do
+  for i,obj in ipairs(pdf.objects) do
+    if i > 0 and i % 100 == 0 then
+      local now = rspamd_util.get_ticks()
+
+      if now >= pdf.end_timestamp then
+        pdf.timeout_processing = now - pdf.start_timestamp
+
+        lua_util.debugm(N, task, 'pdf: timeout processing grammars after spending %s seconds, ' ..
+            '%s elements processed',
+            pdf.timeout_processing, i)
+        break
+      end
+    end
     if obj.ref then
       parse_object_grammar(obj, task, pdf)
     end
   end
-  extract_pdf_compound_objects(task, pdf)
+
+  if not pdf.timeout_processing then
+    extract_pdf_compound_objects(task, pdf)
+  else
+    -- ENOTIME
+    return
+  end
 
   -- Now we might probably have all objects being processed
-  for _,obj in ipairs(pdf.objects) do
+  for i,obj in ipairs(pdf.objects) do
     if obj.dict then
       -- Types processing
+      if i > 0 and i % 100 == 0 then
+        local now = rspamd_util.get_ticks()
+
+        if now >= pdf.end_timestamp then
+          pdf.timeout_processing = now - pdf.start_timestamp
+
+          lua_util.debugm(N, task, 'pdf: timeout processing dicts after spending %s seconds, ' ..
+              '%s elements processed',
+              pdf.timeout_processing, i)
+          break
+        end
+      end
       process_dict(task, pdf, obj, obj.dict)
     end
   end
@@ -1112,9 +1155,12 @@ local function process_pdf(input, mpart, task)
   local matches = pdf_trie:match(input)
 
   if matches then
+    local start_ts = rspamd_util.get_ticks()
     local pdf_output = {
       tag = 'pdf',
       extract_text = extract_text_data,
+      start_timestamp = start_ts,
+      end_timestamp = start_ts + config.pdf_process_timeout,
     }
     local grouped_processors = {}
     for npat,matched_positions in pairs(matches) do

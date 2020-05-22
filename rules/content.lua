@@ -46,6 +46,10 @@ local function process_pdf_specific(task, part, specific)
     task:insert_result('PDF_MANY_OBJECTS', 1.0, string.format('%s:%d',
         part:get_filename() or 'unknown', specific.many_objects))
   end
+  if specific.timeout_processing then
+    task:insert_result('PDF_TIMEOUT', 1.0, string.format('%s:%.3f',
+        part:get_filename() or 'unknown', specific.timeout_processing))
+  end
 end
 
 local tags_processors = {
@@ -101,6 +105,12 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   type = 'virtual',
   name = 'PDF_MANY_OBJECTS',
+  parent = id,
+  groups = {"content", "pdf"},
+}
+rspamd_config:register_symbol{
+  type = 'virtual',
+  name = 'PDF_TIMEOUT',
   parent = id,
   groups = {"content", "pdf"},
 }

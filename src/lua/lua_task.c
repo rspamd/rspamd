@@ -759,8 +759,9 @@ LUA_FUNCTION_DEF (task, get_date);
  */
 LUA_FUNCTION_DEF (task, get_message_id);
 /***
- * @method task:get_timeval()
+ * @method task:get_timeval([raw])
  * Returns the timestamp for a task start processing time.
+ * @param {boolean} raw if true then two float numbers are returned: task start timestamp and timeout event timestamp
  * @return {table} table with fields as described in `struct timeval` in C
  */
 LUA_FUNCTION_DEF (task, get_timeval);
