@@ -57,10 +57,10 @@ local function register_settings_cb()
       if s.symbols_enabled then
         -- Remove all symbols from set.symbols aside of explicit_disable symbols
         set.symbols = lua_util.list_to_hash(explicit_symbols)
+        seen_enabled = true
         for _,sym in ipairs(s.symbols_enabled) do
           enabled_symbols[sym] = true
           set.symbols[sym] = true
-          seen_enabled = true
         end
       end
       if s.groups_enabled then
@@ -79,10 +79,10 @@ local function register_settings_cb()
 
       -- Disabled map
       if s.symbols_disabled then
+        seen_disabled = true
         for _,sym in ipairs(s.symbols_disabled) do
           disabled_symbols[sym] = true
           set.symbols[sym] = false
-          seen_disabled = true
         end
       end
       if s.groups_disabled then
