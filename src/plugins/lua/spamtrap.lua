@@ -167,7 +167,7 @@ if opts then
   if settings['map'] then
     settings['map'] = rspamd_config:add_map{
       url = settings['map'],
-      description = "Spamtrap map for %s", settings['symbol'],
+      description = string.format("Spamtrap map for %s", settings['symbol']),
       type = "regexp"
     }
   else
