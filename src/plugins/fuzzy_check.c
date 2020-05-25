@@ -346,6 +346,14 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		return -1;
 	}
 
+	if ((value = ucl_object_lookup_any (obj, "enabled", "enable", NULL)) != NULL) {
+		if (!ucl_object_toboolean (value)) {
+			msg_info_config ("fuzzy rule %s is disabled by configuration", name);
+
+			return 0;
+		}
+	}
+
 	rule = fuzzy_rule_new (fuzzy_module_ctx->default_symbol,
 			cfg->cfg_pool);
 	rule->ucl_obj = obj;
