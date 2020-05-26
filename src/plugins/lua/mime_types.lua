@@ -211,7 +211,7 @@ local function check_mime_type(task)
     return ext[1],ext[2],parts
   end
 
-  local function check_filename(fname, ct, is_archive, part, detected_ext)
+  local function check_filename(fname, ct, is_archive, part, detected_ext, nfiles)
 
     local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
     if has_bad_unicode then
@@ -247,7 +247,7 @@ local function check_mime_type(task)
     if detected_ext and ((not ext) or ext ~= detected_ext) then
       -- Try to find extension by real content type
       check_filename('detected.' .. detected_ext, detected.ct,
-          false, part, nil)
+          false, part, nil, 1)
     end
 
     if not ext then return end
@@ -315,7 +315,7 @@ local function check_mime_type(task)
 
     local function check_tables(e)
       if is_archive then
-        return extra_archive_table[e] or settings.bad_archive_extensions[e] or
+        return extra_archive_table[e] or (nfiles < 2 and settings.bad_archive_extensions[e]) or
             extra_table[e] or settings.bad_extensions[e]
       end
 
@@ -395,7 +395,7 @@ local function check_mime_type(task)
         local detected_ext = p:get_detected_ext()
 
         if filename then
-          check_filename(filename, ct, false, p, detected_ext)
+          check_filename(filename, ct, false, p, detected_ext, 1)
         end
 
         if p:is_archive() then
@@ -448,7 +448,7 @@ local function check_mime_type(task)
 
               if f['name'] then
                 check_filename(f['name'], nil,
-                    true, p, nil)
+                    true, p, nil, nfiles)
               end
             end
 
