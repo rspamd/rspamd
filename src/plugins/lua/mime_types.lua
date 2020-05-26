@@ -257,7 +257,7 @@ local function check_mime_type(task)
       if #parts > 2 then
         -- We need to ensure that next-to-last extension is an extension,
         -- so we check for its length and if it is not a number or date
-        if #ext2 <= 4 and not string.match(ext2, '^%d+[%]%)]?$') then
+        if #ext2 > 0 and #ext2 <= 4 and not string.match(ext2, '^%d+[%]%)]?$') then
 
           -- Use the greatest badness multiplier
           if not badness_mult or
@@ -457,7 +457,7 @@ local function check_mime_type(task)
               -- the same as double extension of the file
               local _,ext2 = gen_extension(filename)
 
-              if ext2 then
+              if ext2 and #ext2 > 0 then
                 local enc_ext = gen_extension(fl[1].name)
 
                 if enc_ext
