@@ -23,6 +23,7 @@
 #include "mime_encoding.h"
 #include "message.h"
 #include "contrib/fastutf8/fastutf8.h"
+#include "contrib/google-ced/ced_c.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 44
@@ -561,38 +562,22 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 const char *
 rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen)
 {
-	static UCharsetDetector *csd;
-	const UCharsetMatch **csm, *sel = NULL;
-	UErrorCode uc_err = U_ZERO_ERROR;
-	gint32 matches, i, max_conf = G_MININT32, conf;
-	gdouble mean = 0.0, stddev = 0.0;
-
-	if (csd == NULL) {
-		csd = ucsdet_open (&uc_err);
-
-		g_assert (csd != NULL);
-	}
+	int nconsumed;
+	bool is_reliable;
+	const gchar *ced_name;
 
 	if (rspamd_fast_utf8_validate (in, inlen) == 0) {
 		return UTF8_CHARSET;
 	}
 
-	ucsdet_setText (csd, in, inlen, &uc_err);
-	csm = ucsdet_detectAll (csd, &matches, &uc_err);
 
-	for (i = 0; i < matches; i ++) {
-		if ((conf = ucsdet_getConfidence (csm[i], &uc_err)) > max_conf) {
-			max_conf = conf;
-			sel = csm[i];
-		}
+	ced_name = ced_encoding_detect (in, inlen, NULL, NULL,
+			NULL, 0, CED_EMAIL_CORPUS,
+			false, &nconsumed, &is_reliable);
 
-		mean += (conf - mean) / (i + 1);
-		gdouble err = fabs (conf - mean);
-		stddev += (err - stddev) / (i + 1);
-	}
+	if (ced_name) {
 
-	if (sel && ((max_conf > 50) || (max_conf - mean > stddev * 1.25))) {
-		return ucsdet_getName (sel, &uc_err);
+		return ced_name;
 	}
 
 	return NULL;
