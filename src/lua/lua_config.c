@@ -1831,7 +1831,7 @@ lua_parse_symbol_type (const gchar *str)
 					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST;
 				} else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
 					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST |
-							SYMBOL_TYPE_IDEMPOTENT;
+							SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
 				} else {
 					gint fl = 0;
 

@@ -1390,7 +1390,7 @@ end
 
 local id = rspamd_config:register_symbol({
   name = 'NEURAL_CHECK',
-  type = 'postfilter',
+  type = 'postfilter,callback',
   flags = 'nostat',
   priority = 6,
   callback = ann_scores_filter
@@ -1448,7 +1448,7 @@ end
 
 rspamd_config:register_symbol({
   name = 'NEURAL_LEARN',
-  type = 'idempotent',
+  type = 'idempotent,callback',
   flags = 'nostat,explicit_disable',
   priority = 5,
   callback = ann_push_vector
