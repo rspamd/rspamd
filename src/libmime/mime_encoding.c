@@ -25,7 +25,6 @@
 #include "contrib/fastutf8/fastutf8.h"
 #include "contrib/google-ced/ced_c.h"
 #include <unicode/ucnv.h>
-#include <unicode/ucsdet.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 44
 #include <unicode/unorm2.h>
 #endif

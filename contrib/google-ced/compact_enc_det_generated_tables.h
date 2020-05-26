@@ -165,7 +165,7 @@ static const Encoding kMapToEncoding[NUM_RANKEDENCODING] = {
 
 // Massaged TLD or charset, followed by packed encoding probs
 typedef struct {
-  char key_prob[20];
+  unsigned char key_prob[20];
 } HintEntry;
 
 static const HintEntry kLangHintProbs[] = {	// MaxRange 192

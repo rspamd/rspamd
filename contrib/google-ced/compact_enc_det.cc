@@ -1620,7 +1620,7 @@ int ApplyTldHint(const char* url_tld_hint, int weight,
                            normalized_tld.c_str());
   if (n >= 0) {
     // TLD is four bytes, probability table is ~12 bytes
-    int best_sub = ApplyCompressedProb(&kTLDHintProbs[n].key_prob[kMaxTldKey],
+    int best_sub = ApplyCompressedProb((const char *)&kTLDHintProbs[n].key_prob[kMaxTldKey],
                                        kMaxTldVector, weight, destatep);
     // Never boost ASCII7; do CP1252 instead
     if (best_sub == F_ASCII_7_bit) {best_sub = F_CP1252;}
@@ -1647,7 +1647,7 @@ int ApplyCharsetHint(const char* charset_hint, int weight,
                            normalized_charset.c_str());
   if (n >= 0) {
     // Charset is eight bytes, probability table is ~eight bytes
-    int best_sub = ApplyCompressedProb(&kCharsetHintProbs[n].key_prob[kMaxCharsetKey],
+    int best_sub = ApplyCompressedProb((const char *)&kCharsetHintProbs[n].key_prob[kMaxCharsetKey],
                                        kMaxCharsetVector, weight, destatep);
     // Never boost ASCII7; do CP1252 instead
     if (best_sub == F_ASCII_7_bit) {best_sub = F_CP1252;}
@@ -1858,7 +1858,7 @@ int ApplyUILanguageHint(const Language language_hint,
                            normalized_lang.c_str());
   if (n >= 0) {
     // Language is eight bytes, probability table is ~eight bytes
-    int best_sub = ApplyCompressedProb(&kLangHintProbs[n].key_prob[kMaxLangKey],
+    int best_sub = ApplyCompressedProb((const char *)&kLangHintProbs[n].key_prob[kMaxLangKey],
                                        kMaxLangVector, weight, destatep);
     // Never boost ASCII7; do CP1252 instead
     if (best_sub == F_ASCII_7_bit) {best_sub = F_CP1252;}
@@ -5681,7 +5681,7 @@ Encoding CompactEncDet::TopEncodingOfLangHint(const char* name) {
 
   // Charset is eight bytes, probability table is eight bytes
   int toprankenc =
-    TopCompressedProb(&kLangHintProbs[n].key_prob[kMaxLangKey],
+    TopCompressedProb((const char *)&kLangHintProbs[n].key_prob[kMaxLangKey],
                       kMaxLangVector);
   return kMapToEncoding[toprankenc];
 }
@@ -5695,7 +5695,7 @@ Encoding CompactEncDet::TopEncodingOfTLDHint(const char* name) {
 
   // TLD is four bytes, probability table is 12 bytes
   int toprankenc =
-    TopCompressedProb(&kTLDHintProbs[n].key_prob[kMaxTldKey],
+    TopCompressedProb((const char *)&kTLDHintProbs[n].key_prob[kMaxTldKey],
                       kMaxTldVector);
   return kMapToEncoding[toprankenc];
 }
@@ -5709,7 +5709,7 @@ Encoding CompactEncDet::TopEncodingOfCharsetHint(const char* name) {
 
   // Charset is eight bytes, probability table is eight bytes
   int toprankenc =
-    TopCompressedProb(&kCharsetHintProbs[n].key_prob[kMaxCharsetKey],
+    TopCompressedProb((const char *)&kCharsetHintProbs[n].key_prob[kMaxCharsetKey],
                       kMaxCharsetVector);
   return kMapToEncoding[toprankenc];
 }
