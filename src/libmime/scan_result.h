@@ -141,12 +141,13 @@ struct rspamd_symbol_result *rspamd_task_insert_result_full (struct rspamd_task 
 															 const gchar *symbol,
 															 double weight,
 															 const gchar *opts,
-															 enum rspamd_symbol_insert_flags flags);
+															 enum rspamd_symbol_insert_flags flags,
+															 struct rspamd_scan_result *result);
 
 #define rspamd_task_insert_result_single(task, symbol, flag, opts) \
-    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_SINGLE)
+    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_SINGLE, NULL)
 #define rspamd_task_insert_result(task, symbol, flag, opts) \
-    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT)
+    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT, NULL)
 
 
 /**

@@ -479,10 +479,11 @@ insert_metric_result (struct rspamd_task *task,
 
 struct rspamd_symbol_result *
 rspamd_task_insert_result_full (struct rspamd_task *task,
-		const gchar *symbol,
-		double weight,
-		const gchar *opt,
-		enum rspamd_symbol_insert_flags flags)
+								const gchar *symbol,
+								double weight,
+								const gchar *opt,
+								enum rspamd_symbol_insert_flags flags,
+								struct rspamd_scan_result *result)
 {
 	struct rspamd_symbol_result *s = NULL, *ret = NULL;
 	struct rspamd_scan_result *mres;
@@ -494,46 +495,67 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 		return NULL;
 	}
 
-	DL_FOREACH (task->result, mres) {
-		if (mres->symbol_cbref != -1) {
-			/* Check if we can insert this symbol to this symbol result */
-			GError *err = NULL;
-			lua_State *L = (lua_State *)task->cfg->lua_state;
+	if (result == NULL) {
+		/* Insert everywhere */
+		DL_FOREACH (task->result, mres) {
+			if (mres->symbol_cbref != -1) {
+				/* Check if we can insert this symbol to this symbol result */
+				GError *err = NULL;
+				lua_State *L = (lua_State *) task->cfg->lua_state;
 
-			if (!rspamd_lua_universal_pcall (L, mres->symbol_cbref,
-					G_STRLOC, 1, "uss", &err,
-					"rspamd{task}", task, symbol, mres->name ? mres->name : "default")) {
-				msg_warn_task ("cannot call for symbol_cbref for result %s: %e",
-						mres->name ? mres->name : "default", err);
-				g_error_free (err);
-
-				continue;
-			}
-			else {
-				if (!lua_toboolean (L, -1)) {
-					/* Skip symbol */
-					msg_debug_metric ("skip symbol %s for result %s due to Lua return value",
-							symbol, mres->name);
-					lua_pop (L, 1); /* Remove result */
+				if (!rspamd_lua_universal_pcall (L, mres->symbol_cbref,
+						G_STRLOC, 1, "uss", &err,
+						"rspamd{task}", task, symbol, mres->name ? mres->name : "default")) {
+					msg_warn_task ("cannot call for symbol_cbref for result %s: %e",
+							mres->name ? mres->name : "default", err);
+					g_error_free (err);
 
 					continue;
 				}
+				else {
+					if (!lua_toboolean (L, -1)) {
+						/* Skip symbol */
+						msg_debug_metric ("skip symbol %s for result %s due to Lua return value",
+								symbol, mres->name);
+						lua_pop (L, 1); /* Remove result */
 
-				lua_pop (L, 1); /* Remove result */
+						continue;
+					}
+
+					lua_pop (L, 1); /* Remove result */
+				}
+			}
+
+			s = insert_metric_result (task,
+					symbol,
+					weight,
+					opt,
+					mres,
+					flags);
+
+			if (mres->name == NULL) {
+				/* Default result */
+				ret = s;
+
+				/* Process cache item */
+				if (s && task->cfg->cache && s->sym) {
+					rspamd_symcache_inc_frequency (task->cfg->cache,
+							s->sym->cache_item);
+				}
 			}
 		}
-
+	}
+	else {
+		/* Specific insertion */
 		s = insert_metric_result (task,
 				symbol,
 				weight,
 				opt,
-				mres,
+				result,
 				flags);
+		ret = s;
 
-		if (mres->name == NULL) {
-			/* Default result */
-			ret = s;
-
+		if (result->name == NULL) {
 			/* Process cache item */
 			if (s && task->cfg->cache && s->sym) {
 				rspamd_symcache_inc_frequency (task->cfg->cache,
