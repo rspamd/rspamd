@@ -391,13 +391,23 @@ local function apply_pdf_filter(input, filt)
 end
 
 -- Conditionally apply a pipeline of stream filters and return uncompressed data
-local function maybe_apply_filter(dict, data)
+local function maybe_apply_filter(dict, data, pdf, task)
   local uncompressed = data
 
   if dict.Filter then
     local filt = dict.Filter
     if type(filt) == 'string' then
       filt = {filt}
+    end
+
+    if dict.DecodeParms then
+      local decode_params = maybe_dereference_object(dict.DecodeParms, pdf, task)
+
+      if type(decode_params) == 'table' then
+        if decode_params.Predictor then
+          return nil,'predictor exists'
+        end
+      end
     end
 
     for _,f in ipairs(filt) do
@@ -407,7 +417,7 @@ local function maybe_apply_filter(dict, data)
     end
   end
 
-  return uncompressed
+  return uncompressed,nil
 end
 
 -- Conditionally extract stream data from object and attach it as obj.uncompressed
@@ -422,7 +432,7 @@ local function maybe_extract_object_stream(obj, pdf, task)
         tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
     local real_stream = obj.stream.data:span(1, len)
 
-    local uncompressed = maybe_apply_filter(dict, real_stream)
+    local uncompressed,filter_err = maybe_apply_filter(dict, real_stream, pdf, task)
 
     if uncompressed then
       obj.uncompressed = uncompressed
@@ -430,8 +440,8 @@ local function maybe_extract_object_stream(obj, pdf, task)
           obj.major, obj.minor, len, uncompressed:len())
       return obj.uncompressed
     else
-      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s',
-          obj.major, obj.minor, len, dict.Filter)
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s: %s',
+          obj.major, obj.minor, len, dict.Filter, filter_err)
     end
   end
 end
