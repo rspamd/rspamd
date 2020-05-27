@@ -236,10 +236,18 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
                   local key = table.remove(pieces, 1)
                   data[key] = table.concat(pieces, ' ')
                 else
-                  data[elt] = true
+                  data[elt] = rspamd_config:add_map{
+                    type = mtype,
+                    description = description,
+                    url = elt,
+                  }
                 end
               else
-                data[elt] = true
+                data[elt] = rspamd_config:add_map{
+                  type = mtype,
+                  description = description,
+                  url = elt,
+                }
               end
 
               nelts = nelts + 1
@@ -256,7 +264,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
 
               return nil
             end
-
+            --setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
             return ret
           else
