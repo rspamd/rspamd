@@ -147,6 +147,17 @@ local function cb(task)
 end
  */
 LUA_FUNCTION_DEF (task, insert_result);
+/***
+ * @method task:insert_result_named(shadow_result, [enforce_symbol,]symbol, weight[, option1, ...])
+ * Insert specific symbol to the tasks scanning results assigning the initial
+ * weight to it.
+ * @param {string} shadow_result name of shadow result
+ * @param {boolean} enforce_symbol if represented and true, then insert symbol even if it is not registered in the metric
+ * @param {string} symbol symbol to insert
+ * @param {number} weight initial weight (this weight is multiplied by the metric weight)
+ * @param {string} options list of optional options attached to a symbol inserted
+ */
+LUA_FUNCTION_DEF (task, insert_result_named);
 
 /***
  * @method task:adjust_result(symbol, score[, option1, ...])
@@ -1119,6 +1130,14 @@ LUA_FUNCTION_DEF (task, topointer);
  */
 LUA_FUNCTION_DEF (task, add_named_result);
 
+/**
+ * @method task:get_all_named_results()
+ *
+ * Returns all named results registered for the task as a table of strings
+ * @return {table|string} all named results starting from `default`
+ */
+LUA_FUNCTION_DEF (task, get_all_named_results);
+
 /***
  * @method task:get_dns_req()
  * Get number of dns requests being sent in the task
@@ -1146,6 +1165,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, get_worker),
 	LUA_INTERFACE_DEF (task, insert_result),
+	LUA_INTERFACE_DEF (task, insert_result_named),
 	LUA_INTERFACE_DEF (task, adjust_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, has_pre_result),
@@ -1241,6 +1261,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_stat_tokens),
 	LUA_INTERFACE_DEF (task, get_meta_words),
 	LUA_INTERFACE_DEF (task, lookup_words),
+	LUA_INTERFACE_DEF (task, add_named_result),
+	LUA_INTERFACE_DEF (task, get_all_named_results),
 	LUA_INTERFACE_DEF (task, topointer),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -1880,7 +1902,8 @@ lua_task_get_worker (lua_State * L)
 
 
 static gint
-lua_task_insert_result (lua_State * L)
+lua_task_insert_result_common (lua_State * L, struct rspamd_scan_result *result,
+		gint common_args_pos)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
@@ -1891,15 +1914,15 @@ lua_task_insert_result (lua_State * L)
 	gint i, top, args_start;
 
 	if (task != NULL) {
-		if (lua_isboolean (L, 2)) {
-			args_start = 3;
+		if (lua_isboolean (L, common_args_pos)) {
+			args_start = common_args_pos + 1;
 
-			if (lua_toboolean (L, 2)) {
+			if (lua_toboolean (L, common_args_pos)) {
 				flags |= RSPAMD_SYMBOL_INSERT_ENFORCE;
 			}
 		}
 		else {
-			args_start = 2;
+			args_start = common_args_pos;
 		}
 
 		symbol_name = rspamd_mempool_strdup (task->task_pool,
@@ -1907,7 +1930,7 @@ lua_task_insert_result (lua_State * L)
 		weight = luaL_checknumber (L, args_start + 1);
 		top = lua_gettop (L);
 		s = rspamd_task_insert_result_full (task, symbol_name, weight,
-				NULL, flags);
+				NULL, flags, result);
 
 		/* Get additional options */
 		if (s) {
@@ -1987,6 +2010,33 @@ lua_task_insert_result (lua_State * L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_insert_result (lua_State * L)
+{
+	return lua_task_insert_result_common (L, NULL, 2);
+}
+
+static gint
+lua_task_insert_result_named (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *named_result = luaL_checkstring (L, 2);
+	struct rspamd_scan_result *res;
+
+	if (task && named_result) {
+		res = rspamd_find_metric_result (task, named_result);
+
+		if (res == NULL) {
+			return luaL_error (L, "invalid arguments: bad named result: %s",
+					named_result);
+		}
+
+		return lua_task_insert_result_common (L, res, 3);
+	}
+
+	return luaL_error (L, "invalid arguments");
 }
 
 static gint
@@ -6511,6 +6561,38 @@ lua_task_add_named_result (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_get_all_named_results (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		gint n = 0;
+		struct rspamd_scan_result *res;
+
+		DL_COUNT (task->result, res, n);
+		lua_createtable (L, n, 0);
+		n = 1;
+
+		DL_FOREACH (task->result, res) {
+			if (res->name != NULL) {
+				lua_pushstring (L, res->name);
+			}
+			else {
+				lua_pushstring (L, DEFAULT_METRIC);
+			}
+
+			lua_rawseti (L, -2, n ++);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 
