@@ -1166,31 +1166,33 @@ local function parse_atom(str)
   return atom
 end
 
-local function process_atom(atom, task)
-  local atom_cb = atoms[atom]
+local function gen_process_atom_cb(result_name, task)
+  return  function (atom)
+    local atom_cb = atoms[atom]
 
-  if atom_cb then
-    local res = atom_cb(task)
+    if atom_cb then
+      local res = atom_cb(task, result_name)
 
-    if not res then
-      lua_util.debugm(N, task, 'atom: %1, NULL result', atom)
-    elseif res > 0 then
-      lua_util.debugm(N, task, 'atom: %1, result: %2', atom, res)
+      if not res then
+        lua_util.debugm(N, task, 'atom: %1, NULL result', atom)
+      elseif res > 0 then
+        lua_util.debugm(N, task, 'atom: %1, result: %2', atom, res)
+      end
+      return res
+    else
+      -- This is likely external atom
+      local real_sym = atom
+      if symbols_replacements[atom] then
+        real_sym = symbols_replacements[atom]
+      end
+      if task:has_symbol(real_sym, result_name) then
+        lua_util.debugm(N, task, 'external atom: %1, result: 1, named_result: %s', real_sym, result_name)
+        return 1
+      end
+      lua_util.debugm(N, task, 'external atom: %1, result: 0, , named_result: %s', real_sym, result_name)
     end
-    return res
-  else
-    -- This is likely external atom
-    local real_sym = atom
-    if symbols_replacements[atom] then
-      real_sym = symbols_replacements[atom]
-    end
-    if task:has_symbol(real_sym) then
-      lua_util.debugm(N, task, 'external atom: %1, result: 1', real_sym)
-      return 1
-    end
-    lua_util.debugm(N, task, 'external atom: %1, result: 0', real_sym)
+    return 0
   end
-  return 0
 end
 
 local function post_process()
@@ -1462,49 +1464,87 @@ local function post_process()
   fun.each(function(k, r)
       local expression = nil
       -- Meta function callback
-      local meta_cb = function(task)
-        local res = 0
-        local trace = {}
-        -- XXX: need to memoize result for better performance
-        local has_sym = task:has_symbol(k)
-        if not has_sym then
-          if expression then
-            res,trace = expression:process_traced(task)
-          end
-          if res > 0 then
-            -- Symbol should be one shot to make it working properly
+      -- Here are dragons!
+      -- This function can be called from 2 DIFFERENT type of invocations:
+      -- 1) Invocation from Rspamd itself where `res_name` will be nil
+      -- 2) Invocation from other meta during expression:process_traced call
+      -- So we need to distinguish that and return different stuff to be able to deal with atoms
+      local meta_cb = function(task, res_name)
+        local cached = task:cache_get('sa_metas_processed')
 
-            -- Exclude elements that are named in the same way as the symbol itself
-            local function exclude_sym_filter(sopt)
-              return sopt ~= k
-            end
-            task:insert_result(k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
-          end
-        else
-          res = 1
+        -- We avoid many task methods invocations here (likely)
+        if not cached then
+          cached = {}
+          task:cache_set('sa_metas_processed', cached)
         end
 
-        return res
+        local already_processed = cached[k]
+
+        -- Exclude elements that are named in the same way as the symbol itself
+        local function exclude_sym_filter(sopt)
+          return sopt ~= k
+        end
+
+        if not already_processed or (not res_name or not already_processed[res_name])then
+          -- Execute symbol
+          local function exec_symbol(cur_res)
+            local res,trace = expression:process_traced(gen_process_atom_cb(cur_res, task))
+            if res > 0 then
+              -- Symbol should be one shot to make it working properly
+              task:insert_result_named(cur_res, k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
+            end
+
+            if not cached[k] then
+              cached[k] = {
+                cur_res = res
+              }
+            else
+              cached[k][cur_res] = res
+            end
+          end
+
+          if not res_name then
+            -- Invoke for all named results
+            local named_results = task:get_all_named_results()
+            for _,cur_res in ipairs(named_results) do
+              exec_symbol(cur_res)
+            end
+          else
+            -- Invoked from another meta
+            exec_symbol(res_name)
+          end
+        else
+          -- We have cached the result
+          if res_name then
+            return cached[k][res_name] or 0
+          end
+        end
+
+        -- No return if invoked directly from Rspamd as we use task:insert_result_named directly
       end
-      expression = rspamd_expression.create(r['meta'],
-        {parse_atom, process_atom}, rspamd_config:get_mempool())
+
+      expression = rspamd_expression.create(r['meta'], parse_atom, rspamd_config:get_mempool())
       if not expression then
         rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
       else
         if r['score'] then
-          rspamd_config:set_metric_symbol({
+          rspamd_config:set_metric_symbol{
             name = k, score = r['score'],
             description = r['description'],
             priority = 2,
-            one_shot = true })
+            one_shot = true
+          }
           scores_added[k] = 1
         end
-        rspamd_config:register_symbol({
+
+        rspamd_config:register_symbol{
           name = k,
           weight = calculate_score(k, r),
           callback = meta_cb
-        })
+        }
+
         r['expression'] = expression
+
         if not atoms[k] then
           atoms[k] = meta_cb
         end
