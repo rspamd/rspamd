@@ -1,7 +1,7 @@
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
     # Clang plugin for static analysis
-    PROJECT(RspamdClangPlugin)
+    PROJECT(RspamdClangPlugin CXX)
     if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
         MESSAGE(FATAL_ERROR "Cannot build clang plugin when compiler is not clang")
     endif ()
@@ -25,16 +25,16 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
     SET(CLANGPLUGINSRC plugin.cc printf_check.cc)
 
     ADD_LIBRARY(rspamd-clang SHARED ${CLANGPLUGINSRC})
-    SET_TARGET_PROPERTIES(rspamd-clang PROPERTIES
-            COMPILE_FLAGS "-O2 -Wall -Wextra -Wno-unused-parameter -Werror"
-            LINKER_LANGUAGE CXX)
-    IF(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	    set_property(TARGET rspamd-clang APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--no-undefined -Wl,--as-needed")
+    IF (SANITIZE)
+        set (CMAKE_C_FLAGS "")
+        set (CMAKE_CXX_FLAGS "")
+        set (CMAKE_EXE_LINKER_FLAGS "")
     ENDIF()
+
 
     find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
     if(found_LLVM)
-        target_link_libraries(rspamd-clang PRIVATE LLVM)
+        target_link_libraries(rspamd-clang PRIVATE ${LLVM})
     else()
         # XXX not tested yet
         llvm_map_components_to_libnames(llvm_libs support core)
