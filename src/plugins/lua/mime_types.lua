@@ -35,6 +35,7 @@ local settings = {
   symbol_good = 'MIME_GOOD',
   symbol_attachment = 'MIME_BAD_ATTACHMENT',
   symbol_encrypted_archive = 'MIME_ENCRYPTED_ARCHIVE',
+  symbol_exe_in_gen_split_rar = 'MIME_EXE_IN_GEN_SPLIT_RAR',
   symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
   symbol_bad_extension = 'MIME_BAD_EXTENSION',
@@ -434,6 +435,12 @@ local function check_mime_type(task)
           end
 
           if check then
+            local is_gen_split_rar = false
+            if filename then
+              local ext = gen_extension(filename)
+              is_gen_split_rar = string.match(ext, '^%d%d%d$') and arch:get_type() == 'rar'
+            end
+
             local fl = arch:get_files_full(1000)
 
             local nfiles = #fl
@@ -447,8 +454,12 @@ local function check_mime_type(task)
               end
 
               if f['name'] then
-                check_filename(f['name'], nil,
-                    true, p, nil, nfiles)
+                if is_gen_split_rar and gen_extension(f['name']) == 'exe' then
+                  task:insert_result(settings['symbol_exe_in_gen_split_rar'], 1.0, f['name'])
+                else
+                  check_filename(f['name'], nil,
+                      true, p, nil, nfiles)
+                end
               end
             end
 
@@ -606,6 +617,12 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_encrypted_archive'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_exe_in_gen_split_rar'],
       parent = id,
       group = 'mime_types',
     })
