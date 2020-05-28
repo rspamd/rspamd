@@ -58,6 +58,7 @@ steps:
       - cd /rspamd/fedora/build
       - export LDFLAGS='-fuse-ld=lld'
       - export CFLAGS='-fsanitize=address,undefined,implicit-integer-truncation'
+      - export CXXFLAGS='-fsanitize=address,undefined,implicit-integer-truncation'
       - export ASAN_OPTIONS=detect_leaks=0
       - >
         cmake
