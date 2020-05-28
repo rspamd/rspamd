@@ -1174,9 +1174,9 @@ local function gen_process_atom_cb(result_name, task)
       local res = atom_cb(task, result_name)
 
       if not res then
-        lua_util.debugm(N, task, 'atom: %1, NULL result', atom)
+        lua_util.debugm(N, task, 'metric: %s, atom: %s, NULL result', result_name, atom)
       elseif res > 0 then
-        lua_util.debugm(N, task, 'atom: %1, result: %2', atom, res)
+        lua_util.debugm(N, task, 'metric: %s, atom: %s, result: %s', result_name, atom, res)
       end
       return res
     else
@@ -1186,10 +1186,10 @@ local function gen_process_atom_cb(result_name, task)
         real_sym = symbols_replacements[atom]
       end
       if task:has_symbol(real_sym, result_name) then
-        lua_util.debugm(N, task, 'external atom: %1, result: 1, named_result: %s', real_sym, result_name)
+        lua_util.debugm(N, task, 'external atom: %s, result: 1, named_result: %s', real_sym, result_name)
         return 1
       end
-      lua_util.debugm(N, task, 'external atom: %1, result: 0, , named_result: %s', real_sym, result_name)
+      lua_util.debugm(N, task, 'external atom: %s, result: 0, , named_result: %s', real_sym, result_name)
     end
     return 0
   end
@@ -1470,6 +1470,7 @@ local function post_process()
       -- 2) Invocation from other meta during expression:process_traced call
       -- So we need to distinguish that and return different stuff to be able to deal with atoms
       local meta_cb = function(task, res_name)
+        lua_util.debugm(N, task, 'meta callback for %s; result name: %s', k, res_name)
         local cached = task:cache_get('sa_metas_processed')
 
         -- We avoid many task methods invocations here (likely)
@@ -1485,22 +1486,21 @@ local function post_process()
           return sopt ~= k
         end
 
-        if not already_processed or (not res_name or not already_processed[res_name])then
+        if not already_processed then
           -- Execute symbol
           local function exec_symbol(cur_res)
             local res,trace = expression:process_traced(gen_process_atom_cb(cur_res, task))
+            lua_util.debugm(N, task, 'meta result for %s: %s; result name: %s', k, res, cur_res)
             if res > 0 then
               -- Symbol should be one shot to make it working properly
               task:insert_result_named(cur_res, k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
             end
 
             if not cached[k] then
-              cached[k] = {
-                cur_res = res
-              }
-            else
-              cached[k][cur_res] = res
+              cached[k] = {}
             end
+
+            cached[k][cur_res] = res
           end
 
           if not res_name then
@@ -1512,11 +1512,16 @@ local function post_process()
           else
             -- Invoked from another meta
             exec_symbol(res_name)
+            return cached[k][res_name] or 0
           end
         else
           -- We have cached the result
+          local res = already_processed[res_name or 'default'] or 0
+          lua_util.debugm(N, task, 'cached meta result for %s: %s; result name: %s',
+              k, res, res_name)
+
           if res_name then
-            return cached[k][res_name] or 0
+            return res
           end
         end
 
