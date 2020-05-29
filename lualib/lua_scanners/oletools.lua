@@ -291,7 +291,7 @@ local function oletools_check(task, content, digest, rule)
           lua_util.debugm(N, task, '%s: analysis_keyword_table: %s', rule.log_prefix, analysis_keyword_table)
           lua_util.debugm(N, task, '%s: analysis_cat_table: %s', rule.log_prefix, analysis_cat_table)
 
-          if rule.extended == false and analysis_cat_table.autoexec == 'A' and analysis_cat_table.suspicious == 'S' then
+          if rule.extended == false and analysis_cat_table[2] == 'A' and analysis_cat_table[3] == 'S' then
             -- use single string as virus name
             local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
             lua_util.debugm(rule.name, task, '%s: threat result: %s', rule.log_prefix, threat)
@@ -309,7 +309,7 @@ local function oletools_check(task, content, digest, rule)
             common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
             common.save_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
 
-          elseif analysis_cat_table.macro_exist == '-' and #analysis_keyword_table == 0 then
+          elseif analysis_cat_table[1] == '-' and #analysis_keyword_table == 0 then
             common.save_cache(task, digest, rule, 'OK')
             common.log_clean(task, rule, 'No macro found')
 
