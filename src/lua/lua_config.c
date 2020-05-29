@@ -3796,6 +3796,30 @@ lua_config_register_finish_script (lua_State *L)
 	return 0;
 }
 
+static inline bool
+rspamd_lua_config_check_settings_symbols_object (const ucl_object_t *obj)
+{
+	if (obj == NULL) {
+		/* Semantically valid */
+		return true;
+	}
+
+	if (ucl_object_type (obj) == UCL_OBJECT) {
+		/* Key-value mapping - should be okay */
+		return true;
+	}
+
+	if (ucl_object_type (obj) == UCL_ARRAY) {
+		/* Okay if empty */
+		if (obj->len == 0) {
+			return true;
+		}
+	}
+
+	/* Everything else not okay */
+	return false;
+}
+
 static gint
 lua_config_register_settings_id (lua_State *L)
 {
@@ -3809,7 +3833,7 @@ lua_config_register_settings_id (lua_State *L)
 
 		sym_enabled = ucl_object_lua_import (L, 3);
 
-		if (sym_enabled != NULL && ucl_object_type (sym_enabled) != UCL_OBJECT) {
+		if (!rspamd_lua_config_check_settings_symbols_object (sym_enabled)) {
 			ucl_object_unref (sym_enabled);
 
 			return luaL_error (L, "invalid symbols enabled");
@@ -3817,7 +3841,7 @@ lua_config_register_settings_id (lua_State *L)
 
 		sym_disabled = ucl_object_lua_import (L, 4);
 
-		if (sym_disabled != NULL && ucl_object_type (sym_disabled) != UCL_OBJECT) {
+		if (!rspamd_lua_config_check_settings_symbols_object (sym_disabled)) {
 			ucl_object_unref (sym_enabled);
 			ucl_object_unref (sym_disabled);
 

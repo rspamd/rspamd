@@ -3531,10 +3531,8 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 		return item->allowed_ids.dyn.n;
 	}
 	else {
-		while (item->forbidden_ids.st[cnt] != 0) {
+		while (item->forbidden_ids.st[cnt] != 0 && cnt < G_N_ELEMENTS (item->allowed_ids.st)) {
 			cnt ++;
-
-			g_assert (cnt < G_N_ELEMENTS (item->allowed_ids.st));
 		}
 
 		*nids = cnt;
@@ -3543,7 +3541,7 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 	}
 }
 
-/* Usable for near-sorted ids list */
+/* Insertion sort: usable for near-sorted ids list */
 static inline void
 rspamd_ids_insertion_sort (guint *a, guint n)
 {
@@ -3571,7 +3569,7 @@ rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
 	if (ls->st[0] == -1) {
 		/* Dynamic array */
 		if (ls->dyn.len < ls->dyn.allocated) {
-			/* Trivial, append + qsort */
+			/* Trivial, append + sort */
 			ls->dyn.n[ls->dyn.len++] = id;
 		}
 		else {
@@ -3590,7 +3588,7 @@ rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
 	}
 	else {
 		/* Static part */
-		while (ls->st[cnt] != 0) {
+		while (ls->st[cnt] != 0 && cnt < G_N_ELEMENTS (ls->st)) {
 			cnt ++;
 		}
 
