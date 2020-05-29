@@ -139,7 +139,7 @@ steps:
         if [ $EXIT_CODE -gt 128 ]; then
         gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
         fi
-      - cat /tmp/ubsan.*
+      - cat /tmp/ubsan.* || true
       - exit $EXIT_CODE
 
   - name: functional
