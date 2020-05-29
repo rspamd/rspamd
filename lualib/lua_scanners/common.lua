@@ -399,7 +399,10 @@ local function check_parts_match(task, rule)
       -- check detected content type (libmagic) regex matching
       if detected_ext then
         local magic = lua_magic_types[detected_ext] or {}
-        if match_filter(task, magic.ct, rule.mime_parts_filter_regex) then
+        if match_filter(task, rule, detected_ext, rule.mime_parts_filter_ext, 'ext') then
+          lua_util.debugm(rule.name, task, '%s: detected extension matched: |%s|', rule.log_prefix, detected_ext)
+          return true
+        elseif magic.ct and match_filter(task, rule, magic.ct, rule.mime_parts_filter_regex, 'regex') then
           lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
               rule.log_prefix, magic.ct)
           return true
