@@ -171,15 +171,15 @@ local function oletools_check(task, content, digest, rule)
 
           -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
           -- H=Hex strings, B=Base64 strings, D=Dridex strings, V=VBA strings
-          local analysis_cat_table = {
-            macro_exist = '-',
-            autoexec = '-',
-            suspicious = '-',
-            iocs = '-',
-            hex = '-',
-            base64 = '-',
-            dridex = '-',
-            vba = '-'
+	  local analysis_cat_table = {
+            [1] = '-',
+            [2] = '-',
+            [3] = '-',
+            [4] = '-',
+            [5] = '-',
+            [6] = '-',
+            [7] = '-',
+            [8] = '-'
           }
           local analysis_keyword_table = {}
 
@@ -247,7 +247,7 @@ local function oletools_check(task, content, digest, rule)
 
               elseif #v.macros > 0 then
 
-                analysis_cat_table.macro_exist = 'M'
+                analysis_cat_table[1] = 'M'
 
                 lua_util.debugm(rule.name, task,
                     '%s: filename: %s', rule.log_prefix, result[2]['file'])
@@ -263,25 +263,25 @@ local function oletools_check(task, content, digest, rule)
                   lua_util.debugm(rule.name, task, '%s: threat found - type: %s, keyword: %s, '..
                       'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
                   if a.type == 'AutoExec' then
-                    analysis_cat_table.autoexec = 'A'
+                    analysis_cat_table[2] = 'A'
                     table.insert(analysis_keyword_table, a.keyword)
                   elseif a.type == 'Suspicious' then
                     if rule.extended == true or
                       (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
                     then
-                      analysis_cat_table.suspicious = 'S'
+                      analysis_cat_table[3] = 'S'
                       table.insert(analysis_keyword_table, a.keyword)
                     end
                   elseif a.type == 'IOC' then
-                    analysis_cat_table.iocs = 'I'
+                    analysis_cat_table[4] = 'I'
                   elseif a.type == 'Hex strings' then
-                    analysis_cat_table.hex = 'H'
+                    analysis_cat_table[5] = 'H'
                   elseif a.type == 'Base64 strings' then
-                    analysis_cat_table.base64 = 'B'
+                    analysis_cat_table[6] = 'B'
                   elseif a.type == 'Dridex strings' then
-                    analysis_cat_table.dridex = 'D'
+                    analysis_cat_table[7] = 'D'
                   elseif a.type == 'VBA strings' then
-                    analysis_cat_table.vba = 'V'
+                    analysis_cat_table[8] = 'V'
                   end
                 end
               end
