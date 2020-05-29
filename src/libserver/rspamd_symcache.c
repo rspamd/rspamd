@@ -3500,12 +3500,9 @@ rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
 		return item->allowed_ids.dyn.n;
 	}
 	else {
-		while (item->allowed_ids.st[cnt] != 0) {
+		while (item->allowed_ids.st[cnt] != 0 && cnt < G_N_ELEMENTS (item->allowed_ids.st)) {
 			cnt ++;
-
-			g_assert (cnt < G_N_ELEMENTS (item->allowed_ids.st));
 		}
-
 
 		*nids = cnt;
 
