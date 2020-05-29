@@ -690,16 +690,10 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 					"%s is missing", ddep->from, ddep->to, ddep->from);
 		}
 		else {
-			if (it->type & (SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_COMPOSITE)) {
-				msg_err_cache ("cannot register delayed dependency between %s and %s: "
-				   "%s is a postfilter", ddep->from, ddep->to, ddep->from);
-			}
-			else {
-				msg_debug_cache ("delayed between %s(%d:%d) -> %s", ddep->from,
-						it->id, vit->id, ddep->to);
-				rspamd_symcache_add_dependency (cache, it->id, ddep->to, vit != it ?
-																		 vit->id : -1);
-			}
+			msg_debug_cache ("delayed between %s(%d:%d) -> %s", ddep->from,
+					it->id, vit->id, ddep->to);
+			rspamd_symcache_add_dependency (cache, it->id, ddep->to, vit != it ?
+																	 vit->id : -1);
 		}
 
 		cur = g_list_next (cur);
