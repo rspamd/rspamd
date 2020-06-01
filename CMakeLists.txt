@@ -505,6 +505,11 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	# on a build system. On the other hand, we know that linux has stupid
 	# but compatible shmem support, so we assume this macro as true
 	SET(HAVE_SANE_SHMEM 1)
+	CHECK_C_SOURCE_COMPILES ("#define _GNU_SOURCE
+						  #include <sys/socket.h>
+						  int main (int argc, char **argv) {
+							return ((int*)(&recvmmsg))[argc];
+						  }" HAVE_RECVMMSG)
 ELSE()
 	CHECK_C_SOURCE_RUNS("
 	#include <sys/mman.h>
