@@ -372,7 +372,7 @@ local function maybe_dereference_object(elt, pdf, task)
       -- No recursion!
       return pdf.ref[ref]
     else
-      lua_util.debugm(N, task, 'cannot dereference %s:%s -> %s',
+      lua_util.debugm(N, task, 'cannot dereference %s:%s -> %s, no object',
           elt[2], elt[3], obj_ref(elt[2], elt[3]))
       return nil
     end
@@ -683,14 +683,16 @@ process_dict = function(task, pdf, obj, dict)
 
     local resources = dict.Resources
     if resources and type(resources) == 'table' then
-      obj.resources = maybe_dereference_object(resources, pdf, task)
+      local res_ref = maybe_dereference_object(resources, pdf, task)
 
-      if type(obj.resources) ~= 'table' then
-        rspamd_logger.infox(task, 'cannot parse resources from pdf: %s returned by grammar',
-            obj.resources)
+      if type(res_ref) ~= 'table' then
+        lua_util.debugm(N, task, 'cannot parse resources from pdf: %s',
+            resources)
         obj.resources = {}
-      elseif obj.resources.dict then
-        obj.resources = obj.resources.dict
+      elseif res_ref.dict then
+        obj.resources = res_ref.dict
+      else
+        obj.resources = {}
       end
     else
       -- Fucking pdf: we need to inherit from parent
