@@ -255,10 +255,24 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 	gchar *ret = NULL, *h, *t;
 	struct rspamd_charset_substitution *s;
 	const gchar *cset;
+	rspamd_ftok_t utf8_tok;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (sub_hash == NULL) {
 		rspamd_mime_encoding_substitute_init ();
+	}
+
+	/* Fast path */
+	RSPAMD_FTOK_ASSIGN (&utf8_tok, "utf-8");
+
+	if (rspamd_ftok_casecmp (in, &utf8_tok) == 0) {
+		return UTF8_CHARSET;
+	}
+
+	RSPAMD_FTOK_ASSIGN (&utf8_tok, "utf8");
+
+	if (rspamd_ftok_casecmp (in, &utf8_tok) == 0) {
+		return UTF8_CHARSET;
 	}
 
 	ret = rspamd_mempool_ftokdup (pool, in);
@@ -320,6 +334,21 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
 	struct rspamd_charset_converter *conv;
+	rspamd_ftok_t cset_tok;
+
+	/* Check if already utf8 */
+	RSPAMD_FTOK_FROM_STR (&cset_tok, in_enc);
+
+	if (rspamd_mime_charset_utf_check (&cset_tok, input, len,
+			FALSE)) {
+		d = rspamd_mempool_alloc (pool, len);
+		memcpy (d, input, len);
+		if (olen) {
+			*olen = len;
+		}
+
+		return d;
+	}
 
 	conv = rspamd_mime_get_converter_cached (in_enc, pool, TRUE, &uc_err);
 	utf8_converter = rspamd_get_utf8_converter ();
