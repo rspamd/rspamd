@@ -460,8 +460,16 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	msg_info_task ("converted from %s to UTF-8 inlen: %d, outlen: %d (%d UTF16 chars)",
-			charset, input->len, r, uc_len);
+	if (text_part->mime_part && text_part->mime_part->ct) {
+		msg_info_task ("converted text part from %s ('%T' announced) to UTF-8 inlen: %d, outlen: %d (%d UTF16 chars)",
+				charset, &text_part->mime_part->ct->charset, input->len, r, uc_len);
+	}
+	else {
+		msg_info_task ("converted text part from %s (no charset announced) to UTF-8 inlen: %d, "
+				 "outlen: %d (%d UTF16 chars)",
+				charset, input->len, r, uc_len);
+	}
+
 	text_part->utf_raw_content = rspamd_mempool_alloc (task->task_pool,
 			sizeof (*text_part->utf_raw_content) + sizeof (gpointer) * 4);
 	text_part->utf_raw_content->data = d;
