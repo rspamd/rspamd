@@ -301,7 +301,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 		ret = (char *)s->canon;
 	}
 
-	/* Just fucking stupid */
+	/* Try different aliases */
 	cset = ucnv_getCanonicalName (ret, "MIME", &uc_err);
 
 	if (cset == NULL) {
@@ -311,12 +311,12 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 
 	if (cset == NULL) {
 		uc_err = U_ZERO_ERROR;
-		cset = ucnv_getCanonicalName (ret, "WINDOWS", &uc_err);
+		cset = ucnv_getCanonicalName (ret, "", &uc_err);
 	}
 
 	if (cset == NULL) {
 		uc_err = U_ZERO_ERROR;
-		cset = ucnv_getCanonicalName (ret, "JAVA", &uc_err);
+		cset = ucnv_getAlias (ret, 0, &uc_err);
 	}
 
 	return cset;
@@ -389,7 +389,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 		return NULL;
 	}
 
-	msg_info_pool ("converted from %s to UTF-8 inlen: %z, outlen: %d",
+	msg_debug_pool ("converted from %s to UTF-8 inlen: %z, outlen: %d",
 			in_enc, len, r);
 	g_free (tmp_buf);
 
