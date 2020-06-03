@@ -1343,7 +1343,6 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
 	struct fuzzy_session *session;
-	rspamd_inet_addr_t *addr;
 	gssize r, msg_len;
 	guint64 *nerrors;
 	struct iovec iovs[MSGVEC_LEN];
@@ -1428,13 +1427,13 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 					msg_debug ("invalid fuzzy command of size %z received", r);
 
 					nerrors = rspamd_lru_hash_lookup (session->ctx->errors_ips,
-							addr, -1);
+							session->addr, -1);
 
 					if (nerrors == NULL) {
 						nerrors = g_malloc (sizeof (*nerrors));
 						*nerrors = 1;
 						rspamd_lru_hash_insert (session->ctx->errors_ips,
-								rspamd_inet_address_copy (addr),
+								rspamd_inet_address_copy (session->addr),
 								nerrors, -1, -1);
 					}
 					else {
