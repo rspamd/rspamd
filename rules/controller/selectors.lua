@@ -30,11 +30,7 @@ local function handle_check_selector(_, conn, req_params)
   if req_params.selector then
     local selector = lua_selectors.create_selector_closure(rspamd_config,
         req_params.selector, '', true)
-    if not selector then
-      conn:send_error(500, 'invalid selector')
-    else
-      conn:send_ucl({success = true})
-    end
+      conn:send_ucl({success = selector and true})
   else
     conn:send_error(404, 'missing selector')
   end
