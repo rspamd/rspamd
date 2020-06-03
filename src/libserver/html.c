@@ -349,7 +349,12 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 	gchar *t = s, *h = s, *e = s, *end_ptr, old_c;
 	const gchar *end;
 	const gchar *entity;
-	gboolean seen_hash = FALSE, seen_digit_only = FALSE, seen_hex = FALSE;
+	gboolean seen_hash = FALSE, seen_hex = FALSE;
+	enum {
+		do_undefined,
+		do_digits_only,
+		do_mixed,
+	} seen_digit_only;
 	gint state = 0, base;
 	UChar32 uc;
 	khiter_t k;
@@ -371,7 +376,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 				state = 1;
 				seen_hash = FALSE;
 				seen_hex = FALSE;
-				seen_digit_only = FALSE;
+				seen_digit_only = do_undefined;
 				e = h;
 				h++;
 				continue;
@@ -520,17 +525,18 @@ decode_entity:
 					h ++;
 				}
 			}
-			else if (g_ascii_isdigit (*h) || (seen_hex && g_ascii_isxdigit (*h))) {
-				seen_digit_only = TRUE;
+			else if (seen_digit_only != do_mixed &&
+				(g_ascii_isdigit (*h) || (seen_hex && g_ascii_isxdigit (*h)))) {
+				seen_digit_only = do_digits_only;
 			}
 			else {
-				if (seen_digit_only && seen_hash && h > e) {
+				if (seen_digit_only == do_digits_only && seen_hash && h > e) {
 					/* We have seen some digits, so we can try to decode, eh */
 					/* Fuck retarded email clients... */
 					goto decode_entity;
 				}
 
-				seen_digit_only = FALSE;
+				seen_digit_only = do_mixed;
 			}
 
 			h++;
