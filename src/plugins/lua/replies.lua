@@ -150,7 +150,7 @@ local function replies_set(task)
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
-  if msg_id == nil then
+  if msg_id == nil or msg_id:len() <= 2 then
     return
   end
   -- Create hash of message-id and store to redis
