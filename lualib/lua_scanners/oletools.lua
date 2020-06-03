@@ -301,7 +301,16 @@ local function oletools_check(task, content, digest, rule)
           elseif rule.extended == true and #analysis_keyword_table > 0 then
             -- report any flags (types) and any most keywords as individual virus name
 
-            table.insert(analysis_keyword_table, 1, table.concat(lua_util.values(analysis_cat_table)))
+            local flags = analysis_cat_table.macro_exist ..
+                analysis_cat_table.autoexec ..
+                analysis_cat_table.suspicious ..
+                analysis_cat_table.iocs ..
+                analysis_cat_table.hex ..
+                analysis_cat_table.base64 ..
+                analysis_cat_table.dridex ..
+                analysis_cat_table.vba
+
+            table.insert(analysis_keyword_table, 1, flags)
 
             lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
                 rule.log_prefix, table.concat(analysis_keyword_table, ','))
