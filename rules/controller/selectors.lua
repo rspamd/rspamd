@@ -27,7 +27,7 @@ local function handle_list_extractors(_, conn)
 end
 
 local function handle_check_selector(_, conn, req_params)
-  if req_params.selector then
+  if req_params.selector and req_params.selector ~= '' then
     local selector = lua_selectors.create_selector_closure(rspamd_config,
         req_params.selector, '', true)
       conn:send_ucl({success = selector and true})
@@ -37,7 +37,7 @@ local function handle_check_selector(_, conn, req_params)
 end
 
 local function handle_check_message(task, conn, req_params)
-  if req_params.selector then
+  if req_params.selector and req_params.selector ~= '' then
     local selector = lua_selectors.create_selector_closure(rspamd_config,
         req_params.selector, '', true)
     if not selector then
