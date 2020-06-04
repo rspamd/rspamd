@@ -91,9 +91,9 @@ local function replies_check(task)
     return false
   end
 
-  local function redis_get_cb(err, data)
+  local function redis_get_cb(err, data, addr)
     if err ~= nil then
-      rspamd_logger.errx(task, 'redis_get_cb received error: %1', err)
+      rspamd_logger.errx(task, 'redis_get_cb error when reading data from %s: %s', addr:get_addr(), err)
       return
     end
     if data and type(data) == 'string' and check_recipient(data) then
@@ -134,9 +134,9 @@ local function replies_check(task)
 end
 
 local function replies_set(task)
-  local function redis_set_cb(err)
+  local function redis_set_cb(err, _, addr)
     if err ~=nil then
-      rspamd_logger.errx(task, 'redis_set_cb received error: %1', err)
+      rspamd_logger.errx(task, 'redis_set_cb error when writing data to %s: %s', addr:get_addr(), err)
     end
   end
   -- If sender is unauthenticated return
