@@ -612,7 +612,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		rule->lua_id = lua_tonumber (L, -1);
 	}
 
-	lua_settop (L, 0);
+	lua_settop (L, err_idx - 1);
 
 	rspamd_mempool_add_destructor (cfg->cfg_pool, fuzzy_free_rule,
 			rule);
@@ -1140,7 +1140,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 	if (lua_type (L, -1) == LUA_TTABLE) {
 		lua_pushstring (L, "fuzzy_check");
-		lua_createtable (L, 0, 2);
+		lua_createtable (L, 0, 3);
 		/* Set methods */
 		lua_pushstring (L, "unlearn");
 		lua_pushcfunction (L, fuzzy_lua_unlearn_handler);
@@ -1417,9 +1417,13 @@ fuzzy_rule_check_mimepart (struct rspamd_task *task,
 						   gboolean *need_check,
 						   gboolean *fuzzy_check)
 {
+	lua_State *L = (lua_State *)task->cfg->lua_state;
+
+	gint old_top = lua_gettop (L);
+
 	if (rule->lua_id != -1 && rule->ctx->check_mime_part_ref != -1) {
 		gint err_idx, ret;
-		lua_State *L = (lua_State *)task->cfg->lua_state;
+
 		struct rspamd_task **ptask;
 		struct rspamd_mime_part **ppart;
 
@@ -1449,7 +1453,7 @@ fuzzy_rule_check_mimepart (struct rspamd_task *task,
 			*fuzzy_check = lua_toboolean (L, -1);
 		}
 
-		lua_settop (L, 0);
+		lua_settop (L, old_top);
 
 		return ret;
 	}
@@ -3187,7 +3191,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			}
 
 			/* Result + error function */
-			lua_settop (L, 0);
+			lua_settop (L, err_idx - 1);
 
 			if (skip) {
 				msg_info_task ("skip rule %s by condition callback",
@@ -3795,9 +3799,9 @@ fuzzy_lua_gen_hashes_handler (lua_State *L)
 				}
 
 				lua_settable (L, -3); /* ret[rule->name] = {raw_fuzzy1, ..., raw_fuzzyn} */
-			}
 
-			g_ptr_array_free (commands, TRUE);
+				g_ptr_array_free (commands, TRUE);
+			}
 		}
 	}
 	else {
