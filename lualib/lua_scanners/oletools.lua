@@ -171,14 +171,15 @@ local function oletools_check(task, content, digest, rule)
 
           -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
           -- H=Hex strings, B=Base64 strings, D=Dridex strings, V=VBA strings
+          -- Keep sorted to avoid dragons
           local analysis_cat_table = {
-            macro_exist = '-',
             autoexec = '-',
-            suspicious = '-',
-            iocs = '-',
-            hex = '-',
             base64 = '-',
             dridex = '-',
+            hex = '-',
+            iocs = '-',
+            macro_exist = '-',
+            suspicious = '-',
             vba = '-'
           }
           local analysis_keyword_table = {}
@@ -300,8 +301,9 @@ local function oletools_check(task, content, digest, rule)
 
           elseif rule.extended == true and #analysis_keyword_table > 0 then
             -- report any flags (types) and any most keywords as individual virus name
-
-            table.insert(analysis_keyword_table, 1, table.concat(lua_util.values(analysis_cat_table)))
+            local analysis_cat_table_values = lua_util.values(analysis_cat_table)
+            table.sort(analysis_cat_table_values)
+            table.insert(analysis_keyword_table, 1, table.concat(analysis_cat_table_values))
 
             lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
                 rule.log_prefix, table.concat(analysis_keyword_table, ','))
