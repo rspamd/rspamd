@@ -426,7 +426,7 @@ local function maybe_extract_object_stream(obj, pdf, task)
     return nil
   end
   local dict = obj.dict
-  if dict.Length then
+  if dict.Length and type(obj.stream) == 'table' then
     local len = math.min(obj.stream.len,
         tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
     local real_stream = obj.stream.data:span(1, len)
