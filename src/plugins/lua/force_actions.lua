@@ -71,7 +71,7 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
       if not selector then
         selector_cache[selector_expr] = lua_selectors.create_selector_closure(rspamd_config, selector_expr, '', true)
         selector = selector_cache[selector_expr]
-        if not selector then 
+        if not selector then
           rspamd_logger.errx(task, 'could not create selector [%1]', selector_expr)
           return "((could not create selector))"
         end
@@ -86,7 +86,7 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit, 
         extracted = '((error extracting value))'
       end
       return extracted
-    end 
+    end
 
     local cact = task:get_metric_action('default')
     if cact == act then

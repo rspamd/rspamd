@@ -612,6 +612,6 @@ for k, r in pairs(settings.rules) do
     type = 'idempotent',
     callback = gen_exporter(r),
     priority = 10,
-    flags = 'empty',
+    flags = 'empty,explicit_disable,ignore_passthrough',
   })
 end
