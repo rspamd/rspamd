@@ -218,9 +218,10 @@ local function dmarc_report(task, spf_ok, dkim_ok, disposition,
   local dkim_fail = table.concat(dres.fail or E, '|')
   local dkim_temperror = table.concat(dres.temperror or E, '|')
   local dkim_permerror = table.concat(dres.permerror or E, '|')
+  local disposition_to_return = if disposition == "softfail" then "none" else disposition
   local res = table.concat({
     ip:to_string(), spf_ok, dkim_ok,
-    disposition, (sampled_out and 'sampled_out' or ''), hfromdom,
+    disposition_to_return, (sampled_out and 'sampled_out' or ''), hfromdom,
     dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, spfdom, spf_result}, ',')
 
   return res
@@ -817,7 +818,7 @@ if opts['reporting'] == true then
           }),
         }
         if data.override ~= '' then
-          table.insert(buf, string.format('<reason>%s</reason>', data.override))
+          table.insert(buf, string.format('<reason><type>%s</type></reason>', data.override))
         end
         table.insert(buf, table.concat({
           '</policy_evaluated></row><identifiers><header_from>', data.header_from,
