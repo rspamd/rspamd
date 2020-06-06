@@ -218,9 +218,8 @@ local function dmarc_report(task, spf_ok, dkim_ok, disposition,
   local dkim_fail = table.concat(dres.fail or E, '|')
   local dkim_temperror = table.concat(dres.temperror or E, '|')
   local dkim_permerror = table.concat(dres.permerror or E, '|')
-  local disposition_to_return = if disposition == "softfail" then "none" else disposition
+  local disposition_to_return = (disposition == "softfail") and "none" or disposition
   local res = table.concat({
-    ip:to_string(), spf_ok, dkim_ok,
     disposition_to_return, (sampled_out and 'sampled_out' or ''), hfromdom,
     dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, spfdom, spf_result}, ',')
 
