@@ -39,6 +39,7 @@
 			<li role="presentation"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab">Configuration</a></li>
 			<li role="presentation"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab">Symbols</a></li>
 			<li role="presentation"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab">Scan<span class="learn" style="display: none;">/Learn</span></a></li>
+			<li role="presentation"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" style="display: none;">Test selectors</a></li>
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
     	<form class="navbar-form navbar-right" style="display: none;">
@@ -310,6 +311,50 @@
 					<div class="widget-content nopadding">
 						<div id="scanLog">
 							<table class="table" id="historyTable_scan"></table>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="selectors">
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-envelope"></i></span>
+						<h5>Test Rspamd selectors</h5>
+					</div>
+					<div class="widget-content">
+						<h5>Message source:</h5>
+						<div class="row">
+							<form class="col-md-12">
+								<div class="form-group">
+									<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
+								</div>
+								<div class="form-group">
+									<button class="btn btn-default pull-right" id="selectorsMsgClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+								</div>
+							</form>
+						</div>
+
+						<h5>Selector(s):</h5>
+						<div class="row">
+							<form class="col-md-12">
+								<div class="form-group has-feedback">
+									<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
+									<span id="selector-feedback-icon" class="glyphicon form-control-feedback"></span>
+								</div>
+								<div class="form-group">
+									<button type="submit" class="btn btn-default btn-primary" id="selectorsChkMsgBtn"><i class="glyphicon glyphicon-search"></i> Check message</button>
+									<button class="btn btn-default pull-right" id="selectorsClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+								</div>
+							</form>
+						</div>
+						<h5>Result:</h5>
+						<div class="row">
+							<form class="col-md-12">
+								<div class="form-group">
+									<textarea class="form-control" id="selectorsResArea" rows="5" readonly></textarea>
+								</div>
+							</form>
 						</div>
 					</div>
 				</div>
