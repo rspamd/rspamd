@@ -561,3 +561,11 @@ input.radio {
 #nprogress .bar {
     height: 1px;
 }
+
+/* Form element background for validation states */
+.has-error .form-control {
+    background-color: #fbe9e5;
+}
+.has-success .form-control {
+    background-color: #eef9e7;
+}

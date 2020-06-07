@@ -26,10 +26,10 @@
 /* global jQuery:false, FooTable:false, Visibility:false */
 
 define(["jquery", "d3pie", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
-    "app/symbols", "app/history", "app/upload"],
+    "app/symbols", "app/history", "app/upload", "app/selectors"],
 // eslint-disable-next-line max-params
 function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
-    tab_symbols, tab_history, tab_upload) {
+    tab_symbols, tab_history, tab_upload, tab_selectors) {
     "use strict";
     var ui = {
         page_size: {
@@ -260,6 +260,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                         $('#selSrv [value="' + e.name + '"]').prop("disabled", true);
                     }
                 });
+                tab_selectors.checkSelectors(ui);
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
@@ -272,10 +273,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             $(".learn").hide();
             $("#resetHistory").attr("disabled", true);
             $("#errors-history").hide();
+            $("#selectors_nav").hide();
         } else {
             $(".learn").show();
             $("#resetHistory").removeAttr("disabled", true);
             $("#errors-history").show();
+            $("#selectors_nav").show();
         }
 
         var buttons = $("#navBar form.navbar-right");
@@ -427,6 +430,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         });
         tab_config.setup(ui);
         tab_history.setup(ui, tables);
+        tab_selectors.setup(ui);
         tab_symbols.setup(ui, tables);
         tab_upload.setup(ui, tables);
         selData = tab_graph.setup(ui);
