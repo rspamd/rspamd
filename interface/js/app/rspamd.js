@@ -125,6 +125,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             });
         }
 
+        if (["#scan_nav", "#selectors_nav", "#disconnect"].indexOf(tab_id) !== -1) {
+            $("#refresh").hide();
+        } else {
+            $("#refresh").show();
+        }
+
         switch (tab_id) {
             case "#status_nav":
                 (function () {
