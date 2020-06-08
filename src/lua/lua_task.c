@@ -342,6 +342,15 @@ LUA_FUNCTION_DEF (task, get_subject);
  */
 LUA_FUNCTION_DEF (task, get_header);
 /***
+ * @method task:has_header(name[, case_sensitive])
+ * Get decoded value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {boolean},{number} true if header exists, the second value is number of headers with this name
+ */
+LUA_FUNCTION_DEF (task, has_header);
+/***
  * @method task:get_header_raw(name[, case_sensitive])
  * Get raw value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter.
@@ -1182,6 +1191,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_request_header),
 	LUA_INTERFACE_DEF (task, set_request_header),
 	LUA_INTERFACE_DEF (task, get_header),
+	LUA_INTERFACE_DEF (task, has_header),
 	LUA_INTERFACE_DEF (task, get_header_raw),
 	LUA_INTERFACE_DEF (task, get_header_full),
 	LUA_INTERFACE_DEF (task, get_header_count),
@@ -2745,16 +2755,22 @@ rspamd_lua_push_header_array (lua_State *L,
 	LUA_TRACE_POINT;
 	struct rspamd_mime_header *cur;
 	guint i;
+	gint nret = 1;
 
 	if (rh == NULL) {
-		if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
+		if (how == RSPAMD_TASK_HEADER_PUSH_HAS) {
+			lua_pushboolean (L, false);
+			lua_pushnumber (L, 0);
+			nret = 2;
+		}
+		else if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
 			lua_pushnumber (L, 0);
 		}
 		else {
 			lua_pushnil (L);
 		}
 
-		return 1;
+		return nret;
 	}
 
 	if (how == RSPAMD_TASK_HEADER_PUSH_FULL) {
@@ -2779,6 +2795,19 @@ rspamd_lua_push_header_array (lua_State *L,
 
 		lua_pushinteger (L, i);
 	}
+	else if (how == RSPAMD_TASK_HEADER_PUSH_HAS) {
+		i = 0;
+		nret = 2;
+
+		DL_FOREACH (rh, cur) {
+			if (!strong || strcmp (name, cur->name) == 0) {
+				i++;
+			}
+		}
+
+		lua_pushboolean (L, true);
+		lua_pushinteger (L, i);
+	}
 	else {
 		DL_FOREACH (rh, cur) {
 			if (!strong || strcmp (name, cur->name) == 0) {
@@ -2790,7 +2819,7 @@ rspamd_lua_push_header_array (lua_State *L,
 		lua_pushnil (L);
 	}
 
-	return 1;
+	return nret;
 }
 
 static gint
@@ -2840,6 +2869,12 @@ static gint
 lua_task_get_header_count (lua_State * L)
 {
 	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_COUNT);
+}
+
+static gint
+lua_task_has_header (lua_State * L)
+{
+	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_HAS);
 }
 
 static gint

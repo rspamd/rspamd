@@ -256,6 +256,7 @@ enum rspamd_lua_task_header_type {
 	RSPAMD_TASK_HEADER_PUSH_RAW,
 	RSPAMD_TASK_HEADER_PUSH_FULL,
 	RSPAMD_TASK_HEADER_PUSH_COUNT,
+	RSPAMD_TASK_HEADER_PUSH_HAS,
 };
 
 gint rspamd_lua_push_header (lua_State *L,
