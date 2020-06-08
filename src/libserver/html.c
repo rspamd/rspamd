@@ -368,7 +368,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 
 	end = s + l;
 
-	while (h - s < l) {
+	while (h - s < l && t <= h) {
 		switch (state) {
 		/* Out of entity */
 		case 0:
