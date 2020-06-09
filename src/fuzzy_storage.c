@@ -159,6 +159,7 @@ struct rspamd_fuzzy_storage_ctx {
 	GHashTable *keys;
 	gboolean encrypted_only;
 	gboolean read_only;
+	gboolean dedicated_update_worker;
 	struct rspamd_keypair_cache *keypair_cache;
 	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
@@ -1980,6 +1981,14 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only),
 			0,
 			"Allow encrypted requests only (and forbid all unknown keys or plaintext requests)");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"dedicated_update_worker",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, dedicated_update_worker),
+			0,
+			"Use worker 0 for updates only");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2215,6 +2224,24 @@ start_fuzzy (struct rspamd_worker *worker)
 				sizeof (struct fuzzy_peer_cmd), 1024);
 		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
 				rspamd_fuzzy_storage_periodic_callback, ctx);
+
+		if (ctx->dedicated_update_worker && worker->cf->count > 1) {
+			msg_info_config ("stop serving clients request in dedicated update mode");
+			rspamd_worker_stop_accept (worker);
+
+			GList *cur = worker->cf->listen_socks;
+
+			while (cur) {
+				struct rspamd_worker_listen_socket *ls =
+						(struct rspamd_worker_listen_socket *)cur->data;
+
+				if (ls->fd != -1) {
+					close (ls->fd);
+				}
+
+				cur = g_list_next (cur);
+			}
+		}
 	}
 
 	ctx->stat_ev.data = ctx;
