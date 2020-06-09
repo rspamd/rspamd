@@ -232,6 +232,7 @@ enum rspamd_inet_address_listen_opts {
 	RSPAMD_INET_ADDRESS_LISTEN_DEFAULT = 0,
 	RSPAMD_INET_ADDRESS_LISTEN_ASYNC = (1u << 0u),
 	RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT = (1u << 1u),
+	RSPAMD_INET_ADDRESS_LISTEN_NOLISTEN = (1u << 2u),
 };
 /**
  * Listen on a specified inet address

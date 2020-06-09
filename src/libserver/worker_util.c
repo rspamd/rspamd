@@ -936,13 +936,24 @@ rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_lo
 static bool
 rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 {
-	if (ls->fd == -1 || ls->is_systemd ||
-		rspamd_inet_address_get_af (ls->addr) == AF_UNIX) {
-		return false;
+	gint nfd = -1;
+
+	if (ls->fd == -1 || ls->is_systemd) {
+		/* No need to reuseport */
+		return true;
+	}
+
+	if (rspamd_inet_address_get_af (ls->addr) == AF_UNIX) {
+		/* Just try listen */
+
+		if (listen (ls->fd, -1) == -1) {
+			return false;
+		}
+
+		return true;
 	}
 
 #if defined(SO_REUSEPORT) && defined(SO_REUSEADDR)
-	gint nfd;
 
 	nfd = rspamd_inet_address_listen (ls->addr,
 			(ls->type == RSPAMD_WORKER_SOCKET_UDP ? SOCK_DGRAM : SOCK_STREAM),
@@ -952,16 +963,25 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 	if (nfd == -1) {
 		msg_warn ("cannot create reuseport listen socket for %d: %s",
 				ls->fd, strerror (errno));
+		nfd = ls->fd;
 	}
 	else {
 		close (ls->fd);
 		ls->fd = nfd;
+		nfd = -1;
 	}
 #else
-
+	nfd = ls->fd;
 #endif
 
-	return false;
+	/* This means that we have an fd with no listening enabled */
+	if (nfd != -1) {
+		if (listen (nfd, -1) == -1) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 /**
