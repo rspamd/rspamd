@@ -946,7 +946,9 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		for (i = 0; i < addrs->len; i ++) {
 			rspamd_inet_addr_t *addr = g_ptr_array_index (addrs, i);
 
-			fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE);
+			fd = rspamd_inet_address_listen (addr, SOCK_STREAM,
+					RSPAMD_INET_ADDRESS_LISTEN_ASYNC, -1);
+
 			if (fd != -1) {
 				static ev_io ev;
 

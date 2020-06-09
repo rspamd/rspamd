@@ -228,15 +228,21 @@ void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
 int rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 								 gboolean async);
 
+enum rspamd_inet_address_listen_opts {
+	RSPAMD_INET_ADDRESS_LISTEN_DEFAULT = 0,
+	RSPAMD_INET_ADDRESS_LISTEN_ASYNC = (1u << 0u),
+	RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT = (1u << 1u),
+};
 /**
  * Listen on a specified inet address
  * @param addr
  * @param type
- * @param async
+ * @param opts
  * @return
  */
 int rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
-								gboolean async);
+								enum rspamd_inet_address_listen_opts opts,
+								gint listen_queue);
 
 /**
  * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6

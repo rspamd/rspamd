@@ -933,6 +933,7 @@ rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_lo
 	ev_timer_start (event_loop, &wrk->hb.heartbeat_ev);
 }
 
+
 /**
  * Handles worker after fork returned zero
  * @param wrk

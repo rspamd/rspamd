@@ -1042,10 +1042,11 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 
 int
 rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
-		gboolean async)
+							enum rspamd_inet_address_listen_opts opts,
+							gint listen_queue)
 {
 	gint fd, r;
-	gint on = 1;
+	gint on = 1, serrno;
 	const struct sockaddr *sa;
 	const char *path;
 
@@ -1053,7 +1054,8 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		return -1;
 	}
 
-	fd = rspamd_socket_create (addr->af, type, 0, async);
+	fd = rspamd_socket_create (addr->af, type, 0,
+			(opts & RSPAMD_INET_ADDRESS_LISTEN_ASYNC));
 	if (fd == -1) {
 		return -1;
 	}
@@ -1070,7 +1072,23 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		sa = &addr->u.in.addr.sa;
 	}
 
-	(void)setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+#if defined(SO_REUSEADDR)
+	if (setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint)) == -1) {
+		msg_err ("cannot set SO_REUSEADDR on %d: %d", fd, strerror (errno));
+		goto err;
+	}
+#endif
+
+#if defined(SO_REUSEPORT)
+	if (opts & RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT) {
+		on = 1;
+
+		if (setsockopt (fd, SOL_SOCKET, SO_REUSEPORT, (const void *)&on, sizeof (gint)) == -1) {
+			msg_err ("cannot set SO_REUSEPORT on %d: %d", fd, strerror (errno));
+			goto err;
+		}
+	}
+#endif
 
 #ifdef HAVE_IPV6_V6ONLY
 	if (addr->af == AF_INET6) {
@@ -1086,13 +1104,13 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 
 	r = bind (fd, sa, addr->slen);
 	if (r == -1) {
-		if (!async || errno != EINPROGRESS) {
-			close (fd);
+		if (!(opts & RSPAMD_INET_ADDRESS_LISTEN_ASYNC) || errno != EINPROGRESS) {
 			msg_warn ("bind %s failed: %d, '%s'",
 					rspamd_inet_address_to_string_pretty (addr),
 					errno,
 					strerror (errno));
-			return -1;
+
+			goto err;
 		}
 	}
 
@@ -1115,18 +1133,31 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 						path, addr->u.un->mode, strerror (errno));
 			}
 		}
-		r = listen (fd, -1);
+
+		r = listen (fd, listen_queue);
 
 		if (r == -1) {
 			msg_warn ("listen %s failed: %d, '%s'",
 					rspamd_inet_address_to_string_pretty (addr),
 					errno, strerror (errno));
-			close (fd);
-			return -1;
+
+			goto err;
 		}
 	}
 
 	return fd;
+
+err:
+	/* Error path */
+	serrno = errno;
+
+	if (fd != -1) {
+		close (fd);
+	}
+
+	errno = serrno;
+
+	return -1;
 }
 
 gssize

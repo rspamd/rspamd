@@ -412,7 +412,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 		 */
 		if (listen_type & RSPAMD_WORKER_SOCKET_TCP) {
 			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
-					SOCK_STREAM, TRUE);
+					SOCK_STREAM, RSPAMD_INET_ADDRESS_LISTEN_ASYNC, -1);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
 				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
@@ -423,7 +423,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 		}
 		if (listen_type & RSPAMD_WORKER_SOCKET_UDP) {
 			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
-					SOCK_DGRAM, TRUE);
+					SOCK_DGRAM, RSPAMD_INET_ADDRESS_LISTEN_ASYNC, -1);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
 				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
@@ -1438,7 +1438,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		else {
 			control_fd = rspamd_inet_address_listen (control_addr, SOCK_STREAM,
-					TRUE);
+					RSPAMD_INET_ADDRESS_LISTEN_ASYNC, -1);
 			if (control_fd == -1) {
 				msg_err_main ("cannot open control socket at path: %s",
 						rspamd_main->cfg->control_socket_path);
