@@ -517,6 +517,7 @@ systemd_get_socket (struct rspamd_main *rspamd_main, const gchar *fdname)
 			ls = g_malloc0 (sizeof (*ls));
 			ls->addr = rspamd_inet_address_from_sa (&addr_storage.sa, slen);
 			ls->fd = sock;
+			ls->is_systemd = true;
 
 			slen = sizeof (stype);
 			if (getsockopt (sock, SOL_SOCKET, SO_TYPE, &stype, &slen) != -1) {

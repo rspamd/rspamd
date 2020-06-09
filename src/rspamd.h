@@ -234,6 +234,7 @@ struct rspamd_worker_listen_socket {
 	const rspamd_inet_addr_t *addr;
 	gint fd;
 	enum rspamd_worker_socket_type type;
+	bool is_systemd;
 };
 
 typedef struct worker_s {
