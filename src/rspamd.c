@@ -373,7 +373,7 @@ rspamd_fork_delayed_cb (EV_P_ ev_timer *w, int revents)
 	rspamd_fork_worker (waiting_worker->rspamd_main, waiting_worker->cf,
 			waiting_worker->oldindex,
 			waiting_worker->rspamd_main->event_loop,
-			rspamd_cld_handler);
+			rspamd_cld_handler, listen_sockets);
 	REF_RELEASE (waiting_worker->cf);
 	g_free (waiting_worker);
 }
@@ -612,15 +612,17 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct ev_loop *event_loop,
 					"cannot spawn more than 1 %s worker, so spawn one",
 					cf->worker->name);
 		}
-		rspamd_fork_worker (rspamd_main, cf, 0, event_loop, rspamd_cld_handler);
+		rspamd_fork_worker (rspamd_main, cf, 0, event_loop, rspamd_cld_handler,
+				listen_sockets);
 	}
 	else if (cf->worker->flags & RSPAMD_WORKER_THREADED) {
-		rspamd_fork_worker (rspamd_main, cf, 0, event_loop, rspamd_cld_handler);
+		rspamd_fork_worker (rspamd_main, cf, 0, event_loop, rspamd_cld_handler,
+				listen_sockets);
 	}
 	else {
 		for (i = 0; i < cf->count; i++) {
 			rspamd_fork_worker (rspamd_main, cf, i, event_loop,
-					rspamd_cld_handler);
+					rspamd_cld_handler, listen_sockets);
 		}
 	}
 }

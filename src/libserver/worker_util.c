@@ -933,16 +933,136 @@ rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_lo
 	ev_timer_start (event_loop, &wrk->hb.heartbeat_ev);
 }
 
+/**
+ * Handles worker after fork returned zero
+ * @param wrk
+ * @param rspamd_main
+ * @param cf
+ * @param listen_sockets
+ */
+static void
+rspamd_handle_child_fork (struct rspamd_worker *wrk,
+						  struct rspamd_main *rspamd_main,
+						  struct rspamd_worker_conf *cf,
+						  GHashTable *listen_sockets)
+{
+	gint rc;
+	struct rlimit rlim;
+
+	/* Update pid for logging */
+	rspamd_log_on_fork (cf->type, rspamd_main->cfg, rspamd_main->logger);
+	wrk->pid = getpid ();
+
+	/* Init PRNG after fork */
+	rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
+	if (rc != OTTERY_ERR_NONE) {
+		msg_err_main ("cannot initialize PRNG: %d", rc);
+		abort ();
+	}
+
+	rspamd_random_seed_fast ();
+#ifdef HAVE_EVUTIL_RNG_INIT
+	evutil_secure_rng_init ();
+#endif
+
+	/*
+	 * Libev stores all signals in a global table, so
+	 * previous handlers must be explicitly detached and forgotten
+	 * before starting a new loop
+	 */
+	ev_signal_stop (rspamd_main->event_loop, &rspamd_main->int_ev);
+	ev_signal_stop (rspamd_main->event_loop, &rspamd_main->term_ev);
+	ev_signal_stop (rspamd_main->event_loop, &rspamd_main->hup_ev);
+	ev_signal_stop (rspamd_main->event_loop, &rspamd_main->usr1_ev);
+	/* Remove the inherited event base */
+	ev_loop_destroy (rspamd_main->event_loop);
+	rspamd_main->event_loop = NULL;
+
+	/* Close unused sockets */
+	GHashTableIter it;
+	gpointer k, v;
+
+
+	g_hash_table_iter_init (&it, listen_sockets);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		GList *elt = (GList *)v;
+		GList *our = cf->listen_socks;
+
+		if (our != elt) {
+			GList *cur = elt;
+
+			while (cur) {
+				struct rspamd_worker_listen_socket *ls =
+						(struct rspamd_worker_listen_socket *)cur->data;
+
+				if (close (ls->fd) == -1) {
+					msg_err ("cannot close fd %d: %s", ls->fd, strerror (errno));
+				}
+
+				cur = g_list_next (cur);
+			}
+		}
+	}
+
+	/* Drop privileges */
+	rspamd_worker_drop_priv (rspamd_main);
+	/* Set limits */
+	rspamd_worker_set_limits (rspamd_main, cf);
+	/* Re-set stack limit */
+	getrlimit (RLIMIT_STACK, &rlim);
+	rlim.rlim_cur = 100 * 1024 * 1024;
+	rlim.rlim_max = rlim.rlim_cur;
+	setrlimit (RLIMIT_STACK, &rlim);
+
+	if (cf->bind_conf) {
+		setproctitle ("%s process (%s)", cf->worker->name,
+				cf->bind_conf->bind_line);
+	}
+	else {
+		setproctitle ("%s process", cf->worker->name);
+	}
+
+	if (rspamd_main->pfh) {
+		rspamd_pidfile_close (rspamd_main->pfh);
+	}
+
+	if (rspamd_main->cfg->log_silent_workers) {
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+	}
+
+	wrk->start_time = rspamd_get_calendar_ticks ();
+
+	if (cf->bind_conf) {
+		msg_info_main ("starting %s process %P (%d); listen on: %s",
+				cf->worker->name,
+				getpid (), index, cf->bind_conf->bind_line);
+	}
+	else {
+		msg_info_main ("starting %s process %P (%d)", cf->worker->name,
+				getpid (), index);
+	}
+	/* Close parent part of socketpair */
+	close (wrk->control_pipe[0]);
+	close (wrk->srv_pipe[0]);
+	rspamd_socket_nonblocking (wrk->control_pipe[1]);
+	rspamd_socket_nonblocking (wrk->srv_pipe[1]);
+	rspamd_main->cfg->cur_worker = wrk;
+	/* Execute worker (this function should not return normally!) */
+	cf->worker->worker_start_func (wrk);
+	/* To distinguish from normal termination */
+	exit (EXIT_FAILURE);
+}
+
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 					struct rspamd_worker_conf *cf,
 					guint index,
 					struct ev_loop *ev_base,
-					rspamd_worker_term_cb term_handler)
+					rspamd_worker_term_cb term_handler,
+					GHashTable *listen_sockets)
 {
 	struct rspamd_worker *wrk;
-	gint rc;
-	struct rlimit rlim;
 
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
@@ -984,81 +1104,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	switch (wrk->pid) {
 	case 0:
-		/* Update pid for logging */
-		rspamd_log_on_fork (cf->type, rspamd_main->cfg, rspamd_main->logger);
-		wrk->pid = getpid ();
-
-		/* Init PRNG after fork */
-		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
-		if (rc != OTTERY_ERR_NONE) {
-			msg_err_main ("cannot initialize PRNG: %d", rc);
-			abort ();
-		}
-
-		rspamd_random_seed_fast ();
-#ifdef HAVE_EVUTIL_RNG_INIT
-		evutil_secure_rng_init ();
-#endif
-
-		/*
-		 * Libev stores all signals in a global table, so
-		 * previous handlers must be explicitly detached and forgotten
-		 * before starting a new loop
-		 */
-		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->int_ev);
-		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->term_ev);
-		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->hup_ev);
-		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->usr1_ev);
-		/* Remove the inherited event base */
-		ev_loop_destroy (rspamd_main->event_loop);
-		rspamd_main->event_loop = NULL;
-		/* Drop privileges */
-		rspamd_worker_drop_priv (rspamd_main);
-		/* Set limits */
-		rspamd_worker_set_limits (rspamd_main, cf);
-		/* Re-set stack limit */
-		getrlimit (RLIMIT_STACK, &rlim);
-		rlim.rlim_cur = 100 * 1024 * 1024;
-		rlim.rlim_max = rlim.rlim_cur;
-		setrlimit (RLIMIT_STACK, &rlim);
-
-		if (cf->bind_conf) {
-			setproctitle ("%s process (%s)", cf->worker->name,
-					cf->bind_conf->bind_line);
-		}
-		else {
-			setproctitle ("%s process", cf->worker->name);
-		}
-
-		if (rspamd_main->pfh) {
-			rspamd_pidfile_close (rspamd_main->pfh);
-		}
-
-		if (rspamd_main->cfg->log_silent_workers) {
-			rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
-		}
-
-		wrk->start_time = rspamd_get_calendar_ticks ();
-
-		if (cf->bind_conf) {
-			msg_info_main ("starting %s process %P (%d); listen on: %s",
-					cf->worker->name,
-					getpid (), index, cf->bind_conf->bind_line);
-		}
-		else {
-			msg_info_main ("starting %s process %P (%d)", cf->worker->name,
-					getpid (), index);
-		}
-		/* Close parent part of socketpair */
-		close (wrk->control_pipe[0]);
-		close (wrk->srv_pipe[0]);
-		rspamd_socket_nonblocking (wrk->control_pipe[1]);
-		rspamd_socket_nonblocking (wrk->srv_pipe[1]);
-		rspamd_main->cfg->cur_worker = wrk;
-		/* Execute worker (this function should not return normally!) */
-		cf->worker->worker_start_func (wrk);
-		/* To distinguish from normal termination */
-		exit (EXIT_FAILURE);
+		rspamd_handle_child_fork (wrk, rspamd_main, cf, listen_sockets);
 		break;
 	case -1:
 		msg_err_main ("cannot fork main process: %s", strerror (errno));
