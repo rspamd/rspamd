@@ -933,6 +933,36 @@ rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_lo
 	ev_timer_start (event_loop, &wrk->hb.heartbeat_ev);
 }
 
+static bool
+rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
+{
+	if (ls->fd == -1 || ls->is_systemd ||
+		rspamd_inet_address_get_af (ls->addr) == AF_UNIX) {
+		return false;
+	}
+
+#if defined(SO_REUSEPORT) && defined(SO_REUSEADDR)
+	gint nfd;
+
+	nfd = rspamd_inet_address_listen (ls->addr,
+			(ls->type == RSPAMD_WORKER_SOCKET_UDP ? SOCK_DGRAM : SOCK_STREAM),
+			RSPAMD_INET_ADDRESS_LISTEN_ASYNC|RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT,
+			-1);
+
+	if (nfd == -1) {
+		msg_warn ("cannot create reuseport listen socket for %d: %s",
+				ls->fd, strerror (errno));
+	}
+	else {
+		close (ls->fd);
+		ls->fd = nfd;
+	}
+#else
+
+#endif
+
+	return false;
+}
 
 /**
  * Handles worker after fork returned zero
@@ -1004,6 +1034,17 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 				cur = g_list_next (cur);
 			}
 		}
+	}
+
+	/* Reuseport before dropping privs */
+	GList *cur = cf->listen_socks;
+
+	while (cur) {
+		struct rspamd_worker_listen_socket *ls =
+				(struct rspamd_worker_listen_socket *)cur->data;
+
+		rspamd_maybe_reuseport_socket (ls);
+		cur = g_list_next (cur);
 	}
 
 	/* Drop privileges */
