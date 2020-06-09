@@ -976,8 +976,10 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 
 	/* This means that we have an fd with no listening enabled */
 	if (nfd != -1) {
-		if (listen (nfd, -1) == -1) {
-			return false;
+		if (ls->type == RSPAMD_WORKER_SOCKET_TCP) {
+			if (listen (nfd, -1) == -1) {
+				return false;
+			}
 		}
 	}
 
@@ -991,7 +993,7 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
  * @param cf
  * @param listen_sockets
  */
-static void
+static void __attribute__((noreturn))
 rspamd_handle_child_fork (struct rspamd_worker *wrk,
 						  struct rspamd_main *rspamd_main,
 						  struct rspamd_worker_conf *cf,
@@ -1063,7 +1065,12 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 		struct rspamd_worker_listen_socket *ls =
 				(struct rspamd_worker_listen_socket *)cur->data;
 
-		rspamd_maybe_reuseport_socket (ls);
+		if (!rspamd_maybe_reuseport_socket (ls)) {
+			msg_err ("cannot listen on socket %s: %s",
+					rspamd_inet_address_to_string_pretty (ls->addr),
+					strerror (errno));
+		}
+
 		cur = g_list_next (cur);
 	}
 
