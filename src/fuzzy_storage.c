@@ -2324,7 +2324,21 @@ start_fuzzy (struct rspamd_worker *worker)
 	srv_cmd.cmd.spair.af = SOCK_DGRAM;
 	srv_cmd.cmd.spair.pair_num = worker->index;
 	memset (srv_cmd.cmd.spair.pair_id, 0, sizeof (srv_cmd.cmd.spair.pair_id));
+	/* 6 bytes of id (including \0) and bind_conf id */
+	G_STATIC_ASSERT (sizeof (srv_cmd.cmd.spair.pair_id) >=
+								sizeof ("fuzzy") + sizeof (guint64));
+
 	memcpy (srv_cmd.cmd.spair.pair_id, "fuzzy", sizeof ("fuzzy"));
+
+	/* Distinguish workers from each others... */
+	if (worker->cf->bind_conf && worker->cf->bind_conf->bind_line) {
+		guint64 bind_hash = rspamd_cryptobox_fast_hash (worker->cf->bind_conf->bind_line,
+				strlen (worker->cf->bind_conf->bind_line), 0xdeadbabe);
+
+		/* 8 more bytes */
+		memcpy (srv_cmd.cmd.spair.pair_id + sizeof ("fuzzy"), &bind_hash,
+				sizeof (bind_hash));
+	}
 
 	rspamd_srv_send_command (worker, ctx->event_loop, &srv_cmd, -1,
 			fuzzy_peer_rep, ctx);
