@@ -1079,7 +1079,7 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 	}
 #endif
 
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && defined(LINUX)
 	if (opts & RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT) {
 		on = 1;
 

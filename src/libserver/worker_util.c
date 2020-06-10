@@ -953,7 +953,7 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 		return true;
 	}
 
-#if defined(SO_REUSEPORT) && defined(SO_REUSEADDR)
+#if defined(SO_REUSEPORT) && defined(SO_REUSEADDR) && defined(LINUX)
 
 	nfd = rspamd_inet_address_listen (ls->addr,
 			(ls->type == RSPAMD_WORKER_SOCKET_UDP ? SOCK_DGRAM : SOCK_STREAM),
