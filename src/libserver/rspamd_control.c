@@ -914,7 +914,7 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				if (spair == NULL) {
 					spair = g_malloc (sizeof (gint) * 2);
 
-					if (rspamd_socketpair (spair, 0) == -1) {
+					if (rspamd_socketpair (spair, cmd.cmd.spair.af) == -1) {
 						rdata->rep.reply.spair.code = errno;
 						msg_err ("cannot create socket pair: %s", strerror (errno));
 					}

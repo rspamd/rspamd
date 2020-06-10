@@ -786,7 +786,7 @@ lua_worker_spawn_process (lua_State *L)
 		cbdata->out_pos = 0;
 	}
 
-	if (rspamd_socketpair (cbdata->sp, TRUE) == -1) {
+	if (rspamd_socketpair (cbdata->sp, SOCK_STREAM) == -1) {
 		msg_err ("cannot spawn socketpair: %s", strerror (errno));
 		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cb_cbref);

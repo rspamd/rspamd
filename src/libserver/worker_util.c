@@ -1136,12 +1136,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
-	if (!rspamd_socketpair (wrk->control_pipe, 0)) {
+	if (!rspamd_socketpair (wrk->control_pipe, SOCK_DGRAM)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
 
-	if (!rspamd_socketpair (wrk->srv_pipe, 0)) {
+	if (!rspamd_socketpair (wrk->srv_pipe, SOCK_DGRAM)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}

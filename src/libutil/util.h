@@ -66,7 +66,7 @@ gint rspamd_socket (const gchar *credits, guint16 port, gint type,
 /*
  * Create socketpair
  */
-gboolean rspamd_socketpair (gint pair[2], gboolean is_stream);
+gboolean rspamd_socketpair (gint pair[2], gint af);
 
 /*
  * Make specified socket non-blocking
