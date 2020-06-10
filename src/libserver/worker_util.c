@@ -938,12 +938,12 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 {
 	gint nfd = -1;
 
-	if (ls->fd == -1 || ls->is_systemd) {
+	if (ls->is_systemd) {
 		/* No need to reuseport */
 		return true;
 	}
 
-	if (rspamd_inet_address_get_af (ls->addr) == AF_UNIX) {
+	if (ls->fd != -1 && rspamd_inet_address_get_af (ls->addr) == AF_UNIX) {
 		/* Just try listen */
 
 		if (listen (ls->fd, -1) == -1) {
@@ -966,7 +966,9 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 		nfd = ls->fd;
 	}
 	else {
-		close (ls->fd);
+		if (ls->fd != -1) {
+			close (ls->fd);
+		}
 		ls->fd = nfd;
 		nfd = -1;
 	}
@@ -1049,7 +1051,7 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 				struct rspamd_worker_listen_socket *ls =
 						(struct rspamd_worker_listen_socket *)cur->data;
 
-				if (close (ls->fd) == -1) {
+				if (ls->fd != -1 && close (ls->fd) == -1) {
 					msg_err ("cannot close fd %d: %s", ls->fd, strerror (errno));
 				}
 
@@ -1123,6 +1125,51 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	exit (EXIT_FAILURE);
 }
 
+static void
+rspamd_handle_main_fork (struct rspamd_worker *wrk,
+						 struct rspamd_main *rspamd_main,
+						 struct rspamd_worker_conf *cf,
+						 struct ev_loop *ev_base)
+{
+	/* Close worker part of socketpair */
+	close (wrk->control_pipe[1]);
+	close (wrk->srv_pipe[1]);
+
+	rspamd_socket_nonblocking (wrk->control_pipe[0]);
+	rspamd_socket_nonblocking (wrk->srv_pipe[0]);
+	rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
+	/* Child event */
+	wrk->cld_ev.data = wrk;
+	ev_child_init (&wrk->cld_ev, rspamd_worker_on_term, wrk->pid, 0);
+	ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
+	/* Heartbeats */
+	rspamd_main_heartbeat_start (wrk, rspamd_main->event_loop);
+	/* Insert worker into worker's table, pid is index */
+	g_hash_table_insert (rspamd_main->workers,
+			GSIZE_TO_POINTER (wrk->pid), wrk);
+
+#if defined(SO_REUSEPORT) && defined(SO_REUSEADDR) && defined(LINUX)
+	/*
+	 * Close listen sockets in the main process once a child is handling them,
+	 * if we have reuseport
+	 */
+	GList *cur = cf->listen_socks;
+
+	while (cur) {
+		struct rspamd_worker_listen_socket *ls =
+				(struct rspamd_worker_listen_socket *)cur->data;
+
+		if (!ls->is_systemd && ls->fd != -1 &&
+			rspamd_inet_address_get_af (ls->addr) != AF_UNIX) {
+			close (ls->fd);
+			ls->fd = -1;
+		}
+
+		cur = g_list_next (cur);
+	}
+#endif
+}
+
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 					struct rspamd_worker_conf *cf,
@@ -1185,19 +1232,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_hard_terminate (rspamd_main);
 		break;
 	default:
-		/* Close worker part of socketpair */
-		close (wrk->control_pipe[1]);
-		close (wrk->srv_pipe[1]);
-		rspamd_socket_nonblocking (wrk->control_pipe[0]);
-		rspamd_socket_nonblocking (wrk->srv_pipe[0]);
-		rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
-		wrk->cld_ev.data = wrk;
-		ev_child_init (&wrk->cld_ev, rspamd_worker_on_term, wrk->pid, 0);
-		ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
-		rspamd_main_heartbeat_start (wrk, rspamd_main->event_loop);
-		/* Insert worker into worker's table, pid is index */
-		g_hash_table_insert (rspamd_main->workers,
-				GSIZE_TO_POINTER (wrk->pid), wrk);
+		rspamd_handle_main_fork (wrk, rspamd_main, cf, ev_base);
 		break;
 	}
 
