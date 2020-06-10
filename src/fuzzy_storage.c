@@ -2165,11 +2165,17 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 		cur = g_list_next (cur);
 	}
 
-	if (worker->index == 0 && ctx->peer_fd != -1) {
-		/* Listen for peer requests */
-		ctx->peer_ev.data = ctx;
-		ev_io_init (&ctx->peer_ev, rspamd_fuzzy_peer_io, ctx->peer_fd, EV_READ);
-		ev_io_start (ctx->event_loop, &ctx->peer_ev);
+	if (ctx->peer_fd != -1) {
+		if (worker->index == 0) {
+			/* Listen for peer requests */
+			shutdown (ctx->peer_fd, SHUT_WR);
+			ctx->peer_ev.data = ctx;
+			ev_io_init (&ctx->peer_ev, rspamd_fuzzy_peer_io, ctx->peer_fd, EV_READ);
+			ev_io_start (ctx->event_loop, &ctx->peer_ev);
+		}
+		else {
+			shutdown (ctx->peer_fd, SHUT_RD);
+		}
 	}
 }
 
