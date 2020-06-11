@@ -438,7 +438,7 @@ local function check_mime_type(task)
             local is_gen_split_rar = false
             if filename then
               local ext = gen_extension(filename)
-              is_gen_split_rar = string.match(ext, '^%d%d%d$') and arch:get_type() == 'rar'
+              is_gen_split_rar = ext and (string.match(ext, '^%d%d%d$')) and (arch:get_type() == 'rar')
             end
 
             local fl = arch:get_files_full(1000)
@@ -454,7 +454,7 @@ local function check_mime_type(task)
               end
 
               if f['name'] then
-                if is_gen_split_rar and gen_extension(f['name']) == 'exe' then
+                if is_gen_split_rar and (gen_extension(f['name']) or '') == 'exe' then
                   task:insert_result(settings['symbol_exe_in_gen_split_rar'], 1.0, f['name'])
                 else
                   check_filename(f['name'], nil,
