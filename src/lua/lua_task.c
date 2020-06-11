@@ -1944,6 +1944,15 @@ lua_task_insert_result_common (lua_State * L, struct rspamd_scan_result *result,
 
 		/* Get additional options */
 		if (s) {
+			if (s->sym == NULL) {
+				/* Unknown symbol, print traceback */
+				lua_pushfstring (L, "unknown symbol %s", symbol_name);
+				rspamd_lua_traceback (L);
+
+				msg_info_task ("symbol insertion issue: %s", lua_tostring (L, -1));
+
+				lua_pop (L, 1); /* Traceback string */
+			}
 			for (i = args_start + 2; i <= top; i++) {
 				gint ltype = lua_type (L, i);
 
@@ -2012,6 +2021,14 @@ lua_task_insert_result_common (lua_State * L, struct rspamd_scan_result *result,
 							s->name, tname);
 				}
 			}
+		}
+		else {
+			lua_pushfstring (L, "insertion failed for %s", symbol_name);
+			rspamd_lua_traceback (L);
+
+			msg_info_task ("symbol insertion issue: %s", lua_tostring (L, -1));
+
+			lua_pop (L, 2); /* Traceback string + error string */
 		}
 
 	}
