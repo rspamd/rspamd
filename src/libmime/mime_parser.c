@@ -1301,34 +1301,6 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		/* Top level message */
 		p = task->msg.begin;
 		len = task->msg.len;
-		/* Skip any space characters to avoid some bad messages to be unparsed */
-		while (len > 0 && g_ascii_isspace (*p)) {
-			p ++;
-			len --;
-		}
-		/*
-		 * Exim somehow uses mailbox format for messages being scanned:
-		 * From x@x.com Fri May 13 19:08:48 2016
-		 *
-		 * Need to check that for all inputs due to proxy
-		 */
-		if (len > sizeof ("From ") - 1) {
-			if (memcmp (p, "From ", sizeof ("From ") - 1) == 0) {
-				/* Skip to CRLF */
-				msg_info_task ("mailbox input detected, enable workaround");
-				p += sizeof ("From ") - 1;
-				len -= sizeof ("From ") - 1;
-
-				while (len > 0 && *p != '\n') {
-					p ++;
-					len --;
-				}
-				while (len > 0 && g_ascii_isspace (*p)) {
-					p ++;
-					len --;
-				}
-			}
-		}
 
 		str.str = (gchar *)p;
 		str.len = len;

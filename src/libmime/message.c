@@ -1127,26 +1127,22 @@ rspamd_message_parse (struct rspamd_task *task)
 	 * Exim somehow uses mailbox format for messages being scanned:
 	 * From xxx@xxx.com Fri May 13 19:08:48 2016
 	 *
-	 * So we check if a task has non-http format then we check for such a line
-	 * at the beginning to avoid errors
+	 * So we check if a task has this line to avoid possible issues
 	 */
-	if (task->cmd != CMD_CHECK_V2 || (task->protocol_flags &
-			RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT)) {
-		if (len > sizeof ("From ") - 1) {
-			if (memcmp (p, "From ", sizeof ("From ") - 1) == 0) {
-				/* Skip to CRLF */
-				msg_info_task ("mailbox input detected, enable workaround");
-				p += sizeof ("From ") - 1;
-				len -= sizeof ("From ") - 1;
+	if (len > sizeof ("From ") - 1) {
+		if (memcmp (p, "From ", sizeof ("From ") - 1) == 0) {
+			/* Skip to CRLF */
+			msg_info_task ("mailbox input detected, enable workaround");
+			p += sizeof ("From ") - 1;
+			len -= sizeof ("From ") - 1;
 
-				while (len > 0 && *p != '\n') {
-					p ++;
-					len --;
-				}
-				while (len > 0 && g_ascii_isspace (*p)) {
-					p ++;
-					len --;
-				}
+			while (len > 0 && *p != '\n') {
+				p ++;
+				len --;
+			}
+			while (len > 0 && g_ascii_isspace (*p)) {
+				p ++;
+				len --;
 			}
 		}
 	}
