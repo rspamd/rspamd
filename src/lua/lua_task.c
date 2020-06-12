@@ -2022,13 +2022,17 @@ lua_task_insert_result_common (lua_State * L, struct rspamd_scan_result *result,
 				}
 			}
 		}
-		else {
+		else if (task->settings == NULL) {
 			lua_pushfstring (L, "insertion failed for %s", symbol_name);
 			rspamd_lua_traceback (L);
 
 			msg_info_task ("symbol insertion issue: %s", lua_tostring (L, -1));
 
 			lua_pop (L, 2); /* Traceback string + error string */
+		}
+		else {
+			/* Usually denied by settings */
+
 		}
 
 	}
