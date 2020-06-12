@@ -954,6 +954,8 @@ local function add_rbl(key, rbl, global_opts)
         rspamd_config:register_symbol{
           type = 'virtual',
           parent = id,
+          group = 'rbl',
+          score = 0,
           name = prefix .. '_' .. rbl.symbol,
         }
       end
@@ -969,6 +971,8 @@ local function add_rbl(key, rbl, global_opts)
         type = 'callback',
         callback = callback,
         name = rbl.symbol,
+        group = 'rbl',
+        score = 0,
         flags = table.concat(flags_tbl, ',')
       }
       if not (rbl.is_whitelist or rbl.ignore_whitelist) then
@@ -1008,6 +1012,8 @@ local function add_rbl(key, rbl, global_opts)
             type = 'virtual',
             parent = id,
             name = s,
+            group = 'rbl',
+            score = 0,
           }
         end
         if rbl.is_whitelist then

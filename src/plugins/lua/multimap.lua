@@ -1265,6 +1265,10 @@ if opts and type(opts) == 'table' then
         rule['symbols_set'][s] = 1
       end, rule['symbols'])
     end
+    if not rule.score then
+      rspamd_logger.infox(rspamd_config, 'set default score 0 for multimap rule %s', rule.symbol)
+      rule.score = 0
+    end
     if rule['score'] then
       -- Register metric symbol
       rule.name = rule.symbol
@@ -1275,11 +1279,13 @@ if opts and type(opts) == 'table' then
     end
   end, fun.filter(function(r) return not r['prefilter'] end, rules))
 
-  fun.each(function(r)
+  -- prefilter symbils
+  fun.each(function(rule)
     rspamd_config:register_symbol({
       type = 'prefilter',
-      name = r['symbol'],
-      callback = gen_multimap_callback(r),
+      name = rule['symbol'],
+      score = rule.score or 0,
+      callback = gen_multimap_callback(rule),
     })
   end, fun.filter(function(r) return r['prefilter'] end, rules))
 
