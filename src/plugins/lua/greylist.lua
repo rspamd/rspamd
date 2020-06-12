@@ -497,11 +497,17 @@ if opts then
       callback = greylist_set,
       priority = 6,
     })
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
       priority = 6,
+    })
+    rspamd_config:register_symbol({
+      name = settings.symbol,
+      type = 'virtual',
+      parent = id,
+      score = 0,
     })
   end
 end

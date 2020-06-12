@@ -137,6 +137,7 @@ if configure_asn_module() then
       parent = id,
       type = 'virtual',
       flags = 'empty',
+      score = 0,
     })
   end
 else
