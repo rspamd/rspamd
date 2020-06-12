@@ -2050,16 +2050,9 @@ lua_config_register_symbol (lua_State * L)
 				nshots = 1;
 			}
 
-			if (!isnan (score)) {
-				rspamd_config_add_symbol (cfg, name,
-						score, description, group, flags,
-						0, nshots);
-			}
-			else {
-				rspamd_config_add_symbol (cfg, name,
-						NAN, description, group, flags,
-						0, nshots);
-			}
+			rspamd_config_add_symbol (cfg, name,
+					score, description, group, flags,
+					0, nshots);
 
 			lua_pushstring (L, "groups");
 			lua_gettable (L, 2);
