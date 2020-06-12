@@ -61,6 +61,13 @@ reconf['HAS_ONION_URI'] = {
     group = 'experimental'
 }
 
+reconf['CSA_COMPLAINTS'] = {
+  re = 'X-CSA-Complaints=/whitelist-complaints@eco.de/Hi',
+  score = 1.0,
+  description = "Sender is part of CSA",
+  group = 'bulk'
+}
+
 local my_victim = [[/(?:victim|prey)/{words}]]
 local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
