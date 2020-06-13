@@ -106,22 +106,24 @@ define(["jquery", "d3pie"],
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
-                var glyph_status = "glyphicon glyphicon-remove-circle";
+                var row_class = "danger";
+                var glyph_status = "glyphicon glyphicon-remove";
                 var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
                 }
                 if (val.status) {
-                    glyph_status = "glyphicon glyphicon-ok-circle";
+                    row_class = "success";
+                    glyph_status = "glyphicon glyphicon-ok";
                     short_id = val.data.config_id.substring(0, 8);
                 }
 
-                $("#clusterTable tbody").append("<tr>" +
-                "<td class=\"col1\" title=\"Radio\"><input type=\"radio\" class=\"form-control radio\" name=\"clusterName\" value=\"" + key + "\"></td>" +
-                "<td class=\"col2\" title=\"SNAme\">" + key + "</td>" +
-                "<td class=\"col3\" title=\"SHost\">" + val.host + "</td>" +
-                "<td class=\"col4\" title=\"SStatus\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
-                "<td class=\"col5\" title=\"short_id\">" + short_id + "</td></tr>");
+                $("#clusterTable tbody").append("<tr class=\"" + row_class + "\">" +
+                "<td><input type=\"radio\" class=\"form-control radio\" name=\"clusterName\" value=\"" + key + "\"></td>" +
+                "<td>" + key + "</td>" +
+                "<td>" + val.host + "</td>" +
+                "<td class=\"text-center\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
+                "<td>" + short_id + "</td></tr>");
 
                 $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
 

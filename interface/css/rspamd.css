@@ -305,71 +305,6 @@ table#symbolsTable input[type="number"] {
     text-shadow: 0 1px 0 #ffffff;
 }
 
-.table-log {
-    table-layout: fixed;
-    border: 0 !important;
-}
-.table-log .col1 {
-    width: 130px;
-}
-.table-log .col2,
-.table-log .col6 {
-    width: 100%;
-}
-.table-log .col3,
-.table-log .col4,
-.table-log .col5 {
-    width: 100px;
-}
-.table-log th {
-    padding: 4px 10px;
-    font-size: 10px;
-    color: #666666;
-    white-space: nowrap;
-    background-color: #efefef;
-    border-bottom: 1px solid #ddd;
-    border-left: 1px solid #cdcdcd;
-}
-.table-log td,
-.table-log td .label {
-    font-family: "Trebuchet MS", Helvetica, sans-serif;
-    font-size: 11px;
-}
-.table-log thead th,
-.table-log tbody td {
-    text-align: left;
-    line-height: 16px;
-    vertical-align: top;
-}
-.table-log th:first-child,
-.table-log td:first-child {
-    border-left: 0;
-}
-.table-log .cell-overflow {
-    white-space: nowrap;
-    overflow: hidden;
-    -o-text-overflow: ellipsis;
-    text-overflow: ellipsis;
-}
-.table-log th.header {
-    cursor: pointer;
-}
-.table-log th:first-child {
-    border-left: 0;
-}
-.table-log th.headerSortUp,
-.table-log th.headerSortDown {
-    background-color: #fefefe;
-    background-position: 100% 12px;
-    background-repeat: no-repeat;
-}
-.table-log th.headerSortUp {
-    background-image: url('../img/asc.png');
-}
-.table-log th.headerSortDown {
-    background-image: url('../img/desc.png');
-}
-
 /* Symbols coloring */
 .symbol-default {
     border-radius: 2px;
@@ -529,33 +464,11 @@ input.radio {
     box-shadow: none !important;
 }
 
-.glyphicon-ok-circle {
+.glyphicon-ok {
     color: #468847;
 }
-
-.glyphicon-remove-circle {
+.glyphicon-remove {
     color: #b94a48;
-}
-
-#clusterTable .col1 {
-    width: 40px;
-}
-
-#clusterTable .col4 {
-    width: 50px;
-    text-align: center;
-}
-
-#clusterTable .col5 {
-    width: 100px;
-}
-
-#clusterTable .col2 {
-    width: 30%;
-}
-
-#clusterTable .col3 {
-    width: 50%;
 }
 
 #nprogress .bar {
@@ -568,4 +481,14 @@ input.radio {
 }
 .has-success .form-control {
     background-color: #eef9e7;
+}
+
+/* Bootstrap 4 spacing */
+.mb-0 {
+    margin-bottom: 0 !important;
+}
+
+/* Custom sizing */
+.w-1 {
+    width: 1% !important;
 }
