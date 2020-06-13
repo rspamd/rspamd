@@ -86,41 +86,46 @@
 						</div>
 					</div>
 				</div>
-
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-signal"></i></span>
-						<h5>Statistics</h5>
-					</div>
-					<div class="widget-content chart-content">
-						<div class="row">
-							<div class="chart" id="chart">
-								<span class="notice">Loading..</span>
-								<noscript>Please enable Javascript</noscript>
+				<div class="row">
+					<div class="col-md-6">
+						<div class="widget-box">
+							<div class="widget-title">
+								<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span>
+								<h5>Servers</h5>
 							</div>
-						</div>
-					</div>
-				</div>
-				<div class="widget-box">
-						<!--iv class="widget-title">
-							<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span>
-							<h5>Servers</h5>
-						</div-->
-						<div class="widget-content nopadding">
-								<table class="table table-log table-hover" id="clusterTable">
+								<div class="widget-content nopadding table-responsive">
+									<table class="table table-hover table-bordered text-nowrap mb-0" id="clusterTable">
 										<thead>
 											<tr>
-												<th class="col1" title="Radio"></th>
-												<th class="col2" title="SName">Server name</th>
-												<th class="col3" title="SHost">Host</th>
-												<th class="col4" title="SStatus">Status</th>
-												<th class="col5" title="SId">Configuration ID</th>
+												<th></th>
+												<th>Server name</th>
+												<th>Host</th>
+												<th class="w-1">Status</th>
+												<th>Configuration ID</th>
 											</tr>
 										</thead>
 										<tbody>
 										</tbody>
-								</table>
+									</table>
+								</div>
 						</div>
+					</div>
+					<div class="col-md-6">
+						<div class="widget-box">
+							<div class="widget-title">
+								<span class="icon"><i class="glyphicon glyphicon-signal"></i></span>
+								<h5>Statistics</h5>
+							</div>
+							<div class="widget-content chart-content">
+								<div class="row">
+									<div class="chart" id="chart">
+										<span class="notice">Loading..</span>
+										<noscript>Please enable Javascript</noscript>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 
