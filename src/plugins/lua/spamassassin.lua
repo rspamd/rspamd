@@ -1532,6 +1532,7 @@ local function post_process()
       if not expression then
         rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
       else
+
         if r['score'] then
           rspamd_config:set_metric_symbol{
             name = k, score = r['score'],
@@ -1540,13 +1541,20 @@ local function post_process()
             one_shot = true
           }
           scores_added[k] = 1
+          rspamd_config:register_symbol{
+            name = k,
+            weight = calculate_score(k, r),
+            callback = meta_cb
+          }
+        else
+          -- Add 0 score to avoid issues
+          rspamd_config:register_symbol{
+            name = k,
+            weight = calculate_score(k, r),
+            callback = meta_cb,
+            score = 0,
+          }
         end
-
-        rspamd_config:register_symbol{
-          name = k,
-          weight = calculate_score(k, r),
-          callback = meta_cb
-        }
 
         r['expression'] = expression
 

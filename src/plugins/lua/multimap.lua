@@ -1260,7 +1260,8 @@ if opts and type(opts) == 'table' then
         rspamd_config:register_symbol({
           type = 'virtual',
           name = s,
-          parent = id
+          parent = id,
+          score = 0, -- Default score
         })
         rule['symbols_set'][s] = 1
       end, rule['symbols'])
