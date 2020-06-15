@@ -397,14 +397,16 @@ local configure_whitelist_module = function()
         local id = rspamd_config:register_symbol({
           name = symbol,
           flags = flags,
-          callback = gen_whitelist_cb(symbol, rule)
+          callback = gen_whitelist_cb(symbol, rule),
+          score = rule.score or 0,
         })
 
         if rule.inverse_symbol then
           rspamd_config:register_symbol({
             name = rule.inverse_symbol,
             type = 'virtual',
-            parent = id
+            parent = id,
+            score = rule.score and -(rule.score) or 0,
           })
         end
 
