@@ -89,6 +89,12 @@ rspamd_expr_op_to_str (enum rspamd_expression_op op)
 	case OP_PLUS:
 		op_str = "+";
 		break;
+	case OP_MINUS:
+		op_str = "-";
+		break;
+	case OP_DIVIDE:
+		op_str = "/";
+		break;
 	case OP_NOT:
 		op_str = "!";
 		break;
@@ -180,9 +186,14 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 
 	switch (op) {
 	case OP_NOT:
+		ret = 7;
+		break;
+	case OP_MULT:
+	case OP_DIVIDE:
 		ret = 6;
 		break;
 	case OP_PLUS:
+	case OP_MINUS:
 		ret = 5;
 		break;
 	case OP_GE:
@@ -191,7 +202,6 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 	case OP_LT:
 		ret = 4;
 		break;
-	case OP_MULT:
 	case OP_AND:
 		ret = 3;
 		break;
@@ -227,6 +237,8 @@ rspamd_expr_is_operation_symbol (gchar a)
 	case '<':
 	case '+':
 	case '*':
+	case '-':
+	case '/':
 		return TRUE;
 	}
 
@@ -277,6 +289,12 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 			break;
 		case '+':
 			op = OP_PLUS;
+			break;
+		case '/':
+			op = OP_DIVIDE;
+			break;
+		case '-':
+			op = OP_MINUS;
 			break;
 		case ')':
 			op = OP_CBRACE;
@@ -624,10 +642,50 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				continue;
 			}
 			else if (rspamd_expr_is_operation_symbol (*p)) {
+				/* Lookahead */
 				if (p + 1 < end) {
 					gchar t = *(p + 1);
 
-					if (t != ':') {
+					if (t == ':') {
+						/* Special case, treat it as an atom */
+					}
+					else if (*p == '/') {
+						/* Lookahead for division operation to distinguish from regexp */
+						const gchar *track = p + 1;
+
+						/* Skip spaces */
+						while (track < end && g_ascii_isspace (*track)) {
+							track++;
+						}
+
+						/* Check for a number */
+						if (rspamd_regexp_search (num_re,
+								track,
+								end - track,
+								NULL,
+								NULL,
+								FALSE,
+								NULL)) {
+							state = PARSE_OP;
+							continue;
+						}
+
+						/* Fallback to PARSE_ATOM state */
+					}
+					else if (*p == '-') {
+						/* - is used in composites, so we need to distinguish - from
+						 * 1) unary minus of a limit!
+						 * 2) -BLAH in composites
+						 * Decision is simple: require a space after binary `-` op
+						 */
+						if (g_ascii_isspace (t)) {
+							state = PARSE_OP;
+							continue;
+						}
+						/* Fallback to PARSE_ATOM state */
+					}
+					else {
+						/* Generic operation */
 						state = PARSE_OP;
 						continue;
 					}
@@ -644,6 +702,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			 * 2) if we have full numeric string, then we check for
 			 * the following expression:
 			 *  ^\d+\s*[><]$
+			 *  and check the operation on stack
 			 */
 			if ((gulong)(end - p) > sizeof ("and ") &&
 				(g_ascii_strncasecmp (p, "and ", sizeof ("and ") - 1) == 0 ||
@@ -656,12 +715,13 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			}
 			else {
 				/*
-				 * If we have any comparison operator in the stack, then try
+				 * If we have any comparison or arithmetic operator in the stack, then try
 				 * to parse limit
 				 */
 				op = GPOINTER_TO_INT (rspamd_expr_stack_peek (e));
 
-				if (op >= OP_LT && op <= OP_GE) {
+				if (op == OP_MULT || op == OP_MINUS || op == OP_DIVIDE ||
+						op == OP_PLUS || (op >= OP_LT && op <= OP_GE)) {
 					if (rspamd_regexp_search (num_re,
 							p,
 							end - p,
@@ -673,6 +733,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						state = PARSE_LIM;
 						continue;
 					}
+					/* Fallback to atom parsing */
 				}
 
 				/* Try to parse atom */
@@ -973,7 +1034,16 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val,
 		ret = fabs (val) > DOUBLE_EPSILON ? 0.0 : 1.0;
 		break;
 	case OP_PLUS:
-		ret = acc + val;
+		ret = first_elt ? (val) : (acc + val);
+		break;
+	case OP_MULT:
+		ret = first_elt ? (val) : (acc * val);
+		break;
+	case OP_MINUS:
+		ret = first_elt ? (val) : (acc - val);
+		break;
+	case OP_DIVIDE:
+		ret = first_elt ? (val) : (acc / val);
 		break;
 	case OP_GE:
 		ret = first_elt ? (val >= lim) : (acc >= lim);
@@ -987,7 +1057,6 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val,
 	case OP_LT:
 		ret = first_elt ? (val < lim) : (acc < lim);
 		break;
-	case OP_MULT:
 	case OP_AND:
 		ret = first_elt ? (val) : (acc * val);
 		break;
