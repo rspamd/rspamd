@@ -76,6 +76,7 @@ context("Rspamd expressions", function()
   end
   -- Expression is destroyed when the corresponding pool is destroyed
   cases = {
+    {'(E) && ((B + B + B + B) >= 1)', 0},
     {'A & B | !C', 0},
     {'A & (!B | C)', 1},
     {'A + B + C + D + E + F >= 2', 1},

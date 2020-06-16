@@ -20,6 +20,8 @@
 #include "util.h"
 #include "utlist.h"
 #include "ottery.h"
+#include "libserver/logger.h"
+#include "libcryptobox/cryptobox.h"
 #include <math.h>
 
 #define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
@@ -33,6 +35,17 @@ enum rspamd_expression_elt_type {
 	ELT_OP = 0,
 	ELT_ATOM,
 	ELT_LIMIT
+};
+
+enum rspamd_expression_op_flag {
+	RSPAMD_EXPRESSION_UNARY = 1u << 0u,
+	RSPAMD_EXPRESSION_BINARY = 1u << 1u,
+	RSPAMD_EXPRESSION_NARY = 1u << 2u
+};
+
+struct rspamd_expression_operation {
+	enum rspamd_expression_op op;
+	guint logical_priority;
 };
 
 struct rspamd_expression_elt {
@@ -53,6 +66,7 @@ struct rspamd_expression {
 	GArray *expressions;
 	GPtrArray *expression_stack;
 	GNode *ast;
+	gchar *log_id;
 	guint next_resort;
 	guint evals;
 };
@@ -64,6 +78,13 @@ struct rspamd_expr_process_data {
 	GPtrArray *trace;
 	rspamd_expression_process_cb process_closure;
 };
+
+#define msg_debug_expression(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_expression_log_id, "expression", e->log_id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(expression)
 
 static GQuark
 rspamd_expr_quark (void)
@@ -389,6 +410,9 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 		if (expr->ast) {
 			g_node_destroy (expr->ast);
 		}
+		if (expr->log_id) {
+			g_free (expr->log_id);
+		}
 
 		g_free (expr);
 	}
@@ -632,6 +656,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e->subr = subr;
 	e->evals = 0;
 	e->next_resort = ottery_rand_range (MAX_RESORT_EVALS) + MIN_RESORT_EVALS;
+	e->log_id = g_malloc0 (RSPAMD_LOG_ID_LEN + 1);
+	guint64 h = rspamd_cryptobox_fast_hash (line, len, 0xdeadbabe);
+	rspamd_snprintf (e->log_id, RSPAMD_LOG_ID_LEN + 1, "%xL", h);
 
 	/* Shunting-yard algorithm */
 	while (p < end) {
@@ -959,6 +986,9 @@ err:
 	return FALSE;
 }
 
+/*
+ *  Node optimizer function: skip nodes that are not relevant
+ */
 static gboolean
 rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 		struct rspamd_expression_elt *parelt, gdouble acc, gdouble lim)
@@ -1008,10 +1038,10 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 		break;
 	case OP_MULT:
 	case OP_AND:
-		ret = !acc;
+		ret = acc == 0;
 		break;
 	case OP_OR:
-		ret = !!acc;
+		ret = acc != 0;
 		break;
 	default:
 		g_assert (0);
@@ -1023,45 +1053,67 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 
 static gdouble
 rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val,
-		gdouble acc, gdouble lim, gboolean first_elt)
+		gdouble acc, gdouble lim)
 {
 	gdouble ret = val;
 
 	g_assert (elt->type == ELT_OP);
+
+	if (isnan (acc)) {
+		switch (elt->p.op) {
+		case OP_PLUS:
+		case OP_MINUS:
+		case OP_OR:
+		case OP_AND:
+		case OP_MULT:
+		case OP_DIVIDE:
+			/* Hack for arithmetics */
+			if (!isnan (lim)) {
+				acc = lim;
+			}
+			else {
+				return val;
+			}
+			break;
+		default:
+			acc = val;
+			break;
+		}
+	}
 
 	switch (elt->p.op) {
 	case OP_NOT:
 		ret = fabs (val) > DOUBLE_EPSILON ? 0.0 : 1.0;
 		break;
 	case OP_PLUS:
-		ret = first_elt ? (val) : (acc + val);
+		ret = acc + val;
 		break;
 	case OP_MULT:
-		ret = first_elt ? (val) : (acc * val);
+		ret = acc * val;
 		break;
 	case OP_MINUS:
-		ret = first_elt ? (val) : (acc - val);
+		ret = acc - val;
 		break;
 	case OP_DIVIDE:
-		ret = first_elt ? (val) : (acc / val);
+		ret = acc / val;
 		break;
 	case OP_GE:
-		ret = first_elt ? (val >= lim) : (acc >= lim);
+		ret = acc >= lim;
 		break;
 	case OP_GT:
-		ret = first_elt ? (val > lim) : (acc > lim);
+		ret = acc > lim;
 		break;
 	case OP_LE:
-		ret = first_elt ? (val <= lim) : (acc <= lim);
+		ret = acc <= lim;
 		break;
 	case OP_LT:
-		ret = first_elt ? (val < lim) : (acc < lim);
+		ret = acc < lim;
 		break;
 	case OP_AND:
-		ret = first_elt ? (val) : (acc * val);
+		ret = (acc * val);
 		break;
 	case OP_OR:
-		ret = first_elt ? (val) : (acc + val);
+		ret = (acc + val);
 		break;
 	default:
 		g_assert (0);
@@ -1072,16 +1124,17 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val,
 }
 
 static gdouble
-rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
+rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 						 struct rspamd_expr_process_data *process_data)
 {
 	struct rspamd_expression_elt *elt, *celt, *parelt = NULL;
 	GNode *cld;
-	gdouble acc = NAN, lim = 0;
+	gdouble acc = NAN, lim = NAN;
 	gdouble t1, t2, val;
 	gboolean calc_ticks = FALSE;
 
 	elt = node->data;
+
 
 	switch (elt->type) {
 	case ELT_ATOM:
@@ -1093,7 +1146,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			 * of some shifted address to provide some sort of jittering for
 			 * ticks evaluation
 			 */
-			if ((expr->evals & 0x1F) == (GPOINTER_TO_UINT (node) >> 4 & 0x1F)) {
+			if ((e->evals & 0x1F) == (GPOINTER_TO_UINT (node) >> 4 & 0x1F)) {
 				calc_ticks = TRUE;
 				t1 = rspamd_get_ticks (TRUE);
 			}
@@ -1111,17 +1164,19 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			if (calc_ticks) {
 				t2 = rspamd_get_ticks (TRUE);
 				elt->p.atom->avg_ticks += ((t2 - t1) - elt->p.atom->avg_ticks) /
-						(expr->evals);
+						(e->evals);
 			}
 
 			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;
 		}
 
 		acc = elt->value;
+		msg_debug_expression ("atom: elt=%s; acc=%.1f", elt->p.atom->str, acc);
 		break;
 	case ELT_LIMIT:
 
 		acc = elt->p.lim;
+		msg_debug_expression ("limit: lim=%.1f; acc=%.1f;", elt->p.lim, acc);
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
@@ -1145,17 +1200,15 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 				continue;
 			}
 
-			val = rspamd_ast_process_node (expr, cld, process_data);
+			val = rspamd_ast_process_node (e, cld, process_data);
+			msg_debug_expression ("before op: op=%s; lim=%.1f; acc=%.1f; val = %.2f", rspamd_expr_op_to_str(elt->p.op), lim, acc, val);
+			acc = rspamd_ast_do_op (elt, val, acc, lim);
+			msg_debug_expression ("after op: op=%s; lim=%.1f; acc=%.1f; val = %.2f", rspamd_expr_op_to_str(elt->p.op), lim, acc, val);
 
-			if (isnan (acc)) {
-				acc = rspamd_ast_do_op (elt, val, 0, lim, TRUE);
-			}
-			else {
-				acc = rspamd_ast_do_op (elt, val, acc, lim, FALSE);
-			}
-
+			/* Check if we need to process further */
 			if (!(process_data->flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
 				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
+					msg_debug_expression ("optimizer: done");
 					return acc;
 				}
 			}
