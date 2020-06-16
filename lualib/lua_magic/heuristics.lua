@@ -183,32 +183,34 @@ local function detect_ole_format(input, log_obj, _, part)
     local dtype = input:at(offset + 66)
     lua_util.debugm(N, log_obj, "dtype: %s, offset: %s", dtype, offset)
 
-    if dtype == 5 then
-      -- Extract clsid
-      local matches = msoffice_trie_clsid:match(input:span(offset + 80, 16))
-      if matches then
-        for n,_ in pairs(matches) do
-          if msoffice_clsid_indexes[n] then
-            lua_util.debugm(N, log_obj, "found valid clsid for %s",
-                msoffice_clsid_indexes[n][1])
-            return true,msoffice_clsid_indexes[n][1]
+    if dtype then
+      if dtype == 5 then
+        -- Extract clsid
+        local matches = msoffice_trie_clsid:match(input:span(offset + 80, 16))
+        if matches then
+          for n,_ in pairs(matches) do
+            if msoffice_clsid_indexes[n] then
+              lua_util.debugm(N, log_obj, "found valid clsid for %s",
+                  msoffice_clsid_indexes[n][1])
+              return true,msoffice_clsid_indexes[n][1]
+            end
           end
         end
-      end
-      return true,nil
-    elseif dtype == 2 then
-      local matches = msoffice_trie:match(input:span(offset, 64))
-      if matches then
-        for n,_ in pairs(matches) do
-          if msoffice_patterns_indexes[n] then
-            return true,msoffice_patterns_indexes[n][1]
+        return true,nil
+      elseif dtype == 2 then
+        local matches = msoffice_trie:match(input:span(offset, 64))
+        if matches then
+          for n,_ in pairs(matches) do
+            if msoffice_patterns_indexes[n] then
+              return true,msoffice_patterns_indexes[n][1]
+            end
           end
         end
+        return true,nil
+      elseif dtype >= 0 and dtype < 5 then
+        -- Bad type
+        return true,nil
       end
-      return true,nil
-    elseif dtype >= 0 and dtype < 5 then
-      -- Bad type
-      return true,nil
     end
 
     return false,nil
