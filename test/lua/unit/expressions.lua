@@ -60,6 +60,8 @@ context("Rspamd expressions", function()
     {'(A) & (B) & ((C) | (D) | (E) | (F))', '(A) (B) (C) (D) (E) (F) |(4) &(3)' },
     -- Extra space
     {'A & B | ! C', '(C) ! (A) (B) & |'},
+    -- False minus
+    {'A + B + -C', '(A) (B) (-C) +(3)'},
   }
   for _,c in ipairs(cases) do
     test("Expression creation function: " .. c[1], function()

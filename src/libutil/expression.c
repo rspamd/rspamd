@@ -325,6 +325,67 @@ rspamd_expr_is_operation_symbol (gchar a)
 	return FALSE;
 }
 
+static gboolean
+rspamd_expr_is_operation (struct rspamd_expression *e,
+		const gchar *p, const gchar *end, rspamd_regexp_t *num_re)
+{
+	if (rspamd_expr_is_operation_symbol (*p)) {
+		if (p + 1 < end) {
+			gchar t = *(p + 1);
+
+			if (t == ':') {
+				/* Special case, treat it as an atom */
+			}
+			else if (*p == '/') {
+				/* Lookahead for division operation to distinguish from regexp */
+				const gchar *track = p + 1;
+
+				/* Skip spaces */
+				while (track < end && g_ascii_isspace (*track)) {
+					track++;
+				}
+
+				/* Check for a number */
+				if (rspamd_regexp_search (num_re,
+						track,
+						end - track,
+						NULL,
+						NULL,
+						FALSE,
+						NULL)) {
+					msg_debug_expression ("found divide operation");
+					return TRUE;
+				}
+
+				msg_debug_expression ("false divide operation");
+				/* Fallback to PARSE_ATOM state */
+			}
+			else if (*p == '-') {
+				/* - is used in composites, so we need to distinguish - from
+				 * 1) unary minus of a limit!
+				 * 2) -BLAH in composites
+				 * Decision is simple: require a space after binary `-` op
+				 */
+				if (g_ascii_isspace (t)) {
+					return TRUE;
+				}
+				/* Fallback to PARSE_ATOM state */
+				msg_debug_expression ("false minus operation");
+			}
+			else {
+				/* Generic operation */
+				return TRUE;
+			}
+		}
+		else {
+			/* Last op */
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 /* Return character representation of operation */
 static enum rspamd_expression_op
 rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
@@ -784,62 +845,10 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				state = SKIP_SPACES;
 				continue;
 			}
-			else if (rspamd_expr_is_operation_symbol (*p)) {
+			else if (rspamd_expr_is_operation (e, p, end, num_re)) {
 				/* Lookahead */
-				if (p + 1 < end) {
-					gchar t = *(p + 1);
-
-					if (t == ':') {
-						/* Special case, treat it as an atom */
-					}
-					else if (*p == '/') {
-						/* Lookahead for division operation to distinguish from regexp */
-						const gchar *track = p + 1;
-
-						/* Skip spaces */
-						while (track < end && g_ascii_isspace (*track)) {
-							track++;
-						}
-
-						/* Check for a number */
-						if (rspamd_regexp_search (num_re,
-								track,
-								end - track,
-								NULL,
-								NULL,
-								FALSE,
-								NULL)) {
-							state = PARSE_OP;
-							msg_debug_expression ("found divide operation");
-							continue;
-						}
-
-						msg_debug_expression ("false divide operation");
-						/* Fallback to PARSE_ATOM state */
-					}
-					else if (*p == '-') {
-						/* - is used in composites, so we need to distinguish - from
-						 * 1) unary minus of a limit!
-						 * 2) -BLAH in composites
-						 * Decision is simple: require a space after binary `-` op
-						 */
-						if (g_ascii_isspace (t)) {
-							state = PARSE_OP;
-							continue;
-						}
-						/* Fallback to PARSE_ATOM state */
-						msg_debug_expression ("false minus operation");
-					}
-					else {
-						/* Generic operation */
-						state = PARSE_OP;
-						continue;
-					}
-				}
-				else {
-					state = PARSE_OP;
-					continue;
-				}
+				state = PARSE_OP;
+				continue;
 			}
 
 			/*
@@ -1078,7 +1087,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			if (g_ascii_isspace (*p)) {
 				p ++;
 			}
-			else if (rspamd_expr_is_operation_symbol (*p)) {
+			if (rspamd_expr_is_operation (e, p, end, num_re)) {
+				/* Lookahead */
 				state = PARSE_OP;
 			}
 			else {
