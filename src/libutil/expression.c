@@ -135,6 +135,12 @@ rspamd_expr_op_to_str (enum rspamd_expression_op op)
 	case OP_LT:
 		op_str = "<";
 		break;
+	case OP_OBRACE:
+		op_str = "(";
+		break;
+	case OP_CBRACE:
+		op_str = ")";
+		break;
 	default:
 		op_str = "???";
 		break;
@@ -273,8 +279,6 @@ rspamd_expr_op_flags (enum rspamd_expression_op op)
 		ret |= RSPAMD_EXPRESSION_BINARY|RSPAMD_EXPRESSION_COMPARISON;
 		break;
 	case OP_AND:
-		ret |= RSPAMD_EXPRESSION_NARY|RSPAMD_EXPRESSION_LOGICAL;
-		break;
 	case OP_OR:
 		ret |= RSPAMD_EXPRESSION_NARY|RSPAMD_EXPRESSION_LOGICAL;
 		break;
@@ -326,6 +330,8 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 	case '|':
 	case '+':
 	case '*':
+	case '/':
+	case '-':
 	case '(':
 	case ')': {
 		if (a < end - 1) {
@@ -465,17 +471,20 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 }
 
 static gboolean
-rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
-		GError **err)
+rspamd_ast_add_node (struct rspamd_expression *e,
+					 GPtrArray *operands,
+					 struct rspamd_expression_elt *op,
+					 GError **err)
 {
 
 	GNode *res, *a1, *a2, *test;
-	struct rspamd_expression_elt *test_elt;
 
 	g_assert (op->type == ELT_OP);
 
 	if (op->p.op.op_flags & RSPAMD_EXPRESSION_UNARY) {
 		/* Unary operator */
+		struct rspamd_expression_elt *test_elt;
+
 		res = g_node_new (op);
 		a1 = rspamd_expr_stack_elt_pop (operands);
 
@@ -492,9 +501,19 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 
 		if (test_elt->type == ELT_ATOM) {
 			test_elt->p.atom->parent = res;
+			msg_debug_expression ("added unary op %s to AST; operand: %*s",
+					rspamd_expr_op_to_str (op->p.op.op),
+					(int)test_elt->p.atom->len, test_elt->p.atom->str);
 		}
+		else {
+			msg_debug_expression ("added unary op %s to AST; operand type: %d",
+					rspamd_expr_op_to_str (op->p.op.op),
+					test_elt->type);
+		}
+
 	}
 	else {
+		struct rspamd_expression_elt *e1, *e2;
 		/* For binary/nary operators we might want to examine chains */
 		a2 = rspamd_expr_stack_elt_pop (operands);
 		a1 = rspamd_expr_stack_elt_pop (operands);
@@ -521,23 +540,31 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 
 			/* First try with a1 */
 			test = a1;
-			test_elt = test->data;
+			e1 = test->data;
 
-			if (test_elt->type == ELT_OP && test_elt->p.op.op == op->p.op.op) {
+			if (e1->type == ELT_OP && e1->p.op.op == op->p.op.op) {
 				/* Add children */
 				g_node_append (test, a2);
 				rspamd_expr_stack_elt_push (operands, a1);
+
+				msg_debug_expression ("added nary op %s to AST merged with the first operand",
+						rspamd_expr_op_to_str (op->p.op.op));
+
 				return TRUE;
 			}
 
 			/* Now test a2 */
 			test = a2;
-			test_elt = test->data;
+			e2 = test->data;
 
-			if (test_elt->type == ELT_OP && test_elt->p.op.op == op->p.op.op) {
+			if (e2->type == ELT_OP && e2->p.op.op == op->p.op.op) {
 				/* Add children */
 				g_node_prepend (test, a1);
 				rspamd_expr_stack_elt_push (operands, a2);
+
+				msg_debug_expression ("added nary op %s to AST merged with the second operand",
+						rspamd_expr_op_to_str (op->p.op.op));
+
 				return TRUE;
 			}
 		}
@@ -547,14 +574,28 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 		g_node_append (res, a1);
 		g_node_append (res, a2);
 
-		test_elt = a1->data;
-		if (test_elt->type == ELT_ATOM) {
-			test_elt->p.atom->parent = res;
+		e1 = a1->data;
+		e2 = a2->data;
+
+		if (e1->type == ELT_ATOM) {
+			e1->p.atom->parent = res;
 		}
 
-		test_elt = a2->data;
-		if (test_elt->type == ELT_ATOM) {
-			test_elt->p.atom->parent = res;
+		if (e2->type == ELT_ATOM) {
+			e2->p.atom->parent = res;
+		}
+
+		if (e1->type == ELT_ATOM && e2->type == ELT_ATOM) {
+			msg_debug_expression ("added binary op %s to AST; operands: (%*s; %*s)",
+					rspamd_expr_op_to_str (op->p.op.op),
+					(int) e1->p.atom->len, e1->p.atom->str,
+					(int) e2->p.atom->len, e2->p.atom->str);
+		}
+		else {
+			msg_debug_expression ("added binary op %s to AST; operands (types): (%d; %d)",
+					rspamd_expr_op_to_str (op->p.op.op),
+					e1->type,
+					e2->type);
 		}
 	}
 
@@ -724,6 +765,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e->log_id = g_malloc0 (RSPAMD_LOG_ID_LEN + 1);
 	guint64 h = rspamd_cryptobox_fast_hash (line, len, 0xdeadbabe);
 	rspamd_snprintf (e->log_id, RSPAMD_LOG_ID_LEN + 1, "%xL", h);
+	msg_debug_expression ("start to parse expression '%*s'", (int)len, line);
 
 	/* Shunting-yard algorithm */
 	while (p < end) {
@@ -759,9 +801,11 @@ rspamd_parse_expression (const gchar *line, gsize len,
 								FALSE,
 								NULL)) {
 							state = PARSE_OP;
+							msg_debug_expression ("found divide operation");
 							continue;
 						}
 
+						msg_debug_expression ("false divide operation");
 						/* Fallback to PARSE_ATOM state */
 					}
 					else if (*p == '-') {
@@ -775,6 +819,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 							continue;
 						}
 						/* Fallback to PARSE_ATOM state */
+						msg_debug_expression ("false minus operation");
 					}
 					else {
 						/* Generic operation */
@@ -841,7 +886,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 								(int) (end - p),
 								p);
 					}
-					goto err;
+					goto error_label;
 				}
 
 				if (atom->str == NULL) {
@@ -856,6 +901,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				g_array_append_val (e->expressions, elt);
 				rspamd_expr_stack_elt_push (operand_stack,
 						g_node_new (rspamd_expr_dup_elt (pool, &elt)));
+				msg_debug_expression ("found atom: %*s; pushed onto operand stack (%d size)",
+						(int)atom->len, atom->str, operand_stack->len);
 
 			}
 			break;
@@ -875,12 +922,14 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					g_array_append_val (e->expressions, elt);
 					rspamd_expr_stack_elt_push (operand_stack,
 							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
+					msg_debug_expression ("found limit: %.1f; pushed onto operand stack (%d size)",
+							elt.p.lim, operand_stack->len);
 					c = p;
 					state = SKIP_SPACES;
 				}
 				else {
 					g_set_error (err, rspamd_expr_quark(), 400, "Empty number");
-					goto err;
+					goto error_label;
 				}
 			}
 			break;
@@ -889,7 +938,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			if (op == OP_INVALID) {
 				g_set_error (err, rspamd_expr_quark(), 500, "Bad operator %c",
 						*p);
-				goto err;
+				goto error_label;
 			}
 			else if (op == OP_OBRACE) {
 				/*
@@ -897,6 +946,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				 * the stack.
 				 */
 				rspamd_expr_stack_push (e, GINT_TO_POINTER (op));
+				msg_debug_expression ("found obrace, pushed to operators stack (%d size)",
+						e->expression_stack->len);
 			}
 			else if (op == OP_CBRACE) {
 				/*
@@ -910,16 +961,21 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				 * If the stack runs out without finding a left parenthesis,
 				 * then there are mismatched parentheses.
 				 */
+				msg_debug_expression ("found cbrace, rewind operators stack (%d size)",
+						e->expression_stack->len);
+
 				do {
 					op = GPOINTER_TO_INT (rspamd_expr_stack_pop (e));
 
 					if (op == OP_INVALID) {
 						g_set_error (err, rspamd_expr_quark(), 600,
 								"Braces mismatch");
-						goto err;
+						goto error_label;
 					}
 
 					guint op_priority = rspamd_expr_logic_priority (op);
+					msg_debug_expression ("found op: %s; priority = %d",
+							rspamd_expr_op_to_str (op), op_priority);
 
 					if (op != OP_OBRACE) {
 						elt.type = ELT_OP;
@@ -928,9 +984,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						elt.p.op.logical_priority = op_priority;
 						g_array_append_val (e->expressions, elt);
 
-						if (!rspamd_ast_add_node (operand_stack,
+						if (!rspamd_ast_add_node (e, operand_stack,
 								rspamd_expr_dup_elt (pool, &elt), err)) {
-							goto err;
+							goto error_label;
 						}
 					}
 
@@ -956,34 +1012,54 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 					if (op_stack == OP_INVALID) {
 						/* Stack is empty */
+						msg_debug_expression ("no operations in operators stack");
 						break;
 					}
 
 					/* We ignore associativity for now */
-					guint op_priority = rspamd_expr_logic_priority (op);
+					guint op_priority = rspamd_expr_logic_priority (op),
+						stack_op_priority = rspamd_expr_logic_priority (op_stack);
+
+					msg_debug_expression ("operators stack %d; operands stack: %d; "
+						   "process operation '%s'(%d); pop operation '%s'(%d)",
+							e->expression_stack->len,
+							operand_stack->len,
+							rspamd_expr_op_to_str (op), op_priority,
+							rspamd_expr_op_to_str (op_stack), stack_op_priority);
 
 					if (op_stack != OP_OBRACE &&
-							op_priority < rspamd_expr_logic_priority (op_stack)) {
+							op_priority < stack_op_priority) {
 						elt.type = ELT_OP;
 						elt.p.op.op = op_stack;
-						elt.p.op.op_flags = rspamd_expr_op_flags (op);
+						elt.p.op.op_flags = rspamd_expr_op_flags (op_stack);
 						elt.p.op.logical_priority = op_priority;
 
 						g_array_append_val (e->expressions, elt);
 
-						if (!rspamd_ast_add_node (operand_stack,
+						if (!rspamd_ast_add_node (e, operand_stack,
 								rspamd_expr_dup_elt (pool, &elt), err)) {
-							goto err;
+							goto error_label;
 						}
 					}
 					else {
 						/* Push op_stack back */
+						msg_debug_expression ("operators stack %d; operands stack: %d; "
+							"process operation '%s'(%d); push back to stack '%s'(%d)",
+								e->expression_stack->len,
+								operand_stack->len,
+								rspamd_expr_op_to_str (op), op_priority,
+								rspamd_expr_op_to_str (op_stack), stack_op_priority);
 						rspamd_expr_stack_push (e, GINT_TO_POINTER (op_stack));
 						break;
 					}
 				}
 
 				/* Push new operator itself */
+				msg_debug_expression ("operators stack %d; operands stack: %d; "
+						  "process operation '%s'; push to stack",
+						e->expression_stack->len,
+						operand_stack->len,
+						rspamd_expr_op_to_str (op));
 				rspamd_expr_stack_push (e, GINT_TO_POINTER (op));
 			}
 
@@ -1006,6 +1082,12 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	/* Now we process the stack and push operators to the output */
 	while ((op_stack = GPOINTER_TO_INT (rspamd_expr_stack_pop (e)))
 			!= OP_INVALID) {
+		msg_debug_expression ("operators stack %d; operands stack: %d; "
+						"rewind stack; op: %s",
+				e->expression_stack->len,
+				operand_stack->len,
+				rspamd_expr_op_to_str (op));
+
 		if (op_stack != OP_OBRACE) {
 			elt.type = ELT_OP;
 			elt.p.op.op = op_stack;
@@ -1013,22 +1095,22 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			elt.p.op.logical_priority = rspamd_expr_logic_priority (op_stack);
 
 			g_array_append_val (e->expressions, elt);
-			if (!rspamd_ast_add_node (operand_stack,
+			if (!rspamd_ast_add_node (e, operand_stack,
 					rspamd_expr_dup_elt (pool, &elt), err)) {
-				goto err;
+				goto error_label;
 			}
 		}
 		else {
 			g_set_error (err, rspamd_expr_quark(), 600,
 					"Braces mismatch");
-			goto err;
+			goto error_label;
 		}
 	}
 
 	if (operand_stack->len != 1) {
 		g_set_error (err, rspamd_expr_quark(), 601,
-			"Operators mismatch");
-		goto err;
+			"Operators mismatch: %d elts in stack", operand_stack->len);
+		goto error_label;
 	}
 
 	e->ast = rspamd_expr_stack_elt_pop (operand_stack);
@@ -1053,7 +1135,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 	return TRUE;
 
-err:
+error_label:
+	msg_debug_expression ("fatal error: %e", *err);
+
 	while ((tmp = rspamd_expr_stack_elt_pop (operand_stack)) != NULL) {
 		g_node_destroy (tmp);
 	}
@@ -1068,8 +1152,7 @@ err:
  *  Node optimizer function: skip nodes that are not relevant
  */
 static gboolean
-rspamd_ast_node_done (struct rspamd_expression_elt *elt,
-		struct rspamd_expression_elt *parelt, gdouble acc)
+rspamd_ast_node_done (struct rspamd_expression_elt *elt, gdouble acc)
 {
 	gboolean ret = FALSE;
 
@@ -1092,55 +1175,81 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 	return ret;
 }
 
+
 static gdouble
-rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val, gdouble acc)
+rspamd_ast_do_unary_op (struct rspamd_expression_elt *elt, gdouble operand)
 {
-	gdouble ret = val;
+	gdouble ret;
+	g_assert (elt->type == ELT_OP);
+
+	switch (elt->p.op.op) {
+	case OP_NOT:
+		ret = fabs (operand) > DOUBLE_EPSILON ? 0.0 : 1.0;
+		break;
+	default:
+		g_assert_not_reached ();
+	}
+
+	return ret;
+}
+
+static gdouble
+rspamd_ast_do_binary_op (struct rspamd_expression_elt *elt, gdouble op1, gdouble op2)
+{
+	gdouble ret;
+
+	g_assert (elt->type == ELT_OP);
+
+	switch (elt->p.op.op) {
+	case OP_MINUS:
+		ret = op1 - op2;
+		break;
+	case OP_DIVIDE:
+		ret = op1 / op2;
+		break;
+	case OP_GE:
+		ret = op1 >= op2;
+		break;
+	case OP_GT:
+		ret = op1 > op2;
+		break;
+	case OP_LE:
+		ret = op1 <= op2;
+		break;
+	case OP_LT:
+		ret = op1 < op2;
+		break;
+
+	case OP_NOT:
+	case OP_PLUS:
+	case OP_MULT:
+	case OP_AND:
+	case OP_OR:
+	default:
+		g_assert_not_reached();
+		break;
+	}
+
+	return ret;
+}
+
+static gdouble
+rspamd_ast_do_nary_op (struct rspamd_expression_elt *elt, gdouble val, gdouble acc)
+{
+	gdouble ret;
 
 	g_assert (elt->type == ELT_OP);
 
 	if (isnan (acc)) {
-		switch (elt->p.op.op) {
-		case OP_PLUS:
-		case OP_MINUS:
-		case OP_OR:
-		case OP_AND:
-		case OP_MULT:
-		case OP_DIVIDE:
-			return val;
-		default:
-			acc = val;
-			break;
-		}
+		return val;
 	}
 
 	switch (elt->p.op.op) {
-	case OP_NOT:
-		ret = fabs (val) > DOUBLE_EPSILON ? 0.0 : 1.0;
-		break;
 	case OP_PLUS:
 		ret = acc + val;
 		break;
 	case OP_MULT:
 		ret = acc * val;
-		break;
-	case OP_MINUS:
-		ret = acc - val;
-		break;
-	case OP_DIVIDE:
-		ret = acc / val;
-		break;
-	case OP_GE:
-		ret = acc >= val;
-		break;
-	case OP_GT:
-		ret = acc > val;
-		break;
-	case OP_LE:
-		ret = acc <= val;
-		break;
-	case OP_LT:
-		ret = acc < val;
 		break;
 	case OP_AND:
 		ret = (acc * val);
@@ -1149,7 +1258,14 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val, gdouble acc)
 		ret = (acc + val);
 		break;
 	default:
-		g_assert (0);
+	case OP_NOT:
+	case OP_MINUS:
+	case OP_DIVIDE:
+	case OP_GE:
+	case OP_GT:
+	case OP_LE:
+	case OP_LT:
+		g_assert_not_reached();
 		break;
 	}
 
@@ -1160,14 +1276,14 @@ static gdouble
 rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 						 struct rspamd_expr_process_data *process_data)
 {
-	struct rspamd_expression_elt *elt, *celt, *parelt = NULL;
+	struct rspamd_expression_elt *elt;
 	GNode *cld;
 	gdouble acc = NAN;
 	gdouble t1, t2, val;
 	gboolean calc_ticks = FALSE;
+	const gchar *op_name = NULL;
 
 	elt = node->data;
-
 
 	switch (elt->type) {
 	case ELT_ATOM:
@@ -1213,24 +1329,60 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
+		op_name = rspamd_expr_op_to_str (elt->p.op.op);
 
-		DL_FOREACH (node->children, cld) {
-			celt = cld->data;
+		if (elt->p.op.op_flags & RSPAMD_EXPRESSION_NARY) {
+			msg_debug_expression ("proceed nary operation %s", op_name);
+			/* Proceed all ops in chain */
+			DL_FOREACH (node->children, cld) {
+				val = rspamd_ast_process_node (e, cld, process_data);
+				msg_debug_expression ("before op: op=%s; acc=%.1f; val = %.2f", op_name,
+						acc, val);
+				acc = rspamd_ast_do_nary_op (elt, val, acc);
+				msg_debug_expression ("after op: op=%s; acc=%.1f; val = %.2f", op_name,
+						acc, val);
 
-			val = rspamd_ast_process_node (e, cld, process_data);
-			msg_debug_expression ("before op: op=%s; acc=%.1f; val = %.2f", rspamd_expr_op_to_str(elt->p.op.op),
-					acc, val);
-			acc = rspamd_ast_do_op (elt, val, acc);
-			msg_debug_expression ("after op: op=%s; acc=%.1f; val = %.2f", rspamd_expr_op_to_str(elt->p.op.op),
-					acc, val);
-
-			/* Check if we need to process further */
-			if (!(process_data->flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
-				if (rspamd_ast_node_done (elt, parelt, acc)) {
-					msg_debug_expression ("optimizer: done");
-					return acc;
+				/* Check if we need to process further */
+				if (!(process_data->flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
+					if (rspamd_ast_node_done (elt, acc)) {
+						msg_debug_expression ("optimizer: done");
+						return acc;
+					}
 				}
 			}
+		}
+		else if (elt->p.op.op_flags & RSPAMD_EXPRESSION_BINARY) {
+			GNode *c1 = node->children, *c2;
+
+			c2 = c1->next;
+			g_assert (c2->next == NULL);
+			gdouble val1, val2;
+
+			msg_debug_expression ("proceed binary operation %s",
+					op_name);
+			val1 = rspamd_ast_process_node (e, c1, process_data);
+			val2 = rspamd_ast_process_node (e, c2, process_data);
+
+			msg_debug_expression ("before op: op=%s; op1 = %.1f, op2 = %.1f",
+					op_name, val1, val2);
+			acc = rspamd_ast_do_binary_op (elt, val1, val2);
+			msg_debug_expression ("after op: op=%s; res=%.1f",
+					op_name, acc);
+		}
+		else if (elt->p.op.op_flags & RSPAMD_EXPRESSION_UNARY) {
+			GNode *c1 = node->children;
+
+			g_assert (c1->next == NULL);
+
+			msg_debug_expression ("proceed unary operation %s",
+					op_name);
+			val = rspamd_ast_process_node (e, c1, process_data);
+
+			msg_debug_expression ("before op: op=%s; op1 = %.1f",
+					op_name, val);
+			acc = rspamd_ast_do_unary_op (elt, val);
+			msg_debug_expression ("after op: op=%s; res=%.1f",
+					op_name, acc);
 		}
 		break;
 	}

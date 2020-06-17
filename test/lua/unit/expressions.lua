@@ -41,6 +41,7 @@ context("Rspamd expressions", function()
   local pool = rspamd_mempool.create()
 
   local cases = {
+    {'A & (!B | C)', '(A) (B) ! (C) | &'},
     {'A & B | !C', '(C) ! (A) (B) & |'},
     {'A & (B | !C)', '(A) (B) (C) ! | &'},
     {'A & B &', nil},
@@ -48,8 +49,8 @@ context("Rspamd expressions", function()
     {'(((A))', nil},
     -- Balanced braces
     {'(((A)))', '(A)'},
-    -- Plus and comparison operators (after 2.6 this is not optimized, maybe we can return previous behaviour some day)
-    {'A + B + C + D > 2', '(A) (B) (C) (D) + + + 2 >'},
+    -- Plus and comparison operators
+    {'A + B + C + D > 2', '(A) (B) (C) (D) +(4) 2 >'},
     -- Plus and logic operators
     {'((A + B + C + D) > 2) & D', '(D) (A) (B) (C) (D) +(4) 2 > &'},
     -- Associativity
@@ -91,7 +92,7 @@ context("Rspamd expressions", function()
     {'A & C & !(D || C || E)', 0},
     {'A + B + C', 2},
     {'A * 2.0 + B + C', 3},
-    {'A * 2.0 + B - C', 0},
+    {'A * 2.0 + B - C', 1},
     {'A / 2.0 + B - C', -0.5},
   }
   for _,c in ipairs(cases) do
