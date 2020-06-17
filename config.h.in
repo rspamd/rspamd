@@ -430,6 +430,12 @@ extern uint64_t ottery_rand_uint64(void);
   #error incompatible compiler found, need gcc > 2.7 or clang
 #endif
 
+#ifdef __GNUC__
+#define RSPAMD_CONST_FUNCTION __attribute__ ((const))
+#else
+#define RSPAMD_CONST_FUNCTION
+#endif
+
 #define HAVE_OPENSSL             1
 #define HAVE_MATH_H              1
 

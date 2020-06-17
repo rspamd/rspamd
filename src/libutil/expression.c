@@ -96,6 +96,8 @@ rspamd_expr_quark (void)
 	return g_quark_from_static_string ("rspamd-expression");
 }
 
+static const gchar * RSPAMD_CONST_FUNCTION
+rspamd_expr_op_to_str (enum rspamd_expression_op op);
 static const gchar *
 rspamd_expr_op_to_str (enum rspamd_expression_op op)
 {
@@ -210,6 +212,8 @@ rspamd_expr_stack_peek (struct rspamd_expression *expr)
 /*
  * Return operation priority
  */
+static gint RSPAMD_CONST_FUNCTION
+rspamd_expr_logic_priority (enum rspamd_expression_op op);
 static gint
 rspamd_expr_logic_priority (enum rspamd_expression_op op)
 {
@@ -250,6 +254,9 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 
 	return ret;
 }
+
+static guint RSPAMD_CONST_FUNCTION
+rspamd_expr_op_flags (enum rspamd_expression_op op);
 
 static guint
 rspamd_expr_op_flags (enum rspamd_expression_op op)
@@ -295,6 +302,8 @@ rspamd_expr_op_flags (enum rspamd_expression_op op)
  * Return FALSE if symbol is not operation symbol (operand)
  * Return TRUE if symbol is operation symbol
  */
+static gboolean RSPAMD_CONST_FUNCTION
+rspamd_expr_is_operation_symbol (gchar a);
 static gboolean
 rspamd_expr_is_operation_symbol (gchar a)
 {
