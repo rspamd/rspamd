@@ -48,10 +48,10 @@ context("Rspamd expressions", function()
     {'(((A))', nil},
     -- Balanced braces
     {'(((A)))', '(A)'},
-    -- Plus and comparison operators
-    {'A + B + C + D > 2', '2 (A) (B) (C) (D) +(4) >'},
+    -- Plus and comparison operators (after 2.6 this is not optimized, maybe we can return previous behaviour some day)
+    {'A + B + C + D > 2', '(A) (B) (C) (D) + + + 2 >'},
     -- Plus and logic operators
-    {'((A + B + C + D) > 2) & D', '(D) 2 (A) (B) (C) (D) +(4) > &'},
+    {'((A + B + C + D) > 2) & D', '(D) (A) (B) (C) (D) +(4) 2 > &'},
     -- Associativity
     {'A | B | C & D & E', '(A) (B) (C) (D) (E) &(3) |(3)'},
     -- More associativity
@@ -68,7 +68,7 @@ context("Rspamd expressions", function()
       if not c[2] then
         assert_nil(expr, "Should not be able to parse " .. c[1])
       else
-        assert_not_nil(expr, "Cannot parse " .. c[1])
+        assert_not_nil(expr, "Cannot parse " .. c[1] .. '; error: ' .. (err or 'wut??'))
         assert_equal(expr:to_string(), c[2], string.format("Evaluated expr to '%s', expected: '%s'",
             expr:to_string(), c[2]))
       end
@@ -99,7 +99,7 @@ context("Rspamd expressions", function()
       local expr,err = rspamd_expression.create(c[1],
           {parse_func, process_func}, pool)
 
-      assert_not_nil(expr, "Cannot parse " .. c[1])
+      assert_not_nil(expr, "Cannot parse " .. c[1] .. '; error: ' .. (err or 'wut??'))
       --print(expr)
       res = expr:process(atoms)
       assert_equal(res, c[2], string.format("Processed expr '%s'{%s} returned '%d', expected: '%d'",

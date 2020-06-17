@@ -352,7 +352,6 @@ lua_expr_create (lua_State *L)
 	if (lua_type (L, 1) != LUA_TSTRING ||
 			(lua_type (L, 2) != LUA_TTABLE && lua_type (L, 2) != LUA_TFUNCTION) ||
 			rspamd_lua_check_mempool (L, 3) == NULL) {
-		msg_info ("bad arguments to lua_expr_create");
 		lua_pushnil (L);
 		lua_pushstring (L, "bad arguments");
 	}
@@ -371,7 +370,7 @@ lua_expr_create (lua_State *L)
 			lua_gettable (L, -2);
 
 			if (lua_type (L, -1) != LUA_TFUNCTION) {
-				lua_pop (L, 2);
+				lua_pop (L, 1);
 				lua_pushnil (L);
 				lua_pushstring (L, "bad parse callback");
 
@@ -385,7 +384,7 @@ lua_expr_create (lua_State *L)
 
 			if (lua_type (L, -1) != LUA_TFUNCTION) {
 				if (lua_type (L, -1) != LUA_TNIL && lua_type (L, -1) != LUA_TNONE) {
-					lua_pop (L, 2);
+					lua_pop (L, 1);
 					lua_pushnil (L);
 					lua_pushstring (L, "bad process callback");
 
