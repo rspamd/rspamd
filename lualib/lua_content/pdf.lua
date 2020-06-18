@@ -491,6 +491,7 @@ end
 
 -- Extracts font data and process /ToUnicode mappings
 -- NYI in fact as cmap is ridiculously stupid and complicated
+--[[
 local function process_font(task, pdf, font, fname)
   local dict = font
   if font.dict then
@@ -507,6 +508,7 @@ local function process_font(task, pdf, font, fname)
     end
   end
 end
+--]]
 
 -- Forward declaration
 local process_dict
@@ -711,9 +713,11 @@ process_dict = function(task, pdf, obj, dict)
       obj.resources = resources
     end
 
-    local fonts = obj.resources.Font
 
-    if fonts and type(fonts) == 'table' then
+
+--[[Disabled fonts extraction
+     local fonts = obj.resources.Font
+     if fonts and type(fonts) == 'table' then
       obj.fonts = {}
       for k,v in pairs(fonts) do
         obj.fonts[k] = maybe_dereference_object(v, pdf, task)
@@ -729,6 +733,7 @@ process_dict = function(task, pdf, obj, dict)
         end
       end
     end
+]]
 
     lua_util.debugm(N, task, 'found resources for object %s:%s (%s): %s',
         obj.major, obj.minor, obj.type, obj.resources)
