@@ -492,3 +492,7 @@ input.radio {
 .w-1 {
     width: 1% !important;
 }
+
+#content label {
+    font-weight: normal;
+}
