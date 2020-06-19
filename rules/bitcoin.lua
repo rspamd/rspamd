@@ -96,44 +96,45 @@ local function verify_beach32_cksum(hrp, elts)
   return polymod(hrpExpand(hrp), elts) == 1
 end
 
-local function is_segwit_bech32_address(word)
-  local has_upper, has_lower, has_invalid
-
-  if #word > 90 then return false end
-
-  fun.each(function(ch)
-    if ch < 33 or ch > 126 then
-      has_invalid = true
-    elseif ch >= 97 and ch <= 122 then
-      has_lower = true
-    elseif ch >= 65 and ch <= 90 then
-      has_upper = true;
-    end
-  end, fun.map(string.byte, fun.iter(word)))
-
-  if has_invalid or (has_lower and has_upper) then
-    return false
-  end
-
-  word = word:lower()
-  local last_one_pos = word:find('1[^1]*$')
-  if not last_one_pos or (last_one_pos < 1 or last_one_pos + 7 > #word) then
-    return false
-  end
-  local hrp = word:sub(1, last_one_pos - 1)
+local function gen_bleach32_table(input)
   local d = {}
-  local charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-  for i=last_one_pos + 1,#word do
-    local c = word:sub(i, i)
-    local pos = charset:find(c)
+  local i = 1
+  local res = true
+  local charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
 
-    if not pos then
+  fun.each(function(byte)
+    if res then
+      local pos = charset:find(byte)
+      if not pos then
+        res = false
+      else
+        d[i] = pos - 1
+        i = i + 1
+      end
+    end
+  end, fun.iter(input))
+
+  return res and d or nil
+end
+
+local function is_segwit_bech32_address(word)
+  local prefix = word:sub(1, 3)
+
+  if prefix == 'bc1' or prefix.sub(1, 1) == '1' or prefix.sub(1, 1) == '3' then
+    -- Strip beach32 prefix in bitcoin
+    word = word:lower()
+    local last_one_pos = word:find('1[^1]*$')
+    if not last_one_pos or (last_one_pos < 1 or last_one_pos + 7 > #word) then
       return false
     end
-    d[#d + 1] = pos - 1
-  end
+    local hrp = word:sub(1, last_one_pos - 1)
+    local addr = word:sub(last_one_pos + 1, -1)
+    local decoded = gen_bleach32_table(addr)
 
-  return verify_beach32_cksum(hrp, d)
+    if decoded then
+      return verify_beach32_cksum(hrp, decoded)
+    end
+  end
 end
 
 
@@ -144,7 +145,7 @@ rspamd_config:register_symbol{
     local rspamd_re = require "rspamd_regexp"
 
     local btc_wallet_re = rspamd_re.create_cached('^[13LM][1-9A-Za-z]{25,34}$')
-    local segwit_wallet_re = rspamd_re.create_cached('^[b][c]1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,74}$', 'i')
+    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13])?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
     local words_matched = {}
     local segwit_words_matched = {}
     local valid_wallets = {}
