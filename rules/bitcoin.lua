@@ -120,7 +120,7 @@ end
 local function is_segwit_bech32_address(word)
   local prefix = word:sub(1, 3)
 
-  if prefix == 'bc1' or prefix.sub(1, 1) == '1' or prefix.sub(1, 1) == '3' then
+  if prefix == 'bc1' or prefix:sub(1, 1) == '1' or prefix:sub(1, 1) == '3' then
     -- Strip beach32 prefix in bitcoin
     word = word:lower()
     local last_one_pos = word:find('1[^1]*$')
@@ -133,6 +133,23 @@ local function is_segwit_bech32_address(word)
 
     if decoded then
       return verify_beach32_cksum(hrp, decoded)
+    end
+  else
+    -- BCH address
+    -- 1 byte address type (who cares)
+    -- XXX bytes address hash (who cares)
+    -- 40 bit checksum
+    local rspamd_util = require 'rspamd_util'
+    local decoded = rspamd_util.decode_base32(word:lower(), 'bleach')
+
+    if decoded then
+      local bytes = decoded:bytes()
+
+      if bytes[1] == 0 then
+        -- TODO: Add checksum validation some day
+
+        return true
+      end
     end
   end
 end
