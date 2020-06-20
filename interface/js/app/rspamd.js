@@ -266,7 +266,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                         $('#selSrv [value="' + e.name + '"]').prop("disabled", true);
                     }
                 });
-                tab_selectors.checkSelectors(ui);
+                tab_selectors.displayUI(ui);
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"

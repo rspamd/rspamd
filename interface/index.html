@@ -328,38 +328,71 @@
 						<h5>Test Rspamd selectors</h5>
 					</div>
 					<div class="widget-content">
-						<h5>Message source:</h5>
-						<div class="row">
-							<form class="col-md-12">
-								<div class="form-group">
-									<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
+						<div class="row" id="row-main">
+							<div class="col-md-3 sidebar" id="sidebar-left">
+								<div class="nopadding table-responsive">
+									<table class="table table-condensed small table-striped table-hover table-bordered" id="selectorsTable-extractors">
+										<thead><tr><th>Name</th><th>Description</th></tr></thead>
+										<tbody/>
+									</table>
 								</div>
-								<div class="form-group">
-									<button class="btn btn-default pull-right" id="selectorsMsgClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
-								</div>
-							</form>
-						</div>
+							</div>
 
-						<h5>Selector(s):</h5>
-						<div class="row">
-							<form class="col-md-12">
-								<div class="form-group has-feedback">
-									<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
-									<span id="selector-feedback-icon" class="glyphicon form-control-feedback"></span>
+							<div class="col-md-6 col-xs-12" id="content">
+
+								<div class="row">
+									<ul class="nav nav-tabs sidebar-nav">
+										<li class="active text-nowrap" id="sidebar-tab-left">
+											<a><div id="sidebar-tab-text-left">&#x2195;&ensp;List of extractors</div></a>
+										</li>
+									</ul>
+
+								<div class="col-xs-12">
+								<form class="col-xs-12">
+									<div class="form-group row">
+										<div class="form-group">
+											<label for="selectorsMsgArea">Message source:</label>
+											<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
+										</div>
+										<div class="form-group">
+											<button class="btn btn-default pull-right" id="selectorsMsgClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+										</div>
+									</div>
+
+									<div class="form-group row">
+										<div class="form-group has-feedback">
+											<label for="selectorsSelArea">Selector(s):</label>
+											<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
+											<span id="selector-feedback-icon" class="glyphicon form-control-feedback"></span>
+										</div>
+										<div class="form-group">
+											<button type="submit" class="btn btn-default btn-primary" id="selectorsChkMsgBtn"><i class="glyphicon glyphicon-search"></i> Check message</button>
+											<button class="btn btn-default pull-right" id="selectorsClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+										</div>
+									</div>
+									<div class="form-group row">
+										<label for="selectorsResArea">Result:</label>
+										<textarea class="form-control" id="selectorsResArea" rows="5" readonly></textarea>
+									</div>
+								</form>
 								</div>
-								<div class="form-group">
-									<button type="submit" class="btn btn-default btn-primary" id="selectorsChkMsgBtn"><i class="glyphicon glyphicon-search"></i> Check message</button>
-									<button class="btn btn-default pull-right" id="selectorsClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+
+									<ul class="nav nav-tabs sidebar-nav">
+										<li class="active text-nowrap" id="sidebar-tab-right">
+											<a>&#x2195;&ensp;List of transforms</a>
+										</li>
+									</ul>
 								</div>
-							</form>
-						</div>
-						<h5>Result:</h5>
-						<div class="row">
-							<form class="col-md-12">
-								<div class="form-group">
-									<textarea class="form-control" id="selectorsResArea" rows="5" readonly></textarea>
+							</div>
+
+							<div class="col-md-3 sidebar" id="sidebar-right">
+								<div class="nopadding table-responsive">
+									<table class="table table-condensed small table-striped table-hover table-bordered" id="selectorsTable-transforms">
+										<thead><tr><th>Name</th><th>Description</th></tr></thead>
+										<tbody/>
+									</table>
 								</div>
-							</form>
+							</div>
 						</div>
 					</div>
 				</div>

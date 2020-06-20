@@ -34,7 +34,7 @@ define(["jquery"],
             });
         }
 
-        ui.checkSelectors = function (rspamd) {
+        function checkSelectors(rspamd) {
             function toggle_form_group_class(remove, add) {
                 var icon = {
                     error:   "remove",
@@ -63,9 +63,66 @@ define(["jquery"],
                 $("#selector-feedback-icon").hide();
                 enable_disable_check_btn();
             }
+        }
+
+        function buildLists(rspamd) {
+            function build_table_from_json(json, table_id) {
+                Object.keys(json).forEach(function (key) {
+                    var td = $("<td/>");
+                    var tr = $("<tr/>")
+                        .append(td.clone().html("<code>" + key + "</code>"))
+                        .append(td.clone().html(json[key].description));
+                    $(table_id + " tbody").append(tr);
+                });
+            }
+
+            function getList(list) {
+                rspamd.query("plugins/selectors/list_" + list, {
+                    method: "GET",
+                    success: function (neighbours_status) {
+                        var json = neighbours_status[0].data;
+                        build_table_from_json(json, "#selectorsTable-" + list);
+                    },
+                    server: get_server(rspamd)
+                });
+            }
+
+            getList("extractors");
+            getList("transforms");
+        }
+
+        ui.displayUI = function (rspamd) {
+            buildLists(rspamd);
+            checkSelectors(rspamd);
         };
 
         ui.setup = function (rspamd) {
+            function toggleSidebar(side) {
+                $("#sidebar-" + side).toggleClass("collapsed");
+                var contentClass = "col-md-6";
+                var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
+                        $("#sidebar-right").hasClass("collapsed");
+                switch (openSidebarsCount) {
+                    case 1:
+                        contentClass = "col-md-9";
+                        break;
+                    case 2:
+                        contentClass = "col-md-12";
+                        break;
+                    default:
+                }
+                $("#content").removeClass("col-md-12 col-md-9 col-md-6")
+                    .addClass(contentClass);
+            }
+            $("#sidebar-tab-left>a").click(function () {
+                toggleSidebar("left");
+                return false;
+            });
+            $("#sidebar-tab-right>a").click(function () {
+                toggleSidebar("right");
+                return false;
+            });
+
             $("#selectorsMsgClean").on("click", function () {
                 $("#selectorsChkMsgBtn").attr("disabled", true);
                 $("#selectorsMsgArea").val("");
@@ -73,7 +130,7 @@ define(["jquery"],
             });
             $("#selectorsClean").on("click", function () {
                 $("#selectorsSelArea").val("");
-                ui.checkSelectors(rspamd);
+                checkSelectors(rspamd);
                 return false;
             });
             $("#selectorsChkMsgBtn").on("click", function () {
@@ -86,7 +143,7 @@ define(["jquery"],
                 enable_disable_check_btn();
             });
             $("#selectorsSelArea").on("input", function () {
-                ui.checkSelectors(rspamd);
+                checkSelectors(rspamd);
             });
         };
 
