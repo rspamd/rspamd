@@ -118,6 +118,11 @@ local function gen_bleach32_table(input)
 end
 
 local function is_segwit_bech32_address(word)
+  local semicolon_pos = string.find(word, ':')
+  if semicolon_pos then
+    word = string.sub(word, semicolon_pos + 1)
+  end
+
   local prefix = word:sub(1, 3)
 
   if prefix == 'bc1' or prefix:sub(1, 1) == '1' or prefix:sub(1, 1) == '3' then
@@ -168,7 +173,7 @@ rspamd_config:register_symbol{
     local rspamd_re = require "rspamd_regexp"
 
     local btc_wallet_re = rspamd_re.create_cached('^[13LM][1-9A-Za-z]{25,34}$')
-    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13])?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
+    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13]|(?:[^:]*:))?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
     local words_matched = {}
     local segwit_words_matched = {}
     local valid_wallets = {}
