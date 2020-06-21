@@ -145,7 +145,13 @@ local function is_segwit_bech32_address(word)
     if decoded then
       local bytes = decoded:bytes()
 
-      if bytes[1] == 0 then
+      -- The version byte’s most signficant bit is reserved and must be 0.
+      -- The 4 next bits indicate the type of address and the 3 least significant bits indicate the size of the hash.
+      local version = bit.band(bytes[1], 128)
+      local addr_type = bit.rshift(bit.band(bytes[1], 120), 3)
+      local _ = bit.band(bytes[1], 7) -- hash size
+
+      if version == 0 and (addr_type == 0 or addr_type == 8)then
         -- TODO: Add checksum validation some day
 
         return true
