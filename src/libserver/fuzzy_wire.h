@@ -103,7 +103,8 @@ enum rspamd_fuzzy_extension_type {
 struct rspamd_fuzzy_cmd_extension {
 	enum rspamd_fuzzy_extension_type ext;
 	guint length;
-	guchar payload[];
+	struct rspamd_fuzzy_cmd_extension *next;
+	guchar *payload;
 };
 
 struct rspamd_fuzzy_stat_entry {

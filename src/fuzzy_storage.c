@@ -209,6 +209,7 @@ struct fuzzy_session {
 	struct ev_io io;
 	ref_entry_t ref;
 	struct fuzzy_key_stat *key_stat;
+	struct rspamd_fuzzy_cmd_extension *extensions;
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 };
 
@@ -1213,6 +1214,135 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 	return TRUE;
 }
 
+
+static gboolean
+rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize buflen)
+{
+	struct rspamd_fuzzy_cmd_extension *ext;
+	guchar *storage, *p = buf, *end = buf + buflen;
+	gsize st_len = 0, n_ext = 0;
+
+	/* Read number of extensions to allocate array */
+	while (p < end) {
+		guchar cmd = *p++;
+
+		if (p < end) {
+			if (cmd == RSPAMD_FUZZY_EXT_SOURCE_DOMAIN) {
+				/* Next byte is buf length */
+				guchar dom_len = *p++;
+
+				if (dom_len <= (end - p)) {
+					st_len += dom_len;
+					n_ext ++;
+				}
+				else {
+					/* Truncation */
+					return FALSE;
+				}
+
+				p += dom_len;
+			}
+			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP4) {
+				if (end - p >= sizeof (in_addr_t)) {
+					p += sizeof (in_addr_t);
+					n_ext ++;
+					st_len += sizeof (in_addr_t);
+				}
+				else {
+					/* Truncation */
+					return FALSE;
+				}
+
+				p += sizeof (in_addr_t);
+			}
+			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
+				if (end - p >= sizeof (in6_addr_t)) {
+					p += sizeof (in6_addr_t);
+					n_ext ++;
+					st_len += sizeof (in6_addr_t);
+				}
+				else {
+					/* Truncation */
+					return FALSE;
+				}
+
+				p += sizeof (in6_addr_t);
+			}
+		}
+		else {
+			/* Truncated extension */
+			return FALSE;
+		}
+	}
+
+	if (n_ext > 0) {
+		p = buf;
+		/*
+		 * Memory layout: n_ext of struct rspamd_fuzzy_cmd_extension
+		 *                payload for each extension in a continious data segment
+		 */
+		storage = g_malloc (n_ext * sizeof (struct rspamd_fuzzy_cmd_extension) +
+				st_len);
+
+		guchar *data_buf = storage +
+				n_ext * sizeof (struct rspamd_fuzzy_cmd_extension);
+		ext = (struct rspamd_fuzzy_cmd_extension *)storage;
+
+		/* All validation has been done, so we can just go further */
+		while (p < end) {
+			guchar cmd = *p++;
+
+			if (cmd == RSPAMD_FUZZY_EXT_SOURCE_DOMAIN) {
+				/* Next byte is buf length */
+				guchar dom_len = *p++;
+				guchar *dest = data_buf;
+
+				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_DOMAIN;
+				ext->next = ext + 1;
+				ext->length = dom_len;
+				ext->payload = dest;
+				memcpy (dest, p, dom_len);
+				p += dom_len;
+				data_buf += dom_len;
+				ext = ext->next;
+			}
+			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP4) {
+				guchar *dest = data_buf;
+
+				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_IP4;
+				ext->next = ext + 1;
+				ext->length = sizeof (in_addr_t);
+				ext->payload = dest;
+				memcpy (dest, p, sizeof (in_addr_t));
+				p += sizeof (in_addr_t);
+				data_buf += sizeof (in_addr_t);
+				ext = ext->next;
+			}
+			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
+				guchar *dest = data_buf;
+
+				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_IP6;
+				ext->next = ext + 1;
+				ext->length = sizeof (in6_addr_t);
+				ext->payload = dest;
+				memcpy (dest, p, sizeof (in6_addr_t));
+				p += sizeof (in_addr_t);
+				data_buf += sizeof (in6_addr_t);
+				ext = ext->next;
+			}
+		}
+
+		/* Last next should be NULL */
+		ext->next = NULL;
+
+		/* Rewind to the begin */
+		ext = (struct rspamd_fuzzy_cmd_extension *)storage;
+		s->extensions = ext;
+	}
+
+	return TRUE;
+}
+
 static gboolean
 rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 {
@@ -1298,6 +1428,14 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 		}
 	}
 
+	if (buflen > 0) {
+		/* Process possible extensions */
+		if (!rspamd_fuzzy_extensions_from_wire (s, buf, buflen)) {
+			msg_debug ("truncated fuzzy shingles command of size %d received", buflen);
+			return FALSE;
+		}
+	}
+
 	return TRUE;
 }
 
@@ -1313,6 +1451,10 @@ fuzzy_session_destroy (gpointer d)
 
 	if (session->ip_stat) {
 		REF_RELEASE (session->ip_stat);
+	}
+
+	if (session->extensions) {
+		g_free (session->extensions);
 	}
 
 	g_free (session);
