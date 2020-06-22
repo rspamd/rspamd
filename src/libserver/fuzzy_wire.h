@@ -94,6 +94,18 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {
 
 static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
 
+enum rspamd_fuzzy_extension_type {
+	RSPAMD_FUZZY_EXT_SOURCE_DOMAIN = 'd',
+	RSPAMD_FUZZY_EXT_SOURCE_IP4 = '4',
+	RSPAMD_FUZZY_EXT_SOURCE_IP6 = '6',
+};
+
+struct rspamd_fuzzy_cmd_extension {
+	enum rspamd_fuzzy_extension_type ext;
+	guint length;
+	guchar payload[];
+};
+
 struct rspamd_fuzzy_stat_entry {
 	const gchar *name;
 	guint32 fuzzy_cnt;

@@ -23,7 +23,6 @@
 #include "rspamd.h"
 #include "libserver/maps/map.h"
 #include "libserver/maps/map_helpers.h"
-#include "fuzzy_wire.h"
 #include "libserver/fuzzy_backend/fuzzy_backend.h"
 #include "ottery.h"
 #include "ref.h"
@@ -199,14 +198,8 @@ struct fuzzy_session {
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
-	union {
-		struct rspamd_fuzzy_encrypted_shingle_cmd enc_shingle;
-		struct rspamd_fuzzy_encrypted_cmd enc_normal;
-		struct rspamd_fuzzy_cmd normal;
-		struct rspamd_fuzzy_shingle_cmd shingle;
-	} cmd;
-
-	struct rspamd_fuzzy_encrypted_reply reply;
+	struct rspamd_fuzzy_shingle_cmd cmd; /* Can handle both shingles and non-shingles */
+	struct rspamd_fuzzy_encrypted_reply reply; /* Again: contains everything */
 	struct fuzzy_key_stat *ip_stat;
 
 	enum rspamd_fuzzy_epoch epoch;
@@ -766,23 +759,14 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
-		cmd = &session->cmd.normal;
+	case CMD_ENCRYPTED_NORMAL:
+		cmd = &session->cmd.basic;
 		break;
 	case CMD_SHINGLE:
-		cmd = &session->cmd.shingle.basic;
-		memcpy (&sgl_cpy, &session->cmd.shingle.sgl, sizeof (sgl_cpy));
-		shingle = &sgl_cpy;
-		is_shingle = TRUE;
-		break;
-	case CMD_ENCRYPTED_NORMAL:
-		cmd = &session->cmd.enc_normal.cmd;
-		encrypted = TRUE;
-		break;
 	case CMD_ENCRYPTED_SHINGLE:
-		cmd = &session->cmd.enc_shingle.cmd.basic;
-		memcpy (&sgl_cpy,  &session->cmd.enc_shingle.cmd.sgl, sizeof (sgl_cpy));
+		cmd = &session->cmd.basic;
+		memcpy (&sgl_cpy, &session->cmd.sgl, sizeof (sgl_cpy));
 		shingle = &sgl_cpy;
-		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
 	}
@@ -926,24 +910,22 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	gpointer ptr;
 	gsize up_len = 0;
 
+	cmd = &session->cmd.basic;
+
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
-		cmd = &session->cmd.normal;
-		up_len = sizeof (session->cmd.normal);
+		up_len = sizeof (session->cmd.basic);
 		break;
 	case CMD_SHINGLE:
-		cmd = &session->cmd.shingle.basic;
-		up_len = sizeof (session->cmd.shingle);
+		up_len = sizeof (session->cmd);
 		is_shingle = TRUE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
-		cmd = &session->cmd.enc_normal.cmd;
-		up_len = sizeof (session->cmd.normal);
+		up_len = sizeof (session->cmd.basic);
 		encrypted = TRUE;
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
-		cmd = &session->cmd.enc_shingle.cmd.basic;
-		up_len = sizeof (session->cmd.shingle);
+		up_len = sizeof (session->cmd);
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
@@ -1174,11 +1156,9 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 }
 
 static gboolean
-rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
+rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen)
 {
-	struct rspamd_fuzzy_encrypted_req_hdr *hdr;
-	guchar *payload;
-	gsize payload_len;
+	struct rspamd_fuzzy_encrypted_req_hdr hdr;
 	struct rspamd_cryptobox_pubkey *rk;
 	struct fuzzy_key *key;
 
@@ -1187,25 +1167,17 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 		return FALSE;
 	}
 
-	if (s->cmd_type == CMD_ENCRYPTED_NORMAL) {
-		hdr = &s->cmd.enc_normal.hdr;
-		payload = (guchar *)&s->cmd.enc_normal.cmd;
-		payload_len = sizeof (s->cmd.enc_normal.cmd);
-	}
-	else {
-		hdr = &s->cmd.enc_shingle.hdr;
-		payload = (guchar *) &s->cmd.enc_shingle.cmd;
-		payload_len = sizeof (s->cmd.enc_shingle.cmd);
-	}
-
-	/* Compare magic */
-	if (memcmp (hdr->magic, fuzzy_encrypted_magic, sizeof (hdr->magic)) != 0) {
-		msg_debug ("invalid magic for the encrypted packet");
+	if (buflen < sizeof (hdr)) {
+		msg_warn ("XXX: should not be reached");
 		return FALSE;
 	}
 
+	memcpy (&hdr, buf, sizeof (hdr));
+	buf += sizeof (hdr);
+	buflen -= sizeof (hdr);
+
 	/* Try to find the desired key */
-	key = g_hash_table_lookup (s->ctx->keys, hdr->key_id);
+	key = g_hash_table_lookup (s->ctx->keys, hdr.key_id);
 
 	if (key == NULL) {
 		/* Unknown key, assume default one */
@@ -1215,7 +1187,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	s->key_stat = key->stat;
 
 	/* Now process keypair */
-	rk = rspamd_pubkey_from_bin (hdr->pubkey, sizeof (hdr->pubkey),
+	rk = rspamd_pubkey_from_bin (hdr.pubkey, sizeof (hdr.pubkey),
 			RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
 	if (rk == NULL) {
@@ -1226,9 +1198,9 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	rspamd_keypair_cache_process (s->ctx->keypair_cache, key->key, rk);
 
 	/* Now decrypt request */
-	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
+	if (!rspamd_cryptobox_decrypt_nm_inplace (buf, buflen, hdr.nonce,
 			rspamd_pubkey_get_nm (rk, key->key),
-			hdr->mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
+			hdr.mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err ("decryption failed");
 		rspamd_pubkey_unref (rk);
 
@@ -1245,68 +1217,85 @@ static gboolean
 rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 {
 	enum rspamd_fuzzy_epoch epoch;
+	gboolean encrypted = FALSE;
 
-	/* For now, we assume that recvfrom returns a complete datagramm */
-	switch (buflen) {
-	case sizeof (struct rspamd_fuzzy_cmd):
-		s->cmd_type = CMD_NORMAL;
-		memcpy (&s->cmd.normal, buf, sizeof (s->cmd.normal));
-		epoch = rspamd_fuzzy_command_valid (&s->cmd.normal, buflen);
+	if (buflen < sizeof (struct rspamd_fuzzy_cmd)) {
+		msg_debug ("truncated fuzzy command of size %d received", buflen);
+		return FALSE;
+	}
 
-		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
-			msg_debug ("invalid fuzzy command of size %d received", buflen);
+	/* Now check encryption */
+
+	if (buflen >= sizeof (struct rspamd_fuzzy_encrypted_cmd)) {
+		if (memcmp (buf, fuzzy_encrypted_magic, sizeof (fuzzy_encrypted_magic)) == 0) {
+			/* Encrypted command */
+			encrypted = TRUE;
+		}
+	}
+
+	if (encrypted) {
+		/* Decrypt first */
+		if (!rspamd_fuzzy_decrypt_command (s, buf, buflen)) {
 			return FALSE;
 		}
-		s->epoch = epoch;
-		break;
-	case sizeof (struct rspamd_fuzzy_shingle_cmd):
-		s->cmd_type = CMD_SHINGLE;
-		memcpy (&s->cmd.shingle, buf, sizeof (s->cmd.shingle));
-		epoch = rspamd_fuzzy_command_valid (&s->cmd.shingle.basic, buflen);
-
-		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
-			msg_debug ("invalid fuzzy command of size %d received", buflen);
-			return FALSE;
+		else {
+			/*
+			 * Advance buffer to skip encrypted header.
+			 * Note that after rspamd_fuzzy_decrypt_command buf is unencrypted
+			 */
+			buf += sizeof (struct rspamd_fuzzy_encrypted_req_hdr);
+			buflen -= sizeof (struct rspamd_fuzzy_encrypted_req_hdr);
 		}
-		s->epoch = epoch;
-		break;
-	case sizeof (struct rspamd_fuzzy_encrypted_cmd):
-		s->cmd_type = CMD_ENCRYPTED_NORMAL;
-		memcpy (&s->cmd.enc_normal, buf, sizeof (s->cmd.enc_normal));
+	}
 
-		if (!rspamd_fuzzy_decrypt_command (s)) {
-			return FALSE;
-		}
-		epoch = rspamd_fuzzy_command_valid (&s->cmd.enc_normal.cmd,
-				sizeof (s->cmd.enc_normal.cmd));
+	/* Fill the normal command */
+	if (buflen < sizeof (s->cmd.basic)) {
+		msg_debug ("truncated normal fuzzy command of size %d received", buflen);
+		return FALSE;
+	}
 
-		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
-			msg_debug ("invalid fuzzy command of size %d received", buflen);
-			return FALSE;
-		}
-		/* Encrypted is epoch 10 at least */
-		s->epoch = epoch;
-		break;
-	case sizeof (struct rspamd_fuzzy_encrypted_shingle_cmd):
-		s->cmd_type = CMD_ENCRYPTED_SHINGLE;
-		memcpy (&s->cmd.enc_shingle, buf, sizeof (s->cmd.enc_shingle));
+	memcpy (&s->cmd.basic, buf, sizeof (s->cmd.basic));
+	epoch = rspamd_fuzzy_command_valid (&s->cmd.basic, buflen);
 
-		if (!rspamd_fuzzy_decrypt_command (s)) {
-			return FALSE;
-		}
-		epoch = rspamd_fuzzy_command_valid (&s->cmd.enc_shingle.cmd.basic,
-				sizeof (s->cmd.enc_shingle.cmd));
-
-		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
-			msg_debug ("invalid fuzzy command of size %d received", buflen);
-			return FALSE;
-		}
-
-		s->epoch = epoch;
-		break;
-	default:
+	if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
 		msg_debug ("invalid fuzzy command of size %d received", buflen);
 		return FALSE;
+	}
+
+	s->epoch = epoch;
+
+	/* Advance buf */
+	buf += sizeof (s->cmd.basic);
+	buflen -= sizeof (s->cmd.basic);
+
+	if (s->cmd.basic.shingles_count > 0) {
+		if (buflen >= sizeof (s->cmd.sgl)) {
+			/* Copy the shingles part */
+			memcpy (&s->cmd.sgl, buf, sizeof (s->cmd.sgl));
+		}
+		else {
+			/* Truncated stuff */
+			msg_debug ("truncated fuzzy shingles command of size %d received", buflen);
+			return FALSE;
+		}
+
+		buf += sizeof (s->cmd.sgl);
+		buflen -= sizeof (s->cmd.sgl);
+
+		if (encrypted) {
+			s->cmd_type = CMD_ENCRYPTED_SHINGLE;
+		}
+		else {
+			s->cmd_type = CMD_SHINGLE;
+		}
+	}
+	else {
+		if (encrypted) {
+			s->cmd_type = CMD_ENCRYPTED_NORMAL;
+		}
+		else {
+			s->cmd_type = CMD_NORMAL;
+		}
 	}
 
 	return TRUE;
