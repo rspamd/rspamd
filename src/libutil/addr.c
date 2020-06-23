@@ -1074,7 +1074,9 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 
 #if defined(SO_REUSEADDR)
 	if (setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint)) == -1) {
-		msg_err ("cannot set SO_REUSEADDR on %d: %d", fd, strerror (errno));
+		msg_err ("cannot set SO_REUSEADDR on %s (fd=%d): %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				fd, strerror (errno));
 		goto err;
 	}
 #endif
@@ -1084,7 +1086,9 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		on = 1;
 
 		if (setsockopt (fd, SOL_SOCKET, SO_REUSEPORT, (const void *)&on, sizeof (gint)) == -1) {
-			msg_err ("cannot set SO_REUSEPORT on %d: %d", fd, strerror (errno));
+			msg_err ("cannot set SO_REUSEPORT on %s (fd=%d): %s",
+					rspamd_inet_address_to_string_pretty (addr),
+					fd, strerror (errno));
 			goto err;
 		}
 	}
