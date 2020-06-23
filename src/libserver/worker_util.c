@@ -1107,11 +1107,11 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	if (cf->bind_conf) {
 		msg_info_main ("starting %s process %P (%d); listen on: %s",
 				cf->worker->name,
-				getpid (), index, cf->bind_conf->bind_line);
+				getpid (), wrk->index, cf->bind_conf->bind_line);
 	}
 	else {
 		msg_info_main ("starting %s process %P (%d)", cf->worker->name,
-				getpid (), index);
+				getpid (), wrk->index);
 	}
 	/* Close parent part of socketpair */
 	close (wrk->control_pipe[0]);
