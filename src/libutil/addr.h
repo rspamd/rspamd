@@ -86,7 +86,7 @@ rspamd_inet_addr_t *rspamd_inet_address_from_rnds (
 
 /**
  * Parse string with ipv6 address of length `len` to `target` which should be
- * at least sizeof (in6_addr_t)
+ * at least sizeof (struct in6_addr)
  * @param text input string
  * @param len length of `text` (if 0, then `text` must be zero terminated)
  * @param target target structure

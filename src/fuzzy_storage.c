@@ -1256,17 +1256,17 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 				p += sizeof (in_addr_t);
 			}
 			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
-				if (end - p >= sizeof (in6_addr_t)) {
-					p += sizeof (in6_addr_t);
+				if (end - p >= sizeof (struct in6_addr)) {
+					p += sizeof (struct in6_addr);
 					n_ext ++;
-					st_len += sizeof (in6_addr_t);
+					st_len += sizeof (struct in6_addr);
 				}
 				else {
 					/* Truncation */
 					return FALSE;
 				}
 
-				p += sizeof (in6_addr_t);
+				p += sizeof (struct in6_addr);
 			}
 		}
 		else {
@@ -1323,11 +1323,11 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 
 				ext->ext = RSPAMD_FUZZY_EXT_SOURCE_IP6;
 				ext->next = ext + 1;
-				ext->length = sizeof (in6_addr_t);
+				ext->length = sizeof (struct in6_addr);
 				ext->payload = dest;
-				memcpy (dest, p, sizeof (in6_addr_t));
+				memcpy (dest, p, sizeof (struct in6_addr));
 				p += sizeof (in_addr_t);
-				data_buf += sizeof (in6_addr_t);
+				data_buf += sizeof (struct in6_addr);
 				ext = ext->next;
 			}
 		}
