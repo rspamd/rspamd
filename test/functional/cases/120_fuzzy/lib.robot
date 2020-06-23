@@ -62,7 +62,7 @@ Fuzzy Fuzzy Test
   [Arguments]  ${message}
   Run Keyword If  ${RSPAMD_FUZZY_ADD_${message}} != 1  Fail  "Fuzzy Add was not run"
   @{path_info} =  Path Splitter  ${message}
-  @{fuzzy_files} =  List Files In Directory  @{pathinfo}[0]  pattern=@{pathinfo}[1].fuzzy*  absolute=1
+  @{fuzzy_files} =  List Files In Directory  ${pathinfo}[0]  pattern=${pathinfo}[1].fuzzy*  absolute=1
   FOR  ${i}  IN  @{fuzzy_files}
     ${result} =  Scan Message With Rspamc  ${i}
     Check Rspamc  ${result}  ${FLAG1_SYMBOL}

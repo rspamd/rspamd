@@ -6,8 +6,8 @@ Library         Process
 *** Keywords ***
 Check Controller Errors
   @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /errors
-  Should Be Equal As Integers  @{result}[0]  200
-  Log  @{result}[1]
+  Should Be Equal As Integers  ${result}[0]  200
+  Log  ${result}[1]
 
 Check Pidfile
   [Arguments]  ${pidfile}  ${timeout}=1 min
@@ -22,7 +22,7 @@ Check Rspamc
   ${has_rc} =  Evaluate  'rc' in $kwargs
   ${inverse} =  Evaluate  'inverse' in $kwargs
   ${re} =  Evaluate  're' in $kwargs
-  ${rc} =  Set Variable If  ${has_rc} == True  &{kwargs}[rc]  0
+  ${rc} =  Set Variable If  ${has_rc} == True  ${kwargs}[rc]  0
   FOR  ${i}  IN  @{args}
     Run Keyword If  ${re} == True  Check Rspamc Match Regexp  ${result.stdout}  ${i}  ${inverse}
     ...  ELSE  Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
@@ -63,8 +63,8 @@ Generic Setup
   &{d} =  Run Rspamd  @{vargs}  &{kwargs}
   ${keys} =  Get Dictionary Keys  ${d}
   FOR  ${i}  IN  @{keys}
-    Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  &{d}[${i}]
-    ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  &{d}[${i}]
+    Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  ${d}[${i}]
+    ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  ${d}[${i}]
     ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
   END
 
@@ -152,9 +152,9 @@ Run Rspamd
   [Arguments]  @{vargs}  &{kwargs}
   ${has_CONFIG} =  Evaluate  'CONFIG' in $kwargs
   ${has_TMPDIR} =  Evaluate  'TMPDIR' in $kwargs
-  ${CONFIG} =  Set Variable If  '${has_CONFIG}' == 'True'  &{kwargs}[CONFIG]  ${CONFIG}
+  ${CONFIG} =  Set Variable If  '${has_CONFIG}' == 'True'  ${kwargs}[CONFIG]  ${CONFIG}
   &{d} =  Create Dictionary
-  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  &{kwargs}[TMPDIR]
+  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  ${kwargs}[TMPDIR]
   ...  ELSE  Make Temporary Directory
   Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
   ${template} =  Get File  ${CONFIG}
@@ -192,9 +192,9 @@ Sync Fuzzy Storage
   ${len} =  Get Length  ${vargs}
   ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s
   ...  ${TMPDIR}/rspamd.sock  fuzzy_sync
-  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  @{vargs}[0]/rspamd.sock
+  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  ${vargs}[0]/rspamd.sock
   ...  fuzzy_sync
   Log  ${result.stdout}
   Run Keyword If  $len == 0  Follow Rspamd Log
-  ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3]
+  ...  ELSE  Custom Follow Rspamd Log  ${vargs}[0]/rspamd.log  ${vargs}[1]  ${vargs}[2]  ${vargs}[3]
   Sleep  0.1s  Try give fuzzy storage time to sync
