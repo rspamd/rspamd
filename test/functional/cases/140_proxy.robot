@@ -34,13 +34,13 @@ RSPAMC Legacy Protocol
 *** Keywords ***
 Proxy Setup
   &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/lua_test.conf
-  Set Suite Variable  ${SLAVE_LOGPOS}  &{d}[RSPAMD_LOGPOS]
-  Set Suite Variable  ${SLAVE_PID}  &{d}[RSPAMD_PID]
-  Set Suite Variable  ${SLAVE_TMPDIR}  &{d}[TMPDIR]
+  Set Suite Variable  ${SLAVE_LOGPOS}  ${d}[RSPAMD_LOGPOS]
+  Set Suite Variable  ${SLAVE_PID}  ${d}[RSPAMD_PID]
+  Set Suite Variable  ${SLAVE_TMPDIR}  ${d}[TMPDIR]
   &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/proxy.conf
-  Set Suite Variable  ${PROXY_LOGPOS}  &{d}[RSPAMD_LOGPOS]
-  Set Suite Variable  ${PROXY_PID}  &{d}[RSPAMD_PID]
-  Set Suite Variable  ${PROXY_TMPDIR}  &{d}[TMPDIR]
+  Set Suite Variable  ${PROXY_LOGPOS}  ${d}[RSPAMD_LOGPOS]
+  Set Suite Variable  ${PROXY_PID}  ${d}[RSPAMD_PID]
+  Set Suite Variable  ${PROXY_TMPDIR}  ${d}[TMPDIR]
 
 Proxy Teardown
   Shutdown Process With Children  ${PROXY_PID}

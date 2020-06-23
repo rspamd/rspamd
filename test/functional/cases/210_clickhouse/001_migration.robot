@@ -79,7 +79,7 @@ Prepare rspamd
     &{d} =    Run Rspamd    CONFIG=${TESTDIR}/configs/clickhouse.conf    TMPDIR=${TMPDIR}
     ${keys} =    Get Dictionary Keys    ${d}
     FOR    ${i}    IN    @{keys}
-        Run Keyword If    '${RSPAMD_SCOPE}' == 'Suite'    Set Suite Variable    ${${i}}    &{d}[${i}]
-        ...    ELSE IF    '${RSPAMD_SCOPE}' == 'Test'     Set Test Variable     ${${i}}    &{d}[${i}]
+        Run Keyword If    '${RSPAMD_SCOPE}' == 'Suite'    Set Suite Variable    ${${i}}    ${d}[${i}]
+        ...    ELSE IF    '${RSPAMD_SCOPE}' == 'Test'     Set Test Variable     ${${i}}    ${d}[${i}]
         ...    ELSE    Fail    'RSPAMD_SCOPE must be Test or Suite'
     END
