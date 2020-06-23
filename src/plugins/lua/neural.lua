@@ -1411,7 +1411,7 @@ for k,r in pairs(rules) do
   if not rule_elt.name then
     rule_elt.name = k
   end
-  if rule_elt.train.max_train then
+  if rule_elt.train.max_train and not rule_elt.train.max_trains then
     rule_elt.train.max_trains = rule_elt.train.max_train
   end
 
