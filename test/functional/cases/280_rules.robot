@@ -60,6 +60,14 @@ BITCOIN ADDR
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
   Should Contain  ${result.stdout}  BITCOIN_ADDR
 
+BITCOIN ADDR 2
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc2.eml
+  Should Contain  ${result.stdout}  BITCOIN_ADDR
+
+BITCOIN ADDR 3
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc3.eml
+  Should Contain  ${result.stdout}  BITCOIN_ADDR  
+
 RCVD_COUNT_ONE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
   Should Contain  ${result.stdout}  RCVD_COUNT_ONE
