@@ -13,7 +13,7 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 SURBL resolve ip
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url7.eml
-  Should Contain  ${result.stdout}  URIBL_SBL_CSS (1.00)[8.8.8.9:example.ru
+  Should Contain  ${result.stdout}  URIBL_SBL_CSS (0.00)[8.8.8.9:example.ru
   Should Contain  ${result.stdout}  URIBL_XBL (1.00)[8.8.8.8:example.ru
   Should Contain  ${result.stdout}  URIBL_PBL (1.00)[8.8.8.8:example.ru
 
