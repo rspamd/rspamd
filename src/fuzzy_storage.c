@@ -759,12 +759,17 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	struct rspamd_shingle sgl_cpy;
 
 	switch (session->cmd_type) {
-	case CMD_NORMAL:
 	case CMD_ENCRYPTED_NORMAL:
+		encrypted = TRUE;
+		/* Fallthrough */
+	case CMD_NORMAL:
 		cmd = &session->cmd.basic;
 		break;
-	case CMD_SHINGLE:
+
 	case CMD_ENCRYPTED_SHINGLE:
+		encrypted = TRUE;
+		/* Fallthrough */
+	case CMD_SHINGLE:
 		cmd = &session->cmd.basic;
 		memcpy (&sgl_cpy, &session->cmd.sgl, sizeof (sgl_cpy));
 		shingle = &sgl_cpy;
