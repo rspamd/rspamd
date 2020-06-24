@@ -1,6 +1,6 @@
 *** Settings ***
-Test Setup      Rules Setup
-Test Teardown   Rules Teardown
+Suite Setup      Rules Setup
+Suite Teardown   Rules Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
@@ -17,7 +17,7 @@ ${MESSAGE6}      ${TESTDIR}/messages/pdf_encrypted.eml
 ${MESSAGE7}      ${TESTDIR}/messages/pdf_js.eml
 ${MESSAGE8}      ${TESTDIR}/messages/yand_forward.eml
 ${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
-${RSPAMD_SCOPE}  Test
+${RSPAMD_SCOPE}  Suite
 
 
 *** Test Cases ***
