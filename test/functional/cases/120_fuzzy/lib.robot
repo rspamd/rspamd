@@ -21,7 +21,6 @@ ${SETTINGS_FUZZY_CHECK}  ${EMPTY}
 
 *** Keywords ***
 Fuzzy Skip Add Test Base
-  Create File  ${TMPDIR}/skip_hash.map
   [Arguments]  ${message}
   Set Suite Variable  ${RSPAMD_FUZZY_ADD_${message}}  0
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -w  10  -f
@@ -31,7 +30,8 @@ Fuzzy Skip Add Test Base
   ${result} =  Scan Message With Rspamc  ${message}
   Create File  ${TMPDIR}/test.map
   Should Contain  ${result.stdout}  R_TEST_FUZZY_DENIED
-  Append To File  ${TMPDIR}/skip_hash.map  670cfcba72a87bab689958a8af5c22593dc17c907836c7c26a74d1bb49add25adfa45a5f172e3af82c9c638e8eb5fc860c22c7e966e61a459165ef0b9e1acc89
+  Append To File  ${TMPDIR}/skip_hash.map.tmp  670cfcba72a87bab689958a8af5c22593dc17c907836c7c26a74d1bb49add25adfa45a5f172e3af82c9c638e8eb5fc860c22c7e966e61a459165ef0b9e1acc89
+  Hard Link  ${TMPDIR}/skip_hash.map.tmp  ${TMPDIR}/skip_hash.map
   ${result} =  Scan Message With Rspamc  ${message}
   Check Rspamc  ${result}  R_TEST_FUZZY_DENIED  inverse=1
 
@@ -54,7 +54,6 @@ Fuzzy Delete Test
   Check Rspamc  ${result}
   Sync Fuzzy Storage
   ${result} =  Scan Message With Rspamc  ${message}
-  Follow Rspamd Log
   Should Not Contain  ${result.stdout}  ${FLAG1_SYMBOL}
   Should Be Equal As Integers  ${result.rc}  0
 
@@ -83,7 +82,6 @@ Fuzzy Overwrite Test
   END
   Sync Fuzzy Storage
   ${result} =  Scan Message With Rspamc  ${message}
-  Follow Rspamd Log
   Should Not Contain  ${result.stdout}  ${FLAG1_SYMBOL}
   Should Contain  ${result.stdout}  ${FLAG2_SYMBOL}
   Should Be Equal As Integers  ${result.rc}  0

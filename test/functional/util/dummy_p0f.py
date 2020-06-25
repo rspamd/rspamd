@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 PID = "/tmp/dummy_p0f.pid"
 
@@ -6,11 +6,9 @@ import os
 import sys
 import struct
 import socket
+import socketserver
+
 import dummy_killer
-try:
-    import SocketServer as socketserver
-except:
-    import socketserver
 
 class MyStreamHandler(socketserver.BaseRequestHandler):
 
@@ -22,8 +20,8 @@ class MyStreamHandler(socketserver.BaseRequestHandler):
         }
 
         OS = {
-            'windows' : ('Windows', '7 or 8'),
-            'linux'   : ('Linux', '3.11 and newer')
+            'windows' : (b'Windows', b'7 or 8'),
+            'linux'   : (b'Linux', b'3.11 and newer')
         }
 
         self.data = self.request.recv(21).strip()
@@ -47,10 +45,10 @@ class MyStreamHandler(socketserver.BaseRequestHandler):
                 0,                                # os_match_q
                 OS[self.server.p0f_os][0],        # os_name
                 OS[self.server.p0f_os][1],        # os_flavor
-                '',                               # http_name
-                '',                               # http_flavor
-                'Ethernet or modem',              # link_type
-                ''                                # language
+                b'',                              # http_name
+                b'',                              # http_flavor
+                b'Ethernet or modem',             # link_type
+                b''                               # language
             )
 
         self.request.sendall(response)
@@ -61,7 +59,7 @@ def cleanup(SOCK):
         try:
             os.unlink(SOCK)
         except OSError:
-            print "Could not unlink socket: " + SOCK
+            print("Could not unlink socket: " + SOCK)
 
 if __name__ == "__main__":
     SOCK = '/tmp/p0f.sock'
@@ -92,7 +90,7 @@ if __name__ == "__main__":
     try:
         server.handle_request()
     except socket.error:
-        print "Socket closed"
+        print("Socket closed")
 
     server.server_close()
     cleanup(SOCK)
