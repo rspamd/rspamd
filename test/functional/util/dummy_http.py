@@ -1,14 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import BaseHTTPServer
-import SocketServer
-import SimpleHTTPServer
-import dummy_killer
-
-import time
+import http.server
 import os
-import sys
 import socket
+import socketserver
+import sys
+import time
+
+import dummy_killer
 
 PORT = 18080
 HOST_NAME = '127.0.0.1'
@@ -16,10 +15,10 @@ HOST_NAME = '127.0.0.1'
 PID = "/tmp/dummy_http.pid"
 
 
-class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def setup(self):
-        BaseHTTPServer.BaseHTTPRequestHandler.setup(self)
+        http.server.BaseHTTPRequestHandler.setup(self)
         self.protocol_version = "HTTP/1.1" # allow connection: keep-alive
 
     def do_HEAD(self):
@@ -29,7 +28,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.log_message("to be closed: " + self.close_connection)
 
     def do_GET(self):
-        response = "hello world"
+        response = b"hello world"
 
         """Respond to a GET request."""
         if self.path == "/empty":
@@ -60,7 +59,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 
     def do_POST(self):
-        response = "hello post"
+        response = b"hello post"
         """Respond to a GET request."""
         if self.path == "/empty":
             self.finish()
@@ -82,12 +81,12 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write(response)
 
 
-class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
-                   BaseHTTPServer.HTTPServer):
+class ThreadingSimpleServer(socketserver.ThreadingMixIn,
+                   http.server.HTTPServer):
     def __init__(self):
         self.allow_reuse_address = True
         self.timeout = 1
-        BaseHTTPServer.HTTPServer.__init__(self, (HOST_NAME, PORT), MyHandler)
+        http.server.HTTPServer.__init__(self, (HOST_NAME, PORT), MyHandler)
 
     def run(self):
         dummy_killer.write_pid(PID)
@@ -96,9 +95,9 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
                 sys.stdout.flush()
                 server.handle_request()
         except KeyboardInterrupt:
-            print "Interrupt"
+            print("Interrupt")
         except socket.error:
-            print "Socket closed"
+            print("Socket closed")
 
     def stop(self):
         self.keep_running = False

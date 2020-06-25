@@ -25,7 +25,6 @@ Milter Test
   [Arguments]  ${mtlua}
   ${result} =  Run Process  miltertest  -Dport\=${PORT_PROXY}  -Dhost\=${LOCAL_ADDR}  -s  ${TESTDIR}/lua/miltertest/${mtlua}
   ...  cwd=${TESTDIR}/lua/miltertest
-  Follow Rspamd Log
   Should Match Regexp  ${result.stderr}  ^$
   Log  ${result.rc}
   Log  ${result.stdout}

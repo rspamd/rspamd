@@ -37,5 +37,6 @@ Http Teardown
 Check url
   [Arguments]  ${url}  ${method}  @{expect_results}
   ${result} =  Scan Message With Rspamc  --header=url:${url}  --header=method:${method}  ${MESSAGE}
-  : FOR  ${expect}  IN  @{expect_results}
-  \  Check Rspamc  ${result}  ${expect}
+  FOR  ${expect}  IN  @{expect_results}
+    Check Rspamc  ${result}  ${expect}
+  END

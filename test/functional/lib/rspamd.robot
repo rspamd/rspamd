@@ -17,7 +17,6 @@ Check Pidfile
 
 Check Rspamc
   [Arguments]  ${result}  @{args}  &{kwargs}
-  Follow Rspamd Log
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${has_rc} =  Evaluate  'rc' in $kwargs
   ${inverse} =  Evaluate  'inverse' in $kwargs
@@ -45,19 +44,6 @@ Check Rspamc Match String
   Run Keyword If  ${inverse} == False  Should Contain  ${subject}  ${str}
   ...  ELSE  Should Not Contain  ${subject}  ${str}
 
-Custom Follow Rspamd Log
-  [Arguments]  ${logfile}  ${logpos}  ${logpos_var}  ${scope}
-  ${logpos} =  Log Logs  ${logfile}  ${logpos}
-  Run Keyword If  '${scope}' == 'Test'  Set Test Variable  ${${logpos_var}}  ${logpos}
-  ...  ELSE IF  '${scope}' == 'Suite'  Set Suite Variable  ${${logpos_var}}  ${logpos}
-  ...  ELSE  Fail  'scope must be Test or Suite'
-
-Follow Rspamd Log
-  ${RSPAMD_LOGPOS} =  Log Logs  ${TMPDIR}/rspamd.log  ${RSPAMD_LOGPOS}
-  Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${RSPAMD_LOGPOS}
-  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${RSPAMD_LOGPOS}
-  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
-
 Generic Setup
   [Arguments]  @{vargs}  &{kwargs}
   &{d} =  Run Rspamd  @{vargs}  &{kwargs}
@@ -69,7 +55,6 @@ Generic Setup
   END
 
 Generic Teardown
-  [Arguments]  @{ports}
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
   Log does not contain segfault record
@@ -78,20 +63,11 @@ Generic Teardown
   Cleanup Temporary Directory  ${TMPDIR}
 
 Log does not contain segfault record
-  ${log} =  Get File  ${TMPDIR}/rspamd.log
+  ${log} =  Get File  ${TMPDIR}/rspamd.log  encoding_errors=ignore
   Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
 
-Log Logs
-  [Arguments]  ${logfile}  ${position}
-  ${the_log}  ${position} =  Read Log From Position  ${logfile}  ${position}
-  Log  ${the_log}
-  [Return]  ${position}
-
 Normal Teardown
-  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${port_controller} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER}
-  ${ports} =  Create List  ${port_normal}  ${port_controller}
-  Generic Teardown  @{ports}
+  Generic Teardown
 
 Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
@@ -169,23 +145,20 @@ Run Rspamd
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
   ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
-  ${rspamd_logpos} =  Log Logs  ${tmpdir}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s
   Wait Until Keyword Succeeds  5x  1 sec  Ping Rspamd  ${LOCAL_ADDR}  ${PORT_NORMAL}
   ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
-  Set To Dictionary  ${d}  RSPAMD_LOGPOS=${rspamd_logpos}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
+  Set To Dictionary  ${d}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
   [Return]  &{d}
+
+Simple Teardown
+  Generic Teardown
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
   ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  @{vargs}  ${msg_file}
   [Return]  ${result}
-
-Simple Teardown
-  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${ports} =  Create List  ${port_normal}
-  Generic Teardown  @{ports}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
@@ -195,6 +168,4 @@ Sync Fuzzy Storage
   ...  ELSE  Run Process  ${RSPAMADM}  control  -s  ${vargs}[0]/rspamd.sock
   ...  fuzzy_sync
   Log  ${result.stdout}
-  Run Keyword If  $len == 0  Follow Rspamd Log
-  ...  ELSE  Custom Follow Rspamd Log  ${vargs}[0]/rspamd.log  ${vargs}[1]  ${vargs}[2]  ${vargs}[3]
   Sleep  0.1s  Try give fuzzy storage time to sync

@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import socket
 import sys
+
 import dummy_killer
 
 UDP_IP = "127.0.0.1"
@@ -21,5 +22,5 @@ if __name__ == "__main__":
 
     while True:
         data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-        print "received message:", data
+        print("received message:", data)
         sock.sendto(data, addr)

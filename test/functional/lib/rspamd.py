@@ -1,32 +1,24 @@
+from urllib.request import urlopen
+import glob
 import grp
+import http.client
 import os
 import os.path
 import psutil
-import glob
 import pwd
 import shutil
 import signal
 import socket
+import stat
 import sys
 import tempfile
-import json
-import stat
-from robot.libraries.BuiltIn import BuiltIn
-from robot.api import logger
 
-if sys.version_info > (3,):
-    long = int
-try:
-    from urllib.request import urlopen
-except:
-    from urllib2 import urlopen
-try:
-    import http.client as httplib
-except:
-    import httplib
+from robot.api import logger
+from robot.libraries.BuiltIn import BuiltIn
+import demjson
 
 def Check_JSON(j):
-    d = json.loads(j, strict=True)
+    d = demjson.decode(j, strict=True)
     logger.debug('got json %s' % d)
     assert len(d) > 0
     assert 'error' not in d
@@ -99,13 +91,16 @@ def get_rspamadm():
     return dname + "/src/rspamadm/rspamadm"
 
 def HTTP(method, host, port, path, data=None, headers={}):
-    c = httplib.HTTPConnection("%s:%s" % (host, port))
+    c = http.client.HTTPConnection("%s:%s" % (host, port))
     c.request(method, path, data, headers)
     r = c.getresponse()
     t = r.read()
     s = r.status
     c.close()
     return [s, t]
+
+def hard_link(src, dst):
+    os.link(src, dst)
 
 def make_temporary_directory():
     """Creates and returns a unique temporary directory
@@ -130,14 +125,6 @@ def path_splitter(path):
     dirname = os.path.dirname(path)
     basename = os.path.basename(path)
     return [dirname, basename]
-
-def read_log_from_position(filename, offset):
-    offset = long(offset)
-    with open(filename, 'rb') as f:
-        f.seek(offset)
-        goo = f.read()
-        size = len(goo)
-    return [goo, size+offset]
 
 def rspamc(addr, port, filename):
     mboxgoo = b"From MAILER-DAEMON Fri May 13 19:17:40 2016\r\n"
@@ -251,85 +238,21 @@ def shutdown_process_with_children(pid):
             pass
 
 def write_to_stdin(process_handle, text):
+    if not isinstance(text, bytes):
+        text = bytes(text, 'utf-8')
     lib = BuiltIn().get_library_instance('Process')
     obj = lib.get_process_object()
-    obj.stdin.write(text + "\n")
+    obj.stdin.write(text + b"\n")
     obj.stdin.flush()
     obj.stdin.close()
     out = obj.stdout.read(4096)
-    return out
+    return out.decode('utf-8')
 
 def get_file_if_exists(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'r') as myfile:
             return myfile.read()
     return None
-
-# copy-paste from
-# https://hg.python.org/cpython/file/6860263c05b3/Lib/shutil.py#l1068
-# As soon as we move to Python 3, this should be removed in favor of shutil.which()
-def python3_which(cmd, mode=os.F_OK | os.X_OK, path=None):
-    """Given a command, mode, and a PATH string, return the path which
-    conforms to the given mode on the PATH, or None if there is no such
-    file.
-
-    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
-    of os.environ.get("PATH"), or can be overridden with a custom search
-    path.
-    """
-
-    # Check that a given file can be accessed with the correct mode.
-    # Additionally check that `file` is not a directory, as on Windows
-    # directories pass the os.access check.
-    def _access_check(fn, mode):
-        return (os.path.exists(fn) and os.access(fn, mode)
-                and not os.path.isdir(fn))
-
-    # If we're given a path with a directory part, look it up directly rather
-    # than referring to PATH directories. This includes checking relative to the
-    # current directory, e.g. ./script
-    if os.path.dirname(cmd):
-        if _access_check(cmd, mode):
-            return cmd
-        return None
-
-    if path is None:
-        path = os.environ.get("PATH", os.defpath)
-    if not path:
-        return None
-    path = path.split(os.pathsep)
-
-    if sys.platform == "win32":
-        # The current directory takes precedence on Windows.
-        if not os.curdir in path:
-            path.insert(0, os.curdir)
-
-        # PATHEXT is necessary to check on Windows.
-        pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
-        # See if the given file matches any of the expected path extensions.
-        # This will allow us to short circuit when given "python.exe".
-        # If it does match, only test that one, otherwise we have to try
-        # others.
-        if any(cmd.lower().endswith(ext.lower()) for ext in pathext):
-            files = [cmd]
-        else:
-            files = [cmd + ext for ext in pathext]
-    else:
-        # On other platforms you don't have things like PATHEXT to tell you
-        # what file suffixes are executable, so just pass on cmd as-is.
-        files = [cmd]
-
-    seen = set()
-    for dir in path:
-        normdir = os.path.normcase(dir)
-        if not normdir in seen:
-            seen.add(normdir)
-            for thefile in files:
-                name = os.path.join(dir, thefile)
-                if _access_check(name, mode):
-                    return name
-    return None
-
 
 def _merge_luacov_stats(statsfile, coverage):
     """
@@ -339,7 +262,7 @@ def _merge_luacov_stats(statsfile, coverage):
     Format of the file defined in:
     https://github.com/keplerproject/luacov/blob/master/src/luacov/stats.lua
     """
-    with open(statsfile, 'rb') as fh:
+    with open(statsfile, 'r') as fh:
         while True:
             # max_line:filename
             line = fh.readline().rstrip()
@@ -369,7 +292,7 @@ def _dump_luacov_stats(statsfile, coverage):
     """
     src_files = sorted(coverage)
 
-    with open(statsfile, 'wb') as fh:
+    with open(statsfile, 'w') as fh:
         for src in src_files:
             stats = " ".join(str(n) for n in coverage[src])
             fh.write("%s:%s\n%s\n" % (len(coverage[src]), src, stats))
