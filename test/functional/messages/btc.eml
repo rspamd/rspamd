@@ -9,13 +9,13 @@ Content-Type: multipart/alternative; boundary="00000000000004de7805a4489190"
 
 --0000000000004bee6805a4484c02
 Content-Type: text/plain; charset="UTF-8"
-Content-Transfer-Encoding: base64
+Content-Transfer-Encoding: 8bit
 
 1EHbEvWFkR3oY93EKym1bweaWUW2PKe6v9
 
 --0000000000004bee6805a4484c02
 Content-Type: text/html; charset="UTF-8"
-Content-Transfer-Encoding: quoted-printable
+Content-Transfer-Encoding: 8bit
 
 1EHbEvWFkR3oY93EKym1bweaWUW2PKe6v9
 
