@@ -1,15 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
 import os
-import sys
 import signal
 import socket
+import socketserver
+import sys
+
 import dummy_killer
-
-
-try:
-    import SocketServer as socketserver
-except:
-    import socketserver
 
 PID = "/tmp/dummy_fprot.pid"
 
@@ -53,5 +50,5 @@ if __name__ == "__main__":
     try:
         server.handle_request()
     except socket.error:
-        print "Socket closed"
+        print("Socket closed")
     server.server_close()

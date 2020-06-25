@@ -1,64 +1,58 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import SocketServer
-import dummy_killer
-
-import time
 import os
-import sys
 import socket
 import ssl
+import sys
+import time
+
+import dummy_killer
+import socketserver
 
 PORT = 14433
 HOST_NAME = '127.0.0.1'
 
 PID = "/tmp/dummy_ssl.pid"
 
-class SSLTCPHandler(SocketServer.BaseRequestHandler):
+class SSLTCPHandler(socketserver.StreamRequestHandler):
     def handle(self):
         time.sleep(0.5)
         data = self.request.recv(6000000)
         while data:
-            print "{} wrote:".format(self.client_address[0])
-            print data
+            print("{} wrote:".format(self.client_address[0]))
+            print(data)
             time.sleep(0.1)
-            self.request.sendall('hello\n')
+            self.request.sendall(b'hello\n')
             time.sleep(0.1)
             data = self.request.recv(6000000)
 
-class SSL_TCP_Server(SocketServer.TCPServer):
+class SSL_TCP_Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self,
                  server_address,
                  RequestHandlerClass,
                  certfile,
                  keyfile,
-                 ssl_version=ssl.PROTOCOL_TLSv1,
                  bind_and_activate=True):
         self.allow_reuse_address = True
-        SocketServer.TCPServer.__init__(self, server_address,
-                                        RequestHandlerClass, bind_and_activate)
-        self.certfile = certfile
-        self.keyfile = keyfile
-        self.ssl_version = ssl_version
-        #self.timeout = 1
-
-    def get_request(self):
-        newsocket, fromaddr = self.socket.accept()
-        connstream = ssl.wrap_socket(newsocket,
-                                     server_side=True,
-                                     certfile = self.certfile,
-                                     keyfile = self.keyfile,
-                                     ssl_version = self.ssl_version)
-        return connstream, fromaddr
+        super().__init__(server_address, RequestHandlerClass, False)
+        self.timeout = 1
+        ctx = ssl.create_default_context()
+        ctx.load_cert_chain(certfile=certfile)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        self.socket = ctx.wrap_socket(self.socket, server_side=True)
+        if (bind_and_activate):
+            self.server_bind()
+            self.server_activate()
 
     def run(self):
         dummy_killer.write_pid(PID)
         try:
             self.serve_forever()
         except KeyboardInterrupt:
-            print "Interrupt"
+            print("Interrupt")
         except socket.error as e:
-            print "Socket closed {}".format(e)
+            print("Socket closed {}".format(e))
         finally:
             self.server_close()
 
@@ -66,9 +60,7 @@ class SSL_TCP_Server(SocketServer.TCPServer):
         self.keep_running = False
         self.server_close()
 
-class SSL_ThreadingTCPServer(SocketServer.ThreadingMixIn, SSL_TCP_Server): pass
-
 if __name__ == '__main__':
-    server = SSL_ThreadingTCPServer((HOST_NAME, PORT), SSLTCPHandler, sys.argv[1], sys.argv[1])
+    server = SSL_TCP_Server((HOST_NAME, PORT), SSLTCPHandler, sys.argv[1], sys.argv[1])
     dummy_killer.setup_killer(server, server.stop)
     server.run()

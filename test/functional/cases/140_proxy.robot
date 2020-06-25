@@ -13,32 +13,24 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 Rspamc Client
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_PROXY}  -p  ${MESSAGE}
-  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
-  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Contain  ${result.stdout}  SIMPLE_TEST
   Should Be Equal As Integers  ${result.rc}  0
 
 SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
-  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
-  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
   Should Contain  ${result}  SPAMD/1.1 0 EX_OK
 
 RSPAMC Legacy Protocol
   ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
-  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
-  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
   Should Contain  ${result}  RSPAMD/1.3 0 EX_OK
 
 *** Keywords ***
 Proxy Setup
   &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/lua_test.conf
-  Set Suite Variable  ${SLAVE_LOGPOS}  ${d}[RSPAMD_LOGPOS]
   Set Suite Variable  ${SLAVE_PID}  ${d}[RSPAMD_PID]
   Set Suite Variable  ${SLAVE_TMPDIR}  ${d}[TMPDIR]
   &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/proxy.conf
-  Set Suite Variable  ${PROXY_LOGPOS}  ${d}[RSPAMD_LOGPOS]
   Set Suite Variable  ${PROXY_PID}  ${d}[RSPAMD_PID]
   Set Suite Variable  ${PROXY_TMPDIR}  ${d}[TMPDIR]
 

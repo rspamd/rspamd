@@ -12,7 +12,7 @@ steps:
 
     # any image with a root shell can be used here, but Ubuntu used as base
     # image for build and test images and we need to download it anyway
-    image: ubuntu:18.04
+    image: ubuntu:20.04
     pull: if-not-exists
     volumes:
       - name: rspamd

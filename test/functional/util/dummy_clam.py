@@ -1,15 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 PID = "/tmp/dummy_clamav.pid"
 
 import os
-import sys
 import socket
+import socketserver
+import sys
+
 import dummy_killer
-try:
-    import SocketServer as socketserver
-except:
-    import socketserver
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
@@ -47,6 +45,6 @@ if __name__ == "__main__":
     try:
         server.handle_request()
     except socket.error:
-        print "Socket closed"
+        print("Socket closed")
 
     server.server_close()

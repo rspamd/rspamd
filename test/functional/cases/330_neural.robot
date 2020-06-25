@@ -16,11 +16,12 @@ ${RSPAMD_SCOPE}  Suite
 *** Test Cases ***
 Train
   Sleep  2s  Wait for redis mess
-  : FOR    ${INDEX}    IN RANGE    0    10
-  \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]}
-  \  Check Rspamc  ${result}  SPAM_SYMBOL (1.00)
-  \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]}
-  \  Check Rspamc  ${result}  HAM_SYMBOL (-1.00)
+  FOR    ${INDEX}    IN RANGE    0    10
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]}
+    Check Rspamc  ${result}  SPAM_SYMBOL (1.00)
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]}
+    Check Rspamc  ${result}  HAM_SYMBOL (-1.00)
+  END
 
 Check Neural HAM
   Sleep  2s  Wait for neural to be loaded
@@ -35,11 +36,12 @@ Check Neural SPAM
 
 
 Train INVERSE
-  : FOR    ${INDEX}    IN RANGE    0    10
-  \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]; SPAM_SYMBOL = -1}
-  \  Check Rspamc  ${result}  SPAM_SYMBOL (-1.00)
-  \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]; HAM_SYMBOL = 1;}
-  \  Check Rspamc  ${result}  HAM_SYMBOL (1.00)
+  FOR    ${INDEX}    IN RANGE    0    10
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]; SPAM_SYMBOL = -1}
+    Check Rspamc  ${result}  SPAM_SYMBOL (-1.00)
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]; HAM_SYMBOL = 1;}
+    Check Rspamc  ${result}  HAM_SYMBOL (1.00)
+  END
 
 Check Neural HAM INVERSE
   Sleep  2s  Wait for neural to be loaded

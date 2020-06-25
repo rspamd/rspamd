@@ -17,7 +17,6 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 Flags
   [Setup]  Lua Setup  ${TESTDIR}/lua/flags.lua
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  stat
   Should Contain  ${result.stdout}  Messages scanned: 0
 

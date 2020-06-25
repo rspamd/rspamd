@@ -23,23 +23,19 @@ GTUBE - Encrypted
 
 GTUBE - Scan File feature
   ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
-  Follow Rspamd Log
   Should Contain  ${result}  GTUBE
 
 GTUBE - Scan File feature (encoded)
   ${encoded} =  Encode Filename  ${GTUBE}
   ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${encoded}
-  Follow Rspamd Log
   Should Contain  ${result}  GTUBE
 
 GTUBE - SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
-  Follow Rspamd Log
   Should Contain  ${result}  GTUBE
 
 GTUBE - RSPAMC
   ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
-  Follow Rspamd Log
   Should Contain  ${result}  GTUBE
 
 # Broken
@@ -51,6 +47,5 @@ GTUBE - RSPAMC
 
 EMAILS DETECTION ZEROFONT
   ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${TESTDIR}/messages/zerofont.eml
-  Follow Rspamd Log
   Should Contain  ${result}  MANY_INVISIBLE_PARTS
   Should Contain  ${result}  ZERO_FONT
