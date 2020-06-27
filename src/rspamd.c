@@ -36,17 +36,11 @@
 #endif
 
 #include <signal.h>
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
-#endif
-#ifdef HAVE_STROPS_H
-#include <stropts.h>
 #endif
 
 #ifdef HAVE_OPENSSL

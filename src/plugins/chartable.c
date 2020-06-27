@@ -27,7 +27,6 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libstat/stat_api.h"
-#include "libstat/tokenizers/tokenizers.h"
 #include "libmime/lang_detection.h"
 
 #include "unicode/utf8.h"
