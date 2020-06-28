@@ -46,7 +46,7 @@ def warn(*args, **kwargs):
 
 
 def parse_gcov_file(gcov_file):
-    """Parses the content of .gcov file written by gcov --intermediate-format
+    """Parses the content of .gcov file written by gcov -i
 
     Returns:
       str: Source file name
@@ -72,13 +72,13 @@ def run_gcov(filename, coverage, args):
         * delete .gcov files
     """
     if args.verbose:
-        warn("calling:", 'gcov', '--intermediate-format', filename)
+        warn("calling:", 'gcov', '-i', filename)
         stdout = None
     else:
         # gcov is noisy and don't have quit flag so redirect stdout to /dev/null
         stdout = subprocess.DEVNULL
 
-    subprocess.check_call(['gcov', '--intermediate-format', filename], stdout=stdout)
+    subprocess.check_call(['gcov', '-i', filename], stdout=stdout)
 
     for gcov_file in glob('*.gcov'):
         if args.verbose:
