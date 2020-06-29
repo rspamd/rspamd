@@ -364,7 +364,7 @@ LUA_FUNCTION_DEF (util, close_file);
 LUA_FUNCTION_DEF (util, random_hex);
 
 /***
- * @function util.zstd_compress(data)
+ * @function util.zstd_compress(data, [level=1])
  * Compresses input using zstd compression
  *
  * @param {string/rspamd_text} data input data
@@ -2100,6 +2100,7 @@ lua_util_zstd_compress (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = NULL, *res, tmp;
 	gsize sz, r;
+	gint comp_level = 1;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		t = &tmp;
@@ -2112,6 +2113,10 @@ lua_util_zstd_compress (lua_State *L)
 
 	if (t == NULL || t->start == NULL) {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		comp_level = lua_tointeger (L, 2);
 	}
 
 	sz = ZSTD_compressBound (t->len);
@@ -2127,7 +2132,7 @@ lua_util_zstd_compress (lua_State *L)
 	res->start = g_malloc (sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	r = ZSTD_compress ((void *)res->start, sz, t->start, t->len, 1);
+	r = ZSTD_compress ((void *)res->start, sz, t->start, t->len, comp_level);
 
 	if (ZSTD_isError (r)) {
 		msg_err ("cannot compress data: %s", ZSTD_getErrorName (r));
