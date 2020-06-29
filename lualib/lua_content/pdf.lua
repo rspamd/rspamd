@@ -1008,6 +1008,11 @@ local function postprocess_pdf_objects(task, input, pdf)
     end
     if obj.ref then
       parse_object_grammar(obj, task, pdf)
+
+      -- Special early handling
+      if obj.dict and obj.dict.Type and obj.dict.Type == 'XRef' then
+        process_xref(task, pdf, obj)
+      end
     end
   end
 
