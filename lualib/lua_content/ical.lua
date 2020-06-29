@@ -22,12 +22,12 @@ local ical_grammar
 
 local function gen_grammar()
   if not ical_grammar then
-    local wsp = l.P" "
+    local wsp = l.S(" \t\v\f")
     local crlf = l.P"\r"^-1 * l.P"\n"
     local eol = (crlf * #crlf) + (crlf - (crlf^-1 * wsp))
     local name = l.C((l.P(1) - (l.P":"))^1) / function(v) return (v:gsub("[\n\r]+%s","")) end
     local value = l.C((l.P(1) - eol)^0) / function(v) return (v:gsub("[\n\r]+%s","")) end
-    ical_grammar = name * ":" * wsp^0 * value * eol
+    ical_grammar = name * ":" * wsp^0 * value * eol^-1
   end
 
   return ical_grammar
