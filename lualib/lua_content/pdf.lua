@@ -1294,9 +1294,51 @@ processors.trailer = function(input, task, positions, output)
   end
 end
 
-processors.suspicious = function(_, task, _, output)
-  lua_util.debugm(N, task, "pdf: found a suspicious pattern")
-  output.suspicious = true
+processors.suspicious = function(input, task, positions, output)
+  local suspicious_factor = 0.0
+  local nexec = 0
+  local nencoded = 0
+  local close_encoded = 0
+  local last_encoded
+  for _,match in ipairs(positions) do
+    if match[2] == 1 then
+      -- netsh
+      suspicious_factor = suspicious_factor + 0.5
+    elseif match[2] == 2 then
+      nexec = nexec + 1
+    else
+      nencoded = nencoded + 1
+
+      if last_encoded then
+        if match[1] - last_encoded < 8 then
+          -- likely consecutive encoded chars, increase factor
+          close_encoded = close_encoded + 1
+        end
+      end
+      last_encoded = match[1]
+    end
+  end
+
+  if nencoded > 10 then
+    suspicious_factor = suspicious_factor + nencoded / 10
+  end
+  if nexec > 1 then
+    suspicious_factor = suspicious_factor + nexec / 2.0
+  end
+  if close_encoded > 4 and nencoded - close_encoded < 5 then
+    -- Too many close encoded comparing to the total number of encoded characters
+    suspicious_factor = suspicious_factor + 0.5
+  end
+
+  lua_util.debugm(N, task, 'pdf: found a suspicious patterns: %s exec, %s encoded (%s close), ' ..
+      '%s final factor',
+      nexec, nencoded, close_encoded, suspicious_factor)
+
+  if suspicious_factor > 1.0 then
+    suspicious_factor = 1.0
+  end
+
+  output.suspicious = suspicious_factor
 end
 
 local function generic_table_inserter(positions, output, output_key)

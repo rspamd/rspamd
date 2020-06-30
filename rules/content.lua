@@ -30,7 +30,7 @@ local function process_pdf_specific(task, part, specific)
   end
 
   if specific.suspicious then
-    suspicious_factor = suspicious_factor + 0.7
+    suspicious_factor = suspicious_factor + specific.suspicious
   end
 
   if suspicious_factor > 0.5 then
