@@ -47,8 +47,23 @@ end
 local function handle_query_map(_, conn, req_params)
   maybe_fill_maps_cache()
   if req_params.value and req_params.value ~= '' then
+    local results = {}
+    for uri,m in pairs(maps_cache) do
+      local value = m:get_key(req_params.value)
 
-    conn:send_ucl({success = false and true})
+      if value then
+        local result = {
+          map = uri,
+          alias = uri:match('/([^/]+)$'),
+          value = value
+        }
+        table.insert(results, result)
+      end
+    end
+    conn:send_ucl{
+      success = (#results > 0),
+      results = results
+    }
   else
     conn:send_error(404, 'missing value')
   end
