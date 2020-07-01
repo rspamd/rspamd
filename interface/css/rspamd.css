@@ -23,6 +23,58 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+/* bootstrap 4 overrides */
+:root {
+    font-size: 14px;
+}
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.navbar {
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 20px;
+}
+.nav-pills .nav-link.active {
+    background-color: #e7e7e7;
+}
+.danger > td {
+    background-color: #fbe9e5;
+}
+.success > td {
+    background-color: #eef9e7;
+}
+
+/* bootstrap 4 additionals */
+.btn-group-xs > .btn,
+.btn-xs {
+    padding: .06rem .3rem;
+    font-size: .875rem;
+    line-height: 1.5;
+    border-radius: .2rem;
+}
+.btn.disabled,
+.btn[disabled],
+fieldset[disabled] .btn {
+    cursor: not-allowed;
+}
+
+/* Tweak FooTable for Bootstrap 4 */
+.footable .dropdown-toggle::after {
+    content: none;
+}
+.footable .btn-outline-secondary {
+    border-color: rgb(108, 117, 125);
+}
+.footable .btn-group > .btn:not(:first-child),
+.footable .btn-group > .btn-group:not(:first-child) > .btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+.footable .input-sm {
+    height: 30px;
+}
+
 a {
     outline: none;
 }
@@ -39,9 +91,9 @@ textarea {
 .navbar-brand > img {
     height: 50px;
 }
-.btn-group > .btn.btn-default.radius-right {
-    border-top-right-radius: 4px !important;
-    border-bottom-right-radius: 4px !important;
+.btn-group > .btn.radius-right {
+    border-top-right-radius: .25rem !important;
+    border-bottom-right-radius: .25rem !important;
 }
 .chart-content {
     text-align: center;
@@ -86,12 +138,7 @@ table#symbolsTable input[type="number"] {
     padding: 8px;
 }
 .alert {
-    position: relative;
-    padding: 8px 0 8px;
-    margin: 0 0 4px;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-    background-color: #fcf8e3;
-    border-bottom: 1px solid #fbeed5;
+    margin-bottom: 4px;
 }
 .alert.alert-modal {
     top: 0;
@@ -106,12 +153,6 @@ table#symbolsTable input[type="number"] {
 }
 .alert h4 {
     margin: 0;
-}
-.alert .close {
-    position: relative;
-    top: 0;
-    right: 9px;
-    line-height: 20px;
 }
 .alert-success {
     color: #468847;
@@ -251,7 +292,7 @@ table#symbolsTable input[type="number"] {
     margin: 0 10px 10px 0;
     padding: 0 10px;
 }
-.stat-box:not(.pull-right) {
+.stat-box:not(.float-right) {
     min-width: 90px;
 }
 .stat-box .widget {
@@ -288,6 +329,7 @@ table#symbolsTable input[type="number"] {
     font-size: 26px;
     margin-bottom: 3px;
     margin-top: 6px;
+    font-weight: 700;
 }
 .nomargin {
     margin: 0 !important;
@@ -451,17 +493,10 @@ td.maps-cell {
 }
 
 .scorebar-spam {
-    background-color: rgba(240, 0, 0, 0.1);
+    background-color: rgba(240, 0, 0, 0.1) !important;
 }
 .scorebar-ham {
-    background: rgba(100, 230, 80, 0.1);
-}
-
-input.radio {
-    margin: 0 !important;
-    height: initial;
-    -webkit-box-shadow: none !important;
-    box-shadow: none !important;
+    background: rgba(100, 230, 80, 0.1) !important;
 }
 
 .glyphicon-ok {
@@ -475,29 +510,12 @@ input.radio {
     height: 1px;
 }
 
-/* Form element background for validation states */
-.has-error .form-control {
-    background-color: #fbe9e5;
-}
-.has-success .form-control {
-    background-color: #eef9e7;
-}
-
-/* Bootstrap 4 spacing */
-.mb-0 {
-    margin-bottom: 0 !important;
-}
-
-/* Custom sizing */
-.w-1 {
-    width: 1% !important;
-}
-
 #row-main {
     margin-top: -12px;
     margin-bottom: -12px;
     display: flex;
     flex-wrap: wrap;
+    clear: both;
     /* necessary to hide collapsed sidebar */
     overflow-x: hidden;
 }
@@ -544,6 +562,13 @@ input.radio {
     width: 20px;
     border-bottom: none;
 }
+.sidebar-nav .nav-link,
+.sidebar-nav .nav-link:hover {
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
 #sidebar-tab-left > a,
 #sidebar-tab-right > a {
     background-color: #ffe;
@@ -560,14 +585,16 @@ input.radio {
 }
 @media (min-width: 992px) {
     .sidebar-nav {
-        margin-left: -2px;
-        margin-right: -2px;
+        margin-left: -1px;
+        margin-right: -1px;
+        display: block;
     }
     #content {
         border-left: 1px solid #ddd;
         border-right: 1px solid #ddd;
     }
     #sidebar-tab-left {
+        display: flex;
         transform: translateX(-50%) rotate(90deg) translate(50%, -50%);
     }
     #sidebar-tab-right {
@@ -577,8 +604,8 @@ input.radio {
 }
 @media (max-width: 991.98px) {
     .sidebar-nav {
-        margin-top: -2px;
-        margin-bottom: -2px;
+        margin-top: -1px;
+        margin-bottom: -1px;
     }
     #content {
         border-top: 1px solid #ddd;
@@ -588,4 +615,8 @@ input.radio {
         bottom: 0;
         right: 0;
     }
+}
+
+#navBar .navbar-nav .nav-link {
+    padding: 15px;
 }

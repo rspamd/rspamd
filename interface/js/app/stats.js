@@ -100,8 +100,8 @@ define(["jquery", "d3pie"],
             $.each(stat_w, function (i, item) {
                 $(item).appendTo(widgets);
             });
-            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box pull-right\"><div class=\"widget\"></div></li>");
-            $("#statWidgets").find("li.pull-right").appendTo("#statWidgets");
+            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box float-right\"><div class=\"widget\"></div></li>");
+            $("#statWidgets").find("li.float-right").appendTo("#statWidgets");
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
@@ -119,7 +119,7 @@ define(["jquery", "d3pie"],
                 }
 
                 $("#clusterTable tbody").append("<tr class=\"" + row_class + "\">" +
-                "<td><input type=\"radio\" class=\"form-control radio\" name=\"clusterName\" value=\"" + key + "\"></td>" +
+                "<td class=\"align-middle\"><input type=\"radio\" class=\"form-check m-auto\" name=\"clusterName\" value=\"" + key + "\"></td>" +
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
                 "<td class=\"text-center\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +

@@ -1,0 +1,60 @@
+/* Glyphicons Icons - We're not actually using Glyphicons classes but instead provide a simple mapping from Glyphicons to FooTable class names. */
+.fooicon {
+    position: relative;
+    top: 1px;
+    display: inline-block;
+    font-family: 'Glyphicons Halflings' !important; /* stylelint-disable-line font-family-no-missing-generic-family-keyword */
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+.fooicon::before,
+.fooicon::after {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+.fooicon-loader::before {
+    content: "\e030";
+}
+.fooicon-plus::before {
+    content: "\2b";
+}
+.fooicon-minus::before {
+    content: "\2212";
+}
+.fooicon-search::before {
+    content: "\e003";
+}
+.fooicon-remove::before {
+    content: "\e014";
+}
+.fooicon-sort::before {
+    content: "\e150";
+}
+.fooicon-sort-asc::before {
+    content: "\e155";
+}
+.fooicon-sort-desc::before {
+    content: "\e156";
+}
+.fooicon-pencil::before {
+    content: "\270f";
+}
+.fooicon-trash::before {
+    content: "\e020";
+}
+.fooicon-eye-close::before {
+    content: "\e106";
+}
+.fooicon-flash::before {
+    content: "\e162";
+}
+.fooicon-cog::before {
+    content: "\e019";
+}
+.fooicon-stats::before {
+    content: "\e185";
+}

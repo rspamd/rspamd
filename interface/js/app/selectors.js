@@ -6,7 +6,7 @@ define(["jquery"],
         function enable_disable_check_btn() {
             $("#selectorsChkMsgBtn").prop("disabled", (
                 $.trim($("#selectorsMsgArea").val()).length === 0 ||
-                !$("#selectorsSelArea").parent().hasClass("has-success")
+                !$("#selectorsSelArea").hasClass("is-valid")
             ));
         }
 
@@ -36,13 +36,7 @@ define(["jquery"],
 
         function checkSelectors(rspamd) {
             function toggle_form_group_class(remove, add) {
-                var icon = {
-                    error:   "remove",
-                    success: "ok"
-                };
-                $("#selectorsSelArea").parent().removeClass("has-" + remove).addClass("has-" + add);
-                $("#selector-feedback-icon")
-                    .removeClass("glyphicon-" + icon[remove]).addClass("glyphicon-" + icon[add]).show();
+                $("#selectorsSelArea").removeClass("is-" + remove).addClass("is-" + add);
                 enable_disable_check_btn();
             }
             var selector = $("#selectorsSelArea").val();
@@ -51,16 +45,15 @@ define(["jquery"],
                     method: "GET",
                     success: function (json) {
                         if (json[0].data.success) {
-                            toggle_form_group_class("error", "success");
+                            toggle_form_group_class("invalid", "valid");
                         } else {
-                            toggle_form_group_class("success", "error");
+                            toggle_form_group_class("valid", "invalid");
                         }
                     },
                     server: get_server(rspamd)
                 });
             } else {
-                $("#selectorsSelArea").parent().removeClass("has-error has-success");
-                $("#selector-feedback-icon").hide();
+                $("#selectorsSelArea").removeClass("is-valid is-invalid");
                 enable_disable_check_btn();
             }
         }
@@ -99,19 +92,19 @@ define(["jquery"],
         ui.setup = function (rspamd) {
             function toggleSidebar(side) {
                 $("#sidebar-" + side).toggleClass("collapsed");
-                var contentClass = "col-md-6";
+                var contentClass = "col-lg-6";
                 var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
                         $("#sidebar-right").hasClass("collapsed");
                 switch (openSidebarsCount) {
                     case 1:
-                        contentClass = "col-md-9";
+                        contentClass = "col-lg-9";
                         break;
                     case 2:
-                        contentClass = "col-md-12";
+                        contentClass = "col-lg-12";
                         break;
                     default:
                 }
-                $("#content").removeClass("col-md-12 col-md-9 col-md-6")
+                $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
                     .addClass(contentClass);
             }
             $("#sidebar-tab-left>a").click(function () {

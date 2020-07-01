@@ -6,7 +6,7 @@ requirejs.config({
         app: "../app",
         jquery: "jquery-3.4.1.min",
         visibility: "visibility.min",
-        bootstrap: "bootstrap.min",
+        bootstrap: "bootstrap.bundle.min",
         d3: "d3.min",
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
@@ -40,7 +40,7 @@ requirejs.onError = function (e) {
     document.getElementsByClassName("notification-area")[0].innerHTML =
         "<div class=\"alert alert-error\">" +
             "<strong>Module loading error: " + e.requireType + ", module: " + e.requireModules + "</strong>" +
-            "<button type=\"button\" class=\"btn btn-info btn-xs pull-right\" " +
+            "<button type=\"button\" class=\"btn btn-info btn-xs float-right\" " +
                 "onClick=\"window.location.reload(); this.parentNode.parentNode.removeChild(this.parentNode);\" " +
                 "title=\"Reload current page\">" +
                 "<i class=\"glyphicon glyphicon-repeat\"></i> Reload" +

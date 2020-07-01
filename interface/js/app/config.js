@@ -65,8 +65,8 @@ define(["jquery"],
                             items.push({
                                 idx: idx,
                                 html: "<div class=\"form-group\">" +
-                                "<label class=\"control-label col-sm-2\">" + label + "</label>" +
-                                "<div class=\"controls slider-controls col-sm-10\">" +
+                                "<label class=\"col-form-label col-md-2 float-left\">" + label + "</label>" +
+                                "<div class=\"controls slider-controls col-md-10\">" +
                                 "<input class=\"action-scores form-control\" data-id=\"action\" type=\"number\" value=\"" + item.value + "\">" +
                                 "</div>" +
                                 "</div>"
@@ -146,10 +146,10 @@ define(["jquery"],
 
                     $.each(data, function (i, item) {
                         var label = (item.editable === false || rspamd.read_only)
-                            ? "<span class=\"label label-default\">Read</span>"
-                            : "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
+                            ? "<span class=\"badge badge-secondary\">Read</span>"
+                            : "<span class=\"badge badge-secondary\">Read</span>&nbsp;<span class=\"badge badge-success\">Write</span>";
                         var $tr = $("<tr>");
-                        $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
+                        $("<td class=\"col-lg-2 maps-cell\">" + label + "</td>").appendTo($tr);
                         var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
@@ -180,7 +180,7 @@ define(["jquery"],
                         }
 
                         $("#" + item.map).remove();
-                        $("<form id=\"" + item.map + "\" class=\"form-horizontal form-map\" style=\"display:none\"" +
+                        $("<form id=\"" + item.map + "\" style=\"display:none\"" +
                         " data-type=\"map\" action=\"savemap\" method=\"post\">" +
                         "<textarea class=\"list-textarea\"" + disabled + ">" + text +
                         "</textarea>" +
