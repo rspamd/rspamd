@@ -843,8 +843,6 @@ lua_map_get_key (lua_State * L)
 
 				if (!rspamd_parse_inet_address_ip (addr_str, len, addr->addr)) {
 					addr = NULL;
-					msg_warn ("invalid ip address: %*s, when checking map: %s",
-							(gint)len, addr_str, map->map->name);
 				}
 			}
 			else if (lua_type (L, 2) == LUA_TUSERDATA) {
@@ -1222,15 +1220,13 @@ lua_map_get_uri (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
-	const gchar *ret = "undefined";
 	struct rspamd_map_backend *bk;
-		guint i;
+	guint i;
 
 	if (map != NULL) {
 		for (i = 0; i < map->map->backends->len; i ++) {
 			bk = g_ptr_array_index (map->map->backends, i);
-			ret = bk->uri;
-			lua_pushstring (L, ret);
+			lua_pushstring (L, bk->uri);
 		}
 	}
 	else {
