@@ -65,7 +65,7 @@ define(["jquery"],
                             items.push({
                                 idx: idx,
                                 html: "<div class=\"form-group\">" +
-                                "<label class=\"control-label col-md-2 float-left\">" + label + "</label>" +
+                                "<label class=\"col-form-label col-md-2 float-left\">" + label + "</label>" +
                                 "<div class=\"controls slider-controls col-md-10\">" +
                                 "<input class=\"action-scores form-control\" data-id=\"action\" type=\"number\" value=\"" + item.value + "\">" +
                                 "</div>" +
@@ -180,7 +180,7 @@ define(["jquery"],
                         }
 
                         $("#" + item.map).remove();
-                        $("<form id=\"" + item.map + "\" class=\"form-horizontal form-map\" style=\"display:none\"" +
+                        $("<form id=\"" + item.map + "\" style=\"display:none\"" +
                         " data-type=\"map\" action=\"savemap\" method=\"post\">" +
                         "<textarea class=\"list-textarea\"" + disabled + ">" + text +
                         "</textarea>" +

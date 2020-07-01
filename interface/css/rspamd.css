@@ -499,13 +499,6 @@ td.maps-cell {
     background: rgba(100, 230, 80, 0.1) !important;
 }
 
-input.radio {
-    margin: 0 !important;
-    height: initial;
-    -webkit-box-shadow: none !important;
-    box-shadow: none !important;
-}
-
 .glyphicon-ok {
     color: #468847;
 }
