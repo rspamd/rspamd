@@ -44,21 +44,59 @@ local function maybe_fill_maps_cache()
   end
 end
 
+local function check_specific_map(value, uri, m, results)
+  local value = m:get_key(value)
+
+  if value then
+    local result = {
+      map = uri,
+      alias = uri:match('/([^/]+)$'),
+      value = value
+    }
+    table.insert(results, result)
+  end
+end
+
 local function handle_query_map(_, conn, req_params)
   maybe_fill_maps_cache()
   if req_params.value and req_params.value ~= '' then
     local results = {}
     for uri,m in pairs(maps_cache) do
-      local value = m:get_key(req_params.value)
+      check_specific_map(req_params.value, uri, m, results)
+    end
+    conn:send_ucl{
+      success = (#results > 0),
+      results = results
+    }
+  else
+    conn:send_error(404, 'missing value')
+  end
+end
 
-      if value then
-        local result = {
-          map = uri,
-          alias = uri:match('/([^/]+)$'),
-          value = value
-        }
-        table.insert(results, result)
+local function handle_query_specific_map(_, conn, req_params)
+  maybe_fill_maps_cache()
+  if req_params.value and req_params.value ~= '' then
+    local maps_to_check = maps_cache
+    if req_params.maps then
+      local map_names = lua_util.str_split(req_params.maps, ',')
+      maps_to_check = {}
+      for _,mn in ipairs(map_names) do
+        if maps_cache[mn] then
+          maps_to_check[mn] = maps_cache[mn]
+        else
+          local alias = maps_aliases[mn]
+
+          if alias then
+            maps_to_check[alias] = maps_cache[alias]
+          else
+            conn:send_error(404, 'no such map: ' .. mn)
+          end
+        end
       end
+    end
+    local results = {}
+    for uri,m in pairs(maps_to_check) do
+      check_specific_map(req_params.value, uri, m, results)
     end
     conn:send_ucl{
       success = (#results > 0),
@@ -71,13 +109,19 @@ end
 
 local function handle_list_maps(_, conn, _)
   maybe_fill_maps_cache()
-  conn:send_ucl({maps = lua_util.keys(maps_cache),
-                 aliases = maps_aliases})
+  conn:send_ucl{
+    maps = lua_util.keys(maps_cache),
+    aliases = maps_aliases
+  }
 end
 
 return {
   query = {
     handler = handle_query_map,
+    enable = false,
+  },
+  query_specific = {
+    handler = handle_query_specific_map,
     enable = false,
   },
   list = {
