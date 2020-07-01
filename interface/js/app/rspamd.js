@@ -91,11 +91,11 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         stopTimers();
 
         if (tab_id === "#refresh") {
-            tab_id = "#" + $(".navbar-nav .active > a").attr("id");
+            tab_id = "#" + $(".nav-link.active").attr("id");
         }
 
         $("#autoRefresh").hide();
-        $(".btn-group .btn:visible").last().addClass("radius-right");
+        $("#refresh").addClass("radius-right");
 
         function setAutoRefresh(refreshInterval, timer, callback) {
             function countdown(interval) {
@@ -114,7 +114,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 });
             }
 
-            $(".btn-group .btn:visible").last().removeClass("radius-right");
+            $("#refresh").removeClass("radius-right");
             $("#autoRefresh").show();
 
             countdown(refreshInterval);
@@ -134,7 +134,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         switch (tab_id) {
             case "#status_nav":
                 (function () {
-                    var refreshInterval = $(".dropdown-menu li.active.preset a").data("value");
+                    var refreshInterval = $(".dropdown-menu a.active.preset").data("value");
                     setAutoRefresh(refreshInterval, "status",
                         function () { return tab_stat.statWidgets(ui, graphs, checked_server); });
                     if (refreshInterval) tab_stat.statWidgets(ui, graphs, checked_server);
@@ -152,7 +152,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     var refreshInterval = step[selData] || 3600000;
                     $("#dynamic-item").text((refreshInterval / 60000) + " min");
 
-                    if (!$(".dropdown-menu li.active.dynamic a").data("value")) {
+                    if (!$(".dropdown-menu a.active.dynamic").data("value")) {
                         refreshInterval = null;
                     }
                     setAutoRefresh(refreshInterval, "throughput",
@@ -287,7 +287,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             $("#selectors_nav").show();
         }
 
-        var buttons = $("#navBar form.navbar-right");
+        var buttons = $("#navbar-btn-form");
         $("#mainUI").show();
         $(buttons).show();
         $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
@@ -412,19 +412,19 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             var tab_id = "#" + $(e.target).attr("id");
             tabClick(tab_id);
         });
-        $(".dropdown-menu li a").click(function (e) {
+        $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
-            var classList = $(this).parent().attr("class");
+            var classList = $(this).attr("class");
             var menuClass = (/\b(?:dynamic|preset)\b/).exec(classList)[0];
-            $(".dropdown-menu li.active." + menuClass).removeClass("active");
-            $(this).parent("li").addClass("active");
+            $(".dropdown-menu a.active." + menuClass).removeClass("active");
+            $(this).addClass("active");
             tabClick("#refresh");
         });
 
         $("#selSrv").change(function () {
             checked_server = this.value;
             $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
-            tabClick("#" + $("#navBar ul li.active > a").attr("id"));
+            tabClick("#" + $("#navBar > ul > .nav-item > .nav-link.active").attr("id"));
         });
 
         // Radio buttons
@@ -692,7 +692,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         $("#" + table + "_page_size").change(function () {
             set_page_size(table, this.value, function (n) { tables[table].pageSize(n); });
         });
-        $(document).on("click", ".btn-sym-order-" + table + " button", function () {
+        $(document).on("click", ".btn-sym-order-" + table + " input", function () {
             var order = this.value;
             $("#selSymOrder_" + table).val(order);
             change_symbols_order(order);
@@ -857,13 +857,13 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         }
 
         if (item.action === "clean" || item.action === "no action") {
-            item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge badge-success'>" + item.action + "</div>";
         } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
-            item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge badge-warning'>" + item.action + "</div>";
         } else if (item.action === "spam" || item.action === "reject") {
-            item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge badge-danger'>" + item.action + "</div>";
         } else {
-            item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge badge-info'>" + item.action + "</div>";
         }
 
         var score_content = (item.score < item.required_score)

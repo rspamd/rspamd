@@ -100,8 +100,8 @@ define(["jquery", "d3pie"],
             $.each(stat_w, function (i, item) {
                 $(item).appendTo(widgets);
             });
-            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box pull-right\"><div class=\"widget\"></div></li>");
-            $("#statWidgets").find("li.pull-right").appendTo("#statWidgets");
+            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box float-right\"><div class=\"widget\"></div></li>");
+            $("#statWidgets").find("li.float-right").appendTo("#statWidgets");
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
