@@ -38,14 +38,15 @@ local function maybe_fill_maps_cache()
           -- Do not override, as we don't care about duplicate maps that come from different
           -- sources.
           -- In theory, that should be cached but there are some exceptions even so far...
+          url = math.random() -- to shut luacheck about empty branch with a comment
         end
       end
     end
   end
 end
 
-local function check_specific_map(value, uri, m, results)
-  local value = m:get_key(value)
+local function check_specific_map(input, uri, m, results)
+  local value = m:get_key(input)
 
   if value then
     local result = {
