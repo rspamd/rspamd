@@ -42,7 +42,7 @@ local function extract_text_data(specific)
   return table.concat(tbl, '\n')
 end
 
-local function process_ical(input, _, task)
+local function process_ical(input, mpart, task)
   local control={n='\n', r=''}
   local rspamd_url = require "rspamd_url"
   local escaper = l.Ct((gen_grammar() / function(key, value)
@@ -54,7 +54,7 @@ local function process_ical(input, _, task)
       for _,u in ipairs(local_urls) do
         lua_util.debugm(N, task, 'ical: found URL in ical %s',
             tostring(u))
-        task:inject_url(u)
+        task:inject_url(u, mpart)
       end
     end
     lua_util.debugm(N, task, 'ical: ical key %s = "%s"',
