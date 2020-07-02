@@ -147,7 +147,7 @@ local function is_segwit_bech32_address(word)
     local rspamd_util = require 'rspamd_util'
     local decoded = rspamd_util.decode_base32(word:lower(), 'bleach')
 
-    if decoded then
+    if decoded and #decoded > 0 then
       local bytes = decoded:bytes()
 
       -- The version byte’s most signficant bit is reserved and must be 0.
@@ -156,7 +156,7 @@ local function is_segwit_bech32_address(word)
       local addr_type = bit.rshift(bit.band(bytes[1], 120), 3)
       local _ = bit.band(bytes[1], 7) -- hash size
 
-      if version == 0 and (addr_type == 0 or addr_type == 8)then
+      if version == 0 and (addr_type == 0 or addr_type == 8) then
         -- TODO: Add checksum validation some day
 
         return true
