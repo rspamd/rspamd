@@ -1232,11 +1232,20 @@ lua_util_decode_base32 (lua_State *L)
 	}
 
 	if (s != NULL) {
-		t = lua_newuserdata (L, sizeof (*t));
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = rspamd_decode_base32 (s, inlen, &outlen, btype);
-		t->len = outlen;
-		t->flags = RSPAMD_TEXT_FLAG_OWN;
+		guchar *decoded;
+
+		decoded = rspamd_decode_base32 (s, inlen, &outlen, btype);
+
+		if (decoded) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = (const gchar *)decoded;
+			t->len = outlen;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		lua_pushnil (L);
