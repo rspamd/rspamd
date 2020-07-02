@@ -58,6 +58,9 @@ body {
 fieldset[disabled] .btn {
     cursor: not-allowed;
 }
+.w-1 {
+    width: 1%;
+}
 
 /* Tweak FooTable for Bootstrap 4 */
 .footable .dropdown-toggle::after {
