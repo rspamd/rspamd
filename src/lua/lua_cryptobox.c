@@ -37,8 +37,9 @@
 
 #include <stdalign.h>
 
+
 enum lua_cryptobox_hash_type {
-	LUA_CRYPTOBOX_HASH_BLAKE2,
+	LUA_CRYPTOBOX_HASH_BLAKE2 = 0,
 	LUA_CRYPTOBOX_HASH_SSL,
 	LUA_CRYPTOBOX_HASH_XXHASH64,
 	LUA_CRYPTOBOX_HASH_XXHASH32,
@@ -53,8 +54,11 @@ struct rspamd_lua_cryptobox_hash {
 		rspamd_cryptobox_fast_hash_state_t *fh;
 	} content;
 
-	unsigned type:7;
-	unsigned is_finished:1;
+	unsigned char out[rspamd_cryptobox_HASHBYTES];
+
+	uint8_t type;
+	uint8_t out_len;
+	uint8_t is_finished;
 
 	ref_entry_t ref;
 };
@@ -1006,6 +1010,7 @@ rspamd_lua_hash_create (const gchar *type)
 		if (g_ascii_strcasecmp (type, "md5") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			h->out_len = EVP_MD_size (EVP_md5 ());
 			/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 			EVP_MD_CTX_set_flags (h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
@@ -1016,6 +1021,7 @@ rspamd_lua_hash_create (const gchar *type)
 					g_ascii_strcasecmp (type, "sha") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			h->out_len = EVP_MD_size (EVP_sha1 ());
 			/* Should never ever be used for crypto/security purposes! */
 #ifdef EVP_MD_CTX_FLAG_NON_FIPS_ALLOW
 			EVP_MD_CTX_set_flags (h->content.c, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
@@ -1025,16 +1031,19 @@ rspamd_lua_hash_create (const gchar *type)
 		else if (g_ascii_strcasecmp (type, "sha256") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			h->out_len = EVP_MD_size (EVP_sha256 ());
 			EVP_DigestInit (h->content.c, EVP_sha256 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha512") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			h->out_len = EVP_MD_size (EVP_sha512 ());
 			EVP_DigestInit (h->content.c, EVP_sha512 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha384") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_SSL;
 			h->content.c = EVP_MD_CTX_create ();
+			h->out_len = EVP_MD_size (EVP_sha384 ());
 			EVP_DigestInit (h->content.c, EVP_sha384 ());
 		}
 		else if (g_ascii_strcasecmp (type, "blake2") == 0) {
@@ -1042,6 +1051,7 @@ rspamd_lua_hash_create (const gchar *type)
 			(void) !posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
 					sizeof (*h->content.h));
 			g_assert (h->content.h != NULL);
+			h->out_len = rspamd_cryptobox_HASHBYTES;
 			rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
 		}
 		else if (g_ascii_strcasecmp (type, "xxh64") == 0) {
@@ -1049,24 +1059,28 @@ rspamd_lua_hash_create (const gchar *type)
 			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH64, 0);
+			h->out_len = sizeof (guint64);
 		}
 		else if (g_ascii_strcasecmp (type, "xxh32") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_XXHASH32;
 			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH32, 0);
+			h->out_len = sizeof (guint32);
 		}
 		else if (g_ascii_strcasecmp (type, "mum") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_MUM;
 			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_MUMHASH, 0);
+			h->out_len = sizeof (guint64);
 		}
 		else if (g_ascii_strcasecmp (type, "t1ha") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_T1HA;
 			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_T1HA, 0);
+			h->out_len = sizeof (guint64);
 		}
 		else {
 			g_free (h);
@@ -1075,11 +1089,13 @@ rspamd_lua_hash_create (const gchar *type)
 		}
 	}
 	else {
+		/* Default hash type */
 		h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
 		(void) !posix_memalign ((void **)&h->content.h, _Alignof (rspamd_cryptobox_hash_state_t),
 				sizeof (*h->content.h));
 		g_assert (h->content.h != NULL);
 		rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
+		h->out_len = rspamd_cryptobox_HASHBYTES;
 	}
 
 	return h;
@@ -1336,27 +1352,29 @@ lua_cryptobox_hash_reset (lua_State *L)
 }
 
 static void
-lua_cryptobox_hash_finish (struct rspamd_lua_cryptobox_hash *h,
-		guchar out[rspamd_cryptobox_HASHBYTES], guint *dlen)
+lua_cryptobox_hash_finish (struct rspamd_lua_cryptobox_hash *h)
 {
 	guint64 ll;
+	guchar out[rspamd_cryptobox_HASHBYTES];
+	guint ssl_outlen = sizeof (out);
 
 	switch (h->type) {
 	case LUA_CRYPTOBOX_HASH_BLAKE2:
-		*dlen = rspamd_cryptobox_HASHBYTES;
 		rspamd_cryptobox_hash_final (h->content.h, out);
+		memcpy (h->out, out, sizeof (out));
 		break;
 	case LUA_CRYPTOBOX_HASH_SSL:
-
-		EVP_DigestFinal_ex (h->content.c, out, dlen);
+		EVP_DigestFinal_ex (h->content.c, out, &ssl_outlen);
+		h->out_len = ssl_outlen;
+		g_assert (ssl_outlen <= sizeof (h->out));
+		memcpy (h->out, out, ssl_outlen);
 		break;
 	case LUA_CRYPTOBOX_HASH_XXHASH64:
 	case LUA_CRYPTOBOX_HASH_XXHASH32:
 	case LUA_CRYPTOBOX_HASH_MUM:
 	case LUA_CRYPTOBOX_HASH_T1HA:
 		ll = rspamd_cryptobox_fast_hash_final (h->content.fh);
-		memcpy (out, &ll, sizeof (ll));
-		*dlen = sizeof (ll);
+		memcpy (h->out, &ll, sizeof (ll));
 		break;
 	default:
 		g_assert_not_reached ();
@@ -1375,15 +1393,17 @@ lua_cryptobox_hash_hex (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES],
-		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1], *r;
+	guchar out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1], *r;
 	guint dlen;
 
-	if (h && !h->is_finished) {
-		memset (out_hex, 0, sizeof (out_hex));
+	if (h) {
+		if (!h->is_finished) {
+			lua_cryptobox_hash_finish (h);
+		}
 
-		lua_cryptobox_hash_finish (h, out, &dlen);
-		r = out;
+		memset (out_hex, 0, sizeof (out_hex));
+		r = h->out;
+		dlen = h->out_len;
 
 		if (lua_isnumber (L, 2)) {
 			guint lim = lua_tonumber (L, 2);
@@ -1396,7 +1416,6 @@ lua_cryptobox_hash_hex (lua_State *L)
 
 		rspamd_encode_hex_buf (r, dlen, out_hex, sizeof (out_hex));
 		lua_pushstring (L, out_hex);
-
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1416,11 +1435,10 @@ lua_cryptobox_hash_base32 (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES],
-		out_b32[rspamd_cryptobox_HASHBYTES * 2], *r;
+	guchar out_b32[rspamd_cryptobox_HASHBYTES * 2], *r;
 	guint dlen;
 
-	if (h && !h->is_finished) {
+	if (h) {
 		enum rspamd_base32_type btype = RSPAMD_BASE32_DEFAULT;
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
@@ -1431,9 +1449,13 @@ lua_cryptobox_hash_base32 (lua_State *L)
 			}
 		}
 
+		if (!h->is_finished) {
+			lua_cryptobox_hash_finish (h);
+		}
+
 		memset (out_b32, 0, sizeof (out_b32));
-		lua_cryptobox_hash_finish (h, out, &dlen);
-		r = out;
+		r = h->out;
+		dlen = h->out_len;
 
 		if (lua_isnumber (L, 2)) {
 			guint lim = lua_tonumber (L, 2);
@@ -1446,7 +1468,6 @@ lua_cryptobox_hash_base32 (lua_State *L)
 
 		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32), btype);
 		lua_pushstring (L, out_b32);
-		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1465,13 +1486,17 @@ lua_cryptobox_hash_base64 (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES], *b64, *r;
+	guchar *b64, *r;
 	gsize len;
 	guint dlen;
 
-	if (h && !h->is_finished) {
-		lua_cryptobox_hash_finish (h, out, &dlen);
-		r = out;
+	if (h) {
+		if (!h->is_finished) {
+			lua_cryptobox_hash_finish (h);
+		}
+
+		r = h->out;
+		dlen = h->out_len;
 
 		if (lua_isnumber (L, 2)) {
 			guint lim = lua_tonumber (L, 2);
@@ -1485,7 +1510,6 @@ lua_cryptobox_hash_base64 (lua_State *L)
 		b64 = rspamd_encode_base64 (r, dlen, 0, &len);
 		lua_pushlstring (L, b64, len);
 		g_free (b64);
-		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1504,12 +1528,16 @@ lua_cryptobox_hash_bin (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES], *r;
+	guchar *r;
 	guint dlen;
 
-	if (h && !h->is_finished) {
-		lua_cryptobox_hash_finish (h, out, &dlen);
-		r = out;
+	if (h) {
+		if (!h->is_finished) {
+			lua_cryptobox_hash_finish (h);
+		}
+
+		r = h->out;
+		dlen = h->out_len;
 
 		if (lua_isnumber (L, 2)) {
 			guint lim = lua_tonumber (L, 2);
