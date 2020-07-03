@@ -34,6 +34,9 @@ body {
     padding-top: 0;
     padding-bottom: 0;
     margin-bottom: 20px;
+    border-bottom-color: rgb(231, 231, 231);
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
 }
 .nav-pills .nav-link.active {
     background-color: #e7e7e7;
