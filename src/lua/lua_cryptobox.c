@@ -1284,8 +1284,13 @@ lua_cryptobox_hash_update (lua_State *L)
 		len = nlen;
 	}
 
-	if (h && !h->is_finished && data) {
-		rspamd_lua_hash_update (h, data, len);
+	if (h && data) {
+		if (!h->is_finished) {
+			rspamd_lua_hash_update (h, data, len);
+		}
+		else {
+			return luaL_error (L, "hash is already finalized");
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
