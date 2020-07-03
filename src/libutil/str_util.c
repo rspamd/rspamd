@@ -549,6 +549,7 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 	gchar *o, *end;
 	gsize i;
 	gint remain = -1, x;
+	bool inverse_order = true;
 
 	end = out + outlen;
 	o = out;
@@ -559,58 +560,105 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 		break;
 	case RSPAMD_BASE32_BLEACH:
 		b32 = b32_bleach;
+		inverse_order = false;
 		break;
 	case RSPAMD_BASE32_RFC:
 		b32 = b32_rfc;
+		inverse_order = false;
 		break;
 	default:
 		g_assert_not_reached ();
 		abort ();
 	}
 
-	for (i = 0; i < inlen && o < end - 1; i++) {
-		switch (i % 5) {
-		case 0:
-			/* 8 bits of input and 3 to remain */
-			x = in[i];
-			remain = in[i] >> 5;
-			*o++ = b32[x & 0x1F];
-			break;
-		case 1:
-			/* 11 bits of input, 1 to remain */
-			x = remain | in[i] << 3;
-			*o++ = b32[x & 0x1F];
-			*o++ = b32[x >> 5 & 0x1F];
-			remain = x >> 10;
-			break;
-		case 2:
-			/* 9 bits of input, 4 to remain */
-			x = remain | in[i] << 1;
-			*o++ = b32[x & 0x1F];
-			remain = x >> 5;
-			break;
-		case 3:
-			/* 12 bits of input, 2 to remain */
-			x = remain | in[i] << 4;
-			*o++ = b32[x & 0x1F];
-			*o++ = b32[x >> 5 & 0x1F];
-			remain = x >> 10 & 0x3;
-			break;
-		case 4:
-			/* 10 bits of output, nothing to remain */
-			x = remain | in[i] << 2;
-			*o++ = b32[x & 0x1F];
-			*o++ = b32[x >> 5 & 0x1F];
-			remain = -1;
-			break;
-		default:
-			/* Not to be happen */
-			break;
+	if (inverse_order) {
+		/* Zbase32 as used in Rspamd */
+		for (i = 0; i < inlen && o < end - 1; i++) {
+			switch (i % 5) {
+			case 0:
+				/* 8 bits of input and 3 to remain */
+				x = in[i];
+				remain = in[i] >> 5;
+				*o++ = b32[x & 0x1F];
+				break;
+			case 1:
+				/* 11 bits of input, 1 to remain */
+				x = remain | in[i] << 3;
+				*o++ = b32[x & 0x1F];
+				*o++ = b32[x >> 5 & 0x1F];
+				remain = x >> 10;
+				break;
+			case 2:
+				/* 9 bits of input, 4 to remain */
+				x = remain | in[i] << 1;
+				*o++ = b32[x & 0x1F];
+				remain = x >> 5;
+				break;
+			case 3:
+				/* 12 bits of input, 2 to remain */
+				x = remain | in[i] << 4;
+				*o++ = b32[x & 0x1F];
+				*o++ = b32[x >> 5 & 0x1F];
+				remain = x >> 10 & 0x3;
+				break;
+			case 4:
+				/* 10 bits of output, nothing to remain */
+				x = remain | in[i] << 2;
+				*o++ = b32[x & 0x1F];
+				*o++ = b32[x >> 5 & 0x1F];
+				remain = -1;
+				break;
+			default:
+				/* Not to be happen */
+				break;
+			}
 		}
-
+	}
+	else {
+		/* Traditional base32 with no bits inversion */
+		for (i = 0; i < inlen && o < end - 1; i++) {
+			switch (i % 5) {
+			case 0:
+				/* 8 bits of input and 3 to remain */
+				x = in[i] >> 3;
+				remain = (in[i] & 7) << 2;
+				*o++ = b32[x & 0x1F];
+				break;
+			case 1:
+				/* 11 bits of input, 1 to remain */
+				x = (remain << 6) | in[i];
+				*o++ = b32[(x >> 6) & 0x1F];
+				*o++ = b32[(x >> 1) & 0x1F];
+				remain = (x & 0x1) << 4;
+				break;
+			case 2:
+				/* 9 bits of input, 4 to remain */
+				x = (remain << 4) | in[i];
+				*o++ = b32[(x >> 4) & 0x1F];
+				remain = (x & 15) << 1;
+				break;
+			case 3:
+				/* 12 bits of input, 2 to remain */
+				x = (remain << 7) | in[i];
+				*o++ = b32[(x >> 7) & 0x1F];
+				*o++ = b32[(x >> 2) & 0x1F];
+				remain = (x & 3) << 3;
+				break;
+			case 4:
+				/* 10 bits of output, nothing to remain */
+				x = (remain << 5) | in[i];
+				*o++ = b32[(x >> 5) & 0x1F];
+				*o++ = b32[x & 0x1F];
+				remain = -1;
+				break;
+			default:
+				/* Not to be happen */
+				break;
+			}
+		}
 	}
 	if (remain >= 0 && o < end) {
-		*o++ = b32[remain];
+		*o++ = b32[remain & 0x1F];
 	}
 
 	if (o <= end) {
