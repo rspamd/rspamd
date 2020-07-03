@@ -826,6 +826,7 @@ rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outle
 	guint processed_bits = 0;
 	gsize i;
 	const guchar *b32_dec;
+	bool inverse_bits = true;
 
 	end = out + outlen;
 	o = out;
@@ -836,38 +837,77 @@ rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outle
 		break;
 	case RSPAMD_BASE32_BLEACH:
 		b32_dec = b32_dec_bleach;
+		inverse_bits = false;
 		break;
 	case RSPAMD_BASE32_RFC:
 		b32_dec = b32_dec_rfc;
+		inverse_bits = false;
 		break;
 	default:
 		g_assert_not_reached ();
 		abort ();
 	}
 
-	for (i = 0; i < inlen; i ++) {
-		c = (guchar)in[i];
+	if (inverse_bits) {
+		for (i = 0; i < inlen; i++) {
+			c = (guchar) in[i];
 
-		if (processed_bits >= 8) {
-			processed_bits -= 8;
-			*o++ = acc & 0xFF;
-			acc >>= 8;
+			if (processed_bits >= 8) {
+				/* Emit from left to right */
+				processed_bits -= 8;
+				*o++ = acc & 0xFF;
+				acc >>= 8;
+			}
+
+			decoded = b32_dec[c];
+			if (decoded == 0xff || o >= end) {
+				return -1;
+			}
+
+			acc = (decoded << processed_bits) | acc;
+			processed_bits += 5;
 		}
 
-		decoded = b32_dec[c];
-		if (decoded == 0xff || o >= end) {
+		if (processed_bits > 0 && o < end) {
+			*o++ = (acc & 0xFF);
+		}
+		else if (o > end) {
 			return -1;
 		}
-
-		acc = (decoded << processed_bits) | acc;
-		processed_bits += 5;
 	}
+	else {
+		for (i = 0; i < inlen; i++) {
+			c = (guchar) in[i];
 
-	if (processed_bits > 0 && o < end) {
-		*o++ = (acc & 0xFF);
-	}
-	else if (o > end) {
-		return -1;
+			decoded = b32_dec[c];
+			if (decoded == 0xff) {
+				return -1;
+			}
+
+			acc = (acc << 5) | decoded;
+			processed_bits += 5;
+
+			if (processed_bits >= 8) {
+				/* Emit from right to left */
+				processed_bits -= 8;
+
+				/* Output buffer overflow */
+				if (o >= end) {
+					return -1;
+				}
+
+				*o++ = (acc >> processed_bits) & 0xFF;
+				/* Preserve lowers at the higher parts of the input */
+				acc = (acc & ((1u << processed_bits) - 1));
+			}
+		}
+
+		if (processed_bits > 0 && o < end) {
+			*o++ = (acc & 0xFF);
+		}
+		else if (o > end) {
+			return -1;
+		}
 	}
 
 	return (o - out);
