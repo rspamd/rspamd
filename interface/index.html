@@ -457,11 +457,11 @@
 
 <!-- Common modal -->
 <div id="modalDialog" class="modal fade" tabindex="-1" role="dialog">
-	<div class="modal-dialog">
+	<div class="modal-dialog modal-xl">
 		<div class="modal-content">
-			<div class="modal-header">
-				<h3 id="modalTitle"></h3>
-				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+			<div class="modal-header py-2">
+				<h6 class="modal-title" id="modalTitle"></h6>
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
 			</div>
 			<div class="modal-body" id="modalBody"></div>
 			<div class="modal-footer">
@@ -475,10 +475,10 @@
 
 <!-- login modal -->
 <div id="connectDialog" class="modal" tabindex="-1" role="dialog" style="display: none;">
-	<div class="modal-dialog">
+	<div class="modal-dialog modal-sm modal-dialog-centered">
 		<div class="modal-content shadow">
-			<div class="modal-header">
-				<h3>Login to Rspamd</h3>
+			<div class="modal-header py-2">
+				<h6 class="modal-title">Login to Rspamd</h6>
 			</div>
 			<div class="modal-body" id="connectBody">
 				<form id="connectForm">

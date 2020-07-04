@@ -217,6 +217,8 @@ table#symbolsTable input[type="number"] {
     background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     /* stylelint-disable-next-line function-name-case */
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
+}
+.card-header {
     height: 36px;
 }
 .card-header h6 {
@@ -285,15 +287,6 @@ table#symbolsTable input[type="number"] {
 }
 .nopadding {
     padding: 0 !important;
-}
-.modal-header {
-    height: auto;
-    padding: 8px 15px 5px;
-}
-.modal-header h3 {
-    margin: 7px;
-    font-size: 12px;
-    text-shadow: 0 1px 0 #ffffff;
 }
 
 /* Symbols coloring */
