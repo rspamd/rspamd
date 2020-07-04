@@ -80,7 +80,7 @@
 			<div class="tab-pane active" id="status">
 				<div class="row">
 					<div class="col-lg-12">
-						<div class="widget-box widget-plain">
+						<div class="card border-0">
 							<ul id="statWidgets" class="stat-boxes" style="display: none;">
 							</ul>
 						</div>
@@ -88,12 +88,12 @@
 				</div>
 				<div class="row">
 					<div class="col-lg-6">
-						<div class="widget-box">
-							<div class="widget-title">
-								<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span>
-								<h5>Servers</h5>
+						<div class="card bg-light shadow my-3">
+							<div class="card-header text-secondary py-2">
+								<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
+								<h6 class="font-weight-bolder my-1">Servers</h6>
 							</div>
-								<div class="widget-content nopadding table-responsive">
+								<div class="card-body nopadding table-responsive">
 									<table class="table table-sm table-hover table-bordered text-nowrap mb-0" id="clusterTable">
 										<thead>
 											<tr>
@@ -111,12 +111,12 @@
 						</div>
 					</div>
 					<div class="col-lg-6">
-						<div class="widget-box">
-							<div class="widget-title">
-								<span class="icon"><i class="glyphicon glyphicon-signal"></i></span>
-								<h5>Statistics</h5>
+						<div class="card bg-light shadow my-3">
+							<div class="card-header text-secondary py-2">
+								<span class="icon float-left mr-3"><i class="glyphicon glyphicon-signal"></i></span>
+								<h6 class="font-weight-bolder my-1">Statistics</h6>
 							</div>
-							<div class="widget-content chart-content">
+							<div class="card-body chart-content">
 								<div class="row">
 									<div class="chart" id="chart">
 										<span class="notice">Loading..</span>
@@ -130,12 +130,12 @@
 			</div>
 
 			<div class="tab-pane" id="throughput">
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-stats"></i></span>
-						<h5>Throughput</h5>
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-stats"></i></span>
+						<h6 class="font-weight-bolder my-1">Throughput</h6>
 					</div>
-					<div class="widget-content">
+					<div class="card-body">
 						<div>
 							<div class="row">
 								<div id="graph" class="mx-auto">
@@ -200,17 +200,19 @@
 			</div>
 
 			<div class="tab-pane" id="configuration">
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span><h5>Actions</h5>
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
+						<h6 class="font-weight-bolder my-1">Actions</h6>
 					</div>
-					<div class="widget-content actions-content" id="actionsBody"></div>
+					<div class="card-body actions-content" id="actionsBody"></div>
 				</div>
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-list"></i></span><h5>Lists</h5>
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-list"></i></span>
+						<h6 class="font-weight-bolder my-1">Lists</h6>
 					</div>
-					<div class="widget-content nopadding">
+					<div class="card-body nopadding">
 						<table class="table table-sm table-hover" id="listMaps">
 						</table>
 					</div>
@@ -218,29 +220,29 @@
 			</div>
 
 			<div class="tab-pane" id="symbols">
-				<div class="widget-box">
-					<div class="widget-title  d-flex">
-						<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span>
-						<h5 class="ml-0">Symbols and rules</h5>
-						<div class="buttons align-self-center ml-auto mr-1">
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2  d-flex">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
+						<h6 class="font-weight-bolder my-1" class="ml-0">Symbols and rules</h6>
+						<div class="align-self-center ml-auto mr-1">
 							<button class="btn btn-info btn-sm" id="updateSymbols">
 								<i class="glyphicon glyphicon-refresh"></i> Update
 							</button>
 						</div>
 					</div>
-					<div class="widget-content nopadding">
+					<div class="card-body nopadding">
 						<table class="table table-hover" id="symbolsTable"></table>
 					</div>
 				</div>
 			</div>
 
 			<div class="tab-pane" id="scan">
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-envelope"></i></span>
-						<h5>Scan suspected message</h5>
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-envelope"></i></span>
+						<h6 class="font-weight-bolder my-1">Scan suspected message</h6>
 					</div>
-					<div class="widget-content">
+					<div class="card-body">
 						<div class="row">
 							<form class="col-lg-12" id="scanForm">
 								<div class="form-group">
@@ -255,15 +257,15 @@
 						</div>
 					</div>
 				</div>
-				<div class="widget-box learn" style="display: none;">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-education"></i></span>
-						<h5>Learn Rspamd</h5>
+				<div class="card learn" style="display: none;">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-education"></i></span>
+						<h6 class="font-weight-bolder my-1">Learn Rspamd</h6>
 					</div>
-					<div class="widget-content">
+					<div class="card-body">
 						<div class="row">
 							<div class="col-lg-6">
-								<div class="card bg-light card-body mb-3 card bg-faded p-2 mb-3">
+								<div class="card bg-light shadow card-body card p-2">
 									<p>Learn Bayessian classifier:</p>
 									<form class="form-inline">
 										<div class="form-group">
@@ -276,7 +278,7 @@
 								</div>
 							</div>
 							<div class="col-lg-6">
-								<div class="card bg-light card-body mb-3 card bg-faded p-2 mb-3">
+								<div class="card bg-light shadow card-body card p-2">
 									<p>Learn Fuzzy storage:</p>
 									<form class="form-inline">
 										<div class="form-group">
@@ -295,11 +297,11 @@
 					</div>
 				</div>
 
-				<div class="widget-box">
-					<div class="widget-title d-flex">
-						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h5 class="ml-0">Scan results history</h5>
-						<div id="scanResult" class="form-inline widget-title-form input-group-sm buttons align-self-center ml-auto mr-1">
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2 d-flex">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
+						<h6 class="font-weight-bolder my-1" class="ml-0">Scan results history</h6>
+						<div id="scanResult" class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
 								<label for="selSymOrder_scan">Symbols order:</label>
 								<select id="selSymOrder_scan" class="form-control ml-1">
 									<option value="magnitude" selected>Score magnitude</option>
@@ -313,7 +315,7 @@
 							</button>
 						</div>
 					</div>
-					<div class="widget-content nopadding">
+					<div class="card-body nopadding">
 						<div id="scanLog">
 							<table class="table" id="historyTable_scan"></table>
 						</div>
@@ -322,12 +324,12 @@
 			</div>
 
 			<div class="tab-pane" id="selectors">
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-envelope"></i></span>
-						<h5>Test Rspamd selectors</h5>
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-envelope"></i></span>
+						<h6 class="font-weight-bolder my-1">Test Rspamd selectors</h6>
 					</div>
-					<div class="widget-content">
+					<div class="card-body py-0">
 						<div class="row" id="row-main">
 							<div class="col-lg-3 sidebar" id="sidebar-left">
 								<div class="nopadding table-responsive">
@@ -404,11 +406,11 @@
 
 			<div class="tab-pane" id="history">
 
-				<div class="widget-box">
-					<div class="widget-title d-flex">
-						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h5 class="ml-0">History</h5>
-						<div class="form-inline widget-title-form input-group-sm buttons align-self-center ml-auto mr-1">
+				<div class="card bg-light shadow my-3">
+					<div class="card-header text-secondary py-2 d-flex">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
+						<h6 class="font-weight-bolder my-1" class="ml-0">History</h6>
+						<div class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
 							<label for="selSymOrder_history">Symbols order:</label>
 							<select id="selSymOrder_history" class="form-control ml-1">
 								<option value="magnitude" selected>Score magnitude</option>
@@ -425,23 +427,23 @@
 							</button>
 						</div>
 					</div>
-					<div class="widget-content nopadding">
+					<div class="card-body nopadding">
 						<div id="historyLog">
 							<table class="table" id="historyTable_history"></table>
 						</div>
 					</div>
 				</div>
-				<div class="widget-box" id="errors-history">
-					<div class="widget-title d-flex">
-						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h5 class="ml-0">Errors</h5>
-						<div class="buttons align-self-center ml-auto mr-1">
+				<div class="card bg-light shadow my-3" id="errors-history">
+					<div class="card-header text-secondary py-2 d-flex">
+						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
+						<h6 class="font-weight-bolder my-1" class="ml-0">Errors</h6>
+						<div class="align-self-center ml-auto mr-1">
 							<button class="btn btn-info btn-sm" id="updateErrors">
 								<i class="glyphicon glyphicon-refresh"></i> Update
 							</button>
 						</div>
 					</div>
-					<div class="widget-content nopadding">
+					<div class="card-body nopadding">
 						<table class="table table-hover" id="errorsLog"></table>
 					</div>
 				</div>
@@ -455,11 +457,11 @@
 
 <!-- Common modal -->
 <div id="modalDialog" class="modal fade" tabindex="-1" role="dialog">
-	<div class="modal-dialog">
+	<div class="modal-dialog modal-xl">
 		<div class="modal-content">
-			<div class="modal-header">
-				<h3 id="modalTitle"></h3>
-				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+			<div class="modal-header py-2">
+				<h6 class="modal-title" id="modalTitle"></h6>
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
 			</div>
 			<div class="modal-body" id="modalBody"></div>
 			<div class="modal-footer">
@@ -473,10 +475,10 @@
 
 <!-- login modal -->
 <div id="connectDialog" class="modal" tabindex="-1" role="dialog" style="display: none;">
-	<div class="modal-dialog">
-		<div class="modal-content">
-			<div class="modal-header">
-				<h3>Login to Rspamd</h3>
+	<div class="modal-dialog modal-sm modal-dialog-centered">
+		<div class="modal-content shadow">
+			<div class="modal-header py-2">
+				<h6 class="modal-title">Login to Rspamd</h6>
 			</div>
 			<div class="modal-body" id="connectBody">
 				<form id="connectForm">

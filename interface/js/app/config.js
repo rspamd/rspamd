@@ -136,7 +136,7 @@ define(["jquery"],
 
         ui.getMaps = function (rspamd, checked_server) {
             var $listmaps = $("#listMaps");
-            $listmaps.closest(".widget-box").hide();
+            $listmaps.closest(".card").hide();
             rspamd.query("maps", {
                 success: function (json) {
                     var data = json[0].data;
@@ -156,7 +156,7 @@ define(["jquery"],
                         $tr.appendTo($tbody);
                     });
                     $tbody.appendTo($listmaps);
-                    $listmaps.closest(".widget-box").show();
+                    $listmaps.closest(".card").show();
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
