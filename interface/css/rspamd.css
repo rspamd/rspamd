@@ -218,9 +218,6 @@ table#symbolsTable input[type="number"] {
     /* stylelint-disable-next-line function-name-case */
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
 }
-.card-header {
-    height: 36px;
-}
 .card-header h6 {
     font-size: 0.857rem;
 }
