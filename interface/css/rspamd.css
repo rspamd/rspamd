@@ -206,32 +206,7 @@ table#symbolsTable input[type="number"] {
 }
 
 /* widget */
-.widget-box {
-    background: none repeat scroll 0 0 #f9f9f9;
-    border-top: 1px solid #cdcdcd;
-    border-left: 1px solid #cdcdcd;
-    border-right: 1px solid #cdcdcd;
-    clear: both;
-    margin-top: 16px;
-    margin-bottom: 16px;
-    position: relative;
-}
-.widget-box.widget-calendar,
-.widget-box.widget-chat {
-    overflow: hidden !important;
-}
-.accordion .widget-box {
-    margin-top: -2px;
-    margin-bottom: 0;
-    border-radius: 0;
-}
-.widget-box.widget-plain {
-    background: transparent;
-    border: none;
-    margin-top: 0;
-    margin-bottom: 0;
-}
-.widget-title,
+.card-header,
 .modal-header {
     background-color: #efefef;
     background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#fdfdfd), to(#eaeaea));
@@ -242,41 +217,12 @@ table#symbolsTable input[type="number"] {
     background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     /* stylelint-disable-next-line function-name-case */
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
-    border-bottom: 1px solid #cdcdcd;
     height: 36px;
 }
-.widget-title span.icon {
-    border-right: 1px solid #cdcdcd;
-    padding: 9px 10px 7px 11px;
-    float: left;
-    opacity: .7;
+.card-header h6 {
+    font-size: 0.857rem;
 }
-.widget-title h5 {
-    color: #666666;
-    text-shadow: 0 1px 0 #ffffff;
-    /* float:left; */
-    display: block;
-    font-size: 12px;
-    font-weight: bold;
-    padding: 12px;
-    line-height: 12px;
-    margin: 0 0 0 36px;
-}
-.widget-title .buttons {
-    padding: 2px 2px 0 0;
-}
-.widget-title .label {
-    padding: 3px 5px 2px;
-    float: right;
-    margin: 9px 15px 0 0;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) inset, 0 1px 0 #ffffff;
-}
-.widget-content {
-    padding: 12px 15px;
-    border-bottom: 1px solid #cdcdcd;
-    -moz-box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.2);
-    box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.2);
-}
+
 .stat-boxes {
     margin: 0;
     margin-right: -10px !important;
@@ -292,7 +238,6 @@ table#symbolsTable input[type="number"] {
     background-image: linear-gradient(to bottom, #f9f9f9 0%, #ededed 100%);
     border: 1px solid #d5d5d5;
     border-radius: 4px 4px 4px 4px;
-    box-shadow: 0 1px 0 0 #ffffff inset, 0 1px 0 rgba(255, 255, 255, 0.4);
     display: inline-block;
     line-height: 18px;
     margin: 0 10px 10px 0;
@@ -309,7 +254,6 @@ table#symbolsTable input[type="number"] {
     font-weight: bold;
     text-align: center;
     text-transform: capitalize;
-    text-shadow: 0 1px 0 white;
     color: #666;
 }
 .stat-box .left,
@@ -318,7 +262,6 @@ table#symbolsTable input[type="number"] {
 }
 .stat-box .left {
     border-right: 1px solid gainsboro;
-    box-shadow: 1px 0 0 0 white;
     margin-right: 14px;
     padding-right: 18px;
     font-size: 10px;
@@ -418,13 +361,13 @@ td.maps-cell {
     margin-right: 9px;
 }
 
-#throughput div.widget-content {
+#throughput div.card-body {
     text-align: center;
 }
-#throughput div.widget-content > div {
+#throughput div.card-body > div {
     display: inline-block;
 }
-#throughput div.widget-content div.row {
+#throughput div.card-body div.row {
     background: #fff;
 }
 
@@ -489,10 +432,6 @@ td.maps-cell {
     padding-right: 20px;
 }
 
-.widget-title-form label {
-    font-size: 12px;
-    font-weight: normal;
-}
 #history_page_size {
     width: 6em !important;
     text-align: center;
@@ -517,8 +456,6 @@ td.maps-cell {
 }
 
 #row-main {
-    margin-top: -12px;
-    margin-bottom: -12px;
     display: flex;
     flex-wrap: wrap;
     clear: both;
@@ -625,4 +562,20 @@ td.maps-cell {
 
 #navBar .navbar-nav .nav-link {
     padding: 15px;
+}
+
+#clusterTable td:last-child {
+    border-right: none;
+}
+#clusterTable tr:last-child td {
+    border-bottom: none;
+}
+#clusterTable thead th:last-child {
+    border-right: none;
+}
+#clusterTable tr:last-child td:first-child {
+    border-radius: 0 0 0 calc(.25rem - 1px);
+}
+#clusterTable tr:last-child td:last-child {
+    border-radius: 0 0 calc(.25rem - 1px) 0;
 }

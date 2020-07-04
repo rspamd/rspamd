@@ -80,7 +80,7 @@ define(["jquery", "d3pie"],
                     $(widget).appendTo(widgets);
                 } else {
                     var titleAtt = d3.format(",")(item) + " " + i;
-                    widget = "<li class=\"stat-box\"><div class=\"widget\" title=\"" + titleAtt + "\"><strong>" +
+                    widget = "<li class=\"stat-box bg-light shadow-sm\"><div class=\"widget\" title=\"" + titleAtt + "\"><strong>" +
                     d3.format(".3~s")(item) + "</strong>" + i + "</div></li>";
                     if (i === "scanned") {
                         stat_w[0] = widget;
@@ -100,7 +100,7 @@ define(["jquery", "d3pie"],
             $.each(stat_w, function (i, item) {
                 $(item).appendTo(widgets);
             });
-            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box float-right\"><div class=\"widget\"></div></li>");
+            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box bg-light shadow-sm float-right\"><div class=\"widget\"></div></li>");
             $("#statWidgets").find("li.float-right").appendTo("#statWidgets");
 
             $("#clusterTable tbody").empty();
