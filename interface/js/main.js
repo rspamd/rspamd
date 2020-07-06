@@ -10,6 +10,8 @@ requirejs.config({
         d3: "d3.min",
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
+        fontawesome: "fontawesome.min",
+        fontawesome_solid: "solid.min",
         footable: "footable.min",
         nprogress: "nprogress.min",
         stickytabs: "jquery.stickytabs.min"
@@ -18,6 +20,7 @@ requirejs.config({
         bootstrap: {exports:"bootstrap", deps:["jquery"]},
         d3pie: {exports:"d3pie", deps:["d3.global", "jquery"]},
         d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
+        fontawesome: {exports: "FontAwesome", deps:["fontawesome_solid"]},
         footable: {deps:["bootstrap", "jquery"]},
         stickytabs: {deps:["jquery"]}
     },
@@ -50,7 +53,7 @@ requirejs.onError = function (e) {
 };
 
 // Load main UI
-require(["app/rspamd"],
+require(["app/rspamd", "fontawesome"],
     function (rspamd) {
         "use strict";
         rspamd.setup();

@@ -18,6 +18,7 @@
 	<link rel="stylesheet" type="text/css" href="./css/font-glyphicons.css">
 	<link rel="stylesheet" type="text/css" href="./css/footable.standalone.min.css"/>
 	<link rel="stylesheet" type="text/css" href="./css/FooTable.Glyphicons.css"/>
+	<link rel="stylesheet" type="text/css" href="./css/svg-with-js.min.css">
 	<link rel="stylesheet" type="text/css" href="./css/d3evolution.css">
 	<link rel="stylesheet" type="text/css" href="./css/nprogress.css"/>
 	<link href="./css/rspamd.css" rel="stylesheet">
@@ -45,7 +46,7 @@
 	</ul>
 	<form class="form-inline ml-auto" id="navbar-btn-form" style="display: none;">
 		<div class="btn-group">
-			<a href="#" class="btn btn-outline-secondary" role="button" data-toggle="button" id="refresh" style="display: none;"><i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Refresh</a>
+			<a href="#" class="btn btn-outline-secondary" role="button" data-toggle="button" id="refresh" style="display: none;"><i class="fas fa-sync-alt"></i> Refresh</a>
 			<button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" id="autoRefresh">
 				<span id="countdown">--:--</span>
 			</button>
@@ -66,7 +67,7 @@
 				<a class="dropdown-item dynamic active" href="#" id="dynamic-item" data-value="3600000">1 hour</a>
 			</div>
 		</div>
-		<a href="#" class="btn btn-outline-secondary ml-2" role="button" data-toggle="button" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a>
+		<a href="#" class="btn btn-outline-secondary ml-2" role="button" data-toggle="button" id="disconnect"><i class="fas fa-power-off"></i> Disconnect</a>
 	</form>
 </nav>
 
@@ -90,8 +91,8 @@
 					<div class="col-lg-6">
 						<div class="card bg-light shadow my-3">
 							<div class="card-header text-secondary py-2">
-								<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
-								<h6 class="font-weight-bolder my-1">Servers</h6>
+								<span class="icon mr-3"><i class="fas fa-server"></i></span>
+								<span class="h6 font-weight-bolder my-2">Servers</span>
 							</div>
 								<div class="card-body nopadding table-responsive">
 									<table class="table table-sm table-hover table-bordered text-nowrap mb-0" id="clusterTable">
@@ -113,8 +114,8 @@
 					<div class="col-lg-6">
 						<div class="card bg-light shadow my-3">
 							<div class="card-header text-secondary py-2">
-								<span class="icon float-left mr-3"><i class="glyphicon glyphicon-signal"></i></span>
-								<h6 class="font-weight-bolder my-1">Statistics</h6>
+								<span class="icon mr-3"><i class="fas fa-chart-pie"></i></span>
+								<span class="h6 font-weight-bolder my-2">Statistics</span>
 							</div>
 							<div class="card-body chart-content">
 								<div class="row">
@@ -132,8 +133,8 @@
 			<div class="tab-pane" id="throughput">
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-stats"></i></span>
-						<h6 class="font-weight-bolder my-1">Throughput</h6>
+						<span class="icon mr-3"><i class="fas fa-chart-area"></i></span>
+						<span class="h6 font-weight-bolder my-2">Throughput</span>
 					</div>
 					<div class="card-body">
 						<div>
@@ -202,15 +203,15 @@
 			<div class="tab-pane" id="configuration">
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
-						<h6 class="font-weight-bolder my-1">Actions</h6>
+						<span class="icon mr-3"><i class="fas fa-tasks"></i></span>
+						<span class="h6 font-weight-bolder my-2">Actions</span>
 					</div>
 					<div class="card-body actions-content" id="actionsBody"></div>
 				</div>
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-list"></i></span>
-						<h6 class="font-weight-bolder my-1">Lists</h6>
+						<span class="icon mr-3"><i class="fas fa-list"></i></span>
+						<span class="h6 font-weight-bolder my-2">Lists</span>
 					</div>
 					<div class="card-body nopadding">
 						<table class="table table-sm table-hover" id="listMaps">
@@ -221,12 +222,12 @@
 
 			<div class="tab-pane" id="symbols">
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2  d-flex">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-tasks"></i></span>
-						<h6 class="font-weight-bolder my-1" class="ml-0">Symbols and rules</h6>
+					<div class="card-header text-secondary py-1 d-flex">
+						<span class="icon mr-3"><i class="fas fa-tasks"></i></span>
+						<span class="h6 font-weight-bolder my-2 ml-0">Symbols and rules</span>
 						<div class="align-self-center ml-auto mr-1">
 							<button class="btn btn-info btn-sm" id="updateSymbols">
-								<i class="glyphicon glyphicon-refresh"></i> Update
+								<i class="fas fa-redo-alt"></i> Update
 							</button>
 						</div>
 					</div>
@@ -239,8 +240,8 @@
 			<div class="tab-pane" id="scan">
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-envelope"></i></span>
-						<h6 class="font-weight-bolder my-1">Scan suspected message</h6>
+						<span class="icon mr-3"><i class="fas fa-envelope"></i></span>
+						<span class="h6 font-weight-bolder my-2">Scan suspected message</span>
 					</div>
 					<div class="card-body">
 						<div class="row">
@@ -250,8 +251,8 @@
 									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder="Paste raw message source"></textarea>
 								</div>
 								<div class="form-group">
-									<button type="submit" class="btn btn-primary" data-upload="scan"><i class="glyphicon glyphicon-search"></i> Scan message</button>
-									<button class="btn btn-secondary float-right" id="scanClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+									<button type="submit" class="btn btn-primary" data-upload="scan"><i class="fas fa-search"></i> Scan message</button>
+									<button class="btn btn-secondary float-right" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 								</div>
 							</form>
 						</div>
@@ -259,8 +260,8 @@
 				</div>
 				<div class="card learn" style="display: none;">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-education"></i></span>
-						<h6 class="font-weight-bolder my-1">Learn Rspamd</h6>
+						<span class="icon mr-3"><i class="fas fa-graduation-cap"></i></span>
+						<span class="h6 font-weight-bolder my-2">Learn Rspamd</span>
 					</div>
 					<div class="card-body">
 						<div class="row">
@@ -270,8 +271,8 @@
 									<form class="form-inline">
 										<div class="form-group">
 											<div class="btn-group">
-												<button class="btn btn-success" type="button" data-upload="ham" disabled><i class="glyphicon glyphicon-thumbs-up"></i> Upload HAM</button>
-												<button class="btn btn-danger" type="button" data-upload="spam" disabled><i class="glyphicon glyphicon-thumbs-down"></i> Upload SPAM</button>
+												<button class="btn btn-success" type="button" data-upload="ham" disabled><i class="fas fa-thumbs-up"></i> Upload HAM</button>
+												<button class="btn btn-danger" type="button" data-upload="spam" disabled><i class="fas fa-thumbs-down"></i> Upload SPAM</button>
 											</div>
 										</div>
 									</form>
@@ -289,7 +290,7 @@
 											<label for="fuzzyWeightText">Weight:</label>
 											<input name="fuzzyWeightText" id="fuzzyWeightText" class="form-control ml-1" type="number" value="1"/>
 										</div>
-										<button class="btn btn-warning ml-2" data-upload="fuzzy" disabled><i class="glyphicon glyphicon-upload"></i> Upload FUZZY</button>
+										<button class="btn btn-warning ml-2" data-upload="fuzzy" disabled><i class="fas fa-upload"></i> Upload FUZZY</button>
 									</form>
 								</div>
 							</div>
@@ -298,9 +299,9 @@
 				</div>
 
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2 d-flex">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h6 class="font-weight-bolder my-1" class="ml-0">Scan results history</h6>
+					<div class="card-header text-secondary py-1 d-flex">
+						<span class="icon mr-3"><i class="fas fa-eye"></i></span>
+						<span class="h6 font-weight-bolder my-2 ml-0">Scan results history</span>
 						<div id="scanResult" class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
 								<label for="selSymOrder_scan">Symbols order:</label>
 								<select id="selSymOrder_scan" class="form-control ml-1">
@@ -311,7 +312,7 @@
 							<label for="scan_page_size" class="ml-2">Rows per page:</label>
 							<input id="scan_page_size" class="form-control ml-1" value="25" min="1" type="number">
 							<button class="btn btn-secondary btn-sm ml-2" id="cleanScanHistory">
-								<i class="glyphicon glyphicon-trash"></i> Clean history
+								<i class="fas fa-trash-alt"></i> Clean history
 							</button>
 						</div>
 					</div>
@@ -326,8 +327,8 @@
 			<div class="tab-pane" id="selectors">
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-envelope"></i></span>
-						<h6 class="font-weight-bolder my-1">Test Rspamd selectors</h6>
+						<span class="icon mr-3"><i class="fas fa-envelope"></i></span>
+						<span class="h6 font-weight-bolder my-2">Test Rspamd selectors</span>
 					</div>
 					<div class="card-body py-0">
 						<div class="row" id="row-main">
@@ -358,7 +359,7 @@
 															<label for="selectorsMsgArea">Message source:</label>
 															<textarea class="form-control" id="selectorsMsgArea" rows="9" placeholder="Paste raw message source"></textarea>
 														</div>
-														<button class="btn btn-secondary float-right" id="selectorsMsgClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+														<button class="btn btn-secondary float-right" id="selectorsMsgClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 													</div>
 												</div>
 												<div class="row pt-3">
@@ -367,8 +368,8 @@
 															<label for="selectorsSelArea">Selector(s):</label>
 															<textarea class="form-control" id="selectorsSelArea" rows="1" placeholder="extractor.transform(arg);extractor.transform(arg);..."></textarea>
 														</div>
-														<button type="submit" class="btn btn-primary" id="selectorsChkMsgBtn"><i class="glyphicon glyphicon-search"></i> Check message</button>
-														<button class="btn btn-secondary float-right" id="selectorsClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+														<button type="submit" class="btn btn-primary" id="selectorsChkMsgBtn"><i class="fas fa-search"></i> Check message</button>
+														<button class="btn btn-secondary float-right" id="selectorsClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 													</div>
 												</div>
 												<div class="row pt-3">
@@ -407,9 +408,9 @@
 			<div class="tab-pane" id="history">
 
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2 d-flex">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h6 class="font-weight-bolder my-1" class="ml-0">History</h6>
+					<div class="card-header text-secondary py-1 d-flex">
+						<span class="icon mr-3"><i class="fas fa-eye"></i></span>
+						<span class="h6 font-weight-bolder my-2 ml-0">History</span>
 						<div class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
 							<label for="selSymOrder_history">Symbols order:</label>
 							<select id="selSymOrder_history" class="form-control ml-1">
@@ -420,10 +421,10 @@
 							<label for="history_page_size" class="ml-2">Rows per page:</label>
 							<input id="history_page_size" class="form-control ml-1" value="25" min="1" type="number">
 							<button class="btn btn-danger btn-sm ml-2" id="resetHistory">
-								<i class="glyphicon glyphicon-remove-circle"></i> Reset
+								<i class="fas fa-times-circle"></i> Reset
 							</button>
 							<button class="btn btn-info btn-sm ml-2" id="updateHistory">
-								<i class="glyphicon glyphicon-refresh"></i> Update
+								<i class="fas fa-redo-alt"></i> Update
 							</button>
 						</div>
 					</div>
@@ -434,12 +435,12 @@
 					</div>
 				</div>
 				<div class="card bg-light shadow my-3" id="errors-history">
-					<div class="card-header text-secondary py-2 d-flex">
-						<span class="icon float-left mr-3"><i class="glyphicon glyphicon-eye-open"></i></span>
-						<h6 class="font-weight-bolder my-1" class="ml-0">Errors</h6>
+					<div class="card-header text-secondary py-1 d-flex">
+						<span class="icon mr-3"><i class="fas fa-exclamation-triangle"></i></span>
+						<span class="h6 font-weight-bolder my-2 ml-0">Errors</span>
 						<div class="align-self-center ml-auto mr-1">
 							<button class="btn btn-info btn-sm" id="updateErrors">
-								<i class="glyphicon glyphicon-refresh"></i> Update
+								<i class="fas fa-redo-alt"></i> Update
 							</button>
 						</div>
 					</div>

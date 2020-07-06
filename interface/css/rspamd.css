@@ -218,7 +218,10 @@ table#symbolsTable input[type="number"] {
     /* stylelint-disable-next-line function-name-case */
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
 }
-.card-header h6 {
+.card-header > .icon > svg {
+    vertical-align: middle;
+}
+.card-header .h6 {
     font-size: 0.857rem;
 }
 
@@ -333,17 +336,14 @@ td.maps-cell {
     text-decoration: underline;
 }
 
-/* Glyphicons animated spinners */
-.loading .glyphicon-spin {
-    animation: spin 1000ms infinite linear;
+/* Font Awesome icons size */
+.svg-inline--fa {
+    font-size: 16px;
 }
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(359deg);
-    }
+/* Increase refresh button spinner speed */
+#refresh .fa-spin {
+    -webkit-animation: fa-spin 1s linear infinite;
+    animation: fa-spin 1s linear infinite;
 }
 
 /* Some spacing tweaks */
@@ -434,11 +434,11 @@ td.maps-cell {
     background: rgba(100, 230, 80, 0.1) !important;
 }
 
-.glyphicon-ok {
-    color: #468847;
-}
-.glyphicon-remove {
+.danger .icon {
     color: #b94a48;
+}
+.success .icon {
+    color: #468847;
 }
 
 #nprogress .bar {
