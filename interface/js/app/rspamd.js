@@ -396,11 +396,11 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         });
 
         $(document).ajaxStart(function () {
-            $("#navBar").addClass("loading");
+            $("#refresh > svg").addClass("fa-spin");
         });
         $(document).ajaxComplete(function () {
             setTimeout(function () {
-                $("#navBar").removeClass("loading");
+                $("#refresh > svg").removeClass("fa-spin");
             }, 1000);
         });
 

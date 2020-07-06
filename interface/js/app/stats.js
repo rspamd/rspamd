@@ -107,14 +107,14 @@ define(["jquery", "d3pie"],
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
                 var row_class = "danger";
-                var glyph_status = "glyphicon glyphicon-remove";
+                var glyph_status = "fas fa-times";
                 var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
                 }
                 if (val.status) {
                     row_class = "success";
-                    glyph_status = "glyphicon glyphicon-ok";
+                    glyph_status = "fas fa-check";
                     short_id = val.data.config_id.substring(0, 8);
                 }
 
