@@ -360,7 +360,7 @@ context("Selectors test", function()
     test("case " .. case_name, function()
       local elts = check_selector(case.selector)
       assert_not_nil(elts)
-      assert_rspamd_table_eq({actual = elts, expect = case.expect})
+      assert_rspamd_table_eq_sorted({actual = elts, expect = case.expect})
     end)
   end
 end)
