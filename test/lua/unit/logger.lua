@@ -9,7 +9,6 @@ context("Logger unit tests", function()
       {'%1', '1', 1},
       {'%1', 'true', true},
       {'%1', '{[1] = 1, [2] = test}', {1, 'test'}},
-      {'%1', '{[k1] = 1, [k2] = test}', {k1=1, k2='test'}},
        {'%1', '{[1] = 1, [2] = 2.1, [k2] = test}', {1, 2.1, k2='test'}},
       {'%s', 'true', true},
     }
