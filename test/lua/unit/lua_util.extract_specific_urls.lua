@@ -161,9 +161,7 @@ context("Lua util - extract_specific_urls plain", function()
         local s = logger.slog("%1 =?= %2", c.expect, actual_result)
         print(s) --]]
 
-      table.sort(actual_result)
-      table.sort(c.expect)
-      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
+      assert_rspamd_table_eq_sorted({actual = actual_result, expect = c.expect})
     end)
 
     test("extract_specific_urls " .. i, function()
@@ -184,9 +182,7 @@ context("Lua util - extract_specific_urls plain", function()
         local s = logger.slog("case[%1] %2 =?= %3", i, c.expect, actual_result)
         print(s) --]]
 
-      table.sort(actual_result)
-      table.sort(c.expect)
-      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
+      assert_rspamd_table_eq_sorted({actual = actual_result, expect = c.expect})
     end)
   end
 
@@ -200,9 +196,7 @@ context("Lua util - extract_specific_urls plain", function()
       print(s) --]]
 
     local expect = {"abc.com", "abc.net", "abc.za.org"}
-    table.sort(actual_result)
-    table.sort(expect)
-    assert_rspamd_table_eq({actual = actual_result, expect = expect})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = expect})
   end)
 end)
 
@@ -257,7 +251,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com"}})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = {"domain.com"}})
 
   end)
   test("extract_specific_urls - from email 2 limit", function()
@@ -273,7 +267,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = {"domain.com", "example.net"}})
 
   end)
 
@@ -300,7 +294,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com"}})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = {"domain.com"}})
 
   end)
   test("extract_specific_urls - from email image 2 limit", function()
@@ -317,7 +311,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = {"domain.com", "example.net"}})
 
   end)
   test("extract_specific_urls - from email image 3 limit, no images", function()
@@ -334,7 +328,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+    assert_rspamd_table_eq_sorted({actual = actual_result, expect = {"domain.com", "example.net"}})
   end)
   test("extract_specific_urls - from email image 3 limit, has images", function()
     local actual = util.extract_specific_urls({
@@ -350,7 +344,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result,
+    assert_rspamd_table_eq_sorted({actual = actual_result,
                             expect = {"domain.com", "example.net", "example5.org"}})
   end)
   test("extract_specific_urls - from email image 2 limit, has images", function()
@@ -367,7 +361,7 @@ context("Lua util - extract_specific_urls message", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result,
+    assert_rspamd_table_eq_sorted({actual = actual_result,
                             expect = {"domain.com", "example.net"}})
   end)
 end)
