@@ -460,7 +460,12 @@ local function parse_object_grammar(obj, task, pdf)
 
     if ret then
       if obj.stream then
-        obj.dict = obj_or_err
+        if type(obj_or_err) == 'table' then
+          obj.dict = obj_or_err
+        else
+          obj.dict = {}
+        end
+
         lua_util.debugm(N, task, 'stream object %s:%s is parsed to: %s',
             obj.major, obj.minor, obj_or_err)
       else
