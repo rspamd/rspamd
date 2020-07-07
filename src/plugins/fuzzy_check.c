@@ -1661,7 +1661,6 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 
 			rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
 
-
 			msg_debug_task ("loading shingles of type %s with key %*xs",
 					rule->algorithm_str,
 					16, rule->shingles_key->str);
@@ -1859,13 +1858,20 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
+	guint additional_length;
+	guchar *additional_data;
+
+	additional_length = fuzzy_cmd_extension_length (task, rule);
 
 	if (rule->peer_key) {
-		enccmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*enccmd));
+		enccmd = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (*enccmd) + additional_length);
 		cmd = &enccmd->cmd;
+		additional_data = ((guchar *)enccmd) + sizeof (*enccmd);
 	}
 	else {
 		cmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cmd));
+		additional_data = ((guchar *)cmd) + sizeof (*cmd);
 	}
 
 	cmd->cmd = c;
@@ -1884,15 +1890,21 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io->part = mp;
 	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
+	if (additional_length > 0) {
+		fuzzy_cmd_write_extensions (task, rule, additional_data,
+				additional_length);
+	}
+
 	if (rule->peer_key) {
 		g_assert (enccmd != NULL);
-		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *) cmd, sizeof (*cmd));
+		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd,
+				sizeof (*cmd) + additional_length);
 		io->io.iov_base = enccmd;
-		io->io.iov_len = sizeof (*enccmd);
+		io->io.iov_len = sizeof (*enccmd) + additional_length;
 	}
 	else {
 		io->io.iov_base = cmd;
-		io->io.iov_len = sizeof (*cmd);
+		io->io.iov_len = sizeof (*cmd) + additional_length;
 	}
 
 	return io;
