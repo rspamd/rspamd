@@ -81,6 +81,10 @@ fieldset[disabled] .btn {
     height: 30px;
 }
 
+.footable-header .fooicon {
+    font-size: 12px;
+}
+
 a {
     outline: none;
 }
