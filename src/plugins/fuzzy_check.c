@@ -1489,10 +1489,10 @@ fuzzy_cmd_extension_length (struct rspamd_task *task,
 		}
 	}
 
-	if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
+	if (task->from_addr && rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
 		total += sizeof (struct in_addr) + 1;
 	}
-	else if (rspamd_inet_address_get_af (task->from_addr) == AF_INET6) {
+	else if (task->from_addr&& rspamd_inet_address_get_af (task->from_addr) == AF_INET6) {
 		total += sizeof (struct in6_addr) + 1;
 	}
 
@@ -1537,7 +1537,7 @@ fuzzy_cmd_write_extensions (struct rspamd_task *task,
 		}
 	}
 
-	if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
+	if (task->from_addr && rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
 		if (available >= sizeof (struct in_addr) + 1) {
 			guint klen;
 			guchar *inet_data = rspamd_inet_address_get_hash_key (task->from_addr, &klen);
@@ -1551,7 +1551,7 @@ fuzzy_cmd_write_extensions (struct rspamd_task *task,
 			written += klen + 1;
 		}
 	}
-	else if (rspamd_inet_address_get_af (task->from_addr) == AF_INET6) {
+	else if (task->from_addr && rspamd_inet_address_get_af (task->from_addr) == AF_INET6) {
 		if (available >= sizeof (struct in6_addr) + 1) {
 			guint klen;
 			guchar *inet_data = rspamd_inet_address_get_hash_key (task->from_addr, &klen);
@@ -1870,7 +1870,8 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		additional_data = ((guchar *)enccmd) + sizeof (*enccmd);
 	}
 	else {
-		cmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cmd));
+		cmd = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (*cmd) + additional_length);
 		additional_data = ((guchar *)cmd) + sizeof (*cmd);
 	}
 
@@ -2759,7 +2760,8 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				if (*(session->err) == NULL) {
 					g_set_error (session->err,
 						g_quark_from_static_string (M),
-						errno, "write socket error: %s", strerror (errno));
+						errno, "write socket error: %s",
+						strerror (errno));
 				}
 				ret = return_error;
 			}
