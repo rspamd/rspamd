@@ -70,18 +70,21 @@ define(["jquery", "d3pie"],
             $.each(data, function (i, item) {
                 var widget = "";
                 if (i === "auth" || i === "error") return; // Skip to the next iteration
-                if (i === "version") {
-                    widget = "<div class=\"left\"><strong>" + item + "</strong>" +
-                    i + "</div>";
-                    $(widget).appendTo(widgets);
-                } else if (i === "uptime") {
-                    widget = "<div class=\"right\"><strong>" + msToTime(item) +
-                    "</strong>" + i + "</div>";
+                if (i === "uptime" || i === "version") {
+                    var cls = "border-right ";
+                    var val = item;
+                    if (i === "uptime") {
+                        cls = "";
+                        val = msToTime(item);
+                    }
+                    widget = "<div class=\"" + cls + "float-left px-3\"><strong class=\"d-block mt-2 mb-1 font-weight-bold\">" + val +
+                      "</strong>" + i + "</div>";
                     $(widget).appendTo(widgets);
                 } else {
                     var titleAtt = d3.format(",")(item) + " " + i;
-                    widget = "<li class=\"stat-box bg-light shadow-sm\"><div class=\"widget\" title=\"" + titleAtt + "\"><strong>" +
-                    d3.format(".3~s")(item) + "</strong>" + i + "</div></li>";
+                    widget = "<div class=\"card stat-box d-inline-block text-center bg-light shadow-sm mr-3 px-3\"><div class=\"widget overflow-hidden p-2\" title=\"" +
+                      titleAtt + "\"><strong class=\"d-block mt-2 mb-1 font-weight-bold\">" +
+                    d3.format(".3~s")(item) + "</strong>" + i + "</div></div>";
                     if (i === "scanned") {
                         stat_w[0] = widget;
                     } else if (i === "clean") {
@@ -100,8 +103,9 @@ define(["jquery", "d3pie"],
             $.each(stat_w, function (i, item) {
                 $(item).appendTo(widgets);
             });
-            $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box bg-light shadow-sm float-right\"><div class=\"widget\"></div></li>");
-            $("#statWidgets").find("li.float-right").appendTo("#statWidgets");
+            $("#statWidgets > div:not(.stat-box)")
+                .wrapAll("<div class=\"card stat-box text-center bg-light shadow-sm float-right\"><div class=\"widget overflow-hidden p-2\"></div></div>");
+            $("#statWidgets").find("div.float-right").appendTo("#statWidgets");
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
