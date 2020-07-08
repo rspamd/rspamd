@@ -1118,12 +1118,12 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 	switch (cmd->version) {
 	case 4:
 		if (cmd->shingles_count > 0) {
-			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
+			if (r >= sizeof (struct rspamd_fuzzy_shingle_cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		else {
-			if (r == sizeof (*cmd)) {
+			if (r >= sizeof (*cmd)) {
 				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
@@ -1223,7 +1223,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 static gboolean
 rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize buflen)
 {
-	struct rspamd_fuzzy_cmd_extension *ext;
+	struct rspamd_fuzzy_cmd_extension *ext, *prev_ext;
 	guchar *storage, *p = buf, *end = buf + buflen;
 	gsize st_len = 0, n_ext = 0;
 
@@ -1295,6 +1295,7 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 
 		/* All validation has been done, so we can just go further */
 		while (p < end) {
+			prev_ext = ext;
 			guchar cmd = *p++;
 
 			if (cmd == RSPAMD_FUZZY_EXT_SOURCE_DOMAIN) {
@@ -1338,7 +1339,7 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 		}
 
 		/* Last next should be NULL */
-		ext->next = NULL;
+		prev_ext->next = NULL;
 
 		/* Rewind to the begin */
 		ext = (struct rspamd_fuzzy_cmd_extension *)storage;
