@@ -2022,7 +2022,7 @@ lua_task_insert_result_common (lua_State * L, struct rspamd_scan_result *result,
 				}
 			}
 		}
-		else if (task->settings == NULL) {
+		else if (task->settings == NULL && task->settings_elt == NULL) {
 			lua_pushfstring (L, "insertion failed for %s", symbol_name);
 			rspamd_lua_traceback (L);
 
