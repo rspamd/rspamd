@@ -30,6 +30,9 @@ THE SOFTWARE.
 body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
+.text-secondary {
+    color: #666 !important;
+}
 .navbar {
     padding-top: 0;
     padding-bottom: 0;
@@ -229,62 +232,23 @@ table#symbolsTable input[type="number"] {
     font-size: 0.857rem;
 }
 
-.stat-boxes {
-    margin: 0;
-    margin-right: -10px !important;
-    padding-left: 0;
-}
 .stat-box {
-    background-color: #f6f6f6;
     background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#f9f9f9), to(#ededed));
     background-image: -webkit-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
     background-image: -moz-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
     background-image: -ms-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
     background-image: -o-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
     background-image: linear-gradient(to bottom, #f9f9f9 0%, #ededed 100%);
-    border: 1px solid #d5d5d5;
-    border-radius: 4px 4px 4px 4px;
-    display: inline-block;
-    line-height: 18px;
-    margin: 0 10px 10px 0;
-    padding: 0 10px;
+    line-height: 1;
 }
 .stat-box:not(.float-right) {
     min-width: 90px;
 }
 .stat-box .widget {
-    overflow: hidden;
-    margin: 0 12px;
-    padding: 10px 0 6px;
     font-size: 10px;
-    font-weight: bold;
-    text-align: center;
-    text-transform: capitalize;
-    color: #666;
-}
-.stat-box .left,
-.stat-box .right {
-    float: left;
-}
-.stat-box .left {
-    border-right: 1px solid gainsboro;
-    margin-right: 14px;
-    padding-right: 18px;
-    font-size: 10px;
-    font-weight: bold;
-}
-.stat-box .right {
-    padding-left: 4px;
-}
-.stat-box .widget span,
-.stat-box .widget strong {
-    display: block;
 }
 .stat-box .widget strong {
     font-size: 26px;
-    margin-bottom: 3px;
-    margin-top: 6px;
-    font-weight: 700;
 }
 .nomargin {
     margin: 0 !important;
