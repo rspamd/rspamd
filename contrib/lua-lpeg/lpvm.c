@@ -32,7 +32,7 @@ struct poor_slab {
 };
 
 /* Used to optimize pages allocation */
-struct poor_slab slabs;
+RSPAMD_ALIGNED (64) struct poor_slab slabs;
 
 static uint64_t xorshifto_seed[2] = {0xdeadbabe, 0xdeadbeef};
 
@@ -64,7 +64,7 @@ lpeg_allocate_mem_low (size_t sz)
 	uint64_t s1 = xorshifto_seed[1];
 
 	s1 ^= s0;
-	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	xorshifto_seed[0] = xoroshiro_rotl (s0, 55) ^ s1 ^ (s1 << 14);
 	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
 	flags |= MAP_FIXED;
 	/* Get 46 bits */
@@ -77,7 +77,7 @@ lpeg_allocate_mem_low (size_t sz)
 	memcpy (cp, &sz, sizeof (sz));
 
 	for (unsigned i = 0; i < MAX_PIECES; i ++) {
-		if (slabs.pieces[i].sz == 0) {
+		if (slabs.pieces[i].occupied == 0) {
 			/* Store piece */
 			slabs.pieces[i].sz = sz;
 			slabs.pieces[i].ptr = cp;
@@ -90,7 +90,7 @@ lpeg_allocate_mem_low (size_t sz)
 	/* Not enough free pieces, pop some */
 	unsigned sel = ((uintptr_t)cp) & ((MAX_PIECES * 2) - 1);
 	/* Here we free memory in fact */
-	munmap (slabs.pieces[sel].ptr, slabs.pieces[sel].sz);
+	munmap (slabs.pieces[sel].ptr, slabs.pieces[sel].sz + sizeof (sz));
 	slabs.pieces[sel].sz = sz;
 	slabs.pieces[sel].ptr = cp;
 	slabs.pieces[sel].occupied = 1;
