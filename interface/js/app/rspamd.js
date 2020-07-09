@@ -452,13 +452,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 displayUI();
             },
             error: function () {
-                var dialog = $("#connectDialog");
-                var backdrop = $("#backDrop");
-                $("#mainUI").hide();
-                $(dialog).show();
-                $(backdrop).show();
-                $("#connectPassword").focus();
-                $("#connectForm").off("submit");
+                $("#connectDialog")
+                    .on("shown.bs.modal", function () {
+                        $("#connectDialog").off("shown.bs.modal");
+                        $("#connectPassword").focus();
+                    })
+                    .modal("show");
 
                 $("#connectForm").on("submit", function (e) {
                     e.preventDefault();
@@ -479,8 +478,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                             if (data.auth === "ok") {
                                 sessionStorage.setItem("read_only", data.read_only);
                                 saveCredentials(password);
-                                $(dialog).hide();
-                                $(backdrop).hide();
+                                $("#connectForm").off("submit");
+                                $("#connectDialog").modal("hide");
                                 displayUI();
                             }
                         },
