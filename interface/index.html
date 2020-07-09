@@ -471,11 +471,11 @@
 </div>
 
 <!-- login modal -->
-<div id="connectDialog" class="modal" tabindex="-1" role="dialog" style="display: none;">
+<div id="connectDialog" class="modal fade" data-backdrop="static" data-keyboard="false" role="dialog">
 	<div class="modal-dialog modal-sm modal-dialog-centered">
 		<div class="modal-content shadow">
-			<div class="modal-header py-2">
-				<h6 class="modal-title">Login to Rspamd</h6>
+			<div class="modal-header text-secondary py-2">
+				<i class="fas fa-key my-auto"></i><h6 class="modal-title font-weight-bolder">Login to Rspamd</h6>
 			</div>
 			<div class="modal-body" id="connectBody">
 				<form id="connectForm">
@@ -497,7 +497,6 @@
 	</div>
 </div>
 
-<div id="backDrop" class="modal-backdrop fade in" style="display: none;"></div>
 <script data-main="./js/main.js" src="./js/lib/require.min.js"></script>
 </body>
 </html>
