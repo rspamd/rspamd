@@ -285,8 +285,7 @@ table#symbolsTable input[type="number"] {
     background-color: #cddbff;
 }
 
-.list-textarea {
-    width: 100%;
+#map-textarea {
     height: 360px;
 }
 td.maps-cell {

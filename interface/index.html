@@ -453,18 +453,20 @@
 </div>
 
 <!-- Common modal -->
-<div id="modalDialog" class="modal fade" tabindex="-1" role="dialog">
+<div id="modalDialog" class="modal fade" data-backdrop="static" tabindex="-1" role="dialog">
 	<div class="modal-dialog modal-xl">
-		<div class="modal-content">
-			<div class="modal-header py-2">
-				<h6 class="modal-title" id="modalTitle"></h6>
+		<div class="modal-content shadow">
+			<div class="modal-header text-secondary py-2">
+				<i class="fas my-auto"></i><h6 class="modal-title font-weight-bolder mx-3" id="modalTitle"></h6>
 				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
 			</div>
 			<div class="modal-body" id="modalBody"></div>
 			<div class="modal-footer">
+				<div class="btn-group" id="modalSaveGroup">
+					<button class="btn btn-primary" id="modalSave">Save changes</button>
+					<button class="btn btn-warning" id="modalSaveAll">Save on cluster</button>
+				</div>
 				<button class="btn btn-secondary" data-dismiss="modal" aria-hidden="true" id="modalClose">Close</button>
-				<button class="btn btn-primary" id="modalSave">Save changes</button>
-				<button class="btn btn-primary" id="modalSaveAll">Save on cluster</button>
 			</div>
 		</div>
 	</div>

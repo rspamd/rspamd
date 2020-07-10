@@ -162,9 +162,8 @@ define(["jquery"],
             });
         };
 
-        // @upload edited actions
         ui.setup = function (rspamd) {
-        // Modal form for maps
+            // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var checked_server = rspamd.getSelector("selSrv");
                 var item = $(this).data("item");
@@ -173,46 +172,35 @@ define(["jquery"],
                         Map: item.map
                     },
                     success: function (data) {
-                        var disabled = "";
+                        var readonly = "";
+                        var icon = "fa-edit";
                         var text = data[0].data;
                         if (item.editable === false || rspamd.read_only) {
-                            disabled = "disabled=\"disabled\"";
-                        }
-
-                        $("#" + item.map).remove();
-                        $("<form id=\"" + item.map + "\" style=\"display:none\"" +
-                        " data-type=\"map\" action=\"savemap\" method=\"post\">" +
-                        "<textarea class=\"list-textarea\"" + disabled + ">" + text +
-                        "</textarea>" +
-                        "</form>").appendTo("#modalBody");
-
-                        $("#modalTitle").html(item.uri);
-                        $("#" + item.map).first().show();
-                        $("#modalDialog").modal({backdrop:true, keyboard:"show", show:true});
-                        if (item.editable === false) {
-                            $("#modalSave").hide();
-                            $("#modalSaveAll").hide();
+                            readonly = " readonly";
+                            icon = "fa-eye";
+                            $("#modalSaveGroup").hide();
                         } else {
-                            $("#modalSave").show();
-                            $("#modalSaveAll").show();
+                            $("#modalSaveGroup").show();
                         }
+                        $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
+                        $("#modalTitle").html(item.uri);
+                        $('<textarea id="map-textarea" class="form-control"' + readonly +
+                            ' data-id="' + item.map + '">' +
+                            text +
+                            "</textarea>").appendTo("#modalBody");
+                        $("#modalDialog").modal("show");
                     },
                     errorMessage: "Cannot receive maps data",
                     server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
                 return false;
             });
-            // close modal without saving
             $("#modalDialog").on("hidden.bs.modal", function () {
-                $("#modalBody form").remove();
+                $("#map-textarea").remove();
             });
-            // @save forms from modal
+
             function saveMap(server) {
-                var form = $("#modalBody").children().filter(":visible");
-                var action = $(form).attr("action");
-                var id = $(form).attr("id");
-                var data = $("#" + id).find("textarea").val();
-                rspamd.query(action, {
+                rspamd.query("savemap", {
                     success: function () {
                         rspamd.alertMessage("alert-success", "Map data successfully saved");
                         $("#modalDialog").modal("hide");
@@ -220,10 +208,10 @@ define(["jquery"],
                     errorMessage: "Save map error",
                     method: "POST",
                     headers: {
-                        Map: id,
+                        Map: $("#map-textarea").data("id"),
                     },
                     params: {
-                        data: data,
+                        data: $("#map-textarea").val(),
                         dataType: "text",
                     },
                     server: server
