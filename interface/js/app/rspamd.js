@@ -278,17 +278,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         if (ui.read_only) {
             $(".ro-disable").attr("disabled", true);
             $(".ro-hide").hide();
-            $(".learn").hide();
-            $("#resetHistory").attr("disabled", true);
-            $("#errors-history").hide();
-            $("#selectors_nav").hide();
         } else {
             $(".ro-disable").removeAttr("disabled", true);
             $(".ro-hide").show();
-            $(".learn").show();
-            $("#resetHistory").removeAttr("disabled", true);
-            $("#errors-history").show();
-            $("#selectors_nav").show();
         }
 
         var buttons = $("#navbar-btn-form");
