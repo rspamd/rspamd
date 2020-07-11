@@ -202,7 +202,17 @@
 						<span class="icon mr-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 font-weight-bolder my-2">Actions</span>
 					</div>
-					<div class="card-body actions-content" id="actionsBody"></div>
+					<div class="card-body pb-2">
+						<form id="actionsForm">
+							<fieldset id="actionsFormField" class="ro-disable"></fieldset>
+						</form>
+					</div>
+					<div class="card-footer ro-hide">
+						<div class="btn-group">
+							<button class="btn btn-primary" type="button" id="saveActionsBtn">Save actions</button>
+							<button class="btn btn-warning" type="button" id="saveActionsClusterBtn">Save cluster</button>
+						</div>
+					</div>
 				</div>
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
