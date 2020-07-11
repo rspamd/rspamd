@@ -40,8 +40,8 @@
 
 		<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab" class="nav-link">Configuration</a></li>
 		<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab" class="nav-link">Symbols</a></li>
-		<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab" class="nav-link">Scan<span class="learn" style="display: none;">/Learn</span></a></li>
-		<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" class="nav-link" style="display: none;">Test selectors</a></li>
+		<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab" class="nav-link">Scan<span class="ro-hide" style="display: none;">/Learn</span></a></li>
+		<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
 		<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab" class="nav-link">History</a></li>
 	</ul>
 	<form class="form-inline ml-auto" id="navbar-btn-form" style="display: none;">
@@ -202,7 +202,17 @@
 						<span class="icon mr-3"><i class="fas fa-tasks"></i></span>
 						<span class="h6 font-weight-bolder my-2">Actions</span>
 					</div>
-					<div class="card-body actions-content" id="actionsBody"></div>
+					<div class="card-body pb-2">
+						<form id="actionsForm">
+							<fieldset id="actionsFormField" class="ro-disable"></fieldset>
+						</form>
+					</div>
+					<div class="card-footer ro-hide">
+						<div class="btn-group">
+							<button class="btn btn-primary" type="button" id="saveActionsBtn">Save actions</button>
+							<button class="btn btn-warning" type="button" id="saveActionsClusterBtn">Save cluster</button>
+						</div>
+					</div>
 				</div>
 				<div class="card bg-light shadow my-3">
 					<div class="card-header text-secondary py-2">
@@ -254,7 +264,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card learn" style="display: none;">
+				<div class="card ro-hide" style="display: none;">
 					<div class="card-header text-secondary py-2">
 						<span class="icon mr-3"><i class="fas fa-graduation-cap"></i></span>
 						<span class="h6 font-weight-bolder my-2">Learn Rspamd</span>
@@ -416,7 +426,7 @@
 							</select>
 							<label for="history_page_size" class="ml-2">Rows per page:</label>
 							<input id="history_page_size" class="form-control ml-1" value="25" min="1" type="number">
-							<button class="btn btn-danger btn-sm ml-2" id="resetHistory">
+							<button class="btn btn-danger btn-sm ml-2 ro-hide" id="resetHistory">
 								<i class="fas fa-times-circle"></i> Reset
 							</button>
 							<button class="btn btn-info btn-sm ml-2" id="updateHistory">
@@ -430,7 +440,7 @@
 						</div>
 					</div>
 				</div>
-				<div class="card bg-light shadow my-3" id="errors-history">
+				<div class="card bg-light shadow my-3 ro-hide" id="errors-history">
 					<div class="card-header text-secondary py-1 d-flex">
 						<span class="icon mr-3"><i class="fas fa-exclamation-triangle"></i></span>
 						<span class="h6 font-weight-bolder my-2 ml-0">Errors</span>

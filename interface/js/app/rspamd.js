@@ -276,15 +276,11 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         // So when we store the boolean true or false, it actually stores the strings "true" or "false".
         ui.read_only = sessionStorage.getItem("read_only") === "true";
         if (ui.read_only) {
-            $(".learn").hide();
-            $("#resetHistory").attr("disabled", true);
-            $("#errors-history").hide();
-            $("#selectors_nav").hide();
+            $(".ro-disable").attr("disabled", true);
+            $(".ro-hide").hide();
         } else {
-            $(".learn").show();
-            $("#resetHistory").removeAttr("disabled", true);
-            $("#errors-history").show();
-            $("#selectors_nav").show();
+            $(".ro-disable").removeAttr("disabled", true);
+            $(".ro-hide").show();
         }
 
         var buttons = $("#navbar-btn-form");

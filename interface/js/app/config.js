@@ -27,23 +27,10 @@ define(["jquery"],
         "use strict";
         var ui = {};
 
-        function loadActionsFromForm() {
-            var values = [];
-            var inputs = $("#actionsForm :input[data-id=\"action\"]");
-            // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
-            values[0] = parseFloat(inputs[3].value);
-            values[1] = parseFloat(inputs[2].value);
-            values[2] = parseFloat(inputs[1].value);
-            values[3] = parseFloat(inputs[0].value);
-
-            return JSON.stringify(values);
-        }
-
         ui.getActions = function getActions(rspamd, checked_server) {
             rspamd.query("actions", {
                 success: function (data) {
-                    $("#actionsBody").empty();
-                    $("#actionsForm").empty();
+                    $("#actionsFormField").empty();
                     var items = [];
                     $.each(data[0].data, function (i, item) {
                         var idx = -1;
@@ -64,11 +51,13 @@ define(["jquery"],
                         if (idx >= 0) {
                             items.push({
                                 idx: idx,
-                                html: "<div class=\"form-group\">" +
-                                "<label class=\"col-form-label col-md-2 float-left\">" + label + "</label>" +
-                                "<div class=\"controls slider-controls col-md-10\">" +
-                                "<input class=\"action-scores form-control\" data-id=\"action\" type=\"number\" value=\"" + item.value + "\">" +
-                                "</div>" +
+                                html:
+                                '<div class="form-group">' +
+                                    '<label class="col-form-label col-md-2 float-left">' + label + "</label>" +
+                                    '<div class="controls slider-controls col-md-10">' +
+                                        '<input class="action-scores form-control" data-id="action" type="number" value="' +
+                                          item.value + '">' +
+                                    "</div>" +
                                 "</div>"
                             });
                         }
@@ -78,60 +67,63 @@ define(["jquery"],
                         return a.idx - b.idx;
                     });
 
-                    $("#actionsBody").html("<form id=\"actionsForm\"><fieldset id=\"actionsFormField\">" +
-                    items.map(function (e) {
-                        return e.html;
-                    }).join("") +
-                    "<div class=\"form-group\">" +
-                    "<div class=\"btn-group\">" +
-                    "<button class=\"btn btn-primary\" type=\"button\" id=\"saveActionsBtn\">Save actions</button>" +
-                    "<button class=\"btn btn-primary\" type=\"button\" id=\"saveActionsClusterBtn\">Save cluster</button>" +
-                    "</div></div></fieldset></form>");
-                    if (rspamd.read_only) {
-                        $("#saveActionsClusterBtn").attr("disabled", true);
-                        $("#saveActionsBtn").attr("disabled", true);
-                        $("#actionsFormField").attr("disabled", true);
-                    }
-
-                    function saveActions(server) {
-                        var elts = loadActionsFromForm();
-                        // String to array for comparison
-                        var eltsArray = JSON.parse(loadActionsFromForm());
-                        if (eltsArray[0] < 0) {
-                            rspamd.alertMessage("alert-modal alert-error", "Spam can not be negative");
-                        } else if (eltsArray[1] < 0) {
-                            rspamd.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
-                        } else if (eltsArray[2] < 0) {
-                            rspamd.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
-                        } else if (eltsArray[3] < 0) {
-                            rspamd.alertMessage("alert-modal alert-error", "Greylist can not be negative");
-                        } else if (
-                            (eltsArray[2] === null || eltsArray[3] < eltsArray[2]) &&
-                        (eltsArray[1] === null || eltsArray[2] < eltsArray[1]) &&
-                        (eltsArray[0] === null || eltsArray[1] < eltsArray[0])
-                        ) {
-                            rspamd.query("saveactions", {
-                                method: "POST",
-                                params: {
-                                    data: elts,
-                                    dataType: "json"
-                                },
-                                server: server
-                            });
-                        } else {
-                            rspamd.alertMessage("alert-modal alert-error", "Incorrect order of metric actions threshold");
-                        }
-                    }
-
-                    $("#saveActionsBtn").on("click", function () {
-                        saveActions();
-                    });
-                    $("#saveActionsClusterBtn").on("click", function () {
-                        saveActions("All SERVERS");
-                    });
+                    $("#actionsFormField").html(
+                        items.map(function (e) {
+                            return e.html;
+                        }).join(""));
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
+        };
+
+        ui.saveActions = function (rspamd, server) {
+            function descending(arr) {
+                var desc = true;
+                var filtered = arr.filter(function (el) {
+                    return el !== null;
+                });
+                for (var i = 0; i < filtered.length - 1; i++) {
+                    if (filtered[i + 1] >= filtered[i]) {
+                        desc = false;
+                        break;
+                    }
+                }
+                return desc;
+            }
+
+            var elts = (function () {
+                var values = [];
+                var inputs = $("#actionsForm :input[data-id=\"action\"]");
+                // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
+                values[0] = parseFloat(inputs[3].value);
+                values[1] = parseFloat(inputs[2].value);
+                values[2] = parseFloat(inputs[1].value);
+                values[3] = parseFloat(inputs[0].value);
+
+                return JSON.stringify(values);
+            }());
+            // String to array for comparison
+            var eltsArray = JSON.parse(elts);
+            if (eltsArray[0] < 0) {
+                rspamd.alertMessage("alert-modal alert-error", "Spam can not be negative");
+            } else if (eltsArray[1] < 0) {
+                rspamd.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
+            } else if (eltsArray[2] < 0) {
+                rspamd.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
+            } else if (eltsArray[3] < 0) {
+                rspamd.alertMessage("alert-modal alert-error", "Greylist can not be negative");
+            } else if (descending(eltsArray)) {
+                rspamd.query("saveactions", {
+                    method: "POST",
+                    params: {
+                        data: elts,
+                        dataType: "json"
+                    },
+                    server: server
+                });
+            } else {
+                rspamd.alertMessage("alert-modal alert-error", "Incorrect order of actions thresholds");
+            }
         };
 
         ui.getMaps = function (rspamd, checked_server) {
@@ -197,6 +189,13 @@ define(["jquery"],
             });
             $("#modalDialog").on("hidden.bs.modal", function () {
                 $("#map-textarea").remove();
+            });
+
+            $("#saveActionsBtn").on("click", function () {
+                ui.saveActions(rspamd);
+            });
+            $("#saveActionsClusterBtn").on("click", function () {
+                ui.saveActions(rspamd, "All SERVERS");
             });
 
             function saveMap(server) {
