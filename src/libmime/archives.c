@@ -1921,7 +1921,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	const guchar rar_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07};
 	const guchar zip_magic[] = {0x50, 0x4b, 0x03, 0x04};
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
-	const guchar gz_magic[] = {0x1F, 0x8B};
+	const guchar gz_magic[] = {0x1F, 0x8B, 0x08};
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
