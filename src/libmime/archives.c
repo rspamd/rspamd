@@ -68,11 +68,11 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 		UConverter *utf8_converter;
 
 		conv = rspamd_mime_get_converter_cached (charset, task->task_pool,
-				FALSE, &uc_err);
+				TRUE, &uc_err);
 		utf8_converter = rspamd_get_utf8_converter ();
 
 		if (conv == NULL) {
-			msg_err_task ("cannot open converter for %s: %s",
+			msg_info_task ("cannot open converter for %s: %s",
 					charset, u_errorName (uc_err));
 
 			return NULL;
@@ -82,7 +82,7 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 		r = rspamd_converter_to_uchars (conv, tmp, inlen + 1,
 				in, inlen, &uc_err);
 		if (!U_SUCCESS (uc_err)) {
-			msg_err_task ("cannot convert data to unicode from %s: %s",
+			msg_info_task ("cannot convert data to unicode from %s: %s",
 					charset, u_errorName (uc_err));
 			g_free (tmp);
 
@@ -95,7 +95,7 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 		r = ucnv_fromUChars (utf8_converter, res->str, dlen, tmp, r, &uc_err);
 
 		if (!U_SUCCESS (uc_err)) {
-			msg_err_task ("cannot convert data from unicode from %s: %s",
+			msg_info_task ("cannot convert data from unicode from %s: %s",
 					charset, u_errorName (uc_err));
 			g_free (tmp);
 			g_string_free (res, TRUE);
@@ -1750,7 +1750,13 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 					f->fname = rspamd_archive_file_try_utf (task, fname_start,
 							p - fname_start);
 
-					g_ptr_array_add (arch->files, f);
+					if (f->fname) {
+						g_ptr_array_add (arch->files, f);
+					}
+					else {
+						/* Invalid filename, skip */
+						g_free (f);
+					}
 
 					goto set;
 				}
