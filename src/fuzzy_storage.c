@@ -1547,6 +1547,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 				session->time = (guint64) time (NULL);
 				session->addr = rspamd_inet_address_from_sa (MSG_FIELD(msg[i], msg_name),
 						MSG_FIELD(msg[i], msg_namelen));
+				worker->nconns++;
 
 				/* Each message can have its length in case of recvmmsg */
 #ifdef HAVE_RECVMMSG
@@ -1556,7 +1557,6 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 				if (rspamd_fuzzy_cmd_from_wire (iovs[i].iov_base,
 						msg_len, session)) {
 					/* Check shingles count sanity */
-					worker->nconns++;
 					rspamd_fuzzy_process_command (session);
 				}
 				else {
