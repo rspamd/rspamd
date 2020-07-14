@@ -4,7 +4,8 @@
         "**/*.min.css",
         "**/*.min.js",
         "interface/css/d3evolution.css",
-        "interface/css/nprogress.css"
+        "interface/css/nprogress.css",
+        "interface/css/prism.css"
     ],
     "rules": {
         "at-rule-empty-line-before": null,

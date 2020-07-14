@@ -285,9 +285,6 @@ table#symbolsTable input[type="number"] {
     background-color: #cddbff;
 }
 
-#map-textarea {
-    height: 360px;
-}
 td.maps-cell {
     vertical-align: middle;
 }
@@ -535,4 +532,33 @@ td.maps-cell {
 }
 #clusterTable tr:last-child td:last-child {
     border-radius: 0 0 calc(.25rem - 1px) 0;
+}
+
+textarea#editor {
+    height: calc(100vh - 178px);
+}
+.codejar-wrap {
+    background: rgb(0, 47, 79);
+    border-radius: 6px;
+    max-height: calc(100vh - 178px);
+    overflow-y: auto;
+}
+.codejar-linenumbers {
+    background: rgba(255, 255, 255, 0.07) !important;
+    bottom: unset !important;
+    color: rgba(120, 120, 120, 1) !important;
+    mix-blend-mode: unset !important;
+    text-align: right;
+    overflow: unset !important;
+}
+.editor {
+    color: #fff;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: normal;
+    min-height: 1.5em;
+    resize: unset !important;
+    tab-size: 4;
+    overflow-y: visible !important;
 }
