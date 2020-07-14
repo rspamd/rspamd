@@ -22,8 +22,8 @@
  THE SOFTWARE.
  */
 
-define(["jquery"],
-    function ($) {
+define(["jquery", "codejar", "linenumbers", "prism"],
+    function ($, CodeJar, withLineNumbers, Prism) {
         "use strict";
         var ui = {};
 
@@ -155,6 +155,22 @@ define(["jquery"],
         };
 
         ui.setup = function (rspamd) {
+            var jar = {};
+            // CodeJar requires ES6
+            var editor = window.CodeJar &&
+                // Required to restore cursor position
+                (typeof window.getSelection().setBaseAndExtent === "function")
+                ? {
+                    codejar: true,
+                    elt: "div",
+                    class: "editor language-clike",
+                }
+                // Fallback to textarea if the browser does not support ES6
+                : {
+                    elt: "textarea",
+                    class: "form-control map-textarea",
+                };
+
             // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var checked_server = rspamd.getSelector("selSrv");
@@ -176,10 +192,19 @@ define(["jquery"],
                         }
                         $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
                         $("#modalTitle").html(item.uri);
-                        $('<textarea id="map-textarea" class="form-control"' + readonly +
+
+                        $("<" + editor.elt + ' id="editor" class="' + editor.class + '"' + readonly +
                             ' data-id="' + item.map + '">' +
                             text +
-                            "</textarea>").appendTo("#modalBody");
+                            "</" + editor.elt + ">").appendTo("#modalBody");
+
+                        if (editor.codejar) {
+                            jar = new CodeJar(
+                                document.querySelector("#editor"),
+                                withLineNumbers(Prism.highlightElement)
+                            );
+                        }
+
                         $("#modalDialog").modal("show");
                     },
                     errorMessage: "Cannot receive maps data",
@@ -188,7 +213,12 @@ define(["jquery"],
                 return false;
             });
             $("#modalDialog").on("hidden.bs.modal", function () {
-                $("#map-textarea").remove();
+                if (editor.codejar) {
+                    jar.destroy();
+                    $(".codejar-wrap").remove();
+                } else {
+                    $("#editor").remove();
+                }
             });
 
             $("#saveActionsBtn").on("click", function () {
@@ -207,10 +237,10 @@ define(["jquery"],
                     errorMessage: "Save map error",
                     method: "POST",
                     headers: {
-                        Map: $("#map-textarea").data("id"),
+                        Map: $("#editor").data("id"),
                     },
                     params: {
-                        data: $("#map-textarea").val(),
+                        data: editor.codejar ? jar.toString() : $("#editor").val(),
                         dataType: "text",
                     },
                     server: server
