@@ -27,12 +27,10 @@ end
 
 exports.digest_schema = digest_schema
 
-local function create_digest(data, args)
-
-  local encoding = args[1] or 'hex'
+local function create_raw_digest(data, args)
   local ht = args[2] or 'blake2'
 
-  local h, s
+  local h
 
   if ht == 'blake2' then
     -- Hack to be compatible with various 'get_digest' methods
@@ -41,6 +39,13 @@ local function create_digest(data, args)
     h = cr_hash.create_specific(ht):update(data)
   end
 
+  return h
+end
+
+local function encode_digest(h, args)
+  local encoding = args[1] or 'hex'
+
+  local s
   if encoding == 'hex' then
     s = h:hex()
   elseif encoding == 'base32' then
@@ -56,6 +61,36 @@ local function create_digest(data, args)
   return s
 end
 
+local function create_digest(data, args)
+  local h = create_raw_digest(data, args)
+  return encode_digest(h, args)
+end
+
+
+local function get_cached_or_raw_digest(task, idx, mime_part, args)
+  if #args == 0 then
+    -- Optimise as we already have this hash in the API
+    return mime_part:get_digest()
+  end
+
+  local ht = args[2] or 'blake2'
+  local cache_key = 'mp_digest_' .. ht .. tostring(idx)
+
+  local cached = task:cache_get(cache_key)
+
+  if cached then
+    return encode_digest(cached, args)
+  end
+
+  local h = create_raw_digest(mime_part:get_content('raw_parsed'), args)
+  task:cache_set(cache_key, h)
+
+  return encode_digest(h, args)
+end
+
 exports.create_digest = create_digest
+exports.create_raw_digest = create_raw_digest
+exports.get_cached_or_raw_digest = get_cached_or_raw_digest
+exports.encode_digest = encode_digest
 
 return exports

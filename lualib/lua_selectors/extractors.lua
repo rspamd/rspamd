@@ -134,15 +134,9 @@ uses any type by default)]],
     ['get_value'] = function(task, args)
       local parts = task:get_parts() or E
       local digests = {}
-      for _,p in ipairs(parts) do
+      for i,p in ipairs(parts) do
         if p:get_filename() then
-          if #args == 0 then
-            -- Optimise as we already have this hash in the API
-            table.insert(digests, p:get_digest())
-          else
-            table.insert(digests, common.create_digest(p:get_content('raw_parsed'), args))
-          end
-
+          table.insert(digests, common.get_cached_or_raw_digest(task, i, p, args))
         end
       end
 
