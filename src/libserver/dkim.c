@@ -2654,7 +2654,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 			msg_info_dkim (
 					"%s: headers RSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; key=%*xs; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
@@ -2668,7 +2668,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 				key->key.key_ecdsa) != 1) {
 			msg_info_dkim (
 					"%s: headers ECDSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; key=%*xs; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
@@ -2685,7 +2685,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 				key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_info_dkim (
 					"%s: headers EDDSA verification failure; "
-					"body length %d->%d; headers length %d; d=%s; s=%s; key=%*xs; orig header: %s",
+					"body length %d->%d; headers length %d; d=%s; s=%s; key_md5=%*xs; orig header: %s",
 					rspamd_dkim_type_to_string (ctx->common.type),
 					(gint)(body_end - body_start), ctx->common.body_canonicalised,
 					ctx->common.headers_canonicalised,
