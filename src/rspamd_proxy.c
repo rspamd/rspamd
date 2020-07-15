@@ -1604,7 +1604,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 			msg->method = HTTP_SYMBOLS;
 		}
 		else {
-			msg_debug_session ("cannot parse results from the master backend, "
+			msg_warn_session ("cannot parse results from the master backend, "
 					"return them as is");
 		}
 	}
