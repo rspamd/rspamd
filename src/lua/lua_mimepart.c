@@ -1764,22 +1764,27 @@ lua_mimepart_is_attachment (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (part->part_type != RSPAMD_MIME_PART_IMAGE) {
-		if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
-			lua_pushboolean (L, true);
-		}
-		else {
-			if (part->cd && part->cd->filename.len > 0) {
-				/* We still have filename and it is not an image */
+	if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
+		lua_pushboolean (L, true);
+	}
+	else {
+		/* if has_name and not (image and Content-ID_header_present) */
+		if (part->cd && part->cd->filename.len > 0) {
+			if (part->part_type != RSPAMD_MIME_PART_IMAGE &&
+				rspamd_message_get_header_from_hash (part->raw_headers,
+						"Content-Id") == NULL) {
+				/* Filename is presented but no content id and not image */
 				lua_pushboolean (L, true);
 			}
 			else {
+				/* Image or an embeded object */
 				lua_pushboolean (L, false);
 			}
 		}
-	}
-	else {
-		lua_pushboolean (L, false);
+		else {
+			/* No filename */
+			lua_pushboolean (L, false);
+		}
 	}
 
 	return 1;
