@@ -534,6 +534,23 @@ td.maps-cell {
     border-radius: 0 0 calc(.25rem - 1px) 0;
 }
 
+/* Dynamic width for modal */
+#modalDialog {
+    text-align: center;
+}
+#modalDialog > .modal-dialog {
+    display: inline-block;
+    max-width: 100%;
+    text-align: left;
+    width: auto !important;
+
+    /* Center the modal vertically */
+    margin: 0 auto;
+    top: 50%;
+    transform: translate(0 -50%);
+    -webkit-transform: translate(0, -50%);
+}
+
 textarea#editor {
     height: calc(100vh - 178px);
 }
