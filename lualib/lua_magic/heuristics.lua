@@ -393,6 +393,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
   end
 
   local content = part:get_content()
+  local mtype,msubtype = part:get_type()
   local clen = #content
   local is_text
 
@@ -431,6 +432,10 @@ exports.text_part_heuristic = function(part, log_obj, _)
         if weight and weight >= 40 then
           return ext,weight
         end
+      end
+
+      if mtype == 'text' and (msubtype == 'html' or msubtype == 'htm') then
+        return 'html',21
       end
 
       return 'txt',40
