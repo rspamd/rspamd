@@ -561,4 +561,16 @@ textarea#editor {
     resize: unset !important;
     tab-size: 4;
     overflow-y: visible !important;
+    -moz-tab-size: 4;
+}
+
+/* Prism show-invisibles plugin overrides */
+.token.tab:not(:empty)::before {
+    content: "\23af\27F6";
+}
+/* Temporarily remove CR and LF tokens as they overflow line width */
+.token.cr::before,
+.token.crlf::before,
+.token.lf::before {
+    content: "";
 }
