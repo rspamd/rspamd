@@ -923,6 +923,9 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 		if (g_ascii_strncasecmp (p, "src", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
+		else if (g_ascii_strncasecmp (p, "rel", len) == 0) {
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_REL);
+		}
 	}
 	else if (len == 4) {
 		if (g_ascii_strncasecmp (p, "href", len) == 0) {
@@ -1891,6 +1894,31 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	g_ptr_array_add (hc->images, img);
 	tag->extra = img;
+}
+
+static void
+rspamd_html_process_link_tag (rspamd_mempool_t *pool, struct html_tag *tag,
+							 struct html_content *hc, khash_t (rspamd_url_hash) *url_set,
+							 GPtrArray *part_urls)
+{
+	struct html_tag_component *comp;
+	GList *cur;
+
+	cur = tag->params->head;
+
+	while (cur) {
+		comp = cur->data;
+
+		if (comp->type == RSPAMD_HTML_COMPONENT_REL && comp->len > 0) {
+			if (comp->len == sizeof ("icon") - 1 &&
+				rspamd_lc_cmp (comp->start, "icon", sizeof ("icon") - 1) == 0) {
+
+				rspamd_html_process_img_tag (pool, tag, hc, url_set, part_urls);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
 }
 
 static void
@@ -3161,6 +3189,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc, url_set,
+							part_urls);
+				}
+				else if (cur_tag->id == Tag_LINK && !(cur_tag->flags & FL_CLOSING)) {
+					rspamd_html_process_link_tag (pool, cur_tag, hc, url_set,
 							part_urls);
 				}
 				else if (cur_tag->flags & FL_BLOCK) {

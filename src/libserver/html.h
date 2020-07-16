@@ -42,6 +42,7 @@ enum html_component_type {
 	RSPAMD_HTML_COMPONENT_WIDTH,
 	RSPAMD_HTML_COMPONENT_HEIGHT,
 	RSPAMD_HTML_COMPONENT_SIZE,
+	RSPAMD_HTML_COMPONENT_REL,
 };
 
 struct html_tag_component {
