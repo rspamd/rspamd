@@ -1774,6 +1774,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	cur = tag->params->head;
 	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
 	img->tag = tag;
+	tag->flags |= FL_IMAGE;
 
 	while (cur) {
 		comp = cur->data;
@@ -3180,6 +3181,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 							msg_debug_html ("got valid base tag");
 							hc->base_url = url;
 							cur_tag->extra = url;
+							cur_tag->flags |= FL_HREF;
 						}
 						else {
 							msg_debug_html ("got invalid base tag!");

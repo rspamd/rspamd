@@ -715,15 +715,15 @@ lua_html_tag_get_extra (lua_State *L)
 
 	if (ltag) {
 		if (ltag->tag->extra) {
-			if ((ltag->tag->flags & FL_HREF) || ltag->tag->id == Tag_BASE) {
+			if (ltag->tag->flags & FL_IMAGE) {
+				img = ltag->tag->extra;
+				lua_html_push_image (L, img);
+			}
+			else if (ltag->tag->flags & FL_HREF) {
 				/* For A that's URL */
 				purl = lua_newuserdata (L, sizeof (gpointer));
 				*purl = ltag->tag->extra;
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
-			}
-			else if (ltag->tag->id == Tag_IMG) {
-				img = ltag->tag->extra;
-				lua_html_push_image (L, img);
 			}
 			else if (ltag->tag->flags & FL_BLOCK) {
 				lua_html_push_block (L, ltag->tag->extra);

@@ -105,6 +105,7 @@ struct html_block {
 #define FL_IGNORE       (1 << 27)
 #define FL_BLOCK        (1 << 28)
 #define FL_HREF         (1 << 29)
+#define FL_IMAGE        (1 << 30)
 
 struct html_tag {
 	gint id;
