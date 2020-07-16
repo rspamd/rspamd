@@ -1582,9 +1582,13 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				gchar *buf;
 				gsize orig_len;
 
-				if (rspamd_substring_search (start, len, "://", 3) == -1 &&
-					(len >= sizeof ("data:") &&
-					 g_ascii_strncasecmp (start, "data:", sizeof ("data:") - 1) != 0)) {
+				if (rspamd_substring_search (start, len, "://", 3) == -1) {
+
+					if (len >= sizeof ("data:") &&
+						g_ascii_strncasecmp (start, "data:", sizeof ("data:") - 1) == 0) {
+						/* Image data url, never insert as url */
+						return NULL;
+					}
 
 					/* Assume relative url */
 
