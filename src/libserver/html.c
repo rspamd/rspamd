@@ -1574,14 +1574,18 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			/* Check base url */
 			if (hc && hc->base_url && comp->len > 2) {
 				/*
-				 * Relative url canot start from the following:
+				 * Relative url cannot start from the following:
 				 * schema://
+				 * data:
 				 * slash
 				 */
 				gchar *buf;
 				gsize orig_len;
 
-				if (rspamd_substring_search (start, len, "://", 3) == -1) {
+				if (rspamd_substring_search (start, len, "://", 3) == -1 &&
+					(len >= sizeof ("data:") &&
+					 g_ascii_strncasecmp (start, "data:", sizeof ("data:") - 1) != 0)) {
+
 					/* Assume relative url */
 
 					gboolean need_slash = FALSE;
