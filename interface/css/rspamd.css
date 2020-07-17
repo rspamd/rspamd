@@ -534,31 +534,72 @@ td.maps-cell {
     border-radius: 0 0 calc(.25rem - 1px) 0;
 }
 
-textarea#editor {
-    height: calc(100vh - 178px);
+/* Dynamic width for modal */
+#modalDialog {
+    text-align: center;
 }
-.codejar-wrap {
-    background: rgb(0, 47, 79);
+#modalDialog > .modal-dialog {
+    display: inline-block;
+    max-width: 100%;
+    text-align: left;
+    width: auto !important;
+
+    /* Center the modal vertically */
+    margin: 0 auto;
+    top: 50%;
+    transform: translate(0 -50%);
+    -webkit-transform: translate(0, -50%);
+}
+
+.codejar-wrap,
+#editor.map-textarea {
     border-radius: 6px;
     max-height: calc(100vh - 178px);
-    overflow-y: auto;
+    max-width: 100%;
+    min-width: 100%;
+    overflow: auto;
+    resize: both;
+}
+#editor.map-textarea {
+    height: calc(100vh - 178px);
+    width: calc(100vw - 36px - 3rem);
+}
+.codejar-wrap,
+#editor.map-textarea,
+#editor.map-textarea:focus {
+    background: rgb(0, 47, 79);
+    color: silver;
 }
 .codejar-linenumbers {
     background: rgba(255, 255, 255, 0.07) !important;
     bottom: unset !important;
     color: rgba(120, 120, 120, 1) !important;
+    height: inherit;
     mix-blend-mode: unset !important;
     text-align: right;
     overflow: unset !important;
+    user-select: none;
 }
 .editor {
-    color: #fff;
     font-family: monospace;
     font-size: 14px;
     font-weight: 400;
     letter-spacing: normal;
-    min-height: 1.5em;
+    margin-left: 10px;
+    margin-right: 10px;
     resize: unset !important;
     tab-size: 4;
-    overflow-y: visible !important;
+    -moz-tab-size: 4;
+    overflow: unset !important;
+}
+
+/* Prism show-invisibles plugin overrides */
+.token.tab:not(:empty)::before {
+    content: "\23af\27F6";
+}
+/* Temporarily remove CR and LF tokens as they overflow line width */
+.token.cr::before,
+.token.crlf::before,
+.token.lf::before {
+    content: "";
 }
