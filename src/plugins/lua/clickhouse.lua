@@ -633,7 +633,7 @@ local function clickhouse_collect(task)
   end
 
   local nurls = 0
-  local task_urls = task:get_urls(true) or {}
+  local task_urls = task:get_urls(false) or {}
 
   nurls = #task_urls
 
