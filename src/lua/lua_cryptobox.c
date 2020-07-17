@@ -333,7 +333,7 @@ lua_cryptobox_pubkey_load (lua_State *L)
 
 /***
  * @function rspamd_cryptobox_pubkey.create(data[, type[, alg]])
- * Loads public key from base32 encoded file
+ * Loads public key from base32 encoded string
  * @param {base32 string} base32 string with the key
  * @param {string} type optional 'sign' or 'kex' for signing and encryption
  * @param {string} alg optional 'default' or 'nist' for curve25519/nistp256 keys
