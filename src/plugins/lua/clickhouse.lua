@@ -633,9 +633,9 @@ local function clickhouse_collect(task)
   end
 
   local nurls = 0
-  if task:has_urls(true) then
-    nurls = #task:get_urls(true)
-  end
+  local task_urls = task:get_urls(true) or {}
+
+  nurls = #task_urls
 
   local timestamp = math.floor(task:get_date({
     format = 'connect',
@@ -757,26 +757,21 @@ local function clickhouse_collect(task)
 
   -- Urls step
   local urls_urls = {}
-  if task:has_urls(false) then
 
-    for _,u in ipairs(task:get_urls(false)) do
-      if settings['full_urls'] then
-        urls_urls[u:get_text()] = u
-      else
-        urls_urls[u:get_host()] = u
-      end
+  for _,u in ipairs(task_urls) do
+    if settings['full_urls'] then
+      urls_urls[u:get_text()] = u
+    else
+      urls_urls[u:get_host()] = u
     end
-
-    -- Get tlds
-    table.insert(row, flatten_urls(function(_, u)
-      return u:get_tld() or u:get_host()
-    end, urls_urls))
-    -- Get hosts/full urls
-    table.insert(row, flatten_urls(function(k, _) return k end, urls_urls))
-  else
-    table.insert(row, {})
-    table.insert(row, {})
   end
+
+  -- Get tlds
+  table.insert(row, flatten_urls(function(_, u)
+    return u:get_tld() or u:get_host()
+  end, urls_urls))
+  -- Get hosts/full urls
+  table.insert(row, flatten_urls(function(k, _) return k end, urls_urls))
 
   -- Emails step
   if task:has_urls(true) then
