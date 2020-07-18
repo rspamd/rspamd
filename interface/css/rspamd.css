@@ -285,10 +285,6 @@ table#symbolsTable input[type="number"] {
     background-color: #cddbff;
 }
 
-td.maps-cell {
-    vertical-align: middle;
-}
-
 .map-link {
     display: block;
     color: #0088cc;
