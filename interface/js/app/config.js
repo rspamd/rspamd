@@ -137,12 +137,13 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var label = (item.editable === false || rspamd.read_only)
-                            ? "<span class=\"badge badge-secondary\">Read</span>"
-                            : "<span class=\"badge badge-secondary\">Read</span>&nbsp;<span class=\"badge badge-success\">Write</span>";
-                        var $tr = $("<tr>");
-                        $("<td class=\"col-lg-2 maps-cell\">" + label + "</td>").appendTo($tr);
-                        var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
+                        var $td = '<td><span class="badge badge-secondary">Read</span></td>';
+                        if (!(item.editable === false || rspamd.read_only)) {
+                            $td = $($td).append('&nbsp;<span class="badge badge-success">Write</span>');
+                        }
+                        var $tr = $("<tr>").append($td);
+
+                        var $span = $('<span class="map-link" data-toggle="modal" data-target="#modalDialog">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
