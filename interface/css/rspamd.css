@@ -418,7 +418,8 @@ table#symbolsTable input[type="number"] {
     }
 }
 #content {
-    transition: width 0.3s ease;
+    transition: all 0.3s ease;
+    transition-property: flex-basis, max-width, width;
 }
 #content label {
     font-weight: normal;
