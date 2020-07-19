@@ -30,6 +30,13 @@ THE SOFTWARE.
 body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
+code {
+    font-size: 90%;
+}
+small,
+.small {
+    font-size: 85%;
+}
 .text-secondary {
     color: #666 !important;
 }
@@ -418,7 +425,8 @@ table#symbolsTable input[type="number"] {
     }
 }
 #content {
-    transition: width 0.3s ease;
+    transition: all 0.3s ease;
+    transition-property: flex-basis, max-width, width;
 }
 #content label {
     font-weight: normal;
