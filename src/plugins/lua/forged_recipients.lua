@@ -18,7 +18,14 @@ limitations under the License.
 -- in mime headers
 
 if confighelp then
-  return
+  rspamd_config:add_example(nil, 'forged_recipients',
+      "Check forged recipients and senders (e.g. mime and smtp recipients mismatch)",
+      [[
+  forged_recipients {
+    symbol_sender = "FORGED_SENDER"; # Symbol for a forged sender
+    symbol_rcpt = "FORGED_RECIPIENTS"; # Symbol for a forged recipients
+  }
+  ]])
 end
 
 local symbol_rcpt = 'FORGED_RECIPIENTS'
@@ -29,68 +36,107 @@ local E = {}
 local function check_forged_headers(task)
   local auser = task:get_user()
   local delivered_to = task:get_header('Delivered-To')
-  local smtp_rcpt = task:get_recipients(1)
+  local smtp_rcpts = task:get_recipients(1)
   local smtp_from = task:get_from(1)
-  local res
-  local score = 1.0
 
-  if not smtp_rcpt then return end
-  if #smtp_rcpt == 0 then return end
+  if not smtp_rcpts then return end
+  if #smtp_rcpts == 0 then return end
 
-  local mime_rcpt = task:get_recipients({'mime','orig'})
+  local mime_rcpts = task:get_recipients({ 'mime', 'orig'})
 
-  if not mime_rcpt then
+  if not mime_rcpts then
     return
-  elseif #mime_rcpt == 0 then
+  elseif #mime_rcpts == 0 then
     return
   end
 
   -- Find pair for each smtp recipient in To or Cc headers
-  -- This cycle has O(N^2) complexity so it is better to limit number of iterations
-  if #smtp_rcpt > 100 or #mime_rcpt > 100 then
+  if #smtp_rcpts > 100 or #mime_rcpts > 100 then
     -- Trim array, suggested by Anton Yuzhaninov
-    smtp_rcpt[100] = nil
-    mime_rcpt[100] = nil
+    smtp_rcpts[100] = nil
+    mime_rcpts[100] = nil
   end
 
-  for _,sr in ipairs(smtp_rcpt) do
-    res = false
-    for _,mr in ipairs(mime_rcpt) do
-      if mr.addr and mr.addr ~= '' then
-        if sr['addr'] and
-            string.lower(mr['addr']) == string.lower(sr['addr']) then
-          res = true
-          break
-        elseif delivered_to and delivered_to == mr['addr'] then
-          -- allow alias expansion and forwarding (Postfix)
-          res = true
-          break
-        elseif auser and auser == sr['addr'] then
-          -- allow user to BCC themselves
-          res = true
-          break
-        elseif ((smtp_from or E)[1] or E).addr and
-            smtp_from[1]['addr'] == sr['addr'] then
-          -- allow sender to BCC themselves
-          res = true
-          break
-        elseif mr['user'] and sr['user'] and
-            string.lower(mr['user']) == string.lower(sr['user']) then
-          -- If we have the same username but for another domain, then
-          -- lower the overall score
-          score = score / 2
-        end
-      else
-        res = true
+  -- map smtp recipient domains to a list of addresses for this domain
+  local smtp_rcpt_domain_map = {}
+  local smtp_rcpt_map = {}
+  for _, smtp_rcpt in ipairs(smtp_rcpts) do
+    local addr = smtp_rcpt.addr
+
+    if addr and addr ~= '' then
+      local dom = string.lower(smtp_rcpt.domain)
+      addr = addr:lower()
+
+      local dom_map = smtp_rcpt_domain_map[dom]
+      if not dom_map then
+        dom_map = {}
+        smtp_rcpt_domain_map[dom] = dom_map
+      end
+
+      dom_map[addr] = smtp_rcpt
+      smtp_rcpt_map[addr] = smtp_rcpt
+
+      if auser and auser == addr then
+        smtp_rcpt.matched = true
+      end
+      if ((smtp_from or E)[1] or E).addr and
+          smtp_from[1]['addr'] == addr then
+        -- allow sender to BCC themselves
+        smtp_rcpt.matched = true
       end
     end
-    if not res then
-      local mra = mime_rcpt[1].addr .. (#mime_rcpt > 1 and ' ..' or '')
-      local sra = smtp_rcpt[1].addr .. (#smtp_rcpt > 1 and ' ...' or '')
-      task:insert_result(symbol_rcpt, score, mra, sra)
-      break
+  end
+
+  for _,mime_rcpt in ipairs(mime_rcpts) do
+    if mime_rcpt.addr and mime_rcpt.addr ~= '' then
+      local addr = string.lower(mime_rcpt.addr)
+      local dom =  string.lower(mime_rcpt.domain)
+      local matched_smtp_addr = smtp_rcpt_map[addr]
+      if matched_smtp_addr then
+        -- Direct match, go forward
+        matched_smtp_addr.matched = true
+        mime_rcpt.matched = true
+      elseif delivered_to and delivered_to == addr then
+        mime_rcpt.matched = true
+      elseif auser and auser == addr then
+        -- allow user to BCC themselves
+        mime_rcpt.matched = true
+      else
+        local matched_smtp_domain = smtp_rcpt_domain_map[dom]
+
+        if matched_smtp_domain then
+          -- Same domain but another user, it is likely okay due to aliases substitution
+          mime_rcpt.matched = true
+          -- Special field
+          matched_smtp_domain._seen_mime_domain = true
+        end
+      end
     end
   end
+
+  -- Now go through all lists one more time and find unmatched stuff
+  local opts = {}
+  local seen_mime_unmatched = false
+  local seen_smtp_unmatched = false
+  for _,mime_rcpt in ipairs(mime_rcpts) do
+    if not mime_rcpt.matched then
+      seen_mime_unmatched = true
+      table.insert(opts, 'm:' .. mime_rcpt.addr)
+    end
+  end
+  for _,smtp_rcpt in ipairs(smtp_rcpts) do
+    if not smtp_rcpt.matched then
+      if not smtp_rcpt_domain_map[smtp_rcpt.domain]._seen_mime_domain then
+        seen_smtp_unmatched = true
+        table.insert(opts, 's:' .. smtp_rcpt.addr)
+      end
+    end
+  end
+
+  if seen_smtp_unmatched and seen_mime_unmatched then
+    task:insert_result(symbol_rcpt, 1.0, opts)
+  end
+
   -- Check sender
   if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
     local mime_from = task:get_from(2)
