@@ -455,30 +455,33 @@ local function roll_handler(opts, domain)
         end, fun.tail(keys))
         os.exit(1)
       end
-      -- OK to process
-      -- Insert keys for each algorithm in pairs <old_key(s)>, <new_key>
-      local sk,pk = genkey({algorithm = alg, bits = keys[1].bits})
-      local selector = string.format('%s-%s', alg,
-          os.date("!%Y%m%d"))
+      -- Do not create new keys, if we only want to remove expired keys
+      if not opts.remove_expired then
+        -- OK to process
+        -- Insert keys for each algorithm in pairs <old_key(s)>, <new_key>
+        local sk,pk = genkey({algorithm = alg, bits = keys[1].bits})
+        local selector = string.format('%s-%s', alg,
+            os.date("!%Y%m%d"))
 
-      if selector == keys[1].selector then
-        selector = selector .. '-1'
+        if selector == keys[1].selector then
+          selector = selector .. '-1'
+        end
+        local nelt = {
+          selector = selector,
+          domain = domain,
+          key = tostring(sk),
+          pubkey = tostring(pk),
+          alg = alg,
+          bits = keys[1].bits,
+          valid_start = os.time(),
+        }
+
+        if opts.expire then
+          nelt.valid_end = os.time() + opts.expire * 3600 * 24
+        end
+
+        table.insert(res.selectors, nelt)
       end
-      local nelt = {
-        selector = selector,
-        domain = domain,
-        key = tostring(sk),
-        pubkey = tostring(pk),
-        alg = alg,
-        bits = keys[1].bits,
-        valid_start = os.time(),
-      }
-
-      if opts.expire then
-        nelt.valid_end = os.time() + opts.expire * 3600 * 24
-      end
-
-      table.insert(res.selectors, nelt)
       for _,k in ipairs(keys) do
         table.insert(res.selectors, k)
       end
