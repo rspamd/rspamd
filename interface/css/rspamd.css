@@ -378,6 +378,9 @@ table#symbolsTable input[type="number"] {
 }
 
 /* history table */
+.footable-details.table {
+    margin-bottom: 0;
+}
 #historyTable_scan > tbody > tr > td,
 #historyTable_scan > thead > tr > th,
 #historyTable_history > tbody > tr > td,
