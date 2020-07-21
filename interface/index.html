@@ -338,28 +338,28 @@
 						<span class="h6 font-weight-bolder my-2">Test Rspamd selectors</span>
 					</div>
 					<div class="card-body py-0">
-						<div class="row" id="row-main">
-							<div class="col-lg-3 sidebar" id="sidebar-left">
-								<div class="nopadding table-responsive">
-									<table class="table table-sm small table-striped table-hover table-bordered" id="selectorsTable-extractors">
+						<div class="row h-100" id="row-main">
+							<div class="col-lg-3 sidebar h-100" id="sidebar-left">
+								<div class="nopadding table-responsive mh-100 bg-white">
+									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-extractors">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
 									</table>
 								</div>
 							</div>
 
-							<div class="col-lg-6 col-12" id="content">
+							<div class="col-lg-6 col-12 h-100" id="content">
 
-								<div class="row navbar-light">
+								<div class="row navbar-light h-100">
 									<ul class="nav navbar-nav nav-tabs sidebar-nav">
 										<li class="active text-nowrap nav-item" id="sidebar-tab-left">
 											<a class="nav-link" href=""><div id="sidebar-tab-text-left">&#x2195;&ensp;List of extractors</div></a>
 										</li>
 									</ul>
 
-									<div class="col-lg col-12">
-										<div class="row">
-											<form class="col-12">
+									<div class="col-lg col-12 mh-100 overflow-auto">
+										<div class="row h-100">
+											<form class="col-12 d-flex flex-column">
 												<div class="row pt-3">
 													<div class="col">
 														<div class="form-group">
@@ -379,11 +379,11 @@
 														<button class="btn btn-secondary float-right" id="selectorsClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 													</div>
 												</div>
-												<div class="row pt-3">
-													<div class="col">
-														<div class="form-group">
+												<div class="row pt-3 flex-grow-1">
+													<div class="col d-flex flex-column">
+														<div class="form-group h-100 d-flex flex-column">
 															<label for="selectorsResArea">Result:</label>
-															<textarea class="form-control" id="selectorsResArea" rows="5" readonly></textarea>
+															<textarea class="form-control flex-grow-1" id="selectorsResArea" readonly></textarea>
 														</div>
 													</div>
 												</div>
@@ -399,9 +399,9 @@
 								</div>
 							</div>
 
-							<div class="col-lg-3 sidebar" id="sidebar-right">
-								<div class="nopadding table-responsive">
-									<table class="table table-sm small table-striped table-hover table-bordered" id="selectorsTable-transforms">
+							<div class="col-lg-3 sidebar h-100" id="sidebar-right">
+								<div class="nopadding table-responsive mh-100 bg-white">
+									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-transforms">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
 									</table>

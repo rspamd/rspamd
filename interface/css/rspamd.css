@@ -416,10 +416,17 @@ table#symbolsTable input[type="number"] {
     display: flex;
     flex-wrap: wrap;
     clear: both;
-    /* necessary to hide collapsed sidebar */
-    overflow-x: hidden;
+    margin-left: -17.5px;
+    margin-right: -17.5px;
 }
 @media (min-width: 992px) {
+    #selectors > .card {
+        height: calc(100vh - 91px);
+    }
+    #row-main {
+        /* necessary to hide collapsed sidebar */
+        overflow-x: hidden;
+    }
     #content > div {
         display: flex;
     }
@@ -436,10 +443,6 @@ table#symbolsTable input[type="number"] {
     padding: 8px;
     background-color: #ffe;
     transition: margin 0.3s ease;
-}
-.sidebar > div.table-responsive {
-    max-height: 610px;
-    background-color: white;
 }
 .collapsed {
     /* hide it for small displays */
@@ -485,6 +488,12 @@ table#symbolsTable input[type="number"] {
     transform: rotate(180deg);
 }
 @media (min-width: 992px) {
+    #sidebar-left {
+        border-bottom-left-radius: 3.5px;
+    }
+    #sidebar-right {
+        border-bottom-right-radius: 3.5px;
+    }
     .sidebar-nav {
         margin-left: -1px;
         margin-right: -1px;
@@ -504,6 +513,10 @@ table#symbolsTable input[type="number"] {
     }
 }
 @media (max-width: 991.98px) {
+    #sidebar-right {
+        border-bottom-left-radius: 3.5px;
+        border-bottom-right-radius: 3.5px;
+    }
     .sidebar-nav {
         margin-top: -1px;
         margin-bottom: -1px;
