@@ -154,45 +154,46 @@
 									<div id="rrd-total">Total messages: <span id="rrd-total-value"></span></div>
 								</div>
 							</div>
-
-							<form id="graph_controls" action="#">
-								Dataset:
-								<select id="selData" class="form-control">
-									<option value="day" selected>By day</option>
-									<option value="week">By week</option>
-									<option value="month">By month</option>
-									<option value="year">By year</option>
-								</select>
-								Y-scale:
-								<select id="selYScale" class="form-control">
-									<option value="lin" selected>Lin</option>
-									<option value="log">Log</option>
-								</select>
-								Convert to:
-								<select id="selConvert" class="form-control">
-									<option value="" selected>--</option>
-									<option value="percentage">percentage</option>
-								</select>
-								Chart type:
-								<select id="selType" class="form-control">
-									<option value="line" selected>Line</option>
-									<option value="area">Stacked area</option>
-								</select>
-								<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; library documentation" href="https://github.com/d3/d3-shape#curves" target="_blank">Interpolation mode</a>:
-								<select id="selInterpolate" class="form-control">
-									<option value="curveLinear" selected>linear</option>
-									<option value="curveStep">step</option>
-									<option value="curveStepBefore">stepBefore</option>
-									<option value="curveStepAfter">stepAfter</option>
-									<option value="curveBasis">basis</option>
-									<option value="curveBasisOpen">basisOpen</option>
-									<option value="curveBundle">bundle</option>
-									<option value="curveCardinal">cardinal</option>
-									<option value="curveCardinalOpen">cardinalOpen</option>
-									<option value="curveMonotoneX">monotoneX</option>
-								</select>
-							</form>
 						</div>
+					</div>
+					<div class="card-footer pt-0 text-center">
+						<form id="graph_controls" action="#">
+							Dataset:
+							<select id="selData" class="form-control">
+								<option value="day" selected>By day</option>
+								<option value="week">By week</option>
+								<option value="month">By month</option>
+								<option value="year">By year</option>
+							</select>
+							Y-scale:
+							<select id="selYScale" class="form-control">
+								<option value="lin" selected>Lin</option>
+								<option value="log">Log</option>
+							</select>
+							Convert to:
+							<select id="selConvert" class="form-control">
+								<option value="" selected>--</option>
+								<option value="percentage">percentage</option>
+							</select>
+							Chart type:
+							<select id="selType" class="form-control">
+								<option value="line" selected>Line</option>
+								<option value="area">Stacked area</option>
+							</select>
+							<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; library documentation" href="https://github.com/d3/d3-shape#curves" target="_blank">Interpolation mode</a>:
+							<select id="selInterpolate" class="form-control">
+								<option value="curveLinear" selected>linear</option>
+								<option value="curveStep">step</option>
+								<option value="curveStepBefore">stepBefore</option>
+								<option value="curveStepAfter">stepAfter</option>
+								<option value="curveBasis">basis</option>
+								<option value="curveBasisOpen">basisOpen</option>
+								<option value="curveBundle">bundle</option>
+								<option value="curveCardinal">cardinal</option>
+								<option value="curveCardinalOpen">cardinalOpen</option>
+								<option value="curveMonotoneX">monotoneX</option>
+							</select>
+						</form>
 					</div>
 				</div>
 			</div>
