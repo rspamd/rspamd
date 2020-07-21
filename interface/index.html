@@ -154,45 +154,46 @@
 									<div id="rrd-total">Total messages: <span id="rrd-total-value"></span></div>
 								</div>
 							</div>
-
-							<form id="graph_controls" action="#">
-								Dataset:
-								<select id="selData" class="form-control">
-									<option value="day" selected>By day</option>
-									<option value="week">By week</option>
-									<option value="month">By month</option>
-									<option value="year">By year</option>
-								</select>
-								Y-scale:
-								<select id="selYScale" class="form-control">
-									<option value="lin" selected>Lin</option>
-									<option value="log">Log</option>
-								</select>
-								Convert to:
-								<select id="selConvert" class="form-control">
-									<option value="" selected>--</option>
-									<option value="percentage">percentage</option>
-								</select>
-								Chart type:
-								<select id="selType" class="form-control">
-									<option value="line" selected>Line</option>
-									<option value="area">Stacked area</option>
-								</select>
-								<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; library documentation" href="https://github.com/d3/d3-shape#curves" target="_blank">Interpolation mode</a>:
-								<select id="selInterpolate" class="form-control">
-									<option value="curveLinear" selected>linear</option>
-									<option value="curveStep">step</option>
-									<option value="curveStepBefore">stepBefore</option>
-									<option value="curveStepAfter">stepAfter</option>
-									<option value="curveBasis">basis</option>
-									<option value="curveBasisOpen">basisOpen</option>
-									<option value="curveBundle">bundle</option>
-									<option value="curveCardinal">cardinal</option>
-									<option value="curveCardinalOpen">cardinalOpen</option>
-									<option value="curveMonotoneX">monotoneX</option>
-								</select>
-							</form>
 						</div>
+					</div>
+					<div class="card-footer pt-0 text-center">
+						<form id="graph_controls" action="#">
+							Dataset:
+							<select id="selData" class="form-control">
+								<option value="day" selected>By day</option>
+								<option value="week">By week</option>
+								<option value="month">By month</option>
+								<option value="year">By year</option>
+							</select>
+							Y-scale:
+							<select id="selYScale" class="form-control">
+								<option value="lin" selected>Lin</option>
+								<option value="log">Log</option>
+							</select>
+							Convert to:
+							<select id="selConvert" class="form-control">
+								<option value="" selected>--</option>
+								<option value="percentage">percentage</option>
+							</select>
+							Chart type:
+							<select id="selType" class="form-control">
+								<option value="line" selected>Line</option>
+								<option value="area">Stacked area</option>
+							</select>
+							<a title="&ldquo;Curves&rdquo; section of &ldquo;d3-shape&rdquo; library documentation" href="https://github.com/d3/d3-shape#curves" target="_blank">Interpolation mode</a>:
+							<select id="selInterpolate" class="form-control">
+								<option value="curveLinear" selected>linear</option>
+								<option value="curveStep">step</option>
+								<option value="curveStepBefore">stepBefore</option>
+								<option value="curveStepAfter">stepAfter</option>
+								<option value="curveBasis">basis</option>
+								<option value="curveBasisOpen">basisOpen</option>
+								<option value="curveBundle">bundle</option>
+								<option value="curveCardinal">cardinal</option>
+								<option value="curveCardinalOpen">cardinalOpen</option>
+								<option value="curveMonotoneX">monotoneX</option>
+							</select>
+						</form>
 					</div>
 				</div>
 			</div>
@@ -253,16 +254,16 @@
 					<div class="card-body">
 						<div class="row">
 							<form class="col-lg-12" id="scanForm">
-								<div class="form-group">
+								<div class="form-group mb-0">
 									<label for="scanMsgSource">Message source:</label>
 									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder="Paste raw message source"></textarea>
 								</div>
-								<div class="form-group">
-									<button type="submit" class="btn btn-primary" data-upload="scan"><i class="fas fa-search"></i> Scan message</button>
-									<button class="btn btn-secondary float-right" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
-								</div>
 							</form>
 						</div>
+					</div>
+					<div class="card-footer">
+						<button type="submit" class="btn btn-primary" data-upload="scan"><i class="fas fa-search"></i> Scan message</button>
+						<button class="btn btn-secondary float-right" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 					</div>
 				</div>
 				<div class="card ro-hide" style="display: none;">
@@ -325,7 +326,7 @@
 					</div>
 					<div class="card-body nopadding">
 						<div id="scanLog">
-							<table class="table" id="historyTable_scan"></table>
+							<table class="table mb-0" id="historyTable_scan"></table>
 						</div>
 					</div>
 				</div>
@@ -338,28 +339,28 @@
 						<span class="h6 font-weight-bolder my-2">Test Rspamd selectors</span>
 					</div>
 					<div class="card-body py-0">
-						<div class="row" id="row-main">
-							<div class="col-lg-3 sidebar" id="sidebar-left">
-								<div class="nopadding table-responsive">
-									<table class="table table-sm small table-striped table-hover table-bordered" id="selectorsTable-extractors">
+						<div class="row h-100" id="row-main">
+							<div class="col-lg-3 sidebar h-100" id="sidebar-left">
+								<div class="nopadding table-responsive mh-100 bg-white">
+									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-extractors">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
 									</table>
 								</div>
 							</div>
 
-							<div class="col-lg-6 col-12" id="content">
+							<div class="col-lg-6 col-12 h-100" id="content">
 
-								<div class="row navbar-light">
+								<div class="row navbar-light h-100">
 									<ul class="nav navbar-nav nav-tabs sidebar-nav">
 										<li class="active text-nowrap nav-item" id="sidebar-tab-left">
 											<a class="nav-link" href=""><div id="sidebar-tab-text-left">&#x2195;&ensp;List of extractors</div></a>
 										</li>
 									</ul>
 
-									<div class="col-lg col-12">
-										<div class="row">
-											<form class="col-12">
+									<div class="col-lg col-12 mh-100 overflow-auto">
+										<div class="row h-100">
+											<form class="col-12 d-flex flex-column">
 												<div class="row pt-3">
 													<div class="col">
 														<div class="form-group">
@@ -379,11 +380,11 @@
 														<button class="btn btn-secondary float-right" id="selectorsClean"><i class="fas fa-trash-alt"></i> Clean form</button>
 													</div>
 												</div>
-												<div class="row pt-3">
-													<div class="col">
-														<div class="form-group">
+												<div class="row pt-3 flex-grow-1">
+													<div class="col d-flex flex-column">
+														<div class="form-group h-100 d-flex flex-column">
 															<label for="selectorsResArea">Result:</label>
-															<textarea class="form-control" id="selectorsResArea" rows="5" readonly></textarea>
+															<textarea class="form-control flex-grow-1" id="selectorsResArea" readonly></textarea>
 														</div>
 													</div>
 												</div>
@@ -399,9 +400,9 @@
 								</div>
 							</div>
 
-							<div class="col-lg-3 sidebar" id="sidebar-right">
-								<div class="nopadding table-responsive">
-									<table class="table table-sm small table-striped table-hover table-bordered" id="selectorsTable-transforms">
+							<div class="col-lg-3 sidebar h-100" id="sidebar-right">
+								<div class="nopadding table-responsive mh-100 bg-white">
+									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-transforms">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
 									</table>
@@ -452,7 +453,7 @@
 						</div>
 					</div>
 					<div class="card-body nopadding">
-						<table class="table table-hover" id="errorsLog"></table>
+						<table class="table table-hover mb-0" id="errorsLog"></table>
 					</div>
 				</div>
 
