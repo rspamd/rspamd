@@ -1709,7 +1709,12 @@ void rspamd_gerror_free_maybe (gpointer p)
 #ifdef HAVE_CBLAS_H
 #include "cblas.h"
 #else
+#ifdef __APPLE__
+/* OSX is pure evil: number of threads must be set via env: VECLIB_MAXIMUM_THREADS */
+void openblas_set_num_threads(int num_threads) {}
+#else
 extern void openblas_set_num_threads(int num_threads);
+#endif
 #endif
 /*
  * Openblas creates threads that are not supported by
