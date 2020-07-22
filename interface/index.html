@@ -29,7 +29,7 @@
 
 <nav class="navbar navbar-light bg-light navbar-expand-md" id="navBar">
 	<form class="form-inline mr-auto">
-	<div class="navbar-header navbar-brand">
+	<div class="navbar-header navbar-brand p-0">
 		<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
 	</div>
 		<select id="selSrv" class="form-control"></select>
@@ -91,7 +91,7 @@
 								<span class="icon mr-3"><i class="fas fa-server"></i></span>
 								<span class="h6 font-weight-bolder my-2">Servers</span>
 							</div>
-								<div class="card-body nopadding table-responsive">
+								<div class="card-body p-0 table-responsive">
 									<table class="table table-sm table-hover table-bordered text-nowrap mb-0" id="clusterTable">
 										<thead class="text-secondary">
 											<tr>
@@ -114,9 +114,9 @@
 								<span class="icon mr-3"><i class="fas fa-chart-pie"></i></span>
 								<span class="h6 font-weight-bolder my-2">Statistics</span>
 							</div>
-							<div class="card-body chart-content">
+							<div class="card-body">
 								<div class="row">
-									<div class="chart" id="chart">
+									<div class="bg-white mx-auto" id="chart">
 										<span class="notice">Loading..</span>
 										<noscript>Please enable Javascript</noscript>
 									</div>
@@ -133,8 +133,8 @@
 						<span class="icon mr-3"><i class="fas fa-chart-area"></i></span>
 						<span class="h6 font-weight-bolder my-2">Throughput</span>
 					</div>
-					<div class="card-body">
-						<div>
+					<div class="card-body text-center">
+						<div class="d-inline-block bg-white">
 							<div class="row">
 								<div id="graph" class="mx-auto">
 									<span class="notice">Loading..</span>
@@ -221,7 +221,7 @@
 						<span class="icon mr-3"><i class="fas fa-list"></i></span>
 						<span class="h6 font-weight-bolder my-2">Lists</span>
 					</div>
-					<div class="card-body nopadding">
+					<div class="card-body p-0">
 						<table class="table table-sm table-hover mb-0" id="listMaps">
 						</table>
 					</div>
@@ -239,7 +239,7 @@
 							</button>
 						</div>
 					</div>
-					<div class="card-body nopadding">
+					<div class="card-body p-0">
 						<table class="table table-hover" id="symbolsTable"></table>
 					</div>
 				</div>
@@ -324,7 +324,7 @@
 							</button>
 						</div>
 					</div>
-					<div class="card-body nopadding">
+					<div class="card-body p-0">
 						<div id="scanLog">
 							<table class="table mb-0" id="historyTable_scan"></table>
 						</div>
@@ -341,7 +341,7 @@
 					<div class="card-body py-0">
 						<div class="row h-100" id="row-main">
 							<div class="col-lg-3 sidebar h-100" id="sidebar-left">
-								<div class="nopadding table-responsive mh-100 bg-white">
+								<div class="p-0 table-responsive mh-100 bg-white">
 									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-extractors">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
@@ -352,9 +352,9 @@
 							<div class="col-lg-6 col-12 h-100" id="content">
 
 								<div class="row navbar-light h-100">
-									<ul class="nav navbar-nav nav-tabs sidebar-nav">
+									<ul class="nav navbar-nav nav-tabs sidebar-nav border-bottom-0">
 										<li class="active text-nowrap nav-item" id="sidebar-tab-left">
-											<a class="nav-link" href=""><div id="sidebar-tab-text-left">&#x2195;&ensp;List of extractors</div></a>
+											<a class="nav-link border-bottom-0 px-2 py-0" href=""><div id="sidebar-tab-text-left">&#x2195;&ensp;List of extractors</div></a>
 										</li>
 									</ul>
 
@@ -392,16 +392,16 @@
 										</div>
 									</div>
 
-									<ul class="nav navbar-nav nav-tabs sidebar-nav">
+									<ul class="nav navbar-nav nav-tabs sidebar-nav border-bottom-0">
 										<li class="active text-nowrap nav-item" id="sidebar-tab-right">
-											<a class="nav-link" href="">&#x2195;&ensp;List of transforms</a>
+											<a class="nav-link border-bottom-0 px-2 py-0" href="">&#x2195;&ensp;List of transforms</a>
 										</li>
 									</ul>
 								</div>
 							</div>
 
 							<div class="col-lg-3 sidebar h-100" id="sidebar-right">
-								<div class="nopadding table-responsive mh-100 bg-white">
+								<div class="p-0 table-responsive mh-100 bg-white">
 									<table class="table table-sm small table-striped table-hover table-bordered mb-0" id="selectorsTable-transforms">
 										<thead><tr><th>Name</th><th>Description</th></tr></thead>
 										<tbody/>
@@ -436,7 +436,7 @@
 							</button>
 						</div>
 					</div>
-					<div class="card-body nopadding">
+					<div class="card-body p-0">
 						<div id="historyLog">
 							<table class="table" id="historyTable_history"></table>
 						</div>
@@ -452,7 +452,7 @@
 							</button>
 						</div>
 					</div>
-					<div class="card-body nopadding">
+					<div class="card-body p-0">
 						<table class="table table-hover mb-0" id="errorsLog"></table>
 					</div>
 				</div>
@@ -465,8 +465,8 @@
 </div>
 
 <!-- Common modal -->
-<div id="modalDialog" class="modal fade" data-backdrop="static" tabindex="-1" role="dialog">
-	<div class="modal-dialog modal-xl">
+<div id="modalDialog" class="modal fade text-center" data-backdrop="static" tabindex="-1" role="dialog">
+	<div class="modal-dialog modal-xl d-inline-block mw-100 my-auto text-left">
 		<div class="modal-content shadow">
 			<div class="modal-header text-secondary py-2">
 				<i class="fas my-auto"></i><h6 class="modal-title font-weight-bolder mx-3" id="modalTitle"></h6>

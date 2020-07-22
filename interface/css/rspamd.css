@@ -104,30 +104,12 @@ textarea {
 }
 
 /* local overrides */
-.navbar-brand {
-    margin-left: auto !important;
-    padding: 0;
-}
 .navbar-brand > img {
     height: 50px;
 }
 .btn-group > .btn.radius-right {
     border-top-right-radius: .25rem !important;
     border-bottom-right-radius: .25rem !important;
-}
-.chart-content {
-    text-align: center;
-}
-.chart {
-    height: 400px;
-    margin: 0 auto;
-    text-align: center;
-    background: #fff;
-    display: flex;
-    justify-content: center;
-}
-.chart svg {
-    flex: none;
 }
 .notice {
     display: none;
@@ -257,12 +239,6 @@ table#symbolsTable input[type="number"] {
 .stat-box .widget strong {
     font-size: 26px;
 }
-.nomargin {
-    margin: 0 !important;
-}
-.nopadding {
-    padding: 0 !important;
-}
 
 /* Symbols coloring */
 .symbol-default {
@@ -316,16 +292,6 @@ table#symbolsTable input[type="number"] {
 /* Some spacing tweaks */
 .notification-area div > button:not(.close) {
     margin-right: 9px;
-}
-
-#throughput div.card-body {
-    text-align: center;
-}
-#throughput div.card-body > div {
-    display: inline-block;
-}
-#throughput div.card-body div.row {
-    background: #fff;
 }
 
 /* RRD summary */
@@ -416,9 +382,6 @@ table#symbolsTable input[type="number"] {
 }
 
 #row-main {
-    display: flex;
-    flex-wrap: wrap;
-    clear: both;
     margin-left: -17.5px;
     margin-right: -17.5px;
 }
@@ -437,9 +400,6 @@ table#symbolsTable input[type="number"] {
 #content {
     transition: all 0.3s ease;
     transition-property: flex-basis, max-width, width;
-}
-#content label {
-    font-weight: normal;
 }
 
 .sidebar {
@@ -467,20 +427,14 @@ table#symbolsTable input[type="number"] {
 
 .sidebar-nav {
     width: 20px;
-    border-bottom: none;
 }
 .sidebar-nav .nav-link,
 .sidebar-nav .nav-link:hover {
     border: 1px solid #ddd;
-    border-bottom: none;
-    padding-left: 1rem;
-    padding-right: 1rem;
 }
 #sidebar-tab-left > a,
 #sidebar-tab-right > a {
     background-color: #ffe;
-    padding-top: 0;
-    padding-bottom: 0;
     margin-left: 12px;
     margin-right: 12px;
 }
@@ -554,18 +508,8 @@ table#symbolsTable input[type="number"] {
     border-radius: 0 0 calc(.25rem - 1px) 0;
 }
 
-/* Dynamic width for modal */
-#modalDialog {
-    text-align: center;
-}
 #modalDialog > .modal-dialog {
-    display: inline-block;
-    max-width: 100%;
-    text-align: left;
-    width: auto !important;
-
     /* Center the modal vertically */
-    margin: 0 auto;
     top: 50%;
     transform: translate(0, -50%);
     -webkit-transform: translate(0, -50%);
