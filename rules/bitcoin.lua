@@ -117,48 +117,92 @@ local function gen_bleach32_table(input)
   return res and d or nil
 end
 
-local function is_segwit_bech32_address(word)
-  local semicolon_pos = string.find(word, ':')
-  if semicolon_pos then
-    word = string.sub(word, semicolon_pos + 1)
+local function slice_table(tbl, first, last, step)
+  local sliced = {}
+
+  for i = first or 1, last or #tbl, step or 1 do
+    sliced[#sliced+1] = tbl[i]
   end
 
-  local prefix = word:sub(1, 3)
+  return sliced
+end
+
+local function btc_cash_polymod_step(c, byte)
+ --[[
+  uint8_t c0 = c >> 35;
+  c = ((c & 0x07ffffffff) << 5) ^ d;
+
+  if (c0 & 0x01) c ^= 0x98f2bc8e61;
+  if (c0 & 0x02) c ^= 0x79b76d99e2;
+  if (c0 & 0x04) c ^= 0xf33e5fb3c4;
+  if (c0 & 0x08) c ^= 0xae2eabe2a8;
+  if (c0 & 0x10) c ^= 0x1e4f43e470;
+--]]
+  local c0 = bit.rshift(c, 35)
+  c = bit.bxor(bit.lshift(bit.band(c, 0x07ffffffff), 5), byte)
+  if bit.band(c0, 0x01) ~= 0 then
+    c = bit.bxor(c, 0x98f2bc8e61)
+  end
+  if bit.band(c0, 0x02) ~= 0 then
+    c = bit.bxor(c, 0x79b76d99e2)
+  end
+  if bit.band(c0, 0x04) ~= 0 then
+    c = bit.bxor(c, 0xf33e5fb3c4)
+  end
+  if bit.band(c0, 0x08) ~= 0 then
+    c = bit.bxor(c, 0xae2eabe2a8)
+  end
+  if bit.band(c0, 0x10) ~= 0 then
+    c = bit.bxor(c, 0x1e4f43e470)
+  end
+
+  return c
+end
+
+local function is_segwit_bech32_address(word)
+  local semicolon_pos = string.find(word, ':')
+  local address_part = word
+  if semicolon_pos then
+    address_part = string.sub(word, semicolon_pos + 1)
+  end
+
+  local prefix = address_part:sub(1, 3)
 
   if prefix == 'bc1' or prefix:sub(1, 1) == '1' or prefix:sub(1, 1) == '3' then
     -- Strip beach32 prefix in bitcoin
-    word = word:lower()
-    local last_one_pos = word:find('1[^1]*$')
-    if not last_one_pos or (last_one_pos < 1 or last_one_pos + 7 > #word) then
+    address_part = address_part:lower()
+    local last_one_pos = address_part:find('1[^1]*$')
+    if not last_one_pos or (last_one_pos < 1 or last_one_pos + 7 > #address_part) then
       return false
     end
-    local hrp = word:sub(1, last_one_pos - 1)
-    local addr = word:sub(last_one_pos + 1, -1)
+    local hrp = address_part:sub(1, last_one_pos - 1)
+    local addr = address_part:sub(last_one_pos + 1, -1)
     local decoded = gen_bleach32_table(addr)
 
     if decoded then
       return verify_beach32_cksum(hrp, decoded)
     end
-  else
-    -- BCH address
-    -- 1 byte address type (who cares)
-    -- XXX bytes address hash (who cares)
-    -- 40 bit checksum
-    local rspamd_util = require 'rspamd_util'
-    local decoded = rspamd_util.decode_base32(word:lower(), 'bleach')
+  elseif semicolon_pos then
+    -- Bitcoin cash address
+    -- https://www.bitcoincash.org/spec/cashaddr.html
+    local l = require "rspamd_logger"
+    local decoded = gen_bleach32_table(address_part)
+    l.errx('check %s, %s decoded', word, decoded)
 
-    if decoded and #decoded > 0 then
-      local bytes = decoded:bytes()
+    if decoded and #decoded > 8 then
+      -- TODO: Add checksum validation some day
+      local c = 1
+      local prefix = word:sub(1, semicolon_pos - 1)
+      fun.each(function(byte)
+        c = btc_cash_polymod_step(c, bit.band(string.byte(byte), 0x1f))
+      end, fun.iter(prefix))
 
-      -- The version byte’s most signficant bit is reserved and must be 0.
-      -- The 4 next bits indicate the type of address and the 3 least significant bits indicate the size of the hash.
-      local version = bit.band(bytes[1], 128)
-      local addr_type = bit.rshift(bit.band(bytes[1], 120), 3)
-      local _ = bit.band(bytes[1], 7) -- hash size
+      -- For semicolon
+      c = btc_cash_polymod_step(c, 0)
 
-      if version == 0 and (addr_type == 0 or addr_type == 8) then
-        -- TODO: Add checksum validation some day
+      fun.each(function(byte) c = btc_cash_polymod_step(c, byte) end, decoded)
 
+      if bit.bxor(c, 0x1) == 0 then
         return true
       end
     end
@@ -173,7 +217,7 @@ rspamd_config:register_symbol{
     local rspamd_re = require "rspamd_regexp"
 
     local btc_wallet_re = rspamd_re.create_cached('^[13LM][1-9A-Za-z]{25,34}$')
-    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13]|(?:[^:]*:))?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
+    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13]|(?:[^:]+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
     local words_matched = {}
     local segwit_words_matched = {}
     local valid_wallets = {}
