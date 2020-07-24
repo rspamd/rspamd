@@ -2898,20 +2898,21 @@ rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 	ucl_object_emit_full (obj, emit_type, &func, comments);
 }
 
-const void *
+#ifndef HAVE_MEMRCHR
+void *
 rspamd_memrchr (const void *m, gint c, gsize len)
 {
 	const guint8 *p = m;
-	gsize i;
 
-	for (i = len; i > 0; i --) {
+	for (gsize i = len; i > 0; i --) {
 		if (p[i - 1] == c) {
-			return p + i - 1;
+			return (void *)(p + i - 1);
 		}
 	}
 
 	return NULL;
 }
+#endif
 
 struct UConverter *
 rspamd_get_utf8_converter (void)

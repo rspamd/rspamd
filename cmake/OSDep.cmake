@@ -1,6 +1,7 @@
 # Platform specific configuration
 IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
     ADD_COMPILE_OPTIONS(-DFREEBSD -D_BSD_SOURCE)
+    SET(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -D_BSD_SOURCE")
     CONFIGURE_FILE(freebsd/rspamd.sh.in freebsd/rspamd @ONLY)
     MESSAGE(STATUS "Configuring for BSD system")
     # Find util library
@@ -32,6 +33,7 @@ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     ADD_COMPILE_OPTIONS(-D_GNU_SOURCE -DLINUX)
+    SET(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -D_GNU_SOURCE")
     # Workaround with architecture specific includes
     #IF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
     #	INCLUDE_DIRECTORIES("/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")

@@ -429,7 +429,11 @@ extern const guchar lc_map[256];
  * @param len
  * @return pointer to the last occurrence or NULL
  */
-const void *rspamd_memrchr (const void *m, gint c, gsize len);
+#ifdef HAVE_MEMRCHR
+#define rspamd_memrchr memrchr
+#else
+void *rspamd_memrchr (const void *m, gint c, gsize len);
+#endif
 
 /**
  * Return length of memory segment starting in `s` that contains no chars from `e`

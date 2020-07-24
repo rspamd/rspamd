@@ -52,6 +52,7 @@
 #cmakedefine HAVE_MACHINE_ENDIAN_H  1
 #cmakedefine HAVE_MAXPATHLEN     1
 #cmakedefine HAVE_FMEMOPEN       1
+#cmakedefine HAVE_MEMRCHR        1
 #cmakedefine HAVE_MEMSET_S       1
 #cmakedefine HAVE_MKSTEMP        1
 #cmakedefine HAVE_MMAP_ANON      1
