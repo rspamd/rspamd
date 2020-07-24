@@ -120,6 +120,15 @@ LUA_FUNCTION_DEF (text, split);
  */
 LUA_FUNCTION_DEF (text, at);
 /***
+ * @method rspamd_text:memchr(chr, [reverse])
+ * Returns the first or the last position of the character `chr` in the text or
+ * -1 in case if a character has not been found. Indexes start from `1`
+ * @param {string/number} chr character or a character code to find
+ * @param {boolean} reverse last character if `true`
+ * @return {integer} position of the character or `-1`
+ */
+LUA_FUNCTION_DEF (text, memchr);
+/***
  * @method rspamd_text:bytes()
  * Converts text to an array of bytes
  * @return {table|integer} bytes in the array (as unsigned char)
@@ -214,6 +223,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, lines),
 		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
+		LUA_INTERFACE_DEF (text, memchr),
 		LUA_INTERFACE_DEF (text, bytes),
 		LUA_INTERFACE_DEF (text, lower),
 		LUA_INTERFACE_DEF (text, exclude_chars),
@@ -914,6 +924,61 @@ lua_text_at (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_memchr (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	int c;
+	bool reverse = false;
+
+	if (lua_isnumber (L, 2)) {
+		c = lua_tonumber (L, 2);
+	}
+	else {
+		gsize l;
+		const gchar *str = lua_tolstring (L, 2, &l);
+
+		if (str) {
+			c = str[0];
+
+			if (l != 1) {
+				return luaL_error (L, "need exactly one character to search");
+			}
+		}
+		else {
+			return luaL_error (L, "invalid arguments");
+		}
+	}
+
+	if (t) {
+		void *f;
+
+		if (lua_isboolean (L, 3)) {
+			reverse = lua_toboolean (L, 3);
+		}
+
+		if (reverse) {
+			f = rspamd_memrchr (t->start, c, t->len);
+		}
+		else {
+			f = memchr (t->start, c, t->len);
+		}
+
+		if (f) {
+			lua_pushinteger (L, ((const char *)f) - t->start + 1);
+		}
+		else {
+			lua_pushinteger (L, -1);
 		}
 	}
 	else {
