@@ -3024,7 +3024,7 @@ lua_config_register_regexp (lua_State *L)
 				}
 
 				cache_re = rspamd_re_cache_add (cfg->re_cache, re->re, type,
-						(gpointer) header_str, header_len);
+						(gpointer) header_str, header_len, -1);
 
 				/*
 				 * XXX: here are dragons!

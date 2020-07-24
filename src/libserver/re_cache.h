@@ -68,11 +68,13 @@ struct rspamd_re_cache *rspamd_re_cache_new (void);
  * @param type type of object
  * @param type_data associated data with the type (e.g. header name)
  * @param datalen associated data length
+ * @param lua_cbref optional lua callback reference for matching purposes
  */
 rspamd_regexp_t *
 rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 					 enum rspamd_re_type type,
-					 gconstpointer type_data, gsize datalen);
+					 gconstpointer type_data, gsize datalen,
+					 gint lua_cbref);
 
 /**
  * Replace regexp in the cache with another regexp

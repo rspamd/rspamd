@@ -108,6 +108,7 @@ enum rspamd_re_cache_elt_match_type {
 
 struct rspamd_re_cache_elt {
 	rspamd_regexp_t *re;
+	gint lua_cbref;
 	enum rspamd_re_cache_elt_match_type match_type;
 };
 
@@ -212,6 +213,15 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 			luaL_unref (cache->L, LUA_REGISTRYINDEX, sref);
 			g_free (skey);
 		});
+
+		struct rspamd_re_cache_elt *elt;
+		guint i;
+
+		PTR_ARRAY_FOREACH (cache->re, i, elt) {
+			if (elt->lua_cbref != -1) {
+				luaL_unref (cache->L, LUA_REGISTRYINDEX, elt->lua_cbref);
+			}
+		}
 	}
 
 	kh_destroy (lua_selectors_hash, cache->selectors);
@@ -261,8 +271,11 @@ rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache)
 }
 
 rspamd_regexp_t *
-rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
-		enum rspamd_re_type type, gconstpointer type_data, gsize datalen)
+rspamd_re_cache_add (struct rspamd_re_cache *cache,
+					 rspamd_regexp_t *re,
+					 enum rspamd_re_type type,
+					 gconstpointer type_data, gsize datalen,
+					 gint lua_cbref)
 {
 	guint64 class_id;
 	struct rspamd_re_class *re_class;
@@ -304,6 +317,8 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		elt->re = rspamd_regexp_ref (re);
 		g_ptr_array_add (cache->re, elt);
 		rspamd_regexp_set_class (re, re_class);
+		elt->lua_cbref = lua_cbref;
+
 		g_hash_table_insert (re_class->re, rspamd_regexp_get_id (nre), nre);
 	}
 
@@ -529,11 +544,49 @@ rspamd_re_cache_get_stat (struct rspamd_re_runtime *rt)
 	return &rt->stat;
 }
 
+static gboolean
+rspamd_re_cache_check_lua_condition (struct rspamd_task *task,
+									 rspamd_regexp_t *re,
+									 const guchar *in, gsize len,
+									 goffset start, goffset end,
+									 gint lua_cbref)
+{
+	lua_State *L = (lua_State *)task->cfg->lua_state;
+	GError *err = NULL;
+	struct rspamd_lua_text *t;
+	gint text_pos;
+
+	if (G_LIKELY (lua_cbref == -1)) {
+		return TRUE;
+	}
+
+	t = lua_new_text (L, in, len, FALSE);
+	text_pos = lua_gettop (L);
+
+	if (!rspamd_lua_universal_pcall (L, lua_cbref,
+			G_STRLOC, 1, "utii", &err,
+			"rspamd{task}", task,
+			text_pos, start, end)) {
+		msg_warn_task ("cannot call for re_cache_check_lua_condition for re %s: %e",
+				rspamd_regexp_get_pattern (re), err);
+		g_error_free (err);
+
+		return TRUE;
+	}
+
+	gboolean res = lua_toboolean (L, -1);
+
+	lua_settop (L, text_pos - 1);
+
+	return res;
+}
+
 static guint
 rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re, struct rspamd_task *task,
 		const guchar *in, gsize len,
-		gboolean is_raw)
+		gboolean is_raw,
+		gint lua_cbref)
 {
 	guint r = 0;
 	const gchar *start = NULL, *end = NULL;
@@ -570,12 +623,15 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 				&end,
 				is_raw,
 				NULL)) {
-			r++;
-			msg_debug_re_task ("found regexp /%s/, total hits: %d",
-					rspamd_regexp_get_pattern (re), r);
+			if (rspamd_re_cache_check_lua_condition (task, re, in, len,
+					start, end, lua_cbref)) {
+				r++;
+				msg_debug_re_task ("found regexp /%s/, total hits: %d",
+						rspamd_regexp_get_pattern (re), r);
 
-			if (max_hits > 0 && r >= max_hits) {
-				break;
+				if (max_hits > 0 && r >= max_hits) {
+					break;
+				}
 			}
 		}
 
@@ -621,25 +677,28 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 {
 	struct rspamd_re_hyperscan_cbdata *cbdata = ud;
 	struct rspamd_re_runtime *rt;
-	struct rspamd_re_cache_elt *pcre_elt;
+	struct rspamd_re_cache_elt *cache_elt;
 	guint ret, maxhits, i, processed;
 	struct rspamd_task *task;
 
 	rt = cbdata->rt;
 	task = cbdata->task;
-	pcre_elt = g_ptr_array_index (rt->cache->re, id);
-	maxhits = rspamd_regexp_get_maxhits (pcre_elt->re);
+	cache_elt = g_ptr_array_index (rt->cache->re, id);
+	maxhits = rspamd_regexp_get_maxhits (cache_elt->re);
 
-	if (pcre_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN) {
-		ret = 1;
-		setbit (rt->checked, id);
+	if (cache_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN) {
+		if (rspamd_re_cache_check_lua_condition (task, cache_elt->re,
+				cbdata->ins[0], cbdata->lens[0], from, to, cache_elt->lua_cbref)) {
+			ret = 1;
+			setbit (rt->checked, id);
 
-		if (maxhits == 0 || rt->results[id] < maxhits) {
-			rt->results[id] += ret;
-			rt->stat.regexp_matched++;
+			if (maxhits == 0 || rt->results[id] < maxhits) {
+				rt->results[id] += ret;
+				rt->stat.regexp_matched++;
+			}
+			msg_debug_re_task ("found regexp /%s/ using hyperscan only, total hits: %d",
+					rspamd_regexp_get_pattern (cache_elt->re), rt->results[id]);
 		}
-		msg_debug_re_task ("found regexp /%s/ using hyperscan only, total hits: %d",
-				rspamd_regexp_get_pattern (pcre_elt->re), rt->results[id]);
 	}
 	else {
 		if (!isset (rt->checked, id)) {
@@ -648,11 +707,12 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 
 			for (i = 0; i < cbdata->count; i ++) {
 				rspamd_re_cache_process_pcre (rt,
-						pcre_elt->re,
+						cache_elt->re,
 						cbdata->task,
 						cbdata->ins[i],
 						cbdata->lens[i],
-						FALSE);
+						FALSE,
+						cache_elt->lua_cbref);
 				setbit (rt->checked, id);
 
 				processed += cbdata->lens[i];
@@ -680,6 +740,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	guint64 re_id;
 	guint ret = 0;
 	guint i;
+	struct rspamd_re_cache_elt *cache_elt;
 
 	re_id = rspamd_regexp_get_cache_id (re);
 
@@ -690,6 +751,8 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		return ret;
 	}
 
+	cache_elt = (struct rspamd_re_cache_elt *)g_ptr_array_index (rt->cache->re, re_id);
+
 #ifndef WITH_HYPERSCAN
 	for (i = 0; i < count; i++) {
 		ret = rspamd_re_cache_process_pcre (rt,
@@ -697,20 +760,20 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 				task,
 				in[i],
 				lens[i],
-				is_raw);
+				is_raw,
+				cache_elt->lua_cbref);
 		rt->results[re_id] = ret;
 	}
 
 	setbit (rt->checked, re_id);
 #else
-	struct rspamd_re_cache_elt *elt;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_hyperscan_cbdata cbdata;
 
-	elt = g_ptr_array_index (rt->cache->re, re_id);
+	cache_elt = g_ptr_array_index (rt->cache->re, re_id);
 	re_class = rspamd_regexp_get_class (re);
 
-	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE ||
+	if (rt->cache->disable_hyperscan || cache_elt->match_type == RSPAMD_RE_CACHE_PCRE ||
 			!rt->has_hs || (is_raw && re_class->has_utf8)) {
 		for (i = 0; i < count; i++) {
 			ret = rspamd_re_cache_process_pcre (rt,
@@ -718,7 +781,8 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 					task,
 					in[i],
 					lens[i],
-					is_raw);
+					is_raw,
+					cache_elt->lua_cbref);
 		}
 
 		setbit (rt->checked, re_id);

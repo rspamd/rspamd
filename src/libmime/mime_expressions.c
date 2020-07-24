@@ -823,7 +823,7 @@ set:
 							mime_atom->d.re->regexp,
 							mime_atom->d.re->type,
 							mime_atom->d.re->extra.header,
-							strlen (mime_atom->d.re->extra.header) + 1);
+							strlen (mime_atom->d.re->extra.header) + 1, -1);
 					/* Pass ownership to the cache */
 					rspamd_regexp_unref (own_re);
 				}
@@ -845,7 +845,7 @@ set:
 							mime_atom->d.re->regexp,
 							mime_atom->d.re->type,
 							mime_atom->d.re->extra.selector,
-							strlen (mime_atom->d.re->extra.selector) + 1);
+							strlen (mime_atom->d.re->extra.selector) + 1, -1);
 					/* Pass ownership to the cache */
 					rspamd_regexp_unref (own_re);
 				}
@@ -865,7 +865,8 @@ set:
 						mime_atom->d.re->regexp,
 						mime_atom->d.re->type,
 						NULL,
-						0);
+						0,
+						-1);
 				/* Pass ownership to the cache */
 				rspamd_regexp_unref (own_re);
 			}
@@ -940,7 +941,8 @@ set:
 		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (pool,
 				mime_atom->str);
 		if (mime_atom->d.func == NULL) {
-			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse function '%s'",
+			g_set_error (err, rspamd_mime_expr_quark(), 200,
+					"cannot parse function '%s'",
 					mime_atom->str);
 			goto err;
 		}
