@@ -2479,6 +2479,7 @@ rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 	 * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
 	 * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
 	 * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
+	 * - t - lua_text, argument - int - position of the lua_text on stack (not lua_registry)
 	 */
 	while (*argp) {
 		switch (*argp) {
@@ -2511,6 +2512,7 @@ rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 			nargs ++;
 			break;
 		case 'f':
+		case 't':
 			lua_pushvalue (L, va_arg (ap, gint));
 			nargs ++;
 			break;

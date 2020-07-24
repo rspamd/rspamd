@@ -594,6 +594,7 @@ gchar *rspamd_lua_get_module_name (lua_State *L);
  * - u - lua_userdata, argument - (const char * + void *) - classname + pointer
  * - b - lua_boolean, argument - gboolean (not bool due to varargs promotion)
  * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
+ * - t - lua_text, argument - int - position of the lua_text on stack (not lua_registry)
  * @param L lua state
  * @param cbref LUA_REGISTRY reference
  * @param strloc where this function is called from
