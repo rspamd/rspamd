@@ -27,7 +27,7 @@
 
 <body>
 
-<nav class="navbar navbar-light bg-light navbar-expand-md" id="navBar">
+<nav class="navbar navbar-light bg-light navbar-expand-md d-none" id="navBar">
 	<form class="form-inline mr-auto">
 	<div class="navbar-header navbar-brand p-0">
 		<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
@@ -45,7 +45,7 @@
 		<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
 		<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab" class="nav-link">History</a></li>
 	</ul>
-	<form class="form-inline ml-auto" id="navbar-btn-form" style="display: none;">
+	<form class="form-inline ml-auto">
 		<div class="btn-group">
 			<a href="#" class="btn btn-outline-secondary" role="button" data-toggle="button" id="refresh" style="display: none;"><i class="fas fa-sync-alt"></i> Refresh</a>
 			<button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" id="autoRefresh">
@@ -74,7 +74,7 @@
 
 <div class="notification-area"></div>
 
-<div id="mainUI" style="display: none;">
+<div id="mainUI" class="d-none">
 
 	<div class="container-fluid">
 

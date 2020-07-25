@@ -283,9 +283,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             $(".ro-hide").show();
         }
 
-        var buttons = $("#navbar-btn-form");
-        $("#mainUI").show();
-        $(buttons).show();
+        $("#navBar, #mainUI").removeClass("d-none");
         $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
     }
 
