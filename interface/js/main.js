@@ -46,6 +46,7 @@ define("d3.global", ["d3"], function (d3global) { // eslint-disable-line strict
 // Notify user on module loading failure
 requirejs.onError = function (e) {
     "use strict";
+    document.getElementById("loading").classList.add("d-none");
     document.getElementsByClassName("notification-area")[0].innerHTML =
         "<div class=\"alert alert-error\">" +
             "<strong>Module loading error: " + e.requireType + ", module: " + e.requireModules + "</strong>" +

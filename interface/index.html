@@ -72,13 +72,18 @@
 	</form>
 </nav>
 
-<div class="notification-area"></div>
+<div class="notification-area">
+	<noscript>
+    	<div class="alert alert-error"><strong>Please enable JavaScript</strong></div>
+    </noscript>
+</div>
 
 <div id="preloader" class="container-fluid">
-	<div id="loading" class="position-absolute align-items-center my-3 text-primary blinking">
+	<div id="loading" class="position-absolute align-items-center my-3 text-primary blinking d-none">
 		<div class="spinner-border align-middle" role="status" aria-hidden="true"></div>
 		<strong class="ml-3">Loading...</strong>
 	</div>
+	<script>document.getElementById("loading").classList.remove("d-none");</script>
 	<div class="row position-absolute w-100 h-100 align-items-center text-center">
 		<img class="img-fluid mh-100 mx-auto" src="./img/rspamd_logo_navbar.png" alt="Rspamd" />
 	</div>
