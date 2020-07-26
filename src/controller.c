@@ -1949,7 +1949,7 @@ rspamd_controller_check_fin_task (void *ud)
 
 	if (task->err) {
 		msg_info_task ("cannot check <%s>: %e",
-				MESSAGE_FIELD (task, message_id), task->err);
+				MESSAGE_FIELD_CHECK (task, message_id), task->err);
 		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 				task->err->message);
 		return TRUE;
