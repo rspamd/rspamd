@@ -58,7 +58,7 @@ local policy_schema = ts.shape{
   scan_archives = ts.boolean,
   short_text_direct_hash = ts.boolean,
   text_shingles = ts.boolean,
-  skip_imagess = ts.boolean,
+  skip_images = ts.boolean,
 }
 
 
