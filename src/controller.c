@@ -2090,14 +2090,6 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
-		msg_err_session ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent,
-			400,
-			"Empty body is not permitted");
-		return 0;
-	}
-
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
 			ctx->lang_det, ctx->event_loop, FALSE);
 
