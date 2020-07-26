@@ -567,3 +567,14 @@ table#symbolsTable input[type="number"] {
 .token.lf::before {
     content: "";
 }
+
+/* Preloader */
+.blinking {
+    animation: blinker 1.2s ease-in-out infinite;
+}
+@keyframes blinker {
+    50% {
+        -webkit-filter: invert(1);
+        filter: invert(1);
+    }
+}
