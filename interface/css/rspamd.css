@@ -111,12 +111,6 @@ textarea {
     border-top-right-radius: .25rem !important;
     border-bottom-right-radius: .25rem !important;
 }
-.notice {
-    display: none;
-}
-#js .notice {
-    display: inline;
-}
 
 input.form-control[type="number"] {
     width: 4em;
