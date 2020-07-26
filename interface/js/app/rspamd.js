@@ -283,9 +283,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             $(".ro-hide").show();
         }
 
-        var buttons = $("#navbar-btn-form");
-        $("#mainUI").show();
-        $(buttons).show();
+        $("#preloader").addClass("d-none");
+        $("#navBar, #mainUI").removeClass("d-none");
         $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
     }
 
@@ -436,6 +435,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         tab_symbols.setup(ui, tables);
         tab_upload.setup(ui, tables);
         selData = tab_graph.setup(ui);
+
+        $("#loading").addClass("d-none");
     };
 
     ui.connect = function () {

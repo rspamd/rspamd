@@ -111,12 +111,6 @@ textarea {
     border-top-right-radius: .25rem !important;
     border-bottom-right-radius: .25rem !important;
 }
-.notice {
-    display: none;
-}
-#js .notice {
-    display: inline;
-}
 
 input.form-control[type="number"] {
     width: 4em;
@@ -566,4 +560,15 @@ table#symbolsTable input[type="number"] {
 .token.crlf::before,
 .token.lf::before {
     content: "";
+}
+
+/* Preloader */
+.blinking {
+    animation: blinker 1.2s ease-in-out infinite;
+}
+@keyframes blinker {
+    50% {
+        -webkit-filter: invert(1);
+        filter: invert(1);
+    }
 }
