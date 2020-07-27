@@ -906,6 +906,7 @@ enum rspamd_received_part_type {
 	RSPAMD_RECEIVED_PART_BY,
 	RSPAMD_RECEIVED_PART_FOR,
 	RSPAMD_RECEIVED_PART_WITH,
+	RSPAMD_RECEIVED_PART_ID,
 	RSPAMD_RECEIVED_PART_UNKNOWN,
 };
 
@@ -1237,6 +1238,12 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 				p += sizeof ("for") - 1;
 				cur_part = rspamd_smtp_received_process_part (task, p, end - p,
 						RSPAMD_RECEIVED_PART_FOR, &pos);
+			}
+			else if (len > sizeof ("id") && (lc_map[p[0]] == 'i' &&
+											  lc_map[p[1]] == 'd')) {
+				p += sizeof ("id") - 1;
+				cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+						RSPAMD_RECEIVED_PART_ID, &pos);
 			}
 			else {
 				while (p < end) {
@@ -1614,6 +1621,17 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 				}
 			}
 
+			break;
+		case RSPAMD_RECEIVED_PART_FOR:
+			rh->for_addr = rspamd_email_address_from_smtp (cur->data, cur->dlen);
+
+			if (rh->for_addr) {
+				rh->for_mbox = rh->for_addr->addr;
+
+				rspamd_mempool_add_destructor (task->task_pool,
+						(rspamd_mempool_destruct_t)rspamd_email_address_free,
+						rh->for_addr);
+			}
 			break;
 		default:
 			/* Do nothing */

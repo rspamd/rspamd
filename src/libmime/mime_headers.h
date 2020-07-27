@@ -95,6 +95,8 @@ enum rspamd_received_type {
 			RSPAMD_RECEIVED_MAPI| \
 			RSPAMD_RECEIVED_UNKNOWN)
 
+struct rspamd_email_address;
+
 struct rspamd_received_header {
 	const gchar *from_hostname;
 	const gchar *from_ip;
@@ -102,6 +104,7 @@ struct rspamd_received_header {
 	const gchar *real_ip;
 	const gchar *by_hostname;
 	const gchar *for_mbox;
+	struct rspamd_email_address *for_addr;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_mime_header *hdr;
 	time_t timestamp;
