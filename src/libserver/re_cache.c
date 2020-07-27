@@ -624,7 +624,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 				is_raw,
 				NULL)) {
 			if (rspamd_re_cache_check_lua_condition (task, re, in, len,
-					start, end, lua_cbref)) {
+					start - (const gchar *)in, end - (const gchar *)in, lua_cbref)) {
 				r++;
 				msg_debug_re_task ("found regexp /%s/, total hits: %d",
 						rspamd_regexp_get_pattern (re), r);
