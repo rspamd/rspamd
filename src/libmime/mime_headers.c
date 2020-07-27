@@ -1625,8 +1625,11 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 		case RSPAMD_RECEIVED_PART_FOR:
 			rh->for_addr = rspamd_email_address_from_smtp (cur->data, cur->dlen);
 
-			if (rh->for_addr) {
-				rh->for_mbox = rh->for_addr->addr;
+			if (rh->for_addr && rh->for_addr->addr_len > 0) {
+				t1.begin = rh->for_addr->addr;
+				t1.len = rh->for_addr->addr_len;
+				rh->for_mbox = rspamd_mempool_ftokdup (task->task_pool,
+						&t1);
 
 				rspamd_mempool_add_destructor (task->task_pool,
 						(rspamd_mempool_destruct_t)rspamd_email_address_free,
