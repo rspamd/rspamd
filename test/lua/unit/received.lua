@@ -6,18 +6,18 @@ context("Received headers parser", function()
 
   ffi.cdef[[
     struct received_header {
-      char *from_hostname;
-      char *from_ip;
-      char *real_hostname;
-      char *real_ip;
-      char *by_hostname;
-      char *for_mbox;
-      char *comment_ip;
+      const char *from_hostname;
+      const char *from_ip;
+      const char *real_hostname;
+      const char *real_ip;
+      const char *by_hostname;
+      const char *for_mbox;
+      void *for_addr;
       void *addr;
       void *hdr;
       long timestamp;
-      int type;
-      int flags;
+      int flags; /* See enum rspamd_received_type */
+      struct received_header *prev, *next;
   };
   struct rspamd_task * rspamd_task_new(struct rspamd_worker *worker, struct rspamd_config *cfg);
   int rspamd_smtp_received_parse (struct rspamd_task *task,
@@ -115,6 +115,7 @@ context("Received headers parser", function()
        from_ip = '65.19.167.131',
        real_ip = '65.19.167.131',
        by_hostname = 'mail01.someotherdomain.org',
+       ['for'] = 'user2@somedomain.com',
      }
     },
     {[[from example.com ([]) by example.com with ESMTP id 2019091111 ; Thu, 26 Sep 2019 11:19:07 +0200]],
@@ -122,7 +123,7 @@ context("Received headers parser", function()
         by_hostname = 'example.com',
       },
     },
-    {[[from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) with;ESMTP id 44QShF6xj4z1X for <y.br>; Thu, 21 Mar 2019 23:45:46 -0300 : <g @yi.br>]],
+    {[[from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) with;ESMTP id 44QShF6xj4z1X for <hey@y.br>; Thu, 21 Mar 2019 23:45:46 -0300 : <g @yi.br>]],
        {
          from_hostname = '171-29.br',
          real_ip = '1.1.1.1',
@@ -198,6 +199,16 @@ context("Received headers parser", function()
             assert_nil(hdr.by_hostname,
                 string.format('%s: by_hostname: %s, expected: nil',
                     c[1], ffi_string(hdr.by_hostname)))
+          end
+        elseif k == 'for' then
+          if #v > 0 then
+            assert_equal(v, ffi_string(hdr['for_mbox']),
+                string.format('%s: for: %s, expected: %s',
+                    c[1], ffi_string(hdr['for_mbox']), v))
+          else
+            assert_nil(hdr['for_mbox'],
+                string.format('%s: for: %s, expected: nil',
+                    c[1], ffi_string(hdr['for_mbox'])))
           end
         end
       end
