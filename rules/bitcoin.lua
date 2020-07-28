@@ -230,49 +230,6 @@ config.regexp['BITCOIN_ADDR'] = {
       end
     end,
   },
-  callbackk = function(task)
-    local rspamd_re = require "rspamd_regexp"
-
-    local btc_wallet_re = rspamd_re.create_cached('^[13LM][1-9A-Za-z]{25,34}$')
-    local segwit_wallet_re = rspamd_re.create_cached('^(?:bc1|[13]|(?:[^:]+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}$', 'i')
-    local words_matched = {}
-    local segwit_words_matched = {}
-    local valid_wallets = {}
-
-    for _,part in ipairs(task:get_text_parts() or {}) do
-      local pw = part:filter_words(btc_wallet_re, 'raw', 3)
-
-      if pw and #pw > 0 then
-        for _,w in ipairs(pw) do
-          words_matched[#words_matched + 1] = w
-        end
-      end
-
-      pw = part:filter_words(segwit_wallet_re, 'raw', 3)
-      if pw and #pw > 0 then
-        for _,w in ipairs(pw) do
-          segwit_words_matched[#segwit_words_matched + 1] = w
-        end
-      end
-    end
-
-    for _,word in ipairs(words_matched) do
-      local valid = is_traditional_btc_address(word)
-      if valid then
-        valid_wallets[#valid_wallets + 1] = word
-      end
-    end
-    for _,word in ipairs(segwit_words_matched) do
-      local valid = is_segwit_bech32_address(word)
-      if valid then
-        valid_wallets[#valid_wallets + 1] = word
-      end
-    end
-
-    if #valid_wallets > 0 then
-      return true,1.0,valid_wallets
-    end
-  end,
   score = 0.0,
   one_shot = true,
   group = 'scams',
