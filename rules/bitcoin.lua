@@ -144,14 +144,19 @@ local function is_segwit_bech32_address(task, word)
     if decoded then
       return verify_beach32_cksum(hrp, decoded)
     end
-  elseif semicolon_pos then
+  else
     -- Bitcoin cash address
     -- https://www.bitcoincash.org/spec/cashaddr.html
     local decoded = gen_bleach32_table(address_part)
     lua_util.debugm(N, task, 'check %s, %s decoded', word, decoded)
 
     if decoded and #decoded > 8 then
-      prefix = word:sub(1, semicolon_pos - 1)
+      if semicolon_pos then
+        prefix = word:sub(1, semicolon_pos - 1)
+      else
+        prefix = 'bitcoincash'
+      end
+
       local polymod_tbl = {}
       fun.each(function(byte)
         local b = bit.band(string.byte(byte), 0x1f)
@@ -170,7 +175,7 @@ local function is_segwit_bech32_address(task, word)
 end
 
 local normal_wallet_re = [[/\b[13LM][1-9A-Za-z]{25,34}\b/AL{sa_body}]]
-local btc_bleach_re = [[/\b(?:bc1|[13]|(?:\w+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/AL{sa_body}]]
+local btc_bleach_re = [[/\b(?:\w+:)?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/AL{sa_body}]]
 
 config.regexp['BITCOIN_ADDR'] = {
   description = 'Message has a valid bitcoin wallet address',
