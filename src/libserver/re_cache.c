@@ -628,10 +628,10 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 				r++;
 				msg_debug_re_task ("found regexp /%s/, total hits: %d",
 						rspamd_regexp_get_pattern (re), r);
+			}
 
-				if (max_hits > 0 && r >= max_hits) {
-					break;
-				}
+			if (max_hits > 0 && r >= max_hits) {
+				break;
 			}
 		}
 
