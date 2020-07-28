@@ -18,6 +18,9 @@ limitations under the License.
 
 local fun = require "fun"
 local bit = require "bit"
+local lua_util = require "lua_util"
+local N = "bitcoin"
+
 local off = 0
 local base58_dec = fun.tomap(fun.map(
     function(c)
@@ -209,11 +212,38 @@ local function is_segwit_bech32_address(word)
   end
 end
 
+local normal_wallet_re = [[/\b[13LM][1-9A-Za-z]{25,34}\b/L{sa_body}]]
+local btc_bleach_re = [[/\b(?:bc1|[13]|(?:[^:]+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/L{sa_body}]]
 
-rspamd_config:register_symbol{
-  name = 'BITCOIN_ADDR',
+config.regexp['BITCOIN_ADDR'] = {
   description = 'Message has a valid bitcoin wallet address',
-  callback = function(task)
+  re = string.format('(%s) || (%s)', normal_wallet_re, btc_bleach_re),
+  re_conditions = {
+    [normal_wallet_re] = function(task, txt, s, e)
+      if e - s <= 2 then
+        return false
+      end
+
+      local word = lua_util.str_trim(txt:sub(s, e))
+      local valid = is_traditional_btc_address(word)
+
+      if valid then
+        -- To save option
+        task:insert_result('BITCOIN_ADDR', 1.0, word)
+        lua_util.debugm(N, task, 'found valid tradtional bitcoin addr in the word: %s',
+            word)
+        return true
+      else
+        lua_util.debugm(N, task, 'found invalid bitcoin addr in the word: %s',
+            word)
+
+        return false
+      end
+    end,
+    [btc_bleach_re] = function(task, txt, s, e)
+    end,
+  },
+  callbackk = function(task)
     local rspamd_re = require "rspamd_regexp"
 
     local btc_wallet_re = rspamd_re.create_cached('^[13LM][1-9A-Za-z]{25,34}$')
@@ -257,5 +287,6 @@ rspamd_config:register_symbol{
     end
   end,
   score = 0.0,
-  group = 'scams'
+  one_shot = true,
+  group = 'scams',
 }
