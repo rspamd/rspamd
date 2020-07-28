@@ -630,6 +630,14 @@ LUA_FUNCTION_DEF (util, parse_content_type);
  */
 LUA_FUNCTION_DEF (util, mime_header_encode);
 
+/***
+ *  @function util.btc_polymod(input_values)
+ * Performs bitcoin polymod function
+ * @param {table|numbers} input_values
+ * @return {boolean} true if polymod has been successful
+ */
+LUA_FUNCTION_DEF (util, btc_polymod);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -694,6 +702,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
+	LUA_INTERFACE_DEF (util, btc_polymod),
 	{NULL, NULL}
 };
 
@@ -2254,7 +2263,6 @@ lua_util_gzip_compress (lua_State *L)
 	}
 
 
-
 	memset (&strm, 0, sizeof (strm));
 	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
@@ -2266,14 +2274,14 @@ lua_util_gzip_compress (lua_State *L)
 	sz = deflateBound (&strm, t->len);
 
 	strm.avail_in = t->len;
-	strm.next_in = (guchar *)t->start;
+	strm.next_in = (guchar *) t->start;
 
 	res = lua_newuserdata (L, sizeof (*res));
 	res->start = g_malloc (sz);
 	res->flags = RSPAMD_TEXT_FLAG_OWN;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
-	p = (guchar *)res->start;
+	p = (guchar *) res->start;
 	remain = sz;
 
 	while (strm.avail_in != 0) {
@@ -2302,9 +2310,9 @@ lua_util_gzip_compress (lua_State *L)
 		if (strm.avail_out == 0 && strm.avail_in != 0) {
 			/* Need to allocate more */
 			remain = res->len;
-			res->start = g_realloc ((gpointer)res->start, strm.avail_in + sz);
+			res->start = g_realloc ((gpointer) res->start, strm.avail_in + sz);
 			sz = strm.avail_in + sz;
-			p = (guchar *)res->start + remain;
+			p = (guchar *) res->start + remain;
 			remain = sz - remain;
 		}
 	}
@@ -2684,7 +2692,8 @@ lua_util_get_string_stats (lua_State *L)
 		while (*string_to_check != '\0') {
 			if (g_ascii_isdigit(*string_to_check)) {
 				num_of_digits++;
-			} else if (g_ascii_isalpha(*string_to_check)) {
+			}
+			else if (g_ascii_isalpha(*string_to_check)) {
 				num_of_letters++;
 			}
 			string_to_check++;
@@ -2694,21 +2703,20 @@ lua_util_get_string_stats (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_createtable(L, 0, 2);
-	lua_pushstring(L, "digits");
-	lua_pushinteger(L, num_of_digits);
-	lua_settable(L, -3);
-	lua_pushstring(L, "letters");
-	lua_pushinteger(L, num_of_letters);
-	lua_settable(L, -3);
+	lua_createtable (L, 0, 2);
+	lua_pushstring (L, "digits");
+	lua_pushinteger (L, num_of_digits);
+	lua_settable (L, -3);
+	lua_pushstring (L, "letters");
+	lua_pushinteger (L, num_of_letters);
+	lua_settable (L, -3);
 
 	return 1;
 }
 
 
 static gint
-lua_util_is_utf_outside_range(lua_State *L)
-{
+lua_util_is_utf_outside_range (lua_State *L) {
 	LUA_TRACE_POINT;
 	gsize len_of_string;
 	gint ret;
@@ -2719,48 +2727,48 @@ lua_util_is_utf_outside_range(lua_State *L)
 	static rspamd_lru_hash_t *validators;
 
 	if (validators == NULL) {
-		validators = rspamd_lru_hash_new_full(16, g_free, (GDestroyNotify)uspoof_close, g_int64_hash, g_int64_equal);
+		validators = rspamd_lru_hash_new_full (16, g_free, (GDestroyNotify) uspoof_close, g_int64_hash, g_int64_equal);
 	}
 
 	if (string_to_check) {
-		guint64 hash_key = (guint64)range_end << 32 || range_start;
+		guint64 hash_key = (guint64) range_end << 32 || range_start;
 
-		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, 0);
+		USpoofChecker *validator = rspamd_lru_hash_lookup (validators, &hash_key, 0);
 
 		UErrorCode uc_err = U_ZERO_ERROR;
 
 		if (validator == NULL) {
-			USet * allowed_chars;
-			guint64 * creation_hash_key = g_malloc(sizeof(guint64));
+			USet *allowed_chars;
+			guint64 *creation_hash_key = g_malloc (sizeof (guint64));
 			*creation_hash_key = hash_key;
 
 			validator = uspoof_open (&uc_err);
 			if (uc_err != U_ZERO_ERROR) {
 				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
 				lua_pushboolean (L, false);
-				uspoof_close(validator);
-				g_free(creation_hash_key);
+				uspoof_close (validator);
+				g_free (creation_hash_key);
 				return 1;
 			}
 
-			allowed_chars = uset_openEmpty();
-			uset_addRange(allowed_chars, range_start, range_end);
-			uspoof_setAllowedChars(validator, allowed_chars, &uc_err);
+			allowed_chars = uset_openEmpty ();
+			uset_addRange (allowed_chars, range_start, range_end);
+			uspoof_setAllowedChars (validator, allowed_chars, &uc_err);
 
 			uspoof_setChecks (validator,
-				USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
+					USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
 
-			uset_close(allowed_chars);
+			uset_close (allowed_chars);
 
 			if (uc_err != U_ZERO_ERROR) {
 				msg_err ("Cannot configure uspoof: %s", u_errorName (uc_err));
 				lua_pushboolean (L, false);
-				uspoof_close(validator);
-				g_free(creation_hash_key);
+				uspoof_close (validator);
+				g_free (creation_hash_key);
 				return 1;
 			}
 
-			rspamd_lru_hash_insert(validators, creation_hash_key, validator,
+			rspamd_lru_hash_insert (validators, creation_hash_key, validator,
 					0, 0);
 		}
 
@@ -2791,7 +2799,7 @@ lua_util_get_hostname (lua_State *L)
 		hostlen = 256;
 	}
 	else {
-		hostlen ++;
+		hostlen++;
 	}
 
 	hostbuf = g_alloca (hostlen);
@@ -3910,6 +3918,38 @@ lua_util_unpack (lua_State *L)
 	}
 	lua_pushinteger (L, pos + 1);  /* next position */
 	return n + 1;
+}
+
+static int
+lua_util_btc_polymod (lua_State *L)
+{
+	guint64 c = 1;
+
+	if (lua_type (L, 1) != LUA_TTABLE) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	for (lua_pushnil (L); lua_next (L, 1); lua_pop (L, 1)) {
+		guint8 c0 = c >> 35;
+		guint64 d = lua_tointeger (L, -1);
+
+		c = ((c & 0x07ffffffff) << 5) ^ d;
+
+		if (c0 & 0x01) c ^= 0x98f2bc8e61;
+		if (c0 & 0x02) c ^= 0x79b76d99e2;
+		if (c0 & 0x04) c ^= 0xf33e5fb3c4;
+		if (c0 & 0x08) c ^= 0xae2eabe2a8;
+		if (c0 & 0x10) c ^= 0x1e4f43e470;
+	}
+
+	if ((c ^ 1) == 0) {
+		lua_pushboolean (L, true);
+	}
+	else {
+		lua_pushboolean (L, false);
+	}
+
+	return 1;
 }
 
 static gint
