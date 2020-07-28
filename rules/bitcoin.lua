@@ -121,16 +121,6 @@ local function gen_bleach32_table(input)
   return res and d or nil
 end
 
-local function slice_table(tbl, first, last, step)
-  local sliced = {}
-
-  for i = first or 1, last or #tbl, step or 1 do
-    sliced[#sliced+1] = tbl[i]
-  end
-
-  return sliced
-end
-
 local function is_segwit_bech32_address(task, word)
   local semicolon_pos = string.find(word, ':')
   local address_part = word
@@ -161,8 +151,7 @@ local function is_segwit_bech32_address(task, word)
     lua_util.debugm(N, task, 'check %s, %s decoded', word, decoded)
 
     if decoded and #decoded > 8 then
-      local c = 1
-      local prefix = word:sub(1, semicolon_pos - 1)
+      prefix = word:sub(1, semicolon_pos - 1)
       local polymod_tbl = {}
       fun.each(function(byte)
         local b = bit.band(string.byte(byte), 0x1f)
@@ -172,7 +161,7 @@ local function is_segwit_bech32_address(task, word)
       -- For semicolon
       table.insert(polymod_tbl, 0)
 
-      fun.each(function(byte) c = table.insert(polymod_tbl, byte) end, decoded)
+      fun.each(function(byte) table.insert(polymod_tbl, byte) end, decoded)
       lua_util.debugm(N, task, 'final polymod table: %s', polymod_tbl)
 
       return rspamd_util.btc_polymod(polymod_tbl)
