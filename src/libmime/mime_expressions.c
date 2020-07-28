@@ -372,6 +372,8 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		case 'u':
 		case 'O':
 		case 'r':
+		case 'L':
+			/* Handled by rspamd_regexp_t */
 			g_string_append_c (re_flags, *p);
 			p++;
 			break;
@@ -813,6 +815,10 @@ set:
 			goto err;
 		}
 		else {
+			const ucl_object_t *re_conditions = ucl_object_lookup (real_ud->conf_obj,
+					"re_conditions");
+			gint lua_cbref = -1;
+
 			/* Check regexp condition */
 			if (real_ud->conf_obj == NULL) {
 				g_set_error (err, rspamd_mime_expr_quark(), 300,
@@ -820,10 +826,6 @@ set:
 						mime_atom->str);
 				goto err;
 			}
-
-			const ucl_object_t *re_conditions = ucl_object_lookup (real_ud->conf_obj,
-					"re_conditions");
-			gint lua_cbref = -1;
 
 			if (re_conditions != NULL) {
 				if (ucl_object_type (re_conditions) != UCL_OBJECT) {
@@ -849,6 +851,10 @@ set:
 
 					lua_cbref = fd->idx;
 				}
+			}
+
+			if (lua_cbref != -1) {
+				msg_info_config ("added condition for regexp %s", mime_atom->str);
 			}
 
 			/* Register new item in the cache */

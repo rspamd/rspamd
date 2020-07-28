@@ -406,6 +406,10 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				/* We optimize all regexps by default */
 				rspamd_flags |= RSPAMD_REGEXP_FLAG_NOOPT;
 				break;
+			case 'L':
+				/* SOM_LEFTMOST hyperscan flag */
+				rspamd_flags |= RSPAMD_REGEXP_FLAG_LEFTMOST;
+				break;
 			case 'r':
 				rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
 				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_UTF;

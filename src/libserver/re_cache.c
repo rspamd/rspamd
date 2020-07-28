@@ -1979,6 +1979,10 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 			hs_flags[i] |= HS_FLAG_SINGLEMATCH;
 		}
 
+		if (re_flags & RSPAMD_REGEXP_FLAG_LEFTMOST) {
+			hs_flags[i] |= HS_FLAG_SOM_LEFTMOST;
+		}
+
 		gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
 
 		if (hs_compile (pat,
