@@ -807,11 +807,50 @@ set:
 		mime_atom->d.re = rspamd_mime_expr_parse_regexp_atom (pool,
 				mime_atom->str, cfg);
 		if (mime_atom->d.re == NULL) {
-			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse regexp '%s'",
+			g_set_error (err, rspamd_mime_expr_quark(), 200,
+					"cannot parse regexp '%s'",
 					mime_atom->str);
 			goto err;
 		}
 		else {
+			/* Check regexp condition */
+			if (real_ud->conf_obj == NULL) {
+				g_set_error (err, rspamd_mime_expr_quark(), 300,
+						"no config object for '%s'",
+						mime_atom->str);
+				goto err;
+			}
+
+			const ucl_object_t *re_conditions = ucl_object_lookup (real_ud->conf_obj,
+					"re_conditions");
+			gint lua_cbref = -1;
+
+			if (re_conditions != NULL) {
+				if (ucl_object_type (re_conditions) != UCL_OBJECT) {
+					g_set_error (err, rspamd_mime_expr_quark(), 320,
+							"re_conditions is not a table for '%s'",
+							mime_atom->str);
+					goto err;
+				}
+
+				const ucl_object_t *function_obj;
+
+				function_obj = ucl_object_lookup (re_conditions, mime_atom->str);
+
+				if (function_obj != NULL) {
+					if (ucl_object_type (function_obj) != UCL_USERDATA) {
+						g_set_error (err, rspamd_mime_expr_quark(), 320,
+								"condition for '%s' is invalid, must be function",
+								mime_atom->str);
+						goto err;
+					}
+
+					struct ucl_lua_funcdata *fd = function_obj->value.ud;
+
+					lua_cbref = fd->idx;
+				}
+			}
+
 			/* Register new item in the cache */
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER ||
@@ -823,7 +862,8 @@ set:
 							mime_atom->d.re->regexp,
 							mime_atom->d.re->type,
 							mime_atom->d.re->extra.header,
-							strlen (mime_atom->d.re->extra.header) + 1, -1);
+							strlen (mime_atom->d.re->extra.header) + 1,
+							lua_cbref);
 					/* Pass ownership to the cache */
 					rspamd_regexp_unref (own_re);
 				}
@@ -845,7 +885,8 @@ set:
 							mime_atom->d.re->regexp,
 							mime_atom->d.re->type,
 							mime_atom->d.re->extra.selector,
-							strlen (mime_atom->d.re->extra.selector) + 1, -1);
+							strlen (mime_atom->d.re->extra.selector) + 1,
+							lua_cbref);
 					/* Pass ownership to the cache */
 					rspamd_regexp_unref (own_re);
 				}
@@ -866,7 +907,7 @@ set:
 						mime_atom->d.re->type,
 						NULL,
 						0,
-						-1);
+						lua_cbref);
 				/* Pass ownership to the cache */
 				rspamd_regexp_unref (own_re);
 			}
@@ -878,7 +919,8 @@ set:
 		lua_getglobal (cfg->lua_state, mime_atom->str);
 
 		if (lua_type (cfg->lua_state, -1) != LUA_TFUNCTION) {
-			g_set_error (err, rspamd_mime_expr_quark(), 200, "no such lua function '%s'",
+			g_set_error (err, rspamd_mime_expr_quark(), 200,
+					"no such lua function '%s'",
 					mime_atom->str);
 			lua_pop (cfg->lua_state, 1);
 
