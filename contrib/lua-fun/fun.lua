@@ -9,6 +9,10 @@
 local exports = {}
 local methods = {}
 
+-- Rspamd specific
+local rspamd_text = require "rspamd_text"
+local text_cookie = rspamd_text.cookie
+
 -- compatibility with Lua 5.1/5.2
 local unpack = rawget(table, "unpack") or unpack
 
@@ -87,6 +91,15 @@ local string_gen = function(param, state)
     return state, r
 end
 
+local text_gen = function(param, state)
+    local state = state + 1
+    if state > #param then
+        return nil
+    end
+    local r = string.char(param:at(state))
+    return state, r
+end
+
 local ipairs_gen = ipairs({}) -- get the generating function from ipairs
 
 local pairs_gen = pairs({ a = 0 }) -- get the generating function from pairs
@@ -123,6 +136,11 @@ local rawiter = function(obj, param, state)
             return nil_gen, nil, nil
         end
         return string_gen, obj, 0
+    elseif (type(obj) == "userdata" and obj.cookie == text_cookie) then
+        if #obj == 0 then
+            return nil_gen, nil, nil
+        end
+        return text_gen, obj, 0
     end
     error(string.format('object %s of type "%s" is not iterable',
           obj, type(obj)))
