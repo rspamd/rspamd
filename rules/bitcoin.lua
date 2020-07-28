@@ -19,6 +19,7 @@ limitations under the License.
 local fun = require "fun"
 local bit = require "bit"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local N = "bitcoin"
 
 local off = 0
@@ -130,39 +131,7 @@ local function slice_table(tbl, first, last, step)
   return sliced
 end
 
-local function btc_cash_polymod_step(c, byte)
- --[[
-  uint8_t c0 = c >> 35;
-  c = ((c & 0x07ffffffff) << 5) ^ d;
-
-  if (c0 & 0x01) c ^= 0x98f2bc8e61;
-  if (c0 & 0x02) c ^= 0x79b76d99e2;
-  if (c0 & 0x04) c ^= 0xf33e5fb3c4;
-  if (c0 & 0x08) c ^= 0xae2eabe2a8;
-  if (c0 & 0x10) c ^= 0x1e4f43e470;
---]]
-  local c0 = bit.rshift(c, 35)
-  c = bit.bxor(bit.lshift(bit.band(c, 0x07ffffffff), 5), byte)
-  if bit.band(c0, 0x01) ~= 0 then
-    c = bit.bxor(c, 0x98f2bc8e61)
-  end
-  if bit.band(c0, 0x02) ~= 0 then
-    c = bit.bxor(c, 0x79b76d99e2)
-  end
-  if bit.band(c0, 0x04) ~= 0 then
-    c = bit.bxor(c, 0xf33e5fb3c4)
-  end
-  if bit.band(c0, 0x08) ~= 0 then
-    c = bit.bxor(c, 0xae2eabe2a8)
-  end
-  if bit.band(c0, 0x10) ~= 0 then
-    c = bit.bxor(c, 0x1e4f43e470)
-  end
-
-  return c
-end
-
-local function is_segwit_bech32_address(word)
+local function is_segwit_bech32_address(task, word)
   local semicolon_pos = string.find(word, ':')
   local address_part = word
   if semicolon_pos then
@@ -188,32 +157,31 @@ local function is_segwit_bech32_address(word)
   elseif semicolon_pos then
     -- Bitcoin cash address
     -- https://www.bitcoincash.org/spec/cashaddr.html
-    local l = require "rspamd_logger"
     local decoded = gen_bleach32_table(address_part)
-    l.errx('check %s, %s decoded', word, decoded)
+    lua_util.debugm(N, task, 'check %s, %s decoded', word, decoded)
 
     if decoded and #decoded > 8 then
-      -- TODO: Add checksum validation some day
       local c = 1
       local prefix = word:sub(1, semicolon_pos - 1)
+      local polymod_tbl = {}
       fun.each(function(byte)
-        c = btc_cash_polymod_step(c, bit.band(string.byte(byte), 0x1f))
+        local b = bit.band(string.byte(byte), 0x1f)
+        table.insert(polymod_tbl, b)
       end, fun.iter(prefix))
 
       -- For semicolon
-      c = btc_cash_polymod_step(c, 0)
+      table.insert(polymod_tbl, 0)
 
-      fun.each(function(byte) c = btc_cash_polymod_step(c, byte) end, decoded)
+      fun.each(function(byte) c = table.insert(polymod_tbl, byte) end, decoded)
+      lua_util.debugm(N, task, 'final polymod table: %s', polymod_tbl)
 
-      if bit.bxor(c, 0x1) == 0 then
-        return true
-      end
+      return rspamd_util.btc_polymod(polymod_tbl)
     end
   end
 end
 
-local normal_wallet_re = [[/\b[13LM][1-9A-Za-z]{25,34}\b/L{sa_body}]]
-local btc_bleach_re = [[/\b(?:bc1|[13]|(?:[^:]+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/L{sa_body}]]
+local normal_wallet_re = [[/\b[13LM][1-9A-Za-z]{25,34}\b/AL{sa_body}]]
+local btc_bleach_re = [[/\b(?:bc1|[13]|(?:\w+:))[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/AL{sa_body}]]
 
 config.regexp['BITCOIN_ADDR'] = {
   description = 'Message has a valid bitcoin wallet address',
@@ -230,7 +198,7 @@ config.regexp['BITCOIN_ADDR'] = {
       if valid then
         -- To save option
         task:insert_result('BITCOIN_ADDR', 1.0, word)
-        lua_util.debugm(N, task, 'found valid tradtional bitcoin addr in the word: %s',
+        lua_util.debugm(N, task, 'found valid traditional bitcoin addr in the word: %s',
             word)
         return true
       else
@@ -241,6 +209,25 @@ config.regexp['BITCOIN_ADDR'] = {
       end
     end,
     [btc_bleach_re] = function(task, txt, s, e)
+      if e - s <= 2 then
+        return false
+      end
+
+      local word = tostring(lua_util.str_trim(txt:sub(s, e)))
+      local valid = is_segwit_bech32_address(task, word)
+
+      if valid then
+        -- To save option
+        task:insert_result('BITCOIN_ADDR', 1.0, word)
+        lua_util.debugm(N, task, 'found valid bleach bitcoin addr in the word: %s',
+            word)
+        return true
+      else
+        lua_util.debugm(N, task, 'found invalid bitcoin addr in the word: %s',
+            word)
+
+        return false
+      end
     end,
   },
   callbackk = function(task)
