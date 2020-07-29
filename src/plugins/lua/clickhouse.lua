@@ -1010,8 +1010,10 @@ local function clickhouse_remove_old_partitions(cfg, ev_base)
   end
 
   local upstream = settings.upstream:get_upstream_round_robin()
-  local partition_to_remove_sql = "SELECT distinct partition, table FROM system.parts WHERE " ..
-      "table in ('${tables}') and max_date <= toDate(now() - interval ${month} month);"
+  local partition_to_remove_sql = "SELECT partition, table " ..
+      "FROM system.parts WHERE table IN ('${tables}') " ..
+      "GROUP BY partition, table " ..
+      "HAVING max(max_date) < toDate(now() - interval ${month} month)"
 
   local table_names = {'rspamd'}
   local tables = table.concat(table_names, "', '")
