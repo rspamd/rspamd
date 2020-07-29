@@ -815,41 +815,36 @@ set:
 			goto err;
 		}
 		else {
-			const ucl_object_t *re_conditions = ucl_object_lookup (real_ud->conf_obj,
-					"re_conditions");
 			gint lua_cbref = -1;
 
 			/* Check regexp condition */
-			if (real_ud->conf_obj == NULL) {
-				g_set_error (err, rspamd_mime_expr_quark(), 300,
-						"no config object for '%s'",
-						mime_atom->str);
-				goto err;
-			}
+			if (real_ud->conf_obj != NULL) {
+				const ucl_object_t *re_conditions = ucl_object_lookup (real_ud->conf_obj,
+						"re_conditions");
 
-			if (re_conditions != NULL) {
-				if (ucl_object_type (re_conditions) != UCL_OBJECT) {
-					g_set_error (err, rspamd_mime_expr_quark(), 320,
-							"re_conditions is not a table for '%s'",
-							mime_atom->str);
-					goto err;
-				}
-
-				const ucl_object_t *function_obj;
-
-				function_obj = ucl_object_lookup (re_conditions, mime_atom->str);
-
-				if (function_obj != NULL) {
-					if (ucl_object_type (function_obj) != UCL_USERDATA) {
-						g_set_error (err, rspamd_mime_expr_quark(), 320,
-								"condition for '%s' is invalid, must be function",
+				if (re_conditions != NULL) {
+					if (ucl_object_type (re_conditions) != UCL_OBJECT) {
+						g_set_error (err, rspamd_mime_expr_quark (), 320,
+								"re_conditions is not a table for '%s'",
 								mime_atom->str);
 						goto err;
 					}
 
-					struct ucl_lua_funcdata *fd = function_obj->value.ud;
+					const ucl_object_t *function_obj = ucl_object_lookup (re_conditions,
+							mime_atom->str);
 
-					lua_cbref = fd->idx;
+					if (function_obj != NULL) {
+						if (ucl_object_type (function_obj) != UCL_USERDATA) {
+							g_set_error (err, rspamd_mime_expr_quark (), 320,
+									"condition for '%s' is invalid, must be function",
+									mime_atom->str);
+							goto err;
+						}
+
+						struct ucl_lua_funcdata *fd = function_obj->value.ud;
+
+						lua_cbref = fd->idx;
+					}
 				}
 			}
 
