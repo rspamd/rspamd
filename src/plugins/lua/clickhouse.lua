@@ -864,15 +864,15 @@ local function clickhouse_collect(task)
       used_memory, settings.limits.max_memory)
 end
 
-local function do_remove_partition(ev_base, cfg, table_name, partition_id)
-  lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
+local function do_remove_partition(ev_base, cfg, table_name, partition)
+  lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition)
   local upstream = settings.upstream:get_upstream_round_robin()
-  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition_id}'"
+  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition}'"
   local remove_method = (settings.retention.method == 'drop') and 'DROP' or 'DETACH'
   local sql_params = {
     ['table_name']     = table_name,
     ['remove_method']  = remove_method,
-    ['partition_id']   = partition_id
+    ['partition']   = partition
   }
 
   local sql = lua_util.template(remove_partition_sql, sql_params)
@@ -887,13 +887,13 @@ local function do_remove_partition(ev_base, cfg, table_name, partition_id)
   if err then
     rspamd_logger.errx(rspamd_config,
       "cannot detach partition %s:%s from server %s: %s",
-      table_name, partition_id,
+      table_name, partition,
       settings['server'], err)
     return
   end
 
   rspamd_logger.infox(rspamd_config,
-      'detached partition %s:%s on server %s', table_name, partition_id,
+      'detached partition %s:%s on server %s', table_name, partition,
       settings['server'])
 
 end
