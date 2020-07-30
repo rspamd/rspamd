@@ -467,7 +467,7 @@ rspamd_cryptobox_sign (guchar *sig, unsigned long long *siglen_p,
 		enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY (mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
-		crypto_sign (sig, siglen_p, m, mlen, sk);
+		crypto_sign_detached (sig, siglen_p, m, mlen, sk);
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
