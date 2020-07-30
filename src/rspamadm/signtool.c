@@ -344,7 +344,13 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 	}
 
 	rspamd_snprintf (sigpath, sizeof (sigpath), "%s%s", fname, suffix);
-	g_assert (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) != -1);
+
+	if (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) == -1) {
+		rspamd_fprintf (stderr, "cannot write signature to %s: %s\n", sigpath,
+				strerror (errno));
+		exit (errno);
+	}
+
 	close (fd_sig);
 	munmap (map, st.st_size);
 
