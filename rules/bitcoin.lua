@@ -100,6 +100,7 @@ local function verify_beach32_cksum(hrp, elts)
   return polymod(hrpExpand(hrp), elts) == 1
 end
 
+
 local function gen_bleach32_table(input)
   local d = {}
   local i = 1
@@ -108,7 +109,7 @@ local function gen_bleach32_table(input)
 
   fun.each(function(byte)
     if res then
-      local pos = charset:find(byte)
+      local pos = charset:find(byte, 1, true)
       if not pos then
         res = false
       else
