@@ -230,8 +230,7 @@ local function maybe_force_action(task, disposition)
   if disposition then
     local force_action = dmarc_actions[disposition]
     if force_action then
-      -- Don't do anything if pre-result has been already set
-      if task:has_pre_result() then return end
+      -- Set least action
       task:set_pre_result(force_action, 'Action set by DMARC', N, nil, nil, 'least')
     end
   end
