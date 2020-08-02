@@ -78,6 +78,10 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             });
         });
 
+        // Remove jquery-stickytabs listeners
+        $(window).off("hashchange");
+        $(".nav-tabs-sticky > .nav-item > .nav-link").off("click").removeClass("active");
+
         stopTimers();
         cleanCredentials();
         ui.connect();
