@@ -114,36 +114,6 @@ local redis_lua_script_vectors_len = [[
   if ret then nham = tonumber(ret) end
 
   return {nspam,nham}
-
-  if KEYS[2] == 'spam' then
-    if nspam <= lim then
-      if nspam > nham then
-        -- Apply sampling
-        local skip_rate = 1.0 - nham / (nspam + 1)
-        if coin < skip_rate - classes_bias then
-          return {tostring(-(nspam)),'sampled out with probability ' .. tostring(skip_rate - classes_bias)}
-        end
-      end
-      return {tostring(nspam),'can learn'}
-    else -- Enough learns
-      return {tostring(-(nspam)),'too many spam samples'}
-    end
-  else
-    if nham <= lim then
-      if nham > nspam then
-        -- Apply sampling
-        local skip_rate = 1.0 - nspam / (nham + 1)
-        if coin < skip_rate - classes_bias then
-          return {tostring(-(nham)),'sampled out with probability ' .. tostring(skip_rate - classes_bias)}
-        end
-      end
-      return {tostring(nham),'can learn'}
-    else
-      return {tostring(-(nham)),'too many ham samples'}
-    end
-  end
-
-  return {tostring(-1),'bad input'}
 ]]
 local redis_lua_script_vectors_len_id = nil
 
