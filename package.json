@@ -1,7 +1,7 @@
 {
     "devDependencies": {
         "eslint": "*",
-        "stylelint": "~13.3.3",
+        "stylelint": ">=13.6.0",
         "stylelint-config-standard": "*"
     },
     "eslintIgnore": [
