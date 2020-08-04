@@ -535,10 +535,14 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 
 			for (guint i = 0; i < mp->cnt; i ++) {
 				const ac_trie_pat_t *pat;
+				const gchar *pat_flags = NULL;
+
+				if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
+					pat_flags = "u";
+				}
 
 				pat = &g_array_index (mp->pats, ac_trie_pat_t, i);
-
-				re = rspamd_regexp_new (pat->ptr, NULL, err);
+				re = rspamd_regexp_new (pat->ptr, pat_flags, err);
 
 				if (re == NULL) {
 					return FALSE;
