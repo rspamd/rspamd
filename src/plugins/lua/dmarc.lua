@@ -997,13 +997,13 @@ if opts['reporting'] == true then
             reporting_addrs[report_settings.additional_address] = true
           end
         end
-        rspamd_logger.infox(ev_base, 'sending report for %s <%s> (<%s> bcc)',
+        rspamd_logger.infox(rspamd_config, 'sending report for %s <%s> (<%s> bcc)',
             reporting_domain, reporting_addrs, bcc_addrs)
         local dmarc_xml = dmarc_report_xml()
         local dmarc_push_cb
         dmarc_push_cb = function(err, data)
           if err then
-            rspamd_logger.errx(ev_base, 'Redis request failed: %s', err)
+            rspamd_logger.errx(rspamd_config, 'redis request failed: %s', err)
             -- XXX: data is orphaned; replace key or delete data
             get_reporting_domain()
           elseif type(data) == 'table' then
@@ -1022,7 +1022,7 @@ if opts['reporting'] == true then
                 {report_key, cursor, 'COUNT', report_settings.hscan_count}
               )
               if not ret then
-                rspamd_logger.errx(ev_base, 'Failed to schedule redis request')
+                rspamd_logger.errx(rspamd_config, 'failed to schedule redis request')
                 get_reporting_domain()
               end
             else
@@ -1041,7 +1041,7 @@ if opts['reporting'] == true then
           {report_key, cursor, 'COUNT', report_settings.hscan_count}
         )
         if not ret then
-          rspamd_logger.errx(rspamd_config, 'Failed to schedule redis request')
+          rspamd_logger.errx(rspamd_config, 'failed to schedule redis request')
           -- XXX: data is orphaned; replace key or delete data
           get_reporting_domain()
         end
@@ -1049,9 +1049,9 @@ if opts['reporting'] == true then
       local function delete_reports()
         local function delete_reports_cb(err)
           if err then
-            rspamd_logger.errx(rspamd_config, 'Error deleting reports: %s', err)
+            rspamd_logger.errx(rspamd_config, 'error deleting reports: %s', err)
           end
-          rspamd_logger.infox(rspamd_config, 'Deleted reports for %s', reporting_domain)
+          rspamd_logger.infox(rspamd_config, 'deleted reports for %s', reporting_domain)
           get_reporting_domain()
         end
         local ret = rspamd_redis.redis_make_request_taskless(ev_base,
@@ -1064,7 +1064,7 @@ if opts['reporting'] == true then
           {report_key}
         )
         if not ret then
-          rspamd_logger.errx(rspamd_config, 'Failed to schedule redis request')
+          rspamd_logger.errx(rspamd_config, 'failed to schedule redis request')
           get_reporting_domain()
         end
       end
@@ -1074,10 +1074,10 @@ if opts['reporting'] == true then
           local function verify_cb(resolver, to_resolve, results, err, _, authenticated)
             if err then
               if err == 'no records with this name' or err == 'requested record is not found' then
-                rspamd_logger.infox(rspamd_config, 'Reports to %s for %s not authorised', test_addr, reporting_domain)
+                rspamd_logger.infox(rspamd_config, 'reports to %s for %s not authorised', test_addr, reporting_domain)
                 to_verify[test_addr] = nil
               else
-                rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
+                rspamd_logger.errx(rspamd_config, 'lookup error [%s]: %s', to_resolve, err)
                 if retry < report_settings.retries then
                   retry = retry + 1
                   rspamd_config:get_resolver():resolve('txt', {
@@ -1142,11 +1142,11 @@ if opts['reporting'] == true then
                   callback = check_addr_cb,
                 })
               else
-                rspamd_logger.errx(rspamd_config, 'No DMARC record found for %s', reporting_domain)
+                rspamd_logger.errx(rspamd_config, 'no DMARC record found for %s', reporting_domain)
                 delete_reports()
               end
             else
-              rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
+              rspamd_logger.errx(rspamd_config, 'lookup error [%s]: %s', to_resolve, err)
               if retry < report_settings.retries then
                 retry = retry + 1
                 rspamd_config:get_resolver():resolve('txt', {
@@ -1155,7 +1155,7 @@ if opts['reporting'] == true then
                   callback = check_addr_cb,
                 })
               else
-                rspamd_logger.errx(rspamd_config, "Couldn't get reporting address for %s: retries exceeded",
+                rspamd_logger.errx(rspamd_config, "couldn't get reporting address for %s: retries exceeded",
                     reporting_domain)
                 delete_reports()
               end
@@ -1173,7 +1173,7 @@ if opts['reporting'] == true then
               end
             end
             if not found_policy then
-              rspamd_logger.errx(rspamd_config, 'No policy: %s', to_resolve)
+              rspamd_logger.errx(rspamd_config, 'no policy: %s', to_resolve)
               if reporting_domain ~= esld then
                 rspamd_config:get_resolver():resolve('txt', {
                   ev_base = ev_base,
@@ -1184,10 +1184,10 @@ if opts['reporting'] == true then
                 delete_reports()
               end
             elseif failed_policy then
-              rspamd_logger.errx(rspamd_config, 'Duplicate policies: %s', to_resolve)
+              rspamd_logger.errx(rspamd_config, 'duplicate policies: %s', to_resolve)
               delete_reports()
             elseif not policy['rua'] then
-              rspamd_logger.errx(rspamd_config, 'No reporting address: %s', to_resolve)
+              rspamd_logger.errx(rspamd_config, 'no reporting address: %s', to_resolve)
               delete_reports()
             else
               local upool = mempool.create()
@@ -1195,11 +1195,11 @@ if opts['reporting'] == true then
               for _, m in ipairs(split) do
                 local url = rspamd_url.create(upool, m)
                 if not url then
-                  rspamd_logger.errx(rspamd_config, 'Couldnt extract reporting address: %s', policy['rua'])
+                  rspamd_logger.errx(rspamd_config, "couldn't extract reporting address: %s", policy['rua'])
                 else
                   local urlt = url:to_table()
                   if urlt['protocol'] ~= 'mailto' then
-                    rspamd_logger.errx(rspamd_config, 'Invalid URL: %s', url)
+                    rspamd_logger.errx(rspamd_config, 'invalid URL: %s', url)
                   else
                     if urlt['tld'] == rspamd_util.get_tld(reporting_domain) then
                       reporting_addrs[string.format('%s@%s', urlt['user'], urlt['host'])] = true
@@ -1220,7 +1220,7 @@ if opts['reporting'] == true then
               elseif next(reporting_addrs) then
                 make_report()
               else
-                rspamd_logger.errx(rspamd_config, 'No reporting address for %s', reporting_domain)
+                rspamd_logger.errx(rspamd_config, 'no reporting address for %s', reporting_domain)
                 delete_reports()
               end
             end
@@ -1240,7 +1240,7 @@ if opts['reporting'] == true then
         cursor = 0
         local function get_reporting_domain_cb(err, data)
           if err then
-            rspamd_logger.errx(cfg, 'Unable to get DMARC domain: %s', err)
+            rspamd_logger.errx(cfg, 'unable to get DMARC domain: %s', err)
           else
             if type(data) == 'userdata' then
               reporting_domain = nil
@@ -1250,7 +1250,7 @@ if opts['reporting'] == true then
               reporting_domain = tmp[2]
             end
             if not reporting_domain then
-              rspamd_logger.infox(cfg, 'No more domains to generate reports for')
+              rspamd_logger.infox(cfg, 'no more domains to generate reports for')
             else
               get_reporting_address()
             end
@@ -1267,11 +1267,11 @@ if opts['reporting'] == true then
           {idx_key}
         )
         if not ret then
-          rspamd_logger.errx(cfg, 'Unable to get DMARC domain')
+          rspamd_logger.errx(cfg, 'unable to get DMARC domain')
         end
       end
       local function send_reports(time)
-        rspamd_logger.infox(ev_base, 'sending reports ostensibly %1', time)
+        rspamd_logger.infox(rspamd_config, 'sending reports ostensibly %1', time)
         pool:set_variable(VAR_NAME, time)
         local yesterday = os.date('!*t', rspamd_util.get_time() - INTERVAL)
         local today = os.date('!*t', rspamd_util.get_time())
@@ -1311,7 +1311,7 @@ if opts['reporting'] == true then
       local stamp
       local f, err = io.open(statefile, 'r')
       if err then
-        rspamd_logger.errx('Failed to open statefile: %s', err)
+        rspamd_logger.errx(rspamd_config, 'failed to open statefile: %s', err)
       end
       if f then
         io.input(f)
@@ -1320,19 +1320,19 @@ if opts['reporting'] == true then
       end
       local time = rspamd_util.get_time()
       if not stamp then
-        lua_util.debugm(N, rspamd_config, 'No state found - sending reports immediately')
+        lua_util.debugm(N, rspamd_config, 'no state found - sending reports immediately')
         schedule_regular_send()
         send_reports(time)
         return
       end
       local delta = stamp - time + INTERVAL
       if delta <= 0 then
-        lua_util.debugm(N, rspamd_config, 'Last send is too old - sending reports immediately')
+        lua_util.debugm(N, rspamd_config, 'last send is too old - sending reports immediately')
         schedule_regular_send()
         send_reports(time)
         return
       end
-      lua_util.debugm(N, rspamd_config, 'Scheduling next send in %s seconds', delta)
+      lua_util.debugm(N, rspamd_config, 'scheduling next send in %s seconds', delta)
       schedule_intermediate_send(delta)
     end)
   end
@@ -1348,7 +1348,7 @@ end
 if opts['send_reports'] then
   for _, e in ipairs({'email', 'domain', 'org_name'}) do
     if not report_settings[e] then
-      rspamd_logger.errx(rspamd_config, 'Missing required setting: report_settings.%s', e)
+      rspamd_logger.errx(rspamd_config, 'missing required setting: report_settings.%s', e)
       return
     end
   end
