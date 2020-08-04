@@ -119,7 +119,7 @@ rspamd_config.FORWARDED = {
       return addr
     end
 
-    if not task:has_recipients(1) then return false end
+    if not task:has_recipients(1) or not task:has_recipients(2) then return false end
     local envrcpts = task:get_recipients(1)
     -- Forwarding will only be for single recipient messages
     if #envrcpts > 1 then return false end
