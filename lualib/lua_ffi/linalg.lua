@@ -44,7 +44,7 @@ local function ffi_to_table(a, m, n)
   for i=0,m-1 do
     res[i + 1] = {}
     for j=0,n-1 do
-      res[i + 1][j + 1] = a[i][j]
+      res[i + 1][j + 1] = a[i * n + j]
     end
   end
 
