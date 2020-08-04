@@ -244,6 +244,13 @@ static inline int kad_len(const kad_node_t *p) /* calculate the size of p->x */
 }
 
 /* Additions by Rspamd */
-void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float *A, const float *B, float *C);
+void kad_sgemm_simple (int trans_A, int trans_B, int M, int N, int K, const float *A, const float *B, float *C);
+/**
+ * Calculate eugenvectors and eugenvalues
+ * @param N dimensions of A (must be NxN)
+ * @param A input matrix (part of it will be destroyed, so copy if needed), on finish the first `nwork` columns will have eugenvectors
+ * @param eugenvals eugenvalues, must be N elements vector
+ */
+bool kad_ssyev_simple (int N, float *A, float *eugenvals);
 
 #endif

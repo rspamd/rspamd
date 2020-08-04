@@ -900,6 +900,7 @@ void kad_vec_mul_sum(int n, float *a, const float *b, const float *c)
 void kad_saxpy(int n, float a, const float *x, float *y) { kad_saxpy_inlined(n, a, x, y); }
 
 #ifdef HAVE_CBLAS
+extern void ssyev(const char* jobz, const char* uplo, int* n, float* a, int* lda, float* w, float* work, int* lwork, int* info);
 #ifdef HAVE_CBLAS_H
 #include "cblas.h"
 #else
@@ -946,6 +947,34 @@ void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float
 	} else abort(); /* not implemented for (trans_A && trans_B) */
 }
 #endif
+
+bool kad_ssyev_simple(int N, float *A, float *eugenvals)
+{
+#ifndef HAVE_CBLAS
+	return false;
+#else
+	int n = N, lda = N, info, lwork;
+	float wkopt;
+	float *work;
+
+	/* Query and allocate the optimal workspace */
+	lwork = -1;
+	ssyev ("Vectors", "Upper", &n, A, &lda, eugenvals, &wkopt, &lwork, &info);
+	lwork = wkopt;
+	work = (float*) g_malloc(lwork * sizeof(double));
+	ssyev ("Vectors", "Upper", &n, A, &lda, eugenvals, work, &lwork, &info);
+	/* Check for convergence */
+	if (info > 0) {
+		g_free (work);
+
+		return false;
+	}
+
+	g_free (work);
+
+	return true;
+#endif
+}
 
 /***************************
  * Random number generator *

@@ -25,13 +25,14 @@ local exports = {}
 
 ffi.cdef[[
   void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float *A, const float *B, float *C);
+  bool kad_ssyev_simple (int N, float *A, float *output);
 ]]
 
 local function table_to_ffi(a, m, n)
-  local a_conv = ffi.new(string.format("float[%d][%d]", m, n), {})
+  local a_conv = ffi.new("float[?]", m * n)
   for i=1,m or #a do
     for j=1,n or #a[1] do
-      a_conv[i - 1][j - 1] = a[i][j]
+      a_conv[(i - 1) * n + (j - 1)] = a[i][j]
     end
   end
   return a_conv
@@ -58,10 +59,26 @@ exports.sgemm = function(a, m, b, n, k, trans_a, trans_b)
   if type(b) == 'table' then
     b = table_to_ffi(b, k, n)
   end
-  local res = ffi.new(string.format("float[%d][%d]", m, n), {})
+  local res = ffi.new("float[?]", m * n)
   ffi.C.kad_sgemm_simple(trans_a or 0, trans_b or 0, m, n, k, ffi.cast('const float*', a),
       ffi.cast('const float*', b), ffi.cast('float*', res))
   return res
+end
+
+exports.eugen = function(a, n)
+  if type(a) == 'table' then
+    -- Need to convert, slow!
+    n = n or #a
+    a = table_to_ffi(a, n, n)
+  end
+
+  local res = ffi.new("float[?]", n)
+
+  if ffi.C.kad_ssyev_simple(n, ffi.cast('float*', a), res) then
+    return res,a
+  end
+
+  return nil
 end
 
 exports.ffi_to_table = ffi_to_table
