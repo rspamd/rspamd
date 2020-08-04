@@ -49,6 +49,7 @@ pcall(ffi.load, "rspamd-server", true)
 exports.common = require "lua_ffi/common"
 exports.dkim = require "lua_ffi/dkim"
 exports.spf = require "lua_ffi/spf"
+exports.linalg = require "lua_ffi/linalg"
 
 for k,v in pairs(ffi) do
   -- Preserve all stuff to use lua_ffi as ffi itself
