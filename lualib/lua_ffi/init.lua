@@ -34,8 +34,7 @@ else
   local ret,result_or_err = pcall(require, 'ffi')
 
   if not ret then
-    io.stderr:write('FFI support is required: please use LuaJIT or install lua-ffi')
-    os.exit(1)
+    return {}
   end
 
   ffi = result_or_err
@@ -50,5 +49,10 @@ pcall(ffi.load, "rspamd-server", true)
 exports.common = require "lua_ffi/common"
 exports.dkim = require "lua_ffi/dkim"
 exports.spf = require "lua_ffi/spf"
+
+for k,v in pairs(ffi) do
+  -- Preserve all stuff to use lua_ffi as ffi itself
+  exports[k] = v
+end
 
 return exports

@@ -754,6 +754,11 @@ local function sign_handler(opts)
 
   local lua_dkim = require("lua_ffi").dkim
 
+  if not lua_dkim then
+    io.stderr:write('FFI support is required: please use LuaJIT or install lua-ffi')
+    os.exit(1)
+  end
+
   local sign_key
   if rspamd_util.file_exists(opts.key) then
     sign_key = lua_dkim.load_sign_key(opts.key, 'file')
