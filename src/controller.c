@@ -2567,6 +2567,7 @@ rspamd_controller_handle_stat_common (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
 	gint i;
+	int64_t uptime;
 	guint64 spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_stat *stat, stat_copy;
@@ -2598,6 +2599,13 @@ rspamd_controller_handle_stat_common (
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
 	task->sock = conn_ent->conn->fd;
 
+	ucl_object_insert_key (top, ucl_object_fromstring (
+			RVERSION), "version",  0, false);
+	ucl_object_insert_key (top, ucl_object_fromstring (
+			session->ctx->cfg->checksum), "config_id", 0, false);
+	uptime = ev_time () - session->ctx->start_time;
+	ucl_object_insert_key (top, ucl_object_fromint (
+			uptime), "uptime", 0, false);
 	ucl_object_insert_key (top, ucl_object_frombool (!session->is_enable),
 			"read_only", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
