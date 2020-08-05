@@ -89,6 +89,7 @@ rspamd_lua_new_class (lua_State * L,
 	void *class_ptr;
 	khiter_t k;
 	gint r, nmethods = 0;
+	gboolean seen_index = false;
 
 	k = kh_put (lua_class_set, lua_classes, classname, &r);
 	class_ptr = RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k));
@@ -96,6 +97,9 @@ rspamd_lua_new_class (lua_State * L,
 	if (methods) {
 		for (;;) {
 			if (methods[nmethods].name != NULL) {
+				if (strcmp (methods[nmethods].name, "__index") == 0) {
+					seen_index = true;
+				}
 				nmethods ++;
 			}
 			else {
@@ -105,9 +109,12 @@ rspamd_lua_new_class (lua_State * L,
 	}
 
 	lua_createtable (L, 0, 3 + nmethods);
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);      /* pushes the metatable */
-	lua_settable (L, -3);       /* metatable.__index = metatable */
+
+	if (!seen_index) {
+		lua_pushstring (L, "__index");
+		lua_pushvalue (L, -2);      /* pushes the metatable */
+		lua_settable (L, -3);       /* metatable.__index = metatable */
+	}
 
 	lua_pushstring (L, "class");
 	lua_pushstring (L, classname);

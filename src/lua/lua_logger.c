@@ -389,7 +389,7 @@ static gsize
 lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 						 struct lua_logger_trace *trace)
 {
-	gint r, top;
+	gint r = 0, top;
 	const gchar *str = NULL;
 	gboolean converted_to_str = FALSE;
 
@@ -403,6 +403,32 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 	lua_gettable (L, -2);
 
 	if (!lua_istable (L, -1)) {
+
+		if (lua_isfunction (L, -1)) {
+			/* Functional metatable, try to get __tostring directly */
+			lua_pushstring (L, "__tostring");
+			lua_gettable (L, -3);
+
+			if (lua_isfunction (L, -1)) {
+				lua_pushvalue (L, pos);
+
+				if (lua_pcall (L, 1, 1, 0) != 0) {
+					lua_settop (L, top);
+
+					return 0;
+				}
+
+				str = lua_tostring (L, -1);
+
+				if (str) {
+					r = rspamd_snprintf (outbuf, len, "%s", str);
+				}
+
+				lua_settop (L, top);
+
+				return r;
+			}
+		}
 		lua_settop (L, top);
 
 		return 0;
