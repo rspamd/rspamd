@@ -1079,6 +1079,7 @@ lua_kann_train1 (lua_State *L)
 				FREE_VEC (x, n);
 				FREE_VEC (y, n);
 
+				lua_pop (L, 1);
 				n = luaL_error (L, "invalid params at pos %d: "
 					   "bad input dimension %d; %d expected",
 						s + 1,
@@ -1102,6 +1103,7 @@ lua_kann_train1 (lua_State *L)
 			lua_rawgeti (L, 3, s + 1);
 
 			if (rspamd_lua_table_size (L, -1) != n_out) {
+				lua_pop (L, 1);
 				FREE_VEC (x, n);
 				FREE_VEC (y, n);
 

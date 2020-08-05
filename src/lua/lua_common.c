@@ -972,6 +972,7 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_worker (L);
 	luaopen_kann (L);
 	luaopen_spf (L);
+	luaopen_tensor (L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload (L, "bit", luaopen_bit);
 	lua_settop (L, 0);
