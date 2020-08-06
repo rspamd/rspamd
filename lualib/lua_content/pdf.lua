@@ -543,7 +543,7 @@ local function process_javascript(task, pdf, js)
 
   local njs = {
     data = js,
-    hash = rspamd_util.encode_base32(bin_hash),
+    hash = hash:hex(),
     bin_hash = bin_hash,
   }
   pdf.scripts[bin_hash] = njs
