@@ -2945,8 +2945,10 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 						lua_gettable (L, -2);
 
 						if (lua_type (L, -1) == LUA_TTABLE) {
+							gint tbl_pos = lua_gettop (L);
 
-							for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+							for (lua_pushnil (L); lua_next (L, tbl_pos);
+									lua_pop (L, 1)) {
 								const gchar *h = NULL;
 								gsize hlen = 0;
 
