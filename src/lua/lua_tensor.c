@@ -236,7 +236,20 @@ lua_tensor_save (lua_State *L)
 	struct rspamd_lua_tensor *t = lua_check_tensor (L, 1);
 
 	if (t) {
+		gsize sz = sizeof (gint) * 4 + t->size * sizeof (rspamd_tensor_num_t);
+		guchar *data;
 
+		struct rspamd_lua_text *out = lua_new_text (L, NULL, 0, TRUE);
+
+		data = g_malloc (sz);
+		memcpy (data, &t->ndims, sizeof (int));
+		memcpy (data + sizeof (int), &t->size, sizeof (int));
+		memcpy (data + 2 * sizeof (int), t->dim, sizeof (int) * 2);
+		memcpy (data + 4 * sizeof (int), t->data,
+				t->size * sizeof (rspamd_tensor_num_t));
+
+		out->start = (const gchar *)data;
+		out->len = sz;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
