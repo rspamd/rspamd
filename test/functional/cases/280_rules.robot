@@ -105,6 +105,9 @@ PHISH_SENDER_E
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender5.eml
   Should Contain  ${result.stdout}  SOMETHING
 
+PHISH_SENDER_ROUTING_PART
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
+  Should Contain  ${result.stdout}  SOMETHING
 
 *** Keywords ***
 Rules Setup
