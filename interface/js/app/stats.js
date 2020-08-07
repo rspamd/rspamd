@@ -146,27 +146,27 @@ define(["jquery", "d3pie"],
             var data = creds[checked_server].data.actions;
             var new_data = [{
                 color: "#66CC00",
-                label: "Clean",
+                label: "no action",
                 data: data["no action"],
                 value: data["no action"]
             }, {
                 color: "#BF8040",
-                label: "Temporarily rejected",
+                label: "soft reject",
                 data: data["soft reject"],
                 value: data["soft reject"]
             }, {
                 color: "#FFAD00",
-                label: "Probable spam",
+                label: "add header",
                 data: data["add header"],
                 value: data["add header"]
             }, {
                 color: "#436EEE",
-                label: "Greylisted",
+                label: "greylist",
                 data: data.greylist,
                 value: data.greylist
             }, {
                 color: "#FF0000",
-                label: "Rejected",
+                label: "reject",
                 data: data.reject,
                 value: data.reject
             }];
