@@ -68,7 +68,7 @@ define(["jquery", "d3pie"],
             var stat_w = [];
 
             $.each(data, function (i, item) {
-                var widgetsOrder = ["scanned", "no action", "greylist", "add header", "reject", "learned"];
+                var widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
                 function widget(k, v) {
                     var titleAtt = d3.format(",")(v) + " " + k;
@@ -160,6 +160,11 @@ define(["jquery", "d3pie"],
                 data: data["add header"],
                 value: data["add header"]
             }, {
+                color: "#FF6600",
+                label: "rewrite subject",
+                data: data["rewrite subject"],
+                value: data["rewrite subject"]
+            }, {
                 color: "#436EEE",
                 label: "greylist",
                 data: data.greylist,
@@ -186,6 +191,7 @@ define(["jquery", "d3pie"],
                             actions: {
                                 "no action": 0,
                                 "add header": 0,
+                                "rewrite subject": 0,
                                 "greylist": 0,
                                 "reject": 0,
                                 "soft reject": 0,
