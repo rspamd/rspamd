@@ -65,22 +65,22 @@ define(["jquery", "d3evolution", "footable"],
             legend: {
                 space: 140,
                 entries: [{
-                    label: "Rejected",
+                    label: "reject",
                     color: "#FF0000"
                 }, {
-                    label: "Temporarily rejected",
+                    label: "soft reject",
                     color: "#BF8040"
                 }, {
-                    label: "Subject rewritten",
+                    label: "rewrite subject",
                     color: "#FF6600"
                 }, {
-                    label: "Probable spam",
+                    label: "add header",
                     color: "#FFAD00"
                 }, {
-                    label: "Greylisted",
+                    label: "greylist",
                     color: "#436EEE"
                 }, {
-                    label: "Clean",
+                    label: "no action",
                     color: "#66CC00"
                 }]
             }

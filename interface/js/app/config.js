@@ -33,27 +33,14 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     $("#actionsFormField").empty();
                     var items = [];
                     $.each(data[0].data, function (i, item) {
-                        var idx = -1;
-                        var label = null;
-                        if (item.action === "greylist") {
-                            label = "Greylist";
-                            idx = 0;
-                        } else if (item.action === "add header") {
-                            label = "Probably Spam";
-                            idx = 1;
-                        } else if (item.action === "rewrite subject") {
-                            label = "Rewrite subject";
-                            idx = 2;
-                        } else if (item.action === "reject") {
-                            label = "Spam";
-                            idx = 3;
-                        }
+                        var actionsOrder = ["greylist", "add header", "rewrite subject", "reject"];
+                        var idx = actionsOrder.indexOf(item.action);
                         if (idx >= 0) {
                             items.push({
                                 idx: idx,
                                 html:
                                 '<div class="form-group">' +
-                                    '<label class="col-form-label col-md-2 float-left">' + label + "</label>" +
+                                    '<label class="col-form-label col-md-2 float-left">' + item.action + "</label>" +
                                     '<div class="controls slider-controls col-md-10">' +
                                         '<input class="action-scores form-control" data-id="action" type="number" value="' +
                                           item.value + '">' +
