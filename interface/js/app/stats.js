@@ -68,7 +68,16 @@ define(["jquery", "d3pie"],
             var stat_w = [];
 
             $.each(data, function (i, item) {
-                var widget = "";
+                var widgetsOrder = ["scanned", "no action", "greylist", "add header", "reject", "learned"];
+
+                function widget(k, v) {
+                    var titleAtt = d3.format(",")(v) + " " + k;
+                    return '<div class="card stat-box d-inline-block text-center bg-light shadow-sm mr-3 px-3">' +
+                      '<div class="widget overflow-hidden p-2" title="' + titleAtt +
+                      '"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
+                    d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
+                }
+
                 if (i === "auth" || i === "error") return; // Skip to the next iteration
                 if (i === "uptime" || i === "version") {
                     var cls = "border-right ";
@@ -77,27 +86,15 @@ define(["jquery", "d3pie"],
                         cls = "";
                         val = msToTime(item);
                     }
-                    widget = "<div class=\"" + cls + "float-left px-3\"><strong class=\"d-block mt-2 mb-1 font-weight-bold\">" + val +
-                      "</strong>" + i + "</div>";
-                    $(widget).appendTo(widgets);
+                    $('<div class="' + cls + 'float-left px-3"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
+                      val + "</strong>" + i + "</div>")
+                        .appendTo(widgets);
+                } else if (i === "actions") {
+                    $.each(item, function (action, count) {
+                        stat_w[widgetsOrder.indexOf(action)] = widget(action, count);
+                    });
                 } else {
-                    var titleAtt = d3.format(",")(item) + " " + i;
-                    widget = "<div class=\"card stat-box d-inline-block text-center bg-light shadow-sm mr-3 px-3\"><div class=\"widget overflow-hidden p-2\" title=\"" +
-                      titleAtt + "\"><strong class=\"d-block mt-2 mb-1 font-weight-bold\">" +
-                    d3.format(".3~s")(item) + "</strong>" + i + "</div></div>";
-                    if (i === "scanned") {
-                        stat_w[0] = widget;
-                    } else if (i === "clean") {
-                        stat_w[1] = widget;
-                    } else if (i === "greylist") {
-                        stat_w[2] = widget;
-                    } else if (i === "probable") {
-                        stat_w[3] = widget;
-                    } else if (i === "reject") {
-                        stat_w[4] = widget;
-                    } else if (i === "learned") {
-                        stat_w[5] = widget;
-                    }
+                    stat_w[widgetsOrder.indexOf(i)] = widget(i, item);
                 }
             });
             $.each(stat_w, function (i, item) {
@@ -146,22 +143,22 @@ define(["jquery", "d3pie"],
             var creds = JSON.parse(sessionStorage.getItem("Credentials"));
             if (!creds || !creds[checked_server]) return null;
 
-            var data = creds[checked_server].data;
+            var data = creds[checked_server].data.actions;
             var new_data = [{
                 color: "#66CC00",
                 label: "Clean",
-                data: data.clean,
-                value: data.clean
+                data: data["no action"],
+                value: data["no action"]
             }, {
                 color: "#BF8040",
                 label: "Temporarily rejected",
-                data: data.soft_reject,
-                value: data.soft_reject
+                data: data["soft reject"],
+                value: data["soft reject"]
             }, {
                 color: "#FFAD00",
                 label: "Probable spam",
-                data: data.probable,
-                value: data.probable
+                data: data["add header"],
+                value: data["add header"]
             }, {
                 color: "#436EEE",
                 label: "Greylisted",
@@ -179,34 +176,39 @@ define(["jquery", "d3pie"],
         // Public API
         var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
-                rspamd.query("auth", {
+                rspamd.query("stat", {
                     success: function (neighbours_status) {
                         var neighbours_sum = {
                             version: neighbours_status[0].data.version,
-                            auth: "ok",
                             uptime: 0,
-                            clean: 0,
-                            probable: 0,
-                            greylist: 0,
-                            reject: 0,
-                            soft_reject: 0,
                             scanned: 0,
                             learned: 0,
-                            config_id: ""
+                            actions: {
+                                "no action": 0,
+                                "add header": 0,
+                                "greylist": 0,
+                                "reject": 0,
+                                "soft reject": 0,
+                            }
                         };
                         var status_count = 0;
                         for (var e in neighbours_status) {
                             if (neighbours_status[e].status === true) {
-                            // Remove alert status
+                                // Remove alert status
                                 localStorage.removeItem(e + "_alerted");
-                                neighbours_sum.clean += neighbours_status[e].data.clean;
-                                neighbours_sum.probable += neighbours_status[e].data.probable;
-                                neighbours_sum.greylist += neighbours_status[e].data.greylist;
-                                neighbours_sum.reject += neighbours_status[e].data.reject;
-                                neighbours_sum.soft_reject += neighbours_status[e].data.soft_reject;
-                                neighbours_sum.scanned += neighbours_status[e].data.scanned;
-                                neighbours_sum.learned += neighbours_status[e].data.learned;
-                                neighbours_sum.uptime += neighbours_status[e].data.uptime;
+
+                                var data = neighbours_status[e].data;
+                                for (var action in neighbours_sum.actions) {
+                                    if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
+                                        neighbours_sum.actions[action] += data.actions[action];
+                                    }
+                                }
+                                var items = ["learned", "scanned", "uptime"];
+                                for (var i in items) {
+                                    if ({}.hasOwnProperty.call(items, i)) {
+                                        neighbours_sum[items[i]] += data[items[i]];
+                                    }
+                                }
                                 status_count++;
                             }
                         }
