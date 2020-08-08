@@ -125,23 +125,23 @@ define(["jquery", "d3pie"],
                     short_id = val.data.config_id.substring(0, 8);
                 }
 
-                $("#clusterTable tbody").append("<tr class=\"" + row_class + "\">" +
-                "<td class=\"align-middle\"><input type=\"radio\" class=\"form-check m-auto\" name=\"clusterName\" value=\"" + key + "\"></td>" +
+                $("#clusterTable tbody").append('<tr class="' + row_class + '">' +
+                '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" value="' + key + '"></td>' +
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
-                "<td class=\"text-center\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
+                '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
                 '<td class="text-right">' + uptime + "</td>" +
                 "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
 
-                $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
+                $("#selSrv").append($('<option value="' + key + '">' + key + "</option>"));
 
                 if (checked_server === key) {
-                    $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
-                    $("#selSrv [value=\"" + key + "\"]").prop("selected", true);
+                    $('#clusterTable tbody [value="' + key + '"]').prop("checked", true);
+                    $('#selSrv [value="' + key + '"]').prop("selected", true);
                 } else if (!val.status) {
-                    $("#clusterTable tbody [value=\"" + key + "\"]").prop("disabled", true);
-                    $("#selSrv [value=\"" + key + "\"]").prop("disabled", true);
+                    $('#clusterTable tbody [value="' + key + '"]').prop("disabled", true);
+                    $('#selSrv [value="' + key + '"]').prop("disabled", true);
                 }
             });
             $(widgets).show();
