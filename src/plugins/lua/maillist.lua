@@ -63,62 +63,64 @@ local function check_ml_ezmlm(task)
   return true
 end
 
--- MailMan (the gnu mailing list manager)
--- Precedence: bulk [or list for v2]
--- List-Help: <mailto:
--- List-Post: <mailto:
--- List-Subscribe: .*<mailto:.*=subscribe>
--- List-Unsubscribe: .*<mailto:.*=unsubscribe>
--- List-Archive:
--- X-Mailman-Version: \d
--- RFC 2919 headers exist
+-- GNU Mailman
+-- Two major versions currently in use and they use slightly different headers
+-- Mailman2: https://code.launchpad.net/~mailman-coders/mailman/2.1
+-- Mailman3: https://gitlab.com/mailman/mailman
 local function check_ml_mailman(task)
-  -- Mailing-List
-  local header = task:get_header('x-mailman-version')
-  if not header or not string.find(header, '^%d') then
+  local header = task:get_header('X-Mailman-Version')
+  if not header then
     return false
   end
-  -- Precedence
-  header = task:get_header('precedence')
+  local mm_version = header:match('^([23])%.')
+  if not mm_version then
+    lua_util.debugm(N, task, 'unknown Mailman version: %s', header)
+    return false
+  end
+  lua_util.debugm(N, task, 'checking Mailman %s headers', mm_version)
+
+  -- XXX Some messages may not contain Precedence, but they are rare:
+  -- http://bazaar.launchpad.net/~mailman-coders/mailman/2.1/revision/1339
+  header = task:get_header('Precedence')
   if not header or (header ~= 'bulk' and header ~= 'list') then
     return false
   end
-  -- For reminders we have other headers than for normal messages
-  header = task:get_header('x-list-administrivia')
-  local subject = task:get_header('subject')
-  if (header and string.find(header, 'yes')) or
-      (subject and string.find(subject, 'mailing list memberships reminder$')) then
-    if not task:get_header('errors-to') or not task:get_header('x-beenthere') then
-      return false
-    end
-    header = task:get_header('x-no-archive')
-    if not header or not string.find(header, 'yes') then
-      return false
-    end
-    return true
+
+  -- Mailmain 3 allows to disable all List-* headers in settings, but by default it adds them.
+  -- In all other cases all Mailman message should have List-Id header
+  if not task:has_header('List-Id') then
+    return false
   end
 
-  -- Other headers
-  header = task:get_header('list-post')
-  if not header or not string.find(header, '^<mailto:') then
-    return false
+  if mm_version == '2' then
+    -- X-BeenThere present in all Mailman2 messages
+    if not task:has_header('X-BeenThere') then
+      return false
+    end
+    -- X-List-Administrivia: is only added to messages Mailman creates and
+    -- sends out of its own accord
+    header = task:get_header('X-List-Administrivia')
+    if header and header == 'yes' then
+      -- not much elase we can check, Subjects can be changed in settings
+      return true
+    end
+  else -- Mailman 3
+    -- XXX not Mailman3 admin messages have this headers, but one
+    -- which don't usually have List-* headers examined below
+    if task:has_header('List-Administrivia') then
+      return true
+    end
   end
-  header = task:get_header('list-help')
-  if not header or not string.find(header, '^<mailto:') then
-    return false
-  end
-  -- Subscribe and unsubscribe
-  header = task:get_header('list-subscribe')
-  if not header or not string.find(header, '<mailto:.*=subscribe>') then
-    return false
-  end
-  header = task:get_header('list-unsubscribe')
-  if not header or not string.find(header, '<mailto:.*=unsubscribe>') then
-    return false
+
+  -- List-Archive and List-Post are optional, check other headers
+  for _, h in ipairs({'List-Help', 'List-Subscribe', 'List-Unsubscribe'}) do
+    header = task:get_header(h)
+    if not (header and header:find('<mailto:', 1, true)) then
+      return false
+    end
   end
 
   return true
-
 end
 
 -- Subscribe.ru
@@ -264,7 +266,7 @@ end
 -- RFC 2919 headers exist
 local function check_maillist(task)
   local score = check_generic_list_headers(task)
-  if score > 1 then
+  if score >= 1 then
     if check_ml_ezmlm(task) then
       task:insert_result(symbol, 1, 'ezmlm')
     elseif check_ml_mailman(task) then
