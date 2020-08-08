@@ -122,45 +122,39 @@ local function check_ml_mailman(task)
 end
 
 -- Subscribe.ru
--- Precedence: normal
--- List-Id: <.*.subscribe.ru>
--- List-Help: <http://subscribe.ru/catalog/.*>
--- List-Subscribe: <mailto:.*-sub@subscribe.ru>
--- List-Unsubscribe: <mailto:.*-unsub@subscribe.ru>
--- List-Archive:  <http://subscribe.ru/archive/.*>
--- List-Owner: <mailto:.*-owner@subscribe.ru>
+-- List-Id: <*.subscribe.ru>
+-- List-Help: <https://subscribe.ru/catalog/*>
+-- List-Subscribe: <mailto:*-sub@subscribe.ru>
+-- List-Unsubscribe: <mailto:*-unsub@subscribe.ru>
+-- List-Archive:  <https://subscribe.ru/archive/*>
+-- List-Owner: <mailto:*@subscribe.ru>
 -- List-Post: NO
 local function check_ml_subscriberu(task)
   -- List-Id
   local header = task:get_header('list-id')
-  if not header or not string.find(header, '^<.*%.subscribe%.ru>$') then
-    return false
-  end
-  -- Precedence
-  header = task:get_header('precedence')
-  if not header or not string.match(header, '^normal$') then
+  if not (header and header:find('^<.*%.subscribe%.ru>$')) then
     return false
   end
   -- Other headers
   header = task:get_header('list-archive')
-  if not header or not string.find(header, '^<http://subscribe.ru/archive/.*>$') then
+  if not (header and header:find('^<https?://subscribe%.ru/archive/.+>$')) then
     return false
   end
   header = task:get_header('list-owner')
-  if not header or not string.find(header, '^<mailto:.*-owner@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+@subscribe%.ru>$')) then
     return false
   end
   header = task:get_header('list-help')
-  if not header or not string.find(header, '^<http://subscribe.ru/catalog/.*>$') then
+  if not (header and header:find('^<https?://subscribe%.ru/catalog/.+>$')) then
     return false
   end
   -- Subscribe and unsubscribe
   header = task:get_header('list-subscribe')
-  if not header or not string.find(header, '^<mailto:.*-sub@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+-sub@subscribe%.ru>$')) then
     return false
   end
   header = task:get_header('list-unsubscribe')
-  if not header or not string.find(header, '^<mailto:.*-unsub@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+-unsub@subscribe%.ru>$')) then
     return false
   end
 
