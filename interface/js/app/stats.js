@@ -111,6 +111,8 @@ define(["jquery", "d3pie"],
             $.each(servers, function (key, val) {
                 var row_class = "danger";
                 var glyph_status = "fas fa-times";
+                var version = "???";
+                var uptime = "???";
                 var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
@@ -118,6 +120,8 @@ define(["jquery", "d3pie"],
                 if (val.status) {
                     row_class = "success";
                     glyph_status = "fas fa-check";
+                    uptime = msToTime(val.data.uptime);
+                    version = val.data.version;
                     short_id = val.data.config_id.substring(0, 8);
                 }
 
@@ -126,6 +130,8 @@ define(["jquery", "d3pie"],
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
                 "<td class=\"text-center\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
+                '<td class="text-right">' + uptime + "</td>" +
+                "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
 
                 $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
