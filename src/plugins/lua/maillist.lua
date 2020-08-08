@@ -63,104 +63,100 @@ local function check_ml_ezmlm(task)
   return true
 end
 
--- MailMan (the gnu mailing list manager)
--- Precedence: bulk [or list for v2]
--- List-Help: <mailto:
--- List-Post: <mailto:
--- List-Subscribe: .*<mailto:.*=subscribe>
--- List-Unsubscribe: .*<mailto:.*=unsubscribe>
--- List-Archive:
--- X-Mailman-Version: \d
--- RFC 2919 headers exist
+-- GNU Mailman
+-- Two major versions currently in use and they use slightly different headers
+-- Mailman2: https://code.launchpad.net/~mailman-coders/mailman/2.1
+-- Mailman3: https://gitlab.com/mailman/mailman
 local function check_ml_mailman(task)
-  -- Mailing-List
-  local header = task:get_header('x-mailman-version')
-  if not header or not string.find(header, '^%d') then
+  local header = task:get_header('X-Mailman-Version')
+  if not header then
     return false
   end
-  -- Precedence
-  header = task:get_header('precedence')
+  local mm_version = header:match('^([23])%.')
+  if not mm_version then
+    lua_util.debugm(N, task, 'unknown Mailman version: %s', header)
+    return false
+  end
+  lua_util.debugm(N, task, 'checking Mailman %s headers', mm_version)
+
+  -- XXX Some messages may not contain Precedence, but they are rare:
+  -- http://bazaar.launchpad.net/~mailman-coders/mailman/2.1/revision/1339
+  header = task:get_header('Precedence')
   if not header or (header ~= 'bulk' and header ~= 'list') then
     return false
   end
-  -- For reminders we have other headers than for normal messages
-  header = task:get_header('x-list-administrivia')
-  local subject = task:get_header('subject')
-  if (header and string.find(header, 'yes')) or
-      (subject and string.find(subject, 'mailing list memberships reminder$')) then
-    if not task:get_header('errors-to') or not task:get_header('x-beenthere') then
-      return false
-    end
-    header = task:get_header('x-no-archive')
-    if not header or not string.find(header, 'yes') then
-      return false
-    end
-    return true
+
+  -- Mailmain 3 allows to disable all List-* headers in settings, but by default it adds them.
+  -- In all other cases all Mailman message should have List-Id header
+  if not task:has_header('List-Id') then
+    return false
   end
 
-  -- Other headers
-  header = task:get_header('list-post')
-  if not header or not string.find(header, '^<mailto:') then
-    return false
+  if mm_version == '2' then
+    -- X-BeenThere present in all Mailman2 messages
+    if not task:has_header('X-BeenThere') then
+      return false
+    end
+    -- X-List-Administrivia: is only added to messages Mailman creates and
+    -- sends out of its own accord
+    header = task:get_header('X-List-Administrivia')
+    if header and header == 'yes' then
+      -- not much elase we can check, Subjects can be changed in settings
+      return true
+    end
+  else -- Mailman 3
+    -- XXX not Mailman3 admin messages have this headers, but one
+    -- which don't usually have List-* headers examined below
+    if task:has_header('List-Administrivia') then
+      return true
+    end
   end
-  header = task:get_header('list-help')
-  if not header or not string.find(header, '^<mailto:') then
-    return false
-  end
-  -- Subscribe and unsubscribe
-  header = task:get_header('list-subscribe')
-  if not header or not string.find(header, '<mailto:.*=subscribe>') then
-    return false
-  end
-  header = task:get_header('list-unsubscribe')
-  if not header or not string.find(header, '<mailto:.*=unsubscribe>') then
-    return false
+
+  -- List-Archive and List-Post are optional, check other headers
+  for _, h in ipairs({'List-Help', 'List-Subscribe', 'List-Unsubscribe'}) do
+    header = task:get_header(h)
+    if not (header and header:find('<mailto:', 1, true)) then
+      return false
+    end
   end
 
   return true
-
 end
 
 -- Subscribe.ru
--- Precedence: normal
--- List-Id: <.*.subscribe.ru>
--- List-Help: <http://subscribe.ru/catalog/.*>
--- List-Subscribe: <mailto:.*-sub@subscribe.ru>
--- List-Unsubscribe: <mailto:.*-unsub@subscribe.ru>
--- List-Archive:  <http://subscribe.ru/archive/.*>
--- List-Owner: <mailto:.*-owner@subscribe.ru>
+-- List-Id: <*.subscribe.ru>
+-- List-Help: <https://subscribe.ru/catalog/*>
+-- List-Subscribe: <mailto:*-sub@subscribe.ru>
+-- List-Unsubscribe: <mailto:*-unsub@subscribe.ru>
+-- List-Archive:  <https://subscribe.ru/archive/*>
+-- List-Owner: <mailto:*@subscribe.ru>
 -- List-Post: NO
 local function check_ml_subscriberu(task)
   -- List-Id
   local header = task:get_header('list-id')
-  if not header or not string.find(header, '^<.*%.subscribe%.ru>$') then
-    return false
-  end
-  -- Precedence
-  header = task:get_header('precedence')
-  if not header or not string.match(header, '^normal$') then
+  if not (header and header:find('^<.*%.subscribe%.ru>$')) then
     return false
   end
   -- Other headers
   header = task:get_header('list-archive')
-  if not header or not string.find(header, '^<http://subscribe.ru/archive/.*>$') then
+  if not (header and header:find('^<https?://subscribe%.ru/archive/.+>$')) then
     return false
   end
   header = task:get_header('list-owner')
-  if not header or not string.find(header, '^<mailto:.*-owner@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+@subscribe%.ru>$')) then
     return false
   end
   header = task:get_header('list-help')
-  if not header or not string.find(header, '^<http://subscribe.ru/catalog/.*>$') then
+  if not (header and header:find('^<https?://subscribe%.ru/catalog/.+>$')) then
     return false
   end
   -- Subscribe and unsubscribe
   header = task:get_header('list-subscribe')
-  if not header or not string.find(header, '^<mailto:.*-sub@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+-sub@subscribe%.ru>$')) then
     return false
   end
   header = task:get_header('list-unsubscribe')
-  if not header or not string.find(header, '^<mailto:.*-unsub@subscribe.ru>$') then
+  if not (header and header:find('^<mailto:.+-unsub@subscribe%.ru>$')) then
     return false
   end
 
@@ -205,53 +201,52 @@ local function check_generic_list_headers(task)
   local score = 0
   local has_subscribe, has_unsubscribe
 
-  if task:get_header_count('list-id') then
-    lua_util.debugm(N, task, 'has header List-Id, score = %s', score)
+  if task:has_header('List-Id') then
     score = score + 0.75
+    lua_util.debugm(N, task, 'has List-Id header, score = %s', score)
   end
 
   local header = task:get_header('Precedence')
   if header and (header == 'list' or header == 'bulk') then
-    lua_util.debugm(N, task, 'has header Precedence: %s, score = %s',
-        header, score)
-
     score = score + 0.25
+    lua_util.debugm(N, task, 'has header "Precedence: %s", score = %s',
+        header, score)
   end
 
-  if task:get_header_count('list-archive') == 1 then
+  if task:has_header('List-Archive') then
+    score = score + 0.125
     lua_util.debugm(N, task, 'has header List-Archive, score = %s',
         score)
-    score = score + 0.125
   end
-  if task:get_header_count('list-owner') == 1 then
+  if task:has_header('List-Owner') then
+    score = score + 0.125
     lua_util.debugm(N, task, 'has header List-Owner, score = %s',
         score)
-    score = score + 0.125
   end
-  if task:get_header_count('list-help') == 1 then
+  if task:has_header('List-Help') then
+    score = score + 0.125
     lua_util.debugm(N, task, 'has header List-Help, score = %s',
         score)
-    score = score + 0.125
   end
 
   -- Subscribe and unsubscribe
-  if task:get_header_count('list-subscribe') == 1 then
+  if task:has_header('List-Subscribe') then
+    has_subscribe = true
+    score = score + 0.125
     lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
         score)
-    score = score + 0.125
-    has_subscribe = true
   end
-  if task:get_header_count('list-unsubscribe') == 1 then
+  if task:has_header('List-Unsubscribe') then
+    has_unsubscribe = true
+    score = score + 0.125
     lua_util.debugm(N, task, 'has header List-Unsubscribe, score = %s',
         score)
-    score = score + 0.125
-    has_unsubscribe = true
   end
 
-  if task:get_header_count('x-loop') == 1 then
-    lua_util.debugm(N, task, 'has header x-loop, score = %s',
-        score)
+  if task:has_header('X-Loop') then
     score = score + 0.125
+    lua_util.debugm(N, task, 'has header X-Loop, score = %s',
+        score)
   end
 
   if has_subscribe and has_unsubscribe then
@@ -270,7 +265,7 @@ end
 -- RFC 2919 headers exist
 local function check_maillist(task)
   local score = check_generic_list_headers(task)
-  if score > 1 then
+  if score >= 1 then
     if check_ml_ezmlm(task) then
       task:insert_result(symbol, 1, 'ezmlm')
     elseif check_ml_mailman(task) then
