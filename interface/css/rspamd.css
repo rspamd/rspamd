@@ -288,6 +288,22 @@ table#symbolsTable input[type="number"] {
     margin-right: 9px;
 }
 
+.status-table td:last-child {
+    border-right: none;
+}
+.status-table tr:last-child td {
+    border-bottom: none;
+}
+.status-table thead th:last-child {
+    border-right: none;
+}
+.status-table tr:last-child td:first-child {
+    border-radius: 0 0 0 calc(.25rem - 1px);
+}
+.status-table tr:last-child td:last-child {
+    border-radius: 0 0 calc(.25rem - 1px) 0;
+}
+
 /* RRD summary */
 #summary-row {
     padding-left: 80px;
@@ -484,22 +500,6 @@ table#symbolsTable input[type="number"] {
 
 #navBar .navbar-nav .nav-link {
     padding: 15px;
-}
-
-#clusterTable td:last-child {
-    border-right: none;
-}
-#clusterTable tr:last-child td {
-    border-bottom: none;
-}
-#clusterTable thead th:last-child {
-    border-right: none;
-}
-#clusterTable tr:last-child td:first-child {
-    border-radius: 0 0 0 calc(.25rem - 1px);
-}
-#clusterTable tr:last-child td:last-child {
-    border-radius: 0 0 calc(.25rem - 1px) 0;
 }
 
 #modalDialog > .modal-dialog {

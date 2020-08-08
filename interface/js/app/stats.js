@@ -142,6 +142,37 @@ define(["jquery", "d3pie"],
                     $('#selSrv [value="' + key + '"]').prop("disabled", true);
                 }
             });
+
+            function addStatfiles(server, statfiles) {
+                $.each(statfiles, function (i, statfile) {
+                    var cls = "";
+                    switch (statfile.symbol) {
+                        case "BAYES_SPAM":
+                            cls = "symbol-positive";
+                            break;
+                        case "BAYES_HAM":
+                            cls = "symbol-negative";
+                            break;
+                        default:
+                    }
+                    $("#bayesTable tbody").append("<tr>" +
+                      (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
+                      '<td class="' + cls + '">' + statfile.symbol + "</td>" +
+                      '<td class="' + cls + '">' + statfile.type + "</td>" +
+                      '<td class="' + cls + '">' + statfile.revision + "</td>" +
+                      '<td class="' + cls + '">' + statfile.users + "</td></tr>");
+                });
+            }
+            $("#bayesTable tbody").empty();
+            if (checked_server === "All SERVERS") {
+                $.each(servers, function (server, val) {
+                    if (server !== "All SERVERS") {
+                        addStatfiles(server, val.data.statfiles);
+                    }
+                });
+            } else {
+                addStatfiles(checked_server, data.statfiles);
+            }
         }
 
         function getChart(rspamd, pie, checked_server) {
