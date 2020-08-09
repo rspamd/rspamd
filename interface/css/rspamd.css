@@ -57,6 +57,9 @@ small,
 .success > td {
     background-color: #eef9e7;
 }
+td.warning {
+    background-color: #fff8e6;
+}
 
 /* bootstrap 4 additionals */
 .btn-group-xs > .btn,

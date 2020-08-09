@@ -128,7 +128,9 @@ define(["jquery", "d3pie"],
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
                 '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                '<td class="text-right">' + uptime + "</td>" +
+                '<td class="text-right' +
+                  (val.data.uptime < 3600 ? ' warning" title="Has been restarted within the last hour"' : "") +
+                  '">' + uptime + "</td>" +
                 "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
 
