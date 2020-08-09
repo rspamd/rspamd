@@ -159,19 +159,33 @@ define(["jquery", "d3pie"],
                       (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
                       '<td class="' + cls + '">' + statfile.symbol + "</td>" +
                       '<td class="' + cls + '">' + statfile.type + "</td>" +
-                      '<td class="' + cls + '">' + statfile.revision + "</td>" +
-                      '<td class="' + cls + '">' + statfile.users + "</td></tr>");
+                      '<td class="text-right ' + cls + '">' + statfile.revision + "</td>" +
+                      '<td class="text-right ' + cls + '">' + statfile.users + "</td></tr>");
                 });
             }
-            $("#bayesTable tbody").empty();
+
+            function addFuzzyStorage(server, storages) {
+                var i = 0;
+                $.each(storages, function (storage, hashes) {
+                    $("#fuzzyTable tbody").append("<tr>" +
+                      (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
+                      "<td>" + storage + "</td>" +
+                      '<td class="text-right">' + hashes + "</td></tr>");
+                    i++;
+                });
+            }
+
+            $("#bayesTable tbody, #fuzzyTable tbody").empty();
             if (checked_server === "All SERVERS") {
                 $.each(servers, function (server, val) {
                     if (server !== "All SERVERS") {
                         addStatfiles(server, val.data.statfiles);
+                        addFuzzyStorage(server, val.data.fuzzy_hashes);
                     }
                 });
             } else {
                 addStatfiles(checked_server, data.statfiles);
+                addFuzzyStorage(checked_server, data.fuzzy_hashes);
             }
         }
 
