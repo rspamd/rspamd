@@ -56,17 +56,14 @@ define(["jquery", "d3pie"],
         }
 
         function displayStatWidgets(checked_server) {
-            var widgets = $("#statWidgets");
-            $(widgets).empty().hide();
-
             var servers = JSON.parse(sessionStorage.getItem("Credentials"));
             var data = {};
-
             if (servers && servers[checked_server]) {
                 data = servers[checked_server].data;
             }
-            var stat_w = [];
 
+            var stat_w = [];
+            $("#statWidgets").empty().hide();
             $.each(data, function (i, item) {
                 var widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
@@ -89,7 +86,7 @@ define(["jquery", "d3pie"],
                     }
                     $('<div class="' + cls + 'float-left px-3"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
                       val + "</strong>" + i + "</div>")
-                        .appendTo(widgets);
+                        .appendTo("#statWidgets");
                 } else if (i === "actions") {
                     $.each(item, function (action, count) {
                         stat_w[widgetsOrder.indexOf(action)] = widget(action, count);
@@ -99,18 +96,21 @@ define(["jquery", "d3pie"],
                 }
             });
             $.each(stat_w, function (i, item) {
-                $(item).appendTo(widgets);
+                $(item).appendTo("#statWidgets");
             });
             $("#statWidgets > div:not(.stat-box)")
                 .wrapAll('<div class="card stat-box text-center bg-light shadow-sm float-right">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
             $("#statWidgets").find("div.float-right").appendTo("#statWidgets");
+            $("#statWidgets").show();
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
                 var row_class = "danger";
                 var glyph_status = "fas fa-times";
+                var version = "???";
+                var uptime = "???";
                 var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
@@ -118,27 +118,77 @@ define(["jquery", "d3pie"],
                 if (val.status) {
                     row_class = "success";
                     glyph_status = "fas fa-check";
+                    uptime = msToTime(val.data.uptime);
+                    version = val.data.version;
                     short_id = val.data.config_id.substring(0, 8);
                 }
 
-                $("#clusterTable tbody").append("<tr class=\"" + row_class + "\">" +
-                "<td class=\"align-middle\"><input type=\"radio\" class=\"form-check m-auto\" name=\"clusterName\" value=\"" + key + "\"></td>" +
+                $("#clusterTable tbody").append('<tr class="' + row_class + '">' +
+                '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" value="' + key + '"></td>' +
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
-                "<td class=\"text-center\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
+                '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                '<td class="text-right' +
+                  (val.data.uptime < 3600 ? ' warning" title="Has been restarted within the last hour"' : "") +
+                  '">' + uptime + "</td>" +
+                "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
 
-                $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
+                $("#selSrv").append($('<option value="' + key + '">' + key + "</option>"));
 
                 if (checked_server === key) {
-                    $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
-                    $("#selSrv [value=\"" + key + "\"]").prop("selected", true);
+                    $('#clusterTable tbody [value="' + key + '"]').prop("checked", true);
+                    $('#selSrv [value="' + key + '"]').prop("selected", true);
                 } else if (!val.status) {
-                    $("#clusterTable tbody [value=\"" + key + "\"]").prop("disabled", true);
-                    $("#selSrv [value=\"" + key + "\"]").prop("disabled", true);
+                    $('#clusterTable tbody [value="' + key + '"]').prop("disabled", true);
+                    $('#selSrv [value="' + key + '"]').prop("disabled", true);
                 }
             });
-            $(widgets).show();
+
+            function addStatfiles(server, statfiles) {
+                $.each(statfiles, function (i, statfile) {
+                    var cls = "";
+                    switch (statfile.symbol) {
+                        case "BAYES_SPAM":
+                            cls = "symbol-positive";
+                            break;
+                        case "BAYES_HAM":
+                            cls = "symbol-negative";
+                            break;
+                        default:
+                    }
+                    $("#bayesTable tbody").append("<tr>" +
+                      (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
+                      '<td class="' + cls + '">' + statfile.symbol + "</td>" +
+                      '<td class="' + cls + '">' + statfile.type + "</td>" +
+                      '<td class="text-right ' + cls + '">' + statfile.revision + "</td>" +
+                      '<td class="text-right ' + cls + '">' + statfile.users + "</td></tr>");
+                });
+            }
+
+            function addFuzzyStorage(server, storages) {
+                var i = 0;
+                $.each(storages, function (storage, hashes) {
+                    $("#fuzzyTable tbody").append("<tr>" +
+                      (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
+                      "<td>" + storage + "</td>" +
+                      '<td class="text-right">' + hashes + "</td></tr>");
+                    i++;
+                });
+            }
+
+            $("#bayesTable tbody, #fuzzyTable tbody").empty();
+            if (checked_server === "All SERVERS") {
+                $.each(servers, function (server, val) {
+                    if (server !== "All SERVERS") {
+                        addStatfiles(server, val.data.statfiles);
+                        addFuzzyStorage(server, val.data.fuzzy_hashes);
+                    }
+                });
+            } else {
+                addStatfiles(checked_server, data.statfiles);
+                addFuzzyStorage(checked_server, data.fuzzy_hashes);
+            }
         }
 
         function getChart(rspamd, pie, checked_server) {
