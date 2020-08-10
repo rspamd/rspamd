@@ -37,6 +37,7 @@ dofile(local_rules .. '/http_headers.lua')
 dofile(local_rules .. '/forwarding.lua')
 dofile(local_rules .. '/mid.lua')
 dofile(local_rules .. '/bitcoin.lua')
+dofile(local_rules .. '/bounce.lua')
 dofile(local_rules .. '/content.lua')
 dofile(local_rules .. '/controller/init.lua')
 
