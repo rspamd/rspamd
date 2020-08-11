@@ -2164,7 +2164,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		rspamd_gmtime (rep->ts, &tm_split);
 		rspamd_snprintf (timebuf, sizeof (timebuf), "%02d.%02d.%4d %02d:%02d:%02d GMT",
 				tm_split.tm_mday,
-				tm_split.tm_mon,
+				tm_split.tm_mon + 1,
 				tm_split.tm_year + 1900,
 				tm_split.tm_hour, tm_split.tm_min, tm_split.tm_sec);
 
