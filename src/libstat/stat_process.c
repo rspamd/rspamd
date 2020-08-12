@@ -679,6 +679,16 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 
 			if (bk_run == NULL) {
 				/* XXX: must be error */
+				if (task->result->passthrough_result) {
+					/* Passthrough email, cannot learn */
+					g_set_error (err, rspamd_stat_quark (), 500,
+							"Cannot learn statistics when passthrough "
+							"result has been set; not classified");
+
+					res = FALSE;
+					goto end;
+				}
+
 				msg_warn_task ("no runtime for backend %s; classifier %s; symbol %s",
 						st->backend->name, cl->cfg->name, st->stcf->symbol);
 				continue;
