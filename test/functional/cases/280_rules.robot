@@ -84,6 +84,30 @@ FROM_NEQ_ENVFROM
   ${result} =  Scan Message With Rspamc  ${MESSAGE8}  --from  test@test.net
   Check Rspamc  ${result}  FROM_NEQ_ENVFROM
 
+PHISH_SENDER_A
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender.eml
+  Should Contain  ${result.stdout}  MULTIPLE_FROM (9.00)[any@attack.com,admin@legitimate.com]
+  Should Contain  ${result.stdout}  MULTIPLE_UNIQUE_HEADERS (7.00)[From]
+
+PHISH_SENDER_B
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender2.eml
+  Should Contain  ${result.stdout}  SOMETHING
+
+PHISH_SENDER_C
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender3.eml
+  Should Contain  ${result.stdout}  SOMETHING
+
+PHISH_SENDER_D
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender4.eml
+  Should Contain  ${result.stdout}  SOMETHING
+
+PHISH_SENDER_E
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender5.eml
+  Should Contain  ${result.stdout}  SOMETHING
+
+PHISH_SENDER_ROUTING_PART
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
+  Should Contain  ${result.stdout}  SOMETHING
 
 *** Keywords ***
 Rules Setup

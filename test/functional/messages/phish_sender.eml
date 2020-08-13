@@ -1,0 +1,15 @@
+Received: by mail-lf1-f54.gulugulu.com with SMTP id j14so14439709lfg.9
+        for <test@test.ru>; Mon, 27 Apr 2020 09:54:21 -0700 (PDT)
+From: <any@attack.com>
+From: <admin@legitimate.com>
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <CA+1S=h4aGimA6vSBJF=t1F+5z-Mua5+Cimf+NU_NDWJk8ZNOcw@mail.gmail.com>
+Subject: Fwd:
+To: <test@test.ru>
+Content-Type: multipart/alternative; boundary="00000000000004de7805a4489190"
+
+--0000000000004bee6805a4484c02
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+sadsad
