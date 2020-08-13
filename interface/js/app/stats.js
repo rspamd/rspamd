@@ -29,6 +29,7 @@ define(["jquery", "d3pie"],
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
+            if (!Number.isFinite(seconds)) return "???";
             /* eslint-disable no-bitwise */
             var years = seconds / 31536000 >> 0; // 3600*24*365
             var months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
