@@ -113,15 +113,20 @@ define(["jquery", "d3pie"],
                 var version = "???";
                 var uptime = "???";
                 var short_id = "???";
-                if (!("config_id" in val.data)) {
-                    val.data.config_id = "";
-                }
                 if (val.status) {
                     row_class = "success";
                     glyph_status = "fas fa-check";
-                    uptime = msToTime(val.data.uptime);
-                    version = val.data.version;
-                    short_id = val.data.config_id.substring(0, 8);
+                    if (Number.isFinite(val.data.uptime)) {
+                        uptime = msToTime(val.data.uptime);
+                    }
+                    if ("version" in val.data) {
+                        version = val.data.version;
+                    }
+                    if (key === "All SERVERS") {
+                        short_id = "";
+                    } else if ("config_id" in val.data) {
+                        short_id = val.data.config_id.substring(0, 8);
+                    }
                 }
 
                 $("#clusterTable tbody").append('<tr class="' + row_class + '">' +
@@ -130,7 +135,9 @@ define(["jquery", "d3pie"],
                 "<td>" + val.host + "</td>" +
                 '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
                 '<td class="text-right' +
-                  (val.data.uptime < 3600 ? ' warning" title="Has been restarted within the last hour"' : "") +
+                  ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
+                      ? ' warning" title="Has been restarted within the last hour"'
+                      : "") +
                   '">' + uptime + "</td>" +
                 "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
@@ -251,42 +258,78 @@ define(["jquery", "d3pie"],
                             }
                         };
                         var status_count = 0;
-                        for (var e in neighbours_status) {
-                            if (neighbours_status[e].status === true) {
-                                // Remove alert status
-                                sessionStorage.removeItem("alerted_stats_" + neighbours_status[e].name);
+                        var promises = [];
+                        var to_Credentials = {
+                            "All SERVERS": {
+                                name: "All SERVERS",
+                                url: "",
+                                host: "",
+                                checked: true,
+                                status: true
+                            }
+                        };
 
-                                var data = neighbours_status[e].data;
-                                for (var action in neighbours_sum.actions) {
-                                    if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
-                                        neighbours_sum.actions[action] += data.actions[action];
+                        function process_node_stat(e) {
+                            var data = neighbours_status[e].data;
+                            for (var action in neighbours_sum.actions) {
+                                if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
+                                    neighbours_sum.actions[action] += data.actions[action];
+                                }
+                            }
+                            ["learned", "scanned", "uptime"].forEach(function (p) {
+                                neighbours_sum[p] += data[p];
+                            });
+                            status_count++;
+                        }
+
+                        // Get config_id, version and uptime using /auth query for Rspamd 2.5 and earlier
+                        function get_legacy_stat(e) {
+                            var alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
+                            promises.push($.ajax({
+                                url: neighbours_status[e].url + "auth",
+                                headers: {Password:rspamd.getPassword()},
+                                success: function (data) {
+                                    sessionStorage.removeItem(alerted);
+                                    ["config_id", "version", "uptime"].forEach(function (p) {
+                                        neighbours_status[e].data[p] = data[p];
+                                    });
+                                    process_node_stat(e);
+                                },
+                                error: function (jqXHR, textStatus, errorThrown) {
+                                    if (!(alerted in sessionStorage)) {
+                                        sessionStorage.setItem(alerted, true);
+                                        rspamd.alertMessage("alert-error", neighbours_status[e].name + " > " +
+                                          "Cannot receive legacy stats data" + (errorThrown ? ": " + errorThrown : ""));
+                                    }
+                                    process_node_stat(e);
+                                }
+                            }));
+                        }
+
+                        for (var e in neighbours_status) {
+                            if ({}.hasOwnProperty.call(neighbours_status, e)) {
+                                to_Credentials[neighbours_status[e].name] = neighbours_status[e];
+                                if (neighbours_status[e].status === true) {
+                                    // Remove alert status
+                                    sessionStorage.removeItem("alerted_stats_" + neighbours_status[e].name);
+
+                                    if ({}.hasOwnProperty.call(neighbours_status[e].data, "version")) {
+                                        process_node_stat(e);
+                                    } else {
+                                        get_legacy_stat(e);
                                     }
                                 }
-                                var items = ["learned", "scanned", "uptime"];
-                                for (var i in items) {
-                                    if ({}.hasOwnProperty.call(items, i)) {
-                                        neighbours_sum[items[i]] += data[items[i]];
-                                    }
-                                }
-                                status_count++;
                             }
                         }
-                        neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
-                        var to_Credentials = {};
-                        to_Credentials["All SERVERS"] = {
-                            name: "All SERVERS",
-                            url: "",
-                            host: "",
-                            checked: true,
-                            data: neighbours_sum,
-                            status: true
-                        };
-                        neighbours_status.forEach(function (elmt) {
-                            to_Credentials[elmt.name] = elmt;
-                        });
-                        sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
-                        displayStatWidgets(checked_server);
-                        graphs.chart = getChart(rspamd, graphs.chart, checked_server);
+                        setTimeout(function () {
+                            $.when.apply($, promises).always(function () {
+                                neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                                to_Credentials["All SERVERS"].data = neighbours_sum;
+                                sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
+                                displayStatWidgets(checked_server);
+                                graphs.chart = getChart(rspamd, graphs.chart, checked_server);
+                            });
+                        }, promises.length ? 100 : 0);
                     },
                     errorMessage: "Cannot receive stats data",
                     errorOnceId: "alerted_stats_",
