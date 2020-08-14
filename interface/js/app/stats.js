@@ -254,7 +254,7 @@ define(["jquery", "d3pie"],
                         for (var e in neighbours_status) {
                             if (neighbours_status[e].status === true) {
                                 // Remove alert status
-                                localStorage.removeItem(e + "_alerted");
+                                sessionStorage.removeItem("alerted_stats_" + neighbours_status[e].name);
 
                                 var data = neighbours_status[e].data;
                                 for (var action in neighbours_sum.actions) {
