@@ -325,6 +325,12 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 
 	rspamd_regexp_library_init (NULL);
 
+	if (pattern == NULL) {
+		g_set_error (err, rspamd_regexp_quark(), EINVAL,
+				"cannot create regexp from a NULL pattern");
+		return NULL;
+	}
+
 	if (flags == NULL) {
 		/* We need to parse pattern and detect flags set */
 		if (*start == '/') {
