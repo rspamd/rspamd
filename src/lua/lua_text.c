@@ -201,6 +201,7 @@ LUA_FUNCTION_DEF (text, base64);
 LUA_FUNCTION_DEF (text, hex);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
+LUA_FUNCTION_DEF (text, lt);
 
 static const struct luaL_reg textlib_f[] = {
 		LUA_INTERFACE_DEF (text, fromstring),
@@ -236,6 +237,7 @@ static const struct luaL_reg textlib_m[] = {
 		{"__tostring", lua_text_str},
 		{"__gc", lua_text_gc},
 		{"__eq", lua_text_eq},
+		{"__lt", lua_text_lt},
 		{NULL, NULL}
 };
 
@@ -1115,6 +1117,25 @@ lua_text_eq (lua_State *L)
 	}
 	else {
 		lua_pushboolean (L, false);
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_lt (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t1 = lua_check_text (L, 1),
+			*t2 = lua_check_text (L, 2);
+
+	if (t1 && t2) {
+		if (t1->len == t2->len) {
+			lua_pushboolean (L, memcmp (t1->start, t2->start, t1->len) < 0);
+		}
+		else {
+			lua_pushboolean (L, t1->len < t2->len);
+		}
 	}
 
 	return 1;
