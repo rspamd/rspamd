@@ -64,7 +64,8 @@ local function redis_query_sentinel(ev_base, params, initialised)
   end
   -- Coroutines syntax
   local rspamd_redis = require "rspamd_redis"
-  local addr = params.sentinels:get_upstream_round_robin()
+  local sentinels = params.sentinels
+  local addr = sentinels:get_upstream_round_robin()
 
   local host = addr:get_addr()
   local masters = {}
