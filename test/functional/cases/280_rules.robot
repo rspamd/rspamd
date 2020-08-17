@@ -66,7 +66,7 @@ BITCOIN ADDR 2
 
 BITCOIN ADDR 3
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc3.eml
-  Should Contain  ${result.stdout}  BITCOIN_ADDR  
+  Should Contain  ${result.stdout}  BITCOIN_ADDR
 
 RCVD_COUNT_ONE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
@@ -91,23 +91,24 @@ PHISH_SENDER_A
 
 PHISH_SENDER_B
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender2.eml
-  Should Contain  ${result.stdout}  SOMETHING
+  Should Contain  ${result.stdout}  BROKEN_HEADERS
 
 PHISH_SENDER_C
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender3.eml
-  Should Contain  ${result.stdout}  SOMETHING
+  Should Contain  ${result.stdout}  BROKEN_HEADERS
 
 PHISH_SENDER_D
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender4.eml
-  Should Contain  ${result.stdout}  SOMETHING
+  Should Contain  ${result.stdout}  BROKEN_HEADERS
 
 PHISH_SENDER_E
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender5.eml
-  Should Contain  ${result.stdout}  SOMETHING
+  Should Contain  ${result.stdout}  MULTIPLE_FROM
+  Should Contain  ${result.stdout}  DMARC_NA (0.00)[Duplicate From header]
 
 PHISH_SENDER_ROUTING_PART
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
-  Should Contain  ${result.stdout}  SOMETHING
+  Should Contain  ${result.stdout}  FROM_INVALID
 
 *** Keywords ***
 Rules Setup
