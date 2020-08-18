@@ -166,6 +166,8 @@ if type(jit) == 'table' then
 end
 
 local function process_regexp_opt(re, task, re_type, header, strong)
+  --[[
+  -- This is now broken with lua regexp conditions!
   if type(jit) == 'table' then
     -- Use ffi call
     local itype = ffi.C.rspamd_re_cache_type_from_string(re_type)
@@ -181,6 +183,8 @@ local function process_regexp_opt(re, task, re_type, header, strong)
   else
     return task:process_regexp(re, re_type, header, strong)
   end
+  --]]
+  return task:process_regexp(re, re_type, header, strong)
 end
 
 local function is_pcre_only(name)
