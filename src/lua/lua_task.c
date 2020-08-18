@@ -774,8 +774,10 @@ end
 LUA_FUNCTION_DEF (task, get_date);
 /***
  * @method task:get_message_id()
- * Returns message id of the specified task
- * @return {string} if of a message
+ * Returns message identifier from the `Message-ID` header.  Angle brackets (`<>`)
+ * are stripped off if present.  If a Message-ID header is missing `undef` is
+ * returned.
+ * @return {string} ID of the message
  */
 LUA_FUNCTION_DEF (task, get_message_id);
 /***
