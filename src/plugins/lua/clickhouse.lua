@@ -731,9 +731,8 @@ local function clickhouse_collect(task)
 
     if fname then
       table.insert(attachments_fnames, fname)
-      local type, subtype = part:get_type()
-      table.insert(attachments_ctypes, string.format("%s/%s",
-          type, subtype))
+      local mime_type, mime_subtype = part:get_type()
+      table.insert(attachments_ctypes, string.format("%s/%s", mime_type, mime_subtype))
       table.insert(attachments_lengths, part:get_length())
       table.insert(attachments_digests, string.sub(part:get_digest(), 1, 16))
     end
