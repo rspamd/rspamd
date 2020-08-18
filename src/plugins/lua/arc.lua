@@ -89,6 +89,8 @@ local settings = {
   key_prefix = 'arc_keys', -- default hash name
   reuse_auth_results = false, -- Reuse the existing authentication results
   whitelisted_signers_map = nil, -- Trusted signers domains
+  allowed_ids = nil, -- Allowed settings id
+  forbidden_ids = nil, -- Banned settings id
 }
 
 -- To match normal AR
@@ -684,12 +686,20 @@ if settings.use_redis then
   settings.redis_params = redis_params
 end
 
-rspamd_config:register_symbol({
+local sym_reg_tbl = {
   name = settings['sign_symbol'],
   callback = arc_signing_cb,
   groups = {"policies", "arc"},
   score = 0.0,
-})
+}
+if type(settings.allowed_ids) == 'table' then
+  sym_reg_tbl.allowed_ids = settings.allowed_ids
+end
+if type(settings.forbidden_ids) == 'table' then
+  sym_reg_tbl.forbidden_ids = settings.forbidden_ids
+end
 
--- Do not sign unless valid
+rspamd_config:register_symbol(sym_reg_tbl)
+
+-- Do not sign unless checked
 rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CALLBACK')

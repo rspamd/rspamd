@@ -33,6 +33,8 @@ local settings = {
   allow_username_mismatch = false,
   allow_pubkey_mismatch = true,
   sign_authenticated = true,
+  allowed_ids = nil,
+  forbidden_ids = nil,
   check_pubkey = false,
   domain = {},
   path = string.format('%s/%s/%s', rspamd_paths['DBDIR'], 'dkim', '$domain.$selector.key'),
@@ -160,13 +162,20 @@ if settings.use_redis then
   settings.redis_params = redis_params
 end
 
-
-rspamd_config:register_symbol({
+local sym_reg_tbl = {
   name = settings['symbol'],
   callback = dkim_signing_cb,
   groups = {"policies", "dkim"},
   score = 0.0,
-})
+}
 
+if type(settings.allowed_ids) == 'table' then
+  sym_reg_tbl.allowed_ids = settings.allowed_ids
+end
+if type(settings.forbidden_ids) == 'table' then
+  sym_reg_tbl.forbidden_ids = settings.forbidden_ids
+end
+
+rspamd_config:register_symbol(sym_reg_tbl)
 -- Add dependency on DKIM checks
 rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')
