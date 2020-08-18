@@ -135,7 +135,7 @@ uses any type by default)]],
       local parts = task:get_parts() or E
       local digests = {}
       for i,p in ipairs(parts) do
-        if p:get_filename() then
+        if p:is_attachment() then
           table.insert(digests, common.get_cached_or_raw_digest(task, i, p, args))
         end
       end
