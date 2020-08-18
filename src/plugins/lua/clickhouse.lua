@@ -726,11 +726,9 @@ local function clickhouse_collect(task)
   local attachments_ctypes = {}
   local attachments_lengths = {}
   local attachments_digests = {}
-  for _,part in ipairs(task:get_parts()) do
-    local fname = part:get_filename()
-
-    if fname then
-      table.insert(attachments_fnames, fname)
+  for _, part in ipairs(task:get_parts()) do
+    if part:is_attachment() then
+      table.insert(attachments_fnames, part:get_filename() or '')
       local mime_type, mime_subtype = part:get_type()
       table.insert(attachments_ctypes, string.format("%s/%s", mime_type, mime_subtype))
       table.insert(attachments_lengths, part:get_length())
