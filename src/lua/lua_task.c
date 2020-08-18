@@ -4732,6 +4732,12 @@ lua_task_get_groups (lua_State *L)
 			mres = rspamd_find_metric_result (task, lua_tostring (L, 3));
 		}
 
+		if (mres == NULL) {
+			lua_pushnil (L);
+
+			return 1;
+		}
+
 		lua_createtable (L, 0, kh_size (mres->sym_groups));
 
 		kh_foreach (mres->sym_groups, gr, gr_score, {
@@ -5943,6 +5949,12 @@ lua_task_get_metric_result (lua_State *L)
 
 		if (lua_isstring (L, 2)) {
 			metric_res = rspamd_find_metric_result (task, lua_tostring (L, 2));
+
+			if (metric_res == NULL) {
+				lua_pushnil (L);
+
+				return 1;
+			}
 		}
 
 		/* Fields added:
@@ -6041,6 +6053,12 @@ lua_task_get_metric_action (lua_State *L)
 
 		if (lua_isstring (L, 2)) {
 			mres = rspamd_find_metric_result (task, lua_tostring (L, 2));
+		}
+
+		if (mres == NULL) {
+			lua_pushnil (L);
+
+			return 1;
 		}
 
 		action = rspamd_check_action_metric (task, NULL, mres);
