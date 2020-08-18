@@ -1271,6 +1271,9 @@ local function process_pdf(input, mpart, task)
     if pdf_object.encrypted then
       pdf_output.encrypted = true
     end
+    if pdf_object.scripts then
+      pdf_output.scripts = true
+    end
 
     return pdf_output
   end
