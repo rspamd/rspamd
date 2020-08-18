@@ -1181,12 +1181,15 @@ local function process_pdf(input, mpart, task)
 
   if matches then
     local start_ts = rspamd_util.get_ticks()
-    local pdf_output = {
+    -- Temp object used to share data between pdf extraction methods
+    local pdf_object = {
       tag = 'pdf',
       extract_text = extract_text_data,
       start_timestamp = start_ts,
       end_timestamp = start_ts + config.pdf_process_timeout,
     }
+    -- Output object that excludes all internal stuff
+    local pdf_output = lua_util.shallowcopy(pdf_object)
     local grouped_processors = {}
     for npat,matched_positions in pairs(matches) do
       local index = pdf_indexes[npat]
@@ -1211,43 +1214,43 @@ local function process_pdf(input, mpart, task)
       lua_util.debugm(N, task, "pdf: process group %s with %s matches",
           name, #processor.offsets)
       table.sort(processor.offsets, function(e1, e2) return e1[1] < e2[1] end)
-      processor.processor_func(input, task, processor.offsets, pdf_output)
+      processor.processor_func(input, task, processor.offsets, pdf_object, pdf_output)
     end
 
     pdf_output.flags = {}
 
-    if pdf_output.start_objects and pdf_output.end_objects then
-      if #pdf_output.start_objects > config.max_pdf_objects then
-        pdf_output.many_objects = #pdf_output.start_objects
+    if pdf_object.start_objects and pdf_object.end_objects then
+      if #pdf_object.start_objects > config.max_pdf_objects then
+        pdf_output.many_objects = #pdf_object.start_objects
         -- Trim
       end
 
       -- Postprocess objects
-      postprocess_pdf_objects(task, input, pdf_output)
+      postprocess_pdf_objects(task, input, pdf_object)
       if config.text_extraction then
-        search_text(task, pdf_output)
+        search_text(task, pdf_object, pdf_output)
       end
       if config.url_extraction then
-        search_urls(task, pdf_output, mpart)
+        search_urls(task, pdf_object, mpart, pdf_output)
       end
 
-      if config.js_fuzzy and pdf_output.scripts then
+      if config.js_fuzzy and pdf_object.scripts then
         pdf_output.fuzzy_hashes = {}
         if config.openaction_fuzzy_only then
           -- OpenAction only
-          if pdf_output.openaction and pdf_output.openaction.bin_hash then
-            if config.min_js_fuzzy and #pdf_output.openaction.data >= config.min_js_fuzzy then
+          if pdf_object.openaction and pdf_object.openaction.bin_hash then
+            if config.min_js_fuzzy and #pdf_object.openaction.data >= config.min_js_fuzzy then
               lua_util.debugm(N, task, "pdf: add fuzzy hash from openaction: %s",
-                  pdf_output.openaction.hash)
-              table.insert(pdf_output.fuzzy_hashes, pdf_output.openaction.bin_hash)
+                  pdf_object.openaction.hash)
+              table.insert(pdf_output.fuzzy_hashes, pdf_object.openaction.bin_hash)
             else
               lua_util.debugm(N, task, "pdf: skip fuzzy hash from Javascript: %s, too short: %s",
-                  pdf_output.openaction.hash, #pdf_output.openaction.data)
+                  pdf_object.openaction.hash, #pdf_object.openaction.data)
             end
           end
         else
           -- All hashes
-          for h,sc in pairs(pdf_output.scripts) do
+          for h,sc in pairs(pdf_object.scripts) do
             if config.min_js_fuzzy and #sc.data >= config.min_js_fuzzy then
               lua_util.debugm(N, task, "pdf: add fuzzy hash from Javascript: %s",
                   sc.hash)
@@ -1264,19 +1267,24 @@ local function process_pdf(input, mpart, task)
       pdf_output.flags.no_objects = true
     end
 
+    -- Propagate from object to output
+    if pdf_object.encrypted then
+      pdf_output.encrypted = true
+    end
+
     return pdf_output
   end
 end
 
 -- Processes the PDF trailer
-processors.trailer = function(input, task, positions, output)
+processors.trailer = function(input, task, positions, pdf_object, pdf_output)
   local last_pos = positions[#positions]
 
   lua_util.debugm(N, task, 'pdf: process trailer at position %s (%s total length)',
       last_pos, #input)
 
   if last_pos[1] > config.max_pdf_trailer then
-    output.long_trailer = #input - last_pos[1]
+    pdf_output.long_trailer = #input - last_pos[1]
     return
   end
 
@@ -1286,20 +1294,21 @@ processors.trailer = function(input, task, positions, output)
     if line:find('/Encrypt ') then
       lua_util.debugm(N, task, "pdf: found encrypted line in trailer: %s",
           line)
-      output.encrypted = true
+      pdf_output.encrypted = true
+      pdf_object.encrypted = true
       break
     end
     lines_checked = lines_checked + 1
 
     if lines_checked > config.max_pdf_trailer_lines then
       lua_util.debugm(N, task, "pdf: trailer has too many lines, stop checking")
-      output.long_trailer = #input - last_pos[1]
+      pdf_output.long_trailer = #input - last_pos[1]
       break
     end
   end
 end
 
-processors.suspicious = function(input, task, positions, output)
+processors.suspicious = function(input, task, positions, pdf_object, pdf_output)
   local suspicious_factor = 0.0
   local nexec = 0
   local nencoded = 0
@@ -1343,33 +1352,33 @@ processors.suspicious = function(input, task, positions, output)
     suspicious_factor = 1.0
   end
 
-  output.suspicious = suspicious_factor
+  pdf_output.suspicious = suspicious_factor
 end
 
-local function generic_table_inserter(positions, output, output_key)
-  if not output[output_key] then
-    output[output_key] = {}
+local function generic_table_inserter(positions, pdf_object, output_key)
+  if not pdf_object[output_key] then
+    pdf_object[output_key] = {}
   end
-  local shift = #output[output_key]
+  local shift = #pdf_object[output_key]
   for i,pos in ipairs(positions) do
-    output[output_key][i + shift] = pos[1]
+    pdf_object[output_key][i + shift] = pos[1]
   end
 end
 
-processors.start_object = function(_, task, positions, output)
-  generic_table_inserter(positions, output, 'start_objects')
+processors.start_object = function(_, task, positions, pdf_object)
+  generic_table_inserter(positions, pdf_object, 'start_objects')
 end
 
-processors.end_object = function(_, task, positions, output)
-  generic_table_inserter(positions, output, 'end_objects')
+processors.end_object = function(_, task, positions, pdf_object)
+  generic_table_inserter(positions, pdf_object, 'end_objects')
 end
 
-processors.start_stream = function(_, task, positions, output)
-  generic_table_inserter(positions, output, 'start_streams')
+processors.start_stream = function(_, task, positions, pdf_object)
+  generic_table_inserter(positions, pdf_object, 'start_streams')
 end
 
-processors.end_stream = function(_, task, positions, output)
-  generic_table_inserter(positions, output, 'end_streams')
+processors.end_stream = function(_, task, positions, pdf_object)
+  generic_table_inserter(positions, pdf_object, 'end_streams')
 end
 
 exports.process = process_pdf
