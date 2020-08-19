@@ -97,6 +97,26 @@ exports.rspamd_str_trim = rspamd_str_trim
 exports.str_trim = rspamd_str_trim
 
 --[[[
+-- @function lua_util.str_startswith(text, prefix)
+-- @param {string} text
+-- @param {string} prefix
+-- @return {boolean} true if text starts with the specified prefix, false otherwise
+--]]
+exports.str_startswith = function(s, prefix)
+  return s:sub(1, prefix:len()) == prefix
+end
+
+--[[[
+-- @function lua_util.str_endswith(text, suffix)
+-- @param {string} text
+-- @param {string} suffix
+-- @return {boolean} true if text ends with the specified suffix, false otherwise
+--]]
+exports.str_endswith = function(s, suffix)
+  return s:sub(-suffix:len()) == suffix
+end
+
+--[[[
 -- @function lua_util.round(number, decimalPlaces)
 -- Round number to fixed number of decimal points
 -- @param {number} number number to round
