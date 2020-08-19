@@ -351,6 +351,7 @@ lua_tensor_index (lua_State *L)
 			}
 		}
 		else if (lua_isstring (L, 2)) {
+			/* Access to methods */
 			lua_getmetatable (L, 1);
 			lua_pushvalue (L, 2);
 			lua_rawget (L, -2);
@@ -392,7 +393,20 @@ lua_tensor_mul (lua_State *L)
 					dims[0], shadow_dims[1], shadow_dims[0], dims[1]);
 		}
 
-		res = lua_newtensor (L, 2, dims, true);
+		if (dims[0] == 0) {
+			/* Column */
+			dims[0] = 1;
+			res = lua_newtensor (L, 2, dims, true, true);
+		}
+		else if (dims[1] == 0) {
+			/* Row */
+			res = lua_newtensor (L, 1, dims, true, true);
+			dims[1] = 1;
+		}
+		else {
+			res = lua_newtensor (L, 2, dims, true, true);
+		}
+
 		kad_sgemm_simple (transA, transB, dims[0], dims[1], shadow_dims[0],
 				t1->data, t2->data, res->data);
 	}
@@ -438,7 +452,7 @@ lua_tensor_load (lua_State *L)
 		if (sz == nelts * sizeof (rspamd_tensor_num_t) + sizeof (int) * 4) {
 			if (ndims == 1) {
 				if (nelts == dims[0]) {
-					struct rspamd_lua_tensor *t = lua_newtensor (L, ndims, dims, false);
+					struct rspamd_lua_tensor *t = lua_newtensor (L, ndims, dims, false, true);
 					memcpy (t->data, data + sizeof (int) * 4, nelts *
 							sizeof (rspamd_tensor_num_t));
 				}
@@ -449,7 +463,7 @@ lua_tensor_load (lua_State *L)
 			}
 			else if (ndims == 2) {
 				if (nelts == dims[0] * dims[1]) {
-					struct rspamd_lua_tensor *t = lua_newtensor (L, ndims, dims, false);
+					struct rspamd_lua_tensor *t = lua_newtensor (L, ndims, dims, false, true);
 					memcpy (t->data, data + sizeof (int) * 4, nelts *
 							sizeof (rspamd_tensor_num_t));
 				}
