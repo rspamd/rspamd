@@ -342,8 +342,8 @@ local function create_ann(n, nlayers)
   local nhidden = math.floor((n + 1) / 2)
   local t = rspamd_kann.layer.input(n)
   t = rspamd_kann.transform.relu(t)
-  t = rspamd_kann.transform.tanh(rspamd_kann.layer.dense(t, nhidden));
-  t = rspamd_kann.layer.cost(t, 1, rspamd_kann.cost.mse)
+  t = rspamd_kann.layer.dense(t, nhidden);
+  t = rspamd_kann.layer.cost(t, 1, rspamd_kann.cost.ceb_neg)
   return rspamd_kann.new.kann(t)
 end
 
