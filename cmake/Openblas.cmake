@@ -6,6 +6,11 @@ IF(ENABLE_BLAS MATCHES "ON")
             include/blas
             ROOT ${BLAS_ROOT_DIR}
             LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
+    ProcessPackage(BLAS_LAPACK OPTIONAL_INCLUDE LIBRARY lapack
+            INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
+            include/blas
+            ROOT ${BLAS_ROOT_DIR}
+            LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
 ENDIF()
 
 IF(WITH_BLAS)
