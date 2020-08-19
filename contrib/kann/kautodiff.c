@@ -900,6 +900,10 @@ void kad_vec_mul_sum(int n, float *a, const float *b, const float *c)
 void kad_saxpy(int n, float a, const float *x, float *y) { kad_saxpy_inlined(n, a, x, y); }
 
 #ifdef HAVE_CBLAS
+#ifndef __APPLE__
+/* As gfortran mangles names */
+#define ssyev ssyev_
+#endif
 extern void ssyev(const char* jobz, const char* uplo, int* n, float* a, int* lda, float* w, float* work, int* lwork, int* info);
 #ifdef HAVE_CBLAS_H
 #include "cblas.h"
