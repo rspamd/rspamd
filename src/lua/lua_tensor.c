@@ -33,6 +33,7 @@ LUA_FUNCTION_DEF (tensor, destroy);
 LUA_FUNCTION_DEF (tensor, mul);
 LUA_FUNCTION_DEF (tensor, tostring);
 LUA_FUNCTION_DEF (tensor, index);
+LUA_FUNCTION_DEF (tensor, newindex);
 
 static luaL_reg rspamd_tensor_f[] = {
 		LUA_INTERFACE_DEF (tensor, load),
@@ -49,6 +50,7 @@ static luaL_reg rspamd_tensor_m[] = {
 		{"tostring", lua_tensor_tostring},
 		{"__tostring", lua_tensor_tostring},
 		{"__index", lua_tensor_index},
+		{"__newindex", lua_tensor_newindex},
 		{NULL, NULL},
 };
 
@@ -355,6 +357,74 @@ lua_tensor_index (lua_State *L)
 			lua_getmetatable (L, 1);
 			lua_pushvalue (L, 2);
 			lua_rawget (L, -2);
+		}
+	}
+
+	return 1;
+}
+static gint
+lua_tensor_newindex (lua_State *L)
+{
+	struct rspamd_lua_tensor *t = lua_check_tensor (L, 1);
+	gint idx;
+
+	if (t) {
+		if (lua_isnumber (L, 2)) {
+			idx = lua_tointeger (L, 2);
+
+			if (t->ndims == 1) {
+				/* Individual element */
+				if (idx <= t->dim[0]) {
+					rspamd_tensor_num_t value = lua_tonumber (L, 3), old;
+
+					old = t->data[idx - 1];
+					t->data[idx - 1] = value;
+					lua_pushnumber (L, old);
+				}
+				else {
+					return luaL_error (L, "invalid index: %d", idx);
+				}
+			}
+			else {
+				if (lua_isnumber (L, 3)) {
+					return luaL_error (L, "cannot assign number to a row");
+				}
+				else if (lua_isuserdata (L, 3)) {
+					/* Tensor assignment */
+					struct rspamd_lua_tensor *row = lua_check_tensor (L, 3);
+
+					if (row) {
+						if (row->ndims == 1) {
+							if (row->dim[0] == t->dim[1]) {
+								if (idx <= t->dim[0]) {
+									memcpy (&t->data[idx * t->dim[0]],
+											row->data,
+											t->dim[1] * sizeof (rspamd_tensor_num_t));
+
+									return 0;
+								}
+								else {
+									return luaL_error (L, "invalid index: %d", idx);
+								}
+							}
+						}
+						else {
+							return luaL_error (L, "cannot assign matrix to row");
+						}
+					}
+					else {
+						return luaL_error (L, "cannot assign row, invalid tensor");
+					}
+				}
+				else {
+					/* TODO: add table assignment */
+					return luaL_error (L, "cannot assign row, not a tensor");
+				}
+			}
+		}
+		else {
+			/* Access to methods? NYI */
+			return luaL_error (L, "cannot assign method of a tensor");
 		}
 	}
 
