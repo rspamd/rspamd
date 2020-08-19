@@ -23,8 +23,8 @@ typedef float rspamd_tensor_num_t;
 struct rspamd_lua_tensor {
 	int ndims;
 	int size; /* overall size (product of dims) */
-	rspamd_tensor_num_t *data;
 	int dim[2];
+	rspamd_tensor_num_t *data;
 };
 
 struct rspamd_lua_tensor *lua_check_tensor (lua_State *L, int pos);
