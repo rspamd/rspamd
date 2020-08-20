@@ -434,7 +434,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
         end
       end
 
-      if mtype == 'text' and (msubtype == 'html' or msubtype == 'htm') then
+      if (mtype == 'text' or mtype == 'application') and (msubtype == 'html' or msubtype == 'xhtml+xml') then
         return 'html',21
       end
 
