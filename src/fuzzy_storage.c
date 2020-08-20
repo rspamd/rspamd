@@ -1249,7 +1249,6 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 			}
 			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP4) {
 				if (end - p >= sizeof (in_addr_t)) {
-					p += sizeof (in_addr_t);
 					n_ext ++;
 					st_len += sizeof (in_addr_t);
 				}
@@ -1262,7 +1261,6 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 			}
 			else if (cmd == RSPAMD_FUZZY_EXT_SOURCE_IP6) {
 				if (end - p >= sizeof (struct in6_addr)) {
-					p += sizeof (struct in6_addr);
 					n_ext ++;
 					st_len += sizeof (struct in6_addr);
 				}
@@ -1272,6 +1270,10 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 				}
 
 				p += sizeof (struct in6_addr);
+			}
+			else {
+				/* Invalid command */
+				return FALSE;
 			}
 		}
 		else {
@@ -1335,6 +1337,9 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 				p += sizeof (in_addr_t);
 				data_buf += sizeof (struct in6_addr);
 				ext = ext->next;
+			}
+			else {
+				g_assert_not_reached ();
 			}
 		}
 
