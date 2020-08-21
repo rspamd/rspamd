@@ -28,5 +28,7 @@ struct rspamd_lua_tensor {
 };
 
 struct rspamd_lua_tensor *lua_check_tensor (lua_State *L, int pos);
+struct rspamd_lua_tensor *lua_newtensor (lua_State *L, int ndims,
+		const int *dim, bool zero_fill, bool own);
 
 #endif

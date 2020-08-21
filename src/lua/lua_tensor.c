@@ -54,7 +54,7 @@ static luaL_reg rspamd_tensor_m[] = {
 		{NULL, NULL},
 };
 
-static struct rspamd_lua_tensor *
+struct rspamd_lua_tensor *
 lua_newtensor (lua_State *L, int ndims, const int *dim, bool zero_fill, bool own)
 {
 	struct rspamd_lua_tensor *res;
