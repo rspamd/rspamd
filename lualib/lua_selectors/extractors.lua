@@ -58,7 +58,12 @@ For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
   -- Get MIME from
   ['from'] = {
     ['get_value'] = function(task, args)
-      local from = task:get_from(args[1] or 0)
+      local from
+      if type(args) == 'table' then
+        from = task:get_from(args)
+      else
+        from = task:get_from(0)
+      end
       if ((from or E)[1] or E).addr then
         return from[1],'table'
       end
@@ -69,7 +74,12 @@ uses any type by default)]],
   },
   ['rcpts'] = {
     ['get_value'] = function(task, args)
-      local rcpts = task:get_recipients(args[1] or 0)
+      local rcpts
+      if type(args) == 'table' then
+        rcpts = task:get_recipients(args)
+      else
+        rcpts = task:get_recipients(0)
+      end
       if ((rcpts or E)[1] or E).addr then
         return rcpts,'table_list'
       end
