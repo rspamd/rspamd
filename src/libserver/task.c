@@ -204,6 +204,10 @@ rspamd_task_free (struct rspamd_task *task)
 			rspamd_email_address_free (task->from_envelope);
 		}
 
+		if (task->from_envelope_orig) {
+			rspamd_email_address_free (task->from_envelope_orig);
+		}
+
 		if (task->meta_words) {
 			g_array_free (task->meta_words, TRUE);
 		}

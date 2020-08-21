@@ -190,6 +190,7 @@ struct rspamd_task {
 
 	GPtrArray *rcpt_envelope;                        /**< array of rspamd_email_address					*/
 	struct rspamd_email_address *from_envelope;
+	struct rspamd_email_address *from_envelope_orig;
 
 	ucl_object_t *messages;                            /**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;                /**< regexp runtime									*/

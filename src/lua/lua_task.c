@@ -3767,7 +3767,18 @@ lua_task_get_from (lua_State *L)
 			/* Create table to preserve compatibility */
 			if (addr->addr) {
 				lua_createtable (L, 1, 0);
-				lua_push_email_address (L, addr);
+				if (what & RSPAMD_ADDRESS_ORIGINAL) {
+					if (task->from_envelope_orig) {
+						lua_push_email_address (L, task->from_envelope_orig);
+					}
+					else {
+						lua_push_email_address (L, addr);
+					}
+				}
+				else {
+					lua_push_email_address (L, addr);
+				}
+
 				lua_rawseti (L, -2, 1);
 			}
 			else {
@@ -3851,13 +3862,10 @@ lua_task_set_from (lua_State *L)
 			}
 		}
 		else if (paddr) {
+			/* SMTP from case */
 			if (lua_import_email_address (L, task, 3, &addr)) {
-
-				if (paddr) {
-					rspamd_email_address_free (*paddr);
-				}
-
-				*paddr = addr;
+				task->from_envelope_orig = *paddr;
+				task->from_envelope = addr;
 				lua_pushboolean (L, true);
 			}
 			else {
