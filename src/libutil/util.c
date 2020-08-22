@@ -2438,3 +2438,20 @@ rspamd_set_counter_ema (struct rspamd_counter_data *cd,
 
 	return cd->mean;
 }
+
+void
+rspamd_ptr_array_shuffle (GPtrArray *ar)
+{
+	if (ar->len < 2) {
+		return;
+	}
+
+	guint n = ar->len;
+
+	for (guint i = 0; i < n - 1; i++) {
+		guint j = i + rspamd_random_uint64_fast () % (n - i);
+		gpointer t = g_ptr_array_index (ar, j);
+		g_ptr_array_index (ar, j) = g_ptr_array_index (ar, i);
+		g_ptr_array_index (ar, i) = t;
+	}
+}

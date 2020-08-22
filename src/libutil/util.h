@@ -478,6 +478,12 @@ double rspamd_set_counter_ema (struct rspamd_counter_data *cd,
 double rspamd_set_counter (struct rspamd_counter_data *cd,
 						   gdouble value);
 
+/**
+ * Shuffle elements in an array inplace
+ * @param ar
+ */
+void rspamd_ptr_array_shuffle (GPtrArray *ar);
+
 enum rspamd_pbkdf_version_id {
 	RSPAMD_PBKDF_ID_V1 = 1,
 	RSPAMD_PBKDF_ID_V2 = 2,
