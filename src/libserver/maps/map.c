@@ -1223,21 +1223,23 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 
 	if (cbd->stage == http_map_http_conn && cbd->addrs->len > 0) {
 		rspamd_ptr_array_shuffle (cbd->addrs);
+		gint idx = 0;
 		/*
 		 * For the existing addr we can just select any address as we have
 		 * data available
 		 */
 		if (cbd->map->nelts > 0 && rspamd_random_double_fast () > 0.5) {
 			/* Already shuffled, use whatever is the first */
-			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, 0);
+			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, idx);
 		}
 		else {
 			/* Always prefer IPv4 as IPv6 is almost all the time broken */
 			g_ptr_array_sort (cbd->addrs, rspamd_map_dns_address_sort_func);
-			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, 0);
+			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, idx);
 		}
 
-		msg_debug_map ("open http connection to %s",
+retry:
+		msg_debug_map ("try open http connection to %s",
 				rspamd_inet_address_to_string_pretty (cbd->addr));
 		cbd->conn = rspamd_http_connection_new_client (NULL,
 				NULL,
@@ -1250,14 +1252,29 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 			write_http_request (cbd);
 		}
 		else {
-			cbd->periodic->errored = TRUE;
-			msg_err_map ("error reading %s(%s): "
-						 "connection with http server terminated incorrectly: %s",
-					cbd->bk->uri,
-					cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
-					strerror (errno));
+			if (idx < cbd->addrs->len - 1) {
+				/* We can retry */
+				idx++;
+				rspamd_inet_addr_t *prev_addr = cbd->addr;
+				cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, idx);
+				msg_info_map ("cannot connect to %s to get data for %s: %s, retry with %s",
+						rspamd_inet_address_to_string_pretty (prev_addr),
+						cbd->bk->uri,
+						strerror (errno),
+						rspamd_inet_address_to_string_pretty (cbd->addr));
+				goto retry;
+			}
+			else {
+				/* Nothing else left */
+				cbd->periodic->errored = TRUE;
+				msg_err_map ("error reading %s(%s): "
+							 "connection with http server terminated incorrectly: %s",
+						cbd->bk->uri,
+						cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
+						strerror (errno));
 
-			rspamd_map_process_periodic (cbd->periodic);
+				rspamd_map_process_periodic (cbd->periodic);
+			}
 		}
 	}
 
