@@ -1127,6 +1127,40 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 			cbd, jittered_sec, map->name, reason);
 }
 
+static gint
+rspamd_map_af_to_weight (const rspamd_inet_addr_t *addr)
+{
+	int ret;
+
+	switch (rspamd_inet_address_get_af (addr)) {
+	case AF_UNIX:
+		ret = 2;
+		break;
+	case AF_INET:
+		ret = 1;
+		break;
+	default:
+		ret = 0;
+		break;
+	}
+
+	return ret;
+}
+
+static gint
+rspamd_map_dns_address_sort_func (gconstpointer a, gconstpointer b)
+{
+	const rspamd_inet_addr_t *ip1 = *(const rspamd_inet_addr_t **)a,
+			*ip2 = *(const rspamd_inet_addr_t **)b;
+	gint w1, w2;
+
+	w1 = rspamd_map_af_to_weight (ip1);
+	w2 = rspamd_map_af_to_weight (ip2);
+
+	/* Inverse order */
+	return w2 - w1;
+}
+
 static void
 rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 {
@@ -1188,11 +1222,20 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	}
 
 	if (cbd->stage == http_map_http_conn && cbd->addrs->len > 0) {
-		guint selected_addr_idx;
-
-		selected_addr_idx = rspamd_random_uint64_fast () % cbd->addrs->len;
-		cbd->addr = (rspamd_inet_addr_t *)g_ptr_array_index (cbd->addrs,
-				selected_addr_idx);
+		rspamd_ptr_array_shuffle (cbd->addrs);
+		/*
+		 * For the existing addr we can just select any address as we have
+		 * data available
+		 */
+		if (cbd->map->nelts > 0 && rspamd_random_double_fast () > 0.5) {
+			/* Already shuffled, use whatever is the first */
+			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, 0);
+		}
+		else {
+			/* Always prefer IPv4 as IPv6 is almost all the time broken */
+			g_ptr_array_sort (cbd->addrs, rspamd_map_dns_address_sort_func);
+			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, 0);
+		}
 
 		msg_debug_map ("open http connection to %s",
 				rspamd_inet_address_to_string_pretty (cbd->addr));
