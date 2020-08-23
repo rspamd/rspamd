@@ -924,22 +924,34 @@ rspamd_parse_inet_address_ip (const char *src, gsize srclen,
 	return ret;
 }
 
+/*
+ * This is used to allow rspamd_inet_address_to_string to be used several times
+ * at the same function invocation, like printf("%s -> %s", f(ip1), f(ip2));
+ * Yes, it is bad but it helps to utilise this function without temporary buffers
+ * for up to 5 simultaneous invocations.
+ */
+#define NADDR_BUFS 5
+
 const char *
 rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr)
 {
-	static char addr_str[INET6_ADDRSTRLEN + 1];
+	static char addr_str[NADDR_BUFS][INET6_ADDRSTRLEN + 1];
+	static guint cur_addr = 0;
+	char *addr_buf;
 
 	if (addr == NULL) {
 		return "<empty inet address>";
 	}
 
+	addr_buf = addr_str[cur_addr++ % NADDR_BUFS];
+
 	switch (addr->af) {
 	case AF_INET:
-		return inet_ntop (addr->af, &addr->u.in.addr.s4.sin_addr, addr_str,
-				   sizeof (addr_str));
+		return inet_ntop (addr->af, &addr->u.in.addr.s4.sin_addr, addr_buf,
+				INET6_ADDRSTRLEN + 1);
 	case AF_INET6:
-		return inet_ntop (addr->af, &addr->u.in.addr.s6.sin6_addr, addr_str,
-				   sizeof (addr_str));
+		return inet_ntop (addr->af, &addr->u.in.addr.s6.sin6_addr, addr_buf,
+				INET6_ADDRSTRLEN + 1);
 	case AF_UNIX:
 		return addr->u.un->addr.sun_path;
 	}
@@ -947,33 +959,39 @@ rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr)
 	return "undefined";
 }
 
+#define PRETTY_IP_BUFSIZE 128
+
 const char *
 rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr)
 {
-	static char addr_str[PATH_MAX + 5];
+	static char addr_str[NADDR_BUFS][PRETTY_IP_BUFSIZE];
+	static guint cur_addr = 0;
+	char *addr_buf;
 
 	if (addr == NULL) {
 		return "<empty inet address>";
 	}
 
+	addr_buf = addr_str[cur_addr++ % NADDR_BUFS];
+
 	switch (addr->af) {
 	case AF_INET:
-		rspamd_snprintf (addr_str, sizeof (addr_str), "%s:%d",
+		rspamd_snprintf (addr_buf, PRETTY_IP_BUFSIZE, "%s:%d",
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
 		break;
 	case AF_INET6:
-		rspamd_snprintf (addr_str, sizeof (addr_str), "[%s]:%d",
+		rspamd_snprintf (addr_buf, PRETTY_IP_BUFSIZE, "[%s]:%d",
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
 		break;
 	case AF_UNIX:
-		rspamd_snprintf (addr_str, sizeof (addr_str), "unix:%s",
+		rspamd_snprintf (addr_buf, PRETTY_IP_BUFSIZE, "unix:%s",
 				rspamd_inet_address_to_string (addr));
 		break;
 	}
 
-	return addr_str;
+	return addr_buf;
 }
 
 uint16_t
