@@ -1334,7 +1334,7 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 				ext->length = sizeof (struct in6_addr);
 				ext->payload = dest;
 				memcpy (dest, p, sizeof (struct in6_addr));
-				p += sizeof (in_addr_t);
+				p += sizeof (struct in6_addr);
 				data_buf += sizeof (struct in6_addr);
 				ext = ext->next;
 			}
