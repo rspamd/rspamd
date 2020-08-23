@@ -1180,11 +1180,6 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	}
 
 	if (reply->code == RDNS_RC_NOERROR) {
-		/*
-		 * We just get the first address hoping that a resolver performs
-		 * round-robin rotation well
-		 */
-
 		DL_FOREACH (reply->entries, cur_rep) {
 			rspamd_inet_addr_t *addr;
 			addr = rspamd_inet_address_from_rnds (reply->entries);
@@ -1257,11 +1252,12 @@ retry:
 				idx++;
 				rspamd_inet_addr_t *prev_addr = cbd->addr;
 				cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index (cbd->addrs, idx);
-				msg_info_map ("cannot connect to %s to get data for %s: %s, retry with %s",
+				msg_info_map ("cannot connect to %s to get data for %s: %s, retry with %s (%d of %d)",
 						rspamd_inet_address_to_string_pretty (prev_addr),
 						cbd->bk->uri,
 						strerror (errno),
-						rspamd_inet_address_to_string_pretty (cbd->addr));
+						rspamd_inet_address_to_string_pretty (cbd->addr),
+						idx + 1, cbd->addrs->len);
 				goto retry;
 			}
 			else {
