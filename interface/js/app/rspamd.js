@@ -89,12 +89,13 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
     function tabClick(id) {
         var tab_id = id;
-        if ($(tab_id).attr("disabled")) return;
-        $(tab_id).attr("disabled", true);
+        if ($(id).attr("disabled")) return;
+        var navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
+        navBarControls.attr("disabled", true).addClass("disabled", true);
 
         stopTimers();
 
-        if (tab_id === "#refresh") {
+        if (id === "#refresh" || id === "#autoRefresh") {
             tab_id = "#" + $(".nav-link.active").attr("id");
         }
 
@@ -141,7 +142,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     var refreshInterval = $(".dropdown-menu a.active.preset").data("value");
                     setAutoRefresh(refreshInterval, "status",
                         function () { return tab_stat.statWidgets(ui, graphs, checked_server); });
-                    if (refreshInterval) tab_stat.statWidgets(ui, graphs, checked_server);
+                    if (id !== "#autoRefresh") tab_stat.statWidgets(ui, graphs, checked_server);
 
                     $(".preset").show();
                     $(".dynamic").hide();
@@ -161,7 +162,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     }
                     setAutoRefresh(refreshInterval, "throughput",
                         function () { return tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData); });
-                    if (refreshInterval) tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
+                    if (id !== "#autoRefresh") tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
 
                     $(".preset").hide();
                     $(".dynamic").show();
@@ -185,9 +186,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         }
 
         setTimeout(function () {
-            $(tab_id).removeAttr("disabled");
-            $("#refresh").removeAttr("disabled");
-        }, 1000);
+            navBarControls.removeAttr("disabled").removeClass("disabled");
+        }, (id === "#autoRefresh") ? 0 : 1000);
     }
 
     function drawTooltips() {
@@ -403,13 +403,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             }, 1000);
         });
 
-        $("a[data-toggle=\"tab\"]").on("shown.bs.tab", function (e) {
-            var tab_id = "#" + $(e.target).attr("id");
-            tabClick(tab_id);
+        $('a[data-toggle="tab"]').on("shown.bs.tab", function (e) {
+            tabClick("#" + $(e.target).attr("id"));
         });
-        $("a[data-toggle=\"button\"]").on("click", function (e) {
-            var tab_id = "#" + $(e.target).attr("id");
-            tabClick(tab_id);
+        $("#refresh, #disconnect").on("click", function (e) {
+            e.preventDefault();
+            tabClick("#" + $(e.target).attr("id"));
         });
         $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
@@ -417,7 +416,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             var menuClass = (/\b(?:dynamic|preset)\b/).exec(classList)[0];
             $(".dropdown-menu a.active." + menuClass).removeClass("active");
             $(this).addClass("active");
-            tabClick("#refresh");
+            tabClick("#autoRefresh");
         });
 
         $("#selSrv").change(function () {
