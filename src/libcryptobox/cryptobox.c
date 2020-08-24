@@ -1437,18 +1437,10 @@ rspamd_cryptobox_mac_bytes (enum rspamd_cryptobox_mode mode)
 void
 rspamd_cryptobox_hash_init (void *p, const guchar *key, gsize keylen)
 {
-	if (key != NULL && keylen > 0) {
-		crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
-				_Alignof(crypto_generichash_blake2b_state));
-		crypto_generichash_blake2b_init (st, key, keylen,
-				crypto_generichash_blake2b_BYTES_MAX);
-	}
-	else {
-		crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
-				_Alignof(crypto_generichash_blake2b_state));
-		crypto_generichash_blake2b_init (st, key, keylen,
-				crypto_generichash_blake2b_BYTES_MAX);
-	}
+	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
+			_Alignof(crypto_generichash_blake2b_state));
+	crypto_generichash_blake2b_init (st, key, keylen,
+			crypto_generichash_blake2b_BYTES_MAX);
 }
 
 /**
