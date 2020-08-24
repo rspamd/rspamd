@@ -3262,6 +3262,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 
 	ucl_object_iterate_free (iter);
 
+#if 0
+	/* WTF: why don't we allow empty list here?? */
 	if (*target == NULL) {
 		g_set_error (err,
 				CFG_RCL_ERROR,
@@ -3272,6 +3274,7 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 				obj->len);
 		return FALSE;
 	}
+#endif
 
 	if (!is_hash && *target != NULL) {
 		*target = g_list_reverse (*target);
