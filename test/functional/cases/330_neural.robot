@@ -8,7 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/neural.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -18,9 +18,9 @@ Train
   Sleep  2s  Wait for redis mess
   FOR    ${INDEX}    IN RANGE    0    10
     ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]}
-    Check Rspamc  ${result}  SPAM_SYMBOL (1.00)
+    Check Rspamc  ${result}  SPAM_SYMBOL
     ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]}
-    Check Rspamc  ${result}  HAM_SYMBOL (-1.00)
+    Check Rspamc  ${result}  HAM_SYMBOL
   END
 
 Check Neural HAM
@@ -37,10 +37,10 @@ Check Neural SPAM
 
 Train INVERSE
   FOR    ${INDEX}    IN RANGE    0    10
-    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]; SPAM_SYMBOL = -1}
-    Check Rspamc  ${result}  SPAM_SYMBOL (-1.00)
-    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]; HAM_SYMBOL = 1;}
-    Check Rspamc  ${result}  HAM_SYMBOL (1.00)
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]; SPAM_SYMBOL = -5;}
+    Check Rspamc  ${result}  SPAM_SYMBOL
+    ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]; HAM_SYMBOL = 5;}
+    Check Rspamc  ${result}  HAM_SYMBOL
   END
 
 Check Neural HAM INVERSE
@@ -59,9 +59,7 @@ Neural Setup
   ${TMPDIR} =    Make Temporary Directory
   Set Suite Variable        ${TMPDIR}
   Run Redis
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/neural.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  Generic Setup
 
 Neural Teardown
   Shutdown Process With Children  ${REDIS_PID}
