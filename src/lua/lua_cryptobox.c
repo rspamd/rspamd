@@ -1235,7 +1235,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 		}
 
 		if (s) {
-			rspamd_cryptobox_hash_update (h, s, len);
+			rspamd_cryptobox_hash_update (h->content.h, s, len);
 		}
 
 		ph = lua_newuserdata (L, sizeof (void *));

@@ -1435,7 +1435,7 @@ rspamd_cryptobox_mac_bytes (enum rspamd_cryptobox_mode mode)
 }
 
 void
-rspamd_cryptobox_hash_init (void *p, const guchar *key, gsize keylen)
+rspamd_cryptobox_hash_init (rspamd_cryptobox_hash_state_t *p, const guchar *key, gsize keylen)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
 			_Alignof(crypto_generichash_blake2b_state));
@@ -1447,7 +1447,7 @@ rspamd_cryptobox_hash_init (void *p, const guchar *key, gsize keylen)
  * Update hash with data portion
  */
 void
-rspamd_cryptobox_hash_update (void *p, const guchar *data, gsize len)
+rspamd_cryptobox_hash_update (rspamd_cryptobox_hash_state_t *p, const guchar *data, gsize len)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
 			_Alignof(crypto_generichash_blake2b_state));
@@ -1458,7 +1458,7 @@ rspamd_cryptobox_hash_update (void *p, const guchar *data, gsize len)
  * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
  */
 void
-rspamd_cryptobox_hash_final (void *p, guchar *out)
+rspamd_cryptobox_hash_final (rspamd_cryptobox_hash_state_t *p, guchar *out)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
 			_Alignof(crypto_generichash_blake2b_state));

@@ -322,17 +322,19 @@ typedef crypto_generichash_blake2b_state rspamd_cryptobox_hash_state_t;
  * with at least rspamd_cryptobox_HASHSTATEBYTES bytes length. If keylen == 0, then
  * non-keyed hash is generated
  */
-void rspamd_cryptobox_hash_init (void *st, const guchar *key, gsize keylen);
+void rspamd_cryptobox_hash_init (rspamd_cryptobox_hash_state_t *st,
+		const guchar *key, gsize keylen);
 
 /**
  * Update hash with data portion
  */
-void rspamd_cryptobox_hash_update (void *st, const guchar *data, gsize len);
+void rspamd_cryptobox_hash_update (rspamd_cryptobox_hash_state_t *st,
+		const guchar *data, gsize len);
 
 /**
  * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
  */
-void rspamd_cryptobox_hash_final (void *st, guchar *out);
+void rspamd_cryptobox_hash_final (rspamd_cryptobox_hash_state_t *st, guchar *out);
 
 /**
  * One in all function
