@@ -34,6 +34,7 @@ LUA_FUNCTION_DEF (tensor, mul);
 LUA_FUNCTION_DEF (tensor, tostring);
 LUA_FUNCTION_DEF (tensor, index);
 LUA_FUNCTION_DEF (tensor, newindex);
+LUA_FUNCTION_DEF (tensor, len);
 
 static luaL_reg rspamd_tensor_f[] = {
 		LUA_INTERFACE_DEF (tensor, load),
@@ -51,6 +52,7 @@ static luaL_reg rspamd_tensor_m[] = {
 		{"__tostring", lua_tensor_tostring},
 		{"__index", lua_tensor_index},
 		{"__newindex", lua_tensor_newindex},
+		{"__len", lua_tensor_len},
 		{NULL, NULL},
 };
 
@@ -558,6 +560,30 @@ lua_tensor_load (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_tensor_len (lua_State *L)
+{
+	struct rspamd_lua_tensor *t = lua_check_tensor (L, 1);
+	gint nret = 1;
+
+	if (t) {
+		/* Return the main dimension first */
+		if (t->ndims == 1) {
+			lua_pushinteger (L, t->dim[0]);
+		}
+		else {
+			lua_pushinteger (L, t->dim[0]);
+			lua_pushinteger (L, t->dim[1]);
+			nret = 2;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return nret;
 }
 
 static gint
