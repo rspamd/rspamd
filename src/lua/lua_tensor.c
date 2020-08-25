@@ -383,7 +383,7 @@ lua_tensor_newindex (lua_State *L)
 
 			if (t->ndims == 1) {
 				/* Individual element */
-				if (idx <= t->dim[0]) {
+				if (idx <= t->dim[0] && idx > 0) {
 					rspamd_tensor_num_t value = lua_tonumber (L, 3), old;
 
 					old = t->data[idx - 1];
@@ -405,8 +405,9 @@ lua_tensor_newindex (lua_State *L)
 					if (row) {
 						if (row->ndims == 1) {
 							if (row->dim[0] == t->dim[1]) {
-								if (idx <= t->dim[0]) {
-									memcpy (&t->data[idx * t->dim[0]],
+								if (idx > 0 && idx <= t->dim[0]) {
+									idx --; /* Zero based index */
+									memcpy (&t->data[idx * t->dim[1]],
 											row->data,
 											t->dim[1] * sizeof (rspamd_tensor_num_t));
 
