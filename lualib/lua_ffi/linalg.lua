@@ -65,7 +65,7 @@ exports.sgemm = function(a, m, b, n, k, trans_a, trans_b)
   return res
 end
 
-exports.eugen = function(a, n)
+exports.eigen = function(a, n)
   if type(a) == 'table' then
     -- Need to convert, slow!
     n = n or #a

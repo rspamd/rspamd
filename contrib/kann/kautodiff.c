@@ -952,7 +952,7 @@ void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float
 }
 #endif
 
-bool kad_ssyev_simple(int N, float *A, float *eugenvals)
+bool kad_ssyev_simple(int N, float *A, float *eigenvals)
 {
 #ifndef HAVE_CBLAS
 	return false;
@@ -963,10 +963,10 @@ bool kad_ssyev_simple(int N, float *A, float *eugenvals)
 
 	/* Query and allocate the optimal workspace */
 	lwork = -1;
-	ssyev ("Vectors", "Upper", &n, A, &lda, eugenvals, &wkopt, &lwork, &info);
+	ssyev ("Vectors", "Upper", &n, A, &lda, eigenvals, &wkopt, &lwork, &info);
 	lwork = wkopt;
 	work = (float*) g_malloc(lwork * sizeof(double));
-	ssyev ("Vectors", "Upper", &n, A, &lda, eugenvals, work, &lwork, &info);
+	ssyev ("Vectors", "Upper", &n, A, &lda, eigenvals, work, &lwork, &info);
 	/* Check for convergence */
 	if (info > 0) {
 		g_free (work);

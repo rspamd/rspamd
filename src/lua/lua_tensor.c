@@ -35,7 +35,7 @@ LUA_FUNCTION_DEF (tensor, tostring);
 LUA_FUNCTION_DEF (tensor, index);
 LUA_FUNCTION_DEF (tensor, newindex);
 LUA_FUNCTION_DEF (tensor, len);
-LUA_FUNCTION_DEF (tensor, eugen);
+LUA_FUNCTION_DEF (tensor, eigen);
 LUA_FUNCTION_DEF (tensor, mean);
 LUA_FUNCTION_DEF (tensor, transpose);
 
@@ -56,7 +56,7 @@ static luaL_reg rspamd_tensor_m[] = {
 		{"__index", lua_tensor_index},
 		{"__newindex", lua_tensor_newindex},
 		{"__len", lua_tensor_len},
-		LUA_INTERFACE_DEF (tensor, eugen),
+		LUA_INTERFACE_DEF (tensor, eigen),
 		LUA_INTERFACE_DEF (tensor, mean),
 		LUA_INTERFACE_DEF (tensor, transpose),
 		{NULL, NULL},
@@ -604,9 +604,9 @@ lua_tensor_len (lua_State *L)
 }
 
 static gint
-lua_tensor_eugen (lua_State *L)
+lua_tensor_eigen (lua_State *L)
 {
-	struct rspamd_lua_tensor *t = lua_check_tensor (L, 1), *eugen;
+	struct rspamd_lua_tensor *t = lua_check_tensor (L, 1), *eigen;
 
 	if (t) {
 		if (t->ndims != 2 || t->dim[0] != t->dim[1]) {
@@ -614,9 +614,9 @@ lua_tensor_eugen (lua_State *L)
 					t->dim[0], t->dim[1]);
 		}
 
-		eugen = lua_newtensor (L, 1, &t->dim[0], true, true);
+		eigen = lua_newtensor (L, 1, &t->dim[0], true, true);
 
-		if (!kad_ssyev_simple (t->dim[0], t->data, eugen->data)) {
+		if (!kad_ssyev_simple (t->dim[0], t->data, eigen->data)) {
 			lua_pop (L, 1);
 			return luaL_error (L, "kad_ssyev_simple failed (no blas?)");
 		}
