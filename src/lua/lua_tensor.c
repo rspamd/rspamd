@@ -38,11 +38,13 @@ LUA_FUNCTION_DEF (tensor, len);
 LUA_FUNCTION_DEF (tensor, eigen);
 LUA_FUNCTION_DEF (tensor, mean);
 LUA_FUNCTION_DEF (tensor, transpose);
+LUA_FUNCTION_DEF (tensor, has_blas);
 
 static luaL_reg rspamd_tensor_f[] = {
 		LUA_INTERFACE_DEF (tensor, load),
 		LUA_INTERFACE_DEF (tensor, new),
 		LUA_INTERFACE_DEF (tensor, fromtable),
+		LUA_INTERFACE_DEF (tensor, has_blas),
 		{NULL, NULL},
 };
 
@@ -710,6 +712,18 @@ lua_tensor_transpose (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static gint
+lua_tensor_has_blas (lua_State *L)
+{
+#ifdef HAVE_CBLAS
+	lua_pushboolean (L, true);
+#else
+	lua_pushboolean (L, false);
+#endif
 
 	return 1;
 }
