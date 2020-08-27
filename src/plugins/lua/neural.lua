@@ -24,6 +24,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_kann = require "rspamd_kann"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
+local rspamd_tensor = require "rspamd_tensor"
 local fun = require "fun"
 local lua_settings = require "lua_settings"
 local meta_functions = require "lua_meta"
@@ -58,6 +59,7 @@ local default_options = {
   hidden_layer_mult = 1.5, -- number of neurons in the hidden layer
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
+  max_inputs = nil, -- when PCA is used
 }
 
 local redis_profile_schema = ts.shape{
@@ -67,6 +69,8 @@ local redis_profile_schema = ts.shape{
   redis_key = ts.string,
   distance = ts.number:is_optional(),
 }
+
+local has_blas = rspamd_tensor.has_blas()
 
 -- Rule structure:
 -- * static config fields (see `default_options`)
@@ -1487,6 +1491,12 @@ for k,r in pairs(rules) do
   end
 
   if not rule_elt.profile then rule_elt.profile = {} end
+
+  if rule_elt.max_inputs and not has_blas then
+    rspamd_logger.errx('cannot set max inputs to %s as BLAS is not compiled in',
+        rule_elt.name, rule_elt.max_inputs)
+    rule_elt.max_inputs = nil
+  end
 
   rspamd_logger.infox(rspamd_config, "register ann rule %s", k)
   settings.rules[k] = rule_elt
