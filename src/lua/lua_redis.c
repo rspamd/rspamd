@@ -23,6 +23,7 @@
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
 static const gchar *M = "rspamd lua redis";
+static void *redis_null;
 
 /***
  * @module rspamd_redis
@@ -344,8 +345,7 @@ lua_redis_push_reply (lua_State *L, const redisReply *r, gboolean text_data)
 		lua_pushinteger (L, r->integer);
 		break;
 	case REDIS_REPLY_NIL:
-		/* XXX: not the best approach */
-		lua_newuserdata (L, sizeof (gpointer));
+		lua_getfield (L, LUA_REGISTRYINDEX, "redis.null");
 		break;
 	case REDIS_REPLY_STRING:
 	case REDIS_REPLY_STATUS:
@@ -1665,6 +1665,18 @@ lua_load_redis (lua_State * L)
 
 	return 1;
 }
+
+static void
+lua_redis_null_mt (lua_State *L)
+{
+	luaL_newmetatable (L, "redis{null}");
+
+	lua_pushinteger (L, 0);
+	lua_setfield (L, -2, "cookie");
+
+	lua_pop (L, 1);
+}
+
 /**
  * Open redis library
  * @param L lua stack
@@ -1676,4 +1688,11 @@ luaopen_redis (lua_State * L)
 	rspamd_lua_new_class (L, "rspamd{redis}", redislib_m);
 	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_redis", lua_load_redis);
+
+	/* Set null element */
+	lua_redis_null_mt (L);
+	redis_null = lua_newuserdata (L, 0);
+	luaL_getmetatable (L, "redis{null}");
+	lua_setmetatable (L, -2);
+	lua_setfield (L, LUA_REGISTRYINDEX, "redis.null");
 }
