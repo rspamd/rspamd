@@ -1666,13 +1666,23 @@ lua_load_redis (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_redis_null_idx (lua_State *L)
+{
+	lua_pushnil (L);
+
+	return 1;
+}
+
 static void
 lua_redis_null_mt (lua_State *L)
 {
 	luaL_newmetatable (L, "redis{null}");
 
-	lua_pushinteger (L, 0);
-	lua_setfield (L, -2, "cookie");
+	lua_pushcfunction (L, lua_redis_null_idx);
+	lua_setfield (L, -2, "__index");
+	lua_pushcfunction (L, lua_redis_null_idx);
+	lua_setfield (L, -2, "__tostring");
 
 	lua_pop (L, 1);
 }
