@@ -427,6 +427,7 @@ enum rspamd_lua_parse_arguments_flags {
  * - F - function
  * - O - ucl_object_t *
  * - D - same as N but argument is set to NAN not to 0.0
+ * - u{classname} - userdata of the following class (stored directly)
  *
  * If any of keys is prefixed with `*` then it is treated as required argument
  * @param L lua state
