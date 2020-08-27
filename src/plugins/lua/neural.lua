@@ -640,17 +640,15 @@ end
 
 -- This is an utility function for PCA training
 local function fill_scatter(inputs)
-  local scatter_matrix = rspamd_tensor.new(2, #inputs, #inputs)
-  local row_len = #inputs[1]
+  local scatter_matrix = rspamd_tensor.new(2, #inputs[1], #inputs[1])
+  local nsamples = #inputs
 
-  if type(inputs) == 'table' then
-    -- Convert to a tensor
-    inputs = rspamd_tensor.fromtable(inputs)
-  end
+  -- Convert to a tensor where each row is an input dimension
+  inputs = rspamd_tensor.fromtable(inputs):transpose()
 
   local meanv = inputs:mean()
 
-  for i=1,row_len do
+  for i=1,nsamples do
     local col = rspamd_tensor.new(1, #inputs)
     for j=1,#inputs do
       local x = inputs[j][i] - meanv[j]
@@ -678,6 +676,8 @@ local function learn_pca(inputs, max_inputs)
   for i=1,max_inputs do
     w[i] = scatter_matrix[#scatter_matrix - i + 1]
   end
+
+  lua_util.debugm(N, 'pca matrix: %s', w)
 
   return w
 end
@@ -856,8 +856,11 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         local profile_serialized = ucl.to_format(profile, 'json-compact', true)
 
         rspamd_logger.infox(rspamd_config,
-            'trained ANN %s:%s, %s bytes; redis key: %s (old key %s)',
-            rule.prefix, set.name, #data, set.ann.redis_key, ann_key)
+            'trained ANN %s:%s, %s bytes (%s compressed); %s rows in pca (%sb compressed); redis key: %s (old key %s)',
+            rule.prefix, set.name,
+            #data, #ann_data,
+            #(set.ann.pca or {}), #(pca_data or {}),
+            set.ann.redis_key, ann_key)
 
         lua_redis.exec_redis_script(redis_save_unlock_id,
             {ev_base = ev_base, is_write = true},
