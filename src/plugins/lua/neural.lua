@@ -182,6 +182,7 @@ local redis_maybe_lock_id = nil
 -- key5 - expire in seconds
 -- key6 - current time
 -- key7 - old key
+-- key8 - optional PCA
 local redis_lua_script_save_unlock = [[
   local now = tonumber(KEYS[6])
   redis.call('ZADD', KEYS[2], now, KEYS[4])
@@ -191,6 +192,9 @@ local redis_lua_script_save_unlock = [[
   redis.call('HDEL', KEYS[1], 'lock')
   redis.call('HDEL', KEYS[7], 'lock')
   redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
+  if KEYS[8] then
+    redis.call('HSET', KEYS[1], 'pca', KEYS[8])
+  end
   return 1
 ]]
 local redis_save_unlock_id = nil
@@ -758,6 +762,11 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         )
       else
         local ann_data = rspamd_util.zstd_compress(data)
+        local pca_data
+
+        if set.ann.pca then
+          pca_data = rspamd_util.zstd_compress(set.ann.pca:save())
+        end
         if not set.ann then
           set.ann = {
             symbols = set.symbols,
@@ -798,6 +807,7 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
              tostring(rule.ann_expire),
              tostring(os.time()),
              ann_key, -- old key to unlock...
+             pca_data
             })
       end
     end
