@@ -899,16 +899,21 @@ void kad_vec_mul_sum(int n, float *a, const float *b, const float *c)
 
 void kad_saxpy(int n, float a, const float *x, float *y) { kad_saxpy_inlined(n, a, x, y); }
 
+/* This is actually lapack not cblas, but this definition is used */
 #ifdef HAVE_CBLAS
 #ifndef __APPLE__
 /* As gfortran mangles names */
 #define ssyev ssyev_
 #endif
 extern void ssyev(const char* jobz, const char* uplo, int* n, float* a, int* lda, float* w, float* work, int* lwork, int* info);
+#endif
+
+#ifdef HAVE_CBLAS_SGEMM
+
 #ifdef HAVE_CBLAS_H
 #include "cblas.h"
 #else
-/* Poor man approach */
+/* Poor man approach, thanks for that Apple */
 enum CBLAS_ORDER {CblasRowMajor=101, CblasColMajor=102 };
 enum CBLAS_TRANSPOSE {CblasNoTrans=111, CblasTrans=112 };
 extern void cblas_sgemm(const enum CBLAS_ORDER Order,
@@ -919,6 +924,7 @@ extern void cblas_sgemm(const enum CBLAS_ORDER Order,
                  const float *B, const int ldb, const float  beta,
                  float *C, const int ldc);
 #endif
+
 void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float *A, const float *B, float *C)
 {
 	cblas_sgemm(CblasRowMajor, trans_A? CblasTrans : CblasNoTrans, trans_B? CblasTrans : CblasNoTrans, M, N, K, 1.0f, A, trans_A? M : K, B, trans_B? K : N, 1.0f, C, N);
