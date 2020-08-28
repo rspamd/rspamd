@@ -776,7 +776,7 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
             lr = rule.train.learning_rate,
             max_epoch = rule.train.max_iterations,
             cb = train_cb,
-            pca = set.ann.pca
+            pca = (set.ann or {}).pca
           })
 
       if not ret then
@@ -833,10 +833,10 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         local ann_data = rspamd_util.zstd_compress(data)
         local pca_data
 
+        fill_set_ann(set, ann_key)
         if set.ann.pca then
           pca_data = rspamd_util.zstd_compress(set.ann.pca:save())
         end
-        fill_set_ann(set, ann_key)
         -- Deserialise ANN from the child process
         ann_trained = rspamd_kann.load(data)
         local version = (set.ann.version or 0) + 1
