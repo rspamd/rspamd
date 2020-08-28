@@ -1140,9 +1140,9 @@ lua_kann_train1 (lua_State *L)
 					lua_pop (L, 1);
 				}
 
-				kad_sgemm_simple (0, 0, pca->dim[0], 1,
-						pca->dim[1], pca->data,
-						tmp_row, x[s]);
+				kad_sgemm_simple (0, 1, 1, n_in,
+						pca->dim[1], tmp_row, pca->data,
+						x[s]);
 			}
 
 			lua_pop (L, 1);
@@ -1267,9 +1267,9 @@ lua_kann_apply1 (lua_State *L)
 			if (pca) {
 				pca_out = g_malloc (sizeof (float) * n_in);
 
-				kad_sgemm_simple (0, 0, pca->dim[0], 1,
-						pca->dim[1], pca->data,
-						vec, pca_out);
+				kad_sgemm_simple (0, 1, 1, n_in,
+						vec_len, vec, pca->data,
+						pca_out);
 
 				kann_feed_bind (k, KANN_F_IN, 0, &pca_out);
 			}
