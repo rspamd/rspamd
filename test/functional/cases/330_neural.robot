@@ -26,13 +26,17 @@ Train
 Check Neural HAM
   Sleep  2s  Wait for neural to be loaded
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"];groups_enabled=["neural"];symbols_disabled = ["NEURAL_LEARN"]}
-  Check Rspamc  ${result}  NEURAL_HAM_SHORT
-  Check Rspamc  ${result}  NEURAL_SPAM_SHORT  inverse=1
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT (
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT (  inverse=1
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT_PCA (
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT_PCA (  inverse=1
 
 Check Neural SPAM
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"];groups_enabled=["neural"];symbols_disabled = ["NEURAL_LEARN"]}
-  Check Rspamc  ${result}  NEURAL_SPAM_SHORT
-  Check Rspamc  ${result}  NEURAL_HAM_SHORT  inverse=1
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT (
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT (  inverse=1
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT_PCA (
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT_PCA (  inverse=1
 
 
 Train INVERSE
@@ -46,13 +50,17 @@ Train INVERSE
 Check Neural HAM INVERSE
   Sleep  2s  Wait for neural to be loaded
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"];groups_enabled=["neural"]}
-  Check Rspamc  ${result}  NEURAL_SPAM_SHORT
-  Check Rspamc  ${result}  NEURAL_HAM_SHORT  inverse=1
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT (
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT_PCA (
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT (  inverse=1
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT_PCA (  inverse=1
 
 Check Neural SPAM INVERSE
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"];groups_enabled=["neural"]}
-  Check Rspamc  ${result}  NEURAL_HAM_SHORT
-  Check Rspamc  ${result}  NEURAL_SPAM_SHORT  inverse=1
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT (
+  Check Rspamc  ${result}  NEURAL_HAM_SHORT_PCA (
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT (  inverse=1
+  Check Rspamc  ${result}  NEURAL_SPAM_SHORT_PCA (  inverse=1
 
 *** Keywords ***
 Neural Setup
