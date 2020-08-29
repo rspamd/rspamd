@@ -1067,10 +1067,12 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
                   'ZADD', -- command
                   {set.prefix, tostring(rspamd_util.get_time()), profile_serialized}
               )
-              rspamd_logger.infox(rspamd_config, 'loaded ANN for %s:%s from %s; %s bytes compressed; version=%s',
+              rspamd_logger.infox(rspamd_config,
+                  'loaded ANN for %s:%s from %s; %s bytes compressed; version=%s',
                   rule.prefix, set.name, ann_key, #data[1], profile.version)
             else
-              rspamd_logger.errx(rspamd_config, 'cannot unpack/deserialise ANN for %s:%s from Redis key %s',
+              rspamd_logger.errx(rspamd_config,
+                  'cannot unpack/deserialise ANN for %s:%s from Redis key %s',
                   rule.prefix, set.name, ann_key)
             end
           end
@@ -1085,11 +1087,13 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             if rule.max_inputs then
               -- We can use PCA
               set.ann.pca = rspamd_tensor.load(pca_data)
-              rspamd_logger.infox(rspamd_config, 'loaded PCA for ANN for %s:%s from %s; %s bytes compressed; version=%s',
+              rspamd_logger.infox(rspamd_config,
+                  'loaded PCA for ANN for %s:%s from %s; %s bytes compressed; version=%s',
                   rule.prefix, set.name, ann_key, #data[2], profile.version)
             else
               -- no need in pca, why is it there?
-              rspamd_logger.warnx(rspamd_config, 'extra PCA for ANN for %s:%s from Redis key %s: no max inputs defined',
+              rspamd_logger.warnx(rspamd_config,
+                  'extra PCA for ANN for %s:%s from Redis key %s: no max inputs defined',
                   rule.prefix, set.name, ann_key)
             end
           else
