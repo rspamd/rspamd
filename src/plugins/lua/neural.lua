@@ -115,7 +115,7 @@ local redis_lua_script_vectors_len = [[
   local prefix = KEYS[1]
   local locked = redis.call('HGET', prefix, 'lock')
   if locked then
-    local host = redis.call('HGET', prefix, 'hostname')
+    local host = redis.call('HGET', prefix, 'hostname') or 'unknown'
     return string.format('%s:%s', hostname, locked)
   end
   local nspam = 0
@@ -167,7 +167,7 @@ local redis_lua_script_maybe_lock = [[
     locked = tonumber(locked)
     local expire = tonumber(KEYS[3])
     if now > locked and (now - locked) < expire then
-      return {tostring(locked), redis.call('HGET', KEYS[1], 'hostname')}
+      return {tostring(locked), redis.call('HGET', KEYS[1], 'hostname') or 'unknown'}
     end
   end
   redis.call('HSET', KEYS[1], 'lock', tostring(now))
