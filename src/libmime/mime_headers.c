@@ -659,9 +659,10 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 				qmarks = 0;
 			}
 			else {
-				g_string_append_len (out, c, 2);
-				c = p + 1;
+				g_string_append_len (out, c, 1);
+				c = p;
 				state = parse_normal;
+				continue; /* Deal with == case */
 			}
 			p ++;
 			break;
