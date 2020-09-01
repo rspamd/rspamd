@@ -897,8 +897,6 @@ void kad_vec_mul_sum(int n, float *a, const float *b, const float *c)
 	for (i = 0; i < n; ++i) a[i] += b[i] * c[i];
 }
 
-void kad_saxpy(int n, float a, const float *x, float *y) { kad_saxpy_inlined(n, a, x, y); }
-
 /* This is actually lapack not cblas, but this definition is used */
 #ifdef HAVE_CBLAS
 #ifndef __APPLE__
@@ -956,6 +954,17 @@ void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float
 				kad_saxpy_inlined(N, A[k*M+i], &B[k*N], &C[i*N]);
 	} else abort(); /* not implemented for (trans_A && trans_B) */
 }
+#endif
+
+#ifdef HAVE_CBLAS_SAXPY
+#ifndef HAVE_CBLAS_H
+extern void cblas_saxpy(const int __N,
+    const float __alpha, const float *__X, const int __incX, float *__Y, const int __incY);
+#endif
+
+void kad_saxpy(int n, float a, const float *x, float *y) { cblas_saxpy(n, a, x, 1, y, 1); }
+#else
+void kad_saxpy(int n, float a, const float *x, float *y) { kad_saxpy_inlined(n, a, x, y); }
 #endif
 
 bool kad_ssyev_simple(int N, float *A, float *eigenvals)

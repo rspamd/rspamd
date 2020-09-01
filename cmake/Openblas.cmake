@@ -51,6 +51,22 @@ int main(int argc, char **argv)
             COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
             LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
             OUTPUT_VARIABLE SGEMM_ERR)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/saxpy.c" "
+#include <stddef.h>
+extern void cblas_saxpy(const int __N,
+    const float __alpha, const float *__X, const int __incX, float *__Y, const int __incY);
+int main(int argc, char **argv)
+{
+    cblas_saxpy(0, 0, NULL, 0, NULL, 0);
+    return 0;
+}
+")
+    try_compile(HAVE_CBLAS_SAXPY
+            ${CMAKE_CURRENT_BINARY_DIR}
+            "${CMAKE_CURRENT_BINARY_DIR}/saxpy.c"
+            COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+            LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
+            OUTPUT_VARIABLE SAXPY_ERR)
 
     # Cmake is just brain damaged
     #CHECK_LIBRARY_EXISTS(${BLAS_REQUIRED_LIBRARIES} cblas_sgemm "" HAVE_CBLAS_SGEMM)
@@ -59,6 +75,12 @@ int main(int argc, char **argv)
         ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_SGEMM)
     else()
         MESSAGE(STATUS "Blas has -NOT- CBLAS sgemm, use internal workaround: ${SGEMM_ERR}")
+    endif()
+    if(HAVE_CBLAS_SAXPY)
+        MESSAGE(STATUS "Blas has CBLAS saxpy")
+        ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_SAXPY)
+    else()
+        MESSAGE(STATUS "Blas has -NOT- CBLAS saxpy, use internal workaround: ${SAXPY_ERR}")
     endif()
     ADD_COMPILE_OPTIONS(-DHAVE_CBLAS)
 ENDIF(WITH_BLAS)
