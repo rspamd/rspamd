@@ -17,6 +17,7 @@
 #include "lua_common.h"
 #include "lua_tensor.h"
 #include "contrib/kann/kautodiff.h"
+#include "blas-config.h"
 
 /***
  * @module rspamd_tensor

@@ -1,0 +1,10 @@
+#ifndef RSPAMD_BLAS_CONFIG_H_IN
+#define RSPAMD_BLAS_CONFIG_H_IN
+
+#cmakedefine HAVE_CBLAS_SGEMM 1
+#cmakedefine HAVE_CBLAS_SAXPY 1
+#cmakedefine HAVE_OPENBLAS_SET_NUM_THREADS 1
+#cmakedefine HAVE_CBLAS_H 1
+#cmakedefine HAVE_CBLAS 1
+
+#endif

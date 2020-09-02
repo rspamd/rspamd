@@ -22,10 +22,10 @@ IF(WITH_BLAS)
         IF(NOT HAVE_CBLAS_H)
             MESSAGE(STATUS "Blas header cblas.h has not been found, use internal workaround")
         ELSE()
-            ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_H)
+            SET(HAVE_CBLAS_H 1)
         ENDIF()
     ELSE()
-        ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_H)
+        SET(HAVE_CBLAS_H 1)
     ENDIF()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/sgemm.c" "
 #include <stddef.h>
@@ -68,19 +68,35 @@ int main(int argc, char **argv)
             LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
             OUTPUT_VARIABLE SAXPY_ERR)
 
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/openblas_set_num_threads.c" "
+#include <stddef.h>
+extern void openblas_set_num_threads(int num_threads);
+int main(int argc, char **argv)
+{
+    openblas_set_num_threads(1);
+    return 0;
+}
+")
+    try_compile(HAVE_OPENBLAS_SET_NUM_THREADS
+            ${CMAKE_CURRENT_BINARY_DIR}
+            "${CMAKE_CURRENT_BINARY_DIR}/openblas_set_num_threads.c"
+            COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+            LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
+            OUTPUT_VARIABLE OPENBLAS_SET_NUM_THREADS_ERR)
+
     # Cmake is just brain damaged
     #CHECK_LIBRARY_EXISTS(${BLAS_REQUIRED_LIBRARIES} cblas_sgemm "" HAVE_CBLAS_SGEMM)
     if(HAVE_CBLAS_SGEMM)
         MESSAGE(STATUS "Blas has CBLAS sgemm")
-        ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_SGEMM)
     else()
         MESSAGE(STATUS "Blas has -NOT- CBLAS sgemm, use internal workaround: ${SGEMM_ERR}")
     endif()
     if(HAVE_CBLAS_SAXPY)
         MESSAGE(STATUS "Blas has CBLAS saxpy")
-        ADD_COMPILE_OPTIONS(-DHAVE_CBLAS_SAXPY)
     else()
         MESSAGE(STATUS "Blas has -NOT- CBLAS saxpy, use internal workaround: ${SAXPY_ERR}")
     endif()
-    ADD_COMPILE_OPTIONS(-DHAVE_CBLAS)
+    SET(HAVE_CBLAS 1)
 ENDIF(WITH_BLAS)
+
+CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/blas-config.h.in" "${CMAKE_BINARY_DIR}/src/blas-config.h")

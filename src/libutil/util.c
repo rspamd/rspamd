@@ -64,6 +64,7 @@
 
 #include "zlib.h"
 #include "contrib/uthash/utlist.h"
+#include "blas-config.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -1705,17 +1706,8 @@ void rspamd_gerror_free_maybe (gpointer p)
 
 
 
-#ifdef HAVE_CBLAS
-#ifdef HAVE_CBLAS_H
-#include "cblas.h"
-#else
-#ifdef __APPLE__
-/* OSX is pure evil: number of threads must be set via env: VECLIB_MAXIMUM_THREADS */
-void openblas_set_num_threads(int num_threads) {}
-#else
+#ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 extern void openblas_set_num_threads(int num_threads);
-#endif
-#endif
 /*
  * Openblas creates threads that are not supported by
  * jemalloc allocator (aside of being bloody stupid). So this hack

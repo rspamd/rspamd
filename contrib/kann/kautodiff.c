@@ -7,6 +7,7 @@
 #include <float.h>
 #include <math.h>
 #include "kautodiff.h"
+#include "blas-config.h"
 
 typedef struct {
 	uint64_t s[2];

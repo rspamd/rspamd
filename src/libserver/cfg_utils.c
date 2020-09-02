@@ -55,6 +55,8 @@
 #endif
 #include <math.h>
 
+#include "blas-config.h"
+
 #define DEFAULT_SCORE 10.0
 
 #define DEFAULT_RLIMIT_NOFILE 2048
@@ -2782,12 +2784,8 @@ rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
 	}
 }
 
-#ifdef HAVE_CBLAS
-#ifdef HAVE_CBLAS_H
-#include "cblas.h"
-#else
+#ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 extern void openblas_set_num_threads(int num_threads);
-#endif
 #endif
 
 gboolean
@@ -2892,7 +2890,7 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			ZSTD_freeCStream (ctx->out_zstream);
 			ctx->out_zstream = NULL;
 		}
-#ifdef HAVE_CBLAS
+#ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 		openblas_set_num_threads (cfg->max_blas_threads);
 #endif
 	}
