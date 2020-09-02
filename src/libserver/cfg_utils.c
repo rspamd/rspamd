@@ -2787,6 +2787,9 @@ rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 extern void openblas_set_num_threads(int num_threads);
 #endif
+#ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
+extern void bli_thread_set_num_threads(int num_threads);
+#endif
 
 gboolean
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
@@ -2893,6 +2896,10 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 		openblas_set_num_threads (cfg->max_blas_threads);
 #endif
+#ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
+		bli_thread_set_num_threads (cfg->max_blas_threads);
+#endif
+
 	}
 
 	return ret;

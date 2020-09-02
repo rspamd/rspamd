@@ -1704,19 +1704,24 @@ void rspamd_gerror_free_maybe (gpointer p)
 	}
 }
 
-
-
-#ifdef HAVE_OPENBLAS_SET_NUM_THREADS
-extern void openblas_set_num_threads(int num_threads);
 /*
  * Openblas creates threads that are not supported by
  * jemalloc allocator (aside of being bloody stupid). So this hack
  * is intended to set number of threads to one by default.
  * FIXME: is it legit to do so in ctor?
  */
-RSPAMD_CONSTRUCTOR (openblas_stupidity_fix_ctor)
+#ifdef HAVE_OPENBLAS_SET_NUM_THREADS
+extern void openblas_set_num_threads(int num_threads);
+RSPAMD_CONSTRUCTOR (openblas_thread_fix_ctor)
 {
-	openblas_set_num_threads (1);
+	bli_thread_set_num_threads (1;
+}
+#endif
+#ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
+extern void bli_thread_set_num_threads(int num_threads);
+RSPAMD_CONSTRUCTOR (blis_thread_fix_ctor)
+{
+	bli_thread_set_num_threads (1;
 }
 #endif
 

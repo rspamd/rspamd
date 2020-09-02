@@ -1,14 +1,16 @@
 option (ENABLE_BLAS    "Enable openblas for fast neural network processing [default: OFF]" OFF)
 
 IF(ENABLE_BLAS MATCHES "ON")
-    ProcessPackage(BLAS OPTIONAL_INCLUDE LIBRARY openblas blas
+    ProcessPackage(BLAS OPTIONAL_INCLUDE LIBRARY openblas blas blis
             INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
             include/blas
+            include/blis
             ROOT ${BLAS_ROOT_DIR}
             LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
     ProcessPackage(BLAS_LAPACK OPTIONAL_INCLUDE LIBRARY lapack
             INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
             include/blas
+            include/blis
             ROOT ${BLAS_ROOT_DIR}
             LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
 ENDIF()
@@ -84,6 +86,21 @@ int main(int argc, char **argv)
             LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
             OUTPUT_VARIABLE OPENBLAS_SET_NUM_THREADS_ERR)
 
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/bli_thread_set_num_threads.c" "
+#include <stddef.h>
+extern void bli_thread_set_num_threads(int num_threads);
+int main(int argc, char **argv)
+{
+    bli_thread_set_num_threads(1);
+    return 0;
+}
+")
+    try_compile(HAVE_BLI_THREAD_SET_NUM_THREADS
+            ${CMAKE_CURRENT_BINARY_DIR}
+            "${CMAKE_CURRENT_BINARY_DIR}/bli_thread_set_num_threads.c"
+            COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
+            LINK_LIBRARIES ${BLAS_REQUIRED_LIBRARIES}
+            OUTPUT_VARIABLE BLI_SET_NUM_THREADS_ERR)
     # Cmake is just brain damaged
     #CHECK_LIBRARY_EXISTS(${BLAS_REQUIRED_LIBRARIES} cblas_sgemm "" HAVE_CBLAS_SGEMM)
     if(HAVE_CBLAS_SGEMM)

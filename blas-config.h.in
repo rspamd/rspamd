@@ -4,6 +4,7 @@
 #cmakedefine HAVE_CBLAS_SGEMM 1
 #cmakedefine HAVE_CBLAS_SAXPY 1
 #cmakedefine HAVE_OPENBLAS_SET_NUM_THREADS 1
+#cmakedefine HAVE_BLI_THREAD_SET_NUM_THREADS 1
 #cmakedefine HAVE_CBLAS_H 1
 #cmakedefine HAVE_CBLAS 1
 
