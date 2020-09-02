@@ -38,6 +38,7 @@
 #include "ottery.h"
 #include "util.h"
 #include "logger.h"
+#include "rdns.h"
 
 static int
 rdns_make_socket_nonblocking (int fd)
