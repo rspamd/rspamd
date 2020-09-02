@@ -1115,13 +1115,12 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 
 		if (reread_config (rspamd_main)) {
-			msg_info_main ("kill old workers");
-			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-
 			rspamd_check_core_limits (rspamd_main);
 			msg_info_main ("spawn workers with a new config");
 			spawn_workers (rspamd_main, rspamd_main->event_loop);
 			msg_info_main ("workers spawning has been finished");
+			msg_info_main ("kill old workers");
+			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 		}
 		else {
 			/* Reattach old workers */
