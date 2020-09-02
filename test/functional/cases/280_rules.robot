@@ -7,6 +7,7 @@ Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${LUA_SCRIPT}    ${TESTDIR}/lua/test_fname.lua
 ${MESSAGE}       ${TESTDIR}/messages/newlines.eml
 ${MESSAGE1}      ${TESTDIR}/messages/fws_fn.eml
 ${MESSAGE2}      ${TESTDIR}/messages/fws_fp.eml
@@ -109,6 +110,12 @@ PHISH_SENDER_E
 PHISH_SENDER_ROUTING_PART
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
   Should Contain  ${result.stdout}  FROM_INVALID
+
+FILE NAMES
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/fname.eml
+  Should Contain  ${result.stdout}  TEST_FNAME
+  Should Contain  ${result.stdout}  [삼성생명]2020.08.14 데일리 경제뉴스.pdf, 01029_402110_10620_RGT06902_PRT180ML_20200803_101820.pdf
+
 
 *** Keywords ***
 Rules Setup
