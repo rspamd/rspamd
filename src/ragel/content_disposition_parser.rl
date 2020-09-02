@@ -1,5 +1,6 @@
 %%{
   machine content_type_parser;
+  alphtype unsigned char;
 
   action Disposition_Start {
   }
@@ -101,7 +102,7 @@
 gboolean
 rspamd_content_disposition_parser (const char *data, size_t len, struct rspamd_content_disposition *cd, rspamd_mempool_t *pool)
 {
-  const char *p = data, *pe = data + len, *eof, *qstart = NULL, *qend = NULL,
+  const unsigned char *p = data, *pe = data + len, *eof, *qstart = NULL, *qend = NULL,
     *pname_start = NULL, *pname_end = NULL, *pvalue_start = NULL, *pvalue_end = NULL;
   int cs, *stack = NULL;
   gsize top = 0;
