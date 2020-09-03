@@ -29,7 +29,7 @@
 #ifndef ZSTD_STATIC_LINKING_ONLY
 #define ZSTD_STATIC_LINKING_ONLY
 #endif
-#include "../zstd.h"
+#include "zstd.h"
 #define FSE_STATIC_LINKING_ONLY
 #include "fse.h"
 #define HUF_STATIC_LINKING_ONLY
