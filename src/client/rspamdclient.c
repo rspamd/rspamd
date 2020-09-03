@@ -20,7 +20,6 @@
 #include "libserver/protocol_internal.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
-#include "contrib/zstd/zdict.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>
@@ -391,7 +390,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 					return FALSE;
 				}
 
-				dict_id = ZDICT_getDictID (comp_dictionary, dict_len);
+				dict_id = -1;
 
 				if (dict_id == 0) {
 					g_set_error (err, RCLIENT_ERROR, errno,

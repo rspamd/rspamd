@@ -38,7 +38,6 @@
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "contrib/zstd/zstd.h"
-#include "contrib/zstd/zdict.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
@@ -2764,7 +2763,7 @@ rspamd_open_zstd_dictionary (const char *path)
 		return NULL;
 	}
 
-	dict->id = ZDICT_getDictID (dict->dict, dict->size);
+	dict->id = -1;
 
 	if (dict->id == 0) {
 		g_free (dict);
