@@ -110,6 +110,7 @@ PHISH_SENDER_ROUTING_PART
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
   Should Contain  ${result.stdout}  FROM_INVALID
 
+
 *** Keywords ***
 Rules Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/regexp.conf
