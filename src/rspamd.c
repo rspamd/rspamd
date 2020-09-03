@@ -767,15 +767,28 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 
 	rspamd_main = w->srv;
 
-	if (w->state == rspamd_worker_state_running) {
+	if (w->state == rspamd_worker_state_wanna_die) {
 		w->state = rspamd_worker_state_terminating;
 		kill (w->pid, SIGUSR2);
 		ev_io_stop (rspamd_main->event_loop, &w->srv_ev);
 		g_hash_table_remove_all (w->control_events_pending);
 		msg_info_main ("send signal to worker %P", w->pid);
 	}
-	else {
+	else if (w->state != rspamd_worker_state_running) {
 		msg_info_main ("do not send signal to worker %P, already sent", w->pid);
+	}
+}
+
+static void
+mark_old_workers (gpointer key, gpointer value, gpointer unused)
+{
+	struct rspamd_worker *w = value;
+	struct rspamd_main *rspamd_main;
+
+	rspamd_main = w->srv;
+
+	if (w->state == rspamd_worker_state_running) {
+		w->state = rspamd_worker_state_wanna_die;
 	}
 }
 
@@ -1116,9 +1129,12 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 
 		if (reread_config (rspamd_main)) {
 			rspamd_check_core_limits (rspamd_main);
+			/* Mark old workers */
+			g_hash_table_foreach (rspamd_main->workers, mark_old_workers, NULL);
 			msg_info_main ("spawn workers with a new config");
 			spawn_workers (rspamd_main, rspamd_main->event_loop);
 			msg_info_main ("workers spawning has been finished");
+			/* Kill marked */
 			msg_info_main ("kill old workers");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 		}
