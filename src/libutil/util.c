@@ -1714,14 +1714,14 @@ void rspamd_gerror_free_maybe (gpointer p)
 extern void openblas_set_num_threads(int num_threads);
 RSPAMD_CONSTRUCTOR (openblas_thread_fix_ctor)
 {
-	bli_thread_set_num_threads (1;
+	openblas_set_num_threads (1);
 }
 #endif
 #ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
 extern void bli_thread_set_num_threads(int num_threads);
 RSPAMD_CONSTRUCTOR (blis_thread_fix_ctor)
 {
-	bli_thread_set_num_threads (1;
+	bli_thread_set_num_threads (1);
 }
 #endif
 
