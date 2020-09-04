@@ -545,7 +545,7 @@ void rspamd_config_free (struct rspamd_config *cfg);
  */
 const ucl_object_t *rspamd_config_get_module_opt (struct rspamd_config *cfg,
 												  const gchar *module_name,
-												  const gchar *opt_name);
+												  const gchar *opt_name) G_GNUC_WARN_UNUSED_RESULT;
 
 
 /**

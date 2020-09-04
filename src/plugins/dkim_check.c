@@ -342,7 +342,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	value = rspamd_config_get_module_opt (cfg, "dkim", "check_local");
 
 	if (value == NULL) {
-		rspamd_config_get_module_opt (cfg, "options", "check_local");
+		value = rspamd_config_get_module_opt (cfg, "options", "check_local");
 	}
 
 	if (value != NULL) {
@@ -352,10 +352,12 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->check_local = FALSE;
 	}
 
-	value = rspamd_config_get_module_opt (cfg, "dkim", "check_authed");
+	value = rspamd_config_get_module_opt (cfg, "dkim",
+			"check_authed");
 
 	if (value == NULL) {
-		rspamd_config_get_module_opt (cfg, "options", "check_authed");
+		value = rspamd_config_get_module_opt (cfg, "options",
+				"check_authed");
 	}
 
 	if (value != NULL) {
