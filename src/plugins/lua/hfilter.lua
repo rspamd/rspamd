@@ -568,24 +568,10 @@ local symbols_from = {
   "HFILTER_FROM_BOUNCE"
 }
 
-local function try_opts(where)
-  local ret = false
-  local opts = rspamd_config:get_all_opt(where)
-  if type(opts) == 'table' then
-    if type(opts['check_local']) == 'boolean' then
-      check_local = opts['check_local']
-      ret = true
-    end
-    if type(opts['check_authed']) == 'boolean' then
-      check_authed = opts['check_authed']
-      ret = true
-    end
-  end
-
-  return ret
-end
-
-if not try_opts(N) then try_opts('options') end
+local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
+    false, false)
+check_local = auth_and_local_conf[1]
+check_authed = auth_and_local_conf[2]
 
 local opts = rspamd_config:get_all_opt('hfilter')
 if opts then

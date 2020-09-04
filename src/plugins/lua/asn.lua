@@ -110,6 +110,12 @@ local configure_asn_module = function()
       options[k] = v
     end
   end
+
+  local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
+      false, true)
+  options.check_local = auth_and_local_conf[1]
+  options.check_authed = auth_and_local_conf[2]
+
   if options['provider_type'] == 'rspamd' then
     if not options['provider_info'] and options['provider_info']['ip4'] and
         options['provider_info']['ip6'] then

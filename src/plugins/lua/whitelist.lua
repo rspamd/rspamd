@@ -322,24 +322,10 @@ local configure_whitelist_module = function()
       options[k] = v
     end
 
-    local function try_opts(where)
-      local ret = false
-      local test_opts = rspamd_config:get_all_opt(where)
-      if type(test_opts) == 'table' then
-        if type(test_opts.check_local) == 'boolean' then
-          options.check_local = test_opts.check_local
-          ret = true
-        end
-        if type(test_opts.check_authed) == 'boolean' then
-          options.check_authed = test_opts.check_authed
-          ret = true
-        end
-      end
-
-      return ret
-    end
-
-    if not try_opts(N) then try_opts('options') end
+    local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
+        false, false)
+    options.check_local = auth_and_local_conf[1]
+    options.check_authed = auth_and_local_conf[2]
   else
     rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
     return
