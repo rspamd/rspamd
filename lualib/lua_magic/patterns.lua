@@ -98,13 +98,13 @@ local patterns = {
       {
         string = [[MZ]],
         relative_position = 0,
-        weight = 10,
+        weight = 15,
       },
       -- PE part
       {
         string = [[PE\x{00}\x{00}]],
         position = {'>=', 0x3c + 4},
-        weight = 40,
+        weight = 15,
       }
     }
   },
