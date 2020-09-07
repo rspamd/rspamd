@@ -1358,6 +1358,8 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 struct rspamd_cached_shingles {
 	struct rspamd_shingle *sh;
 	guchar digest[rspamd_cryptobox_HASHBYTES];
+	guint additional_length;
+	guchar *additional_data;
 };
 
 
@@ -1593,24 +1595,57 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 	rspamd_stat_token_t *word;
 	GArray *words;
 	struct fuzzy_cmd_io *io;
+	guint additional_length;
+	guchar *additional_data;
 
 	cached = fuzzy_cmd_get_cached (rule, task, mp);
 
+	/*
+	 * Important note:
+	 *
+	 * We assume that fuzzy io is a consistent memory layout to fit into
+	 * iov structure of size 1
+	 *
+	 * However, there are 4 possibilities:
+	 * 1) non encrypted, non shingle command - just one cmd
+	 * 2) encrypted, non shingle command - encryption hdr + cmd
+	 * 3) non encrypted, shingle command - cmd + shingle
+	 * 4) encrypted, shingle command - encryption hdr + cmd + shingle
+	 *
+	 * Extensions are always at the end, but since we also have caching (sigh, meh...)
+	 * then we have one piece that looks like cmd (+ shingle) + extensions
+	 * To encrypt it optionally we take this memory and prepend encryption header
+	 *
+	 * In case of cached version we do the same: allocate, copy from cached (including extra)
+	 * and optionally encrypt.
+	 *
+	 * However, there should be no extensions in case of unencrypted connection
+	 * (for sanity + privacy).
+	 */
 	if (cached) {
+		additional_length = cached->additional_length;
+		additional_data = cached->additional_data;
+
 		/* Copy cached */
 		if (short_text) {
-			enccmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*enccmd));
+			enccmd = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (*enccmd) + additional_length);
 			cmd = &enccmd->cmd;
 			memcpy (cmd->digest, cached->digest,
 					sizeof (cached->digest));
 			cmd->shingles_count = 0;
+			memcpy (((guchar *)enccmd) + sizeof (*enccmd), additional_data,
+					additional_length);
 		}
 		else if (cached->sh) {
-			encshcmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*encshcmd));
+			encshcmd = rspamd_mempool_alloc0 (task->task_pool,
+					additional_length + sizeof (*encshcmd));
 			shcmd = &encshcmd->cmd;
 			memcpy (&shcmd->sgl, cached->sh, sizeof (struct rspamd_shingle));
 			memcpy (shcmd->basic.digest, cached->digest,
 					sizeof (cached->digest));
+			memcpy (((guchar *)encshcmd) + sizeof (*encshcmd), additional_data,
+					additional_length);
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 		}
 		else {
@@ -1619,9 +1654,12 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 	}
 	else {
 		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
+		additional_length = fuzzy_cmd_extension_length (task, rule);
+		cached->additional_length = additional_length;
 
 		if (short_text) {
-			enccmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*encshcmd));
+			enccmd = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (*enccmd) + additional_length);
 			cmd = &enccmd->cmd;
 			rspamd_cryptobox_hash_init (&st, rule->hash_key->str,
 					rule->hash_key->len);
@@ -1638,9 +1676,19 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			rspamd_cryptobox_hash_final (&st, cmd->digest);
 			memcpy (cached->digest, cmd->digest, sizeof (cached->digest));
 			cached->sh = NULL;
+
+			additional_data = ((guchar *)enccmd) + sizeof (*enccmd);
+
+			if (additional_length > 0) {
+				fuzzy_cmd_write_extensions (task, rule, additional_data,
+						additional_length);
+			}
+
+			cached->additional_data = additional_data;
 		}
 		else {
-			encshcmd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*encshcmd));
+			encshcmd = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (*encshcmd) + additional_length);
 			shcmd = &encshcmd->cmd;
 
 			/*
@@ -1675,6 +1723,14 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 
 			cached->sh = sh;
 			memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
+			additional_data = ((guchar *)encshcmd) + sizeof (*encshcmd);
+
+			if (additional_length > 0) {
+				fuzzy_cmd_write_extensions (task, rule, additional_data,
+						additional_length);
+			}
+
+			cached->additional_data = additional_data;
 		}
 
 		/*
@@ -1722,25 +1778,26 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 		/* Encrypt data */
 		if (!short_text) {
 			fuzzy_encrypt_cmd (rule, &encshcmd->hdr, (guchar *) shcmd,
-					sizeof (*shcmd));
+					sizeof (*shcmd) + additional_length);
 			io->io.iov_base = encshcmd;
-			io->io.iov_len = sizeof (*encshcmd);
+			io->io.iov_len = sizeof (*encshcmd) + additional_length;
 		}
 		else {
 			fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd,
-					sizeof (*cmd));
+					sizeof (*cmd) + additional_length);
 			io->io.iov_base = enccmd;
-			io->io.iov_len = sizeof (*enccmd);
+			io->io.iov_len = sizeof (*enccmd) + additional_length;
 		}
 	}
 	else {
+
 		if (!short_text) {
 			io->io.iov_base = shcmd;
-			io->io.iov_len = sizeof (*shcmd);
+			io->io.iov_len = sizeof (*shcmd) + additional_length;
 		}
 		else {
 			io->io.iov_base = cmd;
-			io->io.iov_len = sizeof (*cmd);
+			io->io.iov_len = sizeof (*cmd) + additional_length;
 		}
 	}
 
