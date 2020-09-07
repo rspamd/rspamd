@@ -750,6 +750,37 @@ fuzzy_peer_send_io (EV_P_ ev_io *w, int revents)
 }
 
 static void
+rspamd_fuzzy_extensions_tolua (lua_State *L,
+							   struct fuzzy_session *session)
+{
+	struct rspamd_fuzzy_cmd_extension *ext;
+	rspamd_inet_addr_t *addr;
+
+	lua_createtable (L, 0, 0);
+
+	LL_FOREACH (session->extensions, ext) {
+		switch (ext->ext) {
+		case RSPAMD_FUZZY_EXT_SOURCE_DOMAIN:
+			lua_pushlstring (L, ext->payload, ext->length);
+			lua_setfield (L, -2, "domain");
+			break;
+		case RSPAMD_FUZZY_EXT_SOURCE_IP4:
+			addr = rspamd_inet_address_new (AF_INET, ext->payload);
+			rspamd_lua_ip_push (L, addr);
+			rspamd_inet_address_free (addr);
+			lua_setfield (L, -2, "ip");
+			break;
+		case RSPAMD_FUZZY_EXT_SOURCE_IP6:
+			addr = rspamd_inet_address_new (AF_INET6, ext->payload);
+			rspamd_lua_ip_push (L, addr);
+			rspamd_inet_address_free (addr);
+			lua_setfield (L, -2, "ip");
+			break;
+		}
+	}
+}
+
+static void
 rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 {
 	struct fuzzy_session *session = ud;
@@ -777,7 +808,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	}
 
-	if (session->ctx->lua_pre_handler_cbref != -1) {
+	if (session->ctx->lua_post_handler_cbref != -1) {
 		/* Start lua post handler */
 		lua_State *L = session->ctx->cfg->lua_state;
 		gint err_idx, ret;
@@ -805,8 +836,9 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		/* result timestamp */
 		lua_pushinteger (L, result->ts);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
+		rspamd_fuzzy_extensions_tolua (L, session);
 
-		if ((ret = lua_pcall (L, 8, LUA_MULTRET, err_idx)) != 0) {
+		if ((ret = lua_pcall (L, 9, LUA_MULTRET, err_idx)) != 0) {
 			msg_err ("call to lua_post_handler lua "
 					 "script failed (%d): %s", ret, lua_tostring (L, -1));
 		}
@@ -965,8 +997,9 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		/* is shingle */
 		lua_pushboolean (L, is_shingle);
 		/* TODO: add additional data maybe (encryption, pubkey, etc) */
+		rspamd_fuzzy_extensions_tolua (L, session);
 
-		if ((ret = lua_pcall (L, 4,LUA_MULTRET, err_idx)) != 0) {
+		if ((ret = lua_pcall (L, 5, LUA_MULTRET, err_idx)) != 0) {
 			msg_err ("call to lua_pre_handler lua "
 						  "script failed (%d): %s", ret, lua_tostring (L, -1));
 		}
