@@ -14,8 +14,8 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 CHECK HIT AND MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  MAP_SET_HIT_AND_MISS (1.00)[example.com]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Score And Exact Options  MAP_SET_HIT_AND_MISS  1  example.com
 
 WRITE NEW MAP
   ${TMP_FILE} =  Make Temporary File
@@ -24,8 +24,8 @@ WRITE NEW MAP
 
 CHECK HIT AND MISS AFTER RELOAD
   Sleep  1s  Wait for map reload
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  MAP_SET_HIT_AND_MISS (1.00)[rspamd.com]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Score And Exact Options  MAP_SET_HIT_AND_MISS  1  rspamd.com
 
 *** Keywords ***
 Map Reload Setup

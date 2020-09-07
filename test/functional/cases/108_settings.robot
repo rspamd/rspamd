@@ -20,236 +20,235 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Keywords ***
 Check Everything Disabled
-  [Arguments]  ${result}
-  Check Rspamc  ${result}  Action: no action
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  BAYES_SPAM
+  Expect Action  no action
+  Do Not Expect Symbol  SIMPLE_VIRTUAL
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  BAYES_SPAM
 
 *** Test Cases ***
 NO SETTINGS SPAM
-  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Contain  ${result.stdout}  SIMPLE_VIRTUAL
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Contain  ${result.stdout}  SIMPLE_PRE
-  Should Contain  ${result.stdout}  SIMPLE_POST
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Scan File  ${SPAM_MESSAGE}
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_VIRTUAL
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
+  Expect Symbol  BAYES_SPAM
 
 NO SETTINGS HAM
-  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Contain  ${result.stdout}  SIMPLE_PRE
-  Should Contain  ${result.stdout}  SIMPLE_POST
-  Should Contain  ${result.stdout}  BAYES_HAM
+  Scan File  ${HAM_MESSAGE}
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
+  Expect Symbol  BAYES_HAM
 
 EMPTY SYMBOLS ENABLED - STATIC
-  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}  -i  5.5.5.5
-  Check Everything Disabled  ${result}
+  Scan File  ${SPAM_MESSAGE}  IP=5.5.5.5
+  Check Everything Disabled
 
 EMPTY GROUPS ENABLED - STATIC
-  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}  -i  5.5.5.6
-  Check Everything Disabled  ${result}
+  Scan File  ${SPAM_MESSAGE}  IP=5.5.5.6
+  Check Everything Disabled
 
 EMPTY SYMBOLS ENABLED - SETTINGS-ID
-  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}  --header  Settings-Id=empty_symbols_enabled
-  Check Everything Disabled  ${result}
+  Scan File  ${SPAM_MESSAGE}  Settings-Id=empty_symbols_enabled
+  Check Everything Disabled
 
 EMPTY GROUPS ENABLED - SETTINGS-ID
-  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}  --header  Settings-Id=empty_groups_enabled
-  Check Everything Disabled  ${result}
+  Scan File  ${SPAM_MESSAGE}  Settings-Id=empty_groups_enabled
+  Check Everything Disabled
 
 ENABLE SYMBOL - NORMAL
-  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST"]}
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  BAYES_HAM
+  Scan File  ${HAM_MESSAGE}  Settings={symbols_enabled = ["SIMPLE_TEST"]}
+  Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  BAYES_HAM
 
 ENABLE SYMBOL - POSTFILTER
-  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST", "SIMPLE_POST"]}
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  BAYES_HAM
+  Scan File  ${HAM_MESSAGE}  Settings={symbols_enabled = ["SIMPLE_TEST", "SIMPLE_POST"]}
+  Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  BAYES_HAM
 
 ENABLE SYMBOL - PREFILTER
-  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_PRE"]}
-  Check Rspamc  ${result}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  BAYES_HAM
+  Scan File  ${HAM_MESSAGE}  Settings={symbols_enabled = ["SIMPLE_PRE"]}
+  Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  BAYES_HAM
 
 ENABLE SYMBOL - CLASSIFIER
-  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["BAYES_HAM", "BAYES_SPAM"]}
-  Check Rspamc  ${result}  BAYES_HAM
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Scan File  ${HAM_MESSAGE}  Settings={symbols_enabled = ["BAYES_HAM", "BAYES_SPAM"]}
+  Expect Symbol  BAYES_HAM
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_TEST
 
 DISABLE SYMBOL - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_disabled = ["SIMPLE_TEST"]}
-  Check Rspamc  ${result}  SIMPLE_TEST  inverse=1
-  Should Contain  ${result.stdout}  SIMPLE_PRE
-  Should Contain  ${result.stdout}  SIMPLE_POST
+  Scan File  ${MESSAGE}  Settings={symbols_disabled = ["SIMPLE_TEST"]}
+  Do Not Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
 
 RESCORE SYMBOL - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={SIMPLE_TEST = 3.33}
-  Check Rspamc  ${result}  SIMPLE_TEST (3.33)
+  Scan File  ${MESSAGE}  Settings={SIMPLE_TEST = 3.33}
+  Expect Symbol With Score  SIMPLE_TEST  3.33
 
 INJECT SYMBOL - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols = ["INJECTED_SYMBOL1", "INJECTED_SYMBOL2"]}
-  Check Rspamc  ${result}  INJECTED_SYMBOL1
-  Should Contain  ${result.stdout}  INJECTED_SYMBOL2
+  Scan File  ${MESSAGE}  Settings={symbols = ["INJECTED_SYMBOL1", "INJECTED_SYMBOL2"]}
+  Expect Symbol  INJECTED_SYMBOL1
+  Expect Symbol  INJECTED_SYMBOL2
 
 RESCORE ACTION
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={actions { reject = 1234.5; } }
-  Check Rspamc  ${result}  ${SPACE}/ 1234.50
+  Scan File  ${MESSAGE}  Settings={actions { reject = 1234.5; } }
+  Expect Required Score  1234.5
 
 DISABLE GROUP - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={groups_disabled = ["b"]}
-  Check Rspamc  ${result}  SIMPLE_TEST  inverse=1
-  Should Contain  ${result.stdout}  SIMPLE_PRE
-  Should Contain  ${result.stdout}  SIMPLE_POST
+  Scan File  ${MESSAGE}  Settings={groups_disabled = ["b"]}
+  Do Not Expect Symbol  SIMPLE_TEST
+  Expect Symbol  SIMPLE_PRE
+  Expect Symbol  SIMPLE_POST
 
 ENABLE GROUP - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={groups_enabled = ["b"]}
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Scan File  ${MESSAGE}  Settings={groups_enabled = ["b"]}
+  Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
 
 SETTINGS ID - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_test
-  Check Rspamc  ${result}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Scan File  ${MESSAGE}  Settings-Id=id_test
+  Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_POST
 
 SETTINGS ID - PRE
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_pre
-  Check Rspamc  ${result}  SIMPLE_PRE
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Scan File  ${MESSAGE}  Settings-Id=id_pre
+  Expect Symbol  SIMPLE_PRE
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_POST
 
 SETTINGS ID - VIRTUAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Settings-Id=id_virtual
+  Expect Symbol  SIMPLE_VIRTUAL
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL GROUP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Settings-Id=id_virtual_group
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL FROM
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  test2@example.com
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  From=test2@example.com
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL USER
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --user  test@example.com
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  User=test@example.com
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL HOSTNAME
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --hostname  example.com
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Hostname=example.com
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL SELECTOR
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user3@example.com
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Rcpt=user3@example.com
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - ANGLED RECIPIENT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  <user3@example.com>
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Rcpt=<user3@example.com>
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL HEADER MATCH
-  ${result} =  Scan Message With Rspamc  ${MESSAGE_7BIT}
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE_7BIT}
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Expect Symbol With Score  EXPLICIT_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL HEADER EXISTS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE_CUSTOM_HDR}
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE_CUSTOM_HDR}
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL HEADER ABSENT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE_ABSENT_MIME}
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE_ABSENT_MIME}
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL REQUEST HEADER
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Test=passed
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
-  Should Not Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Test=passed
+  Expect Symbol With Score  SIMPLE_VIRTUAL  10
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL1
+  Do Not Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL DEP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual1
-  Check Rspamc  ${result}  EXPLICIT_VIRTUAL1
-  Should Contain  ${result.stdout}  DEP_VIRTUAL
-  Should Contain  ${result.stdout}  DEP_REAL
-  Should Not Contain  ${result.stdout}  SIMPLE_TEST
-  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL
-  Should Not Contain  ${result.stdout}  SIMPLE_POST
-  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Scan File  ${MESSAGE}  Settings-Id=id_virtual1
+  Expect Symbol  EXPLICIT_VIRTUAL1
+  Expect Symbol  DEP_VIRTUAL
+  Expect Symbol  DEP_REAL
+  Do Not Expect Symbol  SIMPLE_TEST
+  Do Not Expect Symbol  SIMPLE_VIRTUAL
+  Do Not Expect Symbol  SIMPLE_POST
+  Do Not Expect Symbol  SIMPLE_PRE
 
 PRIORITY
-  ${result} =  Scan Message With Rspamc  ${MESSAGE_PRIORITY}  --header  Settings-Id=id_virtual_group  --from  user@test.com
-  Should Contain  ${result.stdout}  PRIORITY_2
+  Scan File  ${MESSAGE_PRIORITY}  Settings-Id=id_virtual_group  From=user@test.com
+  Expect Symbol  PRIORITY_2
 
 
 *** Keywords ***

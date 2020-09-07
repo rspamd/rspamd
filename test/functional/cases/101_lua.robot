@@ -16,51 +16,50 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 Flags
   [Setup]  Lua Setup  ${TESTDIR}/lua/flags.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Scan File  ${MESSAGE}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  stat
   Should Contain  ${result.stdout}  Messages scanned: 0
 
 Dependencies
   [Setup]  Lua Setup  ${TESTDIR}/lua/deps.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  DEP10
+  Scan File  ${MESSAGE}
+  Expect Symbol  DEP10
 
 Pre and Post Filters
   [Setup]  Lua Setup  ${TESTDIR}/lua/prepostfilters.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  TEST_PRE
-  Should Contain  ${result.stdout}  TEST_POST
+  Scan File  ${MESSAGE}
+  Expect Symbol  TEST_PRE
+  Expect Symbol  TEST_POST
 
 Recipient Parsing Sanity
   [Setup]  Lua Setup  ${TESTDIR}/lua/recipients.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -r  rcpt1@foobar  -r  rcpt2@foobar
-  ...  -r  rcpt3@foobar  -r  rcpt4@foobar
-  Check Rspamc  ${result}  TEST_RCPT (1.00)[rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar]
+  Scan File  ${MESSAGE}  Rcpt=rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar
+  Expect Symbol With Exact Options  TEST_RCPT  rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar
 
 TLD parts
   [Setup]  TLD Setup  ${TESTDIR}/lua/tlds.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  TEST_TLD (1.00)[no worry]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  TEST_TLD  no worry
 
 Hashes
   [Setup]  Lua Setup  ${TESTDIR}/lua/hashes.lua
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  TEST_HASHES (1.00)[no worry]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  TEST_HASHES  no worry
 
 Maps Key Values
   [Setup]  Lua Replace Setup  ${TESTDIR}/lua/maps_kv.lua
   [Teardown]  Lua Replace Teardown
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  RADIX_KV (1.00)[no worry]
-  Should Contain  ${result.stdout}  REGEXP_KV (1.00)[no worry]
-  Should Contain  ${result.stdout}  MAP_KV (1.00)[no worry]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  RADIX_KV  no worry
+  Expect Symbol With Exact Options  REGEXP_KV  no worry
+  Expect Symbol With Exact Options  MAP_KV  no worry
 
 Option Order
   [Setup]  Lua Replace Setup  ${TESTDIR}/lua/option_order.lua
   [Teardown]  Lua Replace Teardown
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  OPTION_ORDER (1.00)[one, two, three, 4, 5, a]
-  Should Contain  ${result.stdout}  TBL_OPTION_ORDER (1.00)[one, two, three, 4, 5, a]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  OPTION_ORDER  one  two  three  4  5  a
+  Expect Symbol With Exact Options  TBL_OPTION_ORDER  one  two  three  4  5  a
 
 *** Keywords ***
 Lua Setup

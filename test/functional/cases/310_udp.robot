@@ -14,16 +14,16 @@ ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Simple UDP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  UDP_SUCCESS (0.00)[helloworld]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  UDP_SUCCESS  helloworld
 
 Sendonly UDP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  UDP_SENDTO
+  Scan File  ${MESSAGE}
+  Expect Symbol  UDP_SENDTO
 
 Errored UDP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  UDP_FAIL (0.00)[read timeout]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  UDP_FAIL  read timeout
 
 *** Keywords ***
 Lua Setup

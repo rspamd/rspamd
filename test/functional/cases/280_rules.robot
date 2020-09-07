@@ -22,93 +22,93 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Broken MIME
-  ${result} =  Scan Message With Rspamc  ${MESSAGE3}
-  Check Rspamc  ${result}  MISSING_SUBJECT
+  Scan File  ${MESSAGE3}
+  Expect Symbol  MISSING_SUBJECT
 
 Issue 2584
-  ${result} =  Scan Message With Rspamc  ${MESSAGE1}
-  Check Rspamc  ${result}  BROKEN_CONTENT_TYPE  inverse=1
-  Should Not Contain  ${result.stdout}  MISSING_SUBJECT
-  Should Not Contain  ${result.stdout}  R_MISSING_CHARSET
+  Scan File  ${MESSAGE1}
+  Do Not Expect Symbol  BROKEN_CONTENT_TYPE
+  Do Not Expect Symbol  MISSING_SUBJECT
+  Do Not Expect Symbol  R_MISSING_CHARSET
 
 Issue 2349
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  MULTIPLE_UNIQUE_HEADERS  inverse=1
+  Scan File  ${MESSAGE2}
+  Do Not Expect Symbol  MULTIPLE_UNIQUE_HEADERS
 
 Broken Rich Text
-  ${result} =  Scan Message With Rspamc  ${MESSAGE4}
-  Check Rspamc  ${result}  BROKEN_CONTENT_TYPE
+  Scan File  ${MESSAGE4}
+  Expect Symbol  BROKEN_CONTENT_TYPE
 
 Dynamic Config
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  SA_BODY_WORD (10
-  Check Rspamc  ${result}  \/ 20
+  Scan File  ${MESSAGE}
+  Expect Symbol With Score  SA_BODY_WORD  10
+  Expect Required Score  20
 
 Broken boundary
-  ${result} =  Scan Message With Rspamc  ${MESSAGE4}
-  Check Rspamc  ${result}  BROKEN_CONTENT_TYPE
+  Scan File  ${MESSAGE4}
+  Expect Symbol  BROKEN_CONTENT_TYPE
 
 PDF encrypted
-  ${result} =  Scan Message With Rspamc  ${MESSAGE6}
-  Check Rspamc  ${result}  PDF_ENCRYPTED
+  Scan File  ${MESSAGE6}
+  Expect Symbol  PDF_ENCRYPTED
 
 PDF javascript
-  ${result} =  Scan Message With Rspamc  ${MESSAGE7}
-  Check Rspamc  ${result}  PDF_JAVASCRIPT
+  Scan File  ${MESSAGE7}
+  Expect Symbol  PDF_JAVASCRIPT
 
 BITCOIN ADDR
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
-  Should Contain  ${result.stdout}  BITCOIN_ADDR
+  Scan File  ${TESTDIR}/messages/btc.eml
+  Expect Symbol  BITCOIN_ADDR
 
 BITCOIN ADDR 2
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc2.eml
-  Should Contain  ${result.stdout}  BITCOIN_ADDR
+  Scan File  ${TESTDIR}/messages/btc2.eml
+  Expect Symbol  BITCOIN_ADDR
 
 BITCOIN ADDR 3
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc3.eml
-  Should Contain  ${result.stdout}  BITCOIN_ADDR
+  Scan File  ${TESTDIR}/messages/btc3.eml
+  Expect Symbol  BITCOIN_ADDR
 
 RCVD_COUNT_ONE
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/btc.eml
-  Should Contain  ${result.stdout}  RCVD_COUNT_ONE
+  Scan File  ${TESTDIR}/messages/btc.eml
+  Expect Symbol  RCVD_COUNT_ONE
 
 RCVD_COUNT_FIVE
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/yand_forward.eml
-  Should Contain  ${result.stdout}  RCVD_COUNT_FIVE
+  Scan File  ${TESTDIR}/messages/yand_forward.eml
+  Expect Symbol  RCVD_COUNT_FIVE
 
 RCVD_COUNT_SEVEN
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rcvd7.eml
-  Should Contain  ${result.stdout}  RCVD_COUNT_SEVEN
+  Scan File  ${TESTDIR}/messages/rcvd7.eml
+  Expect Symbol  RCVD_COUNT_SEVEN
 
 FROM_NEQ_ENVFROM
-  ${result} =  Scan Message With Rspamc  ${MESSAGE8}  --from  test@test.net
-  Check Rspamc  ${result}  FROM_NEQ_ENVFROM
+  Scan File  ${MESSAGE8}  From=test@test.net
+  Expect Symbol  FROM_NEQ_ENVFROM
 
 PHISH_SENDER_A
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender.eml
-  Should Contain  ${result.stdout}  MULTIPLE_FROM (9.00)[any@attack.com,admin@legitimate.com]
-  Should Contain  ${result.stdout}  MULTIPLE_UNIQUE_HEADERS (7.00)[From]
+  Scan File  ${TESTDIR}/messages/phish_sender.eml
+  Expect Symbol With Score And Exact Options  MULTIPLE_FROM  9.0  any@attack.com,admin@legitimate.com
+  Expect Symbol With Score And Exact Options  MULTIPLE_UNIQUE_HEADERS  7.0  From
 
 PHISH_SENDER_B
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender2.eml
-  Should Contain  ${result.stdout}  BROKEN_HEADERS
+  Scan File  ${TESTDIR}/messages/phish_sender2.eml
+  Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_C
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender3.eml
-  Should Contain  ${result.stdout}  BROKEN_HEADERS
+  Scan File  ${TESTDIR}/messages/phish_sender3.eml
+  Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_D
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender4.eml
-  Should Contain  ${result.stdout}  BROKEN_HEADERS
+  Scan File  ${TESTDIR}/messages/phish_sender4.eml
+  Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_E
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender5.eml
-  Should Contain  ${result.stdout}  MULTIPLE_FROM
-  Should Contain  ${result.stdout}  DMARC_NA (0.00)[Duplicate From header]
+  Scan File  ${TESTDIR}/messages/phish_sender5.eml
+  Expect Symbol  MULTIPLE_FROM
+  Expect Symbol With Exact Options  DMARC_NA  Duplicate From header
 
 PHISH_SENDER_ROUTING_PART
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/phish_sender6.eml
-  Should Contain  ${result.stdout}  FROM_INVALID
+  Scan File  ${TESTDIR}/messages/phish_sender6.eml
+  Expect Symbol  FROM_INVALID
 
 
 *** Keywords ***

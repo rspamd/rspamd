@@ -20,10 +20,10 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 
 *** Test Cases ***
 Dead Redis client
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  REDIS_ERROR_3 (0.00)[Connection refused]
-  Check Rspamc  ${result}  REDIS_ASYNC201809_ERROR (0.00)[Connection refused]
-  Check Rspamc  ${result}  REDIS_ASYNC_ERROR (0.00)[Connection refused]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  REDIS_ERROR_3  Connection refused
+  Expect Symbol With Exact Options  REDIS_ASYNC201809_ERROR  Connection refused
+  Expect Symbol With Exact Options  REDIS_ASYNC_ERROR  Connection refused
 
 *** Keywords ***
 Lua Setup

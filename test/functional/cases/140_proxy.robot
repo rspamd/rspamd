@@ -11,11 +11,10 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-Rspamc Client
-  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_PROXY}  -p  ${MESSAGE}
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
-  Should Contain  ${result.stdout}  SIMPLE_TEST
-  Should Be Equal As Integers  ${result.rc}  0
+HTTP PROTOCOL
+  Set Test Variable  ${PORT_NORMAL}  ${PORT_PROXY}
+  Scan File  ${MESSAGE}
+  Expect Symbol  SIMPLE_TEST
 
 SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}

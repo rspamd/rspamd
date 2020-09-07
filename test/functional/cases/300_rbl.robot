@@ -13,41 +13,42 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 RBL FROM MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  1.2.3.4
-  Check Rspamc  ${result}  FAKE_RBL_CODE_2  inverse=True
+  Scan File  ${MESSAGE}  IP=1.2.3.4
+  Do Not Expect Symbol  FAKE_RBL_CODE_2
 
 RBL FROM HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.1
-  Check Rspamc  ${result}  FAKE_RBL_CODE_2
+  Scan File  ${MESSAGE}  IP=4.3.2.1
+  Expect Symbol  FAKE_RBL_CODE_2
 
 RBL FROM MULTIPLE HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.3
-  Check Rspamc  ${result}  FAKE_RBL_CODE_2  FAKE_RBL_CODE_3
+  Scan File  ${MESSAGE}  IP=4.3.2.3
+  Expect Symbol  FAKE_RBL_CODE_2
+  Expect Symbol  FAKE_RBL_CODE_3
 
 RBL FROM UNKNOWN HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.2
-  Check Rspamc  ${result}  FAKE_RBL_UNKNOWN
+  Scan File  ${MESSAGE}  IP=4.3.2.2
+  Expect Symbol  FAKE_RBL_FAKE_RBL_UNKNOWN
 
 RBL RECEIVED HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
-  Check Rspamc  ${result}  FAKE_RECEIVED_RBL_CODE_3
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol  FAKE_RECEIVED_RBL_CODE_3
 
 RBL FROM HIT WL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.4
-  Check Rspamc  ${result}  FAKE_RBL_CODE_2  inverse=True
-  Should Contain  ${result.stdout}  FAKE_WL_RBL_CODE_2 (0.00)[4.3.2.4:from]
+  Scan File  ${MESSAGE}  IP=4.3.2.4
+  Do Not Expect Symbol  FAKE_RBL_CODE_2
+  Expect Symbol With Exact Options  FAKE_WL_RBL_CODE_2  4.3.2.4:from
 
 EMAILBL Compose Map 1
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url14.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[dirty.sanchez.com:email]
+  Scan File  ${TESTDIR}/messages/url14.eml
+  Expect Symbol With Exact Options  RSPAMD_EMAILBL  dirty.sanchez.com:email
 
 EMAILBL Compose Map 2
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url15.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[very.dirty.sanchez.com:email]
+  Scan File  ${TESTDIR}/messages/url15.eml
+  Expect Symbol With Exact Options  RSPAMD_EMAILBL  very.dirty.sanchez.com:email
 
 EMAILBL Compose Map 3
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url16.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL (0.00)[41.black.sanchez.com:email]
+  Scan File  ${TESTDIR}/messages/url16.eml
+  Expect Symbol With Exact Options  RSPAMD_EMAILBL  41.black.sanchez.com:email
 
 
 *** Keywords ***

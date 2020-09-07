@@ -17,81 +17,81 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 CLAMAV MISS
   Run Dummy Clam  ${PORT_CLAM}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
+  Scan File  ${MESSAGE}
+  Do Not Expect Symbol  CLAM_VIRUS
   Shutdown clamav
 
 CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
+  Scan File  ${MESSAGE2}
+  Expect Symbol  CLAM_VIRUS
+  Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
   Shutdown clamav
 
 CLAMAV CACHE HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
+  Scan File  ${MESSAGE2}
+  Expect Symbol  CLAM_VIRUS
+  Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
 
 CLAMAV CACHE MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
+  Scan File  ${MESSAGE}
+  Do Not Expect Symbol  CLAM_VIRUS
+  Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
 
 FPROT MISS
   Run Dummy Fprot  ${PORT_FPROT}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  FPROT_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  FPROT_EICAR
+  Scan File  ${MESSAGE2}
+  Do Not Expect Symbol  FPROT_VIRUS
+  Do Not Expect Symbol  FPROT_EICAR
   Shutdown fport
 
 FPROT HIT - PATTERN
   Run Dummy Fprot  ${PORT_FPROT}  1
   Run Dummy Fprot  ${PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  FPROT_EICAR
-  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
+  Scan File  ${MESSAGE}
+  Expect Symbol  FPROT_EICAR
+  Do Not Expect Symbol  CLAMAV_VIRUS
   # Also check ordered pattern match
-  Should Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_PATTERN
-  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_DEFAULT
-  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_NOPE
+  Expect Symbol  FPROT2_VIRUS_DUPLICATE_PATTERN
+  Do Not Expect Symbol  FPROT2_VIRUS_DUPLICATE_DEFAULT
+  Do Not Expect Symbol  FPROT2_VIRUS_DUPLICATE_NOPE
   Shutdown fport
   Shutdown fport duplicate
 
 FPROT CACHE HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  FPROT_EICAR
-  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
+  Scan File  ${MESSAGE}
+  Expect Symbol  FPROT_EICAR
+  Do Not Expect Symbol  CLAMAV_VIRUS
   # Also check ordered pattern match
-  Should Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_PATTERN
-  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_DEFAULT
+  Expect Symbol  FPROT2_VIRUS_DUPLICATE_PATTERN
+  Do Not Expect Symbol  FPROT2_VIRUS_DUPLICATE_DEFAULT
 
 FPROT CACHE MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  FPROT_VIRUS  inverse=1
+  Scan File  ${MESSAGE2}
+  Do Not Expect Symbol  FPROT_VIRUS
 
 AVAST MISS
   Run Dummy Avast  ${PORT_AVAST}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  AVAST_VIRUS  inverse=1
+  Scan File  ${MESSAGE}
+  Do Not Expect Symbol  AVAST_VIRUS
   Shutdown avast
 
 AVAST HIT
   Run Dummy Avast  ${PORT_AVAST}  1
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  AVAST_VIRUS
-  Should Not Contain  ${result.stdout}  AVAST_VIRUS_FAIL
+  Scan File  ${MESSAGE2}
+  Expect Symbol  AVAST_VIRUS
+  Do Not Expect Symbol  AVAST_VIRUS_FAIL
   Shutdown avast
 
 AVAST CACHE HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  AVAST_VIRUS
-  Should Not Contain  ${result.stdout}  AVAST_VIRUS_FAIL
+  Scan File  ${MESSAGE2}
+  Expect Symbol  AVAST_VIRUS
+  Do Not Expect Symbol  AVAST_VIRUS_FAIL
 
 AVAST CACHE MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  AVAST_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  AVAST_VIRUS_FAIL
+  Scan File  ${MESSAGE}
+  Do Not Expect Symbol  AVAST_VIRUS
+  Do Not Expect Symbol  AVAST_VIRUS_FAIL
 
 *** Keywords ***
 Antivirus Setup

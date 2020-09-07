@@ -26,312 +26,311 @@ ${URL_ICS}      ${TESTDIR}/messages/ics.eml
 
 *** Test Cases ***
 URL_ICS
-  ${result} =  Scan Message With Rspamc  ${URL_ICS}
-  Check Rspamc  ${result}  Urls: ["test.com"]
+  Scan File  ${URL_ICS}
+  Expect URL  test.com
 
 MAP - DNSBL HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.2
-  Check Rspamc  ${result}  DNSBL_MAP
+  Scan File  ${MESSAGE}  IP=127.0.0.2
+  Expect Symbol  DNSBL_MAP
 
 MAP - DNSBL MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.1
-  Check Rspamc  ${result}  DNSBL_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1
+  Do Not Expect Symbol  DNSBL_MAP
 
 MAP - IP HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.1
-  Check Rspamc  ${result}  IP_MAP
+  Scan File  ${MESSAGE}  IP=127.0.0.1
+  Expect Symbol  IP_MAP
 
 MAP - IP MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.2
-  Check Rspamc  ${result}  IP_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.2
+  Do Not Expect Symbol  IP_MAP
 
 MAP - IP MASK
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  10.1.0.10
-  Check Rspamc  ${result}  IP_MAP
+  Scan File  ${MESSAGE}  IP=10.1.0.10
+  Expect Symbol  IP_MAP
 
 MAP - IP MASK MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  11.1.0.10
-  Check Rspamc  ${result}  IP_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=11.1.0.10
+  Do Not Expect Symbol  IP_MAP
 
 MAP - IP V6
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  ::1
-  Check Rspamc  ${result}  IP_MAP
+  Scan File  ${MESSAGE}  IP=::1
+  Expect Symbol  IP_MAP
 
 MAP - IP V6 MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  fe80::1
-  Check Rspamc  ${result}  IP_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=fe80::1
+  Do Not Expect Symbol  IP_MAP
 
 MAP - FROM
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@example.com
-  Check Rspamc  ${result}  FROM_MAP
+  Scan File  ${MESSAGE}  From=user@example.com
+  Expect Symbol  FROM_MAP
 
 MAP - COMBINED IP MASK FROM
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  10.1.0.10  --from  user@example.com
-  Check Rspamc  ${result}  COMBINED_MAP_AND
-  Check Rspamc  ${result}  COMBINED_MAP_OR
+  Scan File  ${MESSAGE}  IP=10.1.0.10  From=user@example.com
+  Expect Symbol  COMBINED_MAP_AND
+  Expect Symbol  COMBINED_MAP_OR
 
 MAP - COMBINED IP MASK ONLY
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  10.1.0.10
-  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
-  Check Rspamc  ${result}  COMBINED_MAP_OR
+  Scan File  ${MESSAGE}  IP=10.1.0.10
+  Do Not Expect Symbol  COMBINED_MAP_AND
+  Expect Symbol  COMBINED_MAP_OR
 
 MAP - COMBINED FROM ONLY
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@example.com
-  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
-  Check Rspamc  ${result}  COMBINED_MAP_OR
+  Scan File  ${MESSAGE}  From=user@example.com
+  Do Not Expect Symbol  COMBINED_MAP_AND
+  Expect Symbol  COMBINED_MAP_OR
 
 MAP - COMBINED MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  11.1.0.10  --from  user@other.com
-  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
-  Check Rspamc  ${result}  COMBINED_MAP_OR  inverse=1
+  Scan File  ${MESSAGE}  IP=11.1.0.10  From=user@other.com
+  Do Not Expect Symbol  COMBINED_MAP_AND
+  Do Not Expect Symbol  COMBINED_MAP_OR
 
 MAP - FROM MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.com
-  Check Rspamc  ${result}  FROM_MAP  inverse=1
+  Scan File  ${MESSAGE}  From=user@other.com
+  Do Not Expect Symbol  FROM_MAP
 
 MAP - FROM REGEXP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user123@test.com
-  Check Rspamc  ${result}  REGEXP_MAP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  somebody@example.com
-  Check Rspamc  ${result}  REGEXP_MAP
+  Scan File  ${MESSAGE}  From=user123@test.com
+  Expect Symbol  REGEXP_MAP
+  Scan File  ${MESSAGE}  From=somebody@example.com
+  Expect Symbol  REGEXP_MAP
 
 MAP - FROM REGEXP MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.org
-  Check Rspamc  ${result}  REGEXP_MAP  inverse=1
+  Scan File  ${MESSAGE}  From=user@other.org
+  Do Not Expect Symbol  REGEXP_MAP
 
 MAP - RCPT DOMAIN HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user@example.com
-  Check Rspamc  ${result}  RCPT_DOMAIN
+  Scan File  ${MESSAGE}  Rcpt=user@example.com
+  Expect Symbol  RCPT_DOMAIN
 
 MAP - RCPT DOMAIN MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  example.com@user
-  Check Rspamc  ${result}  RCPT_DOMAIN  inverse=1
+  Scan File  ${MESSAGE}  Rcpt=example.com@user
+  Do Not Expect Symbol  RCPT_DOMAIN
 
 MAP - RCPT USER HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  bob@example.com
-  Check Rspamc  ${result}  RCPT_USER
+  Scan File  ${MESSAGE}  Rcpt=bob@example.com
+  Expect Symbol  RCPT_USER
 
 MAP - RCPT USER MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  example.com@bob
-  Check Rspamc  ${result}  RCPT_USER  inverse=1
+  Scan File  ${MESSAGE}  From=example.com@bob
+  Do Not Expect Symbol  RCPT_USER
 
 MAP - DEPENDS HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  88.99.142.95  --from  user123@rspamd.com
-  Check Rspamc  ${result}  DEPS_MAP
+  Scan File  ${MESSAGE}  IP=88.99.142.95  From=user123@rspamd.com
+  Expect Symbol  DEPS_MAP
 
 MAP - DEPENDS MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  1.2.3.4  --from  user123@rspamd.com
-  Check Rspamc  ${result}  DEPS_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=1.2.3.4  From=user123@rspamd.com
+  Do Not Expect Symbol  DEPS_MAP
 
 MAP - MULSYM PLAIN
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user1@example.com
-  Check Rspamc  ${result}  RCPT_MAP
+  Scan File  ${MESSAGE}  Rcpt=user1@example.com
+  Expect Symbol  RCPT_MAP
 
 MAP - MULSYM SCORE
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user2@example.com
-  Check Rspamc  ${result}  RCPT_MAP (10.0
+  Scan File  ${MESSAGE}  Rcpt=user2@example.com
+  Expect Symbol With Score  RCPT_MAP  10.0
 
 MAP - MULSYM SYMBOL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user3@example.com
-  Check Rspamc  ${result}  SYM1 (1.0
+  Scan File  ${MESSAGE}  Rcpt=user3@example.com
+  Expect Symbol With Score  SYM1  1.0
 
 MAP - MULSYM SYMBOL MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user4@example.com
-  Check Rspamc  ${result}  RCPT_MAP (1.0
+  Scan File  ${MESSAGE}  Rcpt=user4@example.com
+  Expect Symbol With Score  RCPT_MAP  1.0
 
 MAP - MULSYM SYMBOL + SCORE
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user5@example.com
-  Check Rspamc  ${result}  SYM1 (-10.1
+  Scan File  ${MESSAGE}  Rcpt=user5@example.com
+  Expect Symbol With Score  SYM1  -10.1
 
 MAP - UTF
-  ${result} =  Scan Message With Rspamc  ${UTF_MESSAGE}
-  Check Rspamc  ${result}  HEADER_MAP
+  Scan File  ${UTF_MESSAGE}
+  Expect Symbol  HEADER_MAP
 
 MAP - UTF MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  HEADER_MAP  inverse=1
+  Scan File  ${MESSAGE}
+  Do Not Expect Symbol  HEADER_MAP
 
 MAP - HOSTNAME
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
-  Check Rspamc  ${result}  HOSTNAME_MAP
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com
+  Expect Symbol  HOSTNAME_MAP
 
 MAP - HOSTNAME MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
-  Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=rspamd.com
+  Do Not Expect Symbol  HOSTNAME_MAP
 
 MAP - TOP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com.au
-  Check Rspamc  ${result}  HOSTNAME_TOP_MAP
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.au
+  Expect Symbol  HOSTNAME_TOP_MAP
 
 MAP - TOP MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com.bg
-  Check Rspamc  ${result}  HOSTNAME_TOP_MAP  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.bg
+  Do Not Expect Symbol  HOSTNAME_TOP_MAP
 
 MAP - CDB - HOSTNAME
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
-  Check Rspamc  ${result}  CDB_HOSTNAME
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com
+  Expect Symbol  CDB_HOSTNAME
 
 MAP - CDB - HOSTNAME MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
-  Check Rspamc  ${result}  CDB_HOSTNAME  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=rspamd.com
+  Do Not Expect Symbol  CDB_HOSTNAME
 
 MAP - REDIS - HOSTNAME
   Redis HSET  hostname  redistest.example.net  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net
-  Check Rspamc  ${result}  REDIS_HOSTNAME
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=redistest.example.net
+  Expect Symbol  REDIS_HOSTNAME
 
 MAP - REDIS - HOSTNAME MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
-  Check Rspamc  ${result}  REDIS_HOSTNAME  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=rspamd.com
+  Do Not Expect Symbol  REDIS_HOSTNAME
 
 MAP - REDIS - HOSTNAME - EXPANSION - HIT
   Redis HSET  127.0.0.1.foo.com  redistest.example.net  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net  --rcpt  bob@foo.com
-  Check Rspamc  ${result}  REDIS_HOSTNAME_EXPANSION
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=redistest.example.net  Rcpt=bob@foo.com
+  Expect Symbol  REDIS_HOSTNAME_EXPANSION
 
 MAP - REDIS - HOSTNAME - EXPANSION - MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net  --rcpt  bob@bar.com
-  Check Rspamc  ${result}  REDIS_HOSTNAME_EXPANSION  inverse=1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=redistest.example.net  Rcpt=bob@bar.com
+  Do Not Expect Symbol  REDIS_HOSTNAME_EXPANSION
 
 MAP - REDIS - IP
   Redis HSET  ipaddr  127.0.0.1  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1
-  Check Rspamc  ${result}  REDIS_IPADDR
+  Scan File  ${MESSAGE}  IP=127.0.0.1
+  Expect Symbol  REDIS_IPADDR
 
 MAP - REDIS - IP - MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  8.8.8.8
-  Check Rspamc  ${result}  REDIS_IPADDR  inverse=1
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Do Not Expect Symbol  REDIS_IPADDR
 
 MAP - REDIS - FROM
   Redis HSET  emailaddr  from@rspamd.tk  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  from@rspamd.tk
-  Check Rspamc  ${result}  REDIS_FROMADDR
+  Scan File  ${MESSAGE}  From=from@rspamd.tk
+  Expect Symbol  REDIS_FROMADDR
 
 MAP - REDIS - FROM MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.com
-  Check Rspamc  ${result}  REDIS_FROMADDR  inverse=1
+  Scan File  ${MESSAGE}  From=user@other.com
+  Do Not Expect Symbol  REDIS_FROMADDR
 
 MAP - REDIS - URL TLD - HIT
   Redis HSET  hostname  example.com  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL1}
-  Check Rspamc  ${result}  REDIS_URL_TLD
+  Scan File  ${URL1}
+  Expect Symbol  REDIS_URL_TLD
 
 MAP - REDIS - URL TLD - MISS
-  ${result} =  Scan Message With Rspamc  ${URL2}
-  Check Rspamc  ${result}  REDIS_URL_TLD  inverse=1
+  Scan File  ${URL2}
+  Do Not Expect Symbol  REDIS_URL_TLD
 
 MAP - REDIS - URL RE FULL - HIT
   Redis HSET  fullurlre  html  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL2}
-  Check Rspamc  ${result}  REDIS_URL_RE_FULL
+  Scan File  ${URL2}
+  Expect Symbol  REDIS_URL_RE_FULL
 
 MAP - REDIS - URL RE FULL - MISS
-  ${result} =  Scan Message With Rspamc  ${URL1}
-  Check Rspamc  ${result}  REDIS_URL_RE_FULL  inverse=1
+  Scan File  ${URL1}
+  Do Not Expect Symbol  REDIS_URL_RE_FULL
 
 MAP - REDIS - URL FULL - HIT
   Redis HSET  fullurl  https://www.example.com/foo?a=b  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL1}
-  Check Rspamc  ${result}  REDIS_URL_FULL
+  Scan File  ${URL1}
+  Expect Symbol  REDIS_URL_FULL
 
 MAP - REDIS - URL FULL - MISS
-  ${result} =  Scan Message With Rspamc  ${URL2}
-  Check Rspamc  ${result}  REDIS_URL_FULL  inverse=1
+  Scan File  ${URL2}
+  Do Not Expect Symbol  REDIS_URL_FULL
 
 MAP - REDIS - URL PHISHED - HIT
   Redis HSET  phishedurl  www.rspamd.com  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL3}
-  Check Rspamc  ${result}  REDIS_URL_PHISHED
+  Scan File  ${URL3}
+  Expect Symbol  REDIS_URL_PHISHED
 
 MAP - REDIS - URL PHISHED - MISS
-  ${result} =  Scan Message With Rspamc  ${URL4}
-  Check Rspamc  ${result}  REDIS_URL_PHISHED  inverse=1
+  Scan File  ${URL4}
+  Do Not Expect Symbol  REDIS_URL_PHISHED
 
 MAP - REDIS - URL PLAIN REGEX - HIT
   Redis HSET  urlre  www  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL3}
-  Check Rspamc  ${result}  REDIS_URL_RE_PLAIN
+  Scan File  ${URL3}
+  Expect Symbol  REDIS_URL_RE_PLAIN
 
 MAP - REDIS - URL PLAIN REGEX - MISS
-  ${result} =  Scan Message With Rspamc  ${URL4}
-  Check Rspamc  ${result}  REDIS_URL_RE_PLAIN  inverse=1
+  Scan File  ${URL4}
+  Do Not Expect Symbol  REDIS_URL_RE_PLAIN
 
 MAP - REDIS - URL TLD REGEX - HIT
   Redis HSET  tldre  net  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL5}
-  Check Rspamc  ${result}  REDIS_URL_RE_TLD
+  Scan File  ${URL5}
+  Expect Symbol  REDIS_URL_RE_TLD
 
 MAP - REDIS - URL TLD REGEX - MISS
-  ${result} =  Scan Message With Rspamc  ${URL4}
-  Check Rspamc  ${result}  REDIS_URL_RE_TLD  inverse=1
+  Scan File  ${URL4}
+  Do Not Expect Symbol  REDIS_URL_RE_TLD
 
 MAP - REDIS - URL NOFILTER - HIT
   Redis HSET  urlnofilter  www.example.net  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${URL5}
-  Check Rspamc  ${result}  REDIS_URL_NOFILTER
+  Scan File  ${URL5}
+  Expect Symbol  REDIS_URL_NOFILTER
 
 MAP - REDIS - URL NOFILTER - MISS
-  ${result} =  Scan Message With Rspamc  ${URL4}
-  Check Rspamc  ${result}  REDIS_URL_NOFILTER  inverse=1
+  Scan File  ${URL4}
+  Do Not Expect Symbol  REDIS_URL_NOFILTER
 
 MAP - REDIS - ASN - HIT
   Redis HSET  asn  15169  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
-  Check Rspamc  ${result}  REDIS_ASN
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol  REDIS_ASN
 
 MAP - REDIS - ASN - MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
-  Check Rspamc  ${result}  REDIS_ASN  inverse=1
+  Scan File  ${MESSAGE}  IP=46.228.47.114
+  Do Not Expect Symbol  REDIS_ASN
 
 MAP - REDIS - CC - HIT
   Redis HSET  cc  US  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
-  Check Rspamc  ${result}  REDIS_COUNTRY
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol  REDIS_COUNTRY
 
 MAP - REDIS - CC - MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
-  Check Rspamc  ${result}  REDIS_COUNTRY  inverse=1
+  Scan File  ${MESSAGE}  IP=46.228.47.114
+  Do Not Expect Symbol  REDIS_COUNTRY
 
 MAP - REDIS - ASN FILTERED - HIT
   Redis HSET  asn  1  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
-  Check Rspamc  ${result}  REDIS_ASN_FILTERED
+  Scan File  ${MESSAGE}  IP=8.8.8.8
+  Expect Symbol  REDIS_ASN_FILTERED
 
 MAP - REDIS - ASN FILTERED - MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
-  Check Rspamc  ${result}  REDIS_ASN_FILTERED  inverse=1
+  Scan File  ${MESSAGE}  IP=46.228.47.114
+  Do Not Expect Symbol  REDIS_ASN_FILTERED
 
 MAP - RECEIVED - IP MINMAX POS - ONE
-  ${result} =  Scan Message With Rspamc  ${RCVD1}
-  Check Rspamc  ${result}  RCVD_TEST_01
-  Check Rspamc  ${result}  RCVD_TEST_02  inverse=1
+  Scan File  ${RCVD1}
+  Expect Symbol  RCVD_TEST_01
+  Do Not Expect Symbol  RCVD_TEST_02
 
 # Relies on parsing of shitty received
 #MAP - RECEIVED - IP MINMAX POS - TWO / RCVD_AUTHED_ONE HIT
-#  ${result} =  Scan Message With Rspamc  ${RCVD2}
-#  Check Rspamc  ${result}  RCVD_TEST_02
-#  Should Not Contain  ${result.stdout}  RCVD_TEST_01
-#  Should Contain  ${result.stdout}  RCVD_AUTHED_ONE
+#  Scan File  ${RCVD2}
+#  Expect Symbol  RCVD_TEST_02
+#  Do Not Expect Symbol  RCVD_TEST_01
+#  Expect Symbol  RCVD_AUTHED_ONE
 
 MAP - RECEIVED - REDIS
   Redis HSET  RCVD_TEST  2a01:7c8:aab6:26d:5054:ff:fed1:1da2  ${EMPTY}
-  ${result} =  Scan Message With Rspamc  ${RCVD1}
-  Check Rspamc  ${result}  RCVD_TEST_REDIS_01
+  Scan File  ${RCVD1}
+  Expect Symbol  RCVD_TEST_REDIS_01
 
 RCVD_AUTHED_ONE & RCVD_AUTHED_TWO - MISS
-  ${result} =  Scan Message With Rspamc  ${RCVD3}
-  Check Rspamc  ${result}  RCVD_AUTHED_  inverse=1
+  Scan File  ${RCVD3}
+  Do Not Expect Symbol  RCVD_AUTHED_ONE
+  Do Not Expect Symbol  RCVD_AUTHED_TWO
 
 RCVD_AUTHED_TWO HIT / RCVD_AUTHED_ONE MISS
-  ${result} =  Scan Message With Rspamc  ${RCVD4}
-  Check Rspamc  ${result}  RCVD_AUTHED_TWO
-  Should Not Contain  ${result.stdout}  RCVD_AUTHED_ONE
+  Scan File  ${RCVD4}
+  Expect Symbol  RCVD_AUTHED_TWO
+  Do Not Expect Symbol  RCVD_AUTHED_ONE
 
 FREEMAIL_CC
-  ${result} =  Scan Message With Rspamc  ${FREEMAIL_CC}
-  Check Rspamc  ${result}  FREEMAIL_CC (19.00)[test.com, test1.com, test2.com, test3.com, test4.com, test5.com, test6.com, test7.com, test8.com, test9.com, test10.com, test11.com, test12.com, test13.com, test14.com]
-
-
+  Scan File  ${FREEMAIL_CC}
+  Expect Symbol With Score And Exact Options  FREEMAIL_CC  19.00  test.com  test1.com  test2.com  test3.com  test4.com  test5.com  test6.com  test7.com  test8.com  test9.com  test10.com  test11.com  test12.com  test13.com  test14.com
 
 *** Keywords ***
 Multimap Setup

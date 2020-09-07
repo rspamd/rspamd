@@ -13,34 +13,34 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 FORCE ACTIONS from reject to add header
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_reject
-  Check Rspamc  ${result}  Action: add header
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_REJECT_TO_ADD_HEADER
+  Scan File  ${MESSAGE}  Settings-Id=id_reject
+  Expect Action  add header
+  Expect Symbol  FORCE_ACTION_FORCE_REJECT_TO_ADD_HEADER
 
 FORCE ACTIONS from reject to no action
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_reject_no_action
-  Check Rspamc  ${result}  Action: no action
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_REJECT_TO_NO_ACTION
+  Scan File  ${MESSAGE}  Settings-Id=id_reject_no_action
+  Expect Action  no action
+  Expect Symbol  FORCE_ACTION_FORCE_REJECT_TO_NO_ACTION
 
 FORCE ACTIONS from no action to reject
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_no_action
-  Check Rspamc  ${result}  Action: reject
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_NO_ACTION_TO_REJECT
+  Scan File  ${MESSAGE}  Settings-Id=id_no_action
+  Expect Action  reject
+  Expect Symbol  FORCE_ACTION_FORCE_NO_ACTION_TO_REJECT
 
 FORCE ACTIONS from no action to add header
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_no_action_to_add_header
-  Check Rspamc  ${result}  Action: add header
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_NO_ACTION_TO_ADD_HEADER
+  Scan File  ${MESSAGE}  Settings-Id=id_no_action_to_add_header
+  Expect Action  add header
+  Expect Symbol  FORCE_ACTION_FORCE_NO_ACTION_TO_ADD_HEADER
 
 FORCE ACTIONS from add header to no action
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_add_header
-  Check Rspamc  ${result}  Action: no action
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_ADD_HEADER_TO_NO_ACTION
+  Scan File  ${MESSAGE}  Settings-Id=id_add_header
+  Expect Action  no action
+  Expect Symbol  FORCE_ACTION_FORCE_ADD_HEADER_TO_NO_ACTION
 
 FORCE ACTIONS from add header to reject
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_add_header_to_reject
-  Check Rspamc  ${result}  Action: reject
-  Should Contain  ${result.stdout}  FORCE_ACTION_FORCE_ADD_HEADER_TO_REJECT
+  Scan File  ${MESSAGE}  Settings-Id=id_add_header_to_reject
+  Expect Action  reject
+  Expect Symbol  FORCE_ACTION_FORCE_ADD_HEADER_TO_REJECT
 
 
 *** Keywords ***

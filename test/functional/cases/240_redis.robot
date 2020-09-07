@@ -19,10 +19,10 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 *** Test Cases ***
 Redis client
   Redis SET  test_key  test value
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  REDIS (0.00)[hello from lua on redis]
-  Check Rspamc  ${result}  REDIS_ASYNC (0.00)[test value]
-  Check Rspamc  ${result}  REDIS_ASYNC201809 (0.00)[test value]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  REDIS  hello from lua on redis
+  Expect Symbol With Exact Options  REDIS_ASYNC  test value
+  Expect Symbol With Exact Options  REDIS_ASYNC201809  test value
 
 *** Keywords ***
 Lua Setup

@@ -15,9 +15,9 @@ ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Newlines 
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --user  test@user.com
-  Check Rspamc  ${result}  CONFIG_SELECTOR_RE_RCPT_SUBJECT
-  Check Rspamc  ${result}  LUA_SELECTOR_RE
+  Scan File  ${MESSAGE}  User=test@user.com  Pass=all
+  Expect Symbol  CONFIG_SELECTOR_RE_RCPT_SUBJECT
+  Expect Symbol  LUA_SELECTOR_RE
 
 
 *** Keywords ***

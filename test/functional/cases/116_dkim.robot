@@ -12,24 +12,24 @@ ${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 DKIM PERMFAIL NXDOMAIN
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim2.eml
-  ...  -i  37.48.67.26
-  Check Rspamc  ${result}  R_DKIM_PERMFAIL
+  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim2.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_PERMFAIL
 
 DKIM PERMFAIL BAD RECORD
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  -i  37.48.67.26
-  Check Rspamc  ${result}  R_DKIM_PERMFAIL
+  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_PERMFAIL
 
 DKIM TEMPFAIL SERVFAIL UNALIGNED
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim3.eml
-  ...  -i  37.48.67.26
-  Check Rspamc  ${result}  R_DKIM_TEMPFAIL
+  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim3.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_TEMPFAIL
 
 DKIM NA NOSIG
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
-  ...  -i  37.48.67.26
-  Check Rspamc  ${result}  R_DKIM_NA
+  Scan File  ${TESTDIR}/messages/utf.eml
+  ...  IP=37.48.67.26
+  Expect Symbol  R_DKIM_NA
 
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
@@ -41,16 +41,16 @@ DKIM Sign
 
 DKIM Self Verify
   Run Keyword If  ${RAN_SIGNTEST} == 0  Fail  "Sign test was not run"
-  ${result} =  Scan Message With Rspamc  ${SIGNED_MESSAGE}
-  Check Rspamc  ${result}  R_DKIM_ALLOW
+  Scan File  ${SIGNED_MESSAGE}
+  Expect Symbol  R_DKIM_ALLOW
 
 DKIM Verify ED25519 PASS
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/ed25519.eml
-  Check Rspamc  ${result}  R_DKIM_ALLOW
+  Scan File  ${TESTDIR}/messages/ed25519.eml
+  Expect Symbol  R_DKIM_ALLOW
 
 DKIM Verify ED25519 REJECT
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/ed25519-broken.eml
-  Check Rspamc  ${result}  R_DKIM_REJECT
+  Scan File  ${TESTDIR}/messages/ed25519-broken.eml
+  Expect Symbol  R_DKIM_REJECT
 
 *** Keywords ***
 DKIM Setup

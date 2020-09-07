@@ -14,14 +14,14 @@ ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Simple DNS request
-  ${result} =  Scan Message With Rspamc  --header=to-resolve:example.com  ${MESSAGE}
-  Check Rspamc  ${result}  DNS_SYNC (0.00)[93.184.216.34]
-  Check Rspamc  ${result}  DNS (0.00)[93.184.216.34]
+  Scan File  ${MESSAGE}  To-Resolve=example.com
+  Expect Symbol With Exact Options  DNS_SYNC  93.184.216.34
+  Expect Symbol With Exact Options  DNS  93.184.216.34
 
 Faulty DNS request
-  ${result} =  Scan Message With Rspamc  --header=to-resolve:not-resolvable.com  ${MESSAGE}
-  Check Rspamc  ${result}  DNS_SYNC_ERROR (0.00)[requested record is not found]
-  Check Rspamc  ${result}  DNS_ERROR (0.00)[requested record is not found]
+  Scan File  ${MESSAGE}  To-Resolve=not-resolvable.com
+  Expect Symbol With Exact Options  DNS_SYNC_ERROR  requested record is not found
+  Expect Symbol With Exact Options  DNS_ERROR  requested record is not found
 
 *** Keywords ***
 Lua Setup

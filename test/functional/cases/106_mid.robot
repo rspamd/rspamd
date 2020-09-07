@@ -12,28 +12,28 @@ ${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 MID - invalid Message-ID
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/fws_fp.eml
-  Check Rspamc  ${result}  INVALID_MSGID (1.70)
-  Should Not Contain  ${result.stdout}  MISSING_MID
-  Should Not Contain  ${result.stdout}  INVALID_MSGID_ALLOWED
+  Scan File  ${TESTDIR}/messages/fws_fp.eml
+  Expect Symbol With Score  INVALID_MSGID  1.70
+  Do Not Expect Symbol  MISSING_MID
+  Do Not Expect Symbol  INVALID_MSGID_ALLOWED
 
 MID - invalid Message-ID allowed
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/invalid_mid_allowed.eml
-  Check Rspamc  ${result}  INVALID_MSGID_ALLOWED (1.00)
-  Should Not Contain  ${result.stdout}  MISSING_MID
-  Should Not Contain  ${result.stdout}  INVALID_MSGID (
+  Scan File  ${TESTDIR}/messages/invalid_mid_allowed.eml
+  Expect Symbol With Score  INVALID_MSGID_ALLOWED  1.00
+  Do Not Expect Symbol  MISSING_MID
+  Do Not Expect Symbol  INVALID_MSGID
 
 MID - missing Message-ID
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/freemail.eml
-  Check Rspamc  ${result}  MISSING_MID (2.50)
-  Should Not Contain  ${result.stdout}  MISSING_MID_ALLOWED
-  Should Not Contain  ${result.stdout}  INVALID_MSGID
+  Scan File  ${TESTDIR}/messages/freemail.eml
+  Expect Symbol With Score  MISSING_MID  2.50
+  Do Not Expect Symbol  MISSING_MID_ALLOWED
+  Do Not Expect Symbol  INVALID_MSGID
 
 MID - missing Message-ID allowed
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/onsubdomain_pass_relaxed.eml
-  Check Rspamc  ${result}  MISSING_MID_ALLOWED (1.00)
-  Should Not Contain  ${result.stdout}  MISSING_MID (
-  Should Not Contain  ${result.stdout}  INVALID_MSGID
+  Scan File  ${TESTDIR}/messages/dmarc/onsubdomain_pass_relaxed.eml
+  Expect Symbol With Score  MISSING_MID_ALLOWED  1.00
+  Do Not Expect Symbol  MISSING_MID
+  Do Not Expect Symbol  INVALID_MSGID
 
 *** Keywords ***
 MID Setup
