@@ -15,17 +15,17 @@ ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Newlines 
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  SA_BODY_WORD
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_SPACE
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_NEWLINE  inverse=true
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_SPACE_BOUNDARIES
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_SPACE_BOUNDARIES_2
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_SPACE_BOUNDARIES_3
-  Check Rspamc  ${result}  SA_BODY_WORD_WITH_SPACE_AND_DOT
-  Check Rspamc  ${result}  https://google.com/maps/
-  Check Rspamc  ${result}  https://www.google.com/search?q\=hello world&oq\=hello world&aqs\=chrome..69i57j0l5.3045j0j7&sourceid\=chrome&ie\=UTF-8
-  Check Rspamc  ${result}  https://github.com/google/sanitizers/wiki/AddressSanitizer
+  Scan File  ${MESSAGE}
+  Expect Symbol  SA_BODY_WORD
+  Expect Symbol  SA_BODY_WORD_WITH_SPACE
+  Do Not Expect Symbol  SA_BODY_WORD_WITH_NEWLINE
+  Expect Symbol  SA_BODY_WORD_WITH_SPACE_BOUNDARIES
+  Expect Symbol  SA_BODY_WORD_WITH_SPACE_BOUNDARIES_2
+  Expect Symbol  SA_BODY_WORD_WITH_SPACE_BOUNDARIES_3
+  Expect Symbol  SA_BODY_WORD_WITH_SPACE_AND_DOT
+  Expect Symbol With Option  FOUND_URL  https://google.com/maps/
+  Expect Symbol With Option  FOUND_URL  https://www.google.com/search?q\=hello world&oq\=hello world&aqs\=chrome..69i57j0l5.3045j0j7&sourceid\=chrome&ie\=UTF-8
+  Expect Symbol With Option  FOUND_URL  https://github.com/google/sanitizers/wiki/AddressSanitizer
 
 
 *** Keywords ***

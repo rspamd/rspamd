@@ -11,51 +11,27 @@ ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-Freemail Scan
-  ${FREEMAIL_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/freemail.eml
-  ...  --from  faked.asdfjisiwosp372@outlook.com
-  Set Suite Variable  ${FREEMAIL_RESULT}  ${FREEMAIL_RESULT}
-  Check Rspamc  ${FREEMAIL_RESULT}  ${EMPTY}
+FREEMAIL
+  Scan File  ${TESTDIR}/messages/freemail.eml
+  ...  From=faked.asdfjisiwosp372@outlook.com
+  Expect Symbol  FREEMAIL_FROM
+  Expect Symbol  FREEMAIL_ENVFROM_END_DIGIT
+  Expect Symbol  FREEMAIL_SUBJECT
+  Expect Symbol  TEST_META4
 
-Freemail From
-  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_FROM
+WLBL WHITELIST
+  Scan File  ${TESTDIR}/messages/bad_message.eml
+  Expect Symbol  USER_IN_WHITELIST
+  Expect Symbol  USER_IN_WHITELIST_TO
+  Do Not Expect Symbol  USER_IN_BLACKLIST_TO
+  Do Not Expect Symbol  USER_IN_BLACKLIST
 
-Freemail From Enddigit
-  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_ENVFROM_END_DIGIT
-
-Freemail Subject
-  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_SUBJECT
-
-Metas
-  Should Contain  ${FREEMAIL_RESULT.stdout}  TEST_META4
-
-WLBL From Whitelist
-  ${BAD_MESSAGE_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/bad_message.eml
-  Set Suite Variable  ${BAD_MESSAGE_RESULT}  ${BAD_MESSAGE_RESULT}
-  Check Rspamc  ${BAD_MESSAGE_RESULT}  USER_IN_WHITELIST (
-
-WLBL To Whitelist
-  Should Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_WHITELIST_TO
-
-WLBL To Blacklist Miss
-  Should Not Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_BLACKLIST_TO
-
-WLBL From Blacklist Miss
-  Should Not Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_BLACKLIST (
-
-WLBL From Blacklist
-  ${UTF_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
-  Set Suite Variable  ${UTF_RESULT}  ${UTF_RESULT}
-  Check Rspamc  ${UTF_RESULT}  USER_IN_BLACKLIST (
-
-WLBL To Blacklist
-  Should Contain  ${UTF_RESULT.stdout}  USER_IN_BLACKLIST_TO
-
-WLBL To Whitelist Miss
-  Should Not Contain  ${UTF_RESULT.stdout}  USER_IN_WHITELIST_TO
-
-WLBL From Whitelist Miss
-  Should Not Contain  ${UTF_RESULT.stdout}  USER_IN_WHITELIST (
+WLBL BLACKLIST
+  Scan File  ${TESTDIR}/messages/utf.eml
+  Expect Symbol  USER_IN_BLACKLIST
+  Expect Symbol  USER_IN_BLACKLIST_TO
+  Do Not Expect Symbol  USER_IN_WHITELIST_TO
+  Do Not Expect Symbol  USER_IN_WHITELIST
 
 *** Keywords ***
 SpamAssassin Setup

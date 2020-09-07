@@ -14,17 +14,17 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 GREYLIST NEW
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  GREYLIST (0.00)[greylisted
+  Scan File  ${MESSAGE}
+  Expect Symbol With Option  GREYLIST  greylisted
 
 GREYLIST EARLY
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  GREYLIST (0.00)[greylisted
+  Scan File  ${MESSAGE}
+  Expect Symbol With Option  GREYLIST  greylisted
 
 GREYLIST PASS
   Sleep  4s  Wait greylisting timeout
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  GREYLIST (0.00)[pass
+  Scan File  ${MESSAGE}
+  Expect Symbol With Option  GREYLIST  pass
 
 *** Keywords ***
 Greylist Setup

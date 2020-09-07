@@ -139,8 +139,18 @@ def rspamc(addr, port, filename):
     r = s.recv(2048)
     return r.decode('utf-8')
 
-def scan_file(addr, port, filename):
-    return str(urlopen("http://%s:%s/symbols?file=%s" % (addr, port, filename)).read())
+def Scan_File(filename, **headers):
+    addr = BuiltIn().get_variable_value("${LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${PORT_NORMAL}")
+    headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
+    c = http.client.HTTPConnection("%s:%s" % (addr, port))
+    c.request("POST", "/checkv2", open(filename, "rb"), headers)
+    r = c.getresponse()
+    assert r.status == 200
+    d = demjson.decode(r.read())
+    c.close()
+    BuiltIn().set_test_variable("${SCAN_RESULT}", d)
+    return
 
 def Send_SIGUSR1(pid):
     pid = int(pid)

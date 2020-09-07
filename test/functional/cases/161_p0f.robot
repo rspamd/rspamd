@@ -17,74 +17,65 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 p0f MISS
   Run Dummy p0f
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.1
-  Check Rspamc  ${result}  P0F
-  Check Rspamc  ${result}  Linux 3.11 and newer
-  Check Rspamc  ${result}  Ethernet or modem
-  Check Rspamc  ${result}  WINDOWS  inverse=1
-  Check Rspamc  ${result}  P0F_FAIL  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.1
+  Do Not Expect Symbol  P0F_FAIL
+  Do Not Expect Symbol  WINDOWS
+  Expect Symbol With Exact Options  P0F  Linux 3.11 and newer  link=Ethernet or modem  distance=10
   Shutdown p0f
 
 p0f HIT
   Run Dummy p0f  ${P0F_SOCKET}  windows
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.2
-  Check Rspamc  ${result}  P0F
-  Check Rspamc  ${result}  P0F_FAIL  inverse=1
-  Check Rspamc  ${result}  Ethernet or modem
-  Check Rspamc  ${result}  WINDOWS
-  Check Rspamc  ${result}  Linux 3.11 and newer  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.2
+  Do Not Expect Symbol  P0F_FAIL
+  Expect Symbol With Exact Options  P0F  link=Ethernet or modem  distance=10
+  Expect Symbol  WINDOWS
   Shutdown p0f
 
 p0f MISS CACHE
   Run Dummy p0f
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.3
-  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.3
+  Do Not Expect Symbol  WINDOWS
   Shutdown p0f
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.3
-  Check Rspamc  ${result}  WINDOWS  inverse=1
-  Check Rspamc  ${result}  P0F_FAIL  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.3
+  Do Not Expect Symbol  WINDOWS
+  Do Not Expect Symbol  P0F_FAIL
 
 p0f HIT CACHE
   Run Dummy p0f  ${P0F_SOCKET}  windows
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.4
-  Check Rspamc  ${result}  WINDOWS
+  Scan File  ${MESSAGE}  IP=1.1.1.4
+  Expect Symbol  WINDOWS
   Shutdown p0f
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.4
-  Check Rspamc  ${result}  WINDOWS
-  Check Rspamc  ${result}  P0F_FAIL  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.4
+  Expect Symbol  WINDOWS
+  Do Not Expect Symbol  P0F_FAIL
 
 p0f NO REDIS
   Shutdown Process With Children  ${REDIS_PID}
   Run Dummy p0f
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.5
-  Check Rspamc  ${result}  P0F
-  Check Rspamc  ${result}  Linux 3.11 and newer
-  Check Rspamc  ${result}  Ethernet or modem
-  Check Rspamc  ${result}  P0F_FAIL  inverse=1
-  Should Contain  ${result.stdout}  distance=10
+  Scan File  ${MESSAGE}  IP=1.1.1.5
+  Expect Symbol With Exact Options  P0F  Linux 3.11 and newer  link=Ethernet or modem  distance=10
+  Do Not Expect Symbol  P0F_FAIL
   Shutdown p0f
 
 p0f NO MATCH
   Run Dummy p0f  ${P0F_SOCKET}  windows  no_match
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.6
-  Check Rspamc  ${result}  P0F  inverse=1
-  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.6
+  Do Not Expect Symbol  P0F
+  Do Not Expect Symbol  WINDOWS
   Shutdown p0f
 
 p0f BAD QUERY
   Run Dummy p0f  ${P0F_SOCKET}  windows  bad_query
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.7
-  Check Rspamc  ${result}  P0F_FAIL
-  Check Rspamc  ${result}  Malformed Query
-  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.7
+  Expect Symbol With Exact Options  P0F_FAIL  Malformed Query: /tmp/p0f.sock
+  Do Not Expect Symbol  WINDOWS
   Shutdown p0f
 
 p0f BAD RESPONSE
   Run Dummy p0f  ${P0F_SOCKET}  windows  bad_response
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.8
-  Check Rspamc  ${result}  P0F_FAIL
-  Check Rspamc  ${result}  Error getting result: IO read error: connection terminated
-  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Scan File  ${MESSAGE}  IP=1.1.1.8
+  Expect Symbol With Exact Options  P0F_FAIL  Error getting result: IO read error: connection terminated
+  Do Not Expect Symbol  WINDOWS
   Shutdown p0f
 
 *** Keywords ***

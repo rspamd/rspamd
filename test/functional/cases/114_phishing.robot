@@ -15,16 +15,16 @@ ${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 TEST PHISHING
-  ${result} =  Scan Message With Rspamc  ${MESSAGE1}
-  Check Rspamc  ${result}  ${SPACE}PHISHING
+  Scan File  ${MESSAGE1}
+  Expect Symbol  PHISHING
 
 TEST PHISHING STRICT ONE
-  ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  STRICT_PHISHING
+  Scan File  ${MESSAGE2}
+  Expect Symbol  STRICT_PHISHING
 
 TEST PHISHING STRICT TWO
-  ${result} =  Scan Message With Rspamc  ${MESSAGE3}
-  Check Rspamc  ${result}  STRICTER_PHISHING
+  Scan File  ${MESSAGE3}
+  Expect Symbol  STRICTER_PHISHING
 
 *** Keywords ***
 Phishing Setup

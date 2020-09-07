@@ -15,34 +15,33 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Simple TCP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  HTTP_ASYNC_RESPONSE
-  Check Rspamc  ${result}  HTTP_ASYNC_RESPONSE_2
+  Scan File  ${MESSAGE}
+  Expect Symbol  HTTP_ASYNC_RESPONSE
+  Expect Symbol  HTTP_ASYNC_RESPONSE_2
 
 SSL TCP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  TCP_SSL_RESPONSE (0.00)[hello]
-  Check Rspamc  ${result}  TCP_SSL_RESPONSE_2 (0.00)[hello]
+  Scan File  ${MESSAGE}
+  Expect Symbol With Exact Options  TCP_SSL_RESPONSE  hello
+  Expect Symbol With Exact Options  TCP_SSL_RESPONSE_2  hello
 
 SSL Large TCP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  TCP_SSL_LARGE (0.00)
-  Check Rspamc  ${result}  TCP_SSL_LARGE_2 (0.00)
+  Scan File  ${MESSAGE}
+  Expect Symbol  TCP_SSL_LARGE
+  Expect Symbol  TCP_SSL_LARGE_2
 
 Sync API TCP request
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  HTTP_SYNC_RESPONSE
-  Check Rspamc  ${result}  HTTP_SYNC_RESPONSE_2
-  Check Rspamc  ${result}  hello world
-  Check Rspamc  ${result}  hello post
+  Scan File  ${MESSAGE}
+  Expect Symbol  HTTP_SYNC_RESPONSE
+  Should Contain  ${SCAN_RESULT}[symbols][HTTP_SYNC_RESPONSE][options][0]  hello world
+  Should Contain  ${SCAN_RESULT}[symbols][HTTP_SYNC_RESPONSE_2][options][0]  hello post
 
 Sync API TCP get request
-  Check url  /request  get  HTTP_SYNC_EOF_get (0.00)[hello world]
-  Check url  /content-length  get  HTTP_SYNC_CONTENT_get (0.00)[hello world]
+  Check url  /request  get  HTTP_SYNC_EOF_get  hello world
+  Check url  /content-length  get  HTTP_SYNC_CONTENT_get  hello world
 
 Sync API TCP post request
-  Check url  /request  post  HTTP_SYNC_EOF_post (0.00)[hello post]
-  Check url  /content-length  post  HTTP_SYNC_CONTENT_post (0.00)[hello post]
+  Check url  /request  post  HTTP_SYNC_EOF_post  hello post
+  Check url  /content-length  post  HTTP_SYNC_CONTENT_post  hello post
 
 *** Keywords ***
 Lua Setup
@@ -73,8 +72,6 @@ Run Dummy Ssl
   Wait Until Created  /tmp/dummy_ssl.pid  timeout=2 second
 
 Check url
-  [Arguments]  ${url}  ${method}  @{expect_results}
-  ${result} =  Scan Message With Rspamc  --header=url:${url}  --header=method:${method}  ${MESSAGE}
-  FOR  ${expect}  IN  @{expect_results}
-    Check Rspamc  ${result}  ${expect}
-  END
+  [Arguments]  ${url}  ${method}  ${expect_symbol}  @{expect_options}
+  Scan File  ${MESSAGE}  URL=${url}  Method=${method}
+  Expect Symbol With Exact Options  ${expect_symbol}  @{expect_options}

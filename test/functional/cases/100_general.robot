@@ -13,8 +13,8 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 GTUBE
-  ${result} =  Scan Message With Rspamc  ${GTUBE}
-  Check Rspamc  ${result}  GTUBE (
+  Scan File  ${GTUBE}
+  Expect Symbol  GTUBE
 
 GTUBE - Encrypted
   ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  --key  ${KEY_PUB1}
@@ -22,13 +22,13 @@ GTUBE - Encrypted
   Check Rspamc  ${result}  GTUBE (
 
 GTUBE - Scan File feature
-  ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
-  Should Contain  ${result}  GTUBE
+  Scan File By Reference  ${GTUBE}
+  Expect Symbol  GTUBE
 
 GTUBE - Scan File feature (encoded)
   ${encoded} =  Encode Filename  ${GTUBE}
-  ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${encoded}
-  Should Contain  ${result}  GTUBE
+  Scan File By Reference  ${encoded}
+  Expect Symbol  GTUBE
 
 GTUBE - SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
@@ -38,14 +38,13 @@ GTUBE - RSPAMC
   ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
   Should Contain  ${result}  GTUBE
 
-# Broken
-#EMAILS DETECTION 1
-#  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emails1.eml
-#  Check Rspamc  ${result}  "jim@example.net"
-#  Should Contain  ${result.stdout}  "bob@example.net"
-#  Should Contain  ${result.stdout}  "rupert@example.net"
+EMAILS DETECTION 1
+  Scan File  ${TESTDIR}/messages/emails1.eml  URL-Format=Extended
+  Expect Email  jim@example.net
+  Expect Email  bob@example.net
+  Expect Email  rupert@example.net
 
 EMAILS DETECTION ZEROFONT
-  ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${TESTDIR}/messages/zerofont.eml
-  Should Contain  ${result}  MANY_INVISIBLE_PARTS
-  Should Contain  ${result}  ZERO_FONT
+  Scan File  ${TESTDIR}/messages/zerofont.eml
+  Expect Symbol  MANY_INVISIBLE_PARTS
+  Expect Symbol  ZERO_FONT

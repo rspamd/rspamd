@@ -44,6 +44,10 @@ Check Rspamc Match String
   Run Keyword If  ${inverse} == False  Should Contain  ${subject}  ${str}
   ...  ELSE  Should Not Contain  ${subject}  ${str}
 
+Do Not Expect Symbol
+  [Arguments]  ${symbol}
+  Run Keyword And Expect Error  *  Expect Symbol  ${symbol}
+
 Generic Setup
   [Arguments]  @{vargs}  &{kwargs}
   &{d} =  Run Rspamd  @{vargs}  &{kwargs}
@@ -53,6 +57,59 @@ Generic Setup
     ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  ${d}[${i}]
     ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
   END
+
+Expect Action
+  [Arguments]  ${action}
+  Should Be Equal  ${SCAN_RESULT}[action]  ${action}
+
+Expect Email
+  [Arguments]  ${email}
+  List Should Contain Value  ${SCAN_RESULT}[emails]  ${email}
+
+Expect Required Score
+  [Arguments]  ${required_score}
+  Should Be Equal As Numbers  ${SCAN_RESULT}[required_score]  ${required_score}
+
+Expect Required Score To Be Null
+  Should Be Equal  ${SCAN_RESULT}[required_score]  ${NONE}
+
+Expect Score
+  [Arguments]  ${score}
+  Should Be Equal As Numbers  ${SCAN_RESULT}[score]  ${score}
+
+Expect Symbol
+  [Arguments]  ${symbol}
+  Dictionary Should Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
+  ...  msg=Symbol ${symbol} wasn't found in result
+
+Expect URL
+  [Arguments]  ${url}
+  List Should Contain Value  ${SCAN_RESULT}[urls]  ${url}
+
+Expect Symbol With Exact Options
+  [Arguments]  ${symbol}  @{options}
+  Expect Symbol  ${symbol}
+  ${have_options} =  Convert To List  ${SCAN_RESULT}[symbols][${symbol}][options]
+  Lists Should Be Equal  ${have_options}  ${options}
+  ...  msg="Symbol ${symbol} has options ${SCAN_RESULT}[symbols][${symbol}][options] but expected ${options}"
+
+Expect Symbol With Option
+  [Arguments]  ${symbol}  ${option}
+  Expect Symbol  ${symbol}
+  ${have_options} =  Convert To List  ${SCAN_RESULT}[symbols][${symbol}][options]
+  Should Contain  ${have_options}  ${option}
+  ...  msg="Options for symbol ${symbol} ${SCAN_RESULT}[symbols][${symbol}][options] doesn't contain ${option}"
+
+Expect Symbol With Score
+  [Arguments]  ${symbol}  ${score}
+  Expect Symbol  ${symbol}
+  Should Be Equal As Numbers  ${SCAN_RESULT}[symbols][${symbol}][score]  ${score}
+  ...  msg="Symbol ${symbol} has score of ${SCAN_RESULT}[symbols][${symbol}][score] but expected ${score}"
+
+Expect Symbol With Score And Exact Options
+  [Arguments]  ${symbol}  ${score}  @{options}
+  Expect Symbol With Exact Options  ${symbol}  @{options}
+  Expect Symbol With Score  ${symbol}  ${score}
 
 Generic Teardown
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
@@ -154,6 +211,12 @@ Run Rspamd
 
 Simple Teardown
   Generic Teardown
+
+Scan File By Reference
+  [Arguments]  ${filename}  &{headers}
+  Set To Dictionary  ${headers}  File=${filename}
+  ${result} =  Scan File  /dev/null  &{headers}
+  [Return]  ${result}
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}

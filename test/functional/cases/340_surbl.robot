@@ -12,156 +12,154 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 SURBL resolve ip
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url7.eml
-  Should Contain  ${result.stdout}  URIBL_SBL_CSS (0.00)[8.8.8.9:example.ru
-  Should Contain  ${result.stdout}  URIBL_XBL (0.00)[8.8.8.8:example.ru
-  Should Contain  ${result.stdout}  URIBL_PBL (0.00)[8.8.8.8:example.ru
+  Scan File  ${TESTDIR}/messages/url7.eml
+  Expect Symbol With Exact Options  URIBL_SBL_CSS  8.8.8.9:example.ru:url
+  Expect Symbol With Exact Options  URIBL_XBL  8.8.8.8:example.ru:url
+  Expect Symbol With Exact Options  URIBL_PBL  8.8.8.8:example.ru:url
 
 SURBL Example.com domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url4.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Scan File  ${TESTDIR}/messages/url4.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL Example.net domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url5.eml
-  Should Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Scan File  ${TESTDIR}/messages/url5.eml
+  Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL Example.org domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url6.eml
-  Should Contain  ${result.stdout}  URIBL_BLACK
-  Should Not Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Not Contain  ${result.stdout}  DBL_PHISH
+  Scan File  ${TESTDIR}/messages/url6.eml
+  Expect Symbol  URIBL_BLACK
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  DBL_PHISH
 
 SURBL Example.ru domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url7.eml
-  Should Contain  ${result.stdout}  URIBL_GREY
-  Should Contain  ${result.stdout}  URIBL_RED
-  Should Not Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Not Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Scan File  ${TESTDIR}/messages/url7.eml
+  Expect Symbol  URIBL_GREY
+  Expect Symbol  URIBL_RED
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL Example.ru ZEN domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url7.eml
-  Should Contain  ${result.stdout}  URIBL_SBL_CSS (
-  Should Contain  ${result.stdout}  URIBL_XBL (
-  Should Contain  ${result.stdout}  URIBL_PBL (
-  Should Not Contain  ${result.stdout}  URIBL_SBL (
-  Should Not Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/url7.eml
+  Expect Symbol  URIBL_SBL_CSS
+  Expect Symbol  URIBL_XBL
+  Expect Symbol  URIBL_PBL
+  Do Not Expect Symbol  URIBL_SBL
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL Example.com domain image false
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlimage.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES
-  Should Not Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/urlimage.eml
+  Expect Symbol  RSPAMD_URIBL_IMAGES
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL @example.com mail html
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Contain  ${result.stdout}  DBL_SPAM (
-  Should Contain  ${result.stdout}  example.com:email
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/mailadr.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol With Exact Options  DBL_SPAM  example.com:email
+  Do Not Expect Symbol  RSPAMD_URIBL_IMAGES
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL @example.com mail text
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr2.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Contain  ${result.stdout}  DBL_SPAM (
-  Should Contain  ${result.stdout}  example.com:email
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/mailadr2.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol With Exact Options  DBL_SPAM  example.com:email
+  Do Not Expect Symbol  RSPAMD_URIBL_IMAGES
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL example.com not encoded url in subject
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubject.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/urlinsubject.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL example.com encoded url in subject
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubjectencoded.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  DBL_PHISH (
-  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+  Scan File  ${TESTDIR}/messages/urlinsubjectencoded.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 WHITELIST
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/whitelist.eml
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
-  Should Not Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
+  Scan File  ${TESTDIR}/messages/whitelist.eml
+  Do Not Expect Symbol  RSPAMD_URIBL
+  Do Not Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  RSPAMD_URIBL_IMAGES
 
 EMAILBL full address & domain only
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+  Scan File  ${TESTDIR}/messages/emailbltext.eml
+  Expect Symbol  RSPAMD_EMAILBL_FULL
+  Expect Symbol  RSPAMD_EMAILBL_DOMAINONLY
 
 EMAILBL full subdomain address
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext2.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Scan File  ${TESTDIR}/messages/emailbltext2.eml
+  Expect Symbol  RSPAMD_EMAILBL_FULL
 
 EMAILBL full subdomain address & domain only
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext3.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (0.00)[baddomain.com:email]
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (0.00)[user.subdomain.baddomain.com:email]
+  Scan File  ${TESTDIR}/messages/emailbltext3.eml
+  Expect Symbol With Exact Options  RSPAMD_EMAILBL_DOMAINONLY  baddomain.com:email
+  Expect Symbol With Exact Options  RSPAMD_EMAILBL_FULL  user.subdomain.baddomain.com:email
 
 EMAILBL REPLY TO full address
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
-  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+  Scan File  ${TESTDIR}/messages/replyto.eml
+  Expect Symbol  RSPAMD_EMAILBL_FULL
+  Do Not Expect Symbol  RSPAMD_EMAILBL_DOMAINONLY
 
 EMAILBL REPLY TO domain only
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto2.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
-  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Scan File  ${TESTDIR}/messages/replyto2.eml
+  Expect Symbol  RSPAMD_EMAILBL_DOMAINONLY
+  Do Not Expect Symbol  RSPAMD_EMAILBL_FULL
 
 EMAILBL REPLY TO full subdomain address
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replytosubdomain.eml
-  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
-  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+  Scan File  ${TESTDIR}/messages/replytosubdomain.eml
+  Expect Symbol  RSPAMD_EMAILBL_FULL
+  Do Not Expect Symbol  RSPAMD_EMAILBL_DOMAINONLY
 
 SURBL IDN domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url8.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Scan File  ${TESTDIR}/messages/url8.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL IDN Punycode domain
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url9.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Contain  ${result.stdout}  DBL_SPAM
-  Should Not Contain  ${result.stdout}  DBL_PHISH
-  Should Not Contain  ${result.stdout}  URIBL_BLACK
+  Scan File  ${TESTDIR}/messages/url9.eml
+  Expect Symbol  RSPAMD_URIBL
+  Expect Symbol  DBL_SPAM
+  Do Not Expect Symbol  DBL_PHISH
+  Do Not Expect Symbol  URIBL_BLACK
 
 SURBL html entity&shy
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url10.eml
-  Should Contain  ${result.stdout}  RSPAMD_URIBL
+  Scan File  ${TESTDIR}/messages/url10.eml
+  Expect Symbol  RSPAMD_URIBL
 
 SURBL url compose map 1
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url11.eml
-  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[clean.dirty.sanchez.com:url]
+  Scan File  ${TESTDIR}/messages/url11.eml
+  Expect Symbol With Exact Options  BAD_SUBDOMAIN  clean.dirty.sanchez.com:url
 
 SURBL url compose map 2
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url12.eml
-  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[4.very.dirty.sanchez.com:url]
+  Scan File  ${TESTDIR}/messages/url12.eml
+  Expect Symbol With Exact Options  BAD_SUBDOMAIN  4.very.dirty.sanchez.com:url
 
 SURBL url compose map 3
-  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url13.eml
-  Should Contain  ${result.stdout}  BAD_SUBDOMAIN (0.00)[41.black.sanchez.com:url]
+  Scan File  ${TESTDIR}/messages/url13.eml
+  Expect Symbol With Exact Options  BAD_SUBDOMAIN  41.black.sanchez.com:url
 
 *** Keywords ***
 Surbl Setup
