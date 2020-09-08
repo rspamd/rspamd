@@ -553,11 +553,38 @@ local function prepare_arc_selector(task, sel)
   if arc_seals then
     sel.arc_idx = #arc_seals + 1
 
-    if task:has_symbol(arc_symbols.allow) then
-      sel.arc_cv = 'pass'
-    else
-      sel.arc_cv = 'fail'
+    local function default_arc_cv()
+      if task:has_symbol(arc_symbols.allow) then
+        sel.arc_cv = 'pass'
+      else
+        sel.arc_cv = 'fail'
+      end
     end
+
+    if settings.reuse_auth_results then
+      local ar_header = task:get_header('Authentication-Results')
+
+      if ar_header then
+        local arc_match = string.match(ar_header, 'arc=(%w+)')
+
+        if arc_match then
+          if arc_match == 'none' or arc_match == 'pass' then
+            -- none should be converted to `pass`
+            sel.arc_cv = 'pass'
+          else
+            sel.arc_cv = 'fail'
+          end
+        else
+          default_arc_cv()
+        end
+      else
+        -- Cannot reuse, use normal path
+        default_arc_cv()
+      end
+    else
+      default_arc_cv()
+    end
+
   end
 end
 
