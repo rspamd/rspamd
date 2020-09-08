@@ -121,6 +121,11 @@ local function parse_arc_header(hdr, target)
     target[i].header = hdr[i].decoded
     target[i].raw_header = hdr[i].value
   end
+
+  -- sort by i= attribute
+  table.sort(target, function(a, b)
+    return (a.i or 0) < (b.i or 0)
+  end)
 end
 
 local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
