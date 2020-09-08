@@ -102,31 +102,6 @@ local settings = {
     ['authentication-results'] = {
       header = 'Authentication-Results',
       remove = 0,
-      spf_symbols = {
-        pass = 'R_SPF_ALLOW',
-        fail = 'R_SPF_FAIL',
-        softfail = 'R_SPF_SOFTFAIL',
-        neutral = 'R_SPF_NEUTRAL',
-        temperror = 'R_SPF_DNSFAIL',
-        none = 'R_SPF_NA',
-        permerror = 'R_SPF_PERMFAIL',
-      },
-      dkim_symbols = {
-        pass = 'R_DKIM_ALLOW',
-        fail = 'R_DKIM_REJECT',
-        temperror = 'R_DKIM_TEMPFAIL',
-        none = 'R_DKIM_NA',
-        permerror = 'R_DKIM_PERMFAIL',
-      },
-      dmarc_symbols = {
-        pass = 'DMARC_POLICY_ALLOW',
-        permerror = 'DMARC_BAD_POLICY',
-        temperror = 'DMARC_DNSFAIL',
-        none = 'DMARC_NA',
-        reject = 'DMARC_POLICY_REJECT',
-        softfail = 'DMARC_POLICY_SOFTFAIL',
-        quarantine = 'DMARC_POLICY_QUARANTINE',
-      },
       add_smtp_user = true,
       stop_chars = ';',
     },
@@ -472,8 +447,7 @@ local function milter_headers(task)
           settings.routines['authentication-results'].remove
     end
 
-    local res = ar.gen_auth_results(task,
-      settings.routines['authentication-results'])
+    local res = ar.gen_auth_results(task, nil)
 
     if res then
       add_header('authentication-results', res, ';', 1)
