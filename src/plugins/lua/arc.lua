@@ -561,35 +561,35 @@ local function prepare_arc_selector(task, sel)
   end
 end
 
-local function do_sign(task, p)
-  if p.alg and p.alg ~= 'rsa' then
+local function do_sign(task, sign_params)
+  if sign_params.alg and sign_params.alg ~= 'rsa' then
     -- No support for ed25519 keys
     return
   end
 
-  prepare_arc_selector(task, p)
+  prepare_arc_selector(task, sign_params)
 
   if settings.check_pubkey then
-    local resolve_name = p.selector .. "._domainkey." .. p.domain
+    local resolve_name = sign_params.selector .. "._domainkey." .. sign_params.domain
     task:get_resolver():resolve_txt({
       task = task,
       name = resolve_name,
       callback = function(_, _, results, err)
         if not err and results and results[1] then
-          p.pubkey = results[1]
-          p.strict_pubkey_check = not settings.allow_pubkey_mismatch
+          sign_params.pubkey = results[1]
+          sign_params.strict_pubkey_check = not settings.allow_pubkey_mismatch
         elseif not settings.allow_pubkey_mismatch then
           rspamd_logger.errx('public key for domain %s/%s is not found: %s, skip signing',
-              p.domain, p.selector, err)
+              sign_params.domain, sign_params.selector, err)
           return
         else
           rspamd_logger.infox('public key for domain %s/%s is not found: %s',
-              p.domain, p.selector, err)
+              sign_params.domain, sign_params.selector, err)
         end
 
-        local dret, hdr = dkim_sign(task, p)
+        local dret, hdr = dkim_sign(task, sign_params)
         if dret then
-          local sret, _ = arc_sign_seal(task, p, hdr)
+          local sret, _ = arc_sign_seal(task, sign_params, hdr)
           if sret then
             task:insert_result(settings.sign_symbol, 1.0)
           end
@@ -599,9 +599,9 @@ local function do_sign(task, p)
       forced = true
     })
   else
-    local dret, hdr = dkim_sign(task, p)
+    local dret, hdr = dkim_sign(task, sign_params)
     if dret then
-      local sret, _ = arc_sign_seal(task, p, hdr)
+      local sret, _ = arc_sign_seal(task, sign_params, hdr)
       if sret then
         task:insert_result(settings.sign_symbol, 1.0)
       end
@@ -627,27 +627,27 @@ local function arc_signing_cb(task)
       dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
     else
       -- TODO: no support for multiple sigs
-      local p = selectors[1]
-      prepare_arc_selector(task, p)
-      if ((p.key or p.rawkey) and p.selector) then
-        if p.key then
-          p.key = lua_util.template(p.key, {
-            domain = p.domain,
-            selector = p.selector
+      local cur_selector = selectors[1]
+      prepare_arc_selector(task, cur_selector)
+      if ((cur_selector.key or cur_selector.rawkey) and cur_selector.selector) then
+        if cur_selector.key then
+          cur_selector.key = lua_util.template(cur_selector.key, {
+            domain = cur_selector.domain,
+            selector = cur_selector.selector
           })
 
-          local exists,err = rspamd_util.file_exists(p.key)
+          local exists,err = rspamd_util.file_exists(cur_selector.key)
           if not exists then
             if err and err == 'No such file or directory' then
-              lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+              lua_util.debugm(N, task, 'cannot read key from %s: %s', cur_selector.key, err)
             else
-              rspamd_logger.warnx(task, 'cannot read key from %s: %s', p.key, err)
+              rspamd_logger.warnx(task, 'cannot read key from %s: %s', cur_selector.key, err)
             end
             return false
           end
         end
 
-        do_sign(task, p)
+        do_sign(task, cur_selector)
       else
         rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
         return false
