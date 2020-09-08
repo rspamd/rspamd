@@ -173,7 +173,7 @@ struct rspamd_dkim_sign_context_s {
 
 struct rspamd_dkim_header {
 	const gchar *name;
-	guint count;
+	gint count;
 };
 
 /* Parser of dkim params */
@@ -722,7 +722,7 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		struct rspamd_dkim_common_ctx *ctx)
 {
 	struct rspamd_dkim_header *hdr;
-	guint count = ctx->idx, i;
+	gint count = ctx->idx, i;
 
 	ctx->hlist = g_ptr_array_sized_new (count * 3 - 1);
 
@@ -730,20 +730,20 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		/* Authentication results */
 		hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 		hdr->name = RSPAMD_DKIM_ARC_AUTHHEADER;
-		hdr->count = i;
+		hdr->count = -(i + 1);
 		g_ptr_array_add (ctx->hlist, hdr);
 
 		/* Arc signature */
 		hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 		hdr->name = RSPAMD_DKIM_ARC_SIGNHEADER;
-		hdr->count = i;
+		hdr->count = -(i + 1);
 		g_ptr_array_add (ctx->hlist, hdr);
 
 		/* Arc seal (except last one) */
 		if (i != count - 1) {
 			hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 			hdr->name = RSPAMD_DKIM_ARC_SEALHEADER;
-			hdr->count = i;
+			hdr->count = (-i + 1);
 			g_ptr_array_add (ctx->hlist, hdr);
 		}
 	}
@@ -2240,52 +2240,80 @@ static gboolean
 rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	struct rspamd_task *task,
 	const gchar *header_name,
-	guint count,
+	gint count,
 	const gchar *dkim_header,
 	const gchar *dkim_domain)
 {
 	struct rspamd_mime_header *rh, *cur, *sel = NULL;
 	gint hdr_cnt = 0;
+	bool use_idx = false;
+
+	if (count < 0) {
+		use_idx = true;
+		count = -(count); /* use i= in header content as it is arc stuff */
+	}
 
 	if (dkim_header == NULL) {
 		rh = rspamd_message_get_header_array (task, header_name);
 
 		if (rh) {
 			/* Check uniqueness of the header but we count from the bottom to top */
-			for (cur = rh->prev; ; cur = cur->prev) {
-				if (hdr_cnt == count) {
-					sel = cur;
+			if (!use_idx) {
+				for (cur = rh->prev;; cur = cur->prev) {
+					if (hdr_cnt == count) {
+						sel = cur;
+					}
+
+					hdr_cnt++;
+
+					if (cur == rh) {
+						/* Cycle */
+						break;
+					}
 				}
 
-				hdr_cnt ++;
+				if ((rh->flags & RSPAMD_HEADER_UNIQUE) && hdr_cnt > 1) {
+					guint64 random_cookie = ottery_rand_uint64 ();
 
-				if (cur == rh) {
-					/* Cycle */
-					break;
+					msg_warn_dkim ("header %s is intended to be unique by"
+								   " email standards, but we have %d headers of this"
+								   " type, artificially break DKIM check", header_name,
+							hdr_cnt);
+					rspamd_dkim_hash_update (ctx->headers_hash,
+							(const gchar *)&random_cookie,
+							sizeof (random_cookie));
+					ctx->headers_canonicalised += sizeof (random_cookie);
+
+					return FALSE;
+				}
+
+				if (hdr_cnt <= count) {
+					/*
+					 * If DKIM has less headers requested than there are in a
+					 * message, then it's fine, it allows adding extra headers
+					 */
+					return TRUE;
 				}
 			}
+			else {
+				gchar idx_buf[16];
+				gint id_len;
 
-			if ((rh->flags & RSPAMD_HEADER_UNIQUE) && hdr_cnt > 1) {
-				guint64 random_cookie = ottery_rand_uint64 ();
+				id_len = rspamd_snprintf (idx_buf, sizeof (idx_buf), "i=%d;",
+						count);
 
-				msg_warn_dkim ("header %s is intended to be unique by"
-						" email standards, but we have %d headers of this"
-						" type, artificially break DKIM check", header_name,
-						hdr_cnt);
-				rspamd_dkim_hash_update (ctx->headers_hash,
-						(const gchar *)&random_cookie,
-						sizeof (random_cookie));
-				ctx->headers_canonicalised += sizeof (random_cookie);
+				for (cur = rh->prev;; cur = cur->prev) {
+					if (cur->decoded &&
+						rspamd_substring_search (cur->decoded, strlen (cur->decoded),
+								idx_buf, id_len) != -1) {
+						sel = cur;
+						break;
+					}
+				}
 
-				return FALSE;
-			}
-
-			if (hdr_cnt <= count) {
-				/*
-				 * If DKIM has less headers requested than there are in a
-				 * message, then it's fine, it allows adding extra headers
-				 */
-				return TRUE;
+				if (sel == NULL) {
+					return FALSE;
+				}
 			}
 
 			/* Selected header must be non-null if previous condition is false */
