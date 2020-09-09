@@ -285,7 +285,7 @@ local function check_mime_type(task)
     -- Process settings
     local extra_table = {}
     local extra_archive_table = {}
-    local user_settings = task:get_settings()
+    local user_settings = task:cache_get('settings')
     if user_settings and user_settings.plugins then
       user_settings = user_settings.plugins.mime_types
     end
