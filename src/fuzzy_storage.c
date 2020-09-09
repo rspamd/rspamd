@@ -100,8 +100,10 @@ struct fuzzy_global_stat {
 	guint64 fuzzy_shingles_checked[RSPAMD_FUZZY_EPOCH_MAX];
 	/**< amount of shingle check requests for each epoch	*/
 	guint64 fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX];
-	/**< amount of hashes found by epoch				*/
+	/**< amount of invalid requests				*/
 	guint64 invalid_requests;
+	/**< amount of delayed hashes found				*/
+	guint64 delayed_hashes;
 };
 
 struct fuzzy_key_stat {
@@ -140,11 +142,14 @@ struct rspamd_fuzzy_storage_ctx {
 	struct fuzzy_global_stat stat;
 	gdouble expire;
 	gdouble sync_timeout;
+	gdouble delay;
 	struct rspamd_radix_map_helper *update_ips;
 	struct rspamd_radix_map_helper *blocked_ips;
 	struct rspamd_radix_map_helper *ratelimit_whitelist;
+	struct rspamd_radix_map_helper *delay_whitelist;
 
 	const ucl_object_t *update_map;
+	const ucl_object_t *delay_whitelist_map;
 	const ucl_object_t *blocked_map;
 	const ucl_object_t *ratelimit_whitelist_map;
 
@@ -616,6 +621,7 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 		enum rspamd_fuzzy_epoch epoch,
 		gboolean matched,
 		gboolean is_shingle,
+		gboolean is_delayed,
 		struct fuzzy_key_stat *key_stat,
 		struct fuzzy_key_stat *ip_stat,
 		guint cmd, guint reply)
@@ -627,6 +633,9 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 	}
 	if (is_shingle) {
 		ctx->stat.fuzzy_shingles_checked[epoch]++;
+	}
+	if (is_delayed) {
+		ctx->stat.delayed_hashes ++;
 	}
 
 	if (key_stat) {
@@ -672,11 +681,17 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 	}
 }
 
+enum rspamd_fuzzy_reply_flags {
+	RSPAMD_FUZZY_REPLY_ENCRYPTED = 0x1u << 0u,
+	RSPAMD_FUZZY_REPLY_SHINGLE = 0x1u << 1u,
+	RSPAMD_FUZZY_REPLY_DELAY = 0x1u << 2u,
+};
+
 static void
 rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		struct rspamd_fuzzy_reply *result,
 		struct fuzzy_session *session,
-		gboolean encrypted, gboolean is_shingle)
+		gint flags)
 {
 	gsize len;
 
@@ -687,13 +702,21 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		rspamd_fuzzy_update_stats (session->ctx,
 				session->epoch,
 				result->v1.prob > 0.5,
-				is_shingle,
+				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+				flags & RSPAMD_FUZZY_REPLY_DELAY,
 				session->key_stat,
 				session->ip_stat,
 				cmd->cmd,
 				result->v1.value);
 
-		if (encrypted) {
+		if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
+			/* Hash is too fresh, need to delay it */
+			session->reply.rep.ts = 0;
+			session->reply.rep.v1.prob = 0.0;
+			session->reply.rep.v1.value = 0;
+		}
+
+		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
 			/* We need also to encrypt reply */
 			ottery_rand_bytes (session->reply.hdr.nonce,
 					sizeof (session->reply.hdr.nonce));
@@ -788,10 +811,12 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const struct rspamd_shingle *shingle = NULL;
 	struct rspamd_shingle sgl_cpy;
+	gint send_flags = 0;
 
 	switch (session->cmd_type) {
 	case CMD_ENCRYPTED_NORMAL:
 		encrypted = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		/* Fallthrough */
 	case CMD_NORMAL:
 		cmd = &session->cmd.basic;
@@ -799,12 +824,14 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 
 	case CMD_ENCRYPTED_SHINGLE:
 		encrypted = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		/* Fallthrough */
 	case CMD_SHINGLE:
 		cmd = &session->cmd.basic;
 		memcpy (&sgl_cpy, &session->cmd.sgl, sizeof (sgl_cpy));
 		shingle = &sgl_cpy;
 		is_shingle = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
 		break;
 	}
 
@@ -868,7 +895,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 				}
 
 				lua_settop (L, 0);
-				rspamd_fuzzy_make_reply (cmd, result, session, encrypted, is_shingle);
+				rspamd_fuzzy_make_reply (cmd, result, session, send_flags);
 				REF_RELEASE (session);
 
 				return;
@@ -878,8 +905,12 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		lua_settop (L, 0);
 	}
 
-
-	rspamd_fuzzy_make_reply (cmd, result, session, encrypted, is_shingle);
+	if (!isnan (session->ctx->delay) &&
+			rspamd_get_calendar_ticks () - result->ts < session->ctx->delay &&
+			rspamd_match_radix_map_addr (session->ctx->delay_whitelist,
+					session->addr) == NULL)  {
+		send_flags |= RSPAMD_FUZZY_REPLY_DELAY;
+	}
 
 	/* Refresh hash if found with strong confidence */
 	if (result->v1.prob > 0.9 && !session->ctx->read_only) {
@@ -931,6 +962,8 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		}
 	}
 
+	rspamd_fuzzy_make_reply (cmd, result, session, send_flags);
+
 	REF_RELEASE (session);
 }
 
@@ -947,6 +980,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	rspamd_inet_addr_t *naddr;
 	gpointer ptr;
 	gsize up_len = 0;
+	gint send_flags = 0;
 
 	cmd = &session->cmd.basic;
 
@@ -957,15 +991,18 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	case CMD_SHINGLE:
 		up_len = sizeof (session->cmd);
 		is_shingle = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
 		up_len = sizeof (session->cmd.basic);
 		encrypted = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
 		up_len = sizeof (session->cmd);
 		encrypted = TRUE;
 		is_shingle = TRUE;
+		send_flags |= RSPAMD_FUZZY_REPLY_SHINGLE|RSPAMD_FUZZY_REPLY_ENCRYPTED;
 		break;
 	default:
 		msg_err ("invalid command type: %d", session->cmd_type);
@@ -1024,7 +1061,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 				}
 
 				lua_settop (L, 0);
-				rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+				rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 
 				return;
 			}
@@ -1037,7 +1074,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
 		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+		rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 		return;
 	}
 
@@ -1045,7 +1082,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		/* Do not accept unencrypted commands */
 		result.v1.value = 403;
 		result.v1.prob = 0.0f;
-		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+		rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 		return;
 	}
 
@@ -1075,14 +1112,14 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			result.v1.value = 403;
 			result.v1.prob = 0.0f;
 			result.v1.flag = 0;
-			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+			rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
 		result.v1.prob = 1.0f;
 		result.v1.value = 0;
 		result.v1.flag = session->ctx->stat.fuzzy_hashes;
-		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+		rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 	}
 	else {
 		if (rspamd_fuzzy_check_client (session, TRUE)) {
@@ -1138,7 +1175,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			result.v1.prob = 0.0f;
 		}
 reply:
-		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+		rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 	}
 }
 
@@ -1795,6 +1832,11 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 			"invalid_requests",
 			0,
 			false);
+	ucl_object_insert_key (obj,
+			ucl_object_fromint (ctx->stat.delayed_hashes),
+			"delayed_hashes",
+			0,
+			false);
 
 	if (ctx->errors_ips && ip_stat) {
 		i = 0;
@@ -2096,6 +2138,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->max_buckets = DEFAULT_MAX_BUCKETS;
 	ctx->leaky_bucket_burst = NAN;
 	ctx->leaky_bucket_rate = NAN;
+	ctx->delay = NAN;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2121,12 +2164,31 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
+			"delay",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
+					delay),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Default delay time for hashes, default: not enabled");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
 			"allow_update",
 			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map),
 			0,
 			"Allow modifications from the following IP addresses");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"delay_whitelist",
+			rspamd_rcl_parse_struct_ucl,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, delay_whitelist_map),
+			0,
+			"Disable delay check for the following IP addresses");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2477,6 +2539,12 @@ start_fuzzy (struct rspamd_worker *worker)
 				&ctx->ratelimit_whitelist,
 				NULL,
 				worker);
+	}
+
+	if (!isnan (ctx->delay) && ctx->delay_whitelist_map != NULL) {
+		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->delay_whitelist_map,
+				"Skip delay from the following ips",
+				&ctx->delay_whitelist, NULL, worker);
 	}
 
 	/* Ratelimits */
