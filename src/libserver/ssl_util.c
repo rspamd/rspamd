@@ -1111,4 +1111,5 @@ rspamd_ssl_ctx_free (gpointer ssl_ctx)
 
 	rspamd_lru_hash_destroy (ctx->sessions);
 	SSL_CTX_free (ctx->s);
+	g_free (ssl_ctx);
 }
