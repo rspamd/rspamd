@@ -1653,7 +1653,7 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 		}
 	}
 	else {
-		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
+		cached = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cached));
 		additional_length = fuzzy_cmd_extension_length (task, rule);
 		cached->additional_length = additional_length;
 
