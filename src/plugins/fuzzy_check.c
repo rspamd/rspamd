@@ -1653,9 +1653,20 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 		}
 	}
 	else {
-		cached = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cached));
 		additional_length = fuzzy_cmd_extension_length (task, rule);
+		cached = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cached) +
+				additional_length);
+		/*
+		 * Allocate extensions and never touch it except copying to avoid
+		 * occasional encryption
+		 */
 		cached->additional_length = additional_length;
+		cached->additional_data = ((guchar *)cached) + sizeof (*cached);
+
+		if (additional_length > 0) {
+			fuzzy_cmd_write_extensions (task, rule, cached->additional_data,
+					additional_length);
+		}
 
 		if (short_text) {
 			enccmd = rspamd_mempool_alloc0 (task->task_pool,
@@ -1678,13 +1689,7 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			cached->sh = NULL;
 
 			additional_data = ((guchar *)enccmd) + sizeof (*enccmd);
-
-			if (additional_length > 0) {
-				fuzzy_cmd_write_extensions (task, rule, additional_data,
-						additional_length);
-			}
-
-			cached->additional_data = additional_data;
+			memcpy (additional_data, cached->additional_data, additional_length);
 		}
 		else {
 			encshcmd = rspamd_mempool_alloc0 (task->task_pool,
@@ -1724,13 +1729,7 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			cached->sh = sh;
 			memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
 			additional_data = ((guchar *)encshcmd) + sizeof (*encshcmd);
-
-			if (additional_length > 0) {
-				fuzzy_cmd_write_extensions (task, rule, additional_data,
-						additional_length);
-			}
-
-			cached->additional_data = additional_data;
+			memcpy (additional_data, cached->additional_data, additional_length);
 		}
 
 		/*
