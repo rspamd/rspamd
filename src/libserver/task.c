@@ -727,7 +727,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		}
 		break;
 
-	case RSPAMD_TASK_STAGE_PRE_FILTERS_EMPTY:
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 	case RSPAMD_TASK_STAGE_FILTERS:
 		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
