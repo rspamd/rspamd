@@ -120,8 +120,12 @@ local custom_routines = {}
 
 local function milter_headers(task)
 
-  local function skip_wanted(hdr)
+  -- Used to override wanted stuff by means of settings
+  local settings_override = false
 
+  local function skip_wanted(hdr)
+    if settings_override then return true end
+    -- Normal checks
     local function match_extended_headers_rcpt()
       local rcpts = task:get_recipients('smtp')
       if not rcpts then return false end
@@ -160,6 +164,11 @@ local function milter_headers(task)
 
   end
 
+  -- XXX: fix this crap one day
+  -- routines - are closures that encloses all environment including task
+  -- common - a common environment shared between routines
+  -- add - add headers table (filled by routines)
+  -- remove - remove headers table (filled by routines)
   local routines, common, add, remove = {}, {}, {}, {}
 
   local function add_header(name, value, stop_chars, order)
@@ -476,7 +485,20 @@ local function milter_headers(task)
     end
   end
 
-  for _, n in ipairs(active_routines) do
+  local routines_enabled = active_routines
+  local user_settings = task:cache_get('settings')
+  if user_settings and user_settings.plugins then
+    user_settings = user_settings.plugins.milter_headers or E
+  end
+
+  if user_settings and type(user_settings.routines) == 'table' then
+    lua_util.debugm(N, task, 'override routines to %s from user settings',
+        user_settings.routines)
+    routines_enabled = user_settings.routines
+    settings_override = true
+  end
+
+  for _, n in ipairs(routines_enabled) do
     local ok, err
     if custom_routines[n] then
       local to_add, to_remove, common_in
@@ -557,9 +579,8 @@ local function activate_routine(s)
       have_routine[s] = true
       table.insert(active_routines, s)
       if (opts.routines and opts.routines[s]) then
-        for k, v in pairs(opts.routines[s]) do
-          settings.routines[s][k] = v
-        end
+        settings.routines[s] = lua_util.override_defaults(settings.routines[s],
+            opts.routines[s])
       end
     end
   else
