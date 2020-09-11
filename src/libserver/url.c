@@ -1792,6 +1792,10 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		return FALSE;
 	}
 
+	if (rspamd_str_has_8bit (p, end - p)) {
+		return FALSE;
+	}
+
 	if (rspamd_parse_inet_address_ip4 (p, end - p, &in4)) {
 		rspamd_url_regen_from_inet_addr (uri, &in4, AF_INET, pool);
 		ret = TRUE;
