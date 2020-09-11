@@ -970,7 +970,6 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 			if (ls->fd != -1) {
 				close (ls->fd);
 			}
-			ls->reuseport = true;
 			ls->fd = nfd;
 			nfd = -1;
 		}
@@ -1172,7 +1171,7 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 		struct rspamd_worker_listen_socket *ls =
 				(struct rspamd_worker_listen_socket *)cur->data;
 
-		if (ls->reuseport) {
+		if (ls->fd != -1 && ls->type == RSPAMD_WORKER_SOCKET_UDP) {
 			close (ls->fd);
 			ls->fd = -1;
 		}

@@ -236,7 +236,6 @@ struct rspamd_worker_listen_socket {
 	gint fd;
 	enum rspamd_worker_socket_type type;
 	bool is_systemd;
-	bool reuseport;
 };
 
 typedef struct worker_s {
