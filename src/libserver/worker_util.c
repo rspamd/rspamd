@@ -955,22 +955,32 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 
 #if defined(SO_REUSEPORT) && defined(SO_REUSEADDR) && defined(LINUX)
 
-	nfd = rspamd_inet_address_listen (ls->addr,
-			(ls->type == RSPAMD_WORKER_SOCKET_UDP ? SOCK_DGRAM : SOCK_STREAM),
-			RSPAMD_INET_ADDRESS_LISTEN_ASYNC|RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT,
-			-1);
+	if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
+		nfd = rspamd_inet_address_listen (ls->addr,
+				(ls->type == RSPAMD_WORKER_SOCKET_UDP ? SOCK_DGRAM : SOCK_STREAM),
+				RSPAMD_INET_ADDRESS_LISTEN_ASYNC|RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT,
+				-1);
 
-	if (nfd == -1) {
-		msg_warn ("cannot create reuseport listen socket for %d: %s",
-				ls->fd, strerror (errno));
-		nfd = ls->fd;
+		if (nfd == -1) {
+			msg_warn ("cannot create reuseport listen socket for %d: %s",
+					ls->fd, strerror (errno));
+			nfd = ls->fd;
+		}
+		else {
+			if (ls->fd != -1) {
+				close (ls->fd);
+			}
+			ls->reuseport = true;
+			ls->fd = nfd;
+			nfd = -1;
+		}
 	}
 	else {
-		if (ls->fd != -1) {
-			close (ls->fd);
-		}
-		ls->fd = nfd;
-		nfd = -1;
+		/*
+		 * Reuseport is broken with the current architecture, so it is easier not
+		 * to use it at all
+		 */
+		nfd = ls->fd;
 	}
 #else
 	nfd = ls->fd;
@@ -1040,6 +1050,9 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 
 	g_hash_table_iter_init (&it, listen_sockets);
 
+	/*
+	 * Close listen sockets of not our process (inherited from other forks)
+	 */
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		GList *elt = (GList *)v;
 		GList *our = cf->listen_socks;
@@ -1159,8 +1172,7 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 		struct rspamd_worker_listen_socket *ls =
 				(struct rspamd_worker_listen_socket *)cur->data;
 
-		if (!ls->is_systemd && ls->fd != -1 &&
-			rspamd_inet_address_get_af (ls->addr) != AF_UNIX) {
+		if (ls->reuseport) {
 			close (ls->fd);
 			ls->fd = -1;
 		}
