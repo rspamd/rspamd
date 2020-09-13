@@ -16,6 +16,7 @@ limitations under the License.
 
 local fun = require 'fun'
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local ts = require("tableshape").types
 local logger = require 'rspamd_logger'
 local common = require "lua_selectors/common"
@@ -428,7 +429,18 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
       'given as second argument or `?`',
     ['args_schema'] = {ts.string:is_optional()}
   },
-
+  -- Extracts tld from a hostname
+  ['get_tld'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, _)
+      return rspamd_util.get_tld(inp)
+    end,
+    ['description'] = 'Extracts tld from a hostname represented as a string',
+    ['args_schema'] = {}
+  },
 }
 
 transform_function.match = transform_function.regexp
