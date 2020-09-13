@@ -18,7 +18,11 @@ local function rspamd_assert_table_equals(tbl)
 end
 
 local function rspamd_assert_table_equals_sorted(tbl)
-  return util.table_cmp(table.sort(tbl.expect), table.sort(tbl.actual))
+  local expect = util.deepcopy(tbl.expect)
+  local actual = util.deepcopy(tbl.actual)
+  table.sort(expect)
+  table.sort(actual)
+  return util.table_cmp(expect, actual)
 end
 
 local function table_keys_sorted(t)
