@@ -69,7 +69,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest",
-                expect = {"f46ccafe448fe4d7b46076938749695e"}
+                expect = {"1ac109c58a7d0f5f532100ac14e9f4d9"}
     },
 
     ["user"] = {
@@ -184,7 +184,7 @@ context("Selectors test", function()
 
     ["urls"] = {
                 selector = "urls",
-                expect = {{"http://example.net"}}},
+                expect = {{"http://subdomain.example.net"}}},
 
     ["emails"] = {
                 selector = "emails",
@@ -192,11 +192,11 @@ context("Selectors test", function()
 
     ["specific_urls"] = {
       selector = "specific_urls({limit = 1})",
-      expect = {{"http://example.net"}}},
+      expect = {{"http://subdomain.example.net"}}},
 
     ["specific_urls + emails"] = {
       selector = "specific_urls({need_emails = true, limit = 2})",
-      expect = {{"test@example.net", "http://example.net"}}},
+      expect = {{"test@example.net", "http://subdomain.example.net"}}},
 
     ["specific_urls + emails limit"] = {
       selector = "specific_urls({need_emails = true, limit = 1})",
@@ -224,7 +224,7 @@ context("Selectors test", function()
 
     ["get_host"] = {
                 selector = "urls:get_host",
-                expect = {{"example.net"}}},
+                expect = {{"subdomain.example.net"}}},
 
     ["get_tld"] = {
                 selector = "urls:get_tld",
@@ -398,7 +398,7 @@ Hello world
 Content-Type: text/html; charset="utf-8"
 
 <html><body>
-<a href="http://example.net">http://example.net</a>
+<a href="http://subdomain.example.net">http://subdomain.example.net</a>
 <a href="mailto:test@example.net">mail me</a>
 </html>
 
