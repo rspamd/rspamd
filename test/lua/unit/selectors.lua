@@ -5,6 +5,7 @@ context("Selectors test", function()
   local lua_selectors = require "lua_selectors"
   local lua_maps = require "lua_maps"
   local test_helper = require "rspamd_test_helper"
+  local lua_util = require "lua_util"
   local cfg = rspamd_config
   local task
 
@@ -226,9 +227,12 @@ context("Selectors test", function()
                 selector = "urls:get_host",
                 expect = {{"subdomain.example.net"}}},
 
-    ["get_tld"] = {
+    ["get_tld_method"] = {
                 selector = "urls:get_tld",
                 expect = {{"example.net"}}},
+    ["get_tld_transform"] = {
+      selector = "urls:get_host.get_tld",
+      expect = {{"example.net"}}},
 
     ["transformation regexp"] = {
                 selector = "urls:get_tld.regexp('\\.([\\w]+)$')",
@@ -356,7 +360,7 @@ context("Selectors test", function()
     },
   }
 
-  for case_name, case in pairs(cases) do
+  for case_name, case in lua_util.spairs(cases) do
     test("case " .. case_name, function()
       local elts = check_selector(case.selector)
       assert_not_nil(elts)
