@@ -394,7 +394,7 @@ rspamd_composite_expr_process (void *ud,
 	struct rspamd_task *task = cd->task;
 	GHashTableIter it;
 	gpointer k, v;
-	gdouble rc = epsilon, max = epsilon;
+	gdouble rc = 0, max = 0;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
