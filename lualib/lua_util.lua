@@ -982,7 +982,9 @@ local function deepcopy(orig)
     for orig_key, orig_value in next, orig, nil do
       copy[deepcopy(orig_key)] = deepcopy(orig_value)
     end
-    setmetatable(copy, deepcopy(getmetatable(orig)))
+    if getmetatable(orig) then
+      setmetatable(copy, deepcopy(getmetatable(orig)))
+    end
   else -- number, string, boolean, etc
     copy = orig
   end
@@ -990,6 +992,25 @@ local function deepcopy(orig)
 end
 
 exports.deepcopy = deepcopy
+
+--[[[
+-- @function lua_util.deepsort(table)
+-- params: {
+- - table
+-- }
+-- Performs recursive in-place sort of a table
+--]]
+local function deepsort(tbl, sort_func)
+  local orig_type = type(tbl)
+  if orig_type == 'table' then
+    table.sort(tbl, sort_func)
+    for _, orig_value in next, tbl, nil do
+      deepsort(orig_value)
+    end
+  end
+end
+
+exports.deepsort = deepsort
 
 --[[[
 -- @function lua_util.shallowcopy(tbl)
