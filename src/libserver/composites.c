@@ -607,6 +607,8 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	gboolean skip = FALSE, has_valid_op = FALSE,
 			want_remove_score = TRUE, want_remove_symbol = TRUE,
 			want_forced = FALSE;
+	const gchar *disable_score_reason = "no policy",
+		*disable_symbol_reason = "no policy";
 	GNode *par;
 
 	task = cd->task;
@@ -644,16 +646,22 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 		 * - if no composites would like to save score then we remove score
 		 * - if no composites would like to save symbol then we remove symbol
 		 */
-		if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_SYMBOL)) {
-			want_remove_symbol = FALSE;
-		}
+		if (!want_forced) {
+			if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_SYMBOL)) {
+				want_remove_symbol = FALSE;
+				disable_symbol_reason = cur->comp->sym;
+			}
 
-		if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_WEIGHT)) {
-			want_remove_score = FALSE;
-		}
+			if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_WEIGHT)) {
+				want_remove_score = FALSE;
+				disable_score_reason = cur->comp->sym;
+			}
 
-		if (cur->action & RSPAMD_COMPOSITE_REMOVE_FORCED) {
-			want_forced = TRUE;
+			if (cur->action & RSPAMD_COMPOSITE_REMOVE_FORCED) {
+				want_forced = TRUE;
+				disable_symbol_reason = cur->comp->sym;
+				disable_score_reason = cur->comp->sym;
+			}
 		}
 	}
 
@@ -662,15 +670,20 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	if (has_valid_op && ms && !(ms->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 
 		if (want_remove_score || want_forced) {
-			msg_debug_composites ("remove symbol weight for %s (was %.2f)",
-					key, ms->score);
+			msg_debug_composites ("%s remove symbol weight for %s (was %.2f), "
+						 "score removal affected by %s, symbol removal affected by %s",
+					(want_forced ? "forced" : "normal"), key, ms->score,
+					disable_score_reason, disable_symbol_reason);
 			cd->metric_res->score -= ms->score;
 			ms->score = 0.0;
 		}
 
 		if (want_remove_symbol || want_forced) {
 			ms->flags |= RSPAMD_SYMBOL_RESULT_IGNORED;
-			msg_debug_composites ("remove symbol %s", key);
+			msg_debug_composites ("%s remove symbol %s (score %.2f), "
+								  "score removal affected by %s, symbol removal affected by %s",
+					(want_forced ? "forced" : "normal"), key, ms->score,
+					disable_score_reason, disable_symbol_reason);
 		}
 	}
 }
