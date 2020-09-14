@@ -221,10 +221,10 @@ rspamd_rs_compile_cb (guint ncompiled, GError *err, void *cbd)
 
 	/*
 	 * Do not send notification unless all other workers are started
-	 * XXX: now we just sleep for 5 seconds to ensure that
+	 * XXX: now we just sleep for 1 seconds to ensure that
 	 */
 	if (!ctx->loaded) {
-		when = 5.0; /* Postpone */
+		when = 1.0; /* Postpone */
 		ctx->loaded = TRUE;
 		msg_info ("compiled %d regular expressions to the hyperscan tree, "
 				  "postpone loaded notification for %.0f seconds to avoid races",
