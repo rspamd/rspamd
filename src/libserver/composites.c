@@ -383,6 +383,7 @@ static gdouble
 rspamd_composite_expr_process (void *ud,
 		rspamd_expression_atom_t *atom)
 {
+	static const double epsilon = 0.00001;
 	struct composites_data *cd = (struct composites_data *)ud;
 	const gchar *sym = NULL;
 	struct rspamd_composite_atom *comp_atom = (struct rspamd_composite_atom *)atom->data;
@@ -393,7 +394,7 @@ rspamd_composite_expr_process (void *ud,
 	struct rspamd_task *task = cd->task;
 	GHashTableIter it;
 	gpointer k, v;
-	gdouble rc = 0, max = 0;
+	gdouble rc = epsilon, max = epsilon;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
@@ -403,10 +404,11 @@ rspamd_composite_expr_process (void *ud,
 
 		if (ms) {
 			if (ms->score == 0) {
-				rc = 0.001; /* Distinguish from 0 */
+				rc = epsilon; /* Distinguish from 0 */
 			}
 			else {
-				rc = ms->score;
+				/* Treat negative and positive scores equally... */
+				rc = fabs (ms->score);
 			}
 		}
 
