@@ -20,8 +20,8 @@ end
 local function rspamd_assert_table_equals_sorted(tbl)
   local expect = util.deepcopy(tbl.expect)
   local actual = util.deepcopy(tbl.actual)
-  table.sort(expect)
-  table.sort(actual)
+  util.deepsort(expect)
+  util.deepsort(actual)
   return util.table_cmp(expect, actual)
 end
 
