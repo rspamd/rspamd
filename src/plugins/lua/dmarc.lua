@@ -1191,7 +1191,7 @@ if opts['reporting'] == true then
               delete_reports()
             else
               local upool = mempool.create()
-              local split = rspamd_str_split(policy['rua'], ',')
+              local split = rspamd_str_split(policy['rua']:gsub('%s+', ''), ',')
               for _, m in ipairs(split) do
                 local url = rspamd_url.create(upool, m)
                 if not url then
@@ -1438,4 +1438,3 @@ rspamd_config:register_symbol({
 
 rspamd_config:register_dependency('DMARC_CALLBACK', symbols['spf_allow_symbol'])
 rspamd_config:register_dependency('DMARC_CALLBACK', symbols['dkim_allow_symbol'])
-
