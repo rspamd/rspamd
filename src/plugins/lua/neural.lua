@@ -116,7 +116,7 @@ local redis_lua_script_vectors_len = [[
   local locked = redis.call('HGET', prefix, 'lock')
   if locked then
     local host = redis.call('HGET', prefix, 'hostname') or 'unknown'
-    return string.format('%s:%s', hostname, locked)
+    return string.format('%s:%s', host, locked)
   end
   local nspam = 0
   local nham = 0
