@@ -45,14 +45,24 @@ local function maybe_fill_maps_cache()
   end
 end
 
-local function check_specific_map(input, uri, m, results)
+local function check_specific_map(input, uri, m, results, report_misses)
   local value = m:get_key(input)
 
   if value then
     local result = {
       map = uri,
       alias = uri:match('/([^/]+)$'),
-      value = value
+      value = value,
+      key = input,
+      hit = true,
+    }
+    table.insert(results, result)
+  elseif report_misses then
+    local result = {
+      map = uri,
+      alias = uri:match('/([^/]+)$'),
+      key = input,
+      hit = false,
     }
     table.insert(results, result)
   end
@@ -60,52 +70,66 @@ end
 
 local function handle_query_map(_, conn, req_params)
   maybe_fill_maps_cache()
+  local keys_to_check = {}
+
   if req_params.value and req_params.value ~= '' then
-    local results = {}
-    for uri,m in pairs(maps_cache) do
-      check_specific_map(req_params.value, uri, m, results)
-    end
-    conn:send_ucl{
-      success = (#results > 0),
-      results = results
-    }
-  else
-    conn:send_error(404, 'missing value')
+    keys_to_check[1] = req_params.value
+  elseif req_params.values then
+    keys_to_check = lua_util.str_split(req_params.values, ',')
   end
+
+  local results = {}
+  for _,key in ipairs(keys_to_check) do
+    for uri,m in pairs(maps_cache) do
+      check_specific_map(key, uri, m, results, req_params.report_misses)
+    end
+  end
+  conn:send_ucl{
+    success = (#results > 0),
+    results = results
+  }
 end
 
 local function handle_query_specific_map(_, conn, req_params)
   maybe_fill_maps_cache()
+  -- Fill keys to check
+  local keys_to_check = {}
   if req_params.value and req_params.value ~= '' then
-    local maps_to_check = maps_cache
-    if req_params.maps then
-      local map_names = lua_util.str_split(req_params.maps, ',')
-      maps_to_check = {}
-      for _,mn in ipairs(map_names) do
-        if maps_cache[mn] then
-          maps_to_check[mn] = maps_cache[mn]
-        else
-          local alias = maps_aliases[mn]
+    keys_to_check[1] = req_params.value
+  elseif req_params.values then
+    keys_to_check = lua_util.str_split(req_params.values, ',')
+  end
+  local maps_to_check = maps_cache
+  -- Fill maps to check
+  if req_params.maps then
+    local map_names = lua_util.str_split(req_params.maps, ',')
+    maps_to_check = {}
+    for _,mn in ipairs(map_names) do
+      if maps_cache[mn] then
+        maps_to_check[mn] = maps_cache[mn]
+      else
+        local alias = maps_aliases[mn]
 
-          if alias then
-            maps_to_check[alias] = maps_cache[alias]
-          else
-            conn:send_error(404, 'no such map: ' .. mn)
-          end
+        if alias then
+          maps_to_check[alias] = maps_cache[alias]
+        else
+          conn:send_error(404, 'no such map: ' .. mn)
         end
       end
     end
-    local results = {}
-    for uri,m in pairs(maps_to_check) do
-      check_specific_map(req_params.value, uri, m, results)
-    end
-    conn:send_ucl{
-      success = (#results > 0),
-      results = results
-    }
-  else
-    conn:send_error(404, 'missing value')
   end
+
+  local results = {}
+  for _,key in ipairs(keys_to_check) do
+    for uri,m in pairs(maps_to_check) do
+      check_specific_map(key, uri, m, results, req_params.report_misses)
+    end
+  end
+
+  conn:send_ucl{
+    success = (#results > 0),
+    results = results
+  }
 end
 
 local function handle_list_maps(_, conn, _)
