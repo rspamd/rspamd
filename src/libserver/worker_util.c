@@ -1056,7 +1056,7 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 		GList *elt = (GList *)v;
 		GList *our = cf->listen_socks;
 
-		if (our != elt) {
+		if (g_list_position (our, elt) == -1) {
 			GList *cur = elt;
 
 			while (cur) {
@@ -1064,7 +1064,10 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 						(struct rspamd_worker_listen_socket *)cur->data;
 
 				if (ls->fd != -1 && close (ls->fd) == -1) {
-					msg_err ("cannot close fd %d: %s", ls->fd, strerror (errno));
+					msg_err ("cannot close fd %d (addr = %s): %s",
+							ls->fd,
+							rspamd_inet_address_to_string_pretty (ls->addr),
+							strerror (errno));
 				}
 
 				cur = g_list_next (cur);
