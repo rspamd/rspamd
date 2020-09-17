@@ -436,7 +436,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     },
     ['map_type'] = 'string',
     ['process'] = function(inp, _, _)
-      return rspamd_util.get_tld(inp)
+      return rspamd_util.get_tld(inp),'string'
     end,
     ['description'] = 'Extracts tld from a hostname represented as a string',
     ['args_schema'] = {}
