@@ -94,6 +94,9 @@ local function add_antivirus_rule(sym, opts)
   if not opts.symbol_macro then
     opts.symbol_macro = opts.symbol .. '_MACRO'
   end
+  if not opts.symbol_exceed then
+    opts.symbol_exceed = opts.symbol .. '_LIMITS_EXCEEDED'
+  end
 
   -- WORKAROUND for deprecated attachments_only
   if opts.attachments_only ~= nil then
@@ -194,6 +197,13 @@ if opts and type(opts) == 'table' then
         rspamd_config:register_symbol({
           type = 'virtual',
           name = m['symbol_macro'],
+          parent = id,
+          score = 0.0,
+          group = N
+        })
+        rspamd_config:register_symbol({
+          type = 'virtual',
+          name = m['symbol_exceed'],
           parent = id,
           score = 0.0,
           group = N
