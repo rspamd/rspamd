@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <stdint.h>
 
 #include "lua.h"
 
@@ -151,8 +152,9 @@ typedef struct Charset {
 
 #define testchar(st,c)	(((int)(st)[((c) >> 3)] & (1 << ((c) & 7))))
 
-/* Special workaround for luajit */
-#if defined(WITH_LUAJIT) && !(defined(_X86_) || defined(__x86_64__) || defined(__i386__) || defined(__powerpc__))
+/* Special workaround for luajit lightuserdata limitations with GC64 */
+#if defined(WITH_LUAJIT) && INTPTR_MAX == INT64_MAX && \
+	!(defined(_X86_) || defined(__x86_64__) || defined(__i386__) || defined(__powerpc__))
 # define LPEG_LUD_WORKAROUND 1
 void * lpeg_allocate_mem_low(size_t sz);
 void lpeg_free_mem_low(void *p);
