@@ -145,7 +145,7 @@ local function clamav_check(task, content, digest, rule)
             common.yield_result(task, rule, vname, 0.0, 'macro')
           elseif string.find(vname, '^Heuristics%.Limits%.Exceeded') then
             rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
-            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0, 'fail')
+            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0, 'limits_exceeded')
           elseif vname then
             common.yield_result(task, rule, vname)
             cached = vname
