@@ -91,6 +91,11 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
     symbol = rule.symbol_macro
     threat_info = "Scan has returned that input contains macros"
     dyn_weight = 1.0
+  elseif is_fail == 'limits_exceeded' then
+    patterns = rule.patterns
+    symbol = rule.symbol_exceed
+    threat_info = "Scan has returned signature limits exceeded - bypass risk"
+    dyn_weight = 1.0
   end
 
   if type(vname) == 'string' then
