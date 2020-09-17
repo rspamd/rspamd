@@ -73,7 +73,7 @@ lpeg_allocate_mem_low (size_t sz)
 
 	cp = mmap (base_addr, sz + sizeof (sz), PROT_WRITE | PROT_READ,
 			flags, -1, 0);
-	assert (cp != NULL);
+	assert (cp != MAP_FAILED);
 	memcpy (cp, &sz, sizeof (sz));
 
 	for (unsigned i = 0; i < MAX_PIECES; i ++) {
