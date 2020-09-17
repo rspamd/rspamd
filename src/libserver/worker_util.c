@@ -985,6 +985,8 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 	nfd = ls->fd;
 #endif
 
+#if 0
+	/* This needed merely if we have reuseport for tcp, but for now it is disabled */
 	/* This means that we have an fd with no listening enabled */
 	if (nfd != -1) {
 		if (ls->type == RSPAMD_WORKER_SOCKET_TCP) {
@@ -993,6 +995,7 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 			}
 		}
 	}
+#endif
 
 	return true;
 }
@@ -1069,6 +1072,8 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 							rspamd_inet_address_to_string_pretty (ls->addr),
 							strerror (errno));
 				}
+
+				ls->fd = -1;
 
 				cur = g_list_next (cur);
 			}
