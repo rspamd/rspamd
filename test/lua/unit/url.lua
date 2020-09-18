@@ -118,6 +118,21 @@ context("URL check functions", function()
     {"http:www.twitter.com#test", true, {
       host = 'www.twitter.com', fragment = 'test'
     }},
+    {"http://example。com#test", true, {
+      host = 'example.com', fragment = 'test'
+    }},
+    {"http://hoho.example。com#test", true, {
+      host = 'hoho.example.com', fragment = 'test'
+    }},
+    {"http://hoho。example。com#test", true, {
+      host = 'hoho.example.com', fragment = 'test'
+    }},
+    {"http://hoho．example。com#test", true, {
+      host = 'hoho.example.com', fragment = 'test'
+    }},
+    {"http://hehe｡example。com#test", true, {
+      host = 'hehe.example.com', fragment = 'test'
+    }},
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc
