@@ -2084,6 +2084,77 @@ rspamd_telephone_normalise_inplace (struct rspamd_url *uri)
 	uri->urllen -= (orig_len - uri->hostlen);
 }
 
+static inline bool
+is_idna_label_dot (UChar ch)
+{
+	switch(ch){
+	case 0x3002:
+	case 0xFF0E:
+	case 0xFF61:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/*
+ * All credits for this investigation should go to
+ * Dr. Hajime Shimada and Mr. Shirakura as they have revealed this case in their
+ * research.
+ */
+
+/*
+ * This function replaces unsafe IDNA dots in host labels. Unfortunately,
+ * IDNA extends dot definition from '.' to multiple other characters that
+ * should be treated equally.
+ * This function replaces such dots and returns `true` if these dots are found.
+ * In this case, it should be treated as obfuscation attempt.
+ */
+static bool
+rspamd_url_remove_dots (struct rspamd_url *uri)
+{
+	const gchar *hstart = rspamd_url_host_unsafe (uri);
+	gchar *t;
+	UChar32 uc;
+	gint i = 0, hlen;
+	bool ret = false;
+
+	if (uri->hostlen == 0) {
+		return false;
+	}
+
+	hlen = uri->hostlen;
+	t = rspamd_url_host_unsafe (uri);
+
+	while (i < hlen) {
+		gint prev_i = i;
+		U8_NEXT (hstart, i, hlen, uc);
+
+		if (is_idna_label_dot (uc)) {
+			*t ++ = '.';
+			ret = true;
+		}
+		else {
+			if (ret) {
+				/* We have to shift the remaining stuff */
+				while (prev_i < i) {
+					*t ++ = *(hstart + prev_i);
+					prev_i ++;
+				}
+			}
+			else {
+				t += (i - prev_i);
+			}
+		}
+	}
+
+	if (ret) {
+		rspamd_url_shift (uri, t - hstart, UF_HOST);
+	}
+
+	return ret;
+}
+
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri,
 				  gchar *uristring, gsize len,
@@ -2221,6 +2292,10 @@ rspamd_url_parse (struct rspamd_url *uri,
 		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
 	}
 
+	if (rspamd_url_remove_dots (uri)) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+
 
 	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
 		/* Ensure that hostname starts with something sane (exclude numeric urls) */
@@ -2246,6 +2321,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 	UChar *utf16_hostname, *norm_utf16;
 	gint32 utf16_len, norm_utf16_len, norm_utf8_len;
+	UParseError parse_error;
 
 	utf16_hostname = rspamd_mempool_alloc (pool, uri->hostlen * sizeof (UChar));
 	struct UConverter *utf8_conv = rspamd_get_utf8_converter ();
@@ -2260,7 +2336,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 	norm_utf16 = rspamd_mempool_alloc (pool, utf16_len * sizeof (UChar));
 	norm_utf16_len = usprep_prepare (nameprep, utf16_hostname, utf16_len,
-			norm_utf16, utf16_len, USPREP_DEFAULT, NULL, &uc_err);
+			norm_utf16, utf16_len, USPREP_DEFAULT, &parse_error, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
 
