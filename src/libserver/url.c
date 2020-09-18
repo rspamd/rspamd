@@ -2292,10 +2292,11 @@ rspamd_url_parse (struct rspamd_url *uri,
 		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
 	}
 
+	rspamd_url_shift (uri, unquoted_len, UF_HOST);
+
 	if (rspamd_url_remove_dots (uri)) {
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
 	}
-
 
 	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
 		/* Ensure that hostname starts with something sane (exclude numeric urls) */
@@ -2305,8 +2306,6 @@ rspamd_url_parse (struct rspamd_url *uri,
 			return URI_ERRNO_BAD_FORMAT;
 		}
 	}
-
-	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
 	/* Apply nameprep algorithm */
 	static UStringPrepProfile *nameprep = NULL;
