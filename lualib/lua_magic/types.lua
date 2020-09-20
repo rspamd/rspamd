@@ -117,6 +117,14 @@ local types = {
     ct = 'application/x-zoo',
     type = 'archive',
   },
+  egg = {
+    ct = 'application/x-egg',
+    type = 'archive',
+  },
+  alz = {
+    ct = 'application/x-alz',
+    type = 'archive',
+  },
   xar = {
     ct = 'application/x-xar',
     type = 'archive',

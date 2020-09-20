@@ -254,6 +254,26 @@ local patterns = {
       },
     }
   },
+  egg = {
+    -- ALZip egg
+    matches = {
+      {
+        string = [[EGGA]],
+        weight = 60,
+        relative_position = 0,
+      },
+    }
+  },
+  alz = {
+    -- ALZip alz
+    matches = {
+      {
+        string = [[ALZ\x{01}]],
+        weight = 60,
+        relative_position = 0,
+      },
+    }
+  },
   -- Apple is a 'special' child: this needs to be matched at the data tail...
   dmg = {
     matches = {
