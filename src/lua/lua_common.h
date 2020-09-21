@@ -8,6 +8,10 @@
 #include <lualib.h>
 #include <stdbool.h>
 
+#ifdef WITH_LUAJIT
+#include <luajit.h>
+#endif
+
 #include "rspamd.h"
 #include "ucl.h"
 #include "lua_ucl.h"
@@ -41,11 +45,15 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 #endif
 
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM == 501
+
+#ifndef MOONJIT_VERSION
 static inline int lua_absindex (lua_State *L, int i) {
 	if (i < 0 && i > LUA_REGISTRYINDEX)
 		i += lua_gettop(L) + 1;
 	return i;
 }
+#endif
+
 static inline int lua_rawgetp (lua_State *L, int i, const void *p) {
 	int abs_i = lua_absindex(L, i);
 	lua_pushlightuserdata(L, (void*)p);
