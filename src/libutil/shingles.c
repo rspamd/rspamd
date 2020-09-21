@@ -188,6 +188,8 @@ rspamd_shingles_from_text (GArray *input,
 							g_free (res);
 						}
 
+						rspamd_fstring_free (row);
+
 						return NULL;
 					}
 
@@ -256,7 +258,12 @@ rspamd_shingles_from_text (GArray *input,
 							g_free (hashes[i]);
 						}
 
+						if (pool != NULL) {
+							g_free (res);
+						}
+
 						g_free (hashes);
+						rspamd_fstring_free (row);
 
 						return NULL;
 					}
