@@ -47,7 +47,7 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 #if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM == 501
 
 /* Special hack to work with moonjit of specific version */
-#if !defined(MOONJIT_VERSION) || (!defined(LUAJIT_VERSION_NUM) || LUAJIT_VERSION_NUM != 20200)
+#if !defined(MOONJIT_VERSION) && (!defined(LUAJIT_VERSION_NUM) || LUAJIT_VERSION_NUM != 20200)
 static inline int lua_absindex (lua_State *L, int i) {
 	if (i < 0 && i > LUA_REGISTRYINDEX)
 		i += lua_gettop(L) + 1;
