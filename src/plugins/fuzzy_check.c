@@ -82,6 +82,7 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	double max_score;
+	double weight_threshold;
 	gboolean read_only;
 	gboolean skip_unknown;
 	gboolean no_share;
@@ -312,6 +313,7 @@ fuzzy_rule_new (const char *default_symbol, rspamd_mempool_t *pool)
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		rule->mappings);
 	rule->read_only = FALSE;
+	rule->weight_threshold = NAN;
 
 	return rule;
 }
@@ -594,6 +596,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				6, rule->hash_key->str,
 				6, rule->shingles_key->str,
 				rule->algorithm_str);
+	}
+
+	if ((value = ucl_object_lookup (obj,  "weight_threshold")) != NULL) {
+		rule->weight_threshold = ucl_object_todouble (value);
 	}
 
 	/*
@@ -2362,7 +2368,8 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 }
 
 static void
-fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
+fuzzy_insert_metric_results (struct rspamd_task *task, struct fuzzy_rule *rule,
+		GPtrArray *results)
 {
 	struct fuzzy_client_result *res;
 	guint i;
@@ -2439,8 +2446,22 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 			}
 		}
 
-		rspamd_task_insert_result_single (task, res->symbol,
-				res->score * mult, res->option);
+		gdouble weight = res->score * mult;
+
+		if (!isnan (rule->weight_threshold)) {
+			if (weight >= rule->weight_threshold) {
+				rspamd_task_insert_result_single (task, res->symbol,
+						weight, res->option);
+			}
+			else {
+				msg_info_task ("%s is not added: weight=%.4f below threshold",
+						res->symbol, weight);
+			}
+		}
+		else {
+			rspamd_task_insert_result_single (task, res->symbol,
+					weight, res->option);
+		}
 	}
 }
 
@@ -2461,10 +2482,12 @@ fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 	}
 
 	if (nreplied == session->commands->len) {
-		fuzzy_insert_metric_results (session->task, session->results);
+		fuzzy_insert_metric_results (session->task, session->rule, session->results);
+
 		if (session->item) {
 			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
+
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 
 		return TRUE;
