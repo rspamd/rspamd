@@ -149,7 +149,17 @@ struct rspamd_symbol_result *rspamd_task_insert_result_full (struct rspamd_task 
 #define rspamd_task_insert_result(task, symbol, flag, opts) \
     rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT, NULL)
 
-
+/**
+ * Removes a symbol from a specific symbol result
+ * @param task
+ * @param symbol
+ * @param result
+ * @return
+ */
+struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
+		struct rspamd_task *task,
+		const gchar *symbol,
+		struct rspamd_scan_result *result);
 /**
  * Adds new option to symbol
  * @param task

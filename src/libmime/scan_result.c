@@ -354,7 +354,8 @@ insert_metric_result (struct rspamd_task *task,
 
 						diff = NAN;
 						break;
-					} else if (gr_score) {
+					}
+					else if (gr_score) {
 						*gr_score += cur_diff;
 
 						if (cur_diff < diff) {
@@ -885,6 +886,59 @@ rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
 
 	if (k != kh_end (result->symbols)) {
 		res = &kh_value (result->symbols, k);
+	}
+
+	return res;
+}
+
+struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
+		struct rspamd_task *task,
+		const gchar *symbol,
+		struct rspamd_scan_result *result)
+{
+	struct rspamd_symbol_result *res = NULL;
+	khiter_t k;
+
+	if (result == NULL) {
+		/* Use default result */
+		result = task->result;
+	}
+
+	k = kh_get (rspamd_symbols_hash, result->symbols, symbol);
+
+	if (k != kh_end (result->symbols)) {
+		res = &kh_value (result->symbols, k);
+
+		if (!isnan (res->score)) {
+			/* Remove score from the result */
+			result->score -= res->score;
+
+			/* Also check the group limit */
+			if (result->sym_groups && res->sym) {
+				struct rspamd_symbol_group *gr;
+				gint i;
+
+				PTR_ARRAY_FOREACH (res->sym->groups, i, gr) {
+					gdouble *gr_score;
+
+					k = kh_get (rspamd_symbols_group_hash,
+							result->sym_groups, gr);
+
+					if (k != kh_end (result->sym_groups)) {
+						gr_score = &kh_value (result->sym_groups, k);
+
+						if (gr_score) {
+							*gr_score -= res->score;
+						}
+					}
+				}
+			}
+		}
+
+		kh_del (rspamd_symbols_hash, result->symbols, k);
+	}
+	else {
+		return NULL;
 	}
 
 	return res;
