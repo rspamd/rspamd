@@ -170,6 +170,15 @@ LUA_FUNCTION_DEF (task, insert_result_named);
  * @param {string/table} options list of optional options attached to a symbol adjusted
  */
 LUA_FUNCTION_DEF (task, adjust_result);
+
+/***
+ * @method task:remove_result(symbol[, shadow_result])
+ * Removes the symbol from a named or unamed/default result
+ * @param {string} symbol symbol to remove
+ * @param {string} shadow_result name of shadow result
+ * @return {boolean} true if a symbol has been removed
+ */
+LUA_FUNCTION_DEF (task, remove_result);
 /***
  * @method task:set_pre_result(action, [message, [module], [score], [priority], [flags])
  * Sets pre-result for a task. It is used in pre-filters to specify early result
@@ -1178,6 +1187,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, insert_result_named),
 	LUA_INTERFACE_DEF (task, adjust_result),
+	LUA_INTERFACE_DEF (task, remove_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, has_pre_result),
 	LUA_INTERFACE_DEF (task, append_message),
@@ -2158,6 +2168,33 @@ lua_task_adjust_result (lua_State * L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_remove_result (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol_name = luaL_checkstring (L, 2);
+	struct rspamd_scan_result *metric_res;
+	const gchar *named_result = luaL_optstring (L, 3, NULL);
+
+	if (task != NULL) {
+		metric_res = rspamd_find_metric_result (task, named_result);
+
+		if (metric_res == NULL) {
+			return luaL_error (L, "invalid arguments: bad named result: %s",
+					named_result);
+		}
+
+		lua_pushboolean (L, (rspamd_task_remove_symbol_result (task, symbol_name,
+				metric_res)) != NULL);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
