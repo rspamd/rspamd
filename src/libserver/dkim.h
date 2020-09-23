@@ -166,6 +166,7 @@ typedef void (*dkim_key_handler_f) (rspamd_dkim_key_t *key, gsize keylen,
  */
 rspamd_dkim_context_t *rspamd_create_dkim_context (const gchar *sig,
 												   rspamd_mempool_t *pool,
+												   struct rspamd_dns_resolver *resolver,
 												   guint time_jitter,
 												   enum rspamd_dkim_type type,
 												   GError **err);

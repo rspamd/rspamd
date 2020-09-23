@@ -130,6 +130,7 @@ enum rspamd_arc_seal_cv {
 struct rspamd_dkim_context_s {
 	struct rspamd_dkim_common_ctx common;
 	rspamd_mempool_t *pool;
+	struct rspamd_dns_resolver *resolver;
 	gsize blen;
 	gsize bhlen;
 	gint sig_alg;
@@ -333,8 +334,25 @@ rspamd_dkim_parse_domain (rspamd_dkim_context_t * ctx,
 	gsize len,
 	GError **err)
 {
-	ctx->domain = rspamd_mempool_alloc (ctx->pool, len + 1);
-	rspamd_strlcpy (ctx->domain, param, len + 1);
+	if (!rspamd_str_has_8bit (param, len)) {
+		ctx->domain = rspamd_mempool_alloc (ctx->pool, len + 1);
+		rspamd_strlcpy (ctx->domain, param, len + 1);
+	}
+	else {
+		ctx->domain = rspamd_dns_resolver_idna_convert_utf8 (ctx->resolver,
+				ctx->pool, param, len, NULL);
+
+		if (!ctx->domain) {
+			g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_INVALID_H,
+					"invalid dkim domain tag %*.s: idna failed",
+					(int)len, param);
+
+			return FALSE;
+		}
+	}
+
 	return TRUE;
 }
 
@@ -416,8 +434,26 @@ rspamd_dkim_parse_selector (rspamd_dkim_context_t * ctx,
 	gsize len,
 	GError **err)
 {
-	ctx->selector = rspamd_mempool_alloc (ctx->pool, len + 1);
-	rspamd_strlcpy (ctx->selector, param, len + 1);
+
+	if (!rspamd_str_has_8bit (param, len)) {
+		ctx->selector = rspamd_mempool_alloc (ctx->pool, len + 1);
+		rspamd_strlcpy (ctx->selector, param, len + 1);
+	}
+	else {
+		ctx->selector = rspamd_dns_resolver_idna_convert_utf8 (ctx->resolver,
+				ctx->pool, param, len, NULL);
+
+		if (!ctx->selector) {
+			g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_INVALID_H,
+					"invalid dkim selector tag %*.s: idna failed",
+					(int)len, param);
+
+			return FALSE;
+		}
+	}
+
 	return TRUE;
 }
 
@@ -758,10 +794,11 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
  */
 rspamd_dkim_context_t *
 rspamd_create_dkim_context (const gchar *sig,
-		rspamd_mempool_t *pool,
-		guint time_jitter,
-		enum rspamd_dkim_type type,
-		GError **err)
+							rspamd_mempool_t *pool,
+							struct rspamd_dns_resolver *resolver,
+							guint time_jitter,
+							enum rspamd_dkim_type type,
+							GError **err)
 {
 	const gchar *p, *c, *tag = NULL, *end;
 	gsize taglen;
@@ -788,6 +825,7 @@ rspamd_create_dkim_context (const gchar *sig,
 
 	ctx = rspamd_mempool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
 	ctx->pool = pool;
+	ctx->resolver = resolver;
 
 	if (type == RSPAMD_DKIM_ARC_SEAL) {
 		ctx->common.header_canon_type = DKIM_CANON_RELAXED;

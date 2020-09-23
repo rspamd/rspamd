@@ -1187,6 +1187,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 
 			ctx = rspamd_create_dkim_context (rh_cur->decoded,
 					task->task_pool,
+					task->resolver,
 					dkim_module_ctx->time_jitter,
 					RSPAMD_DKIM_NORMAL,
 					&err);
@@ -1508,6 +1509,7 @@ lua_dkim_verify_handler (lua_State *L)
 
 		ctx = rspamd_create_dkim_context (sig,
 				task->task_pool,
+				task->resolver,
 				dkim_module_ctx->time_jitter,
 				type,
 				&err);
