@@ -36,6 +36,7 @@ struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
 	struct ev_loop *event_loop;
 	rspamd_lru_hash_t *fails_cache;
+	void *uidna;
 	ev_tstamp fails_cache_time;
 	struct upstream_list *ups;
 	struct rspamd_config *cfg;
@@ -86,6 +87,20 @@ gboolean rspamd_dns_resolver_request_task_forced (struct rspamd_task *task,
 												  gpointer ud,
 												  enum rdns_request_type type,
 												  const char *name);
+
+/**
+ * Converts a name into idna from UTF8
+ * @param resolver resolver (must be initialised)
+ * @param pool optional memory pool (can be NULL, then you need to g_free) the result
+ * @param name input name
+ * @param namelen length of input (-1 for zero terminated)
+ * @return encoded string
+ */
+gchar* rspamd_dns_resolver_idna_convert_utf8 (struct rspamd_dns_resolver *resolver,
+										  rspamd_mempool_t *pool,
+										  const char *name,
+										  gint namelen,
+										  guint *outlen);
 
 #ifdef  __cplusplus
 }

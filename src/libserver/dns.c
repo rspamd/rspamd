@@ -15,7 +15,7 @@
  */
 
 
-#include <contrib/librdns/rdns.h>
+#include "contrib/librdns/rdns.h"
 #include "config.h"
 #include "dns.h"
 #include "rspamd.h"
@@ -24,6 +24,8 @@
 #include "contrib/librdns/dns_private.h"
 #include "contrib/librdns/rdns_ev.h"
 #include "unix-std.h"
+
+#include <unicode/uidna.h>
 
 static const gchar *M = "rspamd dns";
 
@@ -64,6 +66,22 @@ struct rspamd_dns_fail_cache_entry {
 	const char *name;
 	gint32 namelen;
 	enum rdns_request_type type;
+};
+
+static const gint8 ascii_dns_table[128]={
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		/* HYPHEN-MINUS..FULL STOP */
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  1,  1, -1,
+		/* 0..9 digits */
+		1,  1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -1, -1, -1, -1, -1,
+		/*  LATIN CAPITAL LETTER A..LATIN CAPITAL LETTER Z */
+		-1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+		/* _  */
+		1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -1, -1, -1,  1,
+		/* LATIN SMALL LETTER A..LATIN SMALL LETTER Z */
+		-1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+		1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -1, -1, -1, -1
 };
 
 static guint
@@ -189,6 +207,8 @@ rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
 {
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata = NULL;
+	guint nlen = strlen (name);
+	gchar *real_name = NULL;
 
 	g_assert (resolver != NULL);
 
@@ -196,13 +216,42 @@ rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
 		return NULL;
 	}
 
+	if (nlen == 0 || nlen > DNS_D_MAXNAME) {
+		return NULL;
+	}
+
 	if (session && rspamd_session_blocked (session)) {
 		return NULL;
 	}
 
+	if (rspamd_str_has_8bit (name, nlen)) {
+		/* Convert to idna using libicu as it follows all the standards */
+		real_name = rspamd_dns_resolver_idna_convert_utf8 (resolver, pool,
+				name, nlen, &nlen);
+
+		if (real_name == NULL) {
+			return NULL;
+		}
+
+		name = real_name;
+	}
+
+	/* Name is now in ASCII only */
+	for (gsize i = 0; i < nlen; i ++) {
+		if (ascii_dns_table[((unsigned int)name[i]) & 0x7F] == -1) {
+			/* Invalid DNS name requested */
+
+			if (!pool) {
+				g_free (real_name);
+			}
+
+			return NULL;
+		}
+	}
+
 	if (pool != NULL) {
 		reqdata =
-			rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_dns_request_ud));
+				rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_dns_request_ud));
 	}
 	else {
 		reqdata = g_malloc0 (sizeof (struct rspamd_dns_request_ud));
@@ -230,9 +279,14 @@ rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
 	if (req == NULL) {
 		if (pool == NULL) {
 			g_free (reqdata);
+			g_free (real_name);
 		}
 
 		return NULL;
+	}
+
+	if (real_name && pool == NULL) {
+		g_free (real_name);
 	}
 
 	return reqdata;
@@ -820,6 +874,7 @@ rspamd_dns_resolver_init (rspamd_logger_t *logger,
 
 	dns_resolver = g_malloc0 (sizeof (struct rspamd_dns_resolver));
 	dns_resolver->event_loop = ev_base;
+
 	if (cfg != NULL) {
 		dns_resolver->request_timeout = cfg->dns_timeout;
 		dns_resolver->max_retransmits = cfg->dns_retransmits;
@@ -830,6 +885,11 @@ rspamd_dns_resolver_init (rspamd_logger_t *logger,
 	}
 
 	dns_resolver->r = rdns_resolver_new ();
+
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	dns_resolver->uidna = uidna_openUTS46 (UIDNA_DEFAULT, &uc_err);
+	g_assert (!U_FAILURE (uc_err));
 	rdns_bind_libev (dns_resolver->r, dns_resolver->event_loop);
 
 	if (cfg != NULL) {
@@ -924,6 +984,8 @@ rspamd_dns_resolver_deinit (struct rspamd_dns_resolver *resolver)
 			rspamd_lru_hash_destroy (resolver->fails_cache);
 		}
 
+		uidna_close (resolver->uidna);
+
 		g_free (resolver);
 	}
 }
@@ -998,4 +1060,59 @@ rspamd_dns_upstream_count (void *ups_data)
 	struct upstream_list *ups = ups_data;
 
 	return rspamd_upstreams_alive (ups);
+}
+
+gchar*
+rspamd_dns_resolver_idna_convert_utf8 (struct rspamd_dns_resolver *resolver,
+											  rspamd_mempool_t *pool,
+											  const char *name,
+											  gint namelen,
+											  guint *outlen)
+{
+	if (resolver == NULL || resolver->uidna == NULL || name == NULL
+			|| namelen > DNS_D_MAXNAME) {
+		return NULL;
+	}
+
+	guint dest_len;
+	UErrorCode uc_err = U_ZERO_ERROR;
+	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+	/* Calculate length required */
+	dest_len = uidna_nameToASCII_UTF8 (resolver->uidna, name, namelen,
+			NULL, 0, &info, &uc_err);
+
+	if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
+		gchar *dest;
+
+		if (pool) {
+			dest = rspamd_mempool_alloc (pool, dest_len + 1);
+		}
+		else {
+			dest = g_malloc (dest_len + 1);
+		}
+
+		uc_err = U_ZERO_ERROR;
+
+		dest_len = uidna_nameToASCII_UTF8 (resolver->uidna, name, namelen,
+				dest, dest_len + 1, &info, &uc_err);
+
+		if (U_FAILURE (uc_err)) {
+
+			if (!pool) {
+				g_free (dest);
+			}
+
+			return NULL;
+		}
+
+		dest[dest_len] = '\0';
+
+		if (outlen) {
+			*outlen = dest_len;
+		}
+
+		return dest;
+	}
+
+	return NULL;
 }
