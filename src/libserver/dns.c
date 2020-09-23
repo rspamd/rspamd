@@ -884,7 +884,8 @@ rspamd_dns_resolver_init (rspamd_logger_t *logger,
 		dns_resolver->max_retransmits = 2;
 	}
 
-	dns_resolver->r = rdns_resolver_new ();
+	/* IDN translation is performed in Rspamd now */
+	dns_resolver->r = rdns_resolver_new (RDNS_RESOLVER_NOIDN);
 
 	UErrorCode uc_err = U_ZERO_ERROR;
 

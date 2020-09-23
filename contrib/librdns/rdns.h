@@ -233,10 +233,15 @@ struct rdns_request_name {
  * RDNS API
  */
 
+enum rdns_resolver_flags {
+	RDNS_RESOLVER_DEFAULT,
+	RDNS_RESOLVER_NOIDN = (1u << 0u),
+};
+
 /**
  * Create DNS resolver structure
  */
-struct rdns_resolver *rdns_resolver_new (void);
+struct rdns_resolver *rdns_resolver_new (int flags);
 
 /**
  * Bind resolver to specified async context

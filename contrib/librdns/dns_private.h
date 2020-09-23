@@ -151,6 +151,7 @@ struct rdns_resolver {
 	bool async_binded;
 	bool initialized;
 	bool enable_dnssec;
+	int flags;
 	ref_entry_t ref;
 };
 

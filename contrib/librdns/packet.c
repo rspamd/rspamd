@@ -105,21 +105,25 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 	}
 
 	/* Check for non-ascii characters */
-	while (p != end) {
-		if (*p >= 0x80) {
-			need_encode = true;
+	if (!(resolver->flags & RDNS_RESOLVER_NOIDN)) {
+		while (p != end) {
+			if (*p >= 0x80) {
+				need_encode = true;
+			}
+			else if (*p == '.') {
+				labels++;
+			}
+			p++;
 		}
-		else if (*p == '.') {
-			labels ++;
-		}
-		p ++;
 	}
 
 	if (!need_encode) {
 		*out = malloc (inlen + 1);
+
 		if (*out == NULL) {
 			return false;
 		}
+
 		o = *out;
 		memcpy (o, in, inlen);
 		o[inlen] = '\0';
