@@ -1125,12 +1125,28 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	wrk->start_time = rspamd_get_calendar_ticks ();
 
 	if (cf->bind_conf) {
-		msg_info_main ("starting %s process %P (%d); listen on: %s",
+		GString *listen_conf_stringified = g_string_new (NULL);
+		struct rspamd_worker_bind_conf *cur_conf;
+
+		LL_FOREACH (cf->bind_conf, cur_conf) {
+			if (cur_conf->next) {
+				rspamd_printf_gstring (listen_conf_stringified, "%s, ",
+						cur_conf->bind_line);
+			}
+			else {
+				rspamd_printf_gstring (listen_conf_stringified, "%s",
+						cur_conf->bind_line);
+			}
+		}
+
+		msg_info_main ("starting %s process %P (%d); listen on: %v",
 				cf->worker->name,
-				getpid (), wrk->index, cf->bind_conf->bind_line);
+				getpid (), wrk->index, listen_conf_stringified);
+		g_string_free (listen_conf_stringified, TRUE);
 	}
 	else {
-		msg_info_main ("starting %s process %P (%d)", cf->worker->name,
+		msg_info_main ("starting %s process %P (%d); no listen",
+				cf->worker->name,
 				getpid (), wrk->index);
 	}
 	/* Close parent part of socketpair */
