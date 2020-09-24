@@ -779,7 +779,7 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		if (i != count - 1) {
 			hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 			hdr->name = RSPAMD_DKIM_ARC_SEALHEADER;
-			hdr->count = (-i + 1);
+			hdr->count = -(i + 1);
 			g_ptr_array_add (ctx->hlist, hdr);
 		}
 	}
@@ -2235,7 +2235,8 @@ rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
 									 const gchar *header,
 									 const gchar *header_name,
 									 gboolean is_sign,
-									 guint count)
+									 guint count,
+									 bool is_seal)
 {
 	static gchar st_buf[8192];
 	gchar *buf;
@@ -2259,7 +2260,8 @@ rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
 	g_assert (r != -1);
 
 	if (!is_sign) {
-		msg_debug_dkim ("update signature with header (idx=%d): %s", count, buf);
+		msg_debug_dkim ("update %s with header (idx=%d): %s",
+				is_seal ? "seal" : "signature", count, buf);
 		EVP_DigestUpdate (ctx->headers_hash, buf, r);
 	}
 	else {
@@ -2361,7 +2363,8 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				rspamd_dkim_hash_update (ctx->headers_hash, sel->raw_value,
 						sel->raw_len);
 				ctx->headers_canonicalised += sel->raw_len;
-				msg_debug_dkim ("update signature with header (idx=%d): %*s",
+				msg_debug_dkim ("update %s with header (idx=%d): %*s",
+						(use_idx ? "seal" : "signature"),
 						count, (gint)sel->raw_len, sel->raw_value);
 			}
 			else {
@@ -2382,7 +2385,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 						PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, from_mime), i, addr) {
 							if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
 								if (!rspamd_dkim_canonize_header_relaxed (ctx, addr->raw,
-										header_name, FALSE, i)) {
+										header_name, FALSE, i, use_idx)) {
 									return FALSE;
 								}
 
@@ -2393,7 +2396,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				}
 
 				if (!rspamd_dkim_canonize_header_relaxed (ctx, sel->value,
-						header_name, FALSE, count)) {
+						header_name, FALSE, count, use_idx)) {
 					return FALSE;
 				}
 			}
@@ -2430,7 +2433,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 			if (!rspamd_dkim_canonize_header_relaxed (ctx,
 					dkim_header,
 					header_name,
-					TRUE, 0)) {
+					TRUE, 0, use_idx)) {
 				return FALSE;
 			}
 		}
@@ -3322,7 +3325,8 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 				hdr->str,
 				hname,
 				TRUE,
-				0)) {
+				0,
+				ctx->common.type == RSPAMD_DKIM_ARC_SEAL)) {
 
 			g_string_free (hdr, TRUE);
 			return NULL;
