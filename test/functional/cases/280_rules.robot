@@ -110,6 +110,10 @@ PHISH_SENDER_ROUTING_PART
   Scan File  ${TESTDIR}/messages/phish_sender6.eml
   Expect Symbol  FROM_INVALID
 
+CHECK_ARC
+  Scan File  ${TESTDIR}/messages/arcallow.eml
+  Expect Symbol  ARC_ALLOW
+
 
 *** Keywords ***
 Rules Setup
