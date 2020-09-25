@@ -131,15 +131,17 @@ end
 local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
   for i = 1,#seals do
     if (sigs[i].i or 0) ~= i then
-      rspamd_logger.infox(task, 'bad i value for signature: %s, expected %s',
-        sigs[i].i, i)
-      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+      local fail_reason = string.format('bad i for signature: %d, expected %d; d=%s',
+          sigs[i].i, i, sigs[i].d)
+      rspamd_logger.infox(task, fail_reason)
+      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
       return false
     end
     if (seals[i].i or 0) ~= i then
-      rspamd_logger.infox(task, 'bad i value for seal: %s, expected %s',
-        seals[i].i, i)
-      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+      local fail_reason = string.format('bad i for seal: %d, expected %d; d=%s',
+          seals[i].i, i, seals[i].d)
+      rspamd_logger.infox(task, fail_reason)
+      task:insert_result(arc_symbols['invalid'], 1.0,fail_reason)
       return false
     end
 
