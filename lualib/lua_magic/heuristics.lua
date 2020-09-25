@@ -61,15 +61,16 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    {[[(?i)\s*<html]], 30},
-    {[[(?i)\s*<\!DOCTYPE HTML]], 30},
-    {[[(?i)\s*<xml]], 20},
-    {[[(?i)\s*<body]], 20},
-    {[[(?i)\s*<table]], 20},
-    {[[(?i)\s*<a]], 10},
-    {[[(?i)\s*<p]], 10},
-    {[[(?i)\s*<div]], 10},
-    {[[(?i)\s*<span]], 10},
+    {[[(?i)\s*<html\b]], 30},
+    {[[(?i)\s*<script\b]], 20}, -- Commonly used by spammers
+    {[[(?i)\s*<\!DOCTYPE HTML\b]], 30},
+    {[[(?i)\s*<xml\b]], 20},
+    {[[(?i)\s*<body\b]], 20},
+    {[[(?i)\s*<table\b]], 20},
+    {[[(?i)\s*<a\b]], 10},
+    {[[(?i)\s*<p\b]], 10},
+    {[[(?i)\s*<div\b]], 10},
+    {[[(?i)\s*<span\b]], 10},
   },
   csv = {
     {[[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]], 20}
