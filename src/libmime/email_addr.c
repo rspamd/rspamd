@@ -182,7 +182,7 @@ rspamd_email_address_parse_heuristic (const char *data, size_t len,
 	}
 
 	if (ret) {
-		at = memchr (p, '@', len);
+		at = rspamd_memrchr (p, '@', len);
 
 		if (at != NULL && at + 1 < end) {
 			addr->domain = at + 1;
