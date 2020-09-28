@@ -93,10 +93,10 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				if (w->stemmed.len <= 3) {
 					short_len++;
 				}
-			}
 
-			if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
-				part->nwords ++;
+				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+					part->nwords ++;
+				}
 			}
 
 			if (w->flags & (RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE|
