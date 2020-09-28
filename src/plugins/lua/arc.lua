@@ -547,7 +547,7 @@ local function arc_sign_seal(task, params, header)
     }
   })
   task:insert_result(settings.sign_symbol, 1.0,
-      string.format('i=%d:%s:s=%s', cur_idx, params.domain, params.selector))
+      string.format('%s:s=%s:i=%d', params.domain, params.selector, cur_idx))
 end
 
 local function prepare_arc_selector(task, sel)
