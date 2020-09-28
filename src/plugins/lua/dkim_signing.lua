@@ -62,7 +62,7 @@ local function insert_sign_results(task, ret, hdr, dkim_params)
     })
   end
   if ret then
-    task:insert_result(settings.symbol, 1.0, string.format('%s:%s',
+    task:insert_result(settings.symbol, 1.0, string.format('%s:s=%s',
         dkim_params.domain, dkim_params.selector))
   end
 end
