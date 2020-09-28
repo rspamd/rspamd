@@ -46,7 +46,8 @@ Check Rspamc Match String
 
 Do Not Expect Symbol
   [Arguments]  ${symbol}
-  Run Keyword And Expect Error  *  Expect Symbol  ${symbol}
+  ${passed} =  Run Keyword And Return Status  Expect Symbol  ${symbol}
+  Run Keyword If  ${passed}  Fail  Unexpected symbol ${symbol} was found in result
 
 Generic Setup
   [Arguments]  @{vargs}  &{kwargs}
