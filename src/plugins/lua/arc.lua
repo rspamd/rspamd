@@ -546,7 +546,8 @@ local function arc_sign_seal(task, params, header)
         'ARC-Seal', cur_arc_seal) }
     }
   })
-  task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))
+  task:insert_result(settings.sign_symbol, 1.0,
+      string.format('i=%d:%s:%s', cur_idx, params.domain, params.selector))
 end
 
 local function prepare_arc_selector(task, sel)
@@ -623,10 +624,7 @@ local function do_sign(task, sign_params)
 
         local dret, hdr = dkim_sign(task, sign_params)
         if dret then
-          local sret, _ = arc_sign_seal(task, sign_params, hdr)
-          if sret then
-            task:insert_result(settings.sign_symbol, 1.0)
-          end
+          arc_sign_seal(task, sign_params, hdr)
         end
 
       end,
@@ -635,10 +633,7 @@ local function do_sign(task, sign_params)
   else
     local dret, hdr = dkim_sign(task, sign_params)
     if dret then
-      local sret, _ = arc_sign_seal(task, sign_params, hdr)
-      if sret then
-        task:insert_result(settings.sign_symbol, 1.0)
-      end
+      arc_sign_seal(task, sign_params, hdr)
     end
   end
 end
