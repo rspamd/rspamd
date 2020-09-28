@@ -1164,7 +1164,7 @@ local function add_extra_columns(upstream, ev_base, cfg)
       local sql = string.format('ALTER TABLE rspamd ADD COLUMN IF NOT EXISTS `%s` %s AFTER `%s`',
           col.name, col.type, prev_column)
       if col.comment then
-        sql = sql .. string.format(", COMMENT COLUMN `%s` '%s'", col.name, col.comment)
+        sql = sql .. string.format(", COMMENT COLUMN IF EXISTS `%s` '%s'", col.name, col.comment)
       end
 
       local ret = lua_clickhouse.generic(upstream, settings, ch_params, sql,
