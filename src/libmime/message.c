@@ -94,7 +94,8 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 					short_len++;
 				}
 
-				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT &&
+					!(w->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)) {
 					part->nwords ++;
 				}
 			}
