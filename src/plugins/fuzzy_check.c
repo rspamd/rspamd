@@ -1731,6 +1731,10 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 				memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
 				shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 			}
+			else {
+				/* No shingles, no check */
+				return NULL;
+			}
 
 			cached->sh = sh;
 			memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
