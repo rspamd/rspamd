@@ -2342,11 +2342,16 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				id_len = rspamd_snprintf (idx_buf, sizeof (idx_buf), "i=%d;",
 						count);
 
-				for (cur = rh->prev;; cur = cur->prev) {
+				for (cur = rh->prev; ; cur = cur->prev) {
 					if (cur->decoded &&
 						rspamd_substring_search (cur->decoded, strlen (cur->decoded),
 								idx_buf, id_len) != -1) {
 						sel = cur;
+						break;
+					}
+
+					if (cur == rh) {
+						/* Cycle */
 						break;
 					}
 				}
