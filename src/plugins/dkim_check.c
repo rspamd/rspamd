@@ -58,13 +58,14 @@ static const gchar default_sign_headers[] = ""
 		"(o)to:(o)cc:(x)mime-version:(x)content-type:(x)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
 		"(x)in-reply-to:(x)references:list-id:list-help:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post:(x)openpgp:(x)autocrypt";
+		"list-unsubscribe-post:list-subscribe:list-post:(x)openpgp:(x)autocrypt";
 static const gchar default_arc_sign_headers[] = ""
 		"(o)from:(x)sender:(o)reply-to:(o)subject:(x)date:(x)message-id:"
 		"(o)to:(o)cc:(x)mime-version:(x)content-type:(x)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
 		"(x)in-reply-to:(x)references:list-id:list-help:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post:dkim-signature:(x)openpgp:(x)autocrypt";
+		"list-unsubscribe-post:list-subscribe:list-post:dkim-signature:(x)openpgp:"
+		"(x)autocrypt";
 
 struct dkim_ctx {
 	struct module_ctx ctx;
