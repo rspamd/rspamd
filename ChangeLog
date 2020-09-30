@@ -1,3 +1,175 @@
+2.6: 30 Sep 2020
+  * [Conf] Add missing symbols
+  * [Conf] Add missing symbols
+  * [Conf] Fix fat-fingers typo
+  * [Conf] Fix wrong comment in options.inc
+  * [Conf] Neural: Fix the default name for max_trains
+  * [Conf] Register a known symbol
+  * [Conf] Spf: Add R_SPF_PERMFAIL symbol
+  * [CritFix] Arc: Fix ARC validation for chains of signatures
+  * [CritFix] Distinguish socketpairs between different fuzzy workers
+  * [CritFix] Fix IDNA dots parsing
+  * [CritFix] Fix test assertion method
+  * [CritFix] Fix usage of crypto_sign it should be crypto_sign_detached!
+  * [Feature] Add BOUNCE rule
+  * [Feature] Add controller plugins support and selectors plugin
+  * [Feature] Add maps query method
+  * [Feature] Add minimal delay to fuzzy storage
+  * [Feature] Add multiple base32 alphabets for decoding
+  * [Feature] Add preliminary support of BCH addresses
+  * [Feature] Add query_specific endpoint
+  * [Feature] Allow multiple base32 encodings in Lua API
+  * [Feature] Allow to specify nonces manually
+  * [Feature] Controller: Allow to pass query arguments to the lua webui plugins
+  * [Feature] Fuzzy_check: Add gen_hashes command
+  * [Feature] Fuzzy_check: Add weight_threshold option for fuzzy rules
+  * [Feature] Implement address retry on connection failure
+  * [Feature] Improve limits in pdf scanning
+  * [Feature] Initial support of subscribe command in lua_redis
+  * [Feature] Lua_cryptobox: Add secretbox API
+  * [Feature] Lua_text: Add encoding methods
+  * [Feature] Milter_headers: Allow to activate routines via users settings
+  * [Feature] PDF: Add timeouts for expensive operations
+  * [Feature] Preliminary maps addon for controller
+  * [Feature] Split pdf processing object and output object to allow GC
+  * [Feature] Support BLIS blas library
+  * [Feature] Support input vectorisation by recvmmsg call
+  * [Feature] Support multiple base32 alphabets
+  * [Feature] add queueid, uid, messageid and specific symbols to selectors [Minor] use only selectors to fill vars in force_actions message
+  * [Feature] allow variables in force_actions messages
+  * [Feature] extend lua api
+  * [Fix] #3249
+  * [Fix] Allow to adjust neurons in the hidden layer
+  * [Fix] Another try to fix email names parsing
+  * [Fix] Arc: Allow to reuse authentication results when doing multi-stage signing
+  * [Fix] Arc: Fix bug with arc chains verification where i>1
+  * [Fix] Arc: Sort headers by their i= value
+  * [Fix] Change neural plugin's loss function
+  * [Fix] Deal with double eqsigns when decoding headers
+  * [Fix] Default ANN names in clickhouse
+  * [Fix] Disable reuseport for TCP sockets as it causes too many troubles
+  * [Fix] Disable text detection heuristics for encrypted parts
+  * [Fix] Distinguish DKIM keys by md5
+  * [Fix] Distinguish type from flags in register_symbol
+  * [Fix] Dmarc: Unbreak reporting after cf2ae3292ac93da8b6e0624b48a62828a51803c9
+  * [Fix] Do not flag pre-result of virus scanners as least if action is reject
+  * [Fix] Do not use GC64 workaround on 32bit platforms, omg
+  * [Fix] Exclude damaged urls from html parser
+  * [Fix] Fix FREEMAIL_REPLYTO_NEQ_FROM_DOM
+  * [Fix] Fix FROM_NEQ_ENVFROM
+  * [Fix] Fix FWD_GOOGLE rule (#1815)
+  * [Fix] Fix adding of the empty archive file for gzip
+  * [Fix] Fix aliases in forged recipients and limit number of iterations
+  * [Fix] Fix authentication results insertion
+  * [Fix] Fix calling of methods in selectors
+  * [Fix] Fix clen length for hiredis...
+  * [Fix] Fix endless loop if broken arc chain has been found
+  * [Fix] Fix false - operation
+  * [Fix] Fix get_urls table invocation
+  * [Fix] Fix group based composites
+  * [Fix] Fix headers passing in rspamd_proxy
+  * [Fix] Fix incomplete utf8 sequences handling
+  * [Fix] Fix lua_next invocation
+  * [Fix] Fix lua_parse_symbol_type function logic
+  * [Fix] Fix multiple listen configuration
+  * [Fix] Fix occasional encryption of the cached data
+  * [Fix] Fix parsing boundaries with spaces
+  * [Fix] Fix passing of methods arguments
+  * [Fix] Fix poor man allocator algorithm
+  * [Fix] Fix regexp selector and add flattening
+  * [Fix] Fix rfc base32 encode ordering (skip inverse bits)
+  * [Fix] Fix rfc based base32 decoding
+  * [Fix] Fix sockets leak in the client
+  * [Fix] Fix storing of the original smtp from
+  * [Fix] Fix types check and types usage in lua_cryptobox
+  * [Fix] Fix unused results
+  * [Fix] Fuzzy_check: Disable shingles for short texts (really)
+  * [Fix] Ical: Fix identation grammar
+  * [Fix] Improve part:is_attachment logic
+  * [Fix] Mmap return value must be checked versus MAP_FAILED
+  * [Fix] One more fix to skip images that are not urls
+  * [Fix] Pdf: Support some weird objects with no newline before endobj
+  * [Fix] Rbl: Fix ignore_defaults in conjunction with ignore_whitelists
+  * [Fix] Restore support for `for` and `id` parts in received headers
+  * [Fix] Segmentation fault in contrib/lua-lpeg/lpvm.c on ppc64el
+  * [Fix] Skip spaces at the boundary end
+  * [Fix] Slashing fix: fix captures matching API
+  * [Fix] Spamassassin: Rework metas processing
+  * [Fix] Store reference of upstream list in upstreams objects
+  * [Fix] Understand utf8 in content-disposition parser
+  * [Fix] Unify selectors digest functions
+  * [Fix] Use `abs` value when checking composites
+  * [Fix] Use strict IDNA for utf8 DNS names + add sanity checks for DNS names
+  * [Fix] Use unsigned char and better support of utf8 in ragel parser
+  * [Fix] add missing selector_cache declaration
+  * [Project] Add `L` flag for regexps to save start of the match in Hyperscan
+  * [Project] Add `lower` method to lua_text
+  * [Project] Add a simple matrix Lua library
+  * [Project] Add implicit bitcoincash prefix
+  * [Project] Add linalg ffi library for prototyping
+  * [Project] Add methods to append data to fuzzy requests
+  * [Project] Add routine to call a generic lua function
+  * [Project] Add ssyev method interface
+  * [Project] Add tensors index method
+  * [Project] Add text:sub method
+  * [Project] Allow rspamd_text based selectors
+  * [Project] Allow to specify re_conditions for regular expressions
+  * [Project] Attach extensions to the binary fuzzy commands
+  * [Project] Bitcoin: BTC cash addresses needs some checksum validation
+  * [Project] Cleanup the redis script
+  * [Project] Convert bitcoin rules to the new regexp conditions feature
+  * [Project] Detect memrchr in systems that supports it
+  * [Project] Do not listen sockets in the main process
+  * [Project] Implement 'probabilistic' learn mode for ANN
+  * [Project] Implement BTC polymod in C as it requires 64 bit ops
+  * [Project] Implement bitcoin cash validation in a proper way
+  * [Project] Implement extensions logic for fuzzy storage
+  * [Project] Implement symbols insertion in multiple results mode
+  * [Project] Lua_text: Add method memchr
+  * [Project] Neural: Add PCA loading logic
+  * [Project] Neural: Fix PCA based learning
+  * [Project] Neural: Fix matrix gemm
+  * [Project] Neural: Further PCA fixes
+  * [Project] Neural: Implement PCA in learning
+  * [Project] Neural: Implement PCA learning
+  * [Project] Neural: Implement PCA on ANN forward
+  * [Project] Neural: Implement PCA serialisation
+  * [Project] Neural: Start PCA implementation
+  * [Project] Neural: Use C version of scatter matrix producing
+  * [Project] Preliminary support of lua conditions for regexps
+  * [Project] Preliminary usage of the reuseport
+  * [Project] Process composites separately for each shadow result
+  * [Project] Remove old code
+  * [Project] Rework scan result functions to support shadow results
+  * [Project] Rework some more functions to work with shadow results
+  * [Project] Some more fixes
+  * [Project] Start results chain implementation
+  * [Project] Support fun iterators on rspamd_text objects
+  * [Project] Support multiply, minus and divide operators in expressions
+  * [Project] Tensor: Move scatter matrix calculation to C
+  * [Rework] Allow to specify exat metric result when adding a symbol
+  * [Rework] Change and improve openblas detection and usage
+  * [Rework] Close listen sockets in main after fork
+  * [Rework] Further rework of lua urls extraction API
+  * [Rework] Lua_cryptobox: Allow to store output of the hash function
+  * [Rework] Lua_task: Add more methods to deal with shadow results
+  * [Rework] Modernize logging for expressions
+  * [Rework] Remove empty prefilters feature - we are not prepared...
+  * [Rework] Remove old FindLua module, disable lua fallback when LuaJIT is enabled
+  * [Rework] Rework and refactor forged recipients plugin
+  * [Rework] Rework expressions processing
+  * [Rework] Rework fuzzy commands processing
+  * [Rework] Rework url flags handling API
+  * [Rework] Rework urls extraction
+  * [Rework] Split operations processing and add more debug logs
+  * [Rework] Update zstd to 1.4.5
+  * [Rework] Use google-ced instead of libicu chardet as the former sucks
+  * [Rework] add alias util:parse_addr for util:parse_mail_address
+  * [Rework] get rid of util:parse_addr duplicating the util:parse_mail_address, replace where used
+  * [Rules] Allow prefix for bitcoin cash addresses
+  * [Rules] More fixes for bitcoin cash addresses decoding
+  * [Rules] Refactor bleach32 addresses handling
+
 2.5: 01 Apr 2020
   * [Conf] Mark Rspamd emailbl as ignore whitelist
   * [Conf] RBL: Add missing emails = true option
