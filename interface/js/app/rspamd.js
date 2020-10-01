@@ -258,6 +258,10 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     }
 
     function displayUI() {
+        // In many browsers local storage can only store string.
+        // So when we store the boolean true or false, it actually stores the strings "true" or "false".
+        ui.read_only = sessionStorage.getItem("read_only") === "true";
+
         ui.query("auth", {
             success: function (neighbours_status) {
                 $("#selSrv").empty();
@@ -270,15 +274,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                         $('#selSrv [value="' + e.name + '"]').prop("disabled", true);
                     }
                 });
-                tab_selectors.displayUI(ui);
+                if (!ui.read_only) tab_selectors.displayUI(ui);
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
         });
 
-        // In many browsers local storage can only store string.
-        // So when we store the boolean true or false, it actually stores the strings "true" or "false".
-        ui.read_only = sessionStorage.getItem("read_only") === "true";
         if (ui.read_only) {
             $(".ro-disable").attr("disabled", true);
             $(".ro-hide").hide();
