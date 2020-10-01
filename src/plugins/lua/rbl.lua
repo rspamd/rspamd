@@ -514,6 +514,17 @@ local function gen_rbl_callback(rule)
       no_cache = true,
     }
 
+    if not rule.urls then
+      ex_params.flags_mode = 'explicit'
+      ex_params.flags = {}
+      if rule.content_urls then
+        table.insert(ex_params.flags, 'content')
+      end
+      if rule.images then
+        table.insert(ex_params.flags, 'image')
+      end
+    end
+
     local urls = lua_util.extract_specific_urls(ex_params)
 
     for _,u in ipairs(urls) do
@@ -715,7 +726,7 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'replyto'
   end
 
-  if rule.urls then
+  if rule.urls or rule.content_urls or rule.images then
     pipeline[#pipeline + 1] = check_urls
     description[#description + 1] = 'urls'
   end
@@ -1137,37 +1148,56 @@ local return_bits_schema = ts.map_of(
 )
 
 local rule_schema_tbl = {
-  enabled = ts.boolean:is_optional(),
+  content_urls = ts.boolean:is_optional(),
+  disable_monitoring = ts.boolean:is_optional(),
   disabled = ts.boolean:is_optional(),
-  rbl = ts.string,
-  selector = ts.string:is_optional(),
-  symbol = ts.string:is_optional(),
-  returncodes = return_codes_schema:is_optional(),
-  return_codes = return_codes_schema:is_optional(),
-  returnbits = return_bits_schema:is_optional(),
-  return_bits = return_bits_schema:is_optional(),
-  whitelist_exception = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
-  ):is_optional(),
-  whitelist = lua_maps.map_schema:is_optional(),
-  url_compose_map = lua_maps.map_schema:is_optional(),
-  local_exclude_ip_map = ts.string:is_optional(),
+  dkim = ts.boolean:is_optional(),
+  dkim_domainonly = ts.boolean:is_optional(),
+  dkim_match_from = ts.boolean:is_optional(),
+  emails = ts.boolean:is_optional(),
+  emails_delimiter = ts.string:is_optional(),
+  emails_domainonly = ts.boolean:is_optional(),
+  enabled = ts.boolean:is_optional(),
+  exclude_local = ts.boolean:is_optional(),
+  exclude_private_ips = ts.boolean:is_optional(),
+  exclude_users = ts.boolean:is_optional(),
+  from = ts.boolean:is_optional(),
   hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
   hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
   hash_len = (ts.integer + ts.string / tonumber):is_optional(),
-  monitored_address = ts.string:is_optional(),
-  requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
-  process_script = ts.string:is_optional(),
-  emails_delimiter = ts.string:is_optional(),
-  ignore_defaults = ts.boolean:is_optional(),
+  helo = ts.boolean:is_optional(),
   ignore_default = ts.boolean:is_optional(), -- alias
+  ignore_defaults = ts.boolean:is_optional(),
   ignore_whitelist = ts.boolean:is_optional(),
   ignore_whitelists = ts.boolean:is_optional(), -- alias
+  images = ts.boolean:is_optional(),
+  ipv4 = ts.boolean:is_optional(),
+  ipv6 = ts.boolean:is_optional(),
   is_whitelist = ts.boolean:is_optional(),
+  local_exclude_ip_map = ts.string:is_optional(),
+  monitored_address = ts.string:is_optional(),
+  no_ip = ts.boolean:is_optional(),
+  process_script = ts.string:is_optional(),
+  rbl = ts.string,
+  rdns = ts.boolean:is_optional(),
+  received = ts.boolean:is_optional(),
+  replyto = ts.boolean:is_optional(),
+  requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   resolve_ip = ts.boolean:is_optional(),
-  content_urls = ts.boolean:is_optional(),
-  disable_monitoring = ts.boolean:is_optional(),
+  return_bits = return_bits_schema:is_optional(),
+  return_codes = return_codes_schema:is_optional(),
+  returnbits = return_bits_schema:is_optional(),
+  returncodes = return_codes_schema:is_optional(),
+  selector = ts.string:is_optional(),
+  symbol = ts.string:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
+  unknown = ts.boolean:is_optional(),
+  url_compose_map = lua_maps.map_schema:is_optional(),
+  urls = ts.boolean:is_optional(),
+  whitelist = lua_maps.map_schema:is_optional(),
+  whitelist_exception = (
+      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
+  ):is_optional(),
 }
 -- Add default boolean flags to the schema
 for def_k,_ in pairs(default_options) do

@@ -941,6 +941,8 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     emails = params.need_emails,
     images = params.need_images,
     content = params.need_content,
+    flags = params.flags, -- maybe nil
+    flags_mode = params.flags_mode, -- maybe nil
   }
 
   -- Shortcut for cached stuff
