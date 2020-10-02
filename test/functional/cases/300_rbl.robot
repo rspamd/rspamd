@@ -50,6 +50,14 @@ EMAILBL Compose Map 3
   Scan File  ${TESTDIR}/messages/url16.eml
   Expect Symbol With Exact Options  RSPAMD_EMAILBL  41.black.sanchez.com:email
 
+CONTENT URLS
+  Scan File  ${TESTDIR}/messages/content_url.eml
+  Expect Symbol With Exact Options  URIBL_NOCONTENT  example.org:url
+  Expect Symbol With Option  URIBL_WITHCONTENT  example.com:url
+  Expect Symbol With Option  URIBL_WITHCONTENT  example.org:url
+  Expect Symbol With Option  URIBL_WITHCONTENT  8.8.8.8:url
+  Expect Symbol With Exact Options  URIBL_CONTENTONLY  example.com:url
+
 
 *** Keywords ***
 Rbl Setup
