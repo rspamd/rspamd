@@ -199,9 +199,42 @@ define(["jquery", "d3pie"],
             }
         }
 
-        function getChart(rspamd, pie, checked_server) {
+        function getChart(rspamd, graphs, checked_server) {
+            if (graphs.chart) {
+                graphs.chart.destroy();
+                delete graphs.chart;
+            }
+
             var creds = JSON.parse(sessionStorage.getItem("Credentials"));
-            if (!creds || !creds[checked_server]) return null;
+            // Controller doesn't return the 'actions' object until at least one message is scanned
+            if (!creds || !creds[checked_server] || !creds[checked_server].data.scanned) {
+                // Show grayed out pie as percentage is undefined
+                return rspamd.drawPie(graphs.chart,
+                    "chart",
+                    [{
+                        value: 1,
+                        color: "#ffffff",
+                        label: "undefined"
+                    }],
+                    {
+                        labels: {
+                            mainLabel: {
+                                fontSize: 14,
+                            },
+                            inner: {
+                                format: "none",
+                            },
+                            lines: {
+                                color: "#cccccc"
+                            }
+                        },
+                        tooltips: {
+                            enabled: true,
+                            string: "{label}"
+                        },
+                    }
+                );
+            }
 
             var data = creds[checked_server].data.actions;
             var new_data = [{
@@ -236,7 +269,7 @@ define(["jquery", "d3pie"],
                 value: data.reject
             }];
 
-            return rspamd.drawPie(pie, "chart", new_data);
+            return rspamd.drawPie(graphs.chart, "chart", new_data);
         }
         // Public API
         var ui = {
@@ -271,9 +304,12 @@ define(["jquery", "d3pie"],
 
                         function process_node_stat(e) {
                             var data = neighbours_status[e].data;
-                            for (var action in neighbours_sum.actions) {
-                                if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
-                                    neighbours_sum.actions[action] += data.actions[action];
+                            // Controller doesn't return the 'actions' object until at least one message is scanned
+                            if (data.scanned) {
+                                for (var action in neighbours_sum.actions) {
+                                    if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
+                                        neighbours_sum.actions[action] += data.actions[action];
+                                    }
                                 }
                             }
                             ["learned", "scanned", "uptime"].forEach(function (p) {
@@ -327,7 +363,7 @@ define(["jquery", "d3pie"],
                                 to_Credentials["All SERVERS"].data = neighbours_sum;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                                 displayStatWidgets(checked_server);
-                                graphs.chart = getChart(rspamd, graphs.chart, checked_server);
+                                graphs.chart = getChart(rspamd, graphs, checked_server);
                             });
                         }, promises.length ? 100 : 0);
                     },
