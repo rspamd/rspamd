@@ -951,10 +951,16 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     if params.prefix then
       cache_key = params.prefix
     else
-      cache_key = string.format('sp_urls_%d%s%s%s', params.limit,
+      local cache_key_suffix
+      if params.flags then
+        cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
+      else
+        cache_key_suffix = string.format('%s%s%s',
           tostring(params.need_emails or false),
           tostring(params.need_images or false),
           tostring(params.need_content or false))
+      end
+      cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
     local cached = params.task:cache_get(cache_key)
 
