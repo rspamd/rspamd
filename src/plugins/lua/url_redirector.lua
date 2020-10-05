@@ -88,6 +88,7 @@ local settings = {
   filename_symbol = nil, -- insert symbol if suspect filename (in map suspect_filename_in_url_map)
   path_symbol = nil, -- insert symbol if suspect url path(in map suspect_path_in_url_map)
   subhost_suspect_symbol = nil, -- suspect subhost
+  ip_blacklist_symbol = nil, -- insert symbol if resolv ip from url is in blacklist
   free_download_symbol = nil, --  download on free site like: google, drive live.com or pastbin/raw
   freehost_symbol = nil, -- insert symbol if suspect use freehost (in map free_hosted_dom_map)
   too_much_redir_symbol = nil, -- to much redirect, cannot be followed
@@ -108,7 +109,8 @@ local settings = {
   sub_host_number_part_max = 2, -- if sub host has more than 2 part (sub1.sub2.dom.com)
   free_hosted_dom_map = nil, -- map free hosted (tld & host)
   sub_host_suspect_map = nil, -- map subhost suspect regexp (ex: paypal, facebook, bank, ...)
-  host_use_get_map = nil -- map host to use get method (ex: onedrive.live.com)
+  host_use_get_map = nil, -- map host to use get method (ex: onedrive.live.com)
+  url_ip_blacklist_map = nil -- map IP from resolv url
 }
 
 local function add_dyn_info_url(task, url, value)
@@ -117,6 +119,11 @@ local function add_dyn_info_url(task, url, value)
   -- table = {redir=URL, mimetype=MT, expire=EXP, filename=FN, }
   local redir_url = nil
   if value then
+    if value['ip'] ~= nil then
+      for k,ipx in ipairs(value['ip']) do
+        task:insert_result(settings.ip_blacklist_symbol, 1.0, ipx)
+      end
+    end
     if value['nomx'] ~= nil then
       task:insert_result(settings.mx_symbol, 1.0, tostring(url:get_tld()))
     end
@@ -282,6 +289,7 @@ local function url_redirector_process_url(task, urlx, ntries)
   local host_is_ip = true
   local try_connect = true
   local ip_host = nil
+  local bl_ip = {}
   if (#chunks == 4) then
     for _,v in pairs(chunks) do
       if (tonumber(v) < 0 or tonumber(v) > 255) then
@@ -353,6 +361,11 @@ local function url_redirector_process_url(task, urlx, ntries)
               local is_ok, results = redis_write(task, key, 'SETEX',  {key, tostring(settings.expire), str_table})
             else
               ip_host = tostring(ip4)
+	      if settings.url_ip_blacklist_map and settings.url_ip_blacklist_map:get_key(ip_host) then
+                -- task:insert_result(settings.ip_blacklist_symbol, 1.0, ip_host)
+                -- cache
+                table.insert(bl_ip, ip_host)
+              end
             end
           end
         end
@@ -392,6 +405,9 @@ local function url_redirector_process_url(task, urlx, ntries)
       rspamd_logger.errx(task, 'Error request on %s because error request: %s', host, err)
       -- Would it be interesting to keep the information from the error? but it will take up unnecessary space
       local cache = {}
+      if next(bl_ip) ~= nil then
+        cache['ip'] = bl_ip
+      end
       local str_table = ucl.to_format(cache, 'ucl')
       local is_ok, results = redis_write(task, key, 'SETEX',  {key, tostring(settings.expire), str_table})
     else
@@ -558,7 +574,11 @@ if opts then
       end
       if settings.host_use_get_map then
         settings.host_use_get_map = lua_maps.map_add_from_ucl(settings.host_use_get_map,
-          'set', 'Subhost regexp Suspect definitions')
+          'set', 'Host redirect need get method')
+      end
+      if settings.url_ip_blacklist_map  then
+        settings.url_ip_blacklist_map  = lua_maps.map_add_from_ucl(settings.url_ip_blacklist_map,
+          'set', 'IP fropm url resolv Suspect definitions')
       end
 
       lua_redis.register_prefix(settings.key_prefix .. '[a-z0-9]{32}', N,
@@ -679,6 +699,14 @@ if opts then
       if settings.a_symbol then
         rspamd_config:register_symbol{
           name = settings.a_symbol,
+          type = 'virtual',
+          parent = id,
+          score = 0,
+        }
+       end
+       if settings.ip_blacklist_symbol then
+        rspamd_config:register_symbol{
+          name = settings.ip_blacklist_symbol,
           type = 'virtual',
           parent = id,
           score = 0,
