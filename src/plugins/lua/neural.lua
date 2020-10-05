@@ -1436,7 +1436,7 @@ local function process_rules_settings()
       if fl then
         fl = lua_util.list_to_hash(fl)
 
-        return not (fl.nostat or fl.idempotent or fl.skip)
+        return not (fl.nostat or fl.idempotent or fl.skip or fl.composite)
       end
 
       return false

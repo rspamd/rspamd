@@ -1921,6 +1921,10 @@ lua_push_symbol_flags (lua_State *L, guint flags, enum lua_push_symbol_flags_opt
 	if (flags & SYMBOL_TYPE_SKIPPED) {
 		LUA_OPTION_PUSH (skip);
 	}
+
+	if (flags & SYMBOL_TYPE_COMPOSITE) {
+		LUA_OPTION_PUSH (composite);
+	}
 }
 
 static gint
