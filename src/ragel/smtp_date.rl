@@ -29,7 +29,12 @@
       gulong n;
       if (rspamd_strtoul (tmp, p - tmp, &n)) {
         if (n < 1000) {
-          tm.tm_year = n;
+          if (n < 50) {
+            tm.tm_year = n - 1900 + 2000;
+          }
+          else {
+            tm.tm_year = n;
+          }
         }
         else {
           tm.tm_year = n - 1900;
