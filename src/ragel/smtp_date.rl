@@ -15,6 +15,9 @@
         if (n > 0 && n <= 31) {
           tm.tm_mday = n;
         }
+        else {
+          fbreak;
+        }
       }
     }
   }
@@ -52,7 +55,13 @@
         if (n < 24) {
           tm.tm_hour = n;
         }
+        else {
+          fbreak;
+        }
       }
+    }
+    else {
+      fbreak;
     }
   }
   action Minute_Start {
@@ -65,7 +74,13 @@
         if (n < 60) {
           tm.tm_min = n;
         }
+        else {
+          fbreak;
+        }
       }
+    }
+    else {
+      fbreak;
     }
   }
   action Second_Start {
@@ -78,7 +93,13 @@
         if (n <= 60) { /* Leap second */
           tm.tm_sec = n;
         }
+        else {
+          fbreak;
+        }
       }
+    }
+    else {
+      fbreak;
     }
   }
   action TZ_Sign {
