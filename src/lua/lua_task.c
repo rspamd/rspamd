@@ -5042,19 +5042,27 @@ lua_task_get_date (lua_State *L)
 			if (h) {
 				time_t tt;
 				struct tm t;
+				GError *err = NULL;
 
-				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded));
+				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded),
+						&err);
 
-				if (!gmt) {
-					rspamd_localtime (tt, &t);
+				if (err == NULL) {
+					if (!gmt) {
+						rspamd_localtime (tt, &t);
 #if !defined(__sun)
-					t.tm_gmtoff = 0;
+						t.tm_gmtoff = 0;
 #endif
-					t.tm_isdst = 0;
-					tim = mktime (&t);
+						t.tm_isdst = 0;
+						tim = mktime (&t);
+					}
+					else {
+						tim = tt;
+					}
 				}
 				else {
-					tim = tt;
+					g_error_free (err);
+					tim = 0.0;
 				}
 			}
 			else {
