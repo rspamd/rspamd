@@ -53,7 +53,7 @@ local function mid_check_func(task)
       task:insert_result('MID_CONTAINS_FROM', 1.0)
     elseif (md and fd == md:lower()) then
       task:insert_result('MID_RHS_MATCH_FROM', 1.0)
-    elseif (md and mdtld:lower() == fdtld) then
+    elseif (mdtld ~= nil and fdtld ~= nil and mdtld:lower() == fdtld) then
       task:insert_result('MID_RHS_MATCH_FROMTLD', 1.0)
     end
   end
