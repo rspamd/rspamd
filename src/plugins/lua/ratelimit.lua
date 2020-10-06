@@ -867,6 +867,7 @@ if opts then
       s.name = settings.symbol
     elseif settings.info_symbol then
       s.name = settings.info_symbol
+      s.score = 0.0
     end
 
     rspamd_config:register_symbol(s)
