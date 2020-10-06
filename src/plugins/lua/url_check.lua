@@ -596,6 +596,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.download_symbol then
@@ -604,6 +605,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.mx_symbol then
@@ -612,6 +614,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.ip_symbol then
@@ -620,6 +623,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.port_symbol then
@@ -628,6 +632,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.mimetype_symbol then
@@ -636,6 +641,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.freehost_symbol then
@@ -644,6 +650,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.free_download_symbol then
@@ -652,6 +659,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.subhost_suspect_symbol then
@@ -660,6 +668,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.path_symbol then
@@ -668,6 +677,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.filename_symbol then
@@ -676,6 +686,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.too_much_redir_symbol then
@@ -684,6 +695,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.subhost_max_part_symbol then
@@ -692,6 +704,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.a_symbol then
@@ -700,6 +713,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
       if settings.ip_blacklist_symbol then
@@ -708,6 +722,7 @@ if opts then
           type = 'virtual',
           parent = id,
           score = 0,
+	  group = N
         }
       end
     end
