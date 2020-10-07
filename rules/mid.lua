@@ -14,7 +14,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
-local util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
 local function mid_check_func(task)
   local mid = task:get_header('Message-ID')
   if not mid then return false end
@@ -46,8 +46,8 @@ local function mid_check_func(task)
     local fdtld = nil
     local mdtld = nil
     if md then
-      fdtld = util.get_tld(fd)
-      mdtld = util.get_tld(md)
+      fdtld = rspamd_util.get_tld(fd)
+      mdtld = rspamd_util.get_tld(md)
     end
     if (mid:lower():find(from[1].addr:lower(),1,true)) then
       task:insert_result('MID_CONTAINS_FROM', 1.0)
