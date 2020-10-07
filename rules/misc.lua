@@ -65,16 +65,21 @@ local date_id = rspamd_config:register_symbol({
       return
     end
 
-    local dm = task:get_date({format = 'message', gmt = true})
-    local dt = task:get_date({format = 'connect', gmt = true})
-
-    if dm > 0 and dm - dt > 7200 then
-      -- 2 hours
-      task:insert_result('DATE_IN_FUTURE', 1.0)
+    local dm, err = util.parse_smtp_date(date_time)
+    if err then
+      task:insert_result('INVALID_DATE', 1.0)
       return
-    elseif dm > 0 and dt - dm > 86400 then
-      -- A day
+    end
+
+    local dt = task:get_date({format = 'connect', gmt = true})
+    local date_diff = dt - dm
+
+    if date_diff > 86400 then
+      -- Older than a day
       task:insert_result('DATE_IN_PAST', 1.0)
+    elseif -date_diff > 7200 then
+      -- More than 2 hours in the future
+      task:insert_result('DATE_IN_FUTURE', 1.0)
     end
   end
 })
@@ -83,6 +88,15 @@ rspamd_config:register_symbol({
   name = 'MISSING_DATE',
   score = 1.0,
   description = 'Message date is missing',
+  group = 'headers',
+  type = 'virtual',
+  parent = date_id,
+})
+
+rspamd_config:register_symbol({
+  name = 'INVALID_DATE',
+  score = 1.5,
+  description = 'Malformed date header',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
