@@ -76,10 +76,10 @@ local date_id = rspamd_config:register_symbol({
 
     if date_diff > 86400 then
       -- Older than a day
-      task:insert_result('DATE_IN_PAST', 1.0)
+      task:insert_result('DATE_IN_PAST', 1.0, tostring(math.floor(date_diff/3600)))
     elseif -date_diff > 7200 then
       -- More than 2 hours in the future
-      task:insert_result('DATE_IN_FUTURE', 1.0)
+      task:insert_result('DATE_IN_FUTURE', 1.0, tostring(math.floor(-date_diff/3600)))
     end
   end
 })
