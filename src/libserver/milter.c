@@ -734,6 +734,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			REF_RETAIN (session);
 			priv->fin_cb (priv->fd, session, priv->ud);
 			REF_RELEASE (session);
+			return FALSE;
 		}
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
