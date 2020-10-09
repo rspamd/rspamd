@@ -54,6 +54,8 @@ static const struct rspamd_milter_context *milter_ctx = NULL;
 static gboolean  rspamd_milter_handle_session (
 		struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv);
+static inline void rspamd_milter_plan_io (struct rspamd_milter_session *session,
+					   struct rspamd_milter_private *priv, gshort what);
 
 static GQuark
 rspamd_milter_quark (void)
@@ -183,6 +185,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		rspamd_ev_watcher_stop (priv->event_loop, &priv->ev);
 		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ALL);
+		close (priv->fd);
 
 		if (priv->parser.buf) {
 			rspamd_fstring_free (priv->parser.buf);
@@ -689,8 +692,6 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			REF_RETAIN (session);
 			priv->fin_cb (priv->fd, session, priv->ud);
 			REF_RELEASE (session);
-
-			return FALSE;
 		}
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
@@ -1104,6 +1105,15 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 {
 	struct rspamd_milter_session *session;
 	struct rspamd_milter_private *priv;
+	gint nfd = dup (fd);
+
+	if (nfd == -1) {
+		GError *err = g_error_new (rspamd_milter_quark (), errno,
+				"dup failed: %s", strerror (errno));
+		error_cb (fd, NULL, ud, err);
+
+		return FALSE;
+	}
 
 	g_assert (finish_cb != NULL);
 	g_assert (error_cb != NULL);
@@ -1111,7 +1121,7 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 
 	session = g_malloc0 (sizeof (*session));
 	priv = g_malloc0 (sizeof (*priv));
-	priv->fd = fd;
+	priv->fd = nfd;
 	priv->ud = ud;
 	priv->fin_cb = finish_cb;
 	priv->err_cb = error_cb;
@@ -1124,7 +1134,7 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 	priv->ev.timeout = timeout;
 
-	rspamd_ev_watcher_init (&priv->ev, fd, EV_READ|EV_WRITE,
+	rspamd_ev_watcher_init (&priv->ev, priv->fd, EV_READ|EV_WRITE,
 			rspamd_milter_io_handler, session);
 
 	if (pool) {

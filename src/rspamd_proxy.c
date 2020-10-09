@@ -2150,18 +2150,29 @@ proxy_milter_finish_handler (gint fd,
 
 static void
 proxy_milter_error_handler (gint fd,
-		struct rspamd_milter_session *rms,
+		struct rspamd_milter_session *rms, /* unused */
 		void *ud, GError *err)
 {
 	struct rspamd_proxy_session *session = ud;
 
-	msg_info_session ("abnormally closing milter connection from: %s, "
-			"error: %e",
-			rspamd_inet_address_to_string_pretty (session->client_addr),
-			err);
-	/* Terminate session immediately */
-	proxy_backend_close_connection (session->master_conn);
-	REF_RELEASE (session);
+	if (err && err->code != 0) {
+		msg_info_session ("abnormally closing milter connection from: %s, "
+						  "error: %e",
+				rspamd_inet_address_to_string_pretty (session->client_addr),
+				err);
+		/* Terminate session immediately */
+		proxy_backend_close_connection (session->master_conn);
+		REF_RELEASE (session);
+	}
+	else {
+		msg_info_session ("normally closing milter connection from: %s, "
+						  "%e",
+				rspamd_inet_address_to_string_pretty (session->client_addr),
+				err);
+		/* Terminate session immediately */
+		proxy_backend_close_connection (session->master_conn);
+		REF_RELEASE (session);
+	}
 }
 
 static void
