@@ -124,10 +124,14 @@ end
 -- @return {number} rounded number
 --]]
 
--- Robert Jay Gould http://lua-users.org/wiki/SimpleRound
+-- modified version from Robert Jay Gould http://lua-users.org/wiki/SimpleRound
 exports.round = function(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
-  return math.floor(num * mult) / mult
+  if num >= 0 then
+    return math.floor(num * mult + 0.5) / mult
+  else
+    return math.ceil(num * mult - 0.5) / mult
+  end
 end
 
 --[[[
