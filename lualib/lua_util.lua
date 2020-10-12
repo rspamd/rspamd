@@ -1437,7 +1437,7 @@ end
 -- @param {string} str input string
 -- @return {string} original or quoted string
 --]]]
-local tspecial = lpeg.S"()<>@,;:\\\"/[]?= \t\v"
+local tspecial = lpeg.S"()<>,;:\\\"/[]?= \t\v"
 local special_match = lpeg.P((1 - tspecial)^0 * tspecial^1)
 exports.maybe_smtp_quote_value = function(str)
   if special_match:match(str) then
