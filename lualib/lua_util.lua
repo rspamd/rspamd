@@ -1431,4 +1431,20 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
   return false
 end
 
+---[[[
+-- @function lua_util.maybe_smtp_quote_value(str)
+-- Checks string for the forbidden elements (tspecials in RFC and quote string if needed)
+-- @param {string} str input string
+-- @return {string} original or quoted string
+--]]]
+local tspecial = lpeg.S"()<>@,;:\\\"/[]?= \t\v"
+local special_match = lpeg.P((1 - tspecial)^0 * tspecial^1)
+exports.maybe_smtp_quote_value = function(str)
+  if special_match:match(str) then
+    return string.format('"%s"', str:gsub('"', '\\"'))
+  end
+
+  return str
+end
+
 return exports
