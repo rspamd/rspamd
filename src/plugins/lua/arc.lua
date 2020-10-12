@@ -258,8 +258,10 @@ local function arc_callback(task)
 
       if cbdata.checked == #arc_sig_headers then
         if cbdata.res == 'success' then
-          task:insert_result(arc_symbols.allow, 1.0, string.format('%s:s=%s:i=%d',
-              domain, sig.s, cbdata.checked))
+          local arc_allow_result = string.format('%s:s=%s:i=%d',
+              domain, sig.s, cbdata.checked)
+          task:insert_result(arc_symbols.allow, 1.0, arc_allow_result)
+          task:cache_set('arc-allow', arc_allow_result)
         else
           task:insert_result(arc_symbols.reject, 1.0,
               rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
@@ -581,7 +583,7 @@ local function prepare_arc_selector(task, sel)
     sel.arc_idx = #arc_seals + 1
 
     local function default_arc_cv()
-      if task:has_symbol(arc_symbols.allow) then
+      if task:cache_get('arc-allow') then
         sel.arc_cv = 'pass'
       else
         sel.arc_cv = 'fail'
