@@ -587,12 +587,14 @@ local function gen_rbl_callback(rule)
   end
 
   local function check_selector(task, requests_table, whitelist)
-    local res = rule.selector(task)
+    for selector_label, selector in pairs(rule.selectors) do
+      local res = selector(task)
 
-    if res then
-      for _,r in ipairs(res) do
-        add_dns_request(task, r, false, false, requests_table,
-            'sel' .. rule.selector_id, whitelist)
+      if res then
+        for _,r in ipairs(res) do
+          add_dns_request(task, r, false, false, requests_table,
+              selector_label, whitelist)
+        end
       end
     end
 
@@ -879,26 +881,33 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   if rbl.selector then
-    if known_selectors[rbl.selector] then
-      lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
-          known_selectors[rbl.selector].id)
-      rbl.selector = known_selectors[rbl.selector].selector
-      rbl.selector_id = known_selectors[rbl.selector].id
-    else
-      -- Create a new flattened closure
-      local sel = selectors.create_selector_closure(rspamd_config, rbl.selector, '', true)
 
-      if not sel then
-        rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, rbl.selector)
-        return false
+    rbl.selectors = {}
+    if type(rbl.selector) ~= 'table' then
+      rbl.selector = {['selector'] = rbl.selector}
+    end
+
+    for selector_label, selector in pairs(rbl.selector) do
+      if known_selectors[selector] then
+        lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
+            known_selectors[selector].id)
+        rbl.selectors[selector_label] = known_selectors[selector].selector
+      else
+        -- Create a new flattened closure
+        local sel = selectors.create_selector_closure(rspamd_config, selector, '', true)
+
+        if not sel then
+          rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, selector)
+          return false
+        end
+
+        rbl.selector = sel
+        known_selectors[selector] = {
+          selector = sel,
+          id = #lua_util.keys(known_selectors) + 1,
+        }
+        rbl.selectors[selector_label] = known_selectors[selector].selector
       end
-
-      rbl.selector = sel
-      known_selectors[rbl.selector] = {
-        selector = sel,
-        id = #lua_util.keys(known_selectors) + 1,
-      }
-      rbl.selector_id = known_selectors[rbl.selector].id
     end
 
   end
@@ -1188,7 +1197,7 @@ local rule_schema_tbl = {
   return_codes = return_codes_schema:is_optional(),
   returnbits = return_bits_schema:is_optional(),
   returncodes = return_codes_schema:is_optional(),
-  selector = ts.string:is_optional(),
+  selector = ts.one_of{ts.string, ts.table}:is_optional(),
   symbol = ts.string:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
   unknown = ts.boolean:is_optional(),
