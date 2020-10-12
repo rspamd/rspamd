@@ -129,43 +129,46 @@ local function parse_arc_header(hdr, target)
 end
 
 local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
+  local fail_reason
   for i = 1,#seals do
     if (sigs[i].i or 0) ~= i then
-      local fail_reason = string.format('bad i for signature: %d, expected %d; d=%s',
+      fail_reason = string.format('bad i for signature: %d, expected %d; d=%s',
           sigs[i].i, i, sigs[i].d)
       rspamd_logger.infox(task, fail_reason)
       task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
-      return false
+      return false,fail_reason
     end
     if (seals[i].i or 0) ~= i then
-      local fail_reason = string.format('bad i for seal: %d, expected %d; d=%s',
+      fail_reason = string.format('bad i for seal: %d, expected %d; d=%s',
           seals[i].i, i, seals[i].d)
       rspamd_logger.infox(task, fail_reason)
       task:insert_result(arc_symbols['invalid'], 1.0,fail_reason)
-      return false
+      return false,fail_reason
     end
 
     if not seals[i].cv then
-      task:insert_result(arc_symbols['invalid'], 1.0, 'no cv on i=' .. tostring(i))
-      return false
+      fail_reason = string.format('no cv on i=%d', i)
+      task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+      return false,fail_reason
     end
 
     if i == 1 then
       -- We need to ensure that cv of seal is equal to 'none'
       if seals[i].cv ~= 'none' then
-        task:insert_result(arc_symbols['invalid'], 1.0, 'cv is not "none" for i=1')
-        return false
+        fail_reason = 'cv is not "none" for i=1'
+        task:insert_result(arc_symbols['invalid'], 1.0, fail_reason)
+        return false,fail_reason
       end
     else
       if seals[i].cv ~= 'pass' then
-        task:insert_result(arc_symbols['reject'], 1.0, string.format('cv is %s on i=%d',
-            seals[i].cv, i))
-        return false
+        fail_reason = string.format('cv is %s on i=%d',  seals[i].cv, i)
+        task:insert_result(arc_symbols['reject'], 1.0, fail_reason)
+        return true,fail_reason
       end
     end
   end
 
-  return true
+  return true,nil
 end
 
 local function arc_callback(task)
@@ -217,13 +220,20 @@ local function arc_callback(task)
   lua_util.debugm(N, task, 'got %s arc sections', #cbdata.seals)
 
   -- Now check sanity of what we have
-  if not arc_validate_seals(task, cbdata.seals, cbdata.sigs,
-    arc_seal_headers, arc_sig_headers) then
+  local valid,validation_error = arc_validate_seals(task, cbdata.seals, cbdata.sigs,
+      arc_seal_headers, arc_sig_headers)
+  if not valid then
+    task:cache_set('arc-failure', validation_error)
     return
   end
 
   task:cache_set('arc-sigs', cbdata.sigs)
   task:cache_set('arc-seals', cbdata.seals)
+
+  if validation_error then
+    -- ARC rejection but no strong failure for signing
+    return
+  end
 
   local function gen_arc_seal_cb(sig)
     return function (_, res, err, domain)
@@ -553,6 +563,15 @@ end
 local function prepare_arc_selector(task, sel)
   local arc_seals = task:cache_get('arc-seals')
 
+  if not arc_seals then
+    -- Check if our arc is broken
+    local failure_reason = task:cache_get('arc-failure')
+    if failure_reason then
+      rspamd_logger.infox(task, 'skip ARC as the existing chain is broken: %s', failure_reason)
+      return false
+    end
+  end
+
   sel.arc_cv = 'none'
   sel.arc_idx = 1
   sel.no_cache = true
@@ -594,6 +613,8 @@ local function prepare_arc_selector(task, sel)
     end
 
   end
+
+  return true
 end
 
 local function do_sign(task, sign_params)
@@ -602,7 +623,10 @@ local function do_sign(task, sign_params)
     return
   end
 
-  prepare_arc_selector(task, sign_params)
+  if not prepare_arc_selector(task, sign_params) then
+    -- Broken arc
+    return
+  end
 
   if settings.check_pubkey then
     local resolve_name = sign_params.selector .. "._domainkey." .. sign_params.domain
