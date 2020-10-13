@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (dns_resolver, resolve_txt);
 LUA_FUNCTION_DEF (dns_resolver, resolve_mx);
 LUA_FUNCTION_DEF (dns_resolver, resolve_ns);
 LUA_FUNCTION_DEF (dns_resolver, resolve);
+LUA_FUNCTION_DEF (dns_resolver, idna_convert_utf8);
 
 void lua_push_dns_reply (lua_State *L, const struct rdns_reply *reply);
 
@@ -66,6 +67,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 	LUA_INTERFACE_DEF (dns_resolver, resolve_mx),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_ns),
 	LUA_INTERFACE_DEF (dns_resolver, resolve),
+	LUA_INTERFACE_DEF (dns_resolver, idna_convert_utf8),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -683,6 +685,50 @@ lua_dns_resolver_resolve (lua_State *L)
 	}
 	else {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method resolver:idna_convert_utf8(hostname[, pool])
+ * Converts domain name from IDN (in utf8 format) to punycode
+ * @return {string} new name converted
+ */
+static int
+lua_dns_resolver_idna_convert_utf8 (lua_State *L)
+{
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
+	gsize hlen;
+	guint conv_len = 0;
+	const gchar *hname = luaL_checklstring (L, 2, &hlen);
+	gchar *converted;
+	rspamd_mempool_t *pool = rspamd_lua_check_udata_maybe (L, 3, "rspamd{mempool}");
+
+
+	if (dns_resolver && hname) {
+		if (!rspamd_str_has_8bit (hname, hlen)) {
+			/* No 8 bit, no reasons to call idna */
+			lua_pushlstring (L, hname, hlen);
+		}
+		else {
+			converted = rspamd_dns_resolver_idna_convert_utf8 (dns_resolver, pool,
+					hname, hlen, &conv_len);
+
+			if (converted == NULL) {
+				lua_pushnil (L);
+			}
+			else {
+				lua_pushlstring (L, converted, conv_len);
+
+				if (pool == NULL) {
+					g_free (converted);
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
