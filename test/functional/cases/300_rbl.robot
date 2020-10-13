@@ -58,6 +58,11 @@ CONTENT URLS
   Expect Symbol With Option  URIBL_WITHCONTENT  8.8.8.8:url
   Expect Symbol With Exact Options  URIBL_CONTENTONLY  example.com:url
 
+SELECTORS
+  Scan File  ${TESTDIR}/messages/btc.eml  From=user@example.com  Helo=example.org
+  Expect Symbol With Exact Options  RBL_SELECTOR_SINGLE  example.org:selector
+  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.com:sel_from
+  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
 
 *** Keywords ***
 Rbl Setup
