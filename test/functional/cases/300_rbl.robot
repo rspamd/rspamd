@@ -64,6 +64,11 @@ SELECTORS
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.com:sel_from
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
 
+SELECTORS COMBINED
+  Scan File  ${TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
+  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_from
+  Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
+
 *** Keywords ***
 Rbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/rbl.conf
