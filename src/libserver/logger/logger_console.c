@@ -179,8 +179,11 @@ rspamd_log_console_log (const gchar *module, const gchar *id,
 	rspamd_file_lock (fd, FALSE);
 #endif
 
-	log_time (rspamd_get_calendar_ticks (),
-			rspamd_log, timebuf, sizeof (timebuf));
+	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
+		log_time (rspamd_get_calendar_ticks (),
+				rspamd_log, timebuf, sizeof (timebuf));
+	}
+
 	if (priv->log_color) {
 		if (level_flags & (G_LOG_LEVEL_INFO|G_LOG_LEVEL_MESSAGE)) {
 			/* White */
@@ -215,12 +218,20 @@ rspamd_log_console_log (const gchar *module, const gchar *id,
 		iov[niov++].iov_len = 1;
 	}
 	else {
-		r += rspamd_snprintf (tmpbuf + r,
-				sizeof (tmpbuf) - r,
-				"%s #%P(%s) ",
-				timebuf,
-				rspamd_log->pid,
-				rspamd_log->process_type);
+		if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
+			r += rspamd_snprintf (tmpbuf + r,
+					sizeof (tmpbuf) - r,
+					"%s #%P(%s) ",
+					timebuf,
+					rspamd_log->pid,
+					rspamd_log->process_type);
+		} else {
+			r += rspamd_snprintf (tmpbuf + r,
+					sizeof (tmpbuf) - r,
+					"#%P(%s) ",
+					rspamd_log->pid,
+					rspamd_log->process_type);
+		}
 
 		modulebuf[0] = '\0';
 		mremain = sizeof (modulebuf);
