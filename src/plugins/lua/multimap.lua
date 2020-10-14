@@ -544,7 +544,7 @@ local function multimap_callback(task, rule)
         return true,nil,1.0
       end
     elseif type(p_ret) == 'boolean' then
-      return p_ret,nil,0.0
+      return p_ret,nil,1.0
     end
 
     return false,nil,0.0
@@ -1270,12 +1270,16 @@ if opts and type(opts) == 'table' then
       rspamd_logger.infox(rspamd_config, 'set default score 0 for multimap rule %s', rule.symbol)
       rule.score = 0
     end
-    if rule['score'] then
+    if rule.score then
       -- Register metric symbol
       rule.name = rule.symbol
       rule.description = rule.description or 'multimap symbol'
       rule.group = rule.group or N
 
+      -- XXX: for combined maps we use trace, so flags must include one_shot to avoid scores multiplication
+      if rule.combined and not rule.flags then
+        rule.flags = 'one_shot'
+      end
       rspamd_config:set_metric_symbol(rule)
     end
   end, fun.filter(function(r) return not r['prefilter'] end, rules))
