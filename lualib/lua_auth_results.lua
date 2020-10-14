@@ -173,9 +173,9 @@ local function gen_auth_results(task, settings)
             local dom = t[1]
             local rsn = t[2]
             if rsn then
-              hdr = hdr .. ' reason="' .. lua_util.maybe_smtp_quote_value(rsn) .. '"'
+              hdr = string.format('%s reason=%s', hdr, lua_util.maybe_smtp_quote_value(rsn))
             end
-            hdr = hdr .. ' header.from=' .. lua_util.maybe_smtp_quote_value(dom)
+            hdr = string.format('%s header.from=%s', hdr, lua_util.maybe_smtp_quote_value(dom))
           end
           if key == 'softfail' then
             hdr = hdr .. ' (policy=none)'
@@ -197,7 +197,7 @@ local function gen_auth_results(task, settings)
         -- Main type
         local sender
         local sender_type
-        local smtp_from = lua_util.maybe_smtp_quote_value(task:get_from('smtp'))
+        local smtp_from = task:get_from('smtp')
 
         if smtp_from and
             smtp_from[1] and
