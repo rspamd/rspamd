@@ -188,31 +188,37 @@ local function gen_check_rcvd_conditions(rbl, received_total)
 end
 
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt)
-  local function make_option(ip)
+  local function make_option(ip, label)
     if ip then
       return string.format('%s:%s:%s',
           resolve_table_elt.orig,
-          resolve_table_elt.what,
+          label,
           ip)
     else
       return string.format('%s:%s',
           resolve_table_elt.orig,
-          resolve_table_elt.what)
+          label)
     end
   end
 
-  local function insert_result(s, ip)
+  local function insert_result(s, ip, label)
     if rbl.symbols_prefixes then
-      local prefix = rbl.symbols_prefixes[resolve_table_elt.what]
+      local prefix = rbl.symbols_prefixes[label]
 
       if not prefix then
-        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', resolve_table_elt.what)
-        task:insert_result(s, 1.0, make_option(ip))
+        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
+        task:insert_result(s, 1.0, make_option(ip, label))
       else
-        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip))
+        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip, label))
       end
     else
-      task:insert_result(s, 1.0, make_option(ip))
+      task:insert_result(s, 1.0, make_option(ip, label))
+    end
+  end
+
+  local function insert_results(s, ip)
+    for label in pairs(resolve_table_elt.what) do
+      insert_result(s, ip, label)
     end
   end
 
@@ -236,7 +242,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
   end
 
   if rbl.returncodes == nil and rbl.returnbits == nil and rbl.symbol ~= nil then
-    insert_result(rbl.symbol)
+    insert_results(rbl.symbol)
     return
   end
 
@@ -251,7 +257,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,check_bit in ipairs(bits) do
           if bit.band(ipnum, check_bit) == check_bit then
             foundrc = true
-            insert_result(s)
+            insert_results(s)
             -- Here, we continue with other bits
           end
         end
@@ -261,7 +267,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,v in ipairs(codes) do
           if string.find(ipstr, '^' .. v .. '$') then
             foundrc = true
-            insert_result(s)
+            insert_results(s)
             break
           end
         end
@@ -270,10 +276,10 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
 
     if not foundrc then
       if rbl.unknown and rbl.symbol then
-        insert_result(rbl.symbol, ipstr)
+        insert_results(rbl.symbol, ipstr)
       else
-        rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
-            rbl.rbl, ipstr)
+        rspamd_logger.errx(task, '%1 returned unknown result: %2',
+            to_resolve, ipstr)
       end
     end
   end
@@ -319,13 +325,13 @@ local function gen_rbl_callback(rule)
     return false
   end
 
-  local function add_dns_request(task, req, forced, is_ip, requests_table, what, whitelist)
+  local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist)
     local req_str = req
     if is_ip then
       req_str = tostring(req)
     end
 
-    if whitelist and is_whitelisted(task, req, req_str, whitelist, what) then
+    if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
       return
     end
 
@@ -338,6 +344,9 @@ local function gen_rbl_callback(rule)
       local nreq = requests_table[req]
       if forced and not nreq.forced then
         nreq.forced = true
+      end
+      if not nreq.what[label] then
+        nreq.what[label] = true
       end
 
       return true,nreq -- Duplicate
@@ -354,7 +363,7 @@ local function gen_rbl_callback(rule)
             n = processed,
             orig = req_str,
             resolve_ip = resolve_ip,
-            what = what,
+            what = {[label] = true},
           }
           requests_table[req] = nreq
         end
@@ -377,7 +386,7 @@ local function gen_rbl_callback(rule)
           n = to_resolve,
           orig = req_str,
           resolve_ip = resolve_ip,
-          what = what,
+          what = {[label] = true},
         }
         requests_table[req] = nreq
       end
@@ -788,8 +797,9 @@ local function gen_rbl_callback(rule)
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
+              local label = next(orig_resolve_table_elt.what)
               local dup,nreq = add_dns_request(task, dns_res, false, true,
-                  resolved_req, orig_resolve_table_elt.what)
+                  resolved_req, label)
               -- Add original name
               if not dup then
                 nreq.orig = nreq.orig .. ':' .. orig_resolve_table_elt.n
