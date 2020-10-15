@@ -55,8 +55,11 @@ local function spamtrap_cb(task)
         settings['fuzzy_flag'],
         settings['fuzzy_weight'])
     end
+    local act_flags = ''
     if settings['learn_spam'] then
       task:set_flag("learn_spam")
+      -- Allow processing as we still need to learn and do other stuff
+      act_flags = 'process_all'
     end
     task:insert_result(settings['symbol'], 1, rcpt)
 
@@ -72,7 +75,10 @@ local function spamtrap_cb(task)
         elseif settings.action == 'reject' then
           smtp_message = 'message rejected'
         end
-        task:set_pre_result(settings['action'], smtp_message, 'spamtrap')
+        task:set_pre_result{action = settings['action'],
+                            message = smtp_message,
+                            module = 'spamtrap',
+                            flags = act_flags}
       end
     end
   end
