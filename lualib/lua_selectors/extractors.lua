@@ -241,7 +241,10 @@ The optional second argument accepts list of flags:
   ['received'] = {
     ['get_value'] = function(task, args)
       local rh = task:get_received_headers()
-      if args[1] and rh then
+      if not rh[1] then
+        return nil
+      end
+      if args[1] then
         return fun.map(function(r) return r[args[1]] end, rh), 'string_list'
       end
 
@@ -255,7 +258,10 @@ e.g. `by_hostname`]],
   ['urls'] = {
     ['get_value'] = function(task, args)
       local urls = task:get_urls()
-      if args[1] and urls then
+      if not urls[1] then
+        return nil
+      end
+      if args[1] then
         return fun.map(function(r) return r[args[1]](r) end, urls), 'string_list'
       end
       return urls,'userdata_list'
@@ -271,6 +277,9 @@ e.g. `get_tld`]],
       params.task = task
       params.no_cache = true
       local urls = lua_util.extract_specific_urls(params)
+      if not urls[1] then
+        return nil
+      end
       return urls,'userdata_list'
     end,
     ['description'] = [[Get most specific urls. Arguments are equal to the Lua API function]],
@@ -287,7 +296,10 @@ e.g. `get_tld`]],
   ['emails'] = {
     ['get_value'] = function(task, args)
       local urls = task:get_emails()
-      if args[1] and urls then
+      if not urls[1] then
+        return nil
+      end
+      if args[1] then
         return fun.map(function(r) return r[args[1]](r) end, urls), 'string_list'
       end
       return urls,'userdata_list'
