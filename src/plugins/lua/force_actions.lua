@@ -101,7 +101,8 @@ local function gen_cb(params)
     end
 
     local ret = e:process(task)
-    if params.limit and ret > params.limit then
+    lua_util.debugm(N, task, "expression %s returned %s", params.expr, ret)
+    if (not params.limit) or ret > params.limit then
       if params.subject then
         task:set_metric_subject(params.subject)
       end
