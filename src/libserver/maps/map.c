@@ -2019,34 +2019,31 @@ rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
 	struct rspamd_map *map = (struct rspamd_map *)w->data;
 
 	if (w->attr.st_nlink > 0) {
+		msg_info_map ("old mtime is %t (size = %Hz), "
+					  "new mtime is %t (size = %Hz) for map file %s",
+				w->prev.st_mtime, (gsize)w->prev.st_size,
+				w->attr.st_mtime, (gsize)w->attr.st_size,
+				w->path);
 
-		if (w->attr.st_mtime > w->prev.st_mtime) {
-			msg_info_map ("old mtime is %t (size = %Hz), "
-				 "new mtime is %t (size = %Hz) for map file %s",
-					w->prev.st_mtime, (gsize)w->prev.st_size,
-					w->attr.st_mtime, (gsize)w->attr.st_size,
-					w->path);
+		/* Fire need modify flag */
+		struct rspamd_map_backend *bk;
+		guint i;
 
-			/* Fire need modify flag */
-			struct rspamd_map_backend *bk;
-			guint i;
-
-			PTR_ARRAY_FOREACH (map->backends, i, bk) {
-				if (bk->protocol == MAP_PROTO_FILE) {
-					bk->data.fd->need_modify = TRUE;
-				}
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->protocol == MAP_PROTO_FILE) {
+				bk->data.fd->need_modify = TRUE;
 			}
-
-			map->next_check = 0;
-
-			if (map->scheduled_check) {
-				ev_timer_stop (map->event_loop, &map->scheduled_check->ev);
-				MAP_RELEASE (map->scheduled_check, "rspamd_map_on_stat");
-				map->scheduled_check = NULL;
-			}
-
-			rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 		}
+
+		map->next_check = 0;
+
+		if (map->scheduled_check) {
+			ev_timer_stop (map->event_loop, &map->scheduled_check->ev);
+			MAP_RELEASE (map->scheduled_check, "rspamd_map_on_stat");
+			map->scheduled_check = NULL;
+		}
+
+		rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 	}
 }
 
