@@ -805,25 +805,26 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         });
     };
 
+    ui.escapeHTML = function (string) {
+        var htmlEscaper = /[&<>"'/`=]/g;
+        var htmlEscapes = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#39;",
+            "/": "&#x2F;",
+            "`": "&#x60;",
+            "=": "&#x3D;"
+        };
+        return String(string).replace(htmlEscaper, function (match) {
+            return htmlEscapes[match];
+        });
+    };
+
     ui.preprocess_item = function (rspamd, item) {
-        function escapeHTML(string) {
-            var htmlEscaper = /[&<>"'/`=]/g;
-            var htmlEscapes = {
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                "\"": "&quot;",
-                "'": "&#39;",
-                "/": "&#x2F;",
-                "`": "&#x60;",
-                "=": "&#x3D;"
-            };
-            return String(string).replace(htmlEscaper, function (match) {
-                return htmlEscapes[match];
-            });
-        }
         function escape_HTML_array(arr) {
-            arr.forEach(function (d, i) { arr[i] = escapeHTML(d); });
+            arr.forEach(function (d, i) { arr[i] = ui.escapeHTML(d); });
         }
 
         for (var prop in item) {
@@ -839,9 +840,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                         if (!sym.name) {
                             sym.name = key;
                         }
-                        sym.name = escapeHTML(sym.name);
+                        sym.name = ui.escapeHTML(sym.name);
                         if (sym.description) {
-                            sym.description = escapeHTML(sym.description);
+                            sym.description = ui.escapeHTML(sym.description);
                         }
 
                         if (sym.options) {
@@ -851,7 +852,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     break;
                 default:
                     if (typeof item[prop] === "string") {
-                        item[prop] = escapeHTML(item[prop]);
+                        item[prop] = ui.escapeHTML(item[prop]);
                     }
             }
         }
