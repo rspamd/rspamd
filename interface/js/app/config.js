@@ -170,7 +170,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     success: function (data) {
                         var readonly = "";
                         var icon = "fa-edit";
-                        var text = data[0].data;
+                        var text = rspamd.escapeHTML(data[0].data);
                         if (item.editable === false || rspamd.read_only) {
                             readonly = " readonly";
                             icon = "fa-eye";
