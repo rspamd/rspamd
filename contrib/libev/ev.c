@@ -5034,7 +5034,7 @@ stat_timer_cb (EV_P_ ev_timer *w_, int revents)
     || prev.st_gid   != w->attr.st_gid
     || prev.st_rdev  != w->attr.st_rdev
     || prev.st_size  != w->attr.st_size
-    || prev.st_atime != w->attr.st_atime
+    /*   || prev.st_atime != w->attr.st_atime */ /* Rspamd: to avoid constant maps reload */
     || prev.st_mtime != w->attr.st_mtime
     || prev.st_ctime != w->attr.st_ctime
   ) {
