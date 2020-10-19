@@ -340,10 +340,17 @@ dump_dynamic_config (struct rspamd_config *cfg)
 		return FALSE;
 	}
 
+	struct ucl_emitter_functions *emitter_functions;
+	FILE *fp;
+
+	fp = fdopen (fd, "w");
+	emitter_functions = ucl_object_emit_file_funcs (fp);
+
 	if (!ucl_object_emit_full (cfg->current_dynamic_conf, UCL_EMIT_JSON,
-			ucl_object_emit_fd_funcs (fd), NULL)) {
+			emitter_functions, NULL)) {
 		msg_err ("cannot emit ucl object: %s", strerror (errno));
-		close (fd);
+		ucl_object_emit_funcs_free (emitter_functions);
+		fclose (fp);
 		return FALSE;
 	}
 
@@ -352,8 +359,10 @@ dump_dynamic_config (struct rspamd_config *cfg)
 	/* Rename old config */
 	if (rename (pathbuf, cfg->dynamic_conf) == -1) {
 		msg_err ("rename error: %s", strerror (errno));
-		close (fd);
+		fclose (fp);
+		ucl_object_emit_funcs_free (emitter_functions);
 		unlink (pathbuf);
+
 		return FALSE;
 	}
 	/* Set permissions */
@@ -362,7 +371,9 @@ dump_dynamic_config (struct rspamd_config *cfg)
 		msg_warn ("chmod failed: %s", strerror (errno));
 	}
 
-	close (fd);
+	fclose (fp);
+	ucl_object_emit_funcs_free (emitter_functions);
+
 	return TRUE;
 }
 
