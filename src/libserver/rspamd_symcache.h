@@ -48,10 +48,11 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_CLASSIFIER = (1u << 6u),
 	SYMBOL_TYPE_FINE = (1u << 7u),
 	SYMBOL_TYPE_EMPTY = (1u << 8u), /* Allow execution on empty tasks */
-	SYMBOL_TYPE_PREFILTER = (1u << 9u),
-	SYMBOL_TYPE_POSTFILTER = (1u << 10u),
-	SYMBOL_TYPE_NOSTAT = (1u << 11u), /* Skip as statistical symbol */
-	SYMBOL_TYPE_IDEMPOTENT = (1u << 12u), /* Symbol cannot change metric */
+	SYMBOL_TYPE_CONNFILTER = (1u << 9u), /* Connection stage filter */
+	SYMBOL_TYPE_PREFILTER = (1u << 10u),
+	SYMBOL_TYPE_POSTFILTER = (1u << 11u),
+	SYMBOL_TYPE_NOSTAT = (1u << 12u), /* Skip as statistical symbol */
+	SYMBOL_TYPE_IDEMPOTENT = (1u << 13u), /* Symbol cannot change metric */
 	SYMBOL_TYPE_TRIVIAL = (1u << 14u), /* Symbol is trivial */
 	SYMBOL_TYPE_MIME_ONLY = (1u << 15u), /* Symbol is mime only */
 	SYMBOL_TYPE_EXPLICIT_DISABLE = (1u << 16u), /* Symbol should be disabled explicitly only */

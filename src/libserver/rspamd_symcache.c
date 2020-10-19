@@ -151,8 +151,9 @@ struct rspamd_symcache {
 	GHashTable *items_by_symbol;
 	GPtrArray *items_by_id;
 	struct symcache_order *items_by_order;
-	GPtrArray *filters;
+	GPtrArray *connfilters;
 	GPtrArray *prefilters;
+	GPtrArray *filters;
 	GPtrArray *postfilters;
 	GPtrArray *composites;
 	GPtrArray *idempotent;
@@ -744,6 +745,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		}
 	}
 
+	g_ptr_array_sort_with_data (cache->connfilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->idempotent, postfilters_cmp, cache);
@@ -1116,6 +1118,11 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			g_ptr_array_add (cache->postfilters, item);
 			item->container = cache->postfilters;
 		}
+		else if (item->type & SYMBOL_TYPE_CONNFILTER) {
+			type_str = "connfilter";
+			g_ptr_array_add (cache->connfilters, item);
+			item->container = cache->connfilters;
+		}
 		else {
 			item->is_filter = TRUE;
 			g_ptr_array_add (cache->filters, item);
@@ -1301,8 +1308,9 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 		g_hash_table_destroy (cache->items_by_symbol);
 		g_ptr_array_free (cache->items_by_id, TRUE);
 		rspamd_mempool_delete (cache->static_pool);
-		g_ptr_array_free (cache->filters, TRUE);
+		g_ptr_array_free (cache->connfilters, TRUE);
 		g_ptr_array_free (cache->prefilters, TRUE);
+		g_ptr_array_free (cache->filters, TRUE);
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
@@ -1328,8 +1336,9 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_id = g_ptr_array_new ();
-	cache->filters = g_ptr_array_new ();
+	cache->connfilters = g_ptr_array_new ();
 	cache->prefilters = g_ptr_array_new ();
+	cache->filters = g_ptr_array_new ();
 	cache->postfilters = g_ptr_array_new ();
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
@@ -2069,6 +2078,50 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 	start_events_pending = rspamd_session_events_pending (task->s);
 
 	switch (stage) {
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
+		/* Check for connection filters */
+		saved_priority = G_MININT;
+		all_done = TRUE;
+
+		for (i = 0; i < (gint) cache->connfilters->len; i++) {
+			item = g_ptr_array_index (cache->connfilters, i);
+			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
+
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				return TRUE;
+			}
+
+			if (!CHECK_START_BIT (checkpoint, dyn_item) &&
+				!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
+
+				if (checkpoint->has_slow) {
+					/* Delay */
+					checkpoint->has_slow = FALSE;
+
+					return FALSE;
+				}
+				/* Check priorities */
+				if (saved_priority == G_MININT) {
+					saved_priority = item->priority;
+				}
+				else {
+					if (item->priority < saved_priority &&
+						rspamd_session_events_pending (task->s) > start_events_pending) {
+						/*
+						 * Delay further checks as we have higher
+						 * priority filters to be processed
+						 */
+						return FALSE;
+					}
+				}
+
+				rspamd_symcache_check_symbol (task, cache, item,
+						checkpoint);
+				all_done = FALSE;
+			}
+		}
+		break;
+
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 		/* Check for prefilters */
 		saved_priority = G_MININT;

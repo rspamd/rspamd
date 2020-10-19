@@ -727,6 +727,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		}
 		break;
 
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 	case RSPAMD_TASK_STAGE_FILTERS:
 		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
@@ -1806,8 +1807,8 @@ rspamd_task_stage_name (enum rspamd_task_stage stg)
 	case RSPAMD_TASK_STAGE_CONNECT:
 		ret = "connect";
 		break;
-	case RSPAMD_TASK_STAGE_ENVELOPE:
-		ret = "envelope";
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
+		ret = "connection_filter";
 		break;
 	case RSPAMD_TASK_STAGE_READ_MESSAGE:
 		ret = "read_message";
