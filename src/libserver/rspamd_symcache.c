@@ -928,6 +928,7 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
+	FILE *fp;
 	bool ret;
 	gchar path[PATH_MAX];
 
@@ -951,16 +952,17 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 	}
 
 	rspamd_file_lock (fd, FALSE);
+	fp = fdopen (fd, "w");
 
 	memset (&hdr, 0, sizeof (hdr));
 	memcpy (hdr.magic, rspamd_symcache_magic,
 			sizeof (rspamd_symcache_magic));
 
-	if (write (fd, &hdr, sizeof (hdr)) == -1) {
+	if (fwrite (&hdr, sizeof (hdr), 1, fp) == -1) {
 		msg_err_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
-		close (fd);
+		fclose (fp);
 
 		return FALSE;
 	}
@@ -992,12 +994,12 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 		ucl_object_insert_key (top, elt, k, 0, false);
 	}
 
-	efunc = ucl_object_emit_fd_funcs (fd);
+	efunc = ucl_object_emit_file_funcs (fp);
 	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc, NULL);
 	ucl_object_emit_funcs_free (efunc);
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
-	close (fd);
+	fclose (fp);
 
 	if (rename (path, name) == -1) {
 		msg_err_cache ("cannot rename %s -> %s, error %d, %s", path, name,
