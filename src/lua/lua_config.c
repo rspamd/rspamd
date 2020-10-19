@@ -1817,22 +1817,32 @@ lua_parse_symbol_type (const gchar *str)
 					ret |= SYMBOL_TYPE_VIRTUAL;
 					ret &= ~SYMBOL_TYPE_NORMAL;
 					ret &= ~SYMBOL_TYPE_CALLBACK;
-				} else if (g_ascii_strcasecmp (str, "callback") == 0) {
+				}
+				else if (g_ascii_strcasecmp (str, "callback") == 0) {
 					ret |= SYMBOL_TYPE_CALLBACK;
 					ret &= ~SYMBOL_TYPE_NORMAL;
 					ret &= ~SYMBOL_TYPE_VIRTUAL;
-				} else if (g_ascii_strcasecmp (str, "normal") == 0) {
+				}
+				else if (g_ascii_strcasecmp (str, "normal") == 0) {
 					ret |= SYMBOL_TYPE_NORMAL;
 					ret &= ~SYMBOL_TYPE_CALLBACK;
 					ret &= ~SYMBOL_TYPE_VIRTUAL;
-				} else if (g_ascii_strcasecmp (str, "prefilter") == 0) {
+				}
+				else if (g_ascii_strcasecmp (str, "prefilter") == 0) {
 					ret |= SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_GHOST;
-				} else if (g_ascii_strcasecmp (str, "postfilter") == 0) {
+				}
+				else if (g_ascii_strcasecmp (str, "postfilter") == 0) {
 					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST;
-				} else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
+				}
+				else if (g_ascii_strcasecmp (str, "connfilter") == 0 ||
+						 g_ascii_strcasecmp (str, "conn_filter") == 0) {
+					ret |= SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_GHOST;
+				}
+				else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
 					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST |
-							SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
-				} else {
+						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
+				}
+				else {
 					gint fl = 0;
 
 					fl = lua_parse_symbol_flags (str);
