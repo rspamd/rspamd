@@ -1916,6 +1916,7 @@ rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
 	ucl_object_t *top, *sub;
 	struct ucl_emitter_functions *efuncs;
 	gint i, fd;
+	FILE *fp;
 	gchar fpath[PATH_MAX];
 
 	if (cfg->stats_file == NULL) {
@@ -1931,6 +1932,7 @@ rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
 		return;
 	}
 
+	fp = fdopen (fd, "w");
 	stat = rspamd_main->stat;
 
 	top = ucl_object_typed_new (UCL_OBJECT);
@@ -1956,7 +1958,7 @@ rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
 			ucl_object_fromint (stat->control_connections_count),
 			"control_connections", 0, false);
 
-	efuncs = ucl_object_emit_fd_funcs (fd);
+	efuncs = ucl_object_emit_file_funcs (fp);
 	if (!ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
 			efuncs, NULL)) {
 		msg_err_config ("cannot write stats to %s: %s",
@@ -1972,7 +1974,7 @@ rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
 	}
 
 	ucl_object_unref (top);
-	close (fd);
+	fclose (fp);
 	ucl_object_emit_funcs_free (efuncs);
 }
 
