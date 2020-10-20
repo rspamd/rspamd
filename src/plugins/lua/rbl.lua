@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2011-2020, Vsevolod Stakhov <vsevolod@highsecure.ru>
 Copyright (c) 2013-2015, Andrew Lewis <nerf@judo.za.org>
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,10 +24,10 @@ local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
 local lua_util = require 'lua_util'
-local ts = require("tableshape").types
 local selectors = require "lua_selectors"
 local bit = require 'bit'
 local lua_maps = require "lua_maps"
+local rbl_common = require "plugins/rbl"
 
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
@@ -36,6 +36,7 @@ local lua_maps = require "lua_maps"
 local E = {}
 local N = 'rbl'
 
+-- Checks that could be performed by rbl module
 local local_exclusions
 local white_symbols = {}
 local black_symbols = {}
@@ -1114,107 +1115,14 @@ end
 
 -- Plugin defaults should not be changed - override these in config
 -- New defaults should not alter behaviour
-local default_options = {
-  ['default_enabled'] = true,
-  ['default_ipv4'] = true,
-  ['default_ipv6'] = true,
-  ['default_unknown'] = false,
-  ['default_dkim_domainonly'] = true,
-  ['default_emails_domainonly'] = false,
-  ['default_exclude_private_ips'] = true,
-  ['default_exclude_users'] = false,
-  ['default_exclude_local'] = true,
-  ['default_no_ip'] = false,
-  ['default_dkim_match_from'] = false,
-}
 
-opts = lua_util.override_defaults(default_options, opts)
+
+opts = lua_util.override_defaults(rbl_common.default_options, opts)
 
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = lua_maps.map_add(N, 'local_exclude_ip_map', 'radix',
     'RBL exclusions map')
 end
-
-local return_codes_schema = ts.map_of(
-    ts.string / string.upper, -- Symbol name
-    (
-        ts.array_of(ts.string) +
-            (ts.string / function(s)
-              return { s }
-            end) -- List of IP patterns
-    )
-)
-local return_bits_schema = ts.map_of(
-    ts.string / string.upper, -- Symbol name
-    (
-        ts.array_of(ts.number + ts.string / tonumber) +
-            (ts.string / function(s)
-              return { tonumber(s) }
-            end) +
-            (ts.number / function(s)
-              return { s }
-            end)
-    )
-)
-
-local rule_schema_tbl = {
-  content_urls = ts.boolean:is_optional(),
-  disable_monitoring = ts.boolean:is_optional(),
-  disabled = ts.boolean:is_optional(),
-  dkim = ts.boolean:is_optional(),
-  dkim_domainonly = ts.boolean:is_optional(),
-  dkim_match_from = ts.boolean:is_optional(),
-  emails = ts.boolean:is_optional(),
-  emails_delimiter = ts.string:is_optional(),
-  emails_domainonly = ts.boolean:is_optional(),
-  enabled = ts.boolean:is_optional(),
-  exclude_local = ts.boolean:is_optional(),
-  exclude_private_ips = ts.boolean:is_optional(),
-  exclude_users = ts.boolean:is_optional(),
-  from = ts.boolean:is_optional(),
-  hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
-  hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
-  hash_len = (ts.integer + ts.string / tonumber):is_optional(),
-  helo = ts.boolean:is_optional(),
-  ignore_default = ts.boolean:is_optional(), -- alias
-  ignore_defaults = ts.boolean:is_optional(),
-  ignore_whitelist = ts.boolean:is_optional(),
-  ignore_whitelists = ts.boolean:is_optional(), -- alias
-  images = ts.boolean:is_optional(),
-  ipv4 = ts.boolean:is_optional(),
-  ipv6 = ts.boolean:is_optional(),
-  is_whitelist = ts.boolean:is_optional(),
-  local_exclude_ip_map = ts.string:is_optional(),
-  monitored_address = ts.string:is_optional(),
-  no_ip = ts.boolean:is_optional(),
-  process_script = ts.string:is_optional(),
-  rbl = ts.string,
-  rdns = ts.boolean:is_optional(),
-  received = ts.boolean:is_optional(),
-  replyto = ts.boolean:is_optional(),
-  requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
-  resolve_ip = ts.boolean:is_optional(),
-  return_bits = return_bits_schema:is_optional(),
-  return_codes = return_codes_schema:is_optional(),
-  returnbits = return_bits_schema:is_optional(),
-  returncodes = return_codes_schema:is_optional(),
-  selector = ts.one_of{ts.string, ts.table}:is_optional(),
-  symbol = ts.string:is_optional(),
-  symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
-  unknown = ts.boolean:is_optional(),
-  url_compose_map = lua_maps.map_schema:is_optional(),
-  urls = ts.boolean:is_optional(),
-  whitelist = lua_maps.map_schema:is_optional(),
-  whitelist_exception = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
-  ):is_optional(),
-}
--- Add default boolean flags to the schema
-for def_k,_ in pairs(default_options) do
-  rule_schema_tbl[def_k:sub(#('default_') + 1)] = ts.boolean:is_optional()
-end
-
-local rule_schema = ts.shape(rule_schema_tbl)
 
 for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
@@ -1229,7 +1137,7 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
     end
     -- Propagate default options from opts to rule
     if not rbl.ignore_defaults then
-      for default_opt_key,_ in pairs(default_options) do
+      for default_opt_key,_ in pairs(rbl_common.default_options) do
         local rbl_opt = default_opt_key:sub(#('default_') + 1)
         if rbl[rbl_opt] == nil then
           rbl[rbl_opt] = opts[default_opt_key]
@@ -1241,15 +1149,22 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       rbl.requests_limit = rspamd_config:get_dns_max_requests()
     end
 
-    local res,err = rule_schema:transform(rbl)
+    local res,err = rbl_common.rule_schema:transform(rbl)
     if not res then
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
+      res = rbl_common.convert_checks(res)
       -- Aliases
       if res.return_codes then res.returncodes = res.return_codes end
       if res.return_bits then res.returnbits = res.return_bits end
-      add_rbl(key, res, opts)
+
+      if not res then
+        rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
+            key, err)
+      else
+        add_rbl(key, res, opts)
+      end
     end
   end -- rbl.enabled
 end
