@@ -158,6 +158,22 @@ local function convert_checks(rule)
     rule.connfilter = all_connfilter
   end
 
+  -- Now check if we have any check enabled at all
+  local check_found = false
+  for k,_ in pairs(check_types) do
+    if type(rule[k]) ~= 'nil' then
+      check_found = true
+      break
+    end
+  end
+
+  if not check_found then
+    -- Enable implicit `from` check to allow upgrade
+    rspamd_logger.warnx(rspamd_config, 'rbl rule %s has no check enabled, enable default `from` check',
+        rule.symbol)
+    rule.from = true
+  end
+
   return rule
 end
 
