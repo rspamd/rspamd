@@ -435,7 +435,14 @@ exports.text_part_heuristic = function(part, log_obj, _)
         end
       end
 
+      -- Content type stuff
       if (mtype == 'text' or mtype == 'application') and (msubtype == 'html' or msubtype == 'xhtml+xml') then
+        return 'html',21
+      end
+
+      -- Extension stuff
+      local fname = part:get_filename()
+      if fname and fname:match('html?$') then
         return 'html',21
       end
 
