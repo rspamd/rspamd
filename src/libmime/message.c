@@ -779,13 +779,12 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 {
 	struct rspamd_mime_text_part *text_part;
 	rspamd_ftok_t html_tok, xhtml_tok;
-	gboolean found_html = FALSE, found_txt = FALSE, straight_ct = FALSE;
+	gboolean found_html = FALSE, found_txt = FALSE;
 	enum rspamd_action_type act;
 
-	if (((mime_part->ct && (mime_part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) &&
-		 (straight_ct = TRUE)) ||
-		(mime_part->detected_type &&
-		 strcmp (mime_part->detected_type, "text") == 0)) {
+	if ((mime_part->ct && (mime_part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) ||
+		(mime_part->detected_type && strcmp (mime_part->detected_type, "text") == 0)) {
+
 		found_txt = TRUE;
 
 		html_tok.begin = "html";
@@ -795,16 +794,16 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 		if (rspamd_ftok_casecmp (&mime_part->ct->subtype, &html_tok) == 0 ||
 			rspamd_ftok_casecmp (&mime_part->ct->subtype, &xhtml_tok) == 0 ||
-			(mime_part->detected_ct &&
-				rspamd_ftok_casecmp (&mime_part->detected_ct->subtype, &html_tok) == 0)) {
+			(mime_part->detected_ext &&
+				strcmp (mime_part->detected_ext, "html") == 0)) {
 			found_html = TRUE;
 		}
 	}
 
 	/* Skip attachments */
 	if ((found_txt || found_html) &&
-			mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
-			(!straight_ct || (task->cfg && !task->cfg->check_text_attachements))) {
+			(mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT) &&
+			(!task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
 		return FALSE;
 	}
