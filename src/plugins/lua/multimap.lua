@@ -1276,11 +1276,21 @@ if opts and type(opts) == 'table' then
       rule.description = rule.description or 'multimap symbol'
       rule.group = rule.group or N
 
+      local tmp_flags
+      tmp_flags = rule.flags
+
+      if rule.type == 'received' and rule.flags then
+        -- XXX: hack to allow received flags/nflags
+        -- See issue #3526 on GH
+        rule.flags = nil
+      end
+
       -- XXX: for combined maps we use trace, so flags must include one_shot to avoid scores multiplication
       if rule.combined and not rule.flags then
         rule.flags = 'one_shot'
       end
       rspamd_config:set_metric_symbol(rule)
+      rule.flags = tmp_flags
     end
   end, fun.filter(function(r) return not r['prefilter'] end, rules))
 
