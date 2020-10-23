@@ -842,7 +842,8 @@ rspamd_kv_list_fin (struct map_cb_data *data, void **target)
 
 	if (data->cur_data) {
 		htb = (struct rspamd_hash_map_helper *)data->cur_data;
-		msg_info_map ("read hash of %d elements", kh_size (htb->htb));
+		msg_info_map ("read hash of %d elements from %s", kh_size (htb->htb),
+				map->name);
 		data->map->traverse_function = rspamd_map_helper_traverse_hash;
 		data->map->nelts = kh_size (htb->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&htb->hst);
@@ -1006,6 +1007,8 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 	}
 
 	if (re_map->regexps->len > 0 && re_map->patterns) {
+		gdouble ts1 = rspamd_get_ticks (FALSE);
+
 		if (hs_compile_multi ((const gchar **)re_map->patterns,
 				re_map->flags,
 				re_map->ids,
@@ -1030,6 +1033,10 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 			hs_free_database (re_map->hs_db);
 			re_map->hs_db = NULL;
 		}
+
+		ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
+		msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
+				re_map->regexps->len, re_map->map->name, ts1);
 	}
 	else {
 		msg_err_map ("regexp map is empty");
