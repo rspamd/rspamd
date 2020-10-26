@@ -250,6 +250,29 @@ lua_check_text (lua_State * L, gint pos)
 }
 
 struct rspamd_lua_text *
+lua_check_text_or_string (lua_State * L, gint pos)
+{
+	gint pos_type = lua_type (L, pos);
+
+	if (pos_type == LUA_TUSERDATA) {
+		void *ud = rspamd_lua_check_udata (L, pos, "rspamd{text}");
+		luaL_argcheck (L, ud != NULL, pos, "'text' expected");
+		return ud ? (struct rspamd_lua_text *) ud : NULL;
+	}
+	else if (pos_type == LUA_TSTRING) {
+		/* Fake static lua_text */
+		static struct rspamd_lua_text fake_text;
+
+		fake_text.start = lua_tolstring (L, pos, &fake_text.len);
+		fake_text.flags = RSPAMD_TEXT_FLAG_FAKE;
+
+		return &fake_text;
+	}
+
+	return NULL;
+}
+
+struct rspamd_lua_text *
 lua_new_text (lua_State *L, const gchar *start, gsize len, gboolean own)
 {
 	struct rspamd_lua_text *t;
@@ -1082,6 +1105,8 @@ lua_text_gc (lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 
 	if (t != NULL) {
+		g_assert (!(t->flags & RSPAMD_TEXT_FLAG_FAKE));
+
 		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
 			if (t->flags & RSPAMD_TEXT_FLAG_WIPE) {
 				rspamd_explicit_memzero ((guchar *)t->start, t->len);
@@ -1110,7 +1135,7 @@ lua_text_eq (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t1 = lua_check_text (L, 1),
-			*t2 = lua_check_text (L, 2);
+			*t2 = lua_check_text_or_string (L, 2);
 
 	if (t1->len == t2->len) {
 		lua_pushboolean (L, memcmp (t1->start, t2->start, t1->len) == 0);
@@ -1127,7 +1152,7 @@ lua_text_lt (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t1 = lua_check_text (L, 1),
-			*t2 = lua_check_text (L, 2);
+			*t2 = lua_check_text_or_string (L, 2);
 
 	if (t1 && t2) {
 		if (t1->len == t2->len) {
