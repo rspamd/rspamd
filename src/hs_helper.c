@@ -214,6 +214,13 @@ rspamd_rs_compile_cb (guint ncompiled, GError *err, void *cbd)
 
 	ctx = (struct hs_helper_ctx *)worker->ctx;
 
+	if (err != NULL) {
+		/* Failed to compile: log and go out */
+		msg_err ("cannot compile Hyperscan database: %e", err);
+
+		return;
+	}
+
 	if (ncompiled > 0) {
 		/* Enforce update for other workers */
 		hack_global_forced = TRUE;
