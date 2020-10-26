@@ -1456,7 +1456,6 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 {
 	struct rspamd_mime_text_part *p;
 	guint i, cnt_html = 0, cnt_txt = 0;
-	gboolean res = FALSE;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
 		p = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 0);
