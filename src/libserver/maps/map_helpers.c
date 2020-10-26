@@ -482,7 +482,7 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 		}
 		else {
 			msg_warn_map ("duplicate radix entry found for map %s: %s (old value: '%s', new: '%s')",
-					map->name, key, kh_value (r->htb, k)->value, val);
+					map->name, key, val->value, value);
 		}
 
 		nk = kh_key (r->htb, k).begin;
