@@ -537,7 +537,7 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 		}
 		else {
 			msg_warn_map ("duplicate radix entry found for map %s: %s (old value: '%s', new: '%s')",
-					map->name, key, kh_value (r->htb, k), val);
+					map->name, key, val->value, value);
 		}
 
 		nk = kh_key (r->htb, k).begin;
@@ -591,7 +591,7 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 		}
 		else {
 			msg_warn_map ("duplicate hash entry found for map %s: %s (old value: '%s', new: '%s')",
-					map->name, key, kh_value (ht->htb, k), val);
+					map->name, key, val->value, value);
 		}
 	}
 
@@ -642,9 +642,9 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 
 		/* Always warn about regexp duplicate as it's likely a bad mistake */
 		msg_warn_map ("duplicate re entry found for map %s: %s (old value: '%s', new: '%s')",
-				map->name, key, kh_value (re_map->htb, k)->value, val);
+				map->name, key, val->value, value);
 
-		if (strcmp (kh_value (re_map->htb, k)->value, val->value) == 0) {
+		if (strcmp (val->value, value) == 0) {
 			/* Same value, skip */
 			return;
 		}
