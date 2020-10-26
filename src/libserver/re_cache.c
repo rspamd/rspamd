@@ -1198,13 +1198,13 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 				else {
 					/* Skip empty parts */
-					if (IS_PART_EMPTY (text_part)) {
+					if (IS_TEXT_PART_EMPTY (text_part)) {
 						len = 0;
 						in = "";
 					}
 					else {
 						/* Check raw flags */
-						if (!IS_PART_UTF (text_part)) {
+						if (!IS_TEXT_PART_UTF (text_part)) {
 							raw = TRUE;
 						}
 
@@ -1345,7 +1345,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				scvec[i + 1] = (guchar *)text_part->utf_stripped_content->data;
 				lenvec[i + 1] = text_part->utf_stripped_content->len;
 
-				if (!IS_PART_UTF (text_part)) {
+				if (!IS_TEXT_PART_UTF (text_part)) {
 					raw = TRUE;
 				}
 			}
@@ -1382,7 +1382,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					scvec[i] = (guchar *)text_part->parsed.begin;
 					lenvec[i] = text_part->parsed.len;
 
-					if (!IS_PART_UTF (text_part)) {
+					if (!IS_TEXT_PART_UTF (text_part)) {
 						raw = TRUE;
 					}
 				}

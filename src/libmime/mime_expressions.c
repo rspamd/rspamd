@@ -1455,20 +1455,23 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	void *unused)
 {
 	struct rspamd_mime_text_part *p;
+	guint i, cnt_html = 0, cnt_txt = 0;
 	gboolean res = FALSE;
 
-	if (MESSAGE_FIELD (task, text_parts)->len == 1) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
 		p = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 0);
 
-		if (IS_PART_HTML (p)) {
-			res = TRUE;
-		}
-		else {
-			res = FALSE;
+		if (!IS_TEXT_PART_ATTACHMENT (p)) {
+			if (IS_TEXT_PART_HTML (p)) {
+				cnt_html++;
+			}
+			else {
+				cnt_txt++;
+			}
 		}
 	}
 
-	return res;
+	return (cnt_html > 0 && cnt_txt == 0);
 }
 
 static gboolean
@@ -1565,7 +1568,7 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 	gboolean res = TRUE;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
-		if (IS_PART_HTML (p)) {
+		if (IS_TEXT_PART_HTML (p)) {
 			if (p->flags & RSPAMD_MIME_TEXT_PART_FLAG_BALANCED) {
 				res = TRUE;
 			}
@@ -1600,7 +1603,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 	}
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
-		if (IS_PART_HTML (p) && p->html) {
+		if (IS_TEXT_PART_HTML (p) && p->html) {
 			res = rspamd_html_tag_seen (p->html, arg->data);
 		}
 
@@ -1621,7 +1624,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	gboolean res = FALSE;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
-		if (IS_PART_HTML (p) && (p->html == NULL || p->html->html_tags == NULL)) {
+		if (IS_TEXT_PART_HTML (p) && (p->html == NULL || p->html->html_tags == NULL)) {
 			res = TRUE;
 		}
 

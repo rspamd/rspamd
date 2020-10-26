@@ -617,12 +617,12 @@ lua_textpart_is_utf (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 
-	if (part == NULL || IS_PART_EMPTY (part)) {
+	if (part == NULL || IS_TEXT_PART_EMPTY (part)) {
 		lua_pushboolean (L, FALSE);
 		return 1;
 	}
 
-	lua_pushboolean (L, IS_PART_UTF (part));
+	lua_pushboolean (L, IS_TEXT_PART_UTF (part));
 
 	return 1;
 }
@@ -690,7 +690,7 @@ lua_textpart_get_content (lua_State * L)
 	}
 
 	if (!type) {
-		if (IS_PART_EMPTY (part)) {
+		if (IS_TEXT_PART_EMPTY (part)) {
 			lua_pushnil (L);
 			return 1;
 		}
@@ -698,7 +698,7 @@ lua_textpart_get_content (lua_State * L)
 		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content") == 0) {
-		if (IS_PART_EMPTY (part)) {
+		if (IS_TEXT_PART_EMPTY (part)) {
 			lua_pushnil (L);
 			return 1;
 		}
@@ -707,7 +707,7 @@ lua_textpart_get_content (lua_State * L)
 		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content_oneline") == 0) {
-		if (IS_PART_EMPTY (part)) {
+		if (IS_TEXT_PART_EMPTY (part)) {
 			lua_pushnil (L);
 			return 1;
 		}
@@ -763,7 +763,7 @@ lua_textpart_get_raw_content (lua_State * L)
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 	struct rspamd_lua_text *t;
 
-	if (part == NULL || IS_PART_EMPTY (part)) {
+	if (part == NULL || IS_TEXT_PART_EMPTY (part)) {
 		lua_pushnil (L);
 		return 1;
 	}
@@ -784,7 +784,7 @@ lua_textpart_get_content_oneline (lua_State * L)
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 	struct rspamd_lua_text *t;
 
-	if (part == NULL || IS_PART_EMPTY (part)) {
+	if (part == NULL || IS_TEXT_PART_EMPTY (part)) {
 		lua_pushnil (L);
 		return 1;
 	}
@@ -809,7 +809,7 @@ lua_textpart_get_length (lua_State * L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part) || part->utf_content == NULL) {
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_content == NULL) {
 		lua_pushinteger (L, 0);
 	}
 	else {
@@ -873,7 +873,7 @@ lua_textpart_get_lines_count (lua_State * L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part)) {
+	if (IS_TEXT_PART_EMPTY (part)) {
 		lua_pushinteger (L, 0);
 	}
 	else {
@@ -894,7 +894,7 @@ lua_textpart_get_words_count (lua_State *L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_words == NULL) {
 		lua_pushinteger (L, 0);
 	}
 	else {
@@ -936,7 +936,7 @@ lua_textpart_get_words (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_words == NULL) {
 		lua_createtable (L, 0, 0);
 	}
 	else {
@@ -969,7 +969,7 @@ lua_textpart_filter_words (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_words == NULL) {
 		lua_createtable (L, 0, 0);
 	}
 	else {
@@ -1055,7 +1055,7 @@ lua_textpart_is_empty (lua_State * L)
 		return 1;
 	}
 
-	lua_pushboolean (L, IS_PART_EMPTY (part));
+	lua_pushboolean (L, IS_TEXT_PART_EMPTY (part));
 
 	return 1;
 }
@@ -1071,7 +1071,7 @@ lua_textpart_is_html (lua_State * L)
 		return 1;
 	}
 
-	lua_pushboolean (L, IS_PART_HTML (part));
+	lua_pushboolean (L, IS_TEXT_PART_HTML (part));
 
 	return 1;
 }

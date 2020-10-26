@@ -132,7 +132,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	g_assert (st_ctx != NULL);
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
-		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
+		if (!IS_TEXT_PART_EMPTY (part) && part->utf_words != NULL) {
 			reserved_len += part->utf_words->len;
 		}
 		/* XXX: normal window size */
@@ -146,9 +146,9 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	pdiff = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
-		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
+		if (!IS_TEXT_PART_EMPTY (part) && part->utf_words != NULL) {
 			st_ctx->tokenizer->tokenize_func (st_ctx, task,
-					part->utf_words, IS_PART_UTF (part),
+					part->utf_words, IS_TEXT_PART_UTF (part),
 					NULL, task->tokens);
 		}
 
