@@ -2730,6 +2730,26 @@ rspamd_map_add (struct rspamd_config *cfg,
 	return map;
 }
 
+struct rspamd_map *
+rspamd_map_add_fake (struct rspamd_config *cfg,
+				const gchar *description,
+				const gchar *name)
+{
+	struct rspamd_map *map;
+
+	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
+	map->cfg = cfg;
+	map->id = rspamd_random_uint64_fast ();
+	map->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+	map->user_data = (void **)&map; /* to prevent null pointer dereferencing */
+
+	if (description != NULL) {
+		map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
+	}
+
+	return map;
+}
+
 static inline void
 rspamd_map_add_backend (struct rspamd_map *map, struct rspamd_map_backend *bk)
 {

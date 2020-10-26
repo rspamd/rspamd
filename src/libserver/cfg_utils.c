@@ -2226,12 +2226,9 @@ rspamd_config_get_action_by_type (struct rspamd_config *cfg,
 }
 
 gboolean
-rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
-							  const ucl_object_t *obj,
-							  const gchar *description,
-							  struct rspamd_radix_map_helper **target,
-							  GError **err,
-							  struct rspamd_worker *worker)
+rspamd_config_radix_from_ucl (struct rspamd_config *cfg, const ucl_object_t *obj, const gchar *description,
+							  struct rspamd_radix_map_helper **target, GError **err,
+							  struct rspamd_worker *worker, const gchar *map_name)
 {
 	ucl_type_t type;
 	ucl_object_iter_t it = NULL;
@@ -2269,7 +2266,8 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			else {
 				/* Just a list */
 				if (!*target) {
-					*target = rspamd_map_helper_new_radix (NULL);
+					*target = rspamd_map_helper_new_radix (
+							rspamd_map_add_fake (cfg, description, map_name));
 				}
 
 				rspamd_map_helper_insert_radix_resolve (*target, str, "");
@@ -2300,7 +2298,8 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 				str = ucl_object_tostring (cur);
 
 				if (!*target) {
-					*target = rspamd_map_helper_new_radix (NULL);
+					*target = rspamd_map_helper_new_radix (
+							rspamd_map_add_fake (cfg, description, map_name));
 				}
 
 				rspamd_map_helper_insert_radix_resolve (*target, str, "");
@@ -2803,9 +2802,9 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		if (cfg->local_addrs) {
 			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
 					"Local addresses",
-					(struct rspamd_radix_map_helper **)ctx->local_addrs,
+					(struct rspamd_radix_map_helper **) ctx->local_addrs,
 					NULL,
-					NULL);
+					NULL, "local addresses");
 		}
 
 		rspamd_free_zstd_dictionary (ctx->in_dict);

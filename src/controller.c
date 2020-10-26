@@ -3565,7 +3565,7 @@ start_controller_worker (struct rspamd_worker *worker)
 				"Allow unauthenticated requests from these addresses",
 				&ctx->secure_map,
 				NULL,
-				worker);
+				worker, "controller secure ip");
 	}
 
 	ctx->lang_det = ctx->cfg->lang_det;

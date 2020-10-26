@@ -72,9 +72,9 @@ void radix_destroy_compressed (radix_compressed_t *tree);
  * Create new radix trie
  * @return
  */
-radix_compressed_t *radix_create_compressed (void);
+radix_compressed_t *radix_create_compressed (const gchar *tree_name);
 
-radix_compressed_t *radix_create_compressed_with_pool (rspamd_mempool_t *pool);
+radix_compressed_t *radix_create_compressed_with_pool (rspamd_mempool_t *pool, const gchar *tree_name);
 
 /**
  * Insert list of ip addresses and masks to the radix tree
@@ -84,14 +84,18 @@ radix_compressed_t *radix_create_compressed_with_pool (rspamd_mempool_t *pool);
  * @return number of elements inserted
  */
 gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-							  radix_compressed_t *tree, gconstpointer value, gboolean resolve);
+							  radix_compressed_t *tree, gconstpointer value,
+							  gboolean resolve, const gchar *tree_name);
 
 /**
  * Generic version of @see rspamd_radix_add_iplist. This function creates tree
  * if `tree` is NULL.
  */
-gboolean radix_add_generic_iplist (const gchar *ip_list,
-								   radix_compressed_t **tree, gboolean resolve);
+gboolean
+radix_add_generic_iplist (const gchar *ip_list,
+						  radix_compressed_t **tree,
+						  gboolean resolve,
+						  const gchar *tree_name);
 
 /**
  * Returns number of elements in the tree

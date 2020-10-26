@@ -53,17 +53,20 @@ struct rspamd_radix_map_helper {
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) *htb;
 	radix_compressed_t *trie;
+	struct rspamd_map *map;
 	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
 struct rspamd_hash_map_helper {
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) *htb;
+	struct rspamd_map *map;
 	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
 struct rspamd_cdb_map_helper {
 	GQueue cdbs;
+	struct rspamd_map *map;
 	rspamd_cryptobox_fast_hash_state_t hst;
 	gsize total_size;
 };
@@ -457,7 +460,9 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 	gconstpointer nk;
 	rspamd_ftok_t tok;
 	gint res;
+	struct rspamd_map *map;
 
+	map = r->map;
 	vlen = strlen (value);
 	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
 			vlen + 1);
@@ -472,11 +477,16 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 		tok.begin = nk;
 		k = kh_put (rspamd_map_hash, r->htb, tok, &res);
 	}
+	else {
+		msg_warn_map ("duplicate radix entry found for map %s: %s (old value: %s, new: %s)",
+				map->name, key, kh_value (r->htb, k), val);
+	}
 
 	nk = kh_key (r->htb, k).begin;
 	val->key = nk;
 	kh_value (r->htb, k) = val;
-	rspamd_radix_add_iplist (key, ",", r->trie, val, FALSE);
+	rspamd_radix_add_iplist (key, ",", r->trie, val, FALSE,
+			r->map->name);
 	rspamd_cryptobox_fast_hash_update (&r->hst, nk, tok.len);
 }
 
@@ -490,7 +500,9 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 	gconstpointer nk;
 	rspamd_ftok_t tok;
 	gint res;
+	struct rspamd_map *map;
 
+	map = r->map;
 	vlen = strlen (value);
 	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
 			vlen + 1);
@@ -505,11 +517,16 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 		tok.begin = nk;
 		k = kh_put (rspamd_map_hash, r->htb, tok, &res);
 	}
+	else {
+		msg_warn_map ("duplicate radix entry found for map %s: %s (old value: %s, new: %s)",
+				map->name, key, kh_value (r->htb, k), val);
+	}
 
 	nk = kh_key (r->htb, k).begin;
 	val->key = nk;
 	kh_value (r->htb, k) = val;
-	rspamd_radix_add_iplist (key, ",", r->trie, val, TRUE);
+	rspamd_radix_add_iplist (key, ",", r->trie, val, TRUE,
+			r->map->name);
 	rspamd_cryptobox_fast_hash_update (&r->hst, nk, tok.len);
 }
 
@@ -523,9 +540,11 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	gsize vlen;
 	gint r;
 	rspamd_ftok_t tok;
+	struct rspamd_map *map;
 
 	tok.begin = key;
 	tok.len = strlen (key);
+	map = ht->map;
 
 	k = kh_get (rspamd_map_hash, ht->htb, tok);
 	vlen = strlen (value);
@@ -541,6 +560,10 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 		if (strcmp (value, val->value) == 0) {
 			/* Same element, skip */
 			return;
+		}
+		else {
+			msg_warn_map ("duplicate hash entry found for map %s: %s (old value: %s, new: %s)",
+					map->name, key, kh_value (ht->htb, k), val);
 		}
 	}
 
@@ -598,7 +621,7 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 	vlen = strlen (value);
 	val = rspamd_mempool_alloc0 (re_map->pool, sizeof (*val) +
 			vlen + 1);
-	memcpy (val->value, value, vlen);
+	memcpy (val->value, value, vlen); /* Null terminated due to alloc0 previously */
 	tok.begin = key;
 	tok.len = strlen (key);
 
@@ -608,6 +631,10 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 		nk = rspamd_mempool_strdup (re_map->pool, key);
 		tok.begin = nk;
 		k = kh_put (rspamd_map_hash, re_map->htb, tok, &r);
+	}
+	else {
+		msg_warn_map ("duplicate re found for map %s: %s (old value: %s, new: %s)",
+				map->name, key, kh_value (re_map->htb, k)->value, val);
 	}
 
 	nk = kh_key (re_map->htb, k).begin;
@@ -670,6 +697,7 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 	htb = rspamd_mempool_alloc0 (pool, sizeof (*htb));
 	htb->htb = kh_init (rspamd_map_hash);
 	htb->pool = pool;
+	htb->map = map;
 	rspamd_cryptobox_fast_hash_init (&htb->hst, map_hash_seed);
 
 	return htb;
@@ -714,10 +742,12 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 {
 	struct rspamd_radix_map_helper *r;
 	rspamd_mempool_t *pool;
+	const gchar *name = "unnamed";
 
 	if (map) {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 				map->tag, 0);
+		name = map->name;
 	}
 	else {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
@@ -725,9 +755,10 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 	}
 
 	r = rspamd_mempool_alloc0 (pool, sizeof (*r));
-	r->trie = radix_create_compressed_with_pool (pool);
+	r->trie = radix_create_compressed_with_pool (pool, name);
 	r->htb = kh_init (rspamd_map_hash);
 	r->pool = pool;
+	r->map = map;
 	rspamd_cryptobox_fast_hash_init (&r->hst, map_hash_seed);
 
 	return r;
@@ -1449,6 +1480,7 @@ rspamd_map_helper_new_cdb (struct rspamd_map *map)
 
 	n = g_malloc0 (sizeof (*n));
 	n->cdbs = (GQueue)G_QUEUE_INIT;
+	n->map = map;
 
 	rspamd_cryptobox_fast_hash_init (&n->hst, map_hash_seed);
 

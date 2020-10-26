@@ -438,7 +438,7 @@ dkim_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
 
 		rspamd_config_radix_from_ucl (cfg, value, "DKIM whitelist",
-				&dkim_module_ctx->whitelist_ip, NULL, NULL);
+				&dkim_module_ctx->whitelist_ip, NULL, NULL, "dkim whitelist");
 	}
 
 	if ((value =

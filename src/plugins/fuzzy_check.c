@@ -1067,7 +1067,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 		rspamd_config_radix_from_ucl (cfg, value, "Fuzzy whitelist",
 				&fuzzy_module_ctx->whitelist,
 				NULL,
-				NULL);
+				NULL, "fuzzy ip whitelist");
 	}
 	else {
 		fuzzy_module_ctx->whitelist = NULL;
