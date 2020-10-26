@@ -463,10 +463,6 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 	struct rspamd_map *map;
 
 	map = r->map;
-	vlen = strlen (value);
-	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
-			vlen + 1);
-	memcpy (val->value, value, vlen);
 	tok.begin = key;
 	tok.len = strlen (key);
 
@@ -486,7 +482,7 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 		}
 		else {
 			msg_warn_map ("duplicate radix entry found for map %s: %s (old value: '%s', new: '%s')",
-					map->name, key, kh_value (r->htb, k), val);
+					map->name, key, kh_value (r->htb, k)->value, val);
 		}
 
 		nk = kh_key (r->htb, k).begin;
@@ -495,6 +491,11 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 
 		return; /* do not touch radix in case of exact duplicate */
 	}
+
+	vlen = strlen (value);
+	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
+										  vlen + 1);
+	memcpy (val->value, value, vlen);
 
 	nk = kh_key (r->htb, k).begin;
 	val->key = nk;
@@ -517,10 +518,6 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 	struct rspamd_map *map;
 
 	map = r->map;
-	vlen = strlen (value);
-	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
-			vlen + 1);
-	memcpy (val->value, value, vlen);
 	tok.begin = key;
 	tok.len = strlen (key);
 
@@ -550,6 +547,10 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 		return; /* do not touch radix in case of exact duplicate */
 	}
 
+	vlen = strlen (value);
+	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
+										  vlen + 1);
+	memcpy (val->value, value, vlen);
 	nk = kh_key (r->htb, k).begin;
 	val->key = nk;
 	kh_value (r->htb, k) = val;
@@ -575,7 +576,6 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	map = ht->map;
 
 	k = kh_get (rspamd_map_hash, ht->htb, tok);
-	vlen = strlen (value);
 
 	if (k == kh_end (ht->htb)) {
 		nk = rspamd_mempool_strdup (ht->pool, key);
@@ -596,6 +596,7 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	}
 
 	/* Null termination due to alloc0 */
+	vlen = strlen (value);
 	val = rspamd_mempool_alloc0 (ht->pool, sizeof (*val) + vlen + 1);
 	memcpy (val->value, value, vlen);
 
@@ -626,10 +627,6 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 
 	map = re_map->map;
 
-	vlen = strlen (value);
-	val = rspamd_mempool_alloc0 (re_map->pool, sizeof (*val) +
-											   vlen + 1);
-	memcpy (val->value, value, vlen); /* Null terminated due to alloc0 previously */
 	tok.begin = key;
 	tok.len = strlen (key);
 
@@ -641,6 +638,8 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 		k = kh_put (rspamd_map_hash, re_map->htb, tok, &r);
 	}
 	else {
+		val = kh_value (re_map->htb, k);
+
 		/* Always warn about regexp duplicate as it's likely a bad mistake */
 		msg_warn_map ("duplicate re entry found for map %s: %s (old value: '%s', new: '%s')",
 				map->name, key, kh_value (re_map->htb, k)->value, val);
@@ -658,6 +657,7 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 		return;
 	}
 
+	/* Check regexp stuff */
 	if (re_map->map_flags & RSPAMD_REGEXP_MAP_FLAG_GLOB) {
 		escaped = rspamd_str_regexp_escape (key, strlen (key), &escaped_len,
 				RSPAMD_REGEXP_ESCAPE_GLOB|RSPAMD_REGEXP_ESCAPE_UTF);
@@ -678,6 +678,10 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 		return;
 	}
 
+	vlen = strlen (value);
+	val = rspamd_mempool_alloc0 (re_map->pool, sizeof (*val) +
+											   vlen + 1);
+	memcpy (val->value, value, vlen); /* Null terminated due to alloc0 previously */
 	nk = kh_key (re_map->htb, k).begin;
 	val->key = nk;
 	kh_value (re_map->htb, k) = val;
