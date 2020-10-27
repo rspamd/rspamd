@@ -152,11 +152,13 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     codejar: true,
                     elt: "div",
                     class: "editor language-clike",
+                    readonly_attr: {contenteditable: false},
                 }
                 // Fallback to textarea if the browser does not support ES6
                 : {
                     elt: "textarea",
                     class: "form-control map-textarea",
+                    readonly_attr: {readonly: true},
                 };
 
             // Modal form for maps
@@ -168,22 +170,8 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                         Map: item.map
                     },
                     success: function (data) {
-                        var readonly = "";
-                        var icon = "fa-edit";
-                        var text = rspamd.escapeHTML(data[0].data);
-                        if (item.editable === false || rspamd.read_only) {
-                            readonly = " readonly";
-                            icon = "fa-eye";
-                            $("#modalSaveGroup").hide();
-                        } else {
-                            $("#modalSaveGroup").show();
-                        }
-                        $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
-                        $("#modalTitle").html(item.uri);
-
-                        $("<" + editor.elt + ' id="editor" class="' + editor.class + '"' + readonly +
-                            ' data-id="' + item.map + '">' +
-                            text +
+                        $("<" + editor.elt + ' id="editor" class="' + editor.class + '" data-id="' + item.map + '">' +
+                            rspamd.escapeHTML(data[0].data) +
                             "</" + editor.elt + ">").appendTo("#modalBody");
 
                         if (editor.codejar) {
@@ -192,6 +180,17 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                                 withLineNumbers(Prism.highlightElement)
                             );
                         }
+
+                        var icon = "fa-edit";
+                        if (item.editable === false || rspamd.read_only) {
+                            $("#editor").attr(editor.readonly_attr);
+                            icon = "fa-eye";
+                            $("#modalSaveGroup").hide();
+                        } else {
+                            $("#modalSaveGroup").show();
+                        }
+                        $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
+                        $("#modalTitle").html(item.uri);
 
                         $("#modalDialog").modal("show");
                     },
