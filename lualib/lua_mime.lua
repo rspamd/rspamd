@@ -36,6 +36,56 @@ local function newline(task)
   return '\r\n'
 end
 
+local function do_append_footer(task, part, footer, is_multipart, out, state)
+  local tp = part:get_text()
+  local ct = 'text/plain'
+  local cte = 'quoted-printable'
+  local newline_s = state.newline_s
+
+  if tp:is_html() then
+    ct = 'text/html'
+  end
+
+  local encode_func = function(input)
+    return rspamd_util.encode_qp(input, 80, task:get_newlines_type())
+  end
+
+  if part:get_cte() == '7bit' then
+    cte = '7bit'
+    encode_func = function(input)
+      if type(input) == 'userdata' then
+        return input
+      else
+        return rspamd_text.fromstring(input)
+      end
+    end
+  end
+
+  if is_multipart then
+    out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
+        'Content-Transfer-Encoding: %s',
+        ct, newline_s, cte)
+    out[#out + 1] = ''
+  else
+    state.new_cte = cte
+  end
+
+  local content = tp:get_content('raw_utf') or ''
+  local double_nline = newline_s .. newline_s
+  local nlen = #double_nline
+  -- Hack, if part ends with 2 newline, then we append it after footer
+  if content:sub(-(nlen), nlen + 1) == double_nline then
+    -- content without last newline
+    content = content:sub(-(#newline_s), #newline_s + 1) .. footer
+    out[#out + 1] = {encode_func(content), true}
+    out[#out + 1] = ''
+  else
+    content = content .. footer
+    out[#out + 1] = {encode_func(content), true}
+    out[#out + 1] = ''
+  end
+
+end
 
 --[[[
 -- @function lua_mime.add_text_footer(task, html_footer, text_footer)
@@ -48,63 +98,14 @@ end
 --]]
 exports.add_text_footer = function(task, html_footer, text_footer)
   local newline_s = newline(task)
-  local res = {}
+  local state = {
+    newline_s = newline_s
+  }
   local out = {}
   local text_parts = task:get_text_parts()
 
   if not (html_footer or text_footer) or not (text_parts and #text_parts > 0) then
     return false
-  end
-
-  local function do_append_footer(part, footer, is_multipart)
-    local tp = part:get_text()
-    local ct = 'text/plain'
-    local cte = 'quoted-printable'
-
-    if tp:is_html() then
-      ct = 'text/html'
-    end
-
-    local encode_func = function(input)
-      return rspamd_util.encode_qp(input, 80, task:get_newlines_type())
-    end
-
-    if part:get_cte() == '7bit' then
-      cte = '7bit'
-      encode_func = function(input)
-        if type(input) == 'userdata' then
-          return input
-        else
-          return rspamd_text.fromstring(input)
-        end
-      end
-    end
-
-    if is_multipart then
-      out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
-          'Content-Transfer-Encoding: %s',
-          ct, newline_s, cte)
-      out[#out + 1] = ''
-    else
-      res.new_cte = cte
-    end
-
-    local content = tostring(tp:get_content('raw_utf') or '')
-    local double_nline = newline_s .. newline_s
-    local nlen = #double_nline
-    -- Hack, if part ends with 2 newline, then we append it after footer
-    if content:sub(-(nlen), nlen + 1) == double_nline then
-      content = string.format('%s%s',
-          content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
-          footer)
-      out[#out + 1] = {encode_func(content), true}
-      out[#out + 1] = ''
-    else
-      content = content .. footer
-      out[#out + 1] = {encode_func(content), true}
-      out[#out + 1] = ''
-    end
-
   end
 
   if html_footer or text_footer then
@@ -118,31 +119,31 @@ exports.add_text_footer = function(task, html_footer, text_footer)
       if ct.type and ct.type == 'text' then
         if ct.subtype then
           if html_footer and (ct.subtype == 'html' or ct.subtype == 'htm') then
-            res.need_rewrite_ct = true
+            state.need_rewrite_ct = true
           elseif text_footer and ct.subtype == 'plain' then
-            res.need_rewrite_ct = true
+            state.need_rewrite_ct = true
           end
         else
           if text_footer then
-            res.need_rewrite_ct = true
+            state.need_rewrite_ct = true
           end
         end
 
-        res.new_ct = ct
+        state.new_ct = ct
       end
     else
 
       if text_parts then
 
         if #text_parts == 1 then
-          res.need_rewrite_ct = true
-          res.new_ct = {
+          state.need_rewrite_ct = true
+          state.new_ct = {
             type = 'text',
             subtype = 'plain'
           }
         elseif #text_parts > 1 then
           -- XXX: in fact, it cannot be
-          res.new_ct = {
+          state.new_ct = {
             type = 'multipart',
             subtype = 'mixed'
           }
@@ -224,8 +225,8 @@ exports.add_text_footer = function(task, html_footer, text_footer)
       end
 
       if append_footer and not skip_footer then
-        do_append_footer(part, append_footer,
-            parent and parent:is_multipart())
+        do_append_footer(task, part, append_footer,
+            parent and parent:is_multipart(), out, state)
       else
         out[#out + 1] = {part:get_raw_headers(), true}
         out[#out + 1] = {part:get_raw_content(), false}
@@ -243,9 +244,9 @@ exports.add_text_footer = function(task, html_footer, text_footer)
     b = table.remove(boundaries)
   end
 
-  res.out = out
+  state.out = out
 
-  return res
+  return state
 end
 
 -- All mime extensions with corresponding content types
