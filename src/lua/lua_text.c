@@ -202,6 +202,7 @@ LUA_FUNCTION_DEF (text, hex);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 LUA_FUNCTION_DEF (text, lt);
+LUA_FUNCTION_DEF (text, concat);
 
 static const struct luaL_reg textlib_f[] = {
 		LUA_INTERFACE_DEF (text, fromstring),
@@ -238,6 +239,7 @@ static const struct luaL_reg textlib_m[] = {
 		{"__gc", lua_text_gc},
 		{"__eq", lua_text_eq},
 		{"__lt", lua_text_lt},
+		{"__concat", lua_text_concat},
 		{NULL, NULL}
 };
 
@@ -262,8 +264,14 @@ lua_check_text_or_string (lua_State * L, gint pos)
 	else if (pos_type == LUA_TSTRING) {
 		/* Fake static lua_text */
 		static struct rspamd_lua_text fake_text;
+		gsize len;
 
-		fake_text.start = lua_tolstring (L, pos, &fake_text.len);
+		fake_text.start = lua_tolstring (L, pos, &len);
+		if (len >= G_MAXUINT) {
+			return NULL;
+		}
+
+		fake_text.len = len;
 		fake_text.flags = RSPAMD_TEXT_FLAG_FAKE;
 
 		return &fake_text;
@@ -1134,7 +1142,7 @@ static gint
 lua_text_eq (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t1 = lua_check_text (L, 1),
+	struct rspamd_lua_text *t1 = lua_check_text_or_string (L, 1),
 			*t2 = lua_check_text_or_string (L, 2);
 
 	if (t1->len == t2->len) {
@@ -1151,7 +1159,7 @@ static gint
 lua_text_lt (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t1 = lua_check_text (L, 1),
+	struct rspamd_lua_text *t1 = lua_check_text_or_string (L, 1),
 			*t2 = lua_check_text_or_string (L, 2);
 
 	if (t1 && t2) {
@@ -1161,6 +1169,24 @@ lua_text_lt (lua_State *L)
 		else {
 			lua_pushboolean (L, t1->len < t2->len);
 		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_concat (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t1 = lua_check_text_or_string (L, 1),
+			*t2 = lua_check_text_or_string (L, 2);
+
+	if (t1 && t2) {
+		struct rspamd_lua_text *final;
+
+		final = lua_new_text (L, NULL, t1->len + t2->len, TRUE);
+		memcpy ((void *)final->start, t1->start, t1->len);
+		memcpy ((void *)(final->start + t1->len), t2->start, t2->len);
 	}
 
 	return 1;
