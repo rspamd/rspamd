@@ -306,6 +306,7 @@ local function do_replacement (task, part, mp, replacements,
       return
     end
 
+    state.has_matches = true
     -- now sort flattened by start of match and eliminate all overlaps
     table.sort(matches_flattened, function(m1, m2) return m1[1][1] < m2[1][1] end)
 
