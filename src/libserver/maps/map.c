@@ -1680,6 +1680,11 @@ rspamd_map_common_http_callback (struct rspamd_map *map,
 		/* Read cached data */
 		if (check) {
 			if (data->last_modified < data->cache->last_modified) {
+				msg_info_map ("need to reread cached map triggered by %s "
+							  "(%d our modify time, %d cached modify time)",
+						bk->uri,
+						(int)data->last_modified,
+						(int)data->cache->last_modified);
 				periodic->need_modify = TRUE;
 				/* Reset the whole chain */
 				periodic->cur_backend = 0;
