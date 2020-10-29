@@ -298,7 +298,7 @@ local function do_replacement (task, part, mp, replacements,
     end
 
     if is_multipart then
-      out[#out + 1] = {string.format('Content-Type: %s; charset=utf-8%s'..
+      out[#out + 1] = {string.format('Content-Type: %s; charset="utf-8"%s'..
           'Content-Transfer-Encoding: %s',
           ct, newline_s, cte), true}
       out[#out + 1] = {'', true}
