@@ -276,15 +276,6 @@ local function do_replacement (task, part, mp, replacements,
     end
   end
 
-  if is_multipart then
-    out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
-        'Content-Transfer-Encoding: %s',
-        ct, newline_s, cte)
-    out[#out + 1] = ''
-  else
-    state.new_cte = cte
-  end
-
   local content = tp:get_content('raw_utf') or rspamd_text.fromstring('')
   local match_pos = mp:match(content, true)
 
@@ -304,6 +295,15 @@ local function do_replacement (task, part, mp, replacements,
       out[#out + 1] = {part:get_raw_content(), false}
 
       return
+    end
+
+    if is_multipart then
+      out[#out + 1] = {string.format('Content-Type: %s; charset=utf-8%s'..
+          'Content-Transfer-Encoding: %s',
+          ct, newline_s, cte), true}
+      out[#out + 1] = {'', true}
+    else
+      state.new_cte = cte
     end
 
     state.has_matches = true
@@ -355,8 +355,8 @@ local function do_replacement (task, part, mp, replacements,
     end
 
     -- Final stuff
-    out[#out + 1] = {encode_func(rspamd_text.fromtable(fragments)), true}
-    out[#out + 1] = ''
+    out[#out + 1] = {encode_func(rspamd_text.fromtable(fragments)), false}
+    out[#out + 1] = {'', true}
   else
     -- No matches
     out[#out + 1] = {part:get_raw_headers(), true}
@@ -421,8 +421,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
     local boundary = part:get_boundary()
     if part:is_multipart() then
       if cur_boundary then
-        out[#out + 1] = string.format('--%s',
-            boundaries[#boundaries])
+        out[#out + 1] = {string.format('--%s',
+            boundaries[#boundaries]), true}
       end
 
       boundaries[#boundaries + 1] = boundary or '--XXX'
@@ -436,13 +436,13 @@ exports.multipattern_text_replace = function(task, mp, replacements)
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries], newline_s)
+          out[#out + 1] = {string.format('--%s--',
+              boundaries[#boundaries]), true}
           table.remove(boundaries)
           cur_boundary = nil
         end
-        out[#out + 1] = string.format('--%s',
-            boundary)
+        out[#out + 1] = {string.format('--%s',
+            boundary), true}
       end
 
       out[#out + 1] = {part:get_raw_headers(), true}
@@ -465,13 +465,13 @@ exports.multipattern_text_replace = function(task, mp, replacements)
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
-          out[#out + 1] = string.format('--%s--%s',
-              boundaries[#boundaries], newline_s)
+          out[#out + 1] = {string.format('--%s--',
+              boundaries[#boundaries]), true}
           table.remove(boundaries)
           cur_boundary = boundary
         end
-        out[#out + 1] = string.format('--%s',
-            boundary)
+        out[#out + 1] = {string.format('--%s',
+            boundary), true}
       end
 
       if not skip_replacement then
@@ -488,9 +488,9 @@ exports.multipattern_text_replace = function(task, mp, replacements)
   -- Close remaining
   local b = table.remove(boundaries)
   while b do
-    out[#out + 1] = string.format('--%s--', b)
+    out[#out + 1] = {string.format('--%s--', b), true}
     if #boundaries > 0 then
-      out[#out + 1] = ''
+      out[#out + 1] = {'', true}
     end
     b = table.remove(boundaries)
   end
