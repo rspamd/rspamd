@@ -356,7 +356,7 @@ local function do_replacement (task, part, mp, replacements,
       if m[1][1] >= cur_start then
         fragments[#fragments + 1] = content:sub(cur_start, m[1][1] - 1)
         fragments[#fragments + 1] = replacements[m[2]]
-        cur_start = m[1][2] + 1 -- end of match
+        cur_start = m[1][2] -- end of match
       end
     end
 
