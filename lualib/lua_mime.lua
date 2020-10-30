@@ -338,7 +338,17 @@ local function do_replacement (task, part, mp, replacements,
         end
       end
     end
+    -- Off-by one: match returns 0 based positions while we use 1 based in Lua
+    for _,m in ipairs(matches_flattened) do
+      m[1][1] = m[1][1] - 1
+      m[1][2] = m[1][2] - 1
+    end
+
     -- Now flattened match table is sorted by start pos and has the maximum overlapped pattern
+    -- Matches with the same start and end are covering the same replacement
+    -- e.g. we had something like [1 .. 2] -> replacement 1 and [1 .. 4] -> replacement 2
+    -- after flattening we should have [1 .. 4] -> 2 and [1 .. 4] -> 2
+    -- we can safely ignore those duplicates in the following code
 
     local cur_start = 1
     local fragments = {}
@@ -349,6 +359,7 @@ local function do_replacement (task, part, mp, replacements,
         cur_start = m[1][2] + 1 -- end of match
       end
     end
+
     -- last part
     if cur_start < #content then
       fragments[#fragments + 1] = content:span(cur_start)
@@ -356,7 +367,6 @@ local function do_replacement (task, part, mp, replacements,
 
     -- Final stuff
     out[#out + 1] = {encode_func(rspamd_text.fromtable(fragments)), false}
-    out[#out + 1] = {'', true}
   else
     -- No matches
     out[#out + 1] = {part:get_raw_headers(), true}
