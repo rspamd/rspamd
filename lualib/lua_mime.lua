@@ -354,7 +354,7 @@ local function do_replacement (task, part, mp, replacements,
     local fragments = {}
     for _,m in ipairs(matches_flattened) do
       if m[1][1] > cur_start then
-        fragments[#fragments + 1] = content:span(cur_start, m[1][1] - cur_start)
+        fragments[#fragments + 1] = content:sub(cur_start, m[1][1])
         fragments[#fragments + 1] = replacements[m[2]]
         cur_start = m[1][2] + 1 -- end of match
       end
