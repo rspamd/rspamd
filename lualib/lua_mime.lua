@@ -340,8 +340,8 @@ local function do_replacement (task, part, mp, replacements,
     end
     -- Off-by one: match returns 0 based positions while we use 1 based in Lua
     for _,m in ipairs(matches_flattened) do
-      m[1][1] = m[1][1] - 1
-      m[1][2] = m[1][2] - 1
+      m[1][1] = m[1][1] + 1
+      m[1][2] = m[1][2] + 1
     end
 
     -- Now flattened match table is sorted by start pos and has the maximum overlapped pattern
@@ -353,8 +353,8 @@ local function do_replacement (task, part, mp, replacements,
     local cur_start = 1
     local fragments = {}
     for _,m in ipairs(matches_flattened) do
-      if m[1][1] > cur_start then
-        fragments[#fragments + 1] = content:sub(cur_start, m[1][1])
+      if m[1][1] >= cur_start then
+        fragments[#fragments + 1] = content:sub(cur_start, m[1][1] - 1)
         fragments[#fragments + 1] = replacements[m[2]]
         cur_start = m[1][2] + 1 -- end of match
       end
