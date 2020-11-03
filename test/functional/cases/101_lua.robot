@@ -61,6 +61,14 @@ Option Order
   Expect Symbol With Exact Options  OPTION_ORDER  one  two  three  4  5  a
   Expect Symbol With Exact Options  TBL_OPTION_ORDER  one  two  three  4  5  a
 
+Rule conditions
+  [Setup]  Lua Replace Setup  ${TESTDIR}/lua/conditions.lua
+  [Teardown]  Lua Replace Teardown
+  Scan File  ${MESSAGE}
+  Expect Symbol With Option  ANY_A  hello3
+  Expect Symbol With Option  ANY_A  hello1
+  Expect Symbol With Option  ANY_A  hello2
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
