@@ -451,7 +451,7 @@ local function check_redis_classifier(cls, changes)
 
   local parsed_redis = lua_redis.try_load_redis_servers(cls, nil)
 
-  if not parsed_redis then
+  if not parsed_redis and redis_params then
     parsed_redis = lua_redis.try_load_redis_servers(redis_params, nil)
     if not parsed_redis then
       printf("Cannot parse Redis params")
