@@ -54,7 +54,7 @@ local types = {
   -- text
   rtf = {
     ct = "application/rtf",
-    type = 'text',
+    type = 'binary',
   },
   pdf = {
     ct = 'application/pdf',
