@@ -16,6 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require 'rspamd_logger'
 local upstream_list = require "rspamd_upstream_list"
+local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
 local lua_clickhouse = require "lua_clickhouse"
 local lua_settings = require "lua_settings"
@@ -33,7 +34,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 8 -- Current schema version
+local schema_version = 9 -- Current schema version
 
 local settings = {
   limits = { -- Collection limits
@@ -93,6 +94,7 @@ local settings = {
     run_every = '7d',
   },
   extra_columns = {},
+  insert_metatokens = false,
 }
 
 --- @language SQL
@@ -150,7 +152,8 @@ CREATE TABLE IF NOT EXISTS rspamd
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
     SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
-    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'The first recipient from headers (RFC5322.To/.CC/.BCC)'
+    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'The first recipient from headers (RFC5322.To/.CC/.BCC)',
+    Metatokens Array(Float32) COMMENT 'Metatokens'
 ) ENGINE = MergeTree()
 PARTITION BY toMonday(Date)
 ORDER BY TS
@@ -246,6 +249,11 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (8)]],
   },
+  [8] = {
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS Metatokens Array(Float32) AFTER MIMERcpt
+    ]],
+  }
 }
 
 local predefined_actions = {
@@ -351,6 +359,13 @@ local function clickhouse_asn_row(res)
   for _,v in ipairs(fields) do table.insert(res, v) end
 end
 
+local function clickhouse_metatokens_row(res)
+  local fields = {
+    'Metatokens',
+  }
+  for _,v in ipairs(fields) do table.insert(res, v) end
+end
+
 local function clickhouse_extra_columns(res)
   for _,v in ipairs(settings.extra_columns) do table.insert(res, v.name) end
 end
@@ -433,6 +448,10 @@ local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows)
   if settings.enable_symbols then
     clickhouse_symbols_row(fields)
     clickhouse_groups_row(fields)
+  end
+
+  if settings.insert_metatokens then
+    clickhouse_metatokens_row(fields)
   end
 
   if #settings.extra_columns > 0 then
@@ -832,6 +851,11 @@ local function clickhouse_collect(task)
     table.insert(row, gr_scores_tab)
   end
 
+  if settings.insert_metatokens then
+    local metatokens = meta_functions.gen_metatokens(task)
+    table.insert(row, metatokens)
+  end
+
   -- Extra columns
   if #settings.extra_columns > 0 then
     for _,col in ipairs(settings.extra_columns) do
@@ -1157,7 +1181,7 @@ local function add_extra_columns(upstream, ev_base, cfg)
       local col = settings.extra_columns[i]
       local prev_column
       if i == 1 then
-        prev_column = 'MIMERcpt'
+        prev_column = 'Metatokens'
       else
         prev_column = settings.extra_columns[i - 1].name
       end
