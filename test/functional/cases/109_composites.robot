@@ -51,13 +51,22 @@ Composites - Opts RE Miss one
   Scan File  ${MESSAGE}  opts=sym1,foo1
   Expect Symbol With Score  SYMOPTS1  5.00
   Do Not Expect Symbol  SYMOPTS2
+  Do Not Expect Symbol  SYMOPTS3
 
 Composites - Opts RE Miss both
   Scan File  ${MESSAGE}  opts=sym2
   Do Not Expect Symbol  SYMOPTS1
   Do Not Expect Symbol  SYMOPTS2
+  Do Not Expect Symbol  SYMOPTS3
 
 Composites - Opts RE Hit
-  Scan File  ${MESSAGE}  opts=sym2,foo1
+  Scan File  ${MESSAGE}  opts=foo1,sym2
   Expect Symbol With Score  SYMOPTS2  6.00
+  Do Not Expect Symbol  SYMOPTS1
+  Do Not Expect Symbol  SYMOPTS3
+
+Composites - Opts RE Hit 2
+  Scan File  ${MESSAGE}  opts=foo/,sym2
+  Expect Symbol With Score  SYMOPTS3  6.00
+  Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
