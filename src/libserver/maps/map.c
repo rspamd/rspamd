@@ -263,6 +263,14 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 			w->repeat = cache_cbd->map->poll_timeout;
 		}
 
+		if (w->repeat < 0) {
+			msg_info_map ("cached data for %s has skewed check time: %d last checked, %d poll timeout, %.2f diff",
+					map->name, (int)cache_cbd->data->last_checked,
+					(int)cache_cbd->map->poll_timeout,
+					(rspamd_get_calendar_ticks () - cache_cbd->data->last_checked));
+			w->repeat = 0.0;
+		}
+
 		cache_cbd->last_checked = cache_cbd->data->last_checked;
 		msg_debug_map ("cached data is up to date for %s", map->name);
 		ev_timer_again (loop, &cache_cbd->timeout);
