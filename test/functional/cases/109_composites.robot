@@ -70,3 +70,9 @@ Composites - Opts RE Hit 2
   Expect Symbol With Score  SYMOPTS3  6.00
   Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
+
+Composites - Opts RE Hit 3
+  Scan File  ${MESSAGE}  opts=example.com->app.link
+  Expect Symbol With Score  SYMOPTS4  6.00
+  Do Not Expect Symbol  SYMOPTS2
+  Do Not Expect Symbol  SYMOPTS1

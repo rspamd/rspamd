@@ -449,8 +449,8 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 					}
 				}
 				else {
-					if (rspamd_regexp_match (cur_opt->data.re,
-							opt->option, opt->optlen, FALSE)) {
+					if (rspamd_regexp_search (cur_opt->data.re,
+							opt->option, opt->optlen, NULL, NULL, FALSE, NULL)) {
 						found = true;
 
 						break;
