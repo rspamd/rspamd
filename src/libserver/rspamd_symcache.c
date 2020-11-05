@@ -24,6 +24,7 @@
 #include "contrib/t1ha/t1ha.h"
 #include "libserver/worker_util.h"
 #include "khash.h"
+#include "utlist.h"
 #include <math.h>
 
 #if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
@@ -97,6 +98,11 @@ struct rspamd_symcache_id_list {
 	};
 };
 
+struct rspamd_symcache_condition {
+	gint cb;
+	struct rspamd_symcache_condition *prev, *next;
+};
+
 struct rspamd_symcache_item {
 	/* This block is likely shared */
 	struct rspamd_symcache_item_stat *st;
@@ -112,7 +118,7 @@ struct rspamd_symcache_item {
 		struct {
 			symbol_func_t func;
 			gpointer user_data;
-			gint condition_cb;
+			struct rspamd_symcache_condition *conditions;
 		} normal;
 		struct {
 			gint parent;
@@ -712,7 +718,10 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 			luaL_unref (dcond->L, LUA_REGISTRYINDEX, dcond->cbref);
 		}
 		else {
-			it->specific.normal.condition_cb = dcond->cbref;
+			struct rspamd_symcache_condition *ncond = rspamd_mempool_alloc0 (cache->static_pool,
+					sizeof (*ncond));
+			ncond->cb = dcond->cbref;
+			DL_APPEND (it->specific.normal.conditions, ncond);
 		}
 
 		cur = g_list_next (cur);
@@ -1134,7 +1143,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 
 		item->specific.normal.func = func;
 		item->specific.normal.user_data = user_data;
-		item->specific.normal.condition_cb = -1;
+		item->specific.normal.conditions = NULL;
 	}
 	else {
 		/*
@@ -1144,7 +1153,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		 * - composite symbol
 		 */
 		if (item->type & SYMBOL_TYPE_COMPOSITE) {
-			item->specific.normal.condition_cb = -1;
+			item->specific.normal.conditions = NULL;
 			item->specific.normal.user_data = user_data;
 			g_assert (user_data != NULL);
 			g_ptr_array_add (cache->composites, item);
@@ -1162,7 +1171,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->is_filter = TRUE;
 			item->specific.normal.func = NULL;
 			item->specific.normal.user_data = NULL;
-			item->specific.normal.condition_cb = -1;
+			item->specific.normal.conditions = NULL;
 			type_str = "classifier";
 		}
 		else {
@@ -1753,22 +1762,30 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	if (!rspamd_symcache_is_item_allowed (task, item, TRUE)) {
 		check = FALSE;
 	}
-	else if (item->specific.normal.condition_cb != -1) {
-		/* We also executes condition callback to check if we need this symbol */
-		L = task->cfg->lua_state;
-		lua_rawgeti (L, LUA_REGISTRYINDEX, item->specific.normal.condition_cb);
-		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-		*ptask = task;
+	else if (item->specific.normal.conditions) {
+		struct rspamd_symcache_condition *cur_cond;
 
-		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_info_task ("call to condition for %s failed: %s",
-					item->symbol, lua_tostring (L, -1));
-			lua_pop (L, 1);
-		}
-		else {
-			check = lua_toboolean (L, -1);
-			lua_pop (L, 1);
+		DL_FOREACH (item->specific.normal.conditions, cur_cond) {
+			/* We also executes condition callback to check if we need this symbol */
+			L = task->cfg->lua_state;
+			lua_rawgeti (L, LUA_REGISTRYINDEX, cur_cond->cb);
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
+
+			if (lua_pcall (L, 1, 1, 0) != 0) {
+				msg_info_task ("call to condition for %s failed: %s",
+						item->symbol, lua_tostring (L, -1));
+				lua_pop (L, 1);
+			}
+			else {
+				check = lua_toboolean (L, -1);
+				lua_pop (L, 1);
+			}
+
+			if (!check) {
+				break;
+			}
 		}
 
 		if (!check) {
@@ -2891,26 +2908,33 @@ rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 					ret = FALSE;
 				}
 				else {
-					if (item->specific.normal.condition_cb != -1) {
-						/*
-						 * We also executes condition callback to check
-						 * if we need this symbol
-						 */
-						L = task->cfg->lua_state;
-						lua_rawgeti (L, LUA_REGISTRYINDEX,
-								item->specific.normal.condition_cb);
-						ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-						rspamd_lua_setclass (L, "rspamd{task}", -1);
-						*ptask = task;
+					if (item->specific.normal.conditions) {
+						struct rspamd_symcache_condition *cur_cond;
 
-						if (lua_pcall (L, 1, 1, 0) != 0) {
-							msg_info_task ("call to condition for %s failed: %s",
-									item->symbol, lua_tostring (L, -1));
-							lua_pop (L, 1);
-						}
-						else {
-							ret = lua_toboolean (L, -1);
-							lua_pop (L, 1);
+						DL_FOREACH (item->specific.normal.conditions, cur_cond) {
+							/*
+							 * We also executes condition callback to check
+							 * if we need this symbol
+							 */
+							L = task->cfg->lua_state;
+							lua_rawgeti (L, LUA_REGISTRYINDEX, cur_cond->cb);
+							ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+							rspamd_lua_setclass (L, "rspamd{task}", -1);
+							*ptask = task;
+
+							if (lua_pcall (L, 1, 1, 0) != 0) {
+								msg_info_task ("call to condition for %s failed: %s",
+										item->symbol, lua_tostring (L, -1));
+								lua_pop (L, 1);
+							}
+							else {
+								ret = lua_toboolean (L, -1);
+								lua_pop (L, 1);
+							}
+
+							if (!ret) {
+								break;
+							}
 						}
 					}
 				}
