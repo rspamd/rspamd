@@ -14,31 +14,31 @@ ${RSPAMD_SCOPE}  Suite
 *** Test Cases ***
 Composites - All in One
   Scan File  ${MESSAGE}
-  Expect Symbol With Score  EXPRESSIONS  5
-  Expect Symbol With Score  EXPRESSIONS_B  0
-  Expect Symbol With Score  POLICY_REMOVE_WEIGHT  5
-  Expect Symbol With Score  POLICY_REMOVE_WEIGHT_B  0
-  Do Not Expect Symbol  POLICY_REMOVE_WEIGHT_A
-  Expect Symbol With Score  POLICY_FORCE_REMOVE  5.00
-  Expect Symbol With Score  POLICY_FORCE_REMOVE_A  1.00
-  Do Not Expect Symbol  POLICY_FORCE_REMOVE_B
-  Expect Symbol With Score  POLICY_LEAVE  5.00
-  Do Not Expect Symbol  POLICY_LEAVE_A
-  Expect Symbol With Score  POLICY_LEAVE_B  1.00
-  Expect Symbol With Score  DEFAULT_POLICY_REMOVE_WEIGHT  5.00
-  Expect Symbol With Score  DEFAULT_POLICY_REMOVE_WEIGHT_A  0.00
-  Expect Symbol With Score  DEFAULT_POLICY_REMOVE_WEIGHT_B  0.00
-  Expect Symbol With Score  DEFAULT_POLICY_REMOVE_SYMBOL  5.00
-  Do Not Expect Symbol  DEFAULT_POLICY_REMOVE_SYMBOL_A
-  Do Not Expect Symbol  DEFAULT_POLICY_REMOVE_SYMBOL_B
-  Expect Symbol With Score  DEFAULT_POLICY_LEAVE  5.00
-  Expect Symbol With Score  DEFAULT_POLICY_LEAVE_A  1.00
-  Expect Symbol With Score  DEFAULT_POLICY_LEAVE_B  1.00
-  Expect Symbol With Score  SYMBOL_GROUPS  5.00
-  Expect Symbol With Score  POSITIVE_A  -1.00
-  Expect Symbol With Score  ANY_A  -1.00
-  Expect Symbol With Score  NEGATIVE_B  1.00
-  Do Not Expect Symbol  NEGATIVE_A
+  Expect Symbols With Scores  EXPRESSIONS=5
+  ...  EXPRESSIONS_B=0
+  ...  POLICY_REMOVE_WEIGHT=5
+  ...  POLICY_REMOVE_WEIGHT_B=0
+  ...  POLICY_FORCE_REMOVE=5.00
+  ...  POLICY_FORCE_REMOVE_A=1.00
+  ...  POLICY_LEAVE=5.00
+  ...  POLICY_LEAVE_B=1.00
+  ...  DEFAULT_POLICY_REMOVE_WEIGHT=5.00
+  ...  DEFAULT_POLICY_REMOVE_WEIGHT_A=0.00
+  ...  DEFAULT_POLICY_REMOVE_WEIGHT_B=0.00
+  ...  DEFAULT_POLICY_REMOVE_SYMBOL=5.00
+  ...  DEFAULT_POLICY_LEAVE=5.00
+  ...  DEFAULT_POLICY_LEAVE_A=1.00
+  ...  DEFAULT_POLICY_LEAVE_B=1.00
+  ...  SYMBOL_GROUPS=5.00
+  ...  POSITIVE_A=-1.00
+  ...  ANY_A=-1.00
+  ...  NEGATIVE_B=1.00
+  Do Not Expect Symbols  DEFAULT_POLICY_REMOVE_SYMBOL_A
+  ...  DEFAULT_POLICY_REMOVE_SYMBOL_B
+  ...  NEGATIVE_A
+  ...  POLICY_REMOVE_WEIGHT_A
+  ...  POLICY_FORCE_REMOVE_B
+  ...  POLICY_LEAVE_A
   Expect Score  50
   Expect Required Score To Be Null
 
