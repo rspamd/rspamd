@@ -789,10 +789,12 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	}
 	else {
 		for (i = 0; i < count; i ++) {
+			/* For Hyperscan we can probably safely disable all those limits */
+#if 0
 			if (rt->cache->max_re_data > 0 && lens[i] > rt->cache->max_re_data) {
 				lens[i] = rt->cache->max_re_data;
 			}
-
+#endif
 			rt->stat.bytes_scanned += lens[i];
 		}
 
