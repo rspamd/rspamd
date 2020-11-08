@@ -218,7 +218,7 @@ Run Rspamd
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick  stdout=DEVNULL  stderr=DEVNULL
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s
