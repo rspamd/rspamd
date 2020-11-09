@@ -39,6 +39,7 @@ local lua_maps = require "lua_maps"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 local fun = require "fun"
+local ts = require("tableshape").types
 
 local exports = {}
 
@@ -84,6 +85,17 @@ local function process_func(elt, task)
 
   return nil
 end
+
+
+exports.schema = ts.shape{
+  expression = ts.string,
+  rules = ts.array_of(
+      ts.shape{
+        selector = ts.string,
+        map = lua_maps.map_schema,
+      }
+  )
+}
 
 --[[[
 -- @function lua_maps_expression.create(config, object, module_name)
