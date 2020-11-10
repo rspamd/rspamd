@@ -37,6 +37,7 @@ local settings = {
   expire_novalid = 7200, -- 2 hours by default for no valid mxes
   greylist_invalid = true, -- Greylist first message with invalid MX (require greylist plugin)
   key_prefix = 'rmx',
+  max_mx_a_records = 5, -- Maximum number of A records to check per MX request
 }
 local redis_params
 local exclude_domains
@@ -189,20 +190,22 @@ local function mx_check(task)
       })
       task:insert_result(settings.symbol_no_mx, 1.0, err)
     else
+      -- Inverse sort by priority
       table.sort(results, function(r1, r2)
-        return r1['priority'] < r2['priority']
+        return r1['priority'] > r2['priority']
       end)
-      for _,mx in ipairs(results) do
-        -- Not checked
-        mxes[mx['name']] = {checked = false, working = false, ips = {}}
-      end
 
-      for _,mx in ipairs(results) do
+      local max_mx_to_resolve = math.min(#results, settings.max_mx_a_records)
+      lua_util.debugm(N, task,'check %s MX records (%d actually returned)',
+          max_mx_to_resolve, #results)
+      for i=1,max_mx_to_resolve do
+        local mx = results[i]
+        mxes[mx.name] = {checked = false, working = false, ips = {}}
         local r = task:get_resolver()
         -- XXX: maybe add ipv6?
         r:resolve('a', {
-          name = mx['name'],
-          callback = gen_mx_a_callback(mx['name'], mxes),
+          name = mx.name,
+          callback = gen_mx_a_callback(mx.name, mxes),
           task = task,
           forced = true
         })
