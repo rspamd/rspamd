@@ -258,7 +258,7 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 					"IP addresses for which debug logs are enabled",
 					&logger->debug_ip,
 					NULL,
-					NULL);
+					NULL, "debug ip");
 		}
 
 		if (cfg->log_encryption_key) {

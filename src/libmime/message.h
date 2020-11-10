@@ -120,11 +120,12 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 5)
 #define RSPAMD_MIME_TEXT_PART_HAS_SUBNORMAL (1 << 6)
 #define RSPAMD_MIME_TEXT_PART_NORMALISED (1 << 7)
+#define RSPAMD_MIME_TEXT_PART_ATTACHMENT (1 << 8)
 
-#define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
-#define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
-#define IS_PART_RAW(part) (!((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF))
-#define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
+#define IS_TEXT_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
+#define IS_TEXT_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
+#define IS_TEXT_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
+#define IS_TEXT_PART_ATTACHMENT(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_ATTACHMENT)
 
 
 struct rspamd_mime_text_part {
@@ -140,8 +141,8 @@ struct rspamd_mime_text_part {
 	GByteArray *utf_content; /* utf8 encoded processed content */
 	GByteArray *utf_raw_content; /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
-	GArray *normalized_hashes;
-	GArray *utf_words;
+	GArray *normalized_hashes; /* Array of guint64 */
+	GArray *utf_words; /* Array of rspamd_stat_token_t */
 	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
 
 	GPtrArray *newlines;    /**< positions of newlines in text, relative to content*/

@@ -28,10 +28,10 @@ Fuzzy Skip Add Test Base
   Check Rspamc  ${result}
   Sync Fuzzy Storage
   Scan File  ${message}
-  Create File  ${TMPDIR}/test.map
   Expect Symbol  R_TEST_FUZZY_DENIED
-  Append To File  ${TMPDIR}/skip_hash.map.tmp  670cfcba72a87bab689958a8af5c22593dc17c907836c7c26a74d1bb49add25adfa45a5f172e3af82c9c638e8eb5fc860c22c7e966e61a459165ef0b9e1acc89
-  Hard Link  ${TMPDIR}/skip_hash.map.tmp  ${TMPDIR}/skip_hash.map
+  Create File  ${TMPDIR}/skip_hash.map.tmp  2d875d4737c59c4822fd01dadeba52a329de3933f766c6f167904c6a426bbfa7ea63a66bf807b25c5ee853baee58bfb18d3b423fcd13cfa7c3d77a840039a1ea
+  Move File  ${TMPDIR}/skip_hash.map.tmp  ${TMPDIR}/skip_hash.map
+  Sleep  1s  Wait for reload
   Scan File  ${message}
   Do Not Expect Symbol  R_TEST_FUZZY_DENIED
 

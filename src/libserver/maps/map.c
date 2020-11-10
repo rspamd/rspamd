@@ -263,6 +263,14 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 			w->repeat = cache_cbd->map->poll_timeout;
 		}
 
+		if (w->repeat < 0) {
+			msg_info_map ("cached data for %s has skewed check time: %d last checked, %d poll timeout, %.2f diff",
+					map->name, (int)cache_cbd->data->last_checked,
+					(int)cache_cbd->map->poll_timeout,
+					(rspamd_get_calendar_ticks () - cache_cbd->data->last_checked));
+			w->repeat = 0.0;
+		}
+
 		cache_cbd->last_checked = cache_cbd->data->last_checked;
 		msg_debug_map ("cached data is up to date for %s", map->name);
 		ev_timer_again (loop, &cache_cbd->timeout);
@@ -1680,6 +1688,11 @@ rspamd_map_common_http_callback (struct rspamd_map *map,
 		/* Read cached data */
 		if (check) {
 			if (data->last_modified < data->cache->last_modified) {
+				msg_info_map ("need to reread cached map triggered by %s "
+							  "(%d our modify time, %d cached modify time)",
+						bk->uri,
+						(int)data->last_modified,
+						(int)data->cache->last_modified);
 				periodic->need_modify = TRUE;
 				/* Reset the whole chain */
 				periodic->cur_backend = 0;
@@ -2019,34 +2032,31 @@ rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
 	struct rspamd_map *map = (struct rspamd_map *)w->data;
 
 	if (w->attr.st_nlink > 0) {
+		msg_info_map ("old mtime is %t (size = %Hz), "
+					  "new mtime is %t (size = %Hz) for map file %s",
+				w->prev.st_mtime, (gsize)w->prev.st_size,
+				w->attr.st_mtime, (gsize)w->attr.st_size,
+				w->path);
 
-		if (w->attr.st_mtime > w->prev.st_mtime) {
-			msg_info_map ("old mtime is %t (size = %Hz), "
-				 "new mtime is %t (size = %Hz) for map file %s",
-					w->prev.st_mtime, (gsize)w->prev.st_size,
-					w->attr.st_mtime, (gsize)w->attr.st_size,
-					w->path);
+		/* Fire need modify flag */
+		struct rspamd_map_backend *bk;
+		guint i;
 
-			/* Fire need modify flag */
-			struct rspamd_map_backend *bk;
-			guint i;
-
-			PTR_ARRAY_FOREACH (map->backends, i, bk) {
-				if (bk->protocol == MAP_PROTO_FILE) {
-					bk->data.fd->need_modify = TRUE;
-				}
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->protocol == MAP_PROTO_FILE) {
+				bk->data.fd->need_modify = TRUE;
 			}
-
-			map->next_check = 0;
-
-			if (map->scheduled_check) {
-				ev_timer_stop (map->event_loop, &map->scheduled_check->ev);
-				MAP_RELEASE (map->scheduled_check, "rspamd_map_on_stat");
-				map->scheduled_check = NULL;
-			}
-
-			rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 		}
+
+		map->next_check = 0;
+
+		if (map->scheduled_check) {
+			ev_timer_stop (map->event_loop, &map->scheduled_check->ev);
+			MAP_RELEASE (map->scheduled_check, "rspamd_map_on_stat");
+			map->scheduled_check = NULL;
+		}
+
+		rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 	}
 }
 
@@ -2729,6 +2739,26 @@ rspamd_map_add (struct rspamd_config *cfg,
 	msg_info_map ("added map %s", bk->uri);
 
 	cfg->maps = g_list_prepend (cfg->maps, map);
+
+	return map;
+}
+
+struct rspamd_map *
+rspamd_map_add_fake (struct rspamd_config *cfg,
+				const gchar *description,
+				const gchar *name)
+{
+	struct rspamd_map *map;
+
+	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
+	map->cfg = cfg;
+	map->id = rspamd_random_uint64_fast ();
+	map->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+	map->user_data = (void **)&map; /* to prevent null pointer dereferencing */
+
+	if (description != NULL) {
+		map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
+	}
 
 	return map;
 }

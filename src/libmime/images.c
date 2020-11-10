@@ -684,7 +684,7 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 				}
 
 				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-					if (IS_PART_HTML (tp) && tp->html != NULL &&
+					if (IS_TEXT_PART_HTML (tp) && tp->html != NULL &&
 						tp->html->images != NULL) {
 						for (j = 0; j < tp->html->images->len; j ++) {
 							himg = g_ptr_array_index (tp->html->images, j);

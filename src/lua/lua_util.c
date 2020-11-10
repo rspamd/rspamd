@@ -34,6 +34,7 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
+#include "libmime/smtp_parsers.h"
 #include "contrib/fastutf8/fastutf8.h"
 
 /***
@@ -638,6 +639,15 @@ LUA_FUNCTION_DEF (util, mime_header_encode);
  */
 LUA_FUNCTION_DEF (util, btc_polymod);
 
+/***
+ * @function util.parse_smtp_date(str[, local_tz])
+ * Converts an SMTP date string to unix timestamp
+ * @param {string} str input string
+ * @param {boolean} local_tz convert to local tz if `true`
+ * @return {number} time as unix timestamp (converted to float)
+ */
+LUA_FUNCTION_DEF (util, parse_smtp_date);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -703,6 +713,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
 	LUA_INTERFACE_DEF (util, btc_polymod),
+	LUA_INTERFACE_DEF (util, parse_smtp_date),
 	{NULL, NULL}
 };
 
@@ -3951,6 +3962,45 @@ lua_util_btc_polymod (lua_State *L)
 
 	return 1;
 }
+
+static int
+lua_util_parse_smtp_date (lua_State *L)
+{
+	gsize slen;
+	const gchar *str = lua_tolstring (L, 1, &slen);
+	GError *err = NULL;
+
+	if (str == NULL) {
+		return luaL_argerror (L, 1, "invalid argument");
+	}
+
+	time_t tt = rspamd_parse_smtp_date (str, slen, &err);
+
+	if (err == NULL) {
+		if (lua_isboolean (L, 2) && !!lua_toboolean (L, 2)) {
+			struct tm t;
+
+			rspamd_localtime (tt, &t);
+#if !defined(__sun)
+			t.tm_gmtoff = 0;
+#endif
+			t.tm_isdst = 0;
+			tt = mktime (&t);
+		}
+
+		lua_pushnumber (L, tt);
+	}
+	else {
+		lua_pushnil (L);
+		lua_pushstring (L, err->message);
+		g_error_free (err);
+
+		return 2;
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_load_util (lua_State * L)

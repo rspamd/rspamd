@@ -24,6 +24,7 @@
 #include "contrib/t1ha/t1ha.h"
 #include "libserver/worker_util.h"
 #include "khash.h"
+#include "utlist.h"
 #include <math.h>
 
 #if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
@@ -97,6 +98,11 @@ struct rspamd_symcache_id_list {
 	};
 };
 
+struct rspamd_symcache_condition {
+	gint cb;
+	struct rspamd_symcache_condition *prev, *next;
+};
+
 struct rspamd_symcache_item {
 	/* This block is likely shared */
 	struct rspamd_symcache_item_stat *st;
@@ -112,7 +118,7 @@ struct rspamd_symcache_item {
 		struct {
 			symbol_func_t func;
 			gpointer user_data;
-			gint condition_cb;
+			struct rspamd_symcache_condition *conditions;
 		} normal;
 		struct {
 			gint parent;
@@ -151,8 +157,9 @@ struct rspamd_symcache {
 	GHashTable *items_by_symbol;
 	GPtrArray *items_by_id;
 	struct symcache_order *items_by_order;
-	GPtrArray *filters;
+	GPtrArray *connfilters;
 	GPtrArray *prefilters;
+	GPtrArray *filters;
 	GPtrArray *postfilters;
 	GPtrArray *composites;
 	GPtrArray *idempotent;
@@ -711,7 +718,10 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 			luaL_unref (dcond->L, LUA_REGISTRYINDEX, dcond->cbref);
 		}
 		else {
-			it->specific.normal.condition_cb = dcond->cbref;
+			struct rspamd_symcache_condition *ncond = rspamd_mempool_alloc0 (cache->static_pool,
+					sizeof (*ncond));
+			ncond->cb = dcond->cbref;
+			DL_APPEND (it->specific.normal.conditions, ncond);
 		}
 
 		cur = g_list_next (cur);
@@ -744,6 +754,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		}
 	}
 
+	g_ptr_array_sort_with_data (cache->connfilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->idempotent, postfilters_cmp, cache);
@@ -928,6 +939,7 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
+	FILE *fp;
 	bool ret;
 	gchar path[PATH_MAX];
 
@@ -951,16 +963,17 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 	}
 
 	rspamd_file_lock (fd, FALSE);
+	fp = fdopen (fd, "w");
 
 	memset (&hdr, 0, sizeof (hdr));
 	memcpy (hdr.magic, rspamd_symcache_magic,
 			sizeof (rspamd_symcache_magic));
 
-	if (write (fd, &hdr, sizeof (hdr)) == -1) {
+	if (fwrite (&hdr, sizeof (hdr), 1, fp) == -1) {
 		msg_err_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
-		close (fd);
+		fclose (fp);
 
 		return FALSE;
 	}
@@ -992,12 +1005,12 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 		ucl_object_insert_key (top, elt, k, 0, false);
 	}
 
-	efunc = ucl_object_emit_fd_funcs (fd);
+	efunc = ucl_object_emit_file_funcs (fp);
 	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc, NULL);
 	ucl_object_emit_funcs_free (efunc);
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
-	close (fd);
+	fclose (fp);
 
 	if (rename (path, name) == -1) {
 		msg_err_cache ("cannot rename %s -> %s, error %d, %s", path, name,
@@ -1114,6 +1127,11 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			g_ptr_array_add (cache->postfilters, item);
 			item->container = cache->postfilters;
 		}
+		else if (item->type & SYMBOL_TYPE_CONNFILTER) {
+			type_str = "connfilter";
+			g_ptr_array_add (cache->connfilters, item);
+			item->container = cache->connfilters;
+		}
 		else {
 			item->is_filter = TRUE;
 			g_ptr_array_add (cache->filters, item);
@@ -1125,7 +1143,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 
 		item->specific.normal.func = func;
 		item->specific.normal.user_data = user_data;
-		item->specific.normal.condition_cb = -1;
+		item->specific.normal.conditions = NULL;
 	}
 	else {
 		/*
@@ -1135,7 +1153,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		 * - composite symbol
 		 */
 		if (item->type & SYMBOL_TYPE_COMPOSITE) {
-			item->specific.normal.condition_cb = -1;
+			item->specific.normal.conditions = NULL;
 			item->specific.normal.user_data = user_data;
 			g_assert (user_data != NULL);
 			g_ptr_array_add (cache->composites, item);
@@ -1153,7 +1171,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->is_filter = TRUE;
 			item->specific.normal.func = NULL;
 			item->specific.normal.user_data = NULL;
-			item->specific.normal.condition_cb = -1;
+			item->specific.normal.conditions = NULL;
 			type_str = "classifier";
 		}
 		else {
@@ -1299,8 +1317,9 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 		g_hash_table_destroy (cache->items_by_symbol);
 		g_ptr_array_free (cache->items_by_id, TRUE);
 		rspamd_mempool_delete (cache->static_pool);
-		g_ptr_array_free (cache->filters, TRUE);
+		g_ptr_array_free (cache->connfilters, TRUE);
 		g_ptr_array_free (cache->prefilters, TRUE);
+		g_ptr_array_free (cache->filters, TRUE);
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
@@ -1326,8 +1345,9 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_id = g_ptr_array_new ();
-	cache->filters = g_ptr_array_new ();
+	cache->connfilters = g_ptr_array_new ();
 	cache->prefilters = g_ptr_array_new ();
+	cache->filters = g_ptr_array_new ();
 	cache->postfilters = g_ptr_array_new ();
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
@@ -1742,22 +1762,30 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	if (!rspamd_symcache_is_item_allowed (task, item, TRUE)) {
 		check = FALSE;
 	}
-	else if (item->specific.normal.condition_cb != -1) {
-		/* We also executes condition callback to check if we need this symbol */
-		L = task->cfg->lua_state;
-		lua_rawgeti (L, LUA_REGISTRYINDEX, item->specific.normal.condition_cb);
-		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-		*ptask = task;
+	else if (item->specific.normal.conditions) {
+		struct rspamd_symcache_condition *cur_cond;
 
-		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_info_task ("call to condition for %s failed: %s",
-					item->symbol, lua_tostring (L, -1));
-			lua_pop (L, 1);
-		}
-		else {
-			check = lua_toboolean (L, -1);
-			lua_pop (L, 1);
+		DL_FOREACH (item->specific.normal.conditions, cur_cond) {
+			/* We also executes condition callback to check if we need this symbol */
+			L = task->cfg->lua_state;
+			lua_rawgeti (L, LUA_REGISTRYINDEX, cur_cond->cb);
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
+
+			if (lua_pcall (L, 1, 1, 0) != 0) {
+				msg_info_task ("call to condition for %s failed: %s",
+						item->symbol, lua_tostring (L, -1));
+				lua_pop (L, 1);
+			}
+			else {
+				check = lua_toboolean (L, -1);
+				lua_pop (L, 1);
+			}
+
+			if (!check) {
+				break;
+			}
 		}
 
 		if (!check) {
@@ -2067,6 +2095,50 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 	start_events_pending = rspamd_session_events_pending (task->s);
 
 	switch (stage) {
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
+		/* Check for connection filters */
+		saved_priority = G_MININT;
+		all_done = TRUE;
+
+		for (i = 0; i < (gint) cache->connfilters->len; i++) {
+			item = g_ptr_array_index (cache->connfilters, i);
+			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
+
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				return TRUE;
+			}
+
+			if (!CHECK_START_BIT (checkpoint, dyn_item) &&
+				!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
+
+				if (checkpoint->has_slow) {
+					/* Delay */
+					checkpoint->has_slow = FALSE;
+
+					return FALSE;
+				}
+				/* Check priorities */
+				if (saved_priority == G_MININT) {
+					saved_priority = item->priority;
+				}
+				else {
+					if (item->priority < saved_priority &&
+						rspamd_session_events_pending (task->s) > start_events_pending) {
+						/*
+						 * Delay further checks as we have higher
+						 * priority filters to be processed
+						 */
+						return FALSE;
+					}
+				}
+
+				rspamd_symcache_check_symbol (task, cache, item,
+						checkpoint);
+				all_done = FALSE;
+			}
+		}
+		break;
+
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 		/* Check for prefilters */
 		saved_priority = G_MININT;
@@ -2836,26 +2908,33 @@ rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 					ret = FALSE;
 				}
 				else {
-					if (item->specific.normal.condition_cb != -1) {
-						/*
-						 * We also executes condition callback to check
-						 * if we need this symbol
-						 */
-						L = task->cfg->lua_state;
-						lua_rawgeti (L, LUA_REGISTRYINDEX,
-								item->specific.normal.condition_cb);
-						ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-						rspamd_lua_setclass (L, "rspamd{task}", -1);
-						*ptask = task;
+					if (item->specific.normal.conditions) {
+						struct rspamd_symcache_condition *cur_cond;
 
-						if (lua_pcall (L, 1, 1, 0) != 0) {
-							msg_info_task ("call to condition for %s failed: %s",
-									item->symbol, lua_tostring (L, -1));
-							lua_pop (L, 1);
-						}
-						else {
-							ret = lua_toboolean (L, -1);
-							lua_pop (L, 1);
+						DL_FOREACH (item->specific.normal.conditions, cur_cond) {
+							/*
+							 * We also executes condition callback to check
+							 * if we need this symbol
+							 */
+							L = task->cfg->lua_state;
+							lua_rawgeti (L, LUA_REGISTRYINDEX, cur_cond->cb);
+							ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+							rspamd_lua_setclass (L, "rspamd{task}", -1);
+							*ptask = task;
+
+							if (lua_pcall (L, 1, 1, 0) != 0) {
+								msg_info_task ("call to condition for %s failed: %s",
+										item->symbol, lua_tostring (L, -1));
+								lua_pop (L, 1);
+							}
+							else {
+								ret = lua_toboolean (L, -1);
+								lua_pop (L, 1);
+							}
+
+							if (!ret) {
+								break;
+							}
 						}
 					}
 				}

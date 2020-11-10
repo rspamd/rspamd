@@ -16,6 +16,7 @@ limitations under the License.
 ]]--
 
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 
 local default_settings = {
   spf_symbols = {
@@ -127,19 +128,19 @@ local function gen_auth_results(task, settings)
     hdr[1] = string.format('dkim=%s', ar_string)
 
     if dres.fail_reason then
-      hdr[#hdr + 1] = string.format('(%s)', dres.fail_reason)
+      hdr[#hdr + 1] = string.format('(%s)', lua_util.maybe_smtp_quote_value(dres.fail_reason))
     end
 
     if dres.domain then
-      hdr[#hdr + 1] = string.format('header.d=%s', dres.domain)
+      hdr[#hdr + 1] = string.format('header.d=%s', lua_util.maybe_smtp_quote_value(dres.domain))
     end
 
     if dres.selector then
-      hdr[#hdr + 1] = string.format('header.s=%s', dres.selector)
+      hdr[#hdr + 1] = string.format('header.s=%s', lua_util.maybe_smtp_quote_value(dres.selector))
     end
 
     if dres.bhash then
-      hdr[#hdr + 1] = string.format('header.b=%s', dres.bhash)
+      hdr[#hdr + 1] = string.format('header.b=%s', lua_util.maybe_smtp_quote_value(dres.bhash))
     end
 
     table.insert(hdr_parts, table.concat(hdr, ' '))
@@ -161,25 +162,25 @@ local function gen_auth_results(task, settings)
         if key == 'reject' or key == 'quarantine' or key == 'softfail' then
           hdr = hdr .. 'fail'
         else
-          hdr = hdr .. key
+          hdr = hdr .. lua_util.maybe_smtp_quote_value(key)
         end
         if key == 'pass' then
-          hdr = hdr .. ' (policy=' .. opts[2] .. ')'
-          hdr = hdr .. ' header.from=' .. opts[1]
+          hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(opts[2]) .. ')'
+          hdr = hdr .. ' header.from=' .. lua_util.maybe_smtp_quote_value(opts[1])
         elseif key ~= 'none' then
           local t = {opts[1]:match('^([^%s]+) : (.*)$')}
           if #t > 0 then
             local dom = t[1]
             local rsn = t[2]
             if rsn then
-              hdr = hdr .. ' reason="' .. rsn .. '"'
+              hdr = string.format('%s reason=%s', hdr, lua_util.maybe_smtp_quote_value(rsn))
             end
-            hdr = hdr .. ' header.from=' .. dom
+            hdr = string.format('%s header.from=%s', hdr, lua_util.maybe_smtp_quote_value(dom))
           end
           if key == 'softfail' then
             hdr = hdr .. ' (policy=none)'
           else
-            hdr = hdr .. ' (policy=' .. key .. ')'
+            hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(key) .. ')'
           end
         end
         table.insert(hdr_parts, hdr)
@@ -187,7 +188,8 @@ local function gen_auth_results(task, settings)
         if common.symbols[auth_types['arc'][key]][1] then
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
           for _, v in ipairs(opts) do
-            hdr = hdr .. auth_type .. '=' .. key .. ' (' .. v .. ')'
+            hdr = string.format('%s%s=%s (%s)', hdr, auth_type,
+                lua_util.maybe_smtp_quote_value(key), lua_util.maybe_smtp_quote_value(v))
             table.insert(hdr_parts, hdr)
           end
         end
@@ -201,12 +203,12 @@ local function gen_auth_results(task, settings)
             smtp_from[1] and
             smtp_from[1]['addr'] ~= '' and
             smtp_from[1]['addr'] ~= nil then
-          sender = smtp_from[1]['addr']
+          sender = lua_util.maybe_smtp_quote_value(smtp_from[1]['addr'])
           sender_type = 'smtp.mailfrom'
         else
           local helo = task:get_helo()
           if helo then
-            sender = helo
+            sender = lua_util.maybe_smtp_quote_value(helo)
             sender_type = 'smtp.helo'
           end
         end
@@ -252,10 +254,10 @@ local function gen_auth_results(task, settings)
     local hdr = {[1] = 'auth=pass'}
 
     if settings['add_smtp_user'] then
-      table.insert(hdr,'smtp.auth=' .. u)
+      table.insert(hdr,'smtp.auth=' .. lua_util.maybe_smtp_quote_value(u))
     end
     if smtp_from[1]['addr'] then
-      table.insert(hdr,'smtp.mailfrom=' .. smtp_from[1]['addr'])
+      table.insert(hdr,'smtp.mailfrom=' .. lua_util.maybe_smtp_quote_value(smtp_from[1]['addr']))
     end
 
     table.insert(hdr_parts, table.concat(hdr,' '))

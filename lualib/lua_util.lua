@@ -124,10 +124,14 @@ end
 -- @return {number} rounded number
 --]]
 
--- Robert Jay Gould http://lua-users.org/wiki/SimpleRound
+-- modified version from Robert Jay Gould http://lua-users.org/wiki/SimpleRound
 exports.round = function(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
-  return math.floor(num * mult) / mult
+  if num >= 0 then
+    return math.floor(num * mult + 0.5) / mult
+  else
+    return math.ceil(num * mult - 0.5) / mult
+  end
 end
 
 --[[[
@@ -941,6 +945,8 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     emails = params.need_emails,
     images = params.need_images,
     content = params.need_content,
+    flags = params.flags, -- maybe nil
+    flags_mode = params.flags_mode, -- maybe nil
   }
 
   -- Shortcut for cached stuff
@@ -949,10 +955,16 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     if params.prefix then
       cache_key = params.prefix
     else
-      cache_key = string.format('sp_urls_%d%s%s%s', params.limit,
+      local cache_key_suffix
+      if params.flags then
+        cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
+      else
+        cache_key_suffix = string.format('%s%s%s',
           tostring(params.need_emails or false),
           tostring(params.need_images or false),
           tostring(params.need_content or false))
+      end
+      cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
     local cached = params.task:cache_get(cache_key)
 
@@ -1417,6 +1429,22 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
   end
 
   return false
+end
+
+---[[[
+-- @function lua_util.maybe_smtp_quote_value(str)
+-- Checks string for the forbidden elements (tspecials in RFC and quote string if needed)
+-- @param {string} str input string
+-- @return {string} original or quoted string
+--]]]
+local tspecial = lpeg.S"()<>,;:\\\"/[]?= \t\v"
+local special_match = lpeg.P((1 - tspecial)^0 * tspecial^1)
+exports.maybe_smtp_quote_value = function(str)
+  if special_match:match(str) then
+    return string.format('"%s"', str:gsub('"', '\\"'))
+  end
+
+  return str
 end
 
 return exports

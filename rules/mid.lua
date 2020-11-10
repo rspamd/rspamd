@@ -14,7 +14,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
-
+local rspamd_util = require "rspamd_util"
 local function mid_check_func(task)
   local mid = task:get_header('Message-ID')
   if not mid then return false end
@@ -42,10 +42,19 @@ local function mid_check_func(task)
     local _,_,md = mid:find("@([^>]+)>?$")
     -- See if all or part of the From address
     -- can be found in the Message-ID
+    -- extract tld
+    local fdtld = nil
+    local mdtld = nil
+    if md then
+      fdtld = rspamd_util.get_tld(fd)
+      mdtld = rspamd_util.get_tld(md)
+    end
     if (mid:lower():find(from[1].addr:lower(),1,true)) then
       task:insert_result('MID_CONTAINS_FROM', 1.0)
     elseif (md and fd == md:lower()) then
       task:insert_result('MID_RHS_MATCH_FROM', 1.0)
+    elseif (mdtld ~= nil and fdtld ~= nil and mdtld:lower() == fdtld) then
+      task:insert_result('MID_RHS_MATCH_FROMTLD', 1.0)
     end
   end
   -- Check To address attributes against MID
@@ -88,6 +97,9 @@ rspamd_config:set_metric_symbol('MID_CONTAINS_FROM', 1.0, 'Message-ID contains F
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_FROM', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 0.0,
     'Message-ID RHS matches From domain', 'default', 'Message ID')
+rspamd_config:register_virtual_symbol('MID_RHS_MATCH_FROMTLD', 1.0, check_mid_id)
+rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROMTLD', 0.0,
+    'Message-ID RHS matches From domain tld', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_CONTAINS_TO', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_CONTAINS_TO', 1.0, 'Message-ID contains To address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_TO', 1.0, check_mid_id)

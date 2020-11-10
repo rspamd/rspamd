@@ -2297,6 +2297,9 @@ lua_task_set_pre_result (lua_State * L)
 			else if (strstr (fl_str, "no_smtp_message") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE;
 			}
+			else if (strstr (fl_str, "process_all") != NULL) {
+				flags |= RSPAMD_PASSTHROUGH_PROCESS_ALL;
+			}
 		}
 
 
@@ -2311,7 +2314,7 @@ lua_task_set_pre_result (lua_State * L)
 
 		/* Don't classify or filter message if pre-filter sets results */
 
-		if (res_name == NULL && !(flags & RSPAMD_PASSTHROUGH_LEAST)) {
+		if (res_name == NULL && !(flags & (RSPAMD_PASSTHROUGH_LEAST|RSPAMD_PASSTHROUGH_PROCESS_ALL))) {
 			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
@@ -5042,19 +5045,27 @@ lua_task_get_date (lua_State *L)
 			if (h) {
 				time_t tt;
 				struct tm t;
+				GError *err = NULL;
 
-				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded));
+				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded),
+						&err);
 
-				if (!gmt) {
-					rspamd_localtime (tt, &t);
+				if (err == NULL) {
+					if (!gmt) {
+						rspamd_localtime (tt, &t);
 #if !defined(__sun)
-					t.tm_gmtoff = 0;
+						t.tm_gmtoff = 0;
 #endif
-					t.tm_isdst = 0;
-					tim = mktime (&t);
+						t.tm_isdst = 0;
+						tim = mktime (&t);
+					}
+					else {
+						tim = tt;
+					}
 				}
 				else {
-					tim = tt;
+					g_error_free (err);
+					tim = 0.0;
 				}
 			}
 			else {

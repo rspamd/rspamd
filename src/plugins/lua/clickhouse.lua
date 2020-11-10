@@ -46,8 +46,8 @@ local settings = {
   timeout = 5.0,
   bayes_spam_symbols = {'BAYES_SPAM'},
   bayes_ham_symbols = {'BAYES_HAM'},
-  ann_spam_symbols = {'NEURAL_SPAM'},
-  ann_ham_symbols = {'NEURAL_HAM'},
+  ann_symbols_spam = {'NEURAL_SPAM'},
+  ann_symbols_ham = {'NEURAL_HAM'},
   fuzzy_symbols = {'FUZZY_DENIED'},
   whitelist_symbols = {'WHITELIST_DKIM', 'WHITELIST_SPF_DKIM', 'WHITELIST_DMARC'},
   dkim_allow_symbols = {'R_DKIM_ALLOW'},
@@ -210,7 +210,7 @@ local migrations = {
   [4] = {
     [[ALTER TABLE rspamd
       MODIFY COLUMN Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
-      ADD IF NOT EXISTS COLUMN CustomAction String AFTER Action
+      ADD COLUMN IF NOT EXISTS CustomAction String AFTER Action
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (5)]],
@@ -1164,7 +1164,7 @@ local function add_extra_columns(upstream, ev_base, cfg)
       local sql = string.format('ALTER TABLE rspamd ADD COLUMN IF NOT EXISTS `%s` %s AFTER `%s`',
           col.name, col.type, prev_column)
       if col.comment then
-        sql = sql .. string.format(", COMMENT COLUMN `%s` '%s'", col.name, col.comment)
+        sql = sql .. string.format(", COMMENT COLUMN IF EXISTS `%s` '%s'", col.name, col.comment)
       end
 
       local ret = lua_clickhouse.generic(upstream, settings, ch_params, sql,

@@ -367,6 +367,7 @@ gboolean
 rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 {
 	gint fd;
+	FILE *fp;
 	ucl_object_t *obj, *elt;
 	guint i;
 	struct roll_history_row *row;
@@ -383,6 +384,7 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 		return FALSE;
 	}
 
+	fp = fdopen (fd, "w");
 	obj = ucl_object_typed_new (UCL_ARRAY);
 
 	for (i = 0; i < history->nrows; i ++) {
@@ -418,12 +420,12 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 		ucl_array_append (obj, elt);
 	}
 
-	emitter_func = ucl_object_emit_fd_funcs (fd);
+	emitter_func = ucl_object_emit_file_funcs (fp);
 	ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emitter_func, NULL);
 	ucl_object_emit_funcs_free (emitter_func);
 	ucl_object_unref (obj);
 
-	close (fd);
+	fclose (fp);
 
 	return TRUE;
 }

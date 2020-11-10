@@ -372,21 +372,20 @@ return function(cfg)
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
             not cfg.actions['accept'] then
       for _,d in ipairs(actions_defs) do
-        if cfg.actions[d] and type(cfg.actions[d]) == 'number' then
-          if cfg.actions[d] < 0 then
-            cfg.actions['no action'] = cfg.actions[d] - 0.001
-            logger.infox('set no action score to: %s, as action %s has negative score',
-                    cfg.actions['no action'], d)
+        if cfg.actions[d] then
+          if type(cfg.actions[d]) ~= 'number' then
+            cfg.actions[d] = nil
+          elseif cfg.actions[d] < 0 then
+            cfg.actions['no_action'] = cfg.actions[d] - 0.001
+            logger.infox(rspamd_config, 'set no_action score to: %s, as action %s has negative score',
+                    cfg.actions['no_action'], d)
             break
           end
         end
       end
     end
 
-    local actions_set = {}
-    for _,d in ipairs(actions_defs) do
-      actions_set[d] = true
-    end
+    local actions_set = lua_util.list_to_hash(actions_defs)
 
     -- Now check actions section for garbadge
     actions_set['unknown_weight'] = true
@@ -395,7 +394,37 @@ return function(cfg)
 
     for k,_ in pairs(cfg.actions) do
       if not actions_set[k] then
-        logger.warnx('unknown element in actions section: %s', k)
+        logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
+      end
+    end
+
+    -- Performs thresholds sanity
+    -- We exclude greylist here as it can be set to whatever threshold in practice
+    local actions_order = {
+      'no_action',
+      'add_header',
+      'rewrite_subject',
+      'quarantine',
+      'reject',
+      'discard'
+    }
+    for i=1,(#actions_order - 1) do
+      local act = actions_order[i]
+
+      if cfg.actions[act] and type(cfg.actions[act]) == 'number' then
+        local score = cfg.actions[act]
+
+        for j=i+1,#actions_order do
+          local next_act = actions_order[j]
+          if cfg.actions[next_act] and type(cfg.actions[next_act]) == 'number' then
+            local next_score = cfg.actions[next_act]
+            if next_score <= score then
+              logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower '..
+                  'score than action %s (%s)', act, score, next_act, next_score)
+              ret = false
+            end
+          end
+        end
       end
     end
   end

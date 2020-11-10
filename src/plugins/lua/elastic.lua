@@ -22,6 +22,7 @@ local util = require "rspamd_util"
 local ucl = require "ucl"
 local rspamd_redis = require "lua_redis"
 local upstream_list = require "rspamd_upstream_list"
+local lua_settings = require "lua_settings"
 
 if confighelp then
   return
@@ -147,7 +148,7 @@ local function get_general_metadata(task)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
-  r.rspamd_server = HOSTNAME  
+  r.rspamd_server = HOSTNAME
   if r.user ~= 'unknown' then
       r.direction = "Outbound"
   end
@@ -160,15 +161,23 @@ local function get_general_metadata(task)
     for _, a in ipairs(rcpt) do
       table.insert(l, a['addr'])
     end
-      r.rcpt = l
+    r.rcpt = l
   else
     r.rcpt = 'unknown'
   end
-  local from = task:get_from('smtp')
+
+  local from = task:get_from{'smtp', 'orig'}
   if ((from or E)[1] or E).addr then
     r.from = from[1].addr
   else
     r.from = 'unknown'
+  end
+
+  local mime_from = task:get_from{'mime', 'orig'}
+  if ((mime_from or E)[1] or E).addr then
+    r.mime_from = mime_from[1].addr
+  else
+    r.mime_from = 'unknown'
   end
 
   local syminf = task:get_symbols_all()
@@ -199,6 +208,34 @@ local function get_general_metadata(task)
   r.message_id = task:get_message_id()
   local hname = task:get_hostname() or 'unknown'
   r.hostname = hname
+
+  local settings_id = task:get_settings_id()
+
+  if settings_id then
+    -- Convert to string
+    settings_id = lua_settings.settings_by_id(settings_id)
+
+    if settings_id then
+      settings_id = settings_id.name
+    end
+  end
+
+  if not settings_id then
+    settings_id = ''
+  end
+
+  r.settings_id = settings_id
+
+  local scan_real = task:get_scan_time()
+  scan_real = math.floor(scan_real * 1000)
+  if scan_real < 0 then
+    rspamd_logger.messagex(task,
+        'clock skew detected for message: %s ms real scan time (reset to 0)',
+        scan_real)
+    scan_real = 0
+  end
+
+  r.scan_time = scan_real
 
   return r
 end

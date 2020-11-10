@@ -108,81 +108,266 @@ static rspamd_expression_atom_t *
 rspamd_composite_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err)
 {
-	gsize clen;
+	gsize clen = 0;
 	rspamd_expression_atom_t *res;
 	struct rspamd_composite_atom *atom;
+	const gchar *p, *end;
+	enum composite_expr_state {
+		comp_state_read_symbol = 0,
+		comp_state_read_obrace,
+		comp_state_read_option,
+		comp_state_read_regexp,
+		comp_state_read_regexp_end,
+		comp_state_read_comma,
+		comp_state_read_ebrace,
+		comp_state_read_end
+	} state = comp_state_read_symbol;
 
-	/*
-	 * Composites are just sequences of symbols
-	 */
-	clen = strcspn (line, "; \t()><!|&\n");
-	if (clen == 0) {
-		/* Invalid composite atom */
-		g_set_error (err, rspamd_composites_quark (), 100, "Invalid composite: %s",
-				line);
+	end = line + len;
+	p = line;
+
+	/* Find length of the atom using a reduced state machine */
+	while (p < end) {
+		if (state == comp_state_read_end) {
+			break;
+		}
+
+		switch (state) {
+		case comp_state_read_symbol:
+			clen = rspamd_memcspn (p, "[; \t()><!|&\n", len);
+			p += clen;
+
+			if (*p == '[') {
+				state = comp_state_read_obrace;
+			}
+			else {
+				state = comp_state_read_end;
+			}
+			break;
+		case comp_state_read_obrace:
+			p ++;
+
+			if (*p == '/') {
+				p ++;
+				state = comp_state_read_regexp;
+			}
+			else {
+				state = comp_state_read_option;
+			}
+			break;
+		case comp_state_read_regexp:
+			if (*p == '\\' && p + 1 < end) {
+				/* Escaping */
+				p ++;
+			}
+			else if (*p == '/') {
+				/* End of regexp, possible flags */
+				state = comp_state_read_regexp_end;
+			}
+			p ++;
+			break;
+		case comp_state_read_option:
+		case comp_state_read_regexp_end:
+			if (*p == ',') {
+				p ++;
+				state = comp_state_read_comma;
+			}
+			else if (*p == ']') {
+				state = comp_state_read_ebrace;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case comp_state_read_comma:
+			if (!g_ascii_isspace (*p)) {
+				if (*p == '/') {
+					state = comp_state_read_regexp;
+				}
+				else if (*p == ']') {
+					state = comp_state_read_ebrace;
+				}
+				else {
+					state = comp_state_read_option;
+				}
+			}
+			else {
+				/* Skip spaces after comma */
+				p ++;
+			}
+			break;
+		case comp_state_read_ebrace:
+			p ++;
+			state = comp_state_read_end;
+			break;
+		case comp_state_read_end:
+			g_assert_not_reached ();
+		}
+	}
+
+	if (state != comp_state_read_end) {
+		g_set_error (err, rspamd_composites_quark (), 100, "invalid composite: %s;"
+														   "parser stopped in state %d",
+				line, state);
 		return NULL;
 	}
 
+	clen = p - line;
+	p = line;
+	state = comp_state_read_symbol;
+
+	atom = rspamd_mempool_alloc0 (pool, sizeof (*atom));
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
 	res->str = line;
 
-	atom = rspamd_mempool_alloc0 (pool, sizeof (*atom));
+	/* Full state machine to fill a composite atom */
+	const gchar *opt_start = NULL;
 
-	/* Now check for options combinations */
-	const gchar *obrace, *ebrace;
+	while (p < end) {
+		struct rspamd_composite_option_match *opt_match;
 
-	if ((obrace = memchr (line, '[', clen)) != NULL && obrace > line) {
-		atom->symbol = rspamd_mempool_alloc (pool, obrace - line + 1);
-		rspamd_strlcpy (atom->symbol, line, obrace - line + 1);
-		ebrace = memchr (line, ']', clen);
+		if (state == comp_state_read_end) {
+			break;
+		}
 
-		if (ebrace != NULL && ebrace > obrace) {
-			/* We can make a list of options */
-			gchar **opts = rspamd_string_len_split (obrace + 1,
-					ebrace - obrace - 1, ",", -1, pool);
+		switch (state) {
+		case comp_state_read_symbol:
+			clen = rspamd_memcspn (p, "[; \t()><!|&\n", len);
+			p += clen;
 
-			for (guint i = 0; opts[i] != NULL; i ++) {
-				struct rspamd_composite_option_match *opt_match;
+			if (*p == '[') {
+				state = comp_state_read_obrace;
+			}
+			else {
+				state = comp_state_read_end;
+			}
 
+			atom->symbol = rspamd_mempool_alloc (pool, clen + 1);
+			rspamd_strlcpy (atom->symbol, line, clen + 1);
+
+			break;
+		case comp_state_read_obrace:
+			p ++;
+
+			if (*p == '/') {
+				opt_start = p;
+				p ++; /* Starting slash */
+				state = comp_state_read_regexp;
+			}
+			else {
+				state = comp_state_read_option;
+				opt_start = p;
+			}
+
+			break;
+		case comp_state_read_regexp:
+			if (*p == '\\' && p + 1 < end) {
+				/* Escaping */
+				p ++;
+			}
+			else if (*p == '/') {
+				/* End of regexp, possible flags */
+				state = comp_state_read_regexp_end;
+			}
+			p ++;
+			break;
+		case comp_state_read_option:
+			if (*p == ',' || *p == ']') {
 				opt_match = rspamd_mempool_alloc (pool, sizeof (*opt_match));
+				/* Plain match */
+				gchar *opt_buf;
+				gint opt_len = p - opt_start;
 
-				if (opts[i][0] == '/' && strchr (opts[i] + 1, '/') != NULL) {
-					/* Regexp */
-					rspamd_regexp_t *re;
-					GError *re_err = NULL;
+				opt_buf = rspamd_mempool_alloc (pool, opt_len + 1);
+				rspamd_strlcpy (opt_buf, opt_start, opt_len + 1);
 
-					re = rspamd_regexp_new (opts[i], NULL, &re_err);
+				opt_match->data.match = opt_buf;
+				opt_match->type = RSPAMD_COMPOSITE_OPTION_PLAIN;
 
-					if (re == NULL) {
-						msg_err_pool ("cannot create regexp from string %s: %e",
-								opts[i], re_err);
+				DL_APPEND (atom->opts, opt_match);
 
-						g_error_free (re_err);
-					}
-					else {
-						rspamd_mempool_add_destructor (pool,
-								(rspamd_mempool_destruct_t)rspamd_regexp_unref,
-								re);
-						opt_match->data.re = re;
-						opt_match->type = RSPAMD_COMPOSITE_OPTION_RE;
-
-						DL_APPEND (atom->opts, opt_match);
-					}
+				if (*p == ',') {
+					p++;
+					state = comp_state_read_comma;
 				}
 				else {
-					/* Plain match */
-					opt_match->data.match = opts[i];
-					opt_match->type = RSPAMD_COMPOSITE_OPTION_PLAIN;
+					state = comp_state_read_ebrace;
+				}
+			}
+			else {
+				p ++;
+			}
+			break;
+		case comp_state_read_regexp_end:
+			if (*p == ',' || *p == ']') {
+				opt_match = rspamd_mempool_alloc (pool, sizeof (*opt_match));
+				/* Plain match */
+				gchar *opt_buf;
+				gint opt_len = p - opt_start;
+
+				opt_buf = rspamd_mempool_alloc (pool, opt_len + 1);
+				rspamd_strlcpy (opt_buf, opt_start, opt_len + 1);
+
+				rspamd_regexp_t *re;
+				GError *re_err = NULL;
+
+				re = rspamd_regexp_new (opt_buf, NULL, &re_err);
+
+				if (re == NULL) {
+					msg_err_pool ("cannot create regexp from string %s: %e",
+							opt_buf, re_err);
+
+					g_error_free (re_err);
+				}
+				else {
+					rspamd_mempool_add_destructor (pool,
+							(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+							re);
+					opt_match->data.re = re;
+					opt_match->type = RSPAMD_COMPOSITE_OPTION_RE;
 
 					DL_APPEND (atom->opts, opt_match);
 				}
+
+				if (*p == ',') {
+					p++;
+					state = comp_state_read_comma;
+				}
+				else {
+					state = comp_state_read_ebrace;
+				}
 			}
+			else {
+				p ++;
+			}
+			break;
+		case comp_state_read_comma:
+			if (!g_ascii_isspace (*p)) {
+				if (*p == '/') {
+					state = comp_state_read_regexp;
+					opt_start = p;
+				}
+				else if (*p == ']') {
+					state = comp_state_read_ebrace;
+				}
+				else {
+					opt_start = p;
+					state = comp_state_read_option;
+				}
+			}
+			else {
+				/* Skip spaces after comma */
+				p ++;
+			}
+			break;
+		case comp_state_read_ebrace:
+			p ++;
+			state = comp_state_read_end;
+			break;
+		case comp_state_read_end:
+			g_assert_not_reached ();
 		}
-	}
-	else {
-		atom->symbol = rspamd_mempool_alloc (pool, clen + 1);
-		rspamd_strlcpy (atom->symbol, line, clen + 1);
 	}
 
 	res->data = atom;
@@ -264,8 +449,8 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 					}
 				}
 				else {
-					if (rspamd_regexp_match (cur_opt->data.re,
-							opt->option, opt->optlen, FALSE)) {
+					if (rspamd_regexp_search (cur_opt->data.re,
+							opt->option, opt->optlen, NULL, NULL, FALSE, NULL)) {
 						found = true;
 
 						break;
@@ -275,12 +460,19 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 
 
 			if (!found) {
-				msg_debug_composites ("symbol %s in composite %s misses required option %s",
-						sym,
-						cd->composite->sym,
-						(cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN ?
-						  cur_opt->data.match :
-						  rspamd_regexp_get_pattern (cur_opt->data.re)));
+				if (cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN) {
+					msg_debug_composites ("symbol %s in composite %s misses required option %s",
+							sym,
+							cd->composite->sym,
+							cur_opt->data.match);
+				}
+				else {
+					msg_debug_composites ("symbol %s in composite %s failed to match regexp %s",
+							sym,
+							cd->composite->sym,
+							rspamd_regexp_get_pattern (cur_opt->data.re));
+				}
+
 				ms = NULL;
 
 				break;

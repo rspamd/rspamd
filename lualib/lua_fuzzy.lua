@@ -36,7 +36,7 @@ local policies = {
     min_bytes = 1024,
     min_height = 500,
     min_width = 500,
-    min_length = 32,
+    min_length = 64,
     text_multiplier = 4.0, -- divide min_bytes by 4 for texts
     mime_types = {"application/*"},
     scan_archives = true,
@@ -157,14 +157,18 @@ local function check_text_part(task, part, rule, text)
 
   if rule.text_shingles then
     -- Check number of words
-    if rule.min_length > 0 and wcnt < rule.min_length then
+    local min_words = rule.min_length or 0
+    if min_words < 32 then
+      min_words = 32 -- Minimum for shingles
+    end
+    if wcnt < min_words then
       lua_util.debugm(N, task, 'text has less than %s words: %s; disable shingles',
           rule.min_length, wcnt)
       allow_shingles = false
     else
       lua_util.debugm(N, task, 'allow shingles in text %s, %s words',
           id, wcnt)
-      allow_shingles = wcnt > 0
+      allow_shingles = true
     end
 
     if not rule.short_text_direct_hash and not allow_shingles then
@@ -191,7 +195,7 @@ end
 local function has_sane_text_parts(task)
   local text_parts = task:get_text_parts() or {}
 
-  return fun.any(function(tp) return tp:get_words_count() > 10 end, text_parts)
+  return fun.any(function(tp) return tp:get_words_count() > 32 end, text_parts)
 end
 
 local function check_image_part(task, part, rule, image)

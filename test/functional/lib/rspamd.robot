@@ -46,7 +46,15 @@ Check Rspamc Match String
 
 Do Not Expect Symbol
   [Arguments]  ${symbol}
-  Run Keyword And Expect Error  *  Expect Symbol  ${symbol}
+  Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
+  ...  msg=Symbol ${symbol} was not expected to be found in result
+
+Do Not Expect Symbols
+  [Arguments]  @{symbols}
+  FOR  ${symbol}  IN  @{symbols}
+    Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
+    ...  msg=Symbol ${symbol} was not expected to be found in result
+  END
 
 Generic Setup
   [Arguments]  @{vargs}  &{kwargs}
@@ -102,9 +110,19 @@ Expect Symbol With Option
 
 Expect Symbol With Score
   [Arguments]  ${symbol}  ${score}
-  Expect Symbol  ${symbol}
+  Dictionary Should Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
+  ...  msg=Symbol ${symbol} wasn't found in result
   Should Be Equal As Numbers  ${SCAN_RESULT}[symbols][${symbol}][score]  ${score}
   ...  msg="Symbol ${symbol} has score of ${SCAN_RESULT}[symbols][${symbol}][score] but expected ${score}"
+
+Expect Symbols With Scores
+  [Arguments]  &{symscores}
+  FOR  ${key}  ${value}  IN  &{symscores}
+    Dictionary Should Contain Key  ${SCAN_RESULT}[symbols]  ${key}
+    ...  msg=Symbol ${key} wasn't found in result
+    Should Be Equal As Numbers  ${SCAN_RESULT}[symbols][${key}][score]  ${value}
+    ...  msg="Symbol ${key} has score of ${SCAN_RESULT}[symbols][${key}][score] but expected ${value}"
+  END
 
 Expect Symbol With Score And Exact Options
   [Arguments]  ${symbol}  ${score}  @{options}
@@ -200,7 +218,7 @@ Run Rspamd
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick  stdout=DEVNULL  stderr=DEVNULL
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s

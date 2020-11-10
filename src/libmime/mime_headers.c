@@ -1655,7 +1655,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 
 	if (date_pos > 0 && date_pos < len) {
 		rh->timestamp = rspamd_parse_smtp_date (data + date_pos,
-				len - date_pos);
+				len - date_pos, NULL);
 	}
 
 	return 0;

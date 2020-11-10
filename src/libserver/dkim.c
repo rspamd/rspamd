@@ -849,6 +849,8 @@ rspamd_create_dkim_context (const gchar *sig,
 	ctx->common.sig_hash = rspamd_cryptobox_fast_hash (sig, end - sig,
 			rspamd_hash_seed ());
 
+	msg_debug_dkim ("create dkim context sig = %L", ctx->common.sig_hash);
+
 	while (p <= end) {
 		switch (state) {
 		case DKIM_STATE_TAG:
@@ -2342,11 +2344,16 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				id_len = rspamd_snprintf (idx_buf, sizeof (idx_buf), "i=%d;",
 						count);
 
-				for (cur = rh->prev;; cur = cur->prev) {
+				for (cur = rh->prev; ; cur = cur->prev) {
 					if (cur->decoded &&
 						rspamd_substring_search (cur->decoded, strlen (cur->decoded),
 								idx_buf, id_len) != -1) {
 						sel = cur;
+						break;
+					}
+
+					if (cur == rh) {
+						/* Cycle */
 						break;
 					}
 				}
@@ -2411,18 +2418,28 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 			if (rh) {
 				/* We need to find our own signature */
 				if (!dkim_domain) {
+					msg_err_dkim ("cannot verify dkim as we have no dkim domain!");
 					return FALSE;
 				}
 
+				gboolean found = FALSE;
+
 				DL_FOREACH (rh, cur) {
-					guint64 th = rspamd_cryptobox_fast_hash (rh->decoded,
-							strlen (rh->decoded), rspamd_hash_seed ());
+					guint64 th = rspamd_cryptobox_fast_hash (cur->decoded,
+							strlen (cur->decoded), rspamd_hash_seed ());
 
 					if (th == ctx->sig_hash) {
-						rspamd_dkim_signature_update (ctx, rh->raw_value,
-								rh->raw_len);
+						rspamd_dkim_signature_update (ctx, cur->raw_value,
+								cur->raw_len);
+						found = TRUE;
 						break;
 					}
+				}
+				if (!found) {
+					msg_err_dkim ("BUGON: cannot verify dkim as we have lost our signature"
+								  " during simple canonicalisation, expected hash=%L",
+								  ctx->sig_hash);
+					return FALSE;
 				}
 			}
 			else {

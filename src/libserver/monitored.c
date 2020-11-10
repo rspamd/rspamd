@@ -265,7 +265,7 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 		if (elt) {
 			if (ucl_object_type (elt) == UCL_STRING) {
 				radix_add_generic_iplist (ucl_object_tostring (elt),
-						&conf->expected, FALSE);
+						&conf->expected, FALSE, NULL);
 			}
 			else if (ucl_object_type (elt) == UCL_ARRAY) {
 				const ucl_object_t *cur;
@@ -273,7 +273,7 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 
 				while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
 					radix_add_generic_iplist (ucl_object_tostring (elt),
-							&conf->expected, FALSE);
+							&conf->expected, FALSE, NULL);
 				}
 			}
 		}

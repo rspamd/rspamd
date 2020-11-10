@@ -41,6 +41,7 @@ INIT_LOG_MODULE(radix)
 struct radix_tree_compressed {
 	rspamd_mempool_t *pool;
 	struct btrie *tree;
+	const gchar *name;
 	size_t size;
 	guint duplicates;
 	gboolean own_pool;
@@ -78,8 +79,8 @@ radix_insert_compressed (radix_compressed_t * tree,
 	g_assert (tree != NULL);
 	g_assert (keybits >= masklen);
 
-	msg_debug_radix ("want insert value %p with mask %z, key: %*xs",
-			(gpointer)value, keybits - masklen, (int)keylen, key);
+	msg_debug_radix ("%s: want insert value %p with mask %z, key: %*xs",
+			tree->name, (gpointer)value, keybits - masklen, (int)keylen, key);
 
 	old = radix_find_compressed (tree, key, keylen);
 
@@ -90,25 +91,30 @@ radix_insert_compressed (radix_compressed_t * tree,
 		tree->duplicates++;
 
 		if (tree->duplicates == max_duplicates) {
-			msg_err_radix ("maximum duplicates limit reached: %d, "
-				  "suppress further errors", max_duplicates);
+			msg_err_radix ("%s: maximum duplicates limit reached: %d, "
+				  "suppress further errors", tree->name, max_duplicates);
 		}
 		else if (tree->duplicates < max_duplicates) {
 			memset (ip_str, 0, sizeof (ip_str));
 
 			if (keybits == 32) {
-				msg_err_radix ("cannot insert %p, key: %s/%d, duplicate value",
+				msg_err_radix ("%s: cannot insert %p, key: %s/%d, duplicate value",
+						tree->name,
 						(gpointer) value,
 						inet_ntop (AF_INET, key, ip_str, sizeof (ip_str) - 1),
 						(gint) (keybits - masklen));
 			} else if (keybits == 128) {
-				msg_err_radix ("cannot insert %p, key: [%s]/%d, duplicate value",
+				msg_err_radix ("%s: cannot insert %p, key: [%s]/%d, duplicate value",
+						tree->name,
 						(gpointer) value,
 						inet_ntop (AF_INET6, key, ip_str, sizeof (ip_str) - 1),
 						(gint) (keybits - masklen));
 			} else {
-				msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
-						(gpointer) value, keybits - masklen, (int) keylen, key);
+				msg_err_radix ("%s: cannot insert %p with mask %z, key: %*xs, duplicate value",
+						tree->name,
+						(gpointer) value,
+						keybits - masklen,
+						(int) keylen, key);
 			}
 		}
 	}
@@ -121,7 +127,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 
 
 radix_compressed_t *
-radix_create_compressed (void)
+radix_create_compressed (const gchar *tree_name)
 {
 	radix_compressed_t *tree;
 
@@ -135,12 +141,13 @@ radix_create_compressed (void)
 	tree->duplicates = 0;
 	tree->tree = btrie_init (tree->pool);
 	tree->own_pool = TRUE;
+	tree->name = tree_name;
 
 	return tree;
 }
 
 radix_compressed_t *
-radix_create_compressed_with_pool (rspamd_mempool_t *pool)
+radix_create_compressed_with_pool (rspamd_mempool_t *pool, const gchar *tree_name)
 {
 	radix_compressed_t *tree;
 
@@ -150,6 +157,7 @@ radix_create_compressed_with_pool (rspamd_mempool_t *pool)
 	tree->duplicates = 0;
 	tree->tree = btrie_init (tree->pool);
 	tree->own_pool = FALSE;
+	tree->name = tree_name;
 
 	return tree;
 }
@@ -199,7 +207,8 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 
 gint
 rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-		radix_compressed_t *tree, gconstpointer value, gboolean resolve)
+						 radix_compressed_t *tree, gconstpointer value,
+						 gboolean resolve, const gchar *tree_name)
 {
 	gchar *token, *ipnet, *err_str, **strv, **cur, *brace;
 	union {
@@ -232,7 +241,8 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			k = strtoul (ipnet, &err_str, 10);
 			if (errno != 0) {
 				msg_warn_radix (
-						"invalid netmask, error detected on symbol: %s, error: %s",
+						"%s: invalid netmask, error detected on symbol: %s, error: %s",
+						tree_name,
 						err_str,
 						strerror (errno));
 				k = G_MAXINT;
@@ -378,16 +388,16 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 
 gboolean
 radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree,
-		gboolean resolve)
+						  gboolean resolve, const gchar *tree_name)
 {
 	static const char fill_ptr[] = "1";
 
 	if (*tree == NULL) {
-		*tree = radix_create_compressed ();
+		*tree = radix_create_compressed (tree_name);
 	}
 
 	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree,
-			fill_ptr, resolve) > 0);
+			fill_ptr, resolve, tree_name) > 0);
 }
 
 

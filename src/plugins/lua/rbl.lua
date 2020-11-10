@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2011-2020, Vsevolod Stakhov <vsevolod@highsecure.ru>
 Copyright (c) 2013-2015, Andrew Lewis <nerf@judo.za.org>
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,10 +24,10 @@ local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
 local lua_util = require 'lua_util'
-local ts = require("tableshape").types
 local selectors = require "lua_selectors"
 local bit = require 'bit'
 local lua_maps = require "lua_maps"
+local rbl_common = require "plugins/rbl"
 
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
@@ -36,6 +36,7 @@ local lua_maps = require "lua_maps"
 local E = {}
 local N = 'rbl'
 
+-- Checks that could be performed by rbl module
 local local_exclusions
 local white_symbols = {}
 local black_symbols = {}
@@ -188,31 +189,37 @@ local function gen_check_rcvd_conditions(rbl, received_total)
 end
 
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt)
-  local function make_option(ip)
+  local function make_option(ip, label)
     if ip then
       return string.format('%s:%s:%s',
           resolve_table_elt.orig,
-          resolve_table_elt.what,
+          label,
           ip)
     else
       return string.format('%s:%s',
           resolve_table_elt.orig,
-          resolve_table_elt.what)
+          label)
     end
   end
 
-  local function insert_result(s, ip)
+  local function insert_result(s, ip, label)
     if rbl.symbols_prefixes then
-      local prefix = rbl.symbols_prefixes[resolve_table_elt.what]
+      local prefix = rbl.symbols_prefixes[label]
 
       if not prefix then
-        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', resolve_table_elt.what)
-        task:insert_result(s, 1.0, make_option(ip))
+        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', label)
+        task:insert_result(s, 1.0, make_option(ip, label))
       else
-        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip))
+        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip, label))
       end
     else
-      task:insert_result(s, 1.0, make_option(ip))
+      task:insert_result(s, 1.0, make_option(ip, label))
+    end
+  end
+
+  local function insert_results(s, ip)
+    for label in pairs(resolve_table_elt.what) do
+      insert_result(s, ip, label)
     end
   end
 
@@ -236,7 +243,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
   end
 
   if rbl.returncodes == nil and rbl.returnbits == nil and rbl.symbol ~= nil then
-    insert_result(rbl.symbol)
+    insert_results(rbl.symbol)
     return
   end
 
@@ -251,7 +258,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,check_bit in ipairs(bits) do
           if bit.band(ipnum, check_bit) == check_bit then
             foundrc = true
-            insert_result(s)
+            insert_results(s)
             -- Here, we continue with other bits
           end
         end
@@ -261,7 +268,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,v in ipairs(codes) do
           if string.find(ipstr, '^' .. v .. '$') then
             foundrc = true
-            insert_result(s)
+            insert_results(s)
             break
           end
         end
@@ -270,10 +277,10 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
 
     if not foundrc then
       if rbl.unknown and rbl.symbol then
-        insert_result(rbl.symbol, ipstr)
+        insert_results(rbl.symbol, ipstr)
       else
-        rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
-            rbl.rbl, ipstr)
+        rspamd_logger.errx(task, '%1 returned unknown result: %2',
+            to_resolve, ipstr)
       end
     end
   end
@@ -319,13 +326,13 @@ local function gen_rbl_callback(rule)
     return false
   end
 
-  local function add_dns_request(task, req, forced, is_ip, requests_table, what, whitelist)
+  local function add_dns_request(task, req, forced, is_ip, requests_table, label, whitelist)
     local req_str = req
     if is_ip then
       req_str = tostring(req)
     end
 
-    if whitelist and is_whitelisted(task, req, req_str, whitelist, what) then
+    if whitelist and is_whitelisted(task, req, req_str, whitelist, label) then
       return
     end
 
@@ -338,6 +345,9 @@ local function gen_rbl_callback(rule)
       local nreq = requests_table[req]
       if forced and not nreq.forced then
         nreq.forced = true
+      end
+      if not nreq.what[label] then
+        nreq.what[label] = true
       end
 
       return true,nreq -- Duplicate
@@ -354,7 +364,7 @@ local function gen_rbl_callback(rule)
             n = processed,
             orig = req_str,
             resolve_ip = resolve_ip,
-            what = what,
+            what = {[label] = true},
           }
           requests_table[req] = nreq
         end
@@ -377,7 +387,7 @@ local function gen_rbl_callback(rule)
           n = to_resolve,
           orig = req_str,
           resolve_ip = resolve_ip,
-          what = what,
+          what = {[label] = true},
         }
         requests_table[req] = nreq
       end
@@ -514,6 +524,17 @@ local function gen_rbl_callback(rule)
       no_cache = true,
     }
 
+    if not rule.urls then
+      ex_params.flags_mode = 'explicit'
+      ex_params.flags = {}
+      if rule.content_urls then
+        table.insert(ex_params.flags, 'content')
+      end
+      if rule.images then
+        table.insert(ex_params.flags, 'image')
+      end
+    end
+
     local urls = lua_util.extract_specific_urls(ex_params)
 
     for _,u in ipairs(urls) do
@@ -576,12 +597,14 @@ local function gen_rbl_callback(rule)
   end
 
   local function check_selector(task, requests_table, whitelist)
-    local res = rule.selector(task)
+    for selector_label, selector in pairs(rule.selectors) do
+      local res = selector(task)
 
-    if res then
-      for _,r in ipairs(res) do
-        add_dns_request(task, r, false, false, requests_table,
-            'sel' .. rule.selector_id, whitelist)
+      if res then
+        for _,r in ipairs(res) do
+          add_dns_request(task, r, false, false, requests_table,
+              selector_label, whitelist)
+        end
       end
     end
 
@@ -715,7 +738,7 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'replyto'
   end
 
-  if rule.urls then
+  if rule.urls or rule.content_urls or rule.images then
     pipeline[#pipeline + 1] = check_urls
     description[#description + 1] = 'urls'
   end
@@ -775,8 +798,9 @@ local function gen_rbl_callback(rule)
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
+              local label = next(orig_resolve_table_elt.what)
               local dup,nreq = add_dns_request(task, dns_res, false, true,
-                  resolved_req, orig_resolve_table_elt.what)
+                  resolved_req, label)
               -- Add original name
               if not dup then
                 nreq.orig = nreq.orig .. ':' .. orig_resolve_table_elt.n
@@ -868,26 +892,33 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   if rbl.selector then
-    if known_selectors[rbl.selector] then
-      lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
-          known_selectors[rbl.selector].id)
-      rbl.selector = known_selectors[rbl.selector].selector
-      rbl.selector_id = known_selectors[rbl.selector].id
-    else
-      -- Create a new flattened closure
-      local sel = selectors.create_selector_closure(rspamd_config, rbl.selector, '', true)
 
-      if not sel then
-        rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, rbl.selector)
-        return false
+    rbl.selectors = {}
+    if type(rbl.selector) ~= 'table' then
+      rbl.selector = {['selector'] = rbl.selector}
+    end
+
+    for selector_label, selector in pairs(rbl.selector) do
+      if known_selectors[selector] then
+        lua_util.debugm(N, rspamd_config, 'reuse selector id %s',
+            known_selectors[selector].id)
+        rbl.selectors[selector_label] = known_selectors[selector].selector
+      else
+        -- Create a new flattened closure
+        local sel = selectors.create_selector_closure(rspamd_config, selector, '', true)
+
+        if not sel then
+          rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, selector)
+          return false
+        end
+
+        rbl.selector = sel
+        known_selectors[selector] = {
+          selector = sel,
+          id = #lua_util.keys(known_selectors) + 1,
+        }
+        rbl.selectors[selector_label] = known_selectors[selector].selector
       end
-
-      rbl.selector = sel
-      known_selectors[rbl.selector] = {
-        selector = sel,
-        id = #lua_util.keys(known_selectors) + 1,
-      }
-      rbl.selector_id = known_selectors[rbl.selector].id
     end
 
   end
@@ -1084,97 +1115,14 @@ end
 
 -- Plugin defaults should not be changed - override these in config
 -- New defaults should not alter behaviour
-local default_options = {
-  ['default_enabled'] = true,
-  ['default_ipv4'] = true,
-  ['default_ipv6'] = true,
-  ['default_received'] = false,
-  ['default_from'] = true,
-  ['default_unknown'] = false,
-  ['default_rdns'] = false,
-  ['default_helo'] = false,
-  ['default_dkim'] = false,
-  ['default_dkim_domainonly'] = true,
-  ['default_emails'] = false,
-  ['default_urls'] = false,
-  ['default_emails_domainonly'] = false,
-  ['default_exclude_private_ips'] = true,
-  ['default_exclude_users'] = false,
-  ['default_exclude_local'] = true,
-  ['default_no_ip'] = false,
-  ['default_images'] = false,
-  ['default_replyto'] = false,
-  ['default_dkim_match_from'] = false,
-}
 
-opts = lua_util.override_defaults(default_options, opts)
+
+opts = lua_util.override_defaults(rbl_common.default_options, opts)
 
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = lua_maps.map_add(N, 'local_exclude_ip_map', 'radix',
     'RBL exclusions map')
 end
-
-local return_codes_schema = ts.map_of(
-    ts.string / string.upper, -- Symbol name
-    (
-        ts.array_of(ts.string) +
-            (ts.string / function(s)
-              return { s }
-            end) -- List of IP patterns
-    )
-)
-local return_bits_schema = ts.map_of(
-    ts.string / string.upper, -- Symbol name
-    (
-        ts.array_of(ts.number + ts.string / tonumber) +
-            (ts.string / function(s)
-              return { tonumber(s) }
-            end) +
-            (ts.number / function(s)
-              return { s }
-            end)
-    )
-)
-
-local rule_schema_tbl = {
-  enabled = ts.boolean:is_optional(),
-  disabled = ts.boolean:is_optional(),
-  rbl = ts.string,
-  selector = ts.string:is_optional(),
-  symbol = ts.string:is_optional(),
-  returncodes = return_codes_schema:is_optional(),
-  return_codes = return_codes_schema:is_optional(),
-  returnbits = return_bits_schema:is_optional(),
-  return_bits = return_bits_schema:is_optional(),
-  whitelist_exception = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
-  ):is_optional(),
-  whitelist = lua_maps.map_schema:is_optional(),
-  url_compose_map = lua_maps.map_schema:is_optional(),
-  local_exclude_ip_map = ts.string:is_optional(),
-  hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
-  hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
-  hash_len = (ts.integer + ts.string / tonumber):is_optional(),
-  monitored_address = ts.string:is_optional(),
-  requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
-  process_script = ts.string:is_optional(),
-  emails_delimiter = ts.string:is_optional(),
-  ignore_defaults = ts.boolean:is_optional(),
-  ignore_default = ts.boolean:is_optional(), -- alias
-  ignore_whitelist = ts.boolean:is_optional(),
-  ignore_whitelists = ts.boolean:is_optional(), -- alias
-  is_whitelist = ts.boolean:is_optional(),
-  resolve_ip = ts.boolean:is_optional(),
-  content_urls = ts.boolean:is_optional(),
-  disable_monitoring = ts.boolean:is_optional(),
-  symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
-}
--- Add default boolean flags to the schema
-for def_k,_ in pairs(default_options) do
-  rule_schema_tbl[def_k:sub(#('default_') + 1)] = ts.boolean:is_optional()
-end
-
-local rule_schema = ts.shape(rule_schema_tbl)
 
 for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
@@ -1189,7 +1137,7 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
     end
     -- Propagate default options from opts to rule
     if not rbl.ignore_defaults then
-      for default_opt_key,_ in pairs(default_options) do
+      for default_opt_key,_ in pairs(rbl_common.default_options) do
         local rbl_opt = default_opt_key:sub(#('default_') + 1)
         if rbl[rbl_opt] == nil then
           rbl[rbl_opt] = opts[default_opt_key]
@@ -1201,15 +1149,22 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       rbl.requests_limit = rspamd_config:get_dns_max_requests()
     end
 
-    local res,err = rule_schema:transform(rbl)
+    local res,err = rbl_common.rule_schema:transform(rbl)
     if not res then
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
+      res = rbl_common.convert_checks(res)
       -- Aliases
       if res.return_codes then res.returncodes = res.return_codes end
       if res.return_bits then res.returnbits = res.return_bits end
-      add_rbl(key, res, opts)
+
+      if not res then
+        rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
+            key, err)
+      else
+        add_rbl(key, res, opts)
+      end
     end
   end -- rbl.enabled
 end

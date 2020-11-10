@@ -46,7 +46,7 @@ rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
 rspamd_inet_addr_t *rspamd_parse_smtp_ip (const char *data, size_t len,
 										  rspamd_mempool_t *pool);
 
-guint64 rspamd_parse_smtp_date (const char *data, size_t len);
+guint64 rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err);
 
 #ifdef  __cplusplus
 }

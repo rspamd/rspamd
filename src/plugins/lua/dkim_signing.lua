@@ -53,7 +53,7 @@ local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign
 
-local function insert_sign_results(task, ret, hdr)
+local function insert_sign_results(task, ret, hdr, dkim_params)
   if settings.use_milter_headers then
     task:set_milter_reply({
       add_headers = {
@@ -62,7 +62,8 @@ local function insert_sign_results(task, ret, hdr)
     })
   end
   if ret then
-    task:insert_result(settings.symbol, 1.0)
+    task:insert_result(settings.symbol, 1.0, string.format('%s:s=%s',
+        dkim_params.domain, dkim_params.selector))
   end
 end
 
@@ -89,13 +90,13 @@ local function do_sign(task, p)
         end
 
         local sret, hdr = sign_func(task, p)
-        insert_sign_results(task, sret, hdr)
+        insert_sign_results(task, sret, hdr, p)
       end,
       forced = true
     })
   else
     local sret, hdr = sign_func(task, p)
-    insert_sign_results(task, sret, hdr)
+    insert_sign_results(task, sret, hdr, p)
   end
 end
 

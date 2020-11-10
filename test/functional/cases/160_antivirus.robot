@@ -124,17 +124,26 @@ Shutdown avast
   ${avast_pid} =  Get File if exists  /tmp/dummy_avast.pid
   Run Keyword if  ${avast_pid}  Shutdown Process With Children  ${avast_pid}
 
+Run Dummy
+  [Arguments]  @{varargs}
+  ${process} =  Start Process  @{varargs}
+  ${pid} =  Get From List  ${varargs}  -1
+  ${pass} =  Run Keyword And Return Status  Wait Until Created  ${pid}
+  Run Keyword If  ${pass}  Return From Keyword
+  Wait For Process  ${process}
+  ${res} =  Get Process Result  ${process}
+  Log To Console  ${res.stdout}
+  Log To Console  ${res.stderr}
+  Fail  Dummy server failed to start
+
 Run Dummy Clam
-  [Arguments]  ${port}  ${found}=
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_clam.py  ${port}  ${found}
-  Wait Until Created  /tmp/dummy_clamav.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_clamav.pid
+  Run Dummy  ${TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
-  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
-  Wait Until Created  ${pid}
+  Run Dummy  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
 
 Run Dummy Avast
-  [Arguments]  ${port}  ${found}=
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_avast.py  ${port}  ${found}
-  Wait Until Created  /tmp/dummy_avast.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_avast.pid
+  Run Dummy  ${TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}

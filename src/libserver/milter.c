@@ -54,6 +54,8 @@ static const struct rspamd_milter_context *milter_ctx = NULL;
 static gboolean  rspamd_milter_handle_session (
 		struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv);
+static inline void rspamd_milter_plan_io (struct rspamd_milter_session *session,
+					   struct rspamd_milter_private *priv, gshort what);
 
 static GQuark
 rspamd_milter_quark (void)
@@ -183,6 +185,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		rspamd_ev_watcher_stop (priv->event_loop, &priv->ev);
 		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ALL);
+		close (priv->fd);
 
 		if (priv->parser.buf) {
 			rspamd_fstring_free (priv->parser.buf);
@@ -233,6 +236,48 @@ rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
 	priv->err_cb (priv->fd, session, priv->ud, err);
 	REF_RELEASE (session);
 	g_error_free (err);
+
+	rspamd_milter_plan_io (session, priv, EV_WRITE);
+}
+
+static void
+rspamd_milter_on_protocol_ping (struct rspamd_milter_session *session,
+								 struct rspamd_milter_private *priv)
+{
+	GError *err = NULL;
+	static const gchar reply[] = "HTTP/1.1 200 OK\r\n"
+								 "Connection: close\r\n"
+								 "Server: rspamd/2.7 (milter mode)\r\n"
+								 "Content-Length: 6\r\n"
+								 "Content-Type: text/plain\r\n"
+								 "\r\n"
+								 "pong\r\n";
+
+	if (write (priv->fd, reply, sizeof (reply)) == -1) {
+		gint serrno = errno;
+		msg_err_milter ("cannot write pong reply: %s", strerror (serrno));
+		g_set_error (&err, rspamd_milter_quark (), serrno, "ping command IO error: %s",
+				strerror (serrno));
+		priv->state = RSPAMD_MILTER_WANNA_DIE;
+		REF_RETAIN (session);
+		priv->err_cb (priv->fd, session, priv->ud, err);
+		REF_RELEASE (session);
+		g_error_free (err);
+	}
+	else {
+		priv->state = RSPAMD_MILTER_PONG_AND_DIE;
+		rspamd_milter_plan_io (session, priv, EV_WRITE);
+	}
+}
+
+static gint
+rspamd_milter_http_on_url (http_parser * parser, const gchar *at, size_t length)
+{
+	GString *url = (GString *)parser->data;
+
+	g_string_append_len (url, at, length);
+
+	return 0;
 }
 
 static void
@@ -689,7 +734,6 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			REF_RETAIN (session);
 			priv->fin_cb (priv->fd, session, priv->ud);
 			REF_RELEASE (session);
-
 			return FALSE;
 		}
 		break;
@@ -850,8 +894,40 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 				/* Check if we have HTTP input instead of milter */
 				if (priv->parser.buf->len > sizeof ("GET") &&
 						memcmp (priv->parser.buf->str, "GET", 3) == 0) {
-					err = g_error_new (rspamd_milter_quark (), EINVAL,
-							"HTTP GET request is not supported in milter mode");
+					struct http_parser http_parser;
+					struct http_parser_settings http_callbacks;
+					GString *url = g_string_new (NULL);
+
+					/* Hack, hack, hack */
+					/*
+					 * This code is assumed to read `/ping` command and
+					 * handle it to monitor port's availability since
+					 * milter protocol is stupid and does not allow to do that
+					 * This code also assumes that HTTP request can be read
+					 * as as single data chunk which is not true in some cases
+					 * In general, don't use it for anything but ping checks
+					 */
+					memset (&http_callbacks, 0, sizeof (http_callbacks));
+					http_parser_init (&http_parser, HTTP_REQUEST);
+					http_parser.data = url;
+					http_callbacks.on_url = rspamd_milter_http_on_url;
+					http_parser_execute (&http_parser, &http_callbacks,
+							priv->parser.buf->str, priv->parser.buf->len);
+
+					if (url->len == sizeof ("/ping") - 1 &&
+						rspamd_lc_cmp (url->str, "/ping", url->len) == 0) {
+						rspamd_milter_on_protocol_ping (session, priv);
+						g_string_free (url, TRUE);
+
+						return TRUE;
+					}
+					else {
+						err = g_error_new (rspamd_milter_quark (), EINVAL,
+								"HTTP GET request is not supported in milter mode, url: %s",
+								url->str);
+					}
+
+					g_string_free (url, TRUE);
 				}
 				else if (priv->parser.buf->len > sizeof ("POST") &&
 					 memcmp (priv->parser.buf->str, "POST", 4) == 0) {
@@ -1090,6 +1166,16 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 		REF_RELEASE (session);
 		return FALSE;
 		break;
+	case RSPAMD_MILTER_PONG_AND_DIE:
+		err = g_error_new (rspamd_milter_quark (), 0,
+				"ping command");
+		REF_RETAIN (session);
+		priv->err_cb (priv->fd, session, priv->ud, err);
+		REF_RELEASE (session);
+		g_error_free (err);
+		REF_RELEASE (session);
+		return FALSE;
+		break;
 	}
 
 	return TRUE;
@@ -1104,6 +1190,15 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 {
 	struct rspamd_milter_session *session;
 	struct rspamd_milter_private *priv;
+	gint nfd = dup (fd);
+
+	if (nfd == -1) {
+		GError *err = g_error_new (rspamd_milter_quark (), errno,
+				"dup failed: %s", strerror (errno));
+		error_cb (fd, NULL, ud, err);
+
+		return FALSE;
+	}
 
 	g_assert (finish_cb != NULL);
 	g_assert (error_cb != NULL);
@@ -1111,7 +1206,7 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 
 	session = g_malloc0 (sizeof (*session));
 	priv = g_malloc0 (sizeof (*priv));
-	priv->fd = fd;
+	priv->fd = nfd;
 	priv->ud = ud;
 	priv->fin_cb = finish_cb;
 	priv->err_cb = error_cb;
@@ -1124,7 +1219,7 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 	priv->ev.timeout = timeout;
 
-	rspamd_ev_watcher_init (&priv->ev, fd, EV_READ|EV_WRITE,
+	rspamd_ev_watcher_init (&priv->ev, priv->fd, EV_READ|EV_WRITE,
 			rspamd_milter_io_handler, session);
 
 	if (pool) {

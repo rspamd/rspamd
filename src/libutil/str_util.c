@@ -101,7 +101,7 @@ rspamd_str_lc (gchar *str, guint size)
 gint
 rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
 {
-	guint fp, i;
+	gsize fp, i;
 	guchar c1, c2, c3, c4;
 	union {
 		guchar c[4];

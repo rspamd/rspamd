@@ -126,7 +126,7 @@ local function check_forged_headers(task)
   end
   for _,smtp_rcpt in ipairs(smtp_rcpts) do
     if not smtp_rcpt.matched then
-      if not smtp_rcpt_domain_map[smtp_rcpt.domain]._seen_mime_domain then
+      if not smtp_rcpt_domain_map[smtp_rcpt.domain:lower()]._seen_mime_domain then
         seen_smtp_unmatched = true
         table.insert(opts, 's:' .. smtp_rcpt.addr)
       end

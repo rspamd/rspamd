@@ -1198,7 +1198,6 @@ static entity entities_defs[] = {
 		{"Upsi",                            978,    "\xcf\x92"},
 		{"Mellintrf",                       8499,   "\xe2\x84\xb3"},
 		{"boxHU",                           9577,   "\xe2\x95\xa9"},
-		{"bne",                             61,     "\x3d\xe2\x83\xa5"},
 		{"frac56",                          8538,   "\xe2\x85\x9a"},
 		{"utrif",                           9652,   "\xe2\x96\xb4"},
 		{"LeftTriangle",                    8882,   "\xe2\x8a\xb2"},

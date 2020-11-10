@@ -789,10 +789,12 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	}
 	else {
 		for (i = 0; i < count; i ++) {
+			/* For Hyperscan we can probably safely disable all those limits */
+#if 0
 			if (rt->cache->max_re_data > 0 && lens[i] > rt->cache->max_re_data) {
 				lens[i] = rt->cache->max_re_data;
 			}
-
+#endif
 			rt->stat.bytes_scanned += lens[i];
 		}
 
@@ -1198,13 +1200,13 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 				else {
 					/* Skip empty parts */
-					if (IS_PART_EMPTY (text_part)) {
+					if (IS_TEXT_PART_EMPTY (text_part)) {
 						len = 0;
 						in = "";
 					}
 					else {
 						/* Check raw flags */
-						if (!IS_PART_UTF (text_part)) {
+						if (!IS_TEXT_PART_UTF (text_part)) {
 							raw = TRUE;
 						}
 
@@ -1345,7 +1347,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				scvec[i + 1] = (guchar *)text_part->utf_stripped_content->data;
 				lenvec[i + 1] = text_part->utf_stripped_content->len;
 
-				if (!IS_PART_UTF (text_part)) {
+				if (!IS_TEXT_PART_UTF (text_part)) {
 					raw = TRUE;
 				}
 			}
@@ -1382,7 +1384,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					scvec[i] = (guchar *)text_part->parsed.begin;
 					lenvec[i] = text_part->parsed.len;
 
-					if (!IS_PART_UTF (text_part)) {
+					if (!IS_TEXT_PART_UTF (text_part)) {
 						raw = TRUE;
 					}
 				}

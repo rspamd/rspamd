@@ -208,9 +208,25 @@ rspamd_html_library_init (void)
 
 		for (i = 0; i < G_N_ELEMENTS (tag_defs); i++) {
 			k = kh_put (tag_by_id, html_tag_by_id, tag_defs[i].id, &rc);
+
+			if (rc == 0) {
+				/* Collision by id */
+				msg_err ("collision in html tag id: %d (%s) vs %d (%s)",
+						(int)tag_defs[i].id, tag_defs[i].name,
+						(int)kh_val (html_tag_by_id, k).id, kh_val (html_tag_by_id, k).name);
+			}
+
 			kh_val (html_tag_by_id, k) = tag_defs[i];
 
 			k = kh_put (tag_by_name, html_tag_by_name, tag_defs[i].name, &rc);
+
+			if (rc == 0) {
+				/* Collision by name */
+				msg_err ("collision in html tag name: %d (%s) vs %d (%s)",
+						(int)tag_defs[i].id, tag_defs[i].name,
+						(int)kh_val (html_tag_by_id, k).id, kh_val (html_tag_by_id, k).name);
+			}
+
 			kh_val (html_tag_by_name, k) = tag_defs[i];
 		}
 
@@ -229,11 +245,52 @@ rspamd_html_library_init (void)
 			if (entities_defs[i].code != 0) {
 				k = kh_put (entity_by_number, html_entity_by_number,
 						entities_defs[i].code, &rc);
-				kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+
+				if (rc == 0) {
+					/* Collision by id */
+					gint cmp_res = strcmp (entities_defs[i].replacement,
+							kh_val (html_entity_by_number, k));
+					if (cmp_res != 0) {
+						if (strlen (entities_defs[i].replacement) <
+							strlen (kh_val (html_entity_by_number, k))) {
+							/* Shorter replacement is more likely to be valid */
+							msg_debug ("1 collision in html entity id: %d (%s); replace %s by %s",
+									(int) entities_defs[i].code, entities_defs[i].name,
+									kh_val (html_entity_by_number, k),
+									entities_defs[i].replacement);
+							kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+						}
+						else if (strlen (entities_defs[i].replacement) ==
+								 strlen (kh_val (html_entity_by_number, k)) &&
+										 cmp_res < 0) {
+							/* Identical len but lexicographically shorter */
+							msg_debug ("collision in html entity id: %d (%s); replace %s by %s",
+									(int) entities_defs[i].code, entities_defs[i].name,
+									kh_val (html_entity_by_number, k),
+									entities_defs[i].replacement);
+							kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+						}
+						/* Do not replace otherwise */
+					}
+					/* Identic replacement */
+				}
+				else {
+					kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+				}
 			}
 
 			k = kh_put (entity_by_name, html_entity_by_name,
 					entities_defs[i].name, &rc);
+
+			if (rc == 0) {
+				/* Collision by name */
+				if (strcmp (kh_val (html_entity_by_number, k),
+						entities_defs[i].replacement) != 0) {
+					msg_err ("collision in html entity name: %d (%s)",
+							(int) entities_defs[i].code, entities_defs[i].name);
+				}
+			}
+
 			kh_val (html_entity_by_name, k) = entities_defs[i].replacement;
 		}
 

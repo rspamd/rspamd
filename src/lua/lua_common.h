@@ -101,6 +101,7 @@ struct rspamd_lua_ip {
 #define RSPAMD_TEXT_FLAG_MMAPED (1u << 1u)
 #define RSPAMD_TEXT_FLAG_WIPE (1u << 2u)
 #define RSPAMD_TEXT_FLAG_SYSMALLOC (1u << 3u)
+#define RSPAMD_TEXT_FLAG_FAKE (1u << 4u)
 struct rspamd_lua_text {
 	const gchar *start;
 	guint len;
@@ -254,6 +255,14 @@ void rspamd_lua_task_push (lua_State *L, struct rspamd_task *task);
 struct rspamd_lua_ip *lua_check_ip (lua_State *L, gint pos);
 
 struct rspamd_lua_text *lua_check_text (lua_State *L, gint pos);
+/**
+ * Checks for a text or a string. In case of string a pointer to static structure is returned.
+ * So it should not be reused or placed to Lua stack anyhow!
+ * @param L
+ * @param pos
+ * @return
+ */
+struct rspamd_lua_text *lua_check_text_or_string (lua_State *L, gint pos);
 /* Creates and *pushes* new rspamd text, data is copied if  RSPAMD_TEXT_FLAG_OWN is in flags*/
 struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
 		gsize len, gboolean own);

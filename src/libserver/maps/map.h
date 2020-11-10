@@ -93,6 +93,17 @@ struct rspamd_map *rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 											struct rspamd_worker *worker,
 											int flags);
 
+/**
+ * Adds a fake map structure (for logging purposes mainly)
+ * @param cfg
+ * @param description
+ * @return
+ */
+struct rspamd_map *rspamd_map_add_fake (struct rspamd_config *cfg,
+								   const gchar *description,
+								   const gchar *name);
+
+
 enum rspamd_map_watch_type {
 	RSPAMD_MAP_WATCH_MIN = 9,
 	RSPAMD_MAP_WATCH_PRIMARY_CONTROLLER,

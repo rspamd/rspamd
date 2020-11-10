@@ -79,6 +79,21 @@ local function get_general_metadata(task, flatten, no_content)
   local s = task:get_metric_score('default')[1]
   r.score = flatten and string.format('%.2f', s) or s
 
+  local fuzzy = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
+  if fuzzy and #fuzzy > 0 then
+    local fz = {}
+    for _,h in ipairs(fuzzy) do
+      table.insert(fz, h)
+    end
+    if not flatten then
+      r.fuzzy = fz
+    else
+      r.fuzzy = table.concat(fz, ', ')
+    end
+  else
+    r.fuzzy = 'unknown'
+  end
+
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}

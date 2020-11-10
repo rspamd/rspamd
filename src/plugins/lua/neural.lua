@@ -61,6 +61,7 @@ local default_options = {
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
   max_inputs = nil, -- when PCA is used
+  blacklisted_symbols = {}, -- list of symbols skipped in neural processing
 }
 
 local redis_profile_schema = ts.shape{
@@ -1428,11 +1429,14 @@ local function process_rules_settings()
     end
 
     local function filter_symbols_predicate(sname)
+      if settings.blacklisted_symbols and settings.blacklisted_symbols[sname] then
+        return false
+      end
       local fl = rspamd_config:get_symbol_flags(sname)
       if fl then
         fl = lua_util.list_to_hash(fl)
 
-        return not (fl.nostat or fl.idempotent or fl.skip)
+        return not (fl.nostat or fl.idempotent or fl.skip or fl.composite)
       end
 
       return false
@@ -1568,6 +1572,11 @@ local id = rspamd_config:register_symbol({
 
 settings = lua_util.override_defaults(settings, module_config)
 settings.rules = {} -- Reset unless validated further in the cycle
+
+if settings.blacklisted_symbols and settings.blacklisted_symbols[1] then
+  -- Transform to hash for simplicity
+  settings.blacklisted_symbols = lua_util.list_to_hash(settings.blacklisted_symbols)
+end
 
 -- Check all rules
 for k,r in pairs(rules) do

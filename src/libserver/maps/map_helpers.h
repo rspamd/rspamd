@@ -47,8 +47,8 @@ enum rspamd_regexp_map_flags {
 	RSPAMD_REGEXP_MAP_FLAG_GLOB = (1u << 2),
 };
 
-typedef void (*insert_func) (gpointer st, gconstpointer key,
-							 gconstpointer value);
+typedef void (*rspamd_map_insert_func) (gpointer st, gconstpointer key,
+										gconstpointer value);
 
 /**
  * Radix list is a list like ip/mask
@@ -128,7 +128,7 @@ rspamd_parse_kv_list (
 		gchar *chunk,
 		gint len,
 		struct map_cb_data *data,
-		insert_func func,
+		rspamd_map_insert_func func,
 		const gchar *default_value,
 		gboolean final);
 

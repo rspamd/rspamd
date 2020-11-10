@@ -57,6 +57,7 @@ enum rspamd_milter_io_state {
 	RSPAMD_MILTER_WRITE_REPLY,
 	RSPAMD_MILTER_WANNA_DIE,
 	RSPAMD_MILTER_WRITE_AND_DIE,
+	RSPAMD_MILTER_PONG_AND_DIE,
 };
 
 KHASH_INIT (milter_headers_hash_t, char *, GArray *, true,
