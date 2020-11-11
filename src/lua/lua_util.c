@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "html.h"
-#include "tokenizers/tokenizers.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
-#include "contrib/uthash/utlist.h"
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
+
+#include "lua_parsers.h"
 
 #ifdef WITH_LUA_REPL
 #include "replxx.h"
@@ -34,7 +33,6 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
-#include "libmime/smtp_parsers.h"
 #include "contrib/fastutf8/fastutf8.h"
 
 /***
@@ -1313,100 +1311,7 @@ lua_util_decode_url (lua_State *L)
 static gint
 lua_util_tokenize_text (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *in = NULL;
-	gsize len = 0, pos, ex_len, i;
-	GList *exceptions = NULL, *cur;
-	struct rspamd_lua_text *t;
-	struct rspamd_process_exception *ex;
-	UText utxt = UTEXT_INITIALIZER;
-	GArray *res;
-	rspamd_stat_token_t *w;
-
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		in = luaL_checklstring (L, 1, &len);
-	}
-	else if (lua_type (L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text (L, 1);
-
-		if (t) {
-			in = t->start;
-			len = t->len;
-		}
-	}
-
-	if (in == NULL) {
-		lua_pushnil (L);
-		return 1;
-	}
-
-	if (lua_gettop (L) > 1 && lua_type (L, 2) == LUA_TTABLE) {
-		lua_pushvalue (L, 2);
-		lua_pushnil (L);
-
-		while (lua_next (L, -2) != 0) {
-			if (lua_type (L, -1) == LUA_TTABLE) {
-				lua_rawgeti (L, -1, 1);
-				pos = luaL_checknumber (L, -1);
-				lua_pop (L, 1);
-				lua_rawgeti (L, -1, 2);
-				ex_len = luaL_checknumber (L, -1);
-				lua_pop (L, 1);
-
-				if (ex_len > 0) {
-					ex = g_malloc0 (sizeof (*ex));
-					ex->pos = pos;
-					ex->len = ex_len;
-					ex->type = RSPAMD_EXCEPTION_GENERIC;
-					exceptions = g_list_prepend (exceptions, ex);
-				}
-			}
-			lua_pop (L, 1);
-		}
-
-		lua_pop (L, 1);
-	}
-
-	if (exceptions) {
-		exceptions = g_list_reverse (exceptions);
-	}
-
-	UErrorCode uc_err = U_ZERO_ERROR;
-	utext_openUTF8 (&utxt,
-			in,
-			len,
-			&uc_err);
-
-	res = rspamd_tokenize_text ((gchar *)in, len,
-			&utxt,
-			RSPAMD_TOKENIZE_UTF, NULL,
-			exceptions,
-			NULL, NULL, NULL);
-
-	if (res == NULL) {
-		lua_pushnil (L);
-	}
-	else {
-		lua_createtable (L, res->len, 0);
-
-		for (i = 0; i < res->len; i ++) {
-			w = &g_array_index (res, rspamd_stat_token_t, i);
-			lua_pushlstring (L, w->original.begin, w->original.len);
-			lua_rawseti (L, -2, i + 1);
-		}
-	}
-
-	cur = exceptions;
-	while (cur) {
-		ex = cur->data;
-		g_free (ex);
-		cur = g_list_next (cur);
-	}
-
-	g_list_free (exceptions);
-	utext_close (&utxt);
-
-	return 1;
+	return lua_parsers_tokenize_text (L);
 }
 
 static gint
@@ -1423,49 +1328,7 @@ lua_util_tanh (lua_State *L)
 static gint
 lua_util_parse_html (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t;
-	const gchar *start = NULL;
-	gsize len;
-	GByteArray *res, *in;
-	rspamd_mempool_t *pool;
-	struct html_content *hc;
-
-	if (lua_type (L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text (L, 1);
-
-		if (t != NULL) {
-			start = t->start;
-			len = t->len;
-		}
-	}
-	else if (lua_type (L, 1) == LUA_TSTRING) {
-		start = luaL_checklstring (L, 1, &len);
-	}
-
-	if (start != NULL) {
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
-		hc = rspamd_mempool_alloc0 (pool, sizeof (*hc));
-		in = g_byte_array_sized_new (len);
-		g_byte_array_append (in, start, len);
-
-		res = rspamd_html_process_part (pool, hc, in);
-
-		t = lua_newuserdata (L, sizeof (*t));
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = res->data;
-		t->len = res->len;
-		t->flags = RSPAMD_TEXT_FLAG_OWN;
-
-		g_byte_array_free (res, FALSE);
-		g_byte_array_free (in, TRUE);
-		rspamd_mempool_delete (pool);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
+	return lua_parsers_parse_html (L);
 }
 
 static gint
@@ -1657,46 +1520,7 @@ lua_util_glob (lua_State *L)
 static gint
 lua_util_parse_mail_address (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	GPtrArray *addrs;
-	gsize len;
-	const gchar *str = luaL_checklstring (L, 1, &len);
-	rspamd_mempool_t *pool;
-	gboolean own_pool = FALSE;
-
-	if (str) {
-
-		if (lua_type (L, 2) == LUA_TUSERDATA) {
-			pool = rspamd_lua_check_mempool (L, 2);
-
-			if (pool == NULL) {
-				return luaL_error (L, "invalid arguments");
-			}
-		}
-		else {
-			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-					"lua util", 0);
-			own_pool = TRUE;
-		}
-
-		addrs = rspamd_email_address_from_mime (pool, str, len, NULL, -1);
-
-		if (addrs == NULL) {
-			lua_pushnil (L);
-		}
-		else {
-			lua_push_emails_address_list (L, addrs, 0);
-		}
-
-		if (own_pool) {
-			rspamd_mempool_delete (pool);
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
+	return lua_parsers_parse_mail_address (L);
 }
 
 static gint
@@ -2637,7 +2461,7 @@ lua_util_is_utf_spoofed (lua_State *L)
 }
 
 static gint
-lua_util_is_utf_mixed_script(lua_State *L)
+lua_util_is_utf_mixed_script (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len_of_string;
@@ -2727,7 +2551,8 @@ lua_util_get_string_stats (lua_State *L)
 
 
 static gint
-lua_util_is_utf_outside_range (lua_State *L) {
+lua_util_is_utf_outside_range (lua_State *L)
+{
 	LUA_TRACE_POINT;
 	gsize len_of_string;
 	gint ret;
@@ -2825,73 +2650,7 @@ lua_util_get_hostname (lua_State *L)
 static gint
 lua_util_parse_content_type (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	gsize len;
-	const gchar *ct_str = luaL_checklstring (L, 1, &len);
-	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 2);
-	struct rspamd_content_type *ct;
-
-	if (!ct_str || !pool) {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	ct = rspamd_content_type_parse (ct_str, len, pool);
-
-	if (ct == NULL) {
-		lua_pushnil (L);
-	}
-	else {
-		GHashTableIter it;
-		gpointer k, v;
-
-		lua_createtable (L, 0, 4 + (ct->attrs ? g_hash_table_size (ct->attrs) : 0));
-
-		if (ct->type.len > 0) {
-			lua_pushstring (L, "type");
-			lua_pushlstring (L, ct->type.begin, ct->type.len);
-			lua_settable (L, -3);
-		}
-
-		if (ct->subtype.len > 0) {
-			lua_pushstring (L, "subtype");
-			lua_pushlstring (L, ct->subtype.begin, ct->subtype.len);
-			lua_settable (L, -3);
-		}
-
-		if (ct->charset.len > 0) {
-			lua_pushstring (L, "charset");
-			lua_pushlstring (L, ct->charset.begin, ct->charset.len);
-			lua_settable (L, -3);
-		}
-
-		if (ct->orig_boundary.len > 0) {
-			lua_pushstring (L, "boundary");
-			lua_pushlstring (L, ct->orig_boundary.begin, ct->orig_boundary.len);
-			lua_settable (L, -3);
-		}
-
-		if (ct->attrs) {
-			g_hash_table_iter_init (&it, ct->attrs);
-
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				struct rspamd_content_type_param *param =
-						(struct rspamd_content_type_param *)v, *cur;
-				guint i = 1;
-
-				lua_pushlstring (L, param->name.begin, param->name.len);
-				lua_createtable (L, 1, 0);
-
-				DL_FOREACH (param, cur) {
-					lua_pushlstring (L, cur->value.begin, cur->value.len);
-					lua_rawseti (L, -2, i++);
-				}
-
-				lua_settable (L, -3);
-			}
-		}
-	}
-
-	return 1;
+	return lua_parsers_parse_content_type (L);
 }
 
 
@@ -3966,39 +3725,7 @@ lua_util_btc_polymod (lua_State *L)
 static int
 lua_util_parse_smtp_date (lua_State *L)
 {
-	gsize slen;
-	const gchar *str = lua_tolstring (L, 1, &slen);
-	GError *err = NULL;
-
-	if (str == NULL) {
-		return luaL_argerror (L, 1, "invalid argument");
-	}
-
-	time_t tt = rspamd_parse_smtp_date (str, slen, &err);
-
-	if (err == NULL) {
-		if (lua_isboolean (L, 2) && !!lua_toboolean (L, 2)) {
-			struct tm t;
-
-			rspamd_localtime (tt, &t);
-#if !defined(__sun)
-			t.tm_gmtoff = 0;
-#endif
-			t.tm_isdst = 0;
-			tt = mktime (&t);
-		}
-
-		lua_pushnumber (L, tt);
-	}
-	else {
-		lua_pushnil (L);
-		lua_pushstring (L, err->message);
-		g_error_free (err);
-
-		return 2;
-	}
-
-	return 1;
+	return lua_parsers_parse_smtp_date (L);
 }
 
 

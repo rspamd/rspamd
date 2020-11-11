@@ -980,13 +980,11 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_kann (L);
 	luaopen_spf (L);
 	luaopen_tensor (L);
+	luaopen_parsers (L);
 #ifndef WITH_LUAJIT
 	rspamd_lua_add_preload (L, "bit", luaopen_bit);
 	lua_settop (L, 0);
 #endif
-
-	rspamd_lua_new_class (L, "rspamd{ev_base}", NULL);
-	lua_pop (L, 1);
 
 	rspamd_lua_new_class (L, "rspamd{session}", NULL);
 	lua_pop (L, 1);

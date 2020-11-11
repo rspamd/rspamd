@@ -385,6 +385,8 @@ void luaopen_spf (lua_State *L);
 
 void luaopen_tensor (lua_State *L);
 
+void luaopen_parsers (lua_State *L);
+
 void rspamd_lua_dostring (const gchar *line);
 
 double rspamd_lua_normalize (struct rspamd_config *cfg,
