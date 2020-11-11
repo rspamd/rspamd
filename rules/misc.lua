@@ -19,6 +19,7 @@ limitations under the License.
 local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
+local rspamd_parsers = require "rspamd_parsers"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_lua_utils = require "lua_util"
 
@@ -65,7 +66,7 @@ local date_id = rspamd_config:register_symbol({
       return
     end
 
-    local dm, err = util.parse_smtp_date(date_time)
+    local dm, err = rspamd_parsers.parse_smtp_date(date_time)
     if err then
       task:insert_result('INVALID_DATE', 1.0)
       return
@@ -540,7 +541,7 @@ local check_from_display_name = rspamd_config:register_symbol{
     local from = task:get_from(2)
     if not (from and from[1] and from[1].name) then return false end
     -- See if we can parse an email address from the name
-    local parsed = util.parse_mail_address(from[1].name, task:get_mempool())
+    local parsed = rspamd_parsers.parse_mail_address(from[1].name, task:get_mempool())
     if not parsed then return false end
     if not (parsed[1] and parsed[1]['addr']) then return false end
     -- Make sure we did not mistake e.g. <something>@<name> for an email address
@@ -621,7 +622,7 @@ rspamd_config.SPOOF_REPLYTO = {
     end
     if not found_fromdom then return false end
     -- Parse Reply-To header
-    local parsed = ((util.parse_mail_address(rt, task:get_mempool()) or E)[1] or E).domain
+    local parsed = ((rspamd_parsers.parse_mail_address(rt, task:get_mempool()) or E)[1] or E).domain
     if not parsed then return false end
     -- Reply-To domain must be different to From domain
     if not util.strequal_caseless(parsed, from[1].domain) then
