@@ -441,6 +441,23 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['description'] = 'Extracts tld from a hostname represented as a string',
     ['args_schema'] = {}
   },
+  -- Converts list of strings to numbers and returns a packed string
+  ['pack_numbers'] = {
+    ['types'] = {
+      ['string_list'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local fmt = args[1] or 'f'
+      local res = {}
+      for _, s in ipairs(inp) do
+        table.insert(res, tonumber(s))
+      end
+      return rspamd_util.pack(string.rep(fmt, #res), lua_util.unpack(res)), 'string'
+    end,
+    ['description'] = 'Converts a list of strings to numbers & returns a packed string',
+    ['args_schema'] = {ts.string:is_optional()}
+  },
 }
 
 transform_function.match = transform_function.regexp

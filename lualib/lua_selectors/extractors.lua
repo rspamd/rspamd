@@ -15,6 +15,7 @@ limitations under the License.
 ]]--
 
 local fun = require 'fun'
+local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
 local common = require "lua_selectors/common"
 local ts = require("tableshape").types
@@ -437,6 +438,21 @@ The first argument must be header name.]],
     ['description'] = 'Get full scan result (either default or shadow if shadow result name is specified)' ..
         'Returns the result table. See task:get_metric_result()',
     ['args_schema'] = {ts.string:is_optional()}
+  },
+  -- Get list of metatokens as strings
+  ['metatokens'] = {
+    ['get_value'] = function(task)
+      local tokens = meta_functions.gen_metatokens(task)
+      if not tokens[1] then
+        return nil
+      end
+      local res = {}
+      for _, t in ipairs(tokens) do
+        table.insert(res, tostring(t))
+      end
+      return res, 'string_list'
+    end,
+    ['description'] = 'Get metatokens for a message as strings',
   },
 }
 
