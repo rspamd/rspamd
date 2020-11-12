@@ -1,0 +1,107 @@
+Delivered-To: inboobswetrusts1@gmail.com
+Received: by 2002:a19:c1cd:0:0:0:0:0 with SMTP id r196csp1333505lff;
+        Fri, 25 Sep 2020 10:19:08 -0700 (PDT)
+X-Google-Smtp-Source: ABdhPJz0QI60pshL5/0ubV0rKvSL19K7Ot++feNpjP2IZZ2jdoqLDX7eTqyiU1gupOkugQz0J60N
+X-Received: by 2002:aa7:d585:: with SMTP id r5mr2446562edq.278.1601054347960;
+        Fri, 25 Sep 2020 10:19:07 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1601054347; cv=pass;
+        d=google.com; s=arc-20160816;
+        b=dJINoqknDRaxNQ6l0jhlQtXtC6RqApR1PlfeuL0IMshXmn7VogDqIytsjyptM4VSkL
+         r92KtpG/v+v/xthYUwOY7qwv+XBBi6Bb8o4ia2lhXUBaz8hgCe8FTPEfioqGKQJElD6l
+         fHDXymPRs16Utuq9KSgQ2d9LTOvTpUdrQ79keBWBVDR8wwW4fdphyqDITRcY7z6zh0Dc
+         +JDRGMCt/414oNjsm3U/qrUzZHrIkTn7BqjgM706zS9v3m+f1DwUsgZMFtXWPqt0kaCg
+         0v+knXZlpdToNQ9GBZqEaGWY2Hvis9miIyfL1T3/9Ik1yV+iEcmG7LaAhoAE4fvSV2Fs
+         oNaA==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=mime-version:content-language:accept-language:message-id:date
+         :thread-index:thread-topic:subject:to:from:dkim-signature;
+        bh=Qt9TSIDN8JU9CiNmMN7BS30A3Jgd5CsJoCnAZ6lhuZk=;
+        b=qQAFoUqsdbpbsfWrfZnVpJRGnOx5v7qiA0v5r9+w/Hw6JXTaUxmG5wm9H+pn6JF2h7
+         LbLANFBar42PzVrfpdbPh3XOyAkauaZaCHUXrFQS/0OKUWxoUQP8CB9uaSjPpeGLM7Ge
+         JKDpPDFVX9KlSF8V281OjpVJA9D6Jy8YY7WjoYkRR9vDOtSh3Z15fpY0IdTg78U1adCC
+         D5eWd+1A8kAjJ0vvmBmhWMdBhP6YNF4ESZfTaDb43+cZZibW3Sx5diGYyYlLq8pgOCA7
+         b1PO8K4Zy+/4vhvJvkBAuqwK6bFbO58nAvLFIDl/OHe736jSz0O+F1cZb37oERX5iSuD
+         gd2Q==
+ARC-Authentication-Results: i=2; mx.google.com;
+       dkim=pass header.i=@outlook.com header.s=selector1 header.b=CjJhz37G;
+       arc=pass (i=1);
+       spf=pass (google.com: domain of testcpsf@outlook.com designates 40.92.74.29 as permitted sender) smtp.mailfrom=testcpsf@outlook.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=outlook.com
+Return-Path: <testcpsf@outlook.com>
+Received: from EUR04-DB3-obe.outbound.protection.outlook.com (mail-oln040092074029.outbound.protection.outlook.com. [40.92.74.29])
+        by mx.google.com with ESMTPS id v11si2241830edr.99.2020.09.25.10.19.07
+        for <inboobswetrusts1@gmail.com>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Fri, 25 Sep 2020 10:19:07 -0700 (PDT)
+Received-SPF: pass (google.com: domain of testcpsf@outlook.com designates 40.92.74.29 as permitted sender) client-ip=40.92.74.29;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@outlook.com header.s=selector1 header.b=CjJhz37G;
+       arc=pass (i=1);
+       spf=pass (google.com: domain of testcpsf@outlook.com designates 40.92.74.29 as permitted sender) smtp.mailfrom=testcpsf@outlook.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=outlook.com
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector9901; d=microsoft.com; cv=none; b=Mxai9H/O1SAT1aKkW3+8AoAlmTby1+b4QF6qulkeVGBfoGdJzws0UxMiFYkspN1Jc+qtUbNuNIyvn6vlG/Bkd3oWXrKyWyqKyqAZG1k1FfS38s5CYaV/Z3MbYccSPmrbbNEphRYeqaFoLrR0FlUEELOw96u0SiSErAh0uAmeEagyctTnSXiuHcbyugVoMlnZ4mT/EQhhFZ8mLph40eidSI+PL40oh2muClfGjJf+KFCZL67dIdk4zcz6OJNJljCk3LuI3L5Uf3FAmmBsrhp5Ru0bSnGZkwcZjdgOwsLPBQiF+djwHa5WYO0xt//+O/lG6sZGVhnvgotGfRPk3sh3zw==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com; s=arcselector9901; h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck; bh=Qt9TSIDN8JU9CiNmMN7BS30A3Jgd5CsJoCnAZ6lhuZk=; b=heQfkNck7BGKvNrB7mn8r+lTbciW4KGlu2is5dNR2ieVWMk0oPdJ9/8akIGYb+kopp4p0JVIHseB9qf8iDzwZlPIIJ4NytoRakNAJtt2SX7nB8gzeYmS1btD/kFp2slF9LxBDh6gKFlYazqnOCjqR1wU4JGjXPaXqbC+qeKzlvOi2TWTY0B5dt/kksYlZfMBEPNHmEPuHQIDKTg7m64FFSgEGDFxjI099QwfY6Ia5UTtQHBIESRjp89lElV1yDywqW6dyVLbf8gs+DlI+HlR87ECcDExwPwpZvAhq0/SUjhq0Vk/UDCKOebwGBkVEMQo4tctBvXXkcN7yEZADyqNdw==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=none; dmarc=none; dkim=none; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=outlook.com; s=selector1; h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck; bh=Qt9TSIDN8JU9CiNmMN7BS30A3Jgd5CsJoCnAZ6lhuZk=; b=CjJhz37GIhNre1eIVwKvJSEZHTzsMyuycnaUsFqIYHOTdOWzHZ7UKRSDvRcWjTZm7iaQFiEGspGeAa4KDSQn6gWGxTlMPmD/JyoUFJlgoW1NDW7YwjPvCmjZKri8zag1WCBxarFZhQO3SsIR9iU1VcnlKhAAUtNsMnL5huGl34AyhrHAzAtYuC+j8rO7oXD20+yfc/4I/Efk9N5sg9MW8o6a/1TSEsDsP7bSTW9v7BXutXZCgfGWSqEJDbt1n5nt6ZA8+5WqrEXd0dANOwvaewV2AwrQEQwZguofLhlNwpyYRnwT6fY3C4e2x/Ge0WdtbzIs9w1t7X5mZgf/1tDcPQ==
+Received: from VI1EUR04FT008.eop-eur04.prod.protection.outlook.com (2a01:111:e400:7e0e::52) by VI1EUR04HT055.eop-eur04.prod.protection.outlook.com (2a01:111:e400:7e0e::302) with Microsoft SMTP Server (version=TLS1_2, cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.3412.21; Fri, 25 Sep 2020 17:19:07 +0000
+Received: from AM0PR09MB3876.eurprd09.prod.outlook.com (2a01:111:e400:7e0e::4d) by VI1EUR04FT008.mail.protection.outlook.com (2a01:111:e400:7e0e::406) with Microsoft SMTP Server (version=TLS1_2, cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.3412.21 via Frontend Transport; Fri, 25 Sep 2020 17:19:07 +0000
+Received: from AM0PR09MB3876.eurprd09.prod.outlook.com ([fe80::d82c:67bf:ec39:a403]) by AM0PR09MB3876.eurprd09.prod.outlook.com ([fe80::d82c:67bf:ec39:a403%9]) with mapi id 15.20.3412.024; Fri, 25 Sep 2020 17:19:07 +0000
+From: sad sad <testcpsf@outlook.com>
+To: "inboobswetrusts1@gmail.com" <inboobswetrusts1@gmail.com>
+Subject: test
+Thread-Topic: test
+Thread-Index: AQHWk1/5sqfBiHPcPEmWqAb7mPK/fA==
+Date: Fri, 25 Sep 2020 17:19:07 +0000
+Message-ID: <AM0PR09MB38763650C46C6A6FC3C0DE77CC360@AM0PR09MB3876.eurprd09.prod.outlook.com>
+Accept-Language: ru-RU, en-US
+Content-Language: ru-RU
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+x-incomingtopheadermarker: OriginalChecksum:39E7B13889D2F181F64CFEA6EEA08284B8F1BAD1868D8D18F9E90BE5BCA959F7;UpperCasedChecksum:F3A5A0F5617A448E098AF439F6016D44C37772C4D39C6D9ED88578C46A95CB27;SizeAsReceived:6673;Count:41
+x-tmn: [ggDyUrCobrXP/L2vAfZhcD6i3aFoVJc/Pu2bqWM7VfA4p11xOL37Jw==]
+x-ms-publictraffictype: Email
+x-incomingheadercount: 41
+x-eopattributedmessage: 0
+x-ms-office365-filtering-correlation-id: 54f426e0-67f0-473e-1317-08d861771c15
+x-ms-traffictypediagnostic: VI1EUR04HT055:
+x-microsoft-antispam: BCL:0;
+x-microsoft-antispam-message-info: RIRxucAjNkFMbHAVHyCSGanQXCZOjwMDFoy5OQa8+ewDTDNgZUtGD8vmKmoHVNp41dotypaJu8+p3piVOHXPpA==
+x-ms-exchange-antispam-messagedata: x/DoDE6wUuMAedPLA8tUqGpR3rpo5Gvu464iZGrRRTO++YhFxsOEQs2GnhQMJVAocl8M5TbBedYSIAm7RIuCLSlzt7Bd8K7Z8Yo9riMU1T3WdNuYHE6Qko9u95uvWjPIKPAovKSbTaQH34egSIA0mRzwEfSbM+SL1PE5Ub7WpTukrR1ue0MJ+VW6skZOcSVD
+x-ms-exchange-transport-forked: True
+Content-Type: multipart/alternative; boundary="_000_AM0PR09MB38763650C46C6A6FC3C0DE77CC360AM0PR09MB3876eurp_"
+MIME-Version: 1.0
+X-OriginatorOrg: outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-AuthSource: VI1EUR04FT008.eop-eur04.prod.protection.outlook.com
+X-MS-Exchange-CrossTenant-RMS-PersistedConsumerOrg: 00000000-0000-0000-0000-000000000000
+X-MS-Exchange-CrossTenant-Network-Message-Id: 54f426e0-67f0-473e-1317-08d861771c15
+X-MS-Exchange-CrossTenant-originalarrivaltime: 25 Sep 2020 17:19:07.1617 (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Internet
+X-MS-Exchange-CrossTenant-id: 84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa
+X-MS-Exchange-CrossTenant-rms-persistedconsumerorg: 00000000-0000-0000-0000-000000000000
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: VI1EUR04HT055
+
+--_000_AM0PR09MB38763650C46C6A6FC3C0DE77CC360AM0PR09MB3876eurp_
+Content-Type: text/plain; charset="koi8-r"
+Content-Transfer-Encoding: quoted-printable
+
+test
+
+--_000_AM0PR09MB38763650C46C6A6FC3C0DE77CC360AM0PR09MB3876eurp_
+Content-Type: text/html; charset="koi8-r"
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dkoi8-r">
+<style type=3D"text/css" style=3D"display:none;"> P {margin-top:0;margin-bo=
+ttom:0;} </style>
+</head>
+<body dir=3D"ltr">
+<div style=3D"font-family: Calibri, Arial, Helvetica, sans-serif; font-size=
+: 12pt; color: rgb(0, 0, 0);">
+test</div>
+</body>
+</html>
+
+--_000_AM0PR09MB38763650C46C6A6FC3C0DE77CC360AM0PR09MB3876eurp_--

@@ -111,6 +111,7 @@ PHISH_SENDER_ROUTING_PART
   Expect Symbol  FROM_INVALID
 
 
+
 *** Keywords ***
 Rules Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/regexp.conf

@@ -1,0 +1,194 @@
+Return-Path: <owner-freebsd-test@freebsd.org>
+X-Original-To: vsevolod@highsecure.ru
+Delivered-To: vsevolod@highsecure.ru
+Received: from mx2.freebsd.org (mx2.freebsd.org [96.47.72.81])
+	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits))
+	(No client certificate requested)
+	by mail.highsecure.ru (Postfix) with ESMTPS id 7B5193003B9
+	for <vsevolod@highsecure.ru>; Mon,  7 Sep 2020 17:43:49 +0200 (CEST)
+Received: from mx1.freebsd.org (mx1.freebsd.org [96.47.72.80])
+	(using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+	 key-exchange X25519 server-signature RSA-PSS (4096 bits)
+	 client-signature RSA-PSS (4096 bits))
+	(Client CN "mx1.freebsd.org", Issuer "Let's Encrypt Authority X3" (verified OK))
+	by mx2.freebsd.org (Postfix) with ESMTPS id 515996EBC0;
+	Mon,  7 Sep 2020 15:43:40 +0000 (UTC)
+	(envelope-from owner-freebsd-test@freebsd.org)
+Received: from mailman.nyi.freebsd.org (mailman.nyi.freebsd.org [IPv6:2610:1c1:1:606c::50:13])
+	by mx1.freebsd.org (Postfix) with ESMTP id 4BlXcr04ftz4JVG;
+	Mon,  7 Sep 2020 15:43:40 +0000 (UTC)
+	(envelope-from owner-freebsd-test@freebsd.org)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=freebsd.org; s=dkim;
+	t=1599493420; h=from:from:sender:sender:reply-to:subject:subject:date:date:
+	 message-id:message-id:to:to:cc:mime-version:mime-version:
+	 content-type:content-type:
+	 content-transfer-encoding:content-transfer-encoding:list-id:list-help:
+	 list-unsubscribe:list-subscribe:list-post;
+	bh=KEklvNYAgI4rodPALAhxWKF6FIuGje3BV2G0j7zhqSo=;
+	b=H7pb97c0QZD4Zc7JltI+DXgqONMBy3PRldROVhMw79FLN/Ii04XX8FjGyy14OHavd3qKTF
+	hgYZbAqC4SScjwRxqJ+Ex+TpNUCWCaGGGkXzNYJR19NLHQcUwYsDUkuWmbmsxwuNAlonmJ
+	7XUiaSPe60csOlwwJGs1e7TbXMjv2NHo4Rama0wJa47eCCyj6WDRoq//qSUwmBvICK4eiA
+	E0v4dCcT68KOygTxXz7Bzg7uxf6fwMlqX87OMYynQeJygw536cUEGEzdKwZmFIHQpuakTK
+	qKNNRYYIvpu4npR+J2gqeygP0E2CD4sNHHX2bOhTjfJNkGFCb0sDN388QnMvWA==
+Delivered-To: freebsd-test@mailman.nyi.freebsd.org
+Received: from mx1.freebsd.org (mx1.freebsd.org [IPv6:2610:1c1:1:606c::19:1])
+ by mailman.nyi.freebsd.org (Postfix) with ESMTP id 9974F3CD951
+ for <freebsd-test@mailman.nyi.freebsd.org>;
+ Mon,  7 Sep 2020 15:43:36 +0000 (UTC)
+ (envelope-from vstakhov@outlook.com)
+Received: from EUR04-HE1-obe.outbound.protection.outlook.com
+ (mail-he1eur04olkn0804.outbound.protection.outlook.com
+ [IPv6:2a01:111:f400:fe0d::804])
+ (using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+ (Client CN "mail.protection.outlook.com",
+ Issuer "GlobalSign Organization Validation CA - SHA256 - G3" (verified OK))
+ by mx1.freebsd.org (Postfix) with ESMTPS id 4BlXcl5FF6z4JJ6
+ for <freebsd-test@freebsd.org>; Mon,  7 Sep 2020 15:43:35 +0000 (UTC)
+ (envelope-from vstakhov@outlook.com)
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector9901; d=microsoft.com; cv=none;
+ b=B/A8ZiFYxOSeylXcjyZTt8XXFt7YgTbngdq4AxTQ36z9v/VUw+rMglqR2j93IHtdNzAkr5e6ZRYdmAUwbocvZijACTfi3SoRaj/rAfhIR/ualRfIgQTSetMBeSqcBO95Ai/KEY4NFtDvS4pR4rxydBYVuUZE6UaHSUYwlaEcWonjbb1DtnNOHMH6CT5loNMevNXlgrPTQNgje8PCT6jDhgahA84WWjahM+bywUFwJdSTOdv7pAD2YXFoZKrlHLZskx7CVV+5N8XEjAgyvil3q048bgDeMW98q35PSe7E3zDvoTKWMAmXYTbL13A1FBLttRxVvq6Q46v9aVZc6tpnPQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com; 
+ s=arcselector9901;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=l2MxonmDV0Cxeb7j4O7trwBTQ/jKYy4cF6V7PG/mFuc=;
+ b=dNW7to2Stc2Kt3qw9UK393U0tTTNHoZJhTJCy0n81IevefWs6ZmttQ3plKF/IWxifhHbZgaFclKhNcuEfpYuzYtjZFzusX34zK8e/YWl1VcJMcESDfu0dDcURag4FqAvd1RIPORgKIfRUFuT+JNzEYW7msgkwei0QQn/T+AtMJ8kVx2WtpH+S0JmMN5j7alGUnzghJIyBHavbfDoxcOBX+oY1W5AOTh7APBfIH8WXFlNztbKcwCkY/ujN+p62diFoHaNno3ml2XbxLl1LBA78I1IzIpISdkFE9TM7wDxRjaEVYTMuOI6OlkBjgM5i4TCWx3tW0/Jb/SYsFvu/OIFcA==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=none; dmarc=none;
+ dkim=none; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=outlook.com;
+ s=selector1;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=l2MxonmDV0Cxeb7j4O7trwBTQ/jKYy4cF6V7PG/mFuc=;
+ b=LWxzK+W8PCp8/DGYEOXmewEaJYvM7hue+67rVa05r+fLVS+hMeIANCPNJnZFUe+2bxCew5n5tRULwy3qXhFCxqbk3oy+sUwP5Gb7+XTyNQoCwCjW4tcFRs663CzamXPQKcN10XclDf/nEsU52NfkwmvEBD59j3MHDN6vcyeM2r18UT5tW1dfG2bVrIVO9b8xyehJnUbc82tDUs9ok51LxbgH0aF9vmSp66vlVXhe33tM/f+gmxOIFr4PtMxtpzk3m83Ovp+SskixfCXdldYrP5X7G2jiqyy5tS+tBNs8VnInW6b3pjQNXYcaihcdLluPLfvw8Fx5g46QeHaG+87PZQ==
+Received: from HE1EUR04FT049.eop-eur04.prod.protection.outlook.com
+ (2a01:111:e400:7e0d::49) by
+ HE1EUR04HT035.eop-eur04.prod.protection.outlook.com (2a01:111:e400:7e0d::317)
+ with Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.3348.16; Mon, 7 Sep
+ 2020 15:43:33 +0000
+Received: from LNXP265MB1258.GBRP265.PROD.OUTLOOK.COM (2a01:111:e400:7e0d::4c)
+ by HE1EUR04FT049.mail.protection.outlook.com
+ (2a01:111:e400:7e0d::171) with Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.3348.16 via Frontend
+ Transport; Mon, 7 Sep 2020 15:43:33 +0000
+Received: from LNXP265MB1258.GBRP265.PROD.OUTLOOK.COM
+ ([fe80::1de8:374c:90f8:62f3]) by LNXP265MB1258.GBRP265.PROD.OUTLOOK.COM
+ ([fe80::1de8:374c:90f8:62f3%4]) with mapi id 15.20.3348.019; Mon, 7 Sep 2020
+ 15:43:33 +0000
+From: Vsevolod Stakhov <vstakhov@outlook.com>
+To: "freebsd-test@freebsd.org" <freebsd-test@freebsd.org>
+Subject: test MS arc
+Thread-Topic: test MS arc
+Thread-Index: AQHWhS2I5V1kL4IFmUeXtTRUjyf2sA==
+Date: Mon, 7 Sep 2020 15:43:32 +0000
+Message-ID: <LNXP265MB12586E8A30257B6D494149B7D6280@LNXP265MB1258.GBRP265.PROD.OUTLOOK.COM>
+Accept-Language: en-GB, en-US
+Content-Language: en-GB
+X-MS-Has-Attach: 
+X-MS-TNEF-Correlator: 
+x-incomingtopheadermarker: OriginalChecksum:CA84590A4F01BB4CFB6FE8854C7A3124D845DCA76ED1A8BE88B6B871F8571461;
+ UpperCasedChecksum:191CB9448CDB911635CB69E29CF981BEFC870595A54A21C77102C996928176AC;
+ SizeAsReceived:6597; Count:41
+x-tmn: [Mn3DYL5eFlmEW5EHFTqFAtynCPFwPWHn]
+x-ms-publictraffictype: Email
+x-incomingheadercount: 41
+x-eopattributedmessage: 0
+x-ms-office365-filtering-correlation-id: 7967397b-54bc-46a6-62e1-08d85344c6c2
+x-ms-traffictypediagnostic: HE1EUR04HT035:
+x-microsoft-antispam: BCL:0;
+x-microsoft-antispam-message-info: HhTia0vUVW11W6KU6atvHK8QEQqehAaE91dm5ZOqe3JQmq63kBs1gqPcgwnvTtHC5wlGJ7oJ/+r9GhkQBYIzBQ==
+x-ms-exchange-antispam-messagedata: xy4Pbb5JXejui+jybnwU7c+74dAsS9t9PWI6LRfNckV7jG+tPbE8MEQHwLvDNi5LJxHtR0IG3NbX+Oz+OPa+hEE3kmTjJ8kejutuWcS9RunnnasqnI2877iMYRakZEqFMKHRJ0t1Me8VLuekvfnldA==
+x-ms-exchange-transport-forked: True
+MIME-Version: 1.0
+X-OriginatorOrg: outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-AuthSource: HE1EUR04FT049.eop-eur04.prod.protection.outlook.com
+X-MS-Exchange-CrossTenant-RMS-PersistedConsumerOrg: 00000000-0000-0000-0000-000000000000
+X-MS-Exchange-CrossTenant-Network-Message-Id: 7967397b-54bc-46a6-62e1-08d85344c6c2
+X-MS-Exchange-CrossTenant-rms-persistedconsumerorg: 00000000-0000-0000-0000-000000000000
+X-MS-Exchange-CrossTenant-originalarrivaltime: 07 Sep 2020 15:43:32.9335 (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Internet
+X-MS-Exchange-CrossTenant-id: 84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: HE1EUR04HT035
+X-Content-Filtered-By: Mailman/MimeDel 2.1.33
+X-BeenThere: freebsd-test@freebsd.org
+X-Mailman-Version: 2.1.33
+Precedence: list
+List-Id: Test posting area <freebsd-test.freebsd.org>
+List-Unsubscribe: <https://lists.freebsd.org/mailman/options/freebsd-test>,
+ <mailto:freebsd-test-request@freebsd.org?subject=unsubscribe>
+List-Archive: <http://lists.freebsd.org/pipermail/freebsd-test/>
+List-Post: <mailto:freebsd-test@freebsd.org>
+List-Help: <mailto:freebsd-test-request@freebsd.org?subject=help>
+List-Subscribe: <https://lists.freebsd.org/mailman/listinfo/freebsd-test>,
+ <mailto:freebsd-test-request@freebsd.org?subject=subscribe>
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Errors-To: owner-freebsd-test@freebsd.org
+Sender: owner-freebsd-test@freebsd.org
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=freebsd.org;
+	s=dkim; t=1599493420;
+	h=from:from:sender:sender:reply-to:subject:subject:date:date:
+	 message-id:message-id:to:to:cc:mime-version:mime-version:
+	 content-type:content-type:
+	 content-transfer-encoding:content-transfer-encoding:list-id:list-help:
+	 list-unsubscribe:list-subscribe:list-post:dkim-signature;
+	bh=KEklvNYAgI4rodPALAhxWKF6FIuGje3BV2G0j7zhqSo=;
+	b=fylre+bQ06chZbeFj+oG/gfGdHsDM32k57JIKZGJ7OXEiBBGFYABHPUt+bIiuKKqlMqmfQ
+	/50ejP5WvAueZD0eBFUqnLu5j/fr6n7g0JwyS6Eq8K1piB944eLqWtNIyhNG7KA8EwdXGx
+	WSmQaa+xeac+DP0YiSg/mEEZpikf9fhr+pdH+O0PdVCASQglsXdOrtXTWOBUszBZDxn2on
+	wpfEiC4cHOG5r82bEX/ftcjxtOfhLx0bQFvvxPw+5hGFm3KYH85kEOCV4nTW8OLJrVYBBj
+	71WEG5kYQN5/ZnauVLOaFNkMHbQ4zNTl1nTQvsN1cmNaKr8ucIEgxnBi7NmYLw==
+ARC-Seal: i=1; s=dkim; d=freebsd.org; t=1599493420; a=rsa-sha256; cv=none;
+	b=pYPOUWIwvn3F/A+dZ8VAJ/5Uxfbo/OTsjc1LRbyFsEeLEAOxolNQQ3ysD1JDnryuLPHaKa
+	PaYUBEyl13QXRDkKW/pWc35AmgpEHEOWGyxl7u2h98QWfXJ8AHBJgJ5vH3e658etTDsFAM
+	xINyoITvp/eSikmy1At/c8dhm1zTk8+02hMOBSqecCCFy4Ca535ybQxeTZHWBHqtN7kUBk
+	NivNKbqdkCR3/889X04rT+LzYoMlzS/aGaLY/oKyi6zSp+Vh641krCWq//cYju1xKQnmMs
+	lfvZR8E35lZ+9+k9M6s90wripNmKNM1UwgKzuhCil8CQLEJcl6ujg3/3O+QFlQ==
+ARC-Authentication-Results: i=1;
+	mx1.freebsd.org;
+	dkim=pass header.d=outlook.com header.s=selector1 header.b=LWxzK+W8;
+	dmarc=pass (policy=none) header.from=outlook.com;
+	spf=pass (mx1.freebsd.org: domain of vstakhov@outlook.com designates 2a01:111:f400:fe0d::804 as permitted sender) smtp.mailfrom=vstakhov@outlook.com
+X-Rspamd-Queue-Id: 7B5193003B9
+X-Spamd-Bar: -
+Authentication-Results: mail.highsecure.ru;
+	dkim=pass header.d=freebsd.org header.s=dkim header.b=H7pb97c0;
+	dkim=fail (body hash did not verify) header.d=outlook.com header.s=selector1 header.b=LWxzK+W8;
+	dmarc=fail reason="SPF not aligned (relaxed), DKIM not aligned (relaxed)" header.from=outlook.com (policy=none);
+	spf=pass (mail.highsecure.ru: domain of owner-freebsd-test@freebsd.org designates 96.47.72.81 as permitted sender) smtp.mailfrom=owner-freebsd-test@freebsd.org
+X-Spamd-Result: default: False [-1.31 / 15.00];
+	 FORGED_RECIPIENTS_FORWARDING(0.00)[];
+	 FORWARDED(0.00)[freebsd-test@mailman.nyi.freebsd.org];
+	 R_SPF_ALLOW(-0.50)[+ip4:96.47.72.81:c];
+	 FREEMAIL_FROM(0.00)[outlook.com];
+	 DKIM_MIXED(0.00)[];
+	 R_DKIM_REJECT(0.00)[outlook.com:s=selector1];
+	 ARC_INVALID(1.00)[invalid count of seals and signatures];
+	 DKIM_TRACE(0.00)[freebsd.org:+,outlook.com:-];
+	 MAILLIST(-0.10)[mailman];
+	 FORGED_SENDER(0.00)[vstakhov@outlook.com,owner-freebsd-test@freebsd.org];
+	 FORGED_RECIPIENTS_MAILLIST(0.00)[];
+	 MIME_TRACE(0.00)[0:+];
+	 RCVD_TLS_LAST(0.00)[];
+	 FORGED_RECIPIENTS(0.00)[m:freebsd-test@freebsd.org,s:vsevolod@highsecure.ru];
+	 FROM_NEQ_ENVFROM(0.00)[vstakhov@outlook.com,owner-freebsd-test@freebsd.org];
+	 R_DKIM_ALLOW(-0.20)[freebsd.org:s=dkim];
+	 RCVD_DKIM_ARC_DNSWL_HI(-1.00)[];
+	 FROM_HAS_DN(0.00)[];
+	 FORGED_SENDER_FORWARDING(0.00)[];
+	 MIME_GOOD(-0.10)[text/plain];
+	 SENDER_REP_HAM(0.00)[ip: 96.47.72.81(-0.65)];
+	 HAS_LIST_UNSUB(-0.01)[];
+	 RCPT_COUNT_ONE(0.00)[1];
+	 NEURAL_HAM(-0.00)[-0.965];
+	 TO_DN_EQ_ADDR_ALL(0.00)[];
+	 RCVD_IN_DNSWL_HI(-0.50)[96.47.72.81:from];
+	 FORGED_SENDER_MAILLIST(0.00)[];
+	 RCVD_COUNT_SEVEN(0.00)[8];
+	 DMARC_POLICY_SOFTFAIL(0.10)[outlook.com : SPF not aligned (relaxed), DKIM not aligned (relaxed),none]
+
+123
+_______________________________________________
+freebsd-test@freebsd.org mailing list
+https://lists.freebsd.org/mailman/listinfo/freebsd-test
+To unsubscribe, send any mail to "freebsd-test-unsubscribe@freebsd.org"
