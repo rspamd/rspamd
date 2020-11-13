@@ -1012,10 +1012,18 @@ exports.deepcopy = deepcopy
 -- }
 -- Performs recursive in-place sort of a table
 --]]
+local function default_sort_cmp(e1, e2)
+  if type(e1) == type(e2) then
+    return e1 < e2
+  else
+    return type(e1) < type(e2)
+  end
+end
+
 local function deepsort(tbl, sort_func)
   local orig_type = type(tbl)
   if orig_type == 'table' then
-    table.sort(tbl, sort_func)
+    table.sort(tbl, sort_func or default_sort_cmp)
     for _, orig_value in next, tbl, nil do
       deepsort(orig_value)
     end
