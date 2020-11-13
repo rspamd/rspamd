@@ -458,6 +458,17 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['description'] = 'Converts a list of strings to numbers & returns a packed string',
     ['args_schema'] = {ts.string:is_optional()}
   },
+  -- Filter nils from a list
+  ['filter_string_nils'] = {
+    ['types'] = {
+      ['string_list'] = true
+    },
+    ['process'] = function(inp, _, _)
+      return fun.filter(function(val) return type(val) == 'string' and val ~= 'nil' end, inp), 'string_list'
+    end,
+    ['description'] = 'Removes all nils from a list of strings (when converted implicitly)',
+    ['args_schema'] = {}
+  },
 }
 
 transform_function.match = transform_function.regexp
