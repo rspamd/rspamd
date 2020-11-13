@@ -1025,6 +1025,12 @@ local function add_rbl(key, rbl, global_opts)
       rspamd_config:register_dependency(rbl.symbol, 'DKIM_CHECK')
     end
 
+    if rbl.require_symbols then
+      for _,dep in ipairs(rbl.require_symbols) do
+        rspamd_config:register_dependency(rbl.symbol, dep)
+      end
+    end
+
     -- Failure symbol
     rspamd_config:register_symbol{
       type = 'virtual',

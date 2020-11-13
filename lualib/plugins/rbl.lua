@@ -113,6 +113,9 @@ local rule_schema_tbl = {
   received = ts.boolean:is_optional(),
   replyto = ts.boolean:is_optional(),
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
+  require_symbols = (
+      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
+  ):is_optional(),
   resolve_ip = ts.boolean:is_optional(),
   return_bits = return_bits_schema:is_optional(),
   return_codes = return_codes_schema:is_optional(),
