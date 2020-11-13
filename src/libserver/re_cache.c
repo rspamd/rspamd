@@ -1993,7 +1993,8 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
-			msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
+			msg_info_re_cache ("cannot compile %s to hyperscan: '%s', try prefilter match",
+					hs_errors != NULL ? hs_errors->message : "unknown error",
 					pat);
 			hs_free_compile_error (hs_errors);
 
