@@ -1385,7 +1385,7 @@ lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 	entry->ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 	if (task->message) {
-		memcpy (entry->id, MESSAGE_FIELD (task, digest), sizeof (entry->id));
+		entry->id = GPOINTER_TO_UINT (task->message);
 	}
 }
 
@@ -1399,8 +1399,7 @@ lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key)
 	entry = g_hash_table_lookup (task->lua_cache, key);
 
 	if (entry != NULL && (task->message &&
-						  memcmp (entry->id, MESSAGE_FIELD (task, digest),
-								  sizeof (entry->id)) == 0)) {
+						  entry->id == GPOINTER_TO_UINT (task->message))) {
 		lua_rawgeti (L, LUA_REGISTRYINDEX, entry->ref);
 
 		return TRUE;
@@ -2642,18 +2641,14 @@ lua_task_get_parts (lua_State * L)
 
 	if (task != NULL) {
 		if (task->message) {
-			if (!lua_task_get_cached (L, task, "mime_parts")) {
-				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
+			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
-				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-					ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
-					*ppart = part;
-					rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
-					/* Make it array */
-					lua_rawseti (L, -2, i + 1);
-				}
-
-				lua_task_set_cached (L, task, "mime_parts", -1);
+			PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+				ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+				*ppart = part;
+				rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+				/* Make it array */
+				lua_rawseti (L, -2, i + 1);
 			}
 		}
 		else {

@@ -152,7 +152,7 @@ struct rspamd_lua_map {
 
 struct rspamd_lua_cached_entry {
 	gint ref;
-	guchar id[4];
+	guint id;
 };
 
 /* Common utility functions */
