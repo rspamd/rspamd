@@ -1119,12 +1119,18 @@ end
 
 opts = lua_util.override_defaults(rbl_common.default_options, opts)
 
+if opts.rules and opts.rbls then
+  -- Common issue :(
+  rspamd_logger.infox(rspamd_config, 'merging `rules` and `rbls` keys for compatibility')
+  opts.rbls = lua_util.override_defaults(opts.rbls, opts.rules)
+end
+
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = lua_maps.map_add(N, 'local_exclude_ip_map', 'radix',
     'RBL exclusions map')
 end
 
-for key,rbl in pairs(opts.rbls or opts.rules) do
+for key,rbl in pairs(opts.rbls ) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
