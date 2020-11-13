@@ -169,17 +169,17 @@ context("Selectors test", function()
                 selector = "helo",
                 expect = {"hello mail"}},
 
-    ["received by hostname"] = {
-                selector = "received:by_hostname",
+    ["received ip"] = {
+                selector = "received:by_hostname.filter_string_nils",
                 expect = {{"server1.chat-met-vreemden.nl", "server2.chat-met-vreemden.nl"}}},
 
     ["received by hostname last"] = {
-      selector = "received:by_hostname.last",
+      selector = "received:by_hostname.filter_string_nils.last",
       expect = {"server2.chat-met-vreemden.nl"}
     },
 
     ["received by hostname first"] = {
-      selector = "received:by_hostname.first",
+      selector = "received:by_hostname.filter_string_nils.first",
       expect = {"server1.chat-met-vreemden.nl"}
     },
 
