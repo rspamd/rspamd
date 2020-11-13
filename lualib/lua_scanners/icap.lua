@@ -32,6 +32,7 @@ local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
+local rspamd_version = rspamd_version
 
 local N = 'icap'
 
@@ -105,7 +106,7 @@ local function icap_check(task, content, digest, rule)
     local options_request = {
       string.format("OPTIONS icap://%s:%s/%s ICAP/1.0\r\n", addr:to_string(), addr:get_port(), rule.scheme),
       string.format('Host: %s\r\n', addr:to_string()),
-      "User-Agent: Rspamd\r\n",
+      string.format("User-Agent: Rspamd/%s-%s\r\n", rspamd_version('main'), rspamd_version('id')),
       "Encapsulated: null-body=0\r\n\r\n",
     }
     local size = string.format("%x", tonumber(#content))
