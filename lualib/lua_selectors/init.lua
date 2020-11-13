@@ -338,20 +338,24 @@ exports.parse_selector = function(cfg, str)
           },
           map_type = 'string',
           process = function(inp, t, args)
+            local ret
             if t == 'table' then
-              return inp[method_name],'string'
+              -- Plain table field
+              ret = inp[method_name]
             else
               -- We call method unpacking arguments and dropping all but the first result returned
-              local ret = (inp[method_name](inp, unpack_function(args or E)))
-              local ret_type = type(ret)
-              -- Now apply types heuristic
-              if ret_type == 'string' then
-                return ret,'string'
-              elseif ret_type == 'table' then
-                return ret,'string_list'
-              else
-                return implicit_tostring(ret_type, ret)
-              end
+              ret = (inp[method_name](inp, unpack_function(args or E)))
+            end
+
+            local ret_type = type(ret)
+            -- Now apply types heuristic
+            if ret_type == 'string' then
+              return ret,'string'
+            elseif ret_type == 'table' then
+              -- TODO: we need to ensure that 1) table is numeric 2) table has merely strings
+              return ret,'string_list'
+            else
+              return implicit_tostring(ret_type, ret)
             end
           end,
         }
