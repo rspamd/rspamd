@@ -139,7 +139,7 @@ LUA_FUNCTION_DEF (text, bytes);
  * Return a new text with lowercased characters, if is_utf is true then Rspamd applies utf8 lowercase
  * @param {boolean} is_utf apply utf8 lowercase
  * @param {boolean} inplace lowercase the original text
- * @return rspamd_text} new rspamd_text (or the original text if inplace) with lowercased letters
+ * @return {rspamd_text} new rspamd_text (or the original text if inplace) with lowercased letters
  */
 LUA_FUNCTION_DEF (text, lower);
 LUA_FUNCTION_DEF (text, take_ownership);
@@ -157,7 +157,7 @@ LUA_FUNCTION_DEF (text, take_ownership);
  *
  * @param {string} set_to_exclude characters to exclude
  * @param {boolean} always_copy always copy the source text
- * @return {tspamd_text} modified or copied text
+ * @return {rspamd_text} modified or copied text
  */
 LUA_FUNCTION_DEF (text, exclude_chars);
 /***
@@ -171,7 +171,7 @@ LUA_FUNCTION_DEF (text, exclude_chars);
  * - UTF8 sequences are normalised
  *
  * @param {boolean} always_copy always copy the source text
- * @return {tspamd_text} modified or copied text
+ * @return {rspamd_text} modified or copied text
  */
 LUA_FUNCTION_DEF (text, oneline);
 /***
@@ -179,7 +179,7 @@ LUA_FUNCTION_DEF (text, oneline);
  * Returns a text encoded in base32 (new rspamd_text is allocated)
  *
  * @param {string} b32type base32 type (default, bleach, rfc)
- * @return {tspamd_text} new text encoded in base32
+ * @return {rspamd_text} new text encoded in base32
  */
 LUA_FUNCTION_DEF (text, base32);
 /***
@@ -189,16 +189,30 @@ LUA_FUNCTION_DEF (text, base32);
  * @param {number} line_length return text splited with newlines up to this attribute
  * @param {string} nline newline type: `cr`, `lf`, `crlf`
  * @param {boolean} fold use folding when splitting into lines (false by default)
- * @return {tspamd_text} new text encoded in base64
+ * @return {rspamd_text} new text encoded in base64
  */
 LUA_FUNCTION_DEF (text, base64);
 /***
  * @method rspamd_text:hex()
  * Returns a text encoded in hex (new rspamd_text is allocated)
  *
- * @return {tspamd_text} new text encoded in hex
+ * @return {rspamd_text} new text encoded in hex
  */
 LUA_FUNCTION_DEF (text, hex);
+/***
+ * @method rspamd_text:find(pattern [, init])
+ * Looks for the first match of pattern in the string s.
+ * If it finds a match, then find returns the indices of s where this occurrence
+ * starts and ends; otherwise, it returns nil. A third,
+ * optional numerical argument init specifies where to start the search;
+ * its default value is 1 and can be negative.
+ * This method currently supports merely a plain search, no patterns.
+ *
+ * @param {string} pattern pattern to find
+ * @param {number} init specifies where to start the search (1 default)
+ * @return {number,number/nil} If it finds a match, then find returns the indices of s where this occurrence starts and ends; otherwise, it returns nil
+ */
+LUA_FUNCTION_DEF (text, find);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 LUA_FUNCTION_DEF (text, lt);
@@ -233,6 +247,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, base32),
 		LUA_INTERFACE_DEF (text, base64),
 		LUA_INTERFACE_DEF (text, hex),
+		LUA_INTERFACE_DEF (text, find),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -1311,6 +1326,44 @@ lua_text_hex (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_text_find (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gsize patlen, init = 1;
+	const gchar *pat = luaL_checklstring (L, 2, &patlen);
+
+	if (t != NULL && pat != NULL) {
+
+		if (lua_isnumber (L, 3)) {
+			init = relative_pos_start (lua_tointeger (L, 3), t->len);
+		}
+
+		if (init >= t->len) {
+			return luaL_error (L, "invalid arguments to find: init too large");
+		}
+
+		goffset pos = rspamd_substring_search (t->start + init - 1,
+				t->len - (init - 1),
+				pat, patlen);
+
+		if (pos == -1) {
+			lua_pushnil (L);
+
+			return 1;
+		}
+
+		lua_pushinteger (L, pos + 1);
+		lua_pushinteger (L, pos + patlen);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 2;
 }
 
 #define BITOP(a,b,op) \
