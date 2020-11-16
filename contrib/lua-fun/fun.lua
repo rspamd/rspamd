@@ -96,7 +96,7 @@ local text_gen = function(param, state)
     if state > #param then
         return nil
     end
-    local r = string.char(param:at(state))
+    local r = string.char(param:byte(state))
     return state, r
 end
 
