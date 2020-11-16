@@ -954,7 +954,7 @@ local function attach_pdf_streams(task, input, pdf)
           end
           -- Strip the first \n
           while first < last do
-            local chr = input:at(first)
+            local chr = input:byte(first)
             if chr ~= 13 and chr ~= 10 then break end
             first = first + 1
           end

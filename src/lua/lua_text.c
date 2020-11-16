@@ -59,6 +59,14 @@ LUA_FUNCTION_DEF (text, randombytes);
  */
 LUA_FUNCTION_DEF (text, fromtable);
 /***
+ * @method rspamd_text:byte(pos[, pos2])
+ * Returns a byte at the position `pos` or bytes from `pos` to `pos2` if specified
+ * @param {integer} pos index
+ * @param {integer} pos2 index
+ * @return {integer} byte at the position `pos` or varargs of bytes
+ */
+LUA_FUNCTION_DEF (text, byte);
+/***
  * @method rspamd_text:len()
  * Returns length of a string
  * @return {number} length of string in **bytes**
@@ -240,6 +248,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, split),
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, memchr),
+		LUA_INTERFACE_DEF (text, byte),
 		LUA_INTERFACE_DEF (text, bytes),
 		LUA_INTERFACE_DEF (text, lower),
 		LUA_INTERFACE_DEF (text, exclude_chars),
@@ -962,23 +971,30 @@ lua_text_split (lua_State *L)
 static gint
 lua_text_at (lua_State *L)
 {
+	return lua_text_byte(L);
+}
+
+static gint
+lua_text_byte (lua_State *L)
+{
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	gint pos = lua_tointeger (L, 2);
-
-	if (t) {
-		if (pos > 0 && pos <= t->len) {
-			lua_pushinteger (L, t->start[pos - 1]);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
+	if (!t) {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	gsize start = relative_pos_start (luaL_optinteger (L, 2, 1), t->len);
+	gsize end = relative_pos_end (luaL_optinteger (L, 3, start), t->len);
+	start--;
+
+	if (start >= end) {
+		return 0;
+	}
+
+	for (gsize i = start; i < end; i++) {
+		lua_pushinteger (L, t->start[i]);
+	}
+	return end - start;
 }
 
 static gint

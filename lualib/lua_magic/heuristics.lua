@@ -181,7 +181,7 @@ local function detect_ole_format(input, log_obj, _, part)
   end
 
   local function process_dir_entry(offset)
-    local dtype = input:at(offset + 66)
+    local dtype = input:byte(offset + 66)
     lua_util.debugm(N, log_obj, "dtype: %s, offset: %s", dtype, offset)
 
     if dtype then
