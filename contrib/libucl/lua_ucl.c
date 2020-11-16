@@ -598,11 +598,12 @@ static int
 lua_ucl_to_string (lua_State *L, const ucl_object_t *obj, enum ucl_emitter type)
 {
 	unsigned char *result;
+	size_t outlen;
 
-	result = ucl_object_emit (obj, type);
+	result = ucl_object_emit_len (obj, type, &outlen);
 
 	if (result != NULL) {
-		lua_pushstring (L, (const char *)result);
+		lua_pushlstring (L, (const char *)result, outlen);
 		free (result);
 	}
 	else {
