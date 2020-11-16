@@ -1,5 +1,4 @@
 context("Rspamd_text:byte() test", function()
-  local lua_util = require "lua_util"
   local rspamd_text = require "rspamd_text"
 
   local str = 'OMG'
@@ -24,6 +23,51 @@ context("Rspamd_text:byte() test", function()
       assert_rspamd_table_eq({
         expect = str_bytes,
         actual = txt_bytes
+      })
+    end)
+  end
+end)
+
+context("Rspamd_text:find() test", function()
+  local rspamd_text = require "rspamd_text"
+
+  local cases = {
+    {{'foobarfoo', 'f'}, {1, 1}},
+    {{'foobarfoo', 'foo'}, {1, 3}},
+    {{'foobarfoo', 'bar'}, {4, 6}},
+    {{'foobarfoo', 'baz'}, nil},
+    {{'foobarfoo', 'rfoo'}, {6, 9}},
+  }
+
+  for _, case in ipairs(cases) do
+    local name = string.format('case rspamd_text:find(%s,%s)', case[1][1], case[1][2])
+    test(name, function()
+      local t = rspamd_text.fromstring(case[1][1])
+      local s,e = t:find(case[1][2])
+
+      if case[2] then
+        assert_rspamd_table_eq({
+          expect = case[2],
+          actual = {s, e}
+        })
+      else
+        assert_nil(s)
+      end
+      local ss,ee = string.find(case[1][1], case[1][2], 1, true)
+      assert_rspamd_table_eq({
+        expect = { ss, ee },
+        actual = { s, e }
+      })
+    end)
+    -- Compare with vanila lua
+    name = string.format('case lua string vs rspamd_text:find(%s,%s)', case[1][1], case[1][2])
+    test(name, function()
+      local t = rspamd_text.fromstring(case[1][1])
+      local s,e = t:find(case[1][2])
+      local ss,ee = string.find(case[1][1], case[1][2], 1, true)
+      assert_rspamd_table_eq({
+        expect = { ss, ee },
+        actual = { s, e }
       })
     end)
   end
