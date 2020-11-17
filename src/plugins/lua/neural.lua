@@ -52,6 +52,8 @@ local default_options = {
     classes_bias = 0.0, -- balanced mode: what difference is allowed between classes (1:1 proportion means 0 bias)
     spam_skip_prob = 0.0, -- proportional mode: spam skip probability (0-1)
     ham_skip_prob = 0.0, -- proportional mode: ham skip probability
+    store_pool_only = false, -- store tokens in mempool variable only (disables autotrain);
+    -- neural_vec_mpack stores vector of training data in messagepack neural_profile_digest stores profile digest
   },
   watch_interval = 60.0,
   lock_expire = 600,
@@ -501,8 +503,18 @@ local function ann_push_task_result(rule, task, verdict, score, set)
       elseif hdr:lower() == 'ham' then
         learn_ham = true
       else
-        skip_reason = string.format('no explicit header')
+        skip_reason = 'no explicit header'
       end
+    elseif train_opts.store_pool_only then
+      local ucl = require "ucl"
+      learn_ham = false
+      learn_spam = false
+
+      -- Explicitly store tokens in a mempool variable
+      local vec = result_to_vector(task, set)
+      task:get_mempool():set_variable('neural_vec_mpack', ucl.to_format(vec, 'msgpack'))
+      task:get_mempool():set_variable('neural_profile_digest', set.digest)
+      skip_reason = 'store_pool_only has been set'
     end
   end
 
