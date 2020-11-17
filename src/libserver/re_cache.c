@@ -1977,12 +1977,13 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		if (pcre_flags & PCRE_FLAG(DOTALL)) {
 			hs_flags[i] |= HS_FLAG_DOTALL;
 		}
-		if (rspamd_regexp_get_maxhits (re) == 1) {
-			hs_flags[i] |= HS_FLAG_SINGLEMATCH;
-		}
+
 
 		if (re_flags & RSPAMD_REGEXP_FLAG_LEFTMOST) {
 			hs_flags[i] |= HS_FLAG_SOM_LEFTMOST;
+		}
+		else if (rspamd_regexp_get_maxhits (re) == 1) {
+			hs_flags[i] |= HS_FLAG_SINGLEMATCH;
 		}
 
 		gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
