@@ -407,7 +407,15 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
 			p ++;
 			break;
 		case parse_quoted:
-			if (*p == '"') {
+			if (*p == '\\') {
+				if (p > c) {
+					g_string_append_len (ns, c, p - c);
+				}
+
+				p ++;
+				c = p;
+			}
+			else if (*p == '"') {
 				if (p > c) {
 					g_string_append_len (ns, c, p - c);
 				}
