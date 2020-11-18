@@ -2567,6 +2567,10 @@ lua_task_get_emails (lua_State * L)
 
 	if (task) {
 		if (task->message) {
+			if (task->cfg) {
+				max_urls = task->cfg->max_lua_urls;
+			}
+
 			if (!lua_url_cbdata_fill (L, 2, &cb, PROTOCOL_MAILTO,
 					~(RSPAMD_URL_FLAG_CONTENT|RSPAMD_URL_FLAG_IMAGE), max_urls)) {
 				return luaL_error (L, "invalid arguments");
