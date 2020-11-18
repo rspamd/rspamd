@@ -1358,7 +1358,7 @@ lua_text_find (lua_State *L)
 			init = relative_pos_start (lua_tointeger (L, 3), t->len);
 		}
 
-		if (init >= t->len) {
+		if (init > t->len) {
 			return luaL_error (L, "invalid arguments to find: init too large");
 		}
 
