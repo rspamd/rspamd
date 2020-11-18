@@ -7,7 +7,7 @@ context("RSA signature verification test", function()
   local rsa = require "rspamd_rsa"
   local hash = require "rspamd_cryptobox_hash"
   local pubkey = 'testkey.pub'
-  local privkey = 'testkey'
+  local privkey = 'testkey.sec'
   local data = 'test.data'
   local signature = 'test.sig'
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
