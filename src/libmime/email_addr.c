@@ -294,10 +294,11 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
 					state = parse_quoted;
 				}
 				else if (*p == '(') {
-					obraces ++;
+					obraces ++; /* To avoid ) itself being copied */
 				}
 				else if (*p == ')') {
 					ebraces ++;
+					p ++;
 				}
 
 				if (obraces == ebraces) {
