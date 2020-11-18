@@ -1896,7 +1896,7 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 				rspamd_substring_cmp_func);
 	}
 	else if (inlen == srchlen) {
-		return rspamd_lc_cmp (srch, in, srchlen) == 0;
+		return (rspamd_lc_cmp (srch, in, srchlen) == 0 ? 0 : -1);
 	}
 	else {
 		return (-1);
