@@ -39,6 +39,9 @@ context("Rspamd_text:find() test", function()
     {{'foobarfoo', 'rfoo'}, {6, 9}},
     {{'foo', 'bar'}, nil},
     {{'x', 'xxxx'}, nil},
+    {{'', ''}, {1, 0}},
+    {{'', '_'}, nil},
+    {{'x', ''}, {1, 0}},
   }
 
   for _, case in ipairs(cases) do

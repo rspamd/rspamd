@@ -1358,12 +1358,14 @@ lua_text_find (lua_State *L)
 			init = relative_pos_start (lua_tointeger (L, 3), t->len);
 		}
 
+		init --;
+
 		if (init > t->len) {
 			return luaL_error (L, "invalid arguments to find: init too large");
 		}
 
-		goffset pos = rspamd_substring_search (t->start + init - 1,
-				t->len - (init - 1),
+		goffset pos = rspamd_substring_search (t->start + init,
+				t->len - init,
 				pat, patlen);
 
 		if (pos == -1) {

@@ -1891,6 +1891,9 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 
 			return (-1);
 		}
+		else if (G_UNLIKELY (srchlen == 0)) {
+			return 0;
+		}
 
 		return rspamd_substring_search_common (in, inlen, srch, srchlen,
 				rspamd_substring_cmp_func);
