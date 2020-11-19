@@ -145,6 +145,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     if (id !== "#autoRefresh") tab_stat.statWidgets(ui, graphs, checked_server);
 
                     $(".preset").show();
+                    $(".history").hide();
                     $(".dynamic").hide();
                 }());
                 break;
@@ -165,6 +166,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     if (id !== "#autoRefresh") tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
 
                     $(".preset").hide();
+                    $(".history").hide();
                     $(".dynamic").show();
                 }());
                 break;
@@ -176,8 +178,20 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 tab_symbols.getSymbols(ui, tables, checked_server);
                 break;
             case "#history_nav":
-                tab_history.getHistory(ui, tables);
-                tab_history.getErrors(ui, tables);
+                (function () {
+                    function getHistoryAndErrors() {
+                        tab_history.getHistory(ui, tables);
+                        tab_history.getErrors(ui, tables);
+                    }
+                    var refreshInterval = $(".dropdown-menu a.active.history").data("value");
+                    setAutoRefresh(refreshInterval, "history",
+                        function () { return getHistoryAndErrors(); });
+                    if (id !== "#autoRefresh") getHistoryAndErrors();
+
+                    $(".preset").hide();
+                    $(".history").show();
+                    $(".dynamic").hide();
+                }());
                 break;
             case "#disconnect":
                 disconnect();
@@ -414,7 +428,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
             var classList = $(this).attr("class");
-            var menuClass = (/\b(?:dynamic|preset)\b/).exec(classList)[0];
+            var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
             $(".dropdown-menu a.active." + menuClass).removeClass("active");
             $(this).addClass("active");
             tabClick("#autoRefresh");
