@@ -1769,7 +1769,6 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 		/* Try to compile pattern */
 
 		gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
-		/* Memory leak here but ok since we do exit */
 
 		if (hs_compile (pat,
 				flags | HS_FLAG_PREFILTER,
@@ -1777,9 +1776,18 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
+
+			msg_info_re_cache ("cannot compile (prefilter mode) '%s' to hyperscan: '%s'",
+					pat,
+					hs_errors != NULL ? hs_errors->message : "unknown error");
+
+			hs_free_compile_error (hs_errors);
+			g_free (pat);
+
 			exit (EXIT_FAILURE);
 		}
 
+		g_free (pat);
 		exit (EXIT_SUCCESS);
 	}
 	else if (cld > 0) {
@@ -1994,9 +2002,9 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
-			msg_info_re_cache ("cannot compile %s to hyperscan: '%s', try prefilter match",
-					hs_errors != NULL ? hs_errors->message : "unknown error",
-					pat);
+			msg_info_re_cache ("cannot compile '%s' to hyperscan: '%s', try prefilter match",
+					pat,
+					hs_errors != NULL ? hs_errors->message : "unknown error");
 			hs_free_compile_error (hs_errors);
 
 			/* The approximation operation might take a significant
