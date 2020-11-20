@@ -381,6 +381,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     } else {
                         alertMessage("alert-error", "Request failed");
                     }
+                    if (o.complete) o.complete();
                     NProgress.done();
                 }
             },
@@ -611,6 +612,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
      * @param {string} url - A string containing the URL to which the request is sent
      * @param {Object} [options] - A set of key/value pairs that configure the Ajax request. All settings are optional.
      *
+     * @param {Function} [options.complete] - A function to be called when the requests to all neighbours complete.
      * @param {Object|string|Array} [options.data] - Data to be sent to the server.
      * @param {Function} [options.error] - A function to be called if the request fails.
      * @param {string} [options.errorMessage] - Text to display in the alert message if the request fails.
@@ -629,7 +631,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
+            if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
                 "success"]
                 .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
