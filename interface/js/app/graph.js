@@ -285,6 +285,7 @@ define(["jquery", "d3evolution", "footable"],
                     }
                     updateWidgets(data);
                 },
+                complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
                 data: {type:type}

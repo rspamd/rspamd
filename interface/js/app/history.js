@@ -370,6 +370,7 @@ define(["jquery", "footable"],
                         rspamd.destroyTable("history");
                     }
                 },
+                complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
                 errorMessage: "Cannot receive history",
             });
         };

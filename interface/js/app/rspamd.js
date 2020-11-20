@@ -91,7 +91,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         var tab_id = id;
         if ($(id).attr("disabled")) return;
         var navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
-        navBarControls.attr("disabled", true).addClass("disabled", true);
+        if (id !== "#autoRefresh") navBarControls.attr("disabled", true).addClass("disabled", true);
 
         stopTimers();
 
@@ -126,6 +126,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             if (!refreshInterval) return;
             timer_id[timer] = Visibility.every(refreshInterval, function () {
                 countdown(refreshInterval);
+                if ($("#refresh").attr("disabled")) return;
+                $("#refresh").attr("disabled", true).addClass("disabled", true);
                 callback();
             });
         }
@@ -145,6 +147,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     if (id !== "#autoRefresh") tab_stat.statWidgets(ui, graphs, checked_server);
 
                     $(".preset").show();
+                    $(".history").hide();
                     $(".dynamic").hide();
                 }());
                 break;
@@ -165,6 +168,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     if (id !== "#autoRefresh") tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
 
                     $(".preset").hide();
+                    $(".history").hide();
                     $(".dynamic").show();
                 }());
                 break;
@@ -176,8 +180,20 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 tab_symbols.getSymbols(ui, tables, checked_server);
                 break;
             case "#history_nav":
-                tab_history.getHistory(ui, tables);
-                tab_history.getErrors(ui, tables);
+                (function () {
+                    function getHistoryAndErrors() {
+                        tab_history.getHistory(ui, tables);
+                        tab_history.getErrors(ui, tables);
+                    }
+                    var refreshInterval = $(".dropdown-menu a.active.history").data("value");
+                    setAutoRefresh(refreshInterval, "history",
+                        function () { return getHistoryAndErrors(); });
+                    if (id !== "#autoRefresh") getHistoryAndErrors();
+
+                    $(".preset").hide();
+                    $(".history").show();
+                    $(".dynamic").hide();
+                }());
                 break;
             case "#disconnect":
                 disconnect();
@@ -186,6 +202,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         }
 
         setTimeout(function () {
+            // Do not enable Refresh button until AJAX requests to all neighbours are finished
+            if (tab_id === "#history_nav") navBarControls = $(navBarControls).not("#refresh");
+
             navBarControls.removeAttr("disabled").removeClass("disabled");
         }, (id === "#autoRefresh") ? 0 : 1000);
     }
@@ -367,6 +386,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     } else {
                         alertMessage("alert-error", "Request failed");
                     }
+                    if (o.complete) o.complete();
                     NProgress.done();
                 }
             },
@@ -414,7 +434,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
             var classList = $(this).attr("class");
-            var menuClass = (/\b(?:dynamic|preset)\b/).exec(classList)[0];
+            var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
             $(".dropdown-menu a.active." + menuClass).removeClass("active");
             $(this).addClass("active");
             tabClick("#autoRefresh");
@@ -597,6 +617,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
      * @param {string} url - A string containing the URL to which the request is sent
      * @param {Object} [options] - A set of key/value pairs that configure the Ajax request. All settings are optional.
      *
+     * @param {Function} [options.complete] - A function to be called when the requests to all neighbours complete.
      * @param {Object|string|Array} [options.data] - Data to be sent to the server.
      * @param {Function} [options.error] - A function to be called if the request fails.
      * @param {string} [options.errorMessage] - Text to display in the alert message if the request fails.
@@ -615,7 +636,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
+            if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
                 "success"]
                 .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
