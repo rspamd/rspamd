@@ -367,6 +367,7 @@ define(["jquery", "d3pie"],
                             });
                         }, promises.length ? 100 : 0);
                     },
+                    complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
                     errorMessage: "Cannot receive stats data",
                     errorOnceId: "alerted_stats_",
                     server: "All SERVERS"

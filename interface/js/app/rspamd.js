@@ -91,7 +91,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         var tab_id = id;
         if ($(id).attr("disabled")) return;
         var navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
-        navBarControls.attr("disabled", true).addClass("disabled", true);
+        if (id !== "#autoRefresh") navBarControls.attr("disabled", true).addClass("disabled", true);
 
         stopTimers();
 
@@ -126,6 +126,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             if (!refreshInterval) return;
             timer_id[timer] = Visibility.every(refreshInterval, function () {
                 countdown(refreshInterval);
+                if ($("#refresh").attr("disabled")) return;
+                $("#refresh").attr("disabled", true).addClass("disabled", true);
                 callback();
             });
         }
@@ -200,6 +202,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         }
 
         setTimeout(function () {
+            // Do not enable Refresh button until AJAX requests to all neighbours are finished
+            if (tab_id === "#history_nav") navBarControls = $(navBarControls).not("#refresh");
+
             navBarControls.removeAttr("disabled").removeClass("disabled");
         }, (id === "#autoRefresh") ? 0 : 1000);
     }
