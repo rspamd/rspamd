@@ -26,9 +26,9 @@ local lua_util = require "lua_util"
 
 local content_modules = {
   ical = {
-    mime_type = "text/calendar",
+    mime_type = {"text/calendar", "application/calendar"},
     module = require "lua_content/ical",
-    extensions = {'ical'},
+    extensions = {'ics'},
     output = "text"
   },
   pdf = {
@@ -47,7 +47,14 @@ local function init()
   modules_by_extension = {}
   for k,v in pairs(content_modules) do
     if v.mime_type then
-      modules_by_mime_type[v.mime_type] = {k, v}
+      if type(v.mime_type) == 'table' then
+        for _,mt in ipairs(v.mime_type) do
+          modules_by_mime_type[mt] = {k, v}
+        end
+      else
+        modules_by_mime_type[v.mime_type] = {k, v}
+      end
+
     end
     if v.extensions then
       for _,ext in ipairs(v.extensions) do
