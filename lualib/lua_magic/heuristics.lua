@@ -446,6 +446,11 @@ exports.text_part_heuristic = function(part, log_obj, _)
         return 'html',21
       end
 
+      if mtype ~= 'text' then
+        -- Do not treat non text patterns as text
+        return nil
+      end
+
       return 'txt',40
     end
   end
