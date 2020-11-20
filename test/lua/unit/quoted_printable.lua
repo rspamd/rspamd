@@ -102,6 +102,16 @@ context("Quoted-Printable encoding", function()
       'Mailscape External Mail Flow Outbound Test=',
       'asan found'
     },
+    {
+      'foo=\n\nbar',
+      'foo\nbar',
+      'Soft newline followed by hard newline (LF)',
+    },
+    {
+      'foo=\r\n\r\nbar',
+      'foo\r\nbar',
+      'Soft newline followed by hard newline (CRLF)',
+    },
   }
 
   for _,c in ipairs(cases) do

@@ -2341,13 +2341,17 @@ decode:
 			if      (c >= '0' && c <= '9') { ret = c - '0'; }
 			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
 			else if (c >= 'a' && c <= 'f') { ret = c - 'a' + 10; }
-			else if (c == '\r' || c == '\n') {
-				/* Soft line break */
-				while (remain > 0 && (*p == '\r' || *p == '\n')) {
-					remain --;
+			else if (c == '\r') {
+				/* Eat one more endline */
+				if (remain > 0 && *p == '\n') {
 					p ++;
+					remain --;
 				}
 
+				continue;
+			}
+			else if (c == '\n') {
+				/* Soft line break */
 				continue;
 			}
 			else {
