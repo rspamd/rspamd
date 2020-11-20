@@ -147,6 +147,15 @@ local patterns = {
       },
     }
   },
+  ics = {
+    matches = {
+      {
+        string = [[BEGIN:VCALENDAR]],
+        weight = 60,
+        relative_position = 0,
+      }
+    }
+  },
   -- Archives
   arj = {
     matches = {
