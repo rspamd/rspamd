@@ -25,12 +25,12 @@
 #include "lua_parsers.h"
 
 /***
- * @module rspamd_util
+ * @module rspamd_parsers
  * This module contains Lua-C interfaces to Rspamd parsers of different kind.
  */
 
 /***
- * @function util.tokenize_text(input[, exceptions])
+ * @function parsers.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
  * @param {text/string} input input data
  * @param {table} exceptions, a table of pairs containing <start_pos,length> of exceptions in the input
@@ -268,7 +268,7 @@ lua_parsers_parse_mail_address (lua_State *L)
 		}
 		else {
 			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-					"lua util", 0);
+					"lua parsers", 0);
 			own_pool = TRUE;
 		}
 
