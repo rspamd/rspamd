@@ -189,6 +189,7 @@ end
 
 local function is_pcre_only(name)
   if pcre_only_regexps[name] then
+    rspamd_logger.infox(rspamd_config, 'mark re %s as PCRE only', name)
     return true
   end
   return false
@@ -1664,16 +1665,18 @@ end
 local has_rules = false
 
 if type(section) == "table" then
+  if type(section.pcre_only) == 'table' then
+    pcre_only_regexps = lua_util.list_to_hash(section.pcre_only)
+  end
+  if type(section.alpha) == 'number' then
+    meta_score_alpha = section.alpha
+  end
+  if type(section.match_limit) == 'number' then
+    match_limit = section.match_limit
+  end
+
   for k, fn in pairs(section) do
-    if k == 'alpha' and type(fn) == 'number' then
-      meta_score_alpha = fn
-    elseif k == 'match_limit' and type(fn) == 'number' then
-      match_limit = fn
-    elseif k == 'pcre_only' and type(fn) == 'table' then
-      for _,s in ipairs(fn) do
-        pcre_only_regexps[s] = 1
-      end
-    else
+    if k ~= 'pcre_only' and k ~= 'alpha' and k ~= 'match_limit' then
       if type(fn) == 'table' then
         for _, elt in ipairs(fn) do
           local files = util.glob(elt)
