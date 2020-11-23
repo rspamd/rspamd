@@ -2990,7 +2990,6 @@ lua_config_register_regexp (lua_State *L)
 	GError *err = NULL;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
 	gboolean pcre_only = FALSE;
-	guint old_flags;
 
 	/*
 	 * - `re`* : regular expression object
@@ -3027,9 +3026,8 @@ lua_config_register_regexp (lua_State *L)
 			}
 			else {
 				if (pcre_only) {
-					old_flags = rspamd_regexp_get_flags (re->re);
-					old_flags |= RSPAMD_REGEXP_FLAG_PCRE_ONLY;
-					rspamd_regexp_set_flags (re->re, old_flags);
+					rspamd_regexp_set_flags (re->re,
+							rspamd_regexp_get_flags (re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
 				}
 
 				if (header_str != NULL) {
@@ -3055,6 +3053,11 @@ lua_config_register_regexp (lua_State *L)
 				if (cache_re != re->re) {
 					rspamd_regexp_unref (re->re);
 					re->re = rspamd_regexp_ref (cache_re);
+
+					if (pcre_only) {
+						rspamd_regexp_set_flags (re->re,
+								rspamd_regexp_get_flags (re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
+					}
 				}
 			}
 		}
