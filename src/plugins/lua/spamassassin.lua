@@ -1240,7 +1240,8 @@ local function post_process()
           lua_util.debugm(N, rspamd_config, 'replace %1 -> %2', r, nexpr)
           rspamd_config:replace_regexp({
             old_re = rule['re'],
-            new_re = nre
+            new_re = nre,
+            pcre_only = is_pcre_only(rule['symbol']),
           })
           rule['re'] = nre
           rule['re_expr'] = nexpr

@@ -3072,20 +3072,30 @@ lua_config_replace_regexp (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_regexp *old_re = NULL, *new_re = NULL;
+	gboolean pcre_only = FALSE;
 	GError *err = NULL;
 
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
-				"*old_re=U{regexp};*new_re=U{regexp}",
-				&old_re, &new_re)) {
-			msg_err_config ("cannot get parameters list: %e", err);
+				"*old_re=U{regexp};*new_re=U{regexp};pcre_only=B",
+				&old_re, &new_re, &pcre_only)) {
+			gint ret = luaL_error (L, "cannot get parameters list: %s",
+					err ? err->message : "invalid arguments");
 
 			if (err) {
 				g_error_free (err);
 			}
+
+			return ret;
 		}
 		else {
+
+			if (pcre_only) {
+				rspamd_regexp_set_flags (new_re->re,
+						rspamd_regexp_get_flags (new_re->re) | RSPAMD_REGEXP_FLAG_PCRE_ONLY);
+			}
+
 			rspamd_re_cache_replace (cfg->re_cache, old_re->re, new_re->re);
 		}
 	}
