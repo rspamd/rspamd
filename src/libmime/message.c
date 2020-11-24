@@ -275,7 +275,16 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 			}
 		}
 
-		if (G_UNLIKELY (*p) == '\r') {
+		if (G_UNLIKELY (p >= pe)) {
+			/*
+			 * This is reached when there is a utf8 part and we
+			 * have zero width spaces at the end of the text
+			 * So we just check overflow and refuse to access *p if it is
+			 * after our real content.
+			 */
+			break;
+		}
+		else if (G_UNLIKELY (*p) == '\r') {
 			switch (state) {
 			case normal_char:
 				state = seen_cr;
