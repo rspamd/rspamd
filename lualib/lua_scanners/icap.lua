@@ -88,10 +88,6 @@ local function icap_config(opts)
     icap_conf.servers,
     icap_conf.default_port)
 
-  if icap_conf.user_agent == "extended" then
-    icap_conf.user_agent = string.format("Rspamd/%s-%s (%s)", rspamd_version('main'), rspamd_version('id'), rspamd_util.get_hostname())
-  end
-
   if icap_conf.upstreams then
     lua_util.add_debug_alias('external_services', icap_conf.name)
     return icap_conf
@@ -108,6 +104,11 @@ local function icap_check(task, content, digest, rule)
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
     local respond_headers = {}
+
+    -- Build extended User Agent
+    if rule.user_agent == "extended" then
+      rule.user_agent = string.format("Rspamd/%s-%s (%s/%s)", rspamd_version('main'), rspamd_version('id'), rspamd_util.get_hostname(), string.sub(task:get_uid(), 1,6))
+    end
 
     -- Build the icap queries
     local options_request = {
