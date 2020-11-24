@@ -21,6 +21,42 @@ local common = require "lua_selectors/common"
 local ts = require("tableshape").types
 local E = {}
 
+local url_flags_ts = ts.array_of(ts.one_of{
+    'content',
+    'has_port',
+    'has_user',
+    'host_encoded',
+    'html_displayed',
+    'idn',
+    'image',
+    'missing_slahes', -- sic
+    'no_tld',
+    'numeric',
+    'obscured',
+    'path_encoded',
+    'phished',
+    'query',
+    'query_encoded',
+    'redirected',
+    'schema_encoded',
+    'schemaless',
+    'subject',
+    'text',
+    'unnormalised',
+    'url_displayed',
+    'zw_spaces',
+    }):is_optional()
+
+local function gen_exclude_flags_filter(exclude_flags)
+  return function(u)
+    local got_flags = u:get_flags()
+    for _, flag in ipairs(exclude_flags) do
+      if got_flags[flag] then return false end
+    end
+    return true
+  end
+end
+
 local extractors = {
   -- Plain id function
   ['id'] = {
@@ -277,6 +313,9 @@ e.g. `get_tld`]],
       local params = args[1] or {}
       params.task = task
       params.no_cache = true
+      if params.exclude_flags then
+        params.filter = gen_exclude_flags_filter(params.exclude_flags)
+      end
       local urls = lua_util.extract_specific_urls(params)
       if not urls[1] then
         return nil
@@ -287,31 +326,8 @@ e.g. `get_tld`]],
     ['args_schema'] = {ts.shape{
       limit = ts.number + ts.string / tonumber,
       esld_limit = (ts.number + ts.string / tonumber):is_optional(),
-      flags = ts.array_of(ts.one_of{
-          'content',
-          'has_port',
-          'has_user',
-          'host_encoded',
-          'html_displayed',
-          'idn',
-          'image',
-          'missing_slahes', -- sic
-          'no_tld',
-          'numeric',
-          'obscured',
-          'path_encoded',
-          'query',
-          'query_encoded',
-          'redirected',
-          'schema_encoded',
-          'schemaless',
-          'subject',
-          'text',
-          'unnormalised',
-          'url_displayed',
-          'zw_spaces',
-          'phished',
-          }):is_optional(),
+      exclude_flags = url_flags_ts,
+      flags = url_flags_ts,
       flags_mode = ts.one_of{'explicit'}:is_optional(),
       prefix = ts.string:is_optional(),
       need_content = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
