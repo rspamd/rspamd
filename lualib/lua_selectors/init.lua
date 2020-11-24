@@ -236,8 +236,10 @@ local function make_grammar()
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     METHOD = l.Ct(atom / function(e) return '__' .. e end * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     ARG_LIST = l.Ct((l.V("ARG") * comma^0)^0),
-    ARG = l.Cf(tbl_obrace * l.V("NAMED_ARG") * tbl_ebrace, rawset) + argument,
-    NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * argument * comma^0)^0),
+    ARG = l.Cf(tbl_obrace * l.V("NAMED_ARG") * tbl_ebrace, rawset) + argument + l.V("LIST_ARGS"),
+    NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma^0)^0),
+    LIST_ARGS = l.Ct(tbl_obrace * l.V("LIST_ARG") * tbl_ebrace),
+    LIST_ARG = l.Cg(argument * comma^0)^0,
   }
 end
 
