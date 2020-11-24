@@ -20,6 +20,7 @@
 #include "radix.h"
 #include "rspamd.h"
 #include "cryptobox.h"
+#include "mempool_vars_internal.h"
 #include "contrib/fastutf8/fastutf8.h"
 #include "contrib/cdb/cdb.h"
 
@@ -1029,6 +1030,120 @@ rspamd_radix_dtor (struct map_cb_data *data)
 	}
 }
 
+#ifdef WITH_HYPERSCAN
+
+static void
+rspamd_re_map_cache_update (const gchar *fname, struct rspamd_config *cfg)
+{
+	GHashTable *valid_re_hashes;
+
+	valid_re_hashes = rspamd_mempool_get_variable (cfg->cfg_pool,
+			RSPAMD_MEMPOOL_RE_MAPS_CACHE);
+
+	if (!valid_re_hashes) {
+		valid_re_hashes = g_hash_table_new_full (g_str_hash, g_str_equal,
+				g_free, NULL);
+		rspamd_mempool_set_variable (cfg->cfg_pool,
+				RSPAMD_MEMPOOL_RE_MAPS_CACHE,
+				valid_re_hashes, (rspamd_mempool_destruct_t)g_hash_table_unref);
+	}
+
+	g_hash_table_insert (valid_re_hashes, g_strdup (fname), "1");
+}
+
+static gboolean
+rspamd_try_load_re_map_cache (struct rspamd_regexp_map_helper *re_map)
+{
+	gchar fp[PATH_MAX];
+	gpointer map;
+	gsize len;
+
+	if (!re_map->map->cfg->hs_cache_dir) {
+		return FALSE;
+	}
+
+	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc",
+			re_map->map->cfg->hs_cache_dir,
+			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	if ((map = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
+		if (hs_deserialize_database (map, len, &re_map->hs_db) == HS_SUCCESS) {
+			rspamd_re_map_cache_update (fp, re_map->map->cfg);
+			munmap (map, len);
+
+			return TRUE;
+		}
+
+		munmap (map, len);
+		/* Remove stale file */
+		(void)unlink (fp);
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
+{
+	gchar fp[PATH_MAX], np[PATH_MAX];
+	gsize len;
+	gint fd;
+	char *bytes = NULL;
+	struct rspamd_map *map;
+
+	map = re_map->map;
+
+	if (!re_map->map->cfg->hs_cache_dir) {
+		return FALSE;
+	}
+
+	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc.tmp",
+			re_map->map->cfg->hs_cache_dir,
+			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
+		if (hs_serialize_database (re_map->hs_db, &bytes, &len) == HS_SUCCESS) {
+			if (write (fd, bytes, len) == -1) {
+				msg_warn_map ("cannot write hyperscan cache to %s: %s",
+						fp, strerror (errno));
+				unlink (fp);
+				free (bytes);
+			}
+			else {
+				free (bytes);
+				fsync (fd);
+
+				rspamd_snprintf (np, sizeof (np), "%s/%*xs.hsmc",
+						re_map->map->cfg->hs_cache_dir,
+						(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+
+				if (rename (fp, np) == -1) {
+					msg_warn_map ("cannot rename hyperscan cache from %s to %s: %s",
+							fp, np, strerror (errno));
+					unlink (fp);
+				}
+				else {
+					msg_info_map ("written cached hyperscan data for %s to %s",
+							map->name, np);
+
+					rspamd_re_map_cache_update (np, map->cfg);
+				}
+			}
+		}
+		else {
+			msg_warn_map ("cannot serialize hyperscan cache to %s: %s",
+					fp, strerror (errno));
+			unlink (fp);
+		}
+
+
+		close (fd);
+	}
+
+	return FALSE;
+}
+#endif
+
 static void
 rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 {
@@ -1106,25 +1221,36 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 	}
 
 	if (re_map->regexps->len > 0 && re_map->patterns) {
-		gdouble ts1 = rspamd_get_ticks (FALSE);
 
-		if (hs_compile_multi ((const gchar **)re_map->patterns,
-				re_map->flags,
-				re_map->ids,
-				re_map->regexps->len,
-				HS_MODE_BLOCK,
-				&plt,
-				&re_map->hs_db,
-				&err) != HS_SUCCESS) {
+		if (!rspamd_try_load_re_map_cache (re_map)) {
+			gdouble ts1 = rspamd_get_ticks (FALSE);
 
-			msg_err_map ("cannot create tree of regexp when processing '%s': %s",
-					err->expression >= 0 ?
-							re_map->patterns[err->expression] :
-							"unknown regexp", err->message);
-			re_map->hs_db = NULL;
-			hs_free_compile_error (err);
+			if (hs_compile_multi ((const gchar **) re_map->patterns,
+					re_map->flags,
+					re_map->ids,
+					re_map->regexps->len,
+					HS_MODE_BLOCK,
+					&plt,
+					&re_map->hs_db,
+					&err) != HS_SUCCESS) {
 
-			return;
+				msg_err_map ("cannot create tree of regexp when processing '%s': %s",
+						err->expression >= 0 ?
+						re_map->patterns[err->expression] :
+						"unknown regexp", err->message);
+				re_map->hs_db = NULL;
+				hs_free_compile_error (err);
+
+				return;
+			}
+
+			ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
+			msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
+					re_map->regexps->len, re_map->map->name, ts1);
+		}
+		else {
+			msg_info_map ("hyperscan read %d cached regular expressions from %s",
+					re_map->regexps->len, re_map->map->name);
 		}
 
 		if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
@@ -1132,10 +1258,6 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 			hs_free_database (re_map->hs_db);
 			re_map->hs_db = NULL;
 		}
-
-		ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
-		msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
-				re_map->regexps->len, re_map->map->name, ts1);
 	}
 	else {
 		msg_err_map ("regexp map is empty");
