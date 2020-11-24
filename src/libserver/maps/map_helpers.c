@@ -72,12 +72,13 @@ struct rspamd_cdb_map_helper {
 };
 
 struct rspamd_regexp_map_helper {
+	rspamd_cryptobox_hash_state_t hst;
+	guchar re_digest[rspamd_cryptobox_HASHBYTES];
 	rspamd_mempool_t *pool;
 	struct rspamd_map *map;
 	GPtrArray *regexps;
 	GPtrArray *values;
 	khash_t(rspamd_map_hash) *htb;
-	rspamd_cryptobox_fast_hash_state_t hst;
 	enum rspamd_regexp_map_flags map_flags;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
@@ -685,7 +686,7 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 	nk = kh_key (re_map->htb, k).begin;
 	val->key = nk;
 	kh_value (re_map->htb, k) = val;
-	rspamd_cryptobox_fast_hash_update (&re_map->hst, nk, tok.len);
+	rspamd_cryptobox_hash_update (&re_map->hst, nk, tok.len);
 
 	pcre_flags = rspamd_regexp_get_pcre_flags (re);
 
@@ -860,7 +861,7 @@ rspamd_map_helper_new_regexp (struct rspamd_map *map,
 	re_map->map = map;
 	re_map->map_flags = flags;
 	re_map->htb = kh_init (rspamd_map_hash);
-	rspamd_cryptobox_fast_hash_init (&re_map->hst, map_hash_seed);
+	rspamd_cryptobox_hash_init (&re_map->hst, NULL, 0);
 
 	return re_map;
 }
@@ -1245,12 +1246,13 @@ rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 
 	if (data->cur_data) {
 		re_map = data->cur_data;
+		rspamd_cryptobox_hash_final (&re_map->hst, re_map->re_digest);
+		memcpy (&data->map->digest, re_map->re_digest, sizeof (data->map->digest));
 		rspamd_re_map_finalize (re_map);
 		msg_info_map ("read regexp list of %ud elements",
 				re_map->regexps->len);
 		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
 		data->map->nelts = kh_size (re_map->htb);
-		data->map->digest = rspamd_cryptobox_fast_hash_final (&re_map->hst);
 	}
 
 	if (target) {
