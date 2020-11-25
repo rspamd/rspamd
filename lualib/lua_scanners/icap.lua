@@ -107,12 +107,16 @@ local function icap_check(task, content, digest, rule)
 
     -- Build extended User Agent
     if rule.user_agent == "extended" then
-      rule.user_agent = string.format("Rspamd/%s-%s (%s/%s)", rspamd_version('main'), rspamd_version('id'), rspamd_util.get_hostname(), string.sub(task:get_uid(), 1,6))
+      rule.user_agent = string.format("Rspamd/%s-%s (%s/%s)",
+          rspamd_version('main'),
+          rspamd_version('id'),
+          rspamd_util.get_hostname(),
+          string.sub(task:get_uid(), 1,6))
     end
 
     -- Build the icap queries
     local options_request = {
-      string.format("OPTIONS icap://%s:%s/%s ICAP/1.0\r\n", addr:to_string(), addr:get_port(), rule.scheme),
+      string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(true), rule.scheme),
       string.format('Host: %s\r\n', addr:to_string()),
       string.format("User-Agent: %s\r\n", rule.user_agent),
       "Encapsulated: null-body=0\r\n\r\n",
