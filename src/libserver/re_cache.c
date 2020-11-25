@@ -941,7 +941,7 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 		gsize slen;
 		const gchar *sel_data;
 
-		if (lua_type (L, -1) == LUA_TSTRING) {
+		if (lua_type (L, -1) != LUA_TTABLE) {
 			txt = lua_check_text_or_string (L, -1);
 
 			if (txt) {
