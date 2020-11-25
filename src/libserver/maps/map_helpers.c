@@ -1055,26 +1055,34 @@ static gboolean
 rspamd_try_load_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 {
 	gchar fp[PATH_MAX];
-	gpointer map;
+	gpointer data;
 	gsize len;
+	struct rspamd_map *map;
 
-	if (!re_map->map->cfg->hs_cache_dir) {
+	map = re_map->map;
+
+	if (!map->cfg->hs_cache_dir) {
 		return FALSE;
 	}
 
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc",
-			re_map->map->cfg->hs_cache_dir,
+			map->cfg->hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
-	if ((map = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
-		if (hs_deserialize_database (map, len, &re_map->hs_db) == HS_SUCCESS) {
-			rspamd_re_map_cache_update (fp, re_map->map->cfg);
-			munmap (map, len);
+	if ((data = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
+		if (hs_deserialize_database (data, len, &re_map->hs_db) == HS_SUCCESS) {
+			rspamd_re_map_cache_update (fp, map->cfg);
+			munmap (data, len);
+
+			msg_info_map ("loaded hypersan cache from %s (%Hz length) for %s",
+					fp, len, map->name);
 
 			return TRUE;
 		}
 
-		munmap (map, len);
+		msg_info_map ("invalid hypersan cache in %s (%Hz length) for %s, removing file",
+				fp, len, map->name);
+		munmap (data, len);
 		/* Remove stale file */
 		(void)unlink (fp);
 	}
@@ -1093,7 +1101,7 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 
 	map = re_map->map;
 
-	if (!re_map->map->cfg->hs_cache_dir) {
+	if (!map->cfg->hs_cache_dir) {
 		return FALSE;
 	}
 
@@ -1123,8 +1131,8 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 					unlink (fp);
 				}
 				else {
-					msg_info_map ("written cached hyperscan data for %s to %s",
-							map->name, np);
+					msg_info_map ("written cached hyperscan data for %s to %s (%Hz length)",
+							map->name, np, len);
 
 					rspamd_re_map_cache_update (np, map->cfg);
 				}
@@ -1247,6 +1255,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 			ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
 			msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
 					re_map->regexps->len, re_map->map->name, ts1);
+			rspamd_try_save_re_map_cache (re_map);
 		}
 		else {
 			msg_info_map ("hyperscan read %d cached regular expressions from %s",
