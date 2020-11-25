@@ -1031,6 +1031,75 @@ rspamd_radix_dtor (struct map_cb_data *data)
 }
 
 #ifdef WITH_HYPERSCAN
+struct rspamd_re_maps_cache_dtor_cbdata {
+	struct rspamd_config *cfg;
+	GHashTable *valid_re_hashes;
+	gchar *dirname;
+};
+
+static void
+rspamd_re_maps_cache_cleanup_dtor (gpointer ud)
+{
+	struct rspamd_re_maps_cache_dtor_cbdata *cbd =
+			(struct rspamd_re_maps_cache_dtor_cbdata *)ud;
+	GPtrArray *cache_files;
+	GError *err = NULL;
+	struct rspamd_config *cfg;
+
+	cfg = cbd->cfg;
+
+	if (cfg->cur_worker != NULL) {
+		/* Skip dtor, limit it to main process only */
+		return;
+	}
+
+	cache_files = rspamd_glob_path (cbd->dirname, "*.hsmc", FALSE, &err);
+
+	if (!cache_files) {
+		msg_err_config ("cannot glob files in %s: %e", cbd->dirname, err);
+		g_error_free (err);
+	}
+	else {
+		const gchar *fname;
+		guint i;
+
+		PTR_ARRAY_FOREACH (cache_files, i, fname) {
+			gchar *basename = g_path_get_basename (fname);
+
+			if (g_hash_table_lookup (cbd->valid_re_hashes, basename) == NULL) {
+				gchar *dir;
+
+				dir = g_path_get_dirname (fname);
+
+				/* Sanity check to avoid removal of something bad */
+				if (strcmp (dir, cbd->dirname) != 0) {
+					msg_err_config ("bogus file found: %s in %s, skip deleting",
+							fname, dir);
+				}
+				else {
+					if (unlink (fname) == -1) {
+						msg_err_config ("cannot delete obsolete file %s in %s: %s",
+								fname, dir, strerror (errno));
+					}
+					else {
+						msg_info_config ("deleted obsolete file %s in %s",
+								fname, dir);
+					}
+				}
+
+				g_free (dir);
+			}
+			else {
+				msg_debug_config ("valid re cache file %s", fname);
+			}
+
+			g_free (basename);
+		}
+	}
+
+	g_hash_table_unref (cbd->valid_re_hashes);
+	g_free (cbd->dirname);
+}
 
 static void
 rspamd_re_map_cache_update (const gchar *fname, struct rspamd_config *cfg)
@@ -1046,9 +1115,18 @@ rspamd_re_map_cache_update (const gchar *fname, struct rspamd_config *cfg)
 		rspamd_mempool_set_variable (cfg->cfg_pool,
 				RSPAMD_MEMPOOL_RE_MAPS_CACHE,
 				valid_re_hashes, (rspamd_mempool_destruct_t)g_hash_table_unref);
+
+		/* We also add a cleanup dtor for all hashes */
+		static struct rspamd_re_maps_cache_dtor_cbdata cbd;
+
+		cbd.valid_re_hashes = g_hash_table_ref (valid_re_hashes);
+		cbd.cfg = cfg;
+		cbd.dirname = g_path_get_dirname (fname);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				rspamd_re_maps_cache_cleanup_dtor, &cbd);
 	}
 
-	g_hash_table_insert (valid_re_hashes, g_strdup (fname), "1");
+	g_hash_table_insert (valid_re_hashes, g_path_get_basename (fname), "1");
 }
 
 static gboolean
