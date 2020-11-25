@@ -1150,6 +1150,43 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 
 	return FALSE;
 }
+
+static gboolean
+rspamd_re_map_cache_cleanup_old (struct rspamd_regexp_map_helper *old_re_map)
+{
+	gchar fp[PATH_MAX];
+	struct rspamd_map *map;
+
+	map = old_re_map->map;
+
+	if (!map->cfg->hs_cache_dir) {
+		return FALSE;
+	}
+
+	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc",
+			map->cfg->hs_cache_dir,
+			(gint)rspamd_cryptobox_HASHBYTES / 2, old_re_map->re_digest);
+
+	msg_info_map ("unlink stale cache file for %s: %s", map->name, fp);
+
+	if (unlink (fp) == -1) {
+		msg_warn_map ("cannot unlink stale cache file for %s (%s): %s",
+				map->name, fp, strerror (errno));
+		return FALSE;
+	}
+
+	GHashTable *valid_re_hashes;
+
+	valid_re_hashes = rspamd_mempool_get_variable (map->cfg->cfg_pool,
+			RSPAMD_MEMPOOL_RE_MAPS_CACHE);
+
+	if (valid_re_hashes) {
+		g_hash_table_remove (valid_re_hashes, fp);
+	}
+
+	return TRUE;
+}
+
 #endif
 
 static void
@@ -1372,7 +1409,7 @@ rspamd_glob_list_read_multiple (
 void
 rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 {
-	struct rspamd_regexp_map_helper *re_map;
+	struct rspamd_regexp_map_helper *re_map, *old_re_map;
 	struct rspamd_map *map = data->map;
 
 	if (data->cur_data) {
@@ -1391,7 +1428,17 @@ rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 	}
 
 	if (data->prev_data) {
-		rspamd_map_helper_destroy_regexp (data->prev_data);
+		old_re_map = data->prev_data;
+
+#ifdef WITH_HYPERSCAN
+		if (memcmp (re_map->re_digest, old_re_map->re_digest,
+				sizeof (re_map->re_digest)) != 0) {
+			/* Cleanup old stuff */
+			rspamd_re_map_cache_cleanup_old (old_re_map);
+		}
+#endif
+
+		rspamd_map_helper_destroy_regexp (old_re_map);
 	}
 }
 void
