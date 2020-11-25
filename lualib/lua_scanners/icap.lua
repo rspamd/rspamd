@@ -32,6 +32,9 @@ local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
+local rspamd_util = require "rspamd_util"
+local rspamd_version = rspamd_version
+
 
 local N = 'icap'
 
@@ -54,6 +57,7 @@ local function icap_config(opts)
     default_score = 1,
     action = false,
     dynamic_scan = false,
+    user_agent = "Rspamd",
   }
 
   icap_conf = lua_util.override_defaults(icap_conf, opts)
@@ -101,13 +105,22 @@ local function icap_check(task, content, digest, rule)
     local retransmits = rule.retransmits
     local respond_headers = {}
 
+    -- Build extended User Agent
+    if rule.user_agent == "extended" then
+      rule.user_agent = string.format("Rspamd/%s-%s (%s/%s)", rspamd_version('main'), rspamd_version('id'), rspamd_util.get_hostname(), string.sub(task:get_uid(), 1,6))
+    end
+
     -- Build the icap queries
     local options_request = {
       string.format("OPTIONS icap://%s:%s/%s ICAP/1.0\r\n", addr:to_string(), addr:get_port(), rule.scheme),
       string.format('Host: %s\r\n', addr:to_string()),
-      "User-Agent: Rspamd\r\n",
+      string.format("User-Agent: %s\r\n", rule.user_agent),
       "Encapsulated: null-body=0\r\n\r\n",
     }
+    if rule.user_agent == "none" then
+      table.remove(options_request, 3)
+    end
+
     local size = string.format("%x", tonumber(#content))
 
     local function icap_callback(err, conn)
