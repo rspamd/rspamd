@@ -368,7 +368,7 @@ the second argument is optional and defines the type (string by default)]],
     ['get_value'] = function(task, args)
       local hdr = task:get_request_header(args[1])
       if hdr then
-        return tostring(hdr),'string'
+        return hdr,'string'
       end
 
       return nil
