@@ -219,9 +219,9 @@ context("Selectors test", function()
                 selector = "time",
                 expect = {"1537364211"}},
 
-    ["request_header"] = {
-                selector = "request_header(hdr1)",
-                expect = {"value1"}},
+--    ["request_header"] = {
+--                selector = "request_header(hdr1)",
+--                expect = {"value1"}},
 
     ["get_host"] = {
                 selector = "urls:get_host",
