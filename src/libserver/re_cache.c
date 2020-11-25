@@ -937,19 +937,24 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 						lua_tostring (L, -1));
 	}
 	else {
+		struct rspamd_lua_text *txt;
 		gsize slen;
 		const gchar *sel_data;
 
 		if (lua_type (L, -1) == LUA_TSTRING) {
-			sel_data = lua_tolstring (L, -1, &slen);
-			*n = 1;
-			*svec = g_malloc (sizeof (guchar *));
-			*lenvec = g_malloc (sizeof (guint));
-			(*svec)[0] = g_malloc (slen);
-			memcpy ((*svec)[0], sel_data, slen);
-			(*lenvec)[0] = slen;
+			txt = lua_check_text_or_string (L, -1);
 
-			result = TRUE;
+			if (txt) {
+				sel_data = txt->start;
+				slen = txt->len;
+				*n = 1;
+				*svec = g_malloc (sizeof (guchar *));
+				*lenvec = g_malloc (sizeof (guint));
+				(*svec)[0] = g_malloc (slen);
+				memcpy ((*svec)[0], sel_data, slen);
+				(*lenvec)[0] = slen;
+				result = TRUE;
+			}
 		}
 		else {
 			*n = rspamd_lua_table_size (L, -1);
@@ -961,7 +966,16 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 				for (guint i = 0; i < *n; i ++) {
 					lua_rawgeti (L, -1, i + 1);
 
-					sel_data = lua_tolstring (L, -1, &slen);
+					txt = lua_check_text_or_string (L, -1);
+					if (txt) {
+						sel_data = txt->start;
+						slen = txt->len;
+					}
+					else {
+						sel_data = "";
+						slen = 0;
+					}
+
 					(*svec)[i] = g_malloc (slen);
 					memcpy ((*svec)[i], sel_data, slen);
 					(*lenvec)[i] = slen;
