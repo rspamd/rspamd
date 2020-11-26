@@ -851,10 +851,10 @@ local function clickhouse_collect(task)
     table.insert(custom_rows[k], lua_clickhouse.row_to_tsv(rule.get_row(task)))
   end
 
-  nrows = nrows + 1
   local tsv_row = lua_clickhouse.row_to_tsv(row)
   used_memory = used_memory + #tsv_row
   data_rows[#data_rows + 1] = tsv_row
+  nrows = nrows + 1
   lua_util.debugm(N, task,
       "add clickhouse row %s / %s; used memory: %s / %s",
       nrows, settings.limits.max_rows,

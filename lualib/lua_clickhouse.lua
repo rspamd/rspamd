@@ -74,10 +74,13 @@ end
 local function row_to_tsv(row)
 
   for i,elt in ipairs(row) do
-    if type(elt) == 'table' then
+    local t = type(elt)
+    if t == 'table' then
       row[i] = '[' .. array_to_string(elt) .. ']'
-    elseif type(elt) == 'number' then
+    elseif t == 'number' then
       row[i] = ch_number(elt)
+    elseif t == 'userdata' then
+      row[i] = clickhouse_quote(tostring(elt))
     else
       row[i] = clickhouse_quote(elt)
     end
