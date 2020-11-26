@@ -456,12 +456,24 @@ exports.combine_selectors = function(_, selectors, delimiter)
 
   if not selectors then return nil end
 
-  local all_strings = fun.all(function(s) return type(s) == 'string' end, selectors)
+  local have_tables, have_userdata
 
-  if all_strings then
-    return table.concat(selectors, delimiter)
+  for _,s in ipairs(selectors) do
+    if type(s) == 'table' then
+      have_tables = true
+    elseif type(s) == 'userdata' then
+      have_userdata = true
+    end
+  end
+
+  if not have_tables then
+    if not have_userdata then
+      return table.concat(selectors, delimiter)
+    else
+      return rspamd_text.fromtable(selectors, delimiter)
+    end
   else
-    -- We need to do a spill on each table selector
+    -- We need to do a spill on each table selector and make a cortezian product
     -- e.g. s:tbl:s -> s:telt1:s + s:telt2:s ...
     local tbl = {}
     local res = {}
@@ -472,6 +484,7 @@ exports.combine_selectors = function(_, selectors, delimiter)
       elseif type(s) == 'userdata' then
         rawset(tbl, i, fun.duplicate(tostring(s)))
       else
+        -- Raw table
         rawset(tbl, i, s)
       end
     end
