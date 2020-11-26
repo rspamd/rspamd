@@ -60,9 +60,12 @@ end
 -- Converts an array to a string suitable for clickhouse
 local function array_to_string(ar)
   for i,elt in ipairs(ar) do
-    if type(elt) == 'string' then
-      ar[i] = '\'' .. clickhouse_quote(elt) .. '\''
-    elseif type(elt) == 'number' then
+    local t = type(elt)
+    if t == 'string' then
+      ar[i] = string.format('\'%s\'', clickhouse_quote(elt))
+    elseif t == 'userdata' then
+      ar[i] = string.format('\'%s\'', clickhouse_quote(tostring(elt)))
+    elseif t == 'number' then
       ar[i] = ch_number(elt)
     end
   end
