@@ -118,7 +118,6 @@ local function add_scanner_rule(sym, opts)
     return nil
   end
 
-  if not opts.symbol then opts.symbol = sym:upper() end
   local cfg = lua_scanners[opts.type]
 
   if not cfg then
@@ -131,12 +130,15 @@ local function add_scanner_rule(sym, opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-      opts.type, opts.symbol)
+      opts.type, rule.symbol or sym:upper())
     return nil
   end
 
   rule.type = opts.type
-
+  -- Fill missing symbols
+  if not rule.symbol then
+    rule.symbol = sym:upper()
+  end
   if not rule.symbol_fail then
     rule.symbol_fail = rule.symbol .. '_FAIL'
   end
@@ -183,8 +185,8 @@ local function add_scanner_rule(sym, opts)
     end
   end
 
-  rspamd_logger.infox(rspamd_config, 'registered external services rule: %s',
-      rule.name)
+  rspamd_logger.infox(rspamd_config, 'registered external services rule: symbol %s; type %s',
+      rule.symbol, rule.type)
 
   return scan_cb, rule
 end
