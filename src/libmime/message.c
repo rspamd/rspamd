@@ -1330,7 +1330,6 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	memcpy (MESSAGE_FIELD (task, digest), n, sizeof (n));
 
-	/* Parse urls inside Subject header */
 	if (MESSAGE_FIELD (task, subject)) {
 		p = MESSAGE_FIELD (task, subject);
 		len = strlen (p);
@@ -1338,9 +1337,6 @@ rspamd_message_parse (struct rspamd_task *task)
 				p, len,
 				seed);
 		memcpy (MESSAGE_FIELD (task, digest), n, sizeof (n));
-		rspamd_url_find_multiple (task->task_pool, p, len,
-				RSPAMD_URL_FIND_STRICT, NULL,
-				rspamd_url_task_subject_callback, task);
 	}
 
 	if (task->queue_id) {
@@ -1492,6 +1488,15 @@ rspamd_message_process (struct rspamd_task *task)
 
 	if (old_top != -1) {
 		lua_settop (L, old_top);
+	}
+
+	/* Parse urls inside Subject header */
+	if (MESSAGE_FIELD (task, subject)) {
+		rspamd_url_find_multiple (task->task_pool, MESSAGE_FIELD (task, subject),
+				strlen (MESSAGE_FIELD (task, subject)),
+				RSPAMD_URL_FIND_STRICT, NULL,
+				rspamd_url_task_subject_callback,
+				task);
 	}
 
 	/* Calculate average words length and number of short words */

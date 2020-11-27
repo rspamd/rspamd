@@ -721,6 +721,10 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	st = rspamd_task_select_processing_stage (task, stages);
 
 	switch (st) {
+	case RSPAMD_TASK_STAGE_CONNFILTERS:
+		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
+		break;
+
 	case RSPAMD_TASK_STAGE_READ_MESSAGE:
 		if (!rspamd_message_parse (task)) {
 			ret = FALSE;
@@ -733,7 +737,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		}
 		break;
 
-	case RSPAMD_TASK_STAGE_CONNFILTERS:
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 	case RSPAMD_TASK_STAGE_FILTERS:
 		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
