@@ -332,6 +332,10 @@ FREEMAIL_CC
   Scan File  ${FREEMAIL_CC}
   Expect Symbol With Score And Exact Options  FREEMAIL_CC  19.00  test.com  test1.com  test2.com  test3.com  test4.com  test5.com  test6.com  test7.com  test8.com  test9.com  test10.com  test11.com  test12.com  test13.com  test14.com
 
+MAP - MULTISYMBOL DISABLED
+  Scan File  ${MESSAGE}  Rcpt=user3@example.com
+  Expect Symbol With Exact Options  RCPT_MAP_NOMULTISYM  user3@example.com  SYM1
+
 *** Keywords ***
 Multimap Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf

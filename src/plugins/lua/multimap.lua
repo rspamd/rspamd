@@ -561,6 +561,15 @@ local function multimap_callback(task, rule)
               symbol, rule.symbol, rule.symbol)
           symbol = rule.symbol
         end
+      elseif rule.disable_multisymbol then
+        symbol = rule.symbol
+        if type(opt) == 'table' then
+          table.insert(opt, result)
+        elseif type(opt) ~= nil then
+          opt = {opt,result}
+        else
+          opt = {result}
+        end
       else
         forced = true
       end
