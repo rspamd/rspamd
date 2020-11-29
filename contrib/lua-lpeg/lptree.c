@@ -1149,11 +1149,7 @@ static size_t initposition (lua_State *L, size_t len) {
 ** Main match function
 */
 static int lp_match (lua_State *L) {
-#ifdef LPEG_LUD_WORKAROUND
-  Capture *capture = lpeg_allocate_mem_low(sizeof(Capture) * INITCAPSIZE);
-#else
   Capture capture[INITCAPSIZE];
-#endif
   const char *r;
   size_t l;
   const char *s;
@@ -1167,9 +1163,6 @@ static int lp_match (lua_State *L) {
   else if (lua_type (L, SUBJIDX) == LUA_TUSERDATA) {
   	struct rspamd_lua_text *t = lua_check_text (L, SUBJIDX);
   	if (!t) {
-#ifdef LPEG_LUD_WORKAROUND
-		lpeg_free_mem_low (capture);
-#endif
 		return luaL_error (L, "invalid argument (not a text)");
   	}
   	s = t->start;
@@ -1177,16 +1170,10 @@ static int lp_match (lua_State *L) {
 
   	if (s == NULL) {
 		lua_pushnil(L);
-#ifdef LPEG_LUD_WORKAROUND
-		lpeg_free_mem_low (capture);
-#endif
 		return 1;
   	}
   }
   else {
-#ifdef LPEG_LUD_WORKAROUND
-  	lpeg_free_mem_low (capture);
-#endif
   	return luaL_error (L, "invalid argument: %s",
   			lua_typename (L, lua_type (L, SUBJIDX)));
   }
@@ -1198,15 +1185,9 @@ static int lp_match (lua_State *L) {
   r = match(L, s, s + i, s + l, code, capture, ptop);
   if (r == NULL) {
     lua_pushnil(L);
-#ifdef LPEG_LUD_WORKAROUND
-    lpeg_free_mem_low (capture);
-#endif
     return 1;
   }
   rs = getcaptures(L, s, r, ptop);
-#ifdef LPEG_LUD_WORKAROUND
-  lpeg_free_mem_low (capture);
-#endif
   return rs;
 }
 
