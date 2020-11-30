@@ -105,7 +105,13 @@ local function parse_clickhouse_response_json_eachrow(params, data)
 
   local function parse_string(s)
     local parser = ucl.parser()
-    local res, err = parser:parse_string(s)
+    local res, err
+    if type(s) == 'string' then
+      res,err = parser:parse_string(s)
+    else
+      res,err = parser:parse_text(s)
+    end
+
     if not res then
       rspamd_logger.errx(params.log_obj, 'Parser error: %s', err)
       return nil
@@ -114,10 +120,9 @@ local function parse_clickhouse_response_json_eachrow(params, data)
   end
 
   -- iterate over rows and parse
-  local ch_rows = lua_util.str_split(data, "\n")
   local parsed_rows = {}
-  for _, plain_row in pairs(ch_rows) do
-    if plain_row and plain_row:len() > 1 then
+  for plain_row in data:lines() do
+    if plain_row and #plain_row > 1 then
       local parsed_row = parse_string(plain_row)
       if parsed_row then
         table.insert(parsed_rows, parsed_row)
@@ -139,7 +144,14 @@ local function parse_clickhouse_response_json(params, data)
 
   local function parse_string(s)
     local parser = ucl.parser()
-    local res, err = parser:parse_string(s)
+    local res, err
+
+    if type(s) == 'string' then
+      res,err = parser:parse_string(s)
+    else
+      res,err = parser:parse_text(s)
+    end
+
     if not res then
       rspamd_logger.errx(params.log_obj, 'Parser error: %s', err)
       return nil
@@ -270,6 +282,7 @@ exports.select = function (upstream, settings, params, query, ok_cb, fail_cb)
   http_params.password = settings.password
   http_params.body = query
   http_params.log_obj = params.task or params.config
+  http_params.opaque_body = true
 
   lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
@@ -321,6 +334,7 @@ exports.select_sync = function (upstream, settings, params, query, ok_cb, fail_c
   http_params.password = settings.password
   http_params.body = query
   http_params.log_obj = params.task or params.config
+  http_params.opaque_body = true
 
   lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
