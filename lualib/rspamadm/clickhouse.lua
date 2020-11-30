@@ -86,43 +86,10 @@ local function load_config(config_file)
   end
 end
 
-local function get_excluded_symbols(res)
+local function get_excluded_symbols(known_symbols, correlations, seen_total)
   -- Walk results once to collect all symbols & count ocurrences
-  local known_symbols, remove = {}, {}
-  local symbols_count, seen_total = 1, 0
-  for _, r in ipairs(res) do
-    local is_spam = true
-    if r['Action'] == 'no action' or r['Action'] == 'greylist' then
-      is_spam = false
-    end
-    seen_total = seen_total + 1
-    for _, sym in ipairs(r['Symbols.Names']) do
-      local t = known_symbols[sym]
-      if not t then
-        local spam_count, ham_count = 0, 0
-        if is_spam then
-          spam_count = spam_count + 1
-        else
-          ham_count = ham_count + 1
-        end
-        known_symbols[sym] = {
-          id = symbols_count,
-          seen = 1,
-          seen_ham = ham_count,
-          seen_spam = spam_count,
-        }
-        symbols_count = symbols_count + 1
-      else
-        known_symbols[sym].seen = known_symbols[sym].seen + 1
-        if is_spam then
-          known_symbols[sym].seen_spam = known_symbols[sym].seen_spam + 1
-        else
-          known_symbols[sym].seen_ham = known_symbols[sym].seen_ham + 1
-        end
-      end
-    end
-  end
 
+  local remove = {}
   local known_symbols_list = {}
   local composites = rspamd_config:get_all_opt('composites')
   for k, v in pairs(known_symbols) do
@@ -147,12 +114,74 @@ local function get_excluded_symbols(res)
     }
   end
 
-  -- Walk results again & count correlations
+  -- Walk correlation matrix and check total counts
+  for sym_id, row in pairs(correlations) do
+    for inner_sym_id, count in pairs(row) do
+      local known = known_symbols_list[sym_id]
+      local inner = known_symbols_list[inner_sym_id]
+      if known and count == known.seen and not remove[inner.name] and not remove[known.name] then
+        remove[known.name] = string.format("overlapped by %s",
+            known_symbols_list[inner_sym_id].name)
+      end
+    end
+  end
+
+  return remove
+end
+
+local function handle_neural_profile(args)
+  if args.where then
+    args.where = 'WHERE ' .. args.where
+  end
+  local query = string.format(
+      "SELECT Action, Symbols.Names FROM rspamd %s", args.where or '')
+  local upstream = args.upstream:get_upstream_round_robin()
+  local known_symbols = {}
+  local symbols_count, seen_total = 1, 0
   local correlations = {}
-  for _, r in ipairs(res) do
-    for _, sym in ipairs(r['Symbols.Names']) do
-      for _, inner_sym_name in ipairs(r['Symbols.Names']) do
-        if inner_sym_name ~= sym then
+
+  local function process_row(r)
+    local is_spam = true
+    if r['Action'] == 'no action' or r['Action'] == 'greylist' then
+      is_spam = false
+    end
+    seen_total = seen_total + 1
+
+    local nsym = #r['Symbols.Names']
+
+    for i = 1,nsym do
+      local sym = r['Symbols.Names'][i]
+      local t = known_symbols[sym]
+      if not t then
+        local spam_count, ham_count = 0, 0
+        if is_spam then
+          spam_count = spam_count + 1
+        else
+          ham_count = ham_count + 1
+        end
+        known_symbols[sym] = {
+          id = symbols_count,
+          seen = 1,
+          seen_ham = ham_count,
+          seen_spam = spam_count,
+        }
+        symbols_count = symbols_count + 1
+      else
+        known_symbols[sym].seen = known_symbols[sym].seen + 1
+        if is_spam then
+          known_symbols[sym].seen_spam = known_symbols[sym].seen_spam + 1
+        else
+          known_symbols[sym].seen_ham = known_symbols[sym].seen_ham + 1
+        end
+      end
+    end
+
+    -- Fill correlations
+    for i = 1,nsym do
+      for j = 1,nsym do
+        if i ~= j then
+          local sym = r['Symbols.Names'][i]
+          local inner_sym_name = r['Symbols.Names'][j]
           local known_sym = known_symbols[sym]
           local inner_sym = known_symbols[inner_sym_name]
           if known_sym and inner_sym then
@@ -168,35 +197,13 @@ local function get_excluded_symbols(res)
     end
   end
 
-  -- Walk correlation matrix and check total counts
-  for sym_id, row in pairs(correlations) do
-    for inner_sym_id, count in pairs(row) do
-      local known = known_symbols_list[sym_id]
-      local inner = known_symbols_list[inner_sym_id]
-      if known and count == known.seen and not remove[inner.name] and not remove[known.name] then
-        remove[known.name] = string.format("overlapped by %s",
-            known_symbols_list[inner_sym_id].name)
-      end
-    end
-  end
-
-  return remove, known_symbols
-end
-
-local function handle_neural_profile(args)
-  if args.where then
-    args.where = 'WHERE ' .. args.where
-  end
-  local query = string.format(
-      "SELECT Action, Symbols.Names FROM rspamd %s", args.where or '')
-  local upstream = args.upstream:get_upstream_round_robin()
-  local err, res = lua_clickhouse.select_sync(upstream, args, http_params, query)
+  local err, _ = lua_clickhouse.select_sync(upstream, args, http_params, query, process_row)
   if err ~= nil then
     io.stderr:write(string.format('Error querying Clickhouse: %s\n', err))
     os.exit(1)
   end
 
-  local remove, known_symbols = get_excluded_symbols(res)
+  local remove = get_excluded_symbols(known_symbols, correlations, seen_total)
   if not args.json then
     for k in pairs(known_symbols) do
       if not remove[k] then
