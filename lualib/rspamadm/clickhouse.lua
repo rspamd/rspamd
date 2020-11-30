@@ -38,9 +38,14 @@ parser:option '-d --database'
 parser:flag '--no-ssl-verify'
       :description 'Disable SSL verification'
       :argname('no_ssl_verify')
-parser:option '-p --password'
-      :description 'Password to use for Clickhouse'
-      :argname('password')
+parser:mutex(
+    parser:option '-p --password'
+          :description 'Password to use for Clickhouse'
+          :argname('password'),
+    parser:flag '-a --ask-password'
+          :description 'Ask password from the terminal'
+          :argname('ask_password')
+)
 parser:option '-s --server'
       :description 'Address[:port] to connect to Clickhouse with'
       :argname('server')
@@ -227,6 +232,13 @@ local function handler(args)
 
   load_config(cmd_opts.config_file)
   local cfg_opts = rspamd_config:get_all_opt('clickhouse')
+
+  if cmd_opts.ask_password then
+    local rspamd_util = require "rspamd_util"
+
+    io.write('Password: ')
+    cmd_opts.password = rspamd_util.readpassphrase()
+  end
 
   local function override_settings(params)
     for _, which in ipairs(params) do
