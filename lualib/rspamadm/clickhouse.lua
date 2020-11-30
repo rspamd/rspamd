@@ -65,9 +65,20 @@ local neural_profile = parser:command 'neural_profile'
 neural_profile:option '-w --where'
       :description 'WHERE clause for Clickhouse query'
       :argname('where')
-parser:flag '-j --json'
+neural_profile:flag '-j --json'
       :description 'Write output as JSON'
       :argname('json')
+neural_profile:option '--days'
+      :description 'Number of days to collect stats for'
+      :argname('days')
+      :default('7')
+neural_profile:option '--limit -l'
+      :description 'Maximum rows to fetch per day'
+      :argname('limit')
+neural_profile:option '--settings-id'
+      :description 'Settings ID to query'
+      :argname('settings_id')
+      :default('')
 
 local http_params = {
   config = rspamd_config,
@@ -130,15 +141,9 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
 end
 
 local function handle_neural_profile(args)
-  if args.where then
-    args.where = 'WHERE ' .. args.where
-  end
-  local query = string.format(
-      "SELECT Action, Symbols.Names FROM rspamd %s", args.where or '')
-  local upstream = args.upstream:get_upstream_round_robin()
-  local known_symbols = {}
-  local symbols_count, seen_total = 1, 0
-  local correlations = {}
+
+  local known_symbols, correlations = {}, {}
+  local symbols_count, seen_total = 0, 0
 
   local function process_row(r)
     local is_spam = true
@@ -197,10 +202,38 @@ local function handle_neural_profile(args)
     end
   end
 
-  local err, _ = lua_clickhouse.select_sync(upstream, args, http_params, query, process_row)
-  if err ~= nil then
-    io.stderr:write(string.format('Error querying Clickhouse: %s\n', err))
-    os.exit(1)
+  -- Create list of days to query starting with yesterday
+  local query_days = {}
+  local previous_date = os.time() - 86400
+  local num_days = tonumber(args.days)
+  for _ = 1, num_days do
+    table.insert(query_days, os.date('%Y-%m-%d', previous_date))
+    previous_date = previous_date - 86400
+  end
+
+  local conditions = {}
+  table.insert(conditions, string.format("SettingsId = '%s'", args.settings_id))
+  local limit = ''
+  local num_limit = tonumber(args.limit)
+  if num_limit then
+    limit = string.format(' LIMIT %d', num_limit) -- Contains leading space
+  end
+  if args.where then
+    table.insert(conditions, args.where)
+  end
+
+  local query_fmt = 'SELECT Action, Symbols.Names FROM rspamd WHERE %s%s'
+  for _, query_day in ipairs(query_days) do
+    -- Date should be the last condition
+    table.insert(conditions, string.format("Date = '%s'", query_day))
+    local query = string.format(query_fmt, table.concat(conditions, ' AND '), limit)
+    local upstream = args.upstream:get_upstream_round_robin()
+    local err = lua_clickhouse.select_sync(upstream, args, http_params, query, process_row)
+    if err ~= nil then
+      io.stderr:write(string.format('Error querying Clickhouse: %s\n', err))
+      os.exit(1)
+    end
+    conditions[#conditions] = nil -- remove Date condition
   end
 
   local remove = get_excluded_symbols(known_symbols, correlations, seen_total)
