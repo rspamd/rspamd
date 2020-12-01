@@ -811,7 +811,7 @@ local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
           span_len = (elts[i + 1][2] + first) - offset
         end
 
-        if span_len > 0 and offset + span_len < #uncompressed then
+        if span_len > 0 and offset + span_len <= #uncompressed then
           local obj = {
             major = obj_number,
             minor = 0, -- Implicit
@@ -823,6 +823,9 @@ local function pdf_compound_object_unpack(_, uncompressed, pdf, task, first)
           if obj.dict then
             pdf.objects[#pdf.objects + 1] = obj
           end
+        else
+          lua_util.debugm(N, task, 'invalid span_len for compound object %s:%s; offset = %s, len = %s',
+              pair[1], pair[2], offset + span_len, #uncompressed)
         end
       end
     end
