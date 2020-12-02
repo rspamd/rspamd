@@ -727,20 +727,27 @@ local function modify_handler(opts)
         out[#out + 1] = o
       end
     else
-      out[#out + 1] = task:get_rawbody()
+      out[#out + 1] = {task:get_rawbody(), false}
     end
 
     for _,o in ipairs(out) do
       if type(o) == 'string' then
         io.write(o)
         io.write(newline_s)
-      else
+      elseif type(o) == 'table' then
         io.flush()
-        o[1]:save_in_file(1)
+        if type(o[1]) == 'string' then
+          io.write(o[1])
+        else
+          o[1]:save_in_file(1)
+        end
 
         if o[2] then
           io.write(newline_s)
         end
+      else
+        o:save_in_file(1)
+        io.write(newline_s)
       end
     end
 
