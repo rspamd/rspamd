@@ -408,7 +408,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
 
     if is_text then
       -- Try patterns
-      local span_len = math.min(160, clen)
+      local span_len = math.min(4096, clen)
       local start_span = content:span(1, span_len)
       local matches = txt_trie:match(start_span)
       local res = {}
@@ -418,8 +418,8 @@ exports.text_part_heuristic = function(part, log_obj, _)
           local ext,weight = txt_patterns_indexes[n][1], txt_patterns_indexes[n][2][2]
           if ext then
             res[ext] = (res[ext] or 0) + weight * #positions
-            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s, total: %s",
-                ext, weight * #positions, res[ext])
+            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s, total: %s; %s/%s announced",
+                ext, weight * #positions, res[ext], mtype, msubtype)
           end
         end
 
