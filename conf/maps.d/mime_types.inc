@@ -1354,6 +1354,7 @@ message/http 0
 message/imdn+xml 0
 message/news 0
 message/rfc822 0
+message/rfc822-headers 0
 message/s-http 0
 message/sip 0
 message/sipfrag 0

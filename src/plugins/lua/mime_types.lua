@@ -386,6 +386,7 @@ local function check_mime_type(task)
       local mtype,subtype = p:get_type()
 
       if not mtype then
+        lua_util.debugm(N, task, "no content type for part: %s", p:get_id())
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
         task:insert_result('MIME_TRACE', 0.0,
             string.format("%s:%s", p:get_id(), '~'))
