@@ -1690,12 +1690,13 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 static gboolean
 rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *ck,
 		const gchar **start, guint size,
-		guint *remain)
+		gssize *remain)
 {
 	const gchar *h;
 	static gchar buf[BUFSIZ];
 	gchar *t;
-	guint len, inlen, added = 0;
+	guint len, inlen;
+	gssize octets_remain;
 	gboolean got_sp;
 
 	len = size;
@@ -1703,8 +1704,9 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 	h = *start;
 	t = buf;
 	got_sp = FALSE;
+	octets_remain = *remain;
 
-	while (len && inlen) {
+	while (len > 0 && inlen > 0 && (octets_remain != 0)) {
 		if (*h == '\r' || *h == '\n') {
 			if (got_sp) {
 				/* Ignore spaces at the end of line */
@@ -1712,14 +1714,22 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 			}
 			*t++ = '\r';
 			*t++ = '\n';
+
 			if (len > 1 && (*h == '\r' && h[1] == '\n')) {
 				h += 2;
 				len -= 2;
+				octets_remain -= 2;
 			}
 			else {
 				h ++;
 				len --;
-				added ++;
+				if (octets_remain >= 2) {
+					octets_remain -= 2; /* Input has just \n or \r so we actually add more octets */
+				}
+				else {
+					octets_remain --;
+					break;
+				}
 			}
 			break;
 		}
@@ -1735,6 +1745,7 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 				h++;
 				inlen--;
 				len--;
+				octets_remain --;
 				got_sp = TRUE;
 				continue;
 			}
@@ -1742,31 +1753,34 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 		else {
 			got_sp = FALSE;
 		}
+
 		*t++ = *h++;
 		inlen--;
 		len--;
+		octets_remain --;
 	}
 
 	*start = h;
 
-	if (*remain > 0) {
-		gsize cklen = MIN(t - buf, *remain + added);
+	if (t - buf > 0) {
+		gsize cklen = t - buf;
 
 		EVP_DigestUpdate (ck, buf, cklen);
 		ctx->body_canonicalised += cklen;
-		*remain = *remain - (cklen - added);
-		msg_debug_dkim ("update signature with body buffer "
-				"(%z size, %ud remain, %ud added)",
-						cklen, *remain, added);
+		msg_debug_dkim ("relaxed update signature with body buffer "
+				"(%z size, %z -> %z remain); %*s",
+						cklen, *remain, octets_remain, (int)cklen, buf);
+		*remain = octets_remain;
+
 	}
 
-	return (len != 0);
+	return ((len != 0) && (octets_remain != 0));
 }
 
 static gboolean
 rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 		EVP_MD_CTX *ck, const gchar **start, guint size,
-		guint *remain)
+		gssize *remain)
 {
 	const gchar *h;
 	static gchar buf[BUFSIZ];
@@ -1800,14 +1814,14 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 
 	*start = h;
 
-	if (*remain > 0) {
+	if (*remain != 0) {
 		gsize cklen = MIN(t - buf, *remain + added);
 
 		EVP_DigestUpdate (ck, buf, cklen);
 		ctx->body_canonicalised += cklen;
 		*remain = *remain - (cklen - added);
 		msg_debug_dkim ("update signature with body buffer "
-				"(%z size, %ud remain, %ud added)",
+				"(%z size, %z remain, %ud added)",
 				cklen, *remain, added);
 	}
 
@@ -1990,7 +2004,7 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	gboolean sign)
 {
 	const gchar *p;
-	guint remain = ctx->len ? ctx->len : (guint)(end - start);
+	gssize remain = ctx->len ? ctx->len : -1;
 	guint total_len = end - start;
 	gboolean need_crlf = FALSE;
 
