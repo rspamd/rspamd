@@ -1843,7 +1843,7 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 		*remain = octets_remain;
 	}
 
-	return (len != 0);
+	return ((len != 0) && (octets_remain != 0));
 }
 
 static const gchar *
