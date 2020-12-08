@@ -66,6 +66,13 @@ struct rspamd_composite_option_match {
 
 struct rspamd_composite_atom {
 	gchar *symbol;
+	enum {
+		ATOM_UNKNOWN,
+		ATOM_COMPOSITE,
+		ATOM_PLAIN
+	} comp_type;
+
+	struct rspamd_composite *ncomp; /* underlying composite */
 	struct rspamd_composite_option_match *opts;
 };
 
@@ -217,6 +224,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	state = comp_state_read_symbol;
 
 	atom = rspamd_mempool_alloc0 (pool, sizeof (*atom));
+	atom->comp_type = ATOM_UNKNOWN;
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
 	res->str = line;
@@ -383,20 +391,31 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 {
 	struct rspamd_symbol_result *ms = NULL;
 	gdouble rc = 0;
-	struct rspamd_composite *ncomp;
 	struct rspamd_task *task = cd->task;
 
 	if ((ms = rspamd_task_find_symbol_result (cd->task, sym, cd->metric_res)) == NULL) {
 		msg_debug_composites ("not found symbol %s in composite %s", sym,
 				cd->composite->sym);
-		if ((ncomp =
-				g_hash_table_lookup (cd->task->cfg->composite_symbols,
-						sym)) != NULL) {
 
+		if (atom->comp_type == ATOM_UNKNOWN) {
+			struct rspamd_composite *ncomp;
+
+			if ((ncomp =
+						 g_hash_table_lookup (cd->task->cfg->composite_symbols,
+								 sym)) != NULL) {
+				atom->comp_type = ATOM_COMPOSITE;
+				atom->ncomp = ncomp;
+			}
+			else {
+				atom->comp_type = ATOM_PLAIN;
+			}
+		}
+
+		if (atom->comp_type == ATOM_COMPOSITE) {
 			msg_debug_composites ("symbol %s for composite %s is another composite",
 					sym, cd->composite->sym);
 
-			if (isclr (cd->checked, ncomp->id * 2)) {
+			if (isclr (cd->checked, atom->ncomp->id * 2)) {
 				struct rspamd_composite *saved;
 
 				msg_debug_composites ("composite dependency %s for %s is not checked",
@@ -404,7 +423,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
 				saved = cd->composite; /* Save the current composite */
-				composites_foreach_callback ((gpointer)ncomp->sym, ncomp, cd);
+				composites_foreach_callback ((gpointer)atom->ncomp->sym, atom->ncomp, cd);
 
 				/* Restore state */
 				cd->composite = saved;
@@ -417,7 +436,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				/*
 				 * XXX: in case of cyclic references this would return 0
 				 */
-				if (isset (cd->checked, ncomp->id * 2 + 1)) {
+				if (isset (cd->checked, atom->ncomp->id * 2 + 1)) {
 					ms = rspamd_task_find_symbol_result (cd->task, sym,
 							cd->metric_res);
 				}
