@@ -158,6 +158,8 @@ rspamd_add_passthrough_result (struct rspamd_task *task, struct rspamd_action *a
 				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
 				message, module, priority);
 	}
+
+	scan_result->nresults ++;
 }
 
 static inline gdouble
@@ -474,6 +476,7 @@ insert_metric_result (struct rspamd_task *task,
 			symbol,
 			s->score,
 			final_score);
+	metric_res->nresults ++;
 
 	return s;
 }
@@ -729,6 +732,8 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	else if (!val) {
 		ret = TRUE;
 	}
+
+	task->result->nresults ++;
 
 	return ret;
 }

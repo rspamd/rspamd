@@ -89,6 +89,8 @@ struct rspamd_scan_result {
 	guint nactions;
 	guint npositive;
 	guint nnegative;
+	guint nresults; /**< all results: positive, negative, passthrough etc */
+	guint nresults_postfilters; /**< how many results are there before postfilters stage */
 	struct rspamd_scan_result *prev, *next;           /**< double linked list of results */
 };
 
