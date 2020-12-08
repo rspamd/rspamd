@@ -611,51 +611,23 @@ rspamd_composite_expr_process (void *ud,
 	}
 
 	sym = comp_atom->symbol;
+	guint slen = strlen (sym);
 
 	while (*sym != '\0' && !g_ascii_isalnum (*sym)) {
 		sym ++;
+		slen --;
 	}
 
-	if (strncmp (sym, "g:", 2) == 0) {
-		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 2);
+	if (slen > 2) {
+		if (G_UNLIKELY (memcmp (sym, "g:", 2) == 0)) {
+			gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 2);
 
-		if (gr != NULL) {
-			g_hash_table_iter_init (&it, gr->symbols);
+			if (gr != NULL) {
+				g_hash_table_iter_init (&it, gr->symbols);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				sdef = v;
-				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms,
-						comp_atom);
-
-				if (rc) {
-					rspamd_composite_process_symbol_removal (atom,
-							cd,
-							ms,
-							comp_atom->symbol);
-
-					if (fabs (rc) > max) {
-						max = fabs (rc);
-					}
-				}
-			}
-		}
-
-		rc = max;
-	}
-	else if (strncmp (sym, "g+:", 3) == 0) {
-		/* Group, positive symbols only */
-		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
-
-		if (gr != NULL) {
-			g_hash_table_iter_init (&it, gr->symbols);
-
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				sdef = v;
-
-				if (sdef->score > 0) {
-					rc = rspamd_composite_process_single_symbol (cd,
-							sdef->name,
-							&ms,
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					sdef = v;
+					rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms,
 							comp_atom);
 
 					if (rc) {
@@ -673,37 +645,79 @@ rspamd_composite_expr_process (void *ud,
 
 			rc = max;
 		}
-	}
-	else if (strncmp (sym, "g-:", 3) == 0) {
-		/* Group, negative symbols only */
-		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
+		else if (G_UNLIKELY (memcmp (sym, "g+:", 3) == 0)) {
+			/* Group, positive symbols only */
+			gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
 
-		if (gr != NULL) {
-			g_hash_table_iter_init (&it, gr->symbols);
+			if (gr != NULL) {
+				g_hash_table_iter_init (&it, gr->symbols);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				sdef = v;
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					sdef = v;
 
-				if (sdef->score < 0) {
-					rc = rspamd_composite_process_single_symbol (cd,
-							sdef->name,
-							&ms,
-							comp_atom);
+					if (sdef->score > 0) {
+						rc = rspamd_composite_process_single_symbol (cd,
+								sdef->name,
+								&ms,
+								comp_atom);
 
-					if (rc) {
-						rspamd_composite_process_symbol_removal (atom,
-								cd,
-								ms,
-								comp_atom->symbol);
+						if (rc) {
+							rspamd_composite_process_symbol_removal (atom,
+									cd,
+									ms,
+									comp_atom->symbol);
 
-						if (fabs (rc) > max) {
-							max = fabs (rc);
+							if (fabs (rc) > max) {
+								max = fabs (rc);
+							}
 						}
 					}
 				}
-			}
 
-			rc = max;
+				rc = max;
+			}
+		}
+		else if (G_UNLIKELY (memcmp (sym, "g-:", 3) == 0)) {
+			/* Group, negative symbols only */
+			gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
+
+			if (gr != NULL) {
+				g_hash_table_iter_init (&it, gr->symbols);
+
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					sdef = v;
+
+					if (sdef->score < 0) {
+						rc = rspamd_composite_process_single_symbol (cd,
+								sdef->name,
+								&ms,
+								comp_atom);
+
+						if (rc) {
+							rspamd_composite_process_symbol_removal (atom,
+									cd,
+									ms,
+									comp_atom->symbol);
+
+							if (fabs (rc) > max) {
+								max = fabs (rc);
+							}
+						}
+					}
+				}
+
+				rc = max;
+			}
+		}
+		else {
+			rc = rspamd_composite_process_single_symbol (cd, sym, &ms, comp_atom);
+
+			if (rc) {
+				rspamd_composite_process_symbol_removal (atom,
+						cd,
+						ms,
+						comp_atom->symbol);
+			}
 		}
 	}
 	else {
