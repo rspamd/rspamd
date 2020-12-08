@@ -1768,8 +1768,8 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 		EVP_DigestUpdate (ck, buf, cklen);
 		ctx->body_canonicalised += cklen;
 		msg_debug_dkim ("relaxed update signature with body buffer "
-				"(%z size, %z -> %z remain); %*s",
-						cklen, *remain, octets_remain, (int)cklen, buf);
+				"(%z size, %z -> %z remain)",
+						cklen, *remain, octets_remain);
 		*remain = octets_remain;
 
 	}
@@ -1785,44 +1785,62 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *h;
 	static gchar buf[BUFSIZ];
 	gchar *t;
-	guint len, inlen, added = 0;
+	guint len, inlen;
+	gssize octets_remain;
 
 	len = size;
 	inlen = sizeof (buf) - 1;
 	h = *start;
 	t = &buf[0];
+	octets_remain = *remain;
 
-	while (len && inlen) {
+	while (len > 0 && inlen > 0 && (octets_remain != 0)) {
 		if (*h == '\r' || *h == '\n') {
 			*t++ = '\r';
 			*t++ = '\n';
+
 			if (len > 1 && (*h == '\r' && h[1] == '\n')) {
 				h += 2;
 				len -= 2;
+
+				if (octets_remain >= 2) {
+					octets_remain -= 2; /* Input has just \n or \r so we actually add more octets */
+				}
+				else {
+					octets_remain --;
+				}
 			}
 			else {
 				h ++;
 				len --;
-				added ++;
+
+				if (octets_remain >= 2) {
+					octets_remain -= 2; /* Input has just \n or \r so we actually add more octets */
+				}
+				else {
+					octets_remain --;
+				}
 			}
 			break;
 		}
+
 		*t++ = *h++;
+		octets_remain --;
 		inlen--;
 		len--;
 	}
 
 	*start = h;
 
-	if (*remain != 0) {
-		gsize cklen = MIN(t - buf, *remain + added);
+	if (t - buf > 0) {
+		gsize cklen = t - buf;
 
 		EVP_DigestUpdate (ck, buf, cklen);
 		ctx->body_canonicalised += cklen;
-		*remain = *remain - (cklen - added);
-		msg_debug_dkim ("update signature with body buffer "
-				"(%z size, %z remain, %ud added)",
-				cklen, *remain, added);
+		msg_debug_dkim ("simple update signature with body buffer "
+						"(%z size, %z -> %z remain)",
+				cklen, *remain, octets_remain);
+		*remain = octets_remain;
 	}
 
 	return (len != 0);
