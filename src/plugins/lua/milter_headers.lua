@@ -25,6 +25,7 @@ local logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local N = 'milter_headers'
 local lua_util = require "lua_util"
+local lua_maps = require "lua_maps"
 local ts = require("tableshape").types
 local E = {}
 
@@ -36,7 +37,6 @@ local settings = {
   skip_authenticated = true,
   local_headers = {},
   authenticated_headers = {},
-  extended_headers_rcpt = {},
   routines = {
     ['remove-headers'] = {
       headers = {},
@@ -132,16 +132,27 @@ local function milter_headers(task)
       local found
       for _, r in ipairs(rcpts) do
         found = false
-        for k, v in pairs(settings.extended_headers_rcpt) do
-          for _, ehr in ipairs(v) do
-            if r[k] == ehr then
-              found = true
-              break
-            end
+        -- Try full addr match
+        if r.addr and r.domain and r.user then
+          if settings.extended_headers_rcpt:get_key(r.addr) then
+            lua_util.debugm(N, task, 'found full addr in recipients for extended headers: %s',
+                r.addr)
+            found = true
           end
-          if found then break end
+          -- Try user as plain match
+          if not found and settings.extended_headers_rcpt:get_key(r.user) then
+            lua_util.debugm(N, task, 'found user in recipients for extended headers: %s (%s)',
+                r.user, r.addr)
+            found = true
+          end
+          -- Try @domain to match domain
+          if not found and settings.extended_headers_rcpt:get_key('@' .. r.domain) then
+            lua_util.debugm(N, task, 'found domain in recipients for extended headers: @%s (%s)',
+                r.domain, r.addr)
+            found = true
+          end
         end
-        if not found then break end
+        if found then break end
       end
       return found
     end
@@ -549,8 +560,7 @@ local config_schema = ts.shape({
   skip_authenticated = ts.boolean:is_optional(),
   local_headers = ts.array_of(ts.string):is_optional(),
   authenticated_headers = ts.array_of(ts.string):is_optional(),
-  extended_headers_rcpt =
-      (ts.array_of(ts.string) + ts.string / function(s) return {s} end):is_optional(),
+  extended_headers_rcpt = lua_maps.map_schema,
   custom = ts.map_of(ts.string, ts.string):is_optional(),
 }, {
   extra_fields = ts.map_of(ts.string, ts.any)
@@ -646,29 +656,8 @@ logger.infox(rspamd_config, 'active routines [%s]',
     table.concat(active_routines, ','))
 
 if opts.extended_headers_rcpt then
-  for _, e in ipairs(opts.extended_headers_rcpt) do
-    if string.find(e, '^[^@]+@[^@]+$') then
-      if not settings.extended_headers_rcpt.addr then
-        settings.extended_headers_rcpt.addr = {}
-      end
-      table.insert(settings.extended_headers_rcpt['addr'], e)
-    elseif string.find(e, '^[^@]+$') then
-      if not settings.extended_headers_rcpt.user then
-        settings.extended_headers_rcpt.user = {}
-      end
-      table.insert(settings.extended_headers_rcpt['user'], e)
-    else
-      local d = string.match(e, '^@([^@]+)$')
-      if d then
-        if not settings.extended_headers_rcpt.domain then
-          settings.extended_headers_rcpt.domain = {}
-        end
-        table.insert(settings.extended_headers_rcpt['domain'], d)
-      else
-        logger.errx(rspamd_config, 'extended_headers_rcpt: unexpected entry: %s', e)
-      end
-    end
-  end
+  settings.extended_headers_rcpt = lua_maps.rspamd_map_add_from_ucl(opts.extended_headers_rcpt,
+      'set', 'Extended headers recipients')
 end
 
 rspamd_config:register_symbol({
