@@ -27,6 +27,8 @@ context("Selectors test", function()
     task:process_message()
     task:get_mempool():set_variable("int_var", 1)
     task:get_mempool():set_variable("str_var", "str 1")
+    task:cache_set('cachevar1', 'hello\x00world')
+    task:cache_set('cachevar2', {'hello', 'world'})
     if not res then
       assert_true(false, "failed to load message")
     end
@@ -357,6 +359,15 @@ context("Selectors test", function()
     ["header regexp first"] = {
       selector = "header('Subject').regexp('.*').first",
       expect = {"Second, lower-cased header subject"}
+    },
+
+    ["task cache string"] = {
+      selector = "task_cache('cachevar1')",
+      expect = {"hello\x00world"}
+    },
+    ["task cache table"] = {
+      selector = "task_cache('cachevar2')",
+      expect = {{"hello", "world"}}
     },
   }
 

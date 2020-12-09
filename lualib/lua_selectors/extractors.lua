@@ -363,6 +363,25 @@ e.g. `get_user`]],
 the second argument is optional and defines the type (string by default)]],
     ['args_schema'] = {ts.string, ts.string:is_optional()}
   },
+  -- Get value of specific key from task cache
+  ['task_cache'] = {
+    ['get_value'] = function(task, args)
+      local val = task:cache_get(args[1])
+      if not val then
+        return
+      end
+      if type(val) == 'table' then
+        if not val[1] then
+          return
+        end
+        return val, 'string_list'
+      end
+      return val, 'string'
+    end,
+    ['description'] = [[Get value of specific key from task cache. The first argument must be
+the key name]],
+    ['args_schema'] = {ts.string}
+  },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
     ['get_value'] = function(task, args)
