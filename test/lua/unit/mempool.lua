@@ -33,7 +33,12 @@ context("Memory pool unit tests", function()
     assert_equal(v2, 1)
     assert_equal(v3, 1.01)
     assert_equal(v4, false)
-    
+
+    -- string containing null
+    local has_null = 'hello\x00world'
+    pool:set_variable('a', has_null)
+    assert_equal(pool:get_variable('a'), has_null)
+
     pool:destroy()
   end)
 end)
