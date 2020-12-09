@@ -800,6 +800,10 @@ local function process_sa_conf(f)
           handle_header_def(words[3], cur_rule)
         end
 
+        if cur_rule['unset'] then
+          cur_rule['ordinary'] = false
+        end
+
         if words[1] == 'mimeheader' then
           cur_rule['mime'] = true
         else
