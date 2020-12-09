@@ -1693,11 +1693,11 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 		gssize *remain)
 {
 	const gchar *h;
-	static gchar buf[BUFSIZ];
 	gchar *t;
 	guint len, inlen;
 	gssize octets_remain;
 	gboolean got_sp;
+	gchar buf[1024];
 
 	len = size;
 	inlen = sizeof (buf) - 1;
@@ -1707,6 +1707,7 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 	octets_remain = *remain;
 
 	while (len > 0 && inlen > 0 && (octets_remain != 0)) {
+
 		if (*h == '\r' || *h == '\n') {
 			if (got_sp) {
 				/* Ignore spaces at the end of line */
@@ -1783,10 +1784,10 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 		gssize *remain)
 {
 	const gchar *h;
-	static gchar buf[BUFSIZ];
 	gchar *t;
 	guint len, inlen;
 	gssize octets_remain;
+	gchar buf[1024];
 
 	len = size;
 	inlen = sizeof (buf) - 1;
