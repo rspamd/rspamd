@@ -560,7 +560,7 @@ local config_schema = ts.shape({
   skip_authenticated = ts.boolean:is_optional(),
   local_headers = ts.array_of(ts.string):is_optional(),
   authenticated_headers = ts.array_of(ts.string):is_optional(),
-  extended_headers_rcpt = lua_maps.map_schema,
+  extended_headers_rcpt = lua_maps.map_schema:is_optional(),
   custom = ts.map_of(ts.string, ts.string):is_optional(),
 }, {
   extra_fields = ts.map_of(ts.string, ts.any)
