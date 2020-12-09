@@ -1492,7 +1492,7 @@ local function post_process()
           return sopt ~= k
         end
 
-        if not already_processed then
+        if not already_processed[res_name or 'default'] then
           -- Execute symbol
           local function exec_symbol(cur_res)
             local res,trace = expression:process_traced(gen_process_atom_cb(cur_res, task))
