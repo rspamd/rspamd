@@ -531,7 +531,7 @@ local ip_selector = {
     score_divisor = 1,
     outbound = false,
     inbound = true,
-    ipv4_mask = 29, -- Mask bits for ipv4
+    ipv4_mask = 32, -- Mask bits for ipv4
     ipv6_mask = 64, -- Mask bits for ipv6
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
