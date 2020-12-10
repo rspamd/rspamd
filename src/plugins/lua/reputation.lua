@@ -378,6 +378,12 @@ local function ip_reputation_filter(task, rule)
 
   local cfg = rule.selector.config
 
+  if ip:get_version() == 4 and cfg.ipv4_mask then
+    ip = ip:apply_mask(cfg.ipv4_mask)
+  elseif cfg.ipv6_mask then
+    ip = ip:apply_mask(cfg.ipv6_mask)
+  end
+
   local pool = task:get_mempool()
   local asn = pool:get_variable("asn")
   local country = pool:get_variable("country")
@@ -469,11 +475,17 @@ end
 local function ip_reputation_idempotent(task, rule)
   if not rule.backend.set_token then return end -- Read only backend
   local ip = task:get_from_ip()
+  local cfg = rule.selector.config
 
   if not ip or not ip:is_valid() then return end
+
   if lua_util.is_rspamc_or_controller(task) then return end
 
-  local cfg = rule.selector.config
+  if ip:get_version() == 4 and cfg.ipv4_mask then
+    ip = ip:apply_mask(cfg.ipv4_mask)
+  elseif cfg.ipv6_mask then
+    ip = ip:apply_mask(cfg.ipv6_mask)
+  end
 
   local pool = task:get_mempool()
   local asn = pool:get_variable("asn")
@@ -519,6 +531,8 @@ local ip_selector = {
     score_divisor = 1,
     outbound = false,
     inbound = true,
+    ipv4_mask = 29, -- Mask bits for ipv4
+    ipv6_mask = 64, -- Mask bits for ipv6
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
   init = ip_reputation_init,
