@@ -140,6 +140,7 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 
 	ProcessPackage(LIBLUA LIBRARY	"lua"
 			"lua-5.3"
+			LIB_SUFFIXES	"lua5.3"
 			INCLUDE lua.h INCLUDE_SUFFIXES
 			"include/lua-5.3"
 			"include/lua5.3"
@@ -152,6 +153,7 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 	IF (NOT WITH_LIBLUA)
 		ProcessPackage(LIBLUA LIBRARY	"lua"
 				"lua-5.2"
+				LIB_SUFFIXES	"lua5.2"
 				INCLUDE lua.h INCLUDE_SUFFIXES
 				"include/lua-5.2"
 				"include/lua5.2"
