@@ -588,6 +588,7 @@ rspamd_composite_process_symbol_removal (rspamd_expression_atom_t *atom,
 	else {
 		DL_APPEND (rd, nrd);
 		msg_debug_composites ("%s: append symbol %s to removal: %d policy, from composite %s",
+				cd->metric_res->name,
 				ms->name, nrd->action,
 				cd->composite->sym,
 				cd->metric_res->name);
