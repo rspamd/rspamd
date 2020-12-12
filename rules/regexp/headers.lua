@@ -634,28 +634,11 @@ reconf['REPTO_QUOTE_YAHOO'] = {
   group = 'headers'
 }
 
--- MUA definitions
-local xm_gnus = 'X-Mailer=/^Gnus v/H'
-local xm_msoe5 = 'X-Mailer=/^Microsoft Outlook Express 5/H'
-local xm_msoe6 = 'X-Mailer=/^Microsoft Outlook Express 6/H'
-local xm_moz4 = 'X-Mailer=/^Mozilla 4/H'
-local xm_skyri = 'X-Mailer=/^SKYRiXgreen/H'
-local xm_wwwmail = 'X-Mailer=/^WWW-Mail \\d/H'
-local ua_gnus = 'User-Agent=/^Gnus/H'
-local ua_knode = 'User-Agent=/^KNode/H'
-local ua_mutt = 'User-Agent=/^Mutt/H'
-local ua_pan = 'User-Agent=/^Pan/H'
-local ua_xnews = 'User-Agent=/^Xnews/H'
-local no_inr_yes_ref = string.format('(%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', xm_gnus, xm_msoe5, xm_msoe6, xm_moz4, xm_skyri, xm_wwwmail, ua_gnus, ua_knode, ua_mutt, ua_pan, ua_xnews)
-local subj_re = 'Subject=/^R[eE]:/H'
-local has_ref = '(header_exists(References) | header_exists(In-Reply-To))'
-local missing_ref = string.format('!(%s)', has_ref)
--- Fake reply (has RE in subject, but has no References header)
-reconf['FAKE_REPLY_C'] = {
-  re = string.format('(%s) & (%s) & (%s) & !(%s)', subj_re, missing_ref, no_inr_yes_ref, xm_msoe6),
-  score = 6.0,
-  description = 'Fake reply (has RE in subject, but has no References header)',
-  group = 'subject'
+reconf['FAKE_REPLY'] = {
+  re = [[Subject=/^re:/i & !(header_exists(In-Reply-To) | header_exists(References))]],
+  description = 'Fake reply',
+  score = 1.0,
+  group = 'headers'
 }
 
 -- Mime-OLE is needed but absent (e.g. fake Outlook or fake Ecxchange)
