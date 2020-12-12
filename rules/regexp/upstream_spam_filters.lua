@@ -33,13 +33,6 @@ reconf['MICROSOFT_SPAM'] = {
   group = 'upstream_spam_filters'
 }
 
-reconf['AOL_SPAM'] = {
-  re = 'X-AOL-Global-Disposition=/^S/H',
-  score = 5.0,
-  description = "AOL says this message is spam",
-  group = 'upstream_spam_filters'
-}
-
 reconf['KLMS_SPAM'] = {
   re = 'X-KLMS-AntiSpam-Status=/^spam/H',
   score = 5.0,
