@@ -960,3 +960,28 @@ reconf['XM_UA_NO_VERSION'] = {
   group = 'experimental'
 }
 
+-- X-Mailer for old MUA versions which are forged by spammers
+local old_x_mailers = {
+  -- Outlook Express 6.0 was last included in Windows XP (EOL 2014).  Windows
+  -- XP is still used (in 2020) by relatively small number of internet users,
+  -- but this header is widely abused by spammers.
+  'Microsoft Outlook Express',
+  -- Qualcomm Eudora for Windows 7.1.0.9 was released in 2006
+  [[QUALCOMM Windows Eudora (Pro )?Version [1-6]\.]],
+  -- The Bat 3.0 was released in 2004
+  [[The Bat! \(v[12]\.]],
+  -- Can be found in public maillist archives, messages circa 2000
+  [[Microsoft Outlook IMO, Build 9\.0\.]],
+  -- Outlook 2002 (Office XP)
+  [[Microsoft Outlook, Build 10\.]],
+  -- Some old Apple iOS version are used on old devices, so instead of matching
+  -- all old versions, match only versions seen in spam
+  [[i(Phone|Pad) Mail \((?:12[A-Z]|13E)]],
+}
+
+reconf['OLD_X_MAILER'] = {
+  description = 'X-Mailer has a very old MUA version',
+  re = string.format('X-Mailer=/^(?:%s)/', table.concat(old_x_mailers, '|')),
+  score = 2.0,
+  group = 'headers',
+}
