@@ -818,7 +818,8 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			/* Result bit */
 			if (rc != 0) {
 				setbit (cd->checked, comp->id * 2 + 1);
-				rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
+				rspamd_task_insert_result_full (cd->task, key, 1.0, NULL,
+						RSPAMD_SYMBOL_INSERT_SINGLE, cd->metric_res);
 			}
 			else {
 				clrbit (cd->checked, comp->id * 2 + 1);
