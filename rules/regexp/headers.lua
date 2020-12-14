@@ -106,9 +106,17 @@ reconf['MISSING_TO'] = {
 }
 
 -- Detects undisclosed recipients
-local undisc_rcpt = 'To=/^<?undisclosed[- ]recipient/Hi'
 reconf['R_UNDISC_RCPT'] = {
-  re = string.format('(%s)', undisc_rcpt),
+  -- match:
+  -- To: undisclosed-recipients:;
+  -- To: Undisclosed recipients:;
+  -- To: undisclosed-recipients: ;
+  -- To: <Undisclosed-Recipient:;>
+  -- To: "undisclosed-recipients (utajeni adresati)": ;
+  -- To: Undisclosed recipients:
+  -- but do not match:
+  -- Undisclosed Recipient <user@example.org>
+  re = [[To=/^[<"]?undisclosed[- ]recipients?\b.*:/i{header}]],
   score = 3.0,
   description = 'Recipients are absent or undisclosed',
   group = 'headers',
