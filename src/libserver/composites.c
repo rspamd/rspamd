@@ -49,6 +49,7 @@ struct composites_data {
 	struct rspamd_scan_result *metric_res;
 	GHashTable *symbols_to_remove;
 	guint8 *checked;
+	struct composites_data *next;
 };
 
 struct rspamd_composite_option_match {
@@ -923,40 +924,43 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 }
 
 static void
-composites_metric_callback (struct rspamd_scan_result *metric_res,
-		struct rspamd_task *task)
+composites_metric_callback (struct rspamd_task *task)
 {
-	struct composites_data *cd =
-		rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
+	struct composites_data *cd, *first_cd = NULL;
+	struct rspamd_scan_result *mres;
 
-	cd->task = task;
-	cd->metric_res = metric_res;
-	cd->symbols_to_remove = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cd->checked =
-		rspamd_mempool_alloc0 (task->task_pool,
-			NBYTES (g_hash_table_size (task->cfg->composite_symbols) * 2));
+	DL_FOREACH (task->result, mres) {
+		cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
+		cd->task = task;
+		cd->metric_res = mres;
+		cd->symbols_to_remove = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		cd->checked =
+				rspamd_mempool_alloc0 (task->task_pool,
+						NBYTES (g_hash_table_size (task->cfg->composite_symbols) * 2));
 
-	/* Process hash table */
-	rspamd_symcache_composites_foreach (task,
-			task->cfg->cache,
-			composites_foreach_callback,
-			cd);
+		/* Process hash table */
+		rspamd_symcache_composites_foreach (task,
+				task->cfg->cache,
+				composites_foreach_callback,
+				cd);
+		LL_PREPEND (first_cd, cd);
+	}
 
-	/* Remove symbols that are in composites */
-	g_hash_table_foreach (cd->symbols_to_remove, composites_remove_symbols, cd);
-	/* Free list */
-	g_hash_table_unref (cd->symbols_to_remove);
+	LL_REVERSE (first_cd);
+
+	LL_FOREACH (first_cd, cd) {
+		/* Remove symbols that are in composites */
+		g_hash_table_foreach (cd->symbols_to_remove, composites_remove_symbols, cd);
+		/* Free list */
+		g_hash_table_unref (cd->symbols_to_remove);
+	}
 }
 
 void
 rspamd_composites_process_task (struct rspamd_task *task)
 {
 	if (task->result && !RSPAMD_TASK_IS_SKIPPED (task)) {
-		struct rspamd_scan_result *mres;
-
-		DL_FOREACH (task->result, mres) {
-			composites_metric_callback (mres, task);
-		}
+		composites_metric_callback (task);
 	}
 }
 
