@@ -2546,7 +2546,13 @@ lua_task_get_rawbody (lua_State * L)
 			t->flags = 0;
 		}
 		else {
-			lua_pushnil (L);
+			/* Push body it it is there */
+			if (task->msg.len > 0 && task->msg.begin != NULL) {
+				lua_new_text (L, task->msg.begin, task->msg.len, FALSE);
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 	}
 	else {
