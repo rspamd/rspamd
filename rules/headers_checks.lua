@@ -603,21 +603,6 @@ rspamd_config.MV_CASE = {
   group = 'headers'
 }
 
-rspamd_config.FAKE_REPLY = {
-  callback = function (task)
-    local subject = task:get_header('Subject')
-    if (subject and subject:lower():find('^re:')) then
-      local ref = task:get_header('References')
-      local rt  = task:get_header('In-Reply-To')
-      if (not (ref or rt)) then return true end
-    end
-    return false
-  end,
-  description = 'Fake reply',
-  score = 1.0,
-  group = 'headers'
-}
-
 local check_from_id = rspamd_config:register_symbol{
   name = 'CHECK_FROM',
   type = 'callback',

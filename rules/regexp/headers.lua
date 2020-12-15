@@ -106,9 +106,17 @@ reconf['MISSING_TO'] = {
 }
 
 -- Detects undisclosed recipients
-local undisc_rcpt = 'To=/^<?undisclosed[- ]recipient/Hi'
 reconf['R_UNDISC_RCPT'] = {
-  re = string.format('(%s)', undisc_rcpt),
+  -- match:
+  -- To: undisclosed-recipients:;
+  -- To: Undisclosed recipients:;
+  -- To: undisclosed-recipients: ;
+  -- To: <Undisclosed-Recipient:;>
+  -- To: "undisclosed-recipients (utajeni adresati)": ;
+  -- To: Undisclosed recipients:
+  -- but do not match:
+  -- Undisclosed Recipient <user@example.org>
+  re = [[To=/^[<"]?undisclosed[- ]recipients?\b.*:/i{header}]],
   score = 3.0,
   description = 'Recipients are absent or undisclosed',
   group = 'headers',
@@ -634,28 +642,11 @@ reconf['REPTO_QUOTE_YAHOO'] = {
   group = 'headers'
 }
 
--- MUA definitions
-local xm_gnus = 'X-Mailer=/^Gnus v/H'
-local xm_msoe5 = 'X-Mailer=/^Microsoft Outlook Express 5/H'
-local xm_msoe6 = 'X-Mailer=/^Microsoft Outlook Express 6/H'
-local xm_moz4 = 'X-Mailer=/^Mozilla 4/H'
-local xm_skyri = 'X-Mailer=/^SKYRiXgreen/H'
-local xm_wwwmail = 'X-Mailer=/^WWW-Mail \\d/H'
-local ua_gnus = 'User-Agent=/^Gnus/H'
-local ua_knode = 'User-Agent=/^KNode/H'
-local ua_mutt = 'User-Agent=/^Mutt/H'
-local ua_pan = 'User-Agent=/^Pan/H'
-local ua_xnews = 'User-Agent=/^Xnews/H'
-local no_inr_yes_ref = string.format('(%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', xm_gnus, xm_msoe5, xm_msoe6, xm_moz4, xm_skyri, xm_wwwmail, ua_gnus, ua_knode, ua_mutt, ua_pan, ua_xnews)
-local subj_re = 'Subject=/^R[eE]:/H'
-local has_ref = '(header_exists(References) | header_exists(In-Reply-To))'
-local missing_ref = string.format('!(%s)', has_ref)
--- Fake reply (has RE in subject, but has no References header)
-reconf['FAKE_REPLY_C'] = {
-  re = string.format('(%s) & (%s) & (%s) & !(%s)', subj_re, missing_ref, no_inr_yes_ref, xm_msoe6),
-  score = 6.0,
-  description = 'Fake reply (has RE in subject, but has no References header)',
-  group = 'subject'
+reconf['FAKE_REPLY'] = {
+  re = [[Subject=/^re:/i & !(header_exists(In-Reply-To) | header_exists(References))]],
+  description = 'Fake reply',
+  score = 1.0,
+  group = 'headers'
 }
 
 -- Mime-OLE is needed but absent (e.g. fake Outlook or fake Ecxchange)
@@ -977,3 +968,28 @@ reconf['XM_UA_NO_VERSION'] = {
   group = 'experimental'
 }
 
+-- X-Mailer for old MUA versions which are forged by spammers
+local old_x_mailers = {
+  -- Outlook Express 6.0 was last included in Windows XP (EOL 2014).  Windows
+  -- XP is still used (in 2020) by relatively small number of internet users,
+  -- but this header is widely abused by spammers.
+  'Microsoft Outlook Express',
+  -- Qualcomm Eudora for Windows 7.1.0.9 was released in 2006
+  [[QUALCOMM Windows Eudora (Pro )?Version [1-6]\.]],
+  -- The Bat 3.0 was released in 2004
+  [[The Bat! \(v[12]\.]],
+  -- Can be found in public maillist archives, messages circa 2000
+  [[Microsoft Outlook IMO, Build 9\.0\.]],
+  -- Outlook 2002 (Office XP)
+  [[Microsoft Outlook, Build 10\.]],
+  -- Some old Apple iOS version are used on old devices, so instead of matching
+  -- all old versions, match only versions seen in spam
+  [[i(Phone|Pad) Mail \((?:12[A-Z]|13E)]],
+}
+
+reconf['OLD_X_MAILER'] = {
+  description = 'X-Mailer has a very old MUA version',
+  re = string.format('X-Mailer=/^(?:%s)/', table.concat(old_x_mailers, '|')),
+  score = 2.0,
+  group = 'headers',
+}
