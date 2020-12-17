@@ -49,7 +49,7 @@ rspamd_config.SAVE_NN_ROW_IDEMPOTENT = {
       logger.errx(task, err)
       return
     end
-    f:write(tohex(task:cache_get('neural_vec_mpack') or ''))
+    f:write(tohex(task:cache_get('SHORT_neural_vec_mpack') or ''))
     f:close()
     return
   end,
