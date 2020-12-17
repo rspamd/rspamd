@@ -209,6 +209,7 @@ Run Rspamd
   ...  ELSE  Make Temporary Directory
   Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
   ${template} =  Get File  ${CONFIG}
+  # TODO: stop using this; we have Lupa now
   FOR  ${i}  IN  @{vargs}
     ${newvalue} =  Replace Variables  ${${i}}
     Set To Dictionary  ${d}  ${i}=${newvalue}
@@ -218,7 +219,8 @@ Run Rspamd
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick  stdout=DEVNULL  stderr=DEVNULL
+  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  env:RSPAMD_INSTALLROOT=${INSTALLROOT}  stdout=DEVNULL  stderr=DEVNULL
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s

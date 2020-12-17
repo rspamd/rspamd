@@ -25,8 +25,9 @@ local rspamd_logger = require "rspamd_logger"
 -- Define default controller paths, could be overridden in local.d/controller.lua
 
 local controller_plugin_paths = {
+  maps = dofile(local_rules .. "/controller/maps.lua"),
+  neural = dofile(local_rules .. "/controller/neural.lua"),
   selectors = dofile(local_rules .. "/controller/selectors.lua"),
-  maps = dofile(local_rules .. "/controller/maps.lua")
 }
 
 if rspamd_util.file_exists(local_conf .. '/controller.lua') then
