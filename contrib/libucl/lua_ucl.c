@@ -240,7 +240,7 @@ ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj,
 		lua_pushboolean (L, ucl_obj_toboolean (obj));
 		break;
 	case UCL_STRING:
-		lua_pushstring (L, ucl_obj_tostring (obj));
+		lua_pushlstring (L, ucl_obj_tostring (obj), obj->len);
 		break;
 	case UCL_INT:
 #if LUA_VERSION_NUM >= 501
@@ -862,7 +862,7 @@ lua_ucl_parser_parse_text (lua_State *L)
 	else {
 		const gchar *s;
 		gsize len;
-		struct _rspamd_lua_text st_t;
+		static struct _rspamd_lua_text st_t;
 
 		s = lua_tolstring (L, 2, &len);
 		st_t.start = s;
