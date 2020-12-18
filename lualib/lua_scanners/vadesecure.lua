@@ -46,6 +46,7 @@ local function vade_config(opts)
     log_spamcause = true,
     symbol_fail = 'VADE_FAIL',
     symbol = 'VADE_CHECK',
+    settings_outbound = nil, -- Set when there is a settings id for outbound messages
     symbols = {
       clean = {
         symbol = 'VADE_CLEAN',
@@ -193,6 +194,26 @@ local function vade_check(task, content, digest, rule)
     local fip = task:get_from_ip()
     if fip and fip:is_valid() then
       hdrs['X-Inet'] = tostring(fip)
+    end
+
+    if rule.settings_outbound then
+      local settings_id = task:get_settings_id()
+
+      if settings_id then
+        local lua_settings = require "lua_settings"
+        -- Convert to string
+        settings_id = lua_settings.settings_by_id(settings_id)
+
+        if settings_id then
+          settings_id = settings_id.name or ''
+
+          if settings_id == rule.settings_outbound then
+            lua_util.debugm(rule.name, task, '%s settings has matched outbound',
+                settings_id)
+            hdrs['X-Params'] = 'mode=smtpout'
+          end
+        end
+      end
     end
 
     local request_data = {
