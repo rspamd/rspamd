@@ -855,7 +855,21 @@ lua_ucl_parser_parse_text (lua_State *L)
 	int ret = 2;
 
 	parser = lua_ucl_parser_get (L, 1);
-	t = lua_touserdata (L, 2);
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		t = lua_touserdata (L, 2);
+	}
+	else {
+		const gchar *s;
+		gsize len;
+		struct _rspamd_lua_text st_t;
+
+		s = lua_tolstring (L, 2, &len);
+		st_t.start = s;
+		st_t.len = len;
+
+		t = &st_t;
+	}
 
 	if (lua_type (L, 3) == LUA_TSTRING) {
 		type = lua_ucl_str_to_parse_type (lua_tostring (L, 3));
