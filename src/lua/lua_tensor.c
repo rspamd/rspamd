@@ -578,7 +578,7 @@ lua_tensor_load (lua_State *L)
 		}
 	}
 	else {
-		return luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments; sz = %d", (int)sz);
 	}
 
 	return 1;
