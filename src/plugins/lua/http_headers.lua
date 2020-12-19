@@ -33,6 +33,14 @@ local dkim_symbols = {
   symbol_tempfail = 'R_DKIM_TEMPFAIL',
   symbol_na = 'R_DKIM_NA',
   symbol_permfail = 'R_DKIM_PERMFAIL',
+  symbol_trace = 'DKIM_TRACE',
+}
+
+local dkim_trace = {
+  pass = '+',
+  fail = '-',
+  temperror = '?',
+  permerror = '~',
 }
 
 local dmarc_symbols = {
@@ -73,7 +81,7 @@ if opts then
 end
 
 -- Disable DKIM checks if passed via HTTP headers
-rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
+rspamd_config:add_condition("DKIM_CHECK", function(task)
   local hdr = task:get_request_header('DKIM')
 
   if hdr then
@@ -84,30 +92,43 @@ rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
       return true
     end
 
-    local obj = parser:get_object()
+    local p_obj = parser:get_object()
+    local results = p_obj['results']
+    if not results and p_obj['result'] then
+      results = {{result = p_obj['result'], domain = 'unknown'}}
+    end
 
-    if obj['result'] then
-      if obj['result'] == 'pass' or obj['result'] == 'allow' then
-        task:insert_result(dkim_symbols['symbol_allow'], 1.0, 'http header')
-      elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
-        task:insert_result(dkim_symbols['symbol_deny'], 1.0, 'http header')
-      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
-        task:insert_result(dkim_symbols['symbol_tempfail'], 1.0, 'http header')
-      elseif obj['result'] == 'permfail' then
-        task:insert_result(dkim_symbols['symbol_permfail'], 1.0, 'http header')
-      elseif obj['result'] == 'na' then
-        task:insert_result(dkim_symbols['symbol_na'], 1.0, 'http header')
+    if results then
+      for _, obj in ipairs(results) do
+	local dkim_domain = obj['domain'] or 'unknown'
+        if obj['result'] == 'pass' or obj['result'] == 'allow' then
+          task:insert_result(dkim_symbols['symbol_allow'], 1.0, 'http header')
+          task:insert_result(dkim_symbols['symbol_trace'], 1.0,
+	      string.format('%s:%s', dkim_domain, dkim_trace.pass))
+        elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
+          task:insert_result(dkim_symbols['symbol_deny'], 1.0, 'http header')
+          task:insert_result(dkim_symbols['symbol_trace'], 1.0,
+	      string.format('%s:%s', dkim_domain, dkim_trace.fail))
+        elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
+          task:insert_result(dkim_symbols['symbol_tempfail'], 1.0, 'http header')
+          task:insert_result(dkim_symbols['symbol_trace'], 1.0,
+	      string.format('%s:%s', dkim_domain, dkim_trace.temperror))
+        elseif obj['result'] == 'permfail' then
+          task:insert_result(dkim_symbols['symbol_permfail'], 1.0, 'http header')
+          task:insert_result(dkim_symbols['symbol_trace'], 1.0,
+	      string.format('%s:%s', dkim_domain, dkim_trace.permerror))
+        elseif obj['result'] == 'na' then
+          task:insert_result(dkim_symbols['symbol_na'], 1.0, 'http header')
+        end
       end
-
-      return false
     end
   end
 
-  return true
+  return false
 end)
 
 -- Disable SPF checks if passed via HTTP headers
-rspamd_config:add_condition("R_SPF_ALLOW", function(task)
+rspamd_config:add_condition("SPF_CHECK", function(task)
   local hdr = task:get_request_header('SPF')
 
   if hdr then
@@ -134,15 +155,13 @@ rspamd_config:add_condition("R_SPF_ALLOW", function(task)
       elseif obj['result'] == 'na' then
         task:insert_result(spf_symbols['symbol_na'], 1.0, 'http header')
       end
-
-      return false
     end
   end
 
-  return true
+  return false
 end)
 
-rspamd_config:add_condition("DMARC_POLICY_ALLOW", function(task)
+rspamd_config:add_condition("DMARC_CALLBACK", function(task)
   local hdr = task:get_request_header('DMARC')
 
   if hdr then
@@ -171,11 +190,9 @@ rspamd_config:add_condition("DMARC_POLICY_ALLOW", function(task)
       elseif obj['result'] == 'na' then
         task:insert_result(dmarc_symbols['na'], 1.0, 'http header')
       end
-
-      return false
     end
   end
 
-  return true
+  return false
 end)
 
