@@ -5,14 +5,14 @@
 
 ## Introduction
 
-[Rspamd](https://rspamd.com) is an advanced spam filtering system that allows evaluation of messages by a number of
+[Rspamd](https://rspamd.com) is an advanced spam filtering system and email processing framework that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
-such as URL black lists. Each message is analysed by Rspamd and given a `spam score`.
+such as URL black lists. Each message is analysed by Rspamd and given a verdict that might be used by MTA for further processing (e.g. to reject a message, or add a special header indicating spam) along with other information, such as possible DKIM signature or modifications suggested for a message.
 
-According to this spam score and the user's settings, Rspamd recommends an action for
-the MTA to apply to the message, for example, to pass, reject or add a header.
+Rspamd can act as a [Milter](https://en.wikipedia.org/wiki/Milter) allowing direct interaction with popular MTA systems, such as Postfix or Sendmail.
+
 Rspamd is designed to process hundreds of messages per second simultaneously, and provides a number of
-useful features.
+useful features including a comprehensive [Lua API](https://rspamd.com/doc/lua/) that allows access to messages processing in various aspects as well as [asynchronous](https://rspamd.com/doc/lua/sync_async.html) network API to access external resources, such as DNS, HTTP or even generic TCP/UDP services.
 
 
 ## Getting Started
@@ -21,7 +21,7 @@ A good starting point to study how to install and configure Rspamd is [the quick
 
 Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributions, and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd), NetBSD [pkgsrc](https://pkgsrc.org) and [OpenBSD ports](http://openports.se/mail/rspamd).
 
-You can also watch some [videos about Rspamd](https://rspamd.com/media.html).
+We advice to use packages provided by Rspamd project if available for your OS instead of packages that might be provided by some Linux distributives, as they are usually out of date and does not provide the desired spam filtering quality nor supported by Rspamd project.
 
 ## Spam filtering features
 
