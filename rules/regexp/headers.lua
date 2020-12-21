@@ -993,3 +993,23 @@ reconf['OLD_X_MAILER'] = {
   score = 2.0,
   group = 'headers',
 }
+
+-- X-Mailer header values which should not occur (in the modern mail) at all
+local bad_x_mailers = {
+  -- header name repeated in the header value
+  [[X-Mailer: ]],
+  -- Mozilla Thunderbird uses User-Agnet header, not X-Mailer
+  -- Early Thunderbird had U-A like:
+  -- Mozilla Thunderbird 1.0.2 (Windows/20050317)
+  -- Thunderbird 2.0.0.23 (X11/20090812)
+  [[(?:Mozilla )?Thunderbird \d]],
+  -- Was used by Yahoo Groups in 2000s
+  [[eGroups Message Poster]],
+}
+
+reconf['FORGED_X_MAILER'] = {
+  description = 'Forged X-Mailer header',
+  re = string.format('X-Mailer=/^(?:%s)/', table.concat(bad_x_mailers, '|')),
+  score = 4.0,
+  group = 'headers',
+}
