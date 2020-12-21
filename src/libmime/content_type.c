@@ -706,6 +706,12 @@ rspamd_content_type_parse (const gchar *in,
 				res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 				RSPAMD_FTOK_ASSIGN (&res->subtype, "alternative");
 			}
+
+			/* PKCS7 smime */
+			RSPAMD_FTOK_ASSIGN (&srch, "x-pkcs7-mime");
+			if (rspamd_ftok_casecmp (&res->subtype, &srch) == 0) {
+				res->flags |= RSPAMD_CONTENT_TYPE_SMIME;
+			}
 		}
 
 		RSPAMD_FTOK_ASSIGN (&srch, "multipart");

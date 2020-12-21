@@ -33,6 +33,7 @@ enum rspamd_content_type_flags {
 	RSPAMD_CONTENT_TYPE_DSN = 1 << 4,
 	RSPAMD_CONTENT_TYPE_MISSING = 1 << 5,
 	RSPAMD_CONTENT_TYPE_ENCRYPTED = 1 << 6,
+	RSPAMD_CONTENT_TYPE_SMIME = 1 << 7,
 };
 
 enum rspamd_content_param_flags {
