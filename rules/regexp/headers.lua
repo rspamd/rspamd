@@ -153,15 +153,6 @@ reconf['R_MISSING_CHARSET'] = {
   mime_only = true,
 }
 
--- Subject seems to be spam
-reconf['R_SAJDING'] = {
-  re = 'Subject=/\\bsajding(?:om|a)?\\b/iH',
-  score = 8.0,
-  description = 'Subject seems to be spam',
-  group = 'headers',
-  mime_only = true,
-}
-
 -- Find forged Outlook MUA
 -- Yahoo groups messages
 local yahoo_bulk = 'Received=/from \\[\\S+\\] by \\S+\\.(?:groups|scd|dcn)\\.yahoo\\.com with NNFMP/H'
@@ -436,20 +427,9 @@ reconf['FORGED_MUA_KMAIL_MSGID_UNKNOWN'] = {
 local opera1x_mua = 'User-Agent=/^\\s*Opera Mail\\/1[01]\\.\\d+ /H'
 -- Opera Mail Message-ID template
 local opera1x_msgid = 'Message-ID=/^<?op\\.[a-z\\d]{14}\\@\\S+>?$/H'
--- Suspicious Opera Mail User-Agent header
-local suspicious_opera10w_mua = 'User-Agent=/^\\s*Opera Mail\\/10\\.\\d+ \\(Windows\\)$/H'
--- Suspicious Opera Mail Message-ID, apparently from KMail
-local suspicious_opera10w_msgid = 'Message-Id=/^<?2009\\d{8}\\.\\d+\\.\\S+\\@\\S+?>$/H'
--- Summary rule for forged Opera Mail User-Agent header and Message-ID header from KMail
-reconf['SUSPICIOUS_OPERA_10W_MSGID'] = {
-  re = string.format('(%s) & (%s)', suspicious_opera10w_mua, suspicious_opera10w_msgid),
-  score = 4.0,
-  description = 'Message pretends to be send from suspicious Opera Mail/10.x (Windows) but has forged Message-ID, apparently from KMail',
-  group = 'mua'
-}
--- Summary rule for forged Opera Mail Message-ID header
+-- Rule for forged Opera Mail Message-ID header
 reconf['FORGED_MUA_OPERA_MSGID'] = {
-  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', opera1x_mua, opera1x_msgid, reconf['SUSPICIOUS_OPERA_10W_MSGID']['re'], unusable_msgid),
+  re = string.format('(%s) & !(%s) & !(%s)', opera1x_mua, opera1x_msgid, unusable_msgid),
   score = 4.0,
   description = 'Message pretends to be send from Opera Mail but has forged Message-ID',
   group = 'mua'
