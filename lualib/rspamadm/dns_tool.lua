@@ -164,6 +164,8 @@ local function spf_handler(opts)
       local result, flag_or_policy, error_or_addr
       if opts.ip then
         result, flag_or_policy, error_or_addr = record:check_ip(opts.ip)
+      elseif opts.all then
+        result = true
       end
       if opts.ip and not opts.all then
         if result then
