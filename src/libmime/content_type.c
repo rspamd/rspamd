@@ -708,8 +708,9 @@ rspamd_content_type_parse (const gchar *in,
 			}
 
 			/* PKCS7 smime */
-			RSPAMD_FTOK_ASSIGN (&srch, "x-pkcs7-mime");
-			if (rspamd_ftok_casecmp (&res->subtype, &srch) == 0) {
+			RSPAMD_FTOK_ASSIGN (&srch, "pkcs7-mime");
+			if (rspamd_substring_search (res->subtype.begin, res->subtype.len,
+					srch.begin, srch.len) != -1) {
 				res->flags |= RSPAMD_CONTENT_TYPE_SMIME;
 			}
 		}
