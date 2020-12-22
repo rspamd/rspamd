@@ -586,7 +586,7 @@ local function maybe_parse_sa_function(line)
         end
 
         for _,h in ipairs(hdrs_check) do
-          if task:get_header(h) then
+          if task:has_header(h) then
             return 1
           end
         end

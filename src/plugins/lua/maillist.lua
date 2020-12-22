@@ -169,17 +169,7 @@ end
 -- RFC 2919 headers exist
 --
 local function check_ml_googlegroup(task)
-  local header = task:get_header('X-Google-Loop')
-
-  if not header then
-    header = task:get_header('X-Google-Group-Id')
-
-    if not header then
-      return false
-    end
-  end
-
-  return true
+  return task:has_header('X-Google-Loop') or task:has_header('X-Google-Group-Id')
 end
 
 -- CGP detector
