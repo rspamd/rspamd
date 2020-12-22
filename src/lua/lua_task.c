@@ -353,10 +353,10 @@ LUA_FUNCTION_DEF (task, get_header);
 /***
  * @method task:has_header(name[, case_sensitive])
  * Get decoded value of a header specified with optional case_sensitive flag.
- * By default headers are searched in caseless matter.
+ * By default headers are searched in the case insensitive matter.
  * @param {string} name name of header to get
  * @param {boolean} case_sensitive case sensitiveness flag to search for a header
- * @return {boolean},{number} true if header exists, the second value is number of headers with this name
+ * @return {boolean} true if header exists
  */
 LUA_FUNCTION_DEF (task, has_header);
 /***
@@ -2828,8 +2828,7 @@ rspamd_lua_push_header_array (lua_State *L,
 	if (rh == NULL) {
 		if (how == RSPAMD_TASK_HEADER_PUSH_HAS) {
 			lua_pushboolean (L, false);
-			lua_pushnumber (L, 0);
-			nret = 2;
+			nret = 1;
 		}
 		else if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
 			lua_pushnumber (L, 0);
@@ -2864,17 +2863,23 @@ rspamd_lua_push_header_array (lua_State *L,
 		lua_pushinteger (L, i);
 	}
 	else if (how == RSPAMD_TASK_HEADER_PUSH_HAS) {
-		i = 0;
-		nret = 2;
+		nret = 1;
+		bool found = false;
 
-		DL_FOREACH (rh, cur) {
-			if (!strong || strcmp (name, cur->name) == 0) {
-				i++;
+		if (strong) {
+			/* We still have to check all headers in the chain */
+			DL_FOREACH (rh, cur) {
+				if (strcmp (name, cur->name) == 0) {
+					found = true;
+					break;
+				}
 			}
 		}
+		else {
+			found = true;
+		}
 
-		lua_pushboolean (L, true);
-		lua_pushinteger (L, i);
+		lua_pushboolean (L, found);
 	}
 	else {
 		DL_FOREACH (rh, cur) {
