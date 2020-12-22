@@ -184,10 +184,11 @@ context("URL check functions", function()
     {"..", "/"},
     {"/../", "/"},
     {"../", "/"},
+    {"///foo", "/foo"},
   }
 
   for i,v in ipairs(cases) do
-    test("Normalize paths " .. i, function()
+    test(string.format("Normalize paths '%s'", v[1]), function()
       local buf = ffi.new("uint8_t[?]", #v[1])
       local sizbuf = ffi.new("size_t[1]")
       ffi.copy(buf, v[1], #v[1])
