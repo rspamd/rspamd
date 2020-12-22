@@ -286,15 +286,20 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 		/* Search for path */
 		if (msg->url != NULL && msg->url->len != 0) {
+			gchar *pathbuf = NULL;
 
 			http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
 
 			if (u.field_set & (1 << UF_PATH)) {
 				guint unnorm_len;
-				lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
+
+				pathbuf = g_malloc (u.field_data[UF_PATH].len);
+				memcpy (pathbuf, msg->url->str + u.field_data[UF_PATH].off,
+						u.field_data[UF_PATH].len);
+				lookup.begin = pathbuf;
 				lookup.len = u.field_data[UF_PATH].len;
 
-				rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
+				rspamd_http_normalize_path_inplace (pathbuf,
 						lookup.len,
 						&unnorm_len);
 				lookup.len = unnorm_len;
@@ -307,6 +312,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			found = g_hash_table_lookup (entry->rt->paths, &lookup);
 			memcpy (&handler, &found, sizeof (found));
 			msg_debug ("requested known path: %T", &lookup);
+
+			if (pathbuf) {
+				g_free (pathbuf);
+			}
 		}
 		else {
 			err = g_error_new (HTTP_ERROR, 404,
