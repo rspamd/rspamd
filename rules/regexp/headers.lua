@@ -1004,7 +1004,7 @@ reconf['FORGED_X_MAILER'] = {
 -- X-Mailer: Internet Mail Service (5.5.2656.59)
 reconf['FORGED_IMS'] = {
   description = 'Forged X-Mailer: Internet Mail Service',
-  re = [[X-Mailer=/^Internet Mail Service \(5\./{header} & !Received=/^by \S+ with Internet Mail Service \(5\./{header}]]
+  re = [[X-Mailer=/^Internet Mail Service \(5\./{header} & !Received=/^by \S+ with Internet Mail Service \(5\./{header}]],
   score = 3.0,
   group = 'headers',
 }
