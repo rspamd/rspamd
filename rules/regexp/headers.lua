@@ -623,7 +623,7 @@ reconf['REPTO_QUOTE_YAHOO'] = {
 }
 
 reconf['FAKE_REPLY'] = {
-  re = [[Subject=/^re:/i & !(header_exists(In-Reply-To) | header_exists(References))]],
+  re = [[Subject=/^re:/i{header} & !(header_exists(In-Reply-To) | header_exists(References))]],
   description = 'Fake reply',
   score = 1.0,
   group = 'headers'
@@ -969,7 +969,7 @@ local old_x_mailers = {
 
 reconf['OLD_X_MAILER'] = {
   description = 'X-Mailer has a very old MUA version',
-  re = string.format('X-Mailer=/^(?:%s)/', table.concat(old_x_mailers, '|')),
+  re = string.format('X-Mailer=/^(?:%s)/{header}', table.concat(old_x_mailers, '|')),
   score = 2.0,
   group = 'headers',
 }
@@ -989,7 +989,7 @@ local bad_x_mailers = {
 
 reconf['FORGED_X_MAILER'] = {
   description = 'Forged X-Mailer header',
-  re = string.format('X-Mailer=/^(?:%s)/', table.concat(bad_x_mailers, '|')),
+  re = string.format('X-Mailer=/^(?:%s)/{header}', table.concat(bad_x_mailers, '|')),
   score = 4.0,
   group = 'headers',
 }
