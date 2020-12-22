@@ -623,7 +623,7 @@ reconf['REPTO_QUOTE_YAHOO'] = {
 }
 
 reconf['FAKE_REPLY'] = {
-  re = [[Subject=/^re:/i & !(header_exists(In-Reply-To) | header_exists(References))]],
+  re = [[Subject=/^re:/i{header} & !(header_exists(In-Reply-To) | header_exists(References))]],
   description = 'Fake reply',
   score = 1.0,
   group = 'headers'
@@ -969,7 +969,7 @@ local old_x_mailers = {
 
 reconf['OLD_X_MAILER'] = {
   description = 'X-Mailer has a very old MUA version',
-  re = string.format('X-Mailer=/^(?:%s)/', table.concat(old_x_mailers, '|')),
+  re = string.format('X-Mailer=/^(?:%s)/{header}', table.concat(old_x_mailers, '|')),
   score = 2.0,
   group = 'headers',
 }
@@ -989,7 +989,22 @@ local bad_x_mailers = {
 
 reconf['FORGED_X_MAILER'] = {
   description = 'Forged X-Mailer header',
-  re = string.format('X-Mailer=/^(?:%s)/', table.concat(bad_x_mailers, '|')),
+  re = string.format('X-Mailer=/^(?:%s)/{header}', table.concat(bad_x_mailers, '|')),
   score = 4.0,
+  group = 'headers',
+}
+
+-- X-Mailer headers like: 'Internet Mail Service (5.5.2650.21)' are being
+-- forged by spammers, but MS Exachange 5.5 is still being used (in 2020) on
+-- some mail servers.  Example of genuene headers (DC-EXMPL is a hostname which
+-- can be a FQDN):
+-- Received: by DC-EXMPL with Internet Mail Service (5.5.2656.59)
+-- 	id <HKH4BJQX>; Tue, 8 Dec 2020 07:10:54 -0600
+-- Message-ID: <E7209F9DB64FCC4BB1051420F0E955DD05C9D59F@DC-EXMPL>
+-- X-Mailer: Internet Mail Service (5.5.2656.59)
+reconf['FORGED_IMS'] = {
+  description = 'Forged X-Mailer: Internet Mail Service',
+  re = [[X-Mailer=/^Internet Mail Service \(5\./{header} & !Received=/^by \S+ with Internet Mail Service \(5\./{header}]]
+  score = 3.0,
   group = 'headers',
 }
