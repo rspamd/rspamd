@@ -638,8 +638,9 @@ rspamd_config.SPOOF_REPLYTO = {
 
 rspamd_config.INFO_TO_INFO_LU = {
   callback = function(task)
-    local lu = task:get_header('List-Unsubscribe')
-    if not lu then return false end
+    if not task:has_header('List-Unsubscribe') then
+      return false
+    end
     local from = task:get_from('mime')
     if not (from and from[1] and util.strequal_caseless(from[1].user, 'info')) then
       return false

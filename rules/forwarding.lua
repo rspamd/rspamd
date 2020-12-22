@@ -54,9 +54,7 @@ rspamd_config.FWD_YANDEX = {
     end
     local hostname = task:get_hostname()
     if hostname and hostname:lower():find('%.yandex%.[a-z]+$') then
-      if task:get_header_raw('X-Yandex-Forward') then
-        return true
-      end
+      return task:has_header('X-Yandex-Forward')
     end
     return false
   end,
@@ -72,9 +70,7 @@ rspamd_config.FWD_MAILRU = {
     end
     local hostname = task:get_hostname()
     if hostname and hostname:lower():find('%.mail%.ru$') then
-      if task:get_header_raw('X-MailRu-Forward') then
-        return true
-      end
+      return task:has_header('X-MailRu-Forward')
     end
     return false
   end,
@@ -124,7 +120,7 @@ rspamd_config.FORWARDED = {
     -- Forwarding will only be for single recipient messages
     if #envrcpts > 1 then return false end
     -- Get any other headers we might need
-    local lu = task:get_header('List-Unsubscribe')
+    local has_list_unsub = task:has_header('List-Unsubscribe')
     local to = task:get_recipients(2)
     local matches = 0
     -- Retrieve and loop through all Received headers
@@ -139,7 +135,7 @@ rspamd_config.FORWARDED = {
           -- Check that it doesn't match the envrcpt
           if not rspamd_util.strequal_caseless(addr, envrcpts[1].addr) then
             -- Check for mailing-lists as they will have the same signature
-            if matches < 2 and lu and to and rspamd_util.strequal_caseless(to[1].addr, addr) then
+            if matches < 2 and has_list_unsub and to and rspamd_util.strequal_caseless(to[1].addr, addr) then
               return false
             else
               return true, 1.0, addr

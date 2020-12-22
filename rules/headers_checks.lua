@@ -340,17 +340,17 @@ local check_mime_id = rspamd_config:register_symbol{
   callback = function(task)
     -- Check if there is a MIME-Version header
     local missing_mime = false
-    if not task:get_header('MIME-Version') then
+    if not task:has_header('MIME-Version') then
       missing_mime = true
     end
 
     -- Check presense of MIME specific headers
-    local ct_header = task:get_header('Content-Type')
-    local cte_header = task:get_header('Content-Transfer-Encoding')
+    local has_ct_header = task:has_header('Content-Type')
+    local has_cte_header = task:has_header('Content-Transfer-Encoding')
 
     -- Add the symbol if we have MIME headers, but no MIME-Version
     -- (do not add the symbol for RFC822 messages)
-    if (ct_header or cte_header) and missing_mime then
+    if (has_ct_header or has_cte_header) and missing_mime then
       task:insert_result('MISSING_MIME_VERSION', 1.0)
     end
 
@@ -595,8 +595,7 @@ rspamd_config.MULTIPLE_FROM = {
 
 rspamd_config.MV_CASE = {
   callback = function (task)
-    local mv = task:get_header('Mime-Version', true)
-    if (mv) then return true end
+    return task:has_header('Mime-Version', true)
   end,
   description = 'Mime-Version .vs. MIME-Version',
   score = 0.5,
@@ -1117,8 +1116,7 @@ rspamd_config.INVALID_RCPT_8BIT = {
 
 rspamd_config.XM_CASE = {
   callback = function (task)
-    local xm = task:get_header('X-mailer', true)
-    if (xm) then return true end
+    return task:has_header('X-mailer', true)
   end,
   description = 'X-mailer .vs. X-Mailer',
   score = 0.5,
