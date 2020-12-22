@@ -279,7 +279,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
       if rbl.unknown and rbl.symbol then
         insert_results(rbl.symbol, ipstr)
       else
-        rspamd_logger.errx(task, '%1 returned unknown result: %2',
+        lua_util.debugm(N, task, '%1 returned unknown result: %2',
             to_resolve, ipstr)
       end
     end
