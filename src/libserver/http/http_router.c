@@ -254,6 +254,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	guint i;
 	rspamd_regexp_t *re;
 	struct rspamd_http_connection_router *router;
+	gchar *pathbuf = NULL;
 
 	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
 					 sizeof (gpointer));
@@ -286,7 +287,6 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 		/* Search for path */
 		if (msg->url != NULL && msg->url->len != 0) {
-			gchar *pathbuf = NULL;
 
 			http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
 
@@ -312,10 +312,6 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			found = g_hash_table_lookup (entry->rt->paths, &lookup);
 			memcpy (&handler, &found, sizeof (found));
 			msg_debug ("requested known path: %T", &lookup);
-
-			if (pathbuf) {
-				g_free (pathbuf);
-			}
 		}
 		else {
 			err = g_error_new (HTTP_ERROR, 404,
@@ -340,6 +336,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		if (handler != NULL) {
+			if (pathbuf) {
+				g_free (pathbuf);
+			}
+
 			return handler (entry, msg);
 		}
 		else {
@@ -350,6 +350,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 						TRUE)) {
 					found = rspamd_regexp_get_ud (re);
 					memcpy (&handler, &found, sizeof (found));
+
+					if (pathbuf) {
+						g_free (pathbuf);
+					}
 
 					return handler (entry, msg);
 				}
@@ -370,6 +374,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				g_error_free (err);
 			}
 		}
+	}
+
+	if (pathbuf) {
+		g_free (pathbuf);
 	}
 
 	return 0;
