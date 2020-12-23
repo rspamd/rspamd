@@ -622,6 +622,61 @@ rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen,
 	return NULL;
 }
 
+static const char *
+rspamd_mime_charset_find_by_content_maybe_split (const gchar *in, gsize inlen)
+{
+	if (inlen < RSPAMD_CHARSET_MAX_CONTENT * 3) {
+		return rspamd_mime_charset_find_by_content (in, inlen, false);
+	}
+	else {
+		const gchar *c1, *c2, *c3;
+
+		c1 = rspamd_mime_charset_find_by_content (in, RSPAMD_CHARSET_MAX_CONTENT, false);
+		c2 = rspamd_mime_charset_find_by_content (in + inlen / 2,
+				RSPAMD_CHARSET_MAX_CONTENT, false);
+		c3 = rspamd_mime_charset_find_by_content (in + inlen - RSPAMD_CHARSET_MAX_CONTENT,
+				RSPAMD_CHARSET_MAX_CONTENT, false);
+
+		/* 7bit stuff */
+		if (strcmp (c1, "US-ASCII") == 0) {
+			c1 = NULL; /* Invalid - we have 8 bit there */
+		}
+		if (strcmp (c2, "US-ASCII") == 0) {
+			c2 = NULL; /* Invalid - we have 8 bit there */
+		}
+		if (strcmp (c3, "US-ASCII") == 0) {
+			c2 = NULL; /* Invalid - we have 8 bit there */
+		}
+
+		if (!c1) {
+			c1 = c2 ? c2 : c3;
+		}
+		if (!c2) {
+			c2 = c3 ? c3 : c1;
+		}
+		if (!c3) {
+			c3 = c1 ? c2 : c1;
+		}
+
+		if (c1 && c2 && c3) {
+			/* Quorum */
+			if (c1 == c2) {
+				return c1;
+			}
+			else if (c2 == c3) {
+				return c2;
+			}
+			else if (c1 == c3) {
+				return c3;
+			}
+
+			/* All charsets are distinct */
+		}
+
+		return NULL;
+	}
+}
+
 gboolean
 rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 		gchar *in, gsize len, gboolean content_check)
@@ -643,8 +698,7 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 		 */
 		if (content_check) {
 			if (rspamd_fast_utf8_validate (in, len) != 0) {
-				real_charset = rspamd_mime_charset_find_by_content (in,
-						MIN (RSPAMD_CHARSET_MAX_CONTENT, len), FALSE);
+				real_charset = rspamd_mime_charset_find_by_content_maybe_split(in, len);
 
 				if (real_charset) {
 
@@ -715,8 +769,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 
 	if (part->ct->charset.len == 0) {
 		if (need_charset_heuristic) {
-			charset = rspamd_mime_charset_find_by_content (part_content->data,
-					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len), FALSE);
+			charset = rspamd_mime_charset_find_by_content_maybe_split (text_part->parsed.begin,
+					text_part->parsed.len);
 
 			if (charset != NULL) {
 				msg_info_task ("detected charset %s", charset);
@@ -740,8 +794,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		if (charset == NULL) {
 			/* We don't know the real charset but can try heuristic */
 			if (need_charset_heuristic) {
-				charset = rspamd_mime_charset_find_by_content (part_content->data,
-						MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len), FALSE);
+				charset = rspamd_mime_charset_find_by_content_maybe_split (part_content->data,
+						part_content->len);
 				msg_info_task ("detected charset: %s", charset);
 				checked = TRUE;
 				text_part->real_charset = charset;
