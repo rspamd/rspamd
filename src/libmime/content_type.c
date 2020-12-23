@@ -69,7 +69,7 @@ rspamd_rfc2231_decode (rspamd_mempool_t *pool,
 
 		if (charset == NULL) {
 			/* Try heuristic */
-			charset = rspamd_mime_charset_find_by_content (value_start, r);
+			charset = rspamd_mime_charset_find_by_content (value_start, r, TRUE);
 		}
 
 		if (charset == NULL) {

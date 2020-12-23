@@ -138,7 +138,8 @@ rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
  * @param inlen
  * @return detected charset name or NULL
  */
-const char *rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen);
+const char *rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen,
+												 bool check_utf8);
 
 #ifdef  __cplusplus
 }

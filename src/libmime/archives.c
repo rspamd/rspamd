@@ -58,7 +58,7 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 	const gchar *charset = NULL, *p, *end;
 	GString *res;
 
-	charset = rspamd_mime_charset_find_by_content (in, inlen);
+	charset = rspamd_mime_charset_find_by_content (in, inlen, TRUE);
 
 	if (charset) {
 		UChar *tmp;

@@ -596,14 +596,17 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 }
 
 const char *
-rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen)
+rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen,
+									 bool check_utf8)
 {
 	int nconsumed;
 	bool is_reliable;
 	const gchar *ced_name;
 
-	if (rspamd_fast_utf8_validate (in, inlen) == 0) {
-		return UTF8_CHARSET;
+	if (check_utf8) {
+		if (rspamd_fast_utf8_validate (in, inlen) == 0) {
+			return UTF8_CHARSET;
+		}
 	}
 
 
@@ -641,7 +644,7 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 		if (content_check) {
 			if (rspamd_fast_utf8_validate (in, len) != 0) {
 				real_charset = rspamd_mime_charset_find_by_content (in,
-						MIN (RSPAMD_CHARSET_MAX_CONTENT, len));
+						MIN (RSPAMD_CHARSET_MAX_CONTENT, len), FALSE);
 
 				if (real_charset) {
 
@@ -713,7 +716,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	if (part->ct->charset.len == 0) {
 		if (need_charset_heuristic) {
 			charset = rspamd_mime_charset_find_by_content (part_content->data,
-					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
+					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len), FALSE);
 
 			if (charset != NULL) {
 				msg_info_task ("detected charset %s", charset);
@@ -738,7 +741,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			/* We don't know the real charset but can try heuristic */
 			if (need_charset_heuristic) {
 				charset = rspamd_mime_charset_find_by_content (part_content->data,
-						MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
+						MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len), FALSE);
 				msg_info_task ("detected charset: %s", charset);
 				checked = TRUE;
 				text_part->real_charset = charset;
