@@ -978,7 +978,7 @@ reconf['OLD_X_MAILER'] = {
 local bad_x_mailers = {
   -- header name repeated in the header value
   [[X-Mailer: ]],
-  -- Mozilla Thunderbird uses User-Agnet header, not X-Mailer
+  -- Mozilla Thunderbird uses User-Agent header, not X-Mailer
   -- Early Thunderbird had U-A like:
   -- Mozilla Thunderbird 1.0.2 (Windows/20050317)
   -- Thunderbird 2.0.0.23 (X11/20090812)
@@ -995,8 +995,8 @@ reconf['FORGED_X_MAILER'] = {
 }
 
 -- X-Mailer headers like: 'Internet Mail Service (5.5.2650.21)' are being
--- forged by spammers, but MS Exachange 5.5 is still being used (in 2020) on
--- some mail servers.  Example of genuene headers (DC-EXMPL is a hostname which
+-- forged by spammers, but MS Exchange 5.5 is still being used (in 2020) on
+-- some mail servers. Example of genuine headers (DC-EXMPL is a hostname which
 -- can be a FQDN):
 -- Received: by DC-EXMPL with Internet Mail Service (5.5.2656.59)
 -- 	id <HKH4BJQX>; Tue, 8 Dec 2020 07:10:54 -0600
