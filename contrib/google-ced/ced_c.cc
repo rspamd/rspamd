@@ -18,7 +18,7 @@ const char* ced_encoding_detect(const char* text, int text_length,
 			ct, ignore_7bit_mail_encodings, bytes_consumed, is_reliable);
 
 	if (IsValidEncoding(enc)) {
-		return EncodingName(enc);
+		return MimeEncodingName(enc);
 	}
 
 	return nullptr;

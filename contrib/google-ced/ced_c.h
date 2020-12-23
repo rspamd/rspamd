@@ -14,6 +14,9 @@ enum CedTextCorpusType {
 	CED_NUM_CORPA,
 };
 
+/*
+ * XXX: Rspamd addition: it actually returns Mime format of the encoding
+ */
 const char *ced_encoding_detect (const char *text, int text_length,
 								 const char *url_hint,
 								 const char *http_charset_hint,
