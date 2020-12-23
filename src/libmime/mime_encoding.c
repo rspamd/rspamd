@@ -670,7 +670,8 @@ rspamd_mime_charset_find_by_content_maybe_split (const gchar *in, gsize inlen)
 				return c3;
 			}
 
-			/* All charsets are distinct */
+			/* All charsets are distinct. Use the one from the top */
+			return c1;
 		}
 
 		return NULL;
