@@ -415,9 +415,10 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
 		const gchar *fmt, va_list args)
 {
-	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
+	gchar *end;
 	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
 	bool ret = false;
+	gchar logbuf[RSPAMD_LOGBUF_SIZE], logbuf_escaped[RSPAMD_LOGBUF_SIZE];
 
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		rspamd_log = default_logger;
@@ -427,7 +428,10 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_fprintf (stderr, "%*s\n", (gint)(end - logbuf), logbuf);
+			end = rspamd_log_line_hex_escape (logbuf, (end - logbuf),
+					logbuf_escaped, sizeof (logbuf_escaped));
+			rspamd_fprintf (stderr, "%*s\n", (gint)(end - logbuf_escaped),
+					logbuf_escaped);
 		}
 	}
 	else {
@@ -440,12 +444,14 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 
 		if (rspamd_logger_need_log (rspamd_log, level_flags, mod_id)) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+			end = rspamd_log_line_hex_escape (logbuf, (end - logbuf),
+					logbuf_escaped, sizeof (logbuf_escaped));
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
 				gchar *encrypted;
 				gsize enc_len;
 
-				encrypted = rspamd_log_encrypt_message (logbuf, end, &enc_len,
+				encrypted = rspamd_log_encrypt_message (logbuf_escaped, end, &enc_len,
 						rspamd_log);
 				ret = rspamd_log->ops.log (module, id,
 						function,
@@ -460,8 +466,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 				ret = rspamd_log->ops.log (module, id,
 						function,
 						level_flags,
-						logbuf,
-						end - logbuf,
+						logbuf_escaped,
+						end - logbuf_escaped,
 						rspamd_log,
 						rspamd_log->ops.specific);
 			}
@@ -469,8 +475,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 			switch (level) {
 			case G_LOG_LEVEL_CRITICAL:
 				rspamd_log->log_cnt[0] ++;
-				rspamd_log_write_ringbuffer (rspamd_log, module, id, logbuf,
-						end - logbuf);
+				rspamd_log_write_ringbuffer (rspamd_log, module, id, logbuf_escaped,
+						end - logbuf_escaped);
 				break;
 			case G_LOG_LEVEL_WARNING:
 				rspamd_log->log_cnt[1]++;
@@ -882,4 +888,57 @@ rspamd_logger_set_log_function (rspamd_logger_t *logger,
 	/* TODO: write this */
 
 	return NULL;
+}
+
+
+
+gchar *
+rspamd_log_line_hex_escape (const gchar *src, gsize srclen,
+								  gchar *dst, gsize dstlen)
+{
+	static const gchar hexdigests[16] = "0123456789ABCDEF";
+	gchar *d = dst;
+
+	static guint32 escape[] = {
+			0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
+
+			/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
+			0x00000000, /* 0000 0000 0000 0000  0000 0000 0000 0100 */
+
+			/* _^]\ [ZYX WVUT SRQP  ONML KJIH GFED CBA@ */
+			0x00000000, /* 0001 0000 0000 0000  0000 0000 0000 0000 */
+
+			/*  ~}| {zyx wvut srqp  onml kjih gfed cba` */
+			0x80000000, /* 1000 0000 0000 0000  0000 0000 0000 0000 */
+
+			/* Allow all 8bit characters (assuming they are valid utf8) */
+			0x00000000,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+	};
+
+	while (srclen && dstlen) {
+		if (escape[*src >> 5] & (1U << (*src & 0x1f))) {
+			if (dstlen >= 4) {
+				*d++ = '\\';
+				*d++ = 'x';
+				*d++ = hexdigests[*src >> 4];
+				*d++ = hexdigests[*src & 0xf];
+				src++;
+				dstlen -= 4;
+			}
+			else {
+				/* Overflow */
+				break;
+			}
+		} else {
+			*d++ = *src++;
+			dstlen --;
+		}
+
+		srclen--;
+	}
+
+	return d;
 }

@@ -102,6 +102,10 @@ bool rspamd_log_file_log (const gchar *module, const gchar *id,
 						  gpointer arg);
 bool rspamd_log_file_on_fork (rspamd_logger_t *logger, struct rspamd_config *cfg,
 							   gpointer arg, GError **err);
+gchar* rspamd_log_line_hex_escape (const gchar *src, gsize srclen,
+								  gchar *dst, gsize dstlen);
+
+
 
 static const struct rspamd_logger_funcs file_log_funcs = {
 		.init = rspamd_log_file_init,

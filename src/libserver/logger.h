@@ -56,7 +56,12 @@ struct rspamd_logger_funcs {
 	gpointer specific;
 };
 
+#if defined(__x86_64) || defined(__x86_64__) || defined(__amd64) || defined(_M_X64)
 #define RSPAMD_LOGBUF_SIZE 8192
+#else
+/* Use a smaller buffer */
+#define RSPAMD_LOGBUF_SIZE 2048
+#endif
 
 /**
  * Opens a new (initial) logger with console type
