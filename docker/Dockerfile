@@ -1,6 +1,10 @@
-FROM debian:buster
+FROM debian:buster-slim
 
-RUN	apt-get update && apt-get install -y --no-install-recommends gnupg dirmngr && rm -rf /var/lib/apt/lists/*
+RUN	apt-get update && apt-get install -y --no-install-recommends \
+		ca-certificates \
+		dirmngr \
+		gnupg \
+	&& rm -rf /var/lib/apt/lists/*
 
 RUN	set -x \
 # gpg: key FFA232EDBF21E25E: public key "Rspamd Nightly Builds (Rspamd Nightly Builds) <vsevolod@highsecure.ru>" imported
