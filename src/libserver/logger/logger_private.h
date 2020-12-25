@@ -102,10 +102,24 @@ bool rspamd_log_file_log (const gchar *module, const gchar *id,
 						  gpointer arg);
 bool rspamd_log_file_on_fork (rspamd_logger_t *logger, struct rspamd_config *cfg,
 							   gpointer arg, GError **err);
-gchar* rspamd_log_line_hex_escape (const gchar *src, gsize srclen,
+/**
+ * Escape log line by replacing unprintable characters to hex escapes like \xNN
+ * @param src
+ * @param srclen
+ * @param dst
+ * @param dstlen
+ * @return end of the escaped buffer
+ */
+gchar* rspamd_log_line_hex_escape (const guchar *src, gsize srclen,
 								  gchar *dst, gsize dstlen);
-
-
+/**
+ * Returns number of characters to be escaped, e.g. a caller can allocate a new buffer
+ * the desired number of characters
+ * @param src
+ * @param srclen
+ * @return number of characters to be escaped
+ */
+gsize rspamd_log_line_need_escape (const guchar *src, gsize srclen);
 
 static const struct rspamd_logger_funcs file_log_funcs = {
 		.init = rspamd_log_file_init,

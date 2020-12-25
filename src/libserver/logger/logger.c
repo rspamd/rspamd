@@ -418,20 +418,31 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 	gchar *end;
 	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
 	bool ret = false;
-	gchar logbuf[RSPAMD_LOGBUF_SIZE], logbuf_escaped[RSPAMD_LOGBUF_SIZE];
+	gchar logbuf[RSPAMD_LOGBUF_SIZE], *log_line;
+	gsize nescaped;
 
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		rspamd_log = default_logger;
 	}
 
+	log_line = logbuf;
+
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			end = rspamd_log_line_hex_escape (logbuf, (end - logbuf),
-					logbuf_escaped, sizeof (logbuf_escaped));
-			rspamd_fprintf (stderr, "%*s\n", (gint)(end - logbuf_escaped),
-					logbuf_escaped);
+
+			if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
+				gsize unsecaped_len = end - logbuf;
+				gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
+				log_line = logbuf_escaped;
+
+				end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
+						logbuf_escaped,unsecaped_len + nescaped * 4);
+			}
+
+			rspamd_fprintf (stderr, "%*s\n", (gint)(end - log_line),
+					log_line);
 		}
 	}
 	else {
@@ -444,14 +455,21 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 
 		if (rspamd_logger_need_log (rspamd_log, level_flags, mod_id)) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			end = rspamd_log_line_hex_escape (logbuf, (end - logbuf),
-					logbuf_escaped, sizeof (logbuf_escaped));
+
+			if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
+				gsize unsecaped_len = end - logbuf;
+				gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
+				log_line = logbuf_escaped;
+
+				end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
+						logbuf_escaped,unsecaped_len + nescaped * 4);
+			}
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
 				gchar *encrypted;
 				gsize enc_len;
 
-				encrypted = rspamd_log_encrypt_message (logbuf_escaped, end, &enc_len,
+				encrypted = rspamd_log_encrypt_message (log_line, end, &enc_len,
 						rspamd_log);
 				ret = rspamd_log->ops.log (module, id,
 						function,
@@ -466,8 +484,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 				ret = rspamd_log->ops.log (module, id,
 						function,
 						level_flags,
-						logbuf_escaped,
-						end - logbuf_escaped,
+						log_line,
+						end - log_line,
 						rspamd_log,
 						rspamd_log->ops.specific);
 			}
@@ -475,8 +493,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 			switch (level) {
 			case G_LOG_LEVEL_CRITICAL:
 				rspamd_log->log_cnt[0] ++;
-				rspamd_log_write_ringbuffer (rspamd_log, module, id, logbuf_escaped,
-						end - logbuf_escaped);
+				rspamd_log_write_ringbuffer (rspamd_log, module, id, log_line,
+						end - log_line);
 				break;
 			case G_LOG_LEVEL_WARNING:
 				rspamd_log->log_cnt[1]++;
@@ -893,7 +911,7 @@ rspamd_logger_set_log_function (rspamd_logger_t *logger,
 
 
 gchar *
-rspamd_log_line_hex_escape (const gchar *src, gsize srclen,
+rspamd_log_line_hex_escape (const guchar *src, gsize srclen,
 								  gchar *dst, gsize dstlen)
 {
 	static const gchar hexdigests[16] = "0123456789ABCDEF";
@@ -941,4 +959,39 @@ rspamd_log_line_hex_escape (const gchar *src, gsize srclen,
 	}
 
 	return d;
+}
+
+gsize
+rspamd_log_line_need_escape (const guchar *src, gsize srclen)
+{
+	static guint32 escape[] = {
+			0xffffffff, /* 1111 1111 1111 1111  1111 1111 1111 1111 */
+
+			/* ?>=< ;:98 7654 3210  /.-, +*)( '&%$ #"!  */
+			0x00000000, /* 0000 0000 0000 0000  0000 0000 0000 0100 */
+
+			/* _^]\ [ZYX WVUT SRQP  ONML KJIH GFED CBA@ */
+			0x00000000, /* 0001 0000 0000 0000  0000 0000 0000 0000 */
+
+			/*  ~}| {zyx wvut srqp  onml kjih gfed cba` */
+			0x80000000, /* 1000 0000 0000 0000  0000 0000 0000 0000 */
+
+			/* Allow all 8bit characters (assuming they are valid utf8) */
+			0x00000000,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+	};
+	gsize n = 0;
+
+	while (srclen) {
+		if (escape[*src >> 5] & (1U << (*src & 0x1f))) {
+			n++;
+		}
+
+		src ++;
+		srclen --;
+	}
+
+	return n;
 }
