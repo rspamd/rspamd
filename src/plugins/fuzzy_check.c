@@ -181,7 +181,7 @@ static void fuzzy_symbol_callback (struct rspamd_task *task,
 /* Initialization */
 gint fuzzy_check_module_init (struct rspamd_config *cfg,
 	struct module_ctx **ctx);
-gint fuzzy_check_module_config (struct rspamd_config *cfg);
+gint fuzzy_check_module_config (struct rspamd_config *cfg, bool valdate);
 gint fuzzy_check_module_reconfig (struct rspamd_config *cfg);
 static gint fuzzy_attach_controller (struct module_ctx *ctx,
 	GHashTable *commands);
@@ -940,7 +940,7 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 }
 
 gint
-fuzzy_check_module_config (struct rspamd_config *cfg)
+fuzzy_check_module_config (struct rspamd_config *cfg, bool validate)
 {
 	const ucl_object_t *value, *cur, *elt;
 	ucl_object_iter_t it;
@@ -969,7 +969,8 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 							"table and not %s",
 					lua_typename (L, lua_type (L, -1)));
 			fuzzy_module_ctx->enabled = FALSE;
-		} else {
+		}
+		else {
 			lua_pushstring (L, "process_rule");
 			lua_gettable (L, -2);
 
@@ -1205,7 +1206,7 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 				fuzzy_module_ctx->process_rule_ref);
 	}
 
-	return fuzzy_check_module_config (cfg);
+	return fuzzy_check_module_config (cfg, false);
 }
 
 /* Finalize IO */

@@ -46,7 +46,7 @@ static void process_regexp_item (struct rspamd_task *task,
 
 /* Initialization */
 gint regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
-gint regexp_module_config (struct rspamd_config *cfg);
+gint regexp_module_config (struct rspamd_config *cfg, bool validate);
 gint regexp_module_reconfig (struct rspamd_config *cfg);
 
 module_t regexp_module = {
@@ -130,7 +130,7 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 }
 
 gint
-regexp_module_config (struct rspamd_config *cfg)
+regexp_module_config (struct rspamd_config *cfg, bool validate)
 {
 	struct regexp_ctx *regexp_module_ctx = regexp_get_context (cfg);
 	struct regexp_module_item *cur_item = NULL;
@@ -174,7 +174,9 @@ regexp_module_config (struct rspamd_config *cfg)
 			if (!read_regexp_expression (cfg->cfg_pool,
 					cur_item, ucl_object_key (value),
 					ucl_obj_tostring (value), &ud)) {
-				res = FALSE;
+				if (validate) {
+					return FALSE;
+				}
 			}
 			else {
 				rspamd_symcache_add_symbol (cfg->cache,
@@ -228,7 +230,9 @@ regexp_module_config (struct rspamd_config *cfg)
 					if (!read_regexp_expression (cfg->cfg_pool,
 							cur_item, ucl_object_key (value),
 							ucl_obj_tostring (elt), &ud)) {
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						valid_expression = TRUE;
@@ -263,7 +267,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"mime_only attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						if (ucl_object_toboolean (elt)) {
@@ -314,7 +320,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"score attribute is not numeric for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						score = ucl_object_todouble (elt);
@@ -329,7 +337,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"one_shot attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						if (ucl_object_toboolean (elt)) {
@@ -344,7 +354,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"any_shot attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						if (ucl_object_toboolean (elt)) {
@@ -359,7 +371,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"nshots attribute is not numeric for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						nshots = ucl_object_toint (elt);
@@ -374,7 +388,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"one_param attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						if (ucl_object_toboolean (elt)) {
@@ -391,7 +407,9 @@ regexp_module_config (struct rspamd_config *cfg)
 								"priority attribute is not numeric for symbol: '%s'",
 								cur_item->symbol);
 
-						res = FALSE;
+						if (validate) {
+							return FALSE;
+						}
 					}
 					else {
 						priority = ucl_object_toint (elt);
@@ -427,8 +445,13 @@ regexp_module_config (struct rspamd_config *cfg)
 		}
 	}
 
-	msg_info_config ("init internal regexp module, %d regexp rules and %d "
-			"lua rules are loaded", nre, nlua);
+	if (res) {
+		msg_info_config ("init internal regexp module, %d regexp rules and %d "
+						 "lua rules are loaded", nre, nlua);
+	}
+	else {
+		msg_err_config ("fatal regexp module error");
+	}
 
 	return res;
 }
@@ -436,7 +459,7 @@ regexp_module_config (struct rspamd_config *cfg)
 gint
 regexp_module_reconfig (struct rspamd_config *cfg)
 {
-	return regexp_module_config (cfg);
+	return regexp_module_config (cfg, false);
 }
 
 static gboolean

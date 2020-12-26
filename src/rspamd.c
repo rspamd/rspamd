@@ -968,11 +968,15 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 		rspamd_lua_post_load_config (cfg);
 
 		if (init_modules) {
-			rspamd_init_filters (cfg, reload, false);
+			if (!rspamd_init_filters (cfg, reload, false)) {
+				return FALSE;
+			}
 		}
 
 		/* Do post-load actions */
-		rspamd_config_post_load (cfg, opts);
+		if (!rspamd_config_post_load (cfg, opts)) {
+			return FALSE;
+		}
 	}
 
 	return TRUE;

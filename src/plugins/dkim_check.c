@@ -113,7 +113,7 @@ static gint lua_dkim_canonicalize_handler (lua_State *L);
 
 /* Initialization */
 gint dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
-gint dkim_module_config (struct rspamd_config *cfg);
+gint dkim_module_config (struct rspamd_config *cfg, bool validate);
 gint dkim_module_reconfig (struct rspamd_config *cfg);
 
 module_t dkim_module = {
@@ -309,7 +309,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 }
 
 gint
-dkim_module_config (struct rspamd_config *cfg)
+dkim_module_config (struct rspamd_config *cfg, bool validate)
 {
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id = -1;
@@ -469,6 +469,10 @@ dkim_module_config (struct rspamd_config *cfg)
 				NULL, RSPAMD_MAP_DEFAULT)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 					ucl_object_tostring (value));
+
+			if (validate) {
+				return FALSE;
+			}
 		}
 		else {
 			got_trusted = TRUE;
@@ -523,8 +527,10 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
-		msg_err_config (
-			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
+		msg_err_config ("trusted_only option is set and no trusted domains are defined");
+		if (validate) {
+			return FALSE;
+		}
 	}
 	else {
 		if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
@@ -896,7 +902,7 @@ lua_dkim_sign_handler (lua_State *L)
 gint
 dkim_module_reconfig (struct rspamd_config *cfg)
 {
-	return dkim_module_config (cfg);
+	return dkim_module_config (cfg, false);
 }
 
 /*

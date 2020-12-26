@@ -58,7 +58,7 @@ INIT_LOG_MODULE(chartable)
 
 /* Initialization */
 gint chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
-gint chartable_module_config (struct rspamd_config *cfg);
+gint chartable_module_config (struct rspamd_config *cfg, bool validate);
 gint chartable_module_reconfig (struct rspamd_config *cfg);
 
 module_t chartable_module = {
@@ -109,7 +109,7 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 
 gint
-chartable_module_config (struct rspamd_config *cfg)
+chartable_module_config (struct rspamd_config *cfg, bool validate)
 {
 	const ucl_object_t *value;
 	gint res = TRUE;
@@ -174,7 +174,7 @@ chartable_module_config (struct rspamd_config *cfg)
 gint
 chartable_module_reconfig (struct rspamd_config *cfg)
 {
-	return chartable_module_config (cfg);
+	return chartable_module_config (cfg, false);
 }
 
 static gint latin_confusable[] = {
