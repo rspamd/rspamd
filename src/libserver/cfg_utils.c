@@ -925,8 +925,6 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			msg_warn_config ("controller worker is unconfigured: learning,"
 					" periodic scripts, maps watching and many other"
 					" Rspamd features will be broken");
-
-			ret = FALSE;
 		}
 
 		ret = rspamd_symcache_validate (cfg->cache, cfg, FALSE) && ret;
@@ -1589,7 +1587,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, bool strict)
 
 			}
 			else {
-				if (!mod->module_config_func (cfg)) {
+				if (!mod->module_config_func (cfg, strict)) {
 					msg_err_config ("config of %s failed", mod->name);
 					ret = FALSE;
 

@@ -212,7 +212,7 @@ typedef struct module_s {
 
 	int (*module_init_func) (struct rspamd_config *cfg, struct module_ctx **ctx);
 
-	int (*module_config_func) (struct rspamd_config *cfg);
+	int (*module_config_func) (struct rspamd_config *cfg, bool validate);
 
 	int (*module_reconfig_func) (struct rspamd_config *cfg);
 
