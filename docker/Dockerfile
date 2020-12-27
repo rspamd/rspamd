@@ -11,7 +11,7 @@ RUN	set -x \
 	&& rm -rf "$GNUPGHOME" \
 	&& apt-key list > /dev/null
 
-RUN	echo "deb http://rspamd.com/apt-stable/ buster main" > /etc/apt/sources.list.d/rspamd.list
+RUN	echo "deb https://rspamd.com/apt-stable/ buster main" > /etc/apt/sources.list.d/rspamd.list
 
 RUN	apt-get update \
 	&& apt-get install -y rspamd \
