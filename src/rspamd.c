@@ -781,7 +781,7 @@ static void
 mark_old_workers (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker *w = value;
-	struct rspamd_main *rspamd_main;
+	struct rspamd_main __attribute__ ((unused)) *rspamd_main;
 
 	rspamd_main = w->srv;
 

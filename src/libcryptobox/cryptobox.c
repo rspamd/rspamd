@@ -70,7 +70,7 @@ static const guchar n0[16] = {0};
 static void
 rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 {
-	guint32 eax, ecx = 0, ebx = 0, edx = 0;
+	guint32 __attribute__ ((unused)) eax, __attribute__ ((unused)) ecx = 0, __attribute__ ((unused)) ebx = 0, __attribute__ ((unused)) edx = 0;
 
 	eax = info;
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))

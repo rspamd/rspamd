@@ -553,7 +553,7 @@ rspamd_re_cache_check_lua_condition (struct rspamd_task *task,
 {
 	lua_State *L = (lua_State *)task->cfg->lua_state;
 	GError *err = NULL;
-	struct rspamd_lua_text *t;
+	struct rspamd_lua_text __attribute__ ((unused)) *t;
 	gint text_pos;
 
 	if (G_LIKELY (lua_cbref == -1)) {
