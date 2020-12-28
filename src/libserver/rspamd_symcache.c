@@ -586,8 +586,15 @@ rspamd_symcache_process_dep (struct rspamd_symcache *cache,
 	if (dep->vid >= 0) {
 		/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
 		vdit = rspamd_symcache_find_filter (cache, dep->sym, false);
-		msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", it->symbol,
-				dep->vid, vdit->symbol, vdit->id);
+
+		if (!vdit) {
+			msg_err_cache ("cannot add dependency from %s on %s: no dependency symbol registered",
+					dep->sym, dit->symbol);
+		}
+		else {
+			msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", it->symbol,
+					dep->vid, vdit->symbol, vdit->id);
+		}
 	}
 	else {
 		vdit = dit;
