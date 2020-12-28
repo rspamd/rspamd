@@ -1180,7 +1180,9 @@ if set_section and set_section[1] and type(set_section[1]) == "string" then
   end
 elseif set_section and type(set_section) == "table" then
   settings_map_pool = rspamd_mempool.create()
-  process_settings_table(set_section, true, settings_map_pool)
+  rspamd_config:add_post_init(function ()
+    process_settings_table(set_section, true, settings_map_pool)
+  end)
 end
 
 rspamd_config:add_config_unload(function()
