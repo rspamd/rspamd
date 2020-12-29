@@ -115,7 +115,7 @@ _mum (uint64_t v, uint64_t p) {
      multiplication.  If we use a generic code we actually call a
      function doing 128x128->128 bit multiplication.  The function is
      very slow.  */
-  lo = v * p, hi;
+  lo = v * p;
   __asm__ ("umulh %0, %1, %2" : "=r" (hi) : "r" (v), "r" (p));
 #else
   __uint128_t r = (__uint128_t) v * (__uint128_t) p;

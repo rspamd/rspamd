@@ -807,7 +807,7 @@ static void
 rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 {
 	struct fuzzy_session *session = ud;
-	gboolean encrypted = FALSE, is_shingle = FALSE;
+	gboolean is_shingle = FALSE, __attribute__ ((unused)) encrypted = FALSE;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const struct rspamd_shingle *shingle = NULL;
 	struct rspamd_shingle sgl_cpy;
@@ -970,7 +970,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 static void
 rspamd_fuzzy_process_command (struct fuzzy_session *session)
 {
-	gboolean encrypted = FALSE, is_shingle = FALSE;
+	gboolean is_shingle = FALSE, __attribute__ ((unused)) encrypted = FALSE;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	struct rspamd_fuzzy_reply result;
 	struct fuzzy_peer_cmd up_cmd;
