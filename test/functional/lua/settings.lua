@@ -61,6 +61,7 @@ rspamd_config:register_symbol({
   name = 'DEP_VIRTUAL',
   parent = id,
   type = 'virtual',
+  allowed_ids = 'id_virtual1',
   score = 1.0,
 })
 
