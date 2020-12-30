@@ -5774,7 +5774,7 @@ lua_task_set_settings_id (lua_State *L)
 				rspamd_config_find_settings_id_ref (task->cfg, id);
 
 		if (selt == NULL) {
-			return luaL_error (L, "settings id %u is unknown", id);
+			return luaL_error (L, "settings id %f is unknown", (lua_Number)id);
 		}
 		if (task->settings_elt) {
 			/* Overwrite existing settings from Lua */

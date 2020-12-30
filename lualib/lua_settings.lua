@@ -32,6 +32,10 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 
 local function register_settings_cb(from_postload)
+  if not from_postload then
+    assert(false, 'invalid invocation')
+  end
+
   if not post_init_performed then
     all_symbols = rspamd_config:get_symbols()
 
