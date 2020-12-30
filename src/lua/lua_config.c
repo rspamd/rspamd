@@ -3155,21 +3155,36 @@ lua_config_add_on_load (lua_State *L)
 	return 0;
 }
 
+static inline int
+rspamd_post_init_sc_sort (const struct rspamd_config_cfg_lua_script *pra,
+				const struct rspamd_config_cfg_lua_script *prb)
+{
+	/* Inverse sort */
+	return prb->priority - pra->priority;
+}
+
 static gint
 lua_config_add_post_init (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
+	guint priority = 0;
 
 	if (cfg == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
 	}
 
+	if (lua_type (L, 3) == LUA_TNUMBER) {
+		priority = lua_tointeger (L , 3);
+	}
+
 	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	sc->priority = priority;
 	DL_APPEND (cfg->post_init_scripts, sc);
+	DL_SORT (cfg->post_init_scripts, rspamd_post_init_sc_sort);
 
 	return 0;
 }

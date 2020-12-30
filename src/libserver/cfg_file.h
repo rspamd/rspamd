@@ -311,6 +311,7 @@ struct rspamd_action;
 
 struct rspamd_config_cfg_lua_script {
 	gint cbref;
+	gint priority;
 	struct rspamd_config_cfg_lua_script *prev, *next;
 };
 

@@ -2159,8 +2159,8 @@ rspamd_lua_run_config_post_init (lua_State *L, struct rspamd_config *cfg)
 		rspamd_lua_setclass (L, "rspamd{config}", -1);
 
 		if (lua_pcall (L, 1, 0, err_idx) != 0) {
-			msg_err_config ("cannot run config post init script: %s",
-					lua_tostring (L, -1));
+			msg_err_config ("cannot run config post init script: %s; priority = %d",
+					lua_tostring (L, -1), sc->priority);
 		}
 
 		lua_settop (L, err_idx - 1);
