@@ -230,7 +230,7 @@ local function transform_settings_maybe(settings, name)
   return settings
 end
 
-local function register_settings_id(str, settings)
+local function register_settings_id(str, settings, from_postload)
   local numeric_id = numeric_settings_id(str)
 
   if known_ids[numeric_id] then
@@ -252,8 +252,10 @@ local function register_settings_id(str, settings)
     }
   end
 
-  if not post_init_added then
-    rspamd_config:add_post_init(function () register_settings_cb(true) end)
+  if not from_postload and not post_init_added then
+    -- Use high priority to ensure that settings are initialised early but not before all
+    -- plugins are loaded
+    rspamd_config:add_post_init(function () register_settings_cb(true) end, 150)
     rspamd_config:add_config_unload(function()
       if post_init_added then
         known_ids = {}
@@ -299,5 +301,7 @@ exports.default_symbols = function()
   end
   return default_symbols
 end
+
+exports.load_all_settings = register_settings_cb
 
 return exports

@@ -962,7 +962,8 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       end
 
       if elt['id'] then
-        out.id = lua_settings.register_settings_id(elt.id, out)
+        -- We are here from a postload script
+        out.id = lua_settings.register_settings_id(elt.id, out, true)
         lua_util.debugm(N, rspamd_config,
             'added settings id to "%s": %s -> %s',
             name, elt.id, out.id)
@@ -1033,6 +1034,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
   end
 
   settings_initialized = true
+  lua_settings.load_all_settings(true)
   rspamd_logger.infox(rspamd_config, 'loaded %1 elements of settings', nrules)
 
   return true
@@ -1215,7 +1217,7 @@ elseif set_section and type(set_section) == "table" then
   )
   rspamd_config:add_post_init(function ()
     process_settings_table(set_section, true, settings_map_pool, true)
-  end)
+  end, 100)
 end
 
 rspamd_config:add_config_unload(function()
