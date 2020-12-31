@@ -816,7 +816,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	rspamd_regexp_library_init (cfg);
 	rspamd_multipattern_library_init (cfg->hs_cache_dir);
 
-#ifdef WITH_HYPERSCAN
+#if defined(WITH_HYPERSCAN) && !defined(__aarch64__)
 	if (!cfg->disable_hyperscan) {
 		if (!(cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 			msg_warn_config ("CPU doesn't have SSSE3 instructions set "

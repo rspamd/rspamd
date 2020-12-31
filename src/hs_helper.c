@@ -254,11 +254,13 @@ static gboolean
 rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		gboolean forced)
 {
+#ifndef __aarch64__
 	if (!(ctx->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 		msg_warn ("CPU doesn't have SSSE3 instructions set "
 				"required for hyperscan, disable hyperscan compilation");
 		return FALSE;
 	}
+#endif
 
 	if (!rspamd_hs_helper_cleanup_dir (ctx, forced)) {
 		msg_warn ("cannot cleanup cache dir '%s'", ctx->hs_dir);
