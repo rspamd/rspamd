@@ -9,10 +9,10 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov).
 ## Developers
 
 * [Alexander Moisseev](https://github.com/moisseev)
+* [Andrew Lewis](https://github.com/fatalbanana)
 
 ## Alumni Developers
 
-* [Andrew Lewis](https://github.com/fatalbanana)
 * [Mikhail Galanin](https://github.com/negram)
 
 ## Significant contributors
@@ -20,6 +20,7 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov).
 * [Steve Freegard](https://github.com/smfreegard)
 * [Alexey Savelyev](https://github.com/AlexeySa)
 * [Anna Stakhova](https://github.com/AnnaStakhova)
+* [Anton Yuzhaninov](https://github.com/citrin)
 
 <https://github.com/rspamd/rspamd/graphs/contributors>
 
