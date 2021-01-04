@@ -471,4 +471,22 @@ exports.pdf_format_heuristic = function(input, log_obj, pos, part)
   return 'pdf',weight
 end
 
+exports.pe_part_heuristic = function(input, log_obj, pos, part)
+  if not input then
+    return
+  end
+
+  local pe_ptr_bin = input:sub(60, 64)
+  if #pe_ptr_bin ~= 4 then
+    return
+  end
+
+  local pe_ptr = rspamd_util.unpack("<H", pe_ptr_bin)
+  if pe_ptr ~= pos then
+    return
+  end
+
+  return 'exe',15
+end
+
 return exports
