@@ -105,6 +105,7 @@ local patterns = {
         string = [[PE\x{00}\x{00}]],
         position = {'>=', 0x3c + 4},
         weight = 15,
+        heuristic = heuristics.pe_part_heuristic,
       }
     }
   },
