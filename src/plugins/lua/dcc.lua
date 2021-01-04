@@ -71,7 +71,8 @@ rule = dcc.configure(opts)
 if rule then
   local id = rspamd_config:register_symbol({
     name = 'DCC_CHECK',
-    callback = check_dcc
+    callback = check_dcc,
+    type = 'callback',
   })
   rspamd_config:register_symbol{
     type = 'virtual',
