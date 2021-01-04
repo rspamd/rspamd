@@ -137,6 +137,12 @@ rspamd_expr_op_to_str (enum rspamd_expression_op op)
 	case OP_LT:
 		op_str = "<";
 		break;
+	case OP_EQ:
+		op_str = "==";
+		break;
+	case OP_NE:
+		op_str = "!=";
+		break;
 	case OP_OBRACE:
 		op_str = "(";
 		break;
@@ -235,6 +241,8 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 	case OP_GT:
 	case OP_LE:
 	case OP_LT:
+	case OP_EQ:
+	case OP_NE:
 		ret = 4;
 		break;
 	case OP_AND:
@@ -283,6 +291,8 @@ rspamd_expr_op_flags (enum rspamd_expression_op op)
 	case OP_GT:
 	case OP_LE:
 	case OP_LT:
+	case OP_EQ:
+	case OP_NE:
 		ret |= RSPAMD_EXPRESSION_BINARY|RSPAMD_EXPRESSION_COMPARISON;
 		break;
 	case OP_AND:
@@ -319,6 +329,7 @@ rspamd_expr_is_operation_symbol (gchar a)
 	case '*':
 	case '-':
 	case '/':
+	case '=':
 		return TRUE;
 	}
 
@@ -403,10 +414,13 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 	case '/':
 	case '-':
 	case '(':
-	case ')': {
+	case ')':
+	case '=': {
 		if (a < end - 1) {
 			if ((a[0] == '&' && a[1] == '&') ||
-					(a[0] == '|' && a[1] == '|')) {
+				(a[0] == '|' && a[1] == '|') ||
+				(a[0] == '!' && a[1] == '=') ||
+				(a[0] == '=' && a[1] == '=')) {
 				*next = a + 2;
 			}
 			else {
@@ -419,7 +433,12 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 		/* XXX: not especially effective */
 		switch (*a) {
 		case '!':
-			op = OP_NOT;
+			if (a < end - 1 && a[1] == '=') {
+				op = OP_NE;
+			}
+			else {
+				op = OP_NOT;
+			}
 			break;
 		case '&':
 			op = OP_AND;
@@ -438,6 +457,9 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 			break;
 		case '-':
 			op = OP_MINUS;
+			break;
+		case '=':
+			op = OP_EQ;
 			break;
 		case ')':
 			op = OP_CBRACE;
@@ -876,7 +898,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				op = GPOINTER_TO_INT (rspamd_expr_stack_peek (e));
 
 				if (op == OP_MULT || op == OP_MINUS || op == OP_DIVIDE ||
-						op == OP_PLUS || (op >= OP_LT && op <= OP_GE)) {
+						op == OP_PLUS || (op >= OP_LT && op <= OP_NE)) {
 					if (rspamd_regexp_search (num_re,
 							p,
 							end - p,
@@ -1238,6 +1260,12 @@ rspamd_ast_do_binary_op (struct rspamd_expression_elt *elt, gdouble op1, gdouble
 	case OP_LT:
 		ret = op1 < op2;
 		break;
+	case OP_EQ:
+		ret = op1 == op2;
+		break;
+	case OP_NE:
+		ret = op1 != op2;
+		break;
 
 	case OP_NOT:
 	case OP_PLUS:
@@ -1284,6 +1312,8 @@ rspamd_ast_do_nary_op (struct rspamd_expression_elt *elt, gdouble val, gdouble a
 	case OP_GT:
 	case OP_LE:
 	case OP_LT:
+	case OP_EQ:
+	case OP_NE:
 		g_assert_not_reached();
 		break;
 	}

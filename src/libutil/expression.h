@@ -41,6 +41,8 @@ enum rspamd_expression_op {
 	OP_GT, /* > */
 	OP_LE, /* <= */
 	OP_GE, /* >= */
+	OP_EQ, /* == */
+	OP_NE, /* != */
 	OP_OBRACE, /* ( */
 	OP_CBRACE /* ) */
 };
