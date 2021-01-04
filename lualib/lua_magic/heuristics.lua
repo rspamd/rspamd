@@ -476,17 +476,20 @@ exports.pe_part_heuristic = function(input, log_obj, pos, part)
     return
   end
 
+  -- pe header should start at the offset that is placed in msdos header at position 60..64
   local pe_ptr_bin = input:sub(60, 64)
   if #pe_ptr_bin ~= 4 then
     return
   end
 
-  local pe_ptr = rspamd_util.unpack("<H", pe_ptr_bin)
+  -- it is an LE 32 bit integer
+  local pe_ptr = rspamd_util.unpack("<I4", pe_ptr_bin)
+  -- if pe header magic matches the offset, it is definitely a PE file
   if pe_ptr ~= pos then
     return
   end
 
-  return 'exe',15
+  return 'exe',30
 end
 
 return exports
