@@ -1056,6 +1056,11 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 	if (name != NULL && !(type & SYMBOL_TYPE_CALLBACK)) {
 		struct rspamd_symcache_item *existing;
 
+		if (strcspn (name, " \t\n\r") != strlen (name)) {
+			msg_warn_cache ("bogus characters in symbol name: \"%s\"",
+					name);
+		}
+
 		if ((existing = g_hash_table_lookup (cache->items_by_symbol, name)) != NULL) {
 
 			if (existing->type & SYMBOL_TYPE_GHOST) {
