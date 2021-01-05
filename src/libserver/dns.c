@@ -792,6 +792,10 @@ rspamd_dns_read_hosts_file (struct rspamd_config *cfg,
 		g_strfreev (elts);
 	}
 
+	if (linebuf) {
+		free (linebuf);
+	}
+
 	msg_info_config ("processed host file %s; %d records added", fname, nadded);
 	fclose (fp);
 
