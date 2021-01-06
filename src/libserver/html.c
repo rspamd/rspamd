@@ -106,7 +106,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_LABEL, "label", (CM_INLINE)),
 	TAG_DEF(Tag_LEGEND, "legend", (CM_INLINE)),
 	TAG_DEF(Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT | FL_BLOCK)),
-	TAG_DEF(Tag_LINK, "link", (CM_HEAD | CM_EMPTY|FL_HREF)),
+	TAG_DEF(Tag_LINK, "link", (CM_EMPTY|FL_HREF)),
 	TAG_DEF(Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)),
 	TAG_DEF(Tag_MAP, "map", (CM_INLINE|FL_HREF)),
 	TAG_DEF(Tag_MENU, "menu", (CM_BLOCK | CM_OBSOLETE)),
@@ -3192,7 +3192,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 					save_space = FALSE;
 				}
 
-				if (cur_tag->flags & FL_HREF) {
+				if (cur_tag->flags & FL_HREF && !(cur_tag->flags & FL_IGNORE)) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
