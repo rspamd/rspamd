@@ -875,6 +875,7 @@ set:
 							200,
 							"no header name in header regexp: '%s'",
 							mime_atom->str);
+					rspamd_regexp_unref (mime_atom->d.re->regexp);
 					goto err;
 				}
 
@@ -892,12 +893,13 @@ set:
 					rspamd_regexp_unref (own_re);
 				}
 				else {
-					/* We have header regexp, but no header name is detected */
+					/* We have selector regexp, but no selector name is detected */
 					g_set_error (err,
 							rspamd_mime_expr_quark (),
 							200,
 							"no selector name in selector regexp: '%s'",
 							mime_atom->str);
+					rspamd_regexp_unref (mime_atom->d.re->regexp);
 					goto err;
 				}
 			}
