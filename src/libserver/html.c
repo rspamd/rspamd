@@ -983,6 +983,9 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 		else if (g_ascii_strncasecmp (p, "rel", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_REL);
 		}
+		else if (g_ascii_strncasecmp (p, "alt", len) == 0) {
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_ALT);
+		}
 	}
 	else if (len == 4) {
 		if (g_ascii_strncasecmp (p, "href", len) == 0) {
@@ -1817,7 +1820,8 @@ rspamd_html_process_data_image (rspamd_mempool_t *pool,
 static void
 rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 							 struct html_content *hc, khash_t (rspamd_url_hash) *url_set,
-							 GPtrArray *part_urls)
+							 GPtrArray *part_urls,
+							 GByteArray *dest)
 {
 	struct html_tag_component *comp;
 	struct html_image *img;
@@ -1930,6 +1934,19 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				}
 			}
 		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_ALT && comp->len > 0 && dest != NULL) {
+			if (dest->len > 0 && !g_ascii_isspace (dest->data[dest->len - 1])) {
+				/* Add a space */
+				g_byte_array_append (dest, " ", 1);
+			}
+
+			g_byte_array_append (dest, comp->start, comp->len);
+
+			if (!g_ascii_isspace (dest->data[dest->len - 1])) {
+				/* Add a space */
+				g_byte_array_append (dest, " ", 1);
+			}
+		}
 
 		cur = g_list_next (cur);
 	}
@@ -1971,7 +1988,7 @@ rspamd_html_process_link_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			if (comp->len == sizeof ("icon") - 1 &&
 				rspamd_lc_cmp (comp->start, "icon", sizeof ("icon") - 1) == 0) {
 
-				rspamd_html_process_img_tag (pool, tag, hc, url_set, part_urls);
+				rspamd_html_process_img_tag (pool, tag, hc, url_set, part_urls, NULL);
 			}
 		}
 
@@ -3248,7 +3265,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc, url_set,
-							part_urls);
+							part_urls, dest);
 				}
 				else if (cur_tag->id == Tag_LINK && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_link_tag (pool, cur_tag, hc, url_set,
