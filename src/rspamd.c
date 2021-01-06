@@ -1395,7 +1395,7 @@ main (gint argc, gchar **argv, gchar **env)
 	type = g_quark_from_static_string ("main");
 
 	/* First set logger to console logger */
-	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
+	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool, 0);
 	g_assert (rspamd_main->logger != NULL);
 
 	if (is_debug) {

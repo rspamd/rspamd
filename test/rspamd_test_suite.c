@@ -52,17 +52,18 @@ main (int argc, char **argv)
 	}
 
 	/* Setup logger */
-	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
 
 	/* Setup logger */
 	if (verbose || g_test_verbose ()) {
-		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
-		rspamd_log_set_log_flags (rspamd_main->logger,
+		rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
 				RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED|RSPAMD_LOG_FLAG_RSPAMADM);
+
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
 	}
 	else {
+		rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
+				RSPAMD_LOG_FLAG_RSPAMADM);
 		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
-		rspamd_log_set_log_flags (rspamd_main->logger,RSPAMD_LOG_FLAG_RSPAMADM);
 	}
 
 	rspamd_lua_set_path ((lua_State *)cfg->lua_state, NULL, NULL);

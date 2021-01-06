@@ -131,7 +131,7 @@ rspamd_emergency_logger_dtor (gpointer d)
 }
 
 rspamd_logger_t *
-rspamd_log_open_emergency (rspamd_mempool_t *pool)
+rspamd_log_open_emergency (rspamd_mempool_t *pool, gint flags)
 {
 	rspamd_logger_t *logger;
 	GError *err = NULL;
@@ -147,7 +147,7 @@ rspamd_log_open_emergency (rspamd_mempool_t *pool)
 		logger = g_malloc0 (sizeof (rspamd_logger_t));
 	}
 
-
+	logger->flags = flags;
 	logger->pool = pool;
 	logger->process_type = "main";
 
@@ -432,13 +432,15 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		if (level >= G_LOG_LEVEL_INFO) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 
-			if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
-				gsize unsecaped_len = end - logbuf;
-				gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
-				log_line = logbuf_escaped;
+			if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
+				if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
+					gsize unsecaped_len = end - logbuf;
+					gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
+					log_line = logbuf_escaped;
 
-				end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
-						logbuf_escaped,unsecaped_len + nescaped * 4);
+					end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
+							logbuf_escaped, unsecaped_len + nescaped * 4);
+				}
 			}
 
 			rspamd_fprintf (stderr, "%*s\n", (gint)(end - log_line),
@@ -456,13 +458,15 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		if (rspamd_logger_need_log (rspamd_log, level_flags, mod_id)) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 
-			if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
-				gsize unsecaped_len = end - logbuf;
-				gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
-				log_line = logbuf_escaped;
+			if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
+				if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
+					gsize unsecaped_len = end - logbuf;
+					gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
+					log_line = logbuf_escaped;
 
-				end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
-						logbuf_escaped,unsecaped_len + nescaped * 4);
+					end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
+							logbuf_escaped, unsecaped_len + nescaped * 4);
+				}
 			}
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {

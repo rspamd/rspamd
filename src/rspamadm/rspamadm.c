@@ -438,18 +438,17 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (1);
 	}
 
-	/* Setup logger */
-	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool);
 
 	/* Setup logger */
 	if (verbose) {
-		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
-		rspamd_log_set_log_flags (rspamd_main->logger,
+		rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
 				RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED|RSPAMD_LOG_FLAG_RSPAMADM);
+		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_DEBUG);
 	}
 	else {
+		rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
+				RSPAMD_LOG_FLAG_RSPAMADM);
 		rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
-		rspamd_log_set_log_flags (rspamd_main->logger,RSPAMD_LOG_FLAG_RSPAMADM);
 	}
 
 	rspamd_main->event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);

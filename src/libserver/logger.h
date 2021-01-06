@@ -68,7 +68,7 @@ struct rspamd_logger_funcs {
  * This logger is also used as an emergency logger
  * @return new rspamd logger object
  */
-rspamd_logger_t * rspamd_log_open_emergency (rspamd_mempool_t *pool);
+rspamd_logger_t * rspamd_log_open_emergency (rspamd_mempool_t *pool, gint flags);
 
 /**
  * Open specific (configured logging)
