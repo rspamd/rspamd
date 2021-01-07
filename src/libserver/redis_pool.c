@@ -212,7 +212,7 @@ rspamd_redis_conn_timeout (EV_P_ ev_timer *w, int revents)
 				conn->ctx, conn->ref.refcount);
 		/* Prevent reusing */
 		if (conn->entry) {
-			g_queue_unlink (conn->elt->inactive, conn->entry);
+			g_queue_delete_link (conn->elt->inactive, conn->entry);
 			conn->entry = NULL;
 		}
 
