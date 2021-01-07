@@ -779,7 +779,7 @@ rspamd_dns_read_hosts_file (struct rspamd_config *cfg,
 				rep->next = NULL;
 				rep->prev = rep;
 				rdns_resolver_set_fake_reply (dns_resolver->r,
-						g_strdup (*cur_name), rep->type, RDNS_RC_NOERROR, rep);
+						*cur_name, rep->type, RDNS_RC_NOERROR, rep);
 				msg_debug_config ("added fake record %s -> %s from hosts file %s",
 						*cur_name, rspamd_inet_address_to_string (addr), fname);
 				cur_name ++;
