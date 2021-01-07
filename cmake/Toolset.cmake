@@ -1,4 +1,5 @@
 option (ENABLE_FAST_MATH     "Build rspamd with fast math compiler flag [default: ON]" ON)
+option (ENABLE_ANALYZER      "Build rspamd with static analyzer [default: OFF]" OFF)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     SET (COMPILER_GCC 1)
@@ -138,7 +139,7 @@ if (COMPILER_GCC)
     set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${COMPILER_FAST_MATH} -fomit-frame-pointer")
 
     if (ENABLE_FULL_DEBUG MATCHES "ON")
-        if (COMPILER_GCC)
+        if (ENABLE_ANALYZER MATCHES "ON")
             # Check support of -fanalyzer
             CHECK_C_COMPILER_FLAG(-fanalyzer SUPPORT_FANALYZER)
             if (SUPPORT_FANALYZER)
