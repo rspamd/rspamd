@@ -208,7 +208,7 @@ struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
 /**
  * Sets crash signals handlers if compiled with libunwind
  */
-void rspamd_set_crash_handler (struct rspamd_main *);
+RSPAMD_NO_SANITIZE void rspamd_set_crash_handler (struct rspamd_main *);
 
 /**
  * Initialise the main monitoring worker

@@ -1607,13 +1607,14 @@ rspamd_crash_sig_handler (int sig, siginfo_t *info, void *ctx)
 }
 #endif
 
-void
+RSPAMD_NO_SANITIZE void
 rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 {
 #ifdef HAVE_SA_SIGINFO
 	struct sigaction sa;
 
 #ifdef HAVE_SIGALTSTACK
+	void *stack_mem;
 	stack_t ss;
 	memset (&ss, 0, sizeof ss);
 
@@ -1624,7 +1625,8 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	 * I don't know any good ways to stop this behaviour.
 	 */
 	ss.ss_size = MAX (SIGSTKSZ, 8192 * 4);
-	ss.ss_sp = g_malloc0 (ss.ss_size);
+	stack_mem = g_malloc0 (ss.ss_size);
+	ss.ss_sp = stack_mem;
 	sigaltstack (&ss, NULL);
 #endif
 	saved_main = rspamd_main;
