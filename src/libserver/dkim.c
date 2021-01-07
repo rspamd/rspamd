@@ -783,6 +783,10 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 			g_ptr_array_add (ctx->hlist, hdr);
 		}
 	}
+
+	rspamd_mempool_add_destructor (ctx->pool,
+			(rspamd_mempool_destruct_t)rspamd_dkim_hlist_free,
+			ctx->hlist);
 }
 
 /**
