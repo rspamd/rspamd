@@ -91,9 +91,7 @@ local function gen_cb(params)
     end
 
     local cact = task:get_metric_action('default')
-    if params.act and cact == params.act then
-      return false
-    end
+
     if params.honor and params.honor[cact] then
       return false
     elseif params.raction and not params.raction[cact] then
