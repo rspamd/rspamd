@@ -1,3 +1,96 @@
+2.7: 08 Jan 2021
+  * [Conf] Add R_DKIM_PERMFAIL to the metric
+  * [CritFix] Dkim: Fix simple canonicalisation if multiple signatures are presented
+  * [CritFix] Fix controller paths normalisation
+  * [Feature] Add INVALID_DATE rule
+  * [Feature] Add controller endpoint for training neural
+  * [Feature] Add sanity checks for actions thresholds
+  * [Feature] Add support of '==' and '!=' in Rspamd expressions
+  * [Feature] Composites: Improve composite atoms parser
+  * [Feature] Docker: use Debian slim variant
+  * [Feature] Elastic: Add some missing fields
+  * [Feature] Extract text from img alt attributes
+  * [Feature] Improve charset detection logic
+  * [Feature] Lua_clickhouse: Add optional row callback for large selections
+  * [Feature] Lua_dns_resolver: Add idna_convert_utf8 method
+  * [Feature] Lua_mime: Add ability to do multipattern replacement
+  * [Feature] Lua_trie: Allow to report start of the match
+  * [Feature] Multimap: support adding map values as extra options
+  * [Feature] Neural: Move PCA learning to a subprocess
+  * [Feature] RBL: support matching content/image URLs only
+  * [Feature] RBL: support use of multiple selectors
+  * [Feature] Reputation: Allow to specify ip masks
+  * [Feature] Support SMIME signed messages container
+  * [Feature] Support multiple conditions for symbols
+  * [Feature] Support ping in milter mode
+  * [Feature] Support rspamd_text in selector regexps
+  * [Feature] Use own daemonization routine
+  * [Feature] Vadesecure: Implement settings_outbound feature as recommended by Vade
+  * [Feature] `rspamadm clickhouse` command
+  * [Feature] allow hyperscan for aarch64
+  * [Fix] Allow to set priorities between post init scripts
+  * [Fix] Allow to use maps for strings that are not zero terminated
+  * [Fix] Apply max_lua_urls limit for emails as well
+  * [Fix] Arc: Fix CV check on signing
+  * [Fix] Arc: Fix signing of the broken ARC chains
+  * [Fix] Clickhouse: escape carriage return
+  * [Fix] Composites: Allow partial match
+  * [Fix] Deduct type of a table methods
+  * [Fix] Do not load errored hyperscan database
+  * [Fix] Do not process links in ignored html tags
+  * [Fix] Fix ClamAV result for cached encrypted file (#3395)
+  * [Fix] Fix canonicalisation when l= tag is presented
+  * [Fix] Fix flag shift
+  * [Fix] Fix handling of skip/skip_process http flags
+  * [Fix] Fix html attachments checks
+  * [Fix] Fix issue with pushing binary formats to Lua strings
+  * [Fix] Fix logging for rspamadm
+  * [Fix] Fix off-by-one with init check
+  * [Fix] Fix parsing of escape characters in quoted pairs
+  * [Fix] Fix pushing ucl strings with \0 inside
+  * [Fix] Fix quoted-printable soft newlines bugged case
+  * [Fix] Fix settings in case actions are set to null (#3415)
+  * [Fix] Fix several issues with auth results producing
+  * [Fix] Fix smtp comments exclusion
+  * [Fix] Fix smtp date syntax definition
+  * [Fix] Fix substring search in case if srchlen == inlen
+  * [Fix] Fix text selectors
+  * [Fix] Honour `systemd` setting when logging to console (#3514)
+  * [Fix] Html: Add entities collisions prevention logic (e.g. for mathml entities)
+  * [Fix] Lua_auth_results: Quote potentially bad values in AR header
+  * [Fix] Multimap: Fix flags usage
+  * [Fix] Multimap: Fix scoring for combined maps
+  * [Fix] Plug GList * leak in redis pool
+  * [Fix] RBL: allow for multiple matches of the same label if types are different
+  * [Fix] Rely on libev checks for file maps
+  * [Fix] Restore simple dkim canonicalisation mode
+  * [Fix] Return MimeCharset as we work with emails...
+  * [Fix] Spamassassin: Fix pcre_only flags
+  * [Fix] Spamassassin: Preserve 'pcre_only' flag when dealing with regexp replacements
+  * [Fix] Try to fix GError leak
+  * [Fix] Try to fix a mess with settings loading by adding priorities
+  * [Fix] Try to move setings initialisation to a later stage
+  * [Fix] Use dup fd in milter handler to avoid races with the proxy
+  * [Fix] Use message pointer to avoid obsolete data to be cached
+  * [Project] Rbl: Migrate to `checks`
+  * [Project] Rbl: Move config code outside of the plugin
+  * [Project] Ressurect empty prefilters as connection filters
+  * [Project] Support connection filters registration from Lua
+  * [Rework] Add final cleanup logic
+  * [Rework] Add preliminary support of hyperscan caching for re maps
+  * [Rework] Add stale cache removal
+  * [Rework] Clickhouse: Improve performance
+  * [Rework] Distinguish between strict config test mode
+  * [Rework] Furhter logging improvements
+  * [Rework] Milter_headers: improve extended_headers_rcpt support
+  * [Rework] Move parsers to a separate lua library
+  * [Rework] Neural: Skip composite symbols
+  * [Rework] Rbl: Rework defaults logic
+  * [Rework] Some tunes to cache saving
+  * [Rework] Track maps origins
+  * [Rework] Use full crypto hash for regexp maps
+  * [Rules] Remove broken rule
+
 2.6: 30 Sep 2020
   * [Conf] Add missing symbols
   * [Conf] Add missing symbols
