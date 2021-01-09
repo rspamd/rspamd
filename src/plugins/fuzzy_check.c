@@ -3968,7 +3968,7 @@ fuzzy_lua_gen_hashes_handler (lua_State *L)
 				continue;
 			}
 
-			commands = fuzzy_generate_commands (task, rule, FUZZY_WRITE, flag,
+			commands = fuzzy_generate_commands (task, rule, cmd, flag,
 					weight, send_flags);
 
 			if (commands != NULL) {
