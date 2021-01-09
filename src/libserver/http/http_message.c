@@ -198,7 +198,7 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 			return FALSE;
 		}
 
-		if (len != 0 && len != ULLONG_MAX) {
+		if (len != 0 && len != G_MAXSIZE) {
 			if (ftruncate (storage->shared.shm_fd, len) == -1) {
 				return FALSE;
 			}
@@ -227,7 +227,7 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 		}
 	}
 	else {
-		if (len != 0 && len != ULLONG_MAX) {
+		if (len != 0 && len != G_MAXSIZE) {
 			if (data == NULL) {
 				storage->normal = rspamd_fstring_sized_new (len);
 				msg->body_buf.len = 0;
