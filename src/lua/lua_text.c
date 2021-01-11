@@ -225,6 +225,7 @@ LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
 LUA_FUNCTION_DEF (text, lt);
 LUA_FUNCTION_DEF (text, concat);
+LUA_FUNCTION_DEF (text, strtoul);
 
 static const struct luaL_reg textlib_f[] = {
 		LUA_INTERFACE_DEF (text, fromstring),
@@ -257,6 +258,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, base64),
 		LUA_INTERFACE_DEF (text, hex),
 		LUA_INTERFACE_DEF (text, find),
+		LUA_INTERFACE_DEF (text, strtoul),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -1667,6 +1669,29 @@ lua_text_lower (lua_State *L)
 		}
 		else {
 			rspamd_str_lc_utf8 ((gchar *) nt->start, nt->len);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_strtoul (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t) {
+		unsigned long ll;
+
+		if (rspamd_strtoul (t->start, t->len, &ll)) {
+			lua_pushinteger (L, ll);
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
