@@ -38,7 +38,7 @@ local pdf_patterns = {
     patterns = {
       [[netsh\s]],
       [[echo\s]],
-      [[\/[A-Za-z]*#\d\d(?:[#A-Za-z<>/\s])]], -- Hex encode obfuscation
+      [=[\/[A-Za-z]*#\d\d[#A-Za-z<>/\s]]=], -- Hex encode obfuscation
     }
   },
   start_object = {
@@ -1326,16 +1326,33 @@ processors.suspicious = function(input, task, positions, pdf_object, pdf_output)
       suspicious_factor = suspicious_factor + 0.5
     elseif match[2] == 2 then
       nexec = nexec + 1
-    else
-      nencoded = nencoded + 1
+    elseif match[2] == 3 then
+      local enc_data = input:sub(match[1] - 2, match[1] - 1)
+      local legal_escape = false
 
-      if last_encoded then
-        if match[1] - last_encoded < 8 then
-          -- likely consecutive encoded chars, increase factor
-          close_encoded = close_encoded + 1
+      if enc_data then
+        enc_data = enc_data:strtoul()
+
+        if enc_data then
+          -- Legit encode cases are non printable characters (e.g. spaces)
+          if enc_data < 0x21 or enc_data >= 0x7f then
+            legal_escape = true
+          end
         end
       end
-      last_encoded = match[1]
+
+      if not legal_escape then
+        nencoded = nencoded + 1
+
+        if last_encoded then
+          if match[1] - last_encoded < 8 then
+            -- likely consecutive encoded chars, increase factor
+            close_encoded = close_encoded + 1
+          end
+        end
+        last_encoded = match[1]
+
+      end
     end
   end
 
