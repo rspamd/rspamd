@@ -157,6 +157,15 @@ local patterns = {
       }
     }
   },
+  vcf = {
+    matches = {
+      {
+        string = [[BEGIN:VCARD]],
+        weight = 60,
+        relative_position = 0,
+      }
+    }
+  },
   -- Archives
   arj = {
     matches = {
