@@ -36,13 +36,6 @@ end
 
 local exports = {}
 
-local function extract_text_data(specific)
-  local fun = require "fun"
-
-  local tbl = fun.totable(fun.map(function(e) return e[2]:lower() end, specific.elts))
-  return table.concat(tbl, '\n')
-end
-
 local function process_vcard(input, mpart, task)
   local control={n='\n', r=''}
   local rspamd_url = require "rspamd_url"
