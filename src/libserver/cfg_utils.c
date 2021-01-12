@@ -930,12 +930,12 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		ret = rspamd_symcache_validate (cfg->cache, cfg, FALSE) && ret;
 	}
 
-	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
-		rspamd_map_preload (cfg);
-	}
-
 	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
 		rspamd_lua_run_config_post_init (cfg->lua_state, cfg);
+	}
+
+	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
+		rspamd_map_preload (cfg);
 	}
 
 	return ret;
