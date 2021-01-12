@@ -31,6 +31,12 @@ local content_modules = {
     extensions = {'ics'},
     output = "text"
   },
+  vcf = {
+    mime_type = {"text/vcard", "application/vcard"},
+    module = require "lua_content/vcard",
+    extensions = {'vcf'},
+    output = "text"
+  },
   pdf = {
     mime_type = "application/pdf",
     module = require "lua_content/pdf",
