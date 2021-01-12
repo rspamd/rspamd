@@ -863,7 +863,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 
 	tag->parent = *cur_level;
 
-	if (!(tag->flags & CM_INLINE)) {
+	if (!(tag->flags & (CM_INLINE|CM_EMPTY))) {
 		/* Block tag */
 		if (tag->flags & (FL_CLOSING|FL_CLOSED)) {
 			if (!*cur_level) {
