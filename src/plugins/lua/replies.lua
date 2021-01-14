@@ -43,6 +43,7 @@ local settings = {
   cookie_key = nil,
   cookie_is_pattern = false,
   cookie_valid_time = '2w', -- 2 weeks by default
+  min_message_id = 2, -- minimum length of the message-id header
 }
 
 local N = "replies"
@@ -150,7 +151,7 @@ local function replies_set(task)
   end
   -- If no message-id present return
   local msg_id = task:get_header_raw('message-id')
-  if msg_id == nil or msg_id:len() <= 2 then
+  if msg_id == nil or msg_id:len() <= (settings.min_message_id or 2) then
     return
   end
   -- Create hash of message-id and store to redis
