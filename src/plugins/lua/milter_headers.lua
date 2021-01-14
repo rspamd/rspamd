@@ -158,10 +158,6 @@ local function milter_headers(task)
     end
 
 
-    if settings.extended_headers_rcpt and match_extended_headers_rcpt() then
-      return false
-    end
-
     if settings.skip_local and not settings.local_headers[hdr] then
       local ip = task:get_ip()
       if (ip and ip:is_local()) then return true end
@@ -169,6 +165,10 @@ local function milter_headers(task)
 
     if settings.skip_authenticated and not settings.authenticated_headers[hdr] then
       if task:get_user() ~= nil then return true end
+    end
+
+    if settings.extended_headers_rcpt and not match_extended_headers_rcpt() then
+      return true
     end
 
     return false
