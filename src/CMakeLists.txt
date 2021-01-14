@@ -68,11 +68,15 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 		FOREACH(_lib ${CLANG_EXTRA_PLUGINS_LIBS})
 			SET(CMAKE_C_FLAGS
 					"${CMAKE_C_FLAGS} -Xclang -load -Xclang ${_lib}")
+			SET(CMAKE_CXX_FLAGS
+					"${CMAKE_CXX_FLAGS} -Xclang -load -Xclang ${_lib}")
 		ENDFOREACH()
 	ENDIF()
 	IF(CLANG_EXTRA_PLUGINS)
 		FOREACH(_plug ${CLANG_EXTRA_PLUGINS})
 			SET(CMAKE_C_FLAGS
+					"${CMAKE_C_FLAGS} -Xclang -add-plugin -Xclang ${_plug}")
+			SET(CMAKE_CXX_FLAGS
 					"${CMAKE_C_FLAGS} -Xclang -add-plugin -Xclang ${_plug}")
 		ENDFOREACH()
 	ENDIF()
