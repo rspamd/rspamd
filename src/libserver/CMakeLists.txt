@@ -1,4 +1,5 @@
 # Librspamdserver
+ADD_SUBDIRECTORY(css)
 SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.c
 				${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.c
@@ -33,7 +34,8 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/http/http_router.c
 				${CMAKE_CURRENT_SOURCE_DIR}/http/http_context.c
 				${CMAKE_CURRENT_SOURCE_DIR}/maps/map.c
-				${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c)
+				${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c
+				${LIBCSSSRC})
 
 # Librspamd-server
 SET(RSPAMD_SERVER ${LIBRSPAMDSERVERSRC} PARENT_SCOPE)
