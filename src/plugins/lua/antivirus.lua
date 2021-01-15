@@ -231,6 +231,38 @@ if opts and type(opts) == 'table' then
             end
           end
         end
+        if type(m['patterns_fail']) == 'table' then
+          if m['patterns_fail'][1] then
+            for _, p in ipairs(m['patterns_fail']) do
+              if type(p) == 'table' then
+                for sym in pairs(p) do
+                  rspamd_logger.debugm(N, rspamd_config, 'registering: %1', {
+                    type = 'virtual',
+                    name = sym,
+                    parent = m['symbol'],
+                    parent_id = id,
+                    group = N
+                  })
+                  rspamd_config:register_symbol({
+                    type = 'virtual',
+                    name = sym,
+                    parent = id,
+                    group = N
+                  })
+                end
+              end
+            end
+          else
+            for sym in pairs(m['patterns_fail']) do
+              rspamd_config:register_symbol({
+                type = 'virtual',
+                name = sym,
+                parent = id,
+                group = N
+              })
+            end
+          end
+        end        
         if m['score'] then
           -- Register metric symbol
           local description = 'antivirus symbol'
