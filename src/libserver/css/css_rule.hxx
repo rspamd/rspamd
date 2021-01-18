@@ -22,9 +22,7 @@
 #include <vector>
 #include <memory>
 
-namespace rspamd {
-
-namespace css {
+namespace rspamd::css {
 
 class css_rule {
 	css_property prop;
@@ -49,8 +47,6 @@ public:
 	const css_values_vec& get_values(void) { return values; }
 	const css_property& get_prop(void) { return prop; }
 };
-
-}
 
 }
 

@@ -24,20 +24,29 @@
 #include "parse_error.hxx"
 #include "contrib/expected/expected.hpp"
 
-namespace rspamd {
-namespace css {
+namespace rspamd::css {
 
+/*
+ * Simple enum class for display stuff
+ */
 enum class css_display_value {
 	DISPLAY_NORMAL,
 	DISPLAY_
 };
 
+/*
+ * CSS flags
+ */
 enum class css_flag_value {
 	FLAG_INHERIT,
 	FLAG_IMPORTANT,
 	FLAG_NOTIMPORTANT
 };
 
+/*
+ * Value handler, uses std::variant instead of polymorphic classes for now
+ * for simplicity
+ */
 struct css_value {
 	enum class css_value_type {
 		CSS_VALUE_COLOR,
@@ -86,6 +95,14 @@ struct css_value {
 		return std::nullopt;
 	}
 
+	std::optional<const std::string> to_string (void) const {
+		if (type == css_value_type::CSS_VALUE_STRING) {
+			return std::get<std::string>(value);
+		}
+
+		return std::nullopt;
+	}
+
 	constexpr bool is_valid (void) const {
 		return (type != css_value_type::CSS_VALUE_NYI);
 	}
@@ -94,7 +111,6 @@ struct css_value {
 																  size_t inlen);
 };
 
-}
 }
 
 #endif //RSPAMD_CSS_VALUE_HXX

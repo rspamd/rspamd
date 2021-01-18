@@ -21,9 +21,7 @@
 #include <string>
 #include <optional>
 
-namespace rspamd {
-
-namespace css {
+namespace rspamd::css {
 
 /*
  * Generic parser errors
@@ -44,8 +42,6 @@ struct css_parse_error {
 	explicit css_parse_error (css_parse_error_type type) :
 			type(type) {}
 };
-
-}
 
 }
 #endif //RSPAMD_PARSE_ERROR_HXX

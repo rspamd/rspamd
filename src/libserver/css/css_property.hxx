@@ -21,9 +21,7 @@
 #include "parse_error.hxx"
 #include "contrib/expected/expected.hpp"
 
-namespace rspamd {
-
-namespace css {
+namespace rspamd::css {
 
 /*
  * To be extended with properties that are interesting from the email
@@ -45,8 +43,6 @@ struct css_property {
 	static tl::expected<css_property,css_parse_error> from_bytes (const char *input,
 																 size_t inlen);
 };
-
-}
 
 }
 

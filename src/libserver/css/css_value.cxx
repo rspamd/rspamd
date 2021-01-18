@@ -16,15 +16,12 @@
 
 #include "css_value.hxx"
 
-namespace rspamd {
+namespace rspamd::css {
 
-namespace css {
-
-tl::expected<css_value,css_parse_error> from_bytes (const char *input,
+tl::expected<css_value,css_parse_error> css_value::from_bytes (const char *input,
 													size_t inlen)
 {
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }
 
-}
 }

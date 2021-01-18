@@ -17,14 +17,11 @@
 #include "css_property.hxx"
 
 
-namespace rspamd {
-
-namespace css {
+namespace rspamd::css {
 
 auto css_property::from_bytes (const char *input, size_t inlen) -> tl::expected<css_property,css_parse_error>
 {
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }
 
-}
 }

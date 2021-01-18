@@ -13,17 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef RSPAMD_CSS_HXX
-#define RSPAMD_CSS_HXX
 
-#include <string>
+#include "css_selector.hxx"
 
 namespace rspamd::css {
 
-struct css_element {
-
-};
+tl::expected<css_selector,css_parse_error> css_selector::from_bytes (const char *input,
+															   size_t inlen)
+{
+	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
+}
 
 }
 
-#endif //RSPAMD_CSS_H
