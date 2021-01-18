@@ -44,10 +44,21 @@ public:
 	void add_value(const css_value &value) {
 		values.emplace_back(std::make_unique<css_value>(css_value{value}));
 	}
-	const css_values_vec& get_values(void) { return values; }
-	const css_property& get_prop(void) { return prop; }
+	constexpr const css_values_vec& get_values(void) const { return values; }
+	constexpr const css_property& get_prop(void) const { return prop; }
 };
 
+}
+
+/* Make rules hashable by property */
+namespace std {
+template<>
+class hash<rspamd::css::css_rule> {
+public:
+	constexpr size_t operator() (const rspamd::css::css_rule &rule) const {
+		return hash<rspamd::css::css_property>()(rule.get_prop());
+	}
+};
 }
 
 #endif //RSPAMD_CSS_RULE_HXX

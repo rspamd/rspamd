@@ -46,4 +46,24 @@ struct css_property {
 
 }
 
+/* Make properties hashable */
+namespace std {
+template<>
+class hash<rspamd::css::css_property> {
+public:
+	/* Mix bits to provide slightly better distribution but being constexpr */
+	constexpr size_t operator() (const rspamd::css::css_property &prop) const {
+		std::size_t key = 0xdeadbeef ^static_cast<std::size_t>(prop.type);
+		key = (~key) + (key << 21);
+		key = key ^ (key >> 24);
+		key = (key + (key << 3)) + (key << 8);
+		key = key ^ (key >> 14);
+		key = (key + (key << 2)) + (key << 4);
+		key = key ^ (key >> 28);
+		key = key + (key << 31);
+		return key;
+	}
+};
+}
+
 #endif //RSPAMD_CSS_PROPERTY_HXX
