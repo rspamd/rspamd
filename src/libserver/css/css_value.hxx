@@ -95,9 +95,9 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	std::optional<const std::string> to_string (void) const {
+	constexpr std::optional<std::string_view> to_string (void) const {
 		if (type == css_value_type::CSS_VALUE_STRING) {
-			return std::get<std::string>(value);
+			return std::string_view(std::get<std::string>(value));
 		}
 
 		return std::nullopt;

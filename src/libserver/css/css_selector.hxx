@@ -47,9 +47,9 @@ struct css_selector {
 		return std::nullopt;
 	}
 
-	std::optional<const std::string> to_string (void) const {
+	constexpr std::optional<const std::string_view> to_string (void) const {
 		if (type == selector_type::SELECTOR_ELEMENT) {
-			return std::get<std::string>(value);
+			return std::string_view(std::get<std::string>(value));
 		}
 		return std::nullopt;
 	}
