@@ -35,6 +35,7 @@ local settings = {
   remove_upstream_spam_flag = true;
   skip_local = true,
   skip_authenticated = true,
+  skip_all = false,
   local_headers = {},
   authenticated_headers = {},
   routines = {
@@ -157,6 +158,9 @@ local function milter_headers(task)
       return found
     end
 
+    if settings.extended_headers_rcpt and match_extended_headers_rcpt() then
+      return false
+    end
 
     if settings.skip_local and not settings.local_headers[hdr] then
       local ip = task:get_ip()
@@ -167,7 +171,7 @@ local function milter_headers(task)
       if task:get_user() ~= nil then return true end
     end
 
-    if settings.extended_headers_rcpt and not match_extended_headers_rcpt() then
+    if settings.skip_all then
       return true
     end
 
@@ -635,6 +639,10 @@ end
 
 if type(opts['skip_authenticated']) == 'boolean' then
   settings.skip_authenticated = opts['skip_authenticated']
+end
+
+if type(opts['skip_all']) == 'boolean' then
+  settings.skip_all = opts['skip_all']
 end
 
 for _, s in ipairs(opts['use']) do
