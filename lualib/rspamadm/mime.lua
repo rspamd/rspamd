@@ -397,7 +397,7 @@ local function extract_handler(opts)
                 end
                 local content = tag:get_content()
                 if content then
-                  elt.content = content
+                  elt.content = tostring(content)
                 end
                 table.insert(res, elt)
               end)
