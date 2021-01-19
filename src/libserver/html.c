@@ -939,10 +939,18 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		/* Inline tag */
 		parent = (*cur_level)->data;
 
-		if (parent && (parent->flags & (CM_HEAD|CM_UNKNOWN|FL_IGNORE))) {
-			tag->flags |= FL_IGNORE;
+		if (parent) {
+			if (hc->total_tags < max_tags) {
+				nnode = g_node_new (tag);
+				g_node_append (*cur_level, nnode);
 
-			return FALSE;
+				hc->total_tags ++;
+			}
+			if ((parent->flags & (CM_HEAD|CM_UNKNOWN|FL_IGNORE))) {
+				tag->flags |= FL_IGNORE;
+
+				return FALSE;
+			}
 		}
 	}
 
