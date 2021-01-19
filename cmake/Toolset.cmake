@@ -1,5 +1,6 @@
 option (ENABLE_FAST_MATH     "Build rspamd with fast math compiler flag [default: ON]" ON)
 option (ENABLE_ANALYZER      "Build rspamd with static analyzer [default: OFF]" OFF)
+option (ENABLE_STATIC_LIBCXX "Build rspamd with static lib(std)c++ [default: OFF]" OFF)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     SET (COMPILER_GCC 1)
@@ -193,5 +194,13 @@ else ()
     message (STATUS "IPO not enabled for the ${CMAKE_BUILD_TYPE} build")
 endif ()
 
+if (ENABLE_STATIC_LIBCXX MATCHES "ON")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
+    set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libstdc++")
+endif()
+
 message (STATUS "Final CFLAGS: ${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
 message (STATUS "Final CXXFLAGS: ${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UC}}")
+message (STATUS "Final link flags for shlib: ${CMAKE_SHARED_LINKER_FLAGS}")
+message (STATUS "Final link flags for exe: ${CMAKE_EXE_LINKER_FLAGS}")
+
