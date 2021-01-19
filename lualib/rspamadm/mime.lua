@@ -266,6 +266,7 @@ end
 
 local function extract_handler(opts)
   local out_elts = {}
+  local tasks = {}
   local process_func
 
   if opts.words then
@@ -415,11 +416,12 @@ local function extract_handler(opts)
     end
 
     table.insert(out_elts[fname], "")
-
-    task:destroy() -- No automatic dtor
+    table.insert(tasks, task)
   end
 
   print_elts(out_elts, opts, process_func)
+  -- To avoid use after free we postpone tasks destruction
+  for _,task in ipairs(tasks) do task:destroy() end
 end
 
 local function stat_handler(opts)
