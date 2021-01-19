@@ -51,6 +51,7 @@ local settings = {
   expire = 60 * 60 * 24 * 2, -- 2 days by default
   limits = {},
   allow_local = false,
+  prefilter = true,
 }
 
 -- Checks bucket, updating it if needed
@@ -856,21 +857,24 @@ if opts then
     lua_util.disable_module(N, "redis")
   else
     local s = {
-      type = 'prefilter',
+      type = settings.prefilter and 'prefilter' or 'callback',
       name = 'RATELIMIT_CHECK',
       priority = 7,
       callback = ratelimit_cb,
       flags = 'empty,nostat',
     }
 
-    if settings.symbol then
-      s.name = settings.symbol
-    elseif settings.info_symbol then
-      s.name = settings.info_symbol
-      s.score = 0.0
+    local id = rspamd_config:register_symbol(s)
+
+    if settings.info_symbol then
+      rspamd_config:register_symbol{
+        type = 'virtual',
+        name = settings.info_symbol,
+        score = 0.0,
+        parent = id
+      }
     end
 
-    rspamd_config:register_symbol(s)
     rspamd_config:register_symbol {
       type = 'idempotent',
       name = 'RATELIMIT_UPDATE',
