@@ -3200,7 +3200,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 					save_space = FALSE;
 				}
 
-				if (cur_tag->flags & FL_HREF && !(cur_tag->flags & FL_IGNORE)) {
+				/* XXX: uncomment when styles parsing is not so broken */
+				if (cur_tag->flags & FL_HREF /* && !(cur_tag->flags & FL_IGNORE) */) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
