@@ -81,7 +81,7 @@ ${RAGEL_version_error}")
     add_custom_command(OUTPUT ${RAGEL_OUTPUT}
       COMMAND ${RAGEL_EXECUTABLE}
       ARGS    ${RAGEL_COMPILE_FLAGS}
-              -o${RAGEL_OUTPUT_RELATIVE} ${RAGEL_INPUTS_RELATIVE}
+              -o${RAGEL_OUTPUT} ${RAGEL_INPUTS}
       DEPENDS ${RAGEL_INPUTS} ${RAGEL_DEPENDS}
       COMMENT
           "[RAGEL][${Name}] Compiling state machine with Ragel ${RAGEL_VERSION} -> ${RAGEL_OUTPUT}"
