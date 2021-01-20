@@ -17,11 +17,17 @@
 #define RSPAMD_CSS_HXX
 
 #include <string>
+#include <memory>
 
 namespace rspamd::css {
 
-struct css_element {
-
+class css_style_sheet {
+public:
+	css_style_sheet();
+	~css_style_sheet(); /* must be declared separately due to pimpl */
+private:
+	class impl;
+	std::unique_ptr<impl> pimpl;
 };
 
 }

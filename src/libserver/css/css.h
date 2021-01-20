@@ -17,4 +17,16 @@
 #ifndef RSPAMD_CSS_H
 #define RSPAMD_CSS_H
 
+#include "config.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+typedef void * rspamd_css;
+
+rspamd_css rspamd_css_parse_style (const guchar *begin, gsize len, GError **err);
+#ifdef  __cplusplus
+}
+#endif
+
 #endif //RSPAMD_CSS_H

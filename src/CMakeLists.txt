@@ -143,6 +143,10 @@ RAGEL_TARGET(ragel_smtp_ip
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ip_parser.rl.c)
+# Fucking cmake...
+FOREACH(_GEN ${LIBSERVER_GENERATED})
+	set_source_files_properties(${_GEN} PROPERTIES GENERATED TRUE)
+ENDFOREACH()
 ######################### LINK SECTION ###############################
 
 IF(ENABLE_STATIC MATCHES "ON")
@@ -180,6 +184,10 @@ ELSE()
 			"${RAGEL_ragel_smtp_date_OUTPUTS}"
 			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
 ENDIF()
+
+FOREACH(_DEP ${LIBSERVER_DEPENDS})
+	ADD_DEPENDENCIES(rspamd-server "${_DEP}")
+ENDFOREACH()
 
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-fpconv)

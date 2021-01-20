@@ -35,7 +35,7 @@ public:
 	/* Constructors */
 	css_rule(css_rule &&other) = default;
 	explicit css_rule(css_property &&prop, css_values_vec &&values) :
-		prop(prop), values(values) {}
+		prop(prop), values(std::forward<css_values_vec>(values)) {}
 	explicit css_rule(css_property &&prop) : prop(prop), values{} {}
 	/* Methods */
 	void add_value(std::unique_ptr<css_value> &&value) {

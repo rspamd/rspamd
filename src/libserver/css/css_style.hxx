@@ -29,15 +29,18 @@ namespace rspamd::css {
  */
 class css_style {
 public:
-	css_style(const std::shared_ptr<css_style> &_parent) : parent(_parent) {
+	/* Make class trivial */
+	css_style (const css_style &other) = default;
+
+	css_style (const std::shared_ptr<css_style> &_parent) : parent(_parent) {
 		propagate_from_parent ();
 	}
-	css_style(const std::shared_ptr<css_style> &_parent,
+	css_style (const std::shared_ptr<css_style> &_parent,
 		   const std::vector<std::shared_ptr<css_selector> > &_selectors) : parent(_parent) {
-		selectors.reserve(_selectors.size());
+		selectors.reserve (_selectors.size ());
 
 		for (const auto &sel_ptr : _selectors) {
-			selectors.emplace_back(sel_ptr);
+			selectors.emplace_back (sel_ptr);
 		}
 
 		propagate_from_parent ();

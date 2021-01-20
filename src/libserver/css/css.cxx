@@ -16,3 +16,24 @@
 
 #include "css.h"
 #include "css.hxx"
+#include "css_style.hxx"
+
+rspamd_css
+rspamd_css_parse_style (const guchar *begin, gsize len, GError **err)
+{
+	rspamd::css::css_style_sheet *style = nullptr;
+
+
+	return reinterpret_cast<rspamd_css>(style);
+}
+
+namespace rspamd::css {
+
+class css_style_sheet::impl {
+
+};
+
+css_style_sheet::css_style_sheet () : pimpl(new impl) {}
+css_style_sheet::~css_style_sheet () {}
+
+}
