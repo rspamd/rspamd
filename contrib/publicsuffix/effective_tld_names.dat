@@ -79,7 +79,6 @@ exchange.aero
 express.aero
 federation.aero
 flight.aero
-freight.aero
 fuel.aero
 gliding.aero
 government.aero
@@ -213,6 +212,7 @@ ac.at
 co.at
 gv.at
 or.at
+sth.ac.at
 
 // au : https://en.wikipedia.org/wiki/.au
 // http://www.auda.org.au/
@@ -258,7 +258,7 @@ tas.gov.au
 vic.gov.au
 wa.gov.au
 // 4LDs
-education.tas.edu.au
+// education.tas.edu.au - Removed at the request of the Department of Education Tasmania
 schools.nsw.edu.au
 
 // aw : https://en.wikipedia.org/wiki/.aw
@@ -456,6 +456,7 @@ aju.br
 am.br
 anani.br
 aparecida.br
+app.br
 arq.br
 art.br
 ato.br
@@ -463,6 +464,7 @@ b.br
 barueri.br
 belem.br
 bhz.br
+bib.br
 bio.br
 blog.br
 bmd.br
@@ -477,14 +479,19 @@ cnt.br
 com.br
 contagem.br
 coop.br
+coz.br
 cri.br
 cuiaba.br
 curitiba.br
 def.br
+des.br
+det.br
+dev.br
 ecn.br
 eco.br
 edu.br
 emp.br
+enf.br
 eng.br
 esp.br
 etc.br
@@ -500,6 +507,7 @@ fot.br
 foz.br
 fst.br
 g12.br
+geo.br
 ggf.br
 goiania.br
 gov.br
@@ -543,6 +551,7 @@ jor.br
 jus.br
 leg.br
 lel.br
+log.br
 londrina.br
 macapa.br
 maceio.br
@@ -575,6 +584,7 @@ qsl.br
 radio.br
 rec.br
 recife.br
+rep.br
 ribeirao.br
 rio.br
 riobranco.br
@@ -585,6 +595,7 @@ santamaria.br
 santoandre.br
 saobernardo.br
 saogonca.br
+seg.br
 sjc.br
 slg.br
 slz.br
@@ -592,6 +603,7 @@ sorocaba.br
 srv.br
 taxi.br
 tc.br
+tec.br
 teo.br
 the.br
 tmp.br
@@ -709,7 +721,6 @@ ac.ci
 net.ci
 go.ci
 asso.ci
-xn--aroport-bya.ci
 aéroport.ci
 int.ci
 presse.ci
@@ -720,11 +731,13 @@ gouv.ci
 *.ck
 !www.ck
 
-// cl : https://en.wikipedia.org/wiki/.cl
+// cl : https://www.nic.cl
+// Confirmed by .CL registry <hsalgado@nic.cl>
 cl
-gov.cl
-gob.cl
+aprendemas.cl
 co.cl
+gob.cl
+gov.cl
 mil.cl
 
 // cm : https://en.wikipedia.org/wiki/.cm plus bug 981927
@@ -744,11 +757,8 @@ gov.cn
 net.cn
 org.cn
 mil.cn
-xn--55qx5d.cn
 公司.cn
-xn--io0a7i.cn
 网络.cn
-xn--od0alg.cn
 網絡.cn
 // cn geographic names
 ah.cn
@@ -897,16 +907,18 @@ org.do
 sld.do
 web.do
 
-// dz : https://en.wikipedia.org/wiki/.dz
+// dz : http://www.nic.dz/images/pdf_nic/charte.pdf
 dz
+art.dz
+asso.dz
 com.dz
+edu.dz
+gov.dz
 org.dz
 net.dz
-gov.dz
-edu.dz
-asso.dz
 pol.dz
-art.dz
+soc.dz
+tm.dz
 
 // ec : http://www.nic.ec/reg/paso1.asp
 // Submitted by registry <vabboud@nic.ec>
@@ -995,7 +1007,7 @@ com.fj
 gov.fj
 info.fj
 mil.fj
-name.fj 
+name.fj
 net.fj
 org.fj
 pro.fj
@@ -1004,6 +1016,10 @@ pro.fj
 *.fk
 
 // fm : https://en.wikipedia.org/wiki/.fm
+com.fm
+edu.fm
+net.fm
+org.fm
 fm
 
 // fo : https://en.wikipedia.org/wiki/.fo
@@ -1043,6 +1059,8 @@ ga
 gb
 
 // gd : https://en.wikipedia.org/wiki/.gd
+edu.gd
+gov.gd
 gd
 
 // ge : http://www.nic.net.ge/policy_en.pdf
@@ -1134,7 +1152,7 @@ gov.gr
 // gs : https://en.wikipedia.org/wiki/.gs
 gs
 
-// gt : http://www.gt/politicas_de_registro.html
+// gt : https://www.gt/sitio/registration_policy.php?lang=en
 gt
 com.gt
 edu.gt
@@ -1179,35 +1197,20 @@ gov.hk
 idv.hk
 net.hk
 org.hk
-xn--55qx5d.hk
 公司.hk
-xn--wcvs22d.hk
 教育.hk
-xn--lcvr32d.hk
 敎育.hk
-xn--mxtq1m.hk
 政府.hk
-xn--gmqw5a.hk
 個人.hk
-xn--ciqpn.hk
 个人.hk
-xn--gmq050i.hk
 箇人.hk
-xn--zf0avx.hk
 網络.hk
-xn--io0a7i.hk
 网络.hk
-xn--mk0axi.hk
 组織.hk
-xn--od0alg.hk
 網絡.hk
-xn--od0aq3b.hk
 网絡.hk
-xn--tn0ag.hk
 组织.hk
-xn--uc0atv.hk
 組織.hk
-xn--uc0ay4a.hk
 組织.hk
 
 // hm : https://en.wikipedia.org/wiki/.hm
@@ -1379,10 +1382,8 @@ net.ir
 org.ir
 sch.ir
 // xn--mgba3a4f16a.ir (<iran>.ir, Persian YEH)
-xn--mgba3a4f16a.ir
 ایران.ir
 // xn--mgba3a4fra.ir (<iran>.ir, Arabic YEH)
-xn--mgba3a4fra.ir
 ايران.ir
 
 // is : http://www.isnic.is/domain/rules.php
@@ -1455,10 +1456,8 @@ taa.it
 tos.it
 toscana.it
 trentin-sud-tirol.it
-xn--trentin-sd-tirol-rzb.it
 trentin-süd-tirol.it
 trentin-sudtirol.it
-xn--trentin-sdtirol-7vb.it
 trentin-südtirol.it
 trentin-sued-tirol.it
 trentin-suedtirol.it
@@ -1469,10 +1468,8 @@ trentino-altoadige.it
 trentino-s-tirol.it
 trentino-stirol.it
 trentino-sud-tirol.it
-xn--trentino-sd-tirol-c3b.it
 trentino-süd-tirol.it
 trentino-sudtirol.it
-xn--trentino-sdtirol-szb.it
 trentino-südtirol.it
 trentino-sued-tirol.it
 trentino-suedtirol.it
@@ -1484,18 +1481,14 @@ trentinoaltoadige.it
 trentinos-tirol.it
 trentinostirol.it
 trentinosud-tirol.it
-xn--trentinosd-tirol-rzb.it
 trentinosüd-tirol.it
 trentinosudtirol.it
-xn--trentinosdtirol-7vb.it
 trentinosüdtirol.it
 trentinosued-tirol.it
 trentinosuedtirol.it
 trentinsud-tirol.it
-xn--trentinsd-tirol-6vb.it
 trentinsüd-tirol.it
 trentinsudtirol.it
-xn--trentinsdtirol-nsb.it
 trentinsüdtirol.it
 trentinsued-tirol.it
 trentinsuedtirol.it
@@ -1513,16 +1506,12 @@ valleaosta.it
 valled-aosta.it
 valledaosta.it
 vallee-aoste.it
-xn--valle-aoste-ebb.it
 vallée-aoste.it
 vallee-d-aoste.it
-xn--valle-d-aoste-ehb.it
 vallée-d-aoste.it
 valleeaoste.it
-xn--valleaoste-e7a.it
 valléeaoste.it
 valleedaoste.it
-xn--valledaoste-ebb.it
 valléedaoste.it
 vao.it
 vda.it
@@ -1557,7 +1546,6 @@ av.it
 avellino.it
 ba.it
 balsan-sudtirol.it
-xn--balsan-sdtirol-nsb.it
 balsan-südtirol.it
 balsan-suedtirol.it
 balsan.it
@@ -1577,7 +1565,6 @@ bologna.it
 bolzano-altoadige.it
 bolzano.it
 bozen-sudtirol.it
-xn--bozen-sdtirol-2ob.it
 bozen-südtirol.it
 bozen-suedtirol.it
 bozen.it
@@ -1587,7 +1574,6 @@ brindisi.it
 bs.it
 bt.it
 bulsan-sudtirol.it
-xn--bulsan-sdtirol-nsb.it
 bulsan-südtirol.it
 bulsan-suedtirol.it
 bulsan.it
@@ -1608,10 +1594,8 @@ catanzaro.it
 cb.it
 ce.it
 cesena-forli.it
-xn--cesena-forl-mcb.it
 cesena-forlì.it
 cesenaforli.it
-xn--cesenaforl-i8a.it
 cesenaforlì.it
 ch.it
 chieti.it
@@ -1643,10 +1627,8 @@ florence.it
 fm.it
 foggia.it
 forli-cesena.it
-xn--forl-cesena-fcb.it
 forlì-cesena.it
 forlicesena.it
-xn--forlcesena-c8a.it
 forlìcesena.it
 fr.it
 frosinone.it
@@ -1778,7 +1760,6 @@ sp.it
 sr.it
 ss.it
 suedtirol.it
-xn--sdtirol-n2a.it
 südtirol.it
 sv.it
 ta.it
@@ -1914,99 +1895,52 @@ wakayama.jp
 yamagata.jp
 yamaguchi.jp
 yamanashi.jp
-xn--4pvxs.jp
 栃木.jp
-xn--vgu402c.jp
 愛知.jp
-xn--c3s14m.jp
 愛媛.jp
-xn--f6qx53a.jp
 兵庫.jp
-xn--8pvr4u.jp
 熊本.jp
-xn--uist22h.jp
 茨城.jp
-xn--djrs72d6uy.jp
 北海道.jp
-xn--mkru45i.jp
 千葉.jp
-xn--0trq7p7nn.jp
 和歌山.jp
-xn--8ltr62k.jp
 長崎.jp
-xn--2m4a15e.jp
 長野.jp
-xn--efvn9s.jp
 新潟.jp
-xn--32vp30h.jp
 青森.jp
-xn--4it797k.jp
 静岡.jp
-xn--1lqs71d.jp
 東京.jp
-xn--5rtp49c.jp
 石川.jp
-xn--5js045d.jp
 埼玉.jp
-xn--ehqz56n.jp
 三重.jp
-xn--1lqs03n.jp
 京都.jp
-xn--qqqt11m.jp
 佐賀.jp
-xn--kbrq7o.jp
 大分.jp
-xn--pssu33l.jp
 大阪.jp
-xn--ntsq17g.jp
 奈良.jp
-xn--uisz3g.jp
 宮城.jp
-xn--6btw5a.jp
 宮崎.jp
-xn--1ctwo.jp
 富山.jp
-xn--6orx2r.jp
 山口.jp
-xn--rht61e.jp
 山形.jp
-xn--rht27z.jp
 山梨.jp
-xn--djty4k.jp
 岩手.jp
-xn--nit225k.jp
 岐阜.jp
-xn--rht3d.jp
 岡山.jp
-xn--klty5x.jp
 島根.jp
-xn--kltx9a.jp
 広島.jp
-xn--kltp7d.jp
 徳島.jp
-xn--uuwu58a.jp
 沖縄.jp
-xn--zbx025d.jp
 滋賀.jp
-xn--ntso0iqx3a.jp
 神奈川.jp
-xn--elqq16h.jp
 福井.jp
-xn--4it168d.jp
 福岡.jp
-xn--klt787d.jp
 福島.jp
-xn--rny31h.jp
 秋田.jp
-xn--7t0a264c.jp
 群馬.jp
-xn--5rtq34k.jp
 香川.jp
-xn--k7yn95e.jp
 高知.jp
-xn--tor131o.jp
 鳥取.jp
-xn--d5qv7z876c.jp
 鹿児島.jp
 // jp geographic type names
 // http://jprs.jp/doc/rule/saisoku-1.html
@@ -3871,7 +3805,7 @@ gov.lc
 // li : https://en.wikipedia.org/wiki/.li
 li
 
-// lk : http://www.nic.lk/seclevpr.html
+// lk : https://www.nic.lk/index.php/domain-registration/lk-domain-naming-structure
 lk
 gov.lk
 sch.lk
@@ -4201,14 +4135,12 @@ communications.museum
 community.museum
 computer.museum
 computerhistory.museum
-xn--comunicaes-v6a2o.museum
 comunicações.museum
 contemporary.museum
 contemporaryart.museum
 convent.museum
 copenhagen.museum
 corporation.museum
-xn--correios-e-telecomunicaes-ghc29a.museum
 correios-e-telecomunicações.museum
 corvette.museum
 costume.museum
@@ -4358,7 +4290,6 @@ lajolla.museum
 lancashire.museum
 landes.museum
 lans.museum
-xn--lns-qla.museum
 läns.museum
 larsson.museum
 lewismiller.museum
@@ -4619,9 +4550,7 @@ yosemite.museum
 youth.museum
 zoological.museum
 zoology.museum
-xn--9dbhblg6di.museum
 ירושלים.museum
-xn--h1aegh.museum
 иком.museum
 
 // mv : https://en.wikipedia.org/wiki/.mv
@@ -4770,13 +4699,13 @@ web.ni
 //      ccTLD for the Netherlands
 nl
 
-// no : http://www.norid.no/regelverk/index.en.html
-// The Norwegian registry has declined to notify us of updates. The web pages
-// referenced below are the official source of the data. There is also an
-// announce mailing list:
-// https://postlister.uninett.no/sympa/info/norid-diskusjon
+// no : https://www.norid.no/en/om-domenenavn/regelverk-for-no/
+// Norid geographical second level domains : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-b/
+// Norid category second level domains : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-c/
+// Norid category second-level domains managed by parties other than Norid : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-d/
+// RSS feed: https://teknisk.norid.no/en/feed/
 no
-// Norid generic domains : http://www.norid.no/regelverk/vedlegg-c.en.html
+// Norid category second level domains : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-c/
 fhs.no
 vgs.no
 fylkesbibl.no
@@ -4784,13 +4713,13 @@ folkebibl.no
 museum.no
 idrett.no
 priv.no
-// Non-Norid generic domains : http://www.norid.no/regelverk/vedlegg-d.en.html
+// Norid category second-level domains managed by parties other than Norid : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-d/
 mil.no
 stat.no
 dep.no
 kommune.no
 herad.no
-// no geographical names : http://www.norid.no/regelverk/vedlegg-b.en.html
+// Norid geographical second level domains : https://www.norid.no/en/om-domenenavn/regelverk-for-no/vedlegg-b/
 // counties
 aa.no
 ah.no
@@ -4839,55 +4768,43 @@ gs.vf.no
 akrehamn.no
 åkrehamn.no
 algard.no
-xn--lgrd-poac.no
 ålgård.no
 arna.no
 brumunddal.no
 bryne.no
 bronnoysund.no
-xn--brnnysund-m8ac.no
 brønnøysund.no
 drobak.no
-xn--drbak-wua.no
 drøbak.no
 egersund.no
 fetsund.no
 floro.no
-xn--flor-jra.no
 florø.no
 fredrikstad.no
 hokksund.no
 honefoss.no
-xn--hnefoss-q1a.no
 hønefoss.no
 jessheim.no
 jorpeland.no
-xn--jrpeland-54a.no
 jørpeland.no
 kirkenes.no
 kopervik.no
 krokstadelva.no
 langevag.no
-xn--langevg-jxa.no
 langevåg.no
 leirvik.no
 mjondalen.no
-xn--mjndalen-64a.no
 mjøndalen.no
 mo-i-rana.no
 mosjoen.no
-xn--mosjen-eya.no
 mosjøen.no
 nesoddtangen.no
 orkanger.no
 osoyro.no
-xn--osyro-wua.no
 osøyro.no
 raholt.no
-xn--rholt-mra.no
 råholt.no
 sandnessjoen.no
-xn--sandnessjen-ogb.no
 sandnessjøen.no
 skedsmokorset.no
 slattum.no
@@ -4895,7 +4812,6 @@ spjelkavik.no
 stathelle.no
 stavern.no
 stjordalshalsen.no
-xn--stjrdalshalsen-sqb.no
 stjørdalshalsen.no
 tananger.no
 tranby.no
@@ -4910,7 +4826,6 @@ alesund.no
 ålesund.no
 alstahaug.no
 alta.no
-xn--lt-liac.no
 áltá.no
 alaheadju.no
 álaheadju.no
@@ -4921,7 +4836,6 @@ amot.no
 åmot.no
 andebu.no
 andoy.no
-xn--andy-ira.no
 andøy.no
 andasuolo.no
 ardal.no
@@ -4935,7 +4849,6 @@ asker.no
 askim.no
 askvoll.no
 askoy.no
-xn--asky-ira.no
 askøy.no
 asnes.no
 åsnes.no
@@ -4944,90 +4857,69 @@ aukra.no
 aure.no
 aurland.no
 aurskog-holand.no
-xn--aurskog-hland-jnb.no
 aurskog-høland.no
 austevoll.no
 austrheim.no
 averoy.no
-xn--avery-yua.no
 averøy.no
 balestrand.no
 ballangen.no
 balat.no
-xn--blt-elab.no
 bálát.no
 balsfjord.no
 bahccavuotna.no
-xn--bhccavuotna-k7a.no
 báhccavuotna.no
 bamble.no
 bardu.no
 beardu.no
 beiarn.no
 bajddar.no
-xn--bjddar-pta.no
 bájddar.no
 baidar.no
-xn--bidr-5nac.no
 báidár.no
 berg.no
 bergen.no
 berlevag.no
-xn--berlevg-jxa.no
 berlevåg.no
 bearalvahki.no
-xn--bearalvhki-y4a.no
 bearalváhki.no
 bindal.no
 birkenes.no
 bjarkoy.no
-xn--bjarky-fya.no
 bjarkøy.no
 bjerkreim.no
 bjugn.no
 bodo.no
-xn--bod-2na.no
 bodø.no
 badaddja.no
-xn--bdddj-mrabd.no
 bådåddjå.no
 budejju.no
 bokn.no
 bremanger.no
 bronnoy.no
-xn--brnny-wuac.no
 brønnøy.no
 bygland.no
 bykle.no
 barum.no
-xn--brum-voa.no
 bærum.no
 bo.telemark.no
-xn--b-5ga.telemark.no
 bø.telemark.no
 bo.nordland.no
-xn--b-5ga.nordland.no
 bø.nordland.no
 bievat.no
-xn--bievt-0qa.no
 bievát.no
 bomlo.no
-xn--bmlo-gra.no
 bømlo.no
 batsfjord.no
-xn--btsfjord-9za.no
 båtsfjord.no
 bahcavuotna.no
-xn--bhcavuotna-s4a.no
 báhcavuotna.no
 dovre.no
 drammen.no
 drangedal.no
 dyroy.no
-xn--dyry-ira.no
 dyrøy.no
 donna.no
-xn--dnna-gra.no
 dønna.no
 eid.no
 eidfjord.no
@@ -5042,7 +4934,6 @@ etne.no
 etnedal.no
 evenes.no
 evenassi.no
-xn--eveni-0qa01ga.no
 evenášši.no
 evje-og-hornnes.no
 farsund.no
@@ -5052,7 +4943,6 @@ fuoisku.no
 fedje.no
 fet.no
 finnoy.no
-xn--finny-yua.no
 finnøy.no
 fitjar.no
 fjaler.no
@@ -5063,7 +4953,6 @@ flekkefjord.no
 flesberg.no
 flora.no
 fla.no
-xn--fl-zia.no
 flå.no
 folldal.no
 forsand.no
@@ -5073,24 +4962,19 @@ frogn.no
 froland.no
 frosta.no
 frana.no
-xn--frna-woa.no
 fræna.no
 froya.no
-xn--frya-hra.no
 frøya.no
 fusa.no
 fyresdal.no
 forde.no
-xn--frde-gra.no
 førde.no
 gamvik.no
 gangaviika.no
-xn--ggaviika-8ya47h.no
 gáŋgaviika.no
 gaular.no
 gausdal.no
 gildeskal.no
-xn--gildeskl-g0a.no
 gildeskål.no
 giske.no
 gjemnes.no
@@ -5098,7 +4982,6 @@ gjerdrum.no
 gjerstad.no
 gjesdal.no
 gjovik.no
-xn--gjvik-wua.no
 gjøvik.no
 gloppen.no
 gol.no
@@ -5109,7 +4992,6 @@ gratangen.no
 grimstad.no
 grong.no
 kraanghke.no
-xn--kranghke-b0a.no
 kråanghke.no
 grue.no
 gulen.no
@@ -5119,21 +5001,17 @@ halsa.no
 hamar.no
 hamaroy.no
 habmer.no
-xn--hbmer-xqa.no
 hábmer.no
 hapmir.no
-xn--hpmir-xqa.no
 hápmir.no
 hammerfest.no
 hammarfeasta.no
-xn--hmmrfeasta-s4ac.no
 hámmárfeasta.no
 haram.no
 hareid.no
 harstad.no
 hasvik.no
 aknoluokta.no
-xn--koluokta-7ya57h.no
 ákŋoluokta.no
 hattfjelldal.no
 aarborte.no
@@ -5142,23 +5020,19 @@ hemne.no
 hemnes.no
 hemsedal.no
 heroy.more-og-romsdal.no
-xn--hery-ira.xn--mre-og-romsdal-qqb.no
 herøy.møre-og-romsdal.no
 heroy.nordland.no
-xn--hery-ira.nordland.no
 herøy.nordland.no
 hitra.no
 hjartdal.no
 hjelmeland.no
 hobol.no
-xn--hobl-ira.no
 hobøl.no
 hof.no
 hol.no
 hole.no
 holmestrand.no
 holtalen.no
-xn--holtlen-hxa.no
 holtålen.no
 hornindal.no
 horten.no
@@ -5167,86 +5041,66 @@ hurum.no
 hvaler.no
 hyllestad.no
 hagebostad.no
-xn--hgebostad-g3a.no
 hægebostad.no
 hoyanger.no
-xn--hyanger-q1a.no
 høyanger.no
 hoylandet.no
-xn--hylandet-54a.no
 høylandet.no
 ha.no
-xn--h-2fa.no
 hå.no
 ibestad.no
 inderoy.no
-xn--indery-fya.no
 inderøy.no
 iveland.no
 jevnaker.no
 jondal.no
 jolster.no
-xn--jlster-bya.no
 jølster.no
 karasjok.no
 karasjohka.no
-xn--krjohka-hwab49j.no
 kárášjohka.no
 karlsoy.no
 galsa.no
-xn--gls-elac.no
 gálsá.no
 karmoy.no
-xn--karmy-yua.no
 karmøy.no
 kautokeino.no
 guovdageaidnu.no
 klepp.no
 klabu.no
-xn--klbu-woa.no
 klæbu.no
 kongsberg.no
 kongsvinger.no
 kragero.no
-xn--krager-gya.no
 kragerø.no
 kristiansand.no
 kristiansund.no
 krodsherad.no
-xn--krdsherad-m8a.no
 krødsherad.no
 kvalsund.no
 rahkkeravju.no
-xn--rhkkervju-01af.no
 ráhkkerávju.no
 kvam.no
 kvinesdal.no
 kvinnherad.no
 kviteseid.no
 kvitsoy.no
-xn--kvitsy-fya.no
 kvitsøy.no
 kvafjord.no
-xn--kvfjord-nxa.no
 kvæfjord.no
 giehtavuoatna.no
 kvanangen.no
-xn--kvnangen-k0a.no
 kvænangen.no
 navuotna.no
-xn--nvuotna-hwa.no
 návuotna.no
 kafjord.no
-xn--kfjord-iua.no
 kåfjord.no
 gaivuotna.no
-xn--givuotna-8ya.no
 gáivuotna.no
 larvik.no
 lavangen.no
 lavagis.no
 loabat.no
-xn--loabt-0qa.no
 loabát.no
 lebesby.no
 davvesiida.no
@@ -5256,7 +5110,6 @@ leka.no
 leksvik.no
 lenvik.no
 leangaviika.no
-xn--leagaviika-52b.no
 leaŋgaviika.no
 lesja.no
 levanger.no
@@ -5266,17 +5119,14 @@ lillehammer.no
 lillesand.no
 lindesnes.no
 lindas.no
-xn--linds-pra.no
 lindås.no
 lom.no
 loppa.no
 lahppi.no
-xn--lhppi-xqa.no
 láhppi.no
 lund.no
 lunner.no
 luroy.no
-xn--lury-ira.no
 lurøy.no
 luster.no
 lyngdal.no
@@ -5284,23 +5134,17 @@ lyngen.no
 ivgu.no
 lardal.no
 lerdal.no
-xn--lrdal-sra.no
 lærdal.no
 lodingen.no
-xn--ldingen-q1a.no
 lødingen.no
 lorenskog.no
-xn--lrenskog-54a.no
 lørenskog.no
 loten.no
-xn--lten-gra.no
 løten.no
 malvik.no
 masoy.no
-xn--msy-ula0h.no
 måsøy.no
 muosat.no
-xn--muost-0qa.no
 muosát.no
 mandal.no
 marker.no
@@ -5310,13 +5154,10 @@ meland.no
 meldal.no
 melhus.no
 meloy.no
-xn--mely-ira.no
 meløy.no
 meraker.no
-xn--merker-kua.no
 meråker.no
 moareke.no
-xn--moreke-jua.no
 moåreke.no
 midsund.no
 midtre-gauldal.no
@@ -5327,17 +5168,14 @@ moskenes.no
 moss.no
 mosvik.no
 malselv.no
-xn--mlselv-iua.no
 målselv.no
 malatvuopmi.no
-xn--mlatvuopmi-s4a.no
 málatvuopmi.no
 namdalseid.no
 aejrie.no
 namsos.no
 namsskogan.no
 naamesjevuemie.no
-xn--nmesjevuemie-tcba.no
 nååmesjevuemie.no
 laakesvuemie.no
 nannestad.no
@@ -5351,7 +5189,6 @@ nesna.no
 nesodden.no
 nesseby.no
 unjarga.no
-xn--unjrga-rta.no
 unjárga.no
 nesset.no
 nissedal.no
@@ -5362,27 +5199,22 @@ nord-odal.no
 norddal.no
 nordkapp.no
 davvenjarga.no
-xn--davvenjrga-y4a.no
 davvenjárga.no
 nordre-land.no
 nordreisa.no
 raisa.no
-xn--risa-5na.no
 ráisa.no
 nore-og-uvdal.no
 notodden.no
 naroy.no
-xn--nry-yla5g.no
 nærøy.no
 notteroy.no
-xn--nttery-byae.no
 nøtterøy.no
 odda.no
 oksnes.no
 øksnes.no
 oppdal.no
 oppegard.no
-xn--oppegrd-ixa.no
 oppegård.no
 orkdal.no
 orland.no
@@ -5395,7 +5227,6 @@ os.hedmark.no
 os.hordaland.no
 osen.no
 osteroy.no
-xn--ostery-fya.no
 osterøy.no
 ostre-toten.no
 østre-toten.no
@@ -5410,11 +5241,9 @@ oystre-slidre.no
 øystre-slidre.no
 porsanger.no
 porsangu.no
-xn--porsgu-sta26f.no
 porsáŋgu.no
 porsgrunn.no
 radoy.no
-xn--rady-ira.no
 radøy.no
 rakkestad.no
 rana.no
@@ -5424,7 +5253,6 @@ rauma.no
 rendalen.no
 rennebu.no
 rennesoy.no
-xn--rennesy-v1a.no
 rennesøy.no
 rindal.no
 ringebu.no
@@ -5432,52 +5260,39 @@ ringerike.no
 ringsaker.no
 rissa.no
 risor.no
-xn--risr-ira.no
 risør.no
 roan.no
 rollag.no
 rygge.no
 ralingen.no
-xn--rlingen-mxa.no
 rælingen.no
 rodoy.no
-xn--rdy-0nab.no
 rødøy.no
 romskog.no
-xn--rmskog-bya.no
 rømskog.no
 roros.no
-xn--rros-gra.no
 røros.no
 rost.no
-xn--rst-0na.no
 røst.no
 royken.no
-xn--ryken-vua.no
 røyken.no
 royrvik.no
-xn--ryrvik-bya.no
 røyrvik.no
 rade.no
-xn--rde-ula.no
 råde.no
 salangen.no
 siellak.no
 saltdal.no
 salat.no
-xn--slt-elab.no
 sálát.no
-xn--slat-5na.no
 sálat.no
 samnanger.no
 sande.more-og-romsdal.no
-sande.xn--mre-og-romsdal-qqb.no
 sande.møre-og-romsdal.no
 sande.vestfold.no
 sandefjord.no
 sandnes.no
 sandoy.no
-xn--sandy-yua.no
 sandøy.no
 sarpsborg.no
 sauda.no
@@ -5495,31 +5310,23 @@ ski.no
 skien.no
 skiptvet.no
 skjervoy.no
-xn--skjervy-v1a.no
 skjervøy.no
 skierva.no
-xn--skierv-uta.no
 skiervá.no
 skjak.no
-xn--skjk-soa.no
 skjåk.no
 skodje.no
 skanland.no
-xn--sknland-fxa.no
 skånland.no
 skanit.no
-xn--sknit-yqa.no
 skánit.no
 smola.no
-xn--smla-hra.no
 smøla.no
 snillfjord.no
 snasa.no
-xn--snsa-roa.no
 snåsa.no
 snoasa.no
 snaase.no
-xn--snase-nra.no
 snåase.no
 sogndal.no
 sokndal.no
@@ -5533,7 +5340,6 @@ stavanger.no
 steigen.no
 steinkjer.no
 stjordal.no
-xn--stjrdal-s1a.no
 stjørdal.no
 stokke.no
 stor-elvdal.no
@@ -5553,37 +5359,26 @@ sveio.no
 svelvik.no
 sykkylven.no
 sogne.no
-xn--sgne-gra.no
 søgne.no
 somna.no
-xn--smna-gra.no
 sømna.no
 sondre-land.no
-xn--sndre-land-0cb.no
 søndre-land.no
 sor-aurdal.no
-xn--sr-aurdal-l8a.no
 sør-aurdal.no
 sor-fron.no
-xn--sr-fron-q1a.no
 sør-fron.no
 sor-odal.no
-xn--sr-odal-q1a.no
 sør-odal.no
 sor-varanger.no
-xn--sr-varanger-ggb.no
 sør-varanger.no
 matta-varjjat.no
-xn--mtta-vrjjat-k7af.no
 mátta-várjjat.no
 sorfold.no
-xn--srfold-bya.no
 sørfold.no
 sorreisa.no
-xn--srreisa-q1a.no
 sørreisa.no
 sorum.no
-xn--srum-gra.no
 sørum.no
 tana.no
 deatnu.no
@@ -5593,16 +5388,13 @@ tinn.no
 tjeldsund.no
 dielddanuorri.no
 tjome.no
-xn--tjme-hra.no
 tjøme.no
 tokke.no
 tolga.no
 torsken.no
 tranoy.no
-xn--trany-yua.no
 tranøy.no
 tromso.no
-xn--troms-zua.no
 tromsø.no
 tromsa.no
 romsa.no
@@ -5610,10 +5402,8 @@ trondheim.no
 troandin.no
 trysil.no
 trana.no
-xn--trna-woa.no
 træna.no
 trogstad.no
-xn--trgstad-r1a.no
 trøgstad.no
 tvedestrand.no
 tydal.no
@@ -5623,36 +5413,29 @@ divtasvuodna.no
 divttasvuotna.no
 tysnes.no
 tysvar.no
-xn--tysvr-vra.no
 tysvær.no
 tonsberg.no
-xn--tnsberg-q1a.no
 tønsberg.no
 ullensaker.no
 ullensvang.no
 ulvik.no
 utsira.no
 vadso.no
-xn--vads-jra.no
 vadsø.no
 cahcesuolo.no
-xn--hcesuolo-7ya35b.no
 čáhcesuolo.no
 vaksdal.no
 valle.no
 vang.no
 vanylven.no
 vardo.no
-xn--vard-jra.no
 vardø.no
 varggat.no
-xn--vrggt-xqad.no
 várggát.no
 vefsn.no
 vaapste.no
 vega.no
 vegarshei.no
-xn--vegrshei-c0a.no
 vegårshei.no
 vennesla.no
 verdal.no
@@ -5662,7 +5445,6 @@ vestnes.no
 vestre-slidre.no
 vestre-toten.no
 vestvagoy.no
-xn--vestvgy-ixa6o.no
 vestvågøy.no
 vevelstad.no
 vik.no
@@ -5671,23 +5453,17 @@ vindafjord.no
 volda.no
 voss.no
 varoy.no
-xn--vry-yla5g.no
 værøy.no
 vagan.no
-xn--vgan-qoa.no
 vågan.no
 voagat.no
 vagsoy.no
-xn--vgsy-qoa0j.no
 vågsøy.no
 vaga.no
-xn--vg-yiab.no
 vågå.no
 valer.ostfold.no
-xn--vler-qoa.xn--stfold-9xa.no
 våler.østfold.no
 valer.hedmark.no
-xn--vler-qoa.hedmark.no
 våler.hedmark.no
 
 // np : http://www.mos.com.np/register.html
@@ -5721,7 +5497,6 @@ iwi.nz
 kiwi.nz
 maori.nz
 mil.nz
-xn--mori-qsa.nz
 māori.nz
 net.nz
 org.nz
@@ -6526,11 +6301,8 @@ idv.tw
 game.tw
 ebiz.tw
 club.tw
-xn--zf0ao64a.tw
 網路.tw
-xn--uc0atv.tw
 組織.tw
-xn--czrw28b.tw
 商業.tw
 
 // tz : http://www.tznic.or.tz/index.php/domains
@@ -6575,7 +6347,6 @@ cv.ua
 dn.ua
 dnepropetrovsk.ua
 dnipropetrovsk.ua
-dominic.ua
 donetsk.ua
 dp.ua
 if.ua
@@ -6769,7 +6540,7 @@ k12.ok.us
 k12.or.us
 k12.pa.us
 k12.pr.us
-k12.ri.us
+// k12.ri.us  Removed at request of Kim Cournoyer <netsupport@staff.ri.net>
 k12.sc.us
 // k12.sd.us  Bug 934131 - Removed at request of James Booze <James.Booze@k12.sd.us>
 k12.tn.us
@@ -7022,355 +6793,282 @@ yt
 
 // xn--mgbaam7a8h ("Emerat", Arabic) : AE
 // http://nic.ae/english/arabicdomain/rules.jsp
-xn--mgbaam7a8h
 امارات
 
 // xn--y9a3aq ("hye", Armenian) : AM
 // ISOC AM (operated by .am Registry)
-xn--y9a3aq
 հայ
 
 // xn--54b7fta0cc ("Bangla", Bangla) : BD
-xn--54b7fta0cc
 বাংলা
 
 // xn--90ae ("bg", Bulgarian) : BG
-xn--90ae
 бг
 
 // xn--90ais ("bel", Belarusian/Russian Cyrillic) : BY
 // Operated by .by registry
-xn--90ais
 бел
 
 // xn--fiqs8s ("Zhongguo/China", Chinese, Simplified) : CN
 // CNNIC
 // http://cnnic.cn/html/Dir/2005/10/11/3218.htm
-xn--fiqs8s
 中国
 
 // xn--fiqz9s ("Zhongguo/China", Chinese, Traditional) : CN
 // CNNIC
 // http://cnnic.cn/html/Dir/2005/10/11/3218.htm
-xn--fiqz9s
 中國
 
 // xn--lgbbat1ad8j ("Algeria/Al Jazair", Arabic) : DZ
-xn--lgbbat1ad8j
 الجزائر
 
 // xn--wgbh1c ("Egypt/Masr", Arabic) : EG
 // http://www.dotmasr.eg/
-xn--wgbh1c
 مصر
 
 // xn--e1a4c ("eu", Cyrillic) : EU
-xn--e1a4c
+// https://eurid.eu
 ею
 
+// xn--qxa6a ("eu", Greek) : EU
+// https://eurid.eu
+ευ
+
 // xn--mgbah1a3hjkrd ("Mauritania", Arabic) : MR
-xn--mgbah1a3hjkrd
 موريتانيا
 
 // xn--node ("ge", Georgian Mkhedruli) : GE
-xn--node
 გე
 
 // xn--qxam ("el", Greek) : GR
 // Hellenic Ministry of Infrastructure, Transport, and Networks
-xn--qxam
 ελ
 
 // xn--j6w193g ("Hong Kong", Chinese) : HK
 // https://www.hkirc.hk
 // Submitted by registry <hk.tech@hkirc.hk>
 // https://www.hkirc.hk/content.jsp?id=30#!/34
-xn--j6w193g
 香港
-xn--55qx5d.xn--j6w193g
 公司.香港
-xn--wcvs22d.xn--j6w193g
 教育.香港
-xn--mxtq1m.xn--j6w193g
 政府.香港
-xn--gmqw5a.xn--j6w193g
 個人.香港
-xn--od0alg.xn--j6w193g
 網絡.香港
-xn--uc0atv.xn--j6w193g
 組織.香港
 
 // xn--2scrj9c ("Bharat", Kannada) : IN
 // India
-xn--2scrj9c
 ಭಾರತ
 
 // xn--3hcrj9c ("Bharat", Oriya) : IN
 // India
-xn--3hcrj9c
 ଭାରତ
 
 // xn--45br5cyl ("Bharatam", Assamese) : IN
 // India
-xn--45br5cyl
 ভাৰত
 
 // xn--h2breg3eve ("Bharatam", Sanskrit) : IN
 // India
-xn--h2breg3eve
 भारतम्
 
 // xn--h2brj9c8c ("Bharot", Santali) : IN
 // India
-xn--h2brj9c8c
 भारोत
 
 // xn--mgbgu82a ("Bharat", Sindhi) : IN
 // India
-xn--mgbgu82a
 ڀارت
 
 // xn--rvc1e0am3e ("Bharatam", Malayalam) : IN
 // India
-xn--rvc1e0am3e
 ഭാരതം
 
 // xn--h2brj9c ("Bharat", Devanagari) : IN
 // India
-xn--h2brj9c
 भारत
 
 // xn--mgbbh1a ("Bharat", Kashmiri) : IN
 // India
-xn--mgbbh1a
 بارت
 
 // xn--mgbbh1a71e ("Bharat", Arabic) : IN
 // India
-xn--mgbbh1a71e
 بھارت
 
 // xn--fpcrj9c3d ("Bharat", Telugu) : IN
 // India
-xn--fpcrj9c3d
 భారత్
 
 // xn--gecrj9c ("Bharat", Gujarati) : IN
 // India
-xn--gecrj9c
 ભારત
 
 // xn--s9brj9c ("Bharat", Gurmukhi) : IN
 // India
-xn--s9brj9c
 ਭਾਰਤ
 
 // xn--45brj9c ("Bharat", Bengali) : IN
 // India
-xn--45brj9c
 ভারত
 
 // xn--xkc2dl3a5ee0h ("India", Tamil) : IN
 // India
-xn--xkc2dl3a5ee0h
 இந்தியா
 
 // xn--mgba3a4f16a ("Iran", Persian) : IR
-xn--mgba3a4f16a
 ایران
 
 // xn--mgba3a4fra ("Iran", Arabic) : IR
-xn--mgba3a4fra
 ايران
 
 // xn--mgbtx2b ("Iraq", Arabic) : IQ
 // Communications and Media Commission
-xn--mgbtx2b
 عراق
 
 // xn--mgbayh7gpa ("al-Ordon", Arabic) : JO
 // National Information Technology Center (NITC)
 // Royal Scientific Society, Al-Jubeiha
-xn--mgbayh7gpa
 الاردن
 
 // xn--3e0b707e ("Republic of Korea", Hangul) : KR
-xn--3e0b707e
 한국
 
 // xn--80ao21a ("Kaz", Kazakh) : KZ
-xn--80ao21a
 қаз
 
 // xn--fzc2c9e2c ("Lanka", Sinhalese-Sinhala) : LK
-// http://nic.lk
-xn--fzc2c9e2c
+// https://nic.lk
 ලංකා
 
 // xn--xkc2al3hye2a ("Ilangai", Tamil) : LK
-// http://nic.lk
-xn--xkc2al3hye2a
+// https://nic.lk
 இலங்கை
 
 // xn--mgbc0a9azcg ("Morocco/al-Maghrib", Arabic) : MA
-xn--mgbc0a9azcg
 المغرب
 
 // xn--d1alf ("mkd", Macedonian) : MK
 // MARnet
-xn--d1alf
 мкд
 
 // xn--l1acc ("mon", Mongolian) : MN
-xn--l1acc
 мон
 
 // xn--mix891f ("Macao", Chinese, Traditional) : MO
 // MONIC / HNET Asia (Registry Operator for .mo)
-xn--mix891f
 澳門
 
 // xn--mix082f ("Macao", Chinese, Simplified) : MO
-xn--mix082f
 澳门
 
 // xn--mgbx4cd0ab ("Malaysia", Malay) : MY
-xn--mgbx4cd0ab
 مليسيا
 
 // xn--mgb9awbf ("Oman", Arabic) : OM
-xn--mgb9awbf
 عمان
 
 // xn--mgbai9azgqp6j ("Pakistan", Urdu/Arabic) : PK
-xn--mgbai9azgqp6j
 پاکستان
 
 // xn--mgbai9a5eva00b ("Pakistan", Urdu/Arabic, variant) : PK
-xn--mgbai9a5eva00b
 پاكستان
 
 // xn--ygbi2ammx ("Falasteen", Arabic) : PS
 // The Palestinian National Internet Naming Authority (PNINA)
 // http://www.pnina.ps
-xn--ygbi2ammx
 فلسطين
 
 // xn--90a3ac ("srb", Cyrillic) : RS
 // https://www.rnids.rs/en/domains/national-domains
-xn--90a3ac
 срб
-xn--o1ac.xn--90a3ac
 пр.срб
-xn--c1avg.xn--90a3ac
 орг.срб
-xn--90azh.xn--90a3ac
 обр.срб
-xn--d1at.xn--90a3ac
 од.срб
-xn--o1ach.xn--90a3ac
 упр.срб
-xn--80au.xn--90a3ac
 ак.срб
 
 // xn--p1ai ("rf", Russian-Cyrillic) : RU
 // https://cctld.ru/files/pdf/docs/en/rules_ru-rf.pdf
 // Submitted by George Georgievsky <gug@cctld.ru>
-xn--p1ai
 рф
 
 // xn--wgbl6a ("Qatar", Arabic) : QA
 // http://www.ict.gov.qa/
-xn--wgbl6a
 قطر
 
 // xn--mgberp4a5d4ar ("AlSaudiah", Arabic) : SA
 // http://www.nic.net.sa/
-xn--mgberp4a5d4ar
 السعودية
 
 // xn--mgberp4a5d4a87g ("AlSaudiah", Arabic, variant)  : SA
-xn--mgberp4a5d4a87g
 السعودیة
 
 // xn--mgbqly7c0a67fbc ("AlSaudiah", Arabic, variant) : SA
-xn--mgbqly7c0a67fbc
 السعودیۃ
 
 // xn--mgbqly7cvafr ("AlSaudiah", Arabic, variant) : SA
-xn--mgbqly7cvafr
 السعوديه
 
 // xn--mgbpl2fh ("sudan", Arabic) : SD
 // Operated by .sd registry
-xn--mgbpl2fh
 سودان
 
 // xn--yfro4i67o Singapore ("Singapore", Chinese) : SG
-xn--yfro4i67o
 新加坡
 
 // xn--clchc0ea0b2g2a9gcd ("Singapore", Tamil) : SG
-xn--clchc0ea0b2g2a9gcd
 சிங்கப்பூர்
 
 // xn--ogbpf8fl ("Syria", Arabic) : SY
-xn--ogbpf8fl
 سورية
 
 // xn--mgbtf8fl ("Syria", Arabic, variant) : SY
-xn--mgbtf8fl
 سوريا
 
 // xn--o3cw4h ("Thai", Thai) : TH
 // http://www.thnic.co.th
-xn--o3cw4h
 ไทย
-xn--12c1fe0br.xn--o3cw4h
 ศึกษา.ไทย
-xn--12co0c3b4eva.xn--o3cw4h
 ธุรกิจ.ไทย
-xn--h3cuzk1di.xn--o3cw4h
 รัฐบาล.ไทย
-xn--o3cyx2a.xn--o3cw4h
 ทหาร.ไทย
-xn--m3ch0j3a.xn--o3cw4h
 เน็ต.ไทย
-xn--12cfi8ixb8l.xn--o3cw4h
 องค์กร.ไทย
 
 // xn--pgbs0dh ("Tunisia", Arabic) : TN
 // http://nic.tn
-xn--pgbs0dh
 تونس
 
 // xn--kpry57d ("Taiwan", Chinese, Traditional) : TW
 // http://www.twnic.net/english/dn/dn_07a.htm
-xn--kpry57d
 台灣
 
 // xn--kprw13d ("Taiwan", Chinese, Simplified) : TW
 // http://www.twnic.net/english/dn/dn_07a.htm
-xn--kprw13d
 台湾
 
 // xn--nnx388a ("Taiwan", Chinese, variant) : TW
-xn--nnx388a
 臺灣
 
 // xn--j1amh ("ukr", Cyrillic) : UA
-xn--j1amh
 укр
 
 // xn--mgb2ddes ("AlYemen", Arabic) : YE
-xn--mgb2ddes
 اليمن
 
 // xxx : http://icmregistry.com
 xxx
 
 // ye : http://www.y.net.ye/services/domain_name.htm
-*.ye
+ye
+com.ye
+edu.ye
+gov.ye
+net.ye
+mil.ye
+org.ye
 
 // za : https://www.zadna.org.za/content/page/domain-information/
 ac.za
@@ -7419,7 +7117,7 @@ org.zw
 
 // newGTLDs
 
-// List of new gTLDs imported from https://www.icann.org/resources/registries/gtlds/v2/gtlds.json on 2020-02-06T17:49:42Z
+// List of new gTLDs imported from https://www.icann.org/resources/registries/gtlds/v2/gtlds.json on 2020-12-21T16:35:44Z
 // This list is auto-generated, don't edit it manually.
 // aaa : 2015-02-26 American Automobile Association, Inc.
 aaa
@@ -7502,9 +7200,6 @@ agency
 // aig : 2014-12-18 American International Group, Inc.
 aig
 
-// aigo : 2015-08-06 aigo Digital Technology Co,Ltd.
-aigo
-
 // airbus : 2015-07-30 Airbus S.A.S.
 airbus
 
@@ -7541,7 +7236,7 @@ alsace
 // alstom : 2015-07-30 ALSTOM
 alstom
 
-// amazon : 2019-12-19 Amazon EU S.à r.l.
+// amazon : 2019-12-19 Amazon Registry Services, Inc.
 amazon
 
 // americanexpress : 2015-07-31 American Express Travel Related Services Company, Inc.
@@ -7568,7 +7263,7 @@ analytics
 // android : 2014-08-07 Charleston Road Registry Inc.
 android
 
-// anquan : 2015-01-08 QIHOO 360 TECHNOLOGY CO. LTD.
+// anquan : 2015-01-08 Beijing Qihu Keji Co., Ltd.
 anquan
 
 // anz : 2015-07-31 Australia and New Zealand Banking Group Limited
@@ -7628,7 +7323,7 @@ audi
 // audible : 2015-06-25 Amazon Registry Services, Inc.
 audible
 
-// audio : 2014-03-20 Uniregistry, Corp.
+// audio : 2014-03-20 UNR Corp.
 audio
 
 // auspost : 2015-08-13 Australian Postal Corporation
@@ -7637,19 +7332,19 @@ auspost
 // author : 2014-12-18 Amazon Registry Services, Inc.
 author
 
-// auto : 2014-11-13 Cars Registry Limited
+// auto : 2014-11-13 XYZ.COM LLC
 auto
 
-// autos : 2014-01-09 DERAutos, LLC
+// autos : 2014-01-09 XYZ.COM LLC
 autos
 
 // avianca : 2015-01-08 Avianca Holdings S.A.
 avianca
 
-// aws : 2015-06-25 Amazon Registry Services, Inc.
+// aws : 2015-06-25 AWS Registry LLC
 aws
 
-// axa : 2013-12-19 AXA SA
+// axa : 2013-12-19 AXA Group Operations SAS
 axa
 
 // azure : 2014-12-18 Microsoft Corporation
@@ -7766,7 +7461,7 @@ bio
 // black : 2014-01-16 Afilias Limited
 black
 
-// blackfriday : 2014-01-16 Uniregistry, Corp.
+// blackfriday : 2014-01-16 UNR Corp.
 blackfriday
 
 // blockbuster : 2015-07-30 Dish DBS Corporation
@@ -7790,7 +7485,7 @@ bmw
 // bnpparibas : 2014-05-29 BNP Paribas
 bnpparibas
 
-// boats : 2014-12-04 DERBoats, LLC
+// boats : 2014-12-04 XYZ.COM LLC
 boats
 
 // boehringer : 2015-07-09 Boehringer Ingelheim International GmbH
@@ -7829,7 +7524,7 @@ bot
 // boutique : 2013-11-14 Binky Moon, LLC
 boutique
 
-// box : 2015-11-12 .BOX INC.
+// box : 2015-11-12 Intercap Registry Inc.
 box
 
 // bradesco : 2014-12-18 Banco Bradesco S.A.
@@ -7913,7 +7608,7 @@ capital
 // capitalone : 2015-08-06 Capital One Financial Corporation
 capitalone
 
-// car : 2015-01-22 Cars Registry Limited
+// car : 2015-01-22 XYZ.COM LLC
 car
 
 // caravan : 2013-12-12 Caravan International, Inc.
@@ -7931,7 +7626,7 @@ career
 // careers : 2013-10-02 Binky Moon, LLC
 careers
 
-// cars : 2014-11-13 Cars Registry Limited
+// cars : 2014-11-13 XYZ.COM LLC
 cars
 
 // casa : 2013-11-21 Minds + Machines Group Limited
@@ -7966,9 +7661,6 @@ cbre
 
 // cbs : 2015-08-06 CBS Domains Inc.
 cbs
-
-// ceb : 2015-04-09 The Corporate Executive Board Company
-ceb
 
 // center : 2013-11-07 Binky Moon, LLC
 center
@@ -8006,7 +7698,7 @@ cheap
 // chintai : 2015-06-11 CHINTAI Corporation
 chintai
 
-// christmas : 2013-11-21 Uniregistry, Corp.
+// christmas : 2013-11-21 UNR Corp.
 christmas
 
 // chrome : 2014-07-24 Charleston Road Registry Inc.
@@ -8045,7 +7737,7 @@ claims
 // cleaning : 2013-12-05 Binky Moon, LLC
 cleaning
 
-// click : 2014-06-05 Uniregistry, Corp.
+// click : 2014-06-05 UNR Corp.
 click
 
 // clinic : 2014-03-20 Binky Moon, LLC
@@ -8150,7 +7842,7 @@ credit
 // creditcard : 2014-03-20 Binky Moon, LLC
 creditcard
 
-// creditunion : 2015-01-22 CUNA Performance Resources, LLC
+// creditunion : 2015-01-22 DotCooperation LLC
 creditunion
 
 // cricket : 2014-10-09 dot Cricket Limited
@@ -8258,7 +7950,7 @@ dhl
 // diamonds : 2013-09-22 Binky Moon, LLC
 diamonds
 
-// diet : 2014-06-26 Uniregistry, Corp.
+// diet : 2014-06-26 UNR Corp.
 diet
 
 // digital : 2014-03-06 Binky Moon, LLC
@@ -8381,9 +8073,6 @@ esq
 // estate : 2013-08-27 Binky Moon, LLC
 estate
 
-// esurance : 2015-07-23 Esurance Insurance Company
-esurance
-
 // etisalat : 2015-09-03 Emirates Telecommunications Corporation (trading as Etisalat)
 etisalat
 
@@ -8498,7 +8187,7 @@ fit
 // fitness : 2014-03-06 Binky Moon, LLC
 fitness
 
-// flickr : 2015-04-02 Yahoo! Domain Services Inc.
+// flickr : 2015-04-02 Flickr, Inc.
 flickr
 
 // flights : 2013-12-05 Binky Moon, LLC
@@ -8510,7 +8199,7 @@ flir
 // florist : 2013-11-07 Binky Moon, LLC
 florist
 
-// flowers : 2014-10-09 Uniregistry, Corp.
+// flowers : 2014-10-09 UNR Corp.
 flowers
 
 // fly : 2014-05-08 Charleston Road Registry Inc.
@@ -8600,7 +8289,7 @@ gallo
 // gallup : 2015-02-19 Gallup, Inc.
 gallup
 
-// game : 2015-05-28 Uniregistry, Corp.
+// game : 2015-05-28 UNR Corp.
 game
 
 // games : 2015-05-28 Dog Beach, LLC
@@ -8738,7 +8427,7 @@ guge
 // guide : 2013-09-13 Binky Moon, LLC
 guide
 
-// guitars : 2013-11-14 Uniregistry, Corp.
+// guitars : 2013-11-14 UNR Corp.
 guitars
 
 // guru : 2013-08-27 Binky Moon, LLC
@@ -8771,7 +8460,7 @@ health
 // healthcare : 2014-06-12 Binky Moon, LLC
 healthcare
 
-// help : 2014-06-26 Uniregistry, Corp.
+// help : 2014-06-26 UNR Corp.
 help
 
 // helsinki : 2015-02-05 City of Helsinki
@@ -8786,7 +8475,7 @@ hermes
 // hgtv : 2015-07-02 Lifestyle Domain Holdings, Inc.
 hgtv
 
-// hiphop : 2014-03-06 Uniregistry, Corp.
+// hiphop : 2014-03-06 UNR Corp.
 hiphop
 
 // hisamitsu : 2015-07-16 Hisamitsu Pharmaceutical Co.,Inc.
@@ -8795,7 +8484,7 @@ hisamitsu
 // hitachi : 2014-10-31 Hitachi, Ltd.
 hitachi
 
-// hiv : 2014-03-13 Uniregistry, Corp.
+// hiv : 2014-03-13 UNR Corp.
 hiv
 
 // hkt : 2015-05-14 PCCW-HKT DataCom Services Limited
@@ -8816,7 +8505,7 @@ homedepot
 // homegoods : 2015-07-16 The TJX Companies, Inc.
 homegoods
 
-// homes : 2014-01-09 DERHomes, LLC
+// homes : 2014-01-09 XYZ.COM LLC
 homes
 
 // homesense : 2015-07-16 The TJX Companies, Inc.
@@ -8834,7 +8523,7 @@ hospital
 // host : 2014-04-17 DotHost Inc.
 host
 
-// hosting : 2014-05-29 Uniregistry, Corp.
+// hosting : 2014-05-29 UNR Corp.
 hosting
 
 // hot : 2015-08-27 Amazon Registry Services, Inc.
@@ -8924,9 +8613,6 @@ insurance
 // insure : 2014-03-20 Binky Moon, LLC
 insure
 
-// intel : 2015-08-06 Intel Corporation
-intel
-
 // international : 2013-11-07 Binky Moon, LLC
 international
 
@@ -8969,9 +8655,6 @@ java
 // jcb : 2014-11-20 JCB Co., Ltd.
 jcb
 
-// jcp : 2015-04-23 JCP Media, Inc.
-jcp
-
 // jeep : 2015-07-30 FCA US LLC.
 jeep
 
@@ -9008,7 +8691,7 @@ jpmorgan
 // jprs : 2014-09-18 Japan Registry Services Co., Ltd.
 jprs
 
-// juegos : 2014-03-20 Uniregistry, Corp.
+// juegos : 2014-03-20 UNR Corp.
 juegos
 
 // juniper : 2015-07-30 JUNIPER NETWORKS, INC.
@@ -9119,7 +8802,7 @@ law
 // lawyer : 2014-03-20 Dog Beach, LLC
 lawyer
 
-// lds : 2014-03-20 IRI Domain Management, LLC ("Applicant")
+// lds : 2014-03-20 IRI Domain Management, LLC
 lds
 
 // lease : 2014-03-06 Binky Moon, LLC
@@ -9176,7 +8859,7 @@ lincoln
 // linde : 2014-12-04 Linde Aktiengesellschaft
 linde
 
-// link : 2013-11-14 Uniregistry, Corp.
+// link : 2013-11-14 UNR Corp.
 link
 
 // lipsy : 2015-06-25 Lipsy Ltd
@@ -9194,7 +8877,7 @@ lixil
 // llc : 2017-12-14 Afilias Limited
 llc
 
-// llp : 2019-08-26 Dot Registry LLC
+// llp : 2019-08-26 UNR Corp.
 llp
 
 // loan : 2014-11-20 dot Loan Limited
@@ -9212,7 +8895,7 @@ locus
 // loft : 2015-07-30 Annco, Inc.
 loft
 
-// lol : 2015-01-30 Uniregistry, Corp.
+// lol : 2015-01-30 UNR Corp.
 lol
 
 // london : 2013-11-14 Dot London Domains Limited
@@ -9241,9 +8924,6 @@ ltda
 
 // lundbeck : 2015-08-06 H. Lundbeck A/S
 lundbeck
-
-// lupin : 2014-11-07 LUPIN LIMITED
-lupin
 
 // luxe : 2014-01-09 Minds + Machines Group Limited
 luxe
@@ -9332,9 +9012,6 @@ menu
 // merckmsd : 2016-07-14 MSD Registry Holdings, Inc.
 merckmsd
 
-// metlife : 2015-05-07 MetLife Services and Solutions, LLC
-metlife
-
 // miami : 2013-12-19 Minds + Machines Group Limited
 miami
 
@@ -9374,7 +9051,7 @@ moe
 // moi : 2014-12-18 Amazon Registry Services, Inc.
 moi
 
-// mom : 2015-04-16 Uniregistry, Corp.
+// mom : 2015-04-16 UNR Corp.
 mom
 
 // monash : 2013-09-30 Monash University
@@ -9386,7 +9063,7 @@ money
 // monster : 2015-09-11 XYZ.COM LLC
 monster
 
-// mormon : 2013-12-05 IRI Domain Management, LLC ("Applicant")
+// mormon : 2013-12-05 IRI Domain Management, LLC
 mormon
 
 // mortgage : 2014-03-20 Dog Beach, LLC
@@ -9398,7 +9075,7 @@ moscow
 // moto : 2015-06-04 Motorola Trademark Holdings, LLC
 moto
 
-// motorcycles : 2014-01-09 DERMotorcycles, LLC
+// motorcycles : 2014-01-09 XYZ.COM LLC
 motorcycles
 
 // mov : 2014-01-30 Charleston Road Registry Inc.
@@ -9421,9 +9098,6 @@ mutual
 
 // nab : 2015-08-20 National Australia Bank Limited
 nab
-
-// nadex : 2014-12-11 Nadex Domains, Inc.
-nadex
 
 // nagoya : 2013-10-24 GMO Registry, Inc.
 nagoya
@@ -9452,7 +9126,7 @@ netflix
 // network : 2013-11-14 Binky Moon, LLC
 network
 
-// neustar : 2013-12-05 Registry Services, LLC
+// neustar : 2013-12-05 NeuStar, Inc.
 neustar
 
 // new : 2014-01-30 Charleston Road Registry Inc.
@@ -9506,7 +9180,7 @@ nokia
 // northwesternmutual : 2015-06-18 Northwestern Mutual Registry, LLC
 northwesternmutual
 
-// norton : 2014-12-04 Symantec Corporation
+// norton : 2014-12-04 NortonLifeLock Inc.
 norton
 
 // now : 2015-06-25 Amazon Registry Services, Inc.
@@ -9533,7 +9207,7 @@ nyc
 // obi : 2014-09-25 OBI Group Holding SE & Co. KGaA
 obi
 
-// observer : 2015-04-30 Top Level Spectrum, Inc.
+// observer : 2015-04-30 Dog Beach, LLC
 observer
 
 // off : 2015-07-23 Johnson Shareholdings, Inc.
@@ -9566,7 +9240,7 @@ one
 // ong : 2014-03-06 Public Interest Registry
 ong
 
-// onl : 2013-09-16 I-Registry Ltd.
+// onl : 2013-09-16 iRegistry GmbH
 onl
 
 // online : 2015-01-15 DotOnline Inc.
@@ -9653,7 +9327,7 @@ philips
 // phone : 2016-06-02 Dish DBS Corporation
 phone
 
-// photo : 2013-11-14 Uniregistry, Corp.
+// photo : 2013-11-14 UNR Corp.
 photo
 
 // photography : 2013-09-20 Binky Moon, LLC
@@ -9665,7 +9339,7 @@ photos
 // physio : 2014-05-01 PhysBiz Pty Ltd
 physio
 
-// pics : 2013-11-14 Uniregistry, Corp.
+// pics : 2013-11-14 UNR Corp.
 pics
 
 // pictet : 2014-06-26 Pictet Europe S.A.
@@ -9752,7 +9426,7 @@ promo
 // properties : 2013-12-05 Binky Moon, LLC
 properties
 
-// property : 2014-05-22 Uniregistry, Corp.
+// property : 2014-05-22 UNR Corp.
 property
 
 // protection : 2015-04-23 XYZ.COM LLC
@@ -9800,7 +9474,7 @@ realestate
 // realtor : 2014-05-29 Real Estate Domains LLC
 realtor
 
-// realty : 2015-03-19 Fegistry, LLC
+// realty : 2015-03-19 Dog Beach, LLC
 realty
 
 // recipes : 2013-10-17 Binky Moon, LLC
@@ -9863,7 +9537,7 @@ reviews
 // rexroth : 2015-06-18 Robert Bosch GMBH
 rexroth
 
-// rich : 2013-11-21 I-Registry Ltd.
+// rich : 2013-11-21 iRegistry GmbH
 rich
 
 // richardli : 2015-05-14 Pacific Century Asset Management (HK) Limited
@@ -9871,9 +9545,6 @@ richardli
 
 // ricoh : 2014-11-20 Ricoh Company, Ltd.
 ricoh
-
-// rightathome : 2015-07-23 Johnson Shareholdings, Inc.
-rightathome
 
 // ril : 2015-04-02 Reliance Industries Limited
 ril
@@ -10004,9 +9675,6 @@ science
 // scjohnson : 2015-07-23 Johnson Shareholdings, Inc.
 scjohnson
 
-// scor : 2014-10-31 SCOR SE
-scor
-
 // scot : 2014-01-23 Dot Scot Registry Limited
 scot
 
@@ -10046,7 +9714,7 @@ sew
 // sex : 2014-11-13 ICM Registry SX LLC
 sex
 
-// sexy : 2013-09-11 Uniregistry, Corp.
+// sexy : 2013-09-11 UNR Corp.
 sexy
 
 // sfr : 2015-08-13 Societe Francaise du Radiotelephone - SFR
@@ -10079,7 +9747,7 @@ shop
 // shopping : 2016-03-31 Binky Moon, LLC
 shopping
 
-// shouji : 2015-01-08 QIHOO 360 TECHNOLOGY CO. LTD.
+// shouji : 2015-01-08 Beijing Qihu Keji Co., Ltd.
 shouji
 
 // show : 2015-03-05 Binky Moon, LLC
@@ -10087,9 +9755,6 @@ show
 
 // showtime : 2015-08-06 CBS Domains Inc.
 showtime
-
-// shriram : 2014-01-23 Shriram Capital Ltd.
-shriram
 
 // silk : 2015-06-25 Amazon Registry Services, Inc.
 silk
@@ -10250,9 +9915,6 @@ swiss
 // sydney : 2014-09-18 State of New South Wales, Department of Premier and Cabinet
 sydney
 
-// symantec : 2014-12-04 Symantec Corporation
-symantec
-
 // systems : 2013-11-07 Binky Moon, LLC
 systems
 
@@ -10277,7 +9939,7 @@ tatamotors
 // tatar : 2014-04-24 Limited Liability Company "Coordination Center of Regional Domain of Tatarstan Republic"
 tatar
 
-// tattoo : 2013-08-30 Uniregistry, Corp.
+// tattoo : 2013-08-30 UNR Corp.
 tattoo
 
 // tax : 2014-03-20 Binky Moon, LLC
@@ -10394,7 +10056,7 @@ trading
 // training : 2013-11-07 Binky Moon, LLC
 training
 
-// travel :  Dog Beach, LLC
+// travel : 2015-10-09 Dog Beach, LLC
 travel
 
 // travelchannel : 2015-07-02 Lifestyle Domain Holdings, Inc.
@@ -10406,7 +10068,7 @@ travelers
 // travelersinsurance : 2015-03-26 Travelers TLD, LLC
 travelersinsurance
 
-// trust : 2014-10-16 NCC Group Inc.
+// trust : 2014-10-16 UNR Corp.
 trust
 
 // trv : 2015-03-26 Travelers TLD, LLC
@@ -10502,9 +10164,6 @@ visa
 // vision : 2013-12-05 Binky Moon, LLC
 vision
 
-// vistaprint : 2014-09-18 Vistaprint Limited
-vistaprint
-
 // viva : 2014-11-07 Saudi Telecom Company
 viva
 
@@ -10573,9 +10232,6 @@ weber
 
 // website : 2014-04-03 DotWebsite Inc.
 website
-
-// wed : 2013-10-01 Atgron, Inc.
-wed
 
 // wedding : 2014-04-24 Minds + Machines Group Limited
 wedding
@@ -10646,400 +10302,295 @@ xerox
 // xfinity : 2015-07-09 Comcast IP Holdings I, LLC
 xfinity
 
-// xihuan : 2015-01-08 QIHOO 360 TECHNOLOGY CO. LTD.
+// xihuan : 2015-01-08 Beijing Qihu Keji Co., Ltd.
 xihuan
 
 // xin : 2014-12-11 Elegant Leader Limited
 xin
 
 // xn--11b4c3d : 2015-01-15 VeriSign Sarl
-xn--11b4c3d
 कॉम
 
 // xn--1ck2e1b : 2015-02-26 Amazon Registry Services, Inc.
-xn--1ck2e1b
 セール
 
 // xn--1qqw23a : 2014-01-09 Guangzhou YU Wei Information Technology Co., Ltd.
-xn--1qqw23a
 佛山
 
 // xn--30rr7y : 2014-06-12 Excellent First Limited
-xn--30rr7y
 慈善
 
 // xn--3bst00m : 2013-09-13 Eagle Horizon Limited
-xn--3bst00m
 集团
 
 // xn--3ds443g : 2013-09-08 TLD REGISTRY LIMITED OY
-xn--3ds443g
 在线
 
 // xn--3oq18vl8pn36a : 2015-07-02 Volkswagen (China) Investment Co., Ltd.
-xn--3oq18vl8pn36a
 大众汽车
 
 // xn--3pxu8k : 2015-01-15 VeriSign Sarl
-xn--3pxu8k
 点看
 
 // xn--42c2d9a : 2015-01-15 VeriSign Sarl
-xn--42c2d9a
 คอม
 
 // xn--45q11c : 2013-11-21 Zodiac Gemini Ltd
-xn--45q11c
 八卦
 
-// xn--4gbrim : 2013-10-04 Suhub Electronic Establishment
-xn--4gbrim
+// xn--4gbrim : 2013-10-04 Fans TLD Limited
 موقع
 
 // xn--55qw42g : 2013-11-08 China Organizational Name Administration Center
-xn--55qw42g
 公益
 
 // xn--55qx5d : 2013-11-14 China Internet Network Information Center (CNNIC)
-xn--55qx5d
 公司
 
 // xn--5su34j936bgsg : 2015-09-03 Shangri‐La International Hotel Management Limited
-xn--5su34j936bgsg
 香格里拉
 
 // xn--5tzm5g : 2014-12-22 Global Website TLD Asia Limited
-xn--5tzm5g
 网站
 
 // xn--6frz82g : 2013-09-23 Afilias Limited
-xn--6frz82g
 移动
 
 // xn--6qq986b3xl : 2013-09-13 Tycoon Treasure Limited
-xn--6qq986b3xl
 我爱你
 
 // xn--80adxhks : 2013-12-19 Foundation for Assistance for Internet Technologies and Infrastructure Development (FAITID)
-xn--80adxhks
 москва
 
 // xn--80aqecdr1a : 2015-10-21 Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
-xn--80aqecdr1a
 католик
 
 // xn--80asehdb : 2013-07-14 CORE Association
-xn--80asehdb
 онлайн
 
 // xn--80aswg : 2013-07-14 CORE Association
-xn--80aswg
 сайт
 
 // xn--8y0a063a : 2015-03-26 China United Network Communications Corporation Limited
-xn--8y0a063a
 联通
 
 // xn--9dbq2a : 2015-01-15 VeriSign Sarl
-xn--9dbq2a
 קום
 
 // xn--9et52u : 2014-06-12 RISE VICTORY LIMITED
-xn--9et52u
 时尚
 
 // xn--9krt00a : 2015-03-12 Sina Corporation
-xn--9krt00a
 微博
 
 // xn--b4w605ferd : 2014-08-07 Temasek Holdings (Private) Limited
-xn--b4w605ferd
 淡马锡
 
 // xn--bck1b9a5dre4c : 2015-02-26 Amazon Registry Services, Inc.
-xn--bck1b9a5dre4c
 ファッション
 
 // xn--c1avg : 2013-11-14 Public Interest Registry
-xn--c1avg
 орг
 
 // xn--c2br7g : 2015-01-15 VeriSign Sarl
-xn--c2br7g
 नेट
 
 // xn--cck2b3b : 2015-02-26 Amazon Registry Services, Inc.
-xn--cck2b3b
 ストア
 
-// xn--cckwcxetd : 2019-12-19 Amazon EU S.à r.l.
-xn--cckwcxetd
+// xn--cckwcxetd : 2019-12-19 Amazon Registry Services, Inc.
 アマゾン
 
 // xn--cg4bki : 2013-09-27 SAMSUNG SDS CO., LTD
-xn--cg4bki
 삼성
 
 // xn--czr694b : 2014-01-16 Internet DotTrademark Organisation Limited
-xn--czr694b
 商标
 
 // xn--czrs0t : 2013-12-19 Binky Moon, LLC
-xn--czrs0t
 商店
 
 // xn--czru2d : 2013-11-21 Zodiac Aquarius Limited
-xn--czru2d
 商城
 
 // xn--d1acj3b : 2013-11-20 The Foundation for Network Initiatives “The Smart Internet”
-xn--d1acj3b
 дети
 
 // xn--eckvdtc9d : 2014-12-18 Amazon Registry Services, Inc.
-xn--eckvdtc9d
 ポイント
 
 // xn--efvy88h : 2014-08-22 Guangzhou YU Wei Information Technology Co., Ltd.
-xn--efvy88h
 新闻
 
-// xn--estv75g : 2015-02-19 Industrial and Commercial Bank of China Limited
-xn--estv75g
-工行
-
 // xn--fct429k : 2015-04-09 Amazon Registry Services, Inc.
-xn--fct429k
 家電
 
 // xn--fhbei : 2015-01-15 VeriSign Sarl
-xn--fhbei
 كوم
 
 // xn--fiq228c5hs : 2013-09-08 TLD REGISTRY LIMITED OY
-xn--fiq228c5hs
 中文网
 
 // xn--fiq64b : 2013-10-14 CITIC Group Corporation
-xn--fiq64b
 中信
 
 // xn--fjq720a : 2014-05-22 Binky Moon, LLC
-xn--fjq720a
 娱乐
 
 // xn--flw351e : 2014-07-31 Charleston Road Registry Inc.
-xn--flw351e
 谷歌
 
 // xn--fzys8d69uvgm : 2015-05-14 PCCW Enterprises Limited
-xn--fzys8d69uvgm
 電訊盈科
 
-// xn--g2xx48c : 2015-01-30 Minds + Machines Group Limited
-xn--g2xx48c
+// xn--g2xx48c : 2015-01-30 Nawang Heli(Xiamen) Network Service Co., LTD.
 购物
 
 // xn--gckr3f0f : 2015-02-26 Amazon Registry Services, Inc.
-xn--gckr3f0f
 クラウド
 
 // xn--gk3at1e : 2015-10-08 Amazon Registry Services, Inc.
-xn--gk3at1e
 通販
 
 // xn--hxt814e : 2014-05-15 Zodiac Taurus Limited
-xn--hxt814e
 网店
 
 // xn--i1b6b1a6a2e : 2013-11-14 Public Interest Registry
-xn--i1b6b1a6a2e
 संगठन
 
 // xn--imr513n : 2014-12-11 Internet DotTrademark Organisation Limited
-xn--imr513n
 餐厅
 
 // xn--io0a7i : 2013-11-14 China Internet Network Information Center (CNNIC)
-xn--io0a7i
 网络
 
 // xn--j1aef : 2015-01-15 VeriSign Sarl
-xn--j1aef
 ком
 
-// xn--jlq480n2rg : 2019-12-19 Amazon EU S.à r.l.
-xn--jlq480n2rg
+// xn--jlq480n2rg : 2019-12-19 Amazon Registry Services, Inc.
 亚马逊
 
 // xn--jlq61u9w7b : 2015-01-08 Nokia Corporation
-xn--jlq61u9w7b
 诺基亚
 
 // xn--jvr189m : 2015-02-26 Amazon Registry Services, Inc.
-xn--jvr189m
 食品
 
 // xn--kcrx77d1x4a : 2014-11-07 Koninklijke Philips N.V.
-xn--kcrx77d1x4a
 飞利浦
 
-// xn--kpu716f : 2014-12-22 Richemont DNS Inc.
-xn--kpu716f
-手表
-
 // xn--kput3i : 2014-02-13 Beijing RITT-Net Technology Development Co., Ltd
-xn--kput3i
 手机
 
 // xn--mgba3a3ejt : 2014-11-20 Aramco Services Company
-xn--mgba3a3ejt
 ارامكو
 
 // xn--mgba7c0bbn0a : 2015-05-14 Crescent Holding GmbH
-xn--mgba7c0bbn0a
 العليان
 
 // xn--mgbaakc7dvf : 2015-09-03 Emirates Telecommunications Corporation (trading as Etisalat)
-xn--mgbaakc7dvf
 اتصالات
 
 // xn--mgbab2bd : 2013-10-31 CORE Association
-xn--mgbab2bd
 بازار
 
 // xn--mgbca7dzdo : 2015-07-30 Abu Dhabi Systems and Information Centre
-xn--mgbca7dzdo
 ابوظبي
 
 // xn--mgbi4ecexp : 2015-10-21 Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
-xn--mgbi4ecexp
 كاثوليك
 
 // xn--mgbt3dhd : 2014-09-04 Asia Green IT System Bilgisayar San. ve Tic. Ltd. Sti.
-xn--mgbt3dhd
 همراه
 
 // xn--mk1bu44c : 2015-01-15 VeriSign Sarl
-xn--mk1bu44c
 닷컴
 
 // xn--mxtq1m : 2014-03-06 Net-Chinese Co., Ltd.
-xn--mxtq1m
 政府
 
 // xn--ngbc5azd : 2013-07-13 International Domain Registry Pty. Ltd.
-xn--ngbc5azd
 شبكة
 
 // xn--ngbe9e0a : 2014-12-04 Kuwait Finance House
-xn--ngbe9e0a
 بيتك
 
 // xn--ngbrx : 2015-11-12 League of Arab States
-xn--ngbrx
 عرب
 
 // xn--nqv7f : 2013-11-14 Public Interest Registry
-xn--nqv7f
 机构
 
 // xn--nqv7fs00ema : 2013-11-14 Public Interest Registry
-xn--nqv7fs00ema
 组织机构
 
 // xn--nyqy26a : 2014-11-07 Stable Tone Limited
-xn--nyqy26a
 健康
 
 // xn--otu796d : 2017-08-06 Jiang Yu Liang Cai Technology Company Limited
-xn--otu796d
 招聘
 
 // xn--p1acf : 2013-12-12 Rusnames Limited
-xn--p1acf
 рус
 
-// xn--pbt977c : 2014-12-22 Richemont DNS Inc.
-xn--pbt977c
-珠宝
-
 // xn--pssy2u : 2015-01-15 VeriSign Sarl
-xn--pssy2u
 大拿
 
 // xn--q9jyb4c : 2013-09-17 Charleston Road Registry Inc.
-xn--q9jyb4c
 みんな
 
 // xn--qcka1pmc : 2014-07-31 Charleston Road Registry Inc.
-xn--qcka1pmc
 グーグル
 
 // xn--rhqv96g : 2013-09-11 Stable Tone Limited
-xn--rhqv96g
 世界
 
 // xn--rovu88b : 2015-02-26 Amazon Registry Services, Inc.
-xn--rovu88b
 書籍
 
 // xn--ses554g : 2014-01-16 KNET Co., Ltd.
-xn--ses554g
 网址
 
 // xn--t60b56a : 2015-01-15 VeriSign Sarl
-xn--t60b56a
 닷넷
 
 // xn--tckwe : 2015-01-15 VeriSign Sarl
-xn--tckwe
 コム
 
 // xn--tiq49xqyj : 2015-10-21 Pontificium Consilium de Comunicationibus Socialibus (PCCS) (Pontifical Council for Social Communication)
-xn--tiq49xqyj
 天主教
 
 // xn--unup4y : 2013-07-14 Binky Moon, LLC
-xn--unup4y
 游戏
 
 // xn--vermgensberater-ctb : 2014-06-23 Deutsche Vermögensberatung Aktiengesellschaft DVAG
-xn--vermgensberater-ctb
 vermögensberater
 
 // xn--vermgensberatung-pwb : 2014-06-23 Deutsche Vermögensberatung Aktiengesellschaft DVAG
-xn--vermgensberatung-pwb
 vermögensberatung
 
 // xn--vhquv : 2013-08-27 Binky Moon, LLC
-xn--vhquv
 企业
 
 // xn--vuq861b : 2014-10-16 Beijing Tele-info Network Technology Co., Ltd.
-xn--vuq861b
 信息
 
 // xn--w4r85el8fhu5dnra : 2015-04-30 Kerry Trading Co. Limited
-xn--w4r85el8fhu5dnra
 嘉里大酒店
 
 // xn--w4rs40l : 2015-07-30 Kerry Trading Co. Limited
-xn--w4rs40l
 嘉里
 
 // xn--xhq521b : 2013-11-14 Guangzhou YU Wei Information Technology Co., Ltd.
-xn--xhq521b
 广东
 
 // xn--zfr164b : 2013-11-08 China Organizational Name Administration Center
-xn--zfr164b
 政务
 
 // xyz : 2013-12-05 XYZ.COM LLC
 xyz
 
-// yachts : 2014-01-09 DERYachts, LLC
+// yachts : 2014-01-09 XYZ.COM LLC
 yachts
 
 // yahoo : 2015-04-02 Yahoo! Domain Services Inc.
@@ -11066,7 +10617,7 @@ you
 // youtube : 2014-05-01 Charleston Road Registry Inc.
 youtube
 
-// yun : 2015-01-08 QIHOO 360 TECHNOLOGY CO. LTD.
+// yun : 2015-01-08 Beijing Qihu Keji Co., Ltd.
 yun
 
 // zappos : 2015-06-25 Amazon Registry Services, Inc.
@@ -11098,6 +10649,9 @@ cc.ua
 inf.ua
 ltd.ua
 
+// 611coin : https://611project.org/
+611.to
+
 // Adobe : https://www.adobe.com/
 // Submitted by Ian Boston <boston@adobe.com>
 adobeaemcloud.com
@@ -11116,6 +10670,10 @@ barsy.ca
 // Submitted by Mark J. Titorenko <mark.titorenko@alces-software.com>
 *.compute.estate
 *.alces.network
+
+// all-inkl.com : https://all-inkl.com
+// Submitted by Werner Kaltofen <wk@all-inkl.com>
+kasserver.com
 
 // Altervista: https://www.altervista.org
 // Submitted by Carlo Cannas <tech_staff@altervista.it>
@@ -11281,8 +10839,11 @@ backplaneapp.io
 balena-devices.com
 
 // Banzai Cloud
-// Submitted by Gabor Kozma <info@banzaicloud.com>
+// Submitted by Janos Matyas <info@banzaicloud.com>
+*.banzai.cloud
 app.banzaicloud.io
+*.backyards.banzaicloud.io
+
 
 // BetaInABox
 // Submitted by Adrian <adrian@betainabox.com>
@@ -11295,6 +10856,10 @@ bnr.la
 // Blackbaud, Inc. : https://www.blackbaud.com
 // Submitted by Paul Crowder <paul.crowder@blackbaud.com>
 blackbaudcdn.net
+
+// Blatech : http://www.blatech.net
+// Submitted by Luke Bratch <luke@bratch.co.uk>
+of.je
 
 // Boomla : https://boomla.com
 // Submitted by Tibor Halter <thalter@boomla.com>
@@ -11336,32 +10901,35 @@ uwu.ai
 // CentralNic : http://www.centralnic.com/names/domains
 // Submitted by registry <gavin.brown@centralnic.com>
 ae.org
-ar.com
 br.com
 cn.com
 com.de
 com.se
 de.com
 eu.com
-gb.com
 gb.net
-hu.com
 hu.net
 jp.net
 jpn.com
-kr.com
 mex.com
-no.com
-qc.com
 ru.com
 sa.com
 se.net
 uk.com
 uk.net
 us.com
-uy.com
 za.bz
 za.com
+
+// No longer operated by CentralNic, these entries should be adopted and/or removed by current operators
+// Submitted by Gavin Brown <gavin.brown@centralnic.com>
+ar.com
+gb.com
+hu.com
+kr.com
+no.com
+qc.com
+uy.com
 
 // Africa.com Web Solutions Ltd : https://registry.africa.com
 // Submitted by Gavin Brown <gavin.brown@centralnic.com>
@@ -11374,6 +10942,7 @@ gr.com
 // Radix FZC : http://domains.in.net
 // Submitted by Gavin Brown <gavin.brown@centralnic.com>
 in.net
+web.in
 
 // US REGISTRY LLC : http://us.org
 // Submitted by Gavin Brown <gavin.brown@centralnic.com>
@@ -11383,16 +10952,27 @@ us.org
 // Submitted by Gavin Brown <gavin.brown@centralnic.com>
 co.com
 
+// Roar Domains LLC : https://roar.basketball/
+// Submitted by Gavin Brown <gavin.brown@centralnic.com>
+aus.basketball
+nz.basketball
+
+// BRS Media : https://brsmedia.com/
+// Submitted by Gavin Brown <gavin.brown@centralnic.com>
+radio.am
+radio.fm
+
+// Globe Hosting SRL : https://www.globehosting.com/
+// Submitted by Gavin Brown <gavin.brown@centralnic.com>
+co.ro
+shop.ro
+
 // c.la : http://www.c.la/
 c.la
 
 // certmgr.org : https://certmgr.org
 // Submitted by B. Blechschmidt <hostmaster@certmgr.org>
 certmgr.org
-
-// Citrix : https://citrix.com
-// Submitted by Alex Stoddard <alex.stoddard@citrix.com>
-xenapponazure.com
 
 // Civilized Discourse Construction Kit, Inc. : https://www.discourse.org/
 // Submitted by Rishabh Nambiar & Michael Brown <team@discourse.org>
@@ -11411,6 +10991,10 @@ cleverapps.io
 // Submitted by Colin Sidoti <colin@clerk.dev>
 *.lcl.dev
 *.stg.dev
+
+// Clic2000 : https://clic2000.fr
+// Submitted by Mathilde Blanchemanche <mathilde@clic2000.fr>
+clic2000.net
 
 // Cloud66 : https://www.cloud66.com/
 // Submitted by Khash Sajadi <khash@cloud66.com>
@@ -11436,7 +11020,8 @@ cloudcontrolapp.com
 cloudera.site
 
 // Cloudflare, Inc. : https://www.cloudflare.com/
-// Submitted by Jake Riesterer <publicsuffixlist@cloudflare.com>
+// Submitted by Cloudflare Team <publicsuffixlist@cloudflare.com>
+pages.dev
 trycloudflare.com
 workers.dev
 
@@ -11476,10 +11061,6 @@ cloudns.org
 cloudns.pro
 cloudns.pw
 cloudns.us
-
-// Cloudeity Inc : https://cloudeity.com
-// Submitted by Stefan Dimitrov <contact@cloudeity.com>
-cloudeity.net
 
 // CNPY : https://cnpy.gdn
 // Submitted by Angelo Gladding <angelo@lahacker.net>
@@ -11527,6 +11108,10 @@ realm.cz
 // Submitted by Jonathan Rudenberg <jonathan@cupcake.io>
 cupcake.is
 
+// Curv UG : https://curv-labs.de/
+// Submitted by Marvin Wiesner <Marvin@curv-labs.de>
+curv.dev
+
 // Customer OCI - Oracle Dyn https://cloud.oracle.com/home https://dyn.com/dns/
 // Submitted by Gregory Drake <support@dyn.com>
 // Note: This is intended to also include customer-oci.com due to wildcards implicitly including the current label
@@ -11539,6 +11124,12 @@ cupcake.is
 // Submitted by Dominic Luechinger <dol@cyon.ch>
 cyon.link
 cyon.site
+
+// Danger Science Group: https://dangerscience.com/
+// Submitted by Skylar MacDonald <skylar@dangerscience.com>
+fnwk.site
+folionetwork.site
+platform0.app
 
 // Daplie, Inc : https://daplie.com
 // Submitted by AJ ONeal <aj@daplie.com>
@@ -11562,6 +11153,10 @@ firm.dk
 reg.dk
 store.dk
 
+// dappnode.io : https://dappnode.io/
+// Submitted by Abel Boldu / DAppNode Team <community@dappnode.io>
+dyndns.dappnode.io
+
 // dapps.earth : https://dapps.earth/
 // Submitted by Daniil Burdakov <icqkill@gmail.com>
 *.dapps.earth
@@ -11579,9 +11174,18 @@ edgestack.me
 // Submitted by Peter Palfrader / Debian Sysadmin Team <dsa-publicsuffixlist@debian.org>
 debian.net
 
+// Deno Land Inc : https://deno.com/
+// Submitted by Luca Casonato <hostmaster@deno.com>
+deno.dev
+deno-staging.dev
+
 // deSEC : https://desec.io/
 // Submitted by Peter Thomassen <peter@desec.io>
 dedyn.io
+
+// DNS Africa Ltd https://dns.business
+// Submitted by Calvin Browne <calvin@dns.business>
+jozi.biz
 
 // DNShome : https://www.dnshome.de/
 // Submitted by Norbert Auler <mail@dnshome.de>
@@ -11595,6 +11199,10 @@ shop.th
 // DrayTek Corp. : https://www.draytek.com/
 // Submitted by Paul Fang <mis@draytek.com>
 drayddns.com
+
+// DreamCommerce : https://shoper.pl/
+// Submitted by Konrad Kotarba <konrad.kotarba@dreamcommerce.com>
+shoparena.pl
 
 // DreamHost : http://www.dreamhost.com/
 // Submitted by Andrew Farmer <andrew.farmer@dreamhost.com>
@@ -11612,6 +11220,13 @@ drud.us
 // DuckDNS : http://www.duckdns.org/
 // Submitted by Richard Harper <richard@duckdns.org>
 duckdns.org
+
+// Bip : https://bip.sh
+// Submitted by Joel Kennedy <joel@bip.sh>
+bip.sh
+
+// bitbridge.net : Submitted by Craig Welch, abeliidev@gmail.com
+bitbridge.net
 
 // dy.fi : http://dy.fi/
 // Submitted by Heikki Hannikainen <hessu@hes.iki.fi>
@@ -11916,6 +11531,10 @@ ddnss.org
 definima.net
 definima.io
 
+// DigitalOcean : https://digitalocean.com/
+// Submitted by Braxton Huggins <bhuggins@digitalocean.com>
+ondigitalocean.app
+
 // dnstrace.pro : https://dnstrace.pro/
 // Submitted by Chris Partridge <chris@partridge.tech>
 bci.dnstrace.pro
@@ -11960,6 +11579,10 @@ mytuleap.com
 // Submitted by <frc1533@ecgrobotics.org>
 onred.one
 staging.onred.one
+
+// One.com: https://www.one.com/
+// Submitted by Jacob Bunk Nielsen <jbn@one.com>
+service.one
 
 // Enonic : http://enonic.com/
 // Submitted by Erik Kaareng-Sunde <esu@enonic.com>
@@ -12043,6 +11666,10 @@ twmail.net
 twmail.org
 mymailer.com.tw
 url.tw
+
+// Fabrica Technologies, Inc. : https://www.fabrica.dev/
+// Submitted by Eric Jiang <eric@fabrica.dev>
+onfabrica.com
 
 // Facebook, Inc.
 // Submitted by Peter Ruibal <public-suffix@fb.com>
@@ -12144,12 +11771,11 @@ global.ssl.fastly.net
 
 // FASTVPS EESTI OU : https://fastvps.ru/
 // Submitted by Likhachev Vasiliy <lihachev@fastvps.ru>
-fastpanel.direct
 fastvps-server.com
-
-// Featherhead : https://featherhead.xyz/
-// Submitted by Simon Menke <simon@featherhead.xyz>
-fhapp.xyz
+fastvps.host
+myfast.host
+fastvps.site
+myfast.space
 
 // Fedora : https://fedoraproject.org/
 // submitted by Patrick Uiterwijk <puiterwijk@fedoraproject.org>
@@ -12159,9 +11785,20 @@ cloud.fedoraproject.org
 app.os.fedoraproject.org
 app.os.stg.fedoraproject.org
 
+// FearWorks Media Ltd. : https://fearworksmedia.co.uk
+// submitted by Keith Fairley <domains@fearworksmedia.co.uk>
+conn.uk
+copro.uk
+couk.me
+ukco.me
+
 // Fermax : https://fermax.com/
 // submitted by Koen Van Isterdael <k.vanisterdael@fermax.be>
 mydobiss.com
+
+// FH Muenster : https://www.fh-muenster.de
+// Submitted by Robin Naundorf <r.naundorf@fh-muenster.de>
+fh-muenster.io
 
 // Filegear Inc. : https://www.filegear.com
 // Submitted by Jason Zhu <jason@owtware.com>
@@ -12177,9 +11814,22 @@ filegear-sg.me
 // Submitted by Chris Raynor <chris@firebase.com>
 firebaseapp.com
 
+// Firewebkit : https://www.firewebkit.com
+// Submitted by Majid Qureshi <mqureshi@amrayn.com>
+fireweb.app
+
+// FLAP : https://www.flap.cloud
+// Submitted by Louis Chemineau <louis@chmn.me>
+flap.id
+
+// fly.io: https://fly.io
+// Submitted by Kurt Mackey <kurt@fly.io>
+fly.dev
+edgeapp.net
+shw.io
+
 // Flynn : https://flynn.io
 // Submitted by Jonathan Rudenberg <jonathan@flynn.io>
-flynnhub.com
 flynnhosting.net
 
 // Frederik Braun https://frederik-braun.com
@@ -12198,6 +11848,14 @@ freeboxos.fr
 // freedesktop.org : https://www.freedesktop.org
 // Submitted by Daniel Stone <daniel@fooishbar.org>
 freedesktop.org
+
+// freemyip.com : https://freemyip.com
+// Submitted by Cadence <contact@freemyip.com>
+freemyip.com
+
+// FunkFeuer - Verein zur Förderung freier Netze : https://www.funkfeuer.at
+// Submitted by Daniel A. Maierhofer <vorstand@funkfeuer.at>
+wien.funkfeuer.at
 
 // Futureweb OG : http://www.futureweb.at
 // Submitted by Andreas Schnederle-Wagner <schnederle@futureweb.at>
@@ -12222,7 +11880,13 @@ usercontent.jp
 // Gentlent, Inc. : https://www.gentlent.com
 // Submitted by Tom Klein <tom@gentlent.com>
 gentapps.com
+gentlentapis.com
 lab.ms
+cdn-edges.net
+
+// Ghost Foundation : https://ghost.org
+// Submitted by Matt Hanley <security@ghost.org>
+ghost.io
 
 // GitHub, Inc.
 // Submitted by Patrick Toomey <security@github.com>
@@ -12232,6 +11896,11 @@ githubusercontent.com
 // GitLab, Inc.
 // Submitted by Alex Hanselka <alex@gitlab.com>
 gitlab.io
+
+// Gitplac.si - https://gitplac.si
+// Submitted by Aljaž Starc <me@aljaxus.eu>
+gitapp.si
+gitpage.si
 
 // Glitch, Inc : https://glitch.com
 // Submitted by Mads Hartmann <mads@glitch.com>
@@ -12246,6 +11915,10 @@ lolipop.io
 cloudapps.digital
 london.cloudapps.digital
 
+// GOV.UK Pay : https://www.payments.service.gov.uk/
+// Submitted by Richard Baker <richard.baker@digital.cabinet-office.gov.uk>
+pymnt.uk
+
 // UKHomeOffice : https://www.gov.uk/government/organisations/home-office
 // Submitted by Jon Shanks <jon.shanks@digital.homeoffice.gov.uk>
 homeoffice.gov.uk
@@ -12253,7 +11926,6 @@ homeoffice.gov.uk
 // GlobeHosting, Inc.
 // Submitted by Zoltan Egresi <egresi@globehosting.com>
 ro.im
-shop.ro
 
 // GoIP DNS Services : http://www.goip.de
 // Submitted by Christian Poulter <milchstrasse@goip.de>
@@ -12267,6 +11939,18 @@ web.app
 *.0emm.com
 appspot.com
 *.r.appspot.com
+codespot.com
+googleapis.com
+googlecode.com
+pagespeedmobilizer.com
+publishproxy.com
+withgoogle.com
+withyoutube.com
+*.gateway.dev
+cloud.goog
+translate.goog
+cloudfunctions.net
+
 blogspot.ae
 blogspot.al
 blogspot.am
@@ -12341,19 +12025,19 @@ blogspot.td
 blogspot.tw
 blogspot.ug
 blogspot.vn
-cloudfunctions.net
-cloud.goog
-codespot.com
-googleapis.com
-googlecode.com
-pagespeedmobilizer.com
-publishproxy.com
-withgoogle.com
-withyoutube.com
+
+// Aaron Marais' Gitlab pages: https://lab.aaronleem.co.za
+// Submitted by Aaron Marais <its_me@aaronleem.co.za>
+graphox.us
 
 // Group 53, LLC : https://www.group53.com
 // Submitted by Tyler Todd <noc@nova53.net>
 awsmppl.com
+
+// GünstigBestellen : https://günstigbestellen.de
+// Submitted by Furkan Akkoc <info@hendelzon.de>
+günstigbestellen.de
+günstigliefern.de
 
 // Hakaran group: http://hakaran.cz
 // Submited by Arseniy Sokolov <security@hakaran.cz>
@@ -12393,24 +12077,28 @@ ravendb.me
 development.run
 ravendb.run
 
+// Hong Kong Productivity Council: https://www.hkpc.org/
+// Submitted by SECaaS Team <summchan@hkpc.org>
+secaas.hk
+
 // HOSTBIP REGISTRY : https://www.hostbip.com/
 // Submitted by Atanunu Igbunuroghene <publicsuffixlist@hostbip.com>
-bpl.biz
 orx.biz
-ng.city
 biz.gl
-ng.ink
 col.ng
 firm.ng
 gen.ng
 ltd.ng
 ngo.ng
-ng.school
+edu.scot
 sch.so
+org.yt
+
+// HostyHosting (hostyhosting.com)
+hostyhosting.io
 
 // Häkkinen.fi
 // Submitted by Eero Häkkinen <Eero+psl@Häkkinen.fi>
-xn--hkkinen-5wa.fi
 häkkinen.fi
 
 // Ici la Lune : http://www.icilalune.com/
@@ -12421,6 +12109,14 @@ moonscale.net
 // iki.fi
 // Submitted by Hannu Aronsson <haa@iki.fi>
 iki.fi
+
+// Incsub, LLC: https://incsub.com/
+// Submitted by Aaron Edwards <sysadmins@incsub.com>
+smushcdn.com
+wphostedmail.com
+wpmucdn.com
+tempurl.host
+wpmudev.host
 
 // Individual Network Berlin e.V. : https://www.in-berlin.de/
 // Submitted by Christian Seitz <chris@in-berlin.de>
@@ -12477,19 +12173,121 @@ to.leg.br
 // Submitted by Wolfgang Schwarz <admin@intermetrics.de>
 pixolino.com
 
+// Internet-Pro, LLP: https://netangels.ru/
+// Submited by Vasiliy Sheredeko <piphon@gmail.com>
+na4u.ru
+
+// iopsys software solutions AB : https://iopsys.eu/
+// Submitted by Roman Azarenko <roman.azarenko@iopsys.eu>
+iopsys.se
+
 // IPiFony Systems, Inc. : https://www.ipifony.com/
 // Submitted by Matthew Hardeman <mhardeman@ipifony.com>
 ipifony.net
 
 // IServ GmbH : https://iserv.eu
-// Submitted by Kim-Alexander Brodowski <kim.brodowski@iserv.eu>
+// Submitted by Kim-Alexander Brodowski <info@iserv.eu>
 mein-iserv.de
+schulserver.de
 test-iserv.de
 iserv.dev
 
 // I-O DATA DEVICE, INC. : http://www.iodata.com/
 // Submitted by Yuji Minagawa <domains-admin@iodata.jp>
 iobb.net
+
+// Jelastic, Inc. : https://jelastic.com/
+// Submited by Ihor Kolodyuk <ik@jelastic.com>
+mel.cloudlets.com.au
+cloud.interhostsolutions.be
+users.scale.virtualcloud.com.br
+mycloud.by
+alp1.ae.flow.ch
+appengine.flow.ch
+es-1.axarnet.cloud
+diadem.cloud
+vip.jelastic.cloud
+jele.cloud
+it1.eur.aruba.jenv-aruba.cloud
+it1.jenv-aruba.cloud
+it1-eur.jenv-arubabiz.cloud
+oxa.cloud
+tn.oxa.cloud
+uk.oxa.cloud
+primetel.cloud
+uk.primetel.cloud
+ca.reclaim.cloud
+uk.reclaim.cloud
+us.reclaim.cloud
+ch.trendhosting.cloud
+de.trendhosting.cloud
+jele.club
+clicketcloud.com
+ams.cloudswitches.com
+au.cloudswitches.com
+sg.cloudswitches.com
+dopaas.com
+elastyco.com
+nv.elastyco.com
+hidora.com
+paas.hosted-by-previder.com
+rag-cloud.hosteur.com
+rag-cloud-ch.hosteur.com
+jcloud.ik-server.com
+jcloud-ver-jpc.ik-server.com
+demo.jelastic.com
+kilatiron.com
+paas.massivegrid.com
+jed.wafaicloud.com
+lon.wafaicloud.com
+ryd.wafaicloud.com
+j.scaleforce.com.cy
+jelastic.dogado.eu
+paas.leviracloud.eu
+fi.cloudplatform.fi
+demo.datacenter.fi
+paas.datacenter.fi
+jele.host
+mircloud.host
+jele.io
+ocs.opusinteractive.io
+cloud.unispace.io
+cloud-de.unispace.io
+cloud-fr1.unispace.io
+jc.neen.it
+cloud.jelastic.open.tim.it
+jcloud.kz
+upaas.kazteleport.kz
+jl.serv.net.mx
+cloudjiffy.net
+fra1-de.cloudjiffy.net
+west1-us.cloudjiffy.net
+ams1.jls.docktera.net
+jls-sto1.elastx.net
+jls-sto2.elastx.net
+jls-sto3.elastx.net
+fr-1.paas.massivegrid.net
+lon-1.paas.massivegrid.net
+lon-2.paas.massivegrid.net
+ny-1.paas.massivegrid.net
+ny-2.paas.massivegrid.net
+sg-1.paas.massivegrid.net
+jelastic.saveincloud.net
+nordeste-idc.saveincloud.net
+j.scaleforce.net
+jelastic.tsukaeru.net
+atl.jelastic.vps-host.net
+njs.jelastic.vps-host.net
+unicloud.pl
+mircloud.ru
+jelastic.regruhosting.ru
+enscaled.sg
+jele.site
+jelastic.team
+orangecloud.tn
+j.layershift.co.uk
+phx.enscaled.us
+mircloud.us
 
 // Jino : https://www.jino.ru
 // Submitted by Sergey Ulyashin <ulyashin@jino.ru>
@@ -12534,6 +12332,11 @@ oya.to
 co.krd
 edu.krd
 
+// Krellian Ltd. : https://krellian.com
+// Submitted by Ben Francis <ben@krellian.com>
+krellian.net
+webthings.io
+
 // LCube - Professional hosting e.K. : https://www.lcube-webhosting.de
 // Submitted by Lars Laehn <info@lcube.de>
 git-repos.de
@@ -12564,10 +12367,6 @@ co.technology
 // Submitted by Greg Holland <greg.holland@lmpm.com>
 app.lmpm.com
 
-// Linki Tools UG : https://linki.tools
-// Submitted by Paulo Matos <pmatos@linki.tools>
-linkitools.space
-
 // linkyard ldt: https://www.linkyard.ch/
 // Submitted by Mario Siegenthaler <mario.siegenthaler@linkyard.ch>
 linkyard.cloud
@@ -12576,11 +12375,16 @@ linkyard-cloud.ch
 // Linode : https://linode.com
 // Submitted by <security@linode.com>
 members.linode.com
-nodebalancer.linode.com
+*.nodebalancer.linode.com
+*.linodeobjects.com
 
 // LiquidNet Ltd : http://www.liquidnetlimited.com/
 // Submitted by Victor Velchev <admin@liquidnetlimited.com>
 we.bs
+
+// localzone.xyz
+// Submitted by Kenny Niehage <hello@yahe.sh>
+localzone.xyz
 
 // Log'in Line : https://www.loginline.com/
 // Submitted by Rémi Mach <remi.mach@loginline.com>
@@ -12589,6 +12393,10 @@ loginline.dev
 loginline.io
 loginline.services
 loginline.site
+
+// Lõhmus Family, The
+// Submitted by Heiki Lõhmus <hostmaster at lohmus dot me>
+lohmus.me
 
 // LubMAN UMCS Sp. z o.o : https://lubman.pl/
 // Submitted by Ireneusz Maliszewski <ireneusz.maliszewski@lubman.pl>
@@ -12601,7 +12409,6 @@ swidnik.pl
 
 // Lug.org.uk : https://lug.org.uk
 // Submitted by Jon Spriggs <admin@lug.org.uk>
-uklugs.org
 glug.org.uk
 lug.org.uk
 lugs.org.uk
@@ -12645,6 +12452,15 @@ mayfirst.org
 // Submitted by Ilya Zaretskiy <zaretskiy@corp.mail.ru>
 hb.cldmail.ru
 
+// mcpe.me : https://mcpe.me
+// Submitted by Noa Heyl <hi@noa.dev>
+mcpe.me
+
+// McHost : https://mchost.ru
+// Submitted by Evgeniy Subbotin <e.subbotin@mchost.ru>
+mcdir.ru
+vps.mcdir.ru
+
 // Memset hosting : https://www.memset.com
 // Submitted by Tom Whitwell <domains@memset.com>
 miniserver.com
@@ -12652,7 +12468,7 @@ memset.net
 
 // MetaCentrum, CESNET z.s.p.o. : https://www.metacentrum.cz/en/
 // Submitted by Zdeněk Šustr <zdenek.sustr@cesnet.cz>
-cloud.metacentrum.cz
+*.cloud.metacentrum.cz
 custom.metacentrum.cz
 
 // MetaCentrum, CESNET z.s.p.o. : https://www.metacentrum.cz/en/
@@ -12669,11 +12485,25 @@ eu.meteorapp.com
 co.pl
 
 // Microsoft Corporation : http://microsoft.com
-// Submitted by Justin Luk <juluk@microsoft.com>
-azurecontainer.io
+// Submitted by Mitch Webster <miwebst@microsoft.com>
+*.azurecontainer.io
 azurewebsites.net
 azure-mobile.net
 cloudapp.net
+azurestaticapps.net
+centralus.azurestaticapps.net
+eastasia.azurestaticapps.net
+eastus2.azurestaticapps.net
+westeurope.azurestaticapps.net
+westus2.azurestaticapps.net
+
+// minion.systems : http://minion.systems
+// Submitted by Robert Böttinger <r@minion.systems>
+csx.cc
+
+// MobileEducation, LLC : https://joinforte.com
+// Submitted by Grayson Martin <grayson.martin@mobileeducation.us>
+forte.id
 
 // Mozilla Corporation : https://mozilla.com
 // Submitted by Ben Francis <bfrancis@mozilla.com>
@@ -12689,24 +12519,43 @@ net.ru
 org.ru
 pp.ru
 
+// Mythic Beasts : https://www.mythic-beasts.com
+// Submitted by Paul Cammish <kelduum@mythic-beasts.com>
+hostedpi.com
+customer.mythic-beasts.com
+caracal.mythic-beasts.com
+fentiger.mythic-beasts.com
+lynx.mythic-beasts.com
+ocelot.mythic-beasts.com
+oncilla.mythic-beasts.com
+onza.mythic-beasts.com
+sphinx.mythic-beasts.com
+vs.mythic-beasts.com
+x.mythic-beasts.com
+yali.mythic-beasts.com
+cust.retrosnub.co.uk
+
 // Nabu Casa : https://www.nabucasa.com
 // Submitted by Paulus Schoutsen <infra@nabucasa.com>
 ui.nabu.casa
 
 // Names.of.London : https://names.of.london/
-// Submitted by James Stevens <registry@names.of.london> or <james@jrcs.net>
+// Submitted by James Stevens <registry[at]names.of.london> or <publiclist[at]jrcs.net>
 pony.club
 of.fashion
-on.fashion
-of.football
 in.london
 of.london
+from.marketing
+with.marketing
 for.men
+repair.men
 and.mom
 for.mom
 for.one
+under.one
 for.sale
-of.work
+that.win
+from.work
 to.work
 
 // NCTU.ME : https://nctu.me/
@@ -12715,8 +12564,7 @@ nctu.me
 
 // Netlify : https://www.netlify.com
 // Submitted by Jessica Parsons <jessica@netlify.com>
-bitballoon.com
-netlify.com
+netlify.app
 
 // Neustar Inc.
 // Submitted by Trung Tran <Trung.Tran@neustar.biz>
@@ -12873,12 +12721,13 @@ pcloud.host
 nyc.mn
 
 // NymNom : https://nymnom.com/
-// Submitted by Dave McCormack <dave.mccormack@nymnom.com>
+// Submitted by NymNom <psl@nymnom.com>
 nom.ae
 nom.af
 nom.ai
 nom.al
 nym.by
+nom.bz
 nym.bz
 nom.cl
 nym.ec
@@ -12900,6 +12749,7 @@ nom.li
 nym.li
 nym.lt
 nym.lu
+nom.lv
 nym.me
 nom.mk
 nym.mn
@@ -12932,17 +12782,33 @@ static.observableusercontent.com
 // Submitted by Andrew Sampson <andrew@ulterius.io>
 cya.gg
 
+// OMG.LOL : <https://omg.lol>
+// Submitted by Adam Newbold <adam@omg.lol>
+omg.lol
+
 // Omnibond Systems, LLC. : https://www.omnibond.com
 // Submitted by Cole Estep <cole@omnibond.com>
 cloudycluster.net
+
+// OmniWe Limited: https://omniwe.com
+// Submitted by Vicary Archangel <vicary@omniwe.com>
+omniwe.site
 
 // One Fold Media : http://www.onefoldmedia.com/
 // Submitted by Eddie Jones <eddie@onefoldmedia.com>
 nid.io
 
+// Open Social : https://www.getopensocial.com/
+// Submitted by Alexander Varwijk <security@getopensocial.com>
+opensocial.site
+
 // OpenCraft GmbH : http://opencraft.com/
 // Submitted by Sven Marnach <sven@opencraft.com>
 opencraft.hosting
+
+// OpenResearch GmbH: https://openresearch.com/
+// Submitted by Philipp Schmid <ops@openresearch.com>
+orsites.com
 
 // Opera Software, A.S.A.
 // Submitted by Yngve Pettersen <yngve@opera.com>
@@ -12961,6 +12827,10 @@ outsystemscloud.com
 ownprovider.com
 own.pm
 
+// OwO : https://whats-th.is/
+// Submitted by Dean Sheather <dean@deansheather.com>
+*.owo.codes
+
 // OX : http://www.ox.rs
 // Submitted by Adam Grand <webmaster@mail.ox.rs>
 ox.rs
@@ -12976,6 +12846,17 @@ pgfog.com
 // Pagefront : https://www.pagefronthq.com/
 // Submitted by Jason Kriss <jason@pagefronthq.com>
 pagefrontapp.com
+
+// PageXL : https://pagexl.com
+// Submitted by Yann Guichard <yann@pagexl.com>
+pagexl.com
+
+// pcarrier.ca Software Inc: https://pcarrier.ca/
+// Submitted by Pierre Carrier <pc@rrier.ca>
+bar0.net
+bar1.net
+bar2.net
+rdv.to
 
 // .pl domains (grandfathered)
 art.pl
@@ -12998,14 +12879,35 @@ mypep.link
 // Submitted by Kenneth Van Alstyne <kvanalstyne@perspecta.com>
 perspecta.cloud
 
+// PE Ulyanov Kirill Sergeevich : https://airy.host
+// Submitted by Kirill Ulyanov <k.ulyanov@airy.host>
+lk3.ru
+ra-ru.ru
+zsew.ru
+
 // Planet-Work : https://www.planet-work.com/
 // Submitted by Frédéric VANNIÈRE <f.vanniere@planet-work.com>
 on-web.fr
 
 // Platform.sh : https://platform.sh
 // Submitted by Nikola Kotur <nikola@platform.sh>
-*.platform.sh
+bc.platform.sh
+ent.platform.sh
+eu.platform.sh
+us.platform.sh
 *.platformsh.site
+
+// Platter: https://platter.dev
+// Submitted by Patrick Flor <patrick@platter.dev>
+platter-app.com
+platter-app.dev
+platterp.us
+
+// Plesk : https://www.plesk.com/
+// Submitted by Anton Akhtyamov <program-managers@plesk.com>
+pdns.page
+plesk.page
+pleskns.com
 
 // Port53 : https://port53.io/
 // Submitted by Maximilian Schieder <maxi@zeug.co>
@@ -13043,6 +12945,10 @@ byen.site
 // pubtls.org: https://www.pubtls.org
 // Submitted by Kor Nielsen <kor@pubtls.org>
 pubtls.org
+
+// QOTO, Org.
+// Submitted by Jeffrey Phillips Freeman <jeffrey.freeman@qoto.org>
+qoto.io
 
 // Qualifio : https://qualifio.com/
 // Submitted by Xavier De Cock <xdecock@gmail.com>
@@ -13089,6 +12995,10 @@ vaporcloud.io
 rackmaze.com
 rackmaze.net
 
+// Rakuten Games, Inc : https://dev.viberplay.io
+// Submitted by Joshua Zhang <public-suffix@rgames.jp>
+g.vbrplsbx.io
+
 // Rancher Labs, Inc : https://rancher.com
 // Submitted by Vincent Fiduccia <domains@rancher.com>
 *.on-k3s.io
@@ -13125,7 +13035,6 @@ hzc.io
 // Revitalised Limited : http://www.revitalised.co.uk
 // Submitted by Jack Price <jack@revitalised.co.uk>
 wellbeingzone.eu
-ptplus.fit
 wellbeingzone.co.uk
 
 // Rochester Institute of Technology : http://www.rit.edu/
@@ -13166,6 +13075,10 @@ my-firewall.org
 myfirewall.org
 spdns.org
 
+// Seidat : https://www.seidat.com
+// Submitted by Artem Kondratev <accounts@seidat.com>
+seidat.net
+
 // Senseering GmbH : https://www.senseering.de
 // Submitted by Felix Mönckemeyer <f.moenckemeyer@senseering.de>
 senseering.net
@@ -13184,9 +13097,17 @@ shiftedit.io
 // Submitted by Alex Bowers <alex@shopblocks.com>
 myshopblocks.com
 
+// Shopify : https://www.shopify.com
+// Submitted by Alex Richter <alex.richter@shopify.com>
+myshopify.com
+
 // Shopit : https://www.shopitcommerce.com/
 // Submitted by Craig McMahon <craig@shopitcommerce.com>
 shopitsite.com
+
+// shopware AG : https://shopware.com
+// Submitted by Jens Küper <cloud@shopware.com>
+shopware.store
 
 // Siemens Mobility GmbH
 // Submitted by Oliver Graebner <security@mo-siemens.io>
@@ -13210,6 +13131,14 @@ bounty-full.com
 alpha.bounty-full.com
 beta.bounty-full.com
 
+// Small Technology Foundation : https://small-tech.org
+// Submitted by Aral Balkan <aral@small-tech.org>
+small-web.org
+
+// Snowplow Analytics : https://snowplowanalytics.com/
+// Submitted by Ian Streeter <ian@snowplowanalytics.com>
+try-snowplow.com
+
 // Stackhero : https://www.stackhero.io
 // Submitted by Adrien Gillon <adrien+public-suffix-list@stackhero.io>
 stackhero-network.com
@@ -13219,6 +13148,10 @@ stackhero-network.com
 static.land
 dev.static.land
 sites.static.land
+
+// Sony Interactive Entertainment LLC : https://sie.com/
+// Submitted by David Coles <david.coles@sony.com>
+playstation-cloud.com
 
 // SourceLair PC : https://www.sourcelair.com
 // Submitted by Antonis Kalipetis <akalipetis@sourcelair.com>
@@ -13253,11 +13186,6 @@ user.srcf.net
 // Sub 6 Limited: http://www.sub6.com
 // Submitted by Dan Miller <dm@sub6.com>
 temp-dns.com
-
-// Swisscom Application Cloud: https://developer.swisscom.com
-// Submitted by Matthias.Winzeler <matthias.winzeler@swisscom.com>
-applicationcloud.io
-scapp.io
 
 // Symfony, SAS : https://symfony.com/
 // Submitted by Fabien Potencier <fabien@symfony.com>
@@ -13318,11 +13246,14 @@ cust.dev.thingdust.io
 cust.disrec.thingdust.io
 cust.prod.thingdust.io
 cust.testing.thingdust.io
+*.firenet.ch
+*.svc.firenet.ch
 
 // Tlon.io : https://tlon.io
 // Submitted by Mark Staarink <mark@tlon.io>
 arvo.network
 azimuth.network
+tlon.network
 
 // TownNews.com : http://www.townnews.com
 // Submitted by Dustin Ward <dward@townnews.com>
@@ -13394,6 +13325,11 @@ inc.hk
 virtualuser.de
 virtual-user.de
 
+// urown.net : https://urown.net
+// Submitted by Hostmaster <hostmaster@urown.net>
+urown.cloud
+dnsupdate.info
+
 // .US
 // Submitted by Ed Moore <Ed.Moore@lib.de.us>
 lib.de.us
@@ -13401,6 +13337,12 @@ lib.de.us
 // VeryPositive SIA : http://very.lv
 // Submitted by Danko Aleksejevs <danko@very.lv>
 2038.io
+
+// Vercel, Inc : https://vercel.com/
+// Submitted by Connor Davis <security@vercel.com>
+vercel.app
+vercel.dev
+now.sh
 
 // Viprinet Europe GmbH : http://www.viprinet.com
 // Submitted by Simon Kissel <hostmaster@viprinet.com>
@@ -13414,6 +13356,49 @@ v-info.info
 // Submitted by Nathan van Bakel <info@voorloper.com>
 voorloper.cloud
 
+// Voxel.sh DNS : https://voxel.sh/dns/
+// Submitted by Mia Rehlinger <dns@voxel.sh>
+neko.am
+nyaa.am
+be.ax
+cat.ax
+es.ax
+eu.ax
+gg.ax
+mc.ax
+us.ax
+xy.ax
+nl.ci
+xx.gl
+app.gp
+blog.gt
+de.gt
+to.gt
+be.gy
+cc.hn
+blog.kg
+io.kg
+jp.kg
+tv.kg
+uk.kg
+us.kg
+de.ls
+at.md
+de.md
+jp.md
+to.md
+uwu.nu
+indie.porn
+vxl.sh
+ch.tc
+me.tc
+we.tc
+nyan.to
+at.vg
+blog.vu
+dev.vu
+me.vu
+
 // V.UA Domain Administrator : https://domain.v.ua/
 // Submitted by Serhii Rostilo <sergey@rostilo.kiev.ua>
 v.ua
@@ -13421,6 +13406,15 @@ v.ua
 // Waffle Computer Inc., Ltd. : https://docs.waffleinfo.com
 // Submitted by Masayuki Note <masa@blade.wafflecell.com>
 wafflecell.com
+
+// WapBlog.ID : https://www.wapblog.id
+// Submitted by Fajar Sodik <official@wapblog.id>
+idnblogger.com
+indowapblog.com
+bloger.id
+wblog.id
+wbq.me
+fastblog.net
 
 // WebHare bv: https://www.webhare.com/
 // Submitted by Arnold Hendriks <info@webhare.com>
@@ -13436,17 +13430,33 @@ wedeploy.sh
 // Submitted by Jung Jin <jungseok.jin@wdc.com>
 remotewd.com
 
+// WIARD Enterprises : https://wiardweb.com
+// Submitted by Kidd Hustle <kiddhustle@wiardweb.com>
+pages.wiardweb.com
+
 // Wikimedia Labs : https://wikitech.wikimedia.org
-// Submitted by Yuvi Panda <yuvipanda@wikimedia.org>
+// Submitted by Arturo Borrero Gonzalez <aborrero@wikimedia.org>
 wmflabs.org
+toolforge.org
+wmcloud.org
+
+// WISP : https://wisp.gg
+// Submitted by Stepan Fedotov <stepan@wisp.gg>
+panel.gg
+daemon.panel.gg
 
 // WoltLab GmbH : https://www.woltlab.com
 // Submitted by Tim Düsterhus <security@woltlab.cloud>
+woltlab-demo.com
 myforum.community
 community-pro.de
 diskussionsbereich.de
 community-pro.net
 meinforum.net
+
+// www.com.vc : http://www.com.vc
+// Submitted by Li Hui <lihui@sinopub.com>
+cn.vu
 
 // XenonCloud GbR: https://xenoncloud.net
 // Submitted by Julian Uphoff <publicsuffixlist@xenoncloud.net>
@@ -13498,10 +13508,6 @@ noho.st
 za.net
 za.org
 
-// Zeit, Inc. : https://zeit.domains/
-// Submitted by Olli Vanhoja <olli@zeit.co>
-now.sh
-
 // Zine EOOD : https://zine.bg/
 // Submitted by Martin Angelov <martin@zine.bg>
 bss.design
@@ -13510,7 +13516,41 @@ bss.design
 // Submitted by Emil Stahl <esp@zitcom.dk>
 basicserver.io
 virtualserver.io
-site.builder.nu
 enterprisecloud.nu
 
+// Mintere : https://mintere.com/
+// Submitted by Ben Aubin <security@mintere.com>
+mintere.site
+
+// Cityhost LLC  : https://cityhost.ua
+// Submitted by Maksym Rivtin <support@cityhost.net.ua>
+cx.ua
+
+// WP Engine : https://wpengine.com/
+// Submitted by Michael Smith <michael.smith@wpengine.com>
+// Submitted by Brandon DuRette <brandon.durette@wpengine.com>
+wpenginepowered.com
+js.wpenginepowered.com
+
+// Impertrix Solutions : <https://impertrixcdn.com>
+// Submitted by Zhixiang Zhao <csuite@impertrix.com>
+impertrixcdn.com
+impertrix.com
+
+// GignoSystemJapan: http://gsj.bz
+// Submitted by GignoSystemJapan <kakutou-ec@gsj.bz>
+gsj.bz
+
+// Rusnames Limited: http://rusnames.ru/
+// Submitted by Sergey Zotov <admin@rusnames.ru>
+биз.рус
+ком.рус
+крым.рус
+мир.рус
+мск.рус
+орг.рус
+самара.рус
+сочи.рус
+спб.рус
+я.рус
 // ===END PRIVATE DOMAINS===
