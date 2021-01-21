@@ -130,9 +130,14 @@ rspamd_null_safe_copy (const gchar *src, gsize srclen,
 gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
 
 /*
- * Try to convert string of length to unsigned long
+ * Try to convert a string of length to unsigned long
  */
 gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
+
+/*
+ * Try to convert a hex string of length to unsigned long
+ */
+gboolean rspamd_xstrtoul (const gchar *s, gsize len, gulong *value);
 
 /**
  * Utility function to provide mem_pool copy for rspamd_hash_table_copy function

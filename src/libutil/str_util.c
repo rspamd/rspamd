@@ -519,6 +519,53 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 	return TRUE;
 }
 
+gboolean
+rspamd_xstrtoul (const gchar *s, gsize len, gulong *value)
+{
+	const gchar *p = s, *end = s + len;
+	gchar c;
+	gulong v = 0;
+	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
+
+	/* Some preparations for range errors */
+	while (p < end) {
+		c = g_ascii_tolower (*p);
+		if (c >= '0' && c <= '9') {
+			c -= '0';
+			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
+				/* Range error */
+				*value = G_MAXULONG;
+				return FALSE;
+			}
+			else {
+				v *= 16;
+				v += c;
+			}
+		}
+		else if (c >= 'a' || c <= 'f') {
+			c = c - 'a' + 10;
+			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
+				/* Range error */
+				*value = G_MAXULONG;
+				return FALSE;
+			}
+			else {
+				v *= 16;
+				v += c;
+			}
+		}
+		else {
+			*value = v;
+
+			return FALSE;
+		}
+		p++;
+	}
+
+	*value = v;
+	return TRUE;
+}
+
 /**
  * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
  * @param data string to copy
