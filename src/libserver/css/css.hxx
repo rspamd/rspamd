@@ -18,8 +18,20 @@
 
 #include <string>
 #include <memory>
+#include "logger.h"
 
 namespace rspamd::css {
+
+extern unsigned int rspamd_css_log_id;
+
+#define msg_debug_css(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_css_log_id, "css", pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_err_css(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "css", pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 class css_style_sheet {
 public:

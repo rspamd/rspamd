@@ -29,6 +29,8 @@ rspamd_css_parse_style (const guchar *begin, gsize len, GError **err)
 
 namespace rspamd::css {
 
+INIT_LOG_MODULE_PUBLIC(css);
+
 class css_style_sheet::impl {
 
 };

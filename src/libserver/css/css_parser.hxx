@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef RSPAMD_CSS_H
-#define RSPAMD_CSS_H
+#ifndef RSPAMD_CSS_PARSER_HXX
+#define RSPAMD_CSS_PARSER_HXX
 
-#include "config.h"
-#include "mem_pool.h"
+#include "css.hxx"
+#include "parse_error.hxx"
+#include "contrib/expected/expected.hpp"
+#include "logger.h"
 
-#ifdef  __cplusplus
-extern "C" {
-#endif
-typedef void * rspamd_css;
+namespace rspamd::css {
 
-rspamd_css rspamd_css_parse_style (rspamd_mempool_t *pool,
-								   const guchar *begin,
-								   gsize len, GError **err);
-#ifdef  __cplusplus
+INIT_LOG_MODULE(chartable)
+
+auto parse_css (rspamd_mempool_t *pool, const std::string_view &st) ->
+		tl::expected<std::unique_ptr<css_style_sheet>,css_parse_error>;
+
 }
-#endif
 
-#endif //RSPAMD_CSS_H
+#endif //RSPAMD_CSS_PARSER_HXX

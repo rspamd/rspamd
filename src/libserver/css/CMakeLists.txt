@@ -14,6 +14,7 @@ SET(LIBCSSSRC    "${CMAKE_CURRENT_SOURCE_DIR}/css.cxx"
                  "${CMAKE_CURRENT_SOURCE_DIR}/css_property.cxx"
                  "${CMAKE_CURRENT_SOURCE_DIR}/css_value.cxx"
                  "${CMAKE_CURRENT_SOURCE_DIR}/css_selector.cxx"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/css_parser.cxx"
                  "${RAGEL_ragel_css_selector_parser_OUTPUTS}"
                  "${RAGEL_ragel_css_rule_parser_OUTPUTS}"
                  PARENT_SCOPE)
