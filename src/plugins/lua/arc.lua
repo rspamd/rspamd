@@ -53,22 +53,6 @@ local arc_symbols = {
   reject = 'ARC_REJECT',
 }
 
-local symbols = {
-  spf_allow_symbol = 'R_SPF_ALLOW',
-  spf_deny_symbol = 'R_SPF_FAIL',
-  spf_softfail_symbol = 'R_SPF_SOFTFAIL',
-  spf_neutral_symbol = 'R_SPF_NEUTRAL',
-  spf_tempfail_symbol = 'R_SPF_DNSFAIL',
-  spf_permfail_symbol = 'R_SPF_PERMFAIL',
-  spf_na_symbol = 'R_SPF_NA',
-
-  dkim_allow_symbol = 'R_DKIM_ALLOW',
-  dkim_deny_symbol = 'R_DKIM_REJECT',
-  dkim_tempfail_symbol = 'R_DKIM_TEMPFAIL',
-  dkim_na_symbol = 'R_DKIM_NA',
-  dkim_permfail_symbol = 'R_DKIM_PERMFAIL',
-}
-
 local settings = {
   allow_envfrom_empty = true,
   allow_hdrfrom_mismatch = false,
