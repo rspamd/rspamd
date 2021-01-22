@@ -1381,7 +1381,7 @@ if dkim_opts then
 end
 
 local id = rspamd_config:register_symbol({
-  name = 'DMARC_CALLBACK',
+  name = 'DMARC_CALLBACK', -- why is it called 'CALLBACK' not 'CHECK' :(
   type = 'callback',
   group = 'policies',
   groups = {'dmarc'},

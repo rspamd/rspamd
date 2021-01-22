@@ -446,8 +446,8 @@ if settings.whitelisted_signers_map then
   end
 end
 
-rspamd_config:register_dependency('ARC_CALLBACK', symbols['spf_allow_symbol'])
-rspamd_config:register_dependency('ARC_CALLBACK', symbols['dkim_allow_symbol'])
+rspamd_config:register_dependency('ARC_CALLBACK', 'SPF_CHECK')
+rspamd_config:register_dependency('ARC_CALLBACK', 'DKIM_CHECK')
 
 local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
@@ -758,3 +758,6 @@ rspamd_config:register_symbol(sym_reg_tbl)
 
 -- Do not sign unless checked
 rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CALLBACK')
+-- We need to check dmarc before signing as we have to produce valid AAR header
+-- see #3613
+rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CALLBACK')
