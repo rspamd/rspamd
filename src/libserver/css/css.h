@@ -28,6 +28,14 @@ typedef void * rspamd_css;
 rspamd_css rspamd_css_parse_style (rspamd_mempool_t *pool,
 								   const guchar *begin,
 								   gsize len, GError **err);
+
+/*
+ * Unescape css
+ */
+const gchar *rspamd_css_unescape (rspamd_mempool_t *pool,
+							const guchar *begin,
+							gsize len,
+							gsize *outlen);
 #ifdef  __cplusplus
 }
 #endif

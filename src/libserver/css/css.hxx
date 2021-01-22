@@ -19,6 +19,7 @@
 #include <string>
 #include <memory>
 #include "logger.h"
+#include "css.h"
 
 namespace rspamd::css {
 

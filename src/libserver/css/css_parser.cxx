@@ -36,6 +36,9 @@ public:
 		return tl::make_unexpected (error);
 	}
 
+	/* Public for unit tests */
+	std::string_view unescape_css(const std::string_view &sv);
+
 private:
 	enum class parser_state {
 		initial_state,
@@ -51,8 +54,6 @@ private:
 
 	/* Helper parser methods */
 	bool need_unescape(const std::string_view &sv);
-
-	std::string_view unescape_css(const std::string_view &sv);
 };
 
 /*
@@ -235,4 +236,21 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
 	return parser.get_object_maybe();
 }
 
+}
+
+/* C API */
+const gchar *rspamd_css_unescape (rspamd_mempool_t *pool,
+							const guchar *begin,
+							gsize len,
+							gsize *outlen)
+{
+	rspamd::css::css_parser parser(pool);
+	auto sv = parser.unescape_css({(const char*)begin, len});
+	const auto *v = sv.begin();
+
+	if (outlen) {
+		*outlen = sv.size();
+	}
+
+	return v;
 }
