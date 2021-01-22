@@ -155,23 +155,23 @@ css_parser::unescape_css(const std::string_view &sv)
 					const auto *escape_start = &sv[escape_offset + 1];
 					unsigned long val;
 
-					if (!rspamd_xstrtoul (escape_start, i - escape_offset - 1, &val)) {
+					if (!rspamd_xstrtoul(escape_start, i - escape_offset - 1, &val)) {
 						msg_debug_css("invalid broken escape found at pos %d",
 								escape_offset);
 					}
 					else {
-						if (val < 0x1f) {
+						if (val < 0x80) {
 							/* Trivial case: ascii character */
 							*d++ = (unsigned char)val;
 							nleft --;
 						}
 						else {
 							UChar32 uc = val;
-							auto off = d - nspace;
+							auto off = 0;
 							UTF8_APPEND_CHAR_SAFE((uint8_t *) d, off,
 									sv.length (), uc);
-							d = nspace + off;
-							nleft = sv.length () - off;
+							d += off;
+							nleft -= off;
 						}
 					}
 				}
@@ -181,7 +181,7 @@ css_parser::unescape_css(const std::string_view &sv)
 							escape_offset);
 				}
 
-				if (nleft > 0) {
+				if (nleft <= 0) {
 					msg_err_css("cannot unescape css: truncated buffer of size %d",
 							(int)sv.length());
 				}
