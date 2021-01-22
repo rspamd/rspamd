@@ -7,13 +7,14 @@ It provides basic functions for setting metric actions, scores,
 viewing statistic and learning.
 
 <img src="https://rspamd.com/img/webui.png" class="img-responsive" alt="Webui screenshot">
+<img src="https://rspamd.com/img/webui_throughput.png" class="img-responsive" alt="Webui screenshot">
 
 ## Rspamd setup
 
 It is required to configure dynamic settings to store configured values.
 Basically this can be done by providing the following line in options settings:
 
-~~~nginx
+~~~ucl
 options {
  dynamic_conf = "/var/lib/rspamd/rspamd_dynamic";
 }
@@ -23,15 +24,15 @@ Please note that this path must have write access for rspamd user.
 
 Then controller worker should be configured:
 
-~~~nginx
+~~~ucl
 worker {
         type = "controller";
         bind_socket = "localhost:11334";
         count = 1;
-        # Password for normal commands
-        password = "q1";
-        # Password for privilleged commands
-        enable_password = "q2";
+        # Password for normal commands (use rspamadm pw)
+        password = "$2$anydoddx67ggcs74owybhcwqsq3z67q4$udympbo8pfcfqkeiiuj7gegabk5jpt8edmhseujhar9ooyuzig5b";
+        # Password for privilleged commands (use rspamadm pw)
+        enable_password = "$2$nx6sqkxtewx9c5s3hxjmabaxdcr46pk9$45qajkbyqx77abapiqugpjpsojj38zcqn7xnp3ekqyu674koux4b";
         # Path to webiu static files
         static_dir = "${WWWDIR}";
 }
