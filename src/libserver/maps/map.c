@@ -1058,8 +1058,15 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 		}
 		else if (timeout <= 0) {
 			/* Data is already expired, need to check */
-			jittered_sec = 0.0;
-			reason = "expired non-trivial data";
+			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
+				/* In case of error we still need to increase delay */
+				jittered_sec = map->poll_timeout * error_mult;
+				reason = "expired non-trivial data (after error)";
+			}
+			else {
+				jittered_sec = 0.0;
+				reason = "expired non-trivial data";
+			}
 		}
 		else {
 			/* No need to check now, wait till next_check */
