@@ -1,4 +1,4 @@
--- Copyright 2015-2019 Mitchell mitchell.att.foicica.com. See LICENSE.
+-- Copyright 2015-2020 Mitchell. See LICENSE.
 -- Sponsored by the Library of the University of Antwerp.
 -- Contributions from Ana Balan.
 -- Lupa templating engine.
@@ -457,15 +457,18 @@ local function evaluate(ast, env)
       if eval(block.expression, env) then
         chunks[#chunks + 1] = evaluate(block, env)
       else
+        local evaluate_else = true
         local elseifs = block['elseif']
         if elseifs then
           for j = 1, #elseifs do
             if eval(elseifs[j].expression, env) then
               chunks[#chunks + 1] = evaluate(elseifs[j], env)
+              evaluate_else = false
               break
             end
           end
-        elseif block['else'] then
+        end
+        if evaluate_else and block['else'] then
           chunks[#chunks + 1] = evaluate(block['else'], env)
         end
       end
