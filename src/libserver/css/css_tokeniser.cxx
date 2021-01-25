@@ -19,8 +19,46 @@
 
 namespace rspamd::css {
 
+/* Helpers to create tokens */
 
-auto css_tokeniser::next_token (void) -> std::pair<css_parser_token, std::string_view>
+/*
+ * This helper is intended to create tokens either with a tag and value
+ * or with just a tag.
+ */
+template<css_parser_token::token_type T, typename ...Args>
+auto make_token(const Args&... args) -> css_parser_token;
+
+template<>
+auto make_token<css_parser_token::token_type::string_token, std::string_view>(const std::string_view &s)
+        -> css_parser_token
+{
+	return css_parser_token{css_parser_token::token_type::string_token, s};
+}
+
+template<>
+auto make_token<css_parser_token::token_type::whitespace_token, std::string_view>(const std::string_view &s)
+        -> css_parser_token
+{
+	return css_parser_token{css_parser_token::token_type::whitespace_token, s};
+}
+
+template<>
+auto make_token<css_parser_token::token_type::delim_token, char>(const char &c)
+        -> css_parser_token
+{
+	return css_parser_token{css_parser_token::token_type::delim_token, c};
+}
+
+/*
+ * Generic tokens with no value (non-terminals)
+ */
+template<css_parser_token::token_type T>
+auto make_token(void) -> css_parser_token
+{
+	return css_parser_token{T, css_parser_token_placeholder()};
+}
+
+auto css_tokeniser::next_token(void) -> struct css_parser_token
 {
 	/* Helpers */
 
@@ -29,7 +67,7 @@ auto css_tokeniser::next_token (void) -> std::pair<css_parser_token, std::string
 	 * offset is set to the next character after a comment (or eof)
 	 * Nothing is returned
 	 */
-	auto consume_comment = [this] () {
+	auto consume_comment = [this]() {
 		auto i = offset;
 		auto nested = 0;
 
@@ -64,7 +102,7 @@ auto css_tokeniser::next_token (void) -> std::pair<css_parser_token, std::string
 	 * is set one character after the string. Css unescaping is done automatically
 	 * Accepts a quote char to find end of string
 	 */
-	auto consume_string = [this] (auto quote_char) -> auto {
+	auto consume_string = [this](auto quote_char) -> auto {
 		auto i = offset;
 		bool need_unescape = false;
 
@@ -122,8 +160,7 @@ auto css_tokeniser::next_token (void) -> std::pair<css_parser_token, std::string
 			}
 			else {
 				offset = i + 1;
-				return std::make_pair (css_parser_token::delim_token,
-						std::string_view (&input[offset - 1], 1));
+				return make_token<css_parser_token::token_type::delim_token>(c);
 			}
 			break;
 		case ' ':
@@ -136,48 +173,41 @@ auto css_tokeniser::next_token (void) -> std::pair<css_parser_token, std::string
 				c = input[++i];
 			} while (i < input.size () && g_ascii_isspace (c));
 
-			auto ret = std::make_pair (css_parser_token::whitespace_token,
-					std::string_view (&input[offset], i - offset));
+			auto ret = make_token<css_parser_token::token_type::whitespace_token>(
+					std::string_view(&input[offset], i - offset));
 			offset = i;
 			return ret;
 		}
 		case '"':
 		case '\'':
 			offset = i + 1;
-			return std::make_pair (css_parser_token::string_token,
-					consume_string (c));
+			return make_token<css_parser_token::token_type::string_token>(consume_string(c));
 		case '(':
 			offset = i + 1;
-			return std::make_pair (css_parser_token::obrace_token,
-					std::string_view (&input[offset - 1], 1));
+			return make_token<css_parser_token::token_type::obrace_token>();
 		case ')':
 			offset = i + 1;
-			return std::make_pair (css_parser_token::ebrace_token,
-					std::string_view (&input[offset - 1], 1));
+			return make_token<css_parser_token::token_type::ebrace_token>();
 		case ',':
-			offset = i + 1;
-			return std::make_pair (css_parser_token::comma_token,
-					std::string_view (&input[offset - 1], 1));
+			return make_token<css_parser_token::token_type::comma_token>();
 		case '<':
 			/* Maybe an xml like comment */
 			if (i + 3 < input.size () && input[i + 1] == '!'
 				&& input[i + 2] == '-' && input[i + 3] == '-') {
 				offset += 3;
 
-				return std::make_pair (css_parser_token::cdo_token,
-						std::string_view (&input[offset - 3], 3));
+				return make_token<css_parser_token::token_type::cdo_token>();
 			}
 			else {
 				offset = i + 1;
-				return std::make_pair (css_parser_token::delim_token,
-						std::string_view (&input[offset - 1], 1));
+				return make_token<css_parser_token::token_type::delim_token>(c);
 			}
 			break;
 		}
 
 	}
 
-	return std::make_pair (css_parser_token::eof_token, std::string_view ());
+	return make_token<css_parser_token::token_type::eof_token>();
 }
 
 }

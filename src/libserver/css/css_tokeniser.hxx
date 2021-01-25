@@ -21,33 +21,58 @@
 
 #include <string_view>
 #include <utility>
+#include <variant>
 #include "mem_pool.h"
 
 namespace rspamd::css {
 
-enum class css_parser_token {
-	whitespace_token,
-	ident_token,
-	function_token,
-	at_keyword_token,
-	hash_token,
-	string_token,
-	number_token,
-	url_token,
-	dimension_token,
-	percentage_token,
-	cdo_token, /* xml open comment */
-	cdc_token, /* xml close comment */
-	delim_token,
-	obrace_token, /* ( */
-	ebrace_token, /* ) */
-	osqbrace_token, /* [ */
-	esqbrace_token, /* ] */
-	comma_token,
-	colon_token,
-	semicolon_token,
-	eof_token,
+struct css_parser_token_placeholder {}; /* For empty tokens */
+
+struct css_parser_token {
+	enum class token_type : std::uint8_t {
+		whitespace_token,
+		ident_token,
+		function_token,
+		at_keyword_token,
+		hash_token,
+		string_token,
+		number_token,
+		url_token,
+		dimension_token,
+		percentage_token,
+		cdo_token, /* xml open comment */
+		cdc_token, /* xml close comment */
+		delim_token,
+		obrace_token, /* ( */
+		ebrace_token, /* ) */
+		osqbrace_token, /* [ */
+		esqbrace_token, /* ] */
+		comma_token,
+		colon_token,
+		semicolon_token,
+		eof_token,
+	};
+
+	static const std::uint8_t default_flags = 0;
+	static const std::uint8_t flag_bad_string = (1u << 0u);
+	using value_type = std::variant<std::string_view, /* For strings and string like tokens */
+			char, /* For delimiters (might need to move to unicode point) */
+			double, /* For numeric stuff */
+			css_parser_token_placeholder /* For general no token stuff */
+	>;
+
+	/* Typed storage */
+	value_type value;
+	token_type type;
+	std::uint8_t flags = default_flags;
+
+	css_parser_token() = delete;
+	explicit css_parser_token(token_type type, const value_type &value) :
+			value(value), type(type) {}
 };
+
+/* Ensure that parser tokens are simple enough */
+static_assert(std::is_trivially_copyable_v<css_parser_token>);
 
 class css_tokeniser {
 public:
@@ -55,7 +80,8 @@ public:
 	css_tokeniser(rspamd_mempool_t *pool, const std::string_view &sv) :
 			input(sv), offset(0), pool(pool) {}
 
-	auto next_token(void) -> std::pair<css_parser_token, std::string_view>;
+	auto next_token(void) -> struct css_parser_token;
+	auto get_offset(void) const { return offset; }
 private:
 	std::string_view input;
 	std::size_t offset;

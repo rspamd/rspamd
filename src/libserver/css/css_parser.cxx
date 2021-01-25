@@ -94,16 +94,16 @@ bool css_parser::consume_input(const std::string_view &sv)
 	css_tokeniser css_tokeniser(pool, sv);
 
 	while (!eof) {
-		auto token_pair = css_tokeniser.next_token();
+		auto next_token = css_tokeniser.next_token();
 
 		/* Top level parser */
-		switch (token_pair.first) {
-		case css_parser_token::eof_token:
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
 			eof = true;
 			break;
-		case css_parser_token::whitespace_token:
-		case css_parser_token::cdc_token:
-		case css_parser_token::cdo_token:
+		case css_parser_token::token_type::whitespace_token:
+		case css_parser_token::token_type::cdc_token:
+		case css_parser_token::token_type::cdo_token:
 			/* Ignore tokens */
 			break;
 		}
