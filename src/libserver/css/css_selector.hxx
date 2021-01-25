@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#pragma once
 
 #ifndef RSPAMD_CSS_SELECTOR_HXX
 #define RSPAMD_CSS_SELECTOR_HXX

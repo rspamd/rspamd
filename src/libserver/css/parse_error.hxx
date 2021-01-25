@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#pragma once
 
 #ifndef RSPAMD_PARSE_ERROR_HXX
 #define RSPAMD_PARSE_ERROR_HXX

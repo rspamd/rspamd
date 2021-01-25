@@ -16,21 +16,22 @@
 
 #pragma once
 
-#ifndef RSPAMD_CSS_PARSER_HXX
-#define RSPAMD_CSS_PARSER_HXX
+#ifndef RSPAMD_CSS_UTIL_HXX
+#define RSPAMD_CSS_UTIL_HXX
 
-#include "css.hxx"
-#include "parse_error.hxx"
-#include "contrib/expected/expected.hpp"
-#include "logger.h"
+#include <string_view>
+#include "mem_pool.h"
 
 namespace rspamd::css {
 
-INIT_LOG_MODULE(chartable)
-
-auto parse_css (rspamd_mempool_t *pool, const std::string_view &st) ->
-		tl::expected<std::unique_ptr<css_style_sheet>,css_parse_error>;
+/*
+ * Unescape css escapes
+ * \20AC : must be followed by a space if the next character is one of a-f, A-F, 0-9
+ * \0020AC : must be 6 digits long, no space needed (but can be included)
+ */
+std::string_view unescape_css(rspamd_mempool_t *pool,
+							  const std::string_view &sv);
 
 }
 
-#endif //RSPAMD_CSS_PARSER_HXX
+#endif //RSPAMD_CSS_UTIL_HXX

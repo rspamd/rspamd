@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
+
 #ifndef RSPAMD_CSS_HXX
 #define RSPAMD_CSS_HXX
 

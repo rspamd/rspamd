@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #ifndef RSPAMD_CSS_STYLE_HXX
 #define RSPAMD_CSS_STYLE_HXX
 
