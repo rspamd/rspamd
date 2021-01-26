@@ -38,8 +38,6 @@ struct css_parser_token {
 		string_token,
 		number_token,
 		url_token,
-		dimension_token,
-		percentage_token,
 		cdo_token, /* xml open comment */
 		cdc_token, /* xml close comment */
 		delim_token,

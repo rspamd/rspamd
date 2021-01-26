@@ -546,11 +546,83 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 					/* Numeric token */
 					return consume_number();
 				}
+				else {
+					offset = i + 1;
+					return make_token<css_parser_token::token_type::delim_token>(c);
+				}
 			}
 			/* No other options, a delimiter - */
 			offset = i + 1;
 			return make_token<css_parser_token::token_type::delim_token>(c);
 
+			break;
+		case '\\':
+			if (i + 1 < input.size()) {
+				if (input[i + 1] == '\n' || input[i + 1] == '\r') {
+					offset = i + 1;
+					return make_token<css_parser_token::token_type::delim_token>(c);
+				}
+				else {
+					/* Valid escape, assume ident */
+					return consume_ident();
+				}
+			}
+			else {
+				offset = i + 1;
+				return make_token<css_parser_token::token_type::delim_token>(c);
+			}
+			break;
+		case '@':
+			if (i + 3 < input.size()) {
+				if (is_plain_ident(input[i + 1]) &&
+					is_plain_ident(input[i + 2]) && is_plain_ident(input[i + 3])) {
+					offset = i + 1;
+					auto ident_token = consume_ident();
+
+					if (ident_token.type == css_parser_token::token_type::ident_token) {
+						/* Update type */
+						ident_token.type = css_parser_token::token_type::at_keyword_token;
+					}
+
+					return ident_token;
+				}
+				else {
+					offset = i + 1;
+					return make_token<css_parser_token::token_type::delim_token>(c);
+				}
+			}
+			else {
+				offset = i + 1;
+				return make_token<css_parser_token::token_type::delim_token>(c);
+			}
+			break;
+		case '#':
+			/* TODO: make it more conformant */
+			if (i + 2 < input.size()) {
+				if (is_plain_ident(input[i + 1]) &&
+					is_plain_ident(input[i + 2])) {
+					offset = i + 1;
+					auto ident_token = consume_ident();
+
+					if (ident_token.type == css_parser_token::token_type::ident_token) {
+						/* Update type */
+						ident_token.type = css_parser_token::token_type::hash_token;
+					}
+
+					return ident_token;
+				}
+				else {
+					offset = i + 1;
+					return make_token<css_parser_token::token_type::delim_token>(c);
+				}
+			}
+			else {
+				offset = i + 1;
+				return make_token<css_parser_token::token_type::delim_token>(c);
+			}
+			break;
+		default:
+			/* Generic parsing code */
 			break;
 		}
 
