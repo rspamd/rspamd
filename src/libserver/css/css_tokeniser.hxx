@@ -47,14 +47,36 @@ struct css_parser_token {
 		ebrace_token, /* ) */
 		osqbrace_token, /* [ */
 		esqbrace_token, /* ] */
+		ocurlbrace_token, /* { */
+		ecurlbrace_token, /* } */
 		comma_token,
 		colon_token,
 		semicolon_token,
 		eof_token,
 	};
 
+	enum class dim_type : std::uint8_t {
+		dim_px,
+		dim_em,
+		dim_rem,
+		dim_ex,
+		dim_wv,
+		dim_wh,
+		dim_vmax,
+		dim_vmin,
+		dim_pt,
+		dim_cm,
+		dim_mm,
+		dim_in,
+		dim_pc,
+	};
+
 	static const std::uint8_t default_flags = 0;
 	static const std::uint8_t flag_bad_string = (1u << 0u);
+	static const std::uint8_t number_dimension = (1u << 1u);
+	static const std::uint8_t number_percent = (1u << 2u);
+	static const std::uint8_t flag_bad_dimension = (1u << 3u);
+
 	using value_type = std::variant<std::string_view, /* For strings and string like tokens */
 			char, /* For delimiters (might need to move to unicode point) */
 			double, /* For numeric stuff */
@@ -65,10 +87,12 @@ struct css_parser_token {
 	value_type value;
 	token_type type;
 	std::uint8_t flags = default_flags;
+	dim_type dim_type;
 
 	css_parser_token() = delete;
 	explicit css_parser_token(token_type type, const value_type &value) :
 			value(value), type(type) {}
+	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 };
 
 /* Ensure that parser tokens are simple enough */
@@ -86,6 +110,9 @@ private:
 	std::string_view input;
 	std::size_t offset;
 	rspamd_mempool_t *pool;
+
+	auto consume_number() -> struct css_parser_token;
+	auto consume_ident() -> struct css_parser_token;
 };
 
 }
