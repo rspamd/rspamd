@@ -46,6 +46,20 @@ auto make_token<css_parser_token::token_type::ident_token, std::string_view>(con
 }
 
 template<>
+auto make_token<css_parser_token::token_type::function_token, std::string_view>(const std::string_view &s)
+-> css_parser_token
+{
+	return css_parser_token{css_parser_token::token_type::function_token, s};
+}
+
+template<>
+auto make_token<css_parser_token::token_type::url_token, std::string_view>(const std::string_view &s)
+-> css_parser_token
+{
+	return css_parser_token{css_parser_token::token_type::url_token, s};
+}
+
+template<>
 auto make_token<css_parser_token::token_type::whitespace_token, std::string_view>(const std::string_view &s)
         -> css_parser_token
 {
@@ -204,6 +218,21 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 	auto i = offset;
 	auto need_escape = false;
 
+	auto maybe_escape_sv = [&](auto cur_pos, auto tok_type) -> auto {
+		if (need_escape) {
+			auto escaped = rspamd::css::unescape_css(pool, {&input[offset],
+												   cur_pos - offset});
+			offset = cur_pos;
+
+			return css_parser_token{tok_type, escaped};
+		}
+
+		auto result = std::string_view{&input[offset], cur_pos - offset};
+		offset = cur_pos;
+
+		return css_parser_token{tok_type, result};
+	};
+
 	/* Ident token can start from `-` or `--` */
 	if (input[i] == '-') {
 		i ++;
@@ -218,6 +247,7 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 
 		if (!is_plain_ident(c)) {
 			if (c == '\\' && i + 1 < input.size ()) {
+				/* Escape token */
 				need_escape = true;
 				auto nhex = 0;
 
@@ -243,6 +273,40 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 					}
 				} while (i < input.size ());
 			}
+			else if (c == '(') {
+				/* Function or url token */
+				auto j = i + 1;
+
+				while (j < input.size() && g_ascii_isspace(input[j])) {
+					j ++;
+				}
+
+				if (input[j] == '"' || input[j] == '\'') {
+					/* Function token */
+					return maybe_escape_sv(j + 1,
+							css_parser_token::token_type::function_token);
+				}
+				else {
+					/* Consume URL token */
+					while (j < input.size() && input[j] != ')') {
+						j ++;
+					}
+
+					if (input[j] == ')') {
+						/* Valid url token */
+						return maybe_escape_sv(j + 1,
+								css_parser_token::token_type::url_token);
+					}
+					else {
+						/* Incomplete url token */
+						auto ret = maybe_escape_sv(j,
+								css_parser_token::token_type::url_token);
+
+						ret.flags |= css_parser_token::flag_bad_string;
+						return ret;
+					}
+				}
+			}
 			else {
 				i --; /* Push token back */
 				break; /* Not an ident token */
@@ -252,17 +316,7 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 		i ++;
 	}
 
-	if (need_escape) {
-		auto escaped = rspamd::css::unescape_css(pool, {&input[offset], i - offset});
-		offset = i;
-
-		return make_token<css_parser_token::token_type::ident_token>(escaped);
-	}
-
-	auto result = std::string_view{&input[offset], i - offset};
-	offset = i;
-
-	return make_token<css_parser_token::token_type::ident_token>(result);
+	return maybe_escape_sv(i, css_parser_token::token_type::ident_token);
 }
 
 auto css_tokeniser::consume_number() -> struct css_parser_token
