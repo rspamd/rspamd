@@ -706,4 +706,107 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 	return make_token<css_parser_token::token_type::eof_token>();
 }
 
+constexpr auto css_parser_token::get_token_type() -> const char *
+{
+	const char *ret = "unknown";
+
+	switch(type) {
+	case token_type::whitespace_token:
+		ret = "whitespace";
+		break;
+	case token_type::ident_token:
+		ret = "ident";
+		break;
+	case token_type::function_token:
+		ret = "function";
+		break;
+	case token_type::at_keyword_token:
+		ret = "atkeyword";
+		break;
+	case token_type::hash_token:
+		ret = "hash";
+		break;
+	case token_type::string_token:
+		ret = "string";
+		break;
+	case token_type::number_token:
+		ret = "number";
+		break;
+	case token_type::url_token:
+		ret = "url";
+		break;
+	case token_type::cdo_token: /* xml open comment */
+		ret = "cdo";
+		break;
+	case token_type::cdc_token: /* xml close comment */
+		ret = "cdc";
+		break;
+	case token_type::delim_token:
+		ret = "delim";
+		break;
+	case token_type::obrace_token: /* ( */
+		ret = "obrace";
+		break;
+	case token_type::ebrace_token: /* ) */
+		ret = "ebrace";
+		break;
+	case token_type::osqbrace_token: /* [ */
+		ret = "osqbrace";
+		break;
+	case token_type::esqbrace_token: /* ] */
+		ret = "esqbrace";
+		break;
+	case token_type::ocurlbrace_token: /* { */
+		ret = "ocurlbrace";
+		break;
+	case token_type::ecurlbrace_token: /* } */
+		ret = "ecurlbrace";
+		break;
+	case token_type::comma_token:
+		ret = "comma";
+		break;
+	case token_type::colon_token:
+		ret = "colon";
+		break;
+	case token_type::semicolon_token:
+		ret = "semicolon";
+		break;
+	case token_type::eof_token:
+		ret = "eof";
+		break;
+	}
+
+	return ret;
+}
+
+
+auto css_parser_token::debug_token_str() -> std::string
+{
+	const auto *token_type_str = get_token_type();
+	std::string ret = token_type_str;
+
+	if (std::holds_alternative<std::string_view>(value)) {
+		ret += "; value=";
+		ret += std::get<std::string_view>(value);
+	}
+	else if (std::holds_alternative<double>(value)) {
+		ret += "; value=";
+		ret += std::to_string(std::get<double>(value));
+	}
+	else if (std::holds_alternative<char>(value)) {
+		ret += "; value=";
+		ret += std::get<char>(value);
+	}
+
+	if ((flags & (~number_dimension)) != default_flags) {
+		ret += "; flags=" + std::to_string(flags);
+	}
+
+	if (flags & number_dimension) {
+		ret += "; dim=" + std::to_string(static_cast<int>(dim_type));
+	}
+
+	return ret; /* Copy elision */
+}
+
 }

@@ -101,10 +101,9 @@ bool css_parser::consume_input(const std::string_view &sv)
 		case css_parser_token::token_type::eof_token:
 			eof = true;
 			break;
-		case css_parser_token::token_type::whitespace_token:
-		case css_parser_token::token_type::cdc_token:
-		case css_parser_token::token_type::cdo_token:
+		default:
 			/* Ignore tokens */
+			msg_debug_css("got token: %s", next_token.debug_token_str().c_str());
 			break;
 		}
 	}

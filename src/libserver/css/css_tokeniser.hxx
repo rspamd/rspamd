@@ -91,6 +91,11 @@ struct css_parser_token {
 	explicit css_parser_token(token_type type, const value_type &value) :
 			value(value), type(type) {}
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
+
+	/* Debugging routines */
+	constexpr auto get_token_type() -> const char *;
+	/* This function might be slow */
+	auto debug_token_str() -> std::string;
 };
 
 /* Ensure that parser tokens are simple enough */
