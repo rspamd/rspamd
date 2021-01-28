@@ -1737,7 +1737,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 				NULL,
 				ctype,
 				session,
-				0);
+				session->ctx->timeout / 10.0);
 	}
 }
 

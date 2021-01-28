@@ -125,7 +125,7 @@ rspamd_task_new (struct rspamd_worker *worker,
 static void
 rspamd_task_reply (struct rspamd_task *task)
 {
-	const ev_tstamp write_timeout = 2.0;
+	const ev_tstamp write_timeout = 5.0;
 
 	if (task->fin_callback) {
 		task->fin_callback (task, task->fin_arg);

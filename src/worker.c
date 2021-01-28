@@ -271,12 +271,13 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 			rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
 			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 			rspamd_http_connection_reset (task->http_conn);
+			/* Use a shorter timeout for writing reply */
 			rspamd_http_connection_write_message (task->http_conn,
 					msg,
 					NULL,
 					"application/json",
 					task,
-					1.0);
+					session->ctx->timeout / 10.0);
 		}
 	}
 	else {
