@@ -381,6 +381,8 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 			if (input[i] == '%') {
 				ret.flags |= css_parser_token::number_percent;
 				i ++;
+
+				offset = i;
 			}
 			else if (is_plain_ident(input[i])) {
 				auto dim_token = consume_ident();
@@ -392,7 +394,15 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 								(int)sv.size(), sv.begin(), num);
 					}
 				}
+				else {
+					/* We have no option but to uncosume ident token in this case */
+					msg_debug_css("got invalid ident like token after number, unconsume it");
+					offset = i;
+				}
 			}
+		}
+		else {
+			offset = i;
 		}
 
 		return ret;
@@ -677,6 +687,17 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			break;
 		default:
 			/* Generic parsing code */
+
+			if (g_ascii_isdigit(c)) {
+				return consume_number();
+			}
+			else if (is_plain_ident(c)) {
+				return consume_ident();
+			}
+			else {
+				offset = i + 1;
+				return make_token<css_parser_token::token_type::delim_token>(c);
+			}
 			break;
 		}
 
