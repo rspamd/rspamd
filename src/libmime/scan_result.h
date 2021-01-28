@@ -43,6 +43,7 @@ struct rspamd_symbol_result {
 	gssize opts_len;                               /**< total size of all options (negative if truncated option is added) */
 	guint nshots;
 	enum rspamd_symbol_result_flags flags;
+	struct rspamd_symbol_result *next;
 };
 
 

@@ -530,6 +530,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 				}
 			}
 
+			s =  NULL;
 			s = insert_metric_result (task,
 					symbol,
 					weight,
@@ -546,6 +547,10 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 					rspamd_symcache_inc_frequency (task->cfg->cache,
 							s->sym->cache_item);
 				}
+			}
+			else {
+				/* O(N) but we normally don't have any shadow results */
+				LL_APPEND (ret, s);
 			}
 		}
 	}
@@ -679,54 +684,66 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	gsize cpy_len;
 	khiter_t k;
 	gint r;
+	struct rspamd_symbol_result *cur;
 
 	if (s && val) {
-		if (s->opts_len < 0) {
-			/* Cannot add more options, give up */
-			msg_debug_task ("cannot add more options to symbol %s when adding option %s",
-					s->name, val);
-			return FALSE;
-		}
-
-		if (!s->options) {
-			s->options = kh_init (rspamd_options_hash);
-		}
-
-		if (vlen + s->opts_len > task->cfg->max_opts_len) {
-			/* Add truncated option */
-			msg_info_task ("cannot add more options to symbol %s when adding option %s",
-					s->name, val);
-			val = "...";
-			vlen = 3;
-			s->opts_len = -1;
-		}
-
-		if (!(s->sym && (s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
-				kh_size (s->options) < task->cfg->default_max_shots) {
-			opt_cpy = rspamd_task_option_safe_copy (task, val, vlen, &cpy_len);
-			/* Append new options */
-			srch.option = (gchar *)opt_cpy;
-			srch.optlen = cpy_len;
-			k = kh_get (rspamd_options_hash, s->options, &srch);
-
-			if (k == kh_end (s->options)) {
-				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
-				opt->optlen = cpy_len;
-				opt->option = opt_cpy;
-
-				kh_put (rspamd_options_hash, s->options, opt, &r);
-				DL_APPEND (s->opts_head, opt);
-
-				ret = TRUE;
+		/*
+		 * Here we assume that this function is all the time called with the
+		 * symbol from the default result, not some shadow result, or
+		 * the option insertion will be wrong
+		 */
+		LL_FOREACH (s, cur) {
+			if (cur->opts_len < 0) {
+				/* Cannot add more options, give up */
+				msg_debug_task ("cannot add more options to symbol %s when adding option %s",
+						cur->name, val);
+				continue;
 			}
-		}
-		else {
-			/* Skip addition */
-			ret = FALSE;
-		}
 
-		if (ret && s->opts_len >= 0) {
-			s->opts_len += vlen;
+			if (!cur->options) {
+				cur->options = kh_init (rspamd_options_hash);
+			}
+
+			if (vlen + cur->opts_len > task->cfg->max_opts_len) {
+				/* Add truncated option */
+				msg_info_task ("cannot add more options to symbol %s when adding option %s",
+						cur->name, val);
+				val = "...";
+				vlen = 3;
+				cur->opts_len = -1;
+			}
+
+			if (!(cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
+				kh_size (cur->options) < task->cfg->default_max_shots) {
+				opt_cpy = rspamd_task_option_safe_copy (task, val, vlen, &cpy_len);
+				/* Append new options */
+				srch.option = (gchar *) opt_cpy;
+				srch.optlen = cpy_len;
+				k = kh_get (rspamd_options_hash, cur->options, &srch);
+
+				if (k == kh_end (cur->options)) {
+					opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
+					opt->optlen = cpy_len;
+					opt->option = opt_cpy;
+
+					kh_put (rspamd_options_hash, cur->options, opt, &r);
+					DL_APPEND (cur->opts_head, opt);
+
+					if (s == cur) {
+						ret = TRUE;
+					}
+				}
+			}
+			else {
+				/* Skip addition */
+				if (s == cur) {
+					ret = FALSE;
+				}
+			}
+
+			if (ret && cur->opts_len >= 0) {
+				cur->opts_len += vlen;
+			}
 		}
 	}
 	else if (!val) {
