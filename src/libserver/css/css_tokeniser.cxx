@@ -217,6 +217,7 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 {
 	auto i = offset;
 	auto need_escape = false;
+	auto allow_middle_minus = false;
 
 	auto maybe_escape_sv = [&](auto cur_pos, auto tok_type) -> auto {
 		if (need_escape) {
@@ -239,6 +240,7 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 
 		if (i < input.size() && input[i] == '-') {
 			i ++;
+			allow_middle_minus = true;
 		}
 	}
 
@@ -307,10 +309,17 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 					}
 				}
 			}
+			else if (c == '-' && allow_middle_minus) {
+				i++;
+				continue;
+			}
 			else {
 				break; /* Not an ident token */
 			}
 		} /* !plain ident */
+		else {
+			allow_middle_minus = true;
+		}
 
 		i ++;
 	}
@@ -392,6 +401,8 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 						auto sv = std::get<std::string_view>(dim_token.value);
 						msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
 								(int)sv.size(), sv.begin(), num);
+						/* Unconsume ident */
+						offset = i;
 					}
 				}
 				else {
