@@ -17,14 +17,23 @@
 #include "css.h"
 #include "css.hxx"
 #include "css_style.hxx"
+#include "css_parser.hxx"
 
 rspamd_css
-rspamd_css_parse_style (const guchar *begin, gsize len, GError **err)
+rspamd_css_parse_style (rspamd_mempool_t *pool, const guchar *begin, gsize len,
+						GError **err)
 {
-	rspamd::css::css_style_sheet *style = nullptr;
+	auto parse_res = rspamd::css::parse_css(pool, {(const char* )begin, len});
 
-
-	return reinterpret_cast<rspamd_css>(style);
+	if (parse_res.has_value()) {
+		return reinterpret_cast<rspamd_css>(parse_res.value().release());
+	}
+	else {
+		g_set_error(err, g_quark_from_static_string("css"),
+				static_cast<int>(parse_res.error().type),
+				"parse error");
+		return nullptr;
+	}
 }
 
 namespace rspamd::css {
