@@ -89,9 +89,18 @@ auto make_token(void) -> css_parser_token
 	return css_parser_token{T, css_parser_token_placeholder()};
 }
 
+static constexpr inline auto is_plain_ident_start(char c) -> bool
+{
+	if ((c & 0x80) || g_ascii_isalpha(c) || c == '_') {
+		return true;
+	}
+
+	return false;
+};
+
 static constexpr inline auto is_plain_ident(char c) -> bool
 {
-	if ((c & 0x80) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+	if (is_plain_ident_start(c) || c == '-' || g_ascii_isdigit(c)) {
 		return true;
 	}
 
@@ -200,6 +209,7 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	}
 	else {
 		flags |= css_parser_token::flag_bad_dimension;
+		msg_err("hui: %*s", (int)sv.size(), sv.begin());
 
 		return false;
 	}
@@ -247,7 +257,9 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 	while (i < input.size()) {
 		auto c = input[i];
 
-		if (!is_plain_ident(c)) {
+		auto is_plain_c = allow_middle_minus ? is_plain_ident(c) :
+						  is_plain_ident_start(c);
+		if (!is_plain_c) {
 			if (c == '\\' && i + 1 < input.size ()) {
 				/* Escape token */
 				need_escape = true;
@@ -383,6 +395,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
 		std::string numbuf{&input[offset], (i - offset)};
 		num = std::stod(numbuf);
+		offset = i;
 
 		auto ret = make_token<css_parser_token::token_type::number_token>(num);
 
@@ -393,11 +406,11 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 
 				offset = i;
 			}
-			else if (is_plain_ident(input[i])) {
+			else if (is_plain_ident_start(input[i])) {
 				auto dim_token = consume_ident();
 
 				if (dim_token.type == css_parser_token::token_type::ident_token) {
-					if (!dim_token.adjust_dim(dim_token)) {
+					if (!ret.adjust_dim(dim_token)) {
 						auto sv = std::get<std::string_view>(dim_token.value);
 						msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
 								(int)sv.size(), sv.begin(), num);
@@ -408,16 +421,11 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 				else {
 					/* We have no option but to uncosume ident token in this case */
 					msg_debug_css("got invalid ident like token after number, unconsume it");
-					offset = i;
 				}
 			}
 			else {
-				/* Plain number */
-				offset = i;
+				/* Plain number, nothing to do */
 			}
-		}
-		else {
-			offset = i;
 		}
 
 		return ret;
@@ -655,7 +663,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			break;
 		case '@':
 			if (i + 3 < input.size()) {
-				if (is_plain_ident(input[i + 1]) &&
+				if (is_plain_ident_start(input[i + 1]) &&
 					is_plain_ident(input[i + 2]) && is_plain_ident(input[i + 3])) {
 					offset = i + 1;
 					auto ident_token = consume_ident();
@@ -680,8 +688,9 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '#':
 			/* TODO: make it more conformant */
 			if (i + 2 < input.size()) {
-				if (is_plain_ident(input[i + 1]) &&
-					is_plain_ident(input[i + 2])) {
+				auto next_c = input[i + 1], next_next_c = input[i + 2];
+				if ((is_plain_ident(next_c) || next_c == '-') &&
+						(is_plain_ident(next_next_c) || next_next_c == '-')) {
 					offset = i + 1;
 					auto ident_token = consume_ident();
 
@@ -708,7 +717,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			if (g_ascii_isdigit(c)) {
 				return consume_number();
 			}
-			else if (is_plain_ident(c)) {
+			else if (is_plain_ident_start(c)) {
 				return consume_ident();
 			}
 			else {
