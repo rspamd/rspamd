@@ -308,7 +308,6 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 				}
 			}
 			else {
-				i --; /* Push token back */
 				break; /* Not an ident token */
 			}
 		} /* !plain ident */
@@ -341,7 +340,6 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 					seen_dot = true;
 				}
 				else {
-					i --; /* Push back */
 					break;
 				}
 			}
@@ -358,9 +356,11 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 					}
 				}
 				else {
-					i --; /* Push back */
 					break;
 				}
+			}
+			else {
+				break;
 			}
 		}
 
@@ -399,6 +399,10 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 					msg_debug_css("got invalid ident like token after number, unconsume it");
 					offset = i;
 				}
+			}
+			else {
+				/* Plain number */
+				offset = i;
 			}
 		}
 		else {
@@ -564,8 +568,10 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			offset = i + 1;
 			return make_token<css_parser_token::token_type::ecurlbrace_token>();
 		case ',':
+			offset = i + 1;
 			return make_token<css_parser_token::token_type::comma_token>();
 		case ';':
+			offset = i + 1;
 			return make_token<css_parser_token::token_type::semicolon_token>();
 		case '<':
 			/* Maybe an xml like comment */
