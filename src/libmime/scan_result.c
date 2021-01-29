@@ -194,7 +194,8 @@ insert_metric_result (struct rspamd_task *task,
 					  double weight,
 					  const gchar *opt,
 					  struct rspamd_scan_result *metric_res,
-					  enum rspamd_symbol_insert_flags flags)
+					  enum rspamd_symbol_insert_flags flags,
+					  bool *new_sym)
 {
 	struct rspamd_symbol_result *s = NULL;
 	gdouble final_score, *gr_score = NULL, next_gf = 1.0, diff;
@@ -390,6 +391,10 @@ insert_metric_result (struct rspamd_task *task,
 	}
 	else {
 		/* New result */
+		if (new_sym) {
+			*new_sym = true;
+		}
+
 		sym_cpy = rspamd_mempool_strdup (task->task_pool, symbol);
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
 				sym_cpy, &ret);
@@ -530,13 +535,15 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 				}
 			}
 
-			s =  NULL;
+			bool new_symbol = false;
+
 			s = insert_metric_result (task,
 					symbol,
 					weight,
 					opt,
 					mres,
-					flags);
+					flags,
+					&new_symbol);
 
 			if (mres->name == NULL) {
 				/* Default result */
@@ -548,7 +555,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 							s->sym->cache_item);
 				}
 			}
-			else {
+			else if (new_symbol) {
 				/* O(N) but we normally don't have any shadow results */
 				LL_APPEND (ret, s);
 			}
@@ -561,7 +568,8 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 				weight,
 				opt,
 				result,
-				flags);
+				flags,
+				NULL);
 		ret = s;
 
 		if (result->name == NULL) {
@@ -697,6 +705,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 				/* Cannot add more options, give up */
 				msg_debug_task ("cannot add more options to symbol %s when adding option %s",
 						cur->name, val);
+				ret = FALSE;
 				continue;
 			}
 
