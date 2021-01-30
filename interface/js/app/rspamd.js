@@ -468,7 +468,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         $.ajax({
             type: "GET",
             url: "stat",
-            async: false,
             success: function () {
                 displayUI();
             },
