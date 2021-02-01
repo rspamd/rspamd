@@ -1251,7 +1251,7 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 		obj = ucl_object_typed_new (UCL_OBJECT);
 	}
 
-	kh_foreach_value_ptr (mres->symbols, sym, {
+	kh_foreach_value (mres->symbols, sym, {
 		if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 			sobj = rspamd_metric_symbol_ucl (task, sym);
 			ucl_object_insert_key (obj, sobj, sym->name, 0, false);
@@ -1968,7 +1968,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 
 					i = 0;
 
-					kh_foreach_value_ptr (mres->symbols, sym, {
+					kh_foreach_value (mres->symbols, sym, {
 						id = rspamd_symcache_find_symbol (task->cfg->cache,
 								sym->name);
 

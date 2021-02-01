@@ -1120,7 +1120,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			symbuf = rspamd_fstring_sized_new (128);
 			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->symbols));
 
-			kh_foreach_value_ptr (mres->symbols, sym, {
+			kh_foreach_value (mres->symbols, sym, {
 				if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					g_ptr_array_add (sorted_symbols, (gpointer)sym);
 				}

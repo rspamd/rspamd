@@ -32,7 +32,7 @@ KHASH_INIT (rspamd_options_hash, struct rspamd_symbol_option *, char,
 /**
  * Result of metric processing
  */
-KHASH_MAP_INIT_STR (rspamd_symbols_hash, struct rspamd_symbol_result);
+KHASH_MAP_INIT_STR (rspamd_symbols_hash, struct rspamd_symbol_result *);
 #if UINTPTR_MAX <= UINT_MAX
 /* 32 bit */
 #define rspamd_ptr_hash_func(key) (khint32_t)(((uintptr_t)(key))>>1)

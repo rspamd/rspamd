@@ -4657,7 +4657,7 @@ lua_task_get_symbols (lua_State *L)
 			lua_createtable (L, kh_size (mres->symbols), 0);
 			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			kh_foreach_value_ptr (mres->symbols, s, {
+			kh_foreach_value (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					lua_pushstring (L, s->name);
 					lua_rawseti (L, -3, i);
@@ -4700,7 +4700,7 @@ lua_task_get_symbols_all (lua_State *L)
 			found = TRUE;
 			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			kh_foreach_value_ptr (mres->symbols, s, {
+			kh_foreach_value (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					lua_push_symbol_result (L, task, s->name, s, mres, FALSE, TRUE);
 					lua_rawseti (L, -2, i++);
@@ -4742,7 +4742,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 
 			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			kh_foreach_value_ptr (mres->symbols, s, {
+			kh_foreach_value (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					id = rspamd_symcache_find_symbol (task->cfg->cache,
 							s->name);

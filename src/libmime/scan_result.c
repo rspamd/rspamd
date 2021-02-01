@@ -39,7 +39,7 @@ static void
 rspamd_scan_result_dtor (gpointer d)
 {
 	struct rspamd_scan_result *r = (struct rspamd_scan_result *)d;
-	struct rspamd_symbol_result sres;
+	struct rspamd_symbol_result *sres;
 
 	rspamd_set_counter_ema (&symbols_count, kh_size (r->symbols), 0.5);
 
@@ -48,8 +48,8 @@ rspamd_scan_result_dtor (gpointer d)
 	}
 
 	kh_foreach_value (r->symbols, sres, {
-		if (sres.options) {
-			kh_destroy (rspamd_options_hash, sres.options);
+		if (sres->options) {
+			kh_destroy (rspamd_options_hash, sres->options);
 		}
 	});
 	kh_destroy (rspamd_symbols_hash, r->symbols);
@@ -279,7 +279,7 @@ insert_metric_result (struct rspamd_task *task,
 	k = kh_get (rspamd_symbols_hash, metric_res->symbols, symbol);
 	if (k != kh_end (metric_res->symbols)) {
 		/* Existing metric score */
-		s = &kh_value (metric_res->symbols, k);
+		s = kh_value (metric_res->symbols, k);
 		if (single) {
 			max_shots = 1;
 		}
@@ -399,8 +399,8 @@ insert_metric_result (struct rspamd_task *task,
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
 				sym_cpy, &ret);
 		g_assert (ret > 0);
-		s = &kh_value (metric_res->symbols, k);
-		memset (s, 0, sizeof (*s));
+		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (*s));
+		kh_value (metric_res->symbols, k) = s;
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && final_score > 0) {
@@ -916,7 +916,7 @@ rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
 	k = kh_get (rspamd_symbols_hash, result->symbols, sym);
 
 	if (k != kh_end (result->symbols)) {
-		res = &kh_value (result->symbols, k);
+		res = kh_value (result->symbols, k);
 	}
 
 	return res;
@@ -938,7 +938,7 @@ struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
 	k = kh_get (rspamd_symbols_hash, result->symbols, symbol);
 
 	if (k != kh_end (result->symbols)) {
-		res = &kh_value (result->symbols, k);
+		res = kh_value (result->symbols, k);
 
 		if (!isnan (res->score)) {
 			/* Remove score from the result */
@@ -981,7 +981,7 @@ rspamd_task_symbol_result_foreach (struct rspamd_task *task,
 								   gpointer ud)
 {
 	const gchar *kk;
-	struct rspamd_symbol_result res;
+	struct rspamd_symbol_result *res;
 
 	if (result == NULL) {
 		/* Use default result */
@@ -990,7 +990,7 @@ rspamd_task_symbol_result_foreach (struct rspamd_task *task,
 
 	if (func) {
 		kh_foreach (result->symbols, kk, res, {
-			func ((gpointer)kk, (gpointer)&res, ud);
+			func ((gpointer)kk, (gpointer)res, ud);
 		});
 	}
 }
