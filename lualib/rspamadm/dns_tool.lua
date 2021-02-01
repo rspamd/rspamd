@@ -95,6 +95,8 @@ local function spf_handler(opts)
   if opts.ip then
     opts.ip = rspamd_ip.fromstring(opts.ip)
     task:set_from_ip(opts.ip)
+  else
+    opts.all = true
   end
 
   if opts.from then
