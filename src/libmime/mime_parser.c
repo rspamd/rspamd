@@ -726,7 +726,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 
 						ct_nid =  OBJ_obj2nid (p7_signed_content->type);
 
-						if (ct_nid == NID_pkcs7_data) {
+						if (ct_nid == NID_pkcs7_data && p7_signed_content->d.data) {
 							int ret;
 
 							msg_debug_mime ("found an additional part inside of "
