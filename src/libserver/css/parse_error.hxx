@@ -30,6 +30,7 @@ namespace rspamd::css {
 enum class css_parse_error_type {
 	PARSE_ERROR_UNKNOWN_OPTION,
 	PARSE_ERROR_INVALID_SYNTAX,
+	PARSE_ERROR_BAD_NESTING,
 	PARSE_ERROR_NYI,
 	PARSE_ERROR_UNKNOWN_ERROR,
 };

@@ -90,6 +90,7 @@ struct css_parser_token {
 	css_parser_token() = delete;
 	explicit css_parser_token(token_type type, const value_type &value) :
 			value(value), type(type) {}
+	css_parser_token(css_parser_token &&other) = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 
 	/* Debugging routines */
