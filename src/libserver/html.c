@@ -84,7 +84,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_EM, "em", (CM_INLINE)),
 	TAG_DEF(Tag_FIELDSET, "fieldset", (CM_BLOCK)),
 	TAG_DEF(Tag_FONT, "font", (FL_BLOCK)),
-	TAG_DEF(Tag_FORM, "form", (CM_BLOCK)),
+	TAG_DEF(Tag_FORM, "form", (CM_BLOCK|FL_HREF)),
 	TAG_DEF(Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)),
 	TAG_DEF(Tag_H1, "h1", (CM_BLOCK | CM_HEADING)),
@@ -997,6 +997,11 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 	}
 	else if (len == 4) {
 		if (g_ascii_strncasecmp (p, "href", len) == 0) {
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
+		}
+	}
+	else if (len == 6) {
+		if (g_ascii_strncasecmp (p, "action", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
