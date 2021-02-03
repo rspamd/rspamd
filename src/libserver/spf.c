@@ -1777,7 +1777,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 	gchar *c, *new, *tmp, delim = '.';
 	gsize len = 0, slen = 0, macro_len = 0;
 	gint state = 0, ndelim = 0;
-	gchar ip_buf[INET6_ADDRSTRLEN * 2 + 1];
+	gchar ip_buf[64 + 1]; /* cannot use INET6_ADDRSTRLEN as we use ptr lookup */
 	gboolean need_expand = FALSE, reversed;
 	struct rspamd_task *task;
 
@@ -1830,7 +1830,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			/* Read macro name */
 			switch (g_ascii_tolower (*p)) {
 			case 'i':
-				len += INET6_ADDRSTRLEN - 1;
+				len += sizeof (ip_buf) - 1;
 				break;
 			case 's':
 				if (rec->sender) {
