@@ -32,6 +32,7 @@ struct css_consumed_block {
 		css_at_rule,
 		css_simple_block,
 		css_function,
+		css_function_arg,
 		css_component
 	};
 
@@ -72,6 +73,11 @@ struct css_consumed_block {
 
 		return true;
 	}
+
+	auto assign_token(css_parser_token &&tok) -> void
+	{
+		content = std::move(tok);
+	}
 };
 
 class css_parser {
@@ -100,12 +106,24 @@ private:
 	};
 	parser_state state = parser_state::initial_state;
 	std::unique_ptr<css_style_sheet> style_object;
+	std::unique_ptr<css_tokeniser> tokeniser;
 
 	css_parse_error error;
 	rspamd_mempool_t *pool;
 
+	int rec_level = 0;
+	const int max_rec = 20;
+	bool eof = false;
+
 	/* Helper parser methods */
 	bool need_unescape(const std::string_view &sv);
+
+	/* Consumers */
+	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
+	auto function_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
+	auto simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
+							   css_parser_token::token_type expected_end) -> bool;
+	auto qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 };
 
 /*
@@ -140,101 +158,219 @@ css_parser::need_unescape(const std::string_view &sv)
 	return false;
 }
 
-
-bool css_parser::consume_input(const std::string_view &sv)
+auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
-	bool eof = false;
-	css_tokeniser css_tokeniser(pool, sv);
+	auto ret = true, want_more = true;
 
-	auto consumed_blocks = std::make_unique<css_consumed_block>(
-			css_consumed_block::parser_tag_type::css_top_block);
-	auto rec_level = 0;
-	const auto max_rec = 20;
+	if (++rec_level > max_rec) {
+		msg_err_css("max nesting reached, ignore style");
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		return false;
+	}
 
-	auto component_value_consumer = [&](std::unique_ptr<css_consumed_block> &top) -> bool {
-
-		if (++rec_level > max_rec) {
-			error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
-			return false;
-		}
-
-		auto next_token = css_tokeniser.next_token();
+	while (ret && want_more && !eof) {
+		auto next_token = tokeniser->next_token();
 
 		switch (next_token.type) {
-
-		}
-
-		--rec_level;
-
-		return true;
-	};
-
-	auto qualified_rule_consumer = [&](std::unique_ptr<css_consumed_block> &top) -> bool {
-		if (++rec_level > max_rec) {
-			msg_err_css("max nesting reached, ignore style");
-			error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
-			return false;
-		}
-
-		auto ret = true;
-		auto block = std::make_unique<css_consumed_block>(
-				css_consumed_block::parser_tag_type::css_qualified_rule);
-
-		while (ret && !eof) {
-			auto &&next_token = css_tokeniser.next_token();
-			switch (next_token.type) {
-			case css_parser_token::token_type::eof_token:
-				eof = true;
-				break;
-			case css_parser_token::token_type::ident_token:
-			case css_parser_token::token_type::hash_token:
-				/* Consume allowed complex tokens as a rule preamble */
-				ret = component_value_consumer(block);
-				break;
-			case css_parser_token::token_type::cdo_token:
-			case css_parser_token::token_type::cdc_token:
-				if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
-					/* Ignore */
-					ret = true;
-				}
-				else {
-
-				}
-				break;
-			};
-		}
-
-		if (ret) {
-			if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
-				top->attach_block(std::move(block));
-			}
-		}
-
-		--rec_level;
-
-		return ret;
-	};
-
-	auto get_parser_consumer = [&]() -> auto {
-		switch (state) {
-		case parser_state::initial_state:
-			/* Top level qualified parser */
-			return qualified_rule_consumer;
+		case css_parser_token::token_type::eof_token:
+			eof = true;
 			break;
-		}
-	};
-
-	while (!eof) {
-		/* Get a token and a consumer lambda for the current parser state */
-
-		auto consumer = get_parser_consumer();
-
-		if (!consumer(consumed_blocks)) {
+		case css_parser_token::token_type::whitespace_token:
+			/* Ignore whitespaces */
+			break;
+		case css_parser_token::token_type::ebrace_token:
+			ret = true;
+			want_more = false;
+			break;
+		default:
+			/* Attach everything to the function block */
+			top->attach_block(std::make_unique<css_consumed_block>(
+					css::css_consumed_block::parser_tag_type::css_function_arg,
+					std::move(next_token)));
 			break;
 		}
 	}
 
-	return true;
+	--rec_level;
+
+	return ret;
+}
+
+auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
+									   css_parser_token::token_type expected_end) -> bool
+{
+	auto ret = true;
+
+	if (++rec_level > max_rec) {
+		msg_err_css("max nesting reached, ignore style");
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		return false;
+	}
+
+	auto block = std::make_unique<css_consumed_block>(
+			css_consumed_block::parser_tag_type::css_simple_block);
+
+	while (ret && !eof) {
+		auto next_token = tokeniser->next_token();
+
+		if (next_token.type == expected_end) {
+			break;
+		}
+
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
+			eof = true;
+			break;
+		case css_parser_token::token_type::whitespace_token:
+			/* Ignore whitespaces */
+			break;
+		default:
+			tokeniser->pushback_token(std::move(next_token));
+			ret = component_value_consumer(block);
+			break;
+		}
+	}
+
+	--rec_level;
+
+	return ret;
+}
+
+auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
+{
+	if (++rec_level > max_rec) {
+		msg_err_css("max nesting reached, ignore style");
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		return false;
+	}
+
+	auto ret = true;
+	auto block = std::make_unique<css_consumed_block>(
+			css_consumed_block::parser_tag_type::css_qualified_rule);
+
+	while (ret && !eof) {
+		auto next_token = tokeniser->next_token();
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
+			eof = true;
+			break;
+		case css_parser_token::token_type::ident_token:
+		case css_parser_token::token_type::hash_token:
+			/* Consume allowed complex tokens as a rule preamble */
+			ret = component_value_consumer(block);
+			break;
+		case css_parser_token::token_type::cdo_token:
+		case css_parser_token::token_type::cdc_token:
+			if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
+				/* Ignore */
+				ret = true;
+			}
+			else {
+
+			}
+			break;
+		};
+	}
+
+	if (ret) {
+		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
+			top->attach_block(std::move(block));
+		}
+	}
+
+	--rec_level;
+
+	return ret;
+}
+
+auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
+{
+	auto ret = true, need_more = true;
+
+	if (++rec_level > max_rec) {
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		return false;
+	}
+
+	auto block = std::make_unique<css_consumed_block>(
+			css_consumed_block::parser_tag_type::css_component);
+
+	while (ret && need_more && !eof) {
+		auto next_token = tokeniser->next_token();
+
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
+			eof = true;
+			break;
+		case css_parser_token::token_type::ocurlbrace_token:
+			ret = simple_block_consumer(block,
+					css_parser_token::token_type::ecurlbrace_token);
+			need_more = false;
+			break;
+		case css_parser_token::token_type::obrace_token:
+			ret = simple_block_consumer(block,
+					css_parser_token::token_type::ebrace_token);
+			need_more = false;
+			break;
+		case css_parser_token::token_type::osqbrace_token:
+			ret = simple_block_consumer(block,
+					css_parser_token::token_type::esqbrace_token);
+			need_more = false;
+			break;
+		case css_parser_token::token_type::whitespace_token:
+			/* Ignore whitespaces */
+			break;
+		case css_parser_token::token_type::function_token: {
+			need_more = false;
+			auto fblock = std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_function,
+					std::move(next_token));
+
+			/* Consume the rest */
+			ret = function_consumer(fblock);
+
+			if (ret) {
+				block->attach_block(std::move(fblock));
+			}
+			break;
+		}
+		default:
+			block->assign_token(std::move(next_token));
+			need_more = false;
+			break;
+		}
+	}
+
+	if (ret) {
+		top->attach_block(std::move(block));
+	}
+
+	--rec_level;
+
+	return ret;
+}
+
+bool css_parser::consume_input(const std::string_view &sv)
+{
+	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
+	auto ret = true;
+
+	auto consumed_blocks =
+			std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
+
+	while (!eof) {
+		/* Get a token and a consumer lambda for the current parser state */
+
+		switch (state) {
+		case parser_state::initial_state:
+			ret = qualified_rule_consumer(consumed_blocks);
+			break;
+		}
+	}
+
+	tokeniser.reset(nullptr); /* No longer needed */
+
+	return ret;
 }
 
 /*
