@@ -26,6 +26,7 @@ local function make_subj_bounce_keywords_re()
     'delivery failed',
     'delivery failure',
     'delivery report',
+    'delivery status',
     'delivery warning',
     'failure delivery',
     'failure notice',
