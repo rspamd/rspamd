@@ -209,7 +209,6 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	}
 	else {
 		flags |= css_parser_token::flag_bad_dimension;
-		msg_err("hui: %*s", (int)sv.size(), sv.begin());
 
 		return false;
 	}
@@ -445,6 +444,13 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
  */
 auto css_tokeniser::next_token(void) -> struct css_parser_token
 {
+	/* Check pushback queue */
+	if (!backlog.empty()) {
+		auto &tok = backlog.front();
+		backlog.pop_front();
+
+		return std::move(tok);
+	}
 	/* Helpers */
 
 	/*

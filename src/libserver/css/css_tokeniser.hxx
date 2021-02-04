@@ -22,6 +22,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <list>
 #include "mem_pool.h"
 
 namespace rspamd::css {
@@ -91,6 +92,7 @@ struct css_parser_token {
 	explicit css_parser_token(token_type type, const value_type &value) :
 			value(value), type(type) {}
 	css_parser_token(css_parser_token &&other) = default;
+	auto operator=(css_parser_token &&other) -> css_parser_token& = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 
 	/* Debugging routines */
@@ -110,10 +112,14 @@ public:
 
 	auto next_token(void) -> struct css_parser_token;
 	auto get_offset(void) const { return offset; }
+	auto pushback_token(struct css_parser_token &&t) const -> void {
+		backlog.push_back(std::forward<css_parser_token>(t));
+	}
 private:
 	std::string_view input;
 	std::size_t offset;
 	rspamd_mempool_t *pool;
+	mutable std::list<css_parser_token> backlog;
 
 	auto consume_number() -> struct css_parser_token;
 	auto consume_ident() -> struct css_parser_token;
