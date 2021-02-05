@@ -1181,6 +1181,11 @@ struct lua_shingle_data {
 	rspamd_ftok_t t3;
 };
 
+struct lua_shingle_filter_cbdata {
+	struct rspamd_mime_text_part *part;
+	rspamd_mempool_t *pool;
+};
+
 #define STORE_TOKEN(i, t) do { \
     if ((i) < part->utf_words->len) { \
         word = &g_array_index (part->utf_words, rspamd_stat_token_t, (i)); \
@@ -1197,7 +1202,10 @@ lua_shingles_filter (guint64 *input, gsize count,
 	gsize i, min_idx = 0;
 	struct lua_shingle_data *sd;
 	rspamd_stat_token_t *word;
-	struct rspamd_mime_text_part *part = (struct rspamd_mime_text_part *)ud;
+	struct lua_shingle_filter_cbdata *cbd = (struct lua_shingle_filter_cbdata *)ud;
+	struct rspamd_mime_text_part *part;
+
+	part = cbd->part;
 
 	for (i = 0; i < count; i ++) {
 		if (minimal > input[i]) {
@@ -1206,7 +1214,7 @@ lua_shingles_filter (guint64 *input, gsize count,
 		}
 	}
 
-	sd = g_malloc0 (sizeof (*sd));
+	sd = rspamd_mempool_alloc0 (cbd->pool, sizeof (*sd));
 	sd->hash = minimal;
 
 
@@ -1232,6 +1240,7 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 	struct lua_shingle_data *sd;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_stat_token_t *word;
+	struct lua_shingle_filter_cbdata cbd;
 
 	if (part && pool) {
 		/* TODO: add keys and algorithms support */
@@ -1254,8 +1263,10 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 				sizeof (hexdigest));
 		lua_pushlstring (L, hexdigest, sizeof (hexdigest) - 1);
 
+		cbd.pool = pool;
+		cbd.part = part;
 		sgl = rspamd_shingles_from_text (part->utf_words, key,
-				pool, lua_shingles_filter, part, RSPAMD_SHINGLES_MUMHASH);
+				pool, lua_shingles_filter, &cbd, RSPAMD_SHINGLES_MUMHASH);
 
 		if (sgl == NULL) {
 			lua_pushnil (L);
