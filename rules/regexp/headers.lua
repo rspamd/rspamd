@@ -445,7 +445,7 @@ local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s) & !(%s)', user_ag
 -- Mozilla based common Message-ID template
 local mozilla_msgid_common	= 'Message-ID=/^\\s*<[\\dA-F]{8}\\.\\d{1,7}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
 local mozilla_msgid_common_sec	= 'Message-ID=/^\\s*<[\\da-f]{8}-([\\da-f]{4}-){3}[\\da-f]{12}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
-local mozilla_msgid		= 'Message-ID=/^\\s*<(3[3-9A-F]|4[\\dA-F]|5[\\dA-F])[\\dA-F]{6}\\.(\\d0){1,4}\\d\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
+local mozilla_msgid		= 'Message-ID=/^\\s*<(3[3-9A-F]|[4-9A-F][\\dA-F])[\\dA-F]{6}\\.(\\d0){1,4}\\d\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
 -- Summary rule for forged Mozilla Mail Message-ID header
 reconf['FORGED_MUA_MOZILLA_MAIL_MSGID'] = {
   re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
