@@ -649,7 +649,8 @@ local function process_rules_settings()
     end
 
     -- Generic stuff
-    table.sort(fun.totable(fun.filter(filter_symbols_predicate, selt.symbols)))
+    selt.symbols = fun.totable(fun.filter(filter_symbols_predicate, selt.symbols))
+    table.sort(selt.symbols)
 
     selt.digest = lua_util.table_digest(selt.symbols)
     selt.prefix = redis_ann_prefix(rule, selt.name)
