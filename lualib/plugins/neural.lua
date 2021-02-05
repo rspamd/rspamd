@@ -655,22 +655,26 @@ local function process_rules_settings()
     selt.digest = lua_util.table_digest(selt.symbols)
     selt.prefix = redis_ann_prefix(rule, selt.name)
 
+    rspamd_logger.messagex(rspamd_config,
+        'use NN prefix for rule %s; settings id "%s"; symbols digest: "%s"',
+        selt.prefix, selt.name, selt.digest)
+
     lua_redis.register_prefix(selt.prefix, N,
         string.format('NN prefix for rule "%s"; settings id "%s"',
-            rule.prefix, selt.name), {
+            selt.prefix, selt.name), {
           persistent = true,
           type = 'zlist',
         })
     -- Versions
     lua_redis.register_prefix(selt.prefix .. '_\\d+', N,
         string.format('NN storage for rule "%s"; settings id "%s"',
-            rule.prefix, selt.name), {
+            selt.prefix, selt.name), {
           persistent = true,
           type = 'hash',
         })
     lua_redis.register_prefix(selt.prefix .. '_\\d+_spam', N,
         string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
-            rule.prefix, selt.name), {
+            selt.prefix, selt.name), {
           persistent = true,
           type = 'list',
         })
