@@ -61,8 +61,6 @@ local function handle_learn(task, conn)
   conn:send_string('{"success" : true}')
 end
 
-rspamd_config:add_post_init(neural_common.process_rules_settings)
-
 return {
   learn = {
     handler = handle_learn,
