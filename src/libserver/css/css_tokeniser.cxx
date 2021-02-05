@@ -446,10 +446,10 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 {
 	/* Check pushback queue */
 	if (!backlog.empty()) {
-		auto &tok = backlog.front();
+		auto tok = std::move(backlog.front());
 		backlog.pop_front();
 
-		return std::move(tok);
+		return tok;
 	}
 	/* Helpers */
 
