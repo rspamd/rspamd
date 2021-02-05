@@ -3170,6 +3170,8 @@ lua_config_add_post_init (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
 	guint priority = 0;
+	lua_Debug d;
+	gchar tmp[256], *p;
 
 	if (cfg == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
@@ -3179,10 +3181,30 @@ lua_config_add_post_init (lua_State *L)
 		priority = lua_tointeger (L , 3);
 	}
 
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void) lua_getinfo (L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p++;
+		}
+
+		if (strlen (p) > 200) {
+			rspamd_snprintf (tmp, sizeof (tmp), "%10s...]:%d", p,
+					d.currentline);
+		}
+		else {
+			rspamd_snprintf (tmp, sizeof (tmp), "%s:%d", p,
+					d.currentline);
+		}
+	}
+
 	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 	sc->priority = priority;
+	sc->lua_src_pos = rspamd_mempool_strdup (cfg->cfg_pool, tmp);
 	DL_APPEND (cfg->post_init_scripts, sc);
 	DL_SORT (cfg->post_init_scripts, rspamd_post_init_sc_sort);
 
@@ -3195,14 +3217,36 @@ lua_config_add_config_unload (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_config_cfg_lua_script *sc;
+	lua_Debug d;
+	gchar tmp[256], *p;
 
 	if (cfg == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
 	}
 
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void) lua_getinfo (L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p++;
+		}
+
+		if (strlen (p) > 20) {
+			rspamd_snprintf (tmp, sizeof (tmp), "%10s...]:%d", p,
+					d.currentline);
+		}
+		else {
+			rspamd_snprintf (tmp, sizeof (tmp), "%s:%d", p,
+					d.currentline);
+		}
+	}
+
 	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	sc->lua_src_pos = rspamd_mempool_strdup (cfg->cfg_pool, tmp);
 	DL_APPEND (cfg->config_unload_scripts, sc);
 
 	return 0;
