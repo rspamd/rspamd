@@ -68,8 +68,8 @@ struct css_consumed_block {
 			return false;
 		}
 
-		std::get<std::vector<consumed_block_ptr>>(content)
-		        .push_back(std::move(block));
+		auto &value_vec = std::get<std::vector<consumed_block_ptr>>(content);
+		value_vec.push_back(std::move(block));
 
 		return true;
 	}
@@ -77,6 +77,61 @@ struct css_consumed_block {
 	auto assign_token(css_parser_token &&tok) -> void
 	{
 		content = std::move(tok);
+	}
+
+	auto token_type_str(void) const -> const char *
+	{
+		const auto *ret = "";
+
+		switch(tag) {
+		case parser_tag_type::css_top_block:
+			ret = "top";
+			break;
+		case parser_tag_type::css_qualified_rule:
+			ret = "qualified rule";
+			break;
+		case parser_tag_type::css_at_rule:
+			ret = "at rule";
+			break;
+		case parser_tag_type::css_simple_block:
+			ret = "simple block";
+			break;
+		case parser_tag_type::css_function:
+			ret = "function";
+			break;
+		case parser_tag_type::css_function_arg:
+			ret = "function args";
+			break;
+		case parser_tag_type::css_component:
+			ret = "component";
+			break;
+		}
+
+		return ret;
+	}
+
+	auto size() const -> std::size_t {
+		auto ret = 0;
+
+		std::visit([&](auto& arg) {
+			using T = std::decay_t<decltype(arg)>;
+
+			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
+				/* Array of blocks */
+				ret = arg.size();
+			}
+			else if constexpr (std::is_same_v<T, std::monostate>) {
+				/* Empty block */
+				ret = 0;
+			}
+			else {
+				/* Single element block */
+				ret = 1;
+			}
+		},
+		content);
+
+		return ret;
 	}
 };
 
@@ -162,6 +217,9 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 {
 	auto ret = true, want_more = true;
 
+	msg_debug_css("consume function block; top block: %s, recursion level %d",
+			top->token_type_str(), rec_level);
+
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
@@ -201,6 +259,9 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 {
 	auto ret = true;
 
+	msg_debug_css("consume simple block; top block: %s, recursion level %d",
+			top->token_type_str(), rec_level);
+
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
@@ -238,6 +299,9 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 
 auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
+	msg_debug_css("consume qualified block; top block: %s, recursion level %d",
+			top->token_type_str(), rec_level);
+
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
@@ -274,6 +338,8 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 
 	if (ret) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
+			msg_debug_css("attached block qualified rule %s; length=%d",
+					block->token_type_str(), (int)block->size());
 			top->attach_block(std::move(block));
 		}
 	}
@@ -286,6 +352,9 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
 	auto ret = true, need_more = true;
+
+	msg_debug_css("consume component block; top block: %s, recursion level %d",
+			top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
@@ -330,6 +399,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			ret = function_consumer(fblock);
 
 			if (ret) {
+				msg_debug_css("attached block function rule %s; length=%d",
+						fblock->token_type_str(), (int)fblock->size());
 				block->attach_block(std::move(fblock));
 			}
 			break;
@@ -342,6 +413,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	}
 
 	if (ret) {
+		msg_debug_css("attached block component rule %s; length=%d",
+				block->token_type_str(), (int)block->size());
 		top->attach_block(std::move(block));
 	}
 
