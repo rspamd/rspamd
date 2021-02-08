@@ -86,6 +86,7 @@ struct fuzzy_rule {
 	gboolean read_only;
 	gboolean skip_unknown;
 	gboolean no_share;
+	gboolean no_subject;
 	gint learn_condition_cb;
 	struct rspamd_hash_map_helper *skip_map;
 	struct fuzzy_ctx *ctx;
@@ -440,6 +441,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup (obj, "no_share")) != NULL) {
 		rule->no_share = ucl_obj_toboolean (value);
+	}
+
+	if ((value = ucl_object_lookup (obj, "no_subject")) != NULL) {
+		rule->no_subject = ucl_obj_toboolean (value);
 	}
 
 	if ((value = ucl_object_lookup (obj, "algorithm")) != NULL) {
@@ -908,7 +913,7 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_BOOLEAN,
 			NULL,
 			0,
-			NULL,
+			"true",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
@@ -937,6 +942,24 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			NULL,
 			0,
 			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Do no use subject to distinguish short text hashes",
+			"no_subject",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			"false",
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Disable sharing message stats with the fuzzy server",
+			"no_share",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			"false",
 			0);
 
 	return 0;
@@ -1688,7 +1711,7 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			rspamd_cryptobox_hash_update (&st, part->utf_stripped_content->data,
 					part->utf_stripped_content->len);
 
-			if (MESSAGE_FIELD (task, subject)) {
+			if (!rule->no_subject && (MESSAGE_FIELD (task, subject))) {
 				/* We also include subject */
 				rspamd_cryptobox_hash_update (&st, MESSAGE_FIELD (task, subject),
 						strlen (MESSAGE_FIELD (task, subject)));
