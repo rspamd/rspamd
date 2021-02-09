@@ -102,6 +102,10 @@ struct css_parser_token {
 };
 
 /* Ensure that parser tokens are simple enough */
+/*
+ * compiler must implement P0602 "variant and optional should propagate copy/move triviality"
+ * This is broken on gcc < 8!
+ */
 static_assert(std::is_trivially_copyable_v<css_parser_token>);
 
 class css_tokeniser {

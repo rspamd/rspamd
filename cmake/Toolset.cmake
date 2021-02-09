@@ -27,17 +27,19 @@ endif ()
 
 if (COMPILER_GCC)
     # Require minimum version of gcc
-    set (GCC_MINIMUM_VERSION 4)
+    set (GCC_MINIMUM_VERSION 8)
     if (CMAKE_C_COMPILER_VERSION VERSION_LESS ${GCC_MINIMUM_VERSION} AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
         message (FATAL_ERROR "GCC version must be at least ${GCC_MINIMUM_VERSION}.")
     endif ()
 elseif (COMPILER_CLANG)
     # Require minimum version of clang
-    set (CLANG_MINIMUM_VERSION 4)
+    set (CLANG_MINIMUM_VERSION 7)
     if (CMAKE_C_COMPILER_VERSION VERSION_LESS ${CLANG_MINIMUM_VERSION})
         message (FATAL_ERROR "Clang version must be at least ${CLANG_MINIMUM_VERSION}.")
     endif ()
     ADD_COMPILE_OPTIONS(-Wno-unused-command-line-argument)
+    # Use libc++ as libstdc++ is buggy in many cases
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 else ()
     message (WARNING "You are using an unsupported compiler ${CMAKE_C_COMPILER_ID}. Compilation has only been tested with Clang 4+ and GCC 4+.")
 endif ()
