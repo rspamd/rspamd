@@ -1334,6 +1334,14 @@ main (gint argc, gchar **argv, gchar **env)
 	struct ev_loop *event_loop;
 	struct rspamd_main *rspamd_main;
 	gboolean skip_pid = FALSE;
+	sigset_t control_signals;
+
+	/* Block special signals on loading */
+	sigemptyset (&control_signals);
+	sigaddset (&control_signals, SIGHUP);
+	sigaddset (&control_signals, SIGUSR1);
+	sigaddset (&control_signals, SIGUSR2);
+	sigprocmask (SIG_BLOCK, &control_signals, NULL);
 
 	rspamd_main = (struct rspamd_main *) g_malloc0 (sizeof (struct rspamd_main));
 
@@ -1499,7 +1507,6 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (-errno);
 	}
 
-	/* Block signals to use sigsuspend in future */
 	sigprocmask (SIG_BLOCK, &signals.sa_mask, NULL);
 
 	/* Set title */
@@ -1531,9 +1538,11 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->history_file);
 	}
 
-	/* Spawn workers */
+	/* Init workers hash */
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 
+	/* Unblock control signals */
+	sigprocmask (SIG_UNBLOCK, &control_signals, NULL);
 	/* Init event base */
 	event_loop = ev_default_loop (rspamd_config_ev_backend_get (rspamd_main->cfg));
 	rspamd_main->event_loop = event_loop;
