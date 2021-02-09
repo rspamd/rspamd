@@ -2,6 +2,7 @@ option (ENABLE_FAST_MATH     "Build rspamd with fast math compiler flag [default
 option (ENABLE_ANALYZER      "Build rspamd with static analyzer [default: OFF]" OFF)
 option (ENABLE_STATIC_LIBCXX "Build rspamd with static lib(std)c++ [default: OFF]" OFF)
 option (ENABLE_COMPILE_TIME  "Show compile time [default: OFF]" OFF)
+option (ENABLE_LIBCXX        "Use libc++ instead of libstdc++" OFF)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     SET (COMPILER_GCC 1)
@@ -31,6 +32,9 @@ if (COMPILER_GCC)
     if (CMAKE_C_COMPILER_VERSION VERSION_LESS ${GCC_MINIMUM_VERSION} AND NOT CMAKE_VERSION VERSION_LESS 2.8.9)
         message (FATAL_ERROR "GCC version must be at least ${GCC_MINIMUM_VERSION}.")
     endif ()
+    if (ENABLE_LIBCXX MATCHES "ON")
+        # XXX: too complicated to implement for now
+    endif ()
 elseif (COMPILER_CLANG)
     # Require minimum version of clang
     set (CLANG_MINIMUM_VERSION 7)
@@ -38,8 +42,10 @@ elseif (COMPILER_CLANG)
         message (FATAL_ERROR "Clang version must be at least ${CLANG_MINIMUM_VERSION}.")
     endif ()
     ADD_COMPILE_OPTIONS(-Wno-unused-command-line-argument)
-    # Use libc++ as libstdc++ is buggy in many cases
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    if (ENABLE_LIBCXX MATCHES "ON")
+        # Use libc++ as libstdc++ is buggy in many cases
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    endif ()
 else ()
     message (WARNING "You are using an unsupported compiler ${CMAKE_C_COMPILER_ID}. Compilation has only been tested with Clang 4+ and GCC 4+.")
 endif ()
