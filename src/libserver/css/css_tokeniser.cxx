@@ -17,7 +17,6 @@
 #include "css_tokeniser.hxx"
 #include "css_util.hxx"
 #include "css.hxx"
-#include <charconv>
 #include <string>
 
 namespace rspamd::css {
