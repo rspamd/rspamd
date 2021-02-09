@@ -150,6 +150,7 @@ rspamd_log_open_emergency (rspamd_mempool_t *pool, gint flags)
 	logger->flags = flags;
 	logger->pool = pool;
 	logger->process_type = "main";
+	logger->pid = getpid ();
 
 	const struct rspamd_logger_funcs *funcs = &console_log_funcs;
 	memcpy (&logger->ops, funcs, sizeof (*funcs));

@@ -1410,6 +1410,11 @@ main (gint argc, gchar **argv, gchar **env)
 
 	detect_priv (rspamd_main);
 
+	msg_notice_main ("rspamd "
+			RVERSION
+			" is loading configuration, build id: "
+			RID);
+
 	pworker = &workers[0];
 	while (*pworker) {
 		/* Init string quarks */

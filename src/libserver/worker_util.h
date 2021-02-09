@@ -289,6 +289,10 @@ gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_notice_main(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 #define msg_info_main(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \
