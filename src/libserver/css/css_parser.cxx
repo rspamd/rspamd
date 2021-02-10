@@ -216,7 +216,8 @@ private:
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 	auto function_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 	auto simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
-							   css_parser_token::token_type expected_end) -> bool;
+							   css_parser_token::token_type expected_end,
+							   bool consume_current) -> bool;
 	auto qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
 };
 
@@ -294,21 +295,26 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 }
 
 auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
-									   css_parser_token::token_type expected_end) -> bool
+									   css_parser_token::token_type expected_end,
+									   bool consume_current) -> bool
 {
 	auto ret = true;
+	std::unique_ptr<css_consumed_block> block;
 
 	msg_debug_css("consume simple block; top block: %s, recursion level %d",
 			top->token_type_str(), rec_level);
 
-	if (++rec_level > max_rec) {
+	if (!consume_current && ++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
 		return false;
 	}
 
-	auto block = std::make_unique<css_consumed_block>(
-			css_consumed_block::parser_tag_type::css_simple_block);
+	if (!consume_current) {
+		block = std::make_unique<css_consumed_block>(
+				css_consumed_block::parser_tag_type::css_simple_block);
+	}
+
 
 	while (ret && !eof) {
 		auto next_token = tokeniser->next_token();
@@ -326,18 +332,20 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 			break;
 		default:
 			tokeniser->pushback_token(std::move(next_token));
-			ret = component_value_consumer(block);
+			ret = component_value_consumer(consume_current ? top : block);
 			break;
 		}
 	}
 
-	if (ret) {
+	if (!consume_current && ret) {
 		msg_debug_css("attached node 'simple block' rule %s; length=%d",
 				block->token_type_str(), (int)block->size());
 		top->attach_block(std::move(block));
 	}
 
-	--rec_level;
+	if (!consume_current) {
+		--rec_level;
+	}
 
 	return ret;
 }
@@ -397,6 +405,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
 	auto ret = true, need_more = true;
+	std::unique_ptr<css_consumed_block> block;
 
 	msg_debug_css("consume component block; top block: %s, recursion level %d",
 			top->token_type_str(), rec_level);
@@ -406,9 +415,6 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		return false;
 	}
 
-	auto block = std::make_unique<css_consumed_block>(
-			css_consumed_block::parser_tag_type::css_component);
-
 	while (ret && need_more && !eof) {
 		auto next_token = tokeniser->next_token();
 
@@ -417,18 +423,27 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			eof = true;
 			break;
 		case css_parser_token::token_type::ocurlbrace_token:
+			block = std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ecurlbrace_token);
+					css_parser_token::token_type::ecurlbrace_token,
+					true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::obrace_token:
+			block = std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ebrace_token);
+					css_parser_token::token_type::ebrace_token,
+					true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::osqbrace_token:
+			block = std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::esqbrace_token);
+					css_parser_token::token_type::esqbrace_token,
+					true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::whitespace_token:
@@ -436,22 +451,18 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			break;
 		case css_parser_token::token_type::function_token: {
 			need_more = false;
-			auto fblock = std::make_unique<css_consumed_block>(
+			block = std::make_unique<css_consumed_block>(
 					css_consumed_block::parser_tag_type::css_function,
 					std::move(next_token));
 
 			/* Consume the rest */
-			ret = function_consumer(fblock);
-
-			if (ret) {
-				msg_debug_css("attached node function rule %s; length=%d",
-						fblock->token_type_str(), (int)fblock->size());
-				block->attach_block(std::move(fblock));
-			}
+			ret = function_consumer(block);
 			break;
 		}
 		default:
-			block->assign_token(std::move(next_token));
+			block = std::make_unique<css_consumed_block>(
+					css_consumed_block::parser_tag_type::css_component,
+					std::move(next_token));
 			need_more = false;
 			break;
 		}
