@@ -816,18 +816,19 @@ auto css_parser_token::debug_token_str() -> std::string
 	const auto *token_type_str = get_token_type();
 	std::string ret = token_type_str;
 
-	if (std::holds_alternative<std::string_view>(value)) {
-		ret += "; value=";
-		ret += std::get<std::string_view>(value);
-	}
-	else if (std::holds_alternative<double>(value)) {
-		ret += "; value=";
-		ret += std::to_string(std::get<double>(value));
-	}
-	else if (std::holds_alternative<char>(value)) {
-		ret += "; value=";
-		ret += std::get<char>(value);
-	}
+	std::visit([&](auto arg) -> auto {
+		using T = std::decay_t<decltype(arg)>;
+
+		if constexpr (std::is_same_v<T, std::string_view>) {
+			ret += "; value=";
+			ret += arg;
+		}
+		else if constexpr (std::is_same_v<T, double> || std::is_same_v<T, char>) {
+			ret += "; value=";
+			ret += std::to_string(arg);
+		}
+	},
+	value);
 
 	if ((flags & (~number_dimension)) != default_flags) {
 		ret += "; flags=" + std::to_string(flags);
