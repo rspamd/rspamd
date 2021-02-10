@@ -50,7 +50,9 @@ struct css_consumed_block {
 			tag == parser_tag_type::css_qualified_rule ||
 			tag == parser_tag_type::css_simple_block) {
 			/* Pre-allocate content for known vector blocks */
-			content = std::vector<consumed_block_ptr>(4);
+			std::vector<consumed_block_ptr> vec;
+			vec.reserve(4);
+			content = std::move(vec);
 		}
 	}
 	/* Construct a block from a single lexer token (for trivial blocks) */
@@ -61,7 +63,7 @@ struct css_consumed_block {
 	auto attach_block(consumed_block_ptr &&block) -> bool {
 		if (content.index() == 0) {
 			/* Switch from monostate */
-			content = std::vector<consumed_block_ptr>(1);
+			content = std::vector<consumed_block_ptr>();
 		}
 		else if (content.index() == 2) {
 			/* A single component, cannot attach a block ! */
@@ -127,6 +129,43 @@ struct css_consumed_block {
 			else {
 				/* Single element block */
 				ret = 1;
+			}
+		},
+		content);
+
+		return ret;
+	}
+
+	auto debug_str(void) -> std::string {
+		std::string ret = token_type_str();
+
+		ret += "; value: ";
+
+		std::visit([&](auto& arg) {
+			using T = std::decay_t<decltype(arg)>;
+
+			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
+				/* Array of blocks */
+				ret += "nodes: [";
+				for (const auto &block : arg) {
+					ret += "{";
+					ret += block->debug_str();
+					ret += "}, ";
+				}
+
+				if (*(--ret.end()) == ' ') {
+					ret.pop_back();
+					ret.pop_back(); /* Last ',' */
+				}
+				ret += "]";
+			}
+			else if constexpr (std::is_same_v<T, std::monostate>) {
+				/* Empty block */
+				ret += "empty";
+			}
+			else {
+				/* Single element block */
+				ret += arg.debug_token_str();
 			}
 		},
 		content);
@@ -292,6 +331,12 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 		}
 	}
 
+	if (ret) {
+		msg_debug_css("attached node 'simple block' rule %s; length=%d",
+				block->token_type_str(), (int)block->size());
+		top->attach_block(std::move(block));
+	}
+
 	--rec_level;
 
 	return ret;
@@ -338,7 +383,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 
 	if (ret) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
-			msg_debug_css("attached block qualified rule %s; length=%d",
+			msg_debug_css("attached node qualified rule %s; length=%d",
 					block->token_type_str(), (int)block->size());
 			top->attach_block(std::move(block));
 		}
@@ -399,7 +444,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			ret = function_consumer(fblock);
 
 			if (ret) {
-				msg_debug_css("attached block function rule %s; length=%d",
+				msg_debug_css("attached node function rule %s; length=%d",
 						fblock->token_type_str(), (int)fblock->size());
 				block->attach_block(std::move(fblock));
 			}
@@ -413,7 +458,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	}
 
 	if (ret) {
-		msg_debug_css("attached block component rule %s; length=%d",
+		msg_debug_css("attached node component rule %s; length=%d",
 				block->token_type_str(), (int)block->size());
 		top->attach_block(std::move(block));
 	}
@@ -440,6 +485,9 @@ bool css_parser::consume_input(const std::string_view &sv)
 			break;
 		}
 	}
+
+	auto debug_str = consumed_blocks->debug_str();
+	msg_debug_css("consumed css: %*s", (int)debug_str.size(), debug_str.data());
 
 	tokeniser.reset(nullptr); /* No longer needed */
 

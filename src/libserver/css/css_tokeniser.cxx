@@ -819,11 +819,11 @@ auto css_parser_token::debug_token_str() -> std::string
 	std::visit([&](auto arg) -> auto {
 		using T = std::decay_t<decltype(arg)>;
 
-		if constexpr (std::is_same_v<T, std::string_view>) {
+		if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, char>) {
 			ret += "; value=";
 			ret += arg;
 		}
-		else if constexpr (std::is_same_v<T, double> || std::is_same_v<T, char>) {
+		else if constexpr (std::is_same_v<T, double>) {
 			ret += "; value=";
 			ret += std::to_string(arg);
 		}
