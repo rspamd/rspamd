@@ -399,7 +399,7 @@ local function milter_headers(task)
     if #virii > 0 then
       local virusstatus = table.concat(virii, ',')
       if local_mod.status_infected then
-        virusstatus = local_mod,status_infected .. ', ' .. virusstatus
+        virusstatus = local_mod.status_infected .. ', ' .. virusstatus
       end
       add_header('x-virus', virusstatus)
     else
