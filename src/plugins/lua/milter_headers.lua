@@ -53,7 +53,7 @@ local settings = {
       header = 'X-Spamd-Result',
       remove = 0,
       stop_chars = ' ',
-      sort_by = 'name',
+      sort_by = 'score',
     },
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
@@ -249,6 +249,18 @@ local function milter_headers(task)
     table.insert(buf, verdict)
 
     -- Deal with symbols
+    table.sort(common.symbols, function(s1, s2)
+      local res
+      if local_mod.sort_by == 'name' then
+        res = s1.name < s2.name
+      else
+        -- inverse order to show important symbols first
+        res = math.abs(s1.score) > math.abs(s2.score)
+      end
+
+      return res
+    end)
+
     for _, s in ipairs(common.symbols) do
       local sym_str = string.format('%s(%.2f)[%s]',
           s.name, s.score,  table.concat(s.options or {}, ','))
