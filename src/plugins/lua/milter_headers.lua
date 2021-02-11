@@ -38,6 +38,7 @@ local settings = {
   skip_all = false,
   local_headers = {},
   authenticated_headers = {},
+  default_headers_order = nil, -- Insert at the end (set 1 to insert just after the first received)
   routines = {
     ['remove-headers'] = {
       headers = {},
@@ -219,8 +220,16 @@ local function milter_headers(task)
           }
         end
 
-        table.insert(add[hname],
-            lua_util.fold_header(task, hname, value, stop_chars))
+        if settings.default_headers_order then
+          table.insert(add[hname], {
+            order = settings.default_headers_order,
+            value = lua_util.fold_header(task, hname, value, stop_chars)
+          })
+        else
+          table.insert(add[hname],
+              lua_util.fold_header(task, hname, value, stop_chars))
+        end
+
       end
     end
   end
