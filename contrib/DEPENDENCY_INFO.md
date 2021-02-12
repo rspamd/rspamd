@@ -28,3 +28,4 @@
 | kann          |  ?      | MIT                 | YES     | blas/lapack changes|
 | fpconv        | ?       | Boost               | YES     | many changes       |
 | fastutf8      | ?       | MIT                 | YES     | many changes       |
+| expected      | v1.0.0  | Public Domain / CC0 | NO      |                    |
