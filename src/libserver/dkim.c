@@ -1371,8 +1371,9 @@ rspamd_dkim_make_key (const gchar *keydata,
 			g_set_error (err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_KEYFAIL,
-					"DKIM key is has invalid length %d for eddsa",
-					(gint)key->decoded_len);
+					"DKIM key is has invalid length %d for eddsa; expected %d",
+					(gint)key->decoded_len,
+					rspamd_cryptobox_pk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
 			REF_RELEASE (key);
 
 			return NULL;
@@ -2317,11 +2318,11 @@ rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
 
 static gboolean
 rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
-	struct rspamd_task *task,
-	const gchar *header_name,
-	gint count,
-	const gchar *dkim_header,
-	const gchar *dkim_domain)
+							 struct rspamd_task *task,
+							 const gchar *header_name,
+							 gint count,
+							 const gchar *dkim_header,
+							 const gchar *dkim_domain)
 {
 	struct rspamd_mime_header *rh, *cur, *sel = NULL;
 	gint hdr_cnt = 0;
