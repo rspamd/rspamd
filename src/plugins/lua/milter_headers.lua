@@ -383,7 +383,7 @@ local function milter_headers(task)
     if local_mod.remove then
       remove[local_mod.header] = local_mod.remove
     end
-    add[local_mod.header] = string.rep(local_mod.char, score)
+    add[local_mod.header] = string.rep(local_mod.char, math.floor(score))
   end
 
   local function spam_header (class, name, value, remove_v)

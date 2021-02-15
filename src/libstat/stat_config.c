@@ -172,6 +172,9 @@ rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 				lua_tostring (L, -1));
 	}
 	else {
+#if LUA_VERSION_NUM >= 504
+		lua_settop(L, -2);
+#endif
 		if (lua_type (L, -1) != LUA_TTABLE) {
 			msg_err_config ("lua stat must return "
 							"table and not %s",

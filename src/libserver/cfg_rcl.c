@@ -3571,6 +3571,9 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 		return;
 	}
 	else {
+#if LUA_VERSION_NUM >= 504
+		lua_settop(L, -2);
+#endif
 		if (lua_type (L, -1) != LUA_TFUNCTION) {
 			msg_warn_config ("lua script must return "
 					"function and not %s",

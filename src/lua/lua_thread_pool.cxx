@@ -261,12 +261,15 @@ lua_thread_pool_restore_callback_full(struct lua_callback_state *cbs,
 
 static gint
 lua_do_resume_full(lua_State *L, gint narg, const gchar *loc) {
+#if LUA_VERSION_NUM >= 504
+	int nres;
+#endif
 	msg_debug_lua_threads ("%s: lua_do_resume_full", loc);
 #if LUA_VERSION_NUM < 502
 	return lua_resume(L, narg);
 #else
 #if LUA_VERSION_NUM >= 504
-	return lua_resume (L, NULL, narg, NULL);
+	return lua_resume (L, NULL, narg, &nres);
 #else
 	return lua_resume (L, NULL, narg);
 #endif
