@@ -4465,7 +4465,7 @@ lua_push_symbol_result (lua_State *L,
 		s = symbol_result;
 	}
 
-	if (s) {
+	if (s && !(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 		if (add_metric) {
 			table_fields_cnt++;
 		}
@@ -4573,6 +4573,7 @@ lua_task_has_symbol (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_symbol_result *s;
 	const gchar *symbol;
 	gboolean found = FALSE;
 
@@ -4580,11 +4581,19 @@ lua_task_has_symbol (lua_State *L)
 
 	if (task && symbol) {
 		if (lua_isstring (L, 3)) {
-			found = (rspamd_task_find_symbol_result (task, symbol,
-					rspamd_find_metric_result (task, lua_tostring (L, 3))) != NULL);
+			s = rspamd_task_find_symbol_result (task, symbol,
+					rspamd_find_metric_result (task, lua_tostring (L, 3)));
+
+			if (s && !(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+				found = TRUE;
+			}
 		}
 		else {
-			found = (rspamd_task_find_symbol_result (task, symbol, NULL) != NULL);
+			s = rspamd_task_find_symbol_result (task, symbol, NULL);
+
+			if (s && !(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+				found = TRUE;
+			}
 		}
 		lua_pushboolean (L, found);
 	}
