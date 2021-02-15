@@ -182,8 +182,7 @@ public:
 	bool consume_input(const std::string_view &sv);
 
 	auto get_object_maybe(void) -> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error> {
-		if (state == parser_state::parse_done) {
-			state = parser_state::initial_state;
+		if (style_object) {
 			return std::move(style_object);
 		}
 
@@ -191,14 +190,6 @@ public:
 	}
 
 private:
-	enum class parser_state {
-		initial_state,
-		skip_spaces,
-		parse_selector,
-		ignore_selector, /* e.g. media or namespace */
-		parse_done,
-	};
-	parser_state state = parser_state::initial_state;
 	std::unique_ptr<css_style_sheet> style_object;
 	std::unique_ptr<css_tokeniser> tokeniser;
 
@@ -371,11 +362,6 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 		case css_parser_token::token_type::eof_token:
 			eof = true;
 			break;
-		case css_parser_token::token_type::ident_token:
-		case css_parser_token::token_type::hash_token:
-			/* Consume allowed complex tokens as a rule preamble */
-			ret = component_value_consumer(block);
-			break;
 		case css_parser_token::token_type::cdo_token:
 		case css_parser_token::token_type::cdc_token:
 			if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
@@ -385,6 +371,14 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 			else {
 
 			}
+			break;
+		case css_parser_token::token_type::ocurlbrace_token:
+			ret = simple_block_consumer(block,
+					css_parser_token::token_type::ecurlbrace_token, false);
+			break;
+		default:
+			tokeniser->pushback_token(std::move(next_token));
+			ret = component_value_consumer(block);
 			break;
 		};
 	}
@@ -468,7 +462,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		}
 	}
 
-	if (ret) {
+	if (ret && block) {
 		msg_debug_css("attached node component rule %s; length=%d",
 				block->token_type_str(), (int)block->size());
 		top->attach_block(std::move(block));
@@ -487,14 +481,8 @@ bool css_parser::consume_input(const std::string_view &sv)
 	auto consumed_blocks =
 			std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
 
-	while (!eof) {
-		/* Get a token and a consumer lambda for the current parser state */
-
-		switch (state) {
-		case parser_state::initial_state:
-			ret = qualified_rule_consumer(consumed_blocks);
-			break;
-		}
+	while (!eof && ret) {
+		ret = qualified_rule_consumer(consumed_blocks);
 	}
 
 	auto debug_str = consumed_blocks->debug_str();
