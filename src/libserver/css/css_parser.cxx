@@ -137,16 +137,16 @@ struct css_consumed_block {
 	}
 
 	auto debug_str(void) -> std::string {
-		std::string ret = token_type_str();
+		std::string ret = std::string("\"type\": \"") + token_type_str() + "\"";
 
-		ret += "; value: ";
+		ret += ", \"value\": ";
 
 		std::visit([&](auto& arg) {
 			using T = std::decay_t<decltype(arg)>;
 
 			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
 				/* Array of blocks */
-				ret += "nodes: [";
+				ret += "[";
 				for (const auto &block : arg) {
 					ret += "{";
 					ret += block->debug_str();
@@ -161,11 +161,11 @@ struct css_consumed_block {
 			}
 			else if constexpr (std::is_same_v<T, std::monostate>) {
 				/* Empty block */
-				ret += "empty";
+				ret += "\"empty\"";
 			}
 			else {
 				/* Single element block */
-				ret += arg.debug_token_str();
+				ret += "\"" + arg.debug_token_str() + "\"";
 			}
 		},
 		content);
@@ -486,7 +486,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 	}
 
 	auto debug_str = consumed_blocks->debug_str();
-	msg_debug_css("consumed css: %*s", (int)debug_str.size(), debug_str.data());
+	msg_debug_css("consumed css: {%*s}", (int)debug_str.size(), debug_str.data());
 
 	tokeniser.reset(nullptr); /* No longer needed */
 
