@@ -450,7 +450,7 @@ local function milter_headers(task)
 
   routines['x-os-fingerprint'] = function()
     if skip_wanted('x-os-fingerprint') then return end
-    local local_mod = settings.routines['x-os-fingerprint\'']
+    local local_mod = settings.routines['x-os-fingerprint']
 
     local os_string, link_type, uptime_min, distance =
       task:get_mempool():get_variable('os_fingerprint',
