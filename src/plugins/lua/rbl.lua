@@ -600,7 +600,7 @@ local function gen_rbl_callback(rule)
     for selector_label, selector in pairs(rule.selectors) do
       local res = selector(task)
 
-      if res then
+      if res and type(res) == 'table' then
         if rule.selector_flatten then
           add_dns_request(task, table.concat(res, ''), false, false,
                   requests_table, selector_label, whitelist)
@@ -610,6 +610,9 @@ local function gen_rbl_callback(rule)
                     selector_label, whitelist)
           end
         end
+      elseif res then
+        add_dns_request(task, res, false, false,
+                requests_table, selector_label, whitelist)
       end
     end
 
@@ -910,6 +913,10 @@ local function add_rbl(key, rbl, global_opts)
         rbl.selectors[selector_label] = known_selectors[selector].selector
       else
 
+        if type(rbl.selector_flatten) ~= 'boolean' then
+          -- Fail-safety
+          rbl.selector_flatten = true
+        end
         local sel = selectors.create_selector_closure(rspamd_config, selector, '',
                 rbl.selector_flatten)
 
