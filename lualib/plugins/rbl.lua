@@ -53,6 +53,7 @@ local default_options = {
   ['default_exclude_local'] = true,
   ['default_no_ip'] = false,
   ['default_dkim_match_from'] = false,
+  ['default_selector_flatten'] = true,
 }
 
 local return_codes_schema = ts.map_of(
@@ -126,6 +127,7 @@ local rule_schema_tbl = {
   returnbits = return_bits_schema:is_optional(),
   returncodes = return_codes_schema:is_optional(),
   selector = ts.one_of{ts.string, ts.table}:is_optional(),
+  selector_flatten = ts.boolean:is_optional(),
   symbol = ts.string:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
   unknown = ts.boolean:is_optional(),

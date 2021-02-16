@@ -601,9 +601,14 @@ local function gen_rbl_callback(rule)
       local res = selector(task)
 
       if res then
-        for _,r in ipairs(res) do
-          add_dns_request(task, r, false, false, requests_table,
-              selector_label, whitelist)
+        if rule.selector_flatten then
+          add_dns_request(task, table.concat(res, ''), false, false,
+                  requests_table, selector_label, whitelist)
+        else
+          for _,r in ipairs(res) do
+            add_dns_request(task, r, false, false, requests_table,
+                    selector_label, whitelist)
+          end
         end
       end
     end
@@ -904,8 +909,9 @@ local function add_rbl(key, rbl, global_opts)
             known_selectors[selector].id)
         rbl.selectors[selector_label] = known_selectors[selector].selector
       else
-        -- Create a new flattened closure
-        local sel = selectors.create_selector_closure(rspamd_config, selector, '', true)
+
+        local sel = selectors.create_selector_closure(rspamd_config, selector, '',
+                rbl.selector_flatten)
 
         if not sel then
           rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, selector)
