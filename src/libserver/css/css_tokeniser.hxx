@@ -23,6 +23,7 @@
 #include <utility>
 #include <variant>
 #include <list>
+#include <functional>
 #include "mem_pool.h"
 
 namespace rspamd::css {
@@ -101,6 +102,15 @@ struct css_parser_token {
 	auto debug_token_str() -> std::string;
 };
 
+static auto css_parser_eof_token(void) -> const css_parser_token & {
+	static css_parser_token eof_tok {
+		css_parser_token::token_type::eof_token,
+				css_parser_token_placeholder()
+	};
+
+	return eof_tok;
+}
+
 /* Ensure that parser tokens are simple enough */
 /*
  * compiler must implement P0602 "variant and optional should propagate copy/move triviality"
@@ -128,6 +138,8 @@ private:
 	auto consume_number() -> struct css_parser_token;
 	auto consume_ident() -> struct css_parser_token;
 };
+
+using tokeniser_gen_functor = std::function<const css_parser_token &(void)>;
 
 }
 

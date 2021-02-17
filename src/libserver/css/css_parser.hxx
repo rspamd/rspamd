@@ -26,8 +26,6 @@
 
 namespace rspamd::css {
 
-INIT_LOG_MODULE(chartable)
-
 auto parse_css (rspamd_mempool_t *pool, const std::string_view &st) ->
 		tl::expected<std::unique_ptr<css_style_sheet>,css_parse_error>;
 

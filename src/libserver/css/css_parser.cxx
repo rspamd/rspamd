@@ -16,6 +16,8 @@
 
 #include "css_parser.hxx"
 #include "css_tokeniser.hxx"
+#include "css_selector.hxx"
+#include "css_rule.hxx"
 #include <vector>
 #include <unicode/utf8.h>
 
@@ -92,6 +94,14 @@ struct css_consumed_block {
 		}
 
 		return empty_block_vec;
+	}
+
+	auto get_token_or_empty() const -> const css_parser_token& {
+		if (content.index() == 2) {
+			return std::get<css_parser_token>(content);
+		}
+
+		return css_parser_eof_token();
 	}
 
 	auto token_type_str(void) const -> const char *
@@ -604,13 +614,53 @@ bool css_parser::consume_input(const std::string_view &sv)
 			if (simple_block != children.end()) {
 				/*
 				 * We have a component and a simple block,
-				 * so we can parse a declaration
+				 * so we can parse a selector and then extract
+				 * declarations from a simple block
 				 */
 
 				/* First, tag all components as preamble */
-				for (auto it = children.begin(); it != simple_block; ++it) {
-					(*it)->tag = css_consumed_block::parser_tag_type::css_selector;
-				}
+				auto selector_it = children.cbegin();
+
+				auto selector_token_functor = [&selector_it,&simple_block](void)
+						-> const css_parser_token & {
+					for (;;) {
+						if (selector_it == simple_block) {
+							return css_parser_eof_token();
+						}
+
+						const auto &ret = (*selector_it)->get_token_or_empty();
+
+						++selector_it;
+
+						if (ret.type != css_parser_token::token_type::eof_token) {
+							return ret;
+						}
+					}
+				};
+
+				auto selectors_vec = process_selector_tokens(pool, selector_token_functor);
+
+				auto decls_it = (*simple_block)->get_blocks_or_empty().cbegin();
+				auto decls_end = (*simple_block)->get_blocks_or_empty().cend();
+				auto declaration_token_functor = [&decls_it,&decls_end](void)
+						-> const css_parser_token & {
+					for (;;) {
+						if (decls_it == decls_end) {
+							return css_parser_eof_token();
+						}
+
+						const auto &ret = (*decls_it)->get_token_or_empty();
+
+						++decls_it;
+
+						if (ret.type != css_parser_token::token_type::eof_token) {
+							return ret;
+						}
+					}
+				};
+
+				auto declarations_vec = process_declaration_tokens(pool,
+						declaration_token_functor);
 			}
 		}
 	}

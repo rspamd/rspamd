@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-#include "css_selector.hxx"
+#include "css_rule.hxx"
 
 namespace rspamd::css {
 
-auto process_selector_tokens(rspamd_mempool_t *pool,
-							 const tokeniser_gen_functor &next_token_functor)
-	-> selectors_vec
+auto process_declaration_tokens(rspamd_mempool_t *pool,
+								const tokeniser_gen_functor &next_token_functor)
+	-> declarations_vec
 {
-	selectors_vec ret;
+	declarations_vec ret;
 
 	return ret; /* copy elision */
 }
-
 }
-

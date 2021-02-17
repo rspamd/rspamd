@@ -20,6 +20,7 @@
 
 #include "css_value.hxx"
 #include "css_property.hxx"
+#include "css_tokeniser.hxx"
 #include <vector>
 #include <memory>
 
@@ -48,6 +49,12 @@ public:
 	constexpr const css_values_vec& get_values(void) const { return values; }
 	constexpr const css_property& get_prop(void) const { return prop; }
 };
+
+using declarations_vec = std::vector<std::unique_ptr<css_rule>>;
+
+auto process_declaration_tokens(rspamd_mempool_t *pool,
+							 const tokeniser_gen_functor &next_token_functor)
+	-> declarations_vec;
 
 }
 

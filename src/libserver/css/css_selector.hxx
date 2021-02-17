@@ -22,7 +22,8 @@
 #include <variant>
 #include <string>
 #include <optional>
-#include "contrib/expected/expected.hpp"
+#include <vector>
+#include <functional>
 #include "parse_error.hxx"
 #include "css_tokeniser.hxx"
 #include "html_tags.h"
@@ -54,13 +55,17 @@ struct css_selector {
 			return std::string_view(std::get<std::string>(value));
 		}
 		return std::nullopt;
-	}
-
-	static tl::expected<css_selector,css_parse_error> from_bytes (const char *input,
-															   size_t inlen);
+	};
 };
 
+using selectors_vec = std::vector<std::unique_ptr<css_selector>>;
 
+/*
+ * Consume selectors token and split them to the list of selectors
+ */
+auto process_selector_tokens(rspamd_mempool_t *pool,
+							 const tokeniser_gen_functor &next_token_functor)
+	-> selectors_vec;
 
 }
 
