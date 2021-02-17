@@ -22,6 +22,7 @@
 
 namespace rspamd::css {
 
+struct css_consumed_block;
 /*
  * Represents a consumed token by a parser
  */
@@ -33,7 +34,8 @@ struct css_consumed_block {
 		css_simple_block,
 		css_function,
 		css_function_arg,
-		css_component
+		css_component,
+		css_selector,
 	};
 
 	using consumed_block_ptr = std::unique_ptr<css_consumed_block>;
@@ -81,6 +83,17 @@ struct css_consumed_block {
 		content = std::move(tok);
 	}
 
+	/* Empty blocks used to avoid type checks in loops */
+	const inline static std::vector<consumed_block_ptr> empty_block_vec{};
+
+	auto get_blocks_or_empty() const -> const std::vector<consumed_block_ptr>& {
+		if (content.index() == 1) {
+			return std::get<std::vector<consumed_block_ptr>>(content);
+		}
+
+		return empty_block_vec;
+	}
+
 	auto token_type_str(void) const -> const char *
 	{
 		const auto *ret = "";
@@ -106,6 +119,9 @@ struct css_consumed_block {
 			break;
 		case parser_tag_type::css_component:
 			ret = "component";
+			break;
+		case parser_tag_type::css_selector:
+			ret = "selector";
 			break;
 		}
 
@@ -568,6 +584,35 @@ bool css_parser::consume_input(const std::string_view &sv)
 			break;
 		}
 
+	}
+
+	const auto &rules = consumed_blocks->get_blocks_or_empty();
+
+	for (auto &&rule : rules) {
+		/*
+		 * For now, we do not need any of the at rules, so we can safely ignore them
+		 */
+		auto &&children = rule->get_blocks_or_empty();
+
+		if (children.size() > 1 &&
+			children[0]->tag == css_consumed_block::parser_tag_type::css_component) {
+			auto simple_block = std::find_if(children.begin(), children.end(),
+					[](auto &bl) {
+						return bl->tag == css_consumed_block::parser_tag_type::css_simple_block;
+					});
+
+			if (simple_block != children.end()) {
+				/*
+				 * We have a component and a simple block,
+				 * so we can parse a declaration
+				 */
+
+				/* First, tag all components as preamble */
+				for (auto it = children.begin(); it != simple_block; ++it) {
+					(*it)->tag = css_consumed_block::parser_tag_type::css_selector;
+				}
+			}
+		}
 	}
 
 	auto debug_str = consumed_blocks->debug_str();

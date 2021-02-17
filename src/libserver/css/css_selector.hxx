@@ -24,6 +24,7 @@
 #include <optional>
 #include "contrib/expected/expected.hpp"
 #include "parse_error.hxx"
+#include "css_tokeniser.hxx"
 #include "html_tags.h"
 
 namespace rspamd::css {
@@ -41,14 +42,14 @@ struct css_selector {
 	selector_type type;
 	std::variant<tag_id_t, std::string> value;
 
-	constexpr std::optional<tag_id_t> to_tag (void) const {
+	 auto to_tag(void) const -> std::optional<tag_id_t> {
 		if (type == selector_type::SELECTOR_ELEMENT) {
 			return std::get<tag_id_t>(value);
 		}
 		return std::nullopt;
 	}
 
-	constexpr std::optional<const std::string_view> to_string (void) const {
+	auto to_string(void) const -> std::optional<const std::string_view> {
 		if (type == selector_type::SELECTOR_ELEMENT) {
 			return std::string_view(std::get<std::string>(value));
 		}
@@ -58,6 +59,8 @@ struct css_selector {
 	static tl::expected<css_selector,css_parse_error> from_bytes (const char *input,
 															   size_t inlen);
 };
+
+
 
 }
 

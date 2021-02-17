@@ -50,7 +50,7 @@ p {
 p:first-child {
   color: blue;
 }
-a[target=_blank] {
+a[target=_blank] #id{
   background-color: yellow;
 }
 * {
@@ -75,7 +75,7 @@ body {
 }
 
 /* Style the topnav links */
-.topnav a {
+.topnav a{
   float: left;
   display: block;
   color: #f2f2f2;
@@ -85,7 +85,7 @@ body {
 }
 
 /* Clear floats after the columns */
-.row:after {
+.row:after{
   content: "";
   display: table;
   clear: both;
