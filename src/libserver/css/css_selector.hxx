@@ -24,6 +24,7 @@
 #include <optional>
 #include <vector>
 #include <functional>
+#include <memory>
 #include "parse_error.hxx"
 #include "css_tokeniser.hxx"
 #include "html_tags.h"
