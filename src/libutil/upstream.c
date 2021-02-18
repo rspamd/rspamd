@@ -1378,13 +1378,20 @@ rspamd_upstream_get_round_robin (struct upstream_list *ups,
 			}
 		}
 
-		if (up->checked * (up->errors + 1) < min_checked) {
+		/*
+		 * This code is used when all upstreams have zero weight
+		 * The logic is to select least currently used upstream and penalise
+		 * upstream with errors. The error penalty should no be too high
+		 * to avoid sudden traffic drop in this case.
+		 */
+		if (up->checked + up->errors * 2 < min_checked) {
 			min_checked_sel = up;
 			min_checked = up->checked;
 		}
 	}
 
 	if (max_weight == 0) {
+		/* All upstreams have zero weight */
 		if (min_checked > G_MAXUINT / 2) {
 			/* Reset all checked counters to avoid overflow */
 			for (i = 0; i < ups->alive->len; i ++) {
