@@ -24,6 +24,7 @@
 #include <variant>
 #include <optional>
 #include "parse_error.hxx"
+#include "css_parser.hxx"
 #include "contrib/expected/expected.hpp"
 
 namespace rspamd::css {
@@ -109,8 +110,7 @@ struct css_value {
 		return (type != css_value_type::CSS_VALUE_NYI);
 	}
 
-	static tl::expected<css_value,css_parse_error> from_bytes (const char *input,
-																  size_t inlen);
+	static tl::expected<css_value,css_parse_error> from_css_block(const css_consumed_block &bl);
 };
 
 }

@@ -24,181 +24,97 @@
 
 namespace rspamd::css {
 
-struct css_consumed_block;
-/*
- * Represents a consumed token by a parser
- */
-struct css_consumed_block {
-	enum class parser_tag_type : std::uint8_t  {
-		css_top_block,
-		css_qualified_rule,
-		css_at_rule,
-		css_simple_block,
-		css_function,
-		css_function_arg,
-		css_component,
-		css_selector,
-	};
+const css_consumed_block css_parser_eof_block{};
 
-	using consumed_block_ptr = std::unique_ptr<css_consumed_block>;
-
-	parser_tag_type tag;
-	std::variant<std::monostate,
-		std::vector<consumed_block_ptr>,
-		css_parser_token> content;
-
-	css_consumed_block() = delete;
-
-	css_consumed_block(parser_tag_type tag) : tag(tag) {
-		if (tag == parser_tag_type::css_top_block ||
-			tag == parser_tag_type::css_qualified_rule ||
-			tag == parser_tag_type::css_simple_block) {
-			/* Pre-allocate content for known vector blocks */
-			std::vector<consumed_block_ptr> vec;
-			vec.reserve(4);
-			content = std::move(vec);
-		}
+auto css_consumed_block::attach_block(consumed_block_ptr &&block) -> bool {
+	if (content.index() == 0) {
+		/* Switch from monostate */
+		content = std::vector<consumed_block_ptr>();
 	}
-	/* Construct a block from a single lexer token (for trivial blocks) */
-	explicit css_consumed_block(parser_tag_type tag, css_parser_token &&tok) :
-			tag(tag), content(std::move(tok)) {}
-
-	/* Attach a new block to the compound block, consuming block inside */
-	auto attach_block(consumed_block_ptr &&block) -> bool {
-		if (content.index() == 0) {
-			/* Switch from monostate */
-			content = std::vector<consumed_block_ptr>();
-		}
-		else if (content.index() == 2) {
-			/* A single component, cannot attach a block ! */
-			return false;
-		}
-
-		auto &value_vec = std::get<std::vector<consumed_block_ptr>>(content);
-		value_vec.push_back(std::move(block));
-
-		return true;
+	else if (content.index() == 2) {
+		/* A single component, cannot attach a block ! */
+		return false;
 	}
 
-	auto assign_token(css_parser_token &&tok) -> void
-	{
-		content = std::move(tok);
+	auto &value_vec = std::get<std::vector<consumed_block_ptr>>(content);
+	value_vec.push_back(std::move(block));
+
+	return true;
+}
+
+auto css_consumed_block::token_type_str(void) const -> const char *
+{
+	const auto *ret = "";
+
+	switch(tag) {
+	case parser_tag_type::css_top_block:
+		ret = "top";
+		break;
+	case parser_tag_type::css_qualified_rule:
+		ret = "qualified rule";
+		break;
+	case parser_tag_type::css_at_rule:
+		ret = "at rule";
+		break;
+	case parser_tag_type::css_simple_block:
+		ret = "simple block";
+		break;
+	case parser_tag_type::css_function:
+		ret = "function";
+		break;
+	case parser_tag_type::css_function_arg:
+		ret = "function args";
+		break;
+	case parser_tag_type::css_component:
+		ret = "component";
+		break;
+	case parser_tag_type::css_selector:
+		ret = "selector";
+		break;
+	case parser_tag_type::css_eof_block:
+		ret = "eof";
+		break;
 	}
 
-	/* Empty blocks used to avoid type checks in loops */
-	const inline static std::vector<consumed_block_ptr> empty_block_vec{};
+	return ret;
+}
 
-	auto get_blocks_or_empty() const -> const std::vector<consumed_block_ptr>& {
-		if (content.index() == 1) {
-			return std::get<std::vector<consumed_block_ptr>>(content);
-		}
+auto css_consumed_block::debug_str(void) -> std::string {
+	std::string ret = std::string(R"("type": ")") + token_type_str() + "\"";
 
-		return empty_block_vec;
-	}
+	ret += ", \"value\": ";
 
-	auto get_token_or_empty() const -> const css_parser_token& {
-		if (content.index() == 2) {
-			return std::get<css_parser_token>(content);
-		}
+	std::visit([&](auto& arg) {
+				using T = std::decay_t<decltype(arg)>;
 
-		return css_parser_eof_token();
-	}
+				if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
+					/* Array of blocks */
+					ret += "[";
+					for (const auto &block : arg) {
+						ret += "{";
+						ret += block->debug_str();
+						ret += "}, ";
+					}
 
-	auto token_type_str(void) const -> const char *
-	{
-		const auto *ret = "";
-
-		switch(tag) {
-		case parser_tag_type::css_top_block:
-			ret = "top";
-			break;
-		case parser_tag_type::css_qualified_rule:
-			ret = "qualified rule";
-			break;
-		case parser_tag_type::css_at_rule:
-			ret = "at rule";
-			break;
-		case parser_tag_type::css_simple_block:
-			ret = "simple block";
-			break;
-		case parser_tag_type::css_function:
-			ret = "function";
-			break;
-		case parser_tag_type::css_function_arg:
-			ret = "function args";
-			break;
-		case parser_tag_type::css_component:
-			ret = "component";
-			break;
-		case parser_tag_type::css_selector:
-			ret = "selector";
-			break;
-		}
-
-		return ret;
-	}
-
-	auto size() const -> std::size_t {
-		auto ret = 0;
-
-		std::visit([&](auto& arg) {
-			using T = std::decay_t<decltype(arg)>;
-
-			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
-				/* Array of blocks */
-				ret = arg.size();
-			}
-			else if constexpr (std::is_same_v<T, std::monostate>) {
-				/* Empty block */
-				ret = 0;
-			}
-			else {
-				/* Single element block */
-				ret = 1;
-			}
-		},
-		content);
-
-		return ret;
-	}
-
-	auto debug_str(void) -> std::string {
-		std::string ret = std::string("\"type\": \"") + token_type_str() + "\"";
-
-		ret += ", \"value\": ";
-
-		std::visit([&](auto& arg) {
-			using T = std::decay_t<decltype(arg)>;
-
-			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
-				/* Array of blocks */
-				ret += "[";
-				for (const auto &block : arg) {
-					ret += "{";
-					ret += block->debug_str();
-					ret += "}, ";
+					if (*(--ret.end()) == ' ') {
+						ret.pop_back();
+						ret.pop_back(); /* Last ',' */
+					}
+					ret += "]";
 				}
-
-				if (*(--ret.end()) == ' ') {
-					ret.pop_back();
-					ret.pop_back(); /* Last ',' */
+				else if constexpr (std::is_same_v<T, std::monostate>) {
+					/* Empty block */
+					ret += R"("empty")";
 				}
-				ret += "]";
-			}
-			else if constexpr (std::is_same_v<T, std::monostate>) {
-				/* Empty block */
-				ret += "\"empty\"";
-			}
-			else {
-				/* Single element block */
-				ret += "\"" + arg.debug_token_str() + "\"";
-			}
-		},
-		content);
+				else {
+					/* Single element block */
+					ret += "\"" + arg.debug_token_str() + "\"";
+				}
+			},
+			content);
 
-		return ret;
-	}
-};
+	return ret;
+}
 
 class css_parser {
 public:
@@ -622,18 +538,18 @@ bool css_parser::consume_input(const std::string_view &sv)
 				auto selector_it = children.cbegin();
 
 				auto selector_token_functor = [&selector_it,&simple_block](void)
-						-> const css_parser_token & {
+						-> const css_consumed_block & {
 					for (;;) {
 						if (selector_it == simple_block) {
-							return css_parser_eof_token();
+							return css_parser_eof_block;
 						}
 
-						const auto &ret = (*selector_it)->get_token_or_empty();
+						const auto &ret = (*selector_it);
 
 						++selector_it;
 
-						if (ret.type != css_parser_token::token_type::eof_token) {
-							return ret;
+						if (ret->get_token_or_empty().type != css_parser_token::token_type::eof_token) {
+							return *ret;
 						}
 					}
 				};
@@ -643,18 +559,18 @@ bool css_parser::consume_input(const std::string_view &sv)
 				auto decls_it = (*simple_block)->get_blocks_or_empty().cbegin();
 				auto decls_end = (*simple_block)->get_blocks_or_empty().cend();
 				auto declaration_token_functor = [&decls_it,&decls_end](void)
-						-> const css_parser_token & {
+						-> const css_consumed_block & {
 					for (;;) {
 						if (decls_it == decls_end) {
-							return css_parser_eof_token();
+							return css_parser_eof_block;
 						}
 
-						const auto &ret = (*decls_it)->get_token_or_empty();
+						const auto &ret = (*decls_it);
 
 						++decls_it;
 
-						if (ret.type != css_parser_token::token_type::eof_token) {
-							return ret;
+						if (ret->get_token_or_empty().type != css_parser_token::token_type::eof_token) {
+							return *ret;
 						}
 					}
 				};

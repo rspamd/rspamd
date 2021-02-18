@@ -18,8 +18,8 @@
 
 namespace rspamd::css {
 
-tl::expected<css_value,css_parse_error> css_value::from_bytes (const char *input,
-													size_t inlen)
+tl::expected<css_value,css_parse_error>
+css_value::from_css_block(const css_consumed_block &bl)
 {
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }

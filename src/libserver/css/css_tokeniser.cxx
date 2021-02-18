@@ -597,6 +597,9 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case ';':
 			offset = i + 1;
 			return make_token<css_parser_token::token_type::semicolon_token>();
+		case ':':
+			offset = i + 1;
+			return make_token<css_parser_token::token_type::colon_token>();
 		case '<':
 			/* Maybe an xml like comment */
 			if (i + 3 < input.size () && input[i + 1] == '!'

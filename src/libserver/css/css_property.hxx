@@ -19,6 +19,7 @@
 #define RSPAMD_CSS_PROPERTY_HXX
 
 #include <string>
+#include "css_tokeniser.hxx"
 #include "parse_error.hxx"
 #include "contrib/expected/expected.hpp"
 
@@ -29,7 +30,7 @@ namespace rspamd::css {
  * point of view
  */
 enum class css_property_type {
-	PROPERTY_FONT,
+	PROPERTY_FONT = 0,
 	PROPERTY_COLOR,
 	PROPERTY_BGCOLOR,
 	PROPERTY_BACKGROUND,
@@ -37,12 +38,13 @@ enum class css_property_type {
 	PROPERTY_WIDTH,
 	PROPERTY_DISPLAY,
 	PROPERTY_VISIBILITY,
+	PROPERTY_NYI,
 };
 
 struct css_property {
 	css_property_type type;
-	static tl::expected<css_property,css_parse_error> from_bytes (const char *input,
-																 size_t inlen);
+	static tl::expected<css_property,css_parse_error> from_token(
+			const css_parser_token &tok);
 };
 
 

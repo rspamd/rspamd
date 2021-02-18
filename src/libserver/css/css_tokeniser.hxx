@@ -95,6 +95,13 @@ struct css_parser_token {
 	css_parser_token(css_parser_token &&other) = default;
 	auto operator=(css_parser_token &&other) -> css_parser_token& = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
+	auto get_string_or_default(const std::string_view &def) const -> std::string_view  {
+		if (value.index() == 0) {
+			return std::get<std::string_view>(value);
+		}
+
+		return def;
+	}
 
 	/* Debugging routines */
 	constexpr auto get_token_type() -> const char *;
@@ -138,8 +145,6 @@ private:
 	auto consume_number() -> struct css_parser_token;
 	auto consume_ident() -> struct css_parser_token;
 };
-
-using tokeniser_gen_functor = std::function<const css_parser_token &(void)>;
 
 }
 

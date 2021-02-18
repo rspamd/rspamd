@@ -20,7 +20,7 @@
 
 #include "css_value.hxx"
 #include "css_property.hxx"
-#include "css_tokeniser.hxx"
+#include "css_parser.hxx"
 #include <vector>
 #include <memory>
 
@@ -38,7 +38,7 @@ public:
 	css_rule(css_rule &&other) = default;
 	explicit css_rule(css_property &&prop, css_values_vec &&values) :
 		prop(prop), values(std::forward<css_values_vec>(values)) {}
-	explicit css_rule(css_property &&prop) : prop(prop), values{} {}
+	explicit css_rule(const css_property &prop) : prop(prop), values{} {}
 	/* Methods */
 	void add_value(std::unique_ptr<css_value> &&value) {
 		values.emplace_back(std::forward<std::unique_ptr<css_value>>(value));
@@ -53,7 +53,7 @@ public:
 using declarations_vec = std::vector<std::unique_ptr<css_rule>>;
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
-							 const tokeniser_gen_functor &next_token_functor)
+							 const blocks_gen_functor &next_token_functor)
 	-> declarations_vec;
 
 }

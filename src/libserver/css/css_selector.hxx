@@ -25,8 +25,9 @@
 #include <vector>
 #include <functional>
 #include <memory>
+
 #include "parse_error.hxx"
-#include "css_tokeniser.hxx"
+#include "css_parser.hxx"
 #include "html_tags.h"
 
 namespace rspamd::css {
@@ -65,7 +66,7 @@ using selectors_vec = std::vector<std::unique_ptr<css_selector>>;
  * Consume selectors token and split them to the list of selectors
  */
 auto process_selector_tokens(rspamd_mempool_t *pool,
-							 const tokeniser_gen_functor &next_token_functor)
+							 const blocks_gen_functor &next_token_functor)
 	-> selectors_vec;
 
 }

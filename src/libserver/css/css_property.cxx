@@ -15,12 +15,44 @@
  */
 
 #include "css_property.hxx"
-
+#include "frozen/unordered_map.h"
+#include "frozen/string.h"
 
 namespace rspamd::css {
 
-auto css_property::from_bytes (const char *input, size_t inlen) -> tl::expected<css_property,css_parse_error>
+constexpr const auto max_type = static_cast<int>(css_property_type::PROPERTY_NYI);
+constexpr frozen::unordered_map<frozen::string, css_property_type, max_type> type_map{
+		{"font", css_property_type::PROPERTY_FONT},
+		{"color", css_property_type::PROPERTY_COLOR},
+		{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
+		{"background", css_property_type::PROPERTY_BACKGROUND},
+		{"height", css_property_type::PROPERTY_HEIGHT},
+		{"width", css_property_type::PROPERTY_WIDTH},
+		{"display", css_property_type::PROPERTY_DISPLAY},
+		{"visibility", css_property_type::PROPERTY_VISIBILITY},
+};
+
+auto token_string_to_property(const std::string_view &inp) -> css_property_type {
+
+	css_property_type ret = css_property_type::PROPERTY_NYI;
+
+	auto known_type = type_map.find(inp);
+
+	if (known_type != type_map.end()) {
+		ret = known_type->second;
+	}
+
+	return ret;
+}
+
+auto css_property::from_token(const css_parser_token &tok) -> tl::expected<css_property,css_parse_error>
 {
+	if (tok.type == css_parser_token::token_type::ident_token) {
+		auto sv = tok.get_string_or_default("");
+
+		return css_property{token_string_to_property(sv)};
+	}
+
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }
 
