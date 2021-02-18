@@ -17,6 +17,8 @@
 #include "css_tokeniser.hxx"
 #include "css_util.hxx"
 #include "css.hxx"
+#include "frozen/unordered_map.h"
+#include "frozen/string.h"
 #include <string>
 
 namespace rspamd::css {
@@ -106,6 +108,40 @@ static constexpr inline auto is_plain_ident(char c) -> bool
 	return false;
 };
 
+struct css_dimension_data {
+	css_parser_token::dim_type dtype;
+	double mult;
+};
+
+/*
+ * Maps from css dimensions to the multipliers that look reasonable in email
+ */
+constexpr const auto max_dims = static_cast<int>(css_parser_token::dim_type::dim_max);
+constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> dimensions_map{
+		{"px", { css_parser_token::dim_type::dim_px, 1.0}},
+		/* EM/REM are 16 px, so multiply and round */
+		{"em", { css_parser_token::dim_type::dim_em, 16.0}},
+		{"rem", { css_parser_token::dim_type::dim_rem, 16.0}},
+		/*
+		 * Represents the x-height of the element's font.
+		 * On fonts with the "x" letter, this is generally the height
+		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
+		 */
+		{"ex", { css_parser_token::dim_type::dim_ex, 8.0}},
+		{"wv", { css_parser_token::dim_type::dim_wv, 8.0}},
+		{"wh", { css_parser_token::dim_type::dim_wh, 6.0}},
+		{"vmax", { css_parser_token::dim_type::dim_vmax, 8.0}},
+		{"vmin", { css_parser_token::dim_type::dim_vmin, 6.0}},
+		/* One point. 1pt = 1/72nd of 1in */
+		{"pt", { css_parser_token::dim_type::dim_pt, 96.0 / 72.0}},
+		/* 96px/2.54 */
+		{"cm", { css_parser_token::dim_type::dim_cm, 96.0 / 2.54}},
+		{"mm", { css_parser_token::dim_type::dim_mm, 9.60 / 2.54}},
+		{"in", { css_parser_token::dim_type::dim_in, 96.0}},
+		/* 1pc = 12pt = 1/6th of 1in. */
+		{"pc", { css_parser_token::dim_type::dim_pc, 96.0 / 6.0}}
+};
+
 auto
 css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 {
@@ -118,93 +154,13 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	auto num = std::get<double>(value);
 	auto sv = std::get<std::string_view>(dim_token.value);
 
-	if (sv == "px") {
-		dim_type = css_parser_token::dim_type::dim_px;
+	auto dim_found = dimensions_map.find(sv);
+
+	if (dim_found != dimensions_map.end()) {
+		auto dim_elt = dim_found->second;
+		dimension_type = dim_elt.dtype;
 		flags |= css_parser_token::number_dimension;
-		num = (unsigned)num; /* Round to number */
-	}
-	else if (sv == "em") {
-		dim_type = css_parser_token::dim_type::dim_em;
-		flags |= css_parser_token::number_dimension;
-		/* EM is 16 px, so multiply and round */
-		num = (unsigned)(num * 16.0);
-	}
-	else if (sv == "rem") {
-		/* equal to EM in our case */
-		dim_type = css_parser_token::dim_type::dim_rem;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 16.0);
-	}
-	else if (sv == "ex") {
-		/*
-		 * Represents the x-height of the element's font.
-		 * On fonts with the "x" letter, this is generally the height
-		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
-		 */
-		dim_type = css_parser_token::dim_type::dim_ex;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 8.0);
-	}
-	else if (sv == "wv") {
-		/*
-		 * Vewport width in percentages:
-		 * we assume 1% of viewport width as 8px
-		 */
-		dim_type = css_parser_token::dim_type::dim_wv;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 8.0);
-	}
-	else if (sv == "wh") {
-		/*
-		 * Vewport height in percentages
-		 * we assume 1% of viewport width as 6px
-		 */
-		dim_type = css_parser_token::dim_type::dim_wh;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 6.0);
-	}
-	else if (sv == "vmax") {
-		/*
-		 * Vewport width in percentages
-		 * we assume 1% of viewport width as 6px
-		 */
-		dim_type = css_parser_token::dim_type::dim_vmax;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 8.0);
-	}
-	else if (sv == "vmin") {
-		/*
-		 * Vewport height in percentages
-		 * we assume 1% of viewport width as 6px
-		 */
-		dim_type = css_parser_token::dim_type::dim_vmin;
-		flags |= css_parser_token::number_dimension;
-		num = (unsigned)(num * 6.0);
-	}
-	else if (sv == "pt") {
-		dim_type = css_parser_token::dim_type::dim_pt;
-		flags |= css_parser_token::number_dimension;
-		num = (num * 96.0 / 72.0); /* One point. 1pt = 1/72nd of 1in */
-	}
-	else if (sv == "cm") {
-		dim_type = css_parser_token::dim_type::dim_cm;
-		flags |= css_parser_token::number_dimension;
-		num = (num * 96.0 / 2.54); /* 96px/2.54 */
-	}
-	else if (sv == "mm") {
-		dim_type = css_parser_token::dim_type::dim_mm;
-		flags |= css_parser_token::number_dimension;
-		num = (num * 9.6 / 2.54); /* 9.6px/2.54 */
-	}
-	else if (sv == "in") {
-		dim_type = css_parser_token::dim_type::dim_in;
-		flags |= css_parser_token::number_dimension;
-		num = (num * 96.0); /* 96px */
-	}
-	else if (sv == "pc") {
-		dim_type = css_parser_token::dim_type::dim_pc;
-		flags |= css_parser_token::number_dimension;
-		num = (num * 96.0 / 6.0); /* 1pc = 12pt = 1/6th of 1in. */
+		num *= dim_elt.mult;
 	}
 	else {
 		flags |= css_parser_token::flag_bad_dimension;
@@ -838,7 +794,7 @@ auto css_parser_token::debug_token_str() -> std::string
 	}
 
 	if (flags & number_dimension) {
-		ret += "; dim=" + std::to_string(static_cast<int>(dim_type));
+		ret += "; dim=" + std::to_string(static_cast<int>(dimension_type));
 	}
 
 	return ret; /* Copy elision */

@@ -56,7 +56,7 @@ struct css_parser_token {
 	};
 
 	enum class dim_type : std::uint8_t {
-		dim_px,
+		dim_px = 0,
 		dim_em,
 		dim_rem,
 		dim_ex,
@@ -69,6 +69,7 @@ struct css_parser_token {
 		dim_mm,
 		dim_in,
 		dim_pc,
+		dim_max,
 	};
 
 	static const std::uint8_t default_flags = 0;
@@ -85,9 +86,12 @@ struct css_parser_token {
 
 	/* Typed storage */
 	value_type value;
+
+	int lineno;
+
 	token_type type;
 	std::uint8_t flags = default_flags;
-	dim_type dim_type;
+	dim_type dimension_type;
 
 	css_parser_token() = delete;
 	explicit css_parser_token(token_type type, const value_type &value) :
