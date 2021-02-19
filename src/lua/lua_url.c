@@ -55,6 +55,7 @@ LUA_FUNCTION_DEF (url, tostring);
 LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, get_flags);
+LUA_FUNCTION_DEF (url, get_flags_num);
 LUA_FUNCTION_DEF (url, get_protocol);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
@@ -93,6 +94,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_visible),
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
+	LUA_INTERFACE_DEF (url, get_flags_num),
 	{"get_redirected", lua_url_get_phished},
 	LUA_INTERFACE_DEF (url, set_redirected),
 	{"__tostring", lua_url_tostring},
@@ -925,6 +927,22 @@ lua_url_get_flags (lua_State *L)
 }
 
 #undef PUSH_FLAG
+
+static gint
+lua_url_get_flags_num (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url) {
+		lua_pushinteger (L, url->url->flags);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
 
 void
 lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
