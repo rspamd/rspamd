@@ -647,6 +647,7 @@ local function clickhouse_collect(task)
    need_content = true,
    need_images = true,
    need_emails = false,
+   sort = true,
   }) or {}
 
   nurls = #task_urls
