@@ -325,12 +325,19 @@ bool rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
 bool rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u);
 
 /**
- * Compares two urls (similar to C comparison functions)
+ * Compares two urls (similar to C comparison functions) lexicographically
  * @param u1
  * @param u2
  * @return
  */
 int rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2);
+/**
+ * Same but used for qsort to sort `struct rspamd_url *[]` array
+ * @param u1
+ * @param u2
+ * @return
+ */
+int rspamd_url_cmp_qsort (const void *u1, const void *u2);
 
 #ifdef  __cplusplus
 }

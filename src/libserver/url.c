@@ -4167,37 +4167,61 @@ rspamd_url_flag_to_string (int flag)
 	return NULL;
 }
 
-int
+inline int
 rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 {
-	if (u1->protocol != u2->protocol || u1->urllen != u2->urllen) {
-		if (u1->protocol != u2->protocol) {
-			return u1->protocol < u2->protocol;
-		}
+	int min_len = MIN (u1->urllen, u2->urllen);
+	int r;
 
-		return (int)u1->urllen - (int)u2->urllen;
+	if (u1->protocol != u2->protocol) {
+		return u1->protocol < u2->protocol;
 	}
-	else {
-		int r;
 
-		if (u1->protocol & PROTOCOL_MAILTO) {
-			if ((r = rspamd_lc_cmp (rspamd_url_host_unsafe (u1),
-					rspamd_url_host_unsafe (u2), u1->hostlen)) == 0) {
+	if (u1->protocol & PROTOCOL_MAILTO) {
+		/* Emails specialisation (hosts must be compared in a case insensitive matter */
+		min_len = MIN (u1->hostlen, u2->hostlen);
+
+		if ((r = rspamd_lc_cmp (rspamd_url_host_unsafe (u1),
+				rspamd_url_host_unsafe (u2), min_len)) == 0) {
+			if (u1->hostlen == u2->hostlen) {
 				if (u1->userlen != u2->userlen || u1->userlen == 0) {
-					return (int)u1->userlen - (int)u2->userlen;
+					r = (int) u1->userlen - (int) u2->userlen;
 				}
 				else {
-					return rspamd_lc_cmp (rspamd_url_user_unsafe(u1),
+					r = memcmp (rspamd_url_user_unsafe(u1),
 							rspamd_url_user_unsafe(u2),
 							u1->userlen);
 				}
 			}
-
-			return r;
+			else {
+				r = u1->hostlen < u2->hostlen;
+			}
 		}
-
-		r = memcmp (u1->string, u2->string, u1->urllen);
-
-		return r;
 	}
+	else {
+		if (u1->urllen != u2->urllen) {
+			/* Different length, compare common part and then compare length */
+			r = memcmp (u1->string, u2->string, min_len);
+
+			if (r == 0) {
+				r = u1->urllen < u2->urllen;
+			}
+		}
+		else {
+			/* Equal length */
+			r = memcmp (u1->string, u2->string, u1->urllen);
+		}
+	}
+
+	return r;
 }
+
+int
+rspamd_url_cmp_qsort (const void *_u1, const void *_u2)
+{
+	const struct rspamd_url *u1 = *(struct rspamd_url **) _u1,
+			*u2 = *(struct rspamd_url **) _u2;
+
+	return rspamd_url_cmp (u1, u2);
+}
+
