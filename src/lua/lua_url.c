@@ -1255,7 +1255,7 @@ lua_url_eq (lua_State *L)
 }
 
 static gint
-lua_text_lt (lua_State *L)
+lua_url_lt (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *u1 = lua_check_url (L, 1),
