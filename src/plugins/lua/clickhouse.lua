@@ -767,15 +767,54 @@ local function clickhouse_collect(task)
   local urls_tlds = {}
   local urls_flags = {}
 
-  for i,u in ipairs(task_urls) do
-    if settings['full_urls'] then
+  if settings.full_urls then
+    for i,u in ipairs(task_urls) do
       urls_urls[i] = u:get_text()
-    else
-      urls_urls[i] = u:get_host()
+      urls_tlds[i] = u:get_tld() or u:get_host()
+      urls_flags[i] = u:get_flags_num()
     end
-    urls_tlds[i] = u:get_tld() or u:get_host()
-    urls_flags[i] = u:get_flags_num()
+  else
+    -- We need to store unique
+    local mt = {
+      ord_tbl = {}, -- ordered list of urls
+      idx_tbl = {}, -- indexed by host + flags, reference to an index in ord_tbl
+      __newindex = function(t, k, v)
+        local idx = getmetatable(t).idx_tbl
+        local ord =  getmetatable(t).ord_tbl
+        local key = k:get_host() .. tostring(k:get_flags_num())
+        if idx[key] then
+          ord[idx[key]] = v -- replace
+        else
+          ord[#ord + 1] = v
+          idx[key] = #ord
+        end
+      end,
+      __index = function(t, k)
+        local ord = getmetatable(t).ord_tbl
+        if type(k) == 'number' then
+          return ord[k]
+        else
+          local idx = getmetatable(t).idx_tbl
+          local key = k:get_host() .. tostring(k:get_flags_num())
+          if idx[key] then
+            return ord[idx[key]]
+          end
+        end
+      end,
+    }
+    -- Extra index needed for making this unique
+    local urls_idx = {}
+    setmetatable(urls_idx, mt)
+    for _,u in ipairs(task_urls) do
+      if not urls_idx[u] then
+        urls_idx[u] = u
+        urls_urls[#urls_urls + 1] = u:get_host()
+        urls_tlds[#urls_tlds + 1] = u:get_tld() or u:get_host()
+        urls_flags[#urls_flags + 1] = u:get_flags_num()
+      end
+    end
   end
+
 
   -- Get tlds
   table.insert(row, urls_tlds)
