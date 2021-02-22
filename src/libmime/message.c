@@ -771,6 +771,8 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			MESSAGE_FIELD (task, urls),
 			text_part->mime_part->urls);
 
+	g_ptr_array_sort (text_part->mime_part->urls, rspamd_url_cmp_qsort);
+
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 	}

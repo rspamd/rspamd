@@ -3473,6 +3473,7 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
 			part->utf_stripped_content->len, how, part->newlines,
 			rspamd_url_text_part_callback, &mcbd);
+	g_ptr_array_sort (part->mime_part->urls, rspamd_url_cmp_qsort);
 }
 
 void
