@@ -33,7 +33,7 @@ local nrows = 0
 local used_memory = 0
 local last_collection = 0
 local final_call = false -- If the final collection has been started
-local schema_version = 8 -- Current schema version
+local schema_version = 9 -- Current schema version
 
 local settings = {
   limits = { -- Collection limits
@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     `Attachments.Digest` Array(FixedString(16)) COMMENT 'First 16 characters of hash returned by mime_part:get_digest()',
     `Urls.Tld` Array(String) COMMENT 'Effective second level domain part of the URL host',
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
+    `Urls.Flags` Array(UInt32) COMMENT 'Corresponding url flags',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
     ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country FixedString(2) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
@@ -246,6 +247,14 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (8)]],
   },
+  [8] = {
+    -- Add new columns
+    [[ALTER TABLE rspamd
+      ADD COLUMN IF NOT EXISTS `Urls.Flags` Array(UInt32) AFTER `Urls.Url`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (9)]],
+  },
 }
 
 local predefined_actions = {
@@ -314,6 +323,7 @@ local function clickhouse_urls_row(res)
   local fields = {
     'Urls.Tld',
     'Urls.Url',
+    'Urls.Flags',
   }
   for _,v in ipairs(fields) do table.insert(res, v) end
 end
@@ -633,7 +643,11 @@ local function clickhouse_collect(task)
   end
 
   local nurls = 0
-  local task_urls = task:get_urls(false) or {}
+  local task_urls = task:get_urls({
+   need_content = true,
+   need_images = true,
+   need_emails = false,
+  }) or {}
 
   nurls = #task_urls
 
@@ -748,34 +762,36 @@ local function clickhouse_collect(task)
     table.insert(row, {})
   end
 
-  local flatten_urls = function(f, ...)
-    return fun.totable(fun.map(function(k,v) return f(k,v) end, ...))
-  end
-
   -- Urls step
   local urls_urls = {}
+  local urls_tlds = {}
+  local urls_flags = {}
 
-  for _,u in ipairs(task_urls) do
+  for i,u in ipairs(task_urls) do
     if settings['full_urls'] then
-      urls_urls[u:get_text()] = u
+      urls_urls[i] = u:get_text()
     else
-      urls_urls[u:get_host()] = u
+      urls_urls[i] = u:get_host()
     end
+    urls_tlds[i] = u:get_tld() or u:get_host()
+    urls_flags[i] = u:get_flags_num()
   end
 
   -- Get tlds
-  table.insert(row, flatten_urls(function(_, u)
-    return u:get_tld() or u:get_host()
-  end, urls_urls))
+  table.insert(row, urls_tlds)
   -- Get hosts/full urls
-  table.insert(row, flatten_urls(function(k, _) return k end, urls_urls))
+  table.insert(row, urls_urls)
+  -- Numeric flags
+  table.insert(row, urls_flags)
 
   -- Emails step
   if task:has_urls(true) then
-    table.insert(row, flatten_urls(function(k, _) return k end,
-        fun.map(function(u)
-          return string.format('%s@%s', u:get_user(), u:get_host()),true
-        end, task:get_emails())))
+    local emails = task:get_emails() or {}
+    local emails_formatted = {}
+    for i,u in ipairs(emails) do
+      emails_formatted[i] = string.format('%s@%s', u:get_user(), u:get_host())
+    end
+    table.insert(row, emails_formatted)
   else
     table.insert(row, {})
   end
