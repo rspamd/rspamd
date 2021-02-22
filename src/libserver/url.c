@@ -4166,3 +4166,38 @@ rspamd_url_flag_to_string (int flag)
 
 	return NULL;
 }
+
+int
+rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
+{
+	if (u1->protocol != u2->protocol || u1->urllen != u2->urllen) {
+		if (u1->protocol != u2->protocol) {
+			return u1->protocol < u2->protocol;
+		}
+
+		return (int)u1->urllen - (int)u2->urllen;
+	}
+	else {
+		int r;
+
+		if (u1->protocol & PROTOCOL_MAILTO) {
+			if ((r = rspamd_lc_cmp (rspamd_url_host_unsafe (u1),
+					rspamd_url_host_unsafe (u2), u1->hostlen)) == 0) {
+				if (u1->userlen != u2->userlen || u1->userlen == 0) {
+					return (int)u1->userlen - (int)u2->userlen;
+				}
+				else {
+					return rspamd_lc_cmp (rspamd_url_user_unsafe(u1),
+							rspamd_url_user_unsafe(u2),
+							u1->userlen);
+				}
+			}
+
+			return r;
+		}
+
+		r = memcmp (u1->string, u2->string, u1->urllen);
+
+		return r;
+	}
+}
