@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS rspamd
     `Attachments.Digest` Array(FixedString(16)) COMMENT 'First 16 characters of hash returned by mime_part:get_digest()',
     `Urls.Tld` Array(String) COMMENT 'Effective second level domain part of the URL host',
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
-    `Urls.Flags` Array(UInt32) COMMENT 'Corresponding url flags',
+    `Urls.Flags` Array(UInt32) COMMENT 'Corresponding url flags, see `enum rspamd_url_flags` in libserver/url.h for details',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
     ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country FixedString(2) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
