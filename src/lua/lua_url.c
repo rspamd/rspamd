@@ -70,6 +70,8 @@ LUA_FUNCTION_DEF (url, get_visible);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, init);
 LUA_FUNCTION_DEF (url, all);
+LUA_FUNCTION_DEF (url, lt);
+LUA_FUNCTION_DEF (url, eq);
 
 static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_length),
@@ -98,6 +100,8 @@ static const struct luaL_reg urllib_m[] = {
 	{"get_redirected", lua_url_get_phished},
 	LUA_INTERFACE_DEF (url, set_redirected),
 	{"__tostring", lua_url_tostring},
+	{"__eq", lua_url_eq},
+	{"__lt", lua_url_lt},
 	{NULL, NULL}
 };
 
@@ -1232,6 +1236,41 @@ lua_url_adjust_skip_prob (gdouble timestamp,
 
 	return sz;
 }
+
+static gint
+lua_url_eq (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *u1 = lua_check_url (L, 1),
+			*u2 = lua_check_url (L, 2);
+
+	if (u1 && u2) {
+		lua_pushboolean (L, (rspamd_url_cmp (u1->url, u2->url) == 0));
+	}
+	else {
+		lua_pushboolean (L, false);
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_lt (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *u1 = lua_check_url (L, 1),
+			*u2 = lua_check_url (L, 2);
+
+	if (u1 && u2) {
+		lua_pushinteger (L, rspamd_url_cmp (u1->url, u2->url));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_load_url (lua_State * L)
