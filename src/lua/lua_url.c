@@ -1119,6 +1119,12 @@ lua_url_cbdata_fill (lua_State *L,
 				max_urls = lua_tonumber (L, -1);
 			}
 			lua_pop (L, 1);
+
+			lua_getfield (L, pos, "sort");
+			if (lua_isboolean (L, -1)) {
+				cbd->sort = TRUE;
+			}
+			lua_pop (L, 1);
 		}
 		else {
 			/* Plain table of the protocols */

@@ -2407,9 +2407,32 @@ lua_task_get_urls (lua_State * L)
 
 		lua_createtable (L, sz, 0);
 
-		kh_foreach_key (MESSAGE_FIELD (task, urls), u, {
-			lua_tree_url_callback (u, u, &cb);
-		});
+		if (cb.sort) {
+			struct rspamd_url **urls_sorted;
+			gint i = 0;
+
+			urls_sorted = g_new0 (struct rspamd_url *, sz);
+
+			kh_foreach_key (MESSAGE_FIELD(task, urls), u, {
+				if (i < sz) {
+					urls_sorted[i] = u;
+					i ++;
+				}
+			});
+
+			qsort (urls_sorted, i, sizeof (struct rspamd_url *), rspamd_url_cmp_qsort);
+
+			for (int j = 0; j < i; j ++) {
+				lua_tree_url_callback (urls_sorted[j], urls_sorted[j], &cb);
+			}
+
+			g_free (urls_sorted);
+		}
+		else {
+			kh_foreach_key (MESSAGE_FIELD(task, urls), u, {
+				lua_tree_url_callback(u, u, &cb);
+			});
+		}
 
 		lua_url_cbdata_dtor (&cb);
 	}

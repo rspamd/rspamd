@@ -35,6 +35,7 @@ struct lua_tree_cb_data {
 	gsize max_urls;
 	gdouble skip_prob;
 	guint64 xoroshiro_state[4];
+	gboolean sort;
 };
 
 void lua_tree_url_callback (gpointer key, gpointer value, gpointer ud);
