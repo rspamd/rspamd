@@ -409,6 +409,23 @@ LUA_FUNCTION_DEF (task, get_header_count);
 LUA_FUNCTION_DEF (task, get_raw_headers);
 
 /***
+ * @method task:modify_header(name, mods)
+ * Modify an existing or non-existing header with the name `name`
+ * Mods is a table with the following structure:
+ * {
+ *   "add" = {{order, value}, {order, value}},
+ *   "remove" = {order, order, order}
+ * }
+ * Modifications are evaluated in order: remove, add, so headers are first
+ * removed (if any) and then added
+ * Order in remove starts from 1, where 0 means 'remove all', and negative value means
+ * remove from the end
+ * Order in addition means addition from the top: 0 means the most top header, 1 one after, etc
+ * negative order means addtion to the end, e.g. -1 is appending header.
+ */
+LUA_FUNCTION_DEF (task, modify_header);
+
+/***
  * @method task:get_received_headers()
  * Returns a list of tables of parsed received headers. A tables returned have
  * the following structure:
@@ -1209,6 +1226,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_header_full),
 	LUA_INTERFACE_DEF (task, get_header_count),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
+	LUA_INTERFACE_DEF (task, modify_header),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_queue_id),
 	LUA_INTERFACE_DEF (task, get_uid),
@@ -6553,6 +6571,27 @@ lua_task_headers_foreach (lua_State *L)
 				}
 			}
 		} /* if (task->message) */
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_task_modify_header (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task(L, 1);
+	const gchar *hname = luaL_checkstring (L, 2);
+
+	if (hname && task && lua_type (L, 3) == LUA_TTABLE) {
+		ucl_object_t *mods = ucl_object_lua_import (L, 3);
+
+		rspamd_message_set_modified_header (task,
+				MESSAGE_FIELD_CHECK (task, raw_headers), hname, mods);
+		ucl_object_unref (mods);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

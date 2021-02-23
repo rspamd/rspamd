@@ -1940,9 +1940,15 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 							DL_APPEND (*pos, nhdr);
 						}
 					}
+					else {
+						/* NYI: negative order is not defined */
+						msg_err_task ("internal error: calling for set_modified_header "
+									  "with negative add order header");
+					}
 				}
 				else {
-					msg_err_task ("internal error: calling for set_modified_header with invalid header");
+					msg_err_task ("internal error: calling for set_modified_header "
+								  "with invalid header");
 				}
 			}
 		}
