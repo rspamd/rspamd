@@ -1842,8 +1842,8 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		 * This implies an additional copy of all structures but is safe enough to
 		 * deal with it
 		 */
-		cur_hdr->flags |= RSPAMD_HEADER_MODIFIED;
-		cur_hdr->modified_chain = NULL;
+		hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
+		hdr_elt->modified_chain = NULL;
 		gint new_chain_length = 0;
 
 		PTR_ARRAY_FOREACH (existing_ar, i, cur_hdr) {
@@ -1856,7 +1856,7 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 				nhdr->next = NULL;
 				nhdr->ord_next = NULL;
 
-				DL_APPEND (cur_hdr->modified_chain, nhdr);
+				DL_APPEND (hdr_elt->modified_chain, nhdr);
 				new_chain_length ++;
 			}
 		}
@@ -1924,13 +1924,13 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 						DL_APPEND (hdr_elt->modified_chain, nhdr);
 					}
 					else if (ord > 0) {
-						while (ord > 0 && (*pos) && (*pos)->next) {
+						while (ord > 0 && (*pos)) {
 							ord --;
 							pos = &((*pos)->next);
 						}
 						if (*pos) {
 							/* pos is &(elt)->next */
-							nhdr->next = (*pos)->next;
+							nhdr->next = (*pos);
 							nhdr->prev = (*pos)->prev;
 							(*pos)->prev = nhdr;
 							*pos = nhdr;
