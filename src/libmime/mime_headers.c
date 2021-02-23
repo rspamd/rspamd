@@ -1725,3 +1725,194 @@ rspamd_message_headers_new (void)
 
 	return nhdrs;
 }
+
+void
+rspamd_message_set_modified_header (struct rspamd_task *task,
+									struct rspamd_mime_headers_table *hdrs,
+									const gchar *hdr_name,
+									const ucl_object_t *obj)
+{
+	khiter_t k;
+	khash_t(rspamd_mime_headers_htb) *htb = &hdrs->htb;
+	struct rspamd_mime_header *hdr_elt, *existing_chain;
+	int i;
+
+	if (htb) {
+		k = kh_get (rspamd_mime_headers_htb, htb, (gchar *)hdr_name);
+
+		if (k == kh_end (htb)) {
+			hdr_elt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*hdr_elt));
+
+			hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
+			hdr_elt->name = rspamd_mempool_strdup (task->task_pool, hdr_name);
+
+			int r;
+			k = kh_put (rspamd_mime_headers_htb, htb, hdr_elt->name, &r);
+
+			kh_value (htb, k) = hdr_elt;
+		}
+		else {
+			hdr_elt = kh_value (htb, k);
+		}
+	}
+	else {
+		/* No hash, no modification */
+		msg_err_task ("internal error: calling for set_modified_header for no headers");
+		return;
+	}
+
+	if (hdr_elt->flags & RSPAMD_HEADER_MODIFIED) {
+		existing_chain = hdr_elt->modified_chain;
+	}
+	else {
+		existing_chain = hdr_elt;
+	}
+
+	const ucl_object_t *elt, *cur;
+	ucl_object_iter_t it;
+
+	/* First, deal with removed headers, copying the relevant headers with remove flag */
+	elt = ucl_object_lookup (obj, "remove");
+
+	/*
+	 * remove:  {1, 2 ...}
+	 * where number is the header's position starting from '1'
+	 */
+	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		/* First, use a temporary array to keep all headers */
+		GPtrArray *existing_ar = g_ptr_array_new ();
+		struct rspamd_mime_header *cur_hdr;
+
+		/* Exclude removed headers */
+		LL_FOREACH (existing_chain, cur_hdr) {
+			if (!(cur_hdr->flags & RSPAMD_HEADER_REMOVED)) {
+				g_ptr_array_add (existing_ar, cur_hdr);
+			}
+		}
+
+		it = NULL;
+
+		while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_INT) {
+				int ord = ucl_object_toint (cur);
+
+				if (ord == 0) {
+					/* Remove all headers in the existing chain */
+					PTR_ARRAY_FOREACH (existing_ar, i, cur_hdr) {
+						cur_hdr->flags |= RSPAMD_HEADER_MODIFIED|RSPAMD_HEADER_REMOVED;
+					}
+				}
+				else if (ord > 0) {
+					/* Start from the top */
+
+					if (ord <= existing_ar->len) {
+						cur_hdr = g_ptr_array_index (existing_ar, ord - 1);
+						cur_hdr->flags |= RSPAMD_HEADER_MODIFIED|RSPAMD_HEADER_REMOVED;
+					}
+				}
+				else {
+					/* Start from the bottom; ord < 0 */
+					if ((-ord) <= existing_ar->len) {
+						cur_hdr = g_ptr_array_index (existing_ar, existing_ar->len + ord);
+						cur_hdr->flags |= RSPAMD_HEADER_MODIFIED|RSPAMD_HEADER_REMOVED;
+					}
+				}
+			}
+		}
+
+		/*
+	 * Next, we return all headers modified to the existing chain
+	 * This implies an additional copy of all structures but is safe enough to
+	 * deal with it
+	 */
+		cur_hdr->modified_chain = NULL;
+		gint new_chain_length = 0;
+
+		PTR_ARRAY_FOREACH (existing_ar, i, cur_hdr) {
+			if (!(cur_hdr->flags & RSPAMD_HEADER_REMOVED)) {
+				struct rspamd_mime_header *nhdr = rspamd_mempool_alloc (
+						task->task_pool, sizeof (*nhdr));
+				memcpy (nhdr, cur_hdr, sizeof (*nhdr));
+				nhdr->modified_chain = NULL;
+				nhdr->prev = NULL;
+				nhdr->next = NULL;
+				nhdr->ord_next = NULL;
+
+				DL_APPEND (cur_hdr->modified_chain, nhdr);
+				new_chain_length ++;
+			}
+		}
+
+		g_ptr_array_free (existing_ar, TRUE);
+
+		/* End of headers removal logic */
+	}
+
+	/* We can not deal with headers additions */
+	elt = ucl_object_lookup (obj, "add");
+	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		/*
+		 * add:  {{1, "foo"}, {-1, "bar"} ...}
+		 * where number is the header's position starting from '1'
+		 */
+		it = NULL;
+
+		while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_ARRAY) {
+				const ucl_object_t *order = ucl_array_find_index (cur, 0),
+					*value = ucl_array_find_index (cur, 1);
+
+				if (order && value) {
+					int ord = ucl_object_toint (order);
+					const char *raw_value;
+					gsize raw_len;
+
+					raw_value = ucl_object_tolstring (value, &raw_len);
+
+					struct rspamd_mime_header *nhdr = rspamd_mempool_alloc0 (
+							task->task_pool, sizeof (*nhdr));
+
+					nhdr->flags |= RSPAMD_HEADER_ADDED;
+					nhdr->name = hdr_elt->name;
+					nhdr->value = rspamd_mempool_alloc (task->task_pool,
+							raw_len + 1);
+					nhdr->raw_len = rspamd_strlcpy (nhdr->value, raw_value,
+							raw_len + 1);
+					nhdr->raw_value = nhdr->value;
+					nhdr->decoded = rspamd_mime_header_decode (task->task_pool,
+							raw_value, raw_len, NULL);
+
+					/* Now find a position to insert a value */
+					struct rspamd_mime_header **pos = &hdr_elt->modified_chain;
+
+					if (ord == 0) {
+						DL_PREPEND (hdr_elt->modified_chain, nhdr);
+					}
+					else if (ord == -1) {
+						DL_APPEND (hdr_elt->modified_chain, nhdr);
+					}
+					else if (ord > 0) {
+						while (ord > 0 && (*pos) && (*pos)->next) {
+							ord --;
+							pos = &((*pos)->next);
+						}
+						if (*pos) {
+							/* pos is &(elt)->next */
+							nhdr->next = (*pos)->next;
+							nhdr->prev = (*pos)->prev;
+							(*pos)->prev = nhdr;
+							*pos = nhdr;
+						}
+						else {
+							/* Last element */
+							DL_APPEND (*pos, nhdr);
+						}
+					}
+				}
+				else {
+					msg_err_task ("internal error: calling for set_modified_header with invalid header");
+				}
+			}
+		}
+	}
+}

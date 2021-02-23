@@ -20,6 +20,7 @@
 #include "libutil/mem_pool.h"
 #include "libutil/addr.h"
 #include "khash.h"
+#include "contrib/libucl/ucl.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -48,6 +49,9 @@ enum rspamd_mime_header_flags {
 	RSPAMD_HEADER_UNIQUE = 1u << 12u,
 	RSPAMD_HEADER_EMPTY_SEPARATOR = 1u << 13u,
 	RSPAMD_HEADER_TAB_SEPARATED = 1u << 14u,
+	RSPAMD_HEADER_MODIFIED = 1u << 15u, /* Means we need to check modified chain */
+	RSPAMD_HEADER_ADDED = 1u << 16u, /* A header has been artificially added */
+	RSPAMD_HEADER_REMOVED = 1u << 17u, /* A header has been artificially removed */
 };
 
 struct rspamd_mime_header {
@@ -60,6 +64,7 @@ struct rspamd_mime_header {
 	gchar *value;
 	gchar *separator;
 	gchar *decoded;
+	struct rspamd_mime_header *modified_chain; /* Headers modified during transform */
 	struct rspamd_mime_header *prev, *next; /* Headers with the same name */
 	struct rspamd_mime_header *ord_next; /* Overall order of headers, slist */
 };
@@ -170,6 +175,19 @@ rspamd_message_get_header_array (struct rspamd_task *task,
 struct rspamd_mime_header *
 rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *hdrs,
 									 const gchar *field);
+
+/**
+ * Modifies a header (or insert one if not found)
+ * @param hdrs
+ * @param hdr_name
+ * @param obj an array of modified values
+ *
+ */
+void
+rspamd_message_set_modified_header (struct rspamd_task *task,
+									struct rspamd_mime_headers_table *hdrs,
+									const gchar *hdr_name,
+									const ucl_object_t *obj);
 
 /**
  * Cleans up hash table of the headers
