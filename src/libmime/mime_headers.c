@@ -1838,10 +1838,11 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		}
 
 		/*
-	 * Next, we return all headers modified to the existing chain
-	 * This implies an additional copy of all structures but is safe enough to
-	 * deal with it
-	 */
+		 * Next, we return all headers modified to the existing chain
+		 * This implies an additional copy of all structures but is safe enough to
+		 * deal with it
+		 */
+		cur_hdr->flags |= RSPAMD_HEADER_MODIFIED;
 		cur_hdr->modified_chain = NULL;
 		gint new_chain_length = 0;
 
@@ -1868,6 +1869,20 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 	/* We can not deal with headers additions */
 	elt = ucl_object_lookup (obj, "add");
 	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		if (!(hdr_elt->flags & RSPAMD_HEADER_MODIFIED)) {
+			/* Copy the header itself to the modified chain */
+			struct rspamd_mime_header *nhdr;
+			hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
+			nhdr = rspamd_mempool_alloc (
+					task->task_pool, sizeof (*nhdr));
+			memcpy (nhdr, hdr_elt, sizeof (*hdr_elt));
+			nhdr->modified_chain = NULL;
+			nhdr->modified_chain->next = NULL;
+			nhdr->ord_next = NULL;
+			nhdr->prev = nhdr;
+			hdr_elt->modified_chain = nhdr;
+		}
+
 		/*
 		 * add:  {{1, "foo"}, {-1, "bar"} ...}
 		 * where number is the header's position starting from '1'
