@@ -1154,8 +1154,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	case RSPAMD_RE_HEADER:
 	case RSPAMD_RE_RAWHEADER:
 		/* Get list of specified headers */
-		rh = rspamd_message_get_header_array (task,
-				re_class->type_data);
+		rh = rspamd_message_get_header_array(task,
+				re_class->type_data, FALSE);
 
 		if (rh) {
 			ret = rspamd_re_cache_process_headers_list (task, rt, re,
@@ -1177,8 +1177,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		break;
 	case RSPAMD_RE_MIMEHEADER:
 		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, mime_part) {
-			rh = rspamd_message_get_header_from_hash (mime_part->raw_headers,
-					re_class->type_data);
+			rh = rspamd_message_get_header_from_hash(mime_part->raw_headers,
+					re_class->type_data, FALSE);
 
 			if (rh) {
 				ret += rspamd_re_cache_process_headers_list (task, rt, re,
@@ -1345,7 +1345,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		 * of the body content.
 		 */
 
-		rh = rspamd_message_get_header_array (task, "Subject");
+		rh = rspamd_message_get_header_array(task, "Subject", FALSE);
 
 		if (rh) {
 			scvec[0] = (guchar *)rh->decoded;

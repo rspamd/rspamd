@@ -392,7 +392,7 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
 	gboolean parent_propagated = FALSE;
 
-	hdr = rspamd_message_get_header_from_hash (hdrs, "Content-Transfer-Encoding");
+	hdr = rspamd_message_get_header_from_hash(hdrs, "Content-Transfer-Encoding", FALSE);
 
 	if (hdr == NULL) {
 		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
@@ -471,8 +471,8 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found;
 
-	hdr = rspamd_message_get_header_from_hash (part->raw_headers,
-			"Content-Disposition");
+	hdr = rspamd_message_get_header_from_hash(part->raw_headers,
+			"Content-Disposition", FALSE);
 
 
 	if (hdr == NULL) {
@@ -859,8 +859,8 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 			}
 		}
 
-		hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
-				"Content-Type");
+		hdr = rspamd_message_get_header_from_hash(npart->raw_headers,
+				"Content-Type", FALSE);
 
 	}
 	else {
@@ -1402,9 +1402,9 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				}
 			}
 
-			hdr = rspamd_message_get_header_from_hash (
+			hdr = rspamd_message_get_header_from_hash(
 					MESSAGE_FIELD (task, raw_headers),
-					"Content-Type");
+					"Content-Type", FALSE);
 		}
 		else {
 			/* First apply heuristic, maybe we have just headers */
@@ -1432,9 +1432,9 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 					}
 				}
 
-				hdr = rspamd_message_get_header_from_hash (
+				hdr = rspamd_message_get_header_from_hash(
 						MESSAGE_FIELD (task, raw_headers),
-						"Content-Type");
+						"Content-Type", FALSE);
 				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 			}
 			else {
@@ -1488,8 +1488,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				}
 			}
 
-			hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
-					"Content-Type");
+			hdr = rspamd_message_get_header_from_hash(npart->raw_headers,
+					"Content-Type", FALSE);
 		}
 		else {
 			body_pos = 0;

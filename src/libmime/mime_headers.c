@@ -1662,11 +1662,13 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 }
 
 struct rspamd_mime_header *
-rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *headers,
-									 const gchar *field)
+rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *hdrs,
+									 const gchar *field,
+									 gboolean need_modified)
 {
 	khiter_t k;
-	khash_t(rspamd_mime_headers_htb) *htb = &headers->htb;
+	khash_t(rspamd_mime_headers_htb) *htb = &hdrs->htb;
+	struct rspamd_mime_header *hdr;
 
 	if (htb) {
 		k = kh_get (rspamd_mime_headers_htb, htb, (gchar *) field);
@@ -1675,19 +1677,34 @@ rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *headers,
 			return NULL;
 		}
 
-		return kh_value (htb, k);
+		hdr = kh_value (htb, k);
+
+		if (!need_modified) {
+			if (hdr->flags & RSPAMD_HEADER_NON_EXISTING) {
+				return NULL;
+			}
+
+			return hdr;
+		}
+		else {
+			if (hdr->flags & RSPAMD_HEADER_MODIFIED) {
+				return hdr->modified_chain;
+			}
+
+			return hdr;
+		}
 	}
 
 	return NULL;
 }
 
 struct rspamd_mime_header *
-rspamd_message_get_header_array (struct rspamd_task *task,
-								 const gchar *field)
+rspamd_message_get_header_array (struct rspamd_task *task, const gchar *field,
+		gboolean need_modified)
 {
-	return rspamd_message_get_header_from_hash (
+	return rspamd_message_get_header_from_hash(
 			MESSAGE_FIELD_CHECK (task, raw_headers),
-			field);
+			field, need_modified);
 }
 
 static void
@@ -1743,7 +1760,7 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		if (k == kh_end (htb)) {
 			hdr_elt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*hdr_elt));
 
-			hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
+			hdr_elt->flags |= RSPAMD_HEADER_MODIFIED|RSPAMD_HEADER_NON_EXISTING;
 			hdr_elt->name = rspamd_mempool_strdup (task->task_pool, hdr_name);
 
 			int r;

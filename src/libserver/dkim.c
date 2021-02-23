@@ -2334,7 +2334,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	}
 
 	if (dkim_header == NULL) {
-		rh = rspamd_message_get_header_array (task, header_name);
+		rh = rspamd_message_get_header_array(task, header_name, FALSE);
 
 		if (rh) {
 			/* Check uniqueness of the header but we count from the bottom to top */
@@ -2451,7 +2451,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
-			rh = rspamd_message_get_header_array (task, header_name);
+			rh = rspamd_message_get_header_array(task, header_name, FALSE);
 
 			if (rh) {
 				/* We need to find our own signature */
@@ -3287,7 +3287,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			/* Do oversigning */
 			guint count = 0;
 
-			rh = rspamd_message_get_header_array (task, dh->name);
+			rh = rspamd_message_get_header_array(task, dh->name, FALSE);
 
 			if (rh) {
 				DL_FOREACH (rh, cur) {
@@ -3315,7 +3315,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			}
 		}
 		else {
-			rh = rspamd_message_get_header_array (task, dh->name);
+			rh = rspamd_message_get_header_array(task, dh->name, FALSE);
 
 			if (rh) {
 				if (hstat.s.count > 0) {

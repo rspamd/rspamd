@@ -1264,8 +1264,8 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	rh = rspamd_message_get_header_array (task,
-			(gchar *)arg->data);
+	rh = rspamd_message_get_header_array(task,
+			(gchar *) arg->data, FALSE);
 
 	debug_task ("try to get header %s: %d", (gchar *)arg->data,
 			(rh != NULL));
@@ -1653,7 +1653,7 @@ rspamd_raw_header_exists (struct rspamd_task *task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	return rspamd_message_get_header_array (task, arg->data) != NULL;
+	return rspamd_message_get_header_array(task, arg->data, FALSE) != NULL;
 }
 
 static gboolean

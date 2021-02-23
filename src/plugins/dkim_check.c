@@ -1174,7 +1174,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 	rspamd_symcache_item_async_inc (task, item, M);
 
 	/* Now check if a message has its signature */
-	rh = rspamd_message_get_header_array (task, RSPAMD_DKIM_SIGNHEADER);
+	rh = rspamd_message_get_header_array(task, RSPAMD_DKIM_SIGNHEADER, FALSE);
 	if (rh) {
 		msg_debug_task ("dkim signature found");
 

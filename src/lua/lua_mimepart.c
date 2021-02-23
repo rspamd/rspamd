@@ -1645,7 +1645,7 @@ lua_mimepart_get_header_common (lua_State *L, enum rspamd_lua_task_header_type h
 
 		return rspamd_lua_push_header_array (L,
 				name,
-				rspamd_message_get_header_from_hash (part->raw_headers, name),
+				rspamd_message_get_header_from_hash(part->raw_headers, name, FALSE),
 				how,
 				strong);
 	}
@@ -1782,8 +1782,8 @@ lua_mimepart_is_attachment (lua_State * L)
 		/* if has_name and not (image and Content-ID_header_present) */
 		if (part->cd && part->cd->filename.len > 0) {
 			if (part->part_type != RSPAMD_MIME_PART_IMAGE &&
-				rspamd_message_get_header_from_hash (part->raw_headers,
-						"Content-Id") == NULL) {
+					rspamd_message_get_header_from_hash(part->raw_headers,
+							"Content-Id", FALSE) == NULL) {
 				/* Filename is presented but no content id and not image */
 				lua_pushboolean (L, true);
 			}

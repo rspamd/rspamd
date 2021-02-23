@@ -2934,7 +2934,7 @@ lua_task_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 			strong = lua_toboolean (L, 3);
 		}
 
-		rh = rspamd_message_get_header_array (task, name);
+		rh = rspamd_message_get_header_array(task, name, FALSE);
 
 		return rspamd_lua_push_header_array (L, name, rh, how, strong);
 	}
@@ -3988,7 +3988,7 @@ lua_task_get_reply_sender (lua_State *L)
 
 	if (task) {
 
-		rh = rspamd_message_get_header_array (task, "Reply-To");
+		rh = rspamd_message_get_header_array(task, "Reply-To", FALSE);
 
 		if (rh) {
 			lua_pushstring (L, rh->decoded);
@@ -5082,7 +5082,7 @@ lua_task_get_date (lua_State *L)
 			}
 		}
 		else {
-			h = rspamd_message_get_header_array (task, "Date");
+			h = rspamd_message_get_header_array(task, "Date", FALSE);
 
 			if (h) {
 				time_t tt;

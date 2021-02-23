@@ -52,6 +52,7 @@ enum rspamd_mime_header_flags {
 	RSPAMD_HEADER_MODIFIED = 1u << 15u, /* Means we need to check modified chain */
 	RSPAMD_HEADER_ADDED = 1u << 16u, /* A header has been artificially added */
 	RSPAMD_HEADER_REMOVED = 1u << 17u, /* A header has been artificially removed */
+	RSPAMD_HEADER_NON_EXISTING = 1u << 18u, /* Header was not in the original message */
 };
 
 struct rspamd_mime_header {
@@ -164,7 +165,8 @@ gchar *rspamd_mime_message_id_generate (const gchar *fqdn);
  */
 struct rspamd_mime_header *
 rspamd_message_get_header_array (struct rspamd_task *task,
-								 const gchar *field);
+								const gchar *field,
+								gboolean need_modified);
 
 /**
  * Get an array of header's values with specified header's name using raw headers
@@ -174,7 +176,8 @@ rspamd_message_get_header_array (struct rspamd_task *task,
  */
 struct rspamd_mime_header *
 rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *hdrs,
-									 const gchar *field);
+									 const gchar *field,
+									 gboolean need_modified);
 
 /**
  * Modifies a header (or insert one if not found)

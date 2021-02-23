@@ -666,8 +666,8 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 
 	if (img) {
 		/* Check Content-Id */
-		rh = rspamd_message_get_header_from_hash (part->raw_headers,
-				"Content-Id");
+		rh = rspamd_message_get_header_from_hash(part->raw_headers,
+				"Content-Id", FALSE);
 
 		if (rh) {
 			cid = rh->decoded;
