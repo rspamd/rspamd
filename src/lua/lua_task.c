@@ -369,7 +369,7 @@ LUA_FUNCTION_DEF (task, has_header);
  */
 LUA_FUNCTION_DEF (task, get_header_raw);
 /***
- * @method task:get_header_full(name[, case_sensitive])
+ * @method task:get_header_full(name[, case_sensitive[, need_modified]])
  * Get raw value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter. This method returns more
  * information about the header as a list of tables with the following structure:
@@ -381,6 +381,7 @@ LUA_FUNCTION_DEF (task, get_header_raw);
  * - `empty_separator` - `true` if there are no separator between a header and a value
  * @param {string} name name of header to get
  * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @param {boolean} need_modified return a modified value of a header if presented
  * @return {list of tables} all values of a header as specified above
 @example
 function check_header_delimiter_tab(task, header_name)
@@ -2922,7 +2923,7 @@ static gint
 lua_task_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 {
 	LUA_TRACE_POINT;
-	gboolean strong = FALSE;
+	gboolean strong = FALSE, need_modified = FALSE;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_header *rh;
 	const gchar *name;
@@ -2930,11 +2931,15 @@ lua_task_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 	name = luaL_checkstring (L, 2);
 
 	if (name && task) {
-		if (lua_gettop (L) == 3) {
+		if (lua_gettop (L) >= 3) {
 			strong = lua_toboolean (L, 3);
+			if (lua_isboolean (L, 4)) {
+				need_modified = lua_toboolean (L, 4);
+			}
 		}
 
-		rh = rspamd_message_get_header_array(task, name, FALSE);
+
+		rh = rspamd_message_get_header_array (task, name, need_modified);
 
 		return rspamd_lua_push_header_array (L, name, rh, how, strong);
 	}
