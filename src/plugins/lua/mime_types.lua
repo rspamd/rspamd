@@ -23,7 +23,7 @@ local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_maps = require "lua_maps"
-local lua_mime = require "lua_mime"
+local lua_mime_types = require "lua_mime_types"
 local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
 
@@ -570,7 +570,7 @@ if opts then
   end
 
   -- Add all extensions
-  for _,pair in ipairs(lua_mime.full_extensions_map) do
+  for _,pair in ipairs(lua_mime_types.full_extensions_map) do
     local ext, ct = pair[1], pair[2]
     if not settings.extension_map[ext] then
         change_extension_map_entry(ext, ct, settings.other_extensions_mult)
