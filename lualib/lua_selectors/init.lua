@@ -64,9 +64,11 @@ local function implicit_tostring(t, ud_or_table)
     else
       return tostring(ud_or_table),'string'
     end
-  else
+  elseif t ~= 'nil' then
     return tostring(ud_or_table),'string'
   end
+
+  return nil
 end
 
 local function process_selector(task, sel)
@@ -350,6 +352,8 @@ exports.parse_selector = function(cfg, str)
             end
 
             local ret_type = type(ret)
+
+            if ret_type == 'nil' then return nil end
             -- Now apply types heuristic
             if ret_type == 'string' then
               return ret,'string'
