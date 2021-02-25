@@ -644,9 +644,9 @@ local function clickhouse_collect(task)
 
   local nurls = 0
   local task_urls = task:get_urls({
-   need_content = true,
-   need_images = true,
-   need_emails = false,
+   content = true,
+   images = true,
+   emails = false,
    sort = true,
   }) or {}
 
