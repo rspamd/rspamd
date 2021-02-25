@@ -21,6 +21,7 @@ end
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local lua_util = require "lua_util"
+local lua_maps = require "lua_maps"
 
 -- Phishing detection interface for selecting phished urls and inserting corresponding symbol
 --
@@ -34,7 +35,6 @@ local generic_service_name = 'generic service'
 local domains = nil
 local strict_domains = {}
 local exceptions_maps = {}
-local exclude_domains = {}
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
@@ -295,19 +295,15 @@ local function phishing_map(mapname, phishmap, id)
     end
 
 
-    for sym,urls in pairs(xd) do
-      local rmap = rspamd_config:add_map ({
-        type = 'set',
-        url = urls,
-        description = 'Phishing ' .. mapname .. ' map',
-      })
+    for sym,map_data in pairs(xd) do
+      local rmap = lua_maps.map_add_from_ucl (map_data, 'set',
+              'Phishing ' .. mapname .. ' map')
       if rmap then
         rspamd_config:register_virtual_symbol(sym, 1, id)
         local rule = {symbol = sym, map = rmap}
         table.insert(phishmap, rule)
       else
-        rspamd_logger.infox(rspamd_config, 'cannot add map: %s for symbol: %s',
-            table.concat(urls, ";"), sym)
+        rspamd_logger.infox(rspamd_config, 'cannot add map for symbol: %s', sym)
       end
     end
   end
@@ -516,11 +512,8 @@ if opts then
     })
   end
   if opts['domains'] and type(opts['domains']) == 'string' then
-    domains = rspamd_config:add_map({
-      url = opts['domains'],
-      type = 'set',
-      description = 'Phishing domains'
-    })
+    domains = lua_maps.map_add_from_ucl(opts['domains'], 'set',
+            'Phishing domains')
   end
   phishing_map('strict_domains', strict_domains, id)
   phishing_map('exceptions', exceptions_maps, id)
