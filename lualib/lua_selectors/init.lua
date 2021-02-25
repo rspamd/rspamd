@@ -349,13 +349,18 @@ exports.parse_selector = function(cfg, str)
               ret = (inp[method_name](inp, unpack_function(args or E)))
             end
 
+            -- Do not go further
+            if not ret then return nil end
+
             local ret_type = type(ret)
             -- Now apply types heuristic
             if ret_type == 'string' then
               return ret,'string'
-            elseif ret_type == 'table' then
-              -- TODO: we need to ensure that 1) table is numeric 2) table has merely strings
-              return ret,'string_list'
+            elseif ret_type == 'table' and ret[1] ~= nil then
+              local filt_predicate =  fun.filter(function(elt)
+                return elt ~= nil
+              end, ret)
+              return filt_predicate, 'string_list'
             else
               return implicit_tostring(ret_type, ret)
             end
