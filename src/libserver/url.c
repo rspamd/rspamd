@@ -2757,8 +2757,7 @@ url_web_start (struct url_callback_data *cb,
 {
 	/* Check what we have found */
 	if (pos > cb->begin) {
-		if (g_ascii_strncasecmp (pos, "www", 3) == 0 ||
-		 g_ascii_strncasecmp (pos, "ftp", 3) == 0) {
+		if (g_ascii_strncasecmp (pos, "www", 3) == 0) {
 
 			if (!(is_url_start (*(pos - 1)) ||
 				  g_ascii_isspace (*(pos - 1)) ||
