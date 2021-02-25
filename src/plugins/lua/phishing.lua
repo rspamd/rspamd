@@ -33,7 +33,8 @@ local phishtank_symbol = 'PHISHED_PHISHTANK'
 local generic_service_name = 'generic service'
 local domains = nil
 local strict_domains = {}
-local redirector_domains = {}
+local exceptions_maps = {}
+local exclude_domains = {}
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
@@ -268,7 +269,7 @@ local function phishing_cb(task)
           end
         end
 
-        if not found_in_map(redirector_domains) then
+        if not found_in_map(exceptions_maps) then
           if not found_in_map(strict_domains, purl, 1.0) then
             if domains then
               if domains:get_key(ptld) then
@@ -286,32 +287,15 @@ end
 
 local function phishing_map(mapname, phishmap, id)
   if opts[mapname] then
-    local xd = {}
+    local xd
     if type(opts[mapname]) == 'table' then
       xd = opts[mapname]
     else
-      xd[1] = opts[mapname]
+      rspamd_logger.errx(rspamd_config, 'invalid exception table')
     end
 
-    local found_maps = {}
 
-    for _,d in ipairs(xd) do
-      local s = string.find(d, ':[^:]+$')
-      if s then
-        local sym = string.sub(d, s + 1, -1)
-        local map = string.sub(d, 1, s - 1)
-
-        if found_maps[sym] then
-          table.insert(found_maps[sym], map)
-        else
-          found_maps[sym] = {map}
-        end
-      else
-        rspamd_logger.infox(rspamd_config, mapname .. ' option must be in format <map>:<symbol>')
-      end
-    end
-
-    for sym,urls in pairs(found_maps) do
+    for sym,urls in pairs(xd) do
       local rmap = rspamd_config:add_map ({
         type = 'set',
         url = urls,
@@ -539,5 +523,5 @@ if opts then
     })
   end
   phishing_map('strict_domains', strict_domains, id)
-  phishing_map('redirector_domains', redirector_domains, id)
+  phishing_map('exceptions', exceptions_maps, id)
 end
