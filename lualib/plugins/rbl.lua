@@ -138,32 +138,39 @@ local rule_schema_tbl = {
       ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
   ):is_optional(),
   checks = ts.array_of(ts.one_of(lua_util.keys(check_types))):is_optional(),
+  exclude_checks = ts.array_of(ts.one_of(lua_util.keys(check_types))):is_optional(),
 }
 
 local function convert_checks(rule)
   local rspamd_logger = require "rspamd_logger"
   if rule.checks then
     local all_connfilter = true
+    local exclude_checks = lua_util.list_to_hash(rule.exclude_checks or {})
     for _,check in ipairs(rule.checks) do
-      local check_type = check_types[check]
-      if check_type.require_argument then
-        if not rule[check] then
-          rspamd_logger.errx(rspamd_config, 'rbl rule %s has check %s which requires an argument',
-              rule.symbol, check)
+      if not exclude_checks[check] then
+        local check_type = check_types[check]
+        if check_type.require_argument then
+          if not rule[check] then
+            rspamd_logger.errx(rspamd_config, 'rbl rule %s has check %s which requires an argument',
+                    rule.symbol, check)
+            return nil
+          end
+        end
+
+        rule[check] = check_type
+
+        if not check_type.connfilter then
+          all_connfilter = false
+        end
+
+        if not check_type then
+          rspamd_logger.errx(rspamd_config, 'rbl rule %s has invalid check type: %s',
+                  rule.symbol, check)
           return nil
         end
-      end
-
-      rule[check] = check_type
-
-      if not check_type.connfilter then
-        all_connfilter = false
-      end
-
-      if not check_type then
-        rspamd_logger.errx(rspamd_config, 'rbl rule %s has invalid check type: %s',
-            rule.symbol, check)
-        return nil
+      else
+        rspamd_logger.infox(rspamd_config, 'disable check %s in %s: excluded explicitly',
+                check, rule.symbol)
       end
     end
     rule.connfilter = all_connfilter
