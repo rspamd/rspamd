@@ -157,27 +157,40 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 
 	IF (NOT WITH_LIBLUA)
 		ProcessPackage(LIBLUA LIBRARY	"lua"
-				"lua-5.2"
-				LIB_SUFFIXES	"lua5.2"
+				"lua-5.4"
+				LIB_SUFFIXES	"lua5.4"
 				INCLUDE lua.h INCLUDE_SUFFIXES
-				"include/lua-5.2"
-				"include/lua5.2"
-				"include/lua52"
+				"include/lua-5.4"
+				"include/lua5.4"
+				"include/lua54"
 				"include/lua"
 				ROOT ${LUA_ROOT}
-				MODULES lua52
+				MODULES lua54
 				OPTIONAL)
-
 		IF (NOT WITH_LIBLUA)
 			ProcessPackage(LIBLUA LIBRARY	"lua"
-					"lua-5.1"
+					"lua-5.2"
+					LIB_SUFFIXES	"lua5.2"
 					INCLUDE lua.h INCLUDE_SUFFIXES
-					"include/lua-5.1"
-					"include/lua5.1"
-					"include/lua51"
+					"include/lua-5.2"
+					"include/lua5.2"
+					"include/lua52"
 					"include/lua"
 					ROOT ${LUA_ROOT}
-					MODULES lua51)
+					MODULES lua52
+					OPTIONAL)
+
+			IF (NOT WITH_LIBLUA)
+				ProcessPackage(LIBLUA LIBRARY	"lua"
+						"lua-5.1"
+						INCLUDE lua.h INCLUDE_SUFFIXES
+						"include/lua-5.1"
+						"include/lua5.1"
+						"include/lua51"
+						"include/lua"
+						ROOT ${LUA_ROOT}
+						MODULES lua51)
+			ENDIF()
 		ENDIF()
 	ENDIF()
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
