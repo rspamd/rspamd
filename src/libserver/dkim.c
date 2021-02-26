@@ -2326,7 +2326,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 {
 	struct rspamd_mime_header *rh, *cur, *sel = NULL;
 	gint hdr_cnt = 0;
-	bool use_idx = false;
+	bool use_idx = false, is_sign = ctx->is_sign;
 
 	if (count < 0) {
 		use_idx = true;
@@ -2334,7 +2334,8 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	}
 
 	if (dkim_header == NULL) {
-		rh = rspamd_message_get_header_array(task, header_name, FALSE);
+		rh = rspamd_message_get_header_array (task, header_name,
+				is_sign);
 
 		if (rh) {
 			/* Check uniqueness of the header but we count from the bottom to top */
@@ -2413,7 +2414,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 						count, (gint)sel->raw_len, sel->raw_value);
 			}
 			else {
-				if (ctx->is_sign && (sel->flags & RSPAMD_HEADER_FROM)) {
+				if (is_sign && (sel->flags & RSPAMD_HEADER_FROM)) {
 					/* Special handling of the From handling when rewrite is done */
 					gboolean has_rewrite = FALSE;
 					guint i;
@@ -2451,7 +2452,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
-			rh = rspamd_message_get_header_array(task, header_name, FALSE);
+			rh = rspamd_message_get_header_array (task, header_name, is_sign);
 
 			if (rh) {
 				/* We need to find our own signature */
