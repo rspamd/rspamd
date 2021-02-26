@@ -19,6 +19,7 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local lua_redis = require "lua_redis"
+local lua_mime = require "lua_mime"
 
 if confighelp then
   return
@@ -55,8 +56,8 @@ local sign_func = rspamd_plugins.dkim.sign
 
 local function insert_sign_results(task, ret, hdr, dkim_params)
   if settings.use_milter_headers then
-    task:set_milter_reply({
-      add_headers = {
+    lua_mime.modify_headers(task, {
+      add = {
         ['DKIM-Signature'] = {order = 1, value = hdr},
       }
     })

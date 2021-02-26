@@ -26,6 +26,7 @@ local util = require "rspamd_util"
 local N = 'milter_headers'
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
+local lua_mime = require "lua_mime"
 local ts = require("tableshape").types
 local E = {}
 
@@ -580,9 +581,10 @@ local function milter_headers(task)
   if not next(add) then add = nil end
   if not next(remove) then remove = nil end
   if add or remove then
-    task:set_milter_reply({
-      add_headers = add,
-      remove_headers = remove
+
+    lua_mime.modify_headers(task, {
+      add = add,
+      remove = remove
     })
   end
 end

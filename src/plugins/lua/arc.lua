@@ -23,6 +23,7 @@ local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
 local auth_results = require "lua_auth_results"
 local hash = require "rspamd_cryptobox_hash"
+local lua_mime = require "lua_mime"
 
 if confighelp then
   return
@@ -534,12 +535,12 @@ local function arc_sign_seal(task, params, header)
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
     sig:base64(70, nl_type))
 
-  task:set_milter_reply({
-    add_headers = {
+  lua_mime.modify_headers(task, {
+    add = {
       ['ARC-Authentication-Results'] = {order = 1, value = cur_auth_results},
       ['ARC-Message-Signature'] = {order = 1, value = header},
       ['ARC-Seal'] = {order = 1, value = lua_util.fold_header(task,
-        'ARC-Seal', cur_arc_seal) }
+              'ARC-Seal', cur_arc_seal) }
     }
   })
   task:insert_result(settings.sign_symbol, 1.0,
