@@ -510,5 +510,49 @@ exports.multipattern_text_replace = function(task, mp, replacements)
   return state
 end
 
+--[[[
+-- @function lua_mime.modify_headers(task, {add = {hname = {value = 'value', order = 1}}, remove = {hname = {1,2}}})
+-- Adds/removes headers both internal and in the milter reply
+--]]
+exports.modify_headers = function(task, hdr_alterations)
+  local add = hdr_alterations.add or {}
+  local remove = hdr_alterations.remove or {}
+
+  local hdr_flattened = {} -- For C API
+  for hname,hdr in pairs(add) do
+    if not hdr_flattened[hname] then
+      hdr_flattened[hname] = {add = {}}
+    end
+    local add_tbl = hdr_flattened[hname].add
+    if hdr.value then
+      table.insert(add_tbl, {hdr.order or -1, hdr.value})
+    else
+      table.insert(add_tbl, {-1, hdr})
+    end
+  end
+
+  for hname,hdr in pairs(remove) do
+    if not hdr_flattened[hname] then
+      hdr_flattened[hname] = {remove = {}}
+    end
+    local remove_tbl = hdr_flattened[hname].remove
+    if type(hdr) == 'number' then
+      table.insert(remove_tbl, hdr)
+    else
+      for _,num in ipairs(hdr) do
+        table.insert(remove_tbl, num)
+      end
+    end
+  end
+
+  task:set_milter_reply({
+    add_headers = add,
+    remove_headers = remove
+  })
+
+  for hname,flat_rules in pairs(hdr_flattened) do
+    task:modify_header(hname, flat_rules)
+  end
+end
 
 return exports
