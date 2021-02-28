@@ -1866,7 +1866,7 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		/* End of headers removal logic */
 	}
 
-	/* We can noц deal with headers additions */
+	/* We can now deal with headers additions */
 	elt = ucl_object_lookup (obj, "add");
 	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
 		if (!(hdr_elt->flags & RSPAMD_HEADER_MODIFIED)) {
