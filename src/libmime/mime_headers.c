@@ -1866,7 +1866,7 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		/* End of headers removal logic */
 	}
 
-	/* We can not deal with headers additions */
+	/* We can noц deal with headers additions */
 	elt = ucl_object_lookup (obj, "add");
 	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
 		if (!(hdr_elt->flags & RSPAMD_HEADER_MODIFIED)) {
@@ -1877,7 +1877,7 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 					task->task_pool, sizeof (*nhdr));
 			memcpy (nhdr, hdr_elt, sizeof (*hdr_elt));
 			nhdr->modified_chain = NULL;
-			nhdr->modified_chain->next = NULL;
+			nhdr->next = NULL;
 			nhdr->ord_next = NULL;
 			nhdr->prev = nhdr;
 			hdr_elt->modified_chain = nhdr;
