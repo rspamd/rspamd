@@ -601,15 +601,10 @@ local function gen_rbl_callback(rule)
       local res = selector(task)
 
       if res and type(res) == 'table' then
-        if rule.selector_flatten then
-          add_dns_request(task, table.concat(res, ''), false, false,
-                  requests_table, selector_label, whitelist)
-        else
           for _,r in ipairs(res) do
             add_dns_request(task, r, false, false, requests_table,
                     selector_label, whitelist)
           end
-        end
       elseif res then
         add_dns_request(task, res, false, false,
                 requests_table, selector_label, whitelist)
