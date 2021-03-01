@@ -1449,6 +1449,7 @@ rspamd_config:register_dependency('DMARC_CHECK', symbols['dkim_allow_symbol'])
 if opts.munging then
   local lua_maps = require "lua_maps"
   local lua_maps_expressions = require "lua_maps_expressions"
+  local lua_mime = require "lua_mime"
 
   local munging_defaults = {
     reply_goes_to_list = false,
@@ -1481,7 +1482,72 @@ if opts.munging then
   end
 
   local function dmarc_munge_callback(task)
+    if not task:has_symbol(dmarc_symbols.allow) then
+      lua_util.debugm(N, task, 'skip munging, no %s symbol',
+              dmarc_symbols.allow)
+      -- Excepted
+      return
+    end
+    -- TODO: Add policy check to skip munging for non-strict policies
+    if munging_opts.munge_map_condition then
+      local accepted,trace = munging_opts.munge_map_condition:process(task)
+      if not accepted then
+        lua_util.debugm(task, 'skip munging, maps condition not satisified: (%s)',
+                trace)
+        -- Excepted
+        return
+      end
+    end
+    -- Now, look for domain for munging
+    local mr = task:get_recipients({ 'mime', 'orig'})
+    local rcpt_found
+    if mr then
+      for _,r in ipairs(mr) do
+        if r.domain and munging_opts.list_map:get_key(r.domain) then
+          rcpt_found = r
+          break
+        end
+      end
+    end
 
+    if not rcpt_found then
+      lua_util.debugm(task, 'skip munging, recipients are not in list_map')
+      -- Excepted
+      return
+    end
+
+    local via_name = rcpt_found.user
+    local via_addr = rcpt_found.addr
+
+    local from = task:get_from({ 'mime', 'orig'})
+
+    if not from or not from[1] then
+      lua_util.debugm(task, 'skip munging, from is bad')
+      -- Excepted
+      return
+    end
+
+    from = from[1]
+
+    if from.name then
+      from.name = string.format('%s via %s', from.name, via_name)
+    else
+      from.name = string.format('%s via %s', from.user or 'unknown', via_name)
+    end
+
+    local hdr_encoded = rspamd_util.fold_header('From',
+            rspamd_util.mime_header_encode(string.format('%s <%s>',
+                    from.name, via_addr)))
+    lua_mime.modify_headers({
+      remove = {['From'] = {0}},
+      add = {
+        ['From'] = {order = 1, value = hdr_encoded},
+        ['Reply-To'] = {order = 0, value = from.addr}
+      }
+      })
+    lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
+            from.domain, hdr_encoded, from.addr)
+    rspamd_logger.infox(task, 'munged DMARC header for %s', from.domain)
   end
 
   rspamd_config:register_symbol({
