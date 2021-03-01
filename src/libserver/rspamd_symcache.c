@@ -1441,9 +1441,11 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (!ghost && skipped) {
-		item->type |= SYMBOL_TYPE_SKIPPED;
-		msg_warn_cache ("symbol %s has no score registered, skip its check",
-				item->symbol);
+		if (!(item->type & SYMBOL_TYPE_SKIPPED)) {
+			item->type |= SYMBOL_TYPE_SKIPPED;
+			msg_warn_cache ("symbol %s has no score registered, skip its check",
+					item->symbol);
+		}
 	}
 
 	if (ghost) {
