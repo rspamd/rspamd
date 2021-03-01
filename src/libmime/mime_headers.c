@@ -1894,7 +1894,9 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 				const ucl_object_t *order = ucl_array_find_index (cur, 0),
 					*value = ucl_array_find_index (cur, 1);
 
-				if (order && value) {
+				if (order && value &&
+					(ucl_object_type (order) == UCL_INT &&
+					 ucl_object_type (value) == UCL_STRING)) {
 					int ord = ucl_object_toint (order);
 					const char *raw_value;
 					gsize raw_len;
