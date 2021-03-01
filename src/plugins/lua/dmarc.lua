@@ -46,6 +46,7 @@ local report_settings = {
   from_name = 'Rspamd',
   msgid_from = 'rspamd',
 }
+
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
 To: {= rcpt =}
 {%+ if is_string(bcc) %}Bcc: {= bcc =}{%- endif %}
@@ -1440,5 +1441,57 @@ rspamd_config:register_symbol({
   type = 'virtual'
 })
 
-rspamd_config:register_dependency('DMARC_CALLBACK', symbols['spf_allow_symbol'])
-rspamd_config:register_dependency('DMARC_CALLBACK', symbols['dkim_allow_symbol'])
+rspamd_config:register_dependency('DMARC_CHECK', symbols['spf_allow_symbol'])
+rspamd_config:register_dependency('DMARC_CHECK', symbols['dkim_allow_symbol'])
+
+-- DMARC munging support
+
+if opts.munging then
+  local lua_maps = require "lua_maps"
+  local lua_maps_expressions = require "lua_maps_expressions"
+
+  local munging_defaults = {
+    reply_goes_to_list = false,
+    dmarc_mitigate_allow_only = true, -- perform munging based on DMARC_POLICY_ALLOW only
+    munge_from = true, -- replace from with something like <orig name> via <rcpt user>
+    list_map = nil, -- map of maillist domains
+    munge_map_condition = nil, -- maps expression to enable munging
+  }
+
+  local munging_opts = lua_util.override_defaults(munging_defaults, opts.munging)
+
+  if not munging_opts.list_map  then
+    rspamd_logger.errx(rspamd_config, 'cannot enable DMARC munging with no list_map parameter')
+
+    return
+  end
+
+  munging_opts.list_map = lua_maps.map_add_from_ucl(munging_opts.list_map,
+      'set', 'DMARC munging map')
+
+  if not munging_opts.list_map  then
+    rspamd_logger.errx(rspamd_config, 'cannot enable DMARC munging with invalid list_map (invalid map)')
+
+    return
+  end
+
+  if munging_opts.munge_map_condition then
+    munging_opts.munge_map_condition = lua_maps_expressions.create(rspamd_config,
+            munging_opts.munge_map_condition, N)
+  end
+
+  local function dmarc_munge_callback(task)
+
+  end
+
+  rspamd_config:register_symbol({
+    name = 'DMARC_MUNGED',
+    type = 'normal',
+    callback = dmarc_munge_callback
+  })
+
+  rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK')
+  -- To avoid dkim signing issues
+  rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED')
+  rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED')
+end
