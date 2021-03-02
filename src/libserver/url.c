@@ -704,6 +704,7 @@ is_domain_start (int p)
 	if (g_ascii_isalnum (p) ||
 		p == '[' ||
 		p == '%' ||
+		p == '_' ||
 		(p & 0x80)) {
 		return TRUE;
 	}
