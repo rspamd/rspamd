@@ -551,8 +551,8 @@ exports.modify_headers = function(task, hdr_alterations)
   end
 
   task:set_milter_reply({
-    add_headers = add,
-    remove_headers = remove
+    add_headers = hdr_alterations.add,
+    remove_headers = hdr_alterations.remove
   })
 
   for hname,flat_rules in pairs(hdr_flattened) do
