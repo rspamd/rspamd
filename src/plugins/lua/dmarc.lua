@@ -1538,7 +1538,7 @@ if opts.munging then
     local hdr_encoded = rspamd_util.fold_header('From',
             rspamd_util.mime_header_encode(string.format('%s <%s>',
                     from.name, via_addr)))
-    lua_mime.modify_headers({
+    lua_mime.modify_headers(task, {
       remove = {['From'] = {0}},
       add = {
         ['From'] = {order = 1, value = hdr_encoded},
@@ -1548,11 +1548,16 @@ if opts.munging then
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
             from.domain, hdr_encoded, from.addr)
     rspamd_logger.infox(task, 'munged DMARC header for %s', from.domain)
+    task:insert_result('DMARC_MUNGED', 1.0, from.domain)
   end
 
   rspamd_config:register_symbol({
     name = 'DMARC_MUNGED',
     type = 'normal',
+    flags = 'nostat',
+    score = 0,
+    group = 'policies',
+    groups = {'dmarc'},
     callback = dmarc_munge_callback
   })
 
@@ -1560,4 +1565,6 @@ if opts.munging then
   -- To avoid dkim signing issues
   rspamd_config:register_dependency('DKIM_SIGNED', 'DMARC_MUNGED')
   rspamd_config:register_dependency('ARC_SIGNED', 'DMARC_MUNGED')
+
+  rspamd_logger.infox(rspamd_config, 'enabled DMARC munging')
 end
