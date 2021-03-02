@@ -49,6 +49,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					continue;
 				}
 
+				msg_debug_css("got css property: %s", cur_property.to_string());
+
 				/* We now expect colon block */
 				const auto &expect_colon_block = next_block_functor();
 

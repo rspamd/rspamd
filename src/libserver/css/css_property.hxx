@@ -45,6 +45,41 @@ struct css_property {
 	css_property_type type;
 	static tl::expected<css_property,css_parse_error> from_token(
 			const css_parser_token &tok);
+
+	constexpr auto to_string(void) const -> const char * {
+		const char *ret = "nyi";
+
+		switch(type) {
+		case css_property_type::PROPERTY_FONT:
+			ret = "font";
+			break;
+		case css_property_type::PROPERTY_COLOR:
+			ret = "color";
+			break;
+		case css_property_type::PROPERTY_BGCOLOR:
+			ret = "bgcolor";
+			break;
+		case css_property_type::PROPERTY_BACKGROUND:
+			ret = "background";
+			break;
+		case css_property_type::PROPERTY_HEIGHT:
+			ret = "height";
+			break;
+		case css_property_type::PROPERTY_WIDTH:
+			ret = "width";
+			break;
+		case css_property_type::PROPERTY_DISPLAY:
+			ret = "display";
+			break;
+		case css_property_type::PROPERTY_VISIBILITY:
+			ret = "visibility";
+			break;
+		default:
+			break;
+		}
+
+		return ret;
+	}
 };
 
 

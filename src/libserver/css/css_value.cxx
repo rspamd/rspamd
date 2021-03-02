@@ -15,8 +15,12 @@
  */
 
 #include "css_value.hxx"
+#include "css_colors_list.hxx"
+#include "contrib/robin-hood/robin_hood.h"
 
 namespace rspamd::css {
+
+
 
 tl::expected<css_value,css_parse_error>
 css_value::from_css_block(const css_consumed_block &bl)
@@ -24,4 +28,15 @@ css_value::from_css_block(const css_consumed_block &bl)
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }
 
+auto css_value::maybe_color_from_string(const std::string_view &input)
+	-> std::optional<css_value>
+{
+	auto found_it = css_colors_map.find(input);
+
+	if (found_it != css_colors_map.end()) {
+
+	}
+
+	return std::nullopt;
+}
 }

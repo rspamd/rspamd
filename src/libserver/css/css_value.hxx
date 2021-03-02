@@ -29,12 +29,23 @@
 
 namespace rspamd::css {
 
+struct alignas(int) css_color {
+	std::uint8_t r;
+	std::uint8_t g;
+	std::uint8_t b;
+
+	std::uint8_t alpha;
+
+	constexpr css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
+	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
+};
+
 /*
  * Simple enum class for display stuff
  */
 enum class css_display_value {
 	DISPLAY_NORMAL,
-	DISPLAY_
+	DISPLAY_HIDDEN
 };
 
 /*
@@ -54,27 +65,25 @@ struct css_value {
 	enum class css_value_type {
 		CSS_VALUE_COLOR,
 		CSS_VALUE_SIZE,
-		CSS_VALUE_STRING,
 		CSS_VALUE_DISPLAY,
 		CSS_VALUE_FLAG,
 		CSS_VALUE_NYI,
 	} type;
 
-	std::variant<struct html_color,
+	std::variant<css_color,
 			double,
-			std::string,
 			css_display_value,
 			css_flag_value> value;
 
-	constexpr std::optional<struct html_color> to_color (void) const {
+	constexpr std::optional<css_color> to_color(void) const {
 		if (type == css_value_type::CSS_VALUE_COLOR) {
-			return std::get<struct html_color>(value);
+			return std::get<css_color>(value);
 		}
 
 		return std::nullopt;
 	}
 
-	constexpr std::optional<double> to_size (void) const {
+	constexpr std::optional<double> to_size(void) const {
 		if (type == css_value_type::CSS_VALUE_SIZE) {
 			return std::get<double>(value);
 		}
@@ -82,7 +91,7 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<css_display_value> to_display (void) const {
+	constexpr std::optional<css_display_value> to_display(void) const {
 		if (type == css_value_type::CSS_VALUE_DISPLAY) {
 			return std::get<css_display_value>(value);
 		}
@@ -90,7 +99,7 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<css_flag_value> to_flag (void) const {
+	constexpr std::optional<css_flag_value> to_flag(void) const {
 		if (type == css_value_type::CSS_VALUE_FLAG) {
 			return std::get<css_flag_value>(value);
 		}
@@ -98,19 +107,14 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<std::string_view> to_string (void) const {
-		if (type == css_value_type::CSS_VALUE_STRING) {
-			return std::string_view(std::get<std::string>(value));
-		}
-
-		return std::nullopt;
-	}
-
-	constexpr bool is_valid (void) const {
+	constexpr bool is_valid(void) const {
 		return (type != css_value_type::CSS_VALUE_NYI);
 	}
 
-	static tl::expected<css_value,css_parse_error> from_css_block(const css_consumed_block &bl);
+	static auto from_css_block(const css_consumed_block &bl) -> tl::expected<css_value, css_parse_error>;
+
+	static auto maybe_color_from_string(const std::string_view &input)
+		-> std::optional<css_value>;
 };
 
 }
