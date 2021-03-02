@@ -1453,7 +1453,8 @@ if opts.munging then
 
   local munging_defaults = {
     reply_goes_to_list = false,
-    dmarc_mitigate_allow_only = true, -- perform munging based on DMARC_POLICY_ALLOW only
+    mitigate_allow_only = true, -- perform munging based on DMARC_POLICY_ALLOW only
+    mitigate_strict_only = false, -- perform mugning merely for reject/quarantine policies
     munge_from = true, -- replace from with something like <orig name> via <rcpt user>
     list_map = nil, -- map of maillist domains
     munge_map_condition = nil, -- maps expression to enable munging
@@ -1482,13 +1483,45 @@ if opts.munging then
   end
 
   local function dmarc_munge_callback(task)
-    if not task:has_symbol(dmarc_symbols.allow) then
-      lua_util.debugm(N, task, 'skip munging, no %s symbol',
-              dmarc_symbols.allow)
-      -- Excepted
-      return
+    if munging_opts.mitigate_allow_only then
+      if not task:has_symbol(dmarc_symbols.allow) then
+        lua_util.debugm(N, task, 'skip munging, no %s symbol',
+                dmarc_symbols.allow)
+        -- Excepted
+        return
+      end
+    else
+      local has_dmarc = task:has_symbol(dmarc_symbols.allow) or
+              task:has_symbol(dmarc_symbols.quarantine) or
+              task:has_symbol(dmarc_symbols.reject) or
+              task:has_symbol(dmarc_symbols.softfail)
+
+      if not has_dmarc then
+        lua_util.debugm(N, task, 'skip munging, no %s symbol',
+                dmarc_symbols.allow)
+        -- Excepted
+        return
+      end
     end
-    -- TODO: Add policy check to skip munging for non-strict policies
+    if munging_opts.mitigate_strict_only then
+      local s = task:get_symbol(dmarc_symbols.allow) or {[1] = {}}
+      local sopts = s[1].options or {}
+
+      local seen_strict
+      for _,o in ipairs(sopts) do
+        if o == 'reject' or o == 'quarantine' then
+          seen_strict = true
+          break
+        end
+      end
+
+      if not seen_strict then
+        lua_util.debugm(N, task, 'skip munging, no strict policy found in %s',
+                dmarc_symbols.allow)
+        -- Excepted
+        return
+      end
+    end
     if munging_opts.munge_map_condition then
       local accepted,trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
@@ -1516,9 +1549,6 @@ if opts.munging then
       return
     end
 
-    local via_name = rcpt_found.user
-    local via_addr = rcpt_found.addr
-
     local from = task:get_from({ 'mime', 'orig'})
 
     if not from or not from[1] then
@@ -1528,6 +1558,8 @@ if opts.munging then
     end
 
     from = from[1]
+    local via_name = rcpt_found.user
+    local via_addr = rcpt_found.addr
 
     if from.name then
       from.name = string.format('%s via %s', from.name, via_name)
@@ -1538,12 +1570,20 @@ if opts.munging then
     local hdr_encoded = rspamd_util.fold_header('From',
             rspamd_util.mime_header_encode(string.format('%s <%s>',
                     from.name, via_addr)))
+    local add_hdrs = {
+      ['From'] = { order = 1, value = hdr_encoded },
+    }
+
+    if munging_opts.reply_goes_to_list then
+      -- Add another reply-to
+      table.insert(add_hdrs['Reply-To'], {order = 0, value = via_addr})
+      add_hdrs['X-Original-From'] = { order = 0, value = hdr_encoded}
+    else
+      add_hdrs['Reply-To'] = {order = 0, value = via_addr}
+    end
     lua_mime.modify_headers(task, {
       remove = {['From'] = {0}},
-      add = {
-        ['From'] = {order = 1, value = hdr_encoded},
-        ['Reply-To'] = {order = 0, value = from.addr}
-      }
+      add = add_hdrs
       })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
             from.domain, hdr_encoded, from.addr)
