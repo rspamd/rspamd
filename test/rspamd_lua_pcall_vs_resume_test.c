@@ -56,6 +56,8 @@ test_resume(lua_State *L, gint function_call)
 		lua_rawgeti (L, LUA_REGISTRYINDEX, function_call);
 #if LUA_VERSION_NUM < 502
 		lua_resume (L, 0);
+#elif LUA_VERSION_NUM >= 504
+		lua_resume (L, NULL, 0, NULL);
 #else
 		lua_resume (L, NULL, 0);
 #endif
@@ -82,6 +84,8 @@ test_resume_get_thread(gint function_call)
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
 #if LUA_VERSION_NUM < 502
 		lua_resume (ent->lua_state, 0);
+#elif LUA_VERSION_NUM >= 504
+		lua_resume (ent->lua_state, NULL, 0, NULL);
 #else
 		lua_resume (ent->lua_state, NULL, 0);
 #endif
@@ -110,6 +114,8 @@ test_resume_get_new_thread(gint function_call)
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
 #if LUA_VERSION_NUM < 502
 		lua_resume (ent->lua_state, 0);
+#elif LUA_VERSION_NUM >= 504
+		lua_resume (ent->lua_state, NULL, 0, NULL);
 #else
 		lua_resume (ent->lua_state, NULL, 0);
 #endif
