@@ -19,10 +19,10 @@
 #ifndef RSPAMD_CSS_VALUE_HXX
 #define RSPAMD_CSS_VALUE_HXX
 
-#include "libserver/html.h"
 #include <string>
 #include <variant>
 #include <optional>
+#include <vector>
 #include "parse_error.hxx"
 #include "css_parser.hxx"
 #include "contrib/expected/expected.hpp"
@@ -38,6 +38,7 @@ struct alignas(int) css_color {
 
 	constexpr css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
 	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
+	css_color() = default;
 };
 
 /*
@@ -73,7 +74,13 @@ struct css_value {
 	std::variant<css_color,
 			double,
 			css_display_value,
-			css_flag_value> value;
+			css_flag_value,
+			std::monostate> value;
+
+	css_value(const css_color &color) :
+			type(css_value_type::CSS_VALUE_COLOR), value(color) {}
+	css_value(double sz) :
+			type(css_value_type::CSS_VALUE_SIZE), value(sz) {}
 
 	constexpr std::optional<css_color> to_color(void) const {
 		if (type == css_value_type::CSS_VALUE_COLOR) {
@@ -114,6 +121,11 @@ struct css_value {
 	static auto from_css_block(const css_consumed_block &bl) -> tl::expected<css_value, css_parse_error>;
 
 	static auto maybe_color_from_string(const std::string_view &input)
+		-> std::optional<css_value>;
+	static auto maybe_color_from_hex(const std::string_view &input)
+		-> std::optional<css_value>;
+	static auto maybe_color_from_function(const std::string_view &func,
+									   const std::vector<css_parser_token> &args)
 		-> std::optional<css_value>;
 };
 
