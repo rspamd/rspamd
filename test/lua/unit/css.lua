@@ -97,6 +97,31 @@ body {
     width: 100%;
   }
 }
+]],
+[[
+/* Colors */
+* { color: hsl(0, 100%, 50%) }   /* red */
+* { color: hsl(120, 100%, 50%) } /* lime */
+* { color: hsl(120, 100%, 25%) } /* dark green */
+* { color: hsl(120, 100%, 75%) } /* light green */
+* { color: hsl(120, 75%, 75%) }  /* pastel green, and so on */
+em { color: #f00 }              /* #rgb */
+em { color: #ff0000 }           /* #rrggbb */
+em { color: rgb(255,0,0) }
+em { color: rgb(100%, 0%, 0%) }
+body {color: black; background: white }
+h1 { color: maroon }
+h2 { color: olive }
+em { color: rgb(255,0,0) }       /* integer range 0 - 255 */
+em { color: rgb(300,0,0) }       /* clipped to rgb(255,0,0) */
+em { color: rgb(255,-10,0) }     /* clipped to rgb(255,0,0) */
+em { color: rgb(110%, 0%, 0%) }  /* clipped to rgb(100%,0%,0%) */
+em { color: rgb(255,0,0) }      /* integer range 0 - 255 */
+em { color: rgba(255,0,0,1)     /* the same, with explicit opacity of 1 */
+em { color: rgb(100%,0%,0%) }   /* float range 0.0% - 100.0% */
+em { color: rgba(100%,0%,0%,1) } /* the same, with explicit opacity of 1 */
+p { color: rgba(0,0,255,0.5) }        /* semi-transparent solid blue */
+p { color: rgba(100%, 50%, 0%, 0.1) } /* very transparent solid orange */
 ]]
   }
   local NULL = ffi.new 'void*'

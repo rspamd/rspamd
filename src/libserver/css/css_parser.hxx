@@ -51,6 +51,14 @@ public:
 	};
 	using consumed_block_ptr = std::unique_ptr<css_consumed_block>;
 
+	struct css_function_block {
+		css_parser_token function;
+		std::vector<consumed_block_ptr> args;
+
+		css_function_block(css_parser_token &&tok) :
+			function(std::forward<css_parser_token>(tok)) {}
+	};
+
 	css_consumed_block() : tag(parser_tag_type::css_eof_block) {}
 	css_consumed_block(parser_tag_type tag) : tag(tag) {
 		if (tag == parser_tag_type::css_top_block ||
@@ -64,10 +72,19 @@ public:
 	}
 	/* Construct a block from a single lexer token (for trivial blocks) */
 	explicit css_consumed_block(parser_tag_type tag, css_parser_token &&tok) :
-			tag(tag), content(std::move(tok)) {}
+			tag(tag) {
+		if (tag == parser_tag_type::css_function) {
+			content = css_function_block{std::move(tok)};
+		}
+		else {
+			content = std::move(tok);
+		}
+	}
 
 	/* Attach a new block to the compound block, consuming block inside */
 	auto attach_block(consumed_block_ptr &&block) -> bool;
+	/* Attach a new argument to the compound function block, consuming block inside */
+	auto add_function_argument(consumed_block_ptr &&block) -> bool;
 
 	auto assign_token(css_parser_token &&tok) -> void {
 		content = std::move(tok);
@@ -137,7 +154,8 @@ public:
 private:
 	std::variant<std::monostate,
 			std::vector<consumed_block_ptr>,
-			css_parser_token> content;
+			css_parser_token,
+			css_function_block> content;
 };
 
 extern const css_consumed_block css_parser_eof_block;

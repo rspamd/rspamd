@@ -246,33 +246,42 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 				auto j = i + 1;
 
 				while (j < input.size() && g_ascii_isspace(input[j])) {
-					j ++;
+					j++;
 				}
 
-				if (input[j] == '"' || input[j] == '\'') {
-					/* Function token */
-					return maybe_escape_sv(j + 1,
-							css_parser_token::token_type::function_token);
-				}
-				else {
-					/* Consume URL token */
-					while (j < input.size() && input[j] != ')') {
-						j ++;
-					}
-
-					if (input[j] == ')') {
-						/* Valid url token */
-						return maybe_escape_sv(j + 1,
-								css_parser_token::token_type::url_token);
-					}
-					else {
-						/* Incomplete url token */
-						auto ret = maybe_escape_sv(j,
-								css_parser_token::token_type::url_token);
-
-						ret.flags |= css_parser_token::flag_bad_string;
+				if (input.size() > 3 && input.substr(0, 3) == "url") {
+					if (input[j] == '"' || input[j] == '\'') {
+						/* Function token */
+						auto ret = maybe_escape_sv(i,
+								css_parser_token::token_type::function_token);
 						return ret;
 					}
+					else {
+						/* Consume URL token */
+						while (j < input.size() && input[j] != ')') {
+							j++;
+						}
+
+						if (input[j] == ')') {
+							/* Valid url token */
+							auto ret = maybe_escape_sv(j + 1,
+									css_parser_token::token_type::url_token);
+							return ret;
+						}
+						else {
+							/* Incomplete url token */
+							auto ret = maybe_escape_sv(j,
+									css_parser_token::token_type::url_token);
+
+							ret.flags |= css_parser_token::flag_bad_string;
+							return ret;
+						}
+					}
+				}
+				else {
+					auto ret = maybe_escape_sv(i,
+							css_parser_token::token_type::function_token);
+					return ret;
 				}
 			}
 			else if (c == '-' && allow_middle_minus) {

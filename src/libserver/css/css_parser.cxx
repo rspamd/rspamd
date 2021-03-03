@@ -27,17 +27,28 @@ namespace rspamd::css {
 const css_consumed_block css_parser_eof_block{};
 
 auto css_consumed_block::attach_block(consumed_block_ptr &&block) -> bool {
-	if (content.index() == 0) {
+	if (std::holds_alternative<std::monostate>(content)) {
 		/* Switch from monostate */
 		content = std::vector<consumed_block_ptr>();
 	}
-	else if (content.index() == 2) {
+	else if (!std::holds_alternative<std::vector<consumed_block_ptr>>(content)) {
 		/* A single component, cannot attach a block ! */
 		return false;
 	}
 
 	auto &value_vec = std::get<std::vector<consumed_block_ptr>>(content);
 	value_vec.push_back(std::move(block));
+
+	return true;
+}
+
+auto css_consumed_block::add_function_argument(consumed_block_ptr &&block)  -> bool {
+	if (!std::holds_alternative<css_function_block>(content)) {
+		return false;
+	}
+
+	auto &&func_bloc = std::get<css_function_block>(content);
+	func_bloc.args.push_back(std::move(block));
 
 	return true;
 }
@@ -105,6 +116,18 @@ auto css_consumed_block::debug_str(void) -> std::string {
 				else if constexpr (std::is_same_v<T, std::monostate>) {
 					/* Empty block */
 					ret += R"("empty")";
+				}
+				else if constexpr (std::is_same_v<T, css_function_block>) {
+					/* Empty block */
+					ret += R"({ "function:" {"name": )";
+					ret += "\"" + arg.function.debug_token_str() + "\"";
+					ret += R"("arguments:"  [)";
+					for (const auto &block : arg.args) {
+						ret += "{";
+						ret += block->debug_str();
+						ret += "}, ";
+					}
+					ret += "]}";
 				}
 				else {
 					/* Single element block */
@@ -214,9 +237,13 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 			ret = true;
 			want_more = false;
 			break;
+		case css_parser_token::token_type::comma_token:
+		case css_parser_token::token_type::delim_token:
+		case css_parser_token::token_type::obrace_token:
+			break;
 		default:
 			/* Attach everything to the function block */
-			top->attach_block(std::make_unique<css_consumed_block>(
+			top->add_function_argument(std::make_unique<css_consumed_block>(
 					css::css_consumed_block::parser_tag_type::css_function_arg,
 					std::move(next_token)));
 			break;
