@@ -240,46 +240,73 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 	return ret;
 }
 
-auto css_value::maybe_color_from_function(const std::string_view &func,
-									  const std::vector<css_parser_token> &args)
+auto css_value::maybe_color_from_function(const css_consumed_block::css_function_block &func)
 	-> std::optional<css_value>
 {
-	if (func == "rgb" && args.size() == 3) {
-		css_color col{rgb_color_component_convert(args[0]),
-					  rgb_color_component_convert(args[1]),
-					  rgb_color_component_convert(args[2])};
+
+	if (func.as_string() == "rgb" && func.args.size() == 3) {
+		css_color col{rgb_color_component_convert(func.args[0]->get_token_or_empty()),
+					  rgb_color_component_convert(func.args[1]->get_token_or_empty()),
+					  rgb_color_component_convert(func.args[2]->get_token_or_empty())};
 
 		return css_value(col);
 	}
-	else if (func == "rgba" && args.size() == 4) {
-		css_color col{rgb_color_component_convert(args[0]),
-					  rgb_color_component_convert(args[1]),
-					  rgb_color_component_convert(args[2]),
-					  alpha_component_convert(args[3])};
+	else if (func.as_string() == "rgba" && func.args.size() == 4) {
+		css_color col{rgb_color_component_convert(func.args[0]->get_token_or_empty()),
+					  rgb_color_component_convert(func.args[1]->get_token_or_empty()),
+					  rgb_color_component_convert(func.args[2]->get_token_or_empty()),
+					  alpha_component_convert(func.args[3]->get_token_or_empty())};
 
 		return css_value(col);
 	}
-	else if (func == "hsl" && args.size() == 3) {
-		auto h = h_component_convert(args[0]);
-		auto s = sl_component_convert(args[1]);
-		auto l = sl_component_convert(args[2]);
+	else if (func.as_string() == "hsl" && func.args.size() == 3) {
+		auto h = h_component_convert(func.args[0]->get_token_or_empty());
+		auto s = sl_component_convert(func.args[1]->get_token_or_empty());
+		auto l = sl_component_convert(func.args[2]->get_token_or_empty());
 
 		auto col = hsl_to_rgb(h, s, l);
 
 		return css_value(col);
 	}
-	else if (func == "hsla" && args.size() == 4) {
-		auto h = h_component_convert(args[0]);
-		auto s = sl_component_convert(args[1]);
-		auto l = sl_component_convert(args[2]);
+	else if (func.as_string() == "hsla" && func.args.size() == 4) {
+		auto h = h_component_convert(func.args[0]->get_token_or_empty());
+		auto s = sl_component_convert(func.args[1]->get_token_or_empty());
+		auto l = sl_component_convert(func.args[2]->get_token_or_empty());
 
 		auto col = hsl_to_rgb(h, s, l);
-		col.alpha = alpha_component_convert(args[3]);
+		col.alpha = alpha_component_convert(func.args[3]->get_token_or_empty());
 
 		return css_value(col);
 	}
 
 	return std::nullopt;
+}
+
+auto css_value::debug_str() const -> std::string
+{
+	std::string ret;
+
+	std::visit([&](auto& arg) {
+		using T = std::decay_t<decltype(arg)>;
+
+		if constexpr (std::is_same_v<T, css_color>) {
+			ret += "color: r=" + std::to_string(arg.r) +
+					"; g=" + std::to_string(arg.g) +
+					"; b=" + std::to_string(arg.b) +
+					"; a=" + std::to_string(arg.alpha);
+		}
+		else if constexpr (std::is_same_v<T, double>) {
+			ret += "size: " + std::to_string(arg);
+		}
+		else if constexpr (std::is_integral_v<T>) {
+			ret += "integral: " + std::to_string(static_cast<int>(arg));
+		}
+		else {
+			ret += "nyi";
+		}
+	}, value);
+
+	return ret;
 }
 
 }

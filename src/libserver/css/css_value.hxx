@@ -118,14 +118,15 @@ struct css_value {
 		return (type != css_value_type::CSS_VALUE_NYI);
 	}
 
+	auto debug_str() const -> std::string;
+
 	static auto from_css_block(const css_consumed_block &bl) -> tl::expected<css_value, css_parse_error>;
 
 	static auto maybe_color_from_string(const std::string_view &input)
 		-> std::optional<css_value>;
 	static auto maybe_color_from_hex(const std::string_view &input)
 		-> std::optional<css_value>;
-	static auto maybe_color_from_function(const std::string_view &func,
-									   const std::vector<css_parser_token> &args)
+	static auto maybe_color_from_function(const css_consumed_block::css_function_block &func)
 		-> std::optional<css_value>;
 };
 

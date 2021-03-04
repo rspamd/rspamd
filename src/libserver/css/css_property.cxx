@@ -20,9 +20,9 @@
 
 namespace rspamd::css {
 
-constexpr const auto max_type = static_cast<int>(css_property_type::PROPERTY_NYI);
-constexpr frozen::unordered_map<frozen::string, css_property_type, max_type> type_map{
+constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_property_type>({
 		{"font", css_property_type::PROPERTY_FONT},
+		{"font-color", css_property_type::PROPERTY_FONT_COLOR},
 		{"color", css_property_type::PROPERTY_COLOR},
 		{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
 		{"background", css_property_type::PROPERTY_BACKGROUND},
@@ -30,7 +30,7 @@ constexpr frozen::unordered_map<frozen::string, css_property_type, max_type> typ
 		{"width", css_property_type::PROPERTY_WIDTH},
 		{"display", css_property_type::PROPERTY_DISPLAY},
 		{"visibility", css_property_type::PROPERTY_VISIBILITY},
-};
+});
 
 auto token_string_to_property(const std::string_view &inp) -> css_property_type {
 

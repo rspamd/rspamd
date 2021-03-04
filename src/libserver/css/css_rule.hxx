@@ -40,12 +40,8 @@ public:
 		prop(prop), values(std::forward<css_values_vec>(values)) {}
 	explicit css_rule(const css_property &prop) : prop(prop), values{} {}
 	/* Methods */
-	void add_value(std::unique_ptr<css_value> &&value) {
-		values.emplace_back(std::forward<std::unique_ptr<css_value>>(value));
-	}
-	void add_value(const css_value &value) {
-		values.emplace_back(std::make_unique<css_value>(css_value{value}));
-	}
+	void add_value(std::unique_ptr<css_value> &&value);
+	void add_value(const css_value &value);
 	constexpr const css_values_vec& get_values(void) const { return values; }
 	constexpr const css_property& get_prop(void) const { return prop; }
 };

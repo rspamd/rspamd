@@ -56,7 +56,18 @@ public:
 		std::vector<consumed_block_ptr> args;
 
 		css_function_block(css_parser_token &&tok) :
-			function(std::forward<css_parser_token>(tok)) {}
+				function(std::forward<css_parser_token>(tok)) {}
+
+		auto as_string() const -> const std::string_view & {
+			return function.get_string_or_default("");
+		}
+
+		static auto empty_function() -> const css_function_block & {
+			static const css_function_block invalid(
+					css_parser_token(css_parser_token::token_type::eof_token,
+							css_parser_token_placeholder()));
+			return invalid;
+		}
 	};
 
 	css_consumed_block() : tag(parser_tag_type::css_eof_block) {}
@@ -94,7 +105,7 @@ public:
 	const inline static std::vector<consumed_block_ptr> empty_block_vec{};
 
 	auto is_blocks_vec() const -> bool {
-		return (content.index() == 1);
+		return (std::holds_alternative<std::vector<consumed_block_ptr>>(content));
 	}
 
 	auto get_blocks_or_empty() const -> const std::vector<consumed_block_ptr>& {
@@ -106,7 +117,7 @@ public:
 	}
 
 	auto is_token() const -> bool {
-		return (content.index() == 2);
+		return (std::holds_alternative<css_parser_token>(content));
 	}
 
 	auto get_token_or_empty() const -> const css_parser_token& {
@@ -115,6 +126,18 @@ public:
 		}
 
 		return css_parser_eof_token();
+	}
+
+	auto is_function() const -> bool {
+		return (std::holds_alternative<css_function_block>(content));
+	}
+
+	auto get_function_or_invalid() const -> const css_function_block& {
+		if (is_token()) {
+			return std::get<css_function_block>(content);
+		}
+
+		return css_function_block::empty_function();
 	}
 
 	auto size() const -> std::size_t {

@@ -18,6 +18,32 @@
 
 namespace rspamd::css {
 
+static auto
+allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
+	-> std::optional<css_value>
+{
+	if (prop.is_color()) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::hash_token) {
+				return css_value::maybe_color_from_hex(tok.get_string_or_default(""));
+			}
+			else if (tok.type == css_parser_token::token_type::string_token) {
+				return css_value::maybe_color_from_string(tok.get_string_or_default(""));
+			}
+		}
+		else if (parser_block.is_function()) {
+			const auto &func = parser_block.get_function_or_invalid();
+
+			return css_value::maybe_color_from_function(func);
+		}
+	}
+
+	return std::nullopt;
+}
+
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								const blocks_gen_functor &next_block_functor)
 	-> declarations_vec
@@ -83,9 +109,12 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					}
 				}
 
-				auto maybe_value = css_value::from_css_block(next_tok);
+				auto maybe_value = allowed_property_value(cur_property, next_tok);
 
 				if (maybe_value) {
+					msg_debug_css("added value %s to the property %s",
+							maybe_value.value().debug_str().c_str(),
+							cur_property.to_string());
 					cur_rule->add_value(maybe_value.value());
 				}
 			}
@@ -119,4 +148,15 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 
 	return ret; /* copy elision */
 }
+
+void css_rule::add_value(std::unique_ptr<css_value> &&value)
+{
+	values.emplace_back(std::forward<std::unique_ptr<css_value>>(value));
+}
+
+void css_rule::add_value(const css_value &value)
+{
+	values.emplace_back(std::make_unique<css_value>(css_value{value}));
+}
+
 }

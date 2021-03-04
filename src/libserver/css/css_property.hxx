@@ -31,6 +31,7 @@ namespace rspamd::css {
  */
 enum class css_property_type {
 	PROPERTY_FONT = 0,
+	PROPERTY_FONT_COLOR,
 	PROPERTY_COLOR,
 	PROPERTY_BGCOLOR,
 	PROPERTY_BACKGROUND,
@@ -52,6 +53,9 @@ struct css_property {
 		switch(type) {
 		case css_property_type::PROPERTY_FONT:
 			ret = "font";
+			break;
+		case css_property_type::PROPERTY_FONT_COLOR:
+			ret = "font-color";
 			break;
 		case css_property_type::PROPERTY_COLOR:
 			ret = "color";
@@ -79,6 +83,17 @@ struct css_property {
 		}
 
 		return ret;
+	}
+
+	constexpr auto is_color(void) const -> bool {
+		return type == css_property_type::PROPERTY_COLOR ||
+				type == css_property_type::PROPERTY_BACKGROUND ||
+				type == css_property_type::PROPERTY_BGCOLOR ||
+				type == css_property_type::PROPERTY_FONT_COLOR;
+	}
+	constexpr auto is_dimension(void) const -> bool {
+		return type == css_property_type::PROPERTY_HEIGHT ||
+				type == css_property_type::PROPERTY_WIDTH;
 	}
 };
 
