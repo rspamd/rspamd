@@ -74,7 +74,7 @@ auto css_consumed_block::token_type_str(void) const -> const char *
 		ret = "function";
 		break;
 	case parser_tag_type::css_function_arg:
-		ret = "function args";
+		ret = "function arg";
 		break;
 	case parser_tag_type::css_component:
 		ret = "component";
@@ -119,15 +119,19 @@ auto css_consumed_block::debug_str(void) -> std::string {
 				}
 				else if constexpr (std::is_same_v<T, css_function_block>) {
 					/* Empty block */
-					ret += R"({ "function:" {"name": )";
-					ret += "\"" + arg.function.debug_token_str() + "\"";
-					ret += R"("arguments:"  [)";
+					ret += R"({ "content": {"token": )";
+					ret += "\"" + arg.function.debug_token_str() + "\", ";
+					ret += R"("arguments":  [)";
 					for (const auto &block : arg.args) {
 						ret += "{";
 						ret += block->debug_str();
 						ret += "}, ";
 					}
-					ret += "]}";
+					if (*(--ret.end()) == ' ') {
+						ret.pop_back();
+						ret.pop_back(); /* Last ',' */
+					}
+					ret += "]}}";
 				}
 				else {
 					/* Single element block */
