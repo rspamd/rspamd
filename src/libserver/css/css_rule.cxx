@@ -30,7 +30,7 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			if (tok.type == css_parser_token::token_type::hash_token) {
 				return css_value::maybe_color_from_hex(tok.get_string_or_default(""));
 			}
-			else if (tok.type == css_parser_token::token_type::string_token) {
+			else if (tok.type == css_parser_token::token_type::ident_token) {
 				return css_value::maybe_color_from_string(tok.get_string_or_default(""));
 			}
 		}
@@ -65,6 +65,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 
 		switch (next_tok.tag) {
 		case css_consumed_block::parser_tag_type::css_component:
+			/* Component can be a property or a compound list of values */
 			if (state == parse_property) {
 				cur_property = css_property::from_token(next_tok.get_token_or_empty())
 						.value_or(bad_property);
@@ -81,7 +82,6 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				const auto &expect_colon_block = next_block_functor();
 
 				if (expect_colon_block.tag != css_consumed_block::parser_tag_type::css_component) {
-
 					state = ignore_value; /* Ignore up to the next rule */
 				}
 				else {
@@ -130,16 +130,23 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			}
 			break;
 		case css_consumed_block::parser_tag_type::css_function:
-		case css_consumed_block::parser_tag_type::css_function_arg:
 			if (state == parse_value) {
-				auto maybe_value = css_value::from_css_block(next_tok);
+				auto maybe_value = allowed_property_value(cur_property, next_tok);
 
 				if (maybe_value) {
+					msg_debug_css("added value %s to the property %s",
+							maybe_value.value().debug_str().c_str(),
+							cur_property.to_string());
 					cur_rule->add_value(maybe_value.value());
 				}
 			}
 			break;
 		case css_consumed_block::parser_tag_type::css_eof_block:
+			if (state == parse_value) {
+				ret.push_back(std::move(cur_rule));
+			}
+			can_continue = false;
+			break;
 		default:
 			can_continue = false;
 			break;

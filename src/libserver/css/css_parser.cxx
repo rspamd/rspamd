@@ -579,9 +579,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 
 						++selector_it;
 
-						if (ret->get_token_or_empty().type != css_parser_token::token_type::eof_token) {
-							return *ret;
-						}
+						return *ret;
 					}
 				};
 
@@ -600,9 +598,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 
 						++decls_it;
 
-						if (ret->get_token_or_empty().type != css_parser_token::token_type::eof_token) {
-							return *ret;
-						}
+						return *ret;
 					}
 				};
 

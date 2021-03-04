@@ -39,7 +39,7 @@ namespace rspamd::css {
 class css_consumed_block {
 public:
 	enum class parser_tag_type : std::uint8_t  {
-		css_top_block,
+		css_top_block = 0,
 		css_qualified_rule,
 		css_at_rule,
 		css_simple_block,
@@ -133,7 +133,7 @@ public:
 	}
 
 	auto get_function_or_invalid() const -> const css_function_block& {
-		if (is_token()) {
+		if (is_function()) {
 			return std::get<css_function_block>(content);
 		}
 

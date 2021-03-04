@@ -67,6 +67,13 @@ auto css_value::maybe_color_from_hex(const std::string_view &input)
 				hexpair_decode(input[4], input[5]));
 		return css_value(col);
 	}
+	else if (input.length() == 3) {
+		/* Rgb as 3 hex digests */
+		css_color col(hexpair_decode(input[0], input[0]),
+				hexpair_decode(input[1], input[1]),
+				hexpair_decode(input[2], input[2]));
+		return css_value(col);
+	}
 	else if (input.length() == 8) {
 		/* RGBA */
 		css_color col(hexpair_decode(input[0], input[1]),
@@ -290,7 +297,7 @@ auto css_value::debug_str() const -> std::string
 {
 	std::string ret;
 
-	std::visit([&](auto& arg) {
+	std::visit([&](const auto& arg) {
 		using T = std::decay_t<decltype(arg)>;
 
 		if constexpr (std::is_same_v<T, css_color>) {
