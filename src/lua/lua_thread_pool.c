@@ -240,7 +240,7 @@ lua_do_resume_full (lua_State *L, gint narg, const gchar *loc)
 	return lua_resume (L, narg);
 #else
 	#if LUA_VERSION_NUM >= 504
-	return lua_resume (L, from, nargs, NULL);
+	return lua_resume (L, NULL, narg, NULL);
 	#else
 	return lua_resume (L, NULL, narg);
 	#endif
