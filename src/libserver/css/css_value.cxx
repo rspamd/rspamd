@@ -158,17 +158,11 @@ constexpr static inline auto h_component_convert(const css_parser_token &tok)
 			else if (dbl < 0) {
 				dbl = 0;
 			}
-			ret = (dbl / 100.0) * 360.0;
+			ret = (dbl / 100.0);
 		}
 		else {
-			if (dbl > 360) {
-				dbl = 360;
-			}
-			else if (dbl < 0) {
-				dbl = 0;
-			}
-
-			ret = dbl;
+			dbl = ((((int)dbl % 360) + 360) % 360); /* Deal with rotations */
+			ret = dbl / 360.0; /* Normalize to 0..1 */
 		}
 	}
 
@@ -210,6 +204,8 @@ constexpr static inline auto sl_component_convert(const css_parser_token &tok)
 static inline auto hsl_to_rgb(double h, double s, double l)
 	-> css_color
 {
+	css_color ret;
+
 	constexpr auto hue2rgb = [](auto p, auto q, auto t) -> auto {
 		if (t < 0.0) {
 			t += 1.0;
@@ -217,25 +213,33 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 		if (t > 1.0) {
 			t -= 1.0;
 		}
-		if (t < 1.0/6.0) {
+		if (t * 6. < 1.0) {
 			return p + (q - p) * 6.0 * t;
 		}
-		if (t < 0.5) {
+		if (t * 2. < 1) {
 			return q;
 		}
-		if (t < 2.0/3.0) {
+		if (t * 3. < 2.) {
 			return p + (q - p) * (2.0/3.0 - t) * 6.0;
 		}
-		return p * 255.0;
+		return p;
 	};
 
-	css_color ret;
+	if (s == 0) {
+		/* Achromatic */
+		ret.r = l;
+		ret.g = l;
+		ret.b = l;
+	}
+	else {
+		auto q = l <= 0.5 ? l * (1.0 + s) : l + s - l * s;
+		auto p = 2.0 * l - q;
+		ret.r = (std::uint8_t) (hue2rgb(p, q, h + 1.0 / 3.0) * 255);
+		ret.g = (std::uint8_t) (hue2rgb(p, q, h) * 255);
+		ret.b = (std::uint8_t) (hue2rgb(p, q, h - 1.0 / 3.0) * 255);
+	}
 
-	auto q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
-	auto p = 2.0 * l - q;
-	ret.r = (std::uint8_t)hue2rgb(p, q, h + 1.0/3.0);
-	ret.g = (std::uint8_t)hue2rgb(p, q, h);
-	ret.b = (std::uint8_t)hue2rgb(p, q, h - 1.0/3.0);
+	ret.alpha = 255;
 
 	return ret;
 }

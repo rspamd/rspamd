@@ -36,7 +36,7 @@ struct alignas(int) css_color {
 
 	std::uint8_t alpha;
 
-	constexpr css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
+	css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
 	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
 	css_color() = default;
 };
