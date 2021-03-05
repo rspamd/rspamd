@@ -413,7 +413,7 @@ LUA_FUNCTION_DEF (task, get_raw_headers);
  * Modify an existing or non-existing header with the name `name`
  * Mods is a table with the following structure:
  * {
- *   "add" = {{order, value}, {order, value}},
+ *   "add" = { {order, value}, {order, value} },
  *   "remove" = {order, order, order}
  * }
  * Modifications are evaluated in order: remove, add, so headers are first
