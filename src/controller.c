@@ -2764,7 +2764,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
 
 	if (u.field_set & (1 << UF_PATH)) {
-		guint unnorm_len;
+		gsize unnorm_len;
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 
@@ -2971,7 +2971,7 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 	http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
 
 	if (u.field_set & (1 << UF_PATH)) {
-		guint unnorm_len;
+		gsize unnorm_len;
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 

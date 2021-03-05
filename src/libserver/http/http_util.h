@@ -47,7 +47,7 @@ glong rspamd_http_date_format (gchar *buf, gsize len, time_t time);
  * @param len
  * @param nlen
  */
-void rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen);
+void rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen);
 
 #ifdef  __cplusplus
 }

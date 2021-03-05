@@ -2166,7 +2166,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 	gchar *p;
 	const gchar *end;
 	guint i, complen, ret, flags = 0;
-	guint unquoted_len = 0;
+	gsize unquoted_len = 0;
 
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));

@@ -302,7 +302,7 @@ rspamd_http_date_format (gchar *buf, gsize len, time_t time)
 }
 
 void
-rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
+rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 {
 	const gchar *p, *end, *slash = NULL, *dot = NULL;
 	gchar *o;

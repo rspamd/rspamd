@@ -3023,7 +3023,7 @@ rspamd_get_unicode_normalizer (void)
 
 enum rspamd_normalise_result
 rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
-		guint *len)
+		gsize *len)
 {
 #if U_ICU_VERSION_MAJOR_NUM >= 44
 	UErrorCode uc_err = U_ZERO_ERROR;

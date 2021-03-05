@@ -491,7 +491,7 @@ enum rspamd_normalise_result {
  * @return TRUE if a string has been normalised
  */
 enum rspamd_normalise_result rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
-															   gchar *start, guint *len);
+															   gchar *start, gsize *len);
 
 enum rspamd_regexp_escape_flags {
 	RSPAMD_REGEXP_ESCAPE_ASCII = 0,

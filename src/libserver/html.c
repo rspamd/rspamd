@@ -1452,7 +1452,8 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gsize decoded_len;
 	const gchar *p, *s, *prefix = "http://";
 	gchar *d;
-	guint i, dlen;
+	guint i;
+	gsize dlen;
 	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
@@ -2588,8 +2589,11 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	struct rspamd_url *turl;
 	gboolean url_found = FALSE;
 	struct rspamd_process_exception *ex;
+	enum rspamd_normalise_result norm_res;
+	guint saved_flags = 0;
+	gsize dlen;
 
-	if (href_offset <= 0) {
+	if (href_offset < 0) {
 		/* No dispalyed url, just some text within <a> tag */
 		return;
 	}
@@ -2597,15 +2601,23 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	url->visible_part = rspamd_mempool_alloc (pool, dest->len - href_offset + 1);
 	rspamd_strlcpy (url->visible_part, dest->data + href_offset,
 			dest->len - href_offset + 1);
-	g_strstrip (url->visible_part);
+	dlen = dest->len - href_offset;
+	url->visible_part =
+			(gchar *)rspamd_string_len_strip (url->visible_part, &dlen, " \t\v\r\n");
+
+	norm_res = rspamd_normalise_unicode_inplace (pool, url->visible_part, &dlen);
+
+	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
+		saved_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
 
 	rspamd_html_url_is_phished (pool, url,
-			dest->data + href_offset,
-			dest->len - href_offset,
+			url->visible_part,
+			dlen,
 			&url_found, &displayed_url);
 
 	if (url_found) {
-		url->flags |= RSPAMD_URL_FLAG_DISPLAY_URL;
+		url->flags |= saved_flags|RSPAMD_URL_FLAG_DISPLAY_URL;
 	}
 
 	if (exceptions && url_found) {
