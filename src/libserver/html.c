@@ -719,6 +719,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 				p++;
 			}
 		}
+
 		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool,
 				RSPAMD_URL_PARSE_TEXT);
@@ -827,9 +828,28 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			*url_found = TRUE;
 		}
 		else {
-			msg_info_pool ("extract of url '%s' failed: %s",
+			/*
+			 * We have found something that looks like an url but it was
+			 * not parsed correctly.
+			 * Sometimes it means an obfuscation attempt, so we have to check
+			 * what's inside of the text
+			 */
+			gboolean obfuscation_found = FALSE;
+
+			if (g_ascii_strncasecmp (url_str, "http", 4) == 0 &&
+				strstr (url_str, "://") != NULL) {
+				/* Clearly an obfuscation attempt */
+				obfuscation_found = TRUE;
+			}
+
+			msg_info_pool ("extract of url '%s' failed: %s; obfuscation detected: %s",
 					url_str,
-					rspamd_url_strerror (rc));
+					rspamd_url_strerror (rc),
+					obfuscation_found ? "yes" : "no");
+
+			if (obfuscation_found) {
+				href_url->flags |= RSPAMD_URL_FLAG_PHISHED|RSPAMD_URL_FLAG_OBSCURED;
+			}
 		}
 	}
 
