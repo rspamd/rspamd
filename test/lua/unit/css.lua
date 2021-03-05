@@ -100,8 +100,8 @@ body {
 ]],
 [[
 /* Colors */
-* { color: hsl(0, 100%, 50%) }   /* red */
-* { color: hsl(120, 100%, 50%) } /* lime */
+* { color: hsl(0, 100%, 50%) !important }   /* red */
+* { color: hsl(120, 100%, 50%) important } /* lime */
 * { color: hsl(120, 100%, 25%) } /* dark green */
 * { color: hsl(120, 100%, 75%) } /* light green */
 * { color: hsl(120, 75%, 75%) }  /* pastel green, and so on */

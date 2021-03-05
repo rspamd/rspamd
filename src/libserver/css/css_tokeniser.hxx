@@ -100,9 +100,12 @@ struct css_parser_token {
 	auto operator=(css_parser_token &&other) -> css_parser_token& = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 
-	auto get_string_or_default(const std::string_view &def) const -> const std::string_view & {
-		if (value.index() == 0) {
+	auto get_string_or_default(const std::string_view &def) const -> std::string_view {
+		if (std::holds_alternative<std::string_view>(value)) {
 			return std::get<std::string_view>(value);
+		}
+		else if (std::holds_alternative<char>(value)) {
+			return std::string_view(&std::get<char>(value), 1);
 		}
 
 		return def;

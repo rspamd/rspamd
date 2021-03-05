@@ -32,7 +32,9 @@ constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_p
 		{"visibility", css_property_type::PROPERTY_VISIBILITY},
 });
 
-auto token_string_to_property(const std::string_view &inp) -> css_property_type {
+auto token_string_to_property(const std::string_view &inp)
+	-> css_property_type
+{
 
 	css_property_type ret = css_property_type::PROPERTY_NYI;
 
@@ -45,12 +47,13 @@ auto token_string_to_property(const std::string_view &inp) -> css_property_type 
 	return ret;
 }
 
-auto css_property::from_token(const css_parser_token &tok) -> tl::expected<css_property,css_parse_error>
+auto css_property::from_token(const css_parser_token &tok)
+	-> tl::expected<css_property,css_parse_error>
 {
 	if (tok.type == css_parser_token::token_type::ident_token) {
 		auto sv = tok.get_string_or_default("");
 
-		return css_property{token_string_to_property(sv)};
+		return css_property{token_string_to_property(sv), css_property_flag::FLAG_NORMAL};
 	}
 
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};

@@ -50,15 +50,6 @@ enum class css_display_value {
 };
 
 /*
- * CSS flags
- */
-enum class css_flag_value {
-	FLAG_INHERIT,
-	FLAG_IMPORTANT,
-	FLAG_NOTIMPORTANT
-};
-
-/*
  * Value handler, uses std::variant instead of polymorphic classes for now
  * for simplicity
  */
@@ -74,7 +65,6 @@ struct css_value {
 	std::variant<css_color,
 			double,
 			css_display_value,
-			css_flag_value,
 			std::monostate> value;
 
 	css_value(const css_color &color) :
@@ -101,14 +91,6 @@ struct css_value {
 	constexpr std::optional<css_display_value> to_display(void) const {
 		if (type == css_value_type::CSS_VALUE_DISPLAY) {
 			return std::get<css_display_value>(value);
-		}
-
-		return std::nullopt;
-	}
-
-	constexpr std::optional<css_flag_value> to_flag(void) const {
-		if (type == css_value_type::CSS_VALUE_FLAG) {
-			return std::get<css_flag_value>(value);
 		}
 
 		return std::nullopt;

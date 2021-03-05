@@ -58,7 +58,7 @@ public:
 		css_function_block(css_parser_token &&tok) :
 				function(std::forward<css_parser_token>(tok)) {}
 
-		auto as_string() const -> const std::string_view & {
+		auto as_string() const -> std::string_view {
 			return function.get_string_or_default("");
 		}
 

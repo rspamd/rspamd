@@ -29,7 +29,7 @@ namespace rspamd::css {
  * To be extended with properties that are interesting from the email
  * point of view
  */
-enum class css_property_type {
+enum class css_property_type : std::uint16_t {
 	PROPERTY_FONT = 0,
 	PROPERTY_FONT_COLOR,
 	PROPERTY_COLOR,
@@ -42,8 +42,16 @@ enum class css_property_type {
 	PROPERTY_NYI,
 };
 
-struct css_property {
+enum class css_property_flag : std::uint16_t {
+	FLAG_NORMAL,
+	FLAG_IMPORTANT,
+	FLAG_NOT_IMPORTANT
+};
+
+struct alignas(int) css_property {
 	css_property_type type;
+	css_property_flag flag;
+
 	static tl::expected<css_property,css_parse_error> from_token(
 			const css_parser_token &tok);
 

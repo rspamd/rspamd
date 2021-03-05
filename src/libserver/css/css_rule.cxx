@@ -50,8 +50,10 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 {
 	declarations_vec ret;
 	bool can_continue = true;
-	css_property cur_property{css_property_type::PROPERTY_NYI};
-	static const css_property bad_property{css_property_type::PROPERTY_NYI};
+	css_property cur_property{css_property_type::PROPERTY_NYI,
+							  css_property_flag::FLAG_NORMAL};
+	static const css_property bad_property{css_property_type::PROPERTY_NYI,
+										   css_property_flag::FLAG_NORMAL};
 	std::unique_ptr<css_rule> cur_rule;
 
 	enum {
@@ -59,6 +61,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 		parse_value,
 		ignore_value, /* For unknown properties */
 	} state = parse_property;
+
+	auto seen_not = false;
 
 	while (can_continue) {
 		const auto &next_tok = next_block_functor();
@@ -105,7 +109,35 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
 						ret.push_back(std::move(cur_rule));
 						state = parse_property;
+						seen_not = false;
 						continue;
+					}
+					else if (parser_tok.type == css_parser_token::token_type::delim_token) {
+						if (parser_tok.get_string_or_default("") == "!") {
+							/* Probably something like !important */
+							seen_not = true;
+						}
+					}
+					else if (parser_tok.type == css_parser_token::token_type::ident_token) {
+						if (parser_tok.get_string_or_default("") == "important") {
+							if (seen_not) {
+								msg_debug_css("add !important flag to property %s",
+										cur_property.to_string());
+								cur_property.flag = css_property_flag::FLAG_NOT_IMPORTANT;
+							}
+							else {
+								msg_debug_css("add important flag to property %s",
+										cur_property.to_string());
+								cur_property.flag = css_property_flag::FLAG_IMPORTANT;
+							}
+
+							seen_not = false;
+
+							continue;
+						}
+						else {
+							seen_not = false;
+						}
 					}
 				}
 
