@@ -510,7 +510,7 @@ enum rspamd_regexp_escape_flags {
  */
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-						  gsize *dst_len, enum rspamd_regexp_escape_flags flags);
+						  gsize *dst_len, enum rspamd_regexp_escape_flags flags) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Returns copy of src (zero terminated) where all unicode is made valid or replaced
@@ -520,7 +520,8 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
  * @param dstelen
  * @return
  */
-gchar *rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen, rspamd_mempool_t *pool);
+gchar *rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen,
+								  rspamd_mempool_t *pool) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Strips characters in `strip_chars` from start and end of the GString
@@ -535,7 +536,7 @@ gsize rspamd_gstring_strip (GString *s, const gchar *strip_chars);
  * @param strip_chars
  */
 const gchar *rspamd_string_len_strip (const gchar *in,
-									  gsize *len, const gchar *strip_chars);
+									  gsize *len, const gchar *strip_chars) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Returns a NULL terminated list of zero terminated strings based on splitting of
