@@ -1764,7 +1764,7 @@ rspamd_html_url_query_callback (struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
-	if (rspamd_url_set_add_or_increase (cbd->url_set, url) && cbd->part_urls) {
+	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false) && cbd->part_urls) {
 		g_ptr_array_add (cbd->part_urls, url);
 	}
 
@@ -1903,7 +1903,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 						if (img->url) {
 							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
 
-							if (rspamd_url_set_add_or_increase (url_set, img->url) &&
+							if (rspamd_url_set_add_or_increase(url_set, img->url, false) &&
 								part_urls) {
 								g_ptr_array_add (part_urls, img->url);
 							}
@@ -3245,9 +3245,14 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 						if (url != NULL) {
 
 							if (url_set != NULL) {
-								if (rspamd_url_set_add_or_increase (url_set, url)) {
+								struct rspamd_url *maybe_existing =
+										rspamd_url_set_add_or_return (url_set, url);
+								if (maybe_existing == url) {
 									rspamd_process_html_url (pool, url, url_set,
 											part_urls);
+								}
+								else {
+									url = maybe_existing;
 								}
 							}
 

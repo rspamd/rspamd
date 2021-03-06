@@ -3377,7 +3377,7 @@ rspamd_url_query_callback (struct rspamd_url *url, gsize start_offset,
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
 
-	if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url)) {
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url, false)) {
 		if (cbd->part && cbd->part->mime_part->urls) {
 			g_ptr_array_add (cbd->part->mime_part->urls, url);
 		}
@@ -3433,8 +3433,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 
-	if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url) &&
-			cbd->part->mime_part->urls) {
+	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url, false) &&
+		cbd->part->mime_part->urls) {
 		g_ptr_array_add (cbd->part->mime_part->urls, url);
 	}
 
@@ -3592,7 +3592,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url);
+	rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url, false);
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
@@ -3622,8 +3622,8 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 					}
 				}
 
-				rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls),
-						query_url);
+				rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls),
+						query_url, false);
 			}
 		}
 	}
@@ -4044,20 +4044,43 @@ rspamd_url_protocol_from_string (const gchar *str)
 
 
 bool
-rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
-									 struct rspamd_url *u)
+rspamd_url_set_add_or_increase(khash_t (rspamd_url_hash) *set,
+							   struct rspamd_url *u,
+							   bool enforce_replace)
 {
 	khiter_t k;
 	gint r;
 
-	k = kh_put (rspamd_url_hash, set, u, &r);
+	k = kh_get (rspamd_url_hash, set, u);
 
-	if (r == 0) {
+	if (k != kh_end (set)) {
+		/* Existing url */
 		struct rspamd_url *ex = kh_key (set, k);
-
-		ex->count ++;
+#define SUSPICIOUS_URL_FLAGS (RSPAMD_URL_FLAG_PHISHED|RSPAMD_URL_FLAG_OBSCURED|RSPAMD_URL_FLAG_ZW_SPACES)
+		if (enforce_replace) {
+			kh_key (set, k) = u;
+			u->count++;
+		}
+		else {
+			if (u->flags & SUSPICIOUS_URL_FLAGS) {
+				if (!(ex->flags & SUSPICIOUS_URL_FLAGS)) {
+					/* Propagate new url to an old one */
+					kh_key (set, k) = u;
+					u->count++;
+				}
+				else {
+					ex->count++;
+				}
+			}
+			else {
+				ex->count++;
+			}
+		}
 
 		return false;
+	}
+	else {
+		k = kh_put (rspamd_url_hash, set, u, &r);
 	}
 
 	return true;
@@ -4071,12 +4094,15 @@ rspamd_url_set_add_or_return (khash_t (rspamd_url_hash) *set,
 	gint r;
 
 	if (set) {
-		k = kh_put (rspamd_url_hash, set, u, &r);
+		k = kh_get (rspamd_url_hash, set, u);
 
-		if (r == 0) {
-			struct rspamd_url *ex = kh_key (set, k);
+		if (k != kh_end (set)) {
+			return kh_key (set, k);
+		}
+		else {
+			k = kh_put (rspamd_url_hash, set, u, &r);
 
-			return ex;
+			return kh_key (set, k);
 		}
 	}
 

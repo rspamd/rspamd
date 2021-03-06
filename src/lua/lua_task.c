@@ -2507,7 +2507,7 @@ lua_task_inject_url (lua_State * L)
 	}
 
 	if (task && task->message && url && url->url) {
-		if (rspamd_url_set_add_or_increase (MESSAGE_FIELD (task, urls), url->url)) {
+		if (rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url->url, false)) {
 			if (mpart && mpart->urls) {
 				/* Also add url to the mime part */
 				g_ptr_array_add (mpart->urls, url->url);

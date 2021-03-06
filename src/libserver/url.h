@@ -296,8 +296,9 @@ KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
  * @param u
  * @return true if a new url has been added
  */
-bool rspamd_url_set_add_or_increase (khash_t (rspamd_url_hash) *set,
-		struct rspamd_url *u);
+bool rspamd_url_set_add_or_increase(khash_t (rspamd_url_hash) *set,
+									struct rspamd_url *u,
+									bool enforce_replace);
 
 /**
  * Same as rspamd_url_set_add_or_increase but returns the existing url if found
