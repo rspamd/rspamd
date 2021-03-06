@@ -181,10 +181,10 @@ local function phishing_cb(task)
     end
   end
 
-  local urls = task:get_urls()
-
-  if urls then
-    for _,url in ipairs(urls) do
+  -- Process all urls
+  local urls = task:get_urls() or {}
+  for _,url in ipairs(urls) do
+    local function do_loop_iter() -- to emulate continue
       if generic_service_hash then
         check_phishing_map(generic_service_data, url, generic_service_symbol)
       end
@@ -199,6 +199,11 @@ local function phishing_cb(task)
 
       if url:is_phished() and not url:is_redirected() then
         local purl = url:get_phished()
+
+        if not purl then
+          return
+        end
+
         local tld = url:get_tld()
         local ptld = purl:get_tld()
 
@@ -243,7 +248,7 @@ local function phishing_cb(task)
             if a1 ~= a2 then
               weight = 1
               lua_util.debugm(N, task, "confusable: %1 -> %2: different characters",
-                tld, ptld, why)
+                      tld, ptld, why)
             else
               -- We have totally different strings in tld, so penalize it significantly
               if dist > 2 then dist = 2 end
@@ -259,12 +264,12 @@ local function phishing_cb(task)
           if not sweight then sweight = weight end
           if #map > 0 then
             for _,rule in ipairs(map) do
-                for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
-                  if rule['map']:get_key(dn) then
-                    task:insert_result(rule['symbol'], sweight, ptld .. '->' .. dn)
-                    return true
-                  end
+              for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
+                if rule['map']:get_key(dn) then
+                  task:insert_result(rule['symbol'], sweight, ptld .. '->' .. dn)
+                  return true
                 end
+              end
             end
           end
         end
@@ -282,6 +287,8 @@ local function phishing_cb(task)
         end
       end
     end
+
+    do_loop_iter()
   end
 end
 
