@@ -537,8 +537,8 @@ LUA_FUNCTION_DEF (task, get_principal_recipient);
 LUA_FUNCTION_DEF (task, get_reply_sender);
 
 /***
- * @method task:set_recipients([type], {rcpt1, rcpt2...})
- * Sets sender for a task. This function accepts table that will be converted to the address.
+ * @method task:set_recipients([type], {rcpt1, rcpt2...}, [how='add'])
+ * Sets recipients for a task. This function accepts table that will be converted to the address.
  * If some fields are missing they are subsequently reconstructed by this function. E.g. if you
  * specify 'user' and 'domain', then address and raw string will be reconstructed
  *
@@ -548,6 +548,7 @@ LUA_FUNCTION_DEF (task, get_reply_sender);
  * - `domain` - domain part (if present), e.g. `foo.com`
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
  * @param {list of tables} recipients recipients to set
+ * @param {string} how define how to set recipients: `rewrite` - rewrite existing recipients, `alias` - treat existing recipients as aliased recipients, `add` - add new recipients
  * @return {boolean} result of the operation
  */
 LUA_FUNCTION_DEF (task, set_recipients);
@@ -3639,7 +3640,7 @@ lua_task_set_recipients (lua_State *L)
 	GPtrArray *ptrs = NULL;
 	struct rspamd_email_address *addr = NULL;
 	gint what = 0, pos = 3;
-	const gchar *how = "rewrite";
+	const gchar *how = "add";
 	gboolean need_update_digest = FALSE;
 
 	if (task && lua_gettop (L) >= 3) {
@@ -3673,15 +3674,23 @@ lua_task_set_recipients (lua_State *L)
 			break;
 		}
 		if (ptrs) {
-			guint i, flags_add = RSPAMD_EMAIL_ADDR_ORIGINAL;
+			guint i, flags_existing = RSPAMD_EMAIL_ADDR_ORIGINAL, flags_add = 0;
 			struct rspamd_email_address *tmp;
 
 			if (strcmp (how, "alias") == 0) {
 				flags_add |= RSPAMD_EMAIL_ADDR_ALIASED;
 			}
+			else if (strcmp (how, "rewrite") == 0) {
+				/* Clear old addresses */
+				PTR_ARRAY_FOREACH (ptrs, i, tmp) {
+					rspamd_email_address_free (addr);
+				}
+
+				g_ptr_array_set_size (ptrs, 0);
+			}
 
 			PTR_ARRAY_FOREACH (ptrs, i, tmp) {
-				tmp->flags |= flags_add;
+				tmp->flags |= flags_existing;
 			}
 
 			lua_pushvalue (L, pos);
@@ -3693,6 +3702,8 @@ lua_task_set_recipients (lua_State *L)
 						rspamd_message_update_digest (task->message,
 								addr->addr, addr->addr_len);
 					}
+
+					addr->flags |= flags_add;
 					g_ptr_array_add (ptrs, addr);
 				}
 			}
