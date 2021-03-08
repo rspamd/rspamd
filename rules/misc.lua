@@ -503,7 +503,7 @@ local aliases_id = rspamd_config:register_symbol{
         end
 
         if modified then
-          task:set_recipients(type, addrs)
+          task:set_recipients(type, addrs, 'alias')
           task:insert_result('TAGGED_RCPT', 1.0, all_tags)
         end
       end
