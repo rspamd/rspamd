@@ -356,7 +356,7 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 	ver_err = SSL_get_verify_result (c->ssl);
 
 	if (ver_err != X509_V_OK) {
-		g_set_error (&err, rspamd_ssl_quark (), ver_err, "certificate validation "
+		g_set_error (&err, rspamd_ssl_quark (), 400, "certificate validation "
 				"failed: %s", X509_verify_cert_error_string (ver_err));
 		c->err_handler (c->handler_data, err);
 		g_error_free (err);
@@ -367,7 +367,7 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 	/* Get server's certificate */
 	server_cert =  SSL_get_peer_certificate (c->ssl);
 	if (server_cert == NULL) {
-		g_set_error (&err, rspamd_ssl_quark (), ver_err, "peer certificate is absent");
+		g_set_error (&err, rspamd_ssl_quark (), 401, "peer certificate is absent");
 		c->err_handler (c->handler_data, err);
 		g_error_free (err);
 
@@ -377,7 +377,7 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 	if (c->hostname) {
 		if (!rspamd_tls_check_name (server_cert, c->hostname)) {
 			X509_free (server_cert);
-			g_set_error (&err, rspamd_ssl_quark (), ver_err, "peer certificate fails "
+			g_set_error (&err, rspamd_ssl_quark (), 403, "peer certificate fails "
 					"hostname verification for %s", c->hostname);
 			c->err_handler (c->handler_data, err);
 			g_error_free (err);
@@ -396,22 +396,21 @@ rspamd_tls_set_error (gint retcode, const gchar *stage, GError **err)
 {
 	GString *reason;
 	gchar buf[120];
-	gint err_code = 0, last_err = 0;
+	gint err_code = 0;
 
 	reason = g_string_sized_new (sizeof (buf));
 
 	if (retcode == SSL_ERROR_SYSCALL) {
 		rspamd_printf_gstring (reason, "syscall fail: %s", strerror (errno));
-		err_code = errno;
+		err_code = 500;
 	}
 	else {
 		while ((err_code = ERR_get_error()) != 0) {
-			last_err = err_code;
 			ERR_error_string (err_code, buf);
 			rspamd_printf_gstring (reason, "ssl error: %s,", buf);
 		}
 
-		err_code = last_err;
+		err_code = 400;
 
 		if (reason->len > 0 && reason->str[reason->len - 1] == ',') {
 			reason->str[reason->len - 1] = '\0';
@@ -544,7 +543,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		else {
 			conn->shut = ssl_shut_unclean;
 			rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
-			g_set_error (&err, rspamd_ssl_quark (), ETIMEDOUT,
+			g_set_error (&err, rspamd_ssl_quark (), 408,
 					"ssl connection timed out");
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
@@ -616,7 +615,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		break;
 	default:
 		rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
-		g_set_error (&err, rspamd_ssl_quark (), EINVAL,
+		g_set_error (&err, rspamd_ssl_quark (), 500,
 				"ssl bad state error: %d", conn->state);
 		conn->err_handler (conn->handler_data, err);
 		g_error_free (err);
@@ -760,7 +759,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 
 	if (conn->state != ssl_conn_connected && conn->state != ssl_next_read) {
 		errno = EINVAL;
-		g_set_error (&err, rspamd_ssl_quark (), ECONNRESET,
+		g_set_error (&err, rspamd_ssl_quark (), 400,
 				"ssl state error: cannot read data");
 		conn->shut = ssl_shut_unclean;
 		conn->err_handler (conn->handler_data, err);

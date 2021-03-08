@@ -820,7 +820,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 
 	if (r == -1) {
 		if (!priv->ssl) {
-			err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
+			err = g_error_new (HTTP_ERROR, 500, "IO write error: %s", strerror (errno));
 			rspamd_http_connection_ref (conn);
 			conn->error_handler (conn, err);
 			rspamd_http_connection_unref (conn);
@@ -970,9 +970,16 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 					return;
 				}
 				else {
-					err = g_error_new (HTTP_ERROR, 500 + priv->parser.http_errno,
-							"HTTP parser error: %s",
-							http_errno_description (priv->parser.http_errno));
+					if (priv->parser.http_errno > HPE_CB_status) {
+						err = g_error_new (HTTP_ERROR, 400,
+								"HTTP parser error: %s",
+								http_errno_description (priv->parser.http_errno));
+					}
+					else {
+						err = g_error_new (HTTP_ERROR, 500,
+								"HTTP parser internal error: %s",
+								http_errno_description (priv->parser.http_errno));
+					}
 				}
 
 				if (!conn->finished) {
@@ -996,7 +1003,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 
 			if (!conn->finished) {
 				err = g_error_new (HTTP_ERROR,
-						errno,
+						400,
 						"IO read error: unexpected EOF");
 				conn->error_handler (conn, err);
 				g_error_free (err);
@@ -1009,8 +1016,8 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		else {
 			if (!priv->ssl) {
 				err = g_error_new (HTTP_ERROR,
-						errno,
-						"IO read error: %s",
+						500,
+						"HTTP IO read error: %s",
 						strerror (errno));
 				conn->error_handler (conn, err);
 				g_error_free (err);
@@ -1029,7 +1036,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		if (r > 0) {
 			if (http_parser_execute (&priv->parser, &priv->parser_cb,
 					d, r) != (size_t)r || priv->parser.http_errno != 0) {
-				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
+				err = g_error_new (HTTP_ERROR, 400,
 						"HTTP parser error: %s",
 						http_errno_description (priv->parser.http_errno));
 
@@ -1050,7 +1057,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		}
 		else if (r == 0) {
 			if (!conn->finished) {
-				err = g_error_new (HTTP_ERROR, ETIMEDOUT,
+				err = g_error_new (HTTP_ERROR, 408,
 						"IO timeout");
 				conn->error_handler (conn, err);
 				g_error_free (err);
@@ -1062,7 +1069,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else {
-			err = g_error_new (HTTP_ERROR, ETIMEDOUT,
+			err = g_error_new (HTTP_ERROR, 408,
 					"IO timeout");
 			conn->error_handler (conn, err);
 			g_error_free (err);
@@ -2258,7 +2265,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				priv->ctx->ssl_ctx_noverify : priv->ctx->ssl_ctx;
 
 		if (!ssl_ctx) {
-			err = g_error_new (HTTP_ERROR, errno, "ssl message requested "
+			err = g_error_new (HTTP_ERROR, 400, "ssl message requested "
 					"with no ssl ctx");
 			rspamd_http_connection_ref (conn);
 			conn->error_handler (conn, err);
@@ -2281,7 +2288,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 					priv->timeout, rspamd_http_event_handler,
 					rspamd_http_ssl_err_handler, conn)) {
 
-				err = g_error_new (HTTP_ERROR, errno,
+				err = g_error_new (HTTP_ERROR, 400,
 						"ssl connection error: ssl error=%s, errno=%s",
 						ERR_error_string (ERR_get_error (), NULL),
 						strerror (errno));
