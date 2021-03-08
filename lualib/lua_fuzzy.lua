@@ -245,8 +245,15 @@ local function mime_types_check(task, part, rule)
   if not t then return false, false end
 
   local ct = string.format('%s/%s', t, st)
+
+  local detected_ct
   t,st = part:get_detected_type()
-  local detected_ct = string.format('%s/%s', t, st)
+  if t then
+    detected_ct = string.format('%s/%s', t, st)
+  else
+    detected_ct = ct
+  end
+
   local id = part:get_id()
   lua_util.debugm(N, task, 'check binary part %s: %s', id, ct)
 
