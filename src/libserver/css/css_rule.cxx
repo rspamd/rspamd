@@ -15,8 +15,86 @@
  */
 
 #include "css_rule.hxx"
+#include <limits>
 
 namespace rspamd::css {
+
+/* Class methods */
+void css_rule::override_values(const css_rule &other)
+{
+	values.resize(0);
+	values.reserve(other.values.size());
+
+	std::copy(other.values.begin(), other.values.end(),
+			std::back_inserter(values));
+}
+
+void css_rule::merge_values(const css_rule &other)
+{
+	int bits = 0;
+	/* Ensure that our bitset is large enough */
+	static_assert(static_cast<std::size_t>(css_value::css_value_type::CSS_VALUE_NYI) << 1 <
+		std::numeric_limits<int>::max());
+
+	for (const auto &v : values) {
+		bits |= static_cast<int>(v.type);
+	}
+
+	/* Copy only not set values */
+	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
+			[&bits](const auto &elt) -> bool {
+		return !isset(&bits, static_cast<int>(elt.type));
+	});
+}
+
+auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
+{
+	auto it = rules.find(rule);
+	auto &&remote_prop = rule->get_prop();
+
+	if (it != rules.end()) {
+		auto &&local_rule = *it;
+		auto &&local_prop = local_rule->get_prop();
+
+		if (local_prop.flag == css_property_flag::FLAG_IMPORTANT) {
+			if (remote_prop.flag == css_property_flag::FLAG_IMPORTANT) {
+				local_rule->override_values(*rule);
+			}
+			else {
+				/* Ignore remote not important over local important */
+				local_rule->merge_values(*rule);
+			}
+		}
+		else if (local_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
+			if (remote_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
+				local_rule->override_values(*rule);
+			}
+			else {
+				/* Ignore local not important over important */
+				local_rule->merge_values(*rule);
+			}
+		}
+		else {
+			if (remote_prop.flag == css_property_flag::FLAG_IMPORTANT) {
+				/* Override with remote */
+				local_rule->override_values(*rule);
+			}
+			else if (remote_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
+				/* Ignore remote not important over local normal */
+			}
+			else {
+				/* Merge both */
+				local_rule->merge_values(*rule);
+			}
+		}
+	}
+}
+
+}
+
+namespace rspamd::css {
+
+/* Static functions */
 
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
@@ -70,15 +148,15 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								const blocks_gen_functor &next_block_functor)
-	-> declarations_vec
+	-> css_declarations_block
 {
-	declarations_vec ret;
+	css_declarations_block ret;
 	bool can_continue = true;
 	css_property cur_property{css_property_type::PROPERTY_NYI,
 							  css_property_flag::FLAG_NORMAL};
 	static const css_property bad_property{css_property_type::PROPERTY_NYI,
 										   css_property_flag::FLAG_NORMAL};
-	std::unique_ptr<css_rule> cur_rule;
+	std::shared_ptr<css_rule> cur_rule;
 
 	enum {
 		parse_property,
@@ -121,7 +199,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					}
 					else {
 						state = parse_value;
-						cur_rule = std::make_unique<css_rule>(cur_property);
+						cur_rule = std::make_shared<css_rule>(cur_property);
 					}
 				}
 			}
@@ -131,7 +209,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					const auto &parser_tok = next_tok.get_token_or_empty();
 
 					if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
-						ret.push_back(std::move(cur_rule));
+						ret.add_rule(std::move(cur_rule));
 						state = parse_property;
 						seen_not = false;
 						continue;
@@ -199,7 +277,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			break;
 		case css_consumed_block::parser_tag_type::css_eof_block:
 			if (state == parse_value) {
-				ret.push_back(std::move(cur_rule));
+				ret.add_rule(std::move(cur_rule));
 			}
 			can_continue = false;
 			break;
@@ -212,14 +290,9 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	return ret; /* copy elision */
 }
 
-void css_rule::add_value(std::unique_ptr<css_value> &&value)
-{
-	values.emplace_back(std::forward<std::unique_ptr<css_value>>(value));
-}
-
 void css_rule::add_value(const css_value &value)
 {
-	values.emplace_back(std::make_unique<css_value>(css_value{value}));
+	values.push_back(value);
 }
 
 }

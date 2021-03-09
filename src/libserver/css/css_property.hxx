@@ -118,6 +118,8 @@ struct alignas(int) css_property {
 	constexpr auto is_normal_number(void) const -> bool {
 		return type == css_property_type::PROPERTY_OPACITY;
 	}
+
+	auto operator==(const css_property &other) const { return type == other.type; }
 };
 
 

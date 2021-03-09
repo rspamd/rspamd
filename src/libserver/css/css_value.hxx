@@ -59,20 +59,23 @@ enum class css_display_value {
  * for simplicity
  */
 struct css_value {
+	/* Bitset of known types */
 	enum class css_value_type {
-		CSS_VALUE_COLOR,
-		CSS_VALUE_NUMBER,
-		CSS_VALUE_DISPLAY,
-		CSS_VALUE_DIMENSION,
-		CSS_VALUE_NYI,
-	} type;
+		CSS_VALUE_COLOR = 1 << 0,
+		CSS_VALUE_NUMBER = 1 << 1,
+		CSS_VALUE_DISPLAY = 1 << 2,
+		CSS_VALUE_DIMENSION = 1 << 3,
+		CSS_VALUE_NYI = 1 << 4,
+	};
 
+	css_value_type type;
 	std::variant<css_color,
 			double,
 			css_display_value,
 			css_dimension,
 			std::monostate> value;
 
+	css_value() : type(css_value_type::CSS_VALUE_NYI) {}
 	css_value(const css_color &color) :
 			type(css_value_type::CSS_VALUE_COLOR), value(color) {}
 	css_value(double num) :
