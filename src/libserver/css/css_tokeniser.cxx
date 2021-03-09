@@ -337,6 +337,14 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 						if (next_c == '+' || next_c == '-') {
 							i ++;
 						}
+						else if (!g_ascii_isdigit(next_c)) {
+							/* Not an exponent */
+							break;
+						}
+					}
+					else {
+						/* Not an exponent */
+						break;
 					}
 				}
 				else {
