@@ -399,7 +399,10 @@ rspamd_config.OMOGRAPH_URL = {
         if u:is_phished() then
 
           local h1 = u:get_host()
-          local h2 = u:get_phished():get_host()
+          local h2 = u:get_phished()
+          if h2 then -- Due to changes of the phished flag in 2.8
+            h2 = h2:get_host()
+          end
           if h1 and h2 then
             local selt = string.format('%s->%s', h1, h2)
             if not seen[selt] and util.is_utf_spoofed(h1, h2) then
