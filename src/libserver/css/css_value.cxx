@@ -273,6 +273,29 @@ auto css_value::maybe_color_from_function(const css_consumed_block::css_function
 	return std::nullopt;
 }
 
+auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
+-> std::optional<css_value>
+{
+	if (std::holds_alternative<double>(tok.value)) {
+		auto dbl = std::get<double>(tok.value);
+		css_dimension dim;
+
+		dim.dim = dbl;
+
+		if (tok.flags & css_parser_token::number_percent) {
+			dim.is_percent = true;
+		}
+		else {
+			dim.is_percent = false;
+		}
+
+		return css_value{dim};
+	}
+
+	return std::nullopt;
+}
+
+
 auto css_value::debug_str() const -> std::string
 {
 	std::string ret;
@@ -288,6 +311,12 @@ auto css_value::debug_str() const -> std::string
 		}
 		else if constexpr (std::is_same_v<T, double>) {
 			ret += "size: " + std::to_string(arg);
+		}
+		else if constexpr (std::is_same_v<T, css_dimension>) {
+			ret += "dimension: " + std::to_string(arg.dim);
+			if (arg.is_percent) {
+				ret += "%";
+			}
 		}
 		else if constexpr (std::is_integral_v<T>) {
 			ret += "integral: " + std::to_string(static_cast<int>(arg));

@@ -20,7 +20,7 @@
 
 namespace rspamd::css {
 
-constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_property_type>({
+constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string, css_property_type>({
 		{"font", css_property_type::PROPERTY_FONT},
 		{"font-color", css_property_type::PROPERTY_FONT_COLOR},
 		{"font-size", css_property_type::PROPERTY_FONT_SIZE},
@@ -34,15 +34,18 @@ constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_p
 		{"opacity", css_property_type::PROPERTY_OPACITY},
 });
 
+/* Ensure that we have all cases listed */
+static_assert(prop_names_map.size() == static_cast<int>(css_property_type::PROPERTY_NYI));
+
 auto token_string_to_property(const std::string_view &inp)
 	-> css_property_type
 {
 
 	css_property_type ret = css_property_type::PROPERTY_NYI;
 
-	auto known_type = type_map.find(inp);
+	auto known_type = prop_names_map.find(inp);
 
-	if (known_type != type_map.end()) {
+	if (known_type != prop_names_map.end()) {
 		ret = known_type->second;
 	}
 

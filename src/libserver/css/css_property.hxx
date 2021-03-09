@@ -106,11 +106,14 @@ struct alignas(int) css_property {
 		return type == css_property_type::PROPERTY_COLOR ||
 				type == css_property_type::PROPERTY_BACKGROUND ||
 				type == css_property_type::PROPERTY_BGCOLOR ||
-				type == css_property_type::PROPERTY_FONT_COLOR;
+				type == css_property_type::PROPERTY_FONT_COLOR ||
+				type == css_property_type::PROPERTY_FONT;
 	}
 	constexpr auto is_dimension(void) const -> bool {
 		return type == css_property_type::PROPERTY_HEIGHT ||
-				type == css_property_type::PROPERTY_WIDTH;
+				type == css_property_type::PROPERTY_WIDTH ||
+				type == css_property_type::PROPERTY_FONT_SIZE ||
+				type == css_property_type::PROPERTY_FONT;
 	}
 	constexpr auto is_normal_number(void) const -> bool {
 		return type == css_property_type::PROPERTY_OPACITY;

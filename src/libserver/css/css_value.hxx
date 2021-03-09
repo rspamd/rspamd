@@ -41,6 +41,11 @@ struct alignas(int) css_color {
 	css_color() = default;
 };
 
+struct css_dimension {
+	float dim;
+	bool is_percent;
+};
+
 /*
  * Simple enum class for display stuff
  */
@@ -58,21 +63,24 @@ struct css_value {
 		CSS_VALUE_COLOR,
 		CSS_VALUE_NUMBER,
 		CSS_VALUE_DISPLAY,
-		CSS_VALUE_OPACITY,
+		CSS_VALUE_DIMENSION,
 		CSS_VALUE_NYI,
 	} type;
 
 	std::variant<css_color,
 			double,
 			css_display_value,
+			css_dimension,
 			std::monostate> value;
 
 	css_value(const css_color &color) :
 			type(css_value_type::CSS_VALUE_COLOR), value(color) {}
 	css_value(double num) :
 			type(css_value_type::CSS_VALUE_NUMBER), value(num) {}
+	css_value(css_dimension dim) :
+			type(css_value_type::CSS_VALUE_DIMENSION), value(dim) {}
 
-	constexpr std::optional<css_color> to_color(void) const {
+	auto to_color(void) const -> std::optional<css_color> {
 		if (type == css_value_type::CSS_VALUE_COLOR) {
 			return std::get<css_color>(value);
 		}
@@ -80,7 +88,7 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<double> to_number(void) const {
+	auto to_number(void) const -> std::optional<double> {
 		if (type == css_value_type::CSS_VALUE_NUMBER) {
 			return std::get<double>(value);
 		}
@@ -88,7 +96,15 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<css_display_value> to_display(void) const {
+	auto to_dimension(void) const -> std::optional<css_dimension> {
+		if (type == css_value_type::CSS_VALUE_DIMENSION) {
+			return std::get<css_dimension>(value);
+		}
+
+		return std::nullopt;
+	}
+
+	auto to_display(void) const -> std::optional<css_display_value> {
 		if (type == css_value_type::CSS_VALUE_DISPLAY) {
 			return std::get<css_display_value>(value);
 		}
@@ -96,7 +112,7 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr bool is_valid(void) const {
+	auto is_valid(void) const -> bool {
 		return (type != css_value_type::CSS_VALUE_NYI);
 	}
 
@@ -109,6 +125,8 @@ struct css_value {
 	static auto maybe_color_from_hex(const std::string_view &input)
 		-> std::optional<css_value>;
 	static auto maybe_color_from_function(const css_consumed_block::css_function_block &func)
+		-> std::optional<css_value>;
+	static auto maybe_dimension_from_number(const css_parser_token &tok)
 		-> std::optional<css_value>;
 };
 
