@@ -111,6 +111,41 @@ struct css_parser_token {
 		return def;
 	}
 
+	auto get_number_or_default(double def) const -> double {
+		if (std::holds_alternative<double>(value)) {
+			auto dbl = std::get<double>(value);
+
+			if (flags & css_parser_token::number_percent) {
+				dbl /= 100.0;
+			}
+
+			return dbl;
+		}
+
+		return def;
+	}
+
+	auto get_normal_number_or_default(double def) const -> double {
+		if (std::holds_alternative<double>(value)) {
+			auto dbl = std::get<double>(value);
+
+			if (flags & css_parser_token::number_percent) {
+				dbl /= 100.0;
+			}
+
+			if (dbl < 0) {
+				return 0.0;
+			}
+			else if (dbl > 1.0) {
+				return 1.0;
+			}
+
+			return dbl;
+		}
+
+		return def;
+	}
+
 	/* Debugging routines */
 	constexpr auto get_token_type() -> const char *;
 	/* This function might be slow */

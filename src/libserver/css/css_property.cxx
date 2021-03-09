@@ -23,6 +23,7 @@ namespace rspamd::css {
 constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_property_type>({
 		{"font", css_property_type::PROPERTY_FONT},
 		{"font-color", css_property_type::PROPERTY_FONT_COLOR},
+		{"font-size", css_property_type::PROPERTY_FONT_SIZE},
 		{"color", css_property_type::PROPERTY_COLOR},
 		{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
 		{"background", css_property_type::PROPERTY_BACKGROUND},
@@ -30,6 +31,7 @@ constexpr const auto type_map = frozen::make_unordered_map<frozen::string, css_p
 		{"width", css_property_type::PROPERTY_WIDTH},
 		{"display", css_property_type::PROPERTY_DISPLAY},
 		{"visibility", css_property_type::PROPERTY_VISIBILITY},
+		{"opacity", css_property_type::PROPERTY_OPACITY},
 });
 
 auto token_string_to_property(const std::string_view &inp)

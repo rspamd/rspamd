@@ -56,9 +56,9 @@ enum class css_display_value {
 struct css_value {
 	enum class css_value_type {
 		CSS_VALUE_COLOR,
-		CSS_VALUE_SIZE,
+		CSS_VALUE_NUMBER,
 		CSS_VALUE_DISPLAY,
-		CSS_VALUE_FLAG,
+		CSS_VALUE_OPACITY,
 		CSS_VALUE_NYI,
 	} type;
 
@@ -69,8 +69,8 @@ struct css_value {
 
 	css_value(const css_color &color) :
 			type(css_value_type::CSS_VALUE_COLOR), value(color) {}
-	css_value(double sz) :
-			type(css_value_type::CSS_VALUE_SIZE), value(sz) {}
+	css_value(double num) :
+			type(css_value_type::CSS_VALUE_NUMBER), value(num) {}
 
 	constexpr std::optional<css_color> to_color(void) const {
 		if (type == css_value_type::CSS_VALUE_COLOR) {
@@ -80,8 +80,8 @@ struct css_value {
 		return std::nullopt;
 	}
 
-	constexpr std::optional<double> to_size(void) const {
-		if (type == css_value_type::CSS_VALUE_SIZE) {
+	constexpr std::optional<double> to_number(void) const {
+		if (type == css_value_type::CSS_VALUE_NUMBER) {
 			return std::get<double>(value);
 		}
 

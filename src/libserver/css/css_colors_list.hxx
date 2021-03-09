@@ -727,6 +727,7 @@ static const robin_hood::unordered_flat_map<std::string_view, css_color> css_col
 		{"threedhighlight",      {0,   0,   0}},
 		{"threedlightshadow",    {0,   0,   0}},
 		{"threedshadow",         {0,   0,   0}},
+		{"transparent",          {0,   0,   0,   0}},
 		{"window",               {255, 255, 255}},
 		{"windowframe",          {100, 100, 100}},
 		{"windowtext",           {0,   0,   0}},

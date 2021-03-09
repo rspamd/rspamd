@@ -32,6 +32,7 @@ namespace rspamd::css {
 enum class css_property_type : std::uint16_t {
 	PROPERTY_FONT = 0,
 	PROPERTY_FONT_COLOR,
+	PROPERTY_FONT_SIZE,
 	PROPERTY_COLOR,
 	PROPERTY_BGCOLOR,
 	PROPERTY_BACKGROUND,
@@ -39,6 +40,7 @@ enum class css_property_type : std::uint16_t {
 	PROPERTY_WIDTH,
 	PROPERTY_DISPLAY,
 	PROPERTY_VISIBILITY,
+	PROPERTY_OPACITY,
 	PROPERTY_NYI,
 };
 
@@ -65,6 +67,9 @@ struct alignas(int) css_property {
 		case css_property_type::PROPERTY_FONT_COLOR:
 			ret = "font-color";
 			break;
+		case css_property_type::PROPERTY_FONT_SIZE:
+			ret = "font-size";
+			break;
 		case css_property_type::PROPERTY_COLOR:
 			ret = "color";
 			break;
@@ -86,6 +91,9 @@ struct alignas(int) css_property {
 		case css_property_type::PROPERTY_VISIBILITY:
 			ret = "visibility";
 			break;
+		case css_property_type::PROPERTY_OPACITY:
+			ret = "opacity";
+			break;
 		default:
 			break;
 		}
@@ -93,6 +101,7 @@ struct alignas(int) css_property {
 		return ret;
 	}
 
+	/* Helpers to define which values are valid for which properties */
 	constexpr auto is_color(void) const -> bool {
 		return type == css_property_type::PROPERTY_COLOR ||
 				type == css_property_type::PROPERTY_BACKGROUND ||
@@ -102,6 +111,9 @@ struct alignas(int) css_property {
 	constexpr auto is_dimension(void) const -> bool {
 		return type == css_property_type::PROPERTY_HEIGHT ||
 				type == css_property_type::PROPERTY_WIDTH;
+	}
+	constexpr auto is_normal_number(void) const -> bool {
+		return type == css_property_type::PROPERTY_OPACITY;
 	}
 };
 

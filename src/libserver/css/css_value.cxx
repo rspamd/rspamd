@@ -182,27 +182,7 @@ constexpr static inline auto sl_component_convert(const css_parser_token &tok)
 	double ret = 0.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
-		auto dbl = std::get<double>(tok.value);
-
-		if (tok.flags & css_parser_token::number_percent) {
-			if (dbl > 100) {
-				dbl = 100;
-			}
-			else if (dbl < 0) {
-				dbl = 0;
-			}
-			ret = (dbl / 100.0);
-		}
-		else {
-			if (dbl > 1) {
-				dbl = 1;
-			}
-			else if (dbl < 0) {
-				dbl = 0;
-			}
-
-			ret = (dbl);
-		}
+		ret = tok.get_normal_number_or_default(ret);
 	}
 
 	return ret;

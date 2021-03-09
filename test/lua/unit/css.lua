@@ -100,6 +100,11 @@ body {
 ]],
 [[
 /* Colors */
+p { color: rgb(100%, 50%, 0%); opacity: -1; } /* very transparent solid orange */
+p { color: rgb(100%, 50%, 0%); opacity: 2; } /* very transparent solid orange */
+p { color: rgb(100%, 50%, 0%); opacity: 0.5; } /* very transparent solid orange */
+p { color: rgb(100%, 50%, 0%); opacity: 1; width: 99%; } /* very transparent solid orange */
+p { color: rgb(100%, 50%, 0%); opacity: 10%; width: 99%; } /* very transparent solid orange */
 * { color: hsl(0, 100%, 50%) !important }   /* red */
 * { color: hsl(120, 100%, 50%) important } /* lime */
 * { color: hsl(120, 100%, 25%) } /* dark green */
