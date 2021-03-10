@@ -47,10 +47,16 @@ void css_rule::merge_values(const css_rule &other)
 	});
 }
 
-auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
+auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> bool
 {
 	auto it = rules.find(rule);
 	auto &&remote_prop = rule->get_prop();
+	auto ret = true;
+
+	if (rule->get_values().size() == 0) {
+		/* Ignore rules with no values */
+		return false;
+	}
 
 	if (it != rules.end()) {
 		auto &&local_rule = *it;
@@ -61,7 +67,7 @@ auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
 				local_rule->override_values(*rule);
 			}
 			else {
-				/* Ignore remote not important over local important */
+				/* Override remote not important over local important */
 				local_rule->merge_values(*rule);
 			}
 		}
@@ -70,7 +76,7 @@ auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
 				local_rule->override_values(*rule);
 			}
 			else {
-				/* Ignore local not important over important */
+				/* Override local not important over important */
 				local_rule->merge_values(*rule);
 			}
 		}
@@ -81,6 +87,7 @@ auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
 			}
 			else if (remote_prop.flag == css_property_flag::FLAG_NOT_IMPORTANT) {
 				/* Ignore remote not important over local normal */
+				ret = false;
 			}
 			else {
 				/* Merge both */
@@ -88,6 +95,11 @@ auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> void
 			}
 		}
 	}
+	else {
+		rules.insert(std::move(rule));
+	}
+
+	return ret;
 }
 
 }
@@ -208,7 +220,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 				if (next_tok.is_token()) {
 					const auto &parser_tok = next_tok.get_token_or_empty();
 
-					if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
+					if (parser_tok.type == css_parser_token::token_type::semicolon_token && cur_rule) {
 						ret.add_rule(std::move(cur_rule));
 						state = parse_property;
 						seen_not = false;
@@ -267,7 +279,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			if (state == parse_value) {
 				auto maybe_value = allowed_property_value(cur_property, next_tok);
 
-				if (maybe_value) {
+				if (maybe_value && cur_rule) {
 					msg_debug_css("added value %s to the property %s",
 							maybe_value.value().debug_str().c_str(),
 							cur_property.to_string());

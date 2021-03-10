@@ -102,21 +102,26 @@ struct alignas(int) css_property {
 	}
 
 	/* Helpers to define which values are valid for which properties */
-	constexpr auto is_color(void) const -> bool {
+	auto is_color(void) const -> bool {
 		return type == css_property_type::PROPERTY_COLOR ||
 				type == css_property_type::PROPERTY_BACKGROUND ||
 				type == css_property_type::PROPERTY_BGCOLOR ||
 				type == css_property_type::PROPERTY_FONT_COLOR ||
 				type == css_property_type::PROPERTY_FONT;
 	}
-	constexpr auto is_dimension(void) const -> bool {
+	auto is_dimension(void) const -> bool {
 		return type == css_property_type::PROPERTY_HEIGHT ||
 				type == css_property_type::PROPERTY_WIDTH ||
 				type == css_property_type::PROPERTY_FONT_SIZE ||
 				type == css_property_type::PROPERTY_FONT;
 	}
-	constexpr auto is_normal_number(void) const -> bool {
+
+	auto is_normal_number(void) const -> bool {
 		return type == css_property_type::PROPERTY_OPACITY;
+	}
+
+	auto is_display(void) const -> bool {
+		return type == css_property_type::PROPERTY_DISPLAY;
 	}
 
 	auto operator==(const css_property &other) const { return type == other.type; }

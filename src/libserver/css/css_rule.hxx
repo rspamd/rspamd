@@ -111,7 +111,7 @@ public:
 	using rule_shared_hash = shared_ptr_hash<css_rule>;
 	using rule_shared_eq = shared_ptr_equal<css_rule>;
 	css_declarations_block() = default;
-	auto add_rule(rule_shared_ptr &&rule) -> void;
+	auto add_rule(rule_shared_ptr &&rule) -> bool;
 	auto get_rules(void) const -> const auto & {
 		return rules;
 	}
