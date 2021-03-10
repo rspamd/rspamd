@@ -133,7 +133,6 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			return ret;
 		}
 	}
-
 	if (prop.is_dimension()) {
 		if (parser_block.is_token()) {
 			/* A single token */
@@ -141,6 +140,16 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 			if (tok.type == css_parser_token::token_type::number_token) {
 				return css_value::maybe_dimension_from_number(tok);
+			}
+		}
+	}
+	if (prop.is_display()) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token) {
+				return css_value::maybe_display_from_string(tok.get_string_or_default(""));
 			}
 		}
 	}

@@ -16,17 +16,11 @@
 
 #include "css_value.hxx"
 #include "css_colors_list.hxx"
+#include "frozen/unordered_map.h"
+#include "frozen/string.h"
 #include "contrib/robin-hood/robin_hood.h"
 
 namespace rspamd::css {
-
-
-
-tl::expected<css_value,css_parse_error>
-css_value::from_css_block(const css_consumed_block &bl)
-{
-	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
-}
 
 auto css_value::maybe_color_from_string(const std::string_view &input)
 	-> std::optional<css_value>
@@ -295,6 +289,44 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 	return std::nullopt;
 }
 
+constexpr const auto display_names_map = frozen::make_unordered_map<frozen::string, css_display_value>({
+		{"hidden", css_display_value::DISPLAY_HIDDEN},
+		{"none", css_display_value::DISPLAY_HIDDEN},
+		{"inline", css_display_value::DISPLAY_NORMAL},
+		{"block", css_display_value::DISPLAY_NORMAL},
+		{"content", css_display_value::DISPLAY_NORMAL},
+		{"flex", css_display_value::DISPLAY_NORMAL},
+		{"grid" , css_display_value::DISPLAY_NORMAL},
+		{"inline-block", css_display_value::DISPLAY_NORMAL},
+		{"inline-flex", css_display_value::DISPLAY_NORMAL},
+		{"inline-grid", css_display_value::DISPLAY_NORMAL},
+		{"inline-table", css_display_value::DISPLAY_NORMAL},
+		{"list-item", css_display_value::DISPLAY_NORMAL},
+		{"run-in", css_display_value::DISPLAY_NORMAL},
+		{"table", css_display_value::DISPLAY_NORMAL},
+		{"table-caption", css_display_value::DISPLAY_NORMAL},
+		{"table-column-group", css_display_value::DISPLAY_NORMAL},
+		{"table-header-group", css_display_value::DISPLAY_NORMAL},
+		{"table-footer-group", css_display_value::DISPLAY_NORMAL},
+		{"table-row-group", css_display_value::DISPLAY_NORMAL},
+		{"table-cell", css_display_value::DISPLAY_NORMAL},
+		{"table-column", css_display_value::DISPLAY_NORMAL},
+		{"table-row", css_display_value::DISPLAY_NORMAL},
+		{"initial", css_display_value::DISPLAY_NORMAL},
+});
+
+auto css_value::maybe_display_from_string(const std::string_view &input)
+	-> std::optional<css_value>
+{
+	auto f = display_names_map.find(input);
+
+	if (f != display_names_map.end()) {
+		return css_value{f->second};
+	}
+
+	return std::nullopt;
+}
+
 
 auto css_value::debug_str() const -> std::string
 {
@@ -317,6 +349,10 @@ auto css_value::debug_str() const -> std::string
 			if (arg.is_percent) {
 				ret += "%";
 			}
+		}
+		else if constexpr (std::is_same_v<T, css_display_value>) {
+			ret += "display: ";
+			ret += (arg == css_display_value::DISPLAY_HIDDEN ? "hidden" : "normal");
 		}
 		else if constexpr (std::is_integral_v<T>) {
 			ret += "integral: " + std::to_string(static_cast<int>(arg));

@@ -82,6 +82,8 @@ struct css_value {
 			type(css_value_type::CSS_VALUE_NUMBER), value(num) {}
 	css_value(css_dimension dim) :
 			type(css_value_type::CSS_VALUE_DIMENSION), value(dim) {}
+	css_value(css_display_value d) :
+			type(css_value_type::CSS_VALUE_DISPLAY), value(d) {}
 
 	auto to_color(void) const -> std::optional<css_color> {
 		if (type == css_value_type::CSS_VALUE_COLOR) {
@@ -121,8 +123,6 @@ struct css_value {
 
 	auto debug_str() const -> std::string;
 
-	static auto from_css_block(const css_consumed_block &bl) -> tl::expected<css_value, css_parse_error>;
-
 	static auto maybe_color_from_string(const std::string_view &input)
 		-> std::optional<css_value>;
 	static auto maybe_color_from_hex(const std::string_view &input)
@@ -130,6 +130,8 @@ struct css_value {
 	static auto maybe_color_from_function(const css_consumed_block::css_function_block &func)
 		-> std::optional<css_value>;
 	static auto maybe_dimension_from_number(const css_parser_token &tok)
+		-> std::optional<css_value>;
+	static auto maybe_display_from_string(const std::string_view &input)
 		-> std::optional<css_value>;
 };
 
