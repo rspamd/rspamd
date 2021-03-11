@@ -22,6 +22,7 @@
 #include "css_property.hxx"
 #include "css_parser.hxx"
 #include "contrib/robin-hood/robin_hood.h"
+#include "libutil/cxx/util.hxx"
 #include <vector>
 #include <memory>
 
@@ -74,36 +75,6 @@ public:
 }
 
 namespace rspamd::css {
-
-/*
- * We have to define transparent hash and compare methods
- *
- * TODO: move to some utility library
- */
-template<typename T>
-struct shared_ptr_equal {
-	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a, const std::shared_ptr<T> &b) const {
-		return (*a) == (*b);
-	}
-	auto operator()(const std::shared_ptr<T> &a, const T &b) const {
-		return (*a) == b;
-	}
-	auto operator()(const T &a, const std::shared_ptr<T> &b) const {
-		return a == (*b);
-	}
-};
-
-template<typename T>
-struct shared_ptr_hash {
-	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a) const {
-		return std::hash<T>()(*a);
-	}
-	auto operator()(const T &a) const {
-		return std::hash<T>()(a);
-	}
-};
 
 class css_declarations_block {
 public:
