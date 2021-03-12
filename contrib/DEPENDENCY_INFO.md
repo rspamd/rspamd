@@ -32,3 +32,4 @@
 | robin-hood    | 3.9.1   | MIT                 | NO      |                    |
 | frozen        | 1.0.1   | Apache 2            | NO      |                    |
 | fmt           | 7.1.3   | MIT                 | NO      |                    |
+| doctest       | 2.4.5   | MIT                 | NO      |                    |

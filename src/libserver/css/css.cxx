@@ -18,6 +18,9 @@
 #include "css.hxx"
 #include "css_style.hxx"
 #include "css_parser.hxx"
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest/doctest.h"
 
 rspamd_css
 rspamd_css_parse_style (rspamd_mempool_t *pool, const guchar *begin, gsize len,

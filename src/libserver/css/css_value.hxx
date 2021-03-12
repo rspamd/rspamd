@@ -23,6 +23,7 @@
 #include <variant>
 #include <optional>
 #include <vector>
+#include <iosfwd>
 #include "parse_error.hxx"
 #include "css_parser.hxx"
 #include "contrib/expected/expected.hpp"
@@ -39,6 +40,9 @@ struct alignas(int) css_color {
 	css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
 	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
 	css_color() = default;
+	friend bool operator==(const css_color& l, const css_color& r) {
+		return (memcmp(&l, &r, sizeof(css_color)) == 0);
+	}
 };
 
 struct css_dimension {
@@ -136,5 +140,6 @@ struct css_value {
 };
 
 }
+
 
 #endif //RSPAMD_CSS_VALUE_HXX
