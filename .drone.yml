@@ -44,6 +44,7 @@ steps:
       - ncpu=$(getconf _NPROCESSORS_ONLN)
       - make -j $ncpu install
       - make -j $ncpu rspamd-test
+      - make -j $ncpu rspamd-test-cxx
 
   - name: build-clang
     # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
@@ -73,6 +74,7 @@ steps:
       - ncpu=$(getconf _NPROCESSORS_ONLN)
       - make -j $ncpu install
       - make -j $ncpu rspamd-test
+      - make -j $ncpu rspamd-test-cxx
 
   # We run rspamd-test (unit test) and functional test (runned by robot) in
   # parallel to save time. To avoid conflict in saving lua coverage we run them
@@ -111,6 +113,16 @@ steps:
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
+      - set +e
+      - ./rspamd-test-cxx -s; EXIT_CODE=$?
+      - set -e
+      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
+      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
+      - >
+        if [ $EXIT_CODE -gt 128 ]; then
+        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx;
+        exit $EXIT_CODE;
+        fi
       - exit $EXIT_CODE
 
   - name: test-fedora-clang
@@ -138,6 +150,16 @@ steps:
       - >
         if [ $EXIT_CODE -gt 128 ]; then
         gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
+        fi
+      - set +e
+      - ./rspamd-test-cxx -s; EXIT_CODE=$?
+      - set -e
+      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
+      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
+      - >
+        if [ $EXIT_CODE -gt 128 ]; then
+        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx;
+        exit $EXIT_CODE;
         fi
       - cat /tmp/ubsan.* || true
       - exit $EXIT_CODE
