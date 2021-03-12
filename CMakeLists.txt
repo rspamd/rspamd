@@ -118,6 +118,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
 		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
 		"${CMAKE_SOURCE_DIR}/contrib/fmt/include"
+		"${CMAKE_SOURCE_DIR}/contrib/doctest"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
@@ -250,6 +251,7 @@ SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_CXX_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_CXX_FLAGS}")
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
+ADD_DEFINITIONS(-DDOCTEST_CONFIG_SUPER_FAST_ASSERTS)
 
 # Check platform specific includes
 CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
@@ -652,6 +654,7 @@ ADD_SUBDIRECTORY(contrib/kann)
 ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
 ADD_SUBDIRECTORY(contrib/fmt)
+ADD_SUBDIRECTORY(contrib/doctest)
 
 IF (NOT WITH_LUAJIT)
 	ADD_SUBDIRECTORY(contrib/lua-bit)
