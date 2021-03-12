@@ -25,6 +25,7 @@
 #include "contrib/uthash/utlist.h"
 #include <openssl/cms.h>
 #include <openssl/pkcs7.h>
+#include "contrib/fastutf8/fastutf8.h"
 
 struct rspamd_mime_parser_lib_ctx {
 	struct rspamd_multipattern *mp_boundary;
@@ -610,8 +611,20 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 				 * In theory, it is very unsafe to process it as a text part
 				 * as we unlikely get some sane result
 				 */
-				part->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
-				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+
+				/*
+				 * On the other hand, there is an evidence that some
+				 * emails actually rely on that.
+				 * So we apply an expensive hack here:
+				 * if there are no 8bit characters -OR- the content is valid
+				 * UTF8, we can still imply Content-Type == text/plain
+				 */
+
+				if (rspamd_str_has_8bit (part->raw_data.begin, part->raw_data.len) &&
+					!rspamd_fast_utf8_validate (part->raw_data.begin, part->raw_data.len)) {
+					part->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+				}
 			}
 		}
 
