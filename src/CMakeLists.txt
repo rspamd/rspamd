@@ -196,6 +196,7 @@ TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
 TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-zstd)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-fastutf8)
+TARGET_LINK_LIBRARIES(rspamd-server fmt)
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)

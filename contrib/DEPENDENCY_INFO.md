@@ -31,3 +31,4 @@
 | expected      | v1.0    | Public Domain / CC0 | NO      |                    |
 | robin-hood    | 3.9.1   | MIT                 | NO      |                    |
 | frozen        | 1.0.1   | Apache 2            | NO      |                    |
+| fmt           | 7.1.3   | MIT                 | NO      |                    |

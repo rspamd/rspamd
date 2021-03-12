@@ -117,6 +117,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
 		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
 		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
+		"${CMAKE_SOURCE_DIR}/contrib/fmt/include"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
@@ -650,7 +651,7 @@ ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
 ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
-
+ADD_SUBDIRECTORY(contrib/fmt)
 
 IF (NOT WITH_LUAJIT)
 	ADD_SUBDIRECTORY(contrib/lua-bit)
