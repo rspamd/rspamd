@@ -153,6 +153,20 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
     end
 
     if opt[1] then
+      -- Adjust each element if needed
+      local adjusted
+      for i,source in ipairs(opt) do
+        local nsrc,ntype = maybe_adjust_type(source, mtype)
+
+        if mtype ~= ntype then
+          if not adjusted then
+            mtype = ntype
+          end
+          adjusted = true
+        end
+        opt[i] = nsrc
+      end
+
       if mtype == 'radix' then
 
         if string.find(opt[1], '^%d') then
