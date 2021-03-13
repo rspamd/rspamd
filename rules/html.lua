@@ -15,6 +15,8 @@
 
 local reconf = config['regexp']
 
+local rspamd_regexp = require "rspamd_regexp"
+
 -- Messages that have only HTML part
 reconf['MIME_HTML_ONLY'] = {
   re = 'has_only_html_part()',
@@ -368,34 +370,44 @@ rspamd_config.EXT_CSS = {
 
 rspamd_config.HTTP_TO_HTTPS = {
   callback = function(task)
-    local tp = task:get_text_parts()
-    if (not tp) then return false end
+    local http_re = rspamd_regexp.create_cached('/^http[^s]/i')
+    local https_re = rspamd_regexp.create_cached('/^https:/i')
+    local found_opts
+    local tp = task:get_text_parts() or {}
+
     for _,p in ipairs(tp) do
       if p:is_html() then
         local hc = p:get_html()
         if (not hc) then return false end
+
         local found = false
+
         hc:foreach_tag('a', function (tag, length)
           -- Skip this loop if we already have a match
           if (found) then return true end
+
           local c = tag:get_content()
           if (c) then
-            c = tostring(c):lower()
-            if (not c:match('^http')) then return false end
+            if (not http_re:match(c)) then return false end
+
             local u = tag:get_extra()
             if (not u) then return false end
-            u = tostring(u):lower()
-            if (not u:match('^http')) then return false end
-            if ((c:match('^http:') and u:match('^https:')) or
-                (c:match('^https:') and u:match('^http:')))
-            then
+            local url_proto = u:get_protocol()
+            if (not url_proto:match('^http')) then return false end
+            -- Capture matches for http in href to https in visible part only
+            if ((https_re:match(c) and url_proto == 'http')) then
               found = true
+              found_opts = u:get_host()
               return true
             end
           end
           return false
         end)
-        if (found) then return true end
+
+        if (found) then
+          return true,1.0,found_opts
+        end
+
         return false
       end
     end
