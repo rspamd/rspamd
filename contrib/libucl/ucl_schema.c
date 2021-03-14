@@ -244,20 +244,22 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 		/* Additional properties */
 		if (!allow_additional || additional_schema != NULL) {
 			/* Check if we have exactly the same properties in schema and object */
-			iter = NULL;
+			iter = ucl_object_iterate_new (obj);
 			prop = ucl_object_lookup (schema, "properties");
-			while ((elt = ucl_object_iterate (obj, &iter, true)) != NULL) {
+			while ((elt = ucl_object_iterate_safe (iter, true)) != NULL) {
 				found = ucl_object_lookup (prop, ucl_object_key (elt));
 				if (found == NULL) {
 					/* Try patternProperties */
-					piter = NULL;
 					pat = ucl_object_lookup (schema, "patternProperties");
-					while ((pelt = ucl_object_iterate (pat, &piter, true)) != NULL) {
+					piter = ucl_object_iterate_new (pat);
+					while ((pelt = ucl_object_iterate_safe (piter, true)) != NULL) {
 						found = ucl_schema_test_pattern (obj, ucl_object_key (pelt), true);
 						if (found != NULL) {
 							break;
 						}
 					}
+					ucl_object_iterate_free (piter);
+					piter = NULL;
 				}
 				if (found == NULL) {
 					if (!allow_additional) {
@@ -276,6 +278,8 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 					}
 				}
 			}
+			ucl_object_iterate_free (iter);
+			iter = NULL;
 		}
 		/* Required properties */
 		if (required != NULL) {
