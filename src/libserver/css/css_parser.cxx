@@ -19,9 +19,12 @@
 #include "css_selector.hxx"
 #include "css_rule.hxx"
 #include "fmt/core.h"
+
 #include <vector>
 #include <unicode/utf8.h>
 
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
 
 namespace rspamd::css {
 
@@ -117,9 +120,9 @@ auto css_consumed_block::debug_str(void) -> std::string {
 					ret += R"("empty")";
 				}
 				else if constexpr (std::is_same_v<T, css_function_block>) {
-					/* Empty block */
-					ret += fmt::format(R"({ "content": {"token": "{}", "arguments":  [)",
-							arg.function.debug_token_str());
+					ret += R"({ "content": {"token": )";
+					ret += "\"" + arg.function.debug_token_str() + "\", ";
+					ret += R"("arguments":  [)";
 
 					for (const auto &block : arg.args) {
 						ret += "{";
@@ -619,13 +622,59 @@ bool css_parser::consume_input(const std::string_view &sv)
  * Wrapper for the parser
  */
 auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
-	tl::expected<std::unique_ptr<css_style_sheet>,css_parse_error>
+	bool
 {
 	css_parser parser(pool);
 
-	parser.consume_input(st);
+	if (parser.consume_input(st)) {
+		return true;
+	}
 
-	return parser.get_object_maybe();
+	return false;
+}
+
+TEST_SUITE("css parser") {
+	TEST_CASE("parse colors") {
+		const std::vector<const char *> cases{
+			"p { color: rgb(100%, 50%, 0%); opacity: -1; width: 1em; display: none; } /* very transparent solid orange */",
+			"p { color: rgb(100%, 50%, 0%); opacity: 2; display: inline; } /* very transparent solid orange */",
+			"p { color: rgb(100%, 50%, 0%); opacity: 0.5; } /* very transparent solid orange */\n",
+			"p { color: rgb(100%, 50%, 0%); opacity: 1; width: 99%; } /* very transparent solid orange */\n",
+			"p { color: rgb(100%, 50%, 0%); opacity: 10%; width: 99%; } /* very transparent solid orange */\n",
+			"p { color: rgb(100%, 50%, 0%); opacity: 10%; width: 100px; } /* very transparent solid orange */\n",
+			"p { color: rgb(100%, 50%, 0%); opacity: 10% } /* very transparent solid orange */\n",
+			"* { color: hsl(0, 100%, 50%) !important }   /* red */\n",
+			"* { color: hsl(120, 100%, 50%) important } /* lime */\n",
+			"* { color: hsl(120, 100%, 25%) } /* dark green */\n",
+			"* { color: hsl(120, 100%, 75%) } /* light green */\n",
+			"* { color: hsl(120, 75%, 75%) }  /* pastel green, and so on */\n",
+			"em { color: #f00 }              /* #rgb */\n",
+			"em { color: #ff0000 }           /* #rrggbb */\n",
+			"em { color: rgb(255,0,0) }\n",
+			"em { color: rgb(100%, 0%, 0%) }\n",
+			"body {color: black; background: white }\n",
+			"h1 { color: maroon }\n",
+			"h2 { color: olive }\n",
+			"em { color: rgb(255,0,0) }       /* integer range 0 - 255 */\n",
+			"em { color: rgb(300,0,0) }       /* clipped to rgb(255,0,0) */\n",
+			"em { color: rgb(255,-10,0) }     /* clipped to rgb(255,0,0) */\n",
+			"em { color: rgb(110%, 0%, 0%) }  /* clipped to rgb(100%,0%,0%) */\n",
+			"em { color: rgb(255,0,0) }      /* integer range 0 - 255 */\n",
+			"em { color: rgba(255,0,0,1)     /* the same, with explicit opacity of 1 */\n",
+			"em { color: rgb(100%,0%,0%) }   /* float range 0.0% - 100.0% */\n",
+			"em { color: rgba(100%,0%,0%,1) } /* the same, with explicit opacity of 1 */\n",
+			"p { color: rgba(0,0,255,0.5) }        /* semi-transparent solid blue */\n",
+			"p { color: rgba(100%, 50%, 0%, 0.1) } /* very transparent solid orange */",
+		};
+
+		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+				"css", 0);
+		for (const auto &c : cases) {
+			CHECK_UNARY(parse_css(pool, c));
+		}
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 }

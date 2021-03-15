@@ -28,6 +28,8 @@ rspamd_css_parse_style (rspamd_mempool_t *pool, const guchar *begin, gsize len,
 {
 	auto parse_res = rspamd::css::parse_css(pool, {(const char* )begin, len});
 
+#if 0
+	/* Return once semantical parsing is done */
 	if (parse_res.has_value()) {
 		return reinterpret_cast<rspamd_css>(parse_res.value().release());
 	}
@@ -37,6 +39,9 @@ rspamd_css_parse_style (rspamd_mempool_t *pool, const guchar *begin, gsize len,
 				"parse error");
 		return nullptr;
 	}
+#else
+	return nullptr;
+#endif
 }
 
 namespace rspamd::css {

@@ -386,10 +386,19 @@ TEST_SUITE("css values") {
 		}
 	}
 	TEST_CASE("css colors strings") {
+		auto passed = 0;
 		for (const auto &p : css_colors_map) {
-			auto col_parsed = css_value::maybe_color_from_string(p.first);
-			auto final_col = col_parsed.value().to_color().value();
-			CHECK(final_col == p.second);
+			/* Match some of the colors selected randomly */
+			if (rspamd_random_double_fast() > 0.9) {
+				auto col_parsed = css_value::maybe_color_from_string(p.first);
+				auto final_col = col_parsed.value().to_color().value();
+				CHECK_MESSAGE(final_col == p.second, p.first.data());
+				passed ++;
+
+				if (passed > 20) {
+					break;
+				}
+			}
 		}
 	}
 };

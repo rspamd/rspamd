@@ -186,7 +186,7 @@ extern const css_consumed_block css_parser_eof_block;
 using blocks_gen_functor = std::function<const css_consumed_block &(void)>;
 
 auto parse_css (rspamd_mempool_t *pool, const std::string_view &st) ->
-		tl::expected<std::unique_ptr<css_style_sheet>,css_parse_error>;
+		bool;
 
 }
 
