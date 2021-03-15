@@ -18,6 +18,7 @@
 #include "css_colors_list.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
+#include "libutil/util.h"
 #include "contrib/robin-hood/robin_hood.h"
 #include "fmt/core.h"
 
@@ -339,10 +340,8 @@ auto css_value::debug_str() const -> std::string {
 		using T = std::decay_t<decltype(arg)>;
 
 		if constexpr (std::is_same_v<T, css_color>) {
-			ret += "color: r=" + std::to_string(arg.r) +
-				   "; g=" + std::to_string(arg.g) +
-				   "; b=" + std::to_string(arg.b) +
-				   "; a=" + std::to_string(arg.alpha);
+			ret += fmt::format("color: r={};g={};b={};alpha={}",
+					arg.r, arg.g, arg.b, arg.alpha);
 		}
 		else if constexpr (std::is_same_v<T, double>) {
 			ret += "size: " + std::to_string(arg);
@@ -382,6 +381,13 @@ TEST_SUITE("css values") {
 			auto col_parsed = css_value::maybe_color_from_hex(p.first);
 			//CHECK_UNARY(col_parsed);
 			//CHECK_UNARY(col_parsed.value().to_color());
+			auto final_col = col_parsed.value().to_color().value();
+			CHECK(final_col == p.second);
+		}
+	}
+	TEST_CASE("css colors strings") {
+		for (const auto &p : css_colors_map) {
+			auto col_parsed = css_value::maybe_color_from_string(p.first);
 			auto final_col = col_parsed.value().to_color().value();
 			CHECK(final_col == p.second);
 		}

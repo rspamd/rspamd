@@ -18,6 +18,7 @@
 #include "css_tokeniser.hxx"
 #include "css_selector.hxx"
 #include "css_rule.hxx"
+#include "fmt/core.h"
 #include <vector>
 #include <unicode/utf8.h>
 
@@ -91,9 +92,7 @@ auto css_consumed_block::token_type_str(void) const -> const char *
 }
 
 auto css_consumed_block::debug_str(void) -> std::string {
-	std::string ret = std::string(R"("type": ")") + token_type_str() + "\"";
-
-	ret += ", \"value\": ";
+	std::string ret = fmt::format(R"("type": "{}", "value": )", token_type_str());
 
 	std::visit([&](auto& arg) {
 				using T = std::decay_t<decltype(arg)>;
@@ -119,9 +118,9 @@ auto css_consumed_block::debug_str(void) -> std::string {
 				}
 				else if constexpr (std::is_same_v<T, css_function_block>) {
 					/* Empty block */
-					ret += R"({ "content": {"token": )";
-					ret += "\"" + arg.function.debug_token_str() + "\", ";
-					ret += R"("arguments":  [)";
+					ret += fmt::format(R"({ "content": {"token": "{}", "arguments":  [)",
+							arg.function.debug_token_str());
+
 					for (const auto &block : arg.args) {
 						ret += "{";
 						ret += block->debug_str();
