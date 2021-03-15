@@ -1766,7 +1766,19 @@ rspamd_random_double (void)
 }
 
 
-static guint64 xorshifto_seed[4];
+static guint64*
+xorshifto_seed (void)
+{
+	static guint64 xorshifto_seed[4];
+	static bool initialized = false;
+
+	if (G_UNLIKELY(!initialized)) {
+		ottery_rand_bytes((void *)xorshifto_seed, sizeof (xorshifto_seed));
+		initialized = true;
+	}
+
+	return xorshifto_seed;
+}
 
 static inline guint64
 xoroshiro_rotl (const guint64 x, int k) {
@@ -1776,7 +1788,7 @@ xoroshiro_rotl (const guint64 x, int k) {
 gdouble
 rspamd_random_double_fast (void)
 {
-	return rspamd_random_double_fast_seed (xorshifto_seed);
+	return rspamd_random_double_fast_seed (xorshifto_seed());
 }
 
 /* xoshiro256+ */
@@ -1822,13 +1834,13 @@ rspamd_random_uint64_fast_seed (guint64 seed[4])
 guint64
 rspamd_random_uint64_fast (void)
 {
-	return rspamd_random_uint64_fast_seed (xorshifto_seed);
+	return rspamd_random_uint64_fast_seed (xorshifto_seed());
 }
 
 void
 rspamd_random_seed_fast (void)
 {
-	ottery_rand_bytes (xorshifto_seed, sizeof (xorshifto_seed));
+	(void)xorshifto_seed();
 }
 
 gdouble
