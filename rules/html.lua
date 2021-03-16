@@ -368,10 +368,10 @@ rspamd_config.EXT_CSS = {
   description = 'Message contains external CSS reference'
 }
 
+local https_re = rspamd_regexp.create_cached('/^https:/i')
+
 rspamd_config.HTTP_TO_HTTPS = {
   callback = function(task)
-    local http_re = rspamd_regexp.create_cached('/^http[^s]/i')
-    local https_re = rspamd_regexp.create_cached('/^https:/i')
     local found_opts
     local tp = task:get_text_parts() or {}
 
@@ -382,25 +382,25 @@ rspamd_config.HTTP_TO_HTTPS = {
 
         local found = false
 
-        hc:foreach_tag('a', function (tag, length)
+        hc:foreach_tag('a', function (tag, _)
           -- Skip this loop if we already have a match
           if (found) then return true end
 
           local c = tag:get_content()
           if (c) then
-            if (not http_re:match(c)) then return false end
+            if (not https_re:match(c)) then return false end
 
             local u = tag:get_extra()
             if (not u) then return false end
             local url_proto = u:get_protocol()
-            if (not url_proto:match('^http')) then return false end
+
+            if (not url_proto == 'http') then return false end
             -- Capture matches for http in href to https in visible part only
-            if ((https_re:match(c) and url_proto == 'http')) then
-              found = true
-              found_opts = u:get_host()
-              return true
-            end
+            found = true
+            found_opts = u:get_host()
+            return true
           end
+
           return false
         end)
 
