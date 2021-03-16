@@ -17,31 +17,67 @@
 #include "config.h"
 #include "rspamd.h"
 #include <memory>
+
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+
 #include "doctest/doctest.h"
 
+static gboolean verbose = false;
+static const GOptionEntry entries[] =
+		{
+				{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
+						"Enable verbose logging",                  NULL},
+				{NULL,      0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
+		};
+
+
 int
-main(int argc, char** argv)
-{
-	std::unique_ptr<struct rspamd_main> rspamd_main{new struct rspamd_main};
+main(int argc, char **argv) {
+	struct rspamd_main *rspamd_main;
+	rspamd_mempool_t *pool;
 	struct rspamd_config *cfg;
+	GOptionContext *options_context;
 
-	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
-	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
-	cfg->libs_ctx = rspamd_init_libs ();
+	pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
+	rspamd_main = (struct rspamd_main *) rspamd_mempool_alloc0(pool, sizeof(*rspamd_main));
+	rspamd_main->server_pool = pool;
+	cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_DEFAULT);
+	cfg->libs_ctx = rspamd_init_libs();
 	rspamd_main->cfg = cfg;
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
+	cfg->cfg_pool = pool;
 
-	rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
-			RSPAMD_LOG_FLAG_RSPAMADM);
-	rspamd_log_set_log_level (rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+	options_context = g_option_context_new("- run rspamd cxx test");
+	g_option_context_add_main_entries(options_context, entries, NULL);
+	g_option_context_set_ignore_unknown_options(options_context, true);
+
+	GError *error = NULL;
+
+	if (!g_option_context_parse(options_context, &argc, &argv, &error)) {
+		fprintf(stderr, "option parsing failed: %s\n", error->message);
+		g_option_context_free(options_context);
+		exit(1);
+	}
+
+	if (verbose) {
+		rspamd_main->logger = rspamd_log_open_emergency(rspamd_main->server_pool,
+				RSPAMD_LOG_FLAG_USEC | RSPAMD_LOG_FLAG_ENFORCED | RSPAMD_LOG_FLAG_RSPAMADM);
+
+		rspamd_log_set_log_level(rspamd_main->logger, G_LOG_LEVEL_DEBUG);
+	}
+	else {
+		rspamd_main->logger = rspamd_log_open_emergency(rspamd_main->server_pool,
+				RSPAMD_LOG_FLAG_RSPAMADM);
+		rspamd_log_set_log_level(rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
+	}
 
 	doctest::Context context(argc, argv);
 	int res = context.run();
 
-	if(context.shouldExit()) {
+	if (context.shouldExit()) {
 		return res;
 	}
+
+	rspamd_mempool_delete(pool);
 
 	return res;
 }
