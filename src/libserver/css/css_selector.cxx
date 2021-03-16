@@ -16,6 +16,8 @@
 
 #include "css_selector.hxx"
 #include "fmt/core.h"
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
 
 namespace rspamd::css {
 
@@ -182,6 +184,36 @@ css_selector::debug_str() const -> std::string
 	}, value);
 
 	return ret;
+}
+
+TEST_SUITE("css selectors") {
+	TEST_CASE("simple css selectors") {
+		const std::vector<std::pair<const char *, std::vector<css_selector::selector_type>>> cases{
+				{"em", {css_selector::selector_type::SELECTOR_ELEMENT}},
+				{"*", {css_selector::selector_type::SELECTOR_ALL}},
+				{".class", {css_selector::selector_type::SELECTOR_CLASS}},
+				{"#id", {css_selector::selector_type::SELECTOR_ID}},
+				{"em,.class,#id", {css_selector::selector_type::SELECTOR_ELEMENT,
+								   css_selector::selector_type::SELECTOR_CLASS,
+								   css_selector::selector_type::SELECTOR_ID}},
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+			"css", 0);
+
+		for (const auto &c : cases) {
+			auto res = process_selector_tokens(pool,
+					get_selectors_parser_functor(pool, c.first));
+
+			CHECK(c.second.size() == res.size());
+
+			for (auto i = 0; i < c.second.size(); i ++) {
+				CHECK(res[i]->type == c.second[i]);
+			}
+		}
+
+		rspamd_mempool_delete(pool);
+	}
 }
 
 }
