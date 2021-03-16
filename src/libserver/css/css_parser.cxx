@@ -147,6 +147,7 @@ public:
 	css_parser(void) = delete; /* Require mempool to be set for logging */
 	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {}
 
+	std::unique_ptr<css_consumed_block> consume_css_blocks(const std::string_view &sv);
 	bool consume_input(const std::string_view &sv);
 
 	auto get_object_maybe(void) -> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error> {
@@ -512,7 +513,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	return ret;
 }
 
-bool css_parser::consume_input(const std::string_view &sv)
+auto
+css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
 {
 	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
 	auto ret = true;
@@ -542,7 +544,19 @@ bool css_parser::consume_input(const std::string_view &sv)
 
 	}
 
+	tokeniser.reset(nullptr); /* No longer needed */
+
+	return consumed_blocks;
+}
+
+bool css_parser::consume_input(const std::string_view &sv)
+{
+	auto &&consumed_blocks = consume_css_blocks(sv);
 	const auto &rules = consumed_blocks->get_blocks_or_empty();
+
+	if (rules.empty()) {
+		return false;
+	}
 
 	for (auto &&rule : rules) {
 		/*
@@ -610,10 +624,42 @@ bool css_parser::consume_input(const std::string_view &sv)
 	auto debug_str = consumed_blocks->debug_str();
 	msg_debug_css("consumed css: {%*s}", (int)debug_str.size(), debug_str.data());
 
-	tokeniser.reset(nullptr); /* No longer needed */
-
-	return ret;
+	return true;
 }
+
+auto
+get_selectors_parser_functor(rspamd_mempool_t *pool,
+							 const std::string_view &st) -> blocks_gen_functor
+{
+	css_parser parser(pool);
+
+	/*
+	 * We use shared ptr here to avoid std::function limitation around
+	 * unique_ptr due to copyable of std::function
+	 * Hence, to elongate consumed_blocks lifetime we need to copy them
+	 * inside lambda.
+	 */
+	std::shared_ptr<css_consumed_block> consumed_blocks = parser.consume_css_blocks(st);
+	const auto &rules = consumed_blocks->get_blocks_or_empty();
+
+	auto rules_it = rules.begin();
+	auto &&children = (*rules_it)->get_blocks_or_empty();
+	auto cur = children.begin();
+	auto last = children.end();
+
+	return [cur, consumed_blocks, last](void) mutable -> const css_consumed_block & {
+		if (cur != last) {
+			const auto &ret = (*cur);
+
+			++cur;
+
+			return *ret;
+		}
+
+		return css_parser_eof_block;
+	};
+}
+
 
 /*
  * Wrapper for the parser
@@ -673,5 +719,4 @@ TEST_SUITE("css parser") {
 		rspamd_mempool_delete(pool);
 	}
 }
-
 }

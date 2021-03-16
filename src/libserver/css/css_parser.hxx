@@ -184,8 +184,11 @@ extern const css_consumed_block css_parser_eof_block;
 
 using blocks_gen_functor = std::function<const css_consumed_block &(void)>;
 
-auto parse_css (rspamd_mempool_t *pool, const std::string_view &st) ->
+auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
 		bool;
+
+auto get_selectors_parser_functor(rspamd_mempool_t *pool,
+								  const std::string_view &st) -> blocks_gen_functor;
 
 }
 
