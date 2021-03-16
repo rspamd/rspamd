@@ -46,7 +46,6 @@ public:
 		css_function,
 		css_function_arg,
 		css_component,
-		css_selector,
 		css_eof_block,
 	};
 	using consumed_block_ptr = std::unique_ptr<css_consumed_block>;

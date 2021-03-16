@@ -83,9 +83,6 @@ auto css_consumed_block::token_type_str(void) const -> const char *
 	case parser_tag_type::css_component:
 		ret = "component";
 		break;
-	case parser_tag_type::css_selector:
-		ret = "selector";
-		break;
 	case parser_tag_type::css_eof_block:
 		ret = "eof";
 		break;

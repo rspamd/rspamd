@@ -111,6 +111,14 @@ struct css_parser_token {
 		return def;
 	}
 
+	auto get_delim() const -> char {
+		if (std::holds_alternative<char>(value)) {
+			return std::get<char>(value);
+		}
+
+		return (char)-1;
+	}
+
 	auto get_number_or_default(double def) const -> double {
 		if (std::holds_alternative<double>(value)) {
 			auto dbl = std::get<double>(value);

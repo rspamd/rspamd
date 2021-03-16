@@ -37,13 +37,27 @@ namespace rspamd::css {
  */
 struct css_selector {
 	enum class selector_type {
-		SELECTOR_ELEMENT, /* e.g. .tr, for this value we use tag_id_t */
-		SELECTOR_CLASS, /* generic class */
-		SELECTOR_ID /* e.g. #id */
+		SELECTOR_ELEMENT, /* e.g. tr, for this value we use tag_id_t */
+		SELECTOR_CLASS, /* generic class, e.g. .class */
+		SELECTOR_ID, /* e.g. #id */
+		SELECTOR_ALL /* * selector */
 	};
 
 	selector_type type;
-	std::variant<tag_id_t, std::string> value;
+	std::variant<tag_id_t, std::string_view> value;
+
+	/* Conditions for the css selector */
+	/* Dependency on attributes */
+	struct css_attribute_condition {
+		std::string_view attribute;
+		std::string_view op = "";
+		std::string_view value = "";
+	};
+
+	/* General dependency chain */
+	using css_selector_ptr = std::unique_ptr<css_selector>;
+	using css_selector_dep = std::variant<css_attribute_condition, css_selector_ptr>;
+	std::vector<css_selector_dep> dependencies;
 
 	 auto to_tag(void) const -> std::optional<tag_id_t> {
 		if (type == selector_type::SELECTOR_ELEMENT) {
@@ -54,11 +68,16 @@ struct css_selector {
 
 	auto to_string(void) const -> std::optional<const std::string_view> {
 		if (type == selector_type::SELECTOR_ELEMENT) {
-			return std::string_view(std::get<std::string>(value));
+			return std::string_view(std::get<std::string_view>(value));
 		}
 		return std::nullopt;
 	};
+
+	explicit css_selector(selector_type t) : type(t) {}
+
+	auto debug_str(void) const -> std::string;
 };
+
 
 using selectors_vec = std::vector<std::unique_ptr<css_selector>>;
 

@@ -15,6 +15,7 @@
  */
 
 #include "css_selector.hxx"
+#include "fmt/core.h"
 
 namespace rspamd::css {
 
@@ -23,8 +24,164 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 	-> selectors_vec
 {
 	selectors_vec ret;
+	bool can_continue = true;
+	enum class selector_process_state {
+		selector_parse_start = 0,
+		selector_expect_ident,
+		selector_ident_consumed,
+		selector_ignore_attribute,
+		selector_ignore_function,
+		selector_ignore_combination
+	} state = selector_process_state::selector_parse_start;
+	std::unique_ptr<css_selector> cur_selector;
+
+
+	while (can_continue) {
+		const auto &next_tok = next_token_functor();
+
+		if (next_tok.tag == css_consumed_block::parser_tag_type::css_component) {
+			const auto &parser_tok = next_tok.get_token_or_empty();
+
+			if (state == selector_process_state::selector_parse_start) {
+				/*
+				 * At the beginning of the parsing we can expect either
+				 * delim or an ident, everything else is discarded for now
+				 */
+				msg_debug_css("start consume selector");
+
+				switch (parser_tok.type) {
+				case css_parser_token::token_type::delim_token: {
+					auto delim_c = parser_tok.get_delim();
+
+					if (delim_c == '.') {
+						cur_selector = std::make_unique<css_selector>(
+								css_selector::selector_type::SELECTOR_CLASS);
+						state = selector_process_state::selector_expect_ident;
+					}
+					else if (delim_c == '#') {
+						cur_selector = std::make_unique<css_selector>(
+								css_selector::selector_type::SELECTOR_ID);
+						state = selector_process_state::selector_expect_ident;
+					}
+					else if (delim_c == '*') {
+						cur_selector = std::make_unique<css_selector>(
+								css_selector::selector_type::SELECTOR_ALL);
+						state = selector_process_state::selector_ident_consumed;
+					}
+					break;
+				}
+				case css_parser_token::token_type::ident_token:
+					cur_selector = std::make_unique<css_selector>(
+							css_selector::selector_type::SELECTOR_ELEMENT);
+					cur_selector->value = parser_tok.get_string_or_default("");
+					state = selector_process_state::selector_ident_consumed;
+					break;
+				case css_parser_token::token_type::hash_token:
+					cur_selector = std::make_unique<css_selector>(
+							css_selector::selector_type::SELECTOR_ID);
+					cur_selector->value =
+							parser_tok.get_string_or_default("").substr(1);
+					state = selector_process_state::selector_ident_consumed;
+					break;
+				default:
+					msg_debug_css("cannot consume more of a selector, invalid parser token: %*s; expected start",
+							next_tok.token_type_str());
+					can_continue = false;
+					break;
+				}
+			}
+			else if (state == selector_process_state::selector_expect_ident) {
+				/*
+				 * We got something like a selector start, so we expect
+				 * a plain ident
+				 */
+				if (parser_tok.type == css_parser_token::token_type::ident_token && cur_selector) {
+					cur_selector->value = parser_tok.get_string_or_default("");
+					state = selector_process_state::selector_ident_consumed;
+				}
+				else {
+					msg_debug_css("cannot consume more of a selector, invalid parser token: %*s; expected ident",
+							next_tok.token_type_str());
+					can_continue = false;
+				}
+			}
+			else if (state == selector_process_state::selector_ident_consumed) {
+				if (parser_tok.type == css_parser_token::token_type::comma_token) {
+					/* Got full selector, attach it to the vector and go further */
+					msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
+					ret.push_back(std::move(cur_selector));
+					state = selector_process_state::selector_parse_start;
+				}
+				else if (parser_tok.type == css_parser_token::token_type::semicolon_token) {
+					/* TODO: implement adjustments */
+					state = selector_process_state::selector_ignore_function;
+				}
+				else if (parser_tok.type == css_parser_token::token_type::osqbrace_token) {
+					/* TODO: implement attributes checks */
+					state = selector_process_state::selector_ignore_attribute;
+				}
+				else {
+					/* TODO: implement selectors combinations */
+					state = selector_process_state::selector_ignore_combination;
+				}
+			}
+			else {
+				/* Ignore state; ignore all till ',' token or eof token */
+				if (parser_tok.type == css_parser_token::token_type::comma_token) {
+					/* Got full selector, attach it to the vector and go further */
+					ret.push_back(std::move(cur_selector));
+					state = selector_process_state::selector_parse_start;
+				}
+				else {
+					auto debug_str = parser_tok.get_string_or_default("");
+					msg_debug_css("ignore token %*s", (int)debug_str.size(),
+							debug_str.data());
+				}
+			}
+		}
+		else {
+			/* End of parsing */
+			if (state == selector_process_state::selector_ident_consumed && cur_selector) {
+				msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
+				ret.push_back(std::move(cur_selector));
+			}
+			can_continue = false;
+		}
+
+	}
 
 	return ret; /* copy elision */
+}
+
+auto
+css_selector::debug_str() const -> std::string
+{
+	std::string ret;
+
+	if (type == selector_type::SELECTOR_ID) {
+		ret += "#";
+	}
+	else if (type == selector_type::SELECTOR_CLASS) {
+		ret += ".";
+	}
+	else if (type == selector_type::SELECTOR_ALL) {
+		ret = "*";
+
+		return ret;
+	}
+
+	std::visit([&](auto arg) -> void {
+		using T = std::decay_t<decltype(arg)>;
+
+		if constexpr (std::is_same_v<T, tag_id_t>) {
+			ret += fmt::format("tag: {}", static_cast<int>(arg));
+		}
+		else {
+			ret += arg;
+		}
+	}, value);
+
+	return ret;
 }
 
 }
