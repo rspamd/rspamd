@@ -23,7 +23,11 @@
 #include "contrib/uthash/utlist.h"
 
 static const gdouble default_monitoring_interval = 60.0;
-static const guint default_max_errors = 3;
+static const guint default_max_errors = 2;
+static const gdouble default_max_monitored_mult = 32;
+static const gdouble default_min_monitored_mult = 0.1;
+static const gdouble default_initial_monitored_mult = default_min_monitored_mult;
+static const gdouble default_offline_monitored_mult = 8.0;
 
 struct rspamd_monitored_methods {
 	void * (*monitored_config) (struct rspamd_monitored *m,
@@ -45,6 +49,10 @@ struct rspamd_monitored_ctx {
 	mon_change_cb change_cb;
 	gpointer ud;
 	gdouble monitoring_interval;
+	gdouble max_monitored_mult;
+	gdouble min_monitored_mult;
+	gdouble initial_monitored_mult;
+	gdouble offline_monitored_mult;
 	guint max_errors;
 	gboolean initialized;
 };
@@ -96,15 +104,18 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 {
 	if (m->alive) {
 		if (m->cur_errors < m->max_errors) {
-			msg_debug_mon ("%s on resolving %s, %d retries left",
-					error, m->url,  m->max_errors - m->cur_errors);
+
 			m->cur_errors ++;
 			/* Reduce timeout */
 			rspamd_monitored_stop (m);
 
-			if (m->monitoring_mult > 0.1) {
+			if (m->monitoring_mult > m->ctx->min_monitored_mult) {
 				m->monitoring_mult /= 2.0;
 			}
+
+			msg_debug_mon ("%s on resolving %s, %d retries left; next check in %.2f",
+					error, m->url,  m->max_errors - m->cur_errors,
+					m->ctx->monitoring_interval * m->monitoring_mult);
 
 			rspamd_monitored_start (m);
 		}
@@ -114,7 +125,7 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			m->alive = FALSE;
 			m->offline_time = rspamd_get_calendar_ticks ();
 			rspamd_monitored_stop (m);
-			m->monitoring_mult = 1.0;
+			m->monitoring_mult = 2.0;
 			rspamd_monitored_start (m);
 
 			if (m->ctx->change_cb) {
@@ -123,7 +134,7 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 		}
 	}
 	else {
-		if (m->monitoring_mult < 8.0) {
+		if (m->monitoring_mult < m->ctx->offline_monitored_mult) {
 			/* Increase timeout */
 			rspamd_monitored_stop (m);
 			m->monitoring_mult *= 2.0;
@@ -131,7 +142,7 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 		}
 		else {
 			rspamd_monitored_stop (m);
-			m->monitoring_mult = 8.0;
+			m->monitoring_mult = m->ctx->offline_monitored_mult;
 			rspamd_monitored_start (m);
 		}
 	}
@@ -143,9 +154,9 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 	gdouble t;
 
 	m->cur_errors = 0;
-	m->monitoring_mult = 1.0;
 
 	if (!m->alive) {
+		m->monitoring_mult = 1.0;
 		t = rspamd_get_calendar_ticks ();
 		m->total_offline_time += t - m->offline_time;
 		m->alive = TRUE;
@@ -163,6 +174,19 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		}
 	}
 	else {
+		/* Increase monitored interval */
+		if (m->monitoring_mult < m->ctx->max_monitored_mult) {
+			if (m->monitoring_mult < 1.0) {
+				/* Upgrade fast from the initial mult */
+				m->monitoring_mult = 1.0;
+			}
+			else {
+				m->monitoring_mult *= 2.0;
+			}
+		}
+		else {
+			m->monitoring_mult = m->ctx->max_monitored_mult;
+		}
 		m->latency = (lat + m->latency * m->nchecks) / (m->nchecks + 1);
 		m->nchecks ++;
 	}
@@ -175,12 +199,12 @@ rspamd_monitored_periodic (EV_P_ ev_timer *w, int revents)
 	gdouble jittered;
 	gboolean ret = FALSE;
 
-	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
-			0.0);
-
 	if (m->proc.monitored_update) {
 		ret = m->proc.monitored_update (m, m->ctx, m->proc.ud);
 	}
+
+	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
+			0.0);
 
 	if (ret) {
 		m->periodic.repeat = jittered;
@@ -451,6 +475,10 @@ rspamd_monitored_ctx_init (void)
 	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->monitoring_interval = default_monitoring_interval;
 	ctx->max_errors = default_max_errors;
+	ctx->offline_monitored_mult = default_offline_monitored_mult;
+	ctx->initial_monitored_mult = default_initial_monitored_mult;
+	ctx->max_monitored_mult = default_max_monitored_mult;
+	ctx->min_monitored_mult = default_min_monitored_mult;
 	ctx->elts = g_ptr_array_new ();
 	ctx->helts = g_hash_table_new (g_str_hash, g_str_equal);
 
@@ -484,7 +512,7 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {
 		m = g_ptr_array_index (ctx->elts, i);
-		m->monitoring_mult = 0;
+		m->monitoring_mult = ctx->initial_monitored_mult;
 		rspamd_monitored_start (m);
 		m->monitoring_mult = 1.0;
 	}
@@ -518,7 +546,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 
 	m->url = g_strdup (line);
 	m->ctx = ctx;
-	m->monitoring_mult = 1.0;
+	m->monitoring_mult = ctx->initial_monitored_mult;
 	m->max_errors = ctx->max_errors;
 	m->alive = TRUE;
 
