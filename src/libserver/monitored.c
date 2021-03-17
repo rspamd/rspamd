@@ -110,7 +110,12 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			rspamd_monitored_stop (m);
 
 			if (m->monitoring_mult > m->ctx->min_monitored_mult) {
-				m->monitoring_mult /= 2.0;
+				if (m->monitoring_mult < 1.0) {
+					m->monitoring_mult = 1.0;
+				}
+				else {
+					m->monitoring_mult /= 2.0;
+				}
 			}
 
 			msg_debug_mon ("%s on resolving %s, %d retries left; next check in %.2f",
