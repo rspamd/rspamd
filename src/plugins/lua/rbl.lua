@@ -228,6 +228,9 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
     task:insert_result(rbl.symbol .. '_FAIL', 1, string.format('%s:%s',
         resolve_table_elt.orig, err))
+    if rbl.monitored then
+      rbl.monitored:propagate_error(err)
+    end
     return
   end
 

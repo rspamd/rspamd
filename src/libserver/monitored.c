@@ -98,7 +98,7 @@ struct rspamd_monitored {
 
 INIT_LOG_MODULE(monitored)
 
-static inline void
+inline void
 rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 		const gchar *error)
 {
