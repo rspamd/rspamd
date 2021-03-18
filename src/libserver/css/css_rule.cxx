@@ -15,6 +15,7 @@
  */
 
 #include "css_rule.hxx"
+#include "css.hxx"
 #include <limits>
 
 namespace rspamd::css {
@@ -169,9 +170,9 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								const blocks_gen_functor &next_block_functor)
-	-> css_declarations_block
+	-> css_declarations_block_ptr
 {
-	css_declarations_block ret;
+	css_declarations_block_ptr ret;
 	bool can_continue = true;
 	css_property cur_property{css_property_type::PROPERTY_NYI,
 							  css_property_flag::FLAG_NORMAL};
@@ -186,6 +187,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	} state = parse_property;
 
 	auto seen_not = false;
+	ret = std::make_shared<css_declarations_block>();
 
 	while (can_continue) {
 		const auto &next_tok = next_block_functor();
@@ -230,7 +232,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 					const auto &parser_tok = next_tok.get_token_or_empty();
 
 					if (parser_tok.type == css_parser_token::token_type::semicolon_token && cur_rule) {
-						ret.add_rule(std::move(cur_rule));
+						ret->add_rule(std::move(cur_rule));
 						state = parse_property;
 						seen_not = false;
 						continue;
@@ -298,7 +300,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			break;
 		case css_consumed_block::parser_tag_type::css_eof_block:
 			if (state == parse_value) {
-				ret.add_rule(std::move(cur_rule));
+				ret->add_rule(std::move(cur_rule));
 			}
 			can_continue = false;
 			break;

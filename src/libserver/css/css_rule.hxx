@@ -94,9 +94,11 @@ private:
 	robin_hood::unordered_flat_set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
 };
 
+using css_declarations_block_ptr = std::shared_ptr<css_declarations_block>;
+
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 							 const blocks_gen_functor &next_token_functor)
-	-> css_declarations_block;
+	-> css_declarations_block_ptr;
 
 }
 

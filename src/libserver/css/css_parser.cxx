@@ -18,6 +18,7 @@
 #include "css_tokeniser.hxx"
 #include "css_selector.hxx"
 #include "css_rule.hxx"
+#include "css.hxx"
 #include "fmt/core.h"
 
 #include <vector>
@@ -558,6 +559,8 @@ bool css_parser::consume_input(const std::string_view &sv)
 		return false;
 	}
 
+	style_object = std::make_unique<css_style_sheet>();
+
 	for (auto &&rule : rules) {
 		/*
 		 * For now, we do not need any of the at rules, so we can safely ignore them
@@ -598,25 +601,34 @@ bool css_parser::consume_input(const std::string_view &sv)
 
 				auto selectors_vec = process_selector_tokens(pool, selector_token_functor);
 
-				auto decls_it = (*simple_block)->get_blocks_or_empty().cbegin();
-				auto decls_end = (*simple_block)->get_blocks_or_empty().cend();
-				auto declaration_token_functor = [&decls_it,&decls_end](void)
-						-> const css_consumed_block & {
-					for (;;) {
-						if (decls_it == decls_end) {
-							return css_parser_eof_block;
+				if (selectors_vec.size() > 0) {
+					msg_debug_css("processed %d selectors", (int)selectors_vec.size());
+					auto decls_it = (*simple_block)->get_blocks_or_empty().cbegin();
+					auto decls_end = (*simple_block)->get_blocks_or_empty().cend();
+					auto declaration_token_functor = [&decls_it, &decls_end](void)
+							-> const css_consumed_block & {
+						for (;;) {
+							if (decls_it == decls_end) {
+								return css_parser_eof_block;
+							}
+
+							const auto &ret = (*decls_it);
+
+							++decls_it;
+
+							return *ret;
 						}
+					};
 
-						const auto &ret = (*decls_it);
+					auto declarations_vec = process_declaration_tokens(pool,
+							declaration_token_functor);
 
-						++decls_it;
+					if (declarations_vec && !declarations_vec->get_rules().empty()) {
+						msg_debug_css("processed %d rules",
+								(int)declarations_vec->get_rules().size());
 
-						return *ret;
 					}
-				};
-
-				auto declarations_vec = process_declaration_tokens(pool,
-						declaration_token_functor);
+				}
 			}
 		}
 	}

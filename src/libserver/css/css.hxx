@@ -22,6 +22,8 @@
 #include <memory>
 #include "logger.h"
 #include "css.h"
+#include "css_rule.hxx"
+#include "css_selector.hxx"
 
 namespace rspamd::css {
 

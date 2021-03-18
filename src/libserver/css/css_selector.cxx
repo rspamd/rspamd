@@ -15,6 +15,7 @@
  */
 
 #include "css_selector.hxx"
+#include "css.hxx"
 #include "fmt/core.h"
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
