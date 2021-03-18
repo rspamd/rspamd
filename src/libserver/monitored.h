@@ -149,14 +149,6 @@ void rspamd_monitored_stop (struct rspamd_monitored *m);
 void rspamd_monitored_start (struct rspamd_monitored *m);
 
 /**
- * Propagate external monitored error
- * @param m
- * @param error
- */
-void rspamd_monitored_propagate_error (struct rspamd_monitored *m,
-									   const gchar *error);
-
-/**
  * Destroy monitored context and all monitored objects inside
  * @param ctx
  */

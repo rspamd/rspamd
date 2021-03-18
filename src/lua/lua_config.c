@@ -912,14 +912,12 @@ LUA_FUNCTION_DEF (monitored, alive);
 LUA_FUNCTION_DEF (monitored, latency);
 LUA_FUNCTION_DEF (monitored, offline);
 LUA_FUNCTION_DEF (monitored, total_offline);
-LUA_FUNCTION_DEF (monitored, propagate_error);
 
 static const struct luaL_reg monitoredlib_m[] = {
 	LUA_INTERFACE_DEF (monitored, alive),
 	LUA_INTERFACE_DEF (monitored, latency),
 	LUA_INTERFACE_DEF (monitored, offline),
 	LUA_INTERFACE_DEF (monitored, total_offline),
-	LUA_INTERFACE_DEF (monitored, propagate_error),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -4631,23 +4629,6 @@ lua_monitored_latency (lua_State *L)
 	}
 
 	return 1;
-}
-
-static gint
-lua_monitored_propagate_error (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_monitored *m = lua_check_monitored (L, 1);
-	const gchar *what = luaL_checkstring (L, 2);
-
-	if (m && what) {
-		rspamd_monitored_propagate_error (m, what);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
 }
 
 void
