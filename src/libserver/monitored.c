@@ -680,9 +680,10 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 	gdouble jittered;
 
 	g_assert (m != NULL);
-	msg_debug_mon ("started monitored object %s", m->url);
 	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
+
+	msg_debug_mon ("started monitored object %s in %.2f seconds", m->url, jittered);
 
 	if (ev_can_stop (&m->periodic)) {
 		ev_timer_stop (m->ctx->event_loop, &m->periodic);
