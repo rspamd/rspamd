@@ -957,15 +957,26 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 
 	if ((url->protocol & cb->protocols_mask) == url->protocol) {
 
-		if (cb->flags_mode == url_flags_mode_include_any) {
+		/* Handle different flags application logic */
+		switch (cb->flags_mode) {
+		case url_flags_mode_include_any:
 			if (url->flags != (url->flags & cb->flags_mask)) {
 				return;
 			}
-		}
-		else {
+			break;
+		case url_flags_mode_include_explicit:
 			if ((url->flags & cb->flags_mask) != cb->flags_mask) {
 				return;
 			}
+			break;
+		case url_flags_mode_exclude_include:
+			if (url->flags & cb->flags_exclude_mask) {
+				return;
+			}
+			if (url->flags != (url->flags & cb->flags_mask)) {
+				return;
+			}
+			break;
 		}
 
 		if (cb->skip_prob > 0) {
@@ -1206,6 +1217,113 @@ lua_url_cbdata_fill (lua_State *L,
 
 	return TRUE;
 }
+
+gboolean
+lua_url_cbdata_fill_exclude_include (lua_State *L,
+					 gint pos,
+					 struct lua_tree_cb_data *cbd,
+					 guint default_protocols,
+					 gsize max_urls)
+{
+	guint protocols_mask = default_protocols;
+	guint include_flags_mask, exclude_flags_mask;
+
+	gint pos_arg_type = lua_type (L, pos);
+
+	memset (cbd, 0, sizeof (*cbd));
+	cbd->flags_mode = url_flags_mode_exclude_include;
+
+	/* Include flags */
+	if (pos_arg_type == LUA_TTABLE) {
+		include_flags_mask = 0; /* Reset to no flags */
+
+		for (lua_pushnil(L); lua_next(L, pos); lua_pop (L, 1)) {
+			int nmask = 0;
+			const gchar *fname = lua_tostring (L, -1);
+
+			if (rspamd_url_flag_from_string(fname, &nmask)) {
+				include_flags_mask |= nmask;
+			}
+			else {
+				msg_info ("bad url include flag: %s", fname);
+				return FALSE;
+			}
+		}
+	}
+	else if (pos_arg_type == LUA_TNIL) {
+		/* Include all flags */
+		include_flags_mask = ~0U;
+	}
+	else {
+		msg_info ("bad arguments: wrong include mask");
+		return FALSE;
+	}
+
+	/* Exclude flags */
+	pos_arg_type = lua_type (L, pos + 1);
+	if (pos_arg_type == LUA_TTABLE) {
+		exclude_flags_mask = 0; /* Reset to no flags */
+
+		for (lua_pushnil(L); lua_next(L, pos); lua_pop (L, 1)) {
+			int nmask = 0;
+
+			const gchar *fname = lua_tostring (L, -1);
+
+			if (rspamd_url_flag_from_string(fname, &nmask)) {
+				exclude_flags_mask |= nmask;
+			}
+			else {
+				msg_info ("bad url exclude flag: %s", fname);
+				return FALSE;
+			}
+		}
+	}
+	else if (pos_arg_type == LUA_TNIL) {
+		/* Empty all exclude flags */
+		exclude_flags_mask = 0U;
+	}
+	else {
+		msg_info ("bad arguments: wrong exclude mask");
+		return FALSE;
+	}
+
+	if (lua_type (L, pos + 2) == LUA_TTABLE) {
+		protocols_mask = 0U; /* Reset all protocols */
+
+		for (lua_pushnil (L); lua_next (L, pos + 2); lua_pop (L, 1)) {
+			int nmask;
+			const gchar *pname = lua_tostring (L, -1);
+
+			nmask = rspamd_url_protocol_from_string (pname);
+
+			if (nmask != PROTOCOL_UNKNOWN) {
+				protocols_mask |= nmask;
+			}
+			else {
+				msg_info ("bad url protocol: %s", pname);
+				return FALSE;
+			}
+		}
+	}
+	else {
+		protocols_mask = default_protocols;
+	}
+
+	cbd->i = 1;
+	cbd->L = L;
+	cbd->max_urls = max_urls;
+	cbd->protocols_mask = protocols_mask;
+	cbd->flags_mask = include_flags_mask;
+	cbd->flags_exclude_mask = exclude_flags_mask;
+
+	/* This needs to be removed from the stack */
+	rspamd_lua_class_metatable (L, "rspamd{url}");
+	cbd->metatable_pos = lua_gettop (L);
+	(void)lua_checkstack (L, cbd->metatable_pos + 4);
+
+	return TRUE;
+}
+
 
 void
 lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd)

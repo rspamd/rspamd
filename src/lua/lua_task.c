@@ -257,6 +257,18 @@ end
  */
 LUA_FUNCTION_DEF (task, get_urls);
 /***
+ * @method task:get_urls_filtered([{flags_include}, [{flags_exclude}]], [{protocols_mask}])
+ * Get urls managed by either exclude or include flags list
+ * - If flags include are nil then all but excluded urls are returned
+ * - If flags exclude are nil then only included explicitly urls are returned
+ * - If both parameters are nil then all urls are included
+ * @param {table|string} flags_include included flags
+ * @param {table|string} flags_exclude excluded flags
+ * @param {table|string} protocols_mask incude only specific protocols
+ * @return {table rspamd_url} list of urls matching conditions
+ */
+LUA_FUNCTION_DEF (task, get_urls_filtered);
+/***
  * @method task:has_urls([need_emails])
  * Returns 'true' if a task has urls listed
  * @param {boolean} need_emails if `true` then reutrn also email urls
@@ -1212,6 +1224,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, append_message),
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
+	LUA_INTERFACE_DEF (task, get_urls_filtered),
 	LUA_INTERFACE_DEF (task, inject_url),
 	LUA_INTERFACE_DEF (task, get_content),
 	LUA_INTERFACE_DEF (task, get_filename),
@@ -2418,6 +2431,74 @@ lua_task_get_urls (lua_State * L)
 		/* Exclude RSPAMD_URL_FLAG_CONTENT to preserve backward compatibility */
 		if (!lua_url_cbdata_fill (L, 2, &cb, default_protocols_mask,
 				~(RSPAMD_URL_FLAG_CONTENT|RSPAMD_URL_FLAG_IMAGE), max_urls)) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		sz = kh_size (MESSAGE_FIELD (task, urls));
+		sz = lua_url_adjust_skip_prob (task->task_timestamp,
+				MESSAGE_FIELD (task, digest), &cb, sz);
+
+		lua_createtable (L, sz, 0);
+
+		if (cb.sort) {
+			struct rspamd_url **urls_sorted;
+			gint i = 0;
+
+			urls_sorted = g_new0 (struct rspamd_url *, sz);
+
+			kh_foreach_key (MESSAGE_FIELD(task, urls), u, {
+				if (i < sz) {
+					urls_sorted[i] = u;
+					i ++;
+				}
+			});
+
+			qsort (urls_sorted, i, sizeof (struct rspamd_url *), rspamd_url_cmp_qsort);
+
+			for (int j = 0; j < i; j ++) {
+				lua_tree_url_callback (urls_sorted[j], urls_sorted[j], &cb);
+			}
+
+			g_free (urls_sorted);
+		}
+		else {
+			kh_foreach_key (MESSAGE_FIELD(task, urls), u, {
+				lua_tree_url_callback(u, u, &cb);
+			});
+		}
+
+		lua_url_cbdata_dtor (&cb);
+	}
+	else {
+		return luaL_error (L, "invalid arguments, no task");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_urls_filtered (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct lua_tree_cb_data cb;
+	struct rspamd_url *u;
+	static const gint default_protocols_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
+											   PROTOCOL_FILE|PROTOCOL_FTP;
+	gsize sz, max_urls = 0;
+
+	if (task) {
+		if (task->cfg) {
+			max_urls = task->cfg->max_lua_urls;
+		}
+
+		if (task->message == NULL) {
+			lua_newtable (L);
+
+			return 1;
+		}
+
+		if (!lua_url_cbdata_fill_exclude_include (L, 2, &cb, default_protocols_mask, max_urls)) {
 			return luaL_error (L, "invalid arguments");
 		}
 
