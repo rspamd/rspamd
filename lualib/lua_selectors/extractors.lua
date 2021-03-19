@@ -336,6 +336,21 @@ e.g. `get_tld`]],
       ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
     }}
   },
+  -- URLs filtered by flags
+  ['urls_filtered'] = {
+    ['get_value'] = function(task, args)
+      local urls = task:get_urls_filtered(args[1], args[2])
+      if not urls[1] then
+        return nil
+      end
+      return urls,'userdata_list'
+    end,
+    ['description'] = [[Get list of all urls filtered by flags_include/exclude
+(see rspamd_task:get_urls_filtered for description)]],
+    ['args_schema'] = {ts.array_of{
+      url_flags_ts:is_optional(), url_flags_ts:is_optional()
+    }}
+  },
   -- Get all emails
   ['emails'] = {
     ['get_value'] = function(task, args)
