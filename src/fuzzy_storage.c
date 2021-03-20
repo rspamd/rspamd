@@ -906,10 +906,15 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	}
 
 	if (!isnan (session->ctx->delay) &&
-			rspamd_get_calendar_ticks () - result->ts < session->ctx->delay &&
 			rspamd_match_radix_map_addr (session->ctx->delay_whitelist,
 					session->addr) == NULL)  {
-		send_flags |= RSPAMD_FUZZY_REPLY_DELAY;
+		gdouble hash_age = rspamd_get_calendar_ticks () - result->ts;
+		gdouble jittered_age = rspamd_time_jitter (session->ctx->delay,
+				session->ctx->delay / 2.0);
+
+		if (hash_age < jittered_age) {
+			send_flags |= RSPAMD_FUZZY_REPLY_DELAY;
+		}
 	}
 
 	/* Refresh hash if found with strong confidence */
