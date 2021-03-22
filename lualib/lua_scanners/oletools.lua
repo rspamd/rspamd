@@ -301,9 +301,18 @@ local function oletools_check(task, content, digest, rule)
 
           elseif rule.extended == true and #analysis_keyword_table > 0 then
             -- report any flags (types) and any most keywords as individual virus name
-            local analysis_cat_table_values = lua_util.values(analysis_cat_table)
-            table.sort(analysis_cat_table_values)
-            table.insert(analysis_keyword_table, 1, table.concat(analysis_cat_table_values))
+            local analysis_cat_table_values_sorted = {}
+
+            -- see https://github.com/rspamd/rspamd/commit/6bd3e2b9f49d1de3ab882aeca9c30bc7d526ac9d#commitcomment-40130493
+            -- for details
+            local analysis_cat_table_keys_sorted = lua_util.keys(analysis_cat_table)
+            table.sort(analysis_cat_table_keys_sorted)
+
+            for _,v in ipairs(analysis_cat_table_keys_sorted) do
+              table.insert(analysis_cat_table_values_sorted, analysis_cat_table[v])
+            end
+
+            table.insert(analysis_keyword_table, 1, table.concat(analysis_cat_table_values_sorted))
 
             lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
                 rule.log_prefix, table.concat(analysis_keyword_table, ','))
