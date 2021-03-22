@@ -142,6 +142,12 @@ local function add_scanner_rule(sym, opts)
   if not rule.symbol_fail then
     rule.symbol_fail = rule.symbol .. '_FAIL'
   end
+  if not rule.symbol_encrypted then
+    rule.symbol_encrypted = rule.symbol .. '_ENCRYPTED'
+  end
+  if not rule.symbol_macro then
+    rule.symbol_macro = rule.symbol .. '_MACRO'
+  end
 
   rule.redis_params = redis_params
 
@@ -267,6 +273,7 @@ if opts and type(opts) == 'table' then
                     type = 'virtual',
                     name = sym,
                     parent = id,
+                    score = 0.0,
                     group = N
                   })
                 end
@@ -278,12 +285,45 @@ if opts and type(opts) == 'table' then
                 type = 'virtual',
                 name = sym,
                 parent = id,
+                score = 0.0,
                 group = N
               })
             end
           end
         end
-
+        if type(m['patterns_fail']) == 'table' then
+          if m['patterns_fail'][1] then
+            for _, p in ipairs(m['patterns_fail']) do
+              if type(p) == 'table' then
+                for sym in pairs(p) do
+                  rspamd_logger.debugm(N, rspamd_config, 'registering: %1', {
+                    type = 'virtual',
+                    name = sym,
+                    parent = m['symbol'],
+                    parent_id = id,
+                  })
+                  rspamd_config:register_symbol({
+                    type = 'virtual',
+                    name = sym,
+                    parent = id,
+                    score = 0.0,
+                    group = N
+                  })
+                end
+              end
+            end
+          else
+            for sym in pairs(m['patterns_fail']) do
+              rspamd_config:register_symbol({
+                type = 'virtual',
+                name = sym,
+                parent = id,
+                score = 0.0,
+                group = N
+              })
+            end
+          end
+        end
         if m.symbols then
           local function reg_symbols(tbl)
             for _,sym in pairs(tbl) do
