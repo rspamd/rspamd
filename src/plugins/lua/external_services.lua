@@ -273,6 +273,7 @@ if opts and type(opts) == 'table' then
                     type = 'virtual',
                     name = sym,
                     parent = id,
+                    score = 0.0,
                     group = N
                   })
                 end
@@ -284,6 +285,7 @@ if opts and type(opts) == 'table' then
                 type = 'virtual',
                 name = sym,
                 parent = id,
+                score = 0.0,
                 group = N
               })
             end
@@ -304,6 +306,7 @@ if opts and type(opts) == 'table' then
                     type = 'virtual',
                     name = sym,
                     parent = id,
+                    score = 0.0,
                     group = N
                   })
                 end
@@ -315,6 +318,7 @@ if opts and type(opts) == 'table' then
                 type = 'virtual',
                 name = sym,
                 parent = id,
+                score = 0.0,
                 group = N
               })
             end
