@@ -192,11 +192,10 @@ local function check_text_part(task, part, rule, text)
   return allow_direct,allow_shingles
 end
 
-local function has_sane_text_parts(task)
-  local text_parts = task:get_text_parts() or {}
-
-  return fun.any(function(tp) return tp:get_words_count() > 32 end, text_parts)
-end
+--local function has_sane_text_parts(task)
+--  local text_parts = task:get_text_parts() or {}
+--  return fun.any(function(tp) return tp:get_words_count() > 32 end, text_parts)
+--end
 
 local function check_image_part(task, part, rule, image)
   if rule.skip_images then
@@ -216,19 +215,9 @@ local function check_image_part(task, part, rule, image)
 
     if height and width then
       if height < min_height or width < min_width then
-
-
-        if not has_sane_text_parts(task) then
-          lua_util.debugm(N, task, 'allow image part %s (%sx%s): no large enough text part found',
-              id, width, height)
-          return true, false
-        else
-          lua_util.debugm(N, task, 'skip image part %s as it does not meet minimum sizes: %sx%s < %sx%s',
-              id, width, height, min_width, min_height)
-          return false, false
-        end
-
-
+        lua_util.debugm(N, task, 'skip image part %s as it does not meet minimum sizes: %sx%s < %sx%s',
+                id, width, height, min_width, min_height)
+        return false, false
       else
         lua_util.debugm(N, task, 'allow image part %s: %sx%s',
             id, width, height)
