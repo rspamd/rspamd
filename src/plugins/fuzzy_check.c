@@ -2812,7 +2812,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 										"list %s:%d, skipped by server",
 								ftype,
 								op,
-								MESSAGE_FIELD (session->task, message_id),
+								MESSAGE_FIELD_CHECK (session->task, message_id),
 								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
 								rep->v1.flag);
@@ -2827,7 +2827,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 										"list %s:%d, error: %d",
 								ftype,
 								op,
-								MESSAGE_FIELD (session->task, message_id),
+								MESSAGE_FIELD_CHECK (session->task, message_id),
 								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
 								rep->v1.flag,
