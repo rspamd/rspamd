@@ -575,7 +575,7 @@ exports.full_extensions_map = {
     {"wm", "video/x-ms-wm"},
     {"wma", "audio/x-ms-wma"},
     {"wmd", "application/x-ms-wmd"},
-    {"wmf", "application/x-msmetafile"},
+    {"wmf", {"application/x-msmetafile", "image/wmf", "image/x-wmf"}},
     {"wml", "text/vnd.wap.wml"},
     {"wmlc", "application/vnd.wap.wmlc"},
     {"wmls", "text/vnd.wap.wmlscript"},
