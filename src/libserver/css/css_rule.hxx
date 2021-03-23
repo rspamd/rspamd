@@ -81,8 +81,16 @@ public:
 	using rule_shared_ptr = std::shared_ptr<css_rule>;
 	using rule_shared_hash = shared_ptr_hash<css_rule>;
 	using rule_shared_eq = shared_ptr_equal<css_rule>;
+	enum class merge_type {
+		merge_duplicate,
+		merge_parent,
+		merge_override
+	};
+
 	css_declarations_block() = default;
 	auto add_rule(rule_shared_ptr &&rule) -> bool;
+	auto merge_block(const css_declarations_block &other,
+				  merge_type how = merge_type::merge_duplicate) -> void;
 	auto get_rules(void) const -> const auto & {
 		return rules;
 	}

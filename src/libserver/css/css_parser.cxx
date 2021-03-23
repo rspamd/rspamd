@@ -559,7 +559,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 		return false;
 	}
 
-	style_object = std::make_unique<css_style_sheet>();
+	style_object = std::make_unique<css_style_sheet>(pool);
 
 	for (auto &&rule : rules) {
 		/*
@@ -627,6 +627,10 @@ bool css_parser::consume_input(const std::string_view &sv)
 						msg_debug_css("processed %d rules",
 								(int)declarations_vec->get_rules().size());
 
+						for (auto &&selector : selectors_vec) {
+							style_object->add_selector_rule(std::move(selector),
+									   declarations_vec);
+						}
 					}
 				}
 			}
@@ -677,15 +681,16 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
  * Wrapper for the parser
  */
 auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
-	bool
+		tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>
 {
 	css_parser parser(pool);
 
 	if (parser.consume_input(st)) {
-		return true;
+		return parser.get_object_maybe();
 	}
 
-	return false;
+	return tl::make_unexpected(css_parse_error{css_parse_error_type::PARSE_ERROR_INVALID_SYNTAX,
+											"cannot parse input"});
 }
 
 TEST_SUITE("css parser") {

@@ -313,6 +313,38 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	return ret; /* copy elision */
 }
 
+auto
+css_declarations_block::merge_block(const css_declarations_block &other, merge_type how)
+	-> void
+{
+	const auto &other_rules = other.get_rules();
+
+	for (const auto &rule : other_rules) {
+		auto &&found_it = rules.find(rule);
+
+		if (found_it != rules.end()) {
+			/* Duplicate, need to merge */
+			switch(how) {
+			case merge_type::merge_override:
+				/* Override */
+				rules.insert(rule);
+				break;
+			case merge_type::merge_duplicate:
+				/* Merge values */
+				(*found_it)->merge_values(*rule);
+				break;
+			case merge_type::merge_parent:
+				/* Do not merge parent rule if more specific local one is presented */
+				break;
+			}
+		}
+		else {
+			/* New property, just insert */
+			rules.insert(rule);
+		}
+	}
+}
+
 void css_rule::add_value(const css_value &value)
 {
 	values.push_back(value);

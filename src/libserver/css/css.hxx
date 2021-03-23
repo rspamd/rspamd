@@ -40,10 +40,13 @@ extern unsigned int rspamd_css_log_id;
 
 class css_style_sheet {
 public:
-	css_style_sheet();
+	css_style_sheet(rspamd_mempool_t *pool);
 	~css_style_sheet(); /* must be declared separately due to pimpl */
+	auto add_selector_rule(std::unique_ptr<css_selector> &&selector,
+						   css_declarations_block_ptr decls) -> void;
 private:
 	class impl;
+	rspamd_mempool_t *pool;
 	std::unique_ptr<impl> pimpl;
 };
 
