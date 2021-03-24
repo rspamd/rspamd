@@ -1469,7 +1469,7 @@ if opts.munging then
   end
 
   munging_opts.list_map = lua_maps.map_add_from_ucl(munging_opts.list_map,
-      'set', 'DMARC munging map')
+      'set', 'DMARC munging map of the recipients addresses to munge')
 
   if not munging_opts.list_map  then
     rspamd_logger.errx(rspamd_config, 'cannot enable DMARC munging with invalid list_map (invalid map)')
@@ -1536,7 +1536,7 @@ if opts.munging then
     local rcpt_found
     if mr then
       for _,r in ipairs(mr) do
-        if r.domain and munging_opts.list_map:get_key(r.domain) then
+        if r.domain and munging_opts.list_map:get_key(r.addr) then
           rcpt_found = r
           break
         end
