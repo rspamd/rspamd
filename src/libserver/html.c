@@ -3253,6 +3253,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 								}
 								else {
 									url = maybe_existing;
+									/* Increase count to avoid odd checks failure */
+									url->count ++;
 								}
 							}
 
