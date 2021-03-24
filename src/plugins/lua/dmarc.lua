@@ -1587,7 +1587,7 @@ if opts.munging then
 
     add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded}
     lua_mime.modify_headers(task, {
-      remove = {['From'] = {0}},
+      remove = {['From'] = 0},
       add = add_hdrs
       })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
