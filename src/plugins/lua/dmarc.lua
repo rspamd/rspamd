@@ -1558,37 +1558,42 @@ if opts.munging then
     end
 
     from = from[1]
-    local via_name = rcpt_found.user
+    local via_user = rcpt_found.user
     local via_addr = rcpt_found.addr
+    local via_name
 
     if from.name then
-      from.name = string.format('%s via %s', from.name, via_name)
+      via_name = string.format('%s via %s', from.name, via_user)
     else
-      from.name = string.format('%s via %s', from.user or 'unknown', via_name)
+      via_name = string.format('%s via %s', from.user or 'unknown', via_user)
     end
 
     local hdr_encoded = rspamd_util.fold_header('From',
             rspamd_util.mime_header_encode(string.format('%s <%s>',
-                    from.name, via_addr)))
+                    via_name, via_addr)))
+    local orig_from_encoded = rspamd_util.fold_header('X-Original-From',
+            rspamd_util.mime_header_encode(string.format('%s <%s>',
+                    from.name or '', from.addr)))
     local add_hdrs = {
       ['From'] = { order = 1, value = hdr_encoded },
     }
 
     if munging_opts.reply_goes_to_list then
-      -- Add another reply-to
+      -- Reply-to goes to the list
       table.insert(add_hdrs['Reply-To'], {order = 0, value = via_addr})
-      add_hdrs['X-Original-From'] = { order = 0, value = hdr_encoded}
     else
-      add_hdrs['Reply-To'] = {order = 0, value = via_addr}
+      add_hdrs['Reply-To'] = {order = 0, value = from.addr}
     end
+
+    add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded}
     lua_mime.modify_headers(task, {
       remove = {['From'] = {0}},
       add = add_hdrs
       })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
             from.domain, hdr_encoded, from.addr)
-    rspamd_logger.infox(task, 'munged DMARC header for %s', from.domain)
-    task:insert_result('DMARC_MUNGED', 1.0, from.domain)
+    rspamd_logger.infox(task, 'munged DMARC header for %s', from.addr)
+    task:insert_result('DMARC_MUNGED', 1.0, from.addr)
   end
 
   rspamd_config:register_symbol({
