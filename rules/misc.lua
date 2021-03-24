@@ -142,7 +142,7 @@ local obscured_id = rspamd_config:register_symbol{
   name = 'R_SUSPICIOUS_URL',
   score = 5.0,
   one_shot = true,
-  description = 'Obfusicated or suspicious URL has been found in a message',
+  description = 'Obfuscated or suspicious URL has been found in a message',
   group = 'url'
 }
 

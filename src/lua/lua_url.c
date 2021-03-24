@@ -401,7 +401,7 @@ lua_url_is_redirected (lua_State *L)
 
 /***
  * @method url:is_obscured()
- * Check whether URL is treated as obscured or obfusicated (e.g. numbers in IP address or other hacks)
+ * Check whether URL is treated as obscured or obfuscated (e.g. numbers in IP address or other hacks)
  * @return {boolean} `true` if URL is obscured
  */
 static gint
