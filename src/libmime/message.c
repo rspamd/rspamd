@@ -467,7 +467,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				if (G_UNLIKELY (*c) == ' ') {
 					part->spaces ++;
 
-					if (*(c - 1) == ' ') {
+					if (c > begin && *(c - 1) == ' ') {
 						part->double_spaces ++;
 					}
 				}
