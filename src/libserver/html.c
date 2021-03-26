@@ -24,6 +24,7 @@
 #include "url.h"
 #include "contrib/libucl/khash.h"
 #include "libmime/images.h"
+#include "css/css.h"
 
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
@@ -2781,7 +2782,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 							   GByteArray *in,
 							   GList **exceptions,
 							   khash_t (rspamd_url_hash) *url_set,
-							   GPtrArray *part_urls)
+							   GPtrArray *part_urls,
+							   bool allow_css)
 {
 	const guchar *p, *c, *end, *savep = NULL;
 	guchar t;
@@ -2809,6 +2811,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 		xml_tag_end,
 		content_ignore,
 		content_write,
+		content_style,
 		content_ignore_sp
 	} state = parse_start;
 
@@ -3118,6 +3121,36 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 			p ++;
 			break;
 
+		case content_style: {
+
+			/*
+			 * We just search for the first </s substring and then pass
+			 * the content to the parser (if needed)
+			 */
+			goffset end_style = rspamd_substring_search (p, end - p,
+					"</", 2);
+			if (end_style == -1 || g_ascii_tolower (p[end_style + 2]) != 's') {
+				/* Invalid style */
+				state = content_ignore;
+			}
+			else {
+
+				if (allow_css) {
+					GError *err = NULL;
+					(void)rspamd_css_parse_style (pool, p, end_style, &err);
+
+					if (err) {
+						msg_info_pool ("cannot parse css: %e", err);
+						g_error_free (err);
+					}
+				}
+
+				p += end_style;
+				state = tag_begin;
+			}
+			break;
+		}
+
 		case content_ignore_sp:
 			if (!g_ascii_isspace (t)) {
 				c = p;
@@ -3173,7 +3206,12 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 					need_decode = FALSE;
 				}
 				else {
-					state = content_ignore;
+					if (cur_tag->id == Tag_STYLE) {
+						state = content_style;
+					}
+					else {
+						state = content_ignore;
+					}
 				}
 
 				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
@@ -3387,5 +3425,6 @@ rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,
 		GByteArray *in)
 {
-	return rspamd_html_process_part_full (pool, hc, in, NULL, NULL, NULL);
+	return rspamd_html_process_part_full (pool, hc, in, NULL,
+			NULL, NULL, FALSE);
 }

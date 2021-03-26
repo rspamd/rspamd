@@ -147,7 +147,8 @@ GByteArray *rspamd_html_process_part_full (rspamd_mempool_t *pool,
 										   struct html_content *hc,
 										   GByteArray *in, GList **exceptions,
 										   khash_t (rspamd_url_hash) *url_set,
-										   GPtrArray *part_urls);
+										   GPtrArray *part_urls,
+										   bool allow_css);
 
 /*
  * Returns true if a specified tag has been seen in a part
