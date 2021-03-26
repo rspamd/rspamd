@@ -770,7 +770,7 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			&text_part->exceptions,
 			MESSAGE_FIELD (task, urls),
 			text_part->mime_part->urls,
-			task->cfg->enable_css_parser);
+			task->cfg ? task->cfg->enable_css_parser : false);
 
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
