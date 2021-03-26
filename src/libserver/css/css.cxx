@@ -18,18 +18,34 @@
 #include "css.hxx"
 #include "contrib/robin-hood/robin_hood.h"
 #include "css_parser.hxx"
+/* Keep unit tests implementation here (it'll possibly be moved outside one day) */
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest/doctest.h"
 
+static void
+rspamd_css_dtor(void *p)
+{
+	rspamd::css::css_style_sheet *style =
+			reinterpret_cast<rspamd::css::css_style_sheet *>(p);
+
+	delete style;
+}
+
 rspamd_css
-rspamd_css_parse_style (rspamd_mempool_t *pool, const guchar *begin, gsize len,
+rspamd_css_parse_style(rspamd_mempool_t *pool, const guchar *begin, gsize len,
 						GError **err)
 {
 	auto parse_res = rspamd::css::parse_css(pool, {(const char* )begin, len});
 
 	if (parse_res.has_value()) {
-		return reinterpret_cast<rspamd_css>(parse_res.value().release());
+		/*
+		 * Detach style pointer from the unique_ptr as it will be managed by
+		 * C memory pool
+		 */
+		auto *detached_style = reinterpret_cast<rspamd_css>(parse_res.value().release());
+		rspamd_mempool_add_destructor(pool, rspamd_css_dtor, (void *)detached_style);
+		return detached_style;
 	}
 	else {
 		g_set_error(err, g_quark_from_static_string("css"),

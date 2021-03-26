@@ -87,7 +87,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 					state = selector_process_state::selector_ident_consumed;
 					break;
 				default:
-					msg_debug_css("cannot consume more of a selector, invalid parser token: %*s; expected start",
+					msg_debug_css("cannot consume more of a selector, invalid parser token: %s; expected start",
 							next_tok.token_type_str());
 					can_continue = false;
 					break;
@@ -103,7 +103,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 					state = selector_process_state::selector_ident_consumed;
 				}
 				else {
-					msg_debug_css("cannot consume more of a selector, invalid parser token: %*s; expected ident",
+					msg_debug_css("cannot consume more of a selector, invalid parser token: %s; expected ident",
 							next_tok.token_type_str());
 					can_continue = false;
 				}

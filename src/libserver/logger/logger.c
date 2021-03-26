@@ -300,7 +300,7 @@ rspamd_log_on_fork (GQuark ptype, struct rspamd_config *cfg,
 	}
 }
 
-static inline gboolean
+inline gboolean
 rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		guint module_id)
 {

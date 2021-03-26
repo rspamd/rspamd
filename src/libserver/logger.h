@@ -184,6 +184,9 @@ bool rspamd_conditional_debug_fast_num_id (rspamd_logger_t *logger,
 									guint mod_id,
 									const gchar *module, guint64 id,
 									const gchar *function, const gchar *fmt, ...);
+gboolean rspamd_logger_need_log (rspamd_logger_t *rspamd_log,
+								 GLogLevelFlags log_level,
+								 guint module_id);
 
 /**
  * Function with variable number of arguments support that uses static default logger
