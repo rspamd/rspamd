@@ -411,19 +411,22 @@ local function ip_reputation_filter(task, rule)
     if asn_stats then
       local asn_score = generic_reputation_calc(asn_stats, rule, cfg.scores.asn, task)
       score = score + asn_score
-      table.insert(description_t, string.format('asn: %s(%.2f)', asn, asn_score))
+      table.insert(description_t, string.format('asn: %s(%.2f)',
+              asn, asn_score))
     end
     if country_stats then
       local country_score = generic_reputation_calc(country_stats, rule,
           cfg.scores.country, task)
       score = score + country_score
-      table.insert(description_t, string.format('country: %s(%.2f)', country, country_score))
+      table.insert(description_t, string.format('country: %s(%.2f)',
+              country, country_score))
     end
     if ip_stats then
       local ip_score = generic_reputation_calc(ip_stats, rule, cfg.scores.ip,
         task)
       score = score + ip_score
-      table.insert(description_t, string.format('ip: %s(%.2f)', ip, ip_score))
+      table.insert(description_t, string.format('ip: %s(%.2f)',
+              tostring(ip), ip_score))
     end
 
     if math.abs(score) > 0.001 then

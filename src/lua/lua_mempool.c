@@ -524,8 +524,10 @@ lua_mempool_get_variable (lua_State *L)
 
 				return nvar;
 			}
-
-			lua_pushstring (L, value);
+			else {
+				/* No type specified, return string */
+				lua_pushstring(L, value);
+			}
 		}
 		else {
 			lua_pushnil (L);
