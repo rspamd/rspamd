@@ -18,6 +18,7 @@
 #include "css_tokeniser.hxx"
 #include "css_selector.hxx"
 #include "css_rule.hxx"
+#include "css_util.hxx"
 #include "css.hxx"
 #include "fmt/core.h"
 
@@ -159,6 +160,9 @@ public:
 		return tl::make_unexpected(error);
 	}
 
+	/* Helper parser methods */
+	bool need_unescape(const std::string_view &sv);
+
 private:
 	std::unique_ptr<css_style_sheet> style_object;
 	std::unique_ptr<css_tokeniser> tokeniser;
@@ -169,9 +173,6 @@ private:
 	int rec_level = 0;
 	const int max_rec = 20;
 	bool eof = false;
-
-	/* Helper parser methods */
-	bool need_unescape(const std::string_view &sv);
 
 	/* Consumers */
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
@@ -684,8 +685,24 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
 		tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>
 {
 	css_parser parser(pool);
+	std::string_view processed_input;
 
-	if (parser.consume_input(st)) {
+	if (parser.need_unescape(st)) {
+		processed_input = rspamd::css::unescape_css(pool, st);
+	}
+	else {
+		/* Lowercase inplace */
+		auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, st.length()));
+		auto *p = nspace;
+
+		for (const auto c : st) {
+			*p++ = g_ascii_tolower(c);
+		}
+
+		processed_input = std::string_view{nspace, (std::size_t)(p - nspace)};
+	}
+
+	if (parser.consume_input(processed_input)) {
 		return parser.get_object_maybe();
 	}
 

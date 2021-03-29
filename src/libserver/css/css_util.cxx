@@ -23,7 +23,7 @@ namespace rspamd::css {
 std::string_view unescape_css(rspamd_mempool_t *pool,
 							  const std::string_view &sv)
 {
-	auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, sv.length ()));
+	auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, sv.length()));
 	auto *d = nspace;
 	auto nleft = sv.length ();
 
@@ -38,20 +38,20 @@ std::string_view unescape_css(rspamd_mempool_t *pool,
 	auto escape_offset = 0, i = 0;
 
 #define MAYBE_CONSUME_CHAR(c) do { \
-    if (c == '"' || c == '\'') { \
+    if ((c) == '"' || (c) == '\'') { \
         state = quoted; \
-        quote_char = c; \
+        quote_char = (c); \
         nleft--; \
-        *d++ = c; \
+        *d++ = (c); \
     } \
-    else if (c == '\\') { \
+    else if ((c) == '\\') { \
         escape_offset = i; \
         state = escape; \
     } \
     else { \
         state = normal; \
         nleft--; \
-        *d++ = c; \
+        *d++ = g_ascii_tolower(c); \
     } \
 } while (0)
 
@@ -89,14 +89,14 @@ std::string_view unescape_css(rspamd_mempool_t *pool,
 					else {
 						if (val < 0x80) {
 							/* Trivial case: ascii character */
-							*d++ = (unsigned char)val;
+							*d++ = (unsigned char)g_ascii_tolower(val);
 							nleft --;
 						}
 						else {
 							UChar32 uc = val;
 							auto off = 0;
 							UTF8_APPEND_CHAR_SAFE((uint8_t *) d, off,
-									sv.length (), uc);
+									sv.length (), u_tolower(uc));
 							d += off;
 							nleft -= off;
 						}
