@@ -169,7 +169,7 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 }
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
-								const blocks_gen_functor &next_block_functor)
+								blocks_gen_functor &&next_block_functor)
 	-> css_declarations_block_ptr
 {
 	css_declarations_block_ptr ret;

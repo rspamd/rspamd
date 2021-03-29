@@ -650,13 +650,7 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 {
 	css_parser parser(pool);
 
-	/*
-	 * We use shared ptr here to avoid std::function limitation around
-	 * unique_ptr due to copyable of std::function
-	 * Hence, to elongate consumed_blocks lifetime we need to copy them
-	 * inside lambda.
-	 */
-	std::shared_ptr<css_consumed_block> consumed_blocks = parser.consume_css_blocks(st);
+	auto &&consumed_blocks = parser.consume_css_blocks(st);
 	const auto &rules = consumed_blocks->get_blocks_or_empty();
 
 	auto rules_it = rules.begin();
@@ -664,7 +658,18 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 	auto cur = children.begin();
 	auto last = children.end();
 
-	return [cur, consumed_blocks, last](void) mutable -> const css_consumed_block & {
+	/*
+	 * We use move only wrapper to state the fact that the cosumed blocks
+	 * are moved into the closure, not copied.
+	 * It prevents us from thinking about copies of the blocks and
+	 * functors.
+	 * Mutable lambda is required to copy iterators inside of the closure,
+	 * as, again, it is C++ where lifetime of the objects must be explicitly
+	 * transferred. On the other hand, we could move all stuff inside and remove
+	 * mutable.
+	 */
+	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
+		-> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 

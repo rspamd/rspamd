@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 
+#include "function2/function2.hpp"
 #include "css_tokeniser.hxx"
 #include "parse_error.hxx"
 #include "contrib/expected/expected.hpp"
@@ -181,7 +182,7 @@ private:
 
 extern const css_consumed_block css_parser_eof_block;
 
-using blocks_gen_functor = std::function<const css_consumed_block &(void)>;
+using blocks_gen_functor = fu2::unique_function<const css_consumed_block &(void)>;
 
 class css_style_sheet;
 auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->

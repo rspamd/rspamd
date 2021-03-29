@@ -105,7 +105,7 @@ private:
 using css_declarations_block_ptr = std::shared_ptr<css_declarations_block>;
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
-							 const blocks_gen_functor &next_token_functor)
+								blocks_gen_functor &&next_token_functor)
 	-> css_declarations_block_ptr;
 
 }

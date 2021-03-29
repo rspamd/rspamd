@@ -23,7 +23,7 @@
 namespace rspamd::css {
 
 auto process_selector_tokens(rspamd_mempool_t *pool,
-							 const blocks_gen_functor &next_token_functor)
+							 blocks_gen_functor &&next_token_functor)
 	-> selectors_vec
 {
 	selectors_vec ret;

@@ -119,7 +119,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
 		"${CMAKE_SOURCE_DIR}/contrib/fmt/include"
 		"${CMAKE_SOURCE_DIR}/contrib/doctest"
-		"${CMAKE_BINARY_DIR}/contrib/fu2/include"
+		"${CMAKE_SOURCE_DIR}/contrib/fu2/include"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
