@@ -132,6 +132,7 @@ struct html_content {
 	GPtrArray *images;
 	GPtrArray *blocks;
 	GByteArray *parsed;
+	void *css_style;
 };
 
 /*

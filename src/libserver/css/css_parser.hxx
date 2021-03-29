@@ -185,8 +185,12 @@ extern const css_consumed_block css_parser_eof_block;
 using blocks_gen_functor = fu2::unique_function<const css_consumed_block &(void)>;
 
 class css_style_sheet;
-auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
-	tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>;
+/*
+ * Update the existing stylesheet with another stylesheet
+ */
+auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
+					  css_style_sheet *other)
+	-> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>;
 
 auto get_selectors_parser_functor(rspamd_mempool_t *pool,
 								  const std::string_view &st) -> blocks_gen_functor;

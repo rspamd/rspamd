@@ -3137,7 +3137,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool,
 
 				if (allow_css) {
 					GError *err = NULL;
-					(void)rspamd_css_parse_style (pool, p, end_style, &err);
+					hc->css_style = rspamd_css_parse_style (pool, p, end_style, hc->css_style,
+							&err);
 
 					if (err) {
 						msg_info_pool ("cannot parse css: %e", err);

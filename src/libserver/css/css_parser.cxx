@@ -147,7 +147,17 @@ auto css_consumed_block::debug_str(void) -> std::string {
 class css_parser {
 public:
 	css_parser(void) = delete; /* Require mempool to be set for logging */
-	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {}
+	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {
+		/* Int this case we need to remove style in case of parser error */
+		owned_style = true;
+	}
+
+	/*
+	 * This constructor captures existing via unique_ptr, but it does not
+	 * destruct it on errors (we assume that it is owned somewhere else)
+	 */
+	explicit css_parser(css_style_sheet *existing, rspamd_mempool_t *pool) :
+			style_object(existing), pool(pool) {}
 
 	std::unique_ptr<css_consumed_block> consume_css_blocks(const std::string_view &sv);
 	bool consume_input(const std::string_view &sv);
@@ -163,6 +173,13 @@ public:
 	/* Helper parser methods */
 	bool need_unescape(const std::string_view &sv);
 
+	~css_parser() {
+		if (!owned_style && style_object) {
+			/* Avoid double free */
+			(void)style_object.release();
+		}
+	}
+
 private:
 	std::unique_ptr<css_style_sheet> style_object;
 	std::unique_ptr<css_tokeniser> tokeniser;
@@ -173,6 +190,7 @@ private:
 	int rec_level = 0;
 	const int max_rec = 20;
 	bool eof = false;
+	bool owned_style = false;
 
 	/* Consumers */
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
@@ -560,7 +578,9 @@ bool css_parser::consume_input(const std::string_view &sv)
 		return false;
 	}
 
-	style_object = std::make_unique<css_style_sheet>(pool);
+	if (!style_object) {
+		style_object = std::make_unique<css_style_sheet>(pool);
+	}
 
 	for (auto &&rule : rules) {
 		/*
@@ -686,10 +706,11 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 /*
  * Wrapper for the parser
  */
-auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
-		tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>
+auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
+						  css_style_sheet *other)
+	-> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>
 {
-	css_parser parser(pool);
+	css_parser parser(other, pool);
 	std::string_view processed_input;
 
 	if (parser.need_unescape(st)) {
@@ -712,7 +733,7 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st) ->
 	}
 
 	return tl::make_unexpected(css_parse_error{css_parse_error_type::PARSE_ERROR_INVALID_SYNTAX,
-											"cannot parse input"});
+											   "cannot parse input"});
 }
 
 TEST_SUITE("css parser") {
@@ -752,8 +773,18 @@ TEST_SUITE("css parser") {
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
 				"css", 0);
 		for (const auto &c : cases) {
-			CHECK_UNARY(parse_css(pool, c));
+			CHECK(parse_css(pool, c, nullptr).value().get() != nullptr);
 		}
+
+		/* We now merge all styles together */
+		css_style_sheet *merged = nullptr;
+		for (const auto &c : cases) {
+			auto ret = parse_css(pool, c, merged);
+			/* Avoid destruction as we are using this to interoperate with C */
+			merged = ret->release();
+		}
+
+		CHECK(merged != nullptr);
 
 		rspamd_mempool_delete(pool);
 	}

@@ -23,11 +23,13 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
-typedef void * rspamd_css;
+typedef void * rspamd_css_ptr;
 
-rspamd_css rspamd_css_parse_style (rspamd_mempool_t *pool,
-								   const guchar *begin,
-								   gsize len, GError **err);
+rspamd_css_ptr rspamd_css_parse_style (rspamd_mempool_t *pool,
+									   const guchar *begin,
+									   gsize len,
+									   rspamd_css_ptr existing_style,
+									   GError **err);
 
 /*
  * Unescape css

@@ -32,19 +32,26 @@ rspamd_css_dtor(void *p)
 	delete style;
 }
 
-rspamd_css
+rspamd_css_ptr
 rspamd_css_parse_style(rspamd_mempool_t *pool, const guchar *begin, gsize len,
-						GError **err)
+					   rspamd_css_ptr existing_style,
+					   GError **err)
 {
-	auto parse_res = rspamd::css::parse_css(pool, {(const char* )begin, len});
+	auto parse_res = rspamd::css::parse_css(pool, {(const char* )begin, len},
+			reinterpret_cast<rspamd::css::css_style_sheet*>(existing_style));
 
 	if (parse_res.has_value()) {
 		/*
 		 * Detach style pointer from the unique_ptr as it will be managed by
 		 * C memory pool
 		 */
-		auto *detached_style = reinterpret_cast<rspamd_css>(parse_res.value().release());
-		rspamd_mempool_add_destructor(pool, rspamd_css_dtor, (void *)detached_style);
+		auto *detached_style = reinterpret_cast<rspamd_css_ptr>(parse_res.value().release());
+
+		/* We attach dtor merely if the existing style is not null */
+		if (!existing_style) {
+			rspamd_mempool_add_destructor(pool, rspamd_css_dtor, (void *) detached_style);
+		}
+
 		return detached_style;
 	}
 	else {
