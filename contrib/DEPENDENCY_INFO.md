@@ -33,3 +33,4 @@
 | frozen        | 1.0.1   | Apache 2            | NO      |                    |
 | fmt           | 7.1.3   | MIT                 | NO      |                    |
 | doctest       | 2.4.5   | MIT                 | NO      |                    |
+| function2     | 4.1.0   | Boost               | NO      |                    |
