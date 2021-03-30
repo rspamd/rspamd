@@ -490,7 +490,7 @@ local function clickhouse_collect(task)
   local from_domain = ''
   local from_user = ''
   if task:has_from('smtp') then
-    local from = task:get_from('smtp')[1]
+    local from = task:get_from({'smtp','orig'})[1]
 
     if from then
       from_domain = from['domain']:lower()
