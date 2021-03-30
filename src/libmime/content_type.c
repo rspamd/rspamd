@@ -441,8 +441,7 @@ rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 					/* Treat as value start */
 					c = p;
 					eqsign_seen = FALSE;
-					state = parse_space;
-					next_state = parse_param_value;
+					state = parse_param_value;
 					p++;
 				} else {
 					eqsign_seen = TRUE;
