@@ -226,6 +226,16 @@ rspamd_postprocess_ct_attributes (rspamd_mempool_t *pool,
 			param->prev = param;
 		}
 
+		gboolean invalid_utf = FALSE;
+
+		param->value.begin = rspamd_mime_header_decode (pool, param->value.begin,
+				param->value.len, &invalid_utf);
+		param->value.len = strlen (param->value.begin);
+
+		if (invalid_utf) {
+			param->flags |= RSPAMD_CONTENT_PARAM_BROKEN;
+		}
+
 		proc (pool, param, procd);
 	}
 }
@@ -269,7 +279,7 @@ rspamd_content_type_postprocess (rspamd_mempool_t *pool,
 		RSPAMD_FTOK_ASSIGN (&srch, "name");
 		if (!rspamd_ftok_icase_equal (&param->name, &srch)) {
 			/* Just lowercase */
-			rspamd_str_lc ((gchar *) param->value.begin, param->value.len);
+			rspamd_str_lc_utf8 ((gchar *) param->value.begin, param->value.len);
 		}
 	}
 }

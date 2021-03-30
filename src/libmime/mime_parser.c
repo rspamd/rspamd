@@ -501,9 +501,9 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 			gsize hlen;
 			cd = NULL;
 
-			if (cur->decoded) {
-				hlen = strlen (cur->decoded);
-				cd = rspamd_content_disposition_parse (cur->decoded, hlen,
+			if (cur->value) {
+				hlen = strlen (cur->value);
+				cd = rspamd_content_disposition_parse (cur->value, hlen,
 						task->task_pool);
 			}
 
@@ -887,7 +887,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	if (hdr != NULL) {
 
 		DL_FOREACH (hdr, cur) {
-			ct = rspamd_content_type_parse (cur->decoded, strlen (cur->decoded),
+			ct = rspamd_content_type_parse (cur->value, strlen (cur->value),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
@@ -1521,7 +1521,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	}
 	else {
 		DL_FOREACH (hdr, cur) {
-			ct = rspamd_content_type_parse (cur->decoded, strlen (cur->decoded),
+			ct = rspamd_content_type_parse (cur->value, strlen (cur->value),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
