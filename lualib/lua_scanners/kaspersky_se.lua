@@ -220,7 +220,7 @@ local function kaspersky_se_check(task, content, digest, rule)
                   rule.log_prefix)
             end
           elseif data == 'CLEAN AND CONTAINS OFFICE MACRO' then
-            common.yield_result(task, rule, 'File contains macros', 0.0, 'encrypted')
+            common.yield_result(task, rule, 'File contains macros', 0.0, 'macro')
             cached = 'MACRO'
           else
             rspamd_logger.errx(task, '%s: unhandled clean response: %s', rule.log_prefix, data)
