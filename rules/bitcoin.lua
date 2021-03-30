@@ -176,7 +176,7 @@ local function is_segwit_bech32_address(task, word)
 end
 
 local normal_wallet_re = [[/\b[13LM][1-9A-Za-z]{25,34}\b/AL{sa_body}]]
-local btc_bleach_re = [[/\b(?:[a-zA-Z]\w+:)?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/AL{sa_body}]]
+local btc_bleach_re = [[/\b(?:(?:[a-zA-Z]\w+:)|(?:bc1))?[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{14,}\b/AL{sa_body}]]
 
 config.regexp['BITCOIN_ADDR'] = {
   description = 'Message has a valid bitcoin wallet address',
