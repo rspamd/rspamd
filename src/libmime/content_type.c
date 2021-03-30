@@ -509,6 +509,7 @@ rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 
 				if (p == end) {
 					/* Last quote: done... */
+					state = parse_space;
 					break;
 				}
 
