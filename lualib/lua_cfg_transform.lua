@@ -367,7 +367,8 @@ return function(cfg)
     -- Perform sanity check for actions
     local actions_defs = {'no action', 'no_action', -- In case if that's added
                           'greylist', 'add header', 'add_header',
-                          'rewrite subject', 'rewrite_subject', 'reject'}
+                          'rewrite subject', 'rewrite_subject', 'quarantine',
+                          'reject', 'discard'}
 
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
             not cfg.actions['accept'] then
