@@ -670,6 +670,14 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 			if (*p == '?') {
 				state = got_more_qmark;
 				qmarks ++;
+
+				/* Skip multiple ? signs */
+				p ++;
+				while (p < end && *p == '?') {
+					p ++;
+				}
+
+				continue;
 			}
 			p ++;
 			break;
