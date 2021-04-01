@@ -43,7 +43,7 @@
   token = (graph - especials)+;
   charset = token;
   encoding = "Q" | "q" | "B" | "b";
-  encoded_text = (print - ("?"))+;
+  encoded_text = (print+ -- ("?="));
   encoded_word = "=?" charset >Start_Charset %End_Charset
     ("*" language)? "?"
     encoding %End_Encoding "?"
