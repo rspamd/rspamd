@@ -44,6 +44,8 @@ context("RFC2047 decoding", function()
       {'v=1; a=rsa-sha256; c=relaxed/relaxed; d=yoni.za.org; s=testdkim1;',
       'v=1; a=rsa-sha256; c=relaxed/relaxed; d=yoni.za.org; s=testdkim1;'},
       {"=?windows-1251?B?xO7q8+zl7fIuc2NyLnV1ZQ==?=", "Документ.scr.uue"},
+      {"=?UTF-8?Q?=20wie=20ist=20es=20Ihnen=20ergangen?.pdf?=", " wie ist es Ihnen ergangen?.pdf"}, -- ? inside
+      {"=?UTF-8?Q?=20wie=20ist=20es=20Ihnen=20ergangen??=", " wie ist es Ihnen ergangen?"}, -- ending ? inside
     }
 
     local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:49")
@@ -52,7 +54,7 @@ context("RFC2047 decoding", function()
       local res = ffi.C.rspamd_mime_header_decode(pool, c[1], #c[1])
       res = ffi.string(res)
       assert_not_nil(res, "cannot decode " .. c[1])
-      assert_equal(res, c[2], res .. " not equal " .. c[2])
+      assert_rspamd_eq({actual = res, expect = c[2]})
 
     end
 
@@ -79,7 +81,7 @@ context("RFC2047 decoding", function()
         local res = ffi.C.rspamd_mime_header_decode(pool, s, #s)
         res = ffi.string(res)
         assert_not_nil(res, "cannot decode " .. s)
-        assert_equal(res, str, res .. " not equal " .. str .. " on " .. tostring(i) .. " iteration")
+        assert_rspamd_eq({actual = res, expect = str})
       end
     end
 
