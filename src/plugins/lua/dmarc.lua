@@ -1577,19 +1577,33 @@ if opts.munging then
     local add_hdrs = {
       ['From'] = { order = 1, value = hdr_encoded },
     }
+    local remove_hdrs = {
+      {['From'] = 0},
+    }
 
+    local nreply = from.addr
     if munging_opts.reply_goes_to_list then
       -- Reply-to goes to the list
-      table.insert(add_hdrs['Reply-To'], {order = 0, value = via_addr})
-    else
-      add_hdrs['Reply-To'] = {order = 0, value = from.addr}
+      nreply = via_addr
     end
+
+    if task:has_header('Reply-To') then
+      -- If we have reply-to header, then we need to insert an additional
+      -- address there
+      local orig_reply = task:get_header_full('Reply-To')[1]
+      if orig_reply.value then
+        nreply = string.format('%s, %s', orig_reply.value, nreply)
+      end
+      remove_hdrs['Reply-To'] = 1
+    end
+
+    add_hdrs['Reply-To'] = {order = 0, value = nreply}
 
     add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded}
     lua_mime.modify_headers(task, {
-      remove = {['From'] = 0},
+      remove = remove_hdrs,
       add = add_hdrs
-      })
+    })
     lua_util.debugm(N, task, 'munged DMARC header for %s: %s -> %s',
             from.domain, hdr_encoded, from.addr)
     rspamd_logger.infox(task, 'munged DMARC header for %s', from.addr)
