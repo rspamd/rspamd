@@ -258,6 +258,7 @@ struct rspamd_lua_text *lua_check_text (lua_State *L, gint pos);
 /**
  * Checks for a text or a string. In case of string a pointer to static structure is returned.
  * So it should not be reused or placed to Lua stack anyhow!
+ * However, you can use this function up to 4 times and have distinct static structures
  * @param L
  * @param pos
  * @return

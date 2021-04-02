@@ -1527,17 +1527,16 @@ static gint
 lua_util_strlen_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str;
-	gsize len;
+	struct rspamd_lua_text *t;
 
-	str = lua_tolstring (L, 1, &len);
+	t = lua_check_text_or_string (L, 1);
 
-	if (str) {
+	if (t) {
 		gint32 i = 0, nchars = 0;
 		UChar32 uc;
 
-		while (i < len) {
-			U8_NEXT ((guint8 *) str, i, len, uc);
+		while (i < t->len) {
+			U8_NEXT ((guint8 *)t->start, i, t->len, uc);
 			nchars ++;
 		}
 
@@ -1554,26 +1553,33 @@ static gint
 lua_util_lower_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str;
+	struct rspamd_lua_text *t;
+
 	gchar *dst;
-	gsize len;
 	UChar32 uc;
 	UBool err = 0;
 	gint32 i = 0, j = 0;
 
-	str = lua_tolstring (L, 1, &len);
+	t = lua_check_text_or_string (L, 1);
 
-	if (str) {
-		dst = g_malloc (len);
+	if (t) {
+		dst = g_malloc (t->len);
 
-		while (i < len && err == 0) {
-			U8_NEXT ((guint8 *) str, i, len, uc);
+		while (i < t->len && err == 0) {
+			U8_NEXT ((guint8 *) t->start, i, t->len, uc);
 			uc = u_tolower (uc);
-			U8_APPEND (dst, j, len, uc, err);
+			U8_APPEND (dst, j, t->len, uc, err);
 		}
 
-		lua_pushlstring (L, dst, j);
-		g_free (dst);
+		if (lua_isstring (L, 1)) {
+			lua_pushlstring (L, dst, j);
+			g_free (dst);
+		}
+		else {
+			t = lua_new_text (L, dst, j, FALSE);
+			/* We have actually allocated text data before */
+			t->flags |= RSPAMD_TEXT_FLAG_OWN;
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1586,20 +1592,19 @@ static gint
 lua_util_strcasecmp_ascii (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str1, *str2;
-	gsize len1, len2;
+	struct rspamd_lua_text *t1, *t2;
 	gint ret = -1;
 
-	str1 = lua_tolstring (L, 1, &len1);
-	str2 = lua_tolstring (L, 2, &len2);
+	t1 = lua_check_text_or_string (L, 1);
+	t2 = lua_check_text_or_string (L, 2);
 
-	if (str1 && str2) {
+	if (t1 && t2) {
 
-		if (len1 == len2) {
-			ret = g_ascii_strncasecmp (str1, str2, len1);
+		if (t1->len == t2->len) {
+			ret = rspamd_lc_cmp (t1->start, t2->start, t1->len);
 		}
 		else {
-			ret = len1 - len2;
+			ret = t1->len - t2->len;
 		}
 	}
 	else {
@@ -1614,20 +1619,19 @@ static gint
 lua_util_strequal_caseless (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str1, *str2;
-	gsize len1, len2;
+	struct rspamd_lua_text *t1, *t2;
 	gint ret = -1;
 
-	str1 = lua_tolstring (L, 1, &len1);
-	str2 = lua_tolstring (L, 2, &len2);
+	t1 = lua_check_text_or_string (L, 1);
+	t2 = lua_check_text_or_string (L, 2);
 
-	if (str1 && str2) {
+	if (t1 && t2) {
 
-		if (len1 == len2) {
-			ret = rspamd_lc_cmp (str1, str2, len1);
+		if (t1->len == t2->len) {
+			ret = rspamd_lc_cmp (t1->start, t2->start, t1->len);
 		}
 		else {
-			ret = len1 - len2;
+			ret = t1->len - t2->len;
 		}
 	}
 	else {
