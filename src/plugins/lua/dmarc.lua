@@ -1577,9 +1577,7 @@ if opts.munging then
     local add_hdrs = {
       ['From'] = { order = 1, value = hdr_encoded },
     }
-    local remove_hdrs = {
-      {['From'] = 0},
-    }
+    local remove_hdrs = {['From'] = 0}
 
     local nreply = from.addr
     if munging_opts.reply_goes_to_list then
