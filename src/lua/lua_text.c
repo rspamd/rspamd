@@ -288,19 +288,26 @@ lua_check_text_or_string (lua_State * L, gint pos)
 		return ud ? (struct rspamd_lua_text *) ud : NULL;
 	}
 	else if (pos_type == LUA_TSTRING) {
-		/* Fake static lua_text */
-		static struct rspamd_lua_text fake_text;
+		/*
+		 * Fake static lua_text, we allow to use this function multiple times
+		 * by having a small array of static structures.
+		 */
+		static int cur_txt_idx = 0;
+		static struct rspamd_lua_text fake_text[4];
 		gsize len;
+		int sel_idx;
 
-		fake_text.start = lua_tolstring (L, pos, &len);
+		sel_idx = cur_txt_idx++ % G_N_ELEMENTS (fake_text);
+		fake_text[sel_idx].start = lua_tolstring (L, pos, &len);
+
 		if (len >= G_MAXUINT) {
 			return NULL;
 		}
 
-		fake_text.len = len;
-		fake_text.flags = RSPAMD_TEXT_FLAG_FAKE;
+		fake_text[sel_idx].len = len;
+		fake_text[sel_idx].flags = RSPAMD_TEXT_FLAG_FAKE;
 
-		return &fake_text;
+		return &fake_text[sel_idx];
 	}
 
 	return NULL;
