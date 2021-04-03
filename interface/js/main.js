@@ -4,7 +4,7 @@ requirejs.config({
     baseUrl: "js/lib",
     paths: {
         app: "../app",
-        jquery: "jquery-3.5.1.min",
+        jquery: "jquery-3.6.0.min",
         visibility: "visibility.min",
         bootstrap: "bootstrap.bundle.min",
         codejar: "codejar.min",
