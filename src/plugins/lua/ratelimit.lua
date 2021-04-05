@@ -874,6 +874,14 @@ if opts then
         parent = id
       }
     end
+    if settings.symbol then
+      rspamd_config:register_symbol{
+        type = 'virtual',
+        name = settings.symbol,
+        score = 0.0, -- Might be overridden if needed
+        parent = id
+      }
+    end
 
     rspamd_config:register_symbol {
       type = 'idempotent',
