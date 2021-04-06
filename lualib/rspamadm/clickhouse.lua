@@ -170,7 +170,7 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
   local composites = rspamd_config:get_all_opt('composites')
   local all_symbols = rspamd_config:get_symbols()
   local skip_flags = {
-    nostat = true,
+    no_stat = true,
     skip = true,
     idempotent = true,
     composite = true,
