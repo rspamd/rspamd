@@ -1375,6 +1375,24 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	return cache;
 }
 
+static void
+rspamd_symcache_metric_connect_cb (gpointer k, gpointer v, gpointer ud)
+{
+	struct rspamd_symcache *cache = (struct rspamd_symcache *)ud;
+	const gchar *sym = k;
+	struct rspamd_symbol *s = (struct rspamd_symbol *)v;
+	gdouble weight;
+	struct rspamd_symcache_item *item;
+
+	weight = *s->weight_ptr;
+	item = g_hash_table_lookup (cache->items_by_symbol, sym);
+
+	if (item) {
+		item->st->weight = weight;
+		s->cache_item = item;
+	}
+}
+
 gboolean
 rspamd_symcache_init (struct rspamd_symcache *cache)
 {
@@ -1393,6 +1411,12 @@ rspamd_symcache_init (struct rspamd_symcache *cache)
 	/* Copy saved cache entries */
 	res = rspamd_symcache_load_items (cache, cache->cfg->cache_filename);
 	rspamd_symcache_post_init (cache);
+	/* Connect metric symbols with symcache symbols */
+	if (cache->cfg->symbols) {
+		g_hash_table_foreach(cache->cfg->symbols,
+				rspamd_symcache_metric_connect_cb,
+				cache);
+	}
 
 	return res;
 }
@@ -1482,24 +1506,6 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	cache->total_weight += fabs (item->st->weight);
 }
 
-static void
-rspamd_symcache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
-{
-	struct rspamd_symcache *cache = (struct rspamd_symcache *)ud;
-	const gchar *sym = k;
-	struct rspamd_symbol *s = (struct rspamd_symbol *)v;
-	gdouble weight;
-	struct rspamd_symcache_item *item;
-
-	weight = *s->weight_ptr;
-	item = g_hash_table_lookup (cache->items_by_symbol, sym);
-
-	if (item) {
-		item->st->weight = weight;
-		s->cache_item = item;
-	}
-}
-
 gboolean
 rspamd_symcache_validate (struct rspamd_symcache *cache,
 						  struct rspamd_config *cfg,
@@ -1516,10 +1522,6 @@ rspamd_symcache_validate (struct rspamd_symcache *cache,
 		return FALSE;
 	}
 
-	/* Now adjust symbol weights according to default metric */
-	g_hash_table_foreach (cfg->symbols,
-			rspamd_symcache_metric_validate_cb,
-			cache);
 
 	g_hash_table_foreach (cache->items_by_symbol,
 			rspamd_symcache_validate_cb,
