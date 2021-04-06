@@ -678,6 +678,10 @@ local function get_mime_stat_tokens(task, res, i)
 end
 
 local function get_headers_stat_tokens(task, cf, res, i)
+  --[[
+  -- As discussed with Alexander Moisseev, this feature can skew statistics
+  -- especially when learning is separated from scanning, so learning
+  -- has a different set of tokens where this token can have too high weight
   local hdrs_cksum = task:get_mempool():get_variable("headers_hash")
 
   if hdrs_cksum then
@@ -686,6 +690,7 @@ local function get_headers_stat_tokens(task, cf, res, i)
         res[i])
     i = i + 1
   end
+  ]]--
 
   for k,hdrs in pairs(cf.classify_headers_parsed) do
     for _,hname in ipairs(hdrs) do
