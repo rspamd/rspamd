@@ -168,6 +168,7 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
   local remove = {}
   local known_symbols_list = {}
   local composites = rspamd_config:get_all_opt('composites')
+  local all_symbols = rspamd_config:get_symbols()
   for k, v in pairs(known_symbols) do
     local lower_count, higher_count
     if v.seen_spam > v.seen_ham then
@@ -179,6 +180,8 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
     end
     if composites[k] then
       remove[k] = 'composite symbol'
+    elseif (all_symbols[k] or {flags = {}}).flags.nostat then
+      remove[k] = 'nostat symbol'
     elseif lower_count / higher_count >= 0.95 then
       remove[k] = 'weak ham/spam correlation'
     elseif v.seen / seen_total >= 0.9 then
