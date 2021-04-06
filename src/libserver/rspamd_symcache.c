@@ -1396,24 +1396,25 @@ rspamd_symcache_metric_connect_cb (gpointer k, gpointer v, gpointer ud)
 gboolean
 rspamd_symcache_init (struct rspamd_symcache *cache)
 {
-	gboolean res;
+	gboolean res = TRUE;
 
 	g_assert (cache != NULL);
 
 	cache->reload_time = cache->cfg->cache_reload_time;
 
-	/* Just in-memory cache */
-	if (cache->cfg->cache_filename == NULL) {
-		rspamd_symcache_post_init (cache);
-		return TRUE;
+	if (cache->cfg->cache_filename != NULL) {
+		res = rspamd_symcache_load_items (cache, cache->cfg->cache_filename);
 	}
 
-	/* Copy saved cache entries */
-	res = rspamd_symcache_load_items (cache, cache->cfg->cache_filename);
+	if (!res) {
+		return res;
+	}
+
 	rspamd_symcache_post_init (cache);
+
 	/* Connect metric symbols with symcache symbols */
 	if (cache->cfg->symbols) {
-		g_hash_table_foreach(cache->cfg->symbols,
+		g_hash_table_foreach (cache->cfg->symbols,
 				rspamd_symcache_metric_connect_cb,
 				cache);
 	}
