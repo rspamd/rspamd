@@ -19,6 +19,7 @@ local lua_clickhouse = require "lua_clickhouse"
 local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_upstream_list = require "rspamd_upstream_list"
+local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 
 local E = {}
@@ -133,8 +134,18 @@ local function load_config(config_file)
   local _r,err = rspamd_config:load_ucl(config_file)
 
   if not _r then
-    io.stderr:write(string.format('cannot parse %s: %s',
-        config_file, err))
+    rspamd_logger.errx('cannot load %s: %s', config_file, err)
+    os.exit(1)
+  end
+
+  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  if not _r then
+    rspamd_logger.errx('cannot process %s: %s', config_file, err)
+    os.exit(1)
+  end
+
+  if not rspamd_config:init_modules() then
+    rspamd_logger.errx('cannot init modules when parsing %s', config_file)
     os.exit(1)
   end
 end
