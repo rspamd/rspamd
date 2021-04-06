@@ -4425,6 +4425,9 @@ lua_config_init_subsystem (lua_State *L)
 					return luaL_error (L, "no event base specified");
 				}
 			}
+			else if (strcmp (parts[i], "symcache") == 0) {
+				rspamd_symcache_init (cfg->cache);
+			}
 			else {
 				g_strfreev (parts);
 

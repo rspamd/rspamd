@@ -148,6 +148,8 @@ local function load_config(config_file)
     rspamd_logger.errx('cannot init modules when parsing %s', config_file)
     os.exit(1)
   end
+
+  rspamd_config:init_subsystem('symcache')
 end
 
 local function days_list(days)
