@@ -172,7 +172,7 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
   local composites = rspamd_config:get_all_opt('composites')
   local all_symbols = rspamd_config:get_symbols()
   local skip_flags = {
-    no_stat = true,
+    nostat = true,
     skip = true,
     idempotent = true,
     composite = true,
@@ -189,17 +189,19 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
 
     if composites[k] then
       remove[k] = 'composite symbol'
-    elseif all_symbols[k] then
+    elseif lower_count / higher_count >= 0.95 then
+      remove[k] = 'weak ham/spam correlation'
+    elseif v.seen / seen_total >= 0.9 then
+      remove[k] = 'omnipresent symbol'
+    elseif not all_symbols[k] then
+      remove[k] = 'nonexistent symbol'
+    else
       for fl,_ in pairs(all_symbols[k].flags or {}) do
         if skip_flags[fl] then
           remove[k] = fl .. ' symbol'
           break
         end
       end
-    elseif lower_count / higher_count >= 0.95 then
-      remove[k] = 'weak ham/spam correlation'
-    elseif v.seen / seen_total >= 0.9 then
-      remove[k] = 'omnipresent symbol'
     end
     known_symbols_list[v.id] = {
       seen = v.seen,
@@ -410,6 +412,7 @@ local function handle_neural_train(args)
   end
 
   -- Generate symbols digest
+  table.sort(symbols_profile)
   local symbols_digest = lua_util.table_digest(symbols_profile)
   -- Create list of days to query data for
   local query_days = days_list(args.days)
