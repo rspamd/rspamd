@@ -56,7 +56,7 @@ local function check_html_image(task, min, max)
             if tag then
               if has_anchor_parent(tag) then
                 -- do not trigger on small and unknown size images
-                if i['height'] + i['width'] >= 210 or not i['embedded'] then
+                if i['height'] + i['width'] >= 210 and i['embedded'] then
                   return true
                 end
               end
