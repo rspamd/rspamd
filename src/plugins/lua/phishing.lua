@@ -182,6 +182,12 @@ local function phishing_cb(task)
   end
 
   -- Process all urls
+  local dmarc_dom
+  if task:has_symbol('DMARC_POLICY_ALLOW') then
+    local dsym = task:get_symbol('DMARC_POLICY_ALLOW')[1]
+    dmarc_dom = dsym.options[1]
+  end
+
   local urls = task:get_urls() or {}
   for _,url in ipairs(urls) do
     local function do_loop_iter() -- to emulate continue
@@ -208,6 +214,12 @@ local function phishing_cb(task)
         local ptld = purl:get_tld()
 
         if not ptld or not tld then
+          return
+        end
+
+        if dmarc_dom and tld == dmarc_dom then
+          lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc domain', tld,
+                  ptld)
           return
         end
 
@@ -439,6 +451,9 @@ if opts then
       name = symbol,
       callback = phishing_cb
     })
+
+    -- To exclude from domains for dmarc verified messages
+    rspamd_config:register_dependency(symbol, 'DMARC_CHECK')
 
     if opts['generic_service_symbol'] then
       generic_service_symbol = opts['generic_service_symbol']
