@@ -394,7 +394,7 @@ rspamd_config.HTTP_TO_HTTPS = {
             if (not u) then return false end
             local url_proto = u:get_protocol()
 
-            if (not url_proto == 'http') then return false end
+            if url_proto ~= 'http' then return false end
             -- Capture matches for http in href to https in visible part only
             found = true
             found_opts = u:get_host()
