@@ -183,8 +183,9 @@ local function phishing_cb(task)
 
   -- Process all urls
   local dmarc_dom
-  if task:has_symbol('DMARC_POLICY_ALLOW') then
-    local dsym = task:get_symbol('DMARC_POLICY_ALLOW')[1]
+  local dsym = task:get_symbol('DMARC_POLICY_ALLOW')
+  if dsym then
+    dsym = dsym[1] -- legacy stuff, need to take the first element
     dmarc_dom = dsym.options[1]
   end
 
