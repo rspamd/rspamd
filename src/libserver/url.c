@@ -1715,11 +1715,16 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 		slen += INET6_ADDRSTRLEN;
 	}
 
+	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+		slen += sizeof ("65535") - 1;
+	}
+
 	/* Allocate new string to build it from IP */
 	strbuf = rspamd_mempool_alloc (pool, slen + 1);
 	r += rspamd_snprintf (strbuf + r, slen - r, "%*s",
 			(gint)(uri->hostshift),
 			uri->string);
+
 	uri->hostshift = r;
 	uri->tldshift = r;
 	start_offset = strbuf + r;
@@ -1730,6 +1735,12 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 
 	/* Reconstruct URL */
+	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+		p = strbuf + r;
+		start_offset = p + 1;
+		r += rspamd_snprintf (strbuf + r, slen - r, ":%ud",
+				(unsigned int)uri->port);
+	}
 	if (uri->datalen > 0) {
 		p = strbuf + r;
 		start_offset = p + 1;

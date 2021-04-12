@@ -719,6 +719,16 @@ lua_url_to_table (lua_State *L)
 	return 1;
 }
 
+static rspamd_mempool_t *static_lua_url_pool;
+
+RSPAMD_CONSTRUCTOR(rspamd_urls_static_pool_ctor) {
+	static_lua_url_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"static_lua_url", 0);
+}
+
+RSPAMD_DESTRUCTOR(rspamd_urls_static_pool_dtor) {
+	rspamd_mempool_delete (static_lua_url_pool);
+}
 
 /***
  * @function url.create([mempool,] str, [{flags_table}])
@@ -742,15 +752,11 @@ lua_url_create (lua_State *L)
 	}
 	else {
 		own_pool = TRUE;
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "url", 0);
+		pool = static_lua_url_pool;
 		text = luaL_checklstring (L, 1, &length);
 	}
 
 	if (pool == NULL || text == NULL) {
-		if (own_pool && pool) {
-			rspamd_mempool_delete (pool);
-		}
-
 		return luaL_error (L, "invalid arguments");
 	}
 	else {
@@ -781,10 +787,6 @@ lua_url_create (lua_State *L)
 				}
 			}
 		}
-	}
-
-	if (own_pool && pool) {
-		rspamd_mempool_delete (pool);
 	}
 
 	return 1;
