@@ -186,7 +186,9 @@ local function phishing_cb(task)
   local dsym = task:get_symbol('DMARC_POLICY_ALLOW')
   if dsym then
     dsym = dsym[1] -- legacy stuff, need to take the first element
-    dmarc_dom = dsym.options[1]
+    if dsym.options then
+      dmarc_dom = dsym.options[1]
+    end
   end
 
   local urls = task:get_urls() or {}
