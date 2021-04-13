@@ -10,7 +10,7 @@ import time
 import dummy_killer
 
 PORT = 18080
-HOST_NAME = '127.0.0.1'
+HOST_NAME = '0.0.0.0'
 
 PID = "/tmp/dummy_http.pid"
 
@@ -22,10 +22,23 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         self.protocol_version = "HTTP/1.1" # allow connection: keep-alive
 
     def do_HEAD(self):
-        self.send_response(200)
+        if self.path == "/redirect1":
+            self.send_response(301)
+            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/hello")
+        elif self.path == "/redirect2":
+            self.send_response(301)
+            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect1")
+        elif self.path == "/redirect3":
+            self.send_response(301)
+            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect4")
+        elif self.path == "/redirect4":
+            self.send_response(301)
+            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect3")
+        else:
+            self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.log_message("to be closed: " + self.close_connection)
+        self.log_message("to be closed: " + repr(self.close_connection))
 
     def do_GET(self):
         response = b"hello world"
