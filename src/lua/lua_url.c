@@ -975,7 +975,7 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 			if (url->flags & cb->flags_exclude_mask) {
 				return;
 			}
-			if (url->flags != (url->flags & cb->flags_mask)) {
+			if ((url->flags & cb->flags_mask) != 0) {
 				return;
 			}
 			break;
