@@ -228,9 +228,11 @@ rspamd_postprocess_ct_attributes (rspamd_mempool_t *pool,
 
 		gboolean invalid_utf = FALSE;
 
-		param->value.begin = rspamd_mime_header_decode (pool, param->value.begin,
-				param->value.len, &invalid_utf);
-		param->value.len = strlen (param->value.begin);
+		if (param->value.begin != NULL && param->value.len > 0) {
+			param->value.begin = rspamd_mime_header_decode(pool, param->value.begin,
+					param->value.len, &invalid_utf);
+			param->value.len = strlen(param->value.begin);
+		}
 
 		if (invalid_utf) {
 			param->flags |= RSPAMD_CONTENT_PARAM_BROKEN;

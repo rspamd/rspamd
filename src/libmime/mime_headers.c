@@ -1911,6 +1911,10 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 
 					raw_value = ucl_object_tolstring (value, &raw_len);
 
+					if (raw_len == 0) {
+						continue;
+					}
+
 					struct rspamd_mime_header *nhdr = rspamd_mempool_alloc0 (
 							task->task_pool, sizeof (*nhdr));
 
