@@ -1252,7 +1252,7 @@ lua_url_cbdata_fill_exclude_include (lua_State *L,
 			}
 		}
 	}
-	else if (pos_arg_type == LUA_TNIL) {
+	else if (pos_arg_type == LUA_TNIL || pos_arg_type == LUA_TNONE) {
 		/* Include all flags */
 		include_flags_mask = ~0U;
 	}
@@ -1280,7 +1280,7 @@ lua_url_cbdata_fill_exclude_include (lua_State *L,
 			}
 		}
 	}
-	else if (pos_arg_type == LUA_TNIL) {
+	else if (pos_arg_type == LUA_TNIL || pos_arg_type == LUA_TNONE) {
 		/* Empty all exclude flags */
 		exclude_flags_mask = 0U;
 	}
