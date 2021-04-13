@@ -814,29 +814,37 @@ local function reputation_dns_get_token(task, rule, prefix, token, continuation_
   local function dns_cb(_, _, results, err)
     if err and (err ~= 'requested record is not found' and
         err ~= 'no records with this name') then
-      rspamd_logger.errx(task, 'error looking up %s: %s', dns_name, err)
+      rspamd_logger.warnx(task, 'error looking up %s: %s', dns_name, err)
     end
 
     lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 err=%3 list=%4',
         dns_name, results, err, rule.backend.config.list)
 
     -- Now split tokens to list of values
-    if results  then
-      local values = {}
-      -- Format: key1=num1;key2=num2...keyn=numn
-      fun.each(function(e)
-        local vals = lua_util.rspamd_str_split(e, "=")
-        if vals and #vals == 2 then
-          local nv = tonumber(vals[2])
-          if nv then
-            values[vals[1]] = nv
-          end
-        end
+    if results and results[1]  then
+      -- Format: num_messages;sc1;sc2...scn
+      local dns_tokens = lua_util.rspamd_str_split(results[1], ";")
+      -- Convert all to numbers excluding any possible non-numbers
+      dns_tokens = fun.totable(fun.filter(function(e)
+        return type(e) == 'number'
       end,
-          lua_util.rspamd_str_split(results[1], ";"))
+      fun.map(function(e)
+        local n = tonumber(e)
+        if n then return n end
+        return "BAD"
+      end, dns_tokens)))
 
-      continuation_cb(nil, dns_name, values)
+      if #dns_tokens < 2 then
+        rspamd_logger.warnx(task, 'cannot parse response for reputation token %s: %s',
+                dns_name, results[1])
+        continuation_cb(results, dns_name, nil)
+      else
+        local cnt = table.remove(dns_tokens, 1)
+        continuation_cb(nil, dns_name, { cnt, dns_tokens })
+      end
     else
+      rspamd_logger.messagex(task, 'invalid response for reputation token %s: %s',
+              dns_name, results[1])
       continuation_cb(results, dns_name, nil)
     end
   end
