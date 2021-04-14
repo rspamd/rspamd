@@ -209,7 +209,7 @@ local function dkim_reputation_idempotent(task, rule)
     for dom,res in pairs(requests) do
       -- tld + "." + check_result, e.g. example.com.+ - reputation for valid sigs
       local query = string.format('%s.%s', dom, res)
-      rule.backend.set_token(task, rule, nil, query, sc, 'string')
+      rule.backend.set_token(task, rule, nil, query, sc)
     end
   end
 end
@@ -335,7 +335,7 @@ local function url_reputation_idempotent(task, rule)
 
   if sc then
     for _,tld in ipairs(requests) do
-      rule.backend.set_token(task, rule, nil, tld[1], sc, 'string')
+      rule.backend.set_token(task, rule, nil, tld[1], sc)
     end
   end
 end
@@ -508,13 +508,13 @@ local function ip_reputation_idempotent(task, rule)
   local sc = extract_task_score(task, rule)
   if sc then
     if asn then
-      rule.backend.set_token(task, rule, cfg.asn_prefix, asn, sc, 'string')
+      rule.backend.set_token(task, rule, cfg.asn_prefix, asn, sc, nil, 'string')
     end
     if country then
-      rule.backend.set_token(task, rule, cfg.country_prefix, country, sc, 'string')
+      rule.backend.set_token(task, rule, cfg.country_prefix, country, sc, nil, 'string')
     end
 
-    rule.backend.set_token(task, rule, cfg.ip_prefix, ip, sc, 'ip')
+    rule.backend.set_token(task, rule, cfg.ip_prefix, ip, sc, nil, 'ip')
   end
 end
 
@@ -586,7 +586,7 @@ local function spf_reputation_idempotent(task, rule)
 
   lua_util.debugm(N, task, 'set spf record %s -> %s = %s',
       spf_record, hkey, sc)
-  rule.backend.set_token(task, rule, nil, hkey, sc, 'string')
+  rule.backend.set_token(task, rule, nil, hkey, sc)
 end
 
 
@@ -680,12 +680,12 @@ local function generic_reputation_idempotent(task, rule)
       fun.each(function(e)
         lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
             rule['symbol'], e, sc)
-        rule.backend.set_token(task, rule, nil, e, sc, 'string')
+        rule.backend.set_token(task, rule, nil, e, sc)
       end, selector_res)
     else
       lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
           rule['symbol'], selector_res, sc)
-      rule.backend.set_token(task, rule, nil, selector_res, sc, 'string')
+      rule.backend.set_token(task, rule, nil, selector_res, sc)
     end
   end
 end
@@ -743,7 +743,7 @@ local function gen_token_key(prefix, token, rule)
   if prefix then
     token = prefix .. token
   end
-  local res = prefix
+  local res = token
   if rule.backend.config.hashed then
     local hash_alg = rule.backend.config.hash_alg or "blake2"
     local encoding = "base32"
@@ -948,7 +948,7 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
 end
 
 local function reputation_redis_get_token(task, rule, prefix, token, continuation_cb, token_type)
-  if token_type == 'ip' then
+  if token_type and token_type == 'ip' then
     token = tostring(token)
   end
   local key = gen_token_key(prefix, token, rule)
@@ -986,7 +986,7 @@ local function reputation_redis_get_token(task, rule, prefix, token, continuatio
 end
 
 local function reputation_redis_set_token(task, rule, prefix, token, sc, continuation_cb, token_type)
-  if token_type == 'ip' then
+  if token_type and token_type == 'ip' then
     token = tostring(token)
   end
   local key = gen_token_key(prefix, token, rule)
