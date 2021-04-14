@@ -45,26 +45,26 @@ struct rspamd_url_tag {
 	struct rspamd_url_tag *prev, *next;
 };
 
+
 struct rspamd_url {
 	gchar *string;
+	gchar *raw;
 
 	gchar *visible_part;
 	struct rspamd_url *phished_url;
 
 	guint32 flags;
 
-	guint16 protocol;
-	guint16 protocollen;
-	guint16 port;
+	guint8 protocol;
+	guint8 protocollen;
 
+	guint16 port;
 	guint16 usershift;
 	guint16 hostshift;
 	guint16 datashift;
 	guint16 queryshift;
 	guint16 fragmentshift;
 	guint16 tldshift;
-
-
 	guint16 userlen;
 	guint16 hostlen;
 	guint16 datalen;
@@ -72,8 +72,8 @@ struct rspamd_url {
 	guint16 fragmentlen;
 	guint16 tldlen;
 	guint16 count;
-
 	guint16 urllen;
+	guint16 rawlen;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -106,7 +106,7 @@ enum rspamd_url_protocol {
 	PROTOCOL_HTTPS = 1u << 3u,
 	PROTOCOL_MAILTO = 1u << 4u,
 	PROTOCOL_TELEPHONE = 1u << 5u,
-	PROTOCOL_UNKNOWN = 1u << 15u,
+	PROTOCOL_UNKNOWN = 1u << 7u,
 };
 
 enum rspamd_url_parse_flags {

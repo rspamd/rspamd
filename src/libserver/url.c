@@ -2225,6 +2225,9 @@ rspamd_url_parse (struct rspamd_url *uri,
 		len = end - uristring;
 	}
 
+	uri->raw = p;
+	uri->rawlen = len;
+
 	if (flags & RSPAMD_URL_FLAG_MISSINGSLASHES) {
 		len += 2;
 		uri->string = rspamd_mempool_alloc (pool, len + 1);
