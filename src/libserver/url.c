@@ -428,22 +428,24 @@ const gchar *
 rspamd_url_strerror (int err)
 {
 	switch (err) {
-		case URI_ERRNO_OK:
-			return "Parsing went well";
-		case URI_ERRNO_EMPTY:
-			return "The URI string was empty";
-		case URI_ERRNO_INVALID_PROTOCOL:
-			return "No protocol was found";
-		case URI_ERRNO_BAD_FORMAT:
-			return "Bad URL format";
-		case URI_ERRNO_BAD_ENCODING:
-			return "Invalid symbols encoded";
-		case URI_ERRNO_INVALID_PORT:
-			return "Port number is bad";
-		case URI_ERRNO_TLD_MISSING:
-			return "TLD part is not detected";
-		case URI_ERRNO_HOST_MISSING:
-			return "Host part is missing";
+	case URI_ERRNO_OK:
+		return "Parsing went well";
+	case URI_ERRNO_EMPTY:
+		return "The URI string was empty";
+	case URI_ERRNO_INVALID_PROTOCOL:
+		return "No protocol was found";
+	case URI_ERRNO_BAD_FORMAT:
+		return "Bad URL format";
+	case URI_ERRNO_BAD_ENCODING:
+		return "Invalid symbols encoded";
+	case URI_ERRNO_INVALID_PORT:
+		return "Port number is bad";
+	case URI_ERRNO_TLD_MISSING:
+		return "TLD part is not detected";
+	case URI_ERRNO_HOST_MISSING:
+		return "Host part is missing";
+	case URI_ERRNO_TOO_LONG:
+		return "URL is too long";
 	}
 
 	return NULL;
@@ -2187,6 +2189,10 @@ rspamd_url_parse (struct rspamd_url *uri,
 		return URI_ERRNO_EMPTY;
 	}
 
+	if (len >= G_MAXUINT16 / 2) {
+		return URI_ERRNO_TOO_LONG;
+	}
+
 	p = uristring;
 	uri->protocol = PROTOCOL_UNKNOWN;
 
@@ -2218,9 +2224,6 @@ rspamd_url_parse (struct rspamd_url *uri,
 	if (end > uristring && (guint) (end - uristring) != len) {
 		len = end - uristring;
 	}
-
-	uri->raw = p;
-	uri->rawlen = len;
 
 	if (flags & RSPAMD_URL_FLAG_MISSINGSLASHES) {
 		len += 2;

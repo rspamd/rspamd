@@ -46,20 +46,25 @@ struct rspamd_url_tag {
 };
 
 struct rspamd_url {
-	gchar *raw;
 	gchar *string;
 
+	gchar *visible_part;
+	struct rspamd_url *phished_url;
+
+	guint32 flags;
+
 	guint16 protocol;
+	guint16 protocollen;
 	guint16 port;
 
-	guint usershift;
-	guint hostshift;
-	guint datashift;
-	guint queryshift;
-	guint fragmentshift;
-	guint tldshift;
+	guint16 usershift;
+	guint16 hostshift;
+	guint16 datashift;
+	guint16 queryshift;
+	guint16 fragmentshift;
+	guint16 tldshift;
 
-	guint16 protocollen;
+
 	guint16 userlen;
 	guint16 hostlen;
 	guint16 datalen;
@@ -68,12 +73,7 @@ struct rspamd_url {
 	guint16 tldlen;
 	guint16 count;
 
-	guint urllen;
-	guint rawlen;
-	guint32 flags;
-
-	gchar *visible_part;
-	struct rspamd_url *phished_url;
+	guint16 urllen;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -95,7 +95,8 @@ enum uri_errno {
 	URI_ERRNO_BAD_ENCODING, /* Bad characters encoding */
 	URI_ERRNO_BAD_FORMAT,
 	URI_ERRNO_TLD_MISSING,
-	URI_ERRNO_HOST_MISSING
+	URI_ERRNO_HOST_MISSING,
+	URI_ERRNO_TOO_LONG,
 };
 
 enum rspamd_url_protocol {

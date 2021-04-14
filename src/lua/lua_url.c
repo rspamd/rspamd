@@ -348,7 +348,7 @@ lua_url_get_raw (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushlstring (L, url->url->raw, url->url->rawlen);
+		lua_pushlstring (L, url->url->string, url->url->urllen);
 	}
 	else {
 		lua_pushnil (L);
