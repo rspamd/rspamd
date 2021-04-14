@@ -1765,7 +1765,8 @@ rspamd_html_url_query_callback (struct rspamd_url *url, gsize start_offset,
 
 	url->flags |= RSPAMD_URL_FLAG_QUERY;
 
-	if (rspamd_url_set_add_or_increase(cbd->url_set, url, false) && cbd->part_urls) {
+	if (rspamd_url_set_add_or_increase (cbd->url_set, url, false)
+		&& cbd->part_urls) {
 		g_ptr_array_add (cbd->part_urls, url);
 	}
 
@@ -1902,10 +1903,22 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 								img->src, fstr.len, NULL);
 
 						if (img->url) {
-							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
+							struct rspamd_url *existing;
 
-							if (rspamd_url_set_add_or_increase(url_set, img->url, false) &&
-								part_urls) {
+							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
+							existing = rspamd_url_set_add_or_return (url_set, img->url);
+
+							if (existing != img->url) {
+								/*
+								 * We have some other URL that could be
+								 * found, e.g. from another part. However,
+								 * we still want to set an image flag on it
+								 */
+								existing->flags |= img->url->flags;
+								existing->count ++;
+							}
+							else if (part_urls) {
+								/* New url */
 								g_ptr_array_add (part_urls, img->url);
 							}
 						}
