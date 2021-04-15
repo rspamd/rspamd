@@ -242,6 +242,7 @@ struct rspamd_url_flag_name {
 		{"query", RSPAMD_URL_FLAG_QUERY, -1},
 		{"content", RSPAMD_URL_FLAG_CONTENT, -1},
 		{"no_tld", RSPAMD_URL_FLAG_NO_TLD, -1},
+		{"truncated", RSPAMD_URL_FLAG_TRUNCATED, -1},
 };
 
 

@@ -1391,12 +1391,22 @@ lua_url_lt (lua_State *L)
 	return 1;
 }
 
-
 static gint
 lua_load_url (lua_State * L)
 {
 	lua_newtable (L);
 	luaL_register (L, NULL, urllib_f);
+
+	/* Push flags */
+	lua_createtable (L, 0, RSPAMD_URL_MAX_FLAG_SHIFT);
+	for (int i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i ++) {
+		guint flag = 1u << i;
+
+		lua_pushinteger (L, flag);
+		lua_setfield (L, -2, rspamd_url_flag_to_string (flag));
+	}
+
+	lua_setfield (L, -2, "flags");
 
 	return 1;
 }
