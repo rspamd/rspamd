@@ -924,6 +924,7 @@ lua_url_get_flags (lua_State *L)
 		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL);
 		PUSH_FLAG (RSPAMD_URL_FLAG_IMAGE);
 		PUSH_FLAG (RSPAMD_URL_FLAG_CONTENT);
+		PUSH_FLAG (RSPAMD_URL_FLAG_TRUNCATED);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1045,15 +1046,22 @@ lua_url_cbdata_fill (lua_State *L,
 
 				for (lua_pushnil (L); lua_next (L, top); lua_pop (L, 1)) {
 					int nmask = 0;
-					const gchar *fname = lua_tostring (L, -1);
 
 
-					if (rspamd_url_flag_from_string (fname, &nmask)) {
-						flags_mask |= nmask;
+					if (lua_type (L, -1) == LUA_TSTRING) {
+						const gchar *fname = lua_tostring (L, -1);
+
+
+						if (rspamd_url_flag_from_string (fname, &nmask)) {
+							flags_mask |= nmask;
+						}
+						else {
+							msg_info ("bad url flag: %s", fname);
+							return FALSE;
+						}
 					}
 					else {
-						msg_info ("bad url flag: %s", fname);
-						return FALSE;
+						flags_mask |= lua_tointeger (L, -1);
 					}
 				}
 
@@ -1241,14 +1249,20 @@ lua_url_cbdata_fill_exclude_include (lua_State *L,
 
 		for (lua_pushnil(L); lua_next(L, pos); lua_pop (L, 1)) {
 			int nmask = 0;
-			const gchar *fname = lua_tostring (L, -1);
 
-			if (rspamd_url_flag_from_string(fname, &nmask)) {
-				include_flags_mask |= nmask;
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				const gchar *fname = lua_tostring (L, -1);
+
+				if (rspamd_url_flag_from_string(fname, &nmask)) {
+					include_flags_mask |= nmask;
+				}
+				else {
+					msg_info ("bad url include flag: %s", fname);
+					return FALSE;
+				}
 			}
 			else {
-				msg_info ("bad url include flag: %s", fname);
-				return FALSE;
+				include_flags_mask |= lua_tointeger (L, -1);
 			}
 		}
 	}
@@ -1269,14 +1283,19 @@ lua_url_cbdata_fill_exclude_include (lua_State *L,
 		for (lua_pushnil(L); lua_next(L, pos); lua_pop (L, 1)) {
 			int nmask = 0;
 
-			const gchar *fname = lua_tostring (L, -1);
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				const gchar *fname = lua_tostring (L, -1);
 
-			if (rspamd_url_flag_from_string(fname, &nmask)) {
-				exclude_flags_mask |= nmask;
+				if (rspamd_url_flag_from_string(fname, &nmask)) {
+					exclude_flags_mask |= nmask;
+				}
+				else {
+					msg_info ("bad url exclude flag: %s", fname);
+					return FALSE;
+				}
 			}
 			else {
-				msg_info ("bad url exclude flag: %s", fname);
-				return FALSE;
+				exclude_flags_mask |= lua_tointeger (L, -1);
 			}
 		}
 	}
