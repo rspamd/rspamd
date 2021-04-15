@@ -1621,6 +1621,10 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->history_file);
 	}
 
+	if (rspamd_main->cfg->cache) {
+		rspamd_symcache_save(rspamd_main->cfg->cache);
+	}
+
 	msg_info_main ("terminating...");
 
 	REF_RELEASE (rspamd_main->cfg);
