@@ -837,8 +837,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			 */
 			gboolean obfuscation_found = FALSE;
 
-			if (g_ascii_strncasecmp (url_str, "http", 4) == 0 &&
-				strstr (url_str, "://") != NULL) {
+			if (len > 4 && g_ascii_strncasecmp (url_text, "http", 4) == 0 &&
+				rspamd_substring_search (url_text, len,"://", 3) != -1) {
 				/* Clearly an obfuscation attempt */
 				obfuscation_found = TRUE;
 			}
