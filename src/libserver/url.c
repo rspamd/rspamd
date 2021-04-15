@@ -2190,7 +2190,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 	}
 
 	if (len >= G_MAXUINT16 / 2) {
-		return URI_ERRNO_TOO_LONG;
+		flags |= RSPAMD_URL_FLAG_TRUNCATED;
+		len = G_MAXUINT16 / 2;
 	}
 
 	p = uristring;
