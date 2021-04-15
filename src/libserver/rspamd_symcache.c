@@ -1406,10 +1406,6 @@ rspamd_symcache_init (struct rspamd_symcache *cache)
 		res = rspamd_symcache_load_items (cache, cache->cfg->cache_filename);
 	}
 
-	if (!res) {
-		return res;
-	}
-
 	rspamd_symcache_post_init (cache);
 
 	/* Connect metric symbols with symcache symbols */
