@@ -129,7 +129,9 @@ rspamd_mempool_entry_new (const gchar *loc)
 
 RSPAMD_CONSTRUCTOR (rspamd_mempool_entries_ctor)
 {
-	mempool_entries = kh_init (mempool_entry);
+	if (mempool_entries == NULL) {
+		mempool_entries = kh_init (mempool_entry);
+	}
 }
 
 RSPAMD_DESTRUCTOR (rspamd_mempool_entries_dtor)
@@ -150,6 +152,10 @@ rspamd_mempool_get_entry (const gchar *loc)
 	khiter_t k;
 	struct rspamd_mempool_entry_point *elt;
 
+	if (G_UNLIKELY (!mempool_entries)) {
+		rspamd_mempool_entries_ctor();
+	}
+
 	k = kh_get (mempool_entry, mempool_entries, loc);
 
 	if (k != kh_end (mempool_entries)) {
@@ -158,9 +164,8 @@ rspamd_mempool_get_entry (const gchar *loc)
 		return elt;
 	}
 
-	return rspamd_mempool_entry_new (loc);
+	return rspamd_mempool_entry_new(loc);
 }
-
 
 static struct _pool_chain *
 rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
