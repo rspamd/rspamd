@@ -2345,7 +2345,10 @@ struct counters_cbdata {
 	struct rspamd_symcache *cache;
 };
 
-#define ROUND_DOUBLE(x) (floor((x) * 100.0) / 100.0)
+/* Leave several digits */
+#define P10(X) (1e##X)
+#define ROUND_DOUBLE_DIGITS(x, dig) (floor((x) * P10(dig)) / P10(dig))
+#define ROUND_DOUBLE(x) ROUND_DOUBLE_DIGITS(x, 3)
 
 static void
 rspamd_symcache_counters_cb (gpointer k, gpointer v, gpointer ud)
@@ -2466,7 +2469,7 @@ rspamd_symcache_resort_cb (EV_P_ ev_timer *w, int revents)
 	struct rspamd_symcache_item *item;
 	guint i;
 	gdouble cur_ticks;
-	static const double decay_rate = 0.7;
+	static const double decay_rate = 0.25;
 
 	cache = cbdata->cache;
 	/* Plan new event */
