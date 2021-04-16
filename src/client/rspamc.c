@@ -1554,14 +1554,14 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 			}
 		}
 		else {
-			if (cmd->need_input) {
+			if (cmd->need_input && !json) {
 				if (!compact) {
 					rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
 							cbdata->filename, diff);
 				}
 			}
 			else {
-				if (!compact) {
+				if (!compact && !json) {
 					rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
 							cmd->name, diff);
 				}
