@@ -1803,7 +1803,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		end--;
 	}
 
-	if (end - p == 0) {
+	if (end - p == 0 || end - p > INET6_ADDRSTRLEN) {
 		return FALSE;
 	}
 
@@ -1832,7 +1832,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 			if (shift < 32 &&
 				((*p == '.' && dots < 3) || (p == end && dots <= 3))) {
 				if (p - c + 1 >= (gint) sizeof (buf)) {
-					msg_err_pool ("invalid numeric url %*.s...: too long",
+					msg_debug_pool ("invalid numeric url %*.s...: too long",
 							INET6_ADDRSTRLEN, c);
 					return FALSE;
 				}
