@@ -130,6 +130,10 @@ local meta_score_alpha = 0.5
 -- Maximum size of regexp checked
 local match_limit = 0
 
+-- Default priority of the scores registered in the metric
+-- Historically this is set to 2 allowing SA scores to override Rspamd scores
+local scores_priority = 2
+
 local function split(str, delim)
   local result = {}
 
@@ -1547,7 +1551,7 @@ local function post_process()
           rspamd_config:set_metric_symbol{
             name = k, score = r['score'],
             description = r['description'],
-            priority = 2,
+            priority = scores_priority,
             one_shot = true
           }
           scores_added[k] = 1
@@ -1670,18 +1674,19 @@ end
 local has_rules = false
 
 if type(section) == "table" then
-  if type(section.pcre_only) == 'table' then
-    pcre_only_regexps = lua_util.list_to_hash(section.pcre_only)
-  end
-  if type(section.alpha) == 'number' then
-    meta_score_alpha = section.alpha
-  end
-  if type(section.match_limit) == 'number' then
-    match_limit = section.match_limit
-  end
+  local keywords = {
+    pcre_only = {'table', function(v) pcre_only_regexps = lua_util.list_to_hash(v) end},
+    alpha = {'number', function(v) meta_score_alpha = tonumber(v) end},
+    match_limit = {'number', function(v) match_limit = tonumber(v) end},
+    scores_priority = {'number', function(v) scores_priority = tonumber(v) end},
+  }
 
   for k, fn in pairs(section) do
-    if k ~= 'pcre_only' and k ~= 'alpha' and k ~= 'match_limit' then
+    local kw = keywords[k]
+    if kw and type(fn) == kw[1] then
+      kw[2](fn)
+    else
+      -- SA rule file
       if type(fn) == 'table' then
         for _, elt in ipairs(fn) do
           local files = util.glob(elt)
@@ -1718,7 +1723,6 @@ if type(section) == "table" then
               rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
             end
           end
-
         end
       end
     end
