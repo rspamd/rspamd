@@ -17,35 +17,12 @@ limitations under the License.
 local fun = require 'fun'
 local meta_functions = require "lua_meta"
 local lua_util = require "lua_util"
+local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
 local ts = require("tableshape").types
 local E = {}
 
-local url_flags_ts = ts.array_of(ts.one_of{
-    'content',
-    'has_port',
-    'has_user',
-    'host_encoded',
-    'html_displayed',
-    'idn',
-    'image',
-    'missing_slahes', -- sic
-    'no_tld',
-    'numeric',
-    'obscured',
-    'path_encoded',
-    'phished',
-    'query',
-    'query_encoded',
-    'redirected',
-    'schema_encoded',
-    'schemaless',
-    'subject',
-    'text',
-    'unnormalised',
-    'url_displayed',
-    'zw_spaces',
-    }):is_optional()
+local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
 
 local function gen_exclude_flags_filter(exclude_flags)
   return function(u)
