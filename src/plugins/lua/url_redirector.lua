@@ -59,7 +59,7 @@ local settings = {
 
 local function adjust_url(task, orig_url, redir_url)
   if type(redir_url) == 'string' then
-    redir_url = rspamd_url.create(task:get_mempool(), redir_url)
+    redir_url = rspamd_url.create(task:get_mempool(), redir_url, {'redirect_target'})
   end
 
   if redir_url then
