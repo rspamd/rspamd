@@ -889,11 +889,16 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 		ucl_object_insert_key (obj, elt, "host", 0, false);
 	}
 
-	elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_PHISHED);
-	ucl_object_insert_key (obj, elt, "phished", 0, false);
+	ucl_object_t *flags = ucl_object_typed_new (UCL_ARRAY);
 
-	elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_REDIRECTED);
-	ucl_object_insert_key (obj, elt, "redirected", 0, false);
+	for (unsigned int i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i ++) {
+		if (url->flags & (1u << i)) {
+			ucl_object_t *fl = ucl_object_fromstring (rspamd_url_flag_to_string (1u << i));
+			ucl_array_append (flags, fl);
+		}
+	}
+
+	ucl_object_insert_key (obj, flags, "flags", 0, false);
 
 	if (url->linked_url) {
 		encoded = rspamd_url_encode (url->linked_url, &enclen, task->task_pool);
