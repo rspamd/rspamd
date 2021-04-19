@@ -475,12 +475,12 @@ lua_url_get_phished (lua_State *L)
 	struct rspamd_lua_url *purl, *url = lua_check_url (L, 1);
 
 	if (url) {
-		if (url->url->phished_url != NULL) {
+		if (url->url->linked_url != NULL) {
 			if (url->url->flags &
 					(RSPAMD_URL_FLAG_PHISHED|RSPAMD_URL_FLAG_REDIRECTED)) {
 				purl = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
-				purl->url = url->url->phished_url;
+				purl->url = url->url->linked_url;
 
 				return 1;
 			}
@@ -535,7 +535,7 @@ lua_url_set_redirected (lua_State *L)
 			redir = lua_check_url (L, -1);
 
 			url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
-			url->url->phished_url = redir->url;
+			url->url->linked_url = redir->url;
 		}
 	}
 	else {
@@ -546,7 +546,7 @@ lua_url_set_redirected (lua_State *L)
 		}
 
 		url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
-		url->url->phished_url = redir->url;
+		url->url->linked_url = redir->url;
 
 		/* Push back on stack */
 		lua_pushvalue (L, 2);
@@ -903,28 +903,9 @@ lua_url_get_flags (lua_State *L)
 
 		lua_createtable (L, 0, 4);
 
-		PUSH_FLAG (RSPAMD_URL_FLAG_PHISHED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_NUMERIC);
-		PUSH_FLAG (RSPAMD_URL_FLAG_OBSCURED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_REDIRECTED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_HTML_DISPLAYED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_FROM_TEXT);
-		PUSH_FLAG (RSPAMD_URL_FLAG_SUBJECT);
-		PUSH_FLAG (RSPAMD_URL_FLAG_HOSTENCODED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMAENCODED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_PATHENCODED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_QUERYENCODED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_MISSINGSLASHES);
-		PUSH_FLAG (RSPAMD_URL_FLAG_IDN);
-		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_PORT);
-		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER);
-		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS);
-		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED);
-		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES);
-		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL);
-		PUSH_FLAG (RSPAMD_URL_FLAG_IMAGE);
-		PUSH_FLAG (RSPAMD_URL_FLAG_CONTENT);
-		PUSH_FLAG (RSPAMD_URL_FLAG_TRUNCATED);
+		for (gint i = 0; i < RSPAMD_URL_MAX_FLAG_SHIFT; i ++) {
+			PUSH_FLAG (1u << i);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

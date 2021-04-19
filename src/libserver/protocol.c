@@ -895,11 +895,11 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 	elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_REDIRECTED);
 	ucl_object_insert_key (obj, elt, "redirected", 0, false);
 
-	if (url->phished_url) {
-		encoded = rspamd_url_encode (url->phished_url, &enclen, task->task_pool);
-		elt = rspamd_protocol_extended_url (task, url->phished_url, encoded,
+	if (url->linked_url) {
+		encoded = rspamd_url_encode (url->linked_url, &enclen, task->task_pool);
+		elt = rspamd_protocol_extended_url (task, url->linked_url, encoded,
 				enclen);
-		ucl_object_insert_key (obj, elt, "orig_url", 0, false);
+		ucl_object_insert_key (obj, elt, "linked_url", 0, false);
 	}
 
 	return obj;

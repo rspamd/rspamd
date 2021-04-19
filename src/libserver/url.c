@@ -243,6 +243,7 @@ struct rspamd_url_flag_name {
 		{"content", RSPAMD_URL_FLAG_CONTENT, -1},
 		{"no_tld", RSPAMD_URL_FLAG_NO_TLD, -1},
 		{"truncated", RSPAMD_URL_FLAG_TRUNCATED, -1},
+		{"redirect_target", RSPAMD_URL_FLAG_REDIRECT_TARGET, -1},
 };
 
 

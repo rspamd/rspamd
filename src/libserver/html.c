@@ -819,7 +819,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 
 					if (!rspamd_url_is_subdomain (&disp_tok, &href_tok)) {
 						href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
-						href_url->phished_url = text_url;
+						href_url->linked_url = text_url;
 						text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 					}
 				}
