@@ -4103,10 +4103,23 @@ lua_task_get_reply_sender (lua_State *L)
 
 	if (task) {
 
-		rh = rspamd_message_get_header_array(task, "Reply-To", FALSE);
+		rh = rspamd_message_get_header_array (task, "Reply-To", FALSE);
 
 		if (rh) {
-			lua_pushstring (L, rh->decoded);
+			GPtrArray *addrs;
+
+			addrs = rspamd_email_address_from_mime (task->task_pool, rh->decoded,
+					strlen (rh->decoded), NULL, -1);
+
+			if (addrs == NULL) {
+				lua_pushnil (L);
+			}
+			else {
+				struct rspamd_email_address *addr;
+
+				addr = (struct rspamd_email_address *)g_ptr_array_index (addrs, 0);
+				lua_pushlstring (L, addr->addr, addr->addr_len);
+			}
 		}
 		else if (MESSAGE_FIELD_CHECK (task, from_mime) &&
 				MESSAGE_FIELD (task, from_mime)->len == 1) {
