@@ -54,6 +54,8 @@ struct alignas(int) css_property {
 	css_property_type type;
 	css_property_flag flag;
 
+	css_property(css_property_type t, css_property_flag fl = css_property_flag::FLAG_NORMAL) :
+			type(t), flag(fl) {}
 	static tl::expected<css_property,css_parse_error> from_token(
 			const css_parser_token &tok);
 

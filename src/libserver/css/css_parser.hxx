@@ -192,8 +192,18 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 					  css_style_sheet *other)
 	-> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>;
 
+/*
+ * Creates a functor to consume css selectors sequence
+ */
 auto get_selectors_parser_functor(rspamd_mempool_t *pool,
 								  const std::string_view &st) -> blocks_gen_functor;
+
+/*
+ * Creates a functor to process a rule definition (e.g. from embedded style tag for
+ * an element)
+ */
+auto get_rules_parser_functor(rspamd_mempool_t *pool,
+							  const std::string_view &st) -> blocks_gen_functor;
 
 }
 

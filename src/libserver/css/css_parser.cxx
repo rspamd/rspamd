@@ -159,7 +159,14 @@ public:
 	explicit css_parser(css_style_sheet *existing, rspamd_mempool_t *pool) :
 			style_object(existing), pool(pool) {}
 
+	/*
+	 * Process input css blocks
+	 */
 	std::unique_ptr<css_consumed_block> consume_css_blocks(const std::string_view &sv);
+	/*
+	 * Process a single css rule
+	 */
+	std::unique_ptr<css_consumed_block> consume_css_rule(const std::string_view &sv);
 	bool consume_input(const std::string_view &sv);
 
 	auto get_object_maybe(void) -> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error> {
@@ -569,6 +576,38 @@ css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<cs
 	return consumed_blocks;
 }
 
+auto
+css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
+{
+	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
+	auto ret = true;
+
+	auto rule_block =
+			std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_simple_block);
+
+	while (!eof && ret) {
+		auto next_token = tokeniser->next_token();
+
+		switch (next_token.type) {
+		case css_parser_token::token_type::eof_token:
+			eof = true;
+			break;
+		case css_parser_token::token_type::whitespace_token:
+			/* Ignore whitespaces */
+			break;
+		default:
+			tokeniser->pushback_token(std::move(next_token));
+			ret = component_value_consumer(rule_block);
+			break;
+		}
+
+	}
+
+	tokeniser.reset(nullptr); /* No longer needed */
+
+	return rule_block;
+}
+
 bool css_parser::consume_input(const std::string_view &sv)
 {
 	auto &&consumed_blocks = consume_css_blocks(sv);
@@ -690,6 +729,32 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 	 */
 	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
 		-> const css_consumed_block & {
+		if (cur != last) {
+			const auto &ret = (*cur);
+
+			++cur;
+
+			return *ret;
+		}
+
+		return css_parser_eof_block;
+	};
+}
+
+auto
+get_rules_parser_functor(rspamd_mempool_t *pool,
+							 const std::string_view &st) -> blocks_gen_functor
+{
+	css_parser parser(pool);
+
+	auto &&consumed_blocks = parser.consume_css_rule(st);
+	const auto &rules = consumed_blocks->get_blocks_or_empty();
+
+	auto cur = rules.begin();
+	auto last = rules.end();
+
+	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
+			-> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 

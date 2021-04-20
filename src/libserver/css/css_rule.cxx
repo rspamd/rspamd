@@ -18,6 +18,9 @@
 #include "css.hxx"
 #include <limits>
 
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
+
 namespace rspamd::css {
 
 /* Class methods */
@@ -111,8 +114,7 @@ namespace rspamd::css {
 
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
-	-> std::optional<css_value>
-{
+-> std::optional<css_value> {
 	if (prop.is_color()) {
 		if (parser_block.is_token()) {
 			/* A single token */
@@ -170,8 +172,7 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								blocks_gen_functor &&next_block_functor)
-	-> css_declarations_block_ptr
-{
+-> css_declarations_block_ptr {
 	css_declarations_block_ptr ret;
 	bool can_continue = true;
 	css_property cur_property{css_property_type::PROPERTY_NYI,
@@ -315,8 +316,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 
 auto
 css_declarations_block::merge_block(const css_declarations_block &other, merge_type how)
-	-> void
-{
+-> void {
 	const auto &other_rules = other.get_rules();
 
 	for (const auto &rule : other_rules) {
@@ -324,7 +324,7 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 
 		if (found_it != rules.end()) {
 			/* Duplicate, need to merge */
-			switch(how) {
+			switch (how) {
 			case merge_type::merge_override:
 				/* Override */
 				rules.insert(rule);
@@ -345,9 +345,38 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 	}
 }
 
-void css_rule::add_value(const css_value &value)
-{
+void css_rule::add_value(const css_value &value) {
 	values.push_back(value);
 }
 
+TEST_SUITE("css rules") {
+	TEST_CASE("simple css rules") {
+		const std::vector<std::pair<const char *, std::vector<css_property>>> cases{
+				{
+					"font-size:12.0pt;line-height:115%",
+	 				{css_property(css_property_type::PROPERTY_FONT_SIZE)}
+	 			},
+				{
+					"font-size:12.0pt;display:none",
+				{css_property(css_property_type::PROPERTY_FONT_SIZE),
+	 				css_property(css_property_type::PROPERTY_DISPLAY)}
+				}
+		};
+
+		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+				"css", 0);
+
+		for (const auto &c : cases) {
+			auto res = process_declaration_tokens(pool,
+					get_rules_parser_functor(pool, c.first));
+
+			CHECK(res.get() != nullptr);
+
+			for (auto i = 0; i < c.second.size(); i ++) {
+				CHECK(res->has_property(c.second[i]));
+			}
+		}
+	}
 }
+
+} // namespace rspamd::css

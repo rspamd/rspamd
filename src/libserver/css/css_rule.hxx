@@ -76,6 +76,7 @@ public:
 
 namespace rspamd::css {
 
+
 class css_declarations_block {
 public:
 	using rule_shared_ptr = std::shared_ptr<css_rule>;
@@ -95,8 +96,8 @@ public:
 		return rules;
 	}
 
-	auto has_rule(const css_rule &rule) const -> bool {
-		return (rules.find(rule) != rules.end());
+	auto has_property(const css_property &prop) const -> bool {
+		return (rules.find(css_rule{prop}) != rules.end());
 	}
 private:
 	robin_hood::unordered_flat_set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
