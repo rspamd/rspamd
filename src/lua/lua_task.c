@@ -4111,7 +4111,7 @@ lua_task_get_reply_sender (lua_State *L)
 			addrs = rspamd_email_address_from_mime (task->task_pool, rh->decoded,
 					strlen (rh->decoded), NULL, -1);
 
-			if (addrs == NULL) {
+			if (addrs == NULL || addrs->len == 0) {
 				lua_pushnil (L);
 			}
 			else {
@@ -4122,7 +4122,7 @@ lua_task_get_reply_sender (lua_State *L)
 			}
 		}
 		else if (MESSAGE_FIELD_CHECK (task, from_mime) &&
-				MESSAGE_FIELD (task, from_mime)->len == 1) {
+				MESSAGE_FIELD (task, from_mime)->len >= 1) {
 			struct rspamd_email_address *addr;
 
 			addr = (struct rspamd_email_address *)g_ptr_array_index (
