@@ -42,19 +42,34 @@ local function extract_text_data(specific)
   return table.concat(tbl, '\n')
 end
 
+
+-- Keys that can have visible urls
+local url_keys = lua_util.list_to_hash{
+  'description',
+  'location',
+  'summary',
+  'organizer',
+  'organiser',
+  'attendee',
+  'url'
+}
+
 local function process_ical(input, mpart, task)
   local control={n='\n', r=''}
   local rspamd_url = require "rspamd_url"
   local escaper = l.Ct((gen_grammar() / function(key, value)
     value = value:gsub("\\(.)", control)
-    key = key:lower()
-    local local_urls = rspamd_url.all(task:get_mempool(), value)
+    key = key:lower():match('^([^;]+)')
 
-    if local_urls and #local_urls > 0 then
-      for _,u in ipairs(local_urls) do
-        lua_util.debugm(N, task, 'ical: found URL in ical %s',
-            tostring(u))
-        task:inject_url(u, mpart)
+    if key and url_keys[key] then
+      local local_urls = rspamd_url.all(task:get_mempool(), value)
+
+      if local_urls and #local_urls > 0 then
+        for _,u in ipairs(local_urls) do
+          lua_util.debugm(N, task, 'ical: found URL in ical key "%s": %s',
+                  key, tostring(u))
+          task:inject_url(u, mpart)
+        end
       end
     end
     lua_util.debugm(N, task, 'ical: ical key %s = "%s"',
