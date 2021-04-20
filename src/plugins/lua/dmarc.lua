@@ -948,10 +948,10 @@ if opts['reporting'] == true then
                  xmlf('footer')})), 73)
         local addr_string = table.concat(list_rcpt, ', ')
 
-        bcc_addrs = lua_util.keys(bcc_addrs)
+        local bcc_addrs_keys = lua_util.keys(bcc_addrs)
         local bcc_string
-        if #bcc_addrs > 0 then
-          bcc_string = table.concat(bcc_addrs, ', ')
+        if #bcc_addrs_keys > 0 then
+          bcc_string = table.concat(bcc_addrs_keys, ', ')
         end
 
         local rhead = lua_util.jinja_template(report_template,
