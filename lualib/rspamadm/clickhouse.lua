@@ -375,7 +375,6 @@ local function handle_neural_train(args)
   local this_where -- which class of messages are we collecting data for
   local ham_rows, spam_rows = {}, {}
   local want_spam, want_ham = true, true -- keep collecting while true
-  local ucl_parser = ucl.parser()
 
   -- Try find profile in config
   local neural_opts = rspamd_config:get_all_opt('neural')
@@ -403,6 +402,7 @@ local function handle_neural_train(args)
         return
       end
     end
+    local ucl_parser = ucl.parser()
     local ok, err = ucl_parser:parse_string(r[args.column_name_vector], 'msgpack')
     if not ok then
       io.stderr:write(string.format("Couldn't parse [%s]: %s", r[args.column_name_vector], err))
