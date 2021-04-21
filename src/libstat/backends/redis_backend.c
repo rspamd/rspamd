@@ -1212,8 +1212,14 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 				}
 			}
 			else {
-				msg_err_task_check ("got invalid reply from redis: %s, array expected",
-						rspamd_redis_type_to_string (reply->type));
+				if (reply->type == REDIS_REPLY_ERROR) {
+					msg_err_task_check ("cannot learn %s: redis error: \"%s\"",
+							rt->stcf->symbol, reply->str);
+				}
+				else {
+					msg_err_task_check ("got invalid reply from redis: %s, array expected",
+							rspamd_redis_type_to_string(reply->type));
+				}
 			}
 
 			msg_debug_stat_redis ("received tokens for %s: %d processed, %d found",
@@ -1264,9 +1270,15 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 			else {
 				if (reply->type != REDIS_REPLY_NIL) {
-					msg_err_task ("bad learned type for %s: %s, nil expected",
-						rt->stcf->symbol,
-						rspamd_redis_type_to_string (reply->type));
+					if (reply->type == REDIS_REPLY_ERROR) {
+						msg_err_task ("cannot learn %s: redis error: \"%s\"",
+								rt->stcf->symbol, reply->str);
+					}
+					else {
+						msg_err_task ("bad learned type for %s: %s, nil expected",
+								rt->stcf->symbol,
+								rspamd_redis_type_to_string(reply->type));
+					}
 				}
 
 				val = 0;

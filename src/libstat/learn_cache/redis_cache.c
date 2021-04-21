@@ -141,7 +141,11 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 				rspamd_strtol (reply->str, reply->len, &val);
 			}
 			else {
-				if (reply->type != REDIS_REPLY_NIL) {
+				if (reply->type == REDIS_REPLY_ERROR) {
+					msg_err_task ("cannot learn %s: redis error: \"%s\"",
+							rt->ctx->stcf->symbol, reply->str);
+				}
+				else if (reply->type != REDIS_REPLY_NIL) {
 					msg_err_task ("bad learned type for %s: %d",
 							rt->ctx->stcf->symbol, reply->type);
 				}

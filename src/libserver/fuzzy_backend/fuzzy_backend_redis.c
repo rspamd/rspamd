@@ -446,6 +446,10 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 				}
 			}
 		}
+		else if (reply->type == REDIS_REPLY_ERROR) {
+			msg_err_redis_session ("fuzzy backend redis error: \"%s\"",
+					reply->str);
+		}
 
 		if (session->callback.cb_check) {
 			session->callback.cb_check (&rep, session->cbdata);
@@ -571,6 +575,10 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 					rep.ts = strtoul (cur->str, NULL, 10);
 				}
 			}
+		}
+		else if (reply->type == REDIS_REPLY_ERROR) {
+			msg_err_redis_session ("fuzzy backend redis error: \"%s\"",
+					reply->str);
 		}
 
 		if (found_elts < 2) {
@@ -738,6 +746,10 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 			}
 		}
 		else {
+			if (reply->type == REDIS_REPLY_ERROR) {
+				msg_err_redis_session ("fuzzy backend redis error: \"%s\"",
+						reply->str);
+			}
 			if (session->callback.cb_count) {
 				session->callback.cb_count (0, session->cbdata);
 			}
@@ -872,6 +884,10 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 			}
 		}
 		else {
+			if (reply->type == REDIS_REPLY_ERROR) {
+				msg_err_redis_session ("fuzzy backend redis error: \"%s\"",
+						reply->str);
+			}
 			if (session->callback.cb_version) {
 				session->callback.cb_version (0, session->cbdata);
 			}
@@ -1373,6 +1389,10 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 			}
 		}
 		else {
+			if (reply->type == REDIS_REPLY_ERROR) {
+				msg_err_redis_session ("fuzzy backend redis error: \"%s\"",
+						reply->str);
+			}
 			if (session->callback.cb_update) {
 				session->callback.cb_update (FALSE, 0, 0, 0, 0, session->cbdata);
 			}
