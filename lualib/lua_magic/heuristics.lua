@@ -427,7 +427,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
 
         local ext, weight = process_top_detected(res)
 
-        if weight and weight >= 40 then
+        if weight and weight >= 40 and mtype ~= 'message' then
           return ext, weight
         end
       end
