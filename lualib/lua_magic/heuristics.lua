@@ -334,6 +334,21 @@ exports.text_part_heuristic = function(part, log_obj, _)
       local n8bit = 0
 
       while b >= 127 and n8bit < remain do
+        -- utf8 part
+        if bit.band(b, 0xe0) == 0xc0 and remain > 1 and
+                bit.band(bytes[idx + 1], 0xc0) == 0x80 then
+          return true,1
+        elseif bit.band(b, 0xf0) == 0xe0 and remain > 2 and
+                bit.band(bytes[idx + 1], 0xc0) == 0x80 and
+                bit.band(bytes[idx + 2], 0xc0) == 0x80 then
+          return true,2
+        elseif bit.band(b, 0xf8) == 0xf0 and remain > 3 and
+                bit.band(bytes[idx + 1], 0xc0) == 0x80 and
+                bit.band(bytes[idx + 2], 0xc0) == 0x80 and
+                bit.band(bytes[idx + 3], 0xc0) == 0x80 then
+          return true,3
+        end
+
         n8bit = n8bit + 1
         idx = idx + 1
         b = bytes[idx]
