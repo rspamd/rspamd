@@ -403,7 +403,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
       is_text = is_span_text(content)
     end
 
-    if is_text then
+    if is_text and mtype ~= 'message' then
       -- Try patterns
       local span_len = math.min(4096, clen)
       local start_span = content:span(1, span_len)
@@ -420,14 +420,14 @@ exports.text_part_heuristic = function(part, log_obj, _)
           end
         end
 
-        if res.html and res.html >= 40 then
+        if res.html and res.html >= 40  then
           -- HTML has priority over something like js...
           return 'html', res.html
         end
 
         local ext, weight = process_top_detected(res)
 
-        if weight and weight >= 40 and mtype ~= 'message' then
+        if weight and weight >= 40 then
           return ext, weight
         end
       end
