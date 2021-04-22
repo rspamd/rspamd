@@ -327,26 +327,23 @@ end
 exports.text_part_heuristic = function(part, log_obj, _)
   -- We get some span of data and check it
   local function is_span_text(span)
-    local function rough_utf8_check(bytes, idx, remain)
+    -- We examine 8 bit content, and we assume it might be localized text
+    -- if it has more than 3 subsequent 8 bit characters
+    local function rough_8bit_check(bytes, idx, remain)
       local b = bytes[idx]
-      if b >= 127 then
-        if bit.band(b, 0xe0) == 0xc0 and remain > 1 and
-            bit.band(bytes[idx + 1], 0xc0) == 0x80 then
-          return true,1
-        elseif bit.band(b, 0xf0) == 0xe0 and remain > 2 and
-            bit.band(bytes[idx + 1], 0xc0) == 0x80 and
-            bit.band(bytes[idx + 2], 0xc0) == 0x80 then
-          return true,2
-        elseif bit.band(b, 0xf8) == 0xf0 and remain > 3 and
-            bit.band(bytes[idx + 1], 0xc0) == 0x80 and
-            bit.band(bytes[idx + 2], 0xc0) == 0x80 and
-            bit.band(bytes[idx + 3], 0xc0) == 0x80 then
-          return true,3
-        end
-        return false
-      else
-        return true,0
+      local n8bit = 0
+
+      while b >= 127 and n8bit < remain do
+        n8bit = n8bit + 1
+        idx = idx + 1
+        b = bytes[idx]
       end
+
+      if n8bit >= 3 then
+        return true,n8bit
+      end
+
+      return false,0
     end
 
     -- Convert to string as LuaJIT can optimise string.sub (and fun.iter) but not C calls
@@ -360,7 +357,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
       if (b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09) then
         non_printable = non_printable + 1
       elseif b >= 127 then
-        local c,nskip = rough_utf8_check(bytes, i, tlen - i)
+        local c,nskip = rough_8bit_check(bytes, i, tlen - i)
 
         if not c then
           non_printable = non_printable + 1
@@ -425,24 +422,33 @@ exports.text_part_heuristic = function(part, log_obj, _)
 
         if res.html and res.html >= 40 then
           -- HTML has priority over something like js...
-          return 'html',res.html
+          return 'html', res.html
         end
 
-        local ext,weight = process_top_detected(res)
+        local ext, weight = process_top_detected(res)
 
         if weight and weight >= 40 then
-          return ext,weight
+          return ext, weight
         end
       end
 
       -- Content type stuff
-      if (mtype == 'text' or mtype == 'application') and (msubtype == 'html' or msubtype == 'xhtml+xml') then
-        return 'html',21
+      if (mtype == 'text' or mtype == 'application') and
+              (msubtype == 'html' or msubtype == 'xhtml+xml') then
+        return 'html', 21
       end
 
       -- Extension stuff
+      local function has_extension(file, ext)
+        local ext_len = ext:len()
+        return file:len() > ext_len + 1
+                and file:sub(-ext_len):lower() == ext
+                and file:sub(-ext_len - 1, -ext_len - 1) == '.'
+      end
+
+
       local fname = part:get_filename()
-      if fname and fname:match('html?$') then
+      if fname and (has_extension(fname, 'htm') or has_extension(fname, 'html')) then
         return 'html',21
       end
 
