@@ -372,6 +372,10 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		}
 
 		if (!compressed) {
+			/* Detect zstd input */
+			if (input->len > 4 && memcmp (input->str, "\x28\xb5\x2f\xfd", 4) == 0) {
+				compressed = TRUE;
+			}
 			body = rspamd_fstring_new_init (input->str, input->len);
 		}
 		else {
@@ -391,18 +395,6 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 				}
 
 				dict_id = -1;
-
-				if (dict_id == 0) {
-					g_set_error (err, RCLIENT_ERROR, errno,
-							"cannot open dictionary %s: %s",
-							comp_dictionary,
-							strerror (errno));
-					g_free (req);
-					g_string_free (input, TRUE);
-					munmap (dict, dict_len);
-
-					return FALSE;
-				}
 			}
 
 			body = rspamd_fstring_sized_new (ZSTD_compressBound (input->len));
