@@ -503,7 +503,9 @@ local function milter_headers(task)
           settings.routines['authentication-results'].remove
     end
 
-    local res = ar.gen_auth_results(task, nil)
+    local res = ar.gen_auth_results(task,
+        lua_util.override_defaults(ar.default_settings,
+            settings.routines['authentication-results']))
 
     if res then
       add_header('authentication-results', res, ';', 1)
