@@ -28,6 +28,8 @@ gint lua_compress_zstd_decompress (lua_State *L);
 gint lua_compress_zlib_compress (lua_State *L);
 gint lua_compress_zlib_decompress (lua_State *L, bool is_gzip);
 
+void luaopen_compress (lua_State *L);
+
 #ifdef  __cplusplus
 }
 #endif
