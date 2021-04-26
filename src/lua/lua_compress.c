@@ -545,6 +545,10 @@ lua_zstd_decompress_stream (lua_State *L)
 	if (ctx && t) {
 		gsize dlen = 0;
 
+		if (t->len == 0) {
+			return lua_zstd_push_error (L, ZSTD_error_init_missing);
+		}
+
 		inb.size = t->len;
 		inb.pos = 0;
 		inb.src = (const void*)t->start;
