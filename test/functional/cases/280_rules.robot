@@ -86,7 +86,7 @@ FROM_NEQ_ENVFROM
 
 PHISH_SENDER_A
   Scan File  ${TESTDIR}/messages/phish_sender.eml
-  Expect Symbol With Score And Exact Options  MULTIPLE_FROM  9.0  any@attack.com,admin@legitimate.com
+  Expect Symbol With Score And Exact Options  MULTIPLE_FROM  9.0  <any@attack.com>  <admin@legitimate.com>
   Expect Symbol With Score And Exact Options  MULTIPLE_UNIQUE_HEADERS  7.0  From
 
 PHISH_SENDER_B

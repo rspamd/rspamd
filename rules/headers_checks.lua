@@ -576,15 +576,8 @@ rspamd_config.MISSING_FROM = {
 rspamd_config.MULTIPLE_FROM = {
   callback = function(task)
     local from = task:get_from('mime')
-    if from and from[1] then
-      if #from > 1 then
-        return true,1.0,table.concat(
-            fun.totable(
-                fun.map(function(a) return a.addr end,
-                    fun.filter(function(a) return a.addr and a.addr ~= '' end,
-                        from))),
-            ',')
-      end
+    if from and from[2] then
+      return true, 1.0, fun.totable(fun.map(function(a) return a.raw end, from))
     end
     return false
   end,
