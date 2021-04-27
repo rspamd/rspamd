@@ -142,7 +142,6 @@ local function check_redis_classifier(cls, cfg)
 end
 
 local function dump_handler(opts)
-  io.write('[\n')
 
   for _,cls in ipairs(classifiers) do
     local res,conn = lua_redis.redis_connect_sync(cls.redis_params, false)
@@ -153,6 +152,7 @@ local function dump_handler(opts)
     end
 
     local cursor = 0
+    local has_hdr = false
     local compress_ctx
     if opts.compress then
       compress_ctx = rspamd_zstd.compress_ctx()
@@ -175,6 +175,10 @@ local function dump_handler(opts)
       local tokens = {}
       local out = {}
 
+      if not has_hdr then
+        out[1] = "{\n"
+        has_hdr = true
+      end
       for _,e in ipairs(elts) do
         conn:add_cmd('HGETALL', {e})
       end
@@ -198,18 +202,18 @@ local function dump_handler(opts)
 
       -- Output keeping track of the commas
       for i,d in ipairs(tokens) do
-        if i == #tokens then
-          out[#out + 1] = rspamd_logger.slog('{"%s": %s}\n', d.key,
+        if cursor == 0 and i == #tokens then
+          out[#out + 1] = rspamd_logger.slog('"%s": %s\n', d.key,
               ucl.to_format(d.data, "json-compact"))
         else
-          out[#out + 1] = rspamd_logger.slog('{"%s": %s},\n', d.key,
+          out[#out + 1] = rspamd_logger.slog('"%s": %s,\n', d.key,
               ucl.to_format(d.data, "json-compact"))
         end
 
       end
 
       if cursor == 0 then
-        out[#out + 1] = ']\n'
+        out[#out + 1] = '}\n'
       end
 
       if compress_ctx then
