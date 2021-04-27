@@ -17,6 +17,9 @@ limitations under the License.
 local lua_redis = require "lua_redis"
 local rspamd_logger = require "rspamd_logger"
 local argparse = require "argparse"
+local rspamd_zstd = require "rspamd_zstd"
+local rspamd_text = require "rspamd_text"
+local ucl = require "ucl"
 
 local N = "statistics_dump"
 local E = {}
@@ -139,6 +142,8 @@ local function check_redis_classifier(cls, cfg)
 end
 
 local function dump_handler(opts)
+  io.write('[\n')
+
   for _,cls in ipairs(classifiers) do
     local res,conn = lua_redis.redis_connect_sync(cls.redis_params, false)
 
@@ -148,6 +153,10 @@ local function dump_handler(opts)
     end
 
     local cursor = 0
+    local compress_ctx
+    if opts.compress then
+      compress_ctx = rspamd_zstd.compress_ctx()
+    end
 
     repeat
       conn:add_cmd('SCAN', {tostring(cursor),
@@ -164,6 +173,7 @@ local function dump_handler(opts)
 
       local elts = results[2]
       local tokens = {}
+      local out = {}
 
       for _,e in ipairs(elts) do
         conn:add_cmd('HGETALL', {e})
@@ -177,14 +187,42 @@ local function dump_handler(opts)
         local r, hash_content = all_results[i], all_results[i + 1]
 
         if r then
-          tokens[elts[(i + 1)/2]] = hash_content
+          -- List to a hash map
+          local data = {}
+          for j=1,#hash_content,2 do
+            data[hash_content[j]] = hash_content[j + 1]
+          end
+          tokens[#tokens + 1] = {key = elts[(i + 1)/2], data = data}
         end
       end
 
-      for hkey,tok in pairs(tokens) do
-        rspamd_logger.messagex('%s: %s', hkey, tok)
+      -- Output keeping track of the commas
+      for i,d in ipairs(tokens) do
+        if i == #tokens then
+          out[#out + 1] = rspamd_logger.slog('{"%s": %s}\n', d.key,
+              ucl.to_format(d.data, "json-compact"))
+        else
+          out[#out + 1] = rspamd_logger.slog('{"%s": %s},\n', d.key,
+              ucl.to_format(d.data, "json-compact"))
+        end
+
       end
 
+      if cursor == 0 then
+        out[#out + 1] = ']\n'
+      end
+
+      if compress_ctx then
+        if cursor == 0 then
+          compress_ctx:stream(rspamd_text.fromtable(out), 'end'):write()
+        else
+          compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
+        end
+      else
+        for _,o in ipairs(out) do
+          io.write(o)
+        end
+      end
     until cursor == 0
   end
 end
