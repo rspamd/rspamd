@@ -165,7 +165,12 @@ rspamd_log_console_log (const gchar *module, const gchar *id,
 		fd = priv->crit_fd;
 	}
 	else {
-		fd = priv->fd;
+		if (priv->log_rspamadm && (level_flags & G_LOG_LEVEL_WARNING)) {
+			fd = priv->crit_fd;
+		}
+		else {
+			fd = priv->fd;
+		}
 	}
 
 #ifndef DISABLE_PTHREAD_MUTEX
