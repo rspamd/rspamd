@@ -183,6 +183,19 @@ lua_thread_resume_full (struct thread_entry *thread_entry,
 #define lua_thread_resume(thread_entry, narg) \
     lua_thread_resume_full (thread_entry, narg, G_STRLOC)
 
+/**
+ * Terminates thread pool entry and fill the pool with another thread entry if needed
+ * @param pool
+ * @param thread_entry
+ * @param loc
+ */
+void
+lua_thread_pool_terminate_entry_full (struct lua_thread_pool *pool,
+								 struct thread_entry *thread_entry,
+								 const gchar *loc);
+#define lua_thread_pool_terminate_entry(pool, thread_entry) \
+    lua_thread_pool_terminate_entry_full (pool, thread_entry, G_STRLOC)
+
 #ifdef  __cplusplus
 }
 #endif
