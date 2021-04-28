@@ -3,7 +3,13 @@ local rspamd_regexp = require 'rspamd_regexp'
 local util = require 'rspamd_util'
 
 reconf['HAS_PHPMAILER_SIG'] = {
-  re = "X-Mailer=/^PHPMailer/Hi || Content-Type=/boundary=\"b[123]_/Hi",
+  -- PHPMailer 6.0.0 and older used hex hash in boundary:
+  -- boundary="b1_2a45d5e29f78d3408e318878b049f474"
+  -- Since 6.0.1 it uses base64 (without =+/):
+  -- boundary="b1_uBN0UPD3n6RU04VPxI54tENiDgaCGoh15l9s73oFnlM"
+  -- boundary="b1_Ez5tmpb4bSqknyUZ1B1hIvLAfR1MlspDEKGioCOXc"
+  -- https://github.com/PHPMailer/PHPMailer/blob/v6.4.0/src/PHPMailer.php#L2660
+  re = [[X-Mailer=/^PHPMailer /H || Content-Type=/boundary="b1_[0-9a-zA-Z]+"/H]],
   description = "PHPMailer signature",
   group = "compromised_hosts"
 }
