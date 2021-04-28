@@ -41,8 +41,8 @@ parser:option "-c --config"
 -- Extract subcommand
 local dump = parser:command "dump d"
                    :description "Dump bayes statistics"
-dump:flag "-s --sort"
-    :description "Sort output"
+dump:flag "-j --json"
+    :description "Json output"
 dump:flag "-c --compress"
     :description "Compress output"
 dump:option "-b --batch-size"
@@ -141,8 +141,89 @@ local function check_redis_classifier(cls, cfg)
   end
 end
 
-local function dump_handler(opts)
+local function redis_map_zip(ar)
+  local data = {}
+  for j=1,#ar,2 do
+    data[ar[j]] = ar[j + 1]
+  end
 
+  return data
+end
+
+local function dump_pattern(conn, pattern, opts, out)
+  local cursor = 0
+  local compress_ctx
+  if opts.compress then
+    compress_ctx = rspamd_zstd.compress_ctx()
+  end
+
+  repeat
+    conn:add_cmd('SCAN', {tostring(cursor),
+                          'MATCH', pattern,
+                          'COUNT', tostring(opts.batch_size)})
+    local ret, results = conn:exec()
+
+    if not ret then
+      rspamd_logger.errx("cannot connect execute scan command: %s", results)
+      os.exit(1)
+    end
+
+    cursor = tonumber(results[1])
+
+    local elts = results[2]
+    local tokens = {}
+
+    for _,e in ipairs(elts) do
+      conn:add_cmd('HGETALL', {e})
+    end
+    -- This function returns many results, each for each command
+    -- So if we have batch 1000, then we would have 1000 tables in form
+    -- [result, {hash_content}]
+    local all_results = {conn:exec()}
+
+    for i=1,#all_results,2 do
+      local r, hash_content = all_results[i], all_results[i + 1]
+
+      if r then
+        -- List to a hash map
+        local data = redis_map_zip(hash_content)
+        tokens[#tokens + 1] = {key = elts[(i + 1)/2], data = data}
+      end
+    end
+
+    -- Output keeping track of the commas
+    for i,d in ipairs(tokens) do
+      if cursor == 0 and i == #tokens or not opts.json then
+        out[#out + 1] = rspamd_logger.slog('"%s": %s\n', d.key,
+            ucl.to_format(d.data, "json-compact"))
+      else
+        out[#out + 1] = rspamd_logger.slog('"%s": %s,\n', d.key,
+            ucl.to_format(d.data, "json-compact"))
+      end
+
+    end
+
+    if opts.json and cursor == 0 then
+      out[#out + 1] = '}}\n'
+    end
+
+    if compress_ctx then
+      if cursor == 0 then
+        compress_ctx:stream(rspamd_text.fromtable(out), 'end'):write()
+      else
+        compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
+      end
+    else
+      for _,o in ipairs(out) do
+        io.write(o)
+      end
+    end
+    out = {}
+  until cursor == 0
+end
+
+local function dump_handler(opts)
+  local patterns_seen = {}
   for _,cls in ipairs(classifiers) do
     local res,conn = lua_redis.redis_connect_sync(cls.redis_params, false)
 
@@ -151,83 +232,41 @@ local function dump_handler(opts)
       os.exit(1)
     end
 
-    local cursor = 0
-    local has_hdr = false
-    local compress_ctx
-    if opts.compress then
-      compress_ctx = rspamd_zstd.compress_ctx()
-    end
-
-    repeat
-      conn:add_cmd('SCAN', {tostring(cursor),
-                            'MATCH', 'RS*_*',
-                            'COUNT', tostring(opts.batch_size)})
-      local ret, results = conn:exec()
+    local function check_keys(sym)
+      local out = {}
+      local spam_keys_pattern = string.format("%s_keys", sym)
+      conn:add_cmd('SMEMBERS', {spam_keys_pattern})
+      local ret,keys = conn:exec()
 
       if not ret then
-        rspamd_logger.errx("cannot connect execute scan command: %s", results)
+        rspamd_logger.errx("cannot execute command to get keys: %s", keys)
         os.exit(1)
       end
 
-      cursor = tonumber(results[1])
+      for _,k in ipairs(keys) do
+        local pat = string.format('%s*_*', k)
+        if not patterns_seen[pat] then
+          conn:add_cmd('HGETALL', {k})
+          local _ret,additional_keys = conn:exec()
 
-      local elts = results[2]
-      local tokens = {}
-      local out = {}
-
-      if not has_hdr then
-        out[1] = "{\n"
-        has_hdr = true
-      end
-      for _,e in ipairs(elts) do
-        conn:add_cmd('HGETALL', {e})
-      end
-      -- This function returns many results, each for each command
-      -- So if we have batch 1000, then we would have 1000 tables in form
-      -- [result, {hash_content}]
-      local all_results = {conn:exec()}
-
-      for i=1,#all_results,2 do
-        local r, hash_content = all_results[i], all_results[i + 1]
-
-        if r then
-          -- List to a hash map
-          local data = {}
-          for j=1,#hash_content,2 do
-            data[hash_content[j]] = hash_content[j + 1]
+          if _ret then
+            if opts.json then
+              out[1] = string.format('{"pattern": "%s", "meta": %s, "keys": {\n',
+                  k, ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
+            else
+              out[1] = string.format('"%s": %s\n', k,
+                  ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
+            end
+            dump_pattern(conn, pat, opts, out)
+            patterns_seen[pat] = true
           end
-          tokens[#tokens + 1] = {key = elts[(i + 1)/2], data = data}
+
         end
       end
+    end
 
-      -- Output keeping track of the commas
-      for i,d in ipairs(tokens) do
-        if cursor == 0 and i == #tokens then
-          out[#out + 1] = rspamd_logger.slog('"%s": %s\n', d.key,
-              ucl.to_format(d.data, "json-compact"))
-        else
-          out[#out + 1] = rspamd_logger.slog('"%s": %s,\n', d.key,
-              ucl.to_format(d.data, "json-compact"))
-        end
-
-      end
-
-      if cursor == 0 then
-        out[#out + 1] = '}\n'
-      end
-
-      if compress_ctx then
-        if cursor == 0 then
-          compress_ctx:stream(rspamd_text.fromtable(out), 'end'):write()
-        else
-          compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
-        end
-      else
-        for _,o in ipairs(out) do
-          io.write(o)
-        end
-      end
-    until cursor == 0
+    check_keys(cls.symbol_spam)
+    check_keys(cls.symbol_ham)
   end
 end
 
