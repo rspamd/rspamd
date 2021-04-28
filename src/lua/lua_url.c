@@ -741,26 +741,25 @@ lua_url_create (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	rspamd_mempool_t *pool;
-	const gchar *text;
-	size_t length;
+	struct rspamd_lua_text *t;
 	gboolean own_pool = FALSE;
 	struct rspamd_lua_url *u;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		pool = rspamd_lua_check_mempool (L, 1);
-		text = luaL_checklstring (L, 2, &length);
+		t = lua_check_text_or_string (L, 2);
 	}
 	else {
 		own_pool = TRUE;
 		pool = static_lua_url_pool;
-		text = luaL_checklstring (L, 1, &length);
+		t = lua_check_text_or_string (L, 2);
 	}
 
-	if (pool == NULL || text == NULL) {
+	if (pool == NULL || t == NULL) {
 		return luaL_error (L, "invalid arguments");
 	}
 	else {
-		rspamd_url_find_single (pool, text, length, RSPAMD_URL_FIND_ALL,
+		rspamd_url_find_single (pool, t->start, t->len, RSPAMD_URL_FIND_ALL,
 				lua_url_single_inserter, L);
 
 		if (lua_type (L, -1) != LUA_TUSERDATA) {
