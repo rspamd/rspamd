@@ -110,6 +110,9 @@ PHISH_SENDER_ROUTING_PART
   Scan File  ${TESTDIR}/messages/phish_sender6.eml
   Expect Symbol  FROM_INVALID
 
+REPLYTO_ADDR_EQ_FROM
+  Scan File  ${TESTDIR}/messages/replyto_addr_eq_from.eml
+  Expect Symbol  REPLYTO_ADDR_EQ_FROM
 
 
 *** Keywords ***

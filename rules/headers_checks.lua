@@ -214,7 +214,7 @@ local check_replyto_id = rspamd_config:register_symbol({
     end
 
     -- See if Reply-To matches From in some way
-    local from = task:get_from(2)
+    local from = task:get_from{'mime', 'orig'}
     local from_h = get_raw_header(task, 'From')
     if not (from and from[1]) then
       return false
