@@ -54,6 +54,9 @@ local default_options = {
   learning_spawned = false,
   ann_expire = 60 * 60 * 24 * 2, -- 2 days
   hidden_layer_mult = 1.5, -- number of neurons in the hidden layer
+  -- Check ROC curve and AUC in the ML literature
+  spam_score_threshold = nil, -- neural score threshold for spam (must be 0..1 or nil to disable)
+  ham_score_threshold = nil, -- neural score threshold for ham (must be 0..1 or nil to disable)
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
   max_inputs = nil, -- when PCA is used
