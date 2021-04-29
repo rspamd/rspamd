@@ -57,6 +57,7 @@ local default_options = {
   -- Check ROC curve and AUC in the ML literature
   spam_score_threshold = nil, -- neural score threshold for spam (must be 0..1 or nil to disable)
   ham_score_threshold = nil, -- neural score threshold for ham (must be 0..1 or nil to disable)
+  flat_threshold_curve = false, -- use binary classification 0/1 when threshold is reached
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
   max_inputs = nil, -- when PCA is used

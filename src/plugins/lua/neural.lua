@@ -121,7 +121,11 @@ local function ann_scores_filter(task)
         local result = score
 
         if not rule.spam_score_threshold or result >= rule.spam_score_threshold then
-          task:insert_result(rule.symbol_spam, result, symscore)
+          if rule.flat_threshold_curve then
+            task:insert_result(rule.symbol_spam, 1.0, symscore)
+          else
+            task:insert_result(rule.symbol_spam, result, symscore)
+          end
         else
           lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (spam_score_threshold)',
               rule.prefix, set.name, set.ann.version, symscore,
@@ -131,7 +135,11 @@ local function ann_scores_filter(task)
         local result = -(score)
 
         if not rule.ham_score_threshold or result >= rule.ham_score_threshold then
-          task:insert_result(rule.symbol_ham, result, symscore)
+          if rule.flat_threshold_curve then
+            task:insert_result(rule.symbol_ham, 1.0, symscore)
+          else
+            task:insert_result(rule.symbol_ham, result, symscore)
+          end
         else
           lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (ham_score_threshold)',
               rule.prefix, set.name, set.ann.version, result,
