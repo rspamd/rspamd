@@ -150,12 +150,34 @@ local function redis_map_zip(ar)
   return data
 end
 
-local function dump_pattern(conn, pattern, opts, out)
-  local cursor = 0
-  local compress_ctx
-  if opts.compress then
+-- Used to clear plain numeric tables
+table.clear = table.clear or function(tbl)
+  local l = #tbl
+  for i=1,l do tbl[i] = nil end
+end
+
+local compress_ctx
+
+local function dump_out(out, opts, last)
+  if opts.compress and not compress_ctx then
     compress_ctx = rspamd_zstd.compress_ctx()
   end
+
+  if compress_ctx then
+    if last then
+      compress_ctx:stream(rspamd_text.fromtable(out), 'end'):write()
+    else
+      compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
+    end
+  else
+    for _,o in ipairs(out) do
+      io.write(o)
+    end
+  end
+end
+
+local function dump_pattern(conn, pattern, opts, out)
+  local cursor = 0
 
   repeat
     conn:add_cmd('SCAN', {tostring(cursor),
@@ -207,18 +229,12 @@ local function dump_pattern(conn, pattern, opts, out)
       out[#out + 1] = '}}\n'
     end
 
-    if compress_ctx then
-      if cursor == 0 then
-        compress_ctx:stream(rspamd_text.fromtable(out), 'end'):write()
-      else
-        compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
-      end
-    else
-      for _,o in ipairs(out) do
-        io.write(o)
-      end
+    -- Do not write the last chunk of out as it will be processed afterwards
+    if not cursor == 0 then
+      dump_out(out, opts, false)
+      table.clear(out)
     end
-    out = {}
+
   until cursor == 0
 end
 
@@ -232,10 +248,10 @@ local function dump_handler(opts)
       os.exit(1)
     end
 
+    local out = {}
     local function check_keys(sym)
-      local out = {}
-      local spam_keys_pattern = string.format("%s_keys", sym)
-      conn:add_cmd('SMEMBERS', {spam_keys_pattern})
+      local sym_keys_pattern = string.format("%s_keys", sym)
+      conn:add_cmd('SMEMBERS', { sym_keys_pattern })
       local ret,keys = conn:exec()
 
       if not ret then
@@ -243,6 +259,10 @@ local function dump_handler(opts)
         os.exit(1)
       end
 
+      if not opts.json then
+        out[#out + 1] = string.format('"%s": %s\n', sym_keys_pattern,
+            ucl.to_format(keys, 'json-compact'))
+      end
       for _,k in ipairs(keys) do
         local pat = string.format('%s*_*', k)
         if not patterns_seen[pat] then
@@ -251,22 +271,25 @@ local function dump_handler(opts)
 
           if _ret then
             if opts.json then
-              out[1] = string.format('{"pattern": "%s", "meta": %s, "keys": {\n',
+              out[#out + 1] = string.format('{"pattern": "%s", "meta": %s, "elts": {\n',
                   k, ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
             else
-              out[1] = string.format('"%s": %s\n', k,
+              out[#out + 1] = string.format('"%s": %s\n', k,
                   ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
             end
             dump_pattern(conn, pat, opts, out)
             patterns_seen[pat] = true
           end
-
         end
       end
     end
 
     check_keys(cls.symbol_spam)
     check_keys(cls.symbol_ham)
+
+    if #out > 0 then
+      dump_out(out, opts, true)
+    end
   end
 end
 
