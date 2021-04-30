@@ -340,9 +340,9 @@ local function obj_to_redis_arguments(obj, opts, cmd_pipe)
           end
         end
       else
-        -- Numeric table of elements (e.g. _keys)
+        -- Numeric table of elements (e.g. _keys) - it is actually a set in Redis
         for _,elt in ipairs(value) do
-          table.insert(cmd_pipe, {'LPUSHX', {key, elt}})
+          table.insert(cmd_pipe, {'SADD', {key, elt}})
         end
       end
     end
