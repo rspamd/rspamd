@@ -167,7 +167,7 @@ local function redis_map_zip(ar)
 end
 
 -- Used to clear plain numeric tables
-table.clear = table.clear or function(tbl)
+local clear_fcn = table.clear or function(tbl)
   local l = #tbl
   for i=1,l do tbl[i] = nil end
 end
@@ -248,7 +248,7 @@ local function dump_pattern(conn, pattern, opts, out)
     -- Do not write the last chunk of out as it will be processed afterwards
     if not cursor == 0 then
       dump_out(out, opts, false)
-      table.clear(out)
+      clear_fcn(out)
     end
 
   until cursor == 0

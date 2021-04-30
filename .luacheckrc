@@ -36,6 +36,7 @@ globals = {
   'rspamadm_dns_resolver',
   'jit',
   'table.unpack',
+  'table.clear',
   'unpack',
 }
 
