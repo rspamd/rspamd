@@ -31,7 +31,7 @@ local parser = argparse()
     :description "Dump/restore Rspamd statistics"
     :help_description_margin(30)
     :command_target("command")
-    :require_command(true)
+    :require_command(false)
 
 parser:option "-c --config"
       :description "Path to config file"
@@ -57,7 +57,23 @@ local restore = parser:command "restore r"
 restore:argument "file"
        :description "Input file to process"
        :argname "<file>"
-       :args "+"
+       :args "*"
+restore:option "-b --batch-size"
+    :description "Number of entires to process at once"
+    :argname("<elts>")
+    :convert(tonumber)
+    :default(1000)
+restore:option "-m --mode"
+       :description "Number of entires to process at once"
+       :argname("<append|subtract|replace>")
+       :convert {
+          ['append'] = 'append',
+          ['subtract'] = 'subtract',
+          ['replace'] = 'replace',
+        }
+       :default 'append'
+restore:flag "-n --no-operation"
+    :description "Only show redis commands to be issued"
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -293,14 +309,126 @@ local function dump_handler(opts)
   end
 end
 
-local function restore_handler(opts)
+local function obj_to_redis_arguments(obj, opts, cmd_pipe)
+  local key,value = next(obj)
 
+  if type(key) == 'string' then
+    if type(value) == 'table' then
+      if not value[1] then
+        if opts.mode == 'replace' then
+          local cmd = 'HMSET'
+          local params = {key}
+          for k,v in pairs(value) do
+            table.insert(params, k)
+            table.insert(params, v)
+          end
+          table.insert(cmd_pipe, {cmd, params})
+        else
+          local cmd = 'HINCRBYFLOAT'
+          local mult = 1.0
+          if opts.mode == 'subtract' then
+            mult = (-mult)
+          end
+
+          for k,v in pairs(value) do
+            if tonumber(v) then
+              v = tonumber(v)
+              table.insert(cmd_pipe, {cmd, {key, k, tostring(v * mult)}})
+            else
+              table.insert(cmd_pipe, {'HSET', {key, k, v}})
+            end
+          end
+        end
+      else
+        -- Numeric table of elements (e.g. _keys)
+        for _,elt in ipairs(value) do
+          table.insert(cmd_pipe, {'LPUSHX', {key, elt}})
+        end
+      end
+    end
+  end
+
+  return cmd_pipe
+end
+
+local function execute_batch(batch, conns, opts)
+  local cmd_pipe = {}
+
+  for _,cmd in ipairs(batch) do
+    obj_to_redis_arguments(cmd, opts, cmd_pipe)
+  end
+
+  if opts.no_operation then
+    for _,cmd in ipairs(cmd_pipe) do
+      rspamd_logger.messagex('%s %s', cmd[1], table.concat(cmd[2], ' '))
+    end
+  else
+    for _, conn in ipairs(conns) do
+      for _,cmd in ipairs(cmd_pipe) do
+        local is_ok, err = conn:add_cmd(cmd[1], cmd[2])
+
+        if not is_ok then
+          rspamd_logger.errx("cannot add command: %s with args: %s: %s", cmd[1], cmd[2], err)
+        end
+      end
+
+      conn:exec()
+    end
+  end
+end
+
+local function restore_handler(opts)
+  local files = opts.files or {'-'}
+  local conns = {}
+
+  for _,cls in ipairs(classifiers) do
+    local res,conn = lua_redis.redis_connect_sync(cls.redis_params, true)
+
+    if not res then
+      rspamd_logger.errx("cannot connect to redis server: %s", cls.redis_params)
+      os.exit(1)
+    end
+
+    table.insert(conns, conn)
+  end
+
+  local batch = {}
+
+  for _,f in ipairs(files) do
+    if f ~= '-' then
+      io.input(f)
+    end
+
+    local cur_line = 1
+    for line in io.lines() do
+      local ucl_parser = ucl.parser()
+      local res, err
+      res,err = ucl_parser:parse_string(line)
+
+      if not res then
+        rspamd_logger.errx("%s: cannot read line %s: %s", f, cur_line, err)
+        os.exit(1)
+      end
+
+      table.insert(batch, ucl_parser:get_object())
+      cur_line = cur_line + 1
+
+      if cur_line % opts.batch_size == 0 then
+        execute_batch(batch, conns, opts)
+        batch = {}
+      end
+    end
+  end
+
+  if #batch > 0 then
+    execute_batch(batch, conns, opts)
+  end
 end
 
 local function handler(args)
   local opts = parser:parse(args)
 
-  local command = opts.command
+  local command = opts.command or 'dump'
 
   load_config(opts)
   rspamd_config:init_subsystem('stat')
