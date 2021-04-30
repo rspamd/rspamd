@@ -378,7 +378,7 @@ local function execute_batch(batch, conns, opts)
 end
 
 local function restore_handler(opts)
-  local files = opts.files or {'-'}
+  local files = opts.file or {'-'}
   local conns = {}
 
   for _,cls in ipairs(classifiers) do
@@ -395,8 +395,10 @@ local function restore_handler(opts)
   local batch = {}
 
   for _,f in ipairs(files) do
+    local fd
     if f ~= '-' then
-      io.input(f)
+      fd = io.open(f, 'r')
+      io.input(fd)
     end
 
     local cur_line = 1
@@ -418,6 +420,8 @@ local function restore_handler(opts)
         batch = {}
       end
     end
+
+    if fd then fd:close() end
   end
 
   if #batch > 0 then
