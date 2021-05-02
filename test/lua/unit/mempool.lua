@@ -33,7 +33,15 @@ context("Memory pool unit tests", function()
     assert_equal(v2, 1)
     assert_equal(v3, 1.01)
     assert_equal(v4, false)
-    
+
+    local t = {1,2,3,4,5}
+    pool:set_variable('a', t)
+    local bucket = pool:get_variable('a', 'bucket')
+    assert_rspamd_table_eq({
+      expect = t,
+      actual = bucket
+    })
+
     pool:destroy()
   end)
 end)
