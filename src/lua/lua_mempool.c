@@ -488,7 +488,7 @@ lua_mempool_get_variable (lua_State *L)
 							gdouble num;
 							memcpy (&num, pv, sizeof (num));
 							lua_pushnumber (L, num);
-							lua_rawseti (L, -1, i + 1);
+							lua_rawseti (L, -2, i + 1);
 							pv += sizeof (num);
 						}
 					}
