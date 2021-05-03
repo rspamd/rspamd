@@ -106,9 +106,10 @@ local function spf_check_callback(task)
       end
     end
     if not found then
-      rspamd_logger.warnx(task, "cannot find external relay with IP %s",
-          local_config.external_relay)
       ip = task:get_from_ip()
+      rspamd_logger.warnx(task,
+          "cannot find external relay for SPF checks in received headers; use the original IP: %s",
+          tostring(ip))
     end
   else
     ip = task:get_from_ip()
