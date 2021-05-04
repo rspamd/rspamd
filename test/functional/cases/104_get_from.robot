@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Generic Setup
+Suite Setup     GetFrom Setup
 Suite Teardown  Simple Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
@@ -51,3 +51,7 @@ task:get_from('mime') - quoted in the middle of DN (outer spaces)
 task:get_from('mime') - quoted in the middle of DN (inner spaces)
   Scan File  ${TESTDIR}/messages/from/from_quoted_dn_middle_inner.eml
   Expect Symbol With Exact Options  ${SYMBOL}  ${OPTIONS3}
+
+*** Keywords ***
+GetFrom Setup
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}

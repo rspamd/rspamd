@@ -52,4 +52,4 @@ Password Setup
   [Arguments]  ${PASSWORD}  ${ENABLE_PASSWORD}=nq2
   Set Test Variable  ${PASSWORD}
   Set Test Variable  ${ENABLE_PASSWORD}
-  Generic Setup
+  New Setup  PASSWORD=${PASSWORD}  ENABLE_PASSWORD=${ENABLE_PASSWORD}

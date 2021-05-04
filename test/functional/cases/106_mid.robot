@@ -1,12 +1,12 @@
 *** Settings ***
-Suite Setup     MID Setup
+Suite Setup     New Setup
 Suite Teardown  Normal Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/mid.conf
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 
@@ -34,9 +34,3 @@ MID - missing Message-ID allowed
   Expect Symbol With Score  MISSING_MID_ALLOWED  1.00
   Do Not Expect Symbol  MISSING_MID
   Do Not Expect Symbol  INVALID_MSGID
-
-*** Keywords ***
-MID Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/mid.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG

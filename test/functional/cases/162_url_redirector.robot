@@ -7,7 +7,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/url_redirector.conf
 ${MESSAGE}      ${TESTDIR}/messages/redir.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -31,16 +31,12 @@ Urlredirector Setup
   Set Suite Variable  ${REDIS_TMPDIR}  ${TMPDIR}
   Run Redis
   Run Dummy Http
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/url_redirector.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}
 
 Urlredirector Teardown
   Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
   #Stop Dummy Http
   Terminate All Processes    kill=True
-  Cleanup Temporary Directory  ${REDIS_TMPDIR}
 
 Stop Dummy Http
   ${http_pid} =  Get File  /tmp/dummy_http.pid

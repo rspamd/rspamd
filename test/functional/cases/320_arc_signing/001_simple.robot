@@ -1,12 +1,12 @@
 *** Settings ***
-Suite Setup     ARC Signing Setup
-Suite Teardown  ARC Signing Teardown
+Suite Setup     New Setup
+Suite Teardown  Normal Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/arc_signing/simple.conf
 ${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
 ${MESSAGE_FAIL}      ${TESTDIR}/messages/dmarc/fail_none1.eml
 ${REDIS_SCOPE}  Suite
@@ -29,12 +29,3 @@ TEST NOT SIGNED - USERNAME WRONG DOMAIN
 TEST NOT SIGNED - USERNAME WRONG PUBKEY
   ${result} =  Scan Message With Rspamc  ${MESSAGE_FAIL}  -u  bob@invalid.za.org
   Should Not Contain  ${result.stdout}  ARC_SIGNED
-
-*** Keywords ***
-ARC Signing Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/arc_signing/simple.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
-
-ARC Signing Teardown
-  Normal Teardown

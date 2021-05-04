@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/force_actions.conf
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 ${MESSAGE} 		${TESTDIR}/messages/url7.eml
 ${RSPAMD_SCOPE}  Suite
@@ -45,9 +45,7 @@ FORCE ACTIONS from add header to reject
 
 *** Keywords ***
 Force Actions Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/force_actions.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup
 
 Force Actions Teardown
   Normal Teardown

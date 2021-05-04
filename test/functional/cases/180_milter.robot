@@ -7,8 +7,9 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
+${CONFIG}        ${TESTDIR}/configs/milter.conf
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 ACCEPT
@@ -28,7 +29,7 @@ COMBINED TEST
 
 *** Keywords ***
 Milter Setup
-  Generic Setup  CONFIG=${TESTDIR}/configs/milter.conf
+  New Setup  URL_TLD=${URL_TLD}
 
 Milter Test
   [Arguments]  ${mtlua}

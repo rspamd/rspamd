@@ -1,12 +1,12 @@
 *** Settings ***
 Suite Setup     DKIM Signing Setup
-Suite Teardown  DKIM Signing Teardown
+Suite Teardown  Normal Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/dkim_signing/redis.conf
 ${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -25,14 +25,8 @@ TEST NOT SIGNED - USERNAME WRONG DOMAIN
 
 *** Keywords ***
 DKIM Signing Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dkim_signing/redis.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
   Run Redis
   Redis HSET  TEST_DKIM_SELECTORS  cacophony.za.org  dkim
   ${key} =  Get File  ${TESTDIR}/configs/dkim.key
   Redis HSET  TEST_DKIM_KEYS  dkim.cacophony.za.org  ${key}
-
-DKIM Signing Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
+  New Setup

@@ -52,7 +52,7 @@ Lua Setup
 Servers Setup
   Run Dummy Http
   Run Dummy Ssl
-  Lua Setup  ${TESTDIR}/lua/tcp.lua
+  New Setup  LUA_SCRIPT=${TESTDIR}/lua/tcp.lua  URL_TLD=${URL_TLD}
 
 Servers Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid

@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/regexp.conf
 ${MESSAGE}       ${TESTDIR}/messages/newlines.eml
 ${MESSAGE1}      ${TESTDIR}/messages/fws_fn.eml
 ${MESSAGE2}      ${TESTDIR}/messages/fws_fp.eml
@@ -117,9 +117,7 @@ REPLYTO_ADDR_EQ_FROM
 
 *** Keywords ***
 Rules Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/regexp.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}
 
 Rules Teardown
   Normal Teardown

@@ -7,7 +7,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/antivirus.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${MESSAGE2}     ${TESTDIR}/messages/freemail.eml
 ${REDIS_SCOPE}  Suite
@@ -95,9 +95,8 @@ AVAST CACHE MISS
 
 *** Keywords ***
 Antivirus Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/antivirus.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  PORT_CLAM=${PORT_CLAM}  PORT_FPROT=${PORT_FPROT}  PORT_AVAST=${PORT_AVAST}
+  ...  PORT_FPROT2_DUPLICATE=${PORT_FPROT2_DUPLICATE}
   Run Redis
 
 Antivirus Teardown

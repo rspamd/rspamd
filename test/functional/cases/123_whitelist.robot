@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/whitelist.conf
 ${M_DMARC_OK}   ${TESTDIR}/messages/dmarc/pass_none.eml
 ${M_DMARC_BAD}  ${TESTDIR}/messages/dmarc/fail_none.eml
 
@@ -79,6 +79,4 @@ VALID SPF and NO DKIM
 
 *** Keywords ***
 Whitelist Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/whitelist.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup

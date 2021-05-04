@@ -4,9 +4,8 @@ Suite Teardown  Redis Statistics Teardown
 Resource        lib.robot
 
 *** Variables ***
-${REDIS_SERVER}  servers = "${REDIS_ADDR}:${REDIS_PORT}"
-${STATS_BACKEND}  redis
-${STATS_HASH}   hash = "siphash";
+${REDIS_SERVER}  ${REDIS_ADDR}:${REDIS_PORT}
+${STATS_HASH}   siphash
 
 *** Test Cases ***
 Learn

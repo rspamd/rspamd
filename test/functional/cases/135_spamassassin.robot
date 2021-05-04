@@ -1,12 +1,12 @@
 *** Settings ***
-Suite Setup     SpamAssassin Setup
+Suite Setup     New Setup
 Suite Teardown  Simple Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/spamassassin.conf
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
@@ -32,9 +32,3 @@ WLBL BLACKLIST
   Expect Symbol  USER_IN_BLACKLIST_TO
   Do Not Expect Symbol  USER_IN_WHITELIST_TO
   Do Not Expect Symbol  USER_IN_WHITELIST
-
-*** Keywords ***
-SpamAssassin Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/spamassassin.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG

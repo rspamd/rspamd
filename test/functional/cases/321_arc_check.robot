@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/arc.conf
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
@@ -22,6 +22,4 @@ ARC BAD CHECK
 
 *** Keywords ***
 ARC Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/arc.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}

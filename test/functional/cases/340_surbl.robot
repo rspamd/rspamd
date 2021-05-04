@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/surbl.conf
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
@@ -163,9 +163,7 @@ SURBL url compose map 3
 
 *** Keywords ***
 Surbl Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}
 
 Surbl Teardown
   Normal Teardown

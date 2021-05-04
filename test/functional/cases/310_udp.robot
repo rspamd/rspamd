@@ -26,14 +26,9 @@ Errored UDP request
   Expect Symbol With Exact Options  UDP_FAIL  read timeout
 
 *** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
 UDP Setup
   Run Dummy UDP
-  Lua Setup  ${TESTDIR}/lua/udp.lua
+  New Setup  LUA_SCRIPT=${TESTDIR}/lua/udp.lua  URL_TLD=${URL_TLD}
 
 UDP Teardown
   ${udp_pid} =  Get File  /tmp/dummy_udp.pid

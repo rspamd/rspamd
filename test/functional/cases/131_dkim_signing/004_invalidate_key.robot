@@ -7,7 +7,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/dkim_signing/invalidate.conf
 ${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -36,9 +36,7 @@ Key Invalidation Setup
   ${key_dir}  Make Temporary Directory
   Set Suite Variable  ${KEY_DIR}  ${key_dir}
   Copy File  ${TESTDIR}/configs/dkim-eddsa.key  ${KEY_DIR}/dkim-eddsa.key
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dkim_signing/invalidate.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup
 
 Delete Key
   Remove File  ${KEY_DIR}/dkim-eddsa.key

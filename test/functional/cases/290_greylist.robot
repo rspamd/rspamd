@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/greylist.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
@@ -28,9 +28,7 @@ GREYLIST PASS
 
 *** Keywords ***
 Greylist Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/greylist.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}
   Run Redis
 
 Greylist Teardown

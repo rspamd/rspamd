@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/rbl.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
@@ -71,9 +71,7 @@ SELECTORS COMBINED
 
 *** Keywords ***
 Rbl Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/rbl.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}
 
 Rbl Teardown
   Normal Teardown

@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Generic Setup
+Suite Setup     JSON Setup
 Suite Teardown  Simple Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        lib.robot

@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/settings.conf
 ${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${MESSAGE_PRIORITY}      ${TESTDIR}/messages/priority.eml
@@ -255,9 +255,8 @@ PRIORITY
 Settings Setup
   Copy File  ${TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
   Copy File  ${TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/settings.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}
 
 Settings Teardown
   Normal Teardown
+  Remove Files  /tmp/bayes.spam.sqlite3  /tmp/bayes.ham.sqlite3

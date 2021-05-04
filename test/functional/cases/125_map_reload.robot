@@ -39,7 +39,7 @@ Map Reload Setup
   ${lua} =  Replace Variables  ${lua}
   Create File  ${LUA_SCRIPT}  ${lua}
   Create File  ${MAP_FILE}  ${MAP1}
-  Generic Setup
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}  URL_TLD=${URL_TLD}
 
 Map Reload Teardown
   Remove File  ${MAP_FILE}

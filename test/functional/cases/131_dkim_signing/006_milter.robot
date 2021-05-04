@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     DKIM Milter Setup
+Suite Setup     New Setup
 Suite Teardown  Generic Teardown
 Library         Process
 Library         ${TESTDIR}/lib/rspamd.py
@@ -7,8 +7,9 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
+${CONFIG}        ${TESTDIR}/configs/dkim_signing/milter.conf
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 SINGLE SIGNATURE
@@ -18,9 +19,6 @@ MULTIPLE SIGNATURES
   Milter Test  dkim_many.lua
 
 *** Keywords ***
-DKIM Milter Setup
-  Generic Setup  CONFIG=${TESTDIR}/configs/dkim_signing/milter.conf
-
 Milter Test
   [Arguments]  ${mtlua}
   ${result} =  Run Process  miltertest  -Dport\=${PORT_PROXY}  -Dhost\=${LOCAL_ADDR}  -s  ${TESTDIR}/lua/miltertest/${mtlua}

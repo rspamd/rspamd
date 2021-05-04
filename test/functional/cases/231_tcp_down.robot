@@ -23,13 +23,8 @@ Sync API TCP get request when server is down
 
 
 *** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
 Http Setup
-  Lua Setup  ${TESTDIR}/lua/tcp.lua
+  New Setup  LUA_SCRIPT=${TESTDIR}/lua/tcp.lua  URL_TLD=${URL_TLD}
 
 Http Teardown
   Normal Teardown

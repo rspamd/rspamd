@@ -2,6 +2,9 @@
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Keywords ***
+JSON Setup
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}  URL_TLD=${URL_TLD}
+
 Stat Test
   @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /stat
   Check JSON  ${result}[1]

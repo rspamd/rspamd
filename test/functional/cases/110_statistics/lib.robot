@@ -8,10 +8,11 @@ ${CONFIG}       ${TESTDIR}/configs/stats.conf
 ${MESSAGE_SPAM}      ${TESTDIR}/messages/spam_message.eml
 ${MESSAGE_HAM}      ${TESTDIR}/messages/ham.eml
 ${REDIS_SCOPE}  Suite
-${REDIS_SERVER}  ${EMPTY}
+${REDIS_SERVER}  null
 ${RSPAMD_SCOPE}  Suite
-${STATS_HASH}   ${EMPTY}
-${STATS_KEY}    ${EMPTY}
+${STATS_BACKEND}  redis
+${STATS_HASH}   null
+${STATS_KEY}    null
 
 *** Keywords ***
 Broken Learn Test
@@ -46,11 +47,8 @@ Relearn Test
   Do Not Expect Symbol  BAYES_SPAM
 
 Redis Statistics Setup
-  ${tmpdir} =  Make Temporary Directory
-  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Run Redis
-  Generic Setup  TMPDIR=${tmpdir}
+  New Setup  STATS_BACKEND=${STATS_BACKEND}  STATS_HASH=${STATS_HASH}  STATS_KEY=${STATS_KEY}  REDIS_SERVER=${REDIS_SERVER}
 
 Redis Statistics Teardown
   Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}

@@ -7,7 +7,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/p0f.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${MESSAGE2}     ${TESTDIR}/messages/freemail.eml
 ${REDIS_SCOPE}  Suite
@@ -80,14 +80,11 @@ p0f BAD RESPONSE
 
 *** Keywords ***
 p0f Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/p0f.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  P0F_SOCKET=${P0F_SOCKET}  URL_TLD=${URL_TLD}
   Run Redis
 
 p0f Teardown
   Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
   Shutdown p0f
   Terminate All Processes    kill=True
 

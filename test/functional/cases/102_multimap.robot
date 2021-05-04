@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}       ${TESTDIR}/configs/multimap.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
 ${REDIS_SCOPE}  Suite
@@ -338,10 +338,8 @@ MAP - MULTISYMBOL DISABLED
 
 *** Keywords ***
 Multimap Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
   Run Redis
+  New Setup  REDIS_ADDR=${REDIS_ADDR}  REDIS_PORT=${REDIS_PORT}  URL_TLD=${URL_TLD}
 
 Multimap Teardown
   Normal Teardown

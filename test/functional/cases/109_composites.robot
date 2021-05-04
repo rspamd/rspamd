@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Generic Setup
+Suite Setup     Composites Setup
 Suite Teardown  Simple Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
@@ -66,7 +66,7 @@ Composites - Opts RE Hit
   Do Not Expect Symbol  SYMOPTS3
 
 Composites - Opts RE Hit 2
-  Scan File  ${MESSAGE}  opts=foo/,sym2
+  Scan File  ${MESSAGE}  opts=sym2,foo/
   Expect Symbol With Score  SYMOPTS3  6.00
   Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
@@ -76,3 +76,7 @@ Composites - Opts RE Hit 3
   Expect Symbol With Score  SYMOPTS4  6.00
   Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
+
+*** Keywords ***
+Composites Setup
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}

@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/phishing.conf
 ${MESSAGE1}       ${TESTDIR}/messages/phishing1.eml
 ${MESSAGE2}      ${TESTDIR}/messages/phishing2.eml
 ${MESSAGE3}      ${TESTDIR}/messages/phishing3.eml
@@ -28,6 +28,4 @@ TEST PHISHING STRICT TWO
 
 *** Keywords ***
 Phishing Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/phishing.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}

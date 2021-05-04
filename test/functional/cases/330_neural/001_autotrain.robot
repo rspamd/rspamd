@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup      Neural Setup
-Suite Teardown   Neural Teardown
+Suite Teardown   Normal Teardown
 Library         Process
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
@@ -64,11 +64,5 @@ Check Neural SPAM INVERSE
 
 *** Keywords ***
 Neural Setup
-  ${TMPDIR} =    Make Temporary Directory
-  Set Suite Variable        ${TMPDIR}
   Run Redis
-  Generic Setup
-
-Neural Teardown
-  Shutdown Process With Children  ${REDIS_PID}
-  Normal Teardown
+  New Setup  URL_TLD=${URL_TLD}

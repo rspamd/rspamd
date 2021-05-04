@@ -73,7 +73,7 @@ Rule conditions
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
   Set Test Variable  ${LUA_SCRIPT}
-  Generic Setup
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}  URL_TLD=${URL_TLD}
 
 Lua Replace Setup
   [Arguments]  ${LUA_SCRIPT_UNESC}

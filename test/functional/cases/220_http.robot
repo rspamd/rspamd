@@ -40,15 +40,10 @@ SSL Large HTTP request
   Expect Symbol  HTTP_SSL_LARGE
 
 *** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
 Http Setup
   Run Dummy Http
   Run Dummy Https
-  Lua Setup  ${TESTDIR}/lua/http.lua
+  New Setup  LUA_SCRIPT=${TESTDIR}/lua/http.lua  URL_TLD=${URL_TLD}
 
 Http Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid

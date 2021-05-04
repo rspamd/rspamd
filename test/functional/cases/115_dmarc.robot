@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/dmarc.conf
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
@@ -89,6 +89,4 @@ DMARC PCT ZERO SP QUARANTINE
 
 *** Keywords ***
 DMARC Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  New Setup  URL_TLD=${URL_TLD}

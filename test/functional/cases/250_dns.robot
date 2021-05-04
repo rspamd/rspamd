@@ -30,7 +30,7 @@ Lua Setup
   Generic Setup
 
 Http Setup
-  Lua Setup  ${TESTDIR}/lua/dns.lua
+  New Setup  LUA_SCRIPT=${TESTDIR}/lua/dns.lua  URL_TLD=${URL_TLD}
 
 Http Teardown
   Normal Teardown

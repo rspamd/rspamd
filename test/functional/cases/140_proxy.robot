@@ -6,9 +6,10 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${LUA_SCRIPT}   ${TESTDIR}/lua/simple.lua
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${LUA_SCRIPT}    ${TESTDIR}/lua/simple.lua
+${MESSAGE}       ${TESTDIR}/messages/spam_message.eml
+${RSPAMD_SCOPE}  Suite
+${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 HTTP PROTOCOL
@@ -26,15 +27,24 @@ RSPAMC Legacy Protocol
 
 *** Keywords ***
 Proxy Setup
-  &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/lua_test.conf
-  Set Suite Variable  ${SLAVE_PID}  ${d}[RSPAMD_PID]
-  Set Suite Variable  ${SLAVE_TMPDIR}  ${d}[TMPDIR]
-  &{d} =  Run Rspamd  CONFIG=${TESTDIR}/configs/proxy.conf
-  Set Suite Variable  ${PROXY_PID}  ${d}[RSPAMD_PID]
-  Set Suite Variable  ${PROXY_TMPDIR}  ${d}[TMPDIR]
+  # Run slave & copy variables
+  Set Suite Variable  ${CONFIG}  ${TESTDIR}/configs/lua_test.conf
+  New Setup  LUA_SCRIPT=${LUA_SCRIPT}  URL_TLD=${URL_TLD}
+  Set Suite Variable  ${SLAVE_PID}  ${RSPAMD_PID}
+  Set Suite Variable  ${SLAVE_TMPDIR}  ${TMPDIR}
+
+  # Run proxy & copy variables
+  Set Suite Variable  ${CONFIG}  ${TESTDIR}/configs/proxy.conf
+  New Setup
+  Set Suite Variable  ${PROXY_PID}  ${RSPAMD_PID}
+  Set Suite Variable  ${PROXY_TMPDIR}  ${TMPDIR}
 
 Proxy Teardown
-  Shutdown Process With Children  ${PROXY_PID}
-  Shutdown Process With Children  ${SLAVE_PID}
-  Cleanup Temporary Directory  ${PROXY_TMPDIR}
-  Cleanup Temporary Directory  ${SLAVE_TMPDIR}
+  # Restore variables & run normal teardown
+  Set Suite Variable  ${RSPAMD_PID}  ${PROXY_PID}
+  Set Suite Variable  ${TMPDIR}  ${PROXY_TMPDIR}
+  Normal Teardown
+  # Do it again for slave
+  Set Suite Variable  ${RSPAMD_PID}  ${SLAVE_PID}
+  Set Suite Variable  ${TMPDIR}  ${SLAVE_TMPDIR}
+  Normal Teardown

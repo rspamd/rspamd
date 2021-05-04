@@ -11,6 +11,11 @@ ${FLAG1_NUMBER}  50
 ${FLAG1_SYMBOL}  R_TEST_FUZZY_DENIED
 ${FLAG2_NUMBER}  51
 ${FLAG2_SYMBOL}  R_TEST_FUZZY_WHITE
+${FUZZY_ENCRYPTED_ONLY}  false
+${FUZZY_ENCRYPTION_KEY}  null
+${FUZZY_KEY}  null
+${FUZZY_INCLUDE}  ${TESTDIR}/configs/empty.conf
+${FUZZY_SHINGLES_KEY}  null
 @{MESSAGES}      ${TESTDIR}/messages/spam_message.eml  ${TESTDIR}/messages/zip.eml
 @{MESSAGES_SKIP}  ${TESTDIR}/messages/priority.eml
 @{RANDOM_MESSAGES}  ${TESTDIR}/messages/bad_message.eml  ${TESTDIR}/messages/zip-doublebad.eml
@@ -86,34 +91,41 @@ Fuzzy Overwrite Test
 
 Fuzzy Setup Encrypted
   [Arguments]  ${algorithm}
-  ${worker_settings} =  Set Variable  "keypair": {"pubkey": "${KEY_PUB1}", "privkey": "${KEY_PVT1}"}; "encrypted_only": true;
-  ${check_settings} =  Set Variable  encryption_key = "${KEY_PUB1}";
-  Fuzzy Setup Generic  ${algorithm}  ${worker_settings}  ${check_settings}
+  Set Suite Variable  ${FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${FUZZY_ENCRYPTION_KEY}  ${KEY_PUB1}
+  Set Suite Variable  ${FUZZY_INCLUDE}  ${TESTDIR}/configs/fuzzy-encryption-key.conf
+  Fuzzy Setup Generic
 
 Fuzzy Setup Encrypted Keyed
   [Arguments]  ${algorithm}
-  ${worker_settings} =  Set Variable  "keypair": {"pubkey": "${KEY_PUB1}", "privkey": "${KEY_PVT1}"}; "encrypted_only": true;
-  ${check_settings} =  Set Variable  fuzzy_key = "mYN888sydwLTfE32g2hN"; fuzzy_shingles_key = "hXUCgul9yYY3Zlk1QIT2"; encryption_key = "${KEY_PUB1}";
-  Fuzzy Setup Generic  ${algorithm}  ${worker_settings}  ${check_settings}
+  Set Suite Variable  ${FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${FUZZY_ENCRYPTED_ONLY}  true
+  Set Suite Variable  ${FUZZY_ENCRYPTION_KEY}  ${KEY_PUB1} 
+
+  Set Suite Variable  ${FUZZY_KEY}  mYN888sydwLTfE32g2hN
+  Set Suite Variable  ${FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
+  Fuzzy Setup Generic
 
 Fuzzy Setup Plain
   [Arguments]  ${algorithm}
-  Fuzzy Setup Generic  ${algorithm}  ${EMPTY}  ${EMPTY}
+  Set Suite Variable  ${FUZZY_ALGORITHM}  ${algorithm}
+  Fuzzy Setup Generic
 
 Fuzzy Setup Keyed
   [Arguments]  ${algorithm}
-  ${check_settings} =  Set Variable  fuzzy_key = "mYN888sydwLTfE32g2hN"; fuzzy_shingles_key = "hXUCgul9yYY3Zlk1QIT2";
-  Fuzzy Setup Generic  ${algorithm}  ${EMPTY}  ${check_settings}
+  Set Suite Variable  ${FUZZY_ALGORITHM}  ${algorithm}
+  Set Suite Variable  ${FUZZY_KEY}  mYN888sydwLTfE32g2hN
+  Set Suite Variable  ${FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
+  Fuzzy Setup Generic
 
 Fuzzy Setup Generic
-  [Arguments]  ${algorithm}  ${worker_settings}  ${check_settings}  &{kwargs}
-  ${worker_settings} =  Set Variable  backend \= "redis"; ${worker_settings}
-  ${tmpdir} =  Make Temporary Directory
-  Set Suite Variable  ${TMPDIR}  ${tmpdir}
-  Set Suite Variable  ${SETTINGS_FUZZY_WORKER}  ${worker_settings}
-  Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  ${check_settings}
   Run Redis
-  Generic Setup  TMPDIR=${TMPDIR}
+  Generic Setup  FUZZY_ALGORITHM=${FUZZY_ALGORITHM}  FUZZY_ENCRYPTED_ONLY=${FUZZY_ENCRYPTED_ONLY}
+  ...  FUZZY_KEY=${FUZZY_KEY}  FUZZY_SHINGLES_KEY=${FUZZY_SHINGLES_KEY}
+  ...  FUZZY_ENCRYPTION_KEY=${FUZZY_ENCRYPTION_KEY}  FLAG1_NUMBER=${FLAG1_NUMBER}
+  ...  FLAG2_NUMBER=${FLAG2_NUMBER}  FUZZY_BACKEND=redis  PORT_FUZZY=${PORT_FUZZY}
+  ...  FUZZY_INCLUDE=${FUZZY_INCLUDE}
 
 Fuzzy Setup Plain Fasthash
   Fuzzy Setup Plain  fasthash
