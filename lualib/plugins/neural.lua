@@ -653,7 +653,11 @@ local function process_rules_settings()
     end
 
     -- Generic stuff
-    selt.symbols = fun.totable(fun.filter(filter_symbols_predicate, selt.symbols))
+    if not profile then
+      -- Do filtering merely if we are using a dynamic profile
+      selt.symbols = fun.totable(fun.filter(filter_symbols_predicate, selt.symbols))
+    end
+
     table.sort(selt.symbols)
 
     selt.digest = lua_util.table_digest(selt.symbols)
