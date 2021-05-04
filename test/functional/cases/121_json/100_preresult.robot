@@ -1,16 +1,16 @@
 *** Settings ***
-Suite Setup     JSON Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        lib.robot
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/preresult.lua
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/preresult.lua
+${RSPAMD_SCOPE}       Suite
 
 *** Test Cases ***
 Stat

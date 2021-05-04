@@ -1,19 +1,18 @@
 *** Settings ***
-Suite Setup     GetFrom Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${RSPAMD_TESTDIR}/configs/lua_script.conf
-${RSPAMD_LUA_SCRIPT}    ${RSPAMD_TESTDIR}/lua/get_from.lua
-${RSPAMD_SCOPE}  Suite
-
-${SYMBOL}   GET_FROM
-${OPTIONS1}  ,user@example.org,user,example.org
-${OPTIONS2}  First Last,user@example.org,user,example.org
-${OPTIONS3}  First M. Last,user@example.org,user,example.org
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_script.conf
+${OPTIONS1}           ,user@example.org,user,example.org
+${OPTIONS2}           First Last,user@example.org,user,example.org
+${OPTIONS3}           First M. Last,user@example.org,user,example.org
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/get_from.lua
+${RSPAMD_SCOPE}       Suite
+${SYMBOL}             GET_FROM
 
 *** Test Cases ***
 task:get_from('mime') - address only
@@ -51,7 +50,3 @@ task:get_from('mime') - quoted in the middle of DN (outer spaces)
 task:get_from('mime') - quoted in the middle of DN (inner spaces)
   Scan File  ${RSPAMD_TESTDIR}/messages/from/from_quoted_dn_middle_inner.eml
   Expect Symbol With Exact Options  ${SYMBOL}  ${OPTIONS3}
-
-*** Keywords ***
-GetFrom Setup
-  New Setup

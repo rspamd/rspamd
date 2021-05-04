@@ -7,11 +7,11 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Test
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/udp.lua
+${RSPAMD_SCOPE}       Test
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple UDP request
@@ -29,12 +29,12 @@ Errored UDP request
 *** Keywords ***
 UDP Setup
   Run Dummy UDP
-  New Setup
+  Rspamd Setup
 
 UDP Teardown
   ${udp_pid} =  Get File  /tmp/dummy_udp.pid
   Shutdown Process With Children  ${udp_pid}
-  Normal Teardown
+  Rspamd Teardown
 
 Run Dummy UDP
   [Arguments]

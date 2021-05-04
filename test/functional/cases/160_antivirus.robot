@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Antivirus Setup
+Suite Setup     Rspamd Redis Setup
 Suite Teardown  Antivirus Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
@@ -7,12 +7,12 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/antivirus.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${MESSAGE2}     ${RSPAMD_TESTDIR}/messages/freemail.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/antivirus.conf
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/freemail.eml
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 CLAMAV MISS
@@ -94,13 +94,8 @@ AVAST CACHE MISS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
 
 *** Keywords ***
-Antivirus Setup
-  New Setup
-  Run Redis
-
 Antivirus Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
+  Rspamd Redis Teardown
   Shutdown clamav
   Shutdown fport
   Shutdown avast

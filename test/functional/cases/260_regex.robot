@@ -1,16 +1,16 @@
 *** Settings ***
-Test Setup      New Setup
-Test Teardown   Normal Teardown
+Test Setup      Rspamd Setup
+Test Teardown   Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/regexp.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/newlines.eml
-${UTF_MESSAGE}  ${RSPAMD_TESTDIR}/messages/utf.eml
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${RSPAMD_SCOPE}  Test
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/regexp.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
+${RSPAMD_SCOPE}    Test
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${UTF_MESSAGE}     ${RSPAMD_TESTDIR}/messages/utf.eml
 
 
 *** Test Cases ***

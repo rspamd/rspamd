@@ -8,10 +8,9 @@ Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 Suite Teardown  Terminate All Processes    kill=True
 
 *** Variables ***
-${REDIS_SCOPE}   Test
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/plugins.conf
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${PLUGIN_CONFIG}
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/plugins.conf
+${REDIS_SCOPE}     Test
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Tcp client
@@ -39,8 +38,6 @@ DNS client
 *** Keywords ***
 
 Rspamadm test Setup
-  ${tmpdir} =  Make Temporary Directory
-  Set Suite Variable  ${RSPAMD_TMPDIR}  ${tmpdir}
   Run Dummy Http
   Run Redis
 

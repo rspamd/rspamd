@@ -7,12 +7,12 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/url_redirector.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/redir.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${SETTINGS}     {symbols_enabled=[URL_REDIRECTOR_CHECK]}
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/url_redirector.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/redir.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 
 *** Test Cases ***
 RESOLVE URLS
@@ -26,15 +26,11 @@ RESOLVE URLS CACHED
 
 *** Keywords ***
 Urlredirector Setup
-  ${RSPAMD_TMPDIR} =    Make Temporary Directory
-  Set Suite Variable        ${RSPAMD_TMPDIR}
-  Set Suite Variable  ${REDIS_TMPDIR}  ${RSPAMD_TMPDIR}
-  Run Redis
   Run Dummy Http
-  New Setup
+  Rspamd Redis Setup
 
 Urlredirector Teardown
-  Normal Teardown
+  Rspamd Redis Teardown
   #Stop Dummy Http
   Terminate All Processes    kill=True
 

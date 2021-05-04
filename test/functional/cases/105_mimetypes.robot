@@ -1,14 +1,14 @@
 *** Settings ***
-Suite Setup     MIMETypes Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/mime_types.conf
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/mime_types.conf
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Zip
@@ -64,7 +64,3 @@ Exe file, but name in filename_whitelist
 Empty text part should not be treat as html
   Scan File  ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
   Do Not Expect Symbol  FORGED_OUTLOOK_HTML
-
-*** Keywords ***
-MIMETypes Setup
-  New Setup

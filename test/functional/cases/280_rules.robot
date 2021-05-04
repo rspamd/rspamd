@@ -1,23 +1,23 @@
 *** Settings ***
-Suite Setup      Rules Setup
-Suite Teardown   Rules Teardown
+Suite Setup      Rspamd Setup
+Suite Teardown   Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${RSPAMD_TESTDIR}/configs/regexp.conf
-${MESSAGE}       ${RSPAMD_TESTDIR}/messages/newlines.eml
-${MESSAGE1}      ${RSPAMD_TESTDIR}/messages/fws_fn.eml
-${MESSAGE2}      ${RSPAMD_TESTDIR}/messages/fws_fp.eml
-${MESSAGE3}      ${RSPAMD_TESTDIR}/messages/fws_tp.eml
-${MESSAGE4}      ${RSPAMD_TESTDIR}/messages/broken_richtext.eml
-${MESSAGE5}      ${RSPAMD_TESTDIR}/messages/badboundary.eml
-${MESSAGE6}      ${RSPAMD_TESTDIR}/messages/pdf_encrypted.eml
-${MESSAGE7}      ${RSPAMD_TESTDIR}/messages/pdf_js.eml
-${MESSAGE8}      ${RSPAMD_TESTDIR}/messages/yand_forward.eml
-${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${RSPAMD_SCOPE}  Suite
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/regexp.conf
+${MESSAGE1}        ${RSPAMD_TESTDIR}/messages/fws_fn.eml
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/fws_fp.eml
+${MESSAGE3}        ${RSPAMD_TESTDIR}/messages/fws_tp.eml
+${MESSAGE4}        ${RSPAMD_TESTDIR}/messages/broken_richtext.eml
+${MESSAGE5}        ${RSPAMD_TESTDIR}/messages/badboundary.eml
+${MESSAGE6}        ${RSPAMD_TESTDIR}/messages/pdf_encrypted.eml
+${MESSAGE7}        ${RSPAMD_TESTDIR}/messages/pdf_js.eml
+${MESSAGE8}        ${RSPAMD_TESTDIR}/messages/yand_forward.eml
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/newlines.eml
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 
 *** Test Cases ***
@@ -114,10 +114,3 @@ REPLYTO_ADDR_EQ_FROM
   Scan File  ${RSPAMD_TESTDIR}/messages/replyto_addr_eq_from.eml
   Expect Symbol  REPLYTO_ADDR_EQ_FROM
 
-
-*** Keywords ***
-Rules Setup
-  New Setup
-
-Rules Teardown
-  Normal Teardown

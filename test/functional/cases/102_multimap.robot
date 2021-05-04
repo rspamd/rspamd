@@ -1,28 +1,28 @@
 *** Settings ***
-Suite Setup     Multimap Setup
-Suite Teardown  Multimap Teardown
+Suite Setup     Rspamd Redis Setup
+Suite Teardown  Rspamd Redis Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/multimap.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${UTF_MESSAGE}  ${RSPAMD_TESTDIR}/messages/utf.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${RCVD1}        ${RSPAMD_TESTDIR}/messages/received1.eml
-${RCVD2}        ${RSPAMD_TESTDIR}/messages/received2.eml
-${RCVD3}        ${RSPAMD_TESTDIR}/messages/received3.eml
-${RCVD4}        ${RSPAMD_TESTDIR}/messages/received4.eml
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${URL1}         ${RSPAMD_TESTDIR}/messages/url1.eml
-${URL2}         ${RSPAMD_TESTDIR}/messages/url2.eml
-${URL3}         ${RSPAMD_TESTDIR}/messages/url3.eml
-${URL4}         ${RSPAMD_TESTDIR}/messages/url4.eml
-${URL5}         ${RSPAMD_TESTDIR}/messages/url5.eml
-${FREEMAIL_CC}  ${RSPAMD_TESTDIR}/messages/freemailcc.eml
-${URL_ICS}      ${RSPAMD_TESTDIR}/messages/ics.eml
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/multimap.conf
+${FREEMAIL_CC}     ${RSPAMD_TESTDIR}/messages/freemailcc.eml
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RCVD1}           ${RSPAMD_TESTDIR}/messages/received1.eml
+${RCVD2}           ${RSPAMD_TESTDIR}/messages/received2.eml
+${RCVD3}           ${RSPAMD_TESTDIR}/messages/received3.eml
+${RCVD4}           ${RSPAMD_TESTDIR}/messages/received4.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${URL1}            ${RSPAMD_TESTDIR}/messages/url1.eml
+${URL2}            ${RSPAMD_TESTDIR}/messages/url2.eml
+${URL3}            ${RSPAMD_TESTDIR}/messages/url3.eml
+${URL4}            ${RSPAMD_TESTDIR}/messages/url4.eml
+${URL5}            ${RSPAMD_TESTDIR}/messages/url5.eml
+${URL_ICS}         ${RSPAMD_TESTDIR}/messages/ics.eml
+${UTF_MESSAGE}     ${RSPAMD_TESTDIR}/messages/utf.eml
 
 *** Test Cases ***
 URL_ICS
@@ -335,12 +335,3 @@ FREEMAIL_CC
 MAP - MULTISYMBOL DISABLED
   Scan File  ${MESSAGE}  Rcpt=user3@example.com
   Expect Symbol With Exact Options  RCPT_MAP_NOMULTISYM  user3@example.com  SYM1
-
-*** Keywords ***
-Multimap Setup
-  Run Redis
-  New Setup
-
-Multimap Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}

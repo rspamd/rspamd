@@ -1,22 +1,20 @@
 *** Settings ***
-Suite Setup     Whitelist Setup
-Suite Teardown  Normal Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/whitelist.conf
-${M_DMARC_OK}   ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
-${M_DMARC_BAD}  ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
-
-${M_DKIM_RSPAMD_OK}   ${RSPAMD_TESTDIR}/messages/dmarc/good_dkim_rspamd.eml
-${M_DKIM_RSPAMD_BAD}  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim_rspamd.eml
+${CONFIG}               ${RSPAMD_TESTDIR}/configs/whitelist.conf
+${M_DKIM_RSPAMD_BAD}    ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim_rspamd.eml
+${M_DKIM_RSPAMD_OK}     ${RSPAMD_TESTDIR}/messages/dmarc/good_dkim_rspamd.eml
+${M_DMARC_BAD}          ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
+${M_DMARC_OK}           ${RSPAMD_TESTDIR}/messages/dmarc/pass_none.eml
 ${M_NO_DKIM_VALID_SPF}  ${RSPAMD_TESTDIR}/messages/dmarc/no_dkim_valid_spf.eml
-
-${UTF_MESSAGE}  ${RSPAMD_TESTDIR}/messages/utf.eml
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_SCOPE}         Suite
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${UTF_MESSAGE}          ${RSPAMD_TESTDIR}/messages/utf.eml
 
 *** Test Cases ***
 WHITELISTS
@@ -76,7 +74,3 @@ VALID SPF and NO DKIM
   Do Not Expect Symbol  R_DKIM_REJECT
   Do Not Expect Symbol  WHITELIST_SPF_DKIM
   Do Not Expect Symbol  R_DKIM_ALLOW
-
-*** Keywords ***
-Whitelist Setup
-  New Setup

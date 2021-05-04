@@ -1,14 +1,14 @@
 *** Settings ***
-Suite Setup     Surbl Setup
-Suite Teardown  Surbl Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/surbl.conf
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/surbl.conf
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 SURBL resolve ip
@@ -160,11 +160,3 @@ SURBL url compose map 2
 SURBL url compose map 3
   Scan File  ${RSPAMD_TESTDIR}/messages/url13.eml
   Expect Symbol With Exact Options  BAD_SUBDOMAIN  41.black.sanchez.com:url
-
-*** Keywords ***
-Surbl Setup
-  New Setup
-
-Surbl Teardown
-  Normal Teardown
-  Terminate All Processes    kill=True

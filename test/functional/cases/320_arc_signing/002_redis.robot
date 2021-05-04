@@ -1,16 +1,16 @@
 *** Settings ***
 Suite Setup     ARC Signing Setup
-Suite Teardown  Normal Teardown
+Suite Teardown  Rspamd Redis Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/arc_signing/redis.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/arc_signing/redis.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
@@ -23,8 +23,7 @@ TEST NOT SIGNED - USERNAME WRONG DOMAIN
 
 *** Keywords ***
 ARC Signing Setup
-  Run Redis
+  Rspamd Redis Setup
   Redis HSET  TEST_DKIM_SELECTORS  cacophony.za.org  arc
   ${key} =  Get File  ${RSPAMD_TESTDIR}/configs/dkim.key
   Redis HSET  TEST_DKIM_KEYS  arc.cacophony.za.org  ${key}
-  New Setup

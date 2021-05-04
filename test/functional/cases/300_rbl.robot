@@ -1,15 +1,15 @@
 *** Settings ***
-Suite Setup     Rbl Setup
-Suite Teardown  Rbl Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/rbl.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/rbl.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 RBL FROM MISS
@@ -68,11 +68,3 @@ SELECTORS COMBINED
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml  From=user@example.org  Helo=example.org
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_from
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
-
-*** Keywords ***
-Rbl Setup
-  New Setup
-
-Rbl Teardown
-  Normal Teardown
-  Terminate All Processes    kill=True

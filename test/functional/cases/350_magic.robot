@@ -1,15 +1,15 @@
 *** Settings ***
-Suite Setup     Magic Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_script.conf
-${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/magic.lua
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_script.conf
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/magic.lua
+${RSPAMD_SCOPE}       Suite
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Magic detections bundle 1
@@ -69,7 +69,3 @@ Magic detections bundle 1
   ...  MAGIC_SYM_BAT_54
   ...  MAGIC_SYM_ICS_55
   ...  MAGIC_SYM_VCF_56
-
-*** Keywords ***
-Magic Setup
-  New Setup

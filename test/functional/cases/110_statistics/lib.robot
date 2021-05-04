@@ -4,15 +4,15 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/stats.conf
-${MESSAGE_SPAM}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${MESSAGE_HAM}      ${RSPAMD_TESTDIR}/messages/ham.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_REDIS_SERVER}  null
-${RSPAMD_SCOPE}  Suite
+${CONFIG}                ${RSPAMD_TESTDIR}/configs/stats.conf
+${MESSAGE_HAM}           ${RSPAMD_TESTDIR}/messages/ham.eml
+${MESSAGE_SPAM}          ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}           Suite
+${RSPAMD_REDIS_SERVER}   null
+${RSPAMD_SCOPE}          Suite
 ${RSPAMD_STATS_BACKEND}  redis
-${RSPAMD_STATS_HASH}   null
-${RSPAMD_STATS_KEY}    null
+${RSPAMD_STATS_HASH}     null
+${RSPAMD_STATS_KEY}      null
 
 *** Keywords ***
 Broken Learn Test
@@ -45,10 +45,3 @@ Relearn Test
   ${pass} =  Run Keyword And Return Status  Expect Symbol  BAYES_HAM
   Run Keyword If  ${pass}  Pass Execution  What Me Worry
   Do Not Expect Symbol  BAYES_SPAM
-
-Redis Statistics Setup
-  Run Redis
-  New Setup
-
-Redis Statistics Teardown
-  Normal Teardown

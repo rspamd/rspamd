@@ -1,17 +1,17 @@
 *** Settings ***
-Test Teardown   Normal Teardown
+Test Teardown   Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${MAP_MAP}      ${RSPAMD_TESTDIR}/configs/maps/map.list
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RADIX_MAP}    ${RSPAMD_TESTDIR}/configs/maps/ip2.list
-${REGEXP_MAP}   ${RSPAMD_TESTDIR}/configs/maps/regexp.list
-${RSPAMD_SCOPE}  Test
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MAP_MAP}         ${RSPAMD_TESTDIR}/configs/maps/map.list
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RADIX_MAP}       ${RSPAMD_TESTDIR}/configs/maps/ip2.list
+${REGEXP_MAP}      ${RSPAMD_TESTDIR}/configs/maps/regexp.list
+${RSPAMD_SCOPE}    Test
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Flags
@@ -73,7 +73,7 @@ Rule conditions
 Lua Setup
   [Arguments]  ${RSPAMD_LUA_SCRIPT}
   Set Test Variable  ${RSPAMD_LUA_SCRIPT}
-  New Setup
+  Rspamd Setup
 
 Lua Replace Setup
   [Arguments]  ${LUA_SCRIPT_UNESC}
@@ -85,7 +85,7 @@ Lua Replace Setup
 
 Lua Replace Teardown
   Remove File  ${RSPAMD_LUA_SCRIPT}
-  Normal Teardown
+  Rspamd Teardown
 
 TLD Setup
   [Arguments]  ${RSPAMD_LUA_SCRIPT}

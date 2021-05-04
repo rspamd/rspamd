@@ -1,14 +1,14 @@
 *** Settings ***
-Suite Setup     DMARC Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${RSPAMD_TESTDIR}/configs/dmarc.conf
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/dmarc.conf
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 DMARC NONE PASS DKIM
@@ -86,7 +86,3 @@ DMARC PCT ZERO SP QUARANTINE
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/pct_none1.eml
   ...  IP=37.48.67.26  From=foo@mom.za.org
   Expect Symbol  DMARC_POLICY_SOFTFAIL
-
-*** Keywords ***
-DMARC Setup
-  New Setup

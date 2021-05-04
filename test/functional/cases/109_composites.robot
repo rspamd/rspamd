@@ -1,15 +1,15 @@
 *** Settings ***
-Suite Setup     Composites Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/composites.conf
-${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/composites.lua
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/composites.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/composites.lua
+${RSPAMD_SCOPE}       Suite
 
 *** Test Cases ***
 Composites - All in One
@@ -76,7 +76,3 @@ Composites - Opts RE Hit 3
   Expect Symbol With Score  SYMOPTS4  6.00
   Do Not Expect Symbol  SYMOPTS2
   Do Not Expect Symbol  SYMOPTS1
-
-*** Keywords ***
-Composites Setup
-  New Setup

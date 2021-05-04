@@ -1,14 +1,14 @@
 *** Settings ***
-Suite Setup     SPF Setup
-Suite Teardown  Simple Teardown
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${RSPAMD_TESTDIR}/configs/dmarc.conf
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/dmarc.conf
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 SPF FAIL UNRESOLVEABLE INCLUDE
@@ -135,7 +135,3 @@ SPF UPPERCASE
   Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail11.org.org.za
   Expect Symbol  R_SPF_ALLOW
-
-*** Keywords ***
-SPF Setup
-  New Setup

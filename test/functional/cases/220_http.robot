@@ -7,11 +7,11 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/http.lua
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Test
+${RSPAMD_SCOPE}       Test
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple HTTP request
@@ -43,14 +43,14 @@ SSL Large HTTP request
 Http Setup
   Run Dummy Http
   Run Dummy Https
-  New Setup
+  Rspamd Setup
 
 Http Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid
   Shutdown Process With Children  ${http_pid}
   ${https_pid} =  Get File  /tmp/dummy_https.pid
   Shutdown Process With Children  ${https_pid}
-  Normal Teardown
+  Rspamd Teardown
 
 Run Dummy Http
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py

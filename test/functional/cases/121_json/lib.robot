@@ -2,9 +2,6 @@
 ${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Keywords ***
-JSON Setup
-  New Setup
-
 Stat Test
   @{result} =  HTTP  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /stat
   Check JSON  ${result}[1]

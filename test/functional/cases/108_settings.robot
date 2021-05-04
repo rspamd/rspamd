@@ -6,17 +6,17 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/settings.conf
-${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/settings.lua
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${MESSAGE_PRIORITY}      ${RSPAMD_TESTDIR}/messages/priority.eml
-${MESSAGE_7BIT}      ${RSPAMD_TESTDIR}/messages/utf.eml
-${MESSAGE_CUSTOM_HDR}      ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
-${MESSAGE_ABSENT_MIME}      ${RSPAMD_TESTDIR}/messages/ed25519.eml
-${SPAM_MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam.eml
-${HAM_MESSAGE}      ${RSPAMD_TESTDIR}/messages/ham.eml
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}               ${RSPAMD_TESTDIR}/configs/settings.conf
+${HAM_MESSAGE}          ${RSPAMD_TESTDIR}/messages/ham.eml
+${MESSAGE_7BIT}         ${RSPAMD_TESTDIR}/messages/utf.eml
+${MESSAGE_ABSENT_MIME}  ${RSPAMD_TESTDIR}/messages/ed25519.eml
+${MESSAGE_CUSTOM_HDR}   ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
+${MESSAGE_PRIORITY}     ${RSPAMD_TESTDIR}/messages/priority.eml
+${MESSAGE}              ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}    ${RSPAMD_TESTDIR}/lua/settings.lua
+${RSPAMD_SCOPE}         Suite
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${SPAM_MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam.eml
 
 *** Keywords ***
 Check Everything Disabled
@@ -255,8 +255,8 @@ PRIORITY
 Settings Setup
   Copy File  ${RSPAMD_TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
   Copy File  ${RSPAMD_TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
-  New Setup
+  Rspamd Setup
 
 Settings Teardown
-  Normal Teardown
+  Rspamd Teardown
   Remove Files  /tmp/bayes.spam.sqlite3  /tmp/bayes.ham.sqlite3

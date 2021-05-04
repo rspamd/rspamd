@@ -56,10 +56,6 @@ Do Not Expect Symbols
     ...  msg=Symbol ${symbol} was not expected to be found in result
   END
 
-Generic Setup
-  [Arguments]  &{kw}
-  New Setup  &{kw}
-
 Expect Action
   [Arguments]  ${action}
   Should Be Equal  ${SCAN_RESULT}[action]  ${action}
@@ -156,41 +152,9 @@ Export Scoped Variables
     ...  ELSE  Fail  message="Don't know what to do with scope: ${scope}"
   END
 
-Generic Teardown
-  # Robot Framework 4.0
-  #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
-  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
-  Shutdown Process With Children  ${RSPAMD_PID}
-  Save Run Results  ${RSPAMD_TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
-  Log does not contain segfault record
-  Collect Lua Coverage
-  Cleanup Temporary Directory  ${RSPAMD_TMPDIR}
-
-  # Possibly deal with Redis
-  ${redis_tmpdir} =  Get Variable Value  ${REDIS_TMPDIR}
-  Run Keyword If  '${redis_tmpdir}' != 'None'  Cleanup Temporary Directory  ${REDIS_TMPDIR}
-  ${redis_pid} =  Get Variable Value  ${REDIS_PID}
-  Run Keyword If  '${redis_pid}' == 'None'  Return From Keyword
-  Shutdown Process With Children  ${redis_pid}
-
 Log does not contain segfault record
   ${log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
   Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
-
-New Setup
-  [Arguments]  &{kw}
-
-  # Create and chown temporary directory
-  ${RSPAMD_TMPDIR} =  Make Temporary Directory
-  Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
-
-  # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
-  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
-
-  New Run Rspamd
-
-Normal Teardown
-  Generic Teardown
 
 Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
@@ -207,6 +171,39 @@ Redis SET
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0
+
+Redis Teardown
+  ${redis_pid} =  Get Variable Value  ${REDIS_PID}
+  Shutdown Process With Children  ${redis_pid}
+  Cleanup Temporary Directory  ${REDIS_TMPDIR}
+
+Rspamd Setup
+  # Create and chown temporary directory
+  ${RSPAMD_TMPDIR} =  Make Temporary Directory
+  Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
+
+  # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
+  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+
+  Run Rspamd
+
+Rspamd Redis Setup
+  Run Redis
+  Rspamd Setup
+
+Rspamd Teardown
+  # Robot Framework 4.0
+  #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
+  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
+  Shutdown Process With Children  ${RSPAMD_PID}
+  Save Run Results  ${RSPAMD_TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
+  Log does not contain segfault record
+  Collect Lua Coverage
+  Cleanup Temporary Directory  ${RSPAMD_TMPDIR}
+
+Rspamd Redis Teardown
+  Rspamd Teardown
+  Redis Teardown
 
 Run Redis
   ${RSPAMD_TMPDIR} =  Make Temporary Directory
@@ -226,32 +223,6 @@ Run Redis
   Log  ${redis_log}
 
 Run Rspamd
-  New Run Rspamd
-
-Run Nginx
-  ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
-  ${config} =  Replace Variables  ${template}
-  Create File  ${RSPAMD_TMPDIR}/nginx.conf  ${config}
-  Log  ${config}
-  ${result} =  Run Process  nginx  -c  ${RSPAMD_TMPDIR}/nginx.conf
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
-  Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/nginx.pid  timeout=0.5s
-  Wait Until Keyword Succeeds  5x  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
-  ${NGINX_PID} =  Get File  ${RSPAMD_TMPDIR}/nginx.pid
-  Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
-  ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
-  ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
-  Log  ${nginx_log}
-
-Run Rspamc
-  [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
-  ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
-  Log  ${result.stdout}
-  [Return]  ${result}
-
-New Run Rspamd
   Export Rspamd Variables To Environment
 
   # Dump templated config or errors to log
@@ -284,8 +255,28 @@ New Run Rspamd
   ${RSPAMD_PID} =  Get File  ${RSPAMD_TMPDIR}/rspamd.pid
   Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PID=${RSPAMD_PID}
 
-Simple Teardown
-  Generic Teardown
+Run Nginx
+  ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
+  ${config} =  Replace Variables  ${template}
+  Create File  ${RSPAMD_TMPDIR}/nginx.conf  ${config}
+  Log  ${config}
+  ${result} =  Run Process  nginx  -c  ${RSPAMD_TMPDIR}/nginx.conf
+  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  Should Be Equal As Integers  ${result.rc}  0
+  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/nginx.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
+  ${NGINX_PID} =  Get File  ${RSPAMD_TMPDIR}/nginx.pid
+  Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
+  ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
+  ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
+  Log  ${nginx_log}
+
+Run Rspamc
+  [Arguments]  @{args}
+  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
+  ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  Log  ${result.stdout}
+  [Return]  ${result}
 
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}

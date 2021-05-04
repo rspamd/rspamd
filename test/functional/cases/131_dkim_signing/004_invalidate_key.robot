@@ -7,11 +7,11 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/dkim_signing/invalidate.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/dkim_signing/invalidate.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
@@ -36,7 +36,7 @@ Key Invalidation Setup
   ${key_dir}  Make Temporary Directory
   Set Suite Variable  ${RSPAMD_KEY_DIR}  ${key_dir}
   Copy File  ${RSPAMD_TESTDIR}/configs/dkim-eddsa.key  ${RSPAMD_KEY_DIR}/dkim-eddsa.key
-  New Setup
+  Rspamd Setup
 
 Delete Key
   Remove File  ${RSPAMD_KEY_DIR}/dkim-eddsa.key
@@ -47,4 +47,4 @@ Move Key
 
 Key Invalidation Teardown
   Cleanup Temporary Directory  ${RSPAMD_KEY_DIR}
-  Normal Teardown
+  Rspamd Teardown

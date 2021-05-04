@@ -6,10 +6,10 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${CONFIG}              ${RSPAMD_TESTDIR}/configs/lua_test.conf
 ${MAP_WATCH_INTERVAL}  0.5s
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
+${MESSAGE}             ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_SCOPE}        Suite
 ${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
@@ -39,9 +39,9 @@ Map Reload Setup
   ${lua} =  Replace Variables  ${lua}
   Create File  ${RSPAMD_LUA_SCRIPT}  ${lua}
   Create File  ${MAP_FILE}  ${MAP1}
-  New Setup
+  Rspamd Setup
 
 Map Reload Teardown
   Remove File  ${MAP_FILE}
   Remove File  ${RSPAMD_LUA_SCRIPT}
-  Normal Teardown
+  Rspamd Teardown

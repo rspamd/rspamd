@@ -7,11 +7,11 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${RSPAMD_LUA_SCRIPT}      ${RSPAMD_TESTDIR}/lua/tcp.lua
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/tcp.lua
+${RSPAMD_SCOPE}       Suite
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple TCP request
@@ -47,14 +47,14 @@ Sync API TCP post request
 Servers Setup
   Run Dummy Http
   Run Dummy Ssl
-  New Setup 
+  Rspamd Setup 
 
 Servers Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid
   Shutdown Process With Children  ${http_pid}
   ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
   Shutdown Process With Children  ${ssl_pid}
-  Normal Teardown
+  Rspamd Teardown
 
 Run Dummy Http
   [Arguments]

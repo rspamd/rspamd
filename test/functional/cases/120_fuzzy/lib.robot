@@ -5,25 +5,24 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${ALGORITHM}    ${EMPTY}
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/fuzzy.conf
-${RSPAMD_FLAG1_NUMBER}  50
-${FLAG1_SYMBOL}  R_TEST_FUZZY_DENIED
-${RSPAMD_FLAG2_NUMBER}  51
-${FLAG2_SYMBOL}  R_TEST_FUZZY_WHITE
-${RSPAMD_FUZZY_BACKEND}  redis
+${CONFIG}                       ${RSPAMD_TESTDIR}/configs/fuzzy.conf
+${FLAG1_SYMBOL}                 R_TEST_FUZZY_DENIED
+${FLAG2_SYMBOL}                 R_TEST_FUZZY_WHITE
+${REDIS_SCOPE}                  Suite
+${RSPAMD_FLAG1_NUMBER}          50
+${RSPAMD_FLAG2_NUMBER}          51
+${RSPAMD_FUZZY_BACKEND}         redis
 ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  false
 ${RSPAMD_FUZZY_ENCRYPTION_KEY}  null
-${RSPAMD_FUZZY_KEY}  null
-${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/empty.conf
-${RSPAMD_FUZZY_SHINGLES_KEY}  null
-@{MESSAGES}      ${RSPAMD_TESTDIR}/messages/spam_message.eml  ${RSPAMD_TESTDIR}/messages/zip.eml
-@{MESSAGES_SKIP}  ${RSPAMD_TESTDIR}/messages/priority.eml
-@{RANDOM_MESSAGES}  ${RSPAMD_TESTDIR}/messages/bad_message.eml  ${RSPAMD_TESTDIR}/messages/zip-doublebad.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${SETTINGS_FUZZY_WORKER}  ${EMPTY}
-${SETTINGS_FUZZY_CHECK}  ${EMPTY}
+${RSPAMD_FUZZY_INCLUDE}         ${RSPAMD_TESTDIR}/configs/empty.conf
+${RSPAMD_FUZZY_KEY}             null
+${RSPAMD_FUZZY_SHINGLES_KEY}    null
+${RSPAMD_SCOPE}                 Suite
+${SETTINGS_FUZZY_CHECK}         ${EMPTY}
+${SETTINGS_FUZZY_WORKER}        ${EMPTY}
+@{MESSAGES_SKIP}                ${RSPAMD_TESTDIR}/messages/priority.eml
+@{MESSAGES}                     ${RSPAMD_TESTDIR}/messages/spam_message.eml  ${RSPAMD_TESTDIR}/messages/zip.eml
+@{RANDOM_MESSAGES}              ${RSPAMD_TESTDIR}/messages/bad_message.eml  ${RSPAMD_TESTDIR}/messages/zip-doublebad.eml
 
 *** Keywords ***
 Fuzzy Skip Add Test Base
@@ -96,7 +95,7 @@ Fuzzy Setup Encrypted
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTED_ONLY}  true
   Set Suite Variable  ${RSPAMD_FUZZY_ENCRYPTION_KEY}  ${RSPAMD_KEY_PUB1}
   Set Suite Variable  ${RSPAMD_FUZZY_INCLUDE}  ${RSPAMD_TESTDIR}/configs/fuzzy-encryption-key.conf
-  Fuzzy Setup Generic
+  Rspamd Redis Setup
 
 Fuzzy Setup Encrypted Keyed
   [Arguments]  ${algorithm}
@@ -106,23 +105,19 @@ Fuzzy Setup Encrypted Keyed
 
   Set Suite Variable  ${RSPAMD_FUZZY_KEY}  mYN888sydwLTfE32g2hN
   Set Suite Variable  ${RSPAMD_FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
-  Fuzzy Setup Generic
+  Rspamd Redis Setup
 
 Fuzzy Setup Plain
   [Arguments]  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
-  Fuzzy Setup Generic
+  Rspamd Redis Setup
 
 Fuzzy Setup Keyed
   [Arguments]  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_ALGORITHM}  ${algorithm}
   Set Suite Variable  ${RSPAMD_FUZZY_KEY}  mYN888sydwLTfE32g2hN
   Set Suite Variable  ${RSPAMD_FUZZY_SHINGLES_KEY}  hXUCgul9yYY3Zlk1QIT2
-  Fuzzy Setup Generic
-
-Fuzzy Setup Generic
-  Run Redis
-  New Setup
+  Rspamd Redis Setup
 
 Fuzzy Setup Plain Fasthash
   Fuzzy Setup Plain  fasthash
@@ -180,7 +175,3 @@ Fuzzy Multimessage Overwrite Test
   FOR  ${i}  IN  @{MESSAGES}
     Fuzzy Overwrite Test  ${i}
   END
-
-Fuzzy Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}

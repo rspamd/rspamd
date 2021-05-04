@@ -1,8 +1,8 @@
 *** Settings ***
 Documentation    Test the case when trying to connect to nowhere
 ...              (i.e. redis is not running)
-Test Setup      New Setup
-Test Teardown   Normal Teardown
+Test Setup      Rspamd Setup
+Test Teardown   Rspamd Teardown
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
@@ -11,12 +11,12 @@ Suite Teardown  Terminate All Processes    kill=True
 
 
 *** Variables ***
-${REDIS_SCOPE}  Test
-${RSPAMD_SCOPE}  Test
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/redis.conf
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/redis.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}        Test
 ${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/redis.lua
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_SCOPE}       Test
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 
 *** Test Cases ***

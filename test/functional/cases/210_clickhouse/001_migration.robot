@@ -73,7 +73,7 @@ Clickhosue Teardown
     ${clickhouse_pid} =    Get File    ${RSPAMD_TMPDIR}/clickhouse/clickhouse.pid
     Shutdown Process With Children    ${clickhouse_pid}
     Log File    ${RSPAMD_TMPDIR}/clickhouse/clickhouse-server.err.log
-    Simple Teardown
+    Rspamd Teardown
 
 Prepare rspamd
     &{d} =    Run Rspamd    CONFIG=${RSPAMD_TESTDIR}/configs/clickhouse.conf    TMPDIR=${RSPAMD_TMPDIR}

@@ -7,12 +7,12 @@ Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${RSPAMD_TESTDIR}/configs/p0f.conf
-${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${MESSAGE2}     ${RSPAMD_TESTDIR}/messages/freemail.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/p0f.conf
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/freemail.eml
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 p0f MISS
@@ -80,11 +80,10 @@ p0f BAD RESPONSE
 
 *** Keywords ***
 p0f Setup
-  New Setup
-  Run Redis
+  Rspamd Redis Setup
 
 p0f Teardown
-  Normal Teardown
+  Rspamd Redis Teardown
   Shutdown p0f
   Terminate All Processes    kill=True
 
