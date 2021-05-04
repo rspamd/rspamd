@@ -1,16 +1,16 @@
 *** Settings ***
 Suite Setup     DKIM Signing Setup
 Suite Teardown  Normal Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/dkim_signing/redis.conf
-${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/dkim_signing/redis.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
@@ -27,6 +27,6 @@ TEST NOT SIGNED - USERNAME WRONG DOMAIN
 DKIM Signing Setup
   Run Redis
   Redis HSET  TEST_DKIM_SELECTORS  cacophony.za.org  dkim
-  ${key} =  Get File  ${TESTDIR}/configs/dkim.key
+  ${key} =  Get File  ${RSPAMD_TESTDIR}/configs/dkim.key
   Redis HSET  TEST_DKIM_KEYS  dkim.cacophony.za.org  ${key}
   New Setup

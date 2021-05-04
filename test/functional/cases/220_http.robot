@@ -2,15 +2,15 @@
 Test Setup      Http Setup
 Test Teardown   Http Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-# ${CONFIG}       ${TESTDIR}/configs/http.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/http.lua
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
@@ -43,7 +43,7 @@ SSL Large HTTP request
 Http Setup
   Run Dummy Http
   Run Dummy Https
-  New Setup  LUA_SCRIPT=${TESTDIR}/lua/http.lua  URL_TLD=${URL_TLD}
+  New Setup
 
 Http Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid
@@ -53,11 +53,11 @@ Http Teardown
   Normal Teardown
 
 Run Dummy Http
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_http.py
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   Wait Until Created  /tmp/dummy_http.pid
 
 Run Dummy Https
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_https.py  ${TESTDIR}/util/server.pem
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_https.py  ${RSPAMD_TESTDIR}/util/server.pem
   Wait Until Created  /tmp/dummy_https.pid
 
 Check url

@@ -2,14 +2,14 @@
 Suite Setup      Neural Setup
 Suite Teardown   Normal Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/neural.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/neural.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 
@@ -65,4 +65,4 @@ Check Neural SPAM INVERSE
 *** Keywords ***
 Neural Setup
   Run Redis
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup

@@ -2,18 +2,19 @@
 Test Setup      Redis Setup
 Test Teardown   Normal Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 Suite Teardown  Terminate All Processes    kill=True
 
 
 *** Variables ***
 ${REDIS_SCOPE}  Test
 ${RSPAMD_SCOPE}  Test
-${CONFIG}       ${TESTDIR}/configs/redis.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/redis.conf
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/redis.lua
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 
 
 *** Test Cases ***
@@ -26,5 +27,5 @@ Redis client
 
 *** Keywords ***
 Redis Setup
-  New Setup  LUA_SCRIPT=${TESTDIR}/lua/redis.lua
   Run Redis
+  New Setup

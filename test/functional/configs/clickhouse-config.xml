@@ -3,8 +3,8 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>${TMPDIR}/clickhouse/clickhouse-server.log</log>
-        <errorlog>${TMPDIR}/clickhouse/clickhouse-server.err.log</errorlog>
+        <log>${RSPAMD_TMPDIR}/clickhouse/clickhouse-server.log</log>
+        <errorlog>${RSPAMD_TMPDIR}/clickhouse/clickhouse-server.err.log</errorlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -14,7 +14,7 @@
     <http_port>${CLICKHOUSE_PORT}</http_port>
 
     <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
-    <users_config>${TMPDIR}/users.xml</users_config>
+    <users_config>${RSPAMD_TMPDIR}/users.xml</users_config>
 
     <!-- <listen_reuse_port>0</listen_reuse_port> -->
 
@@ -37,7 +37,7 @@
     <mark_cache_size>5368709120</mark_cache_size>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>${TMPDIR}/clickhouse/</path>
+    <path>${RSPAMD_TMPDIR}/clickhouse/</path>
 
     <!-- Default profile of settings. -->
     <default_profile>default</default_profile>

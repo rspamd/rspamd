@@ -1,16 +1,16 @@
 *** Settings ***
 Suite Setup     Greylist Setup
 Suite Teardown  Greylist Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/greylist.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/greylist.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 GREYLIST NEW
@@ -28,7 +28,7 @@ GREYLIST PASS
 
 *** Keywords ***
 Greylist Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup
   Run Redis
 
 Greylist Teardown

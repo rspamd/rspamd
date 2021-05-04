@@ -1,19 +1,19 @@
 *** Settings ***
 Suite Setup     Magic Setup
 Suite Teardown  Simple Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/lua_script.conf
-${LUA_SCRIPT}   ${TESTDIR}/lua/magic.lua
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_script.conf
+${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/magic.lua
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Magic detections bundle 1
-  Scan File  ${TESTDIR}/messages/gargantua.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/gargantua.eml
   Expect Symbols  MAGIC_SYM_ZIP_2
   ...  MAGIC_SYM_RAR_3
   ...  MAGIC_SYM_EXE_4
@@ -72,4 +72,4 @@ Magic detections bundle 1
 
 *** Keywords ***
 Magic Setup
-  New Setup  LUA_SCRIPT=${LUA_SCRIPT}
+  New Setup

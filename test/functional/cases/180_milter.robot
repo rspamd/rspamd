@@ -2,14 +2,14 @@
 Suite Setup     Milter Setup
 Suite Teardown  Generic Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/milter.conf
+${CONFIG}        ${RSPAMD_TESTDIR}/configs/milter.conf
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 ACCEPT
@@ -29,12 +29,12 @@ COMBINED TEST
 
 *** Keywords ***
 Milter Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup
 
 Milter Test
   [Arguments]  ${mtlua}
-  ${result} =  Run Process  miltertest  -Dport\=${PORT_PROXY}  -Dhost\=${LOCAL_ADDR}  -s  ${TESTDIR}/lua/miltertest/${mtlua}
-  ...  cwd=${TESTDIR}/lua/miltertest
+  ${result} =  Run Process  miltertest  -Dport\=${RSPAMD_PORT_PROXY}  -Dhost\=${RSPAMD_LOCAL_ADDR}  -s  ${RSPAMD_TESTDIR}/lua/miltertest/${mtlua}
+  ...  cwd=${RSPAMD_TESTDIR}/lua/miltertest
   Should Match Regexp  ${result.stderr}  ^$
   Log  ${result.rc}
   Log  ${result.stdout}

@@ -28,12 +28,12 @@ Simple interpreter, two results
 
 Process message callback
   ${handle} =  Start Process  ${RSPAMADM}  lua
-  ${result} =  Write to stdin  ${handle}  .load ${TESTDIR}/lua/rspamadm/test_message_callback.lua\n.message message_callback ${TESTDIR}/messages/empty_part.eml
+  ${result} =  Write to stdin  ${handle}  .load ${RSPAMD_TESTDIR}/lua/rspamadm/test_message_callback.lua\n.message message_callback ${RSPAMD_TESTDIR}/messages/empty_part.eml
   Should Contain  ${result}  n parts = 2
   Should Contain  ${result}  1\n2\n4\n6
 
 Lua batch mode
-  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${TESTDIR}/lua/rspamadm/test_batch.lua
+  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_batch.lua
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Integers  ${result.rc}  0
   Should Be Equal  ${result.stdout}  hello world

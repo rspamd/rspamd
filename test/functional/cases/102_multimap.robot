@@ -1,28 +1,28 @@
 *** Settings ***
 Suite Setup     Multimap Setup
 Suite Teardown  Multimap Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/multimap.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/multimap.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${UTF_MESSAGE}  ${RSPAMD_TESTDIR}/messages/utf.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
-${RCVD1}        ${TESTDIR}/messages/received1.eml
-${RCVD2}        ${TESTDIR}/messages/received2.eml
-${RCVD3}        ${TESTDIR}/messages/received3.eml
-${RCVD4}        ${TESTDIR}/messages/received4.eml
-${URL1}         ${TESTDIR}/messages/url1.eml
-${URL2}         ${TESTDIR}/messages/url2.eml
-${URL3}         ${TESTDIR}/messages/url3.eml
-${URL4}         ${TESTDIR}/messages/url4.eml
-${URL5}         ${TESTDIR}/messages/url5.eml
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${FREEMAIL_CC}  ${TESTDIR}/messages/freemailcc.eml
-${URL_ICS}      ${TESTDIR}/messages/ics.eml
+${RCVD1}        ${RSPAMD_TESTDIR}/messages/received1.eml
+${RCVD2}        ${RSPAMD_TESTDIR}/messages/received2.eml
+${RCVD3}        ${RSPAMD_TESTDIR}/messages/received3.eml
+${RCVD4}        ${RSPAMD_TESTDIR}/messages/received4.eml
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${URL1}         ${RSPAMD_TESTDIR}/messages/url1.eml
+${URL2}         ${RSPAMD_TESTDIR}/messages/url2.eml
+${URL3}         ${RSPAMD_TESTDIR}/messages/url3.eml
+${URL4}         ${RSPAMD_TESTDIR}/messages/url4.eml
+${URL5}         ${RSPAMD_TESTDIR}/messages/url5.eml
+${FREEMAIL_CC}  ${RSPAMD_TESTDIR}/messages/freemailcc.eml
+${URL_ICS}      ${RSPAMD_TESTDIR}/messages/ics.eml
 
 *** Test Cases ***
 URL_ICS
@@ -339,7 +339,7 @@ MAP - MULTISYMBOL DISABLED
 *** Keywords ***
 Multimap Setup
   Run Redis
-  New Setup  REDIS_ADDR=${REDIS_ADDR}  REDIS_PORT=${REDIS_PORT}  URL_TLD=${URL_TLD}
+  New Setup
 
 Multimap Teardown
   Normal Teardown

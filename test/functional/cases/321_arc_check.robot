@@ -1,25 +1,25 @@
 *** Settings ***
 Suite Setup     ARC Setup
 Suite Teardown  Simple Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/arc.conf
+${CONFIG}        ${RSPAMD_TESTDIR}/configs/arc.conf
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 ARC ALLOW CHECK
-  Scan File  ${TESTDIR}/messages/arcallow.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/arcallow.eml
   Expect Symbol  ARC_ALLOW
 
 ARC BAD CHECK
-  Scan File  ${TESTDIR}/messages/arcbad.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/arcbad.eml
   Expect Symbol  ARC_INVALID
 
 
 *** Keywords ***
 ARC Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup

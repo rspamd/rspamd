@@ -1,22 +1,22 @@
 *** Settings ***
 Suite Setup     Settings Setup
 Suite Teardown  Settings Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/settings.conf
-${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${MESSAGE_PRIORITY}      ${TESTDIR}/messages/priority.eml
-${MESSAGE_7BIT}      ${TESTDIR}/messages/utf.eml
-${MESSAGE_CUSTOM_HDR}      ${TESTDIR}/messages/empty-plain-text.eml
-${MESSAGE_ABSENT_MIME}      ${TESTDIR}/messages/ed25519.eml
-${SPAM_MESSAGE}      ${TESTDIR}/messages/spam.eml
-${HAM_MESSAGE}      ${TESTDIR}/messages/ham.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/settings.conf
+${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/settings.lua
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${MESSAGE_PRIORITY}      ${RSPAMD_TESTDIR}/messages/priority.eml
+${MESSAGE_7BIT}      ${RSPAMD_TESTDIR}/messages/utf.eml
+${MESSAGE_CUSTOM_HDR}      ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
+${MESSAGE_ABSENT_MIME}      ${RSPAMD_TESTDIR}/messages/ed25519.eml
+${SPAM_MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam.eml
+${HAM_MESSAGE}      ${RSPAMD_TESTDIR}/messages/ham.eml
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Keywords ***
 Check Everything Disabled
@@ -253,9 +253,9 @@ PRIORITY
 
 *** Keywords ***
 Settings Setup
-  Copy File  ${TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
-  Copy File  ${TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
-  New Setup  LUA_SCRIPT=${LUA_SCRIPT}
+  Copy File  ${RSPAMD_TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
+  Copy File  ${RSPAMD_TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
+  New Setup
 
 Settings Teardown
   Normal Teardown

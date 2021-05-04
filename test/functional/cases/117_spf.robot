@@ -1,104 +1,104 @@
 *** Settings ***
 Suite Setup     SPF Setup
 Suite Teardown  Simple Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/dmarc.conf
+${CONFIG}        ${RSPAMD_TESTDIR}/configs/dmarc.conf
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 SPF FAIL UNRESOLVEABLE INCLUDE
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=37.48.67.26  From=x@fail3.org.org.za
   Expect Symbol  R_SPF_FAIL
 
 SPF DNSFAIL FAILED INCLUDE UNALIGNED
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail2.org.org.za
   Expect Symbol  R_SPF_DNSFAIL
   Expect Symbol  DMARC_POLICY_SOFTFAIL
 
 SPF ALLOW UNRESOLVEABLE INCLUDE
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail3.org.org.za
   Expect Symbol  R_SPF_ALLOW
 
 SPF ALLOW FAILED INCLUDE
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.4.4  From=x@fail2.org.org.za
   Expect Symbol  R_SPF_ALLOW
 
 SPF NA NA
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@za
   Expect Symbol  R_SPF_NA
 
 SPF NA NOREC
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@co.za
   Expect Symbol  R_SPF_NA
 
 SPF NA NXDOMAIN
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@zzzzaaaa
   Expect Symbol  R_SPF_NA
 
 SPF PERMFAIL UNRESOLVEABLE REDIRECT
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail4.org.org.za
   Expect Symbol  R_SPF_PERMFAIL
 
 SPF REDIRECT NO USEABLE ELEMENTS
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail10.org.org.za
   Expect Symbol  R_SPF_PERMFAIL
 
 SPF DNSFAIL FAILED REDIRECT
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail1.org.org.za
   Expect Symbol  R_SPF_DNSFAIL
 
 SPF PERMFAIL NO USEABLE ELEMENTS
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail5.org.org.za
   Expect Symbol  R_SPF_PERMFAIL
 
 SPF FAIL
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@example.net
   Expect Symbol  R_SPF_FAIL
 
 SPF FAIL UNRESOLVEABLE MX
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=1.2.3.4  From=x@fail6.org.org.za
   Expect Symbol  R_SPF_FAIL
 
 SPF FAIL UNRESOLVEABLE A
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=1.2.3.4  From=x@fail7.org.org.za
   Expect Symbol  R_SPF_FAIL
 
 SPF DNSFAIL FAILED A
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=1.2.3.4  From=x@fail8.org.org.za
   Expect Symbol  R_SPF_DNSFAIL
 
 SPF DNSFAIL FAILED MX
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=1.2.3.4  From=x@fail9.org.org.za
   Expect Symbol  R_SPF_DNSFAIL
 
 SPF DNSFAIL FAILED RECORD
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=1.2.3.4  From=x@www.dnssec-failed.org
   Expect Symbol  R_SPF_DNSFAIL
 
 SPF PASS INCLUDE
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@pass1.org.org.za
   Expect Symbol  R_SPF_ALLOW
 
@@ -123,19 +123,19 @@ SPF PTRS
   #Expect Symbol  R_SPF_ALLOW
 
 SPF PERMFAIL REDIRECT WITHOUT SPF
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim4.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim4.eml
   ...  IP=192.0.2.1  From=a@fail1.org.org.za
   Expect Symbol  R_SPF_DNSFAIL
 
 SPF EXTERNAL RELAY
-  Scan File  ${TESTDIR}/messages/external_relay.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/external_relay.eml
   Expect Symbol With Score And Exact Options  R_SPF_ALLOW  1.0  +ip4:37.48.67.26
 
 SPF UPPERCASE
-  Scan File  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  IP=8.8.8.8  From=x@fail11.org.org.za
   Expect Symbol  R_SPF_ALLOW
 
 *** Keywords ***
 SPF Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup

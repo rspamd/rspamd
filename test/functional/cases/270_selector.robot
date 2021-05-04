@@ -1,15 +1,15 @@
 *** Settings ***
 Test Setup      Regex Setup
 Test Teardown   Regex Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/selector.conf
-${MESSAGE}      ${TESTDIR}/messages/subject1.eml
-${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/selector.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/subject1.eml
+${UTF_MESSAGE}  ${RSPAMD_TESTDIR}/messages/utf.eml
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${RSPAMD_SCOPE}  Suite
 
 
@@ -22,7 +22,7 @@ Newlines
 
 *** Keywords ***
 Regex Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup
 
 Regex Teardown
   Normal Teardown

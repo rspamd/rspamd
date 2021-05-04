@@ -2,14 +2,14 @@
 Suite Setup      Neural Setup
 Suite Teardown   Normal Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/neural_noauto.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/neural_noauto.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 
@@ -25,9 +25,9 @@ Collect training vectors & train manually
   # Save neural inputs for later
   ${HAM_ROW} =  Get File  ${SCAN_RESULT}[symbols][SAVE_NN_ROW][options][0]
   Remove File  ${SCAN_RESULT}[symbols][SAVE_NN_ROW][options][0]
-  ${HAM_ROW} =  Run  ${RSPAMADM} lua -a ${HAM_ROW} ${TESTDIR}/util/nn_unpack.lua
+  ${HAM_ROW} =  Run  ${RSPAMADM} lua -a ${HAM_ROW} ${RSPAMD_TESTDIR}/util/nn_unpack.lua
   ${HAM_ROW} =  Evaluate  json.loads("${HAM_ROW}")
-  ${SPAM_ROW} =  Run  ${RSPAMADM} lua -a ${SPAM_ROW} ${TESTDIR}/util/nn_unpack.lua
+  ${SPAM_ROW} =  Run  ${RSPAMADM} lua -a ${SPAM_ROW} ${RSPAMD_TESTDIR}/util/nn_unpack.lua
   ${SPAM_ROW} =  Evaluate  json.loads("${SPAM_ROW}")
   ${HAM_VEC} =  Evaluate  [${HAM_ROW}] * 10
   ${SPAM_VEC} =  Evaluate  [${SPAM_ROW}] * 10
@@ -35,7 +35,7 @@ Collect training vectors & train manually
   # Save variables for use in inverse training
   Set Suite Variable  ${HAM_VEC}
   Set Suite Variable  ${SPAM_VEC}
-  HTTP  POST  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /plugins/neural/learn  ${json1}
+  HTTP  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /plugins/neural/learn  ${json1}
   Sleep  2s  Wait for neural to be loaded
 
 Check Neural HAM
@@ -50,7 +50,7 @@ Check Neural SPAM
 
 Train inverse
   ${json2} =  Evaluate  json.dumps({"spam_vec": ${HAM_VEC}, "ham_vec": ${SPAM_VEC}, "rule": "SHORT"})
-  HTTP  POST  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /plugins/neural/learn  ${json2}
+  HTTP  POST  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /plugins/neural/learn  ${json2}
   Sleep  2s  Wait for neural to be loaded
 
 Check Neural HAM - inverse
@@ -66,4 +66,4 @@ Check Neural SPAM - inverse
 *** Keywords ***
 Neural Setup
   Run Redis
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup

@@ -1,16 +1,16 @@
 *** Settings ***
-Test Setup      Http Setup
-Test Teardown   Http Teardown
+Test Setup      New Setup
+Test Teardown   Normal Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-# ${CONFIG}       ${TESTDIR}/configs/http.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/tcp.lua
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
@@ -23,12 +23,6 @@ Sync API TCP get request when server is down
 
 
 *** Keywords ***
-Http Setup
-  New Setup  LUA_SCRIPT=${TESTDIR}/lua/tcp.lua  URL_TLD=${URL_TLD}
-
-Http Teardown
-  Normal Teardown
-
 Check url
   [Arguments]  ${url}  ${method}  @{expect_results}
   ${result} =  Scan Message With Rspamc  --header=url:${url}  --header=method:${method}  ${MESSAGE}

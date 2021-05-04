@@ -106,7 +106,7 @@ def make_temporary_directory():
     """Creates and returns a unique temporary directory
 
     Example:
-    | ${TMPDIR} = | Make Temporary Directory |
+    | ${RSPAMD_TMPDIR} = | Make Temporary Directory |
     """
     dirname = tempfile.mkdtemp()
     os.chmod(dirname, stat.S_IRUSR |
@@ -140,8 +140,8 @@ def rspamc(addr, port, filename):
     return r.decode('utf-8')
 
 def Scan_File(filename, **headers):
-    addr = BuiltIn().get_variable_value("${LOCAL_ADDR}")
-    port = BuiltIn().get_variable_value("${PORT_NORMAL}")
+    addr = BuiltIn().get_variable_value("${RSPAMD_LOCAL_ADDR}")
+    port = BuiltIn().get_variable_value("${RSPAMD_PORT_NORMAL}")
     headers["Queue-Id"] = BuiltIn().get_variable_value("${TEST_NAME}")
     c = http.client.HTTPConnection("%s:%s" % (addr, port))
     c.request("POST", "/checkv2", open(filename, "rb"), headers)
@@ -314,7 +314,7 @@ LUA_STATSFILE = "luacov.stats.out"
 
 def collect_lua_coverage():
     """
-    Merges ${TMPDIR}/*.luacov.stats.out into luacov.stats.out
+    Merges ${RSPAMD_TMPDIR}/*.luacov.stats.out into luacov.stats.out
 
     Example:
     | Collect Lua Coverage |
@@ -324,7 +324,7 @@ def collect_lua_coverage():
     #    logger.info("ENABLE_LUA_COVERAGE is not present in env, will not collect Lua coverage")
     #    return
 
-    tmp_dir = BuiltIn().get_variable_value("${TMPDIR}")
+    tmp_dir = BuiltIn().get_variable_value("${RSPAMD_TMPDIR}")
 
     coverage = {}
     input_files = []

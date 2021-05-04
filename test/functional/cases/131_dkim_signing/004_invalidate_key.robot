@@ -2,16 +2,16 @@
 Force Tags 	isbroken
 Suite Setup     Key Invalidation Setup
 Suite Teardown  Key Invalidation Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/dkim_signing/invalidate.conf
-${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/dkim_signing/invalidate.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
@@ -34,17 +34,17 @@ TEST NOT SIGNED - KEY NO LONGER MATCHES
 *** Keywords ***
 Key Invalidation Setup
   ${key_dir}  Make Temporary Directory
-  Set Suite Variable  ${KEY_DIR}  ${key_dir}
-  Copy File  ${TESTDIR}/configs/dkim-eddsa.key  ${KEY_DIR}/dkim-eddsa.key
+  Set Suite Variable  ${RSPAMD_KEY_DIR}  ${key_dir}
+  Copy File  ${RSPAMD_TESTDIR}/configs/dkim-eddsa.key  ${RSPAMD_KEY_DIR}/dkim-eddsa.key
   New Setup
 
 Delete Key
-  Remove File  ${KEY_DIR}/dkim-eddsa.key
+  Remove File  ${RSPAMD_KEY_DIR}/dkim-eddsa.key
 
 Move Key
-  Copy File  ${TESTDIR}/configs/dkim.key  ${KEY_DIR}/dkim-eddsa.key
-  Set Modified Time  ${KEY_DIR}/dkim-eddsa.key  NOW + 3s
+  Copy File  ${RSPAMD_TESTDIR}/configs/dkim.key  ${RSPAMD_KEY_DIR}/dkim-eddsa.key
+  Set Modified Time  ${RSPAMD_KEY_DIR}/dkim-eddsa.key  NOW + 3s
 
 Key Invalidation Teardown
-  Cleanup Temporary Directory  ${KEY_DIR}
+  Cleanup Temporary Directory  ${RSPAMD_KEY_DIR}
   Normal Teardown

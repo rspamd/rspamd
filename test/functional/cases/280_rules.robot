@@ -1,22 +1,22 @@
 *** Settings ***
 Suite Setup      Rules Setup
 Suite Teardown   Rules Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/regexp.conf
-${MESSAGE}       ${TESTDIR}/messages/newlines.eml
-${MESSAGE1}      ${TESTDIR}/messages/fws_fn.eml
-${MESSAGE2}      ${TESTDIR}/messages/fws_fp.eml
-${MESSAGE3}      ${TESTDIR}/messages/fws_tp.eml
-${MESSAGE4}      ${TESTDIR}/messages/broken_richtext.eml
-${MESSAGE5}      ${TESTDIR}/messages/badboundary.eml
-${MESSAGE6}      ${TESTDIR}/messages/pdf_encrypted.eml
-${MESSAGE7}      ${TESTDIR}/messages/pdf_js.eml
-${MESSAGE8}      ${TESTDIR}/messages/yand_forward.eml
-${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}        ${RSPAMD_TESTDIR}/configs/regexp.conf
+${MESSAGE}       ${RSPAMD_TESTDIR}/messages/newlines.eml
+${MESSAGE1}      ${RSPAMD_TESTDIR}/messages/fws_fn.eml
+${MESSAGE2}      ${RSPAMD_TESTDIR}/messages/fws_fp.eml
+${MESSAGE3}      ${RSPAMD_TESTDIR}/messages/fws_tp.eml
+${MESSAGE4}      ${RSPAMD_TESTDIR}/messages/broken_richtext.eml
+${MESSAGE5}      ${RSPAMD_TESTDIR}/messages/badboundary.eml
+${MESSAGE6}      ${RSPAMD_TESTDIR}/messages/pdf_encrypted.eml
+${MESSAGE7}      ${RSPAMD_TESTDIR}/messages/pdf_js.eml
+${MESSAGE8}      ${RSPAMD_TESTDIR}/messages/yand_forward.eml
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${RSPAMD_SCOPE}  Suite
 
 
@@ -57,27 +57,27 @@ PDF javascript
   Expect Symbol  PDF_JAVASCRIPT
 
 BITCOIN ADDR
-  Scan File  ${TESTDIR}/messages/btc.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   Expect Symbol  BITCOIN_ADDR
 
 BITCOIN ADDR 2
-  Scan File  ${TESTDIR}/messages/btc2.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc2.eml
   Expect Symbol  BITCOIN_ADDR
 
 BITCOIN ADDR 3
-  Scan File  ${TESTDIR}/messages/btc3.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc3.eml
   Expect Symbol  BITCOIN_ADDR
 
 RCVD_COUNT_ONE
-  Scan File  ${TESTDIR}/messages/btc.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   Expect Symbol  RCVD_COUNT_ONE
 
 RCVD_COUNT_FIVE
-  Scan File  ${TESTDIR}/messages/yand_forward.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/yand_forward.eml
   Expect Symbol  RCVD_COUNT_FIVE
 
 RCVD_COUNT_SEVEN
-  Scan File  ${TESTDIR}/messages/rcvd7.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/rcvd7.eml
   Expect Symbol  RCVD_COUNT_SEVEN
 
 FROM_NEQ_ENVFROM
@@ -85,39 +85,39 @@ FROM_NEQ_ENVFROM
   Expect Symbol  FROM_NEQ_ENVFROM
 
 PHISH_SENDER_A
-  Scan File  ${TESTDIR}/messages/phish_sender.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender.eml
   Expect Symbol With Score And Exact Options  MULTIPLE_FROM  9.0  <any@attack.com>  <admin@legitimate.com>
   Expect Symbol With Score And Exact Options  MULTIPLE_UNIQUE_HEADERS  7.0  From
 
 PHISH_SENDER_B
-  Scan File  ${TESTDIR}/messages/phish_sender2.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender2.eml
   Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_C
-  Scan File  ${TESTDIR}/messages/phish_sender3.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender3.eml
   Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_D
-  Scan File  ${TESTDIR}/messages/phish_sender4.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender4.eml
   Expect Symbol  BROKEN_HEADERS
 
 PHISH_SENDER_E
-  Scan File  ${TESTDIR}/messages/phish_sender5.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender5.eml
   Expect Symbol  MULTIPLE_FROM
   Expect Symbol With Exact Options  DMARC_NA  Duplicate From header
 
 PHISH_SENDER_ROUTING_PART
-  Scan File  ${TESTDIR}/messages/phish_sender6.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender6.eml
   Expect Symbol  FROM_INVALID
 
 REPLYTO_ADDR_EQ_FROM
-  Scan File  ${TESTDIR}/messages/replyto_addr_eq_from.eml
+  Scan File  ${RSPAMD_TESTDIR}/messages/replyto_addr_eq_from.eml
   Expect Symbol  REPLYTO_ADDR_EQ_FROM
 
 
 *** Keywords ***
 Rules Setup
-  New Setup  URL_TLD=${URL_TLD}
+  New Setup
 
 Rules Teardown
   Normal Teardown

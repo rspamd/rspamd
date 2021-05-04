@@ -1,17 +1,17 @@
 *** Settings ***
 Suite Setup     New Setup
 Suite Teardown  Normal Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/dkim_signing/sign_maps.conf
-${MESSAGE}      ${TESTDIR}/messages/dmarc/fail_none.eml
-${MESSAGE_FAIL}      ${TESTDIR}/messages/dmarc/fail_none1.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/dkim_signing/sign_maps.conf
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none.eml
+${MESSAGE_FAIL}      ${RSPAMD_TESTDIR}/messages/dmarc/fail_none1.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED

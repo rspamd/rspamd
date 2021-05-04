@@ -1,14 +1,14 @@
 *** Settings ***
 Suite Setup     Force Actions Setup
 Suite Teardown  Force Actions Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/force_actions.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${MESSAGE} 		${TESTDIR}/messages/url7.eml
+${CONFIG}       ${RSPAMD_TESTDIR}/configs/force_actions.conf
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${MESSAGE} 		${RSPAMD_TESTDIR}/messages/url7.eml
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
