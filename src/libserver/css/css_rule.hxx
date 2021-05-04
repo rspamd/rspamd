@@ -89,7 +89,7 @@ public:
 	};
 
 	css_declarations_block() = default;
-	auto add_rule(rule_shared_ptr &&rule) -> bool;
+	auto add_rule(rule_shared_ptr rule) -> bool;
 	auto merge_block(const css_declarations_block &other,
 				  merge_type how = merge_type::merge_duplicate) -> void;
 	auto get_rules(void) const -> const auto & {

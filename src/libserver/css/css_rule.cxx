@@ -26,16 +26,43 @@ namespace rspamd::css {
 /* Class methods */
 void css_rule::override_values(const css_rule &other)
 {
-	values.resize(0);
-	values.reserve(other.values.size());
+	int bits = 0;
+	/* Ensure that our bitset is large enough */
+	static_assert(static_cast<std::size_t>(css_value::css_value_type::CSS_VALUE_NYI) << 1 <
+				  std::numeric_limits<int>::max());
 
-	std::copy(other.values.begin(), other.values.end(),
-			std::back_inserter(values));
+	for (const auto &v : values) {
+		bits |= static_cast<int>(v.type);
+	}
+
+	for (const auto &ov : other.values) {
+		if (isset(&bits, static_cast<int>(ov.type))) {
+			/* We need to override the existing value */
+			/*
+			 * The algorithm is not very efficient,
+			 * so we need to sort the values first and have a O(N) algorithm
+			 * On the other hand, values vectors are usually limited to the
+			 * number of elements about less then 10, so this O(N^2) algorithm
+			 * is probably ok here
+			 */
+			for (auto &v : values) {
+				if (v.type == ov.type) {
+					v = ov;
+				}
+			}
+		}
+	}
+
+	/* Copy only not set values */
+	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
+			[&bits](const auto &elt) -> bool {
+				return !isset(&bits, static_cast<int>(elt.type));
+			});
 }
 
 void css_rule::merge_values(const css_rule &other)
 {
-	int bits = 0;
+	unsigned int bits = 0;
 	/* Ensure that our bitset is large enough */
 	static_assert(static_cast<std::size_t>(css_value::css_value_type::CSS_VALUE_NYI) << 1 <
 		std::numeric_limits<int>::max());
@@ -51,7 +78,7 @@ void css_rule::merge_values(const css_rule &other)
 	});
 }
 
-auto css_declarations_block::add_rule(rule_shared_ptr &&rule) -> bool
+auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
 {
 	auto it = rules.find(rule);
 	auto &&remote_prop = rule->get_prop();
@@ -319,7 +346,7 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 -> void {
 	const auto &other_rules = other.get_rules();
 
-	for (const auto &rule : other_rules) {
+	for (auto &rule : other_rules) {
 		auto &&found_it = rules.find(rule);
 
 		if (found_it != rules.end()) {
@@ -327,11 +354,11 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 			switch (how) {
 			case merge_type::merge_override:
 				/* Override */
-				rules.insert(rule);
+				(*found_it)->override_values(*rule);
 				break;
 			case merge_type::merge_duplicate:
 				/* Merge values */
-				(*found_it)->merge_values(*rule);
+				add_rule(rule);
 				break;
 			case merge_type::merge_parent:
 				/* Do not merge parent rule if more specific local one is presented */
