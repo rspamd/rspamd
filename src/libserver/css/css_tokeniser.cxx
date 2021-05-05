@@ -597,6 +597,8 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 				else if (next_c == '-') {
 					if (i + 2 < input.size() && input[i + 2] == '>') {
 						/* XML like comment */
+						offset += 3;
+
 						return make_token<css_parser_token::token_type::cdc_token>();
 					}
 				}
