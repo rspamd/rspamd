@@ -419,6 +419,12 @@ extern uint64_t ottery_rand_uint64(void);
 #endif
 #endif
 
+#ifdef __cplusplus
+  #define RSPAMD_CONSTRUCTOR(f) \
+        static void f(void); \
+        struct f##_t_ { f##_t_(void) { f(); } }; static f##_t_ f##_; \
+        static void f(void)
+#else
 #if  __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 7)
   #define RSPAMD_CONSTRUCTOR(f) \
           static void f(void) __attribute__((constructor)); \
@@ -430,6 +436,7 @@ extern uint64_t ottery_rand_uint64(void);
   /* In fact, everything else is not supported ¯\_(ツ)_/¯ */
   #error incompatible compiler found, need gcc > 2.7 or clang
 #endif
+#endif /* __cplusplus */
 
 #ifdef __GNUC__
 #define RSPAMD_CONST_FUNCTION __attribute__ ((const))
