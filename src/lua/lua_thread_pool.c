@@ -159,12 +159,17 @@ lua_thread_pool_return_full (struct lua_thread_pool *pool,
 
 void
 lua_thread_pool_terminate_entry_full (struct lua_thread_pool *pool,
-		struct thread_entry *thread_entry, const gchar *loc)
+									  struct thread_entry *thread_entry, const gchar *loc,
+									  bool enforce)
 {
 	struct thread_entry *ent = NULL;
 
-	/* we should only terminate failed threads */
-	g_assert (lua_status (thread_entry->lua_state) != 0 && lua_status (thread_entry->lua_state) != LUA_YIELD);
+
+	if (!enforce) {
+		/* we should only terminate failed threads */
+		g_assert (lua_status(thread_entry->lua_state) != 0 &&
+			lua_status(thread_entry->lua_state) != LUA_YIELD);
+	}
 
 	if (pool->running_entry == thread_entry) {
 		pool->running_entry = NULL;
@@ -327,7 +332,7 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 			 * Maybe there is a way to recover here.
 			 * For now, just remove faulty thread
 			 */
-			lua_thread_pool_terminate_entry_full (pool, thread_entry, loc);
+			lua_thread_pool_terminate_entry_full (pool, thread_entry, loc, false);
 		}
 	}
 }

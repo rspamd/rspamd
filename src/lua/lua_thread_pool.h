@@ -192,9 +192,9 @@ lua_thread_resume_full (struct thread_entry *thread_entry,
 void
 lua_thread_pool_terminate_entry_full (struct lua_thread_pool *pool,
 								 struct thread_entry *thread_entry,
-								 const gchar *loc);
+								 const gchar *loc, bool enforce);
 #define lua_thread_pool_terminate_entry(pool, thread_entry) \
-    lua_thread_pool_terminate_entry_full (pool, thread_entry, G_STRLOC)
+    lua_thread_pool_terminate_entry_full (pool, thread_entry, G_STRLOC, false)
 
 #ifdef  __cplusplus
 }

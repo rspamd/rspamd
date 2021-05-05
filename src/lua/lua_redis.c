@@ -685,8 +685,8 @@ lua_redis_callback_sync (redisAsyncContext *ac, gpointer r, gpointer priv)
 			}
 			else {
 				/* We cannot resume the thread as the associated task has gone */
-				lua_thread_pool_terminate_entry (ud->cfg->lua_thread_pool,
-						ctx->thread);
+				lua_thread_pool_terminate_entry_full (ud->cfg->lua_thread_pool,
+						ctx->thread, G_STRLOC, true);
 				ctx->thread = NULL;
 			}
 		}
