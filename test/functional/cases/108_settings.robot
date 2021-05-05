@@ -1,22 +1,22 @@
 *** Settings ***
 Suite Setup     Settings Setup
 Suite Teardown  Settings Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
-${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${MESSAGE_PRIORITY}      ${TESTDIR}/messages/priority.eml
-${MESSAGE_7BIT}      ${TESTDIR}/messages/utf.eml
-${MESSAGE_CUSTOM_HDR}      ${TESTDIR}/messages/empty-plain-text.eml
-${MESSAGE_ABSENT_MIME}      ${TESTDIR}/messages/ed25519.eml
-${SPAM_MESSAGE}      ${TESTDIR}/messages/spam.eml
-${HAM_MESSAGE}      ${TESTDIR}/messages/ham.eml
-${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}               ${RSPAMD_TESTDIR}/configs/settings.conf
+${HAM_MESSAGE}          ${RSPAMD_TESTDIR}/messages/ham.eml
+${MESSAGE_7BIT}         ${RSPAMD_TESTDIR}/messages/utf.eml
+${MESSAGE_ABSENT_MIME}  ${RSPAMD_TESTDIR}/messages/ed25519.eml
+${MESSAGE_CUSTOM_HDR}   ${RSPAMD_TESTDIR}/messages/empty-plain-text.eml
+${MESSAGE_PRIORITY}     ${RSPAMD_TESTDIR}/messages/priority.eml
+${MESSAGE}              ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}    ${RSPAMD_TESTDIR}/lua/settings.lua
+${RSPAMD_SCOPE}         Suite
+${RSPAMD_URL_TLD}       ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
+${SPAM_MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam.eml
 
 *** Keywords ***
 Check Everything Disabled
@@ -253,11 +253,10 @@ PRIORITY
 
 *** Keywords ***
 Settings Setup
-  Copy File  ${TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
-  Copy File  ${TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/settings.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  Copy File  ${RSPAMD_TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
+  Copy File  ${RSPAMD_TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
+  Rspamd Setup
 
 Settings Teardown
-  Normal Teardown
+  Rspamd Teardown
+  Remove Files  /tmp/bayes.spam.sqlite3  /tmp/bayes.ham.sqlite3

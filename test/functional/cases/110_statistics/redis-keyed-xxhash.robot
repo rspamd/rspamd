@@ -1,13 +1,12 @@
 *** Settings ***
-Suite Setup     Redis Statistics Setup
-Suite Teardown  Redis Statistics Teardown
+Suite Setup     Rspamd Redis Setup
+Suite Teardown  Rspamd Redis Teardown
 Resource        lib.robot
 
 *** Variables ***
-${REDIS_SERVER}  servers = "${REDIS_ADDR}:${REDIS_PORT}"
-${STATS_BACKEND}  redis
-${STATS_HASH}   hash = "xxhash";
-${STATS_KEY}    key = "${KEY_PVT1}";
+${RSPAMD_REDIS_SERVER}  ${RSPAMD_REDIS_ADDR}:${RSPAMD_REDIS_PORT}
+${RSPAMD_STATS_HASH}    xxhash
+${RSPAMD_STATS_KEY}     ${RSPAMD_KEY_PVT1}
 
 *** Test Cases ***
 Learn

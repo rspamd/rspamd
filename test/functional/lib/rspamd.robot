@@ -5,7 +5,7 @@ Library         Process
 
 *** Keywords ***
 Check Controller Errors
-  @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /errors
+  @{result} =  HTTP  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /errors
   Should Be Equal As Integers  ${result}[0]  200
   Log  ${result}[1]
 
@@ -54,16 +54,6 @@ Do Not Expect Symbols
   FOR  ${symbol}  IN  @{symbols}
     Dictionary Should Not Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
     ...  msg=Symbol ${symbol} was not expected to be found in result
-  END
-
-Generic Setup
-  [Arguments]  @{vargs}  &{kwargs}
-  &{d} =  Run Rspamd  @{vargs}  &{kwargs}
-  ${keys} =  Get Dictionary Keys  ${d}
-  FOR  ${i}  IN  @{keys}
-    Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  ${d}[${i}]
-    ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  ${d}[${i}]
-    ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
   END
 
 Expect Action
@@ -126,6 +116,13 @@ Expect Symbol With Score
   Should Be Equal As Numbers  ${SCAN_RESULT}[symbols][${symbol}][score]  ${score}
   ...  msg="Symbol ${symbol} has score of ${SCAN_RESULT}[symbols][${symbol}][score] but expected ${score}"
 
+Expect Symbols
+  [Arguments]  @{symbols}
+  FOR  ${symbol}  IN  @{symbols}
+    Dictionary Should Contain Key  ${SCAN_RESULT}[symbols]  ${symbol}
+    ...  msg=Symbol ${symbol} wasn't found in result
+  END
+
 Expect Symbols With Scores
   [Arguments]  &{symscores}
   FOR  ${key}  ${value}  IN  &{symscores}
@@ -140,24 +137,28 @@ Expect Symbol With Score And Exact Options
   Expect Symbol With Exact Options  ${symbol}  @{options}
   Expect Symbol With Score  ${symbol}  ${score}
 
-Generic Teardown
-  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
-  Shutdown Process With Children  ${RSPAMD_PID}
-  Save Run Results  ${TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
-  Log does not contain segfault record
-  Collect Lua Coverage
-  Cleanup Temporary Directory  ${TMPDIR}
+Export Rspamd Variables To Environment
+  &{all_vars} =  Get Variables  no_decoration=True
+  FOR  ${k}  ${v}  IN  &{all_vars}
+    Run Keyword If  '${k}'.startswith("RSPAMD_")  Set Environment Variable  ${k}  ${v}
+  END
+
+Export Scoped Variables
+  [Arguments]  ${scope}  &{vars}
+  FOR  ${k}  ${v}  IN  &{vars}
+    Run Keyword If  '${scope}' == 'Test'  Set Test Variable  ${${k}}  ${v}
+    ...  ELSE IF  '${scope}' == 'Suite'  Set Suite Variable  ${${k}}  ${v}
+    ...  ELSE IF  '${scope}' == 'Global'  Set Global Variable  ${${k}}  ${v}
+    ...  ELSE  Fail  message="Don't know what to do with scope: ${scope}"
+  END
 
 Log does not contain segfault record
-  ${log} =  Get File  ${TMPDIR}/rspamd.log  encoding_errors=ignore
+  ${log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
   Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
-
-Normal Teardown
-  Generic Teardown
 
 Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
-  ${result} =  Run Process  redis-cli  -h  ${REDIS_ADDR}  -p  ${REDIS_PORT}
+  ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  HSET  ${hash}  ${key}  ${value}
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Log  ${result.stdout}
@@ -165,83 +166,117 @@ Redis HSET
 
 Redis SET
   [Arguments]  ${key}  ${value}
-  ${result} =  Run Process  redis-cli  -h  ${REDIS_ADDR}  -p  ${REDIS_PORT}
+  ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  SET  ${key}  ${value}
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0
 
+Redis Teardown
+  ${redis_pid} =  Get Variable Value  ${REDIS_PID}
+  Shutdown Process With Children  ${redis_pid}
+  Cleanup Temporary Directory  ${REDIS_TMPDIR}
+
+Rspamd Setup
+  # Create and chown temporary directory
+  ${RSPAMD_TMPDIR} =  Make Temporary Directory
+  Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
+
+  # Export ${RSPAMD_TMPDIR} to appropriate scope according to ${RSPAMD_SCOPE}
+  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+
+  Run Rspamd
+
+Rspamd Redis Setup
+  Run Redis
+  Rspamd Setup
+
+Rspamd Teardown
+  # Robot Framework 4.0
+  #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
+  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
+  Shutdown Process With Children  ${RSPAMD_PID}
+  Save Run Results  ${RSPAMD_TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
+  Log does not contain segfault record
+  Collect Lua Coverage
+  Cleanup Temporary Directory  ${RSPAMD_TMPDIR}
+
+Rspamd Redis Teardown
+  Rspamd Teardown
+  Redis Teardown
+
 Run Redis
-  ${template} =  Get File  ${TESTDIR}/configs/redis-server.conf
+  ${RSPAMD_TMPDIR} =  Make Temporary Directory
+  ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/redis-server.conf
   ${config} =  Replace Variables  ${template}
-  Create File  ${TMPDIR}/redis-server.conf  ${config}
+  Create File  ${RSPAMD_TMPDIR}/redis-server.conf  ${config}
   Log  ${config}
-  ${result} =  Run Process  redis-server  ${TMPDIR}/redis-server.conf
+  ${result} =  Run Process  redis-server  ${RSPAMD_TMPDIR}/redis-server.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${TMPDIR}/redis.pid  timeout=0.5s
-  Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${REDIS_ADDR}  ${REDIS_PORT}
-  ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
-  Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
-  ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}
-  ${redis_log} =  Get File  ${TMPDIR}/redis.log
+  Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/redis.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
+  ${REDIS_PID} =  Get File  ${RSPAMD_TMPDIR}/redis.pid
+  ${REDIS_PID} =  Convert To Number  ${REDIS_PID}
+  Export Scoped Variables  ${REDIS_SCOPE}  REDIS_PID=${REDIS_PID}  REDIS_TMPDIR=${RSPAMD_TMPDIR}
+  ${redis_log} =  Get File  ${RSPAMD_TMPDIR}/redis.log
   Log  ${redis_log}
 
+Run Rspamd
+  Export Rspamd Variables To Environment
+
+  # Dump templated config or errors to log
+  ${result} =  Run Process  ${RSPAMADM}  configdump  -c  ${CONFIG}
+  # We need to send output to files (or discard output) to avoid hanging Robot
+  ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
+  ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout
+  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/configdump.stderr
+  Log  ${configdump}
+
+  # Fix directory ownership (maybe do this somewhere else)
+  Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
+
+  # Run Rspamd
+  ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
+  ...  -c  ${CONFIG}  env:TMPDIR=${RSPAMD_TMPDIR}  env:DBDIR=${RSPAMD_TMPDIR}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  # We need to send output to files (or discard output) to avoid hanging Robot
+  ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
+
+  # Abort if it failed
+  Should Be Equal As Integers  ${result.rc}  0
+
+  # Wait for pid file to be written
+  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/rspamd.pid  timeout=0.5s
+
+  # Confirm worker is reachable
+  Wait Until Keyword Succeeds  5x  1 sec  Ping Rspamd  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_NORMAL}
+
+  # Read PID from PIDfile and export it to appropriate scope as ${RSPAMD_PID}
+  ${RSPAMD_PID} =  Get File  ${RSPAMD_TMPDIR}/rspamd.pid
+  Export Scoped Variables  ${RSPAMD_SCOPE}  RSPAMD_PID=${RSPAMD_PID}
+
 Run Nginx
-  ${template} =  Get File  ${TESTDIR}/configs/nginx.conf
+  ${template} =  Get File  ${RSPAMD_TESTDIR}/configs/nginx.conf
   ${config} =  Replace Variables  ${template}
-  Create File  ${TMPDIR}/nginx.conf  ${config}
+  Create File  ${RSPAMD_TMPDIR}/nginx.conf  ${config}
   Log  ${config}
-  ${result} =  Run Process  nginx  -c  ${TMPDIR}/nginx.conf
+  ${result} =  Run Process  nginx  -c  ${RSPAMD_TMPDIR}/nginx.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${TMPDIR}/nginx.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/nginx.pid  timeout=0.5s
   Wait Until Keyword Succeeds  5x  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
-  ${NGINX_PID} =  Get File  ${TMPDIR}/nginx.pid
+  ${NGINX_PID} =  Get File  ${RSPAMD_TMPDIR}/nginx.pid
   Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
   ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
-  ${nginx_log} =  Get File  ${TMPDIR}/nginx.log
+  ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
   Log  ${nginx_log}
 
 Run Rspamc
   [Arguments]  @{args}
   ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
-  ...  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  @{args}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   Log  ${result.stdout}
   [Return]  ${result}
-
-Run Rspamd
-  [Arguments]  @{vargs}  &{kwargs}
-  ${has_CONFIG} =  Evaluate  'CONFIG' in $kwargs
-  ${has_TMPDIR} =  Evaluate  'TMPDIR' in $kwargs
-  ${CONFIG} =  Set Variable If  '${has_CONFIG}' == 'True'  ${kwargs}[CONFIG]  ${CONFIG}
-  &{d} =  Create Dictionary
-  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  ${kwargs}[TMPDIR]
-  ...  ELSE  Make Temporary Directory
-  Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
-  ${template} =  Get File  ${CONFIG}
-  # TODO: stop using this; we have Lupa now
-  FOR  ${i}  IN  @{vargs}
-    ${newvalue} =  Replace Variables  ${${i}}
-    Set To Dictionary  ${d}  ${i}=${newvalue}
-  END
-  ${config} =  Replace Variables  ${template}
-  ${config} =  Replace Variables  ${config}
-  Log  ${config}
-  Create File  ${tmpdir}/rspamd.conf  ${config}
-  ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
-  ...  env:RSPAMD_INSTALLROOT=${INSTALLROOT}  stdout=DEVNULL  stderr=DEVNULL
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
-  Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s
-  Wait Until Keyword Succeeds  5x  1 sec  Ping Rspamd  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
-  Set To Dictionary  ${d}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
-  [Return]  &{d}
-
-Simple Teardown
-  Generic Teardown
 
 Scan File By Reference
   [Arguments]  ${filename}  &{headers}
@@ -251,14 +286,14 @@ Scan File By Reference
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
-  ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  @{vargs}  ${msg_file}
+  ${result} =  Run Rspamc  -p  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_NORMAL}  @{vargs}  ${msg_file}
   [Return]  ${result}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
   ${len} =  Get Length  ${vargs}
   ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s
-  ...  ${TMPDIR}/rspamd.sock  fuzzy_sync
+  ...  ${RSPAMD_TMPDIR}/rspamd.sock  fuzzy_sync
   ...  ELSE  Run Process  ${RSPAMADM}  control  -s  ${vargs}[0]/rspamd.sock
   ...  fuzzy_sync
   Log  ${result.stdout}

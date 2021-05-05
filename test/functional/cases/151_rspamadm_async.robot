@@ -2,26 +2,25 @@
 Test Setup      Rspamadm test Setup
 Test Teardown   Rspamadm test Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 Suite Teardown  Terminate All Processes    kill=True
 
 *** Variables ***
-${REDIS_SCOPE}   Test
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${PLUGIN_CONFIG}
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/plugins.conf
+${REDIS_SCOPE}     Test
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Tcp client
-  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${TESTDIR}/lua/rspamadm/test_tcp_client.lua
+  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_tcp_client.lua
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Integers  ${result.rc}  0
   Should Be Equal  ${result.stdout}  hello post
 
 Redis client
-  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${TESTDIR}/lua/rspamadm/test_redis_client.lua
+  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_redis_client.lua
   Should Match Regexp  ${result.stderr}  ^$
   Should Be Equal As Integers  ${result.rc}  0
   Should Be Equal  ${result.stdout}  true\thello from lua on redis
@@ -29,7 +28,7 @@ Redis client
 DNS client
   ${tmpdir} =  Prepare temp directory  ${CONFIG}
   Set test variable  ${tmpdir}
-  ${result} =  Run Process  ${RSPAMADM}  --var\=CONFDIR\=${tmpdir}  lua  -b  ${TESTDIR}/lua/rspamadm/test_dns_client.lua
+  ${result} =  Run Process  ${RSPAMADM}  --var\=CONFDIR\=${tmpdir}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_dns_client.lua
   Log  ${result.stdout}
   Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
@@ -39,8 +38,6 @@ DNS client
 *** Keywords ***
 
 Rspamadm test Setup
-  ${tmpdir} =  Make Temporary Directory
-  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Run Dummy Http
   Run Redis
 
@@ -52,7 +49,7 @@ Rspamadm test Teardown
 
 Run Dummy Http
   [Arguments]
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_http.py
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   Wait Until Created  /tmp/dummy_http.pid
 
 Prepare temp directory

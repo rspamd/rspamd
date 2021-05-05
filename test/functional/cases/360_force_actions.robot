@@ -1,15 +1,15 @@
 *** Settings ***
-Suite Setup     Force Actions Setup
-Suite Teardown  Force Actions Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${MESSAGE} 		${TESTDIR}/messages/url7.eml
-${RSPAMD_SCOPE}  Suite
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/force_actions.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/url7.eml
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 FORCE ACTIONS from reject to add header
@@ -42,13 +42,3 @@ FORCE ACTIONS from add header to reject
   Expect Action  reject
   Expect Symbol  FORCE_ACTION_FORCE_ADD_HEADER_TO_REJECT
 
-
-*** Keywords ***
-Force Actions Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/force_actions.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
-
-Force Actions Teardown
-  Normal Teardown
-  Terminate All Processes    kill=True

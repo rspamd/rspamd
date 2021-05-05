@@ -1,17 +1,17 @@
 *** Settings ***
-Suite Setup     Phishing Setup
-Suite Teardown  Simple Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Suite Setup     Rspamd Setup
+Suite Teardown  Rspamd Teardown
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}        ${TESTDIR}/configs/plugins.conf
-${MESSAGE1}       ${TESTDIR}/messages/phishing1.eml
-${MESSAGE2}      ${TESTDIR}/messages/phishing2.eml
-${MESSAGE3}      ${TESTDIR}/messages/phishing3.eml
-${RSPAMD_SCOPE}  Suite
-${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/phishing.conf
+${MESSAGE1}        ${RSPAMD_TESTDIR}/messages/phishing1.eml
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/phishing2.eml
+${MESSAGE3}        ${RSPAMD_TESTDIR}/messages/phishing3.eml
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
 TEST PHISHING
@@ -25,9 +25,3 @@ TEST PHISHING STRICT ONE
 TEST PHISHING STRICT TWO
   Scan File  ${MESSAGE3}
   Expect Symbol  STRICTER_PHISHING
-
-*** Keywords ***
-Phishing Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/phishing.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG

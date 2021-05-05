@@ -2,17 +2,17 @@
 Suite Setup     Urlredirector Setup
 Suite Teardown  Urlredirector Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
-${MESSAGE}      ${TESTDIR}/messages/redir.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${SETTINGS}     {symbols_enabled=[URL_REDIRECTOR_CHECK]}
-${URL_TLD}      ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/url_redirector.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/redir.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 
 *** Test Cases ***
 RESOLVE URLS
@@ -26,26 +26,18 @@ RESOLVE URLS CACHED
 
 *** Keywords ***
 Urlredirector Setup
-  ${TMPDIR} =    Make Temporary Directory
-  Set Suite Variable        ${TMPDIR}
-  Set Suite Variable  ${REDIS_TMPDIR}  ${TMPDIR}
-  Run Redis
   Run Dummy Http
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/url_redirector.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
+  Rspamd Redis Setup
 
 Urlredirector Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
+  Rspamd Redis Teardown
   #Stop Dummy Http
   Terminate All Processes    kill=True
-  Cleanup Temporary Directory  ${REDIS_TMPDIR}
 
 Stop Dummy Http
   ${http_pid} =  Get File  /tmp/dummy_http.pid
   Shutdown Process With Children  ${http_pid}
 
 Run Dummy Http
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_http.py
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   Wait Until Created  /tmp/dummy_http.pid

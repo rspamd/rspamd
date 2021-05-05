@@ -1,17 +1,17 @@
 *** Settings ***
-Suite Setup      Neural Setup
-Suite Teardown   Neural Teardown
+Suite Setup      Rspamd Redis Setup
+Suite Teardown   Rspamd Redis Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/neural.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/neural.conf
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Train
@@ -61,14 +61,3 @@ Check Neural SPAM INVERSE
   Expect Symbol  NEURAL_HAM_SHORT_PCA
   Do Not Expect Symbol  NEURAL_SPAM_SHORT
   Do Not Expect Symbol  NEURAL_SPAM_SHORT_PCA
-
-*** Keywords ***
-Neural Setup
-  ${TMPDIR} =    Make Temporary Directory
-  Set Suite Variable        ${TMPDIR}
-  Run Redis
-  Generic Setup
-
-Neural Teardown
-  Shutdown Process With Children  ${REDIS_PID}
-  Normal Teardown

@@ -1,16 +1,17 @@
 *** Settings ***
-Test Setup      Http Setup
-Test Teardown   Http Teardown
+Test Setup      Rspamd Setup
+Test Teardown   Rspamd Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Test
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/dns.lua
+${RSPAMD_SCOPE}       Test
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple DNS request
@@ -22,15 +23,3 @@ Faulty DNS request
   Scan File  ${MESSAGE}  To-Resolve=not-resolvable.com
   Expect Symbol With Exact Options  DNS_SYNC_ERROR  requested record is not found
   Expect Symbol With Exact Options  DNS_ERROR  requested record is not found
-
-*** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
-Http Setup
-  Lua Setup  ${TESTDIR}/lua/dns.lua
-
-Http Teardown
-  Normal Teardown

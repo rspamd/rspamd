@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup     Fuzzy Setup Keyed Fasthash
-Suite Teardown  Fuzzy Teardown
+Suite Teardown  Rspamd Redis Teardown
 Resource        lib.robot
 
 *** Test Cases ***

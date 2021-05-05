@@ -1,28 +1,28 @@
 *** Settings ***
-Suite Setup     Antivirus Setup
+Suite Setup     Rspamd Redis Setup
 Suite Teardown  Antivirus Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${MESSAGE2}     ${TESTDIR}/messages/freemail.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${CONFIG}          ${RSPAMD_TESTDIR}/configs/antivirus.conf
+${MESSAGE2}        ${RSPAMD_TESTDIR}/messages/freemail.eml
+${MESSAGE}         ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${REDIS_SCOPE}     Suite
+${RSPAMD_SCOPE}    Suite
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 CLAMAV MISS
-  Run Dummy Clam  ${PORT_CLAM}
+  Run Dummy Clam  ${RSPAMD_PORT_CLAM}
   Scan File  ${MESSAGE}
   Do Not Expect Symbol  CLAM_VIRUS
   Shutdown clamav
 
 CLAMAV HIT
-  Run Dummy Clam  ${PORT_CLAM}  1
+  Run Dummy Clam  ${RSPAMD_PORT_CLAM}  1
   Scan File  ${MESSAGE2}
   Expect Symbol  CLAM_VIRUS
   Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
@@ -39,15 +39,15 @@ CLAMAV CACHE MISS
   Do Not Expect Symbol  CLAMAV_VIRUS_FAIL
 
 FPROT MISS
-  Run Dummy Fprot  ${PORT_FPROT}
+  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}
   Scan File  ${MESSAGE2}
   Do Not Expect Symbol  FPROT_VIRUS
   Do Not Expect Symbol  FPROT_EICAR
   Shutdown fport
 
 FPROT HIT - PATTERN
-  Run Dummy Fprot  ${PORT_FPROT}  1
-  Run Dummy Fprot  ${PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
+  Run Dummy Fprot  ${RSPAMD_PORT_FPROT}  1
+  Run Dummy Fprot  ${RSPAMD_PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
   Scan File  ${MESSAGE}
   Expect Symbol  FPROT_EICAR
   Do Not Expect Symbol  CLAMAV_VIRUS
@@ -71,13 +71,13 @@ FPROT CACHE MISS
   Do Not Expect Symbol  FPROT_VIRUS
 
 AVAST MISS
-  Run Dummy Avast  ${PORT_AVAST}
+  Run Dummy Avast  ${RSPAMD_PORT_AVAST}
   Scan File  ${MESSAGE}
   Do Not Expect Symbol  AVAST_VIRUS
   Shutdown avast
 
 AVAST HIT
-  Run Dummy Avast  ${PORT_AVAST}  1
+  Run Dummy Avast  ${RSPAMD_PORT_AVAST}  1
   Scan File  ${MESSAGE2}
   Expect Symbol  AVAST_VIRUS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
@@ -94,15 +94,8 @@ AVAST CACHE MISS
   Do Not Expect Symbol  AVAST_VIRUS_FAIL
 
 *** Keywords ***
-Antivirus Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/antivirus.conf
-  Set Suite Variable  ${PLUGIN_CONFIG}
-  Generic Setup  PLUGIN_CONFIG
-  Run Redis
-
 Antivirus Teardown
-  Normal Teardown
-  Shutdown Process With Children  ${REDIS_PID}
+  Rspamd Redis Teardown
   Shutdown clamav
   Shutdown fport
   Shutdown avast
@@ -138,12 +131,12 @@ Run Dummy
 
 Run Dummy Clam
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_clamav.pid
-  Run Dummy  ${TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
+  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_clam.py  ${port}  ${found}  ${pid}
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
-  Run Dummy  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
 
 Run Dummy Avast
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_avast.pid
-  Run Dummy  ${TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}
+  Run Dummy  ${RSPAMD_TESTDIR}/util/dummy_avast.py  ${port}  ${found}  ${pid}

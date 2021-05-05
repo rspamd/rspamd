@@ -1,16 +1,16 @@
 *** Settings ***
 Suite Setup     Map Reload Setup
 Suite Teardown  Map Reload Teardown
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
+${CONFIG}              ${RSPAMD_TESTDIR}/configs/lua_test.conf
 ${MAP_WATCH_INTERVAL}  0.5s
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${MESSAGE}             ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_SCOPE}        Suite
+${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 CHECK HIT AND MISS
@@ -19,7 +19,7 @@ CHECK HIT AND MISS
 
 WRITE NEW MAP
   ${TMP_FILE} =  Make Temporary File
-  Copy File  ${TESTDIR}/configs/maps/domains.list.2  ${TMP_FILE}
+  Copy File  ${RSPAMD_TESTDIR}/configs/maps/domains.list.2  ${TMP_FILE}
   Move File  ${TMP_FILE}  ${MAP_FILE}
 
 CHECK HIT AND MISS AFTER RELOAD
@@ -29,19 +29,19 @@ CHECK HIT AND MISS AFTER RELOAD
 
 *** Keywords ***
 Map Reload Setup
-  ${MAP1} =  Get File  ${TESTDIR}/configs/maps/domains.list
+  ${MAP1} =  Get File  ${RSPAMD_TESTDIR}/configs/maps/domains.list
   ${MAP_FILE} =  Make Temporary File
-  ${LUA_SCRIPT} =  Make Temporary File
-  Set Suite Variable  ${LUA_SCRIPT}
+  ${RSPAMD_LUA_SCRIPT} =  Make Temporary File
+  Set Suite Variable  ${RSPAMD_LUA_SCRIPT}
   Set Suite Variable  ${MAP_FILE}
   Set Suite Variable  ${MAP1}
-  ${lua} =  Get File  ${TESTDIR}/lua/mapreload.lua
+  ${lua} =  Get File  ${RSPAMD_TESTDIR}/lua/mapreload.lua
   ${lua} =  Replace Variables  ${lua}
-  Create File  ${LUA_SCRIPT}  ${lua}
+  Create File  ${RSPAMD_LUA_SCRIPT}  ${lua}
   Create File  ${MAP_FILE}  ${MAP1}
-  Generic Setup
+  Rspamd Setup
 
 Map Reload Teardown
   Remove File  ${MAP_FILE}
-  Remove File  ${LUA_SCRIPT}
-  Normal Teardown
+  Remove File  ${RSPAMD_LUA_SCRIPT}
+  Rspamd Teardown

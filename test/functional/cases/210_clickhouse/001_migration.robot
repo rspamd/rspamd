@@ -2,13 +2,13 @@
 Documentation     Checks if rspamd is able to upgrade migration schema from v0 (very initial) to v2
 Test Setup        Clickhouse Setup
 Test Teardown     Clickhosue Teardown
-Variables         ${TESTDIR}/lib/vars.py
-Library           ${TESTDIR}/lib/rspamd.py
+Variables         ${RSPAMD_TESTDIR}/lib/vars.py
+Library           ${RSPAMD_TESTDIR}/lib/rspamd.py
 Library           clickhouse.py
-Resource          ${TESTDIR}/lib/rspamd.robot
+Resource          ${RSPAMD_TESTDIR}/lib/rspamd.robot
 
 *** Variables ***
-${CONFIG}             ${TESTDIR}/configs/clickhouse.conf
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/clickhouse.conf
 ${RSPAMD_SCOPE}       Suite
 ${CLICKHOUSE_PORT}    ${18123}
 
@@ -22,13 +22,13 @@ ${CLICKHOUSE_PORT}    ${18123}
     #    Column should exist    rspamd    Attachments.Digest
     #    Column should exist    rspamd    Symbols.Scores
     #    Schema version should be    3
-#    Upload new schema                    ${TESTDIR}/data/initial_schema/schema.sql
-#    Insert data    rspamd                ${TESTDIR}/data/initial_schema/data.rspamd.sql
-#    Insert data    rspamd_asn            ${TESTDIR}/data/initial_schema/data.rspamd_asn.sql
-#    Insert data    rspamd_urls           ${TESTDIR}/data/initial_schema/data.rspamd_urls.sql
-#    Insert data    rspamd_emails         ${TESTDIR}/data/initial_schema/data.rspamd_emails.sql
-#    Insert data    rspamd_symbols        ${TESTDIR}/data/initial_schema/data.rspamd_symbols.sql
-#    Insert data    rspamd_attachments    ${TESTDIR}/data/initial_schema/data.rspamd_attachments.sql
+#    Upload new schema                    ${RSPAMD_TESTDIR}/data/initial_schema/schema.sql
+#    Insert data    rspamd                ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd.sql
+#    Insert data    rspamd_asn            ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd_asn.sql
+#    Insert data    rspamd_urls           ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd_urls.sql
+#    Insert data    rspamd_emails         ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd_emails.sql
+#    Insert data    rspamd_symbols        ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd_symbols.sql
+#    Insert data    rspamd_attachments    ${RSPAMD_TESTDIR}/data/initial_schema/data.rspamd_attachments.sql
 #    Prepare rspamd
 #    Sleep    2    #TODO: replace this check with waiting until migration finishes
 #    Column should exist    rspamd    Symbols.Scores
@@ -43,8 +43,8 @@ ${CLICKHOUSE_PORT}    ${18123}
 
 # Eventually broken
 #Retention
-#    Upload new schema        ${TESTDIR}/data/schema_2/schema.sql
-#    Insert data    rspamd    ${TESTDIR}/data/schema_2/data.rspamd.sql
+#    Upload new schema        ${RSPAMD_TESTDIR}/data/schema_2/schema.sql
+#    Insert data    rspamd    ${RSPAMD_TESTDIR}/data/schema_2/data.rspamd.sql
 #    Assert rows count    rspamd    56
 #    Prepare rspamd
 #    Sleep    2    #TODO: replace this check with waiting until migration finishes
@@ -52,31 +52,31 @@ ${CLICKHOUSE_PORT}    ${18123}
 
 *** Keywords ***
 Clickhouse Setup
-    ${TMPDIR} =    Make Temporary Directory
-    Set Suite Variable        ${TMPDIR}
-    Set Directory Ownership    ${TMPDIR}    ${RSPAMD_USER}    ${RSPAMD_GROUP}
-    ${template} =    Get File    ${TESTDIR}/configs/clickhouse-config.xml
+    ${RSPAMD_TMPDIR} =    Make Temporary Directory
+    Set Suite Variable        ${RSPAMD_TMPDIR}
+    Set Directory Ownership    ${RSPAMD_TMPDIR}    ${RSPAMD_USER}    ${RSPAMD_GROUP}
+    ${template} =    Get File    ${RSPAMD_TESTDIR}/configs/clickhouse-config.xml
     ${config} =    Replace Variables    ${template}
-    Create File    ${TMPDIR}/clickhouse-config.xml    ${config}
-    Copy File    ${TESTDIR}/configs/clickhouse-users.xml    ${TMPDIR}/users.xml
-    Create Directory           ${TMPDIR}/clickhouse
-    Set Directory Ownership    ${TMPDIR}/clickhouse    clickhouse    clickhouse
+    Create File    ${RSPAMD_TMPDIR}/clickhouse-config.xml    ${config}
+    Copy File    ${RSPAMD_TESTDIR}/configs/clickhouse-users.xml    ${RSPAMD_TMPDIR}/users.xml
+    Create Directory           ${RSPAMD_TMPDIR}/clickhouse
+    Set Directory Ownership    ${RSPAMD_TMPDIR}/clickhouse    clickhouse    clickhouse
     ${result} =    Run Process    su    -s    /bin/sh    clickhouse    -c
-    ...    clickhouse-server --daemon --config-file\=${TMPDIR}/clickhouse-config.xml --pid-file\=${TMPDIR}/clickhouse/clickhouse.pid
+    ...    clickhouse-server --daemon --config-file\=${RSPAMD_TMPDIR}/clickhouse-config.xml --pid-file\=${RSPAMD_TMPDIR}/clickhouse/clickhouse.pid
     Run Keyword If    ${result.rc} != 0    Log    ${result.stderr}
     Should Be Equal As Integers    ${result.rc}    0
     Wait Until Keyword Succeeds    5 sec    50 ms    TCP Connect    localhost    ${CLICKHOUSE_PORT}
-    Set Suite Variable    ${TMPDIR}    ${TMPDIR}
+    Set Suite Variable    ${RSPAMD_TMPDIR}    ${RSPAMD_TMPDIR}
 
 Clickhosue Teardown
     # Sleep 30
-    ${clickhouse_pid} =    Get File    ${TMPDIR}/clickhouse/clickhouse.pid
+    ${clickhouse_pid} =    Get File    ${RSPAMD_TMPDIR}/clickhouse/clickhouse.pid
     Shutdown Process With Children    ${clickhouse_pid}
-    Log File    ${TMPDIR}/clickhouse/clickhouse-server.err.log
-    Simple Teardown
+    Log File    ${RSPAMD_TMPDIR}/clickhouse/clickhouse-server.err.log
+    Rspamd Teardown
 
 Prepare rspamd
-    &{d} =    Run Rspamd    CONFIG=${TESTDIR}/configs/clickhouse.conf    TMPDIR=${TMPDIR}
+    &{d} =    Run Rspamd    CONFIG=${RSPAMD_TESTDIR}/configs/clickhouse.conf    TMPDIR=${RSPAMD_TMPDIR}
     ${keys} =    Get Dictionary Keys    ${d}
     FOR    ${i}    IN    @{keys}
         Run Keyword If    '${RSPAMD_SCOPE}' == 'Suite'    Set Suite Variable    ${${i}}    ${d}[${i}]

@@ -2,15 +2,16 @@
 Test Setup      UDP Setup
 Test Teardown   UDP Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Test
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/udp.lua
+${RSPAMD_SCOPE}       Test
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple UDP request
@@ -26,21 +27,16 @@ Errored UDP request
   Expect Symbol With Exact Options  UDP_FAIL  read timeout
 
 *** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
 UDP Setup
   Run Dummy UDP
-  Lua Setup  ${TESTDIR}/lua/udp.lua
+  Rspamd Setup
 
 UDP Teardown
   ${udp_pid} =  Get File  /tmp/dummy_udp.pid
   Shutdown Process With Children  ${udp_pid}
-  Normal Teardown
+  Rspamd Teardown
 
 Run Dummy UDP
   [Arguments]
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_udp.py  5005
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_udp.py  5005
   Wait Until Created  /tmp/dummy_udp.pid

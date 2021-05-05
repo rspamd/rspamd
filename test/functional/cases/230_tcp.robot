@@ -2,16 +2,16 @@
 Suite Setup      Servers Setup
 Suite Teardown   Servers Teardown
 Library         Process
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
-Variables       ${TESTDIR}/lib/vars.py
+Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
+Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
+Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-# ${CONFIG}       ${TESTDIR}/configs/http.conf
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${CONFIG}       ${TESTDIR}/configs/lua_test.conf
-${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Suite
+${CONFIG}             ${RSPAMD_TESTDIR}/configs/lua_test.conf
+${MESSAGE}            ${RSPAMD_TESTDIR}/messages/spam_message.eml
+${RSPAMD_LUA_SCRIPT}  ${RSPAMD_TESTDIR}/lua/tcp.lua
+${RSPAMD_SCOPE}       Suite
+${RSPAMD_URL_TLD}     ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Simple TCP request
@@ -44,31 +44,26 @@ Sync API TCP post request
   Check url  /content-length  post  HTTP_SYNC_CONTENT_post  hello post
 
 *** Keywords ***
-Lua Setup
-  [Arguments]  ${LUA_SCRIPT}
-  Set Suite Variable  ${LUA_SCRIPT}
-  Generic Setup
-
 Servers Setup
   Run Dummy Http
   Run Dummy Ssl
-  Lua Setup  ${TESTDIR}/lua/tcp.lua
+  Rspamd Setup 
 
 Servers Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid
   Shutdown Process With Children  ${http_pid}
   ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
   Shutdown Process With Children  ${ssl_pid}
-  Normal Teardown
+  Rspamd Teardown
 
 Run Dummy Http
   [Arguments]
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_http.py
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
 
 Run Dummy Ssl
   [Arguments]
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_ssl.py  ${TESTDIR}/util/server.pem
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem
   Wait Until Created  /tmp/dummy_ssl.pid  timeout=2 second
 
 Check url
