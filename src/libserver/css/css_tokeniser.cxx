@@ -533,9 +533,9 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '\r':
 		case '\v': {
 			/* Consume as much space as we can */
-			do {
+			while (i < input.size() && g_ascii_isspace(c)) {
 				c = input[++i];
-			} while (i < input.size() && g_ascii_isspace(c));
+			}
 
 			auto ret = make_token<css_parser_token::token_type::whitespace_token>(
 					std::string_view(&input[offset], i - offset));
