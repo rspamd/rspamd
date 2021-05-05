@@ -534,7 +534,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '\v': {
 			/* Consume as much space as we can */
 			while (i < input.size() && g_ascii_isspace(c)) {
-				c = input[++i];
+				c = input[i++];
 			}
 
 			auto ret = make_token<css_parser_token::token_type::whitespace_token>(
