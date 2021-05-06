@@ -364,8 +364,13 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 
 		/* I wish it was supported properly */
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
-		std::string numbuf{&input[offset], (i - offset)};
-		num = std::stod(numbuf);
+		char numbuf[128], *endptr = NULL;
+		rspamd_strlcpy(numbuf, &input[offset], MIN(i - offset + 1, sizeof(numbuf)));
+		num = g_ascii_strtod(numbuf, &endptr);
+
+		if (endptr && *endptr != '\0') {
+			msg_debug_css("invalid number: %s", numbuf);
+		}
 		offset = i;
 
 		auto ret = make_token<css_parser_token::token_type::number_token>(num);
