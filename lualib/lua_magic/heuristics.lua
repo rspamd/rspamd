@@ -333,7 +333,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
       local b = bytes[idx]
       local n8bit = 0
 
-      while b >= 127 and n8bit < remain do
+      while b >= 127 and idx < remain do
         -- utf8 part
         if bit.band(b, 0xe0) == 0xc0 and remain > 1 and
                 bit.band(bytes[idx + 1], 0xc0) == 0x80 then
