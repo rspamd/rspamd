@@ -249,7 +249,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 					j++;
 				}
 
-				if (input.size() > 3 && input.substr(0, 3) == "url") {
+				if (input.size() - offset > 3 && input.substr(offset, 3) == "url") {
 					if (input[j] == '"' || input[j] == '\'') {
 						/* Function token */
 						auto ret = maybe_escape_sv(i,
