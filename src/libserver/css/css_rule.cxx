@@ -56,7 +56,7 @@ void css_rule::override_values(const css_rule &other)
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
 			[&bits](const auto &elt) -> bool {
-				return !isset(&bits, static_cast<int>(elt.type));
+				return (bits & static_cast<int>(elt.type)) == 0;
 			});
 }
 
@@ -74,8 +74,8 @@ void css_rule::merge_values(const css_rule &other)
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
 			[&bits](const auto &elt) -> bool {
-		return !isset(&bits, static_cast<int>(elt.type));
-	});
+				return (bits & static_cast<int>(elt.type)) == 0;
+			});
 }
 
 auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
