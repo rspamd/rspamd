@@ -329,11 +329,11 @@ exports.text_part_heuristic = function(part, log_obj, _)
   local function is_span_text(span)
     -- We examine 8 bit content, and we assume it might be localized text
     -- if it has more than 3 subsequent 8 bit characters
-    local function rough_8bit_check(bytes, idx, remain)
+    local function rough_8bit_check(bytes, idx, remain, len)
       local b = bytes[idx]
       local n8bit = 0
 
-      while b >= 127 and idx < remain do
+      while b >= 127 and idx <= len do
         -- utf8 part
         if bit.band(b, 0xe0) == 0xc0 and remain > 1 and
                 bit.band(bytes[idx + 1], 0xc0) == 0x80 then
@@ -372,7 +372,7 @@ exports.text_part_heuristic = function(part, log_obj, _)
       if (b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09) then
         non_printable = non_printable + 1
       elseif b >= 127 then
-        local c,nskip = rough_8bit_check(bytes, i, tlen - i)
+        local c,nskip = rough_8bit_check(bytes, i, tlen - i, tlen)
 
         if not c then
           non_printable = non_printable + 1
