@@ -833,6 +833,8 @@ TEST_SUITE("css parser") {
 			"em { color: rgba(100%,0%,0%,1) } /* the same, with explicit opacity of 1 */\n",
 			"p { color: rgba(0,0,255,0.5) }        /* semi-transparent solid blue */\n",
 			"p { color: rgba(100%, 50%, 0%, 0.1) } /* very transparent solid orange */",
+			".chat-icon[_ng-cnj-c0]::before{content:url(group-2.63e87cd21fbf8c966dd.svg);width:60px;height:60px;display:block}",
+			"tt{color:#1e3482}",
 		};
 
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),

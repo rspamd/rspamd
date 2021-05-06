@@ -194,7 +194,7 @@ private:
 	mutable std::list<css_parser_token> backlog;
 
 	auto consume_number() -> struct css_parser_token;
-	auto consume_ident() -> struct css_parser_token;
+	auto consume_ident(bool allow_number = false) -> struct css_parser_token;
 };
 
 }

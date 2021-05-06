@@ -177,7 +177,7 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 /*
  * Consume functions: return a token and advance lexer offset
  */
-auto css_tokeniser::consume_ident() -> struct css_parser_token
+auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 {
 	auto i = offset;
 	auto need_escape = false;
@@ -211,7 +211,7 @@ auto css_tokeniser::consume_ident() -> struct css_parser_token
 	while (i < input.size()) {
 		auto c = input[i];
 
-		auto is_plain_c = allow_middle_minus ? is_plain_ident(c) :
+		auto is_plain_c = (allow_number || allow_middle_minus) ? is_plain_ident(c) :
 						  is_plain_ident_start(c);
 		if (!is_plain_c) {
 			if (c == '\\' && i + 1 < input.size ()) {
@@ -533,8 +533,8 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '\r':
 		case '\v': {
 			/* Consume as much space as we can */
-			while (i < input.size() && g_ascii_isspace(c)) {
-				c = input[i++];
+			while (i < input.size() && g_ascii_isspace(input[i])) {
+				i++;
 			}
 
 			auto ret = make_token<css_parser_token::token_type::whitespace_token>(
@@ -675,7 +675,8 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 				if ((is_plain_ident(next_c) || next_c == '-') &&
 						(is_plain_ident(next_next_c) || next_next_c == '-')) {
 					offset = i + 1;
-					auto ident_token = consume_ident();
+					/* We consume indent, but we allow numbers there */
+					auto ident_token = consume_ident(true);
 
 					if (ident_token.type == css_parser_token::token_type::ident_token) {
 						/* Update type */
