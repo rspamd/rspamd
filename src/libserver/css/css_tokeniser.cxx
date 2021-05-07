@@ -307,7 +307,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 	auto i = offset;
 	auto seen_dot = false, seen_exp = false;
 
-	if (input[i] == '-') {
+	if (input[i] == '-' || input[i] == '+') {
 		i ++;
 	}
 	if (input[i] == '.' && i < input.size()) {
