@@ -836,6 +836,7 @@ TEST_SUITE("css parser") {
 			".chat-icon[_ng-cnj-c0]::before{content:url(group-2.63e87cd21fbf8c966dd.svg);width:60px;height:60px;display:block}",
 			"tt{color:#1e3482}",
 			"tt{unicode-range: u+0049-u+004a,u+0020;}",
+			"@import url(https://fonts.googleapis.com/css?family=arial:300,400,7000;",
 		};
 
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
