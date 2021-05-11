@@ -1593,21 +1593,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	url = rspamd_mempool_alloc0 (pool, sizeof (*url));
 
-	enum rspamd_normalise_result norm_res;
-
-	norm_res = rspamd_normalise_unicode_inplace (pool, decoded, &dlen);
-
-	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
-		saved_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-	}
-
-	if (norm_res & (RSPAMD_UNICODE_NORM_ZERO_SPACES|RSPAMD_UNICODE_NORM_ERROR)) {
-		saved_flags |= RSPAMD_URL_FLAG_OBSCURED;
-
-		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
-			saved_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
-		}
-	}
+	rspamd_url_normalise_propagate_flags (pool, decoded, &dlen, saved_flags);
 
 	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
 
@@ -2643,6 +2629,9 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 
 	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
 		saved_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+	if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+		saved_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
 	}
 
 	rspamd_html_url_is_phished (pool, url,

@@ -127,9 +127,9 @@ enum rspamd_url_find_type {
  * Initialize url library
  * @param cfg
  */
-void rspamd_url_init (const gchar *tld_file);
+void rspamd_url_init(const gchar *tld_file);
 
-void rspamd_url_deinit (void);
+void rspamd_url_deinit(void);
 
 /*
  * Parse urls inside text
@@ -138,10 +138,10 @@ void rspamd_url_deinit (void);
  * @param part current text part
  * @param is_html turn on html euristic
  */
-void rspamd_url_text_extract (rspamd_mempool_t *pool,
-							  struct rspamd_task *task,
-							  struct rspamd_mime_text_part *part,
-							  enum rspamd_url_find_type how);
+void rspamd_url_text_extract(rspamd_mempool_t *pool,
+							 struct rspamd_task *task,
+							 struct rspamd_mime_text_part *part,
+							 enum rspamd_url_find_type how);
 
 /*
  * Parse a single url into an uri structure
@@ -149,11 +149,11 @@ void rspamd_url_text_extract (rspamd_mempool_t *pool,
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
  */
-enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
-								 gchar *uristring,
-								 gsize len,
-								 rspamd_mempool_t *pool,
-								 enum rspamd_url_parse_flags flags);
+enum uri_errno rspamd_url_parse(struct rspamd_url *uri,
+								gchar *uristring,
+								gsize len,
+								rspamd_mempool_t *pool,
+								enum rspamd_url_parse_flags flags);
 
 /*
  * Try to extract url from a text
@@ -165,17 +165,17 @@ enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean rspamd_url_find (rspamd_mempool_t *pool,
-						  const gchar *begin, gsize len,
-						  gchar **url_str,
-						  enum rspamd_url_find_type how,
-						  goffset *url_pos,
-						  gboolean *prefix_added);
+gboolean rspamd_url_find(rspamd_mempool_t *pool,
+						 const gchar *begin, gsize len,
+						 gchar **url_str,
+						 enum rspamd_url_find_type how,
+						 goffset *url_pos,
+						 gboolean *prefix_added);
 
 /*
  * Return text representation of url parsing error
  */
-const gchar *rspamd_url_strerror (int err);
+const gchar *rspamd_url_strerror(int err);
 
 
 /**
@@ -185,10 +185,10 @@ const gchar *rspamd_url_strerror (int err);
  * @param out output rspamd_ftok_t with tld position
  * @return TRUE if tld has been found
  */
-gboolean rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out);
+gboolean rspamd_url_find_tld(const gchar *in, gsize inlen, rspamd_ftok_t *out);
 
-typedef gboolean (*url_insert_function) (struct rspamd_url *url,
-									 gsize start_offset, gsize end_offset, void *ud);
+typedef gboolean (*url_insert_function)(struct rspamd_url *url,
+										gsize start_offset, gsize end_offset, void *ud);
 
 /**
  * Search for multiple urls in text and call `func` for each url found
@@ -199,12 +199,12 @@ typedef gboolean (*url_insert_function) (struct rspamd_url *url,
  * @param func
  * @param ud
  */
-void rspamd_url_find_multiple (rspamd_mempool_t *pool,
-							   const gchar *in, gsize inlen,
-							   enum rspamd_url_find_type how,
-							   GPtrArray *nlines,
-							   url_insert_function func,
-							   gpointer ud);
+void rspamd_url_find_multiple(rspamd_mempool_t *pool,
+							  const gchar *in, gsize inlen,
+							  enum rspamd_url_find_type how,
+							  GPtrArray *nlines,
+							  url_insert_function func,
+							  gpointer ud);
 
 /**
  * Search for a single url in text and call `func` for each url found
@@ -215,11 +215,11 @@ void rspamd_url_find_multiple (rspamd_mempool_t *pool,
  * @param func
  * @param ud
  */
-void rspamd_url_find_single (rspamd_mempool_t *pool,
-							 const gchar *in, gsize inlen,
-							 enum rspamd_url_find_type how,
-							 url_insert_function func,
-							 gpointer ud);
+void rspamd_url_find_single(rspamd_mempool_t *pool,
+							const gchar *in, gsize inlen,
+							enum rspamd_url_find_type how,
+							url_insert_function func,
+							gpointer ud);
 
 /**
  * Generic callback to insert URLs into rspamd_task
@@ -228,9 +228,9 @@ void rspamd_url_find_single (rspamd_mempool_t *pool,
  * @param end_offset
  * @param ud
  */
-gboolean rspamd_url_task_subject_callback (struct rspamd_url *url,
-									   gsize start_offset,
-									   gsize end_offset, gpointer ud);
+gboolean rspamd_url_task_subject_callback(struct rspamd_url *url,
+										  gsize start_offset,
+										  gsize end_offset, gpointer ud);
 
 /**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
@@ -239,7 +239,7 @@ gboolean rspamd_url_task_subject_callback (struct rspamd_url *url,
  * @param size
  * @return
  */
-gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
+gsize rspamd_url_decode(gchar *dst, const gchar *src, gsize size);
 
 /**
  * Encode url if needed. In this case, memory is allocated from the specific pool.
@@ -248,8 +248,8 @@ gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
  * @param pool
  * @return
  */
-const gchar *rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
-								rspamd_mempool_t *pool);
+const gchar *rspamd_url_encode(struct rspamd_url *url, gsize *dlen,
+							   rspamd_mempool_t *pool);
 
 
 /**
@@ -257,14 +257,14 @@ const gchar *rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
  * @param c
  * @return
  */
-gboolean rspamd_url_is_domain (int c);
+gboolean rspamd_url_is_domain(int c);
 
 /**
  * Returns symbolic name for protocol
  * @param proto
  * @return
  */
-const gchar *rspamd_url_protocol_name (enum rspamd_url_protocol proto);
+const gchar *rspamd_url_protocol_name(enum rspamd_url_protocol proto);
 
 
 /**
@@ -272,7 +272,7 @@ const gchar *rspamd_url_protocol_name (enum rspamd_url_protocol proto);
  * @param str
  * @return
  */
-enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
+enum rspamd_url_protocol rspamd_url_protocol_from_string(const gchar *str);
 
 /**
  * Converts string to a url flag
@@ -280,14 +280,14 @@ enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
  * @param flag
  * @return
  */
-bool rspamd_url_flag_from_string (const gchar *str, gint *flag);
+bool rspamd_url_flag_from_string(const gchar *str, gint *flag);
 
 /**
  * Converts url flag to a string
  * @param flag
  * @return
  */
-const gchar * rspamd_url_flag_to_string (int flag);
+const gchar *rspamd_url_flag_to_string(int flag);
 
 /* Defines sets of urls indexed by url as is */
 KHASH_DECLARE (rspamd_url_hash, struct rspamd_url *, char);
@@ -310,24 +310,25 @@ bool rspamd_url_set_add_or_increase(khash_t (rspamd_url_hash) *set,
  * @param u
  * @return
  */
-struct rspamd_url * rspamd_url_set_add_or_return (khash_t (rspamd_url_hash) *set,
-												  struct rspamd_url *u);
+struct rspamd_url *rspamd_url_set_add_or_return(khash_t (rspamd_url_hash) *set,
+												struct rspamd_url *u);
 /**
  * Helper for url host set
  * @param set
  * @param u
  * @return
  */
-bool rspamd_url_host_set_add (khash_t (rspamd_url_host_hash) *set,
-									 struct rspamd_url *u);
+bool rspamd_url_host_set_add(khash_t (rspamd_url_host_hash) *set,
+							 struct rspamd_url *u);
 /**
  * Checks if a url is in set
  * @param set
  * @param u
  * @return
  */
-bool rspamd_url_set_has (khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
-bool rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u);
+bool rspamd_url_set_has(khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
+
+bool rspamd_url_host_set_has(khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u);
 
 /**
  * Compares two urls (similar to C comparison functions) lexicographically
@@ -335,15 +336,37 @@ bool rspamd_url_host_set_has (khash_t (rspamd_url_host_hash) *set, struct rspamd
  * @param u2
  * @return
  */
-int rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2);
+int rspamd_url_cmp(const struct rspamd_url *u1, const struct rspamd_url *u2);
+
 /**
  * Same but used for qsort to sort `struct rspamd_url *[]` array
  * @param u1
  * @param u2
  * @return
  */
-int rspamd_url_cmp_qsort (const void *u1, const void *u2);
+int rspamd_url_cmp_qsort(const void *u1, const void *u2);
 
+/**
+ * Normalize unicode input and set out url flags as appropriate
+ * @param pool
+ * @param input
+ * @param len_out (must be &var)
+ * @param url_flags_out (must be just a var with no dereference)
+ */
+#define rspamd_url_normalise_propagate_flags(pool, input, len_out, url_flags_out) \
+  do {                                                                            \
+     enum rspamd_normalise_result norm_res;                                       \
+     norm_res = rspamd_normalise_unicode_inplace((pool), (input), (len_out));     \
+     if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                               \
+       url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                             \
+     }                                                                            \
+     if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                            \
+       url_flags_out |= RSPAMD_URL_FLAG_ZW_SPACES;                                \
+     }                                                                            \
+     if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                                \
+       url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                                 \
+     }                                                                            \
+  } while(0)
 #ifdef  __cplusplus
 }
 #endif

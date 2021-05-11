@@ -1339,7 +1339,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 						if (!u_isalnum (uc)) {
 							/* Bad symbol */
 							if (IS_ZERO_WIDTH_SPACE (uc)) {
-								(*flags) |= RSPAMD_URL_FLAG_OBSCURED;
+								(*flags) |= RSPAMD_URL_FLAG_OBSCURED|RSPAMD_URL_FLAG_ZW_SPACES;
 							}
 							else {
 								if (!u_isgraph (uc)) {
@@ -2308,10 +2308,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 	unquoted_len = rspamd_url_decode (rspamd_url_host_unsafe (uri),
 			rspamd_url_host_unsafe (uri), uri->hostlen);
 
-	if (rspamd_normalise_unicode_inplace (pool,
-			rspamd_url_host_unsafe (uri), &unquoted_len)) {
-		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-	}
+	rspamd_url_normalise_propagate_flags (pool, rspamd_url_host_unsafe (uri),
+			&unquoted_len, uri->flags);
 
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
@@ -2380,10 +2378,10 @@ rspamd_url_parse (struct rspamd_url *uri,
 	if (uri->datalen) {
 		unquoted_len = rspamd_url_decode (rspamd_url_data_unsafe (uri),
 				rspamd_url_data_unsafe (uri), uri->datalen);
-		if (rspamd_normalise_unicode_inplace (pool, rspamd_url_data_unsafe (uri),
-				&unquoted_len)) {
-			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-		}
+
+		rspamd_url_normalise_propagate_flags (pool, rspamd_url_data_unsafe (uri),
+				&unquoted_len, uri->flags);
+
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 		/* We now normalize path */
 		rspamd_http_normalize_path_inplace (rspamd_url_data_unsafe (uri),
@@ -2395,10 +2393,9 @@ rspamd_url_parse (struct rspamd_url *uri,
 		unquoted_len = rspamd_url_decode (rspamd_url_query_unsafe (uri),
 				rspamd_url_query_unsafe (uri),
 				uri->querylen);
-		if (rspamd_normalise_unicode_inplace (pool, rspamd_url_query_unsafe (uri),
-				&unquoted_len)) {
-			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-		}
+
+		rspamd_url_normalise_propagate_flags (pool, rspamd_url_query_unsafe (uri),
+				&unquoted_len, uri->flags);
 		rspamd_url_shift (uri, unquoted_len, UF_QUERY);
 	}
 
@@ -2406,10 +2403,9 @@ rspamd_url_parse (struct rspamd_url *uri,
 		unquoted_len = rspamd_url_decode (rspamd_url_fragment_unsafe (uri),
 				rspamd_url_fragment_unsafe (uri),
 				uri->fragmentlen);
-		if (rspamd_normalise_unicode_inplace (pool, rspamd_url_fragment_unsafe (uri),
-				&unquoted_len)) {
-			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-		}
+
+		rspamd_url_normalise_propagate_flags (pool, rspamd_url_fragment_unsafe (uri),
+				&unquoted_len, uri->flags);
 		rspamd_url_shift (uri, unquoted_len, UF_FRAGMENT);
 	}
 
