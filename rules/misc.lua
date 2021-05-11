@@ -22,6 +22,9 @@ local util = require "rspamd_util"
 local rspamd_parsers = require "rspamd_parsers"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_lua_utils = require "lua_util"
+local bit = require "bit"
+local rspamd_url = require "rspamd_url"
+local url_flags_tab = rspamd_url.flags
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = {
@@ -124,14 +127,16 @@ rspamd_config:register_symbol({
 local obscured_id = rspamd_config:register_symbol{
   callback = function(task)
     local urls = task:get_urls()
+    local obs_flag = url_flags_tab.obscured
+    local zw_flag = url_flags_tab.zw_spaces
 
     if urls then
       for _,u in ipairs(urls) do
-        local fl = u:get_flags()
-        if fl.obscured then
+        local fl = u:get_flags_num()
+        if bit.band(fl, obs_flag) then
           task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
         end
-        if fl.zw_spaces then
+        if bit.band(fl, zw_flag) then
           task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
         end
       end
