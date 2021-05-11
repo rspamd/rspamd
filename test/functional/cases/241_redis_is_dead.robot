@@ -7,7 +7,6 @@ Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
-Suite Teardown  Terminate All Processes    kill=True
 
 
 *** Variables ***

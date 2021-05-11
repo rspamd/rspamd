@@ -26,3 +26,8 @@ Newlines
   Expect Symbol With Option  FOUND_URL  https://google.com/maps/
   Expect Symbol With Option  FOUND_URL  https://www.google.com/search?q\=hello world&oq\=hello world&aqs\=chrome..69i57j0l5.3045j0j7&sourceid\=chrome&ie\=UTF-8
   Expect Symbol With Option  FOUND_URL  https://github.com/google/sanitizers/wiki/AddressSanitizer
+
+Dynamic Config
+  Scan File  ${MESSAGE}
+  Expect Symbol With Score  SA_BODY_WORD  10
+  Expect Required Score  20

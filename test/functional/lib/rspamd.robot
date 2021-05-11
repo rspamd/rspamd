@@ -242,6 +242,11 @@ Run Rspamd
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
+  # Log stdout/stderr
+  ${rspamd_output} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout
+  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
+  Log  ${rspamd_output}
+
   # Abort if it failed
   Should Be Equal As Integers  ${result.rc}  0
 

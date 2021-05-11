@@ -106,7 +106,7 @@ local function periodic(cfg, ev_base)
 end
 
 rspamd_config:register_symbol({
-  name = 'SIMPLE_TEST',
+  name = 'SIMPLE_HTTP_TEST',
   score = 1.0,
   callback = http_symbol,
   no_squeeze = true,
@@ -145,7 +145,7 @@ local function http_large_symbol(task)
   end
 end
 rspamd_config:register_symbol({
-  name = 'LARGE_TEST',
+  name = 'LARGE_HTTP_TEST',
   score = 1.0,
   callback = http_large_symbol,
   no_squeeze = true,
