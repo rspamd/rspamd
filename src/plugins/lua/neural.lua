@@ -114,6 +114,7 @@ local function ann_scores_filter(task)
       score = out[1]
 
       local symscore = string.format('%.3f', score)
+      task:cache_set(rule.prefix .. '_neural_score', score)
       lua_util.debugm(N, task, '%s:%s:%s ann score: %s',
           rule.prefix, set.name, set.ann.version, symscore)
 
