@@ -126,12 +126,12 @@ rspamd_config:register_symbol({
 
 local obscured_id = rspamd_config:register_symbol{
   callback = function(task)
-    local urls = task:get_urls()
+    local susp_urls = task:get_urls_filtered({ 'obscured', 'zw_spaces'})
     local obs_flag = url_flags_tab.obscured
     local zw_flag = url_flags_tab.zw_spaces
 
-    if urls then
-      for _,u in ipairs(urls) do
+    if susp_urls then
+      for _,u in ipairs(susp_urls) do
         local fl = u:get_flags_num()
         if bit.band(fl, obs_flag) then
           task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
