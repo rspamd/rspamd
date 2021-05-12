@@ -837,6 +837,8 @@ TEST_SUITE("css parser") {
 			"tt{color:#1e3482}",
 			"tt{unicode-range: u+0049-u+004a,u+0020;}",
 			"@import url(https://fonts.googleapis.com/css?family=arial:300,400,7000;",
+			"tt{color:black;\v}",
+			"tt{color:black;\f}",
 		};
 
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),

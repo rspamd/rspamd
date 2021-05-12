@@ -536,7 +536,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '\t':
 		case '\n':
 		case '\r':
-		case '\v': {
+		case '\f': {
 			/* Consume as much space as we can */
 			while (i < input.size() && g_ascii_isspace(input[i])) {
 				i++;
