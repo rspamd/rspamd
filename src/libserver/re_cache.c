@@ -1894,6 +1894,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 	struct iovec iov[7];
 	struct rspamd_re_cache *cache;
 	GError *err;
+	pid_t our_pid = getpid ();
 
 	cache = cbdata->cache;
 
@@ -1946,8 +1947,8 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		return;
 	}
 
-	rspamd_snprintf (path, sizeof (path), "%s%c%s.hs.new", cbdata->cache_dir,
-			G_DIR_SEPARATOR, re_class->hash);
+	rspamd_snprintf (path, sizeof (path), "%s%c%s.%P.hs.new", cbdata->cache_dir,
+			G_DIR_SEPARATOR, re_class->hash, our_pid);
 	fd = open (path, O_CREAT|O_TRUNC|O_EXCL|O_WRONLY, 00600);
 
 	if (fd == -1) {
@@ -2185,7 +2186,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		g_free (hs_flags);
 
 		/* Now rename temporary file to the new .hs file */
-		rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
+		rspamd_snprintf (npath, sizeof (npath), "%s%c%s.hs", cbdata->cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
 		if (rename (path, npath) == -1) {
