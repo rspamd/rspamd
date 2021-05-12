@@ -133,6 +133,9 @@ context("URL check functions", function()
     {"http://hehe｡example。com#test", true, {
       host = 'hehe.example.com', fragment = 'test'
     }},
+    {"http:////$%^&****((@example.org//#f@f", true, {
+      user = '$%^&****((', host = 'example.org', fragment = 'f@f'
+    }},
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc

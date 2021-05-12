@@ -1113,10 +1113,35 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 			if (t != '/' && t != '\\') {
 				c = p;
-				st = parse_domain_start;
 				slash = p;
+				st = parse_domain_start;
 
-				if (*p == '[') {
+				/*
+				 * Unfortunately, due to brain damage of the RFC 3986 authors,
+				 * we have to distinguish two possibilities here:
+				 * authority = [ userinfo "@" ] host [ ":" port ]
+				 * So if we have @ somewhere before hostname then we must process
+				 * with the username state. Otherwise, we have to process via
+				 * the hostname state. Unfortunately, there is no way to distinguish
+				 * them aside of running NFA or two DFA or performing lookahead.
+				 * Lookahead approach looks easier to implement.
+				 */
+
+				const char *tp = p;
+				while (tp < last) {
+					if (*tp == '@') {
+						user_seen = TRUE;
+						st = parse_user;
+						break;
+					}
+					else if (*tp == '/' || *tp == '#' || *tp == '?') {
+						st = parse_domain_start;
+					}
+
+					tp ++;
+				}
+
+				if (st == parse_domain_start && *p == '[') {
 					st = parse_ipv6;
 					p++;
 					c = p;
