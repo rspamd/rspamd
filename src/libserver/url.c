@@ -1225,7 +1225,11 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 
 				/* For now, we ignore all that stuff as it is bogus */
+				/* Off by one */
+				p --;
 				SET_U (u, UF_USERINFO);
+				p ++;
+				*flags |= RSPAMD_URL_FLAG_HAS_USER;
 				st = parse_at;
 			}
 			else {

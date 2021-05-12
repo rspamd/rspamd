@@ -136,6 +136,9 @@ context("URL check functions", function()
     {"http:////$%^&****((@example.org//#f@f", true, {
       user = '$%^&****((', host = 'example.org', fragment = 'f@f'
     }},
+    {"http://@@example.com", true, {
+      user = "@", host = "example.com"
+    }}
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc
