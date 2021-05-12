@@ -1136,6 +1136,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					}
 					else if (*tp == '/' || *tp == '#' || *tp == '?') {
 						st = parse_domain_start;
+						break;
 					}
 
 					tp ++;
