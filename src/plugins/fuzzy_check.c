@@ -2607,9 +2607,21 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 				ret = return_want_more;
 			}
 			else {
-				/* It is actually time out */
-				fuzzy_check_timer_callback (fd, what, arg);
-				return;
+				if (what & EV_WRITE) {
+					/* Retransmit attempt */
+					if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
+						ret = return_error;
+					}
+					else {
+						session->state = 1;
+						ret = return_want_more;
+					}
+				}
+				else {
+					/* It is actually time out */
+					fuzzy_check_timer_callback(fd, what, arg);
+					return;
+				}
 			}
 			break;
 		case 1:
