@@ -3995,7 +3995,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	if (url->userlen > 0) {
 		ENCODE_URL_COMPONENT (rspamd_url_user_unsafe (url), url->userlen,
 				RSPAMD_URL_FLAGS_USERSAFE);
-		*d++ = ':';
+		*d++ = '@';
 	}
 
 	ENCODE_URL_COMPONENT (rspamd_url_host_unsafe (url), url->hostlen,
