@@ -2609,7 +2609,6 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	struct rspamd_url *turl;
 	gboolean url_found = FALSE;
 	struct rspamd_process_exception *ex;
-	enum rspamd_normalise_result norm_res;
 	guint saved_flags = 0;
 	gsize dlen;
 
@@ -2625,14 +2624,6 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	url->visible_part =
 			(gchar *)rspamd_string_len_strip (url->visible_part, &dlen, " \t\v\r\n");
 
-	norm_res = rspamd_normalise_unicode_inplace (pool, url->visible_part, &dlen);
-
-	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
-		saved_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
-	}
-	if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
-		saved_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
-	}
 
 	rspamd_html_url_is_phished (pool, url,
 			url->visible_part,
@@ -2678,6 +2669,8 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 			/* Already inserted by `rspamd_url_set_add_or_return` */
 		}
 	}
+
+	rspamd_normalise_unicode_inplace (pool, url->visible_part, &dlen);
 }
 
 static gboolean

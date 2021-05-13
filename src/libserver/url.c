@@ -1369,7 +1369,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 						if (!u_isalnum (uc)) {
 							/* Bad symbol */
 							if (IS_ZERO_WIDTH_SPACE (uc)) {
-								(*flags) |= RSPAMD_URL_FLAG_OBSCURED|RSPAMD_URL_FLAG_ZW_SPACES;
+								(*flags) |= RSPAMD_URL_FLAG_ZW_SPACES;
 							}
 							else {
 								if (!u_isgraph (uc)) {
