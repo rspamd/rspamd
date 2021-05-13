@@ -238,6 +238,11 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		cfg->log_flags |= RSPAMD_LOG_FLAG_COLOR;
 	}
 
+	val = ucl_object_lookup_any (obj, "severity", "log_severity", NULL);
+	if (val && ucl_object_toboolean (val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_SEVERITY;
+	}
+
 	val = ucl_object_lookup_any (obj, "systemd", "log_systemd", NULL);
 	if (val && ucl_object_toboolean (val)) {
 		cfg->log_flags |= RSPAMD_LOG_FLAG_SYSTEMD;
@@ -1773,6 +1778,15 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				"logging",
 				"Enable colored output (for console logging)",
 				"log_color",
+				UCL_BOOLEAN,
+				NULL,
+				0,
+				NULL,
+				0);
+		rspamd_rcl_add_doc_by_path (cfg,
+				"logging",
+				"Enable severity logging output (e.g. [error] or [warning])",
+				"log_severity",
 				UCL_BOOLEAN,
 				NULL,
 				0,

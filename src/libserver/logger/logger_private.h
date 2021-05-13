@@ -168,6 +168,7 @@ bool rspamd_log_console_log (const gchar *module, const gchar *id,
 							gsize mlen,
 							rspamd_logger_t *rspamd_log,
 							gpointer arg);
+const gchar *rspamd_get_log_severity_string(gint level_flags);
 
 static const struct rspamd_logger_funcs console_log_funcs = {
 		.init = rspamd_log_console_init,

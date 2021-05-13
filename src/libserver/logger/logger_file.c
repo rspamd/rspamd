@@ -36,6 +36,7 @@ struct rspamd_file_logger_priv {
 	gboolean throttling;
 	gchar *log_file;
 	gboolean is_buffered;
+	gboolean log_severity;
 	time_t throttling_time;
 	guint32 repeats;
 	guint64 last_line_cksum;
@@ -360,6 +361,7 @@ rspamd_log_file_init (rspamd_logger_t *logger, struct rspamd_config *cfg,
 		priv->log_file = g_strdup (cfg->log_file);
 	}
 
+	priv->log_severity = (logger->flags & RSPAMD_LOG_FLAG_SEVERITY);
 	priv->fd = rspamd_try_open_log_fd (logger, priv, uid, gid, err);
 
 	if (priv->fd == -1) {
@@ -506,12 +508,23 @@ rspamd_log_file_log (const gchar *module, const gchar *id,
 	r = 0;
 
 	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-		r += rspamd_snprintf (tmpbuf + r,
-				sizeof (tmpbuf) - r,
-				"%s #%P(%s) ",
-				timebuf,
-				rspamd_log->pid,
-				cptype);
+		if (priv->log_severity) {
+			r += rspamd_snprintf(tmpbuf + r,
+					sizeof(tmpbuf) - r,
+					"%s [%s] #%P(%s) ",
+					timebuf,
+					rspamd_get_log_severity_string (level_flags),
+					rspamd_log->pid,
+					cptype);
+		}
+		else {
+			r += rspamd_snprintf(tmpbuf + r,
+					sizeof(tmpbuf) - r,
+					"%s #%P(%s) ",
+					timebuf,
+					rspamd_log->pid,
+					cptype);
+		}
 	}
 	else {
 		r += rspamd_snprintf (tmpbuf + r,

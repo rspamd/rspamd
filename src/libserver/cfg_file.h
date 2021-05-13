@@ -76,6 +76,7 @@ enum rspamd_log_cfg_flags {
 	RSPAMD_LOG_FLAG_USEC = (1 << 3),
 	RSPAMD_LOG_FLAG_RSPAMADM = (1 << 4),
 	RSPAMD_LOG_FLAG_ENFORCED = (1 << 5),
+	RSPAMD_LOG_FLAG_SEVERITY = (1 << 6),
 };
 
 struct rspamd_worker_log_pipe {

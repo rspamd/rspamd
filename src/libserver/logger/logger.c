@@ -1000,3 +1000,27 @@ rspamd_log_line_need_escape (const guchar *src, gsize srclen)
 
 	return n;
 }
+
+const gchar *
+rspamd_get_log_severity_string (gint level_flags)
+{
+	unsigned int bitnum;
+	static const char *level_strs[G_LOG_LEVEL_USER_SHIFT] = {
+			"", /* G_LOG_FLAG_RECURSION */
+			"", /* G_LOG_FLAG_FATAL */
+			"crit",
+			"error",
+			"warn",
+			"notice",
+			"info",
+			"debug"
+	};
+	level_flags &= ((1u << G_LOG_LEVEL_USER_SHIFT) - 1u) & ~(G_LOG_FLAG_RECURSION|G_LOG_FLAG_FATAL);
+#ifdef __GNUC__
+	/* We assume gcc >= 3 and clang >= 5 anyway */
+	bitnum = __builtin_ffs (level_flags) - 1;
+#else
+	bitnum = ffs (level_flags) - 1;
+#endif
+	return level_strs[bitnum];
+}
