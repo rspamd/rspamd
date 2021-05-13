@@ -2291,10 +2291,18 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 	len = strlen (path);
 
 	if (len < sizeof (rspamd_cryptobox_HASHBYTES + 3)) {
+		if (!silent)  {
+			msg_err_re_cache ("cannot open hyperscan cache file %s: too short filename",
+					path);
+		}
 		return FALSE;
 	}
 
 	if (memcmp (path + len - 3, ".hs", 3) != 0) {
+		if (!silent)  {
+			msg_err_re_cache ("cannot open hyperscan cache file %s: not ending with .hs",
+					path);
+		}
 		return FALSE;
 	}
 

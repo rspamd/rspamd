@@ -133,6 +133,10 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 	}
 
 	globbuf.gl_offs = 0;
+	/*
+	 * We reuse this buffer for .new patterns as well, so allocate with some
+	 * margin
+	 */
 	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs.new") + 2;
 	pattern = g_malloc (len);
 	rspamd_snprintf (pattern, len, "%s%c%s", ctx->hs_dir, G_DIR_SEPARATOR, "*.hs");
@@ -146,6 +150,10 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 					msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
 							strerror (errno));
 					ret = FALSE;
+				}
+				else {
+					msg_notice ("successfully removed outdated hyperscan file: %s",
+							globbuf.gl_pathv[i]);
 				}
 			}
 		}
@@ -193,6 +201,18 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 							strerror(errno));
 					ret = FALSE;
 				}
+				else {
+					msg_notice ("successfully removed outdated hyperscan temporary file: %s; "
+								"pid of the file creator process: %P",
+							globbuf.gl_pathv[i],
+							foreign_pid);
+				}
+			}
+			else {
+				msg_notice ("skip removal of the hyperscan temporary file: %s; "
+							"pid of the file creator process: %P",
+						globbuf.gl_pathv[i],
+						foreign_pid);
 			}
 		}
 	}
