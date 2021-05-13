@@ -497,10 +497,10 @@
 
 #if EV_USE_IOURING
 # include <sys/syscall.h>
-# if !SYS_io_uring_setup && __linux && !__alpha
+# if !SYS_io_uring_register && __linux && !__alpha
 #  define SYS_io_uring_setup     425
 #  define SYS_io_uring_enter     426
-#  define SYS_io_uring_wregister 427
+#  define SYS_io_uring_register  427
 # endif
 # if SYS_io_uring_setup && EV_USE_EPOLL /* iouring backend requires epoll backend */
 #  define EV_NEED_SYSCALL 1
@@ -4130,18 +4130,19 @@ ev_run (EV_P_ int flags)
         if (ecb_expect_true (!(flags & EVRUN_NOWAIT || idleall || !activecnt || pipe_write_skipped)))
           {
             waittime = EV_TS_CONST (MAX_BLOCKTIME);
-
+            if (ecb_expect_true (have_monotonic)) {
 #if EV_USE_TIMERFD
             /* sleep a lot longer when we can reliably detect timejumps */
-            if (ecb_expect_true (timerfd >= 0))
-              waittime = EV_TS_CONST (MAX_BLOCKTIME2);
+              if (ecb_expect_true (timerfd != -1))
+                waittime = EV_TS_CONST (MAX_BLOCKTIME2);
 #endif
 #if !EV_PERIODIC_ENABLE
             /* without periodics but with monotonic clock there is no need */
             /* for any time jump detection, so sleep longer */
-            if (ecb_expect_true (have_monotonic))
+
               waittime = EV_TS_CONST (MAX_BLOCKTIME2);
 #endif
+            }
 
             if (timercnt)
               {
