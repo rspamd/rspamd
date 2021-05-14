@@ -1764,10 +1764,6 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 						 khash_t (rspamd_url_hash) *url_set,
 						 GPtrArray *part_urls)
 {
-	if (url->flags & RSPAMD_URL_FLAG_UNNORMALISED) {
-		url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-	}
-
 	if (url->querylen > 0) {
 		struct rspamd_html_url_query_cbd qcbd;
 
