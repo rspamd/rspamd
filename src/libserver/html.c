@@ -2617,8 +2617,43 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	rspamd_strlcpy (url->visible_part, dest->data + href_offset,
 			dest->len - href_offset + 1);
 	dlen = dest->len - href_offset;
-	url->visible_part =
-			(gchar *)rspamd_string_len_strip (url->visible_part, &dlen, " \t\v\r\n");
+
+	/* Strip unicode spaces from the start and the end */
+	gchar *p = url->visible_part, *end = url->visible_part + dlen;
+	gint i = 0;
+
+	while (i < dlen) {
+		UChar32 uc;
+		gint prev_i = i;
+
+		U8_NEXT(p, i, dlen, uc);
+
+		if (!u_isspace (uc)) {
+			i = prev_i;
+			break;
+		}
+	}
+
+	p += i;
+	dlen -= i;
+	url->visible_part = p;
+	i = end - url->visible_part - 1;
+
+	if (i > 0) {
+		gint32 dl = dlen;
+
+		while (i > 0) {
+			UChar32 uc;
+
+			U8_PREV(p, i, dl, uc);
+
+			if (!u_isspace (uc)) {
+				break;
+			}
+		}
+
+		dlen = i;
+	}
 
 
 	rspamd_html_url_is_phished (pool, url,
