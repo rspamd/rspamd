@@ -25,6 +25,7 @@
 #include "contrib/libucl/khash.h"
 #include "libmime/images.h"
 #include "css/css.h"
+#include "libutil/cxx/utf8_util.h"
 
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
@@ -2619,43 +2620,8 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	dlen = dest->len - href_offset;
 
 	/* Strip unicode spaces from the start and the end */
-	gchar *p = url->visible_part, *end = url->visible_part + dlen;
-	gint i = 0;
-
-	while (i < dlen) {
-		UChar32 uc;
-		gint prev_i = i;
-
-		U8_NEXT(p, i, dlen, uc);
-
-		if (!u_isspace (uc)) {
-			i = prev_i;
-			break;
-		}
-	}
-
-	p += i;
-	dlen -= i;
-	url->visible_part = p;
-	i = end - url->visible_part - 1;
-
-	if (i > 0) {
-		gint32 dl = dlen;
-
-		while (i > 0) {
-			UChar32 uc;
-
-			U8_PREV(p, i, dl, uc);
-
-			if (!u_isspace (uc)) {
-				break;
-			}
-		}
-
-		dlen = i;
-	}
-
-
+	url->visible_part = rspamd_string_unicode_trim_inplace (url->visible_part,
+			&dlen);
 	rspamd_html_url_is_phished (pool, url,
 			url->visible_part,
 			dlen,
