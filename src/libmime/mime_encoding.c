@@ -82,9 +82,9 @@ struct rspamd_charset_converter {
 };
 
 static GQuark
-rspamd_iconv_error_quark (void)
+rspamd_charset_conv_error_quark (void)
 {
-	return g_quark_from_static_string ("iconv error");
+	return g_quark_from_static_string ("charset conversion error");
 }
 
 static void
@@ -354,7 +354,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	utf8_converter = rspamd_get_utf8_converter ();
 
 	if (conv == NULL) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 				"cannot open converter for %s: %s",
 				in_enc, u_errorName (uc_err));
 
@@ -366,7 +366,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	r = rspamd_converter_to_uchars (conv, tmp_buf, len + 1, input, len, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 					"cannot convert data to unicode from %s: %s",
 					in_enc, u_errorName (uc_err));
 		g_free (tmp_buf);
@@ -381,7 +381,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	r = ucnv_fromUChars (utf8_converter, d, dlen, tmp_buf, r, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 				"cannot convert data from unicode from %s: %s",
 				in_enc, u_errorName (uc_err));
 		g_free (tmp_buf);
@@ -419,7 +419,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	utf8_converter = rspamd_get_utf8_converter ();
 
 	if (conv == NULL) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 				"cannot open converter for %s: %s",
 				charset, u_errorName (uc_err));
 
@@ -436,7 +436,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 			&uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 				"cannot convert data to unicode from %s: %s",
 				charset, u_errorName (uc_err));
 		g_free (tmp_buf);
@@ -452,7 +452,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 			tmp_buf, uc_len, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+		g_set_error (err, rspamd_charset_conv_error_quark(), EINVAL,
 				"cannot convert data from unicode from %s: %s",
 				charset, u_errorName (uc_err));
 		g_free (tmp_buf);

@@ -31,7 +31,7 @@ struct rspamd_mime_text_part;
 struct rspamd_charset_converter;
 
 /**
- * Convert charset to a valid iconv charset
+ * Convert charset alias to a canonic charset name
  * @param pool pool to store temporary data
  * @param in
  * @return

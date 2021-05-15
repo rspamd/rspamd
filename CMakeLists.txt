@@ -42,7 +42,6 @@ ENDIF(NOT RSPAMD_USER)
 # Default for SysV Init
 SET(RSPAMD_WORKER_NORMAL "*:11333")
 SET(RSPAMD_WORKER_CONTROLLER "*:11334")
-SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
@@ -335,21 +334,6 @@ CHECK_C_SOURCE_COMPILES(
 		tzset();
 		return timezone;
 	}" HAVE_SANE_TZSET)
-
-IF(WITH_ICONV)
-	CHECK_C_SOURCE_COMPILES("
-#include <iconv.h>
-int main(){
-	iconv_t conv = 0;
-	const char* in = 0;
-	size_t ilen = 0;
-	char* out = 0;
-	size_t olen = 0;
-	iconv(conv, &in, &ilen, &out, &olen);
-	return 0;
-}
-" ICONV_SECOND_ARGUMENT_IS_CONST)
-ENDIF(WITH_ICONV)
 
 # Check macros
 CHECK_SYMBOL_EXISTS(PATH_MAX limits.h HAVE_PATH_MAX)
