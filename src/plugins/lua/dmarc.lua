@@ -1072,30 +1072,18 @@ if opts['reporting'] == true then
       end
       local function verify_reporting_address()
         local function verifier(test_addr, vdom)
-          local retry = 0
           local function verify_cb(resolver, to_resolve, results, err, _, authenticated)
             if err then
-              if err == 'no records with this name' or err == 'requested record is not found' then
-                rspamd_logger.infox(rspamd_config, 'reports to %s for %s not authorised', test_addr, reporting_domain)
-                to_verify[test_addr] = nil
-              else
-                rspamd_logger.errx(rspamd_config, 'lookup error [%s]: %s', to_resolve, err)
-                if retry < report_settings.retries then
-                  retry = retry + 1
-                  rspamd_config:get_resolver():resolve('txt', {
-                    ev_base = ev_base,
-                    name = string.format('%s._report._dmarc.%s',
-                        reporting_domain, vdom),
-                    callback = verify_cb,
-                  })
-                else
-                  delete_reports()
-                end
-              end
+              rspamd_logger.errx(rspamd_config, 'lookup error [%s]: %s',
+                  to_resolve, err)
+              rspamd_logger.infox(rspamd_config, 'reports to %s for %s not authorised',
+                  test_addr, reporting_domain)
+              to_verify[test_addr] = nil
             else
               local is_authed = false
               -- XXX: reporting address could be overridden
               for _, r in ipairs(results) do
+                -- Oh wow
                 if string.match(r, 'v=DMARC1') then
                   is_authed = true
                   break
@@ -1109,6 +1097,7 @@ if opts['reporting'] == true then
                 reporting_addrs[test_addr] = true
               end
             end
+            -- TODO: wtf this code does???
             local t, nvdom = next(to_verify)
             if not t then
               if next(reporting_addrs) then
@@ -1128,6 +1117,7 @@ if opts['reporting'] == true then
             callback = verify_cb,
           })
         end
+        -- TODO: recursion and wtf again
         local t, vdom = next(to_verify)
         verifier(t, vdom)
       end
