@@ -347,9 +347,6 @@ exports.text_part_heuristic = function(part, log_obj, _)
                 bit.band(bytes[idx + 2], 0xc0) == 0x80 and
                 bit.band(bytes[idx + 3], 0xc0) == 0x80 then
           return true,3
-        else
-          -- Non utf
-          return false,0
         end
 
         n8bit = n8bit + 1
