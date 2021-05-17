@@ -758,7 +758,44 @@ if opts['symbols'] then
   end
 end
 
--- XXX: rework this shitty code some day please
+-- Reporting related code --
+
+---
+--- Converts a reporting entry to an XML format
+--- @param data data table
+--- @return string with an XML representation
+local function entry_to_xml(data)
+  local buf = {
+    table.concat({
+      '<record><row><source_ip>', data.ip, '</source_ip><count>',
+      data.count, '</count><policy_evaluated><disposition>',
+      data.disposition, '</disposition><dkim>', data.dkim_disposition,
+      '</dkim><spf>', data.spf_disposition, '</spf>'
+    }),
+  }
+  if data.override ~= '' then
+    table.insert(buf, string.format('<reason><type>%s</type></reason>', data.override))
+  end
+  table.insert(buf, table.concat({
+    '</policy_evaluated></row><identifiers><header_from>', data.header_from,
+    '</header_from></identifiers>',
+  }))
+  table.insert(buf, '<auth_results>')
+  if data.dkim_results[1] then
+    for _, d in ipairs(data.dkim_results) do
+      table.insert(buf, table.concat({
+        '<dkim><domain>', d.domain, '</domain><result>',
+        d.result, '</result></dkim>',
+      }))
+    end
+  end
+  table.insert(buf, table.concat({
+    '<spf><domain>', data.spf_domain, '</domain><result>',
+    data.spf_result, '</result></spf></auth_results></record>',
+  }))
+  return table.concat(buf)
+end
+
 if opts['reporting'] == true then
   redis_params = rspamd_parse_redis_server('dmarc')
   if not redis_params then
@@ -808,37 +845,6 @@ if opts['reporting'] == true then
       local domain_policy = {}
       local to_verify = {}
       local cursor = 0
-      local function entry_to_xml(data)
-        local buf = {
-          table.concat({
-            '<record><row><source_ip>', data.ip, '</source_ip><count>',
-            data.count, '</count><policy_evaluated><disposition>',
-            data.disposition, '</disposition><dkim>', data.dkim_disposition,
-            '</dkim><spf>', data.spf_disposition, '</spf>'
-          }),
-        }
-        if data.override ~= '' then
-          table.insert(buf, string.format('<reason><type>%s</type></reason>', data.override))
-        end
-        table.insert(buf, table.concat({
-          '</policy_evaluated></row><identifiers><header_from>', data.header_from,
-          '</header_from></identifiers>',
-        }))
-        table.insert(buf, '<auth_results>')
-        if data.dkim_results[1] then
-          for _, d in ipairs(data.dkim_results) do
-            table.insert(buf, table.concat({
-              '<dkim><domain>', d.domain, '</domain><result>',
-              d.result, '</result></dkim>',
-            }))
-          end
-        end
-        table.insert(buf, table.concat({
-          '<spf><domain>', data.spf_domain, '</domain><result>',
-          data.spf_result, '</result></spf></auth_results></record>',
-        }))
-        return table.concat(buf)
-      end
       local function dmarc_report_xml()
         local entries = {}
         report_id = string.format('%s.%d.%d',
