@@ -18,6 +18,8 @@
 #include <unicode/utypes.h>
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
+#include <unicode/normalizer2.h>
+#include <unicode/schriter.h>
 #include <utility>
 #include <string>
 
@@ -98,3 +100,101 @@ TEST_SUITE("utf8 utils") {
 }
 
 
+
+enum rspamd_normalise_result
+rspamd_normalise_unicode_inplace(char *start, size_t *len)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	const auto *nfkc_norm = icu::Normalizer2::getNFKCInstance(uc_err);
+	static icu::UnicodeSet zw_spaces{};
+
+	if (!zw_spaces.isFrozen()) {
+		/* Add zw spaces to the set */
+		zw_spaces.add(0x200B);
+		zw_spaces.add(0x200C);
+		zw_spaces.add(0x200D);
+		zw_spaces.add(0xFEF);
+		zw_spaces.add(0x00AD);
+		zw_spaces.freeze();
+	}
+
+	int ret = RSPAMD_UNICODE_NORM_NORMAL;
+
+	g_assert (U_SUCCESS (uc_err));
+
+	auto uc_string = icu::UnicodeString::fromUTF8(icu::StringPiece(start, *len));
+	auto is_normal = nfkc_norm->quickCheck(uc_string, uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		return RSPAMD_UNICODE_NORM_ERROR;
+	}
+
+	/* Filter zero width spaces and push resulting string back */
+	const auto filter_zw_spaces_and_push_back = [&](const icu::UnicodeString &input) -> size_t {
+		icu::StringCharacterIterator it{input};
+		size_t i = 0;
+
+		while(it.hasNext()) {
+			auto uc = it.next32PostInc();
+
+			if (zw_spaces.contains(uc)) {
+				ret |= RSPAMD_UNICODE_NORM_ZERO_SPACES;
+			}
+			else {
+				UBool err = 0;
+				U8_APPEND(start, i, *len, uc, err);
+
+				if (err) {
+					ret = RSPAMD_UNICODE_NORM_ERROR;
+
+					return i;
+				}
+			}
+		}
+
+		return i;
+	};
+
+	if (is_normal != UNORM_YES) {
+		/* Need to normalise */
+		ret |= RSPAMD_UNICODE_NORM_UNNORMAL;
+
+		auto normalised = nfkc_norm->normalize(uc_string, uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			return RSPAMD_UNICODE_NORM_ERROR;
+		}
+
+		*len = filter_zw_spaces_and_push_back(normalised);
+	}
+	else {
+		*len = filter_zw_spaces_and_push_back(uc_string);
+	}
+
+	return static_cast<enum rspamd_normalise_result>(ret);
+}
+
+TEST_SUITE("utf8 utils") {
+	TEST_CASE("utf8 normalise") {
+		std::tuple<const char *, const char *, int> cases[] = {
+				{"abc", "abc", RSPAMD_UNICODE_NORM_NORMAL},
+				{"тест", "тест", RSPAMD_UNICODE_NORM_NORMAL},
+				/* Zero width spaces */
+				{"\xE2\x80\x8B""те""\xE2\x80\x8B""ст", "тест", RSPAMD_UNICODE_NORM_ZERO_SPACES},
+				/* Special case of diacritic */
+				{"13_\u0020\u0308\u0301\u038e\u03ab", "13_ ̈́ΎΫ", RSPAMD_UNICODE_NORM_UNNORMAL},
+				/* Same with zw spaces */
+				{"13\u200C_\u0020\u0308\u0301\u038e\u03ab\u200D", "13_ ̈́ΎΫ",
+	 							RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ZERO_SPACES},
+		};
+
+		for (const auto &c : cases) {
+			std::string cpy{std::get<0>(c)};
+			auto ns = cpy.size();
+			auto res = rspamd_normalise_unicode_inplace(cpy.data(), &ns);
+			cpy.resize(ns);
+			CHECK(cpy == std::string(std::get<1>(c)));
+			CHECK(res == std::get<2>(c));
+		}
+	}
+}

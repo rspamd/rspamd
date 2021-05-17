@@ -2667,7 +2667,7 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 		}
 	}
 
-	rspamd_normalise_unicode_inplace (pool, url->visible_part, &dlen);
+	rspamd_normalise_unicode_inplace (url->visible_part, &dlen);
 }
 
 static gboolean
