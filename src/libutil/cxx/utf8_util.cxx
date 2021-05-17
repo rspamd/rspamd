@@ -21,6 +21,7 @@
 #include <unicode/normalizer2.h>
 #include <unicode/schriter.h>
 #include <utility>
+#include <tuple>
 #include <string>
 
 #include "utf8_util.h"
