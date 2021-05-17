@@ -143,7 +143,7 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 			}
 			else {
 				UBool err = 0;
-				U8_APPEND(start, i, *len, uc, err);
+				U8_APPEND((uint8_t*)start, i, *len, uc, err);
 
 				if (err) {
 					ret = RSPAMD_UNICODE_NORM_ERROR;
