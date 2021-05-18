@@ -136,6 +136,12 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 		size_t i = 0;
 
 		while(it.hasNext()) {
+			/* libicu is very 'special' if it comes to 'safe' macro */
+			if (i >= *len) {
+				ret |= RSPAMD_UNICODE_NORM_ERROR;
+				break;
+			}
+
 			auto uc = it.next32PostInc();
 
 			if (zw_spaces.contains(uc)) {
@@ -143,12 +149,15 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 			}
 			else {
 				UBool err = 0;
+
+				if (uc == 0xFFFD) {
+					ret |= RSPAMD_UNICODE_NORM_UNNORMAL;
+				}
 				U8_APPEND((uint8_t*)start, i, *len, uc, err);
 
 				if (err) {
-					ret = RSPAMD_UNICODE_NORM_ERROR;
-
-					return i;
+					ret |= RSPAMD_UNICODE_NORM_ERROR;
+					break;
 				}
 			}
 		}
@@ -187,6 +196,9 @@ TEST_SUITE("utf8 utils") {
 				/* Same with zw spaces */
 				{"13\u200C_\u0020\u0308\u0301\u038e\u03ab\u200D", "13_ ̈́ΎΫ",
 	 							RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ZERO_SPACES},
+				/* Buffer overflow case */
+				{"u\xC2\xC2\xC2\xC2\xC2\xC2""abcdef""abcdef", "u������",
+	 							RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ERROR},
 		};
 
 		for (const auto &c : cases) {
