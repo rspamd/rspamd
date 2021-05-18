@@ -2,17 +2,17 @@ local rspamd_ip = require 'rspamd_ip'
 local rspamd_logger = require 'rspamd_logger'
 
 local radix_map = rspamd_config:add_map ({
-  url = '${RADIX_MAP}',
+  url = rspamd_env.RADIX_MAP,
   type = 'radix',
 })
 
 local map_map = rspamd_config:add_map ({
-  url = '${MAP_MAP}',
+  url = rspamd_env.MAP_MAP,
   type = 'map',
 })
 
 local regexp_map = rspamd_config:add_map ({
-  url = '${REGEXP_MAP}',
+  url = rspamd_env.REGEXP_MAP,
   type = 'regexp',
 })
 

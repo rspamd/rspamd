@@ -1,8 +1,10 @@
 rspamd_config:register_symbol({
-  name = 'SIMPLE_TEST',
+  name = 'GET_FROM',
   score = 1.0,
   callback = function(task)
-    local a = task:get_from('mime')[1]
-    task:insert_result('GET_FROM', 0.0, a.name .. ',' .. a.addr .. ',' .. a.user .. ',' .. a.domain)
+    local a = task:get_from('mime')
+    if not a then return end
+    a = a[1]
+    return true, (a.name or '') .. ',' .. (a.addr or '') .. ',' .. (a.user or '') .. ',' .. (a.domain or '')
   end
 })
