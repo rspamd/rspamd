@@ -601,19 +601,17 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 
 void
 rspamd_controller_send_openmetrics (struct rspamd_http_connection_entry *entry,
-	const gchar *str)
+									rspamd_fstring_t *str)
 {
 	struct rspamd_http_message *msg;
-	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	reply = rspamd_fstring_new_init (str, strlen (str));
 
 	rspamd_http_message_set_body_from_fstring_steal (msg,
-			rspamd_controller_maybe_compress (entry, reply, msg));
+			rspamd_controller_maybe_compress (entry, str, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,

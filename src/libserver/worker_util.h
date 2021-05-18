@@ -121,11 +121,11 @@ void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 /**
  * Send openmetrics-formatted strings using HTTP
  * @param entry router entry
- * @param str string to send
+ * @param str rspamd fstring buffer, ownership is transferred
  */
 void
 rspamd_controller_send_openmetrics (struct rspamd_http_connection_entry *entry,
-	const gchar *str);
+									rspamd_fstring_t *str);
 
 /**
  * Send a custom string using HTTP

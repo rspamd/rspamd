@@ -2732,6 +2732,7 @@ rspamd_controller_metrics_fin_task (void *ud) {
 	ucl_object_t *top;
 	GList *fuzzy_elts, *cur;
 	struct rspamd_fuzzy_stat_entry *entry;
+	rspamd_fstring_t *output;
 	gint i;
 
 	conn_ent = cbdata->conn_ent;
@@ -2740,86 +2741,102 @@ rspamd_controller_metrics_fin_task (void *ud) {
 	ucl_object_insert_key (top,
 			ucl_object_fromint (cbdata->learned), "total_learns", 0, false);
 
-	GString* output = g_string_new ("");
-	g_string_append_printf (output, "build_info{version=\"%s\"} 1\n",
+	output = rspamd_fstring_sized_new (1024);
+	rspamd_printf_fstring (&output, "build_info{version=\"%s\"} 1\n",
 		ucl_object_tostring (ucl_object_lookup (top, "version")));
-	g_string_append_printf (output, "config{id=\"%s\"} 1\n",
+	rspamd_printf_fstring (&output, "config{id=\"%s\"} 1\n",
 		ucl_object_tostring (ucl_object_lookup (top, "config_id")));
-	g_string_append_printf (output, "process_start_time_seconds %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "process_start_time_seconds %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "start_time")));
-	g_string_append_printf (output, "read_only %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "read_only %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "read_only")));
-	g_string_append_printf (output, "scanned %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "scanned %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "scanned")));
-	g_string_append_printf (output, "learned %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "learned %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "learned")));
-	g_string_append_printf (output, "spam_count %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "spam_count %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "spam_count")));
-	g_string_append_printf (output, "ham_count %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "ham_count %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "ham_count")));
-	g_string_append_printf (output, "connections %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "connections %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "connections")));
-	g_string_append_printf (output, "control_connections %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "control_connections %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "control_connections")));
-	g_string_append_printf (output, "pools_allocated %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "pools_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_allocated")));
-	g_string_append_printf (output, "pools_freed %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "pools_freed %" PRId64 "\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_freed")));
-	g_string_append_printf (output, "bytes_allocated %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "bytes_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "bytes_allocated")));
-	g_string_append_printf (output, "chunks_allocated %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "chunks_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_allocated")));
-	g_string_append_printf (output, "shared_chunks_allocated %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "shared_chunks_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "shared_chunks_allocated")));
-	g_string_append_printf (output, "chunks_freed %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "chunks_freed %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_freed")));
-	g_string_append_printf (output, "chunks_oversized %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "chunks_oversized %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_oversized")));
-	g_string_append_printf (output, "fragmented %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "fragmented %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "fragmented")));
-	g_string_append_printf (output, "total_learns %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "total_learns %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "total_learns")));
-	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-		gchar* path = malloc (strlen (rspamd_action_to_str(i)));
-		g_string_append_printf (output, "actions{type=\"%s\"} %" PRId64 "\n",
-		rspamd_action_to_str (i),
-		ucl_object_toint (ucl_object_lookup_path (top, path)));
-		g_free (path);
-	}
 
-	if (cbdata->stat) {
-		const ucl_object_t *cur_elt;
-        ucl_object_iter_t it = NULL;
-        while ((cur_elt = ucl_object_iterate (cbdata->stat, &it, true))) {
-			if (ucl_object_lookup_path (cur_elt, "symbol") && ucl_object_lookup_path (cur_elt, "type")) {
-				g_string_append_printf (output, "statfiles_revision{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "revision")));
-				g_string_append_printf (output, "statfiles_used{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "used")));
-				g_string_append_printf (output, "statfiles_total{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "total")));
-				g_string_append_printf (output, "statfiles_size{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "size")));
-				g_string_append_printf (output, "statfiles_languages{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "languages")));
-				g_string_append_printf (output, "statfiles_users{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
-					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
-					ucl_object_toint (ucl_object_lookup_path (cur_elt, "users")));
+	const ucl_object_t *acts_obj = ucl_object_lookup (top, "actions");
+
+	if (acts_obj) {
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			const char *str_act = rspamd_action_to_str (i);
+			const ucl_object_t *act = ucl_object_lookup (acts_obj, str_act);
+
+			if (act) {
+				rspamd_printf_fstring(&output, "actions{type=\"%s\"} %L\n",
+						str_act,
+						ucl_object_toint(act));
+			}
+			else {
+				rspamd_printf_fstring (&output, "actions{type=\"%s\"} 0\n",
+						str_act);
 			}
 		}
 	}
 
+	if (cbdata->stat) {
+		const ucl_object_t *cur_elt;
+		ucl_object_iter_t it = NULL;
+		while ((cur_elt = ucl_object_iterate (cbdata->stat, &it, true))) {
+			if (ucl_object_lookup (cur_elt, "symbol") &&
+				ucl_object_lookup (cur_elt, "type")) {
+
+				const char *sym = ucl_object_tostring (ucl_object_lookup (cur_elt, "symbol"));
+				const char *type = ucl_object_tostring (ucl_object_lookup (cur_elt, "type"));
+
+				rspamd_printf_fstring (&output, "statfiles_revision{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "revision")));
+				rspamd_printf_fstring (&output, "statfiles_used{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "used")));
+				rspamd_printf_fstring (&output, "statfiles_total{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "total")));
+				rspamd_printf_fstring (&output, "statfiles_size{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "size")));
+				rspamd_printf_fstring (&output, "statfiles_languages{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "languages")));
+				rspamd_printf_fstring (&output, "statfiles_users{symbol=\"%s\", type=\"%s\"} %L\n",
+						sym,
+						type,
+						ucl_object_toint (ucl_object_lookup (cur_elt, "users")));
+			}
+		}
+	}
 
 	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
 
@@ -2828,17 +2845,15 @@ rspamd_controller_metrics_fin_task (void *ud) {
 			entry = cur->data;
 
 			if (entry->name) {
-				g_string_append_printf (output, "fuzzy_stat{storage=\"%s\"} %" PRIu32 "\n",
-				entry->name, entry->fuzzy_cnt);
+				rspamd_printf_fstring (&output, "fuzzy_stat{storage=\"%s\"} %ud\n",
+						entry->name, entry->fuzzy_cnt);
 			}
 		}
 	}
 
-	g_string_append (output, "# EOF\n");
-	rspamd_controller_send_openmetrics (conn_ent, g_string_free (output, FALSE));
+	rspamd_printf_fstring (&output, "# EOF\n");
 
-	// TODO implement statfile metrics
-
+	rspamd_controller_send_openmetrics (conn_ent, output);
 
 	return TRUE;
 }
