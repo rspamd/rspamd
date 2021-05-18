@@ -119,6 +119,15 @@ void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 								   gint code, const gchar *error_msg, ...);
 
 /**
+ * Send openmetrics-formatted strings using HTTP
+ * @param entry router entry
+ * @param str string to send
+ */
+void
+rspamd_controller_send_openmetrics (struct rspamd_http_connection_entry *entry,
+	const gchar *str);
+
+/**
  * Send a custom string using HTTP
  * @param entry router entry
  * @param str string to send

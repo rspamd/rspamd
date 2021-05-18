@@ -50,6 +50,7 @@
 #define PATH_HISTORY_RESET "/historyreset"
 #define PATH_LEARN_SPAM "/learnspam"
 #define PATH_LEARN_HAM "/learnham"
+#define PATH_METRICS "/metrics"
 #define PATH_SAVE_ACTIONS "/saveactions"
 #define PATH_SAVE_SYMBOLS "/savesymbols"
 #define PATH_SAVE_MAP "/savemap"
@@ -2717,6 +2718,278 @@ rspamd_controller_handle_statreset (
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
+/*
+ * Metrics command handler:
+ * request: /metrics
+ * headers: Password
+ * reply: OpenMetrics
+ */
+
+static gboolean
+rspamd_controller_metrics_fin_task (void *ud) {
+	struct rspamd_stat_cbdata *cbdata = ud;
+	struct rspamd_http_connection_entry *conn_ent;
+	ucl_object_t *top;
+	GList *fuzzy_elts, *cur;
+	struct rspamd_fuzzy_stat_entry *entry;
+	gint i;
+
+	conn_ent = cbdata->conn_ent;
+	top = cbdata->top;
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (cbdata->learned), "total_learns", 0, false);
+
+	GString* output = g_string_new ("");
+	g_string_append_printf (output, "build_info{version=\"%s\"} 1\n",
+		ucl_object_tostring (ucl_object_lookup (top, "version")));
+	g_string_append_printf (output, "config{id=\"%s\"} 1\n",
+		ucl_object_tostring (ucl_object_lookup (top, "config_id")));
+	g_string_append_printf (output, "process_start_time_seconds %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "start_time")));
+	g_string_append_printf (output, "read_only %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "read_only")));
+	g_string_append_printf (output, "scanned %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "scanned")));
+	g_string_append_printf (output, "learned %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "learned")));
+	g_string_append_printf (output, "spam_count %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "spam_count")));
+	g_string_append_printf (output, "ham_count %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "ham_count")));
+	g_string_append_printf (output, "connections %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "connections")));
+	g_string_append_printf (output, "control_connections %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "control_connections")));
+	g_string_append_printf (output, "pools_allocated %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "pools_allocated")));
+	g_string_append_printf (output, "pools_freed %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "pools_freed")));
+	g_string_append_printf (output, "bytes_allocated %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "bytes_allocated")));
+	g_string_append_printf (output, "chunks_allocated %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "chunks_allocated")));
+	g_string_append_printf (output, "shared_chunks_allocated %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "shared_chunks_allocated")));
+	g_string_append_printf (output, "chunks_freed %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "chunks_freed")));
+	g_string_append_printf (output, "chunks_oversized %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "chunks_oversized")));
+	g_string_append_printf (output, "fragmented %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "fragmented")));
+	g_string_append_printf (output, "total_learns %" PRId64 "\n",
+		ucl_object_toint (ucl_object_lookup (top, "total_learns")));
+	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+		gchar* path = malloc (strlen (rspamd_action_to_str(i)));
+		g_string_append_printf (output, "actions{type=\"%s\"} %" PRId64 "\n",
+		rspamd_action_to_str (i),
+		ucl_object_toint (ucl_object_lookup_path (top, path)));
+		g_free (path);
+	}
+
+	if (cbdata->stat) {
+		const ucl_object_t *cur_elt;
+        ucl_object_iter_t it = NULL;
+        while ((cur_elt = ucl_object_iterate (cbdata->stat, &it, true))) {
+			if (ucl_object_lookup_path (cur_elt, "symbol") && ucl_object_lookup_path (cur_elt, "type")) {
+				g_string_append_printf (output, "statfiles_revision{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "revision")));
+				g_string_append_printf (output, "statfiles_used{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "used")));
+				g_string_append_printf (output, "statfiles_total{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "total")));
+				g_string_append_printf (output, "statfiles_size{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "size")));
+				g_string_append_printf (output, "statfiles_languages{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "languages")));
+				g_string_append_printf (output, "statfiles_users{symbol=\"%s\", type=\"%s\"} %" PRId64 "\n",
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "symbol")),
+					ucl_object_tostring (ucl_object_lookup_path (cur_elt, "type")),
+					ucl_object_toint (ucl_object_lookup_path (cur_elt, "users")));
+			}
+		}
+	}
+
+
+	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
+
+	if (fuzzy_elts) {
+		for (cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
+			entry = cur->data;
+
+			if (entry->name) {
+				g_string_append_printf (output, "fuzzy_stat{storage=\"%s\"} %" PRIu32 "\n",
+				entry->name, entry->fuzzy_cnt);
+			}
+		}
+	}
+
+	g_string_append (output, "# EOF\n");
+	rspamd_controller_send_openmetrics (conn_ent, g_string_free (output, FALSE));
+
+	// TODO implement statfile metrics
+
+
+	return TRUE;
+}
+
+static int
+rspamd_controller_handle_metrics_common (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg,
+	gboolean do_reset)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	ucl_object_t *top, *sub;
+	gint i;
+	int64_t uptime;
+	guint64 spam = 0, ham = 0;
+	rspamd_mempool_stat_t mem_st;
+	struct rspamd_stat *stat, stat_copy;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_task *task;
+	struct rspamd_stat_cbdata *cbdata;
+
+	memset (&mem_st, 0, sizeof (mem_st));
+	rspamd_mempool_stat (&mem_st);
+	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
+	stat = &stat_copy;
+	ctx = session->ctx;
+
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			ctx->lang_det, ctx->event_loop, FALSE);
+	task->resolver = ctx->resolver;
+	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
+	cbdata->conn_ent = conn_ent;
+	cbdata->task = task;
+	top = ucl_object_typed_new (UCL_OBJECT);
+	cbdata->top = top;
+
+	task->s = rspamd_session_create (session->pool,
+			rspamd_controller_metrics_fin_task,
+			NULL,
+			rspamd_controller_stat_cleanup_task,
+			cbdata);
+	task->fin_arg = cbdata;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+	task->sock = conn_ent->conn->fd;
+
+	ucl_object_insert_key (top, ucl_object_fromstring (
+			RVERSION), "version",  0, false);
+	ucl_object_insert_key (top, ucl_object_fromstring (
+			session->ctx->cfg->checksum), "config_id", 0, false);
+	uptime = ev_time () - session->ctx->start_time;
+	ucl_object_insert_key (top, ucl_object_fromint (
+			uptime), "uptime", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			session->ctx->start_time), "start_time", 0, false);
+	ucl_object_insert_key (top, ucl_object_frombool (!session->is_enable),
+			"read_only", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_learned), "learned", 0, false);
+
+	if (stat->messages_scanned > 0) {
+		sub = ucl_object_typed_new (UCL_OBJECT);
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			ucl_object_insert_key (sub,
+				ucl_object_fromint (stat->actions_stat[i]),
+				rspamd_action_to_str (i), 0, false);
+			if (i < METRIC_ACTION_GREYLIST) {
+				spam += stat->actions_stat[i];
+			}
+			else {
+				ham += stat->actions_stat[i];
+			}
+			if (do_reset) {
+#ifndef HAVE_ATOMIC_BUILTINS
+				session->ctx->worker->srv->stat->actions_stat[i] = 0;
+#else
+				__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
+						0, __ATOMIC_RELEASE);
+#endif
+			}
+		}
+		ucl_object_insert_key (top, sub, "actions", 0, false);
+	}
+
+	ucl_object_insert_key (top, ucl_object_fromint (
+			spam), "spam_count", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			ham),  "ham_count",	 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (stat->connections_count), "connections", 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (stat->control_connections_count),
+		"control_connections", 0, false);
+
+	ucl_object_insert_key (top,
+		ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0,
+		false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0,
+		false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (
+			mem_st.chunks_allocated), "chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (mem_st.shared_chunks_allocated),
+		"shared_chunks_allocated", 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
+	ucl_object_insert_key (top,
+		ucl_object_fromint (
+			mem_st.oversized_chunks), "chunks_oversized", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.fragmented_size), "fragmented", 0, false);
+
+	if (do_reset) {
+		session->ctx->srv->stat->messages_scanned = 0;
+		session->ctx->srv->stat->messages_learned = 0;
+		session->ctx->srv->stat->connections_count = 0;
+		session->ctx->srv->stat->control_connections_count = 0;
+		rspamd_mempool_stat_reset ();
+	}
+
+	fuzzy_stat_command (task);
+
+	/* Now write statistics for each statfile */
+	rspamd_stat_statistics (task, session->ctx->cfg, &cbdata->learned,
+			&cbdata->stat);
+	session->task = task;
+
+	rspamd_session_pending (task->s);
+
+
+	return 0;
+}
+
+
+static int
+rspamd_controller_handle_metrics (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+	return rspamd_controller_handle_metrics_common (conn_ent, msg, FALSE);
+}
+
 
 /*
  * Counters command handler:
@@ -3618,6 +3891,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_LEARN_HAM,
 			rspamd_controller_handle_learnham);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_METRICS,
+			rspamd_controller_handle_metrics);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_SAVE_ACTIONS,
 			rspamd_controller_handle_saveactions);
