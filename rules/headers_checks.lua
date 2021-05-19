@@ -1001,7 +1001,7 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
     for _,p in ipairs(parts) do
       local mtype,_ = p:get_type()
       if mtype then
-        if mtype == 'text' then
+        if mtype == 'text' and not p:is_attachment() then
           ntext_parts = ntext_parts + 1
           if ntext_parts > 2 then
             found = true
