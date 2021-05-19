@@ -366,6 +366,10 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 				map->next_check = hdate;
 			}
+			else {
+				msg_info_map ("invalid expires header: %T, ignore it", expires_hdr);
+				map->next_check = 0;
+			}
 		}
 
 		/* Check for etag */
@@ -514,6 +518,10 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (hdate != (time_t)-1 && hdate > msg->date) {
 				map->next_check = hdate;
 			}
+			else {
+				msg_info_map ("invalid expires header: %T, ignore it", expires_hdr);
+				map->next_check = 0;
+			}
 		}
 
 		etag_hdr = rspamd_http_message_find_header (msg, "ETag");
@@ -531,8 +539,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
 					map->next_check);
 			msg_info_map ("data is not modified for server %s, next check at %s "
-						  "(http cache based)",
-					cbd->data->host, next_check_date);
+						  "(http cache based: %T)",
+					cbd->data->host, next_check_date, expires_hdr);
 		}
 		else {
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
@@ -1036,6 +1044,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 
 	if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks ();
+		map->next_check = 0;
 
 		if (timeout > 0 && timeout < map->poll_timeout) {
 			/* Early check case, jitter */
@@ -1075,6 +1084,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 		}
 	}
 	else {
+		/* No valid information when to check a map, plan a timer based check */
 		timeout = map->poll_timeout;
 
 		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
@@ -1617,7 +1627,15 @@ rspamd_map_read_http_cached_file (struct rspamd_map *map,
 		return FALSE;
 	}
 
-	map->next_check = header.next_check;
+	double now = rspamd_get_calendar_ticks ();
+
+	if (header.next_check > now) {
+		map->next_check = header.next_check;
+	}
+	else {
+		map->next_check = now;
+	}
+
 	htdata->last_modified = header.mtime;
 
 	if (header.etag_len > 0) {
