@@ -28,7 +28,7 @@
 #include "function2/function2.hpp"
 #include "parse_error.hxx"
 #include "css_parser.hxx"
-#include "html_tags.h"
+#include "libserver/html/html_tags.h"
 
 namespace rspamd::css {
 

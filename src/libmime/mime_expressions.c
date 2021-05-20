@@ -20,7 +20,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "mime_expressions.h"
-#include "html.h"
+#include "libserver/html/html.h"
 #include "lua/lua_common.h"
 #include "utlist.h"
 

@@ -17,7 +17,7 @@
 #include "images.h"
 #include "task.h"
 #include "message.h"
-#include "html.h"
+#include "libserver/html/html.h"
 
 #define msg_debug_images(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_images_log_id, "images", task->task_pool->tag.uid, \

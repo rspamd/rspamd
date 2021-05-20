@@ -19,7 +19,7 @@
 #include "stat_internal.h"
 #include "libmime/message.h"
 #include "libmime/images.h"
-#include "libserver/html.h"
+#include "libserver/html/html.h"
 #include "lua/lua_common.h"
 #include "libserver/mempool_vars_internal.h"
 #include "utlist.h"

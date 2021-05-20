@@ -11,7 +11,6 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_sqlite.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend/fuzzy_backend_redis.c
-				${CMAKE_CURRENT_SOURCE_DIR}/html.c
 				${CMAKE_CURRENT_SOURCE_DIR}/milter.c
 				${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
 				${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
@@ -35,6 +34,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/http/http_context.c
 				${CMAKE_CURRENT_SOURCE_DIR}/maps/map.c
 				${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c
+				${CMAKE_CURRENT_SOURCE_DIR}/html/html.c
 				${LIBCSSSRC})
 
 # Librspamd-server

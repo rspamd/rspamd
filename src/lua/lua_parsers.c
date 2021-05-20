@@ -17,7 +17,7 @@
 #include "lua_common.h"
 #include "tokenizers/tokenizers.h"
 #include "contrib/uthash/utlist.h"
-#include "libserver/html.h"
+#include "libserver/html/html.h"
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"

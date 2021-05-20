@@ -17,7 +17,7 @@
 #include "util.h"
 #include "rspamd.h"
 #include "message.h"
-#include "html.h"
+#include "libserver/html/html.h"
 #include "images.h"
 #include "archives.h"
 #include "tokenizers/tokenizers.h"

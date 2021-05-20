@@ -13,11 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <src/libserver/html.h>
 #include "lua_common.h"
 #include "message.h"
-#include "html.h"
-#include "html_tags.h"
+#include "libserver/html/html.h"
 #include "images.h"
 #include "contrib/mumhash/mum.h"
 
