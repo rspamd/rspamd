@@ -1059,9 +1059,6 @@ rspamd_file_lock (gint fd, gboolean async)
 		if (async && (errno == EAGAIN || errno == EACCES)) {
 			return FALSE;
 		}
-		if (errno != ENOTSUP) {
-			msg_warn ("lock on file failed: %s", strerror (errno));
-		}
 
 		return FALSE;
 	}
@@ -1084,9 +1081,6 @@ rspamd_file_unlock (gint fd, gboolean async)
 			return FALSE;
 		}
 
-		if (errno != ENOTSUP) {
-			msg_warn ("unlock on file failed: %s", strerror (errno));
-		}
 		return FALSE;
 	}
 
@@ -1924,9 +1918,11 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 #endif
 
 #ifndef HAVE_OCLOEXEC
+	int serrno;
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		serrno = errno;
 		close (fd);
+		errno = serrno;
 
 		return -1;
 	}
