@@ -153,7 +153,8 @@ void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *lo
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc(pool, size) \
 	rspamd_mempool_alloc_((pool), (size), (G_STRLOC))
-
+#define rspamd_mempool_alloc_type(pool, type) \
+	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), (G_STRLOC)))
 /**
  * Notify external memory usage for memory pool
  * @param pool
@@ -174,6 +175,8 @@ void *rspamd_mempool_alloc0_ (rspamd_mempool_t *pool, gsize size, const gchar *l
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc0(pool, size) \
 	rspamd_mempool_alloc0_((pool), (size), (G_STRLOC))
+#define rspamd_mempool_alloc0_type(pool, type) \
+	(type *)(rspamd_mempool_alloc0_((pool), sizeof(type), (G_STRLOC)))
 
 /**
  * Make a copy of string in pool
