@@ -19,6 +19,7 @@
 #pragma once
 
 #include <memory>
+#include <array>
 
 /*
  * Common C++ utilities
@@ -52,6 +53,16 @@ struct shared_ptr_hash {
 		return std::hash<T>()(a);
 	}
 };
+
+/*
+ * Creates std::array from a standard C style array with automatic size calculation
+ */
+template <typename V, typename... T>
+constexpr auto array_of(T&&... t) -> std::array<V, sizeof...(T)>
+{
+	return {{ std::forward<T>(t)... }};
+}
+
 
 }
 

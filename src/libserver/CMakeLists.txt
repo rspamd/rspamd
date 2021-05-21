@@ -34,7 +34,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/http/http_context.c
 				${CMAKE_CURRENT_SOURCE_DIR}/maps/map.c
 				${CMAKE_CURRENT_SOURCE_DIR}/maps/map_helpers.c
-				${CMAKE_CURRENT_SOURCE_DIR}/html/html.c
+				${CMAKE_CURRENT_SOURCE_DIR}/html/html.cc
 				${LIBCSSSRC})
 
 # Librspamd-server
