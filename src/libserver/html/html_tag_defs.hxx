@@ -192,7 +192,6 @@ public:
 	}
 };
 
-
 }
 
 #endif //RSPAMD_HTML_TAG_DEFS_HXX

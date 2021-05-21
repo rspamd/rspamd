@@ -51,7 +51,6 @@ INIT_LOG_MODULE(html)
 
 
 [[maybe_unused]] static const html_tags_storage html_tags_defs;
-[[maybe_unused]] static const html_entities_storage html_entities_defs;
 
 static struct rspamd_url *rspamd_html_process_url(rspamd_mempool_t *pool,
 												  const gchar *start, guint len,
@@ -132,218 +131,7 @@ rspamd_html_tag_by_id(gint id) {
 /* Decode HTML entitles in text */
 guint
 rspamd_html_decode_entitles_inplace(gchar *s, gsize len) {
-	goffset l, rep_len;
-	gchar *t = s, *h = s, *e = s, *end_ptr, old_c;
-	const gchar *end;
-	const gchar *entity;
-	gboolean seen_hash = FALSE, seen_hex = FALSE;
-	enum {
-		do_undefined,
-		do_digits_only,
-		do_mixed,
-	} seen_digit_only;
-	gint state = 0, base;
-	UChar32 uc;
-	khiter_t k;
 
-	if (len == 0) {
-		return 0;
-	}
-	else {
-		l = len;
-	}
-
-	end = s + l;
-
-	while (h - s < l && t <= h) {
-		switch (state) {
-			/* Out of entity */
-		case 0:
-			if (*h == '&') {
-				state = 1;
-				seen_hash = FALSE;
-				seen_hex = FALSE;
-				seen_digit_only = do_undefined;
-				e = h;
-				h++;
-				continue;
-			}
-			else {
-				*t = *h;
-				h++;
-				t++;
-			}
-			break;
-		case 1:
-			if (*h == ';' && h > e) {
-decode_entity:
-				/* Determine base */
-				/* First find in entities table */
-				old_c = *h;
-				*h = '\0';
-				entity = e + 1;
-				uc = 0;
-
-				if (*entity != '#') {
-					k = kh_get (entity_by_name, html_entity_by_name, entity);
-					*h = old_c;
-
-					if (k != kh_end (html_entity_by_name)) {
-						if (kh_val (html_entity_by_name, k)) {
-							rep_len = strlen(kh_val (html_entity_by_name, k));
-
-							if (end - t >= rep_len) {
-								memcpy(t, kh_val (html_entity_by_name, k),
-										rep_len);
-								t += rep_len;
-							}
-						}
-						else {
-							if (end - t > h - e + 1) {
-								memmove(t, e, h - e + 1);
-								t += h - e + 1;
-							}
-						}
-					}
-					else {
-						if (end - t > h - e + 1) {
-							memmove(t, e, h - e + 1);
-							t += h - e + 1;
-						}
-					}
-				}
-				else if (e + 2 < h) {
-					if (*(e + 2) == 'x' || *(e + 2) == 'X') {
-						base = 16;
-					}
-					else if (*(e + 2) == 'o' || *(e + 2) == 'O') {
-						base = 8;
-					}
-					else {
-						base = 10;
-					}
-
-					if (base == 10) {
-						uc = strtoul((e + 2), &end_ptr, base);
-					}
-					else {
-						uc = strtoul((e + 3), &end_ptr, base);
-					}
-
-					if (end_ptr != NULL && *end_ptr != '\0') {
-						/* Skip undecoded */
-						*h = old_c;
-
-						if (end - t > h - e + 1) {
-							memmove(t, e, h - e + 1);
-							t += h - e + 1;
-						}
-					}
-					else {
-						/* Search for a replacement */
-						*h = old_c;
-						k = kh_get (entity_by_number, html_entity_by_number, uc);
-
-						if (k != kh_end (html_entity_by_number)) {
-							if (kh_val (html_entity_by_number, k)) {
-								rep_len = strlen(kh_val (html_entity_by_number, k));
-
-								if (end - t >= rep_len) {
-									memcpy(t, kh_val (html_entity_by_number, k),
-											rep_len);
-									t += rep_len;
-								}
-							}
-							else {
-								if (end - t > h - e + 1) {
-									memmove(t, e, h - e + 1);
-									t += h - e + 1;
-								}
-							}
-						}
-						else {
-							/* Unicode point */
-							goffset off = t - s;
-							UBool is_error = 0;
-
-							if (uc > 0) {
-								U8_APPEND (s, off, len, uc, is_error);
-								if (!is_error) {
-									t = s + off;
-								}
-								else {
-									/* Leave invalid entities as is */
-									if (end - t > h - e + 1) {
-										memmove(t, e, h - e + 1);
-										t += h - e + 1;
-									}
-								}
-							}
-							else if (end - t > h - e + 1) {
-								memmove(t, e, h - e + 1);
-								t += h - e + 1;
-							}
-						}
-
-						if (end - t > 0 && old_c != ';') {
-							/* Fuck email clients, fuck them */
-							*t++ = old_c;
-						}
-					}
-				}
-
-				state = 0;
-			}
-			else if (*h == '&') {
-				/* Previous `&` was bogus */
-				state = 1;
-
-				if (end - t > h - e) {
-					memmove(t, e, h - e);
-					t += h - e;
-				}
-
-				e = h;
-			}
-			else if (*h == '#') {
-				seen_hash = TRUE;
-
-				if (h + 1 < end && h[1] == 'x') {
-					seen_hex = TRUE;
-					/* Skip one more character */
-					h++;
-				}
-			}
-			else if (seen_digit_only != do_mixed &&
-					 (g_ascii_isdigit (*h) || (seen_hex && g_ascii_isxdigit (*h)))) {
-				seen_digit_only = do_digits_only;
-			}
-			else {
-				if (seen_digit_only == do_digits_only && seen_hash && h > e) {
-					/* We have seen some digits, so we can try to decode, eh */
-					/* Fuck retarded email clients... */
-					goto decode_entity;
-				}
-
-				seen_digit_only = do_mixed;
-			}
-
-			h++;
-
-			break;
-		}
-	}
-
-	/* Leftover */
-	if (state == 1 && h > e) {
-		/* Unfinished entity, copy as is */
-		if (end - t >= h - e) {
-			memmove(t, e, h - e);
-			t += h - e;
-		}
-	}
-
-	return (t - s);
 }
 
 static gboolean
@@ -3134,4 +2922,10 @@ rspamd_html_process_part (rspamd_mempool_t *pool,
 {
 	return rspamd_html_process_part_full (pool, hc, in, NULL,
 			NULL, NULL, FALSE);
+}
+
+guint
+rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
+{
+	return rspamd::html::decode_html_entitles_inplace(s, len);
 }
