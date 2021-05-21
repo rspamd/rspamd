@@ -172,7 +172,7 @@ public:
 		}
 	}
 
-	auto by_name(std::string_view name) -> const html_tag_def* {
+	auto by_name(std::string_view name) const -> const html_tag_def* {
 		auto it = tag_by_name.find(name);
 
 		if (it != tag_by_name.end()) {
@@ -182,8 +182,8 @@ public:
 		return nullptr;
 	}
 
-	auto by_id(tag_id_t id) -> const html_tag_def* {
-		auto it = tag_by_id.find(id);
+	auto by_id(int id) const -> const html_tag_def* {
+		auto it = tag_by_id.find(static_cast<tag_id_t>(id));
 		if (it != tag_by_id.end()) {
 			return &(it->second);
 		}
