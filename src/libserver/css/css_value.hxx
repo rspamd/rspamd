@@ -40,6 +40,12 @@ struct alignas(int) css_color {
 	css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
 	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
 	css_color() = default;
+	constexpr auto to_number() const -> std::uint32_t {
+		return (std::uint32_t)alpha << 24 |
+				(std::uint32_t)r << 16 |
+				(std::uint32_t)g << 8 |
+				(std::uint32_t)b << 0;
+	}
 	friend bool operator==(const css_color& l, const css_color& r) {
 		return (memcmp(&l, &r, sizeof(css_color)) == 0);
 	}
