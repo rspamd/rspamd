@@ -30,10 +30,10 @@
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 
-char *
-rspamd_string_unicode_trim_inplace (char *str, size_t *len)
+const char *
+rspamd_string_unicode_trim_inplace (const char *str, size_t *len)
 {
-	auto *p = str, *end = str + *len;
+	const auto *p = str, *end = str + *len;
 	auto i = 0;
 
 	while (i < *len) {
