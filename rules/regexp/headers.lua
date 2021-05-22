@@ -962,9 +962,10 @@ local old_x_mailers = {
   [[Microsoft Outlook IMO, Build 9\.0\.]],
   -- Outlook 2002 (Office XP)
   [[Microsoft Outlook, Build 10\.]],
-  -- Some old Apple iOS version are used on old devices, so instead of matching
-  -- all old versions, match only versions seen in spam
-  [[i(Phone|Pad) Mail \((?:12[A-Z]|13E)]],
+  -- Some old Apple iOS versions are used on old devices, match only very old
+  -- versions (iOS 4.3.5 buid 8L1 was supported until 2013) and less old
+  -- versions frequently seen in spam
+  [[i(Phone|Pad) Mail \((?:[1-8][A-L]|12H|13E)]],
 }
 
 reconf['OLD_X_MAILER'] = {
