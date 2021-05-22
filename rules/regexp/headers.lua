@@ -983,14 +983,21 @@ local bad_x_mailers = {
   -- Mozilla Thunderbird 1.0.2 (Windows/20050317)
   -- Thunderbird 2.0.0.23 (X11/20090812)
   [[(?:Mozilla )?Thunderbird \d]],
-  -- Was used by Yahoo Groups in 2000s
+  -- Was used by Yahoo Groups in 2000s, no one expected to use this in 2020s
   [[eGroups Message Poster]],
+  -- Regexp for genuene iOS X-Mailer is below, anything which doesn't match it,
+  -- but starts with 'iPhone Mail' or 'iPad Mail' is likely fake
+  [[i(?:Phone|Pad) Mail]],
 }
+-- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c
+-- https://en.wikipedia.org/wiki/IOS_version_history
+local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \((?:1[AC]|[34][AB]|5[ABCFGH]|7[A-E]|8[ABCEFGHJKL]|9[AB]|\d{2}[A-Z])\d+[a-z]?\)]]
 
 reconf['FORGED_X_MAILER'] = {
   description = 'Forged X-Mailer header',
-  re = string.format('X-Mailer=/^(?:%s)/{header}', table.concat(bad_x_mailers, '|')),
-  score = 4.0,
+  re = string.format('X-Mailer=/^(?:%s)/{header} && !X-Mailer=/^%s/{header}',
+    table.concat(bad_x_mailers, '|'), apple_ios_x_mailer),
+  score = 4.5,
   group = 'headers',
 }
 
