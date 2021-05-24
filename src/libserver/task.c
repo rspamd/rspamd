@@ -25,7 +25,6 @@
 #include "stat_api.h"
 #include "unix-std.h"
 #include "utlist.h"
-#include "contrib/zstd/zstd.h"
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
@@ -40,6 +39,12 @@
 #endif
 
 #include <math.h>
+
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#else
+#  include "contrib/zstd/zstd.h"
+#endif
 
 __KHASH_IMPL (rspamd_req_headers_hash, static inline,
 		rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,

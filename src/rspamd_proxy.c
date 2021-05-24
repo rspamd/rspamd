@@ -36,12 +36,17 @@
 #include "libserver/milter.h"
 #include "libserver/milter_internal.h"
 #include "libmime/lang_detection.h"
-#include "contrib/zstd/zstd.h"
 
 #include <math.h>
 
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h> /* for TCP_NODELAY */
+#endif
+
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#else
+#  include "contrib/zstd/zstd.h"
 #endif
 
 /* Rotate keys each minute by default */

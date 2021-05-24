@@ -16,9 +16,15 @@
 
 #include "lua_common.h"
 #include "unix-std.h"
-#include "contrib/zstd/zstd.h"
-#include "contrib/zstd/error_public.h"
 #include <zlib.h>
+
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#  include "zstd_errors.h"
+#else
+#  include "contrib/zstd/zstd.h"
+#  include "contrib/zstd/error_public.h"
+#endif
 
 /***
  * @module rspamd_compress

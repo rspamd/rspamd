@@ -36,8 +36,12 @@
 #include "contrib/libottery/ottery.h"
 #include "contrib/fastutf8/fastutf8.h"
 
-#define ZSTD_STATIC_LINKING_ONLY
-#include "contrib/zstd/zstd.h"
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#else
+#  define ZSTD_STATIC_LINKING_ONLY
+#  include "contrib/zstd/zstd.h"
+#endif
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>

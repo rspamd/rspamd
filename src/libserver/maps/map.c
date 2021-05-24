@@ -23,9 +23,14 @@
 #include "libserver/http/http_connection.h"
 #include "libserver/http/http_private.h"
 #include "rspamd.h"
-#include "contrib/zstd/zstd.h"
 #include "contrib/libev/ev.h"
 #include "contrib/uthash/utlist.h"
+
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#else
+#  include "contrib/zstd/zstd.h"
+#endif
 
 #undef MAP_DEBUG_REFS
 #ifdef MAP_DEBUG_REFS
