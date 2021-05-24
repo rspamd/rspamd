@@ -154,7 +154,7 @@ Export Scoped Variables
 
 Log does not contain segfault record
   ${log} =  Get File  ${RSPAMD_TMPDIR}/rspamd.log  encoding_errors=ignore
-  Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
+  Should not contain  ${log}  (Segmentation fault)  msg=Segmentation fault detected
 
 Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
