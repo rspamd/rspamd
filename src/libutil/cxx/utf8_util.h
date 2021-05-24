@@ -32,7 +32,7 @@ extern "C" {
  * @param len length
  * @return new length of the string trimmed
  */
-const char* rspamd_string_unicode_trim_inplace (const char *str, size_t *len);
+char* rspamd_string_unicode_trim_inplace (char *str, size_t *len);
 
 enum rspamd_normalise_result {
 	RSPAMD_UNICODE_NORM_NORMAL = 0,
