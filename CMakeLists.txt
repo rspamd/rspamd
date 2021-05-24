@@ -57,6 +57,7 @@ OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
+OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
 
@@ -625,7 +626,12 @@ ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/fpconv)
 ADD_SUBDIRECTORY(contrib/lc-btrie)
 ADD_SUBDIRECTORY(contrib/libottery)
-ADD_SUBDIRECTORY(contrib/zstd)
+IF(SYSTEM_ZSTD MATCHES "OFF")
+	ADD_SUBDIRECTORY(contrib/zstd)
+ELSE()
+	ProcessPackage(LIBZSTD LIBRARY zstd INCLUDE zstd.h
+		ROOT ${LIBZSTD_ROOT_DIR} MODULES zstd)
+ENDIF()
 IF(ENABLE_SNOWBALL MATCHES "ON")
 	ADD_SUBDIRECTORY(contrib/snowball)
 	SET(WITH_SNOWBALL 1)
