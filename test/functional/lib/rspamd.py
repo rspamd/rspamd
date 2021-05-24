@@ -284,8 +284,8 @@ def _merge_luacov_stats(statsfile, coverage):
             except ValueError as e:
                 raise ValueError("%s; input was [%s] in [%s]" % (str(e), line, statsfile,))
             counts = [int(x) for x in fh.readline().split()]
-            assert len(counts) == int(max_line), \
-                "%d != %d for [%s] in [%s]" % (len(counts), int(max_line), src_file, statsfile,)
+            if len(counts) != int(max_line):
+                continue
 
             if src_file in coverage:
                 # enlarge list if needed: lenght of list in different luacov.stats.out files may differ
