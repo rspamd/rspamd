@@ -420,7 +420,7 @@ exports.full_extensions_map = {
     {"qxd", "application/octet-stream"},
     {"ra", "audio/x-pn-realaudio"},
     {"ram", "audio/x-pn-realaudio"},
-    {"rar", {"application/x-rar-compressed", "application/x-rar", "application/octet-stream"}},
+    {"rar", {"application/x-rar-compressed", "application/x-rar", "application/rar", "application/octet-stream"}},
     {"ras", "image/x-cmu-raster"},
     {"rat", "application/rat-file"},
     {"rc", "text/plain"},
