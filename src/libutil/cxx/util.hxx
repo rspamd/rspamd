@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <array>
+#include <string_view>
 
 /*
  * Common C++ utilities
@@ -62,7 +63,6 @@ constexpr auto array_of(T&&... t) -> std::array<V, sizeof...(T)>
 {
 	return {{ std::forward<T>(t)... }};
 }
-
 
 }
 

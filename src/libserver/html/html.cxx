@@ -767,10 +767,11 @@ process_html_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 	}
 }
 
-static void
-rspamd_html_process_data_image(rspamd_mempool_t *pool,
-							   struct html_image *img,
-							   struct html_tag_component *src) {
+static auto
+html_process_data_image(rspamd_mempool_t *pool,
+						struct html_image *img,
+						std::string_view input) -> void
+{
 	/*
 	 * Here, we do very basic processing of the data:
 	 * detect if we have something like: `data:image/xxx;base64,yyyzzz==`
@@ -778,11 +779,10 @@ rspamd_html_process_data_image(rspamd_mempool_t *pool,
 	 * We ignore content type so far
 	 */
 	struct rspamd_image *parsed_image;
-	const gchar *semicolon_pos = NULL, *end = (gchar *)src->start + src->len;
+	const gchar *semicolon_pos = input.data(),
+			*end = input.data() + input.size();
 
-	semicolon_pos = (gchar *)src->start;
-
-	while ((semicolon_pos = (gchar *)memchr(semicolon_pos, ';', end - semicolon_pos)) != NULL) {
+	if ((semicolon_pos = (const gchar *)memchr(semicolon_pos, ';', end - semicolon_pos)) != NULL) {
 		if (end - semicolon_pos > sizeof("base64,")) {
 			if (memcmp(semicolon_pos + 1, "base64,", sizeof("base64,") - 1) == 0) {
 				const gchar *data_pos = semicolon_pos + sizeof("base64,");
@@ -791,7 +791,7 @@ rspamd_html_process_data_image(rspamd_mempool_t *pool,
 				rspamd_ftok_t inp;
 
 				decoded_len = (encoded_len / 4 * 3) + 12;
-				decoded = (gchar *)rspamd_mempool_alloc (pool, decoded_len);
+				decoded = rspamd_mempool_alloc_buffer(pool, decoded_len);
 				rspamd_cryptobox_base64_decode(data_pos, encoded_len,
 						reinterpret_cast<guchar *>(decoded), &decoded_len);
 				inp.begin = decoded;
@@ -806,69 +806,63 @@ rspamd_html_process_data_image(rspamd_mempool_t *pool,
 					img->embedded_image = parsed_image;
 				}
 			}
-
-			break;
 		}
 		else {
 			/* Nothing useful */
 			return;
 		}
-
-		semicolon_pos++;
 	}
 }
 
 static void
-html_process_img_tag(rspamd_mempool_t *pool, struct html_tag *tag,
+html_process_img_tag(rspamd_mempool_t *pool,
+					 struct html_tag *tag,
 					 struct html_content *hc,
 					 khash_t (rspamd_url_hash) *url_set,
 					 GPtrArray *part_urls,
 					 GByteArray *dest)
 {
-	struct html_tag_component *comp;
 	struct html_image *img;
-	rspamd_ftok_t fstr;
-	const guchar *p;
-	GList *cur;
-	gulong val;
-	gboolean seen_width = FALSE, seen_height = FALSE;
-	goffset pos;
 
-	cur = tag->params->head;
 	img = rspamd_mempool_alloc0_type (pool, struct html_image);
 	img->tag = tag;
 	tag->flags |= FL_IMAGE;
 
-	while (cur) {
-		comp = static_cast<html_tag_component *>(cur->data);
+	auto found_href_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_HREF);
 
-		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			fstr.begin = (gchar *) comp->start;
-			fstr.len = comp->len;
+	if (found_href_it != tag->parameters.end()) {
+		/* Check base url */
+		const auto &href_value = found_href_it->second;
+
+		if (href_value.size() > 0) {
+			rspamd_ftok_t fstr;
+			fstr.begin = href_value.data();
+			fstr.len = href_value.size();
 			img->src = rspamd_mempool_ftokdup (pool, &fstr);
 
-			if (comp->len > sizeof("cid:") - 1 && memcmp(comp->start,
+			if (href_value.size() > sizeof("cid:") - 1 && memcmp(href_value.data(),
 					"cid:", sizeof("cid:") - 1) == 0) {
 				/* We have an embedded image */
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
 			}
 			else {
-				if (comp->len > sizeof("data:") - 1 && memcmp(comp->start,
+				if (href_value.size() > sizeof("data:") - 1 && memcmp(href_value.data(),
 						"data:", sizeof("data:") - 1) == 0) {
 					/* We have an embedded image in HTML tag */
 					img->flags |=
 							(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
-					rspamd_html_process_data_image(pool, img, comp);
+					html_process_data_image(pool, img, href_value);
 					hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
 				}
 				else {
 					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
 					if (img->src) {
 
-						img->url = rspamd_html_process_url(pool,
-								img->src, fstr.len, NULL);
+						std::string_view cpy{href_value};
+						auto maybe_url = html_process_url(pool, cpy);
 
-						if (img->url) {
+						if (maybe_url) {
+							img->url = maybe_url.value();
 							struct rspamd_url *existing;
 
 							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
@@ -892,95 +886,109 @@ html_process_img_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 				}
 			}
 		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_HEIGHT) {
-			rspamd_strtoul(reinterpret_cast<const gchar *>(comp->start), comp->len, &val);
-			img->height = val;
-			seen_height = TRUE;
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_WIDTH) {
-			rspamd_strtoul(reinterpret_cast<const gchar *>(comp->start), comp->len, &val);
-			img->width = val;
-			seen_width = TRUE;
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE) {
-			/* Try to search for height= or width= in style tag */
-			if (!seen_height && comp->len > 0) {
-				pos = rspamd_substring_search_caseless(reinterpret_cast<const gchar *>(comp->start),
-						comp->len,
-						"height", sizeof("height") - 1);
-
-				if (pos != -1) {
-					p = comp->start + pos + sizeof("height") - 1;
-
-					while (p < comp->start + comp->len) {
-						if (g_ascii_isdigit (*p)) {
-							rspamd_strtoul(reinterpret_cast<const gchar *>(p),
-									comp->len - (p - comp->start), &val);
-							img->height = val;
-							break;
-						}
-						else if (!g_ascii_isspace (*p) && *p != '=' && *p != ':') {
-							/* Fallback */
-							break;
-						}
-						p++;
-					}
-				}
-			}
-
-			if (!seen_width && comp->len > 0) {
-				pos = rspamd_substring_search_caseless(reinterpret_cast<const gchar *>(comp->start),
-						comp->len,
-						"width", sizeof("width") - 1);
-
-				if (pos != -1) {
-					p = comp->start + pos + sizeof("width") - 1;
-
-					while (p < comp->start + comp->len) {
-						if (g_ascii_isdigit (*p)) {
-							rspamd_strtoul(reinterpret_cast<const gchar *>(p),
-									comp->len - (p - comp->start), &val);
-							img->width = val;
-							break;
-						}
-						else if (!g_ascii_isspace (*p) && *p != '=' && *p != ':') {
-							/* Fallback */
-							break;
-						}
-						p++;
-					}
-				}
-			}
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_ALT && comp->len > 0 && dest != NULL) {
-			if (dest->len > 0 && !g_ascii_isspace (dest->data[dest->len - 1])) {
-				/* Add a space */
-				g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
-			}
-
-			g_byte_array_append(dest, comp->start, comp->len);
-
-			if (!g_ascii_isspace (dest->data[dest->len - 1])) {
-				/* Add a space */
-				g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
-			}
-		}
-
-		cur = g_list_next (cur);
 	}
 
-	if (hc->images == NULL) {
+
+	auto found_height_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_HEIGHT);
+	if (found_height_it != tag->parameters.end()) {
+		unsigned long val;
+
+		rspamd_strtoul(found_height_it->second.data(), found_height_it->second.size(), &val);
+		img->height = val;
+	}
+
+	auto found_width_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_WIDTH);
+	if (found_width_it != tag->parameters.end()) {
+		unsigned long val;
+
+		rspamd_strtoul(found_width_it->second.data(), found_width_it->second.size(), &val);
+		img->width = val;
+	}
+
+	/* TODO: rework to css at some time */
+	auto found_style_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_STYLE);
+	if (found_style_it != tag->parameters.end()) {
+		if (found_height_it == tag->parameters.end()) {
+			auto style_st = found_style_it->second;
+			auto pos = rspamd_substring_search_caseless(style_st.data(),
+					style_st.size(),
+					"height", sizeof("height") - 1);
+			if (pos != -1) {
+				auto substr = style_st.substr(pos + sizeof("height") - 1);
+
+				for (auto i = 0; i < substr.size(); i ++) {
+					auto t = substr[i];
+					if (g_ascii_isdigit (t)) {
+						unsigned long val;
+						rspamd_strtoul(substr.data(),
+								substr.size(), &val);
+						img->height = val;
+						break;
+					}
+					else if (!g_ascii_isspace (t) && t != '=' && t != ':') {
+						/* Fallback */
+						break;
+					}
+				}
+			}
+		}
+		if (found_width_it == tag->parameters.end()) {
+			auto style_st = found_style_it->second;
+			auto pos = rspamd_substring_search_caseless(style_st.data(),
+					style_st.size(),
+					"width", sizeof("width") - 1);
+			if (pos != -1) {
+				auto substr = style_st.substr(pos + sizeof("width") - 1);
+
+				for (auto i = 0; i < substr.size(); i ++) {
+					auto t = substr[i];
+					if (g_ascii_isdigit (t)) {
+						unsigned long val;
+						rspamd_strtoul(substr.data(),
+								substr.size(), &val);
+						img->width = val;
+						break;
+					}
+					else if (!g_ascii_isspace (t) && t != '=' && t != ':') {
+						/* Fallback */
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	auto found_alt_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_ALT);
+
+	if (found_alt_it != tag->parameters.end() && dest != NULL) {
+		if (dest->len > 0 && !g_ascii_isspace (dest->data[dest->len - 1])) {
+			/* Add a space */
+			g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
+		}
+
+		g_byte_array_append(dest,
+				reinterpret_cast<const guint8 *>(found_alt_it->second.data()),
+				found_alt_it->second.size());
+
+		if (!g_ascii_isspace (dest->data[dest->len - 1])) {
+			/* Add a space */
+			g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
+		}
+	}
+
+
+	if (hc->images == nullptr) {
 		hc->images = g_ptr_array_sized_new(4);
-		rspamd_mempool_notify_alloc (pool, 4 * sizeof(gpointer) + sizeof(GPtrArray));
-		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
+		rspamd_mempool_notify_alloc(pool, 4 * sizeof(gpointer) + sizeof(GPtrArray));
+		rspamd_mempool_add_destructor(pool, rspamd_ptr_array_free_hard,
 				hc->images);
 	}
 
 	if (img->embedded_image) {
-		if (!seen_height) {
+		if (img->height == 0) {
 			img->height = img->embedded_image->height;
 		}
-		if (!seen_width) {
+		if (img->width == 0) {
 			img->width = img->embedded_image->width;
 		}
 	}
@@ -989,27 +997,18 @@ html_process_img_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	tag->extra = img;
 }
 
-static void
-rspamd_html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-							 struct html_content *hc, khash_t (rspamd_url_hash) *url_set,
-							 GPtrArray *part_urls) {
-	struct html_tag_component *comp;
-	GList *cur;
+static auto
+html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
+					  struct html_content *hc,
+					  khash_t (rspamd_url_hash) *url_set,
+					  GPtrArray *part_urls) -> void
+{
+	auto found_rel_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_REL);
 
-	cur = tag->params->head;
-
-	while (cur) {
-		comp = static_cast<html_tag_component *>(cur->data);
-
-		if (comp->type == RSPAMD_HTML_COMPONENT_REL && comp->len > 0) {
-			if (comp->len == sizeof("icon") - 1 &&
-				rspamd_lc_cmp(reinterpret_cast<const gchar *>(comp->start), "icon", sizeof("icon") - 1) == 0) {
-
-				rspamd_html_process_img_tag(pool, tag, hc, url_set, part_urls, NULL);
-			}
+	if (found_rel_it != tag->parameters.end()) {
+		if (found_rel_it->second == "icon") {
+			html_process_img_tag(pool, tag, hc, url_set, part_urls, nullptr);
 		}
-
-		cur = g_list_next (cur);
 	}
 }
 
