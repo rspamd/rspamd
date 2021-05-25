@@ -155,6 +155,8 @@ void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *lo
 	rspamd_mempool_alloc_((pool), (size), (G_STRLOC))
 #define rspamd_mempool_alloc_type(pool, type) \
 	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), (G_STRLOC)))
+#define rspamd_mempool_alloc_buffer(pool, buflen) \
+	(char *)(rspamd_mempool_alloc_((pool), sizeof(char) * (buflen), (G_STRLOC)))
 /**
  * Notify external memory usage for memory pool
  * @param pool
