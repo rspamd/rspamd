@@ -46,7 +46,6 @@ extern "C" {
 
 
 struct rspamd_image;
-struct html_tag;
 
 struct html_image {
 	guint height;
@@ -55,7 +54,7 @@ struct html_image {
 	gchar *src;
 	struct rspamd_url *url;
 	struct rspamd_image *embedded_image;
-	struct html_tag *tag;
+	void *tag;
 };
 
 struct html_color {
@@ -79,7 +78,7 @@ struct html_color {
 };
 
 struct html_block {
-	struct html_tag *tag;
+	void *tag;
 	struct html_color font_color;
 	struct html_color background_color;
 	//struct html_tag_component style;
@@ -101,8 +100,6 @@ struct html_block {
 #define FL_HREF         (1 << 29)
 #define FL_IMAGE        (1 << 30)
 
-
-
 /* Forwarded declaration */
 struct rspamd_task;
 
@@ -122,13 +119,13 @@ struct html_content {
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
-guint rspamd_html_decode_entitles_inplace (gchar *s, gsize len);
+guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len);
 
-GByteArray *rspamd_html_process_part (rspamd_mempool_t *pool,
+GByteArray *rspamd_html_process_part(rspamd_mempool_t *pool,
 									  struct html_content *hc,
 									  GByteArray *in);
 
-GByteArray *rspamd_html_process_part_full (rspamd_mempool_t *pool,
+GByteArray *rspamd_html_process_part_full(rspamd_mempool_t *pool,
 										   struct html_content *hc,
 										   GByteArray *in, GList **exceptions,
 										   khash_t (rspamd_url_hash) *url_set,
@@ -138,21 +135,21 @@ GByteArray *rspamd_html_process_part_full (rspamd_mempool_t *pool,
 /*
  * Returns true if a specified tag has been seen in a part
  */
-gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
+gboolean rspamd_html_tag_seen(struct html_content *hc, const gchar *tagname);
 
 /**
  * Returns name for the specified tag id
  * @param id
  * @return
  */
-const gchar *rspamd_html_tag_by_id (gint id);
+const gchar *rspamd_html_tag_by_id(gint id);
 
 /**
  * Returns HTML tag id by name
  * @param name
  * @return
  */
-gint rspamd_html_tag_by_name (const gchar *name);
+gint rspamd_html_tag_by_name(const gchar *name);
 
 /**
  * Extract URL from HTML tag component and sets component elements if needed

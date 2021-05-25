@@ -19,6 +19,7 @@
 #pragma once
 
 #include "libutil/mem_pool.h"
+
 #include <string_view>
 #include <optional>
 
@@ -38,7 +39,30 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
 					struct rspamd_url *href_url,
 					std::string_view text_data) -> std::optional<rspamd_url *>;
 
+/**
+ * Check displayed part of the url at specified offset
+ * @param pool
+ * @param exceptions
+ * @param url_set
+ * @param visible_part
+ * @param href_offset
+ * @param url
+ */
+auto html_check_displayed_url(rspamd_mempool_t *pool,
+						 GList **exceptions,
+						 void *url_set,
+						 std::string_view visible_part,
+						 goffset href_offset,
+						 struct rspamd_url *url) -> void;
 
+/**
+ * Process HTML url (e.g. for href component)
+ * @param pool
+ * @param input may be modified during the process
+ * @return
+ */
+auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
+	-> std::optional<struct rspamd_url *>;
 }
 
 #endif //RSPAMD_HTML_URL_HXX

@@ -18,6 +18,7 @@
 #include "libutil/str_util.h"
 #include "libserver/url.h"
 #include "libserver/logger.h"
+#include "rspamd.h"
 
 #include <unicode/idna.h>
 
@@ -137,7 +138,7 @@ html_url_is_phished(rspamd_mempool_t *pool,
 	if (text_data.size() > 4 &&
 		rspamd_url_find(pool, text_data.data(), text_data.size(), &url_str,
 				RSPAMD_URL_FIND_ALL,
-				&url_pos, NULL) && url_str != NULL) {
+				&url_pos, NULL) && url_str != nullptr) {
 
 		text_url = rspamd_mempool_alloc0_type (pool, struct rspamd_url);
 		auto rc = rspamd_url_parse(text_url, url_str, strlen(url_str), pool,
@@ -192,6 +193,223 @@ html_url_is_phished(rspamd_mempool_t *pool,
 				href_url->flags |= RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED;
 			}
 		}
+	}
+
+	return std::nullopt;
+}
+
+void
+html_check_displayed_url(rspamd_mempool_t *pool,
+						 GList **exceptions,
+						 void *url_set,
+						 std::string_view visible_part,
+						 goffset href_offset,
+						 struct rspamd_url *url)
+{
+	struct rspamd_url *displayed_url = nullptr;
+	struct rspamd_url *turl;
+	struct rspamd_process_exception *ex;
+	guint saved_flags = 0;
+	gsize dlen;
+
+	if (visible_part.empty()) {
+		/* No dispalyed url, just some text within <a> tag */
+		return;
+	}
+
+	url->visible_part = rspamd_mempool_alloc_buffer(pool, visible_part.size() + 1);
+	rspamd_strlcpy(url->visible_part,
+			visible_part.data(),
+			visible_part.size());
+	dlen = visible_part.size();
+
+	/* Strip unicode spaces from the start and the end */
+	url->visible_part = const_cast<char *>(
+			rspamd_string_unicode_trim_inplace(url->visible_part,
+			&dlen));
+	auto maybe_url = html_url_is_phished(pool, url,
+			{url->visible_part, dlen});
+
+	if (maybe_url) {
+		url->flags |= saved_flags | RSPAMD_URL_FLAG_DISPLAY_URL;
+		displayed_url = maybe_url.value();
+	}
+
+	if (exceptions && displayed_url != nullptr) {
+		ex = rspamd_mempool_alloc_type (pool,struct rspamd_process_exception);
+		ex->pos = href_offset;
+		ex->len = dlen;
+		ex->type = RSPAMD_EXCEPTION_URL;
+		ex->ptr = url;
+
+		*exceptions = g_list_prepend(*exceptions, ex);
+	}
+
+	if (displayed_url && url_set) {
+		turl = rspamd_url_set_add_or_return((khash_t (rspamd_url_hash) *)url_set, displayed_url);
+
+		if (turl != nullptr) {
+			/* Here, we assume the following:
+			 * if we have a URL in the text part which
+			 * is the same as displayed URL in the
+			 * HTML part, we assume that it is also
+			 * hint only.
+			 */
+			if (turl->flags &
+				RSPAMD_URL_FLAG_FROM_TEXT) {
+				turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+				turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
+			}
+
+			turl->count++;
+		}
+		else {
+			/* Already inserted by `rspamd_url_set_add_or_return` */
+		}
+	}
+
+	rspamd_normalise_unicode_inplace(url->visible_part, &dlen);
+}
+
+auto
+html_process_url(rspamd_mempool_t *pool, std::string_view &input)
+	-> std::optional<struct rspamd_url *>
+{
+	struct rspamd_url *url;
+	guint saved_flags = 0;
+	gint rc;
+	const gchar *s, *prefix = "http://";
+	gchar *d;
+	gsize dlen;
+	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
+	static const gchar hexdigests[] = "0123456789abcdef";
+
+	auto sz = input.length();
+	const auto *trimmed = rspamd_string_unicode_trim_inplace(input.data(), &sz);
+	input = {trimmed, sz};
+
+	const auto *start = input.data();
+	s = start;
+	dlen = 0;
+
+	for (auto i = 0; i < sz; i++) {
+		if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+			dlen += 3;
+		}
+		else {
+			dlen++;
+		}
+	}
+
+	if (rspamd_substring_search(start, sz, "://", 3) == -1) {
+		if (sz >= sizeof("mailto:") &&
+			(memcmp(start, "mailto:", sizeof("mailto:") - 1) == 0 ||
+			 memcmp(start, "tel:", sizeof("tel:") - 1) == 0 ||
+			 memcmp(start, "callto:", sizeof("callto:") - 1) == 0)) {
+			/* Exclusion, has valid but 'strange' prefix */
+		}
+		else {
+			for (auto i = 0; i < sz; i++) {
+				if (!((s[i] & 0x80) || g_ascii_isalnum (s[i]))) {
+					if (i == 0 && sz > 2 && s[i] == '/' && s[i + 1] == '/') {
+						prefix = "http:";
+						dlen += sizeof("http:") - 1;
+						no_prefix = TRUE;
+					}
+					else if (s[i] == '@') {
+						/* Likely email prefix */
+						prefix = "mailto://";
+						dlen += sizeof("mailto://") - 1;
+						no_prefix = TRUE;
+					}
+					else if (s[i] == ':' && i != 0) {
+						/* Special case */
+						no_prefix = FALSE;
+					}
+					else {
+						if (i == 0) {
+							/* No valid data */
+							return std::nullopt;
+						}
+						else {
+							no_prefix = TRUE;
+							dlen += strlen(prefix);
+						}
+					}
+
+					break;
+				}
+			}
+		}
+	}
+
+	auto *decoded = rspamd_mempool_alloc_buffer(pool, dlen + 1);
+	d = decoded;
+
+	if (no_prefix) {
+		gsize plen = strlen(prefix);
+		memcpy(d, prefix, plen);
+		d += plen;
+	}
+
+	/*
+	 * We also need to remove all internal newlines, spaces
+	 * and encode unsafe characters
+	 */
+	for (auto i = 0; i < sz; i++) {
+		if (G_UNLIKELY (g_ascii_isspace(s[i]))) {
+			continue;
+		}
+		else if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+			/* URL encode */
+			*d++ = '%';
+			*d++ = hexdigests[(s[i] >> 4) & 0xf];
+			*d++ = hexdigests[s[i] & 0xf];
+			has_bad_chars = TRUE;
+		}
+		else {
+			*d++ = s[i];
+		}
+	}
+
+	*d = '\0';
+	dlen = d - decoded;
+
+	url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
+	rspamd_url_normalise_propagate_flags (pool, decoded, &dlen, saved_flags);
+	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
+
+	/* Filter some completely damaged urls */
+	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&
+		!((url->protocol & PROTOCOL_UNKNOWN))) {
+		url->flags |= saved_flags;
+
+		if (has_bad_chars) {
+			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
+
+		if (no_prefix) {
+			url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+
+			if (url->tldlen == 0 || (url->flags & RSPAMD_URL_FLAG_NO_TLD)) {
+				/* Ignore urls with both no schema and no tld */
+				return std::nullopt;
+			}
+		}
+
+		decoded = url->string;
+
+		input = {decoded, url->urllen};
+
+		/* Spaces in href usually mean an attempt to obfuscate URL */
+		/* See https://github.com/vstakhov/rspamd/issues/593 */
+#if 0
+		if (has_spaces) {
+			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
+#endif
+
+		return url;
 	}
 
 	return std::nullopt;

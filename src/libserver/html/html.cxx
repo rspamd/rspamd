@@ -30,6 +30,7 @@
 #include "html_tag_defs.hxx"
 #include "html_entities.hxx"
 #include "html_tag.hxx"
+#include "html_url.hxx"
 
 #include <vector>
 #include <frozen/unordered_map.h>
@@ -633,273 +634,76 @@ parse_tag_content(rspamd_mempool_t *pool,
 	parser_env.cur_state = state;
 }
 
-}
+static auto
+html_process_url_tag(rspamd_mempool_t *pool,
+					 struct html_tag *tag,
+					 struct html_content *hc) -> std::optional<struct rspamd_url *>
+{
+	auto found_href_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_HREF);
 
-/* Unconverted C part */
+	if (found_href_it != tag->parameters.end()) {
+		/* Check base url */
+		auto &href_value = found_href_it->second;
 
-static struct rspamd_url *rspamd_html_process_url(rspamd_mempool_t *pool,
-												  const gchar *start, guint len,
-												  struct html_tag_component *comp);
+		if (hc && hc->base_url && href_value.size() > 2) {
+			/*
+			 * Relative url cannot start from the following:
+			 * schema://
+			 * data:
+			 * slash
+			 */
 
+			if (rspamd_substring_search(href_value.data(), href_value.size(), "://", 3) == -1) {
 
-
-
-struct rspamd_url *
-rspamd_html_process_url(rspamd_mempool_t *pool, const gchar *start, guint len,
-						struct html_tag_component *comp) {
-	struct rspamd_url *url;
-	guint saved_flags = 0;
-	gchar *decoded;
-	gint rc;
-	gsize decoded_len;
-	const gchar *p, *s, *prefix = "http://";
-	gchar *d;
-	guint i;
-	gsize dlen;
-	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
-	static const gchar hexdigests[] = "0123456789abcdef";
-
-	p = start;
-
-	/* Strip spaces from the url */
-	/* Head spaces */
-	while (p < start + len && g_ascii_isspace (*p)) {
-		p++;
-		start++;
-		len--;
-	}
-
-	if (comp) {
-		comp->start = (guchar *)p;
-		comp->len = len;
-	}
-
-	/* Trailing spaces */
-	p = start + len - 1;
-
-	while (p >= start && g_ascii_isspace (*p)) {
-		p--;
-		len--;
-
-		if (comp) {
-			comp->len--;
-		}
-	}
-
-	s = start;
-	dlen = 0;
-
-	for (i = 0; i < len; i++) {
-		if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
-			dlen += 3;
-		}
-		else {
-			dlen++;
-		}
-	}
-
-	if (rspamd_substring_search(start, len, "://", 3) == -1) {
-		if (len >= sizeof("mailto:") &&
-			(memcmp(start, "mailto:", sizeof("mailto:") - 1) == 0 ||
-			 memcmp(start, "tel:", sizeof("tel:") - 1) == 0 ||
-			 memcmp(start, "callto:", sizeof("callto:") - 1) == 0)) {
-			/* Exclusion, has valid but 'strange' prefix */
-		}
-		else {
-			for (i = 0; i < len; i++) {
-				if (!((s[i] & 0x80) || g_ascii_isalnum (s[i]))) {
-					if (i == 0 && len > 2 && s[i] == '/' && s[i + 1] == '/') {
-						prefix = "http:";
-						dlen += sizeof("http:") - 1;
-						no_prefix = TRUE;
-					}
-					else if (s[i] == '@') {
-						/* Likely email prefix */
-						prefix = "mailto://";
-						dlen += sizeof("mailto://") - 1;
-						no_prefix = TRUE;
-					}
-					else if (s[i] == ':' && i != 0) {
-						/* Special case */
-						no_prefix = FALSE;
-					}
-					else {
-						if (i == 0) {
-							/* No valid data */
-							return NULL;
-						}
-						else {
-							no_prefix = TRUE;
-							dlen += strlen(prefix);
-						}
-					}
-
-					break;
+				if (href_value.size() >= sizeof("data:") &&
+					g_ascii_strncasecmp(href_value.data(), "data:", sizeof("data:") - 1) == 0) {
+					/* Image data url, never insert as url */
+					return std::nullopt;
 				}
+
+				/* Assume relative url */
+				auto need_slash = false;
+
+				auto orig_len = href_value.size();
+				auto len = orig_len + hc->base_url->urllen;
+
+				if (hc->base_url->datalen == 0) {
+					need_slash = true;
+					len++;
+				}
+
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t)rspamd_snprintf(buf, len + 1,
+						"%*s%s%*s",
+						hc->base_url->urllen, hc->base_url->string,
+						need_slash ? "/" : "",
+						(gint) orig_len, href_value.size());
+				href_value = {buf, nlen};
 			}
-		}
-	}
-
-	decoded = (char *)rspamd_mempool_alloc (pool, dlen + 1);
-	d = decoded;
-
-	if (no_prefix) {
-		gsize plen = strlen(prefix);
-		memcpy(d, prefix, plen);
-		d += plen;
-	}
-
-	/*
-	 * We also need to remove all internal newlines, spaces
-	 * and encode unsafe characters
-	 */
-	for (i = 0; i < len; i++) {
-		if (G_UNLIKELY (g_ascii_isspace(s[i]))) {
-			continue;
-		}
-		else if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
-			/* URL encode */
-			*d++ = '%';
-			*d++ = hexdigests[(s[i] >> 4) & 0xf];
-			*d++ = hexdigests[s[i] & 0xf];
-			has_bad_chars = TRUE;
-		}
-		else {
-			*d++ = s[i];
-		}
-	}
-
-	*d = '\0';
-	dlen = d - decoded;
-
-	url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
-
-	rspamd_url_normalise_propagate_flags (pool, decoded, &dlen, saved_flags);
-
-	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
-
-	/* Filter some completely damaged urls */
-	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&
-		!((url->protocol & PROTOCOL_UNKNOWN))) {
-		url->flags |= saved_flags;
-
-		if (has_bad_chars) {
-			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-		}
-
-		if (no_prefix) {
-			url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
-
-			if (url->tldlen == 0 || (url->flags & RSPAMD_URL_FLAG_NO_TLD)) {
-				/* Ignore urls with both no schema and no tld */
-				return NULL;
+			else if (href_value[0] == '/' && href_value[1] != '/') {
+				/* Relative to the hostname */
+				auto orig_len = href_value.size();
+				auto len = orig_len + hc->base_url->hostlen + hc->base_url->protocollen +
+					   3 /* for :// */;
+				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
+				auto nlen = (std::size_t)rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
+						hc->base_url->protocollen, hc->base_url->string,
+						hc->base_url->hostlen, rspamd_url_host_unsafe (hc->base_url),
+						(gint)orig_len, href_value.data());
+				href_value = {buf, nlen};
 			}
 		}
 
-		decoded = url->string;
-		decoded_len = url->urllen;
+		auto url = html_process_url(pool, href_value);
 
-		if (comp) {
-			comp->start = (guchar *)decoded;
-			comp->len = decoded_len;
+		if (url && tag->extra == nullptr) {
+			tag->extra = url.value();
 		}
-		/* Spaces in href usually mean an attempt to obfuscate URL */
-		/* See https://github.com/vstakhov/rspamd/issues/593 */
-#if 0
-		if (has_spaces) {
-			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-		}
-#endif
 
 		return url;
 	}
 
-	return NULL;
-}
-
-static struct rspamd_url *
-rspamd_html_process_url_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-							struct html_content *hc) {
-	struct html_tag_component *comp;
-	GList *cur;
-	struct rspamd_url *url;
-	const gchar *start;
-	gsize len;
-
-	cur = tag->params->head;
-
-	while (cur) {
-		comp = (struct html_tag_component *)cur->data;
-
-		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			start = (char *)comp->start;
-			len = comp->len;
-
-			/* Check base url */
-			if (hc && hc->base_url && comp->len > 2) {
-				/*
-				 * Relative url cannot start from the following:
-				 * schema://
-				 * data:
-				 * slash
-				 */
-				gchar *buf;
-				gsize orig_len;
-
-				if (rspamd_substring_search(start, len, "://", 3) == -1) {
-
-					if (len >= sizeof("data:") &&
-						g_ascii_strncasecmp(start, "data:", sizeof("data:") - 1) == 0) {
-						/* Image data url, never insert as url */
-						return NULL;
-					}
-
-					/* Assume relative url */
-
-					gboolean need_slash = FALSE;
-
-					orig_len = len;
-					len += hc->base_url->urllen;
-
-					if (hc->base_url->datalen == 0) {
-						need_slash = TRUE;
-						len++;
-					}
-
-					buf = (char *)rspamd_mempool_alloc (pool, len + 1);
-					rspamd_snprintf(buf, len + 1, "%*s%s%*s",
-							hc->base_url->urllen, hc->base_url->string,
-							need_slash ? "/" : "",
-							(gint) orig_len, start);
-					start = buf;
-				}
-				else if (start[0] == '/' && start[1] != '/') {
-					/* Relative to the hostname */
-					orig_len = len;
-					len += hc->base_url->hostlen + hc->base_url->protocollen +
-						   3 /* for :// */;
-					buf = (char *)rspamd_mempool_alloc (pool, len + 1);
-					rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
-							hc->base_url->protocollen, hc->base_url->string,
-							hc->base_url->hostlen, rspamd_url_host_unsafe (hc->base_url),
-							(gint) orig_len, start);
-					start = buf;
-				}
-			}
-
-			url = rspamd_html_process_url(pool, start, len, comp);
-
-			if (url && tag->extra == NULL) {
-				tag->extra = url;
-			}
-
-			return url;
-		}
-
-		cur = g_list_next (cur);
-	}
-
-	return NULL;
+	return std::nullopt;
 }
 
 struct rspamd_html_url_query_cbd {
@@ -910,8 +714,9 @@ struct rspamd_html_url_query_cbd {
 };
 
 static gboolean
-rspamd_html_url_query_callback(struct rspamd_url *url, gsize start_offset,
-							   gsize end_offset, gpointer ud) {
+html_url_query_callback(struct rspamd_url *url, gsize start_offset,
+							   gsize end_offset, gpointer ud)
+{
 	struct rspamd_html_url_query_cbd *cbd =
 			(struct rspamd_html_url_query_cbd *) ud;
 	rspamd_mempool_t *pool;
@@ -939,9 +744,10 @@ rspamd_html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 }
 
 static void
-rspamd_process_html_url(rspamd_mempool_t *pool, struct rspamd_url *url,
-						khash_t (rspamd_url_hash) *url_set,
-						GPtrArray *part_urls) {
+process_html_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
+					   khash_t (rspamd_url_hash) *url_set,
+					   GPtrArray *part_urls)
+{
 	if (url->querylen > 0) {
 		struct rspamd_html_url_query_cbd qcbd;
 
@@ -953,7 +759,7 @@ rspamd_process_html_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 		rspamd_url_find_multiple(pool,
 				rspamd_url_query_unsafe (url), url->querylen,
 				RSPAMD_URL_FIND_ALL, NULL,
-				rspamd_html_url_query_callback, &qcbd);
+				html_url_query_callback, &qcbd);
 	}
 
 	if (part_urls) {
@@ -1013,10 +819,12 @@ rspamd_html_process_data_image(rspamd_mempool_t *pool,
 }
 
 static void
-rspamd_html_process_img_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-							struct html_content *hc, khash_t (rspamd_url_hash) *url_set,
-							GPtrArray *part_urls,
-							GByteArray *dest) {
+html_process_img_tag(rspamd_mempool_t *pool, struct html_tag *tag,
+					 struct html_content *hc,
+					 khash_t (rspamd_url_hash) *url_set,
+					 GPtrArray *part_urls,
+					 GByteArray *dest)
+{
 	struct html_tag_component *comp;
 	struct html_image *img;
 	rspamd_ftok_t fstr;
@@ -1204,6 +1012,10 @@ rspamd_html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 		cur = g_list_next (cur);
 	}
 }
+
+}
+
+/* Unconverted C part */
 
 static void
 rspamd_html_process_color(const gchar *line, guint len, struct html_color *cl)
@@ -1764,80 +1576,7 @@ rspamd_html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	tag->extra = bl;
 }
 
-static void
-rspamd_html_check_displayed_url(rspamd_mempool_t *pool,
-								GList **exceptions,
-								khash_t (rspamd_url_hash) *url_set,
-								GByteArray *dest,
-								gint href_offset,
-								struct rspamd_url *url) {
-	struct rspamd_url *displayed_url = NULL;
-	struct rspamd_url *turl;
-	gboolean url_found = FALSE;
-	struct rspamd_process_exception *ex;
-	guint saved_flags = 0;
-	gsize dlen;
 
-	if (href_offset < 0) {
-		/* No dispalyed url, just some text within <a> tag */
-		return;
-	}
-
-	url->visible_part = (gchar *)rspamd_mempool_alloc (pool, dest->len - href_offset + 1);
-	rspamd_strlcpy(url->visible_part,
-			reinterpret_cast<const gchar *>(dest->data + href_offset),
-			dest->len - href_offset + 1);
-	dlen = dest->len - href_offset;
-
-	/* Strip unicode spaces from the start and the end */
-	url->visible_part = rspamd_string_unicode_trim_inplace(url->visible_part,
-			&dlen);
-	rspamd_html_url_is_phished(pool, url,
-			reinterpret_cast<const guchar *>(url->visible_part),
-			dlen,
-			&url_found, &displayed_url);
-
-	if (url_found) {
-		url->flags |= saved_flags | RSPAMD_URL_FLAG_DISPLAY_URL;
-	}
-
-	if (exceptions && url_found) {
-		ex = rspamd_mempool_alloc_type (pool,struct rspamd_process_exception);
-		ex->pos = href_offset;
-		ex->len = dest->len - href_offset;
-		ex->type = RSPAMD_EXCEPTION_URL;
-		ex->ptr = url;
-
-		*exceptions = g_list_prepend(*exceptions,
-				ex);
-	}
-
-	if (displayed_url && url_set) {
-		turl = rspamd_url_set_add_or_return(url_set,
-				displayed_url);
-
-		if (turl != NULL) {
-			/* Here, we assume the following:
-			 * if we have a URL in the text part which
-			 * is the same as displayed URL in the
-			 * HTML part, we assume that it is also
-			 * hint only.
-			 */
-			if (turl->flags &
-				RSPAMD_URL_FLAG_FROM_TEXT) {
-				turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
-				turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
-			}
-
-			turl->count++;
-		}
-		else {
-			/* Already inserted by `rspamd_url_set_add_or_return` */
-		}
-	}
-
-	rspamd_normalise_unicode_inplace(url->visible_part, &dlen);
-}
 
 static gboolean
 rspamd_html_propagate_lengths(GNode *node, gpointer _unused) {
