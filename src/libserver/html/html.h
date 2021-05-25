@@ -1,5 +1,17 @@
-/*
- * Functions for simple html parsing
+/*-
+ * Copyright 2021 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef RSPAMD_HTML_H
@@ -32,28 +44,9 @@ extern "C" {
 #define RSPAMD_HTML_FLAG_IMAGE_EXTERNAL (1 << 1)
 #define RSPAMD_HTML_FLAG_IMAGE_DATA (1 << 2)
 
-enum html_component_type {
-	RSPAMD_HTML_COMPONENT_NAME = 0,
-	RSPAMD_HTML_COMPONENT_HREF,
-	RSPAMD_HTML_COMPONENT_COLOR,
-	RSPAMD_HTML_COMPONENT_BGCOLOR,
-	RSPAMD_HTML_COMPONENT_STYLE,
-	RSPAMD_HTML_COMPONENT_CLASS,
-	RSPAMD_HTML_COMPONENT_WIDTH,
-	RSPAMD_HTML_COMPONENT_HEIGHT,
-	RSPAMD_HTML_COMPONENT_SIZE,
-	RSPAMD_HTML_COMPONENT_REL,
-	RSPAMD_HTML_COMPONENT_ALT,
-};
-
-struct html_tag_component {
-	enum html_component_type type;
-	guint len;
-	const guchar *start;
-};
-
 
 struct rspamd_image;
+struct html_tag;
 
 struct html_image {
 	guint height;
@@ -89,7 +82,7 @@ struct html_block {
 	struct html_tag *tag;
 	struct html_color font_color;
 	struct html_color background_color;
-	struct html_tag_component style;
+	//struct html_tag_component style;
 	guint font_size;
 	gboolean visible;
 	gchar *html_class;
@@ -108,16 +101,7 @@ struct html_block {
 #define FL_HREF         (1 << 29)
 #define FL_IMAGE        (1 << 30)
 
-struct html_tag {
-	gint id;
-	gint flags;
-	struct html_tag_component name;
-	guint content_length;
-	goffset content_offset;
-	GQueue *params;
-	gpointer extra; /** Additional data associated with tag (e.g. image) */
-	GNode *parent;
-};
+
 
 /* Forwarded declaration */
 struct rspamd_task;
