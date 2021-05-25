@@ -36,7 +36,7 @@ def main():
 
     for fh in args.file:
         try:
-            r = requests.put(args.dir_url + fh.name, data=fh, auth=auth, timeout=(45, 90))
+            r = requests.put(args.dir_url + os.path.basename(fh.name), data=fh, auth=auth, verify=False, timeout=(45, 90))
             r.raise_for_status()
             print("{} uploaded to {}".format(fh.name, r.url))
         except (requests.exceptions.ConnectionError,
