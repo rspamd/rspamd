@@ -191,6 +191,18 @@ Rspamd Redis Setup
   Run Redis
   Rspamd Setup
 
+Collect Additional Stuffs
+  Log To Console  Uploading rspamd.log ostensibly
+  ${output} =  Run  ${RSPAMD_TESTDIR}/../tools/http_put.py ${RSPAMD_TMPDIR}/rspamd.log https://aluminium.tinfoilcat.org/insecure.webdav.whatmeworry/
+  Log To Console  ${output}
+  @{cov_files} =  List Files In Directory  ${RSPAMD_TMPDIR}  *.luacov.stats.out
+  FOR  ${cov_file}  IN  @{cov_files}
+    Log To Console  Uploading ${cov_file} ostensibly
+    ${output} =  Run  ${RSPAMD_TESTDIR}/../tools/http_put.py ${RSPAMD_TMPDIR}/${cov_file} https://aluminium.tinfoilcat.org/insecure.webdav.whatmeworry/
+    Log To Console  ${output}
+  END
+  Fail  coverage stuff broke
+
 Rspamd Teardown
   # Robot Framework 4.0
   #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
@@ -198,7 +210,8 @@ Rspamd Teardown
   Shutdown Process With Children  ${RSPAMD_PID}
   Save Run Results  ${RSPAMD_TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
-  Collect Lua Coverage
+  ${coverage_ok} =  Run Keyword And Return Status  Collect Lua Coverage
+  Run Keyword If  ${coverage_ok} != True  Collect Additional Stuffs
   Cleanup Temporary Directory  ${RSPAMD_TMPDIR}
 
 Rspamd Redis Teardown
