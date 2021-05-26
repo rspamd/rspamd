@@ -81,7 +81,7 @@ struct html_block {
 	void *tag;
 	struct html_color font_color;
 	struct html_color background_color;
-	//struct html_tag_component style;
+	rspamd_ftok_t style;
 	guint font_size;
 	gboolean visible;
 	gchar *html_class;

@@ -1012,14 +1012,10 @@ html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 }
 
-}
-
-/* Unconverted C part */
-
 static void
-rspamd_html_process_color(const gchar *line, guint len, struct html_color *cl)
+html_process_color(std::string_view input, struct html_color *cl)
 {
-	const gchar *p = line, *end = line + len;
+	const gchar *p = input.data(), *end = input.data() + input.size();
 	char hexbuf[7];
 
 	memset(cl, 0, sizeof(*cl));
@@ -1032,7 +1028,7 @@ rspamd_html_process_color(const gchar *line, guint len, struct html_color *cl)
 		cl->d.comp.alpha = 255;
 		cl->valid = TRUE;
 	}
-	else if (len > 4 && rspamd_lc_cmp(p, "rgb", 3) == 0) {
+	else if (input.size() > 4 && rspamd_lc_cmp(p, "rgb", 3) == 0) {
 		/* We have something like rgba(x,x,x,x) or rgb(x,x,x) */
 		enum {
 			obrace,
@@ -1178,7 +1174,7 @@ stop:
 	}
 	else {
 		auto maybe_color_value =
-				rspamd::css::css_value::maybe_color_from_string({line, len});
+				rspamd::css::css_value::maybe_color_from_string(input);
 
 		if (maybe_color_value.has_value()) {
 			auto color = maybe_color_value->to_color().value();
@@ -1191,10 +1187,11 @@ stop:
 /*
  * Target is used for in and out if this function returns TRUE
  */
-static gboolean
-rspamd_html_process_css_size(const gchar *suffix, gsize len,
-							 gdouble *tgt) {
-	gdouble sz = *tgt;
+static auto
+html_process_css_size(const gchar *suffix, gsize len,
+							 double &tgt)  -> bool
+{
+	gdouble sz = tgt;
 	gboolean ret = FALSE;
 
 	if (len >= 2) {
@@ -1281,15 +1278,16 @@ rspamd_html_process_css_size(const gchar *suffix, gsize len,
 	}
 
 	if (ret) {
-		*tgt = sz;
+		tgt = sz;
 	}
 
 	return ret;
 }
 
-static void
-rspamd_html_process_font_size(const gchar *line, guint len, guint *fs,
-							  gboolean is_css) {
+static auto
+html_process_font_size(const gchar *line, guint len, guint &fs,
+							  gboolean is_css) -> void
+{
 	const gchar *p = line, *end = line + len;
 	gchar *err = NULL, numbuf[64];
 	gdouble sz = 0;
@@ -1329,7 +1327,7 @@ rspamd_html_process_font_size(const gchar *line, guint len, guint *fs,
 		slen = strlen(e);
 		rspamd_str_lc((gchar *) e, slen);
 
-		if (!rspamd_html_process_css_size(e, slen, &sz)) {
+		if (!html_process_css_size(e, slen, sz)) {
 			failsafe = TRUE;
 		}
 	}
@@ -1361,12 +1359,14 @@ rspamd_html_process_font_size(const gchar *line, guint len, guint *fs,
 		sz = 32;
 	}
 
-	*fs = sz;
+	fs = sz;
 }
 
 static void
-rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
-						  struct html_content *hc, const gchar *style, guint len) {
+html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
+				   struct html_content *hc,
+				   std::string_view style)
+{
 	const gchar *p, *c, *end, *key = NULL;
 	enum {
 		read_key,
@@ -1377,9 +1377,9 @@ rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
 	guint klen = 0;
 	gdouble opacity = 1.0;
 
-	p = style;
+	p = style.data();
 	c = p;
-	end = p + len;
+	end = p + style.size();
 
 	while (p <= end) {
 		switch (state) {
@@ -1415,7 +1415,7 @@ rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
 					if ((klen == 5 && g_ascii_strncasecmp(key, "color", 5) == 0)
 						|| (klen == 10 && g_ascii_strncasecmp(key, "font-color", 10) == 0)) {
 
-						rspamd_html_process_color(c, p - c, &bl->font_color);
+						html_process_color({c, (std::size_t)(p - c)}, &bl->font_color);
 						msg_debug_html ("got color: %xd", bl->font_color.d.val);
 					}
 					else if ((klen == 16 && g_ascii_strncasecmp(key,
@@ -1423,7 +1423,7 @@ rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
 							 (klen == 10 && g_ascii_strncasecmp(key,
 									 "background", 10) == 0)) {
 
-						rspamd_html_process_color(c, p - c, &bl->background_color);
+						html_process_color({c, (std::size_t)(p - c)}, &bl->background_color);
 						msg_debug_html ("got bgcolor: %xd", bl->background_color.d.val);
 					}
 					else if (klen == 7 && g_ascii_strncasecmp(key, "display", 7) == 0) {
@@ -1435,8 +1435,8 @@ rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
 					}
 					else if (klen == 9 &&
 							 g_ascii_strncasecmp(key, "font-size", 9) == 0) {
-						rspamd_html_process_font_size(c, p - c,
-								&bl->font_size, TRUE);
+						html_process_font_size(c, p - c,
+								bl->font_size, TRUE);
 						msg_debug_html ("got font size: %ud", bl->font_size);
 					}
 					else if (klen == 7 &&
@@ -1490,78 +1490,57 @@ rspamd_html_process_style(rspamd_mempool_t *pool, struct html_block *bl,
 	}
 }
 
-static void
-rspamd_html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
-							  struct html_content *hc) {
-	struct html_tag_component *comp;
+static auto
+html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
+					   struct html_content *hc) -> void
+{
 	struct html_block *bl;
 	rspamd_ftok_t fstr;
-	GList *cur;
 
-	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0_type (pool, struct html_block);
 	bl->tag = tag;
 	bl->visible = TRUE;
 	bl->font_size = (guint) -1;
 	bl->font_color.d.comp.alpha = 255;
 
-	while (cur) {
-		comp = static_cast<html_tag_component *>(cur->data);
+	auto found_color_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_COLOR);
 
-		if (comp->len > 0) {
-			switch (comp->type) {
-			case RSPAMD_HTML_COMPONENT_COLOR:
-				fstr.begin = (gchar *) comp->start;
-				fstr.len = comp->len;
-				rspamd_html_process_color(reinterpret_cast<const gchar *>(comp->start), comp->len,
-						&bl->font_color);
-				msg_debug_html ("tag %*s; got color: %xd",
-						tag->name.len, tag->name.start, bl->font_color.d.val);
-				break;
-			case RSPAMD_HTML_COMPONENT_BGCOLOR:
-				fstr.begin = (gchar *) comp->start;
-				fstr.len = comp->len;
-				rspamd_html_process_color(reinterpret_cast<const gchar *>(comp->start), comp->len,
-						&bl->background_color);
-				msg_debug_html ("tag %*s; got color: %xd",
-						tag->name.len, tag->name.start, bl->font_color.d.val);
+	if (found_color_it != tag->parameters.end()) {
+		html_process_color(found_color_it->second, &bl->font_color);
+		msg_debug_html ("tag %*s; got color: %xd",
+				(int)tag->name.size(), tag->name.data(),
+				bl->font_color.d.val);
+	}
 
-				if (tag->id == Tag_BODY) {
-					/* Set global background color */
-					memcpy(&hc->bgcolor, &bl->background_color,
-							sizeof(hc->bgcolor));
-				}
-				break;
-			case RSPAMD_HTML_COMPONENT_STYLE:
-				bl->style.len = comp->len;
-				bl->style.start = comp->start;
-				msg_debug_html ("tag: %*s; got style: %*s",
-						tag->name.len, tag->name.start,
-						(gint) bl->style.len, bl->style.start);
-				rspamd_html_process_style(pool, bl, hc, reinterpret_cast<const gchar *>(comp->start), comp->len);
-				break;
-			case RSPAMD_HTML_COMPONENT_CLASS:
-				fstr.begin = (gchar *) comp->start;
-				fstr.len = comp->len;
-				bl->html_class = rspamd_mempool_ftokdup (pool, &fstr);
-				msg_debug_html ("tag: %*s; got class: %s",
-						tag->name.len, tag->name.start, bl->html_class);
-				break;
-			case RSPAMD_HTML_COMPONENT_SIZE:
-				/* Not supported by html5 */
-				/* FIXME maybe support it */
-				bl->font_size = 16;
-				msg_debug_html ("tag %*s; got size: %*s",
-						tag->name.len, tag->name.start,
-						(gint) comp->len, comp->start);
-				break;
-			default:
-				/* NYI */
-				break;
-			}
+	auto found_bgcolor_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_BGCOLOR);
+
+	if (found_bgcolor_it != tag->parameters.end()) {
+		html_process_color(found_bgcolor_it->second, &bl->background_color);
+		msg_debug_html ("tag %*s; got bgcolor: %xd",
+				(int)tag->name.size(), tag->name.data(),
+				bl->background_color.d.val);
+		if (tag->id == Tag_BODY) {
+			/* Set global background color */
+			memcpy(&hc->bgcolor, &bl->background_color,
+					sizeof(hc->bgcolor));
 		}
+	}
 
-		cur = g_list_next (cur);
+	auto found_style_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_STYLE);
+	if (found_style_it != tag->parameters.end()) {
+		html_process_style(pool, bl, hc, found_style_it->second);
+		msg_debug_html ("tag: %*s; got style: %*s",
+				(int)tag->name.size(), tag->name.data(),
+				(int) bl->style.len, bl->style.begin);
+	}
+
+	auto found_class_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_CLASS);
+	if (found_class_it != tag->parameters.end()) {
+		fstr.begin = found_class_it->second.data();
+		fstr.len = found_class_it->second.size();
+		bl->html_class = rspamd_mempool_ftokdup (pool, &fstr);
+		msg_debug_html ("tag: %*s; got class: %s",
+				(int)tag->name.size(), tag->name.data(), bl->html_class);
 	}
 
 	if (hc->blocks == NULL) {
@@ -1575,6 +1554,10 @@ rspamd_html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	tag->extra = bl;
 }
 
+
+}
+
+/* Unconverted C part */
 
 
 static gboolean
