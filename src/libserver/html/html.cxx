@@ -696,7 +696,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 
 		auto url = html_process_url(pool, href_value);
 
-		if (url && tag->extra == nullptr) {
+		if (url && std::holds_alternative<std::monostate>(tag->extra)) {
 			tag->extra = url.value();
 		}
 
@@ -1551,7 +1551,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 
 	g_ptr_array_add(hc->blocks, bl);
-	tag->extra = bl;
+	tag->block = bl;
 }
 
 static auto
@@ -1578,13 +1578,13 @@ static auto
 html_propagate_style(struct html_content *hc,
 							struct html_tag *tag,
 							struct html_block *bl,
-							GQueue *blocks) -> void
+							std::vector<struct html_block *> &blocks) -> void
 {
 	struct html_block *bl_parent;
 	gboolean push_block = FALSE;
 
 	/* Propagate from the parent if needed */
-	bl_parent = static_cast<html_block *>(g_queue_peek_tail(blocks));
+	bl_parent = blocks.back();
 
 	if (bl_parent) {
 		if (!bl->background_color.valid) {
@@ -1647,7 +1647,7 @@ html_propagate_style(struct html_content *hc,
 	}
 
 	if (push_block && !(tag->flags & FL_CLOSED)) {
-		g_queue_push_tail(blocks, bl);
+		blocks.push_back(bl);
 	}
 }
 
@@ -1680,7 +1680,7 @@ html_process_part_full (rspamd_mempool_t *pool,
 	struct rspamd_url *url = NULL;
 	gint len, href_offset = -1;
 	struct html_tag *cur_tag = NULL, *content_tag = NULL;
-	GQueue *styles_blocks;
+	std::vector<struct html_block *> styles_blocks;
 	struct tag_content_parser_state content_parser_env;
 	tags_vector *all_tags;
 
@@ -1719,7 +1719,7 @@ html_process_part_full (rspamd_mempool_t *pool,
 	hc->bgcolor.valid = TRUE;
 
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
-	styles_blocks = g_queue_new ();
+	styles_blocks.reserve(32);
 
 	p = in->data;
 	c = p;
@@ -2199,8 +2199,8 @@ html_process_part_full (rspamd_mempool_t *pool,
 
 							if (prev_tag->id == Tag_A &&
 								!(prev_tag->flags & (FL_CLOSING)) &&
-								prev_tag->extra) {
-								prev_url = static_cast<rspamd_url *>(prev_tag->extra);
+								std::holds_alternative<rspamd_url *>(prev_tag->extra)) {
+								prev_url = std::get<rspamd_url *>(prev_tag->extra);
 
 								std::string_view disp_part{
 										reinterpret_cast<const gchar *>(dest->data + href_offset),
@@ -2265,13 +2265,13 @@ html_process_part_full (rspamd_mempool_t *pool,
 
 					if (cur_tag->flags & FL_CLOSING) {
 						/* Just remove block element from the queue if any */
-						if (styles_blocks->length > 0) {
-							g_queue_pop_tail (styles_blocks);
+						if (!styles_blocks.empty()) {
+							styles_blocks.pop_back();
 						}
 					}
 					else {
 						html_process_block_tag(pool, cur_tag, hc);
-						bl = static_cast<html_block *>(cur_tag->extra);
+						bl = cur_tag->block;
 
 						if (bl) {
 							html_propagate_style(hc, cur_tag,
@@ -2312,7 +2312,6 @@ html_process_part_full (rspamd_mempool_t *pool,
 				html_propagate_lengths, NULL);
 	}
 
-	g_queue_free (styles_blocks);
 	hc->parsed = dest;
 
 	return dest;

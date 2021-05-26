@@ -20,6 +20,7 @@
 
 #include <utility>
 #include <string_view>
+#include <variant>
 #include <contrib/robin-hood/robin_hood.h>
 
 namespace rspamd::html {
@@ -38,6 +39,8 @@ enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_ALT,
 };
 
+using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
+
 struct html_tag {
 	gint id;
 	gint flags;
@@ -47,7 +50,8 @@ struct html_tag {
 	std::string_view name;
 	robin_hood::unordered_flat_map<html_component_type, std::string_view> parameters;
 
-	gpointer extra; /* TODO: convert to variant */
+	html_tag_extra_t extra;
+	struct html_block *block; /* TODO: temporary, must be handled by css */
 	GNode *parent;
 };
 
