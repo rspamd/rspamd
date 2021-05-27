@@ -356,7 +356,7 @@ parse_tag_content(rspamd_mempool_t *pool,
 				 * Copy tag name to the temporary buffer for modifications
 				 */
 				auto *s = rspamd_mempool_alloc_buffer(pool, tag->name.size() + 1);
-				rspamd_strlcpy(s, tag->name.data(), tag->name.size());
+				rspamd_strlcpy(s, tag->name.data(), tag->name.size() + 1);
 				auto nsize = rspamd_html_decode_entitles_inplace(s,
 						tag->name.size());
 				nsize =  rspamd_str_lc_utf8(s, nsize);
