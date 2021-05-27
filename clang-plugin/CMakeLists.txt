@@ -14,10 +14,7 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 
     find_package(Clang REQUIRED)
 
-    set(clang_libs
-            clangAST
-            clangBasic
-            clangFrontend)
+    set(clang_libs clang)
 
     message(STATUS "Found LibClang in: ${CLANG_INSTALL_PREFIX}")
     include_directories(${CLANG_INCLUDE_DIRS})
