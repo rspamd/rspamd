@@ -16,8 +16,12 @@
 #include "lua_common.h"
 #include "message.h"
 #include "libserver/html/html.h"
+#include "libserver/html/html_tag.hxx"
 #include "images.h"
-#include "contrib/mumhash/mum.h"
+
+#include <contrib/robin-hood/robin_hood.h>
+#include <frozen/string.h>
+#include <frozen/unordered_map.h>
 
 /***
  * @module rspamd_html
@@ -186,7 +190,7 @@ lua_check_html (lua_State * L, gint pos)
 
 struct lua_html_tag {
 	struct html_content *html;
-	struct html_tag *tag;
+	rspamd::html::html_tag *tag;
 };
 
 static struct lua_html_tag *
@@ -216,6 +220,20 @@ lua_html_has_tag (lua_State *L)
 	return 1;
 }
 
+constexpr const auto prop_map = frozen::make_unordered_map<frozen::string, int>({
+		{"no_html", RSPAMD_HTML_FLAG_BAD_START},
+		{"bad_start", RSPAMD_HTML_FLAG_BAD_START},
+		{"bad_element", RSPAMD_HTML_FLAG_BAD_ELEMENTS},
+		{"bad_elements", RSPAMD_HTML_FLAG_BAD_ELEMENTS},
+		{"xml", RSPAMD_HTML_FLAG_XML},
+		{"unknown_element", RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS},
+		{"unknown_elements", RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS},
+		{"duplicate_element", RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS},
+		{"duplicate_elements", RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS},
+		{"unbalanced", RSPAMD_HTML_FLAG_UNBALANCED},
+		{"data_urls", RSPAMD_HTML_FLAG_HAS_DATA_URLS},
+});
+
 static gint
 lua_html_has_property (lua_State *L)
 {
@@ -225,35 +243,10 @@ lua_html_has_property (lua_State *L)
 	gboolean ret = FALSE;
 
 	if (hc && propname) {
-		/*
-		 * - `no_html`
-		 * - `bad_element`
-		 * - `xml`
-		 * - `unknown_element`
-		 * - `duplicate_element`
-		 * - `unbalanced`
-		 * - `data_urls`
-		 */
-		if (strcmp (propname, "no_html") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_BAD_START;
-		}
-		else if (strcmp (propname, "bad_element") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-		}
-		else if (strcmp (propname, "xml") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_XML;
-		}
-		else if (strcmp (propname, "unknown_element") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
-		}
-		else if (strcmp (propname, "duplicate_element") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS;
-		}
-		else if (strcmp (propname, "unbalanced") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_UNBALANCED;
-		}
-		else if (strcmp (propname, "data_urls") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_HAS_DATA_URLS;
+		auto found_prop = prop_map.find(frozen::string(propname));
+
+		if (found_prop != prop_map.end()) {
+			ret = hc->flags & found_prop->second;
 		}
 	}
 
@@ -277,7 +270,7 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 		if (img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA) {
 			struct rspamd_lua_text *t;
 
-			t = lua_newuserdata (L, sizeof (*t));
+			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 			t->start = img->src;
 			t->len = strlen (img->src);
 			t->flags = 0;
@@ -293,7 +286,7 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 
 	if (img->url) {
 		lua_pushstring (L, "url");
-		purl = lua_newuserdata (L, sizeof (gpointer));
+		purl = static_cast<rspamd_url **>(lua_newuserdata(L, sizeof(gpointer)));
 		*purl = img->url;
 		rspamd_lua_setclass (L, "rspamd{url}", -1);
 		lua_settable (L, -3);
@@ -301,8 +294,8 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 
 	if (img->tag) {
 		lua_pushstring (L, "tag");
-		ltag = lua_newuserdata (L, sizeof (struct lua_html_tag));
-		ltag->tag = img->tag;
+		ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(struct lua_html_tag)));
+		ltag->tag = static_cast<rspamd::html::html_tag *>(img->tag);
 		ltag->html = NULL;
 		rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
 		lua_settable (L, -3);
@@ -360,8 +353,10 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	lua_createtable (L, 0, 6);
 
 	if (bl->tag) {
+		gsize name_len;
+		const gchar *name = rspamd_html_tag_name(bl->tag, &name_len);
 		lua_pushstring (L, "tag");
-		lua_pushlstring (L, bl->tag->name.start, bl->tag->name.len);
+		lua_pushlstring (L, name, name_len);
 		lua_settable (L, -3);
 	}
 
@@ -394,9 +389,9 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 
 	if (bl->style.len > 0) {
 		lua_pushstring (L, "style");
-		t = lua_newuserdata (L, sizeof (*t));
+		t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = bl->style.start;
+		t->start = bl->style.begin;
 		t->len = bl->style.len;
 		t->flags = 0;
 		lua_settable (L, -3);
@@ -425,7 +420,7 @@ lua_html_get_blocks (lua_State *L)
 			lua_createtable (L, hc->blocks->len, 0);
 
 			for (i = 0; i < hc->blocks->len; i ++) {
-				bl = g_ptr_array_index (hc->blocks, i);
+				bl = static_cast<decltype(bl)>(g_ptr_array_index (hc->blocks, i));
 				lua_html_push_block (L, bl);
 				lua_rawseti (L, -2, i + 1);
 			}
@@ -445,23 +440,22 @@ struct lua_html_traverse_ud {
 	lua_State *L;
 	struct html_content *html;
 	gint cbref;
-	GHashTable *tags;
+	robin_hood::unordered_flat_set<int> tags;
 	gboolean any;
 };
 
 static gboolean
 lua_html_node_foreach_cb (GNode *n, gpointer d)
 {
-	struct lua_html_traverse_ud *ud = d;
-	struct html_tag *tag = n->data;
+	struct lua_html_traverse_ud *ud = (struct lua_html_traverse_ud *)d;
+	auto *tag = (rspamd::html::html_tag *)n->data;
 	struct lua_html_tag *ltag;
 
-	if (tag && (ud->any || g_hash_table_lookup (ud->tags,
-			GSIZE_TO_POINTER (mum_hash64 (tag->id, 0))))) {
+	if (tag && (ud->any || ud->tags.contains(tag->id))) {
 
 		lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 
-		ltag = lua_newuserdata (ud->L, sizeof (*ltag));
+		ltag = static_cast<lua_html_tag *>(lua_newuserdata(ud->L, sizeof(*ltag)));
 		ltag->tag = tag;
 		ltag->html = ud->html;
 		rspamd_lua_setclass (ud->L, "rspamd{html_tag}", -1);
@@ -501,7 +495,6 @@ lua_html_foreach_tag (lua_State *L)
 	const gchar *tagname;
 	gint id;
 
-	ud.tags = g_hash_table_new (g_direct_hash, g_direct_equal);
 	ud.any = FALSE;
 	ud.html = hc;
 
@@ -511,14 +504,14 @@ lua_html_foreach_tag (lua_State *L)
 			ud.any = TRUE;
 		}
 		else {
-			id = rspamd_html_tag_by_name (tagname);
+			id = rspamd_html_tag_by_name(tagname);
 
 			if (id == -1) {
-				g_hash_table_unref (ud.tags);
 				return luaL_error (L, "invalid tagname: %s", tagname);
 			}
-			g_hash_table_insert (ud.tags, GSIZE_TO_POINTER (mum_hash64 (id, 0)),
-					"1");
+
+
+			ud.tags.insert(id);
 		}
 	}
 	else if (lua_type (L, 2) == LUA_TTABLE) {
@@ -533,18 +526,16 @@ lua_html_foreach_tag (lua_State *L)
 				id = rspamd_html_tag_by_name (tagname);
 
 				if (id == -1) {
-					g_hash_table_unref (ud.tags);
 					return luaL_error (L, "invalid tagname: %s", tagname);
 				}
-				g_hash_table_insert (ud.tags,
-						GSIZE_TO_POINTER (mum_hash64 (id, 0)), "1");
+				ud.tags.insert(id);
 			}
 		}
 
 		lua_pop (L, 1);
 	}
 
-	if (hc && (ud.any || g_hash_table_size (ud.tags) > 0) && lua_isfunction (L, 3)) {
+	if (hc && (ud.any || !ud.tags.empty()) && lua_isfunction (L, 3)) {
 		if (hc->html_tags) {
 
 			lua_pushvalue (L, 3);
@@ -558,11 +549,8 @@ lua_html_foreach_tag (lua_State *L)
 		}
 	}
 	else {
-		g_hash_table_unref (ud.tags);
 		return luaL_error (L, "invalid arguments");
 	}
-
-	g_hash_table_unref (ud.tags);
 
 	return 0;
 }
@@ -602,8 +590,8 @@ lua_html_tag_get_parent (lua_State *L)
 		node = ltag->tag->parent;
 
 		if (node && node->data) {
-			ptag = lua_newuserdata (L, sizeof (*ptag));
-			ptag->tag = node->data;
+			ptag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(*ptag)));
+			ptag->tag = static_cast<rspamd::html::html_tag *>(node->data);
 			ptag->html = ltag->html;
 			rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
 		}
@@ -670,9 +658,10 @@ lua_html_tag_get_content (lua_State *L)
 	if (ltag) {
 		if (ltag->html && ltag->tag->content_length &&
 				ltag->html->parsed->len >= ltag->tag->content_offset + ltag->tag->content_length) {
-			t = lua_newuserdata (L, sizeof (*t));
+			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->start = ltag->html->parsed->data + ltag->tag->content_offset;
+			t->start = reinterpret_cast<const char *>(ltag->html->parsed->data) +
+					ltag->tag->content_offset;
 			t->len = ltag->tag->content_length;
 			t->flags = 0;
 		}
@@ -712,19 +701,19 @@ lua_html_tag_get_extra (lua_State *L)
 	struct rspamd_url **purl;
 
 	if (ltag) {
-		if (ltag->tag->extra) {
-			if (ltag->tag->flags & FL_IMAGE) {
-				img = ltag->tag->extra;
+		if (!std::holds_alternative<std::monostate>(ltag->tag->extra)) {
+			if (std::holds_alternative<struct html_image *>(ltag->tag->extra)) {
+				img = std::get<struct html_image *>(ltag->tag->extra);
 				lua_html_push_image (L, img);
 			}
-			else if (ltag->tag->flags & FL_HREF) {
+			else if (std::holds_alternative<struct rspamd_url *>(ltag->tag->extra)) {
 				/* For A that's URL */
-				purl = lua_newuserdata (L, sizeof (gpointer));
-				*purl = ltag->tag->extra;
+				purl = static_cast<rspamd_url **>(lua_newuserdata(L, sizeof(gpointer)));
+				*purl = std::get<struct rspamd_url *>(ltag->tag->extra);
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
 			}
 			else if (ltag->tag->flags & FL_BLOCK) {
-				lua_html_push_block (L, ltag->tag->extra);
+				lua_html_push_block (L, ltag->tag->block);
 			}
 			else {
 				/* Unknown extra ? */

@@ -152,13 +152,13 @@ const gchar *rspamd_html_tag_by_id(gint id);
 gint rspamd_html_tag_by_name(const gchar *name);
 
 /**
- * Extract URL from HTML tag component and sets component elements if needed
- * @param pool
- * @param start
+ * Gets a name for a tag
+ * @param tag
  * @param len
- * @param comp
  * @return
  */
+const gchar *rspamd_html_tag_name(void *tag, gsize *len);
+
 
 #ifdef  __cplusplus
 }

@@ -21,7 +21,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_url.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_util.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_tcp.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_html.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_html.cxx
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_sqlite3.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_cryptobox.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_map.c

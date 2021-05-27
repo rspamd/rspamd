@@ -73,8 +73,8 @@ rspamd_tcp: ../src/lua/lua_tcp.c
 	$(LUADOC) < ../src/lua/lua_tcp.c > markdown/lua/rspamd_tcp.md
 rspamd_mempool: ../src/lua/lua_mempool.c
 	$(LUADOC) < ../src/lua/lua_mempool.c > markdown/lua/rspamd_mempool.md
-rspamd_html: ../src/lua/lua_html.c
-	$(LUADOC) < ../src/lua/lua_html.c > markdown/lua/rspamd_html.md
+rspamd_html: ../src/lua/lua_html.cxx
+	$(LUADOC) < ../src/lua/lua_html.cxx > markdown/lua/rspamd_html.md
 rspamd_util: ../src/lua/lua_util.c
 	$(LUADOC) < ../src/lua/lua_util.c > markdown/lua/rspamd_util.md
 rspamd_sqlite3: ../src/lua/lua_sqlite3.c

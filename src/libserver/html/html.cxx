@@ -2387,3 +2387,15 @@ rspamd_html_tag_by_id(gint id)
 
 	return nullptr;
 }
+
+const gchar *
+rspamd_html_tag_name(void *p, gsize *len)
+{
+	auto *tag = reinterpret_cast<rspamd::html::html_tag *>(p);
+
+	if (len) {
+		*len = tag->name.size();
+	}
+
+	return tag->name.data();
+}
