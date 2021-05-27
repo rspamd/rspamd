@@ -157,55 +157,55 @@ namespace rspamd {
 
 			switch (type) {
 			case 's':
-				return llvm::make_unique<PrintfArgChecker> (cstring_arg_handler,
+				return std::make_unique<PrintfArgChecker> (cstring_arg_handler,
 						this->pcontext, this->ci);
 			case 'd':
-				return llvm::make_unique<PrintfArgChecker> (int_arg_handler,
+				return std::make_unique<PrintfArgChecker> (int_arg_handler,
 						this->pcontext, this->ci);
 			case 'z':
-				return llvm::make_unique<PrintfArgChecker> (size_arg_handler,
+				return std::make_unique<PrintfArgChecker> (size_arg_handler,
 						this->pcontext, this->ci);
 			case 'l':
-				return llvm::make_unique<PrintfArgChecker> (long_arg_handler,
+				return std::make_unique<PrintfArgChecker> (long_arg_handler,
 						this->pcontext, this->ci);
 			case 'f':
 			case 'g':
-				return llvm::make_unique<PrintfArgChecker> (double_arg_handler,
+				return std::make_unique<PrintfArgChecker> (double_arg_handler,
 						this->pcontext, this->ci);
 			case 'F':
 			case 'G':
-				return llvm::make_unique<PrintfArgChecker> (
+				return std::make_unique<PrintfArgChecker> (
 						long_double_arg_handler,
 						this->pcontext, this->ci);
 			case 'c':
-				return llvm::make_unique<PrintfArgChecker> (char_arg_handler,
+				return std::make_unique<PrintfArgChecker> (char_arg_handler,
 						this->pcontext, this->ci);
 			case 'p':
-				return llvm::make_unique<PrintfArgChecker> (pointer_arg_handler,
+				return std::make_unique<PrintfArgChecker> (pointer_arg_handler,
 						this->pcontext, this->ci);
 			case 'P':
-				return llvm::make_unique<PrintfArgChecker> (pid_arg_handler,
+				return std::make_unique<PrintfArgChecker> (pid_arg_handler,
 						this->pcontext, this->ci);
 			case 't':
-				return llvm::make_unique<PrintfArgChecker> (time_arg_handler,
+				return std::make_unique<PrintfArgChecker> (time_arg_handler,
 						this->pcontext, this->ci);
 			case 'L':
-				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
+				return std::make_unique<PrintfArgChecker> (int64_arg_handler,
 						this->pcontext, this->ci);
 			case 'D':
-				return llvm::make_unique<PrintfArgChecker> (int32_arg_handler,
+				return std::make_unique<PrintfArgChecker> (int32_arg_handler,
 						this->pcontext, this->ci);
 			case 'T':
-				return llvm::make_unique<PrintfArgChecker> (tok_arg_handler,
+				return std::make_unique<PrintfArgChecker> (tok_arg_handler,
 						this->pcontext, this->ci);
 			case 'V':
-				return llvm::make_unique<PrintfArgChecker> (fstring_arg_handler,
+				return std::make_unique<PrintfArgChecker> (fstring_arg_handler,
 						this->pcontext, this->ci);
 			case 'v':
-				return llvm::make_unique<PrintfArgChecker> (gstring_arg_handler,
+				return std::make_unique<PrintfArgChecker> (gstring_arg_handler,
 						this->pcontext, this->ci);
 			case 'e':
-				return llvm::make_unique<PrintfArgChecker> (gerr_arg_handler,
+				return std::make_unique<PrintfArgChecker> (gerr_arg_handler,
 						this->pcontext, this->ci);
 			default: {
 				auto err_msg = std::string ("unknown parser flag: ") + type;

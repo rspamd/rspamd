@@ -47,7 +47,7 @@ namespace rspamd {
 		std::unique_ptr <ASTConsumer> CreateASTConsumer (CompilerInstance &CI,
 				llvm::StringRef) override
 		{
-			return llvm::make_unique<RspamdASTConsumer> (CI);
+			return std::make_unique<RspamdASTConsumer> (CI);
 		}
 
 		bool ParseArgs (const CompilerInstance &CI,
