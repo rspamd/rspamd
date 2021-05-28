@@ -225,9 +225,11 @@ ENDIF()
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
 ProcessPackage(ICUDATA LIBRARY icudata INCLUDE unicode/ucnv.h
-	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
+	ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
 ProcessPackage(ICUC LIBRARY icuuc INCLUDE unicode/ucnv.h
-	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
+	ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
+ProcessPackage(ICUIO LIBRARY icuio INCLUDE unicode/ucnv.h
+		ROOT ${ICU_ROOT_DIR} MODULES icu-io)
 ProcessPackage(ICUI18N LIBRARY icui18n INCLUDE unicode/ucnv.h
 	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
 ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE openssl/evp.h
