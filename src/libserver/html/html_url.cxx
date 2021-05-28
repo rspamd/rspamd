@@ -220,7 +220,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	url->visible_part = rspamd_mempool_alloc_buffer(pool, visible_part.size() + 1);
 	rspamd_strlcpy(url->visible_part,
 			visible_part.data(),
-			visible_part.size());
+			visible_part.size() + 1);
 	dlen = visible_part.size();
 
 	/* Strip unicode spaces from the start and the end */
