@@ -712,13 +712,13 @@ lua_html_tag_get_extra (lua_State *L)
 				*purl = std::get<struct rspamd_url *>(ltag->tag->extra);
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
 			}
-			else if (ltag->tag->flags & FL_BLOCK) {
-				lua_html_push_block (L, ltag->tag->block);
-			}
 			else {
 				/* Unknown extra ? */
 				lua_pushnil (L);
 			}
+		}
+		else if (ltag->tag->block != nullptr) {
+			lua_html_push_block (L, ltag->tag->block);
 		}
 		else {
 			lua_pushnil (L);
