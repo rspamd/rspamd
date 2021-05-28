@@ -1583,6 +1583,10 @@ html_propagate_style(struct html_content *hc,
 	struct html_block *bl_parent;
 	gboolean push_block = FALSE;
 
+	if (blocks.empty()) {
+		/* No blocks to propagate */
+		return;
+	}
 	/* Propagate from the parent if needed */
 	bl_parent = blocks.back();
 

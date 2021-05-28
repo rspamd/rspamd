@@ -42,17 +42,17 @@ enum class html_component_type : std::uint8_t {
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
 
 struct html_tag {
-	gint id;
-	gint flags;
-	guint content_length;
-	goffset content_offset;
+	gint id = -1;
+	gint flags = 0;
+	guint content_length = 0;
+	goffset content_offset = 0;
 
 	std::string_view name;
 	robin_hood::unordered_flat_map<html_component_type, std::string_view> parameters;
 
 	html_tag_extra_t extra;
-	struct html_block *block; /* TODO: temporary, must be handled by css */
-	GNode *parent;
+	struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
+	GNode *parent = nullptr;
 };
 
 }
