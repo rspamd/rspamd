@@ -21,7 +21,6 @@
 #include "worker_private.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"
-#include "contrib/zstd/zstd.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "protocol_internal.h"
@@ -29,6 +28,12 @@
 #include "contrib/fastutf8/fastutf8.h"
 #include "task.h"
 #include <math.h>
+
+#ifdef SYS_ZSTD
+#  include "zstd.h"
+#else
+#  include "contrib/zstd/zstd.h"
+#endif
 
 INIT_LOG_MODULE(protocol)
 
