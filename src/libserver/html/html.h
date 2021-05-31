@@ -102,7 +102,6 @@ struct html_block {
 
 /* Forwarded declaration */
 struct rspamd_task;
-struct html_content;
 
 /*
  * Decode HTML entitles in text. Text is modified in place.
@@ -121,7 +120,7 @@ void *rspamd_html_process_part_full(rspamd_mempool_t *pool,
 /*
  * Returns true if a specified tag has been seen in a part
  */
-gboolean rspamd_html_tag_seen(struct html_content *hc, const gchar *tagname);
+gboolean rspamd_html_tag_seen(void *ptr, const gchar *tagname);
 
 /**
  * Returns name for the specified tag id

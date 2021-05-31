@@ -955,28 +955,17 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 	auto found_alt_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_ALT);
 
-	if (found_alt_it != tag->parameters.end() && dest != NULL) {
-		if (dest->len > 0 && !g_ascii_isspace (dest->data[dest->len - 1])) {
+	if (found_alt_it != tag->parameters.end()) {
+		if (!hc->parsed.empty() && !g_ascii_isspace (hc->parsed.back())) {
 			/* Add a space */
-			g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
+			hc->parsed += ' ';
 		}
+		hc->parsed.append(found_alt_it->second);
 
-		g_byte_array_append(dest,
-				reinterpret_cast<const guint8 *>(found_alt_it->second.data()),
-				found_alt_it->second.size());
-
-		if (!g_ascii_isspace (dest->data[dest->len - 1])) {
+		if (!g_ascii_isspace (hc->parsed.back())) {
 			/* Add a space */
-			g_byte_array_append(dest, reinterpret_cast<const guint8 *>(" "), 1);
+			hc->parsed += ' ';
 		}
-	}
-
-
-	if (hc->images == nullptr) {
-		hc->images = g_ptr_array_sized_new(4);
-		rspamd_mempool_notify_alloc(pool, 4 * sizeof(gpointer) + sizeof(GPtrArray));
-		rspamd_mempool_add_destructor(pool, rspamd_ptr_array_free_hard,
-				hc->images);
 	}
 
 	if (img->embedded_image) {
@@ -988,7 +977,7 @@ html_process_img_tag(rspamd_mempool_t *pool,
 		}
 	}
 
-	g_ptr_array_add(hc->images, img);
+	hc->images.push_back(img);
 	tag->extra = img;
 }
 
@@ -1002,7 +991,7 @@ html_process_link_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 
 	if (found_rel_it != tag->parameters.end()) {
 		if (found_rel_it->second == "icon") {
-			html_process_img_tag(pool, tag, hc, url_set, part_urls, nullptr);
+			html_process_img_tag(pool, tag, hc, url_set, part_urls);
 		}
 	}
 }
@@ -1489,10 +1478,7 @@ static auto
 html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					   struct html_content *hc) -> void
 {
-	struct html_block *bl;
-	rspamd_ftok_t fstr;
-
-	bl = rspamd_mempool_alloc0_type (pool, struct html_block);
+	auto *bl = rspamd_mempool_alloc0_type (pool, struct html_block);
 	bl->tag = tag;
 	bl->visible = TRUE;
 	bl->font_size = (guint) -1;
@@ -1531,6 +1517,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 
 	auto found_class_it = tag->parameters.find(html_component_type::RSPAMD_HTML_COMPONENT_CLASS);
 	if (found_class_it != tag->parameters.end()) {
+		rspamd_ftok_t fstr;
 		fstr.begin = found_class_it->second.data();
 		fstr.len = found_class_it->second.size();
 		bl->html_class = rspamd_mempool_ftokdup (pool, &fstr);
@@ -1538,14 +1525,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 				(int)tag->name.size(), tag->name.data(), bl->html_class);
 	}
 
-	if (hc->blocks == NULL) {
-		hc->blocks = g_ptr_array_sized_new(64);
-		rspamd_mempool_notify_alloc (pool, 64 * sizeof(gpointer) + sizeof(GPtrArray));
-		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
-				hc->blocks);
-	}
-
-	g_ptr_array_add(hc->blocks, bl);
+	hc->blocks.push_back(bl);
 	tag->block = bl;
 }
 
@@ -1575,7 +1555,6 @@ html_propagate_style(struct html_content *hc,
 							struct html_block *bl,
 							std::vector<struct html_block *> &blocks) -> void
 {
-	struct html_block *bl_parent;
 	gboolean push_block = FALSE;
 
 	if (blocks.empty()) {
@@ -1583,40 +1562,38 @@ html_propagate_style(struct html_content *hc,
 		return;
 	}
 	/* Propagate from the parent if needed */
-	bl_parent = blocks.back();
+	auto *bl_parent = blocks.back();
 
-	if (bl_parent) {
-		if (!bl->background_color.valid) {
-			/* Try to propagate background color from parent nodes */
-			if (bl_parent->background_color.valid) {
-				memcpy(&bl->background_color, &bl_parent->background_color,
-						sizeof(bl->background_color));
-			}
+	if (!bl->background_color.valid) {
+		/* Try to propagate background color from parent nodes */
+		if (bl_parent->background_color.valid) {
+			memcpy(&bl->background_color, &bl_parent->background_color,
+					sizeof(bl->background_color));
 		}
-		else {
-			push_block = TRUE;
-		}
+	}
+	else {
+		push_block = TRUE;
+	}
 
-		if (!bl->font_color.valid) {
-			/* Try to propagate background color from parent nodes */
-			if (bl_parent->font_color.valid) {
-				memcpy(&bl->font_color, &bl_parent->font_color,
-						sizeof(bl->font_color));
-			}
+	if (!bl->font_color.valid) {
+		/* Try to propagate background color from parent nodes */
+		if (bl_parent->font_color.valid) {
+			memcpy(&bl->font_color, &bl_parent->font_color,
+					sizeof(bl->font_color));
 		}
-		else {
-			push_block = TRUE;
-		}
+	}
+	else {
+		push_block = TRUE;
+	}
 
-		/* Propagate font size */
-		if (bl->font_size == (guint) -1) {
-			if (bl_parent->font_size != (guint) -1) {
-				bl->font_size = bl_parent->font_size;
-			}
+	/* Propagate font size */
+	if (bl->font_size == (guint) -1) {
+		if (bl_parent->font_size != (guint) -1) {
+			bl->font_size = bl_parent->font_size;
 		}
-		else {
-			push_block = TRUE;
-		}
+	}
+	else {
+		push_block = TRUE;
 	}
 
 	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
@@ -2340,16 +2317,17 @@ rspamd_html_tag_by_name(const gchar *name)
 }
 
 gboolean
-rspamd_html_tag_seen(struct html_content *hc, const gchar *tagname)
+rspamd_html_tag_seen(void *ptr, const gchar *tagname)
 {
 	gint id;
+	auto *hc = rspamd::html::html_content::from_ptr(ptr);
 
 	g_assert (hc != NULL);
 
 	id = rspamd_html_tag_by_name(tagname);
 
 	if (id != -1) {
-		return isset(hc->tags_seen, id);
+		return hc->tags_seen[id];
 	}
 
 	return FALSE;
