@@ -33,7 +33,7 @@ rspamd_css_dtor(void *p)
 }
 
 rspamd_css_ptr
-rspamd_css_parse_style(rspamd_mempool_t *pool, const guchar *begin, gsize len,
+rspamd_css_parse_style(rspamd_mempool_t *pool, const gchar *begin, gsize len,
 					   rspamd_css_ptr existing_style,
 					   GError **err)
 {

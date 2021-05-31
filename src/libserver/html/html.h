@@ -102,35 +102,21 @@ struct html_block {
 
 /* Forwarded declaration */
 struct rspamd_task;
-
-struct html_content {
-	struct rspamd_url *base_url;
-	GNode *html_tags;
-	gint flags;
-	guint total_tags;
-	struct html_color bgcolor;
-	guchar *tags_seen;
-	GPtrArray *images;
-	GPtrArray *blocks;
-	GByteArray *parsed;
-	void *css_style;
-};
+struct html_content;
 
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
 guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len);
 
-GByteArray *rspamd_html_process_part(rspamd_mempool_t *pool,
-									  struct html_content *hc,
-									  GByteArray *in);
+void* rspamd_html_process_part(rspamd_mempool_t *pool,
+							   GByteArray *in);
 
-GByteArray *rspamd_html_process_part_full(rspamd_mempool_t *pool,
-										   struct html_content *hc,
-										   GByteArray *in, GList **exceptions,
-										   khash_t (rspamd_url_hash) *url_set,
-										   GPtrArray *part_urls,
-										   bool allow_css);
+void *rspamd_html_process_part_full(rspamd_mempool_t *pool,
+									GByteArray *in, GList **exceptions,
+									khash_t (rspamd_url_hash) *url_set,
+									GPtrArray *part_urls,
+									bool allow_css);
 
 /*
  * Returns true if a specified tag has been seen in a part
