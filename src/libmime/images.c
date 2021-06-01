@@ -658,8 +658,8 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *tp;
 	struct html_image *himg;
-	const gchar *cid, *html_cid;
-	guint cid_len, i, j;
+	const gchar *cid;
+	guint cid_len, i;
 	struct rspamd_image *img;
 
 	img = (struct rspamd_image *)part->specific.img;
@@ -684,35 +684,22 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 				}
 
 				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-					if (IS_TEXT_PART_HTML (tp) && tp->html != NULL &&
-						tp->html->images != NULL) {
-						for (j = 0; j < tp->html->images->len; j ++) {
-							himg = g_ptr_array_index (tp->html->images, j);
+					if (IS_TEXT_PART_HTML (tp) && tp->html != NULL) {
+						himg = rspamd_html_find_embedded_image(tp->html, cid, cid_len);
 
-							if ((himg->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED) &&
-								himg->src) {
-								html_cid = himg->src;
+						if (himg != NULL) {
+							img->html_image = himg;
+							himg->embedded_image = img;
 
-								if (strncmp (html_cid, "cid:", 4) == 0) {
-									html_cid += 4;
-								}
+							msg_debug_images ("found linked image by cid: <%s>",
+									cid);
 
-								if (strlen (html_cid) == cid_len &&
-									memcmp (html_cid, cid, cid_len) == 0) {
-									img->html_image = himg;
-									himg->embedded_image = img;
+							if (himg->height == 0) {
+								himg->height = img->height;
+							}
 
-									msg_debug_images ("found linked image by cid: <%s>",
-											cid);
-
-									if (himg->height == 0) {
-										himg->height = img->height;
-									}
-
-									if (himg->width == 0) {
-										himg->width = img->width;
-									}
-								}
+							if (himg->width == 0) {
+								himg->width = img->width;
 							}
 						}
 					}

@@ -144,6 +144,16 @@ gint rspamd_html_tag_by_name(const gchar *name);
  */
 const gchar *rspamd_html_tag_name(void *tag, gsize *len);
 
+/**
+ * Find HTML image by content id
+ * @param html_content
+ * @param cid
+ * @param cid_len
+ * @return
+ */
+struct html_image* rspamd_html_find_embedded_image(void *html_content,
+		const char *cid, gsize cid_len);
+
 
 #ifdef  __cplusplus
 }

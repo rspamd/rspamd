@@ -2277,6 +2277,23 @@ html_process_part_full (rspamd_mempool_t *pool,
 	return hc;
 }
 
+static auto
+html_find_image_by_cid(const html_content &hc, std::string_view cid)
+	-> std::optional<const html_image *>
+{
+	for (const auto *html_image : hc.images) {
+		/* Filter embedded images */
+		if (html_image->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED &&
+				html_image->src != nullptr) {
+			if (cid == html_image->src) {
+				return html_image;
+			}
+		}
+	}
+
+	return std::nullopt;
+}
+
 }
 
 void *
@@ -2355,4 +2372,19 @@ rspamd_html_tag_name(void *p, gsize *len)
 	}
 
 	return tag->name.data();
+}
+
+struct html_image*
+rspamd_html_find_embedded_image(void *html_content,
+								const char *cid, gsize cid_len)
+{
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+
+	auto maybe_img = rspamd::html::html_find_image_by_cid(*hc, {cid, cid_len});
+
+	if (maybe_img) {
+		return (html_image *)maybe_img.value();
+	}
+
+	return nullptr;
 }
