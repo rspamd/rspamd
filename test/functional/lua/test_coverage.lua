@@ -2,6 +2,7 @@
 -- This should be the very first file executed during a test
 -- otherwise coverage will be partly missed
 --]]
+local E = {}
 local logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
 local loaded, luacov = pcall(require, 'luacov.runner')
@@ -22,7 +23,7 @@ local woker_name
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   woker_name = worker:get_name()
-  local stats_path = rspamd_paths["DBDIR"] .. '/' .. woker_name .. '.luacov.stats.out'
+  local stats_path = rspamd_paths["DBDIR"] .. '/' .. woker_name .. '-' .. tostring(E):sub(10) .. '.luacov.stats.out'
   local config = luacov.load_config()
   config.statsfile = stats_path
 end)
