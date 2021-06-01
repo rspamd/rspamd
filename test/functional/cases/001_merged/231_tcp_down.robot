@@ -1,17 +1,10 @@
 *** Settings ***
-Suite Setup     Rspamd Setup
-Suite Teardown  Rspamd Teardown
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
 Variables       ${RSPAMD_TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}              ${RSPAMD_TESTDIR}/configs/lua_test.conf
-${MESSAGE}             ${RSPAMD_TESTDIR}/messages/spam_message.eml
-${RSPAMD_LUA_SCRIPT}   ${RSPAMD_TESTDIR}/lua/tcp.lua
-${RSPAMD_SCOPE}        Suite
-${RSPAMD_URL_TLD}      ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
-
+${MESSAGE}      ${RSPAMD_TESTDIR}/messages/spam_message.eml
 
 *** Test Cases ***
 Sync API TCP get request when server is down
