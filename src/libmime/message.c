@@ -696,7 +696,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
 				msg_info_task (
-						"gtube %s pattern has been found in part of length %ud",
+						"gtube %s pattern has been found in part of length %uz",
 						rspamd_action_to_str (act),
 						part->utf_content.len);
 			}
