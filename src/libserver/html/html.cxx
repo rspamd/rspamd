@@ -2388,3 +2388,14 @@ rspamd_html_find_embedded_image(void *html_content,
 
 	return nullptr;
 }
+
+bool
+rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest)
+{
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+
+	dest->begin = hc->parsed.data();
+	dest->len = hc->parsed.size();
+
+	return true;
+}

@@ -1224,8 +1224,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 							raw = TRUE;
 						}
 
-						in = text_part->utf_content->data;
-						len = text_part->utf_content->len;
+						in = text_part->utf_content.begin;
+						len = text_part->utf_content.len;
 					}
 				}
 

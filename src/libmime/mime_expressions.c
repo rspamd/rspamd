@@ -1625,7 +1625,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	gboolean res = FALSE;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
-		if (IS_TEXT_PART_HTML (p) && (p->html == NULL || p->html->html_tags == NULL)) {
+		if (IS_TEXT_PART_HTML (p) && (p->html == NULL)) {
 			res = TRUE;
 		}
 

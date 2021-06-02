@@ -694,8 +694,8 @@ lua_textpart_get_content (lua_State * L)
 			lua_pushnil (L);
 			return 1;
 		}
-		start = part->utf_content->data;
-		len = part->utf_content->len;
+		start = part->utf_content.begin;
+		len = part->utf_content.len;
 	}
 	else if (strcmp (type, "content") == 0) {
 		if (IS_TEXT_PART_EMPTY (part)) {
@@ -703,8 +703,8 @@ lua_textpart_get_content (lua_State * L)
 			return 1;
 		}
 
-		start = part->utf_content->data;
-		len = part->utf_content->len;
+		start = part->utf_content.begin;
+		len = part->utf_content.len;
 	}
 	else if (strcmp (type, "content_oneline") == 0) {
 		if (IS_TEXT_PART_EMPTY (part)) {
@@ -809,11 +809,11 @@ lua_textpart_get_length (lua_State * L)
 		return 1;
 	}
 
-	if (IS_TEXT_PART_EMPTY (part) || part->utf_content == NULL) {
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_content.len == 0) {
 		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushinteger (L, part->utf_content->len);
+		lua_pushinteger (L, part->utf_content.len);
 	}
 
 	return 1;

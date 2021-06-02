@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "message.h"
 #include "libserver/html/html.h"
+#include "libserver/html/html.hxx"
 #include "libserver/html/html_tag.hxx"
 #include "images.h"
 
@@ -180,12 +181,12 @@ static const struct luaL_reg taglib_m[] = {
 	{NULL, NULL}
 };
 
-static struct html_content *
+static struct rspamd::html::html_content *
 lua_check_html (lua_State * L, gint pos)
 {
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{html}");
 	luaL_argcheck (L, ud != NULL, pos, "'html' expected");
-	return ud ? *((struct html_content **)ud) : NULL;
+	return ud ? *((struct rspamd::html::html_content **)ud) : NULL;
 }
 
 struct lua_html_tag {
@@ -205,7 +206,7 @@ static gint
 lua_html_has_tag (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct html_content *hc = lua_check_html (L, 1);
+	auto *hc = lua_check_html (L, 1);
 	const gchar *tagname = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
 
@@ -238,7 +239,7 @@ static gint
 lua_html_has_property (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct html_content *hc = lua_check_html (L, 1);
+	auto *hc = lua_check_html (L, 1);
 	const gchar *propname = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
 
@@ -256,7 +257,7 @@ lua_html_has_property (lua_State *L)
 }
 
 static void
-lua_html_push_image (lua_State *L, struct html_image *img)
+lua_html_push_image (lua_State *L, const struct html_image *img)
 {
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag;
@@ -319,22 +320,15 @@ static gint
 lua_html_get_images (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct html_content *hc = lua_check_html (L, 1);
-	struct html_image *img;
-
-	guint i;
+	auto *hc = lua_check_html (L, 1);
+	guint i = 1;
 
 	if (hc != NULL) {
-		if (hc->images) {
-			lua_createtable (L, hc->images->len, 0);
+		lua_createtable (L, hc->images.size(), 0);
 
-			PTR_ARRAY_FOREACH (hc->images, i, img) {
-				lua_html_push_image (L, img);
-				lua_rawseti (L, -2, i + 1);
-			}
-		}
-		else {
-			lua_newtable (L);
+		for (const auto *img : hc->images) {
+			lua_html_push_image (L, img);
+			lua_rawseti (L, -2, i++);
 		}
 	}
 	else {
@@ -410,14 +404,14 @@ static gint
 lua_html_get_blocks (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct html_content *hc = lua_check_html (L, 1);
+	auto *hc = lua_check_html (L, 1);
 	struct html_block *bl;
 
 	guint i;
 
 	if (hc != NULL) {
-		if (hc->blocks && hc->blocks->len > 0) {
-			lua_createtable (L, hc->blocks->len, 0);
+		if (hc->blocks.size() > 0) {
+			lua_createtable (L, hc->blocks.size(), 0);
 
 			for (i = 0; i < hc->blocks->len; i ++) {
 				bl = static_cast<decltype(bl)>(g_ptr_array_index (hc->blocks, i));

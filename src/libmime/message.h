@@ -138,7 +138,7 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t parsed; /* decoded from mime encodings */
 
 	/* UTF8 content */
-	GByteArray *utf_content; /* utf8 encoded processed content */
+	rspamd_ftok_t utf_content; /* utf8 encoded processed content */
 	GByteArray *utf_raw_content; /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
 	GArray *normalized_hashes; /* Array of guint64 */

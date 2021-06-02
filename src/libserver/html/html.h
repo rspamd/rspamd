@@ -154,6 +154,14 @@ const gchar *rspamd_html_tag_name(void *tag, gsize *len);
 struct html_image* rspamd_html_find_embedded_image(void *html_content,
 		const char *cid, gsize cid_len);
 
+/**
+ * Stores parsed content in ftok_t structure
+ * @param html_content
+ * @param dest
+ * @return
+ */
+bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest);
+
 
 #ifdef  __cplusplus
 }

@@ -375,9 +375,9 @@ lua_trie_search_mime (lua_State *L)
 
 	if (trie && task) {
 		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
-			if (!IS_TEXT_PART_EMPTY (part) && part->utf_content != NULL) {
-				text = part->utf_content->data;
-				len = part->utf_content->len;
+			if (!IS_TEXT_PART_EMPTY (part) && part->utf_content.len > 0) {
+				text = part->utf_content.begin;
+				len = part->utf_content.len;
 
 				if (lua_trie_search_str (L, trie, text, len, cb) != 0) {
 					found = TRUE;

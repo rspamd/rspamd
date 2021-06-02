@@ -522,10 +522,10 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		part->utf_stripped_content = g_byte_array_new ();
 	}
 	else {
-		part->utf_stripped_content = g_byte_array_sized_new (part->utf_content->len);
+		part->utf_stripped_content = g_byte_array_sized_new (part->utf_content.len);
 
-		p = (const gchar *)part->utf_content->data;
-		end = p + part->utf_content->len;
+		p = (const gchar *)part->utf_content.begin;
+		end = p + part->utf_content.len;
 
 		rspamd_strip_newlines_parse (task, p, end, part);
 
@@ -668,10 +668,10 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
 	}
 
-	if (part->utf_content && part->utf_content->len >= sizeof (gtube_pattern_reject) &&
-			part->utf_content->len <= max_check_size) {
-		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->utf_content->data,
-				part->utf_content->len,
+	if (part->utf_content.len >= sizeof (gtube_pattern_reject) &&
+			part->utf_content.len <= max_check_size) {
+		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->utf_content.begin,
+				part->utf_content.len,
 				rspamd_multipattern_gtube_cb, task, NULL)) > 0) {
 
 			switch (ret) {
@@ -698,7 +698,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				msg_info_task (
 						"gtube %s pattern has been found in part of length %ud",
 						rspamd_action_to_str (act),
-						part->utf_content->len);
+						part->utf_content.len);
 			}
 		}
 	}
@@ -728,13 +728,16 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 
 	if (text_part->utf_raw_content != NULL) {
 		/* Just have the same content */
-		text_part->utf_content = text_part->utf_raw_content;
+		text_part->utf_content.begin = (const gchar *)text_part->utf_raw_content->data;
+		text_part->utf_content.len = text_part->utf_raw_content->len;
 	}
 	else {
 		/*
 		 * We ignore unconverted parts from now as it is dangerous
 		 * to treat them as text parts
 		 */
+		text_part->utf_content.begin = NULL;
+		text_part->utf_content.len = 0;
 
 		return FALSE;
 	}
@@ -760,25 +763,20 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	text_part->html = rspamd_mempool_alloc0 (task->task_pool,
-			sizeof (*text_part->html));
+
 	text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
-	text_part->utf_content = rspamd_html_process_part_full (
+	text_part->html = rspamd_html_process_part_full (
 			task->task_pool,
-			text_part->html,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
 			MESSAGE_FIELD (task, urls),
 			text_part->mime_part->urls,
 			task->cfg ? task->cfg->enable_css_parser : false);
+	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);
 
-	if (text_part->utf_content->len == 0) {
+	if (text_part->utf_content.len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) free_byte_array_callback,
-			text_part->utf_content);
 
 	return TRUE;
 }
@@ -1546,7 +1544,7 @@ rspamd_message_process (struct rspamd_task *task)
 						sel = p2;
 					}
 					else {
-						if (p1->utf_content->len > p2->utf_content->len) {
+						if (p1->utf_content.len > p2->utf_content.len) {
 							sel = p1;
 						}
 						else {
