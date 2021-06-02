@@ -190,7 +190,7 @@ lua_check_html (lua_State * L, gint pos)
 }
 
 struct lua_html_tag {
-	struct html_content *html;
+	rspamd::html::html_content *html;
 	rspamd::html::html_tag *tag;
 };
 
@@ -339,7 +339,7 @@ lua_html_get_images (lua_State *L)
 }
 
 static void
-lua_html_push_block (lua_State *L, struct html_block *bl)
+lua_html_push_block (lua_State *L, const struct html_block *bl)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
@@ -405,18 +405,15 @@ lua_html_get_blocks (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html (L, 1);
-	struct html_block *bl;
-
-	guint i;
+	guint i = 1;
 
 	if (hc != NULL) {
 		if (hc->blocks.size() > 0) {
 			lua_createtable (L, hc->blocks.size(), 0);
 
-			for (i = 0; i < hc->blocks->len; i ++) {
-				bl = static_cast<decltype(bl)>(g_ptr_array_index (hc->blocks, i));
+			for (const auto *bl : hc->blocks) {
 				lua_html_push_block (L, bl);
-				lua_rawseti (L, -2, i + 1);
+				lua_rawseti (L, -2, i++);
 			}
 		}
 		else {
@@ -432,7 +429,7 @@ lua_html_get_blocks (lua_State *L)
 
 struct lua_html_traverse_ud {
 	lua_State *L;
-	struct html_content *html;
+	rspamd::html::html_content *html;
 	gint cbref;
 	robin_hood::unordered_flat_set<int> tags;
 	gboolean any;
@@ -484,7 +481,7 @@ static gint
 lua_html_foreach_tag (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct html_content *hc = lua_check_html (L, 1);
+	auto *hc = lua_check_html (L, 1);
 	struct lua_html_traverse_ud ud;
 	const gchar *tagname;
 	gint id;
@@ -651,10 +648,10 @@ lua_html_tag_get_content (lua_State *L)
 
 	if (ltag) {
 		if (ltag->html && ltag->tag->content_length &&
-				ltag->html->parsed->len >= ltag->tag->content_offset + ltag->tag->content_length) {
+				ltag->html->parsed.size() >= ltag->tag->content_offset + ltag->tag->content_length) {
 			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->start = reinterpret_cast<const char *>(ltag->html->parsed->data) +
+			t->start = reinterpret_cast<const char *>(ltag->html->parsed.data()) +
 					ltag->tag->content_offset;
 			t->len = ltag->tag->content_length;
 			t->flags = 0;
