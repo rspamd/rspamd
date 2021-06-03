@@ -74,7 +74,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 INIT_LOG_MODULE(html)
 
 static gboolean
-rspamd_html_check_balance(GNode *node, GNode **cur_level)
+html_check_balance(GNode *node, GNode **cur_level)
 {
 	struct html_tag *arg = (struct html_tag *)node->data, *tmp;
 	GNode *cur;
@@ -141,7 +141,7 @@ html_process_tag(rspamd_mempool_t *pool,
 				nnode = g_node_new(tag);
 				g_node_append (*cur_level, nnode);
 
-				if (!rspamd_html_check_balance(nnode, cur_level)) {
+				if (!html_check_balance(nnode, cur_level)) {
 					msg_debug_html (
 							"mark part as unbalanced as it has not pairable closing tags");
 					hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
@@ -261,11 +261,11 @@ struct tag_content_parser_state {
 };
 
 static inline void
-parse_tag_content(rspamd_mempool_t *pool,
-				  struct html_content *hc,
-				  struct html_tag *tag,
-				  const char *in,
-				  struct tag_content_parser_state &parser_env)
+html_parse_tag_content(rspamd_mempool_t *pool,
+					   struct html_content *hc,
+					   struct html_tag *tag,
+					   const char *in,
+					   struct tag_content_parser_state &parser_env)
 {
 	enum tag_parser_state {
 		parse_start = 0,
@@ -740,7 +740,7 @@ html_url_query_callback(struct rspamd_url *url, gsize start_offset,
 }
 
 static void
-process_html_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
+html_process_query_url(rspamd_mempool_t *pool, struct rspamd_url *url,
 					   khash_t (rspamd_url_hash) *url_set,
 					   GPtrArray *part_urls)
 {
@@ -2022,7 +2022,7 @@ html_process_part_full (rspamd_mempool_t *pool,
 			break;
 
 		case tag_content:
-			parse_tag_content(pool, hc, cur_tag, p, content_parser_env);
+			html_parse_tag_content(pool, hc, cur_tag, p, content_parser_env);
 			if (t == '>') {
 				if (closing) {
 					cur_tag->flags |= FL_CLOSING;
@@ -2138,7 +2138,7 @@ html_process_part_full (rspamd_mempool_t *pool,
 								struct rspamd_url *maybe_existing =
 										rspamd_url_set_add_or_return (url_set, maybe_url.value());
 								if (maybe_existing == maybe_url.value()) {
-									process_html_query_url(pool, url, url_set,
+									html_process_query_url(pool, url, url_set,
 											part_urls);
 								}
 								else {
