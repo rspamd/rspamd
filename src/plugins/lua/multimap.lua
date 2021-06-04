@@ -473,6 +473,9 @@ local function multimap_callback(task, rule)
       ret = r.hash:get_key(value)
     end
 
+    lua_util.debugm(N, task, 'found return "%s" for multimap %s', ret, 
+    rule.symbol)
+
     if ret then
       if type(ret) == 'table' then
         for _,elt in ipairs(ret) do
@@ -576,7 +579,6 @@ local function multimap_callback(task, rule)
     else
       symbol = rule.symbol
     end
-
 
     if opt then
       if type(opt) == 'table' then
