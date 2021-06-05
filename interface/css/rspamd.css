@@ -60,6 +60,15 @@ small,
 td.warning {
     background-color: #fff8e6;
 }
+@media (max-width: 1199px) {
+    .navbar-collapse.order-3 {
+        border-top: 1px solid #dee2e6 !important;
+    }
+    /* Avoid navbar toggler hiding on navbar collapse */
+    .navbar-toggler {
+        display: block !important;
+    }
+}
 
 /* bootstrap 4 additionals */
 .btn-group-xs > .btn,
