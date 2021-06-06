@@ -27,60 +27,71 @@
 
 <body>
 
-<nav class="navbar navbar-light bg-light navbar-expand-md d-none" id="navBar">
-	<form class="form-inline mr-auto">
+<nav class="navbar navbar-light bg-light navbar-expand-xl d-none" id="navBar">
 	<div class="navbar-header navbar-brand p-0">
 		<img src="./img/rspamd_logo_navbar.png" alt="Rspamd">
 	</div>
-		<select id="selSrv" class="form-control"></select>
-	</form>
-	<ul class="nav navbar-nav nav-pills nav-tabs-sticky" role="tablist">
-		<li role="presentation" class="nav-item"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab" class="nav-link">Status</a></li>
+	<div class="collapse navbar-collapse order-3 order-xl-2">
+		<form class="form-inline my-2 mr-auto">
+			<select id="selSrv" class="form-control"></select>
+		</form>
+	</div>
 
-		<li role="presentation" class="nav-item"><a id="throughput_nav" aria-controls="throughput" role="tab" href="#throughput" data-toggle="tab" class="nav-link">Throughput</a></li>
+	<div class="collapse navbar-collapse order-4 order-xl-3 justify-content-center">
+		<ul class="nav navbar-nav nav-pills nav-tabs-sticky" role="tablist">
+			<li role="presentation" class="nav-item"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab" class="nav-link">Status</a></li>
 
-		<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab" class="nav-link">Configuration</a></li>
-		<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab" class="nav-link">Symbols</a></li>
-		<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab" class="nav-link">Scan<span class="ro-hide" style="display: none;">/Learn</span></a></li>
-		<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
-		<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab" class="nav-link">History</a></li>
-	</ul>
-	<form class="form-inline ml-auto">
-		<div class="btn-group">
-			<button class="btn btn-outline-secondary" id="refresh" style="display: none;"><i class="fas fa-sync-alt"></i> Refresh</a>
-			<button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" id="autoRefresh" title="Auto-refresh time interval">
-				<span id="countdown">--:--</span>
-			</button>
-			<div class="dropdown-menu">
-				<a class="dropdown-item preset" href="#" data-value=null>Disable</a>
-				<div class="dropdown-divider preset" role="separator"></div>
-				<a class="dropdown-item preset active" href="#" data-value="10000">10 seconds</a>
-				<a class="dropdown-item preset" href="#" data-value="30000">30 seconds</a>
-				<div class="dropdown-divider preset" role="separator"></div>
-				<a class="dropdown-item preset" href="#" data-value="60000">1 minute</a>
-				<a class="dropdown-item preset" href="#" data-value="600000">10 minutes</a>
-				<a class="dropdown-item preset" href="#" data-value="1800000">30 minutes</a>
-				<div class="dropdown-divider preset" role="separator"></div>
-				<a class="dropdown-item preset" href="#" data-value="3600000">1 hour</a>
+			<li role="presentation" class="nav-item"><a id="throughput_nav" aria-controls="throughput" role="tab" href="#throughput" data-toggle="tab" class="nav-link">Throughput</a></li>
 
-				<a class="dropdown-item history active" href="#" data-value=null>Disable</a>
-				<div class="dropdown-divider history" role="separator"></div>
-				<a class="dropdown-item history" href="#" data-value="10000">10 seconds</a>
-				<a class="dropdown-item history" href="#" data-value="30000">30 seconds</a>
-				<div class="dropdown-divider history" role="separator"></div>
-				<a class="dropdown-item history" href="#" data-value="60000">1 minute</a>
-				<a class="dropdown-item history" href="#" data-value="600000">10 minutes</a>
-				<a class="dropdown-item history" href="#" data-value="1800000">30 minutes</a>
-				<div class="dropdown-divider history" role="separator"></div>
-				<a class="dropdown-item history" href="#" data-value="3600000">1 hour</a>
+			<li role="presentation" class="nav-item"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab" class="nav-link">Configuration</a></li>
+			<li role="presentation" class="nav-item"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab" class="nav-link">Symbols</a></li>
+			<li role="presentation" class="nav-item"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab" class="nav-link">Scan<span class="ro-hide" style="display: none;">/Learn</span></a></li>
+			<li role="presentation" class="nav-item"><a id="selectors_nav" aria-controls="selectors" role="tab" href="#selectors" data-toggle="tab" class="nav-link ro-hide" style="display: none;">Test selectors</a></li>
+			<li role="presentation" class="nav-item"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab" class="nav-link">History</a></li>
+		</ul>
+	</div>
 
-				<a class="dropdown-item dynamic" href="#" data-value=null>Disable</a>
-				<div class="dropdown-divider dynamic" role="separator"></div>
-				<a class="dropdown-item dynamic active" href="#" id="dynamic-item" data-value="3600000">1 hour</a>
+	<div class="d-flex flex-row order-2 order-xl-4">
+		<form class="form-inline ml-auto">
+			<div class="btn-group">
+				<button class="btn btn-outline-secondary" id="refresh" style="display: none;"><i class="fas fa-sync-alt"></i> Refresh</button>
+				<button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" id="autoRefresh" title="Auto-refresh time interval">
+					<span id="countdown">--:--</span>
+				</button>
+				<div class="dropdown-menu">
+					<a class="dropdown-item preset" href="#" data-value=null>Disable</a>
+					<div class="dropdown-divider preset" role="separator"></div>
+					<a class="dropdown-item preset active" href="#" data-value="10000">10 seconds</a>
+					<a class="dropdown-item preset" href="#" data-value="30000">30 seconds</a>
+					<div class="dropdown-divider preset" role="separator"></div>
+					<a class="dropdown-item preset" href="#" data-value="60000">1 minute</a>
+					<a class="dropdown-item preset" href="#" data-value="600000">10 minutes</a>
+					<a class="dropdown-item preset" href="#" data-value="1800000">30 minutes</a>
+					<div class="dropdown-divider preset" role="separator"></div>
+					<a class="dropdown-item preset" href="#" data-value="3600000">1 hour</a>
+
+					<a class="dropdown-item history active" href="#" data-value=null>Disable</a>
+					<div class="dropdown-divider history" role="separator"></div>
+					<a class="dropdown-item history" href="#" data-value="10000">10 seconds</a>
+					<a class="dropdown-item history" href="#" data-value="30000">30 seconds</a>
+					<div class="dropdown-divider history" role="separator"></div>
+					<a class="dropdown-item history" href="#" data-value="60000">1 minute</a>
+					<a class="dropdown-item history" href="#" data-value="600000">10 minutes</a>
+					<a class="dropdown-item history" href="#" data-value="1800000">30 minutes</a>
+					<div class="dropdown-divider history" role="separator"></div>
+					<a class="dropdown-item history" href="#" data-value="3600000">1 hour</a>
+
+					<a class="dropdown-item dynamic" href="#" data-value=null>Disable</a>
+					<div class="dropdown-divider dynamic" role="separator"></div>
+					<a class="dropdown-item dynamic active" href="#" id="dynamic-item" data-value="3600000">1 hour</a>
+				</div>
 			</div>
-		</div>
-		<button class="btn btn-outline-secondary ml-2" id="disconnect"><i class="fas fa-power-off"></i> Disconnect</a>
-	</form>
+			<button class="btn btn-outline-secondary ml-2" id="disconnect"><i class="fas fa-power-off"></i> Disconnect</button>
+		</form>
+		<button class="navbar-toggler ml-2" type="button" data-toggle="collapse" data-target=".navbar-collapse">
+			<span class="navbar-toggler-icon"></span>
+		</button>
+	</div>
 </nav>
 
 <div class="notification-area">
