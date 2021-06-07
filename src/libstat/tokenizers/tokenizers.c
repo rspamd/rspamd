@@ -549,7 +549,10 @@ start_over:
 
 			/* Also check for long text mode */
 			if (long_text_mode) {
-				if ((res->len + 1) % 16 == 0) {
+				/* Check time each 128 words added */
+				const int words_check_mask = 0x7F;
+
+				if ((res->len & words_check_mask) == words_check_mask) {
 					ev_tstamp now = ev_time ();
 
 					if (now - start > max_exec_time) {
