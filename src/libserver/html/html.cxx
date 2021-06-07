@@ -182,16 +182,19 @@ html_process_tag(rspamd_mempool_t *pool,
 						return true;
 					}
 				}
-			}
 
-			if (hc->total_tags < rspamd::html::max_tags) {
-				parent->children.push_back(tag);
+				if (hc->total_tags < rspamd::html::max_tags) {
+					parent->children.push_back(tag);
 
-				if ((tag->flags & FL_CLOSED) == 0) {
-					tags_stack.push_back(tag);
+					if ((tag->flags & FL_CLOSED) == 0) {
+						tags_stack.push_back(tag);
+					}
+
+					hc->total_tags++;
 				}
-
-				hc->total_tags++;
+			}
+			else {
+				hc->root_tag = tag;
 			}
 
 			if (tag->flags & (CM_HEAD | CM_UNKNOWN | FL_IGNORE)) {
@@ -1527,26 +1530,6 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 }
 
 static auto
-html_propagate_lengths(GNode *node, gpointer _unused) -> gboolean
-{
-	GNode *child;
-	struct html_tag *tag = static_cast<html_tag *>(node->data), *cld_tag;
-
-	if (tag) {
-		child = node->children;
-
-		/* Summarize content length from children */
-		while (child) {
-			cld_tag = static_cast<html_tag *>(child->data);
-			tag->content_length += cld_tag->content_length;
-			child = child->next;
-		}
-	}
-
-	return FALSE;
-}
-
-static auto
 html_propagate_style(struct html_content *hc,
 							struct html_tag *tag,
 							struct html_block *bl,
@@ -2260,10 +2243,13 @@ html_process_part_full (rspamd_mempool_t *pool,
 		}
 	}
 
-	if (hc->html_tags) {
-		g_node_traverse (hc->html_tags, G_POST_ORDER, G_TRAVERSE_ALL, -1,
-				html_propagate_lengths, NULL);
-	}
+	hc->traverse_tags([](const html_tag *tag) -> bool {
+		/* Summarize content length from children */
+		for (const auto *cld_tag : tag->children) {
+			tag->content_length += cld_tag->content_length;
+		}
+		return true;
+	}, html_content::traverse_type::POST_ORDER);
 
 	return hc;
 }

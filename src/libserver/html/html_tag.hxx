@@ -45,7 +45,7 @@ using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struc
 struct html_tag {
 	gint id = -1;
 	gint flags = 0;
-	guint content_length = 0;
+	mutable guint content_length = 0; /* Allow content length propagation */
 	goffset content_offset = 0;
 
 	std::string_view name;
