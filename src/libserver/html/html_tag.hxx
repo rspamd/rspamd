@@ -22,7 +22,7 @@
 #include <string_view>
 #include <variant>
 #include <vector>
-#include <contrib/robin-hood/robin_hood.h>
+#include <optional>
 
 namespace rspamd::html {
 
@@ -41,20 +41,38 @@ enum class html_component_type : std::uint8_t {
 };
 
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
+struct html_tag_component {
+	html_component_type type;
+	std::string_view value;
+
+	html_tag_component(html_component_type type, std::string_view value)
+		: type(type), value(value) {}
+};
 
 struct html_tag {
-	gint id = -1;
-	gint flags = 0;
-	mutable guint content_length = 0; /* Allow content length propagation */
-	goffset content_offset = 0;
+	int id = -1;
+	unsigned int flags = 0;
+	mutable unsigned int content_length = 0; /* Allow content length propagation */
+	unsigned int content_offset = 0;
 
 	std::string_view name;
-	robin_hood::unordered_flat_map<html_component_type, std::string_view> parameters;
+	std::vector<html_tag_component> parameters;
 
 	html_tag_extra_t extra;
 	struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
 	std::vector<struct html_tag *> children;
 	struct html_tag *parent;
+
+	auto find_component(html_component_type what) const -> std::optional<std::string_view>
+	{
+		for (const auto &comp : parameters) {
+			if (comp.type == what) {
+				return comp.value;
+			}
+		}
+
+		return std::nullopt;
+	}
 };
 
 }
