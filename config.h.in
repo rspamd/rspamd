@@ -444,6 +444,12 @@ extern uint64_t ottery_rand_uint64(void);
 #define RSPAMD_CONST_FUNCTION
 #endif
 
+#ifdef __GNUC__
+#define RSPAMD_UNREACHABLE __builtin_unreachable()
+#else
+#define RSPAMD_UNREACHABLE abort()
+#endif
+
 #define HAVE_OPENSSL             1
 #define HAVE_MATH_H              1
 
