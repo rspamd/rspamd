@@ -21,6 +21,7 @@
 #include <utility>
 #include <string_view>
 #include <variant>
+#include <vector>
 #include <contrib/robin-hood/robin_hood.h>
 
 namespace rspamd::html {
@@ -52,7 +53,8 @@ struct html_tag {
 
 	html_tag_extra_t extra;
 	struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
-	GNode *parent = nullptr;
+	std::vector<struct html_tag *> children;
+	struct html_tag *parent;
 };
 
 }

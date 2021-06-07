@@ -31,7 +31,7 @@ namespace rspamd::html {
 
 struct html_content {
 	struct rspamd_url *base_url = nullptr;
-	GNode *html_tags;
+	struct html_tag *root_tag = nullptr;
 	gint flags = 0;
 	guint total_tags = 0;
 	struct html_color bgcolor;
@@ -44,7 +44,6 @@ struct html_content {
 
 	/* Preallocate and reserve all internal structures */
 	html_content() {
-		html_tags =  g_node_new(nullptr);
 		tags_seen.resize(N_TAGS, false);
 		blocks.reserve(128);
 		all_tags.reserve(128);
