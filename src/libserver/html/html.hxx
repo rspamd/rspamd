@@ -26,6 +26,7 @@
 
 #include <vector>
 #include <memory>
+#include "function2/function2.hpp"
 
 namespace rspamd::html {
 
@@ -64,11 +65,50 @@ struct html_content {
 		return static_cast<html_content* >(ptr);
 	}
 
-private:
-	~html_content() {
-		g_node_destroy(html_tags);
+	enum class traverse_type {
+		PRE_ORDER,
+		POST_ORDER
+	};
+	auto traverse_tags(fu2::function<bool(const html_tag *)> &&func,
+					traverse_type how = traverse_type::PRE_ORDER) const -> bool {
+
+		auto rec_functor_pre_order = [&](const html_tag *root, auto &&rec) -> bool {
+			if (func(root)) {
+
+				for (const auto *c : root->children) {
+					if (!rec(c, rec)) {
+						return false;
+					}
+				}
+
+				return true;
+			}
+			return false;
+		};
+		auto rec_functor_post_order = [&](const html_tag *root, auto &&rec) -> bool {
+			for (const auto *c : root->children) {
+				if (!rec(c, rec)) {
+					return false;
+				}
+			}
+
+			return func(root);
+		};
+
+		switch(how) {
+		case traverse_type::PRE_ORDER:
+			return rec_functor_pre_order(root_tag, rec_functor_pre_order);
+		case traverse_type::POST_ORDER:
+			return rec_functor_post_order(root_tag, rec_functor_post_order);
+		default:
+			RSPAMD_UNREACHABLE;
+		}
 	}
+
+private:
+	~html_content() = default;
 };
+
 
 }
 

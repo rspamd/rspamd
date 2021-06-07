@@ -191,7 +191,7 @@ lua_check_html (lua_State * L, gint pos)
 
 struct lua_html_tag {
 	rspamd::html::html_content *html;
-	rspamd::html::html_tag *tag;
+	const rspamd::html::html_tag *tag;
 };
 
 static struct lua_html_tag *
@@ -427,72 +427,23 @@ lua_html_get_blocks (lua_State *L)
 	return 1;
 }
 
-struct lua_html_traverse_ud {
-	lua_State *L;
-	rspamd::html::html_content *html;
-	gint cbref;
-	robin_hood::unordered_flat_set<int> tags;
-	gboolean any;
-};
 
-static gboolean
-lua_html_node_foreach_cb (GNode *n, gpointer d)
-{
-	struct lua_html_traverse_ud *ud = (struct lua_html_traverse_ud *)d;
-	auto *tag = (rspamd::html::html_tag *)n->data;
-	struct lua_html_tag *ltag;
-
-	if (tag && (ud->any || ud->tags.contains(tag->id))) {
-
-		lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-
-		ltag = static_cast<lua_html_tag *>(lua_newuserdata(ud->L, sizeof(*ltag)));
-		ltag->tag = tag;
-		ltag->html = ud->html;
-		rspamd_lua_setclass (ud->L, "rspamd{html_tag}", -1);
-		lua_pushinteger (ud->L, tag->content_length);
-
-		/* Leaf flag */
-		if (g_node_first_child (n)) {
-			lua_pushboolean (ud->L, false);
-		}
-		else {
-			lua_pushboolean (ud->L, true);
-		}
-
-		if (lua_pcall (ud->L, 3, 1, 0) != 0) {
-			msg_err ("error in foreach_tag callback: %s", lua_tostring (ud->L, -1));
-			lua_pop (ud->L, 1);
-			return TRUE;
-		}
-
-		if (lua_toboolean (ud->L, -1)) {
-			lua_pop (ud->L, 1);
-			return TRUE;
-		}
-
-		lua_pop (ud->L, 1);
-	}
-
-	return FALSE;
-}
 
 static gint
 lua_html_foreach_tag (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	auto *hc = lua_check_html (L, 1);
-	struct lua_html_traverse_ud ud;
 	const gchar *tagname;
 	gint id;
+	auto any = false;
+	robin_hood::unordered_flat_set<int> tags;
 
-	ud.any = FALSE;
-	ud.html = hc;
 
 	if (lua_type (L, 2) == LUA_TSTRING) {
 		tagname = luaL_checkstring (L, 2);
 		if (strcmp (tagname, "any") == 0) {
-			ud.any = TRUE;
+			any = true;
 		}
 		else {
 			id = rspamd_html_tag_by_name(tagname);
@@ -502,7 +453,7 @@ lua_html_foreach_tag (lua_State *L)
 			}
 
 
-			ud.tags.insert(id);
+			tags.insert(id);
 		}
 	}
 	else if (lua_type (L, 2) == LUA_TTABLE) {
@@ -511,7 +462,7 @@ lua_html_foreach_tag (lua_State *L)
 		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 			tagname = luaL_checkstring (L, -1);
 			if (strcmp (tagname, "any") == 0) {
-				ud.any = TRUE;
+				any = TRUE;
 			}
 			else {
 				id = rspamd_html_tag_by_name (tagname);
@@ -519,25 +470,48 @@ lua_html_foreach_tag (lua_State *L)
 				if (id == -1) {
 					return luaL_error (L, "invalid tagname: %s", tagname);
 				}
-				ud.tags.insert(id);
+				tags.insert(id);
 			}
 		}
 
 		lua_pop (L, 1);
 	}
 
-	if (hc && (ud.any || !ud.tags.empty()) && lua_isfunction (L, 3)) {
-		if (hc->html_tags) {
+	if (hc && (any || !tags.empty()) && lua_isfunction (L, 3)) {
+		hc->traverse_tags([&](const rspamd::html::html_tag *tag) -> bool {
+			if (tag && (any || tags.contains(tag->id))) {
+				lua_pushvalue(L, 3);
 
-			lua_pushvalue (L, 3);
-			ud.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-			ud.L = L;
+				auto *ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
+				ltag->tag = tag;
+				ltag->html = hc;
+				rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
+				lua_pushinteger (L, tag->content_length);
 
-			g_node_traverse (hc->html_tags, G_PRE_ORDER, G_TRAVERSE_ALL, -1,
-					lua_html_node_foreach_cb, &ud);
+				/* Leaf flag */
+				if (tag->children.empty()) {
+					lua_pushboolean (L, true);
+				}
+				else {
+					lua_pushboolean (L, false);
+				}
 
-			luaL_unref (L, LUA_REGISTRYINDEX, ud.cbref);
-		}
+				if (lua_pcall (L, 3, 1, 0) != 0) {
+					msg_err ("error in foreach_tag callback: %s", lua_tostring (L, -1));
+					lua_pop (L, 1);
+					return false;
+				}
+
+				if (lua_toboolean (L, -1)) {
+					lua_pop(L, 1);
+					return false;
+				}
+
+				lua_pop(L, 1);
+			}
+
+			return true;
+		});
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -575,14 +549,13 @@ lua_html_tag_get_parent (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag = lua_check_html_tag (L, 1), *ptag;
-	GNode *node;
 
 	if (ltag != NULL) {
-		node = ltag->tag->parent;
+		auto *parent = ltag->tag->parent;
 
-		if (node && node->data) {
+		if (parent) {
 			ptag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(*ptag)));
-			ptag->tag = static_cast<rspamd::html::html_tag *>(node->data);
+			ptag->tag = static_cast<rspamd::html::html_tag *>(parent);
 			ptag->html = ltag->html;
 			rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
 		}

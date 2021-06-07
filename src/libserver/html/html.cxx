@@ -108,7 +108,7 @@ html_check_balance(struct html_tag *tag,
 	}
 
 	/* Misuse */
-	return false;
+	RSPAMD_UNREACHABLE;
 }
 
 static auto
