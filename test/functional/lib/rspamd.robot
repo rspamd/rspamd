@@ -243,9 +243,10 @@ Run Rspamd
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
   # Log stdout/stderr
-  ${rspamd_output} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout
-  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
-  Log  ${rspamd_output}
+  ${rspamd_stdout} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout
+  ${rspamd_stderror} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
+  Log  ${rspamd_stdout}
+  Log  ${rspamd_stderror}
 
   # Abort if it failed
   Should Be Equal As Integers  ${result.rc}  0
