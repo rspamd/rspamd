@@ -72,6 +72,10 @@ struct html_content {
 	auto traverse_tags(fu2::function<bool(const html_tag *)> &&func,
 					traverse_type how = traverse_type::PRE_ORDER) const -> bool {
 
+		if (root_tag == nullptr) {
+			return false;
+		}
+
 		auto rec_functor_pre_order = [&](const html_tag *root, auto &&rec) -> bool {
 			if (func(root)) {
 
