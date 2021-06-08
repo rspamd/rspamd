@@ -15,7 +15,6 @@
  */
 #include "config.h"
 #include "util.h"
-#include "rspamd.h"
 #include "message.h"
 #include "html.h"
 #include "html_tags.h"
@@ -36,12 +35,13 @@
 #include <vector>
 #include <frozen/unordered_map.h>
 #include <frozen/string.h>
+#include <fmt/core.h>
+
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
+
 
 #include <unicode/uversion.h>
-#include <unicode/ucnv.h>
-#if U_ICU_VERSION_MAJOR_NUM >= 46
-#include <unicode/uidna.h>
-#endif
 
 namespace rspamd::html {
 
@@ -1607,12 +1607,12 @@ tags_vector_ptr_dtor(void *ptr)
 }
 
 static auto
-html_process_part_full (rspamd_mempool_t *pool,
-						GByteArray *in,
-						GList **exceptions,
-						khash_t (rspamd_url_hash) *url_set,
-						GPtrArray *part_urls,
-						bool allow_css) -> html_content *
+html_process_input(rspamd_mempool_t *pool,
+					GByteArray *in,
+					GList **exceptions,
+					khash_t (rspamd_url_hash) *url_set,
+					GPtrArray *part_urls,
+					bool allow_css) -> html_content *
 {
 	const gchar *p, *c, *end;
 	guchar t;
@@ -2260,6 +2260,57 @@ html_find_image_by_cid(const html_content &hc, std::string_view cid)
 	return std::nullopt;
 }
 
+static auto
+html_debug_structure(const html_content &hc) -> std::string
+{
+	std::string output;
+
+	if (hc.root_tag) {
+		auto rec_functor = [&](const html_tag *t, int level, auto rec_functor) -> void {
+			std::string pluses(level, '+');
+			output += fmt::format("{}{};", pluses, t->name);
+			for (const auto *cld : t->children) {
+				rec_functor(cld, level + 1, rec_functor);
+			}
+		};
+
+		rec_functor(hc.root_tag, 1, rec_functor);
+	}
+
+	return output;
+}
+
+/*
+ * Tests part
+ */
+
+TEST_CASE("html parsing") {
+
+	const std::vector<std::pair<std::string, std::string>> cases{
+		{"<html><div><div></div></div></html>", "+html;++div;+++div;"},
+		{"<html><div><div></div></html>", "+html;++div;+++div;"},
+		{"<html><div><div></div></html></div>", "+html;++div;+++div;"},
+		{"<p><p><a></p></a></a>", "+p;++p;+++a;"},
+		{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
+	};
+
+	rspamd_url_init(NULL);
+	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+			"html", 0);
+
+	for (const auto &c : cases) {
+		GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+		g_byte_array_append(tmp, (const guint8 *)c.first.data(), c.first.size());
+		auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
+		CHECK(hc != nullptr);
+		auto dump = html_debug_structure(*hc);
+		CHECK(c.second == dump);
+		g_byte_array_free(tmp, TRUE);
+	}
+
+	rspamd_mempool_delete(pool);
+}
+
 }
 
 void *
@@ -2269,7 +2320,7 @@ rspamd_html_process_part_full(rspamd_mempool_t *pool,
 							  GPtrArray *part_urls,
 							  bool allow_css)
 {
-	return rspamd::html::html_process_part_full(pool, in, exceptions, url_set,
+	return rspamd::html::html_process_input(pool, in, exceptions, url_set,
 			part_urls, allow_css);
 }
 
