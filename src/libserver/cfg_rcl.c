@@ -3107,11 +3107,14 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 			*target = kp;
 		}
 		else {
+			gchar *dump = ucl_object_emit (obj, UCL_EMIT_JSON_COMPACT);
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"cannot load the keypair specified: %s",
-					ucl_object_key (obj));
+					"cannot load the keypair specified: %s; section: %s; value: %s",
+					ucl_object_key (obj), section->name, dump);
+			free (dump);
+
 			return FALSE;
 		}
 	}
