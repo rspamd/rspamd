@@ -1317,8 +1317,9 @@ rspamd_main_daemon (struct rspamd_main *rspamd_main)
 		}
 	}
 
-	msg_info_main ("daemonized successfully; old pid %P, new pid %P",
-			old_pid, getpid ());
+	msg_info_main ("daemonized successfully; old pid %P, new pid %P; pid file: %s",
+			old_pid, getpid (),
+			rspamd_main->cfg->pid_file);
 
 	return TRUE;
 }
