@@ -49,6 +49,13 @@ struct alignas(int) css_color {
 	friend bool operator==(const css_color& l, const css_color& r) {
 		return (memcmp(&l, &r, sizeof(css_color)) == 0);
 	}
+
+	static auto white() -> css_color {
+		return css_color{255, 255, 255};
+	}
+	static auto black() -> css_color {
+		return css_color{0, 0, 0};
+	}
 };
 
 struct css_dimension {
@@ -59,7 +66,7 @@ struct css_dimension {
 /*
  * Simple enum class for display stuff
  */
-enum class css_display_value {
+enum class css_display_value : std::uint8_t {
 	DISPLAY_NORMAL,
 	DISPLAY_HIDDEN
 };
@@ -70,7 +77,7 @@ enum class css_display_value {
  */
 struct css_value {
 	std::variant<css_color,
-			double,
+			float,
 			css_display_value,
 			css_dimension,
 			std::monostate> value;
@@ -78,7 +85,7 @@ struct css_value {
 	css_value() {}
 	css_value(const css_color &color) :
 			value(color) {}
-	css_value(double num) :
+	css_value(float num) :
 			value(num) {}
 	css_value(css_dimension dim) :
 			value(dim) {}
@@ -89,8 +96,8 @@ struct css_value {
 		return extract_value_maybe<css_color>();
 	}
 
-	auto to_number(void) const -> std::optional<double> {
-		return extract_value_maybe<double>();
+	auto to_number(void) const -> std::optional<float> {
+		return extract_value_maybe<float>();
 	}
 
 	auto to_dimension(void) const -> std::optional<css_dimension> {

@@ -24,18 +24,20 @@
 #include "libserver/html/html.h"
 #include "libserver/html/html_tags.h"
 
+
 #include <vector>
 #include <memory>
 #include "function2/function2.hpp"
 
 namespace rspamd::html {
 
+struct html_block;
+
 struct html_content {
 	struct rspamd_url *base_url = nullptr;
 	struct html_tag *root_tag = nullptr;
 	gint flags = 0;
 	guint total_tags = 0;
-	struct html_color bgcolor;
 	std::vector<bool> tags_seen;
 	std::vector<html_image *> images;
 	std::vector<html_block *> blocks;
@@ -49,12 +51,6 @@ struct html_content {
 		blocks.reserve(128);
 		all_tags.reserve(128);
 		parsed.reserve(256);
-		/* Set white background color by default */
-		bgcolor.d.comp.alpha = 0;
-		bgcolor.d.comp.r = 255;
-		bgcolor.d.comp.g = 255;
-		bgcolor.d.comp.b = 255;
-		bgcolor.valid = TRUE;
 	}
 
 	static void html_content_dtor(void *ptr) {

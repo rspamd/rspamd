@@ -18,6 +18,7 @@
 #include "message.h"
 #include "html.h"
 #include "html_tags.h"
+#include "html_block.hxx"
 #include "html.hxx"
 #include "libserver/css/css_value.hxx"
 
