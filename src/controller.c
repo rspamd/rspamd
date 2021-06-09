@@ -2764,7 +2764,7 @@ rspamd_controller_metrics_fin_task (void *ud) {
 		ucl_object_toint (ucl_object_lookup (top, "control_connections")));
 	rspamd_printf_fstring (&output, "pools_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_allocated")));
-	rspamd_printf_fstring (&output, "pools_freed %" PRId64 "\n",
+	rspamd_printf_fstring (&output, "pools_freed %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_freed")));
 	rspamd_printf_fstring (&output, "bytes_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "bytes_allocated")));
