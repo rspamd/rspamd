@@ -1199,7 +1199,7 @@ if opts['reporting'] == true then
                   if urlt['protocol'] ~= 'mailto' then
                     rspamd_logger.errx(rspamd_config, 'invalid URL: %s', url)
                   else
-                    if urlt['tld'] == rspamd_util.get_tld(reporting_domain) then
+                    if string.lower(urlt['tld']) == string.lower(rspamd_util.get_tld(reporting_domain)) then
                       reporting_addrs[string.format('%s@%s', urlt['user'], urlt['host'])] = true
                     else
                       to_verify[string.format('%s@%s', urlt['user'], urlt['host'])] = urlt['host']
