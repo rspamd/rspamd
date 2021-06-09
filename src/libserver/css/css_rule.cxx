@@ -28,15 +28,15 @@ void css_rule::override_values(const css_rule &other)
 {
 	int bits = 0;
 	/* Ensure that our bitset is large enough */
-	static_assert(static_cast<std::size_t>(css_value::css_value_type::CSS_VALUE_NYI) << 1 <
+	static_assert(1 << std::variant_size_v<decltype(css_value::value)> <
 				  std::numeric_limits<int>::max());
 
 	for (const auto &v : values) {
-		bits |= static_cast<int>(v.type);
+		bits |= static_cast<int>(1 << v.value.index());
 	}
 
 	for (const auto &ov : other.values) {
-		if (isset(&bits, static_cast<int>(ov.type))) {
+		if (isset(&bits, static_cast<int>(1 << ov.value.index()))) {
 			/* We need to override the existing value */
 			/*
 			 * The algorithm is not very efficient,
@@ -46,7 +46,7 @@ void css_rule::override_values(const css_rule &other)
 			 * is probably ok here
 			 */
 			for (auto &v : values) {
-				if (v.type == ov.type) {
+				if (v.value.index() == ov.value.index()) {
 					v = ov;
 				}
 			}
@@ -56,25 +56,22 @@ void css_rule::override_values(const css_rule &other)
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
 			[&bits](const auto &elt) -> bool {
-				return (bits & static_cast<int>(elt.type)) == 0;
+				return (bits & (1 << static_cast<int>(elt.value.index()))) == 0;
 			});
 }
 
 void css_rule::merge_values(const css_rule &other)
 {
 	unsigned int bits = 0;
-	/* Ensure that our bitset is large enough */
-	static_assert(static_cast<std::size_t>(css_value::css_value_type::CSS_VALUE_NYI) << 1 <
-		std::numeric_limits<int>::max());
 
 	for (const auto &v : values) {
-		bits |= static_cast<int>(v.type);
+		bits |= 1 << v.value.index();
 	}
 
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
 			[&bits](const auto &elt) -> bool {
-				return (bits & static_cast<int>(elt.type)) == 0;
+				return (bits & (1 << elt.value.index())) == 0;
 			});
 }
 

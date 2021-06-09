@@ -69,66 +69,40 @@ enum class css_display_value {
  * for simplicity
  */
 struct css_value {
-	/* Bitset of known types */
-	enum class css_value_type {
-		CSS_VALUE_COLOR = 1 << 0,
-		CSS_VALUE_NUMBER = 1 << 1,
-		CSS_VALUE_DISPLAY = 1 << 2,
-		CSS_VALUE_DIMENSION = 1 << 3,
-		CSS_VALUE_NYI = 1 << 4,
-	};
-
-	css_value_type type;
 	std::variant<css_color,
 			double,
 			css_display_value,
 			css_dimension,
 			std::monostate> value;
 
-	css_value() : type(css_value_type::CSS_VALUE_NYI) {}
+	css_value() {}
 	css_value(const css_color &color) :
-			type(css_value_type::CSS_VALUE_COLOR), value(color) {}
+			value(color) {}
 	css_value(double num) :
-			type(css_value_type::CSS_VALUE_NUMBER), value(num) {}
+			value(num) {}
 	css_value(css_dimension dim) :
-			type(css_value_type::CSS_VALUE_DIMENSION), value(dim) {}
+			value(dim) {}
 	css_value(css_display_value d) :
-			type(css_value_type::CSS_VALUE_DISPLAY), value(d) {}
+			value(d) {}
 
 	auto to_color(void) const -> std::optional<css_color> {
-		if (type == css_value_type::CSS_VALUE_COLOR) {
-			return std::get<css_color>(value);
-		}
-
-		return std::nullopt;
+		return extract_value_maybe<css_color>();
 	}
 
 	auto to_number(void) const -> std::optional<double> {
-		if (type == css_value_type::CSS_VALUE_NUMBER) {
-			return std::get<double>(value);
-		}
-
-		return std::nullopt;
+		return extract_value_maybe<double>();
 	}
 
 	auto to_dimension(void) const -> std::optional<css_dimension> {
-		if (type == css_value_type::CSS_VALUE_DIMENSION) {
-			return std::get<css_dimension>(value);
-		}
-
-		return std::nullopt;
+		return extract_value_maybe<css_dimension>();
 	}
 
 	auto to_display(void) const -> std::optional<css_display_value> {
-		if (type == css_value_type::CSS_VALUE_DISPLAY) {
-			return std::get<css_display_value>(value);
-		}
-
-		return std::nullopt;
+		return extract_value_maybe<css_display_value>();
 	}
 
 	auto is_valid(void) const -> bool {
-		return (type != css_value_type::CSS_VALUE_NYI);
+		return !(std::holds_alternative<std::monostate>(value));
 	}
 
 	auto debug_str() const -> std::string;
@@ -143,6 +117,15 @@ struct css_value {
 		-> std::optional<css_value>;
 	static auto maybe_display_from_string(const std::string_view &input)
 		-> std::optional<css_value>;
+private:
+	template<typename T>
+	auto extract_value_maybe(void) const -> std::optional<T> {
+		if (std::holds_alternative<T>(value)) {
+			return std::get<T>(value);
+		}
+
+		return std::nullopt;
+	}
 };
 
 }
