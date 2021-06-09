@@ -126,6 +126,10 @@ struct alignas(int) css_property {
 		return type == css_property_type::PROPERTY_DISPLAY;
 	}
 
+	auto is_visibility(void) const -> bool {
+		return type == css_property_type::PROPERTY_VISIBILITY;
+	}
+
 	auto operator==(const css_property &other) const { return type == other.type; }
 };
 

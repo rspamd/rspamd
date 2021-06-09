@@ -180,6 +180,16 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 			}
 		}
 	}
+	if (prop.is_visibility()) {
+		if (parser_block.is_token()) {
+			/* A single token */
+			const auto &tok = parser_block.get_token_or_empty();
+
+			if (tok.type == css_parser_token::token_type::ident_token) {
+				return css_value::maybe_display_from_string(tok.get_string_or_default(""));
+			}
+		}
+	}
 	if (prop.is_normal_number()) {
 		if (parser_block.is_token()) {
 			/* A single token */
@@ -369,9 +379,11 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 	}
 }
 
-void css_rule::add_value(const css_value &value) {
+void css_rule::add_value(const css_value &value)
+{
 	values.push_back(value);
 }
+
 
 TEST_SUITE("css rules") {
 	TEST_CASE("simple css rules") {

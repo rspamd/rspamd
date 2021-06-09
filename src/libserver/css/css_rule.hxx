@@ -76,7 +76,9 @@ public:
 
 namespace rspamd::css {
 
-
+/**
+ * Class that is designed to hold css declaration (a set of rules)
+ */
 class css_declarations_block {
 public:
 	using rule_shared_ptr = std::shared_ptr<css_rule>;
@@ -96,9 +98,15 @@ public:
 		return rules;
 	}
 
+	/**
+	 * Returns if a declaration block has some property
+	 * @param prop
+	 * @return
+	 */
 	auto has_property(const css_property &prop) const -> bool {
 		return (rules.find(css_rule{prop}) != rules.end());
 	}
+
 private:
 	robin_hood::unordered_flat_set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
 };
