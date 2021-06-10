@@ -80,7 +80,7 @@ struct css_parser_token {
 
 	using value_type = std::variant<std::string_view, /* For strings and string like tokens */
 			char, /* For delimiters (might need to move to unicode point) */
-			double, /* For numeric stuff */
+			float, /* For numeric stuff */
 			css_parser_token_placeholder /* For general no token stuff */
 	>;
 
@@ -119,9 +119,9 @@ struct css_parser_token {
 		return (char)-1;
 	}
 
-	auto get_number_or_default(double def) const -> double {
-		if (std::holds_alternative<double>(value)) {
-			auto dbl = std::get<double>(value);
+	auto get_number_or_default(float def) const -> float {
+		if (std::holds_alternative<float>(value)) {
+			auto dbl = std::get<float>(value);
 
 			if (flags & css_parser_token::number_percent) {
 				dbl /= 100.0;
@@ -133,9 +133,9 @@ struct css_parser_token {
 		return def;
 	}
 
-	auto get_normal_number_or_default(double def) const -> double {
-		if (std::holds_alternative<double>(value)) {
-			auto dbl = std::get<double>(value);
+	auto get_normal_number_or_default(float def) const -> float {
+		if (std::holds_alternative<float>(value)) {
+			auto dbl = std::get<float>(value);
 
 			if (flags & css_parser_token::number_percent) {
 				dbl /= 100.0;

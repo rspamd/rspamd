@@ -26,6 +26,11 @@
 #include <vector>
 #include <memory>
 
+namespace rspamd::html {
+/* Forward declaration */
+struct html_block;
+}
+
 namespace rspamd::css {
 
 class css_rule {
@@ -106,6 +111,13 @@ public:
 	auto has_property(const css_property &prop) const -> bool {
 		return (rules.find(css_rule{prop}) != rules.end());
 	}
+
+	/**
+	 * Compile CSS declaration to the html block
+	 * @param pool used to carry memory requred for html_block
+	 * @return html block structure
+	 */
+	auto compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *;
 
 private:
 	robin_hood::unordered_flat_set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;

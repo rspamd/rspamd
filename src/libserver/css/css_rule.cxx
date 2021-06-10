@@ -16,6 +16,7 @@
 
 #include "css_rule.hxx"
 #include "css.hxx"
+#include "libserver/html/html_block.hxx"
 #include <limits>
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
@@ -349,9 +350,10 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 }
 
 auto
-css_declarations_block::merge_block(const css_declarations_block &other, merge_type how)
--> void {
+css_declarations_block::merge_block(const css_declarations_block &other, merge_type how) -> void
+{
 	const auto &other_rules = other.get_rules();
+
 
 	for (auto &rule : other_rules) {
 		auto &&found_it = rules.find(rule);
@@ -377,6 +379,119 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 			rules.insert(rule);
 		}
 	}
+}
+
+auto
+css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *
+{
+	auto *block = rspamd_mempool_alloc0_type(pool, rspamd::html::html_block);
+	auto opacity = -1;
+	const css_rule *font_rule = nullptr, *background_rule = nullptr;
+
+	for (const auto &rule : rules) {
+		auto prop = rule->get_prop().type;
+		const auto &vals = rule->get_values();
+
+		if (vals.empty()) {
+			continue;
+		}
+
+		switch (prop) {
+		case css_property_type::PROPERTY_VISIBILITY:
+		case css_property_type::PROPERTY_DISPLAY: {
+			auto disp = vals.back().to_display().value_or(css_display_value::DISPLAY_NORMAL);
+			block->set_display(disp);
+			break;
+		}
+		case css_property_type::PROPERTY_FONT_SIZE: {
+			auto fs = vals.back().to_dimension();
+			if (fs) {
+				block->set_font_size(fs.value().dim, fs.value().is_percent);
+			}
+		}
+		case css_property_type::PROPERTY_OPACITY: {
+			opacity = vals.back().to_number().value_or(opacity);
+			break;
+		}
+		case css_property_type::PROPERTY_FONT_COLOR: {
+			auto color = vals.back().to_color();
+			if (color) {
+				block->set_fgcolor(color.value());
+			}
+			break;
+		}
+		case css_property_type::PROPERTY_BGCOLOR: {
+			auto color = vals.back().to_color();
+			if (color) {
+				block->set_bgcolor(color.value());
+			}
+			break;
+		}
+		case css_property_type::PROPERTY_HEIGHT: {
+			auto w = vals.back().to_dimension();
+			if (w) {
+				block->set_width(w.value().dim, w.value().is_percent);
+			}
+			break;
+		}
+		case css_property_type::PROPERTY_WIDTH: {
+			auto h = vals.back().to_dimension();
+			if (h) {
+				block->set_width(h.value().dim, h.value().is_percent);
+			}
+			break;
+		}
+		/* Optional attributes */
+		case css_property_type::PROPERTY_FONT:
+			font_rule = rule.get();
+			break;
+		case css_property_type::PROPERTY_BACKGROUND:
+			background_rule = rule.get();
+			break;
+		default:
+			/* Do nothing for now */
+			break;
+		}
+	}
+
+	/* Optional properties */
+	if (!(block->mask & rspamd::html::html_block::fg_color_mask) && font_rule) {
+		auto &vals = font_rule->get_values();
+
+		for (const auto &val : vals) {
+			auto maybe_color = val.to_color();
+
+			if (maybe_color) {
+				block->set_fgcolor(maybe_color.value());
+			}
+		}
+	}
+
+	if (!(block->mask & rspamd::html::html_block::font_size_mask) && font_rule) {
+		auto &vals = font_rule->get_values();
+
+		for (const auto &val : vals) {
+			auto maybe_dim = val.to_dimension();
+
+			if (maybe_dim) {
+				block->set_font_size(maybe_dim.value().dim, maybe_dim.value().is_percent);
+			}
+		}
+	}
+
+	if (!(block->mask & rspamd::html::html_block::bg_color_mask) && background_rule) {
+		auto &vals = background_rule->get_values();
+
+		for (const auto &val : vals) {
+			auto maybe_color = val.to_color();
+
+			if (maybe_color) {
+				block->set_bgcolor(maybe_color.value());
+			}
+		}
+	}
+
+	return block;
 }
 
 void css_rule::add_value(const css_value &value)

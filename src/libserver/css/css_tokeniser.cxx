@@ -75,7 +75,7 @@ auto make_token<css_parser_token::token_type::delim_token, char>(const char &c)
 }
 
 template<>
-auto make_token<css_parser_token::token_type::number_token, double>(const double &d)
+auto make_token<css_parser_token::token_type::number_token, float>(const float &d)
 -> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::number_token, d};
@@ -145,13 +145,13 @@ constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> di
 auto
 css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 {
-	if (!std::holds_alternative<double>(value) ||
+	if (!std::holds_alternative<float>(value) ||
 	        !std::holds_alternative<std::string_view>(dim_token.value)) {
 		/* Invalid tokens */
 		return false;
 	}
 
-	auto num = std::get<double>(value);
+	auto num = std::get<float>(value);
 	auto sv = std::get<std::string_view>(dim_token.value);
 
 	auto dim_found = dimensions_map.find(sv);

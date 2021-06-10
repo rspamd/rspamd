@@ -49,7 +49,8 @@ struct html_block {
 		bg_color = c;
 		mask |= bg_color_mask;
 	}
-	auto set_height(float h) -> void {
+	auto set_height(float h, bool is_percent = false) -> void {
+		h = is_percent ? (-h) : h;
 		if (h < INT16_MIN) {
 			/* Negative numbers encode percents... */
 			height = -100;
@@ -62,7 +63,8 @@ struct html_block {
 		}
 		mask |= height_mask;
 	}
-	auto set_width(double w) -> void {
+	auto set_width(float w, bool is_percent = false) -> void {
+		w = is_percent ? (-w) : w;
 		if (w < INT16_MIN) {
 			width = INT16_MIN;
 		}
@@ -87,7 +89,8 @@ struct html_block {
 		display = v;
 		mask |= display_mask;
 	}
-	auto set_font_size(float fs) -> void  {
+	auto set_font_size(float fs, bool is_percent = false) -> void  {
+		fs = is_percent ? (-fs) : fs;
 		if (fs < INT8_MIN) {
 			font_size = -100;
 		}

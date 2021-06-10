@@ -98,7 +98,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 	std::uint8_t ret = 0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
-		auto dbl = std::get<double>(tok.value);
+		auto dbl = std::get<float>(tok.value);
 
 		if (tok.flags & css_parser_token::number_percent) {
 			if (dbl > 100) {
@@ -129,7 +129,7 @@ constexpr static inline auto alpha_component_convert(const css_parser_token &tok
 	double ret = 1.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
-		auto dbl = std::get<double>(tok.value);
+		auto dbl = std::get<float>(tok.value);
 
 		if (tok.flags & css_parser_token::number_percent) {
 			if (dbl > 100) {
@@ -160,7 +160,7 @@ constexpr static inline auto h_component_convert(const css_parser_token &tok)
 	double ret = 0.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
-		auto dbl = std::get<double>(tok.value);
+		auto dbl = std::get<float>(tok.value);
 
 		if (tok.flags & css_parser_token::number_percent) {
 			if (dbl > 100) {
@@ -276,8 +276,8 @@ auto css_value::maybe_color_from_function(const css_consumed_block::css_function
 
 auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 -> std::optional<css_value> {
-	if (std::holds_alternative<double>(tok.value)) {
-		auto dbl = std::get<double>(tok.value);
+	if (std::holds_alternative<float>(tok.value)) {
+		auto dbl = std::get<float>(tok.value);
 		css_dimension dim;
 
 		dim.dim = dbl;
