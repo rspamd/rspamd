@@ -27,11 +27,11 @@ namespace rspamd::html {
 struct html_block {
 	rspamd::css::css_color fg_color;
 	rspamd::css::css_color bg_color;
-	std::uint16_t height;
-	std::uint16_t width;
+	std::int16_t height;
+	std::int16_t width;
 	std::uint16_t mask;
 	rspamd::css::css_display_value display;
-	std::uint8_t font_size;
+	std::int8_t font_size;
 
 	constexpr static const auto fg_color_mask = 0x1 << 0;
 	constexpr static const auto bg_color_mask = 0x1 << 1;
@@ -49,12 +49,13 @@ struct html_block {
 		bg_color = c;
 		mask |= bg_color_mask;
 	}
-	auto set_height(double h) -> void {
-		if (h < 0) {
-			height = 0;
+	auto set_height(float h) -> void {
+		if (h < INT16_MIN) {
+			/* Negative numbers encode percents... */
+			height = -100;
 		}
-		else if (h > UINT16_MAX) {
-			height = UINT16_MAX;
+		else if (h > INT16_MAX) {
+			height = INT16_MAX;
 		}
 		else {
 			height = h;
@@ -62,11 +63,11 @@ struct html_block {
 		mask |= height_mask;
 	}
 	auto set_width(double w) -> void {
-		if (w < 0) {
-			width = 0;
+		if (w < INT16_MIN) {
+			width = INT16_MIN;
 		}
-		else if (w > UINT16_MAX) {
-			width = UINT16_MAX;
+		else if (w > INT16_MAX) {
+			width = INT16_MAX;
 		}
 		else {
 			width = w;
@@ -87,11 +88,11 @@ struct html_block {
 		mask |= display_mask;
 	}
 	auto set_font_size(float fs) -> void  {
-		if (fs < 0) {
-			font_size = 0;
+		if (fs < INT8_MIN) {
+			font_size = -100;
 		}
-		else if (fs > UINT8_MAX) {
-			font_size = UINT8_MAX;
+		else if (fs > INT8_MAX) {
+			font_size = INT8_MAX;
 		}
 		else {
 			font_size = fs;
@@ -105,16 +106,54 @@ struct html_block {
 	 * @return
 	 */
 	auto propagate_block(const html_block &other) -> void {
-#define PROPAGATE_ELT(elt) \
-    do { if (!(mask & elt##_mask) && (other.mask & elt##_mask)) (elt) = other.elt; } while(0)
+		auto simple_prop = [&](auto mask_val, auto &our_val, auto other_val) constexpr -> void {
+			if (!(mask & mask_val) && (other.mask & mask_val)) {
+				our_val = other_val;
+			}
+		};
+		simple_prop(fg_color_mask, fg_color, other.fg_color);
+		simple_prop(bg_color_mask, bg_color, other.bg_color);
+		simple_prop(display_mask, display, other.display);
 
-		PROPAGATE_ELT(fg_color);
-		PROPAGATE_ELT(bg_color);
-		PROPAGATE_ELT(height);
-		PROPAGATE_ELT(width);
-		PROPAGATE_ELT(display);
-		PROPAGATE_ELT(font_size);
-#undef PROPAGATE_ELT
+		/* Sizes are very different
+		 * We can have multiple cases:
+		 * 1) Our size is > 0 and we can use it as is
+		 * 2) Parent size is > 0 and our size is undefined, so propagate parent
+		 * 3) Parent size is < 0 and our size is undefined - propagate parent
+		 * 4) Parent size is > 0 and our size is < 0 - multiply parent by abs(ours)
+		 * 5) Parent size is undefined and our size is < 0 - tricky stuff, assume some defaults
+		 */
+		auto size_prop = [&](auto mask_val, auto &our_val, auto other_val, auto default_val) constexpr -> void {
+			if (!(mask & mask_val)) {
+				/* We have our value */
+				if (our_val < 0) {
+					if (other.mask & mask_val) {
+						if (other_val >= 0) {
+							our_val = other_val * (-our_val / 100.0);
+						}
+						else {
+							our_val *= (-other_val / 100.0);
+						}
+					}
+					else {
+						/* Parent value is not defined and our value is relative */
+						our_val = default_val * (-our_val / 100.0);
+					}
+				}
+				/* We do nothing as we have our own absolute value */
+			}
+			else {
+				/* We propagate parent if defined */
+				if (other.mask & mask_val) {
+					our_val = other_val;
+				}
+				/* Otherwise do nothing */
+			}
+		};
+
+		size_prop(height_mask, height, other.height, 800);
+		size_prop(width_mask, width, other.width, 1024);
+		size_prop(font_size_mask, font_size, other.font_size, 1024);
 	}
 
 	/**
