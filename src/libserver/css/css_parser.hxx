@@ -30,6 +30,10 @@
 #include "contrib/expected/expected.hpp"
 #include "logger.h"
 
+/* Forward declaration */
+namespace rspamd::html {
+struct html_block;
+}
 
 namespace rspamd::css {
 
@@ -204,6 +208,15 @@ auto get_selectors_parser_functor(rspamd_mempool_t *pool,
  */
 auto get_rules_parser_functor(rspamd_mempool_t *pool,
 							  const std::string_view &st) -> blocks_gen_functor;
+
+/**
+ * Parses a css declaration (e.g. embedded css and returns a completed html block)
+ * @param pool
+ * @param st
+ * @return
+ */
+auto parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
+	-> rspamd::html::html_block *;
 
 }
 

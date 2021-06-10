@@ -801,6 +801,20 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 											   "cannot parse input"});
 }
 
+auto
+parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
+	-> rspamd::html::html_block *
+{
+	auto &&res = process_declaration_tokens(pool,
+			get_rules_parser_functor(pool, st));
+
+	if (res) {
+		return res->compile_to_block(pool);
+	}
+
+	return nullptr;
+}
+
 TEST_SUITE("css parser") {
 	TEST_CASE("parse colors") {
 		const std::vector<const char *> cases{

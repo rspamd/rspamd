@@ -40,7 +40,6 @@ struct html_content {
 	guint total_tags = 0;
 	std::vector<bool> tags_seen;
 	std::vector<html_image *> images;
-	std::vector<html_block *> blocks;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;
 	std::string parsed;
 	void *css_style;
@@ -48,7 +47,6 @@ struct html_content {
 	/* Preallocate and reserve all internal structures */
 	html_content() {
 		tags_seen.resize(N_TAGS, false);
-		blocks.reserve(128);
 		all_tags.reserve(128);
 		parsed.reserve(256);
 	}

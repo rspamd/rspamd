@@ -171,6 +171,17 @@ struct html_block {
 						  rspamd::css::css_display_value::DISPLAY_NORMAL,
 						  12};
 	}
+	/**
+	 * Produces html block with no defined values allocated from the pool
+	 * @param pool
+	 * @return
+	 */
+	static auto undefined_html_block_pool(rspamd_mempool_t *pool) -> html_block* {
+		auto *bl = rspamd_mempool_alloc_type(pool, html_block);
+		bl->mask = 0;
+
+		return bl;
+	}
 };
 
 }
