@@ -360,7 +360,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 	}
 
 	if (i > offset) {
-		double num;
+		float num;
 
 		/* I wish it was supported properly */
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);

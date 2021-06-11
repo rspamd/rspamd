@@ -39,6 +39,12 @@ enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_REL,
 	RSPAMD_HTML_COMPONENT_ALT,
 };
+/**
+ * Returns component type from a string
+ * @param st
+ * @return
+ */
+auto html_component_from_string(const std::string_view &st) -> std::optional<html_component_type>;
 
 using html_tag_extra_t = std::variant<std::monostate, struct rspamd_url *, struct html_image *>;
 struct html_tag_component {
@@ -69,6 +75,15 @@ struct html_tag {
 			if (comp.type == what) {
 				return comp.value;
 			}
+		}
+
+		return std::nullopt;
+	}
+
+	auto find_component(std::optional<html_component_type> what) const -> std::optional<std::string_view>
+	{
+		if (what) {
+			return find_component(what.value());
 		}
 
 		return std::nullopt;

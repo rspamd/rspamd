@@ -225,6 +225,18 @@ html_process_tag(rspamd_mempool_t *pool,
 	return true;
 }
 
+auto
+html_component_from_string(const std::string_view &st) -> std::optional<html_component_type>
+{
+	auto known_component_it = html_components_map.find(st);
+
+	if (known_component_it != html_components_map.end()) {
+		return known_component_it->second;
+	}
+	else {
+		return std::nullopt;
+	}
+}
 
 static auto
 find_tag_component_name(rspamd_mempool_t *pool,
@@ -1048,7 +1060,6 @@ html_process_input(rspamd_mempool_t *pool,
 	struct rspamd_url *url = NULL;
 	gint len, href_offset = -1;
 	struct html_tag *cur_tag = NULL, *content_tag = NULL;
-	std::vector<html_block *> blocks_stack;
 	std::vector<html_tag *> tags_stack;
 	struct tag_content_parser_state content_parser_env;
 
@@ -1614,15 +1625,8 @@ html_process_input(rspamd_mempool_t *pool,
 				}
 
 				if (cur_tag->flags & FL_BLOCK) {
-					struct html_block *bl;
 
-					if (cur_tag->flags & FL_CLOSING) {
-						/* Just remove block element from the queue if any */
-						if (!blocks_stack.empty()) {
-							blocks_stack.pop_back();
-						}
-					}
-					else {
+					if (!(cur_tag->flags & FL_CLOSING)) {
 						html_process_block_tag(pool, cur_tag, hc);
 					}
 				}
