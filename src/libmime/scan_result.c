@@ -724,22 +724,30 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 
 			if (!(cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
 				kh_size (cur->options) < task->cfg->default_max_shots) {
-				opt_cpy = rspamd_task_option_safe_copy (task, val, vlen, &cpy_len);
-				/* Append new options */
-				srch.option = (gchar *) opt_cpy;
-				srch.optlen = cpy_len;
+
+				srch.option = (gchar *) val;
+				srch.optlen = vlen;
 				k = kh_get (rspamd_options_hash, cur->options, &srch);
 
 				if (k == kh_end (cur->options)) {
-					opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
-					opt->optlen = cpy_len;
-					opt->option = opt_cpy;
+					opt_cpy = rspamd_task_option_safe_copy (task, val, vlen, &cpy_len);
+					if (cpy_len != vlen) {
+						srch.option = (gchar *) opt_cpy;
+						srch.optlen = cpy_len;
+						k = kh_get (rspamd_options_hash, cur->options, &srch);
+					}
+					/* Append new options */
+					if (k == kh_end (cur->options)) {
+						opt = rspamd_mempool_alloc0 (task->task_pool, sizeof(*opt));
+						opt->optlen = cpy_len;
+						opt->option = opt_cpy;
 
-					kh_put (rspamd_options_hash, cur->options, opt, &r);
-					DL_APPEND (cur->opts_head, opt);
+						kh_put (rspamd_options_hash, cur->options, opt, &r);
+						DL_APPEND (cur->opts_head, opt);
 
-					if (s == cur) {
-						ret = TRUE;
+						if (s == cur) {
+							ret = TRUE;
+						}
 					}
 				}
 			}
