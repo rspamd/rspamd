@@ -1643,7 +1643,7 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 	}
 
-	hc->traverse_tags([](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([](const html_tag *tag) -> bool {
 		/* Summarize content length from children */
 		for (const auto *cld_tag : tag->children) {
 			tag->content_length += cld_tag->content_length;

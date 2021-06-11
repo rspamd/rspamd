@@ -431,7 +431,7 @@ lua_html_foreach_tag (lua_State *L)
 	}
 
 	if (hc && (any || !tags.empty()) && lua_isfunction (L, 3)) {
-		hc->traverse_tags([&](const rspamd::html::html_tag *tag) -> bool {
+		hc->traverse_all_tags([&](const rspamd::html::html_tag *tag) -> bool {
 			if (tag && (any || tags.contains(tag->id))) {
 				lua_pushvalue(L, 3);
 

@@ -63,7 +63,7 @@ struct html_content {
 		PRE_ORDER,
 		POST_ORDER
 	};
-	auto traverse_tags(fu2::function<bool(const html_tag *)> &&func,
+	auto traverse_block_tags(fu2::function<bool(const html_tag *)> &&func,
 					traverse_type how = traverse_type::PRE_ORDER) const -> bool {
 
 		if (root_tag == nullptr) {
@@ -101,6 +101,18 @@ struct html_content {
 		default:
 			RSPAMD_UNREACHABLE;
 		}
+	}
+
+	auto traverse_all_tags(fu2::function<bool(const html_tag *)> &&func) const -> bool {
+		for (const auto &tag : all_tags) {
+			if (!(tag->flags & (FL_CLOSING|FL_XML))) {
+				if (!func(tag.get())) {
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 private:
