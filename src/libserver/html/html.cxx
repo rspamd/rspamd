@@ -1421,7 +1421,7 @@ html_process_input(rspamd_mempool_t *pool,
 			if (t == '>') {
 				state = tag_end;
 				/* We don't know a lot about sgml tags, ignore them */
-				cur_tag = hc->root_tag;
+				cur_tag = nullptr;
 				continue;
 			}
 			p ++;
@@ -1698,11 +1698,14 @@ html_debug_structure(const html_content &hc) -> std::string
 TEST_CASE("html parsing") {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-		{"<html><div><div></div></div></html>", "+html;++div;+++div;"},
-		{"<html><div><div></div></html>", "+html;++div;+++div;"},
-		{"<html><div><div></div></html></div>", "+html;++div;+++div;"},
-		{"<p><p><a></p></a></a>", "+p;++p;+++a;"},
-		{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
+			{"<html><!DOCTYPE html><body>", "+html;++body;"},
+			{"<html><div><div></div></div></html>", "+html;++div;+++div;"},
+			{"<html><div><div></div></html>", "+html;++div;+++div;"},
+			{"<html><div><div></div></html></div>", "+html;++div;+++div;"},
+			{"<p><p><a></p></a></a>", "+p;++p;+++a;"},
+			{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
+			{"<html><!DOCTYPE html><body><head><body></body></html></body></html>",
+					"+html;++body;+++head;++++body;"}
 	};
 
 	rspamd_url_init(NULL);
