@@ -250,7 +250,7 @@ lua_parsers_parse_mail_address (lua_State *L)
 	GPtrArray *addrs;
 	gsize len;
 	const gchar *str = luaL_checklstring (L, 1, &len);
-	gint max_addrs = luaL_optinteger(L, 2, 10240);
+	gint max_addrs = luaL_optinteger(L, 3, 10240);
 	rspamd_mempool_t *pool;
 	gboolean own_pool = FALSE;
 
