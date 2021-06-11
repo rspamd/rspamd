@@ -233,27 +233,27 @@ end
 
 local function apply_addr_filter(task, filter, input, rule)
   if filter == 'email:addr' or filter == 'email' then
-    local addr = util.parse_mail_address(input, task:get_mempool())
+    local addr = util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return a.addr end, addr))
     end
   elseif filter == 'email:user' then
-    local addr = util.parse_mail_address(input, task:get_mempool())
+    local addr = util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return a.user end, addr))
     end
   elseif filter == 'email:domain' then
-    local addr = util.parse_mail_address(input, task:get_mempool())
+    local addr = util.parse_mail_address(input, task:get_mempool(, 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return a.domain end, addr))
     end
   elseif filter == 'email:domain:tld' then
-    local addr = util.parse_mail_address(input, task:get_mempool())
+    local addr = util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return util.get_tld(a.domain) end, addr))
     end
   elseif filter == 'email:name' then
-    local addr = util.parse_mail_address(input, task:get_mempool())
+    local addr = util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return a.name end, addr))
     end
@@ -473,7 +473,7 @@ local function multimap_callback(task, rule)
       ret = r.hash:get_key(value)
     end
 
-    lua_util.debugm(N, task, 'found return "%s" for multimap %s', ret, 
+    lua_util.debugm(N, task, 'found return "%s" for multimap %s', ret,
     rule.symbol)
 
     if ret then
