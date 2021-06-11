@@ -18,6 +18,7 @@
 #include "libserver/html/html.h"
 #include "libserver/html/html.hxx"
 #include "libserver/html/html_tag.hxx"
+#include "libserver/html/html_block.hxx"
 #include "images.h"
 
 #include <contrib/robin-hood/robin_hood.h>
@@ -89,19 +90,6 @@ LUA_FUNCTION_DEF (html, has_property);
 LUA_FUNCTION_DEF (html, get_images);
 
 /***
- * @method html:get_blocks()
- * Returns a table of html blocks. Each block provides the following data:
- *
- * `tag` - corresponding tag
- * `color` - a triplet (r g b) for font color
- * `bgcolor` - a triplet (r g b) for background color
- * `style` - rspamd{text} with the full style description
- * `font_size` - font size
- * @return {table} table of blocks in html part
- */
-LUA_FUNCTION_DEF (html, get_blocks);
-
-/***
  * @method html:foreach_tag(tagname, callback)
  * Processes HTML tree calling the specified callback for each tag of the specified
  * type.
@@ -120,7 +108,6 @@ static const struct luaL_reg htmllib_m[] = {
 	LUA_INTERFACE_DEF (html, has_tag),
 	LUA_INTERFACE_DEF (html, has_property),
 	LUA_INTERFACE_DEF (html, get_images),
-	LUA_INTERFACE_DEF (html, get_blocks),
 	LUA_INTERFACE_DEF (html, foreach_tag),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -170,6 +157,20 @@ LUA_FUNCTION_DEF (html_tag, get_content);
  */
 LUA_FUNCTION_DEF (html_tag, get_content_length);
 
+/***
+ * @method html_tag:get_style()
+ * Returns style calculated for the element
+ * @return {table} table associated with the style
+ */
+LUA_FUNCTION_DEF (html_tag, get_style);
+
+/***
+ * @method html_tag:get_style()
+ * Returns style calculated for the element
+ * @return {table} table associated with the style
+ */
+LUA_FUNCTION_DEF (html_tag, get_attribute);
+
 static const struct luaL_reg taglib_m[] = {
 	LUA_INTERFACE_DEF (html_tag, get_type),
 	LUA_INTERFACE_DEF (html_tag, get_extra),
@@ -177,6 +178,8 @@ static const struct luaL_reg taglib_m[] = {
 	LUA_INTERFACE_DEF (html_tag, get_flags),
 	LUA_INTERFACE_DEF (html_tag, get_content),
 	LUA_INTERFACE_DEF (html_tag, get_content_length),
+	LUA_INTERFACE_DEF (html_tag, get_style),
+	LUA_INTERFACE_DEF (html_tag, get_attribute),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -339,95 +342,45 @@ lua_html_get_images (lua_State *L)
 }
 
 static void
-lua_html_push_block (lua_State *L, const struct html_block *bl)
+lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t;
 
 	lua_createtable (L, 0, 6);
 
-	if (bl->tag) {
-		gsize name_len;
-		const gchar *name = rspamd_html_tag_name(bl->tag, &name_len);
-		lua_pushstring (L, "tag");
-		lua_pushlstring (L, name, name_len);
-		lua_settable (L, -3);
-	}
-
-	if (bl->font_color.valid) {
+	if (bl->mask & rspamd::html::html_block::fg_color_mask) {
 		lua_pushstring (L, "color");
 		lua_createtable (L, 4, 0);
-		lua_pushinteger (L, bl->font_color.d.comp.r);
+		lua_pushinteger (L, bl->fg_color.r);
 		lua_rawseti (L, -2, 1);
-		lua_pushinteger (L, bl->font_color.d.comp.g);
+		lua_pushinteger (L, bl->fg_color.g);
 		lua_rawseti (L, -2, 2);
-		lua_pushinteger (L, bl->font_color.d.comp.b);
+		lua_pushinteger (L, bl->fg_color.b);
 		lua_rawseti (L, -2, 3);
-		lua_pushinteger (L, bl->font_color.d.comp.alpha);
+		lua_pushinteger (L, bl->fg_color.alpha);
 		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
-	if (bl->background_color.valid) {
+	if (bl->mask & rspamd::html::html_block::bg_color_mask) {
 		lua_pushstring (L, "bgcolor");
 		lua_createtable (L, 4, 0);
-		lua_pushinteger (L, bl->background_color.d.comp.r);
+		lua_pushinteger (L, bl->bg_color.r);
 		lua_rawseti (L, -2, 1);
-		lua_pushinteger (L, bl->background_color.d.comp.g);
+		lua_pushinteger (L, bl->bg_color.g);
 		lua_rawseti (L, -2, 2);
-		lua_pushinteger (L, bl->background_color.d.comp.b);
+		lua_pushinteger (L, bl->bg_color.b);
 		lua_rawseti (L, -2, 3);
-		lua_pushinteger (L, bl->background_color.d.comp.alpha);
+		lua_pushinteger (L, bl->bg_color.alpha);
 		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
 
-	if (bl->style.len > 0) {
-		lua_pushstring (L, "style");
-		t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = bl->style.begin;
-		t->len = bl->style.len;
-		t->flags = 0;
-		lua_settable (L, -3);
+	if (bl->mask & rspamd::html::html_block::font_size_mask) {
+		lua_pushstring(L, "font_size");
+		lua_pushinteger(L, bl->font_size);
+		lua_settable(L, -3);
 	}
-
-	lua_pushstring (L, "visible");
-	lua_pushboolean (L, bl->visible);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "font_size");
-	lua_pushinteger (L, bl->font_size);
-	lua_settable (L, -3);
 }
-
-static gint
-lua_html_get_blocks (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	auto *hc = lua_check_html (L, 1);
-	guint i = 1;
-
-	if (hc != NULL) {
-		if (hc->blocks.size() > 0) {
-			lua_createtable (L, hc->blocks.size(), 0);
-
-			for (const auto *bl : hc->blocks) {
-				lua_html_push_block (L, bl);
-				lua_rawseti (L, -2, i++);
-			}
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-
 
 static gint
 lua_html_foreach_tag (lua_State *L)
@@ -681,15 +634,56 @@ lua_html_tag_get_extra (lua_State *L)
 				lua_pushnil (L);
 			}
 		}
-		else if (ltag->tag->block != nullptr) {
-			lua_html_push_block (L, ltag->tag->block);
-		}
 		else {
 			lua_pushnil (L);
 		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_html_tag_get_style (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+
+	if (ltag) {
+		if (ltag->tag->block) {
+			lua_html_push_block(L, ltag->tag->block);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_html_tag_get_attribute (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct lua_html_tag *ltag = lua_check_html_tag(L, 1);
+	gsize slen;
+	const gchar *attr_name = luaL_checklstring(L, 2, &slen);
+
+	if (ltag && attr_name) {
+		auto maybe_attr = ltag->tag->find_component(
+				rspamd::html::html_component_from_string({attr_name, slen}));
+
+		if (maybe_attr) {
+			lua_pushlstring(L, maybe_attr->data(), maybe_attr->size());
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
 	}
 
 	return 1;
