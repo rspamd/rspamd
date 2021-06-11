@@ -243,7 +243,7 @@ local function apply_addr_filter(task, filter, input, rule)
       return fun.totable(fun.map(function(a) return a.user end, addr))
     end
   elseif filter == 'email:domain' then
-    local addr = util.parse_mail_address(input, task:get_mempool(, 1024)
+    local addr = util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
       return fun.totable(fun.map(function(a) return a.domain end, addr))
     end
