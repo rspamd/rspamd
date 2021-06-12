@@ -197,7 +197,9 @@ local vis_check_id = rspamd_config:register_symbol{
         local hc = p:get_html() -- we get HTML context
 
         hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag, clen, is_leaf)
-          local bl = tag:get_extra()
+          local bl = tag:get_style()
+          local rspamd_logger = require "rspamd_logger"
+          rspamd_logger.errx('hui: %s', bl)
           if bl then
             if not bl['visible'] and is_leaf then
               invisible_blocks = invisible_blocks + 1
