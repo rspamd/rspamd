@@ -178,7 +178,7 @@ public:
 	}
 
 	/* Helper parser methods */
-	bool need_unescape(const std::string_view &sv);
+	static bool need_unescape(const std::string_view &sv);
 
 	~css_parser() {
 		if (!owned_style && style_object) {
@@ -778,7 +778,7 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 	css_parser parser(other, pool);
 	std::string_view processed_input;
 
-	if (parser.need_unescape(st)) {
+	if (css_parser::need_unescape(st)) {
 		processed_input = rspamd::css::unescape_css(pool, st);
 	}
 	else {
@@ -805,8 +805,24 @@ auto
 parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 	-> rspamd::html::html_block *
 {
+	std::string_view processed_input;
+
+	if (css_parser::need_unescape(st)) {
+		processed_input = rspamd::css::unescape_css(pool, st);
+	}
+	else {
+		/* Lowercase inplace */
+		auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, st.length()));
+		auto *p = nspace;
+
+		for (const auto c : st) {
+			*p++ = g_ascii_tolower(c);
+		}
+
+		processed_input = std::string_view{nspace, (std::size_t)(p - nspace)};
+	}
 	auto &&res = process_declaration_tokens(pool,
-			get_rules_parser_functor(pool, st));
+			get_rules_parser_functor(pool, processed_input));
 
 	if (res) {
 		return res->compile_to_block(pool);
