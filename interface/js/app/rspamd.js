@@ -48,6 +48,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
     var timer_id = [];
+    var locale = null;
     var selData = null; // Graph's dataset selector state
     var symbolDescriptions = {};
 
@@ -273,7 +274,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
     function unix_time_format(tm) {
         var date = new Date(tm ? tm * 1000 : 0);
-        return date.toLocaleString();
+        return (locale)
+            ? date.toLocaleString(locale)
+            : date.toLocaleString();
     }
 
     function displayUI() {
@@ -406,6 +409,76 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     // Public functions
     ui.alertMessage = alertMessage;
     ui.setup = function () {
+        (function initSettings() {
+            var selected_locale = null;
+            var custom_locale = null;
+            var localeTextbox = ".popover #settings-popover #locale";
+
+            function validateLocale(saveToLocalStorage) {
+                function toggle_form_group_class(remove, add) {
+                    $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
+                }
+
+                var now = new Date();
+
+                if (custom_locale.length) {
+                    try {
+                        now.toLocaleString(custom_locale);
+
+                        if (saveToLocalStorage) localStorage.setItem("custom_locale", custom_locale);
+                        locale = (selected_locale === "custom") ? custom_locale : null;
+                        toggle_form_group_class("invalid", "valid");
+                    } catch (err) {
+                        locale = null;
+                        toggle_form_group_class("valid", "invalid");
+                    }
+                } else {
+                    if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
+                    locale = null;
+                    $(localeTextbox).removeClass("is-valid is-invalid");
+                }
+
+                // Display date example
+                $(".popover #settings-popover #date-example").text(
+                    (locale)
+                        ? now.toLocaleString(locale)
+                        : now.toLocaleString()
+                );
+            }
+
+            $("#settings").popover({
+                title: "WebUI settings",
+                container: "body",
+                placement: "bottom",
+                html: true,
+                sanitize: false,
+                content: function () {
+                    // Using .clone() has the side-effect of producing elements with duplicate id attributes.
+                    return $("#settings-popover").clone();
+                }
+            });
+            $("#settings").on("click", function (e) {
+                e.preventDefault();
+            });
+            $("#settings").on("inserted.bs.popover", function () {
+                selected_locale = localStorage.getItem("selected_locale") || "browser";
+                custom_locale = localStorage.getItem("custom_locale") || "";
+                validateLocale();
+
+                $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
+                $(localeTextbox).val(custom_locale);
+            });
+            $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
+                selected_locale = this.value;
+                localStorage.setItem("selected_locale", selected_locale);
+                validateLocale();
+            });
+            $(document).on("input", ".popover #settings-popover #locale", function () {
+                custom_locale = $(localeTextbox).val();
+                validateLocale(true);
+            });
+        }());
+
         $("#selData").change(function () {
             selData = this.value;
             tabClick("#throughput_nav");
