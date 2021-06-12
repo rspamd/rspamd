@@ -380,6 +380,11 @@ lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 		lua_pushinteger(L, bl->font_size);
 		lua_settable(L, -3);
 	}
+
+	/* TODO: fix */
+	lua_pushstring(L, "visible");
+	lua_pushboolean(L, true);
+	lua_settable(L, -3);
 }
 
 static gint
