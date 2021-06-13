@@ -86,7 +86,33 @@
 					<a class="dropdown-item dynamic active" href="#" id="dynamic-item" data-value="3600000">1 hour</a>
 				</div>
 			</div>
-			<button class="btn btn-outline-secondary ml-2" id="disconnect"><i class="fas fa-power-off"></i> Disconnect</button>
+			<button class="btn btn-outline-secondary ml-2" id="disconnect" title="Disconnect"><i class="fas fa-power-off"></i></button>
+			<button class="btn btn-outline-secondary ml-2" id="settings" title="WebUI settings"><i class="fas fa-cog"></i></button>
+			<div class="d-none">
+				<div id="settings-popover">
+					<div class="card">
+						<div class="card-body">
+							<h6 class="card-title font-weight-bolder">Date and time locale</h6>
+							<label class="ml-2">
+								<input type="radio"  class="mr-2" name="locale" value="browser" checked>
+								Use browser settings
+							</label>
+							<div class="input-group input-group-sm">
+								<div class="input-group-prepend">
+									<div class="input-group-text">
+										<label class="my-auto">
+											<input type="radio" class="mr-2" name="locale" value="custom">
+											Custom
+										</label>
+									</div>
+								</div>
+								<input type="text" id="locale" placeholder="Enter locale" class="form-control" />
+							</div>
+							<p class="mt-2 mb-0">Date: <span id="date-example"></span></p>
+						</div>
+					</div>
+				</div>
+			</div>
 		</form>
 		<button class="navbar-toggler ml-2" type="button" data-toggle="collapse" data-target=".navbar-collapse">
 			<span class="navbar-toggler-icon"></span>
