@@ -46,6 +46,12 @@ struct alignas(int) css_color {
 				(std::uint32_t)g << 8 |
 				(std::uint32_t)b << 0;
 	}
+
+	constexpr auto to_rgb() const -> std::uint32_t {
+		return (std::uint32_t)r << 16 |
+			   (std::uint32_t)g << 8 |
+			   (std::uint32_t)b << 0;
+	}
 	friend bool operator==(const css_color& l, const css_color& r) {
 		return (memcmp(&l, &r, sizeof(css_color)) == 0);
 	}
