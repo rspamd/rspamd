@@ -199,47 +199,27 @@ local vis_check_id = rspamd_config:register_symbol{
         hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag, clen, is_leaf)
           local bl = tag:get_style()
           local rspamd_logger = require "rspamd_logger"
-          rspamd_logger.errx('hui: %s', bl)
           if bl then
-            if not bl['visible'] and is_leaf then
+            if not bl.visible and is_leaf then
               invisible_blocks = invisible_blocks + 1
             end
 
-            if bl['font_size'] and bl['font_size'] == 0 and is_leaf then
+            if (bl.font_size or 12) == 0 and is_leaf then
               zero_size_blocks = zero_size_blocks + 1
             end
 
-            if bl['bgcolor'] and bl['color'] and bl['visible'] and is_leaf then
-
-              local color = bl['color']
-              local bgcolor = bl['bgcolor']
-              -- Should use visual approach here some day
-              local diff_r = math.abs(color[1] - bgcolor[1])
-              local diff_g = math.abs(color[2] - bgcolor[2])
-              local diff_b = math.abs(color[3] - bgcolor[3])
-              local r_avg = (color[1] + bgcolor[1]) / 2.0
-              -- Square
-              diff_r = diff_r * diff_r
-              diff_g = diff_g * diff_g
-              diff_b = diff_b * diff_b
-
-              diff = math.sqrt(2*diff_r + 4*diff_g + 3 * diff_b +
-                  (r_avg * (diff_r - diff_b) / 256.0))
-              diff = diff / 256.0
-
-              if diff < 0.1 then
-                ret = true
-                invisible_blocks = invisible_blocks + 1 -- This block is invisible
-                transp_len = transp_len + clen * (0.1 - diff) * 10.0
-                normal_len = normal_len - clen
-                local tr = transp_len / (normal_len + transp_len)
-                if tr > transp_rate then
-                  transp_rate = tr
-                  arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
-                    tostring(tag:get_type()),
-                    color[1], color[2], color[3],
-                    bgcolor[1], bgcolor[2], bgcolor[3])
-                end
+            if bl.transparent and is_leaf then
+              ret = true
+              invisible_blocks = invisible_blocks + 1 -- This block is invisible
+              transp_len = transp_len + clen
+              normal_len = normal_len - clen
+              local tr = transp_len / (normal_len + transp_len)
+              if tr > transp_rate then
+                transp_rate = tr
+                arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
+                    tag:get_type(),
+                    bl.color[1], bl.color[2], bl.color[3],
+                    bl.bgcolor[1], bl.bgcolor[2], bl.bgcolor[3])
               end
             end
           end

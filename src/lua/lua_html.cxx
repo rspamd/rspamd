@@ -382,7 +382,11 @@ lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 	}
 
 	lua_pushstring(L, "visible");
-	lua_pushboolean(L, (bl->mask & rspamd::html::html_block::invisible_flag) == 0);
+	lua_pushboolean(L, bl->is_visible());
+	lua_settable(L, -3);
+
+	lua_pushstring(L, "transparent");
+	lua_pushboolean(L, bl->is_transparent());
 	lua_settable(L, -3);
 }
 

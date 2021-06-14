@@ -41,6 +41,7 @@ struct html_block {
 	constexpr static const auto display_mask = 0x1 << 4;
 	constexpr static const auto font_size_mask = 0x1 << 5;
 	constexpr static const auto invisible_flag = 0x1 << 6;
+	constexpr static const auto transparent_flag = 0x1 << 7;
 
 	/* Helpers to set mask when setting the elements */
 	auto set_fgcolor(const rspamd::css::css_color &c) -> void {
@@ -182,7 +183,7 @@ struct html_block {
 		if ((mask & (bg_color_mask|fg_color_mask)) == (bg_color_mask|fg_color_mask)) {
 			if (fg_color.alpha < 10) {
 				/* Too transparent */
-				mask |= invisible_flag;
+				mask |= invisible_flag|transparent_flag;
 
 				return;
 			}
@@ -201,17 +202,21 @@ struct html_block {
 						  (ravg * (diff_r - diff_b) / 256.0)) / 256.0;
 
 				if (diff < 0.1) {
-					mask |= invisible_flag;
+					mask |= invisible_flag|transparent_flag;
 					return;
 				}
 			}
 		}
 
-		mask &= ~invisible_flag;
+		mask &= ~(invisible_flag|transparent_flag);
 	}
 
-	auto is_visible(void) const -> bool {
-		return (mask & invisible_flag) != 0;
+	constexpr auto is_visible(void) const -> bool {
+		return (mask & invisible_flag) == 0;
+	}
+
+	constexpr auto is_transparent(void) const -> bool {
+		return (mask & transparent_flag) != 0;
 	}
 
 	/**
