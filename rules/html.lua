@@ -182,7 +182,6 @@ local vis_check_id = rspamd_config:register_symbol{
     --local logger = require "rspamd_logger"
     local tp = task:get_text_parts() -- get text parts in a message
     local ret = false
-    local diff = 0.0
     local transp_rate = 0
     local invisible_blocks = 0
     local zero_size_blocks = 0
@@ -198,7 +197,6 @@ local vis_check_id = rspamd_config:register_symbol{
 
         hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag, clen, is_leaf)
           local bl = tag:get_style()
-          local rspamd_logger = require "rspamd_logger"
           if bl then
             if not bl.visible and is_leaf then
               invisible_blocks = invisible_blocks + 1
