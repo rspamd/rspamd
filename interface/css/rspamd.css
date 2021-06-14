@@ -369,14 +369,14 @@ table#symbolsTable input[type="number"] {
 .footable-details.table {
     margin-bottom: 0;
 }
-#historyTable_scan > tbody > tr > td,
-#historyTable_scan > thead > tr > th,
-#historyTable_history > tbody > tr > td,
-#historyTable_history > thead > tr > th {
+#scanTable > tbody > tr > td,
+#scanTable > thead > tr > th,
+#historyTable > tbody > tr > td,
+#historyTable > thead > tr > th {
     padding: 4px;
 }
-#historyTable_scan > thead > tr > th,
-#historyTable_history > thead > tr > th {
+#scanTable > thead > tr > th,
+#historyTable > thead > tr > th {
     padding-right: 20px;
 }
 

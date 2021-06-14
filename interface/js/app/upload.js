@@ -139,7 +139,7 @@ define(["jquery"],
                     if (json.action) {
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
 
-                        var rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
+                        var rows_total = $("#scanTable > tbody > tr:not(.footable-detail-row)").length + 1;
                         var o = rspamd.process_history_v2(rspamd, {rows:[json]}, "scan");
                         var items = o.items;
                         rspamd.symbols.scan.push(o.symbols[0]);

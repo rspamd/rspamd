@@ -197,6 +197,8 @@ define(["jquery", "d3pie"],
                 addStatfiles(checked_server, data.statfiles);
                 addFuzzyStorage(checked_server, data.fuzzy_hashes);
             }
+
+            $("#statWidgets [title], #clusterTable [title]").tooltip();
         }
 
         function getChart(rspamd, graphs, checked_server) {

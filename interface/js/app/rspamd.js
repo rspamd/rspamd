@@ -35,7 +35,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         page_size: {
             scan: 25,
             errors: 25,
-            history: 25
+            history: 25,
+            symbols: 25
         },
         symbols: {
             scan: [],
@@ -534,6 +535,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         tab_upload.setup(ui, tables);
         selData = tab_graph.setup(ui);
 
+        $("[title]").tooltip();
         $("#loading").addClass("d-none");
     };
 
@@ -862,7 +864,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         });
         /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
-        tables[table] = FooTable.init("#historyTable_" + table, {
+        tables[table] = FooTable.init("#" + table + "Table", {
             columns: columns,
             rows: items,
             expandFirst: expandFirst,
@@ -1075,7 +1077,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
     ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {
         var i = (typeof iteration === "undefined") ? 10 : iteration;
-        var num_rows = $("#historyTable_" + table + " > tbody > tr:not(.footable-detail-row)").length;
+        var num_rows = $("#" + table + "Table > tbody > tr:not(.footable-detail-row)").length;
         if (num_rows === ui.page_size[table] ||
             num_rows === rows_total) {
             return callback();

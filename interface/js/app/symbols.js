@@ -209,7 +209,7 @@ define(["jquery", "footable"],
                         paging: {
                             enabled: true,
                             limit: 5,
-                            size: 25
+                            size: rspamd.page_size.symbols
                         },
                         filtering: {
                             enabled: true,
@@ -227,7 +227,11 @@ define(["jquery", "footable"],
                                 if (rspamd.read_only) {
                                     $(".mb-disabled").attr("disabled", true);
                                 }
-                            }
+                                $("#symbolsTable [title]").tooltip();
+                            },
+                            "after.ft.sorting": function () { $("#symbolsTable [title]").tooltip(); },
+                            "after.ft.paging": function () { $("#symbolsTable [title]").tooltip(); },
+                            "after.ft.filtering": function () { $("#symbolsTable [title]").tooltip(); }
                         }
                     });
                 },
@@ -250,6 +254,11 @@ define(["jquery", "footable"],
                     success: function (data) {
                         var items = process_symbols_data(rspamd, data[0].data)[0];
                         tables.symbols.rows.load(items);
+
+                        // Is there a way to get an event when all rows are loaded?
+                        rspamd.waitForRowsDisplayed("symbols", items.length, function () {
+                            $("#symbolsTable [title]").tooltip();
+                        });
                     },
                     server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
