@@ -1643,13 +1643,28 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 	}
 
+	/* Summarize content length from children */
 	hc->traverse_block_tags([](const html_tag *tag) -> bool {
-		/* Summarize content length from children */
 		for (const auto *cld_tag : tag->children) {
 			tag->content_length += cld_tag->content_length;
 		}
 		return true;
 	}, html_content::traverse_type::POST_ORDER);
+
+	/* Propagate styles */
+	hc->traverse_block_tags([](const html_tag *tag) -> bool {
+		if (tag->block) {
+			for (const auto *cld_tag : tag->children) {
+				if (cld_tag->block) {
+					cld_tag->block->propagate_block(*tag->block);
+				}
+				else {
+					cld_tag->block = tag->block;
+				}
+			}
+		}
+		return true;
+	}, html_content::traverse_type::PRE_ORDER);
 
 	return hc;
 }

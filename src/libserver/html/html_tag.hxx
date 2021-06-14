@@ -65,7 +65,7 @@ struct html_tag {
 	std::vector<html_tag_component> parameters;
 
 	html_tag_extra_t extra;
-	struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
+	mutable struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
 	std::vector<struct html_tag *> children;
 	struct html_tag *parent;
 
