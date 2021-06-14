@@ -1654,6 +1654,8 @@ html_process_input(rspamd_mempool_t *pool,
 	/* Propagate styles */
 	hc->traverse_block_tags([](const html_tag *tag) -> bool {
 		if (tag->block) {
+			tag->block->compute_visibility();
+
 			for (const auto *cld_tag : tag->children) {
 				if (cld_tag->block) {
 					cld_tag->block->propagate_block(*tag->block);

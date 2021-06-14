@@ -18,6 +18,7 @@
 #pragma once
 
 #include "libserver/css/css_value.hxx"
+#include <cmath>
 
 namespace rspamd::html {
 
@@ -39,6 +40,7 @@ struct html_block {
 	constexpr static const auto width_mask = 0x1 << 3;
 	constexpr static const auto display_mask = 0x1 << 4;
 	constexpr static const auto font_size_mask = 0x1 << 5;
+	constexpr static const auto invisible_flag = 0x1 << 6;
 
 	/* Helpers to set mask when setting the elements */
 	auto set_fgcolor(const rspamd::css::css_color &c) -> void {
@@ -157,6 +159,59 @@ struct html_block {
 		size_prop(height_mask, height, other.height, 800);
 		size_prop(width_mask, width, other.width, 1024);
 		size_prop(font_size_mask, font_size, other.font_size, 1024);
+	}
+
+	auto compute_visibility(void) -> void {
+		if (mask & display_mask) {
+			if (display == css::css_display_value::DISPLAY_HIDDEN) {
+				mask |= invisible_flag;
+
+				return;
+			}
+		}
+
+		if (mask & font_size_mask) {
+			if (font_size == 0) {
+				mask |= invisible_flag;
+
+				return;
+			}
+		}
+
+		/* Check if we have both bg/fg colors */
+		if ((mask & (bg_color_mask|fg_color_mask)) == (bg_color_mask|fg_color_mask)) {
+			if (fg_color.alpha < 10) {
+				/* Too transparent */
+				mask |= invisible_flag;
+
+				return;
+			}
+
+			if (bg_color.alpha > 10) {
+				auto diff_r = std::abs(fg_color.r - bg_color.r);
+				auto diff_g = std::abs(fg_color.g - bg_color.g);
+				auto diff_b = std::abs(fg_color.b - bg_color.b);
+				auto ravg = (fg_color.r + bg_color.r) / 2.0;
+
+				diff_r *= diff_r;
+				diff_g *= diff_g;
+				diff_b *= diff_b;
+
+				auto diff = std::sqrt(2.0 * diff_r + 4.0 * diff_g + 3.0 * diff_b +
+						  (ravg * (diff_r - diff_b) / 256.0)) / 256.0;
+
+				if (diff < 0.1) {
+					mask |= invisible_flag;
+					return;
+				}
+			}
+		}
+
+		mask &= ~invisible_flag;
+	}
+
+	auto is_visible(void) const -> bool {
+		return (mask & invisible_flag) != 0;
 	}
 
 	/**
