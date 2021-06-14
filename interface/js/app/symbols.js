@@ -137,7 +137,13 @@ define(["jquery", "footable"],
             });
             return [items, distinct_groups];
         }
-        // @get symbols into modal form
+        function initTooltips() {
+            $("#symbolsTable [title]").tooltip();
+        }
+        function hideTooltips() {
+            $("#symbolsTable [title]").tooltip("hide");
+        }
+
         ui.getSymbols = function (rspamd, tables, checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
@@ -227,11 +233,14 @@ define(["jquery", "footable"],
                                 if (rspamd.read_only) {
                                     $(".mb-disabled").attr("disabled", true);
                                 }
-                                $("#symbolsTable [title]").tooltip();
+                                initTooltips();
                             },
-                            "after.ft.sorting": function () { $("#symbolsTable [title]").tooltip(); },
-                            "after.ft.paging": function () { $("#symbolsTable [title]").tooltip(); },
-                            "after.ft.filtering": function () { $("#symbolsTable [title]").tooltip(); }
+                            "before.ft.sorting": hideTooltips,
+                            "before.ft.paging": hideTooltips,
+                            "before.ft.filtering": hideTooltips,
+                            "after.ft.sorting": initTooltips,
+                            "after.ft.paging": initTooltips,
+                            "after.ft.filtering": initTooltips
                         }
                     });
                 },
@@ -253,11 +262,12 @@ define(["jquery", "footable"],
                 rspamd.query("symbols", {
                     success: function (data) {
                         var items = process_symbols_data(rspamd, data[0].data)[0];
+                        hideTooltips();
                         tables.symbols.rows.load(items);
 
                         // Is there a way to get an event when all rows are loaded?
                         rspamd.waitForRowsDisplayed("symbols", items.length, function () {
-                            $("#symbolsTable [title]").tooltip();
+                            initTooltips();
                         });
                     },
                     server: (checked_server === "All SERVERS") ? "local" : checked_server

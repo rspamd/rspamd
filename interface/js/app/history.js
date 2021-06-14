@@ -351,6 +351,7 @@ define(["jquery", "footable"],
 
                         if (Object.prototype.hasOwnProperty.call(tables, "history") &&
                             version === prevVersion) {
+                            rspamd.hideSymbolTooltips();
                             tables.history.rows.load(items);
                             if (version) { // Non-legacy
                                 // Is there a way to get an event when all rows are loaded?

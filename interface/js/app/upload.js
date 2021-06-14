@@ -145,6 +145,7 @@ define(["jquery"],
                         rspamd.symbols.scan.push(o.symbols[0]);
 
                         if (Object.prototype.hasOwnProperty.call(tables, "scan")) {
+                            rspamd.hideSymbolTooltips();
                             tables.scan.rows.load(items, true);
                             // Is there a way to get an event when all rows are loaded?
                             rspamd.waitForRowsDisplayed("scan", rows_total, function () {

@@ -64,6 +64,7 @@ define(["jquery", "d3pie"],
             }
 
             var stat_w = [];
+            $("#statWidgets [title]").tooltip("hide");
             $("#statWidgets").empty().hide();
             $.each(data, function (i, item) {
                 var widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
@@ -103,8 +104,10 @@ define(["jquery", "d3pie"],
                 .wrapAll('<div class="card stat-box text-center bg-light shadow-sm float-right">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
             $("#statWidgets").find("div.float-right").appendTo("#statWidgets");
+            $("#statWidgets [title]").tooltip();
             $("#statWidgets").show();
 
+            $("#clusterTable [title]").tooltip("hide");
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
@@ -141,6 +144,7 @@ define(["jquery", "d3pie"],
                   '">' + uptime + "</td>" +
                 "<td>" + version + "</td>" +
                 "<td>" + short_id + "</td></tr>");
+                $("#clusterTable [title]").tooltip();
 
                 $("#selSrv").append($('<option value="' + key + '">' + key + "</option>"));
 
@@ -197,8 +201,6 @@ define(["jquery", "d3pie"],
                 addStatfiles(checked_server, data.statfiles);
                 addFuzzyStorage(checked_server, data.fuzzy_hashes);
             }
-
-            $("#statWidgets [title], #clusterTable [title]").tooltip();
         }
 
         function getChart(rspamd, graphs, checked_server) {

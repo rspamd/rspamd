@@ -26,7 +26,7 @@
         // }],
         "line-comment-position": "off",
         "max-params": ["warn", 6],
-        "max-statements": ["warn", 44],
+        "max-statements": ["warn", 50],
         "max-statements-per-line": ["error", { "max": 2 }],
         "multiline-comment-style": "off",
         "multiline-ternary": ["error", "always-multiline"],

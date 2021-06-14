@@ -222,6 +222,10 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         });
     }
 
+    function hideSymbolTooltips() {
+        $("abbr[data-sym-key]").tooltip("hide");
+    }
+
     function getPassword() {
         return sessionStorage.getItem("Password");
     }
@@ -767,6 +771,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     // Scan and History shared functions
 
     ui.drawTooltips = drawTooltips;
+    ui.hideSymbolTooltips = hideSymbolTooltips;
     ui.unix_time_format = unix_time_format;
     ui.set_page_size = set_page_size;
 
@@ -886,6 +891,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             },
             on: {
                 "ready.ft.table": drawTooltips,
+                "before.ft.sorting": hideSymbolTooltips,
+                "before.ft.paging": hideSymbolTooltips,
+                "before.ft.filtering": hideSymbolTooltips,
                 "after.ft.sorting": drawTooltips,
                 "after.ft.paging": drawTooltips,
                 "after.ft.filtering": drawTooltips,
