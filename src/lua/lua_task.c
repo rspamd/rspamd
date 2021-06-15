@@ -219,9 +219,11 @@ LUA_FUNCTION_DEF (task, set_pre_result);
 
 /***
  * @method task:has_pre_result()
- * Returns true if task has some pre-result being set
+ * Returns true if task has some pre-result being set.
+ * If result has been set this function also returns pre result action,
+ * message and module as strings in this order.
  *
- * @return {boolean} true if task has some pre-result being set
+ * @return {boolean,[string,string,string]} true if task has some pre-result being set
  */
 LUA_FUNCTION_DEF (task, has_pre_result);
 /***
