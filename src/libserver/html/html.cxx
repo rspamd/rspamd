@@ -1658,7 +1658,19 @@ html_process_input(rspamd_mempool_t *pool,
 	}, html_content::traverse_type::POST_ORDER);
 
 	/* Propagate styles */
-	hc->traverse_block_tags([](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
+		if (hc->css_style) {
+			auto *css_block = hc->css_style->check_tag_block(tag);
+
+			if (css_block) {
+				if (tag->block) {
+					tag->block->propagate_block(*css_block);
+				}
+				else {
+					tag->block = css_block;
+				}
+			}
+		}
 		if (tag->block) {
 			tag->block->compute_visibility();
 
