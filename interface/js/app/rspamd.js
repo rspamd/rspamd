@@ -298,21 +298,22 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 });
                 if (!ui.read_only) tab_selectors.displayUI(ui);
             },
+            complete: function () {
+                if (ui.read_only) {
+                    $(".ro-disable").attr("disabled", true);
+                    $(".ro-hide").hide();
+                } else {
+                    $(".ro-disable").removeAttr("disabled", true);
+                    $(".ro-hide").show();
+                }
+
+                $("#preloader").addClass("d-none");
+                $("#navBar, #mainUI").removeClass("d-none");
+                $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
+            },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
         });
-
-        if (ui.read_only) {
-            $(".ro-disable").attr("disabled", true);
-            $(".ro-hide").hide();
-        } else {
-            $(".ro-disable").removeAttr("disabled", true);
-            $(".ro-hide").show();
-        }
-
-        $("#preloader").addClass("d-none");
-        $("#navBar, #mainUI").removeClass("d-none");
-        $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
     }
 
     function alertMessage(alertClass, alertText) {
