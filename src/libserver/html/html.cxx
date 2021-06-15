@@ -251,6 +251,7 @@ find_tag_component_name(rspamd_mempool_t *pool,
 	auto *p = rspamd_mempool_alloc_buffer(pool, end - begin);
 	memcpy(p, begin, end - begin);
 	auto len = decode_html_entitles_inplace(p, end - begin);
+	len = rspamd_str_lc(p, len);
 	auto known_component_it = html_components_map.find({p, len});
 
 	if (known_component_it != html_components_map.end()) {
