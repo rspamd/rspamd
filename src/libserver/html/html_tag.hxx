@@ -38,6 +38,7 @@ enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_SIZE,
 	RSPAMD_HTML_COMPONENT_REL,
 	RSPAMD_HTML_COMPONENT_ALT,
+	RSPAMD_HTML_COMPONENT_ID,
 };
 /**
  * Returns component type from a string

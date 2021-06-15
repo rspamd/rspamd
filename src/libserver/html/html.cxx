@@ -65,6 +65,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 				{"size", html_component_type::RSPAMD_HTML_COMPONENT_SIZE},
 				{"rel", html_component_type::RSPAMD_HTML_COMPONENT_REL},
 				{"alt", html_component_type::RSPAMD_HTML_COMPONENT_ALT},
+				{"id", html_component_type::RSPAMD_HTML_COMPONENT_ID},
 		});
 
 #define msg_debug_html(...)  rspamd_conditional_debug_fast (NULL, NULL, \
