@@ -193,8 +193,8 @@ class css_style_sheet;
  * Update the existing stylesheet with another stylesheet
  */
 auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
-					  css_style_sheet *other)
-	-> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>;
+			   std::shared_ptr<css_style_sheet> &&other)
+	-> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error>;
 
 /*
  * Creates a functor to consume css selectors sequence

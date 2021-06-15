@@ -21,11 +21,11 @@
 #include "html_block.hxx"
 #include "html.hxx"
 #include "libserver/css/css_value.hxx"
+#include "libserver/css/css.hxx"
 
 #include "url.h"
 #include "contrib/libucl/khash.h"
 #include "libmime/images.h"
-#include "css/css.h"
 #include "libutil/cxx/utf8_util.h"
 
 #include "html_tag_defs.hxx"
@@ -1381,7 +1381,7 @@ html_process_input(rspamd_mempool_t *pool,
 			 * We just search for the first </s substring and then pass
 			 * the content to the parser (if needed)
 			 */
-			goffset end_style = rspamd_substring_search (p, end - p,
+			auto end_style = rspamd_substring_search (p, end - p,
 					"</", 2);
 			if (end_style == -1 || g_ascii_tolower (p[end_style + 2]) != 's') {
 				/* Invalid style */
@@ -1390,14 +1390,18 @@ html_process_input(rspamd_mempool_t *pool,
 			else {
 
 				if (allow_css) {
-					GError *err = nullptr;
-					hc->css_style = rspamd_css_parse_style(pool, p, end_style, hc->css_style,
-							&err);
+					auto ret_maybe =  rspamd::css::parse_css(pool, {p, std::size_t(end_style)},
+							std::move(hc->css_style));
 
-					if (err) {
-						msg_info_pool ("cannot parse css: %e", err);
-						g_error_free (err);
+					if (!ret_maybe.has_value()) {
+						auto err_str = fmt::format("cannot parse css (error code: {}): {}",
+								static_cast<int>(ret_maybe.error().type),
+								ret_maybe.error().description.value_or("unknown error"));
+						msg_info_pool ("cannot parse css: %*s",
+								(int)err_str.size(), err_str.data());
 					}
+
+					hc->css_style = ret_maybe.value();
 				}
 
 				p += end_style;

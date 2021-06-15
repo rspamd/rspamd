@@ -21,7 +21,6 @@
 #include <string>
 #include <memory>
 #include "logger.h"
-#include "css.h"
 #include "css_rule.hxx"
 #include "css_selector.hxx"
 
@@ -49,6 +48,12 @@ private:
 	rspamd_mempool_t *pool;
 	std::unique_ptr<impl> pimpl;
 };
+
+using css_return_pair = std::pair<std::shared_ptr<css_style_sheet>, css_parse_error>;
+auto css_parse_style(rspamd_mempool_t *pool,
+					 std::string_view input,
+					 std::shared_ptr<css_style_sheet> &&existing) ->
+					 css_return_pair;
 
 }
 

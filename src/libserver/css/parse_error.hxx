@@ -33,6 +33,7 @@ enum class css_parse_error_type {
 	PARSE_ERROR_BAD_NESTING,
 	PARSE_ERROR_NYI,
 	PARSE_ERROR_UNKNOWN_ERROR,
+	PARSE_ERROR_NO_ERROR,
 };
 
 struct css_parse_error {
@@ -41,9 +42,8 @@ struct css_parse_error {
 
 	explicit css_parse_error (css_parse_error_type type, const std::string &description) :
 		type(type), description(description) {}
-	explicit css_parse_error (css_parse_error_type type) :
+	explicit css_parse_error (css_parse_error_type type = css_parse_error_type::PARSE_ERROR_NO_ERROR) :
 			type(type) {}
-	css_parse_error() = default;
 };
 
 }

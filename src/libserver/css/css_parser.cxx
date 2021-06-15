@@ -148,15 +148,14 @@ class css_parser {
 public:
 	css_parser(void) = delete; /* Require mempool to be set for logging */
 	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {
-		/* Int this case we need to remove style in case of parser error */
-		owned_style = true;
+		style_object.reset();
 	}
 
 	/*
 	 * This constructor captures existing via unique_ptr, but it does not
 	 * destruct it on errors (we assume that it is owned somewhere else)
 	 */
-	explicit css_parser(css_style_sheet *existing, rspamd_mempool_t *pool) :
+	explicit css_parser(std::shared_ptr<css_style_sheet> &&existing, rspamd_mempool_t *pool) :
 			style_object(existing), pool(pool) {}
 
 	/*
@@ -169,9 +168,9 @@ public:
 	std::unique_ptr<css_consumed_block> consume_css_rule(const std::string_view &sv);
 	bool consume_input(const std::string_view &sv);
 
-	auto get_object_maybe(void) -> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error> {
+	auto get_object_maybe(void) -> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error> {
 		if (style_object) {
-			return std::move(style_object);
+			return style_object;
 		}
 
 		return tl::make_unexpected(error);
@@ -180,15 +179,8 @@ public:
 	/* Helper parser methods */
 	static bool need_unescape(const std::string_view &sv);
 
-	~css_parser() {
-		if (!owned_style && style_object) {
-			/* Avoid double free */
-			(void)style_object.release();
-		}
-	}
-
 private:
-	std::unique_ptr<css_style_sheet> style_object;
+	std::shared_ptr<css_style_sheet> style_object;
 	std::unique_ptr<css_tokeniser> tokeniser;
 
 	css_parse_error error;
@@ -197,7 +189,6 @@ private:
 	int rec_level = 0;
 	const int max_rec = 20;
 	bool eof = false;
-	bool owned_style = false;
 
 	/* Consumers */
 	auto component_value_consumer(std::unique_ptr<css_consumed_block> &top) -> bool;
@@ -618,7 +609,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 	}
 
 	if (!style_object) {
-		style_object = std::make_unique<css_style_sheet>(pool);
+		style_object = std::make_shared<css_style_sheet>(pool);
 	}
 
 	for (auto &&rule : rules) {
@@ -772,10 +763,10 @@ get_rules_parser_functor(rspamd_mempool_t *pool,
  * Wrapper for the parser
  */
 auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
-						  css_style_sheet *other)
-	-> tl::expected<std::unique_ptr<css_style_sheet>, css_parse_error>
+			   std::shared_ptr<css_style_sheet> &&other)
+	-> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error>
 {
-	css_parser parser(other, pool);
+	css_parser parser(std::forward<std::shared_ptr<css_style_sheet>>(other), pool);
 	std::string_view processed_input;
 
 	if (css_parser::need_unescape(st)) {
@@ -878,14 +869,13 @@ TEST_SUITE("css parser") {
 		}
 
 		/* We now merge all styles together */
-		css_style_sheet *merged = nullptr;
+		std::shared_ptr<css_style_sheet> merged;
 		for (const auto &c : cases) {
-			auto ret = parse_css(pool, c, merged);
-			/* Avoid destruction as we are using this to interoperate with C */
-			merged = ret->release();
+			auto ret = parse_css(pool, c, std::move(merged));
+			merged.swap(ret.value());
 		}
 
-		CHECK(merged != nullptr);
+		CHECK(merged.get() != nullptr);
 
 		rspamd_mempool_delete(pool);
 	}
