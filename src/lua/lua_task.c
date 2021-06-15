@@ -2366,15 +2366,45 @@ lua_task_has_pre_result (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	gint nret = 1;
 
 	if (task) {
-		lua_pushboolean (L, task->result->passthrough_result != NULL);
+		if (task->result->passthrough_result) {
+			struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+
+			lua_pushboolean (L, true);
+			nret = 4;
+			/* bool, action, message, module */
+
+			if (pr->action) {
+				lua_pushstring(L, rspamd_action_to_str(pr->action->action_type));
+			}
+			else {
+				lua_pushnil(L);
+			}
+
+			if (pr->message) {
+				lua_pushstring(L, pr->message);
+			}
+			else {
+				lua_pushnil(L);
+			}
+			if (pr->module) {
+				lua_pushstring(L, pr->module);
+			}
+			else {
+				lua_pushnil(L);
+			}
+		}
+		else {
+			lua_pushboolean (L, false);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return nret;
 }
 
 static gint
