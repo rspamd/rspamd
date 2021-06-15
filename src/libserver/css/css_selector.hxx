@@ -29,6 +29,7 @@
 #include "parse_error.hxx"
 #include "css_parser.hxx"
 #include "libserver/html/html_tags.h"
+#include "libcryptobox/cryptobox.h"
 
 namespace rspamd::css {
 
@@ -67,13 +68,23 @@ struct css_selector {
 	}
 
 	auto to_string(void) const -> std::optional<const std::string_view> {
-		if (type == selector_type::SELECTOR_ELEMENT) {
+		if (type != selector_type::SELECTOR_ELEMENT) {
 			return std::string_view(std::get<std::string_view>(value));
 		}
 		return std::nullopt;
 	};
 
 	explicit css_selector(selector_type t) : type(t) {}
+	explicit css_selector(tag_id_t t) : type(selector_type::SELECTOR_ELEMENT) {
+		value = t;
+	}
+	explicit css_selector(const std::string_view &st, selector_type t = selector_type::SELECTOR_ID) : type(t) {
+		value = st;
+	}
+
+	auto operator ==(const css_selector &other) const -> bool {
+		return type == other.type && value == other.value;
+	}
 
 	auto debug_str(void) const -> std::string;
 };
@@ -88,6 +99,24 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 							 blocks_gen_functor &&next_token_functor)
 	-> selectors_vec;
 
+}
+
+/* Selectors hashing */
+namespace std {
+template<>
+class hash<rspamd::css::css_selector> {
+public:
+	auto operator() (const rspamd::css::css_selector &sel) const -> auto {
+		if (sel.type == rspamd::css::css_selector::selector_type::SELECTOR_ELEMENT) {
+			return static_cast<std::uint64_t>(std::get<tag_id_t>(sel.value));
+		}
+		else {
+			const auto &sv = std::get<std::string_view>(sel.value);
+
+			return rspamd_cryptobox_fast_hash(sv.data(), sv.size(), 0xdeadbabe);
+		}
+	}
+};
 }
 
 #endif //RSPAMD_CSS_SELECTOR_HXX

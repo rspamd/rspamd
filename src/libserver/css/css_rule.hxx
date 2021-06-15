@@ -87,8 +87,8 @@ namespace rspamd::css {
 class css_declarations_block {
 public:
 	using rule_shared_ptr = std::shared_ptr<css_rule>;
-	using rule_shared_hash = shared_ptr_hash<css_rule>;
-	using rule_shared_eq = shared_ptr_equal<css_rule>;
+	using rule_shared_hash = smart_ptr_hash<css_rule>;
+	using rule_shared_eq = smart_ptr_equal<css_rule>;
 	enum class merge_type {
 		merge_duplicate,
 		merge_parent,

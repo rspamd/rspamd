@@ -17,6 +17,9 @@
 #include "css.hxx"
 #include "contrib/robin-hood/robin_hood.h"
 #include "css_parser.hxx"
+#include "libserver/html/html_tag.hxx"
+#include "libserver/html/html_block.hxx"
+
 /* Keep unit tests implementation here (it'll possibly be moved outside one day) */
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #define DOCTEST_CONFIG_IMPLEMENT
@@ -28,8 +31,11 @@ INIT_LOG_MODULE_PUBLIC(css);
 
 class css_style_sheet::impl {
 public:
+	using sel_shared_hash = smart_ptr_hash<css_selector>;
+	using sel_shared_eq = smart_ptr_equal<css_selector>;
 	using selector_ptr = std::unique_ptr<css_selector>;
-	using selectors_hash = robin_hood::unordered_flat_map<selector_ptr, css_declarations_block_ptr>;
+	using selectors_hash = robin_hood::unordered_flat_map<selector_ptr, css_declarations_block_ptr,
+			sel_shared_hash, sel_shared_eq>;
 	using universal_selector_t = std::pair<selector_ptr, css_declarations_block_ptr>;
 	selectors_hash tags_selector;
 	selectors_hash class_selectors;
@@ -94,6 +100,115 @@ css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 			found_it->second->merge_block(*decls);
 		}
 	}
+}
+
+auto
+css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
+		rspamd::html::html_block *
+{
+	std::optional<std::string_view> id_comp, class_comp;
+	rspamd::html::html_block *res = nullptr;
+
+	if (!tag) {
+		return nullptr;
+	}
+
+	/* First, find id in a tag and a class */
+	for (const auto &param : tag->parameters) {
+		if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_ID) {
+			id_comp = param.value;
+		}
+		else if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_CLASS) {
+			class_comp = param.value;
+		}
+	}
+
+	/* ID part */
+	if (id_comp && !pimpl->id_selectors.empty()) {
+		auto found_id_sel = pimpl->id_selectors.find(css_selector{id_comp.value()});
+
+		if (found_id_sel != pimpl->id_selectors.end()) {
+			const auto &decl = *(found_id_sel->second);
+			res = decl.compile_to_block(pool);
+		}
+	}
+
+	/* Class part */
+	if (class_comp && !pimpl->class_selectors.empty()) {
+		auto sv_split = [](auto strv, std::string_view delims = " ") -> std::vector<std::string_view> {
+			std::vector<decltype(strv)> ret;
+			std::size_t start = 0;
+
+			while (start < strv.size()) {
+				const auto last = strv.find_first_of(delims, start);
+				if (start != last) {
+					ret.emplace_back(strv.substr(start, last - start));
+				}
+
+				if (last == std::string_view::npos) {
+					if (start < strv.size()) {
+						ret.emplace_back(strv.substr(start));
+					}
+					break;
+				}
+
+				start = last + 1;
+			}
+
+			return ret;
+		};
+
+		auto elts = sv_split(class_comp.value());
+
+		for (const auto &e : elts) {
+			auto found_class_sel = pimpl->class_selectors.find(
+					css_selector{e, css_selector::selector_type::SELECTOR_CLASS});
+
+			if (found_class_sel != pimpl->id_selectors.end()) {
+				const auto &decl = *(found_class_sel->second);
+				auto *tmp = decl.compile_to_block(pool);
+
+				if (res == nullptr) {
+					res = tmp;
+				}
+				else {
+					res->propagate_block(*tmp);
+				}
+			}
+		}
+	}
+
+	/* Tags part */
+	if (!pimpl->tags_selector.empty()) {
+		auto found_tag_sel = pimpl->class_selectors.find(
+				css_selector{static_cast<tag_id_t>(tag->id)});
+
+		if (found_tag_sel != pimpl->id_selectors.end()) {
+			const auto &decl = *(found_tag_sel->second);
+			auto *tmp = decl.compile_to_block(pool);
+
+			if (res == nullptr) {
+				res = tmp;
+			}
+			else {
+				res->propagate_block(*tmp);
+			}
+		}
+	}
+
+	/* Finally, universal selector */
+	if (pimpl->universal_selector) {
+		auto *tmp = pimpl->universal_selector->second->compile_to_block(pool);
+
+		if (res == nullptr) {
+			res = tmp;
+		}
+		else {
+			res->propagate_block(*tmp);
+		}
+	}
+
+	return res;
 }
 
 auto

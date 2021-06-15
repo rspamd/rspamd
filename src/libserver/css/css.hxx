@@ -24,6 +24,12 @@
 #include "css_rule.hxx"
 #include "css_selector.hxx"
 
+namespace rspamd::html {
+/* Forward declaration */
+struct html_tag;
+struct html_block;
+}
+
 namespace rspamd::css {
 
 extern unsigned int rspamd_css_log_id;
@@ -43,6 +49,9 @@ public:
 	~css_style_sheet(); /* must be declared separately due to pimpl */
 	auto add_selector_rule(std::unique_ptr<css_selector> &&selector,
 						   css_declarations_block_ptr decls) -> void;
+
+	auto check_tag_block(const rspamd::html::html_tag *tag) ->
+		rspamd::html::html_block *;
 private:
 	class impl;
 	rspamd_mempool_t *pool;
