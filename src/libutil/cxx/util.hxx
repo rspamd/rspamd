@@ -31,7 +31,7 @@ namespace rspamd {
  * Transparent smart pointers hashing
  */
 template<typename T>
-struct shared_ptr_equal {
+struct smart_ptr_equal {
 	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
 	auto operator()(const std::shared_ptr<T> &a, const std::shared_ptr<T> &b) const {
 		return (*a) == (*b);
@@ -42,12 +42,24 @@ struct shared_ptr_equal {
 	auto operator()(const T &a, const std::shared_ptr<T> &b) const {
 		return a == (*b);
 	}
+	auto operator()(const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) const {
+		return (*a) == (*b);
+	}
+	auto operator()(const std::unique_ptr<T> &a, const T &b) const {
+		return (*a) == b;
+	}
+	auto operator()(const T &a, const std::unique_ptr<T> &b) const {
+		return a == (*b);
+	}
 };
 
 template<typename T>
-struct shared_ptr_hash {
+struct smart_ptr_hash {
 	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
 	auto operator()(const std::shared_ptr<T> &a) const {
+		return std::hash<T>()(*a);
+	}
+	auto operator()(const std::unique_ptr<T> &a) const {
 		return std::hash<T>()(*a);
 	}
 	auto operator()(const T &a) const {
