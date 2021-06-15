@@ -66,6 +66,10 @@ local settings = {
       header = 'X-Rspamd-Queue-Id',
       remove = 0,
     },
+    ['x-rspamd-pre-result'] = {
+      header = 'X-Rspamd-Pre-Result',
+      remove = 0,
+    },
     ['remove-spam-flag'] = {
       header = 'X-Spam',
     },
@@ -277,6 +281,22 @@ local function milter_headers(task)
       table.insert(buf, sym_str)
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')
+
+    local has_pr,action,message,module = task:has_pre_result()
+
+    if has_pr then
+      local pr_header = {}
+      if action then
+        table.insert(pr_header, string.format('action=%s', action))
+      end
+      if module then
+        table.insert(pr_header, string.format('module=%s', module))
+      end
+      if message then
+        table.insert(pr_header, message)
+      end
+      add_header('x-rspamd-pre-result', table.concat(pr_header, '; '), ';')
+    end
   end
 
   routines['x-rspamd-queue-id'] = function()
