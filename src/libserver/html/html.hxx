@@ -125,6 +125,8 @@ private:
 };
 
 
+auto html_tag_by_name(const std::string_view &name) -> std::optional<tag_id_t>;
+
 }
 
 #endif //RSPAMD_HTML_HXX

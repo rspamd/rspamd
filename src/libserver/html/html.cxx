@@ -1726,6 +1726,18 @@ html_debug_structure(const html_content &hc) -> std::string
 	return output;
 }
 
+auto html_tag_by_name(const std::string_view &name)
+	-> std::optional<tag_id_t>
+{
+	const auto *td = rspamd::html::html_tags_defs.by_name(name);
+
+	if (td != nullptr) {
+		return td->id;
+	}
+
+	return std::nullopt;
+}
+
 /*
  * Tests part
  */
