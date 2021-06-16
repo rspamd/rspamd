@@ -459,8 +459,8 @@ start_over:
 									ex->pos)) {
 								token.original.begin = text + last;
 								token.original.len = ex->pos - last;
-								token.flags = 0;
-								g_array_append_val (res, token);
+								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
+											  RSPAMD_STAT_TOKEN_FLAG_UTF;
 							}
 
 							/* Process the current exception */
