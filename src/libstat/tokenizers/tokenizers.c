@@ -275,6 +275,14 @@ rspamd_tokenize_exception (struct rspamd_process_exception *ex, GArray *res)
 		g_array_append_val (res, token);
 		token.flags = 0;
 	}
+	else if (ex->type == RSPAMD_EXCEPTION_INVISIBLE) {
+		token.original.begin = "!!INV!!";
+		token.original.len = sizeof ("!!INV!!") - 1;
+		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+
+		g_array_append_val (res, token);
+		token.flags = 0;
+	}
 }
 
 

@@ -316,21 +316,6 @@ struct rspamd_main {
 	struct rspamd_http_context *http_ctx;
 };
 
-enum rspamd_exception_type {
-	RSPAMD_EXCEPTION_NEWLINE = 0,
-	RSPAMD_EXCEPTION_URL,
-	RSPAMD_EXCEPTION_GENERIC,
-};
-/**
- * Structure to point exception in text from processing
- */
-struct rspamd_process_exception {
-	goffset pos;
-	guint len;
-	gpointer ptr;
-	enum rspamd_exception_type type;
-};
-
 /**
  * Control session object
  */

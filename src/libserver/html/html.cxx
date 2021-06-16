@@ -1658,7 +1658,7 @@ html_process_input(rspamd_mempool_t *pool,
 	}, html_content::traverse_type::POST_ORDER);
 
 	/* Propagate styles */
-	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([&hc, &exceptions,&pool](const html_tag *tag) -> bool {
 		if (hc->css_style) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
@@ -1673,6 +1673,60 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 		if (tag->block) {
 			tag->block->compute_visibility();
+
+			if (exceptions) {
+				if (!tag->block->is_visible()) {
+					if (tag->parent == nullptr || (tag->parent->block && tag->parent->block->is_visible())) {
+						/* Add exception for an invisible element */
+						auto * ex = rspamd_mempool_alloc_type (pool,struct rspamd_process_exception);
+						ex->pos = tag->content_offset;
+						ex->len = tag->content_length;
+						ex->type = RSPAMD_EXCEPTION_INVISIBLE;
+						ex->ptr = (void *)tag;
+
+						*exceptions = g_list_prepend(*exceptions, ex);
+					}
+				}
+				else if (*exceptions && tag->parent) {
+					/* Current block is visible, check if parent is invisible */
+					auto *ex = (struct rspamd_process_exception*)g_list_first(*exceptions)->data;
+
+					/*
+					 * TODO: we need to handle the following cases:
+					 * <inv><vis><inv> -< insert one more exception
+					 * <vis><inv> -< increase content_offset decrease length
+					 * <inv><vis> -< decrease length
+					 */
+					if (ex && ex->type == RSPAMD_EXCEPTION_INVISIBLE &&
+						ex->ptr == (void *)tag->parent) {
+						auto *parent = tag->parent;
+
+						if (tag->content_offset + tag->content_length ==
+							parent->content_offset + parent->content_length) {
+							/* <inv><vis> */
+							ex->len -= tag->content_length;
+						}
+						else if (tag->content_offset == parent->content_offset) {
+							/* <vis><inv> */
+							ex->len -= tag->content_length;
+							ex->pos += tag->content_length;
+						}
+						else if (tag->content_offset > ex->pos) {
+							auto *nex = rspamd_mempool_alloc_type (pool,
+									struct rspamd_process_exception);
+							auto start_len = tag->content_offset - ex->pos;
+							auto end_len = ex->len - tag->content_length - tag->content_length;
+							nex->pos = tag->content_offset + tag->content_length;
+							nex->len = end_len;
+							nex->type = RSPAMD_EXCEPTION_INVISIBLE;
+							nex->ptr = (void *)parent; /* ! */
+							ex->len = start_len;
+							*exceptions = g_list_prepend(*exceptions, ex);
+						}
+
+					}
+				}
+			}
 
 			for (const auto *cld_tag : tag->children) {
 				if (cld_tag->block) {
