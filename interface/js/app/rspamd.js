@@ -498,12 +498,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             }, 1000);
         });
 
-        $('a[data-toggle="tab"]').on("shown.bs.tab", function (e) {
-            tabClick("#" + $(e.target).attr("id"));
+        $('a[data-toggle="tab"]').on("shown.bs.tab", function () {
+            tabClick("#" + $(this).attr("id"));
         });
         $("#refresh, #disconnect").on("click", function (e) {
             e.preventDefault();
-            tabClick("#" + $(e.target).attr("id"));
+            tabClick("#" + $(this).attr("id"));
         });
         $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
