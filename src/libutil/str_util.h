@@ -44,6 +44,14 @@ gint rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l);
 guint rspamd_str_lc (gchar *str, guint size);
 
 /**
+ * Performs ascii copy & lowercase
+ * @param src
+ * @param size
+ * @return
+ */
+gsize rspamd_str_copy_lc (const gchar *src, gchar *dst, gsize size);
+
+/**
  * Convert string to lowercase in-place using utf (limited) conversion
  */
 guint rspamd_str_lc_utf8 (gchar *str, guint size);

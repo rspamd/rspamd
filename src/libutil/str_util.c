@@ -27,6 +27,10 @@
 #endif
 #include <math.h>
 
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
+
 #include "contrib/fastutf8/fastutf8.h"
 
 const guchar lc_map[256] = {
@@ -96,6 +100,44 @@ rspamd_str_lc (gchar *str, guint size)
 	}
 
 	return size;
+}
+
+gsize
+rspamd_str_copy_lc (const gchar *src, gchar *dst, gsize size)
+{
+	gchar *d = dst;
+
+	/* Find aligned start */
+	while ((0xf & (uintptr_t)src) && size > 0) {
+		*d++ = lc_map[(guchar)*src++];
+		size --;
+	}
+
+	/* Aligned start in src */
+#ifdef __x86_64__
+	while (size >= 16) {
+		__m128i sv = _mm_load_si128((const __m128i*)src);
+		/* From A */
+		__m128i rangeshift = _mm_sub_epi8(sv, _mm_set1_epi8((char)('A'+128)));
+		/* To Z */
+		__m128i nomodify = _mm_cmpgt_epi8(rangeshift, _mm_set1_epi8(-128 + 25));
+		/* ^ ' ' */
+		__m128i flip  = _mm_andnot_si128(nomodify, _mm_set1_epi8(0x20));
+		__m128i uc = _mm_xor_si128(sv, flip);
+		_mm_storeu_si128((__m128i*)d, uc);
+		d += 16;
+		src += 16;
+		size -= 16;
+	}
+#endif
+
+	/* Leftover */
+	while (size > 0) {
+		*d++ = lc_map[(guchar)*src++];
+		size --;
+	}
+
+	return (d - dst);
 }
 
 gint
