@@ -298,21 +298,22 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 });
                 if (!ui.read_only) tab_selectors.displayUI(ui);
             },
+            complete: function () {
+                if (ui.read_only) {
+                    $(".ro-disable").attr("disabled", true);
+                    $(".ro-hide").hide();
+                } else {
+                    $(".ro-disable").removeAttr("disabled", true);
+                    $(".ro-hide").show();
+                }
+
+                $("#preloader").addClass("d-none");
+                $("#navBar, #mainUI").removeClass("d-none");
+                $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
+            },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
         });
-
-        if (ui.read_only) {
-            $(".ro-disable").attr("disabled", true);
-            $(".ro-hide").hide();
-        } else {
-            $(".ro-disable").removeAttr("disabled", true);
-            $(".ro-hide").show();
-        }
-
-        $("#preloader").addClass("d-none");
-        $("#navBar, #mainUI").removeClass("d-none");
-        $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
     }
 
     function alertMessage(alertClass, alertText) {
@@ -497,12 +498,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             }, 1000);
         });
 
-        $('a[data-toggle="tab"]').on("shown.bs.tab", function (e) {
-            tabClick("#" + $(e.target).attr("id"));
+        $('a[data-toggle="tab"]').on("shown.bs.tab", function () {
+            tabClick("#" + $(this).attr("id"));
         });
         $("#refresh, #disconnect").on("click", function (e) {
             e.preventDefault();
-            tabClick("#" + $(e.target).attr("id"));
+            tabClick("#" + $(this).attr("id"));
         });
         $(".dropdown-menu a").click(function (e) {
             e.preventDefault();
