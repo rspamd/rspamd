@@ -16,6 +16,7 @@
 
 #include "css_selector.hxx"
 #include "css.hxx"
+#include "libserver/html/html.hxx"
 #include "fmt/core.h"
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
@@ -73,12 +74,15 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 					}
 					break;
 				}
-				case css_parser_token::token_type::ident_token:
-					cur_selector = std::make_unique<css_selector>(
-							css_selector::selector_type::SELECTOR_ELEMENT);
-					cur_selector->value = parser_tok.get_string_or_default("");
+				case css_parser_token::token_type::ident_token: {
+					auto tag_id = html::html_tag_by_name(parser_tok.get_string_or_default(""));
+
+					if (tag_id) {
+						cur_selector = std::make_unique<css_selector>(tag_id.value());
+					}
 					state = selector_process_state::selector_ident_consumed;
 					break;
+				}
 				case css_parser_token::token_type::hash_token:
 					cur_selector = std::make_unique<css_selector>(
 							css_selector::selector_type::SELECTOR_ID);
@@ -109,7 +113,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				}
 			}
 			else if (state == selector_process_state::selector_ident_consumed) {
-				if (parser_tok.type == css_parser_token::token_type::comma_token) {
+				if (parser_tok.type == css_parser_token::token_type::comma_token && cur_selector) {
 					/* Got full selector, attach it to the vector and go further */
 					msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
 					ret.push_back(std::move(cur_selector));
@@ -130,7 +134,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 			}
 			else {
 				/* Ignore state; ignore all till ',' token or eof token */
-				if (parser_tok.type == css_parser_token::token_type::comma_token) {
+				if (parser_tok.type == css_parser_token::token_type::comma_token && cur_selector) {
 					/* Got full selector, attach it to the vector and go further */
 					ret.push_back(std::move(cur_selector));
 					state = selector_process_state::selector_parse_start;
@@ -190,11 +194,11 @@ css_selector::debug_str() const -> std::string
 TEST_SUITE("css selectors") {
 	TEST_CASE("simple css selectors") {
 		const std::vector<std::pair<const char *, std::vector<css_selector::selector_type>>> cases{
-				{"em", {css_selector::selector_type::SELECTOR_ELEMENT}},
+				{"em", {css_selector::selector_type::SELECTOR_TAG}},
 				{"*", {css_selector::selector_type::SELECTOR_ALL}},
 				{".class", {css_selector::selector_type::SELECTOR_CLASS}},
 				{"#id", {css_selector::selector_type::SELECTOR_ID}},
-				{"em,.class,#id", {css_selector::selector_type::SELECTOR_ELEMENT,
+				{"em,.class,#id", {css_selector::selector_type::SELECTOR_TAG,
 								   css_selector::selector_type::SELECTOR_CLASS,
 								   css_selector::selector_type::SELECTOR_ID}},
 		};

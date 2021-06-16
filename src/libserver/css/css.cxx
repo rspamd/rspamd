@@ -72,7 +72,7 @@ css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 	case css_selector::selector_type::SELECTOR_ID:
 		target_hash = &pimpl->id_selectors;
 		break;
-	case css_selector::selector_type::SELECTOR_ELEMENT:
+	case css_selector::selector_type::SELECTOR_TAG:
 		target_hash = &pimpl->tags_selector;
 		break;
 	}

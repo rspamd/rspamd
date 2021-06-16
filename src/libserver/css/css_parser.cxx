@@ -774,14 +774,9 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 	}
 	else {
 		/* Lowercase inplace */
-		auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, st.length()));
-		auto *p = nspace;
-
-		for (const auto c : st) {
-			*p++ = g_ascii_tolower(c);
-		}
-
-		processed_input = std::string_view{nspace, (std::size_t)(p - nspace)};
+		auto *nspace = rspamd_mempool_alloc_buffer(pool, st.size());
+		rspamd_str_copy_lc(st.data(), nspace, st.size());
+		processed_input = std::string_view{nspace, st.size()};
 	}
 
 	if (parser.consume_input(processed_input)) {
@@ -825,7 +820,7 @@ parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 TEST_SUITE("css parser") {
 	TEST_CASE("parse colors") {
 		const std::vector<const char *> cases{
-			"p { color: rgb(100%, 50%, 0%); opacity: -1; width: 1em; display: none; } /* very transparent solid orange */",
+			"P { CoLoR: rgb(100%, 50%, 0%); opacity: -1; width: 1em; display: none; } /* very transparent solid orange тест */",
 			"p { color: rgb(100%, 50%, 0%); opacity: 2; display: inline; } /* very transparent solid orange */",
 			"p { color: rgb(100%, 50%, 0%); opacity: 0.5; } /* very transparent solid orange */\n",
 			"p { color: rgb(100%, 50%, 0%); opacity: 1; width: 99%; } /* very transparent solid orange */\n",
