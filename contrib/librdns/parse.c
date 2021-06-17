@@ -263,7 +263,8 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		return -1;
 	}
 	if (*remain < (int)sizeof (uint16_t) * 6) {
-		rdns_info ("stripped dns reply: %d bytes remain", *remain);
+		rdns_info ("stripped dns reply: %d bytes remain; domain %s", *remain,
+				rep->requested_name);
 		return -1;
 	}
 	GET16 (type);
@@ -282,7 +283,7 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 			parsed = true;
 		}
 		else {
-			rdns_info ("corrupted A record");
+			rdns_info ("corrupted A record; domain: %s", rep->requested_name);
 			return -1;
 		}
 		break;
@@ -294,14 +295,14 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 			parsed = true;
 		}
 		else {
-			rdns_info ("corrupted AAAA record");
+			rdns_info ("corrupted AAAA record; domain %s", rep->requested_name);
 			return -1;
 		}
 		break;
 	case DNS_T_PTR:
 		if (! rdns_parse_labels (resolver, in, &elt->content.ptr.name, &p,
 				rep, remain, true)) {
-			rdns_info ("invalid labels in PTR record");
+			rdns_info ("invalid labels in PTR record; domain %s", rep->requested_name);
 			return -1;
 		}
 		parsed = true;
@@ -309,7 +310,7 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 	case DNS_T_NS:
 		if (! rdns_parse_labels (resolver, in, &elt->content.ns.name, &p,
 				rep, remain, true)) {
-			rdns_info ("invalid labels in NS record");
+			rdns_info ("invalid labels in NS record; domain %s", rep->requested_name);
 			return -1;
 		}
 		parsed = true;
@@ -317,60 +318,74 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 	case DNS_T_SOA:
 		if (! rdns_parse_labels (resolver, in, &elt->content.soa.mname, &p,
 				rep, remain, true)) {
-			rdns_info ("invalid labels in NS record");
+			rdns_info ("invalid labels in SOA record; domain %s", rep->requested_name);
 			return -1;
 		}
 		if (! rdns_parse_labels (resolver, in, &elt->content.soa.admin, &p,
 				rep, remain, true)) {
-			rdns_info ("invalid labels in NS record");
+			rdns_info ("invalid labels in SOA record; domain %s", rep->requested_name);
 			return -1;
 		}
-		GET32 (elt->content.soa.serial);
-		GET32 (elt->content.soa.refresh);
-		GET32 (elt->content.soa.retry);
-		GET32 (elt->content.soa.expire);
-		GET32 (elt->content.soa.minimum);
+		if (*remain >= sizeof(int32_t) * 5) {
+			GET32 (elt->content.soa.serial);
+			GET32 (elt->content.soa.refresh);
+			GET32 (elt->content.soa.retry);
+			GET32 (elt->content.soa.expire);
+			GET32 (elt->content.soa.minimum);
+		}
+		else {
+			rdns_info ("invalid data in SOA record; domain %s", rep->requested_name);
+			return -1;
+		}
 		parsed = true;
 		break;
 	case DNS_T_MX:
 		GET16 (elt->content.mx.priority);
 		if (! rdns_parse_labels (resolver, in, &elt->content.mx.name, &p,
 				rep, remain, true)) {
-			rdns_info ("invalid labels in MX record");
+			rdns_info ("invalid labels in MX record; domain %s", rep->requested_name);
 			return -1;
 		}
 		parsed = true;
 		break;
 	case DNS_T_TXT:
 	case DNS_T_SPF:
-		elt->content.txt.data = malloc (datalen + 1);
-		if (elt->content.txt.data == NULL) {
-			rdns_err ("failed to allocate %d bytes for TXT record", (int)datalen + 1);
+		if (datalen <= *remain) {
+			elt->content.txt.data = malloc(datalen + 1);
+			if (elt->content.txt.data == NULL) {
+				rdns_err ("failed to allocate %d bytes for TXT record; domain %s",
+						(int) datalen + 1, rep->requested_name);
+				return -1;
+			}
+			/* Now we should compose data from parts */
+			copied = 0;
+			parts = 0;
+			while (copied + parts < datalen && *remain > 0) {
+				txtlen = *p;
+				if (txtlen + copied + parts <= datalen && *remain >= txtlen + 1) {
+					parts++;
+					memcpy (elt->content.txt.data + copied, p + 1, txtlen);
+					copied += txtlen;
+					p += txtlen + 1;
+					*remain -= txtlen + 1;
+				}
+				else {
+					break;
+				}
+			}
+			*(elt->content.txt.data + copied) = '\0';
+			parsed = true;
+			elt->type = RDNS_REQUEST_TXT;
+		}
+		else {
+			rdns_info ("stripped data in TXT record (%d bytes available, %d requested); "
+			  "domain %s", (int)*remain, (int)datalen, rep->requested_name);
 			return -1;
 		}
-		/* Now we should compose data from parts */
-		copied = 0;
-		parts = 0;
-		while (copied + parts < datalen) {
-			txtlen = *p;
-			if (txtlen + copied + parts <= datalen) {
-				parts ++;
-				memcpy (elt->content.txt.data + copied, p + 1, txtlen);
-				copied += txtlen;
-				p += txtlen + 1;
-				*remain -= txtlen + 1;
-			}
-			else {
-				break;
-			}
-		}
-		*(elt->content.txt.data + copied) = '\0';
-		parsed = true;
-		elt->type = RDNS_REQUEST_TXT;
 		break;
 	case DNS_T_SRV:
 		if (p - *pos > (int)(*remain - sizeof (uint16_t) * 3)) {
-			rdns_info ("stripped dns reply while reading SRV record");
+			rdns_info ("stripped dns reply while reading SRV record; domain %s", rep->requested_name);
 			return -1;
 		}
 		GET16 (elt->content.srv.priority);
@@ -378,14 +393,14 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		GET16 (elt->content.srv.port);
 		if (! rdns_parse_labels (resolver, in, &elt->content.srv.target,
 				&p, rep, remain, true)) {
-			rdns_info ("invalid labels in SRV record");
+			rdns_info ("invalid labels in SRV record; domain %s", rep->requested_name);
 			return -1;
 		}
 		parsed = true;
 		break;
 	case DNS_T_TLSA:
 		if (p - *pos > (int)(*remain - sizeof (uint8_t) * 3) || datalen <= 3) {
-			rdns_info ("stripped dns reply while reading TLSA record");
+			rdns_info ("stripped dns reply while reading TLSA record; domain %s", rep->requested_name);
 			return -1;
 		}
 		GET8 (elt->content.tlsa.usage);
@@ -394,7 +409,8 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		datalen -= 3;
 		elt->content.tlsa.data = malloc (datalen);
 		if (elt->content.tlsa.data == NULL) {
-			rdns_err ("failed to allocate %d bytes for TLSA record", (int)datalen + 1);
+			rdns_err ("failed to allocate %d bytes for TLSA record; domain %s",
+					(int)datalen + 1, rep->requested_name);
 			return -1;
 		}
 		elt->content.tlsa.datalen = datalen;
@@ -409,7 +425,7 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		*remain -= datalen;
 		break;
 	default:
-		rdns_debug ("unexpected RR type: %d", type);
+		rdns_debug ("unexpected RR type: %d; domain %s", type, rep->requested_name);
 		p += datalen;
 		*remain -= datalen;
 		break;
