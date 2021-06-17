@@ -148,7 +148,6 @@ define(["jquery"],
                             tables.scan.rows.load(items, true);
                             // Is there a way to get an event when all rows are loaded?
                             rspamd.waitForRowsDisplayed("scan", rows_total, function () {
-                                rspamd.drawTooltips();
                                 $("html, body").animate({
                                     scrollTop: $("#scanResult").offset().top
                                 }, 1000);
