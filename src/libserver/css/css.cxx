@@ -146,9 +146,6 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 				}
 
 				if (last == std::string_view::npos) {
-					if (start < strv.size()) {
-						ret.emplace_back(strv.substr(start));
-					}
 					break;
 				}
 
@@ -164,7 +161,7 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 			auto found_class_sel = pimpl->class_selectors.find(
 					css_selector{e, css_selector::selector_type::SELECTOR_CLASS});
 
-			if (found_class_sel != pimpl->id_selectors.end()) {
+			if (found_class_sel != pimpl->class_selectors.end()) {
 				const auto &decl = *(found_class_sel->second);
 				auto *tmp = decl.compile_to_block(pool);
 
@@ -180,10 +177,10 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 
 	/* Tags part */
 	if (!pimpl->tags_selector.empty()) {
-		auto found_tag_sel = pimpl->class_selectors.find(
+		auto found_tag_sel = pimpl->tags_selector.find(
 				css_selector{static_cast<tag_id_t>(tag->id)});
 
-		if (found_tag_sel != pimpl->id_selectors.end()) {
+		if (found_tag_sel != pimpl->tags_selector.end()) {
 			const auto &decl = *(found_tag_sel->second);
 			auto *tmp = decl.compile_to_block(pool);
 

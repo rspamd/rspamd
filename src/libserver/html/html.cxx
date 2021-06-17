@@ -1033,7 +1033,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 
 	if (maybe_bgcolor) {
-		tag->block->set_bgcolor(maybe_fgcolor->to_color().value());
+		tag->block->set_bgcolor(maybe_bgcolor->to_color().value());
 	}
 }
 
