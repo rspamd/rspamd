@@ -125,11 +125,6 @@ local types = {
     ct = 'application/x-alz',
     type = 'archive',
   },
-  -- https://en.wikipedia.org/wiki/Associated_Signature_Containers
-  asice = {
-    ct = 'application/vnd.etsi.asic-e+zip',
-    type = 'archive'
-  },
   xar = {
     ct = 'application/x-xar',
     type = 'archive',
@@ -225,6 +220,15 @@ local types = {
   },
   odp = {
     ct = 'application/vnd.oasis.opendocument.presentation',
+    type = 'office'
+  },
+  -- https://en.wikipedia.org/wiki/Associated_Signature_Containers
+  asice = {
+    ct = 'application/vnd.etsi.asic-e+zip',
+    type = 'office'
+  },
+  asics = {
+    ct = 'application/vnd.etsi.asic-s+zip',
     type = 'office'
   },
   -- other
