@@ -1831,7 +1831,7 @@ lua_mimepart_is_broken (lua_State * L)
 				true : false);
 	}
 	else {
-		lua_pushboolean (L, true);
+		lua_pushboolean (L, false);
 	}
 
 	return 1;

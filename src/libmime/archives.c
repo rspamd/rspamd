@@ -1951,7 +1951,10 @@ rspamd_archives_process (struct rspamd_task *task)
 					msg_info_task ("found %s archive with incorrect content-type: %T/%T",
 							rspamd_archive_type_str (arch->type),
 							&part->ct->type, &part->ct->subtype);
-					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+
+					if (!(part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
+						part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+					}
 				}
 			}
 		}
