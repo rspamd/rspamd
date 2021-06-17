@@ -55,7 +55,8 @@ local zip_patterns = {
     [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]
   },
   odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
-  epub = {[[epub\+zip]]}
+  epub = {[[epub\+zip]]},
+  asice = {[[mimetypeapplication/vnd\.etsi\.asic-e\+zipPK]]},
 }
 
 local txt_trie

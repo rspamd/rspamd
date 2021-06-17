@@ -125,6 +125,11 @@ local types = {
     ct = 'application/x-alz',
     type = 'archive',
   },
+  -- https://en.wikipedia.org/wiki/Associated_Signature_Containers
+  asice = {
+    ct = 'application/vnd.etsi.asic-e+zip',
+    type = 'archive'
+  },
   xar = {
     ct = 'application/x-xar',
     type = 'archive',
