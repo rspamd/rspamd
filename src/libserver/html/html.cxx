@@ -1796,17 +1796,19 @@ auto html_tag_by_name(const std::string_view &name)
  * Tests part
  */
 
-TEST_CASE("html parsing") {
+TEST_SUITE("html") {
+TEST_CASE("html parsing")
+{
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<html><!DOCTYPE html><body>", "+html;++body;"},
-			{"<html><div><div></div></div></html>", "+html;++div;+++div;"},
-			{"<html><div><div></div></html>", "+html;++div;+++div;"},
-			{"<html><div><div></div></html></div>", "+html;++div;+++div;"},
-			{"<p><p><a></p></a></a>", "+p;++p;+++a;"},
+			{"<html><!DOCTYPE html><body>",                    "+html;++body;"},
+			{"<html><div><div></div></div></html>",            "+html;++div;+++div;"},
+			{"<html><div><div></div></html>",                  "+html;++div;+++div;"},
+			{"<html><div><div></div></html></div>",            "+html;++div;+++div;"},
+			{"<p><p><a></p></a></a>",                          "+p;++p;+++a;"},
 			{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
 			{"<html><!DOCTYPE html><body><head><body></body></html></body></html>",
-					"+html;++body;+++head;++++body;"}
+															   "+html;++body;+++head;++++body;"}
 	};
 
 	rspamd_url_init(NULL);
@@ -1815,7 +1817,7 @@ TEST_CASE("html parsing") {
 
 	for (const auto &c : cases) {
 		GByteArray *tmp = g_byte_array_sized_new(c.first.size());
-		g_byte_array_append(tmp, (const guint8 *)c.first.data(), c.first.size());
+		g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
 		auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
 		CHECK(hc != nullptr);
 		auto dump = html_debug_structure(*hc);
@@ -1824,6 +1826,7 @@ TEST_CASE("html parsing") {
 	}
 
 	rspamd_mempool_delete(pool);
+}
 }
 
 }

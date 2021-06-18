@@ -377,7 +377,7 @@ auto css_value::debug_str() const -> std::string {
 	return ret;
 }
 
-TEST_SUITE("css values") {
+TEST_SUITE("css") {
 	TEST_CASE("css hex colors") {
 		const std::pair<const char*, css_color> hex_tests[] = {
 				{"000", css_color(0, 0, 0)},

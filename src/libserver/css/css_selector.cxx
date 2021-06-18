@@ -191,7 +191,7 @@ css_selector::debug_str() const -> std::string
 	return ret;
 }
 
-TEST_SUITE("css selectors") {
+TEST_SUITE("css") {
 	TEST_CASE("simple css selectors") {
 		const std::vector<std::pair<const char *, std::vector<css_selector::selector_type>>> cases{
 				{"em", {css_selector::selector_type::SELECTOR_TAG}},

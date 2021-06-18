@@ -46,6 +46,7 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace") {
 		memcpy(cpy, c.first.data(), c.first.size());
 		auto nlen = rspamd_strip_smtp_comments_inplace(cpy, c.first.size());
 		CHECK(std::string{cpy,nlen} == c.second);
+		delete[] cpy;
 	}
 }
 

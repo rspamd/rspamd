@@ -817,7 +817,7 @@ parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 	return nullptr;
 }
 
-TEST_SUITE("css parser") {
+TEST_SUITE("css") {
 	TEST_CASE("parse colors") {
 		const std::vector<const char *> cases{
 			"P { CoLoR: rgb(100%, 50%, 0%); opacity: -1; width: 1em; display: none; } /* very transparent solid orange тест */",

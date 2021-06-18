@@ -500,7 +500,7 @@ void css_rule::add_value(const css_value &value)
 }
 
 
-TEST_SUITE("css rules") {
+TEST_SUITE("css") {
 	TEST_CASE("simple css rules") {
 		const std::vector<std::pair<const char *, std::vector<css_property>>> cases{
 				{
