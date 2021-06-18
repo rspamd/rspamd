@@ -81,7 +81,7 @@ struct html_block {
 	}
 	auto set_display(bool v) -> void  {
 		if (v) {
-			display = rspamd::css::css_display_value::DISPLAY_NORMAL;
+			display = rspamd::css::css_display_value::DISPLAY_INLINE;
 		}
 		else {
 			display = rspamd::css::css_display_value::DISPLAY_HIDDEN;
@@ -228,7 +228,7 @@ struct html_block {
 						  rspamd::css::css_color::white(),
 						  0, 0,
 						  (fg_color_mask|bg_color_mask|display_mask|font_size_mask),
-						  rspamd::css::css_display_value::DISPLAY_NORMAL,
+						  rspamd::css::css_display_value::DISPLAY_INLINE,
 						  12};
 	}
 	/**

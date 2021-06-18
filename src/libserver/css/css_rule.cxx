@@ -399,7 +399,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 		switch (prop) {
 		case css_property_type::PROPERTY_VISIBILITY:
 		case css_property_type::PROPERTY_DISPLAY: {
-			auto disp = vals.back().to_display().value_or(css_display_value::DISPLAY_NORMAL);
+			auto disp = vals.back().to_display().value_or(css_display_value::DISPLAY_INLINE);
 			block->set_display(disp);
 			break;
 		}

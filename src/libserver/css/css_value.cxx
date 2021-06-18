@@ -298,27 +298,27 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 constexpr const auto display_names_map = frozen::make_unordered_map<frozen::string, css_display_value>({
 		{"hidden",             css_display_value::DISPLAY_HIDDEN},
 		{"none",               css_display_value::DISPLAY_HIDDEN},
-		{"inline",             css_display_value::DISPLAY_NORMAL},
-		{"block",              css_display_value::DISPLAY_NORMAL},
-		{"content",            css_display_value::DISPLAY_NORMAL},
-		{"flex",               css_display_value::DISPLAY_NORMAL},
-		{"grid",               css_display_value::DISPLAY_NORMAL},
-		{"inline-block",       css_display_value::DISPLAY_NORMAL},
-		{"inline-flex",        css_display_value::DISPLAY_NORMAL},
-		{"inline-grid",        css_display_value::DISPLAY_NORMAL},
-		{"inline-table",       css_display_value::DISPLAY_NORMAL},
-		{"list-item",          css_display_value::DISPLAY_NORMAL},
-		{"run-in",             css_display_value::DISPLAY_NORMAL},
-		{"table",              css_display_value::DISPLAY_NORMAL},
-		{"table-caption",      css_display_value::DISPLAY_NORMAL},
-		{"table-column-group", css_display_value::DISPLAY_NORMAL},
-		{"table-header-group", css_display_value::DISPLAY_NORMAL},
-		{"table-footer-group", css_display_value::DISPLAY_NORMAL},
-		{"table-row-group",    css_display_value::DISPLAY_NORMAL},
-		{"table-cell",         css_display_value::DISPLAY_NORMAL},
-		{"table-column",       css_display_value::DISPLAY_NORMAL},
-		{"table-row",          css_display_value::DISPLAY_NORMAL},
-		{"initial",            css_display_value::DISPLAY_NORMAL},
+		{"inline",             css_display_value::DISPLAY_INLINE},
+		{"block",              css_display_value::DISPLAY_BLOCK},
+		{"content",            css_display_value::DISPLAY_INLINE},
+		{"flex",               css_display_value::DISPLAY_BLOCK},
+		{"grid",               css_display_value::DISPLAY_INLINE},
+		{"inline-block",       css_display_value::DISPLAY_INLINE},
+		{"inline-flex",        css_display_value::DISPLAY_INLINE},
+		{"inline-grid",        css_display_value::DISPLAY_INLINE},
+		{"inline-table",       css_display_value::DISPLAY_INLINE},
+		{"list-item",          css_display_value::DISPLAY_BLOCK},
+		{"run-in",             css_display_value::DISPLAY_BLOCK},
+		{"table",              css_display_value::DISPLAY_BLOCK},
+		{"table-caption",      css_display_value::DISPLAY_BLOCK},
+		{"table-column-group", css_display_value::DISPLAY_BLOCK},
+		{"table-header-group", css_display_value::DISPLAY_BLOCK},
+		{"table-footer-group", css_display_value::DISPLAY_BLOCK},
+		{"table-row-group",    css_display_value::DISPLAY_BLOCK},
+		{"table-cell",         css_display_value::DISPLAY_BLOCK},
+		{"table-column",       css_display_value::DISPLAY_BLOCK},
+		{"table-row",          css_display_value::DISPLAY_BLOCK},
+		{"initial",            css_display_value::DISPLAY_INLINE},
 });
 
 auto css_value::maybe_display_from_string(const std::string_view &input)
@@ -354,7 +354,17 @@ auto css_value::debug_str() const -> std::string {
 		}
 		else if constexpr (std::is_same_v<T, css_display_value>) {
 			ret += "display: ";
-			ret += (arg == css_display_value::DISPLAY_HIDDEN ? "hidden" : "normal");
+			switch (arg) {
+			case css_display_value::DISPLAY_HIDDEN:
+				ret += "hidden";
+				break;
+			case css_display_value::DISPLAY_BLOCK:
+				ret += "block";
+				break;
+			case css_display_value::DISPLAY_INLINE:
+				ret += "inline";
+				break;
+			}
 		}
 		else if constexpr (std::is_integral_v<T>) {
 			ret += "integral: " + std::to_string(static_cast<int>(arg));
