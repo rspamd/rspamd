@@ -18,9 +18,14 @@
 #include "html_entities.hxx"
 
 #include <string>
+#include <utility>
+#include <vector>
 #include <contrib/robin-hood/robin_hood.h>
 #include <unicode/utf8.h>
 #include "libutil/cxx/util.hxx"
+
+#define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
+#include "doctest/doctest.h"
 
 namespace rspamd::html {
 
@@ -2196,9 +2201,14 @@ public:
 static const html_entities_storage html_entities_defs;
 
 std::size_t
-decode_html_entitles_inplace(char *s, std::size_t len)
+decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 {
 	long l, rep_len;
+	/*
+	 * t - tortoise (destination ptr)
+	 * h - hare (source ptr)
+	 * e - begin of entity
+	 */
 	char *t = s, *h = s, *e = s, *end_ptr, old_c;
 	const gchar *end;
 	const gchar *entity;
@@ -2208,7 +2218,12 @@ decode_html_entitles_inplace(char *s, std::size_t len)
 		do_digits_only,
 		do_mixed,
 	} seen_digit_only;
-	int state = 0, base;
+	enum class parser_state {
+		normal_content,
+		ampersand,
+		skip_multi_spaces,
+	} state = parser_state::normal_content;
+	int base;
 	UChar32 uc;
 
 	if (len == 0) {
@@ -2222,10 +2237,9 @@ decode_html_entitles_inplace(char *s, std::size_t len)
 
 	while (h - s < l && t <= h) {
 		switch (state) {
-			/* Out of entity */
-		case 0:
+		case parser_state::normal_content:
 			if (*h == '&') {
-				state = 1;
+				state = parser_state::ampersand;
 				seen_hash = false;
 				seen_hex = false;
 				seen_digit_only = do_undefined;
@@ -2234,12 +2248,17 @@ decode_html_entitles_inplace(char *s, std::size_t len)
 				continue;
 			}
 			else {
-				*t = *h;
-				h++;
-				t++;
+				if (norm_spaces && g_ascii_isspace(*h)) {
+					*t++ = ' ';
+					state = parser_state::skip_multi_spaces;
+					h++;
+				}
+				else {
+					*t++ = *h++;
+				}
 			}
 			break;
-		case 1:
+		case parser_state::ampersand:
 			if (*h == ';' && h > e) {
 decode_entity:
 				old_c = *h;
@@ -2340,11 +2359,11 @@ decode_entity:
 					}
 				}
 
-				state = 0;
+				state = parser_state::normal_content;
 			}
 			else if (*h == '&') {
 				/* Previous `&` was bogus */
-				state = 1;
+				state = parser_state::ampersand;
 
 				if (end - t > h - e) {
 					memmove(t, e, h - e);
@@ -2379,11 +2398,19 @@ decode_entity:
 			h++;
 
 			break;
+		case parser_state::skip_multi_spaces:
+			if (g_ascii_isspace(*h)) {
+				h ++;
+			}
+			else {
+				state = parser_state::normal_content;
+			}
+			break;
 		}
 	}
 
 	/* Leftover */
-	if (state == 1 && h > e) {
+	if (state == parser_state::ampersand && h > e) {
 		/* Unfinished entity, copy as is */
 		if (end - t >= h - e) {
 			memmove(t, e, h - e);
@@ -2392,6 +2419,45 @@ decode_entity:
 	}
 
 	return (t - s);
+}
+
+TEST_SUITE("html") {
+
+	TEST_CASE("html entities") {
+		std::vector<std::pair<std::string, std::string>> cases{
+				{"", ""},
+				{"abc", "abc"},
+				{"abc def", "abc def"},
+				{"abc     def", "abc def"},
+				{"abc\ndef", "abc def"},
+				{"abc\n \tdef", "abc def"},
+				{"    abc def   ", " abc def "},
+				{"FOO&gt;BAR", "FOO>BAR"},
+				{"FOO&gtBAR", "FOO>BAR"},
+				{"FOO&gt BAR", "FOO>BAR"},
+				{"FOO&gt;;;BAR", "FOO>;;BAR"},
+				{"I'm &notit; ", "I'm ¬it; "},
+				{"I'm &notin; ", "I'm ∉ "},
+				{"FOO& BAR", "FOO& BAR"},
+				{"FOO&&&&gt;BAR", "FOO&&&>BAR"},
+				{"FOO&#41;BAR", "FOO)BAR"},
+				{"FOO&#x41;BAR", "FOOABAR"},
+				{"FOO&#X41;BAR", "FOOABAR"},
+				{"FOO&#BAR", "FOO&#BAR"},
+				{"FOO&#ZOO", "FOO&#ZOO"},
+				{"FOO&#xBAR", "FOOºR"},
+				{"FOO&#x41BAR", "FOO䆺R"},
+				{"FOO&#x0000;ZOO", "FOO�ZOO"},
+		};
+
+		for (const auto &c : cases) {
+			auto *cpy = new char[c.first.size()];
+			memcpy(cpy, c.first.data(), c.first.size());
+			auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);
+			CHECK(std::string{cpy,nlen} == c.second);
+			delete[] cpy;
+		}
+	}
 }
 
 } // namespace rspamd::html
