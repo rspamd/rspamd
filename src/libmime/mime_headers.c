@@ -44,7 +44,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 	struct rspamd_received_header *recv;
 	const gchar *p, *end;
 	gchar *id;
-	gint max_recipients = -1;
+	gint max_recipients = -1, len;
 
 	if (task->cfg) {
 		max_recipients = task->cfg->max_recipients;
@@ -93,7 +93,9 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 
 		rh->flags = RSPAMD_HEADER_MESSAGE_ID|RSPAMD_HEADER_UNIQUE;
 		p = rh->decoded;
-		end = p + strlen (p);
+		len = rspamd_strip_smtp_comments_inplace(rh->decoded, strlen(p));
+		rh->decoded[len] = '\0'; /* Zero terminate after stripping */
+		end = p + len;
 
 		if (*p == '<') {
 			p++;
