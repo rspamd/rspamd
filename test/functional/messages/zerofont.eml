@@ -14,5 +14,7 @@ Content-Type: text/html
   <body class="activity-stream">
     <div>fi<span style="FONT-SIZE: 0px">le </span>sh<span style="FONT-SIZE: 0px">aring </span></div>
   <a href="https://example.com">test url</a>
+
+<div>foo<div>bar</div>ttt<div>ololo</div>baz</div>
   </body>
 </html>
