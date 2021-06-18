@@ -22,6 +22,7 @@
 #include <vector>
 #include <contrib/robin-hood/robin_hood.h>
 #include <unicode/utf8.h>
+#include <unicode/uchar.h>
 #include "libutil/cxx/util.hxx"
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
@@ -1732,7 +1733,7 @@ static const auto html_entities_array = rspamd::array_of<html_entity_def>(
 		ENTITY_DEF("die", 168, "\xc2\xa8"),
 		ENTITY_DEF("ngt", 8815, "\xe2\x89\xaf"),
 		ENTITY_DEF("vcy", 1074, "\xd0\xb2"),
-		ENTITY_DEF("fjlig", 0, "\x66\x6a"),
+		ENTITY_DEF("fjlig", (unsigned)-1, "\x66\x6a"),
 		ENTITY_DEF("submult", 10945, "\xe2\xab\x81"),
 		ENTITY_DEF("ubrcy", 1118, "\xd1\x9e"),
 		ENTITY_DEF("ovbar", 9021, "\xe2\x8c\xbd"),
@@ -2203,15 +2204,13 @@ static const html_entities_storage html_entities_defs;
 std::size_t
 decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 {
-	long l, rep_len;
 	/*
 	 * t - tortoise (destination ptr)
 	 * h - hare (source ptr)
 	 * e - begin of entity
 	 */
-	char *t = s, *h = s, *e = s, *end_ptr, old_c;
+	char *t = s, *h = s, *e = s;
 	const gchar *end;
-	const gchar *entity;
 	bool seen_hash = false, seen_hex = false;
 	enum {
 		do_undefined,
@@ -2223,19 +2222,214 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		ampersand,
 		skip_multi_spaces,
 	} state = parser_state::normal_content;
-	int base;
-	UChar32 uc;
 
-	if (len == 0) {
-		return 0;
-	}
-	else {
-		l = len;
-	}
+	end = s + len;
 
-	end = s + l;
+	auto replace_named_entity = [&](const char *entity, std::size_t len) -> bool {
+		const auto *entity_def = html_entities_defs.by_name({entity,
+															 (std::size_t) (h - entity)});
 
-	while (h - s < l && t <= h) {
+		auto replace_entity = [&]() -> void {
+			auto l = entity_def->replacement.size();
+			memcpy(t, entity_def->replacement.data(), l);
+			t += l;
+		};
+
+		if (entity_def) {
+			replace_entity();
+			return true;
+		}
+		else {
+			/* Try heuristic */
+			/* Try 4 letters replacements */
+			if (h - e > 4) {
+				entity_def = html_entities_defs.by_name({entity, 4});
+
+				if (entity_def) {
+					replace_entity();
+					/* Rewind h by 5 for & character and entity */
+					h = e + 4;
+				}
+			}
+			/* Try 3 letters replacements */
+			if (!entity_def && h - e > 3) {
+				entity_def = html_entities_defs.by_name({entity, 3});
+
+				if (entity_def) {
+					replace_entity();
+					h = e + 3;
+				}
+			}
+			/* Try 2 letters replacements */
+			if (!entity_def && h - e > 2) {
+				entity_def = html_entities_defs.by_name({entity, 2});
+
+				if (entity_def) {
+					replace_entity();
+					h = e + 2;
+				}
+			}
+			/* Leave undecoded */
+			if (!entity_def && (end - t > h - e + 1)) {
+				memmove(t, e, h - e + 1);
+				t += h - e + 1;
+			}
+			else if (entity_def) {
+				return true;
+			}
+		}
+
+		return false;
+	};
+
+	/* Strtoul works merely for 0 terminated strings, so leave it alone... */
+	auto dec_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
+		int n = 0;
+
+		/* Avoid INT_MIN overflow by moving to negative numbers */
+		while (g_ascii_isdigit(*str) && len > 0) {
+			n = 10 * n - (*str++ - '0');
+			len --;
+		}
+
+		if (len == 0) {
+			return -(n);
+		}
+		else {
+			return std::nullopt;
+		}
+	};
+	auto hex_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
+		int n = 0;
+
+		/* Avoid INT_MIN overflow by moving to negative numbers */
+		while (g_ascii_isxdigit(*str) && len > 0) {
+			if (*str <= 0x39) {
+				n = 16 * n - (*str++ - '0');
+			}
+			else {
+				n = 16 * n - (((*str++) | ' ') - 'a' + 10);
+			}
+			len --;
+		}
+
+		if (len == 0) {
+			return -(n);
+		}
+		else {
+			return std::nullopt;
+		}
+	};
+	auto oct_to_int = [](const char *str, std::size_t len) -> std::optional<int> {
+		int n = 0;
+
+		/* Avoid INT_MIN overflow by moving to negative numbers */
+		while (g_ascii_isdigit(*str) && len > 0) {
+			if (*str > '7') {
+				break;
+			}
+			else {
+				n = 8 * n - (*str++ - '0');
+			}
+			len --;
+		}
+
+		if (len == 0) {
+			return -(n);
+		}
+		else {
+			return std::nullopt;
+		}
+	};
+
+	auto replace_numeric_entity = [&](const char *entity) -> bool {
+		UChar32 uc;
+		std::optional<int> maybe_num;
+
+		if (*entity == 'x' || *entity == 'X') {
+			maybe_num = hex_to_int(entity + 1, h - (entity + 1));
+		}
+		else if (*entity == 'o' || *entity == 'O') {
+			maybe_num = oct_to_int(entity + 1, h - (entity + 1));
+		}
+		else {
+			maybe_num = dec_to_int(entity, h - entity);
+		}
+
+		if (!maybe_num) {
+			/* Skip undecoded */
+			if (end - t >= h - e) {
+				memmove(t, e, h - e);
+				t += h - e;
+			}
+
+			return false;
+		}
+		else {
+			uc = maybe_num.value();
+			/* Search for a replacement */
+			const auto *entity_def = html_entities_defs.by_id(uc);
+
+			if (entity_def) {
+				auto rep_len = entity_def->replacement.size();
+
+				if (end - t >= rep_len) {
+					memcpy(t, entity_def->replacement.data(),
+							rep_len);
+					t += rep_len;
+				}
+
+				return true;
+			}
+			else {
+				/* Unicode point */
+				goffset off = t - s;
+				UBool is_error = 0;
+
+				if (uc > 0 && u_isprint(uc)) {
+					U8_APPEND (s, off, len, uc, is_error);
+
+					if (!is_error) {
+						t = s + off;
+					}
+					else {
+						/* Leave invalid entities as is */
+						if (end - t > h - e + 1) {
+							memmove(t, e, h - e + 1);
+							t += h - e + 1;
+						}
+
+						return false;
+					}
+				}
+				else if (end - t > 3) {
+					/* Not printable code point replace with 0xFFFD */
+					*t++ = '\357';
+					*t++ = '\277';
+					*t++ = '\275';
+				}
+			}
+
+			return true;
+		}
+
+		return false;
+	};
+
+	auto replace_entity = [&]() -> bool {
+		const auto *entity_start = e + 1;
+
+		if (*entity_start != '#') {
+			return replace_named_entity(entity_start, (h - entity_start));
+		}
+		else if (entity_start + 1 < h) {
+			return replace_numeric_entity(entity_start + 1);
+		}
+
+		return false;
+	};
+
+	while (h - s < len && t <= h) {
 		switch (state) {
 		case parser_state::normal_content:
 			if (*h == '&') {
@@ -2259,106 +2453,8 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			}
 			break;
 		case parser_state::ampersand:
-			if (*h == ';' && h > e) {
-decode_entity:
-				old_c = *h;
-				*h = '\0';
-				entity = e + 1;
-				uc = 0;
-
-				if (*entity != '#') {
-					const auto *entity_def = html_entities_defs.by_name({entity,
-																		 (std::size_t) (h - entity)});
-					*h = old_c;
-
-					if (entity_def) {
-						rep_len = entity_def->replacement.size();
-
-						if (end - t >= rep_len) {
-							memcpy(t, entity_def->replacement.data(),
-									rep_len);
-							t += rep_len;
-						}
-					}
-					else {
-						if (end - t > h - e + 1) {
-							memmove(t, e, h - e + 1);
-							t += h - e + 1;
-						}
-					}
-				}
-				else if (e + 2 < h) {
-					if (*(e + 2) == 'x' || *(e + 2) == 'X') {
-						base = 16;
-					}
-					else if (*(e + 2) == 'o' || *(e + 2) == 'O') {
-						base = 8;
-					}
-					else {
-						base = 10;
-					}
-
-					if (base == 10) {
-						uc = strtoul((e + 2), &end_ptr, base);
-					}
-					else {
-						uc = strtoul((e + 3), &end_ptr, base);
-					}
-
-					if (end_ptr != nullptr && *end_ptr != '\0') {
-						/* Skip undecoded */
-						*h = old_c;
-
-						if (end - t > h - e + 1) {
-							memmove(t, e, h - e + 1);
-							t += h - e + 1;
-						}
-					}
-					else {
-						/* Search for a replacement */
-						*h = old_c;
-						const auto *entity_def = html_entities_defs.by_id(uc);
-
-						if (entity_def) {
-							rep_len = entity_def->replacement.size();
-
-							if (end - t >= rep_len) {
-								memcpy(t, entity_def->replacement.data(),
-										rep_len);
-								t += rep_len;
-							}
-						}
-						else {
-							/* Unicode point */
-							goffset off = t - s;
-							UBool is_error = 0;
-
-							if (uc > 0) {
-								U8_APPEND (s, off, len, uc, is_error);
-								if (!is_error) {
-									t = s + off;
-								}
-								else {
-									/* Leave invalid entities as is */
-									if (end - t > h - e + 1) {
-										memmove(t, e, h - e + 1);
-										t += h - e + 1;
-									}
-								}
-							}
-							else if (end - t > h - e + 1) {
-								memmove(t, e, h - e + 1);
-								t += h - e + 1;
-							}
-						}
-
-						if (end - t > 0 && old_c != ';') {
-							/* Fuck email clients, fuck them */
-							*t++ = old_c;
-						}
-					}
-				}
-
+			if ((*h == ';' || g_ascii_isspace(*h)) && h > e) {
+				replace_entity();
 				state = parser_state::normal_content;
 			}
 			else if (*h == '&') {
@@ -2389,7 +2485,9 @@ decode_entity:
 				if (seen_digit_only == do_digits_only && seen_hash && h > e) {
 					/* We have seen some digits, so we can try to decode, eh */
 					/* Fuck retarded email clients... */
-					goto decode_entity;
+					replace_entity();
+					state = parser_state::normal_content;
+					continue;
 				}
 
 				seen_digit_only = do_mixed;
@@ -2412,9 +2510,15 @@ decode_entity:
 	/* Leftover */
 	if (state == parser_state::ampersand && h > e) {
 		/* Unfinished entity, copy as is */
-		if (end - t >= h - e) {
-			memmove(t, e, h - e);
-			t += h - e;
+		if (replace_entity()) {
+			/* To follow FSM semantics */
+			h ++;
+		}
+
+		/* Leftover after replacement */
+		if (h < end && t + (end - h) <= end) {
+			memmove(t, h, end - h);
+			t += end - h;
 		}
 	}
 
@@ -2451,11 +2555,13 @@ TEST_SUITE("html") {
 		};
 
 		for (const auto &c : cases) {
-			auto *cpy = new char[c.first.size()];
-			memcpy(cpy, c.first.data(), c.first.size());
-			auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);
-			CHECK(std::string{cpy,nlen} == c.second);
-			delete[] cpy;
+			SUBCASE(c.first.c_str()) {
+				auto *cpy = new char[c.first.size()];
+				memcpy(cpy, c.first.data(), c.first.size());
+				auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);
+				CHECK(std::string{cpy, nlen} == c.second);
+				delete[] cpy;
+			}
 		}
 	}
 }
