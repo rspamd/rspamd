@@ -50,7 +50,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     var timer_id = [];
     var locale = null;
     var selData = null; // Graph's dataset selector state
-    var symbolDescriptions = {};
 
     NProgress.configure({
         minimum: 0.01,
@@ -208,17 +207,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
             navBarControls.removeAttr("disabled").removeClass("disabled");
         }, (id === "#autoRefresh") ? 0 : 1000);
-    }
-
-    function drawTooltips() {
-        // Update symbol description tooltips
-        $.each(symbolDescriptions, function (key, description) {
-            $("abbr[data-sym-key=" + key + "]").tooltip({
-                placement: "bottom",
-                html: true,
-                title: description
-            });
-        });
     }
 
     function getPassword() {
@@ -520,6 +508,12 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             tabClick("#" + $("#navBar > ul > .nav-item > .nav-link.active").attr("id"));
         });
 
+        $("body").tooltip({
+            selector: ".symbol-default abbr[title]",
+            placement: "left",
+            html: true
+        });
+
         // Radio buttons
         $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
             if (!this.disabled) {
@@ -764,7 +758,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
     // Scan and History shared functions
 
-    ui.drawTooltips = drawTooltips;
     ui.unix_time_format = unix_time_format;
     ui.set_page_size = set_page_size;
 
@@ -776,7 +769,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 var cell_val = sort_symbols(ui.symbols[table][i], compare_function);
                 row.cells[symbolsCol].val(cell_val, false, true);
             });
-            drawTooltips();
         }
 
         $("#selSymOrder_" + table).unbind().change(function () {
@@ -883,10 +875,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 filtering: FooTable.actionFilter
             },
             on: {
-                "ready.ft.table": drawTooltips,
-                "after.ft.sorting": drawTooltips,
-                "after.ft.paging": drawTooltips,
-                "after.ft.filtering": drawTooltips,
                 "expand.ft.row": function (e, ft, row) {
                     setTimeout(function () {
                         var detail_row = row.$el.next();
@@ -1020,18 +1008,15 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 }
 
                 rspamd.preprocess_item(rspamd, item);
-                Object.keys(item.symbols).forEach(function (key) {
-                    var sym = item.symbols[key];
+                Object.values(item.symbols).forEach(function (sym) {
                     sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
 
                     if (sym.description) {
-                        sym.str += '<abbr data-sym-key="' + key + '">' +
-                            sym.name + "</abbr></strong> (" + sym.score + ")</span>";
-                        // Store description for tooltip
-                        symbolDescriptions[key] = sym.description;
+                        sym.str += '<abbr title="' + sym.description + '">' + sym.name + "</abbr>";
                     } else {
-                        sym.str += sym.name + "</strong> (" + sym.score + ")</span>";
+                        sym.str += sym.name;
                     }
+                    sym.str += "</strong> (" + sym.score + ")</span>";
 
                     if (sym.options) {
                         sym.str += " [" + sym.options.join(",") + "]";

@@ -352,12 +352,6 @@ define(["jquery", "footable"],
                         if (Object.prototype.hasOwnProperty.call(tables, "history") &&
                             version === prevVersion) {
                             tables.history.rows.load(items);
-                            if (version) { // Non-legacy
-                                // Is there a way to get an event when all rows are loaded?
-                                rspamd.waitForRowsDisplayed("history", items.length, function () {
-                                    rspamd.drawTooltips();
-                                });
-                            }
                         } else {
                             rspamd.destroyTable("history");
                             // Is there a way to get an event when the table is destroyed?

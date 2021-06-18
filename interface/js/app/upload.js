@@ -135,6 +135,15 @@ define(["jquery"],
                 },
                 method: "POST",
                 success: function (neighbours_status) {
+                    function scrollTop(rows_total) {
+                        // Is there a way to get an event when all rows are loaded?
+                        rspamd.waitForRowsDisplayed("scan", rows_total, function () {
+                            $("html, body").animate({
+                                scrollTop: $("#scanResult").offset().top
+                            }, 1000);
+                        });
+                    }
+
                     var json = neighbours_status[0].data;
                     if (json.action) {
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
@@ -146,23 +155,13 @@ define(["jquery"],
 
                         if (Object.prototype.hasOwnProperty.call(tables, "scan")) {
                             tables.scan.rows.load(items, true);
-                            // Is there a way to get an event when all rows are loaded?
-                            rspamd.waitForRowsDisplayed("scan", rows_total, function () {
-                                rspamd.drawTooltips();
-                                $("html, body").animate({
-                                    scrollTop: $("#scanResult").offset().top
-                                }, 1000);
-                            });
+                            scrollTop(rows_total);
                         } else {
                             rspamd.destroyTable("scan");
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(function () {
                                 rspamd.initHistoryTable(rspamd, data, items, "scan", columns_v2(), true);
-                                rspamd.waitForRowsDisplayed("scan", rows_total, function () {
-                                    $("html, body").animate({
-                                        scrollTop: $("#scanResult").offset().top
-                                    }, 1000);
-                                });
+                                scrollTop(rows_total);
                             }, 200);
                         }
                     } else {
