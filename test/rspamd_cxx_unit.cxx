@@ -19,8 +19,9 @@
 #include <memory>
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
-
 #include "doctest/doctest.h"
+
+#include "rspamd_cxx_unit_utils.hxx"
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =

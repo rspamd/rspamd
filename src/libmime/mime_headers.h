@@ -206,6 +206,14 @@ struct rspamd_mime_headers_table * rspamd_message_headers_ref (struct rspamd_mim
  */
 struct rspamd_mime_headers_table* rspamd_message_headers_new (void);
 
+/**
+ * Strip rfc822 CFWS sequences from a string in place
+ * @param input input
+ * @param len length of the input
+ * @return new length of the input
+ */
+gsize rspamd_strip_smtp_comments_inplace (gchar *input, gsize len);
+
 #ifdef  __cplusplus
 }
 #endif

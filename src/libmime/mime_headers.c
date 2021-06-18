@@ -1968,3 +1968,90 @@ rspamd_message_set_modified_header (struct rspamd_task *task,
 		}
 	}
 }
+
+gsize
+rspamd_strip_smtp_comments_inplace (gchar *input, gsize len)
+{
+	enum parser_state {
+		parse_normal,
+		parse_obrace,
+		parse_comment,
+		parse_quoted_copy,
+		parse_quoted_ignore,
+	} state = parse_normal, next_state = parse_normal;
+	gchar *d = input, *end = input + len, *start = input;
+	gchar t;
+	int obraces = 0, ebraces = 0;
+
+	while (input < end) {
+		t = *input;
+		switch (state) {
+		case parse_normal:
+			if (t == '(') {
+				state = parse_obrace;
+			}
+			else if (t == '\\') {
+				state = parse_quoted_copy;
+				next_state = parse_normal;
+			}
+			else {
+				*d++ = t;
+			}
+			input ++;
+			break;
+		case parse_obrace:
+			obraces ++;
+			if (t == '(') {
+				obraces ++;
+			}
+			else if (t == ')') {
+				ebraces ++;
+
+				if (obraces == ebraces) {
+					obraces = 0;
+					ebraces = 0;
+					state = parse_normal;
+				}
+			}
+			else if (t == '\\') {
+				state = parse_quoted_ignore;
+				next_state = parse_comment;
+			}
+			else {
+				state = parse_comment;
+			}
+			input ++;
+			break;
+		case parse_comment:
+			if (t == '(') {
+				state = parse_obrace;
+			}
+			else if (t == ')') {
+				ebraces ++;
+
+				if (obraces == ebraces) {
+					obraces = 0;
+					ebraces = 0;
+					state = parse_normal;
+				}
+			}
+			else if (t == '\\') {
+				state = parse_quoted_ignore;
+				next_state = parse_comment;
+			}
+			input ++;
+			break;
+		case parse_quoted_copy:
+			*d++ = t;
+			state = next_state;
+			input ++;
+			break;
+		case parse_quoted_ignore:
+			state = next_state;
+			input ++;
+			break;
+		}
+	}
+
+	return (d - start);
+}
