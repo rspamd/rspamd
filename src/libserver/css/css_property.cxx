@@ -17,6 +17,7 @@
 #include "css_property.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
+#include "libutil/cxx/util.hxx"
 
 namespace rspamd::css {
 
@@ -43,10 +44,10 @@ auto token_string_to_property(const std::string_view &inp)
 
 	css_property_type ret = css_property_type::PROPERTY_NYI;
 
-	auto known_type = prop_names_map.find(inp);
+	auto known_type = find_map(prop_names_map, inp);
 
-	if (known_type != prop_names_map.end()) {
-		ret = known_type->second;
+	if (known_type) {
+		ret = known_type.value().get();
 	}
 
 	return ret;

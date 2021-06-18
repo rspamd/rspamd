@@ -21,6 +21,7 @@
 #include <memory>
 #include <array>
 #include <string_view>
+#include <optional>
 
 /*
  * Common C++ utilities
@@ -74,6 +75,20 @@ template <typename V, typename... T>
 constexpr auto array_of(T&&... t) -> std::array<V, sizeof...(T)>
 {
 	return {{ std::forward<T>(t)... }};
+}
+
+template<class C, class K, class V = typename C::mapped_type, typename std::enable_if_t<
+		std::is_constructible_v<typename C::key_type, K>
+		&& std::is_constructible_v<typename C::mapped_type, V>, bool> = false>
+constexpr auto find_map(const C &c, const K &k) -> std::optional<std::reference_wrapper<const V>>
+{
+	auto f = c.find(k);
+
+	if (f != c.end()) {
+		return std::cref<V>(f->second);
+	}
+
+	return std::nullopt;
 }
 
 }

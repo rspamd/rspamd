@@ -154,10 +154,10 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 	auto num = std::get<float>(value);
 	auto sv = std::get<std::string_view>(dim_token.value);
 
-	auto dim_found = dimensions_map.find(sv);
+	auto dim_found = find_map(dimensions_map, sv);
 
-	if (dim_found != dimensions_map.end()) {
-		auto dim_elt = dim_found->second;
+	if (dim_found) {
+		auto dim_elt = dim_found.value().get();
 		dimension_type = dim_elt.dtype;
 		flags |= css_parser_token::number_dimension;
 		num *= dim_elt.mult;
