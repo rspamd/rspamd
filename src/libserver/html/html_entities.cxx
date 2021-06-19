@@ -2169,6 +2169,7 @@ static const auto html_entities_array = rspamd::array_of<html_entity_def>(
 
 class html_entities_storage {
 	robin_hood::unordered_flat_map<std::string_view, html_entity_def> entity_by_name;
+	robin_hood::unordered_flat_map<std::string_view, html_entity_def> entity_by_name_heur;
 	robin_hood::unordered_flat_map<unsigned, html_entity_def> entity_by_id;
 public:
 	html_entities_storage() {
@@ -2178,13 +2179,25 @@ public:
 		for (const auto &e : html_entities_array) {
 			entity_by_name[e.name] = e;
 			entity_by_id[e.code] = e;
+
+			if (e.allow_heuristic) {
+				entity_by_name_heur[e.name] = e;
+			}
 		}
 	}
 
-	auto by_name(std::string_view name) const -> const html_entity_def * {
-		auto it = entity_by_name.find(name);
+	auto by_name(std::string_view name, bool use_heuristic = false) const -> const html_entity_def * {
+		const decltype(entity_by_name)* htb;
 
-		if (it != entity_by_name.end()) {
+		if (use_heuristic) {
+			htb = &entity_by_name_heur;
+		}
+		else {
+			htb = &entity_by_name;
+		}
+		auto it = htb->find(name);
+
+		if (it != htb->end()) {
 			return &(it->second);
 		}
 
@@ -2229,7 +2242,8 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 
 	auto replace_named_entity = [&](const char *entity, std::size_t len) -> bool {
 		const auto *entity_def = html_entities_defs.by_name({entity,
-															 (std::size_t) (h - entity)});
+															 (std::size_t) (h - entity)},
+															 		false);
 
 		auto replace_entity = [&]() -> void {
 			auto l = entity_def->replacement.size();
@@ -2245,9 +2259,9 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			/* Try heuristic */
 			auto heuristic_lookup_func = [&](std::size_t lookup_len) -> bool {
 				if (!entity_def && h - e > lookup_len) {
-					entity_def = html_entities_defs.by_name({entity, lookup_len});
+					entity_def = html_entities_defs.by_name({entity, lookup_len}, true);
 
-					if (entity_def && entity_def->allow_heuristic) {
+					if (entity_def) {
 						replace_entity();
 						/* Adjust h back */
 						h = e + lookup_len;
