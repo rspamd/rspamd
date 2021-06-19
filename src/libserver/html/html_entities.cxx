@@ -2241,34 +2241,27 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 		else {
 			/* Try heuristic */
-			/* Try 4 letters replacements */
-			if (h - e > 4) {
-				entity_def = html_entities_defs.by_name({entity, 4});
+			auto heuristic_lookup_func = [&](std::size_t lookup_len) -> bool {
+				if (!entity_def && h - e > lookup_len) {
+					entity_def = html_entities_defs.by_name({entity, lookup_len});
 
-				if (entity_def) {
-					replace_entity();
-					/* Rewind h by 5 for & character and entity */
-					h = e + 4;
-				}
-			}
-			/* Try 3 letters replacements */
-			if (!entity_def && h - e > 3) {
-				entity_def = html_entities_defs.by_name({entity, 3});
+					if (entity_def) {
+						replace_entity();
+						/* Adjust h back */
+						h = e + lookup_len;
 
-				if (entity_def) {
-					replace_entity();
-					h = e + 3;
+						return true;
+					}
 				}
-			}
-			/* Try 2 letters replacements */
-			if (!entity_def && h - e > 2) {
-				entity_def = html_entities_defs.by_name({entity, 2});
 
-				if (entity_def) {
-					replace_entity();
-					h = e + 2;
-				}
-			}
+				return false;
+			};
+
+			heuristic_lookup_func(5);
+			heuristic_lookup_func(4);
+			heuristic_lookup_func(3);
+			heuristic_lookup_func(2);
+
 			/* Leave undecoded */
 			if (!entity_def && (end - t > h - e + 1)) {
 				memmove(t, e, h - e + 1);
@@ -2386,20 +2379,19 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				goffset off = t - s;
 				UBool is_error = 0;
 
-				if (uc > 0 && u_isprint(uc)) {
+				if (uc > 0) {
 					U8_APPEND (s, off, len, uc, is_error);
 
 					if (!is_error) {
 						t = s + off;
 					}
-					else {
-						/* Leave invalid entities as is */
-						if (end - t > h - e + 1) {
-							memmove(t, e, h - e + 1);
-							t += h - e + 1;
-						}
+					else if (end - t > 3) {
+						/* Not printable code point replace with 0xFFFD */
+						*t++ = '\357';
+						*t++ = '\277';
+						*t++ = '\275';
 
-						return false;
+						return true;
 					}
 				}
 				else if (end - t > 3) {
@@ -2417,13 +2409,15 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	};
 
 	auto replace_entity = [&]() -> bool {
-		const auto *entity_start = e + 1;
+		if (e + 1 < end) {
+			const auto *entity_start = e + 1;
 
-		if (*entity_start != '#') {
-			return replace_named_entity(entity_start, (h - entity_start));
-		}
-		else if (entity_start + 1 < h) {
-			return replace_numeric_entity(entity_start + 1);
+			if (*entity_start != '#') {
+				return replace_named_entity(entity_start, (h - entity_start));
+			}
+			else if (entity_start + 1 < h) {
+				return replace_numeric_entity(entity_start + 1);
+			}
 		}
 
 		return false;
@@ -2514,6 +2508,9 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			/* To follow FSM semantics */
 			h ++;
 		}
+		else {
+			h = e; /* Include the last & */
+		}
 
 		/* Leftover after replacement */
 		if (h < end && t + (end - h) <= end) {
@@ -2552,6 +2549,14 @@ TEST_SUITE("html") {
 				{"FOO&#xBAR", "FOOºR"},
 				{"FOO&#x41BAR", "FOO䆺R"},
 				{"FOO&#x0000;ZOO", "FOO�ZOO"},
+				{"FOO&#x0081;ZOO", "FOO\u0081ZOO"},
+				{"FOO&#xD800;ZOO", "FOO�ZOO"},
+				{"FOO&#xFFFFFF;ZOO", "FOO�ZOO"},
+				{"ZZ&pound_id=23", "ZZ£_id=23"},
+				{"ZZ&prod_id=23", "ZZ&prod_id=23"},
+				{"ZZ&gt", "ZZ>"},
+				{"ZZ&", "ZZ&"},
+				{"ZZ&AElig=", "ZZÆ="},
 		};
 
 		for (const auto &c : cases) {
