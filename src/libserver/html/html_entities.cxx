@@ -2578,7 +2578,7 @@ TEST_SUITE("html") {
 		};
 
 		for (const auto &c : cases) {
-			SUBCASE(c.first.c_str()) {
+			SUBCASE(("decode entities: " + c.first).c_str()) {
 				auto *cpy = new char[c.first.size()];
 				memcpy(cpy, c.first.data(), c.first.size());
 				auto nlen = decode_html_entitles_inplace(cpy, c.first.size(), true);

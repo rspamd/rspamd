@@ -860,17 +860,21 @@ TEST_SUITE("css") {
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
 				"css", 0);
 		for (const auto &c : cases) {
-			CHECK(parse_css(pool, c, nullptr).value().get() != nullptr);
+			SUBCASE((std::string("parse css: ") + c).c_str()) {
+				CHECK(parse_css(pool, c, nullptr).value().get() != nullptr);
+			}
 		}
 
 		/* We now merge all styles together */
-		std::shared_ptr<css_style_sheet> merged;
-		for (const auto &c : cases) {
-			auto ret = parse_css(pool, c, std::move(merged));
-			merged.swap(ret.value());
-		}
+		SUBCASE("merged css parse") {
+			std::shared_ptr<css_style_sheet> merged;
+			for (const auto &c : cases) {
+				auto ret = parse_css(pool, c, std::move(merged));
+				merged.swap(ret.value());
+			}
 
-		CHECK(merged.get() != nullptr);
+			CHECK(merged.get() != nullptr);
+		}
 
 		rspamd_mempool_delete(pool);
 	}

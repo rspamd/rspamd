@@ -42,11 +42,13 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace") {
 	};
 
 	for (const auto &c : cases) {
-		auto *cpy = new char[c.first.size()];
-		memcpy(cpy, c.first.data(), c.first.size());
-		auto nlen = rspamd_strip_smtp_comments_inplace(cpy, c.first.size());
-		CHECK(std::string{cpy,nlen} == c.second);
-		delete[] cpy;
+		SUBCASE (("strip comments in " + c.first).c_str()) {
+			auto *cpy = new char[c.first.size()];
+			memcpy(cpy, c.first.data(), c.first.size());
+			auto nlen = rspamd_strip_smtp_comments_inplace(cpy, c.first.size());
+			CHECK(std::string{cpy, nlen} == c.second);
+			delete[] cpy;
+		}
 	}
 }
 

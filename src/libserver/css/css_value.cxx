@@ -388,11 +388,13 @@ TEST_SUITE("css") {
 		};
 
 		for (const auto &p : hex_tests) {
-			auto col_parsed = css_value::maybe_color_from_hex(p.first);
-			//CHECK_UNARY(col_parsed);
-			//CHECK_UNARY(col_parsed.value().to_color());
-			auto final_col = col_parsed.value().to_color().value();
-			CHECK(final_col == p.second);
+			SUBCASE((std::string("parse hex color: ") + p.first).c_str()) {
+				auto col_parsed = css_value::maybe_color_from_hex(p.first);
+				//CHECK_UNARY(col_parsed);
+				//CHECK_UNARY(col_parsed.value().to_color());
+				auto final_col = col_parsed.value().to_color().value();
+				CHECK(final_col == p.second);
+			}
 		}
 	}
 	TEST_CASE("css colors strings") {
