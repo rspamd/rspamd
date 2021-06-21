@@ -50,6 +50,7 @@ main(int argc, char **argv) {
 	options_context = g_option_context_new("- run rspamd cxx test");
 	g_option_context_add_main_entries(options_context, entries, NULL);
 	g_option_context_set_ignore_unknown_options(options_context, true);
+	g_option_context_set_help_enabled(options_context, false);
 
 	GError *error = NULL;
 
