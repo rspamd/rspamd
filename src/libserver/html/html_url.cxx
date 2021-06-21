@@ -99,7 +99,8 @@ convert_idna_hostname_maybe(rspamd_mempool_t *pool, struct rspamd_url *url, bool
 		icu::IDNAInfo info;
 		auto uc_err = U_ZERO_ERROR;
 		auto *udn = get_icu_idna_instance();
-		udn->nameToASCII_UTF8(ret,byte_sink, info, uc_err);
+		udn->nameToASCII_UTF8(icu::StringPiece(ret.data(), ret.size()),
+				byte_sink, info, uc_err);
 
 		if (uc_err == U_ZERO_ERROR && !info.hasErrors()) {
 			ret = std::string_view{idn_hbuf, (std::size_t)byte_sink.NumberOfBytesWritten()};
