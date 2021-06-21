@@ -1037,14 +1037,16 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 }
 
-using tags_vector = std::vector<std::unique_ptr<struct html_tag>>;
-
-static auto
-tags_vector_ptr_dtor(void *ptr)
+static inline auto
+html_append_content(struct html_content *hc, std::string_view data) -> auto
 {
-	auto *ptags = (tags_vector *)ptr;
+	auto cur_offset = hc->parsed.size();
+	hc->parsed.append(data);
+	auto nlen = decode_html_entitles_inplace(hc->parsed.data() + cur_offset,
+			hc->parsed.size() - cur_offset, true);
+	hc->parsed.resize(nlen + cur_offset);
 
-	delete ptags;
+	return nlen;
 }
 
 static auto
@@ -1055,9 +1057,9 @@ html_process_input(rspamd_mempool_t *pool,
 					GPtrArray *part_urls,
 					bool allow_css) -> html_content *
 {
-	const gchar *p, *c, *end;
+	const gchar *p, *c, *end, *start;
 	guchar t;
-	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE;
+	gboolean closing = FALSE;
 	guint obrace = 0, ebrace = 0;
 	struct rspamd_url *url = NULL;
 	gint len, href_offset = -1;
@@ -1067,6 +1069,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 	enum {
 		parse_start = 0,
+		content_before_start,
 		tag_begin,
 		sgml_tag,
 		xml_tag,
@@ -1076,11 +1079,9 @@ html_process_input(rspamd_mempool_t *pool,
 		sgml_content,
 		tag_content,
 		tag_end,
+		html_text_content,
 		xml_tag_end,
-		content_ignore,
-		content_write,
 		content_style,
-		content_ignore_sp
 	} state = parse_start;
 
 	g_assert (in != NULL);
@@ -1092,6 +1093,7 @@ html_process_input(rspamd_mempool_t *pool,
 	p = (const char *)in->data;
 	c = p;
 	end = p + in->len;
+	start = c;
 
 	while (p < end) {
 		t = *p;
@@ -1104,9 +1106,17 @@ html_process_input(rspamd_mempool_t *pool,
 			else {
 				/* We have no starting tag, so assume that it's content */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
-				state = content_write;
+				state = content_before_start;
 			}
-
+			break;
+		case content_before_start:
+			if (t == '<') {
+				html_append_content(hc, {c, std::size_t(p - c)});
+				state = tag_begin;
+			}
+			else {
+				p ++;
+			}
 			break;
 		case tag_begin:
 			switch (t) {
@@ -1248,133 +1258,13 @@ html_process_input(rspamd_mempool_t *pool,
 			p ++;
 			break;
 
-		case content_ignore:
+		case html_text_content:
 			if (t != '<') {
 				p ++;
 			}
 			else {
 				state = tag_begin;
 			}
-			break;
-
-		case content_write:
-
-			if (t != '<') {
-				if (t == '&') {
-					need_decode = TRUE;
-				}
-				else if (g_ascii_isspace (t)) {
-					save_space = TRUE;
-
-					if (p > c) {
-						if (need_decode) {
-							goffset old_offset = hc->parsed.size();
-
-							if (content_tag) {
-								if (content_tag->content_length == 0) {
-									content_tag->content_offset = old_offset;
-								}
-							}
-
-							hc->parsed.append(c, p - c);
-
-							len = decode_html_entitles_inplace(
-									hc->parsed.data() + old_offset,
-									(std::size_t)(p - c));
-							hc->parsed.resize(hc->parsed.size() + len - (p - c));
-
-							if (content_tag) {
-								content_tag->content_length += len;
-							}
-						}
-						else {
-							len = p - c;
-
-							if (content_tag) {
-								if (content_tag->content_length == 0) {
-									content_tag->content_offset = hc->parsed.size();
-								}
-
-								content_tag->content_length += len;
-							}
-
-							hc->parsed.append(c, len);
-						}
-					}
-
-					c = p;
-					state = content_ignore_sp;
-				}
-				else {
-					if (save_space) {
-						/* Append one space if needed */
-						if (!hc->parsed.empty() &&
-							!g_ascii_isspace (hc->parsed.back())) {
-							hc->parsed += " ";
-
-							if (content_tag) {
-								if (content_tag->content_length == 0) {
-									/*
-									 * Special case
-									 * we have a space at the beginning but
-									 * we have no set content_offset
-									 * so we need to do it here
-									 */
-									content_tag->content_offset = hc->parsed.size();
-								}
-								else {
-									content_tag->content_length++;
-								}
-							}
-						}
-						save_space = FALSE;
-					}
-				}
-			}
-			else {
-				if (c != p) {
-
-					if (need_decode) {
-						goffset old_offset = hc->parsed.size();
-
-						if (content_tag) {
-							if (content_tag->content_length == 0) {
-								content_tag->content_offset = hc->parsed.size();
-							}
-						}
-
-						hc->parsed.append(c, p - c);
-						len = decode_html_entitles_inplace(
-								hc->parsed.data() + old_offset,
-								(std::size_t)(p - c));
-						hc->parsed.resize(hc->parsed.size() + len - (p - c));
-
-						if (content_tag) {
-							content_tag->content_length += len;
-						}
-					}
-					else {
-						len = p - c;
-
-						if (content_tag) {
-							if (content_tag->content_length == 0) {
-								content_tag->content_offset = hc->parsed.size();
-							}
-
-							content_tag->content_length += len;
-						}
-
-						hc->parsed.append(c, len);
-					}
-				}
-
-				content_tag = NULL;
-
-				state = tag_begin;
-				continue;
-			}
-
-			p ++;
 			break;
 
 		case content_style: {
@@ -1387,7 +1277,7 @@ html_process_input(rspamd_mempool_t *pool,
 					"</", 2);
 			if (end_style == -1 || g_ascii_tolower (p[end_style + 2]) != 's') {
 				/* Invalid style */
-				state = content_ignore;
+				state = tag_content;
 			}
 			else {
 
@@ -1411,17 +1301,6 @@ html_process_input(rspamd_mempool_t *pool,
 			}
 			break;
 		}
-
-		case content_ignore_sp:
-			if (!g_ascii_isspace (t)) {
-				c = p;
-				state = content_write;
-				continue;
-			}
-
-			p ++;
-			break;
-
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
@@ -1457,17 +1336,12 @@ html_process_input(rspamd_mempool_t *pool,
 			content_parser_env.reset();
 
 			if (cur_tag != nullptr) {
+				state = html_text_content;
 
-				if (html_process_tag(pool, hc, cur_tag, tags_stack)) {
-					state = content_write;
-					need_decode = FALSE;
-				}
-				else {
+				cur_tag->content_offset = p - start;
+				if (!html_process_tag(pool, hc, cur_tag, tags_stack)) {
 					if (cur_tag->id == Tag_STYLE) {
 						state = content_style;
-					}
-					else {
-						state = content_ignore;
 					}
 				}
 
@@ -1507,7 +1381,6 @@ html_process_input(rspamd_mempool_t *pool,
 							}
 						}
 					}
-					save_space = FALSE;
 				}
 
 				if ((cur_tag->id == Tag_P ||
@@ -1533,7 +1406,6 @@ html_process_input(rspamd_mempool_t *pool,
 							}
 						}
 					}
-					save_space = FALSE;
 				}
 
 				/* XXX: uncomment when styles parsing is not so broken */
@@ -1637,11 +1509,8 @@ html_process_input(rspamd_mempool_t *pool,
 					}
 				}
 			}
-			else {
-				state = content_write;
-			}
 
-
+			state = html_text_content;
 			p++;
 			c = p;
 			cur_tag = NULL;
@@ -1740,6 +1609,19 @@ html_process_input(rspamd_mempool_t *pool,
 		return true;
 	}, html_content::traverse_type::PRE_ORDER);
 
+	/* Leftover */
+	switch (state) {
+	case html_text_content:
+	case content_before_start:
+		if (p > c) {
+			html_append_content(hc, {c, std::size_t(p - c)});
+		}
+		break;
+	default:
+		/* Do nothing */
+		break;
+	}
+
 	return hc;
 }
 
@@ -1816,17 +1698,64 @@ TEST_CASE("html parsing")
 			"html", 0);
 
 	for (const auto &c : cases) {
-		GByteArray *tmp = g_byte_array_sized_new(c.first.size());
-		g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
-		auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
-		CHECK(hc != nullptr);
-		auto dump = html_debug_structure(*hc);
-		CHECK(c.second == dump);
-		g_byte_array_free(tmp, TRUE);
+		SUBCASE((std::string("extract tags from: ") + c.first).c_str()) {
+			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
+			CHECK(hc != nullptr);
+			auto dump = html_debug_structure(*hc);
+			CHECK(c.second == dump);
+			g_byte_array_free(tmp, TRUE);
+		}
 	}
 
 	rspamd_mempool_delete(pool);
 }
+
+TEST_CASE("html text extraction")
+{
+
+	const std::vector<std::pair<std::string, std::string>> cases{
+			{"test", "test"},
+			{"test   ", "test "},
+			{"test   foo,   bar", "test foo, bar"},
+			{"<p>text</p>", "text"},
+			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
+			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
+			{"foo<br>baz", "foo\nbaz"},
+			{"<div>foo</div><div>bar</div>", "foo\nbar"},
+	};
+
+	rspamd_url_init(NULL);
+	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+			"html", 0);
+
+	auto replace_newlines = [](std::string &str) {
+		auto start_pos = 0;
+		while((start_pos = str.find("\n", start_pos, 1)) != std::string::npos) {
+			str.replace(start_pos, 1, "\\n", 2);
+			start_pos += 2;
+		}
+	};
+
+	for (const auto &c : cases) {
+		SUBCASE((std::string("extract text from: ") + c.first).c_str()) {
+			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
+			CHECK(hc != nullptr);
+			replace_newlines(hc->parsed);
+			auto expected = c.second;
+			replace_newlines(expected);
+			CHECK(hc->parsed == expected);
+			g_byte_array_free(tmp, TRUE);
+		}
+	}
+
+	rspamd_mempool_delete(pool);
+}
+
 }
 
 }
