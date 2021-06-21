@@ -219,6 +219,10 @@ struct html_block {
 		return (mask & transparent_flag) != 0;
 	}
 
+	constexpr auto has_display(void) const -> bool {
+		return (mask & display_mask) != 0;
+	}
+
 	/**
 	 * Returns a default html block for root HTML element
 	 * @return
@@ -227,7 +231,7 @@ struct html_block {
 		return html_block{rspamd::css::css_color::black(),
 						  rspamd::css::css_color::white(),
 						  0, 0,
-						  (fg_color_mask|bg_color_mask|display_mask|font_size_mask),
+						  (fg_color_mask|bg_color_mask|font_size_mask),
 						  rspamd::css::css_display_value::DISPLAY_INLINE,
 						  12};
 	}

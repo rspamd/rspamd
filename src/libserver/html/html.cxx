@@ -1070,6 +1070,54 @@ html_append_content(struct html_content *hc, std::string_view data) -> auto
 }
 
 static auto
+html_append_tag_content(const gchar *start, gsize len,
+						struct html_content *hc, const struct html_tag *tag) -> void
+{
+	auto cur_offset = tag->content_offset;
+	auto total_len = tag->content_length;
+
+	if (cur_offset > len || total_len + cur_offset > len) {
+		RSPAMD_UNREACHABLE;
+	}
+
+	if (tag->id == Tag_BR || tag->id == Tag_HR) {
+		hc->parsed.append("\n");
+		return;
+	}
+
+	if (!tag->block) {
+		return; /* XXX: is it always true? */
+	}
+
+	if (tag->block->has_display() && tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
+		hc->parsed.append("\n");
+	}
+
+	for (const auto &cld_tag : tag->children) {
+		if (cld_tag->tag_start > cur_offset) {
+			if (tag->block->is_visible()) {
+				html_append_content(hc, {start + cur_offset,
+										 cld_tag->tag_start - cur_offset});
+			}
+		}
+		html_append_tag_content(start, len, hc, cld_tag);
+		auto old_offset = cur_offset;
+		cur_offset = cld_tag->content_offset + cld_tag->content_length;
+
+		if (total_len < cur_offset - old_offset) {
+			/* Child tag spans over parent (e.g. wrong nesting) */
+			total_len = 0;
+			break;
+		}
+		total_len -= cur_offset - old_offset;
+	}
+
+	if (total_len > 0 && tag->block->is_visible()) {
+		html_append_content(hc, {start + cur_offset, total_len});
+	}
+}
+
+static auto
 html_process_input(rspamd_mempool_t *pool,
 					GByteArray *in,
 					GList **exceptions,
@@ -1490,17 +1538,8 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 	}
 
-	/* Summarize content length from children */
-	hc->traverse_block_tags([](const html_tag *tag) -> bool {
-
-		for (const auto *cld_tag : tag->children) {
-			tag->content_length += cld_tag->content_length;
-		}
-		return true;
-	}, html_content::traverse_type::POST_ORDER);
-
 	/* Propagate styles */
-	hc->traverse_block_tags([&hc, &exceptions,&pool](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
 		if (hc->css_style) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
@@ -1514,61 +1553,17 @@ html_process_input(rspamd_mempool_t *pool,
 			}
 		}
 		if (tag->block) {
-			tag->block->compute_visibility();
-
-			if (exceptions) {
-				if (!tag->block->is_visible()) {
-					if (tag->parent == nullptr || (tag->parent->block && tag->parent->block->is_visible())) {
-						/* Add exception for an invisible element */
-						auto * ex = rspamd_mempool_alloc_type (pool,struct rspamd_process_exception);
-						ex->pos = tag->content_offset;
-						ex->len = tag->content_length;
-						ex->type = RSPAMD_EXCEPTION_INVISIBLE;
-						ex->ptr = (void *)tag;
-
-						*exceptions = g_list_prepend(*exceptions, ex);
-					}
+			if (!tag->block->has_display()) {
+				/* If we have no display field, we can check it by tag */
+				if (tag->flags & CM_BLOCK) {
+					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
 				}
-				else if (*exceptions && tag->parent) {
-					/* Current block is visible, check if parent is invisible */
-					auto *ex = (struct rspamd_process_exception*)g_list_first(*exceptions)->data;
-
-					/*
-					 * TODO: we need to handle the following cases:
-					 * <inv><vis><inv> -< insert one more exception
-					 * <vis><inv> -< increase content_offset decrease length
-					 * <inv><vis> -< decrease length
-					 */
-					if (ex && ex->type == RSPAMD_EXCEPTION_INVISIBLE &&
-						ex->ptr == (void *)tag->parent) {
-						auto *parent = tag->parent;
-
-						if (tag->content_offset + tag->content_length ==
-							parent->content_offset + parent->content_length) {
-							/* <inv><vis> */
-							ex->len -= tag->content_length;
-						}
-						else if (tag->content_offset == parent->content_offset) {
-							/* <vis><inv> */
-							ex->len -= tag->content_length;
-							ex->pos += tag->content_length;
-						}
-						else if (tag->content_offset > ex->pos) {
-							auto *nex = rspamd_mempool_alloc_type (pool,
-									struct rspamd_process_exception);
-							auto start_len = tag->content_offset - ex->pos;
-							auto end_len = ex->len - tag->content_length - tag->content_length;
-							nex->pos = tag->content_offset + tag->content_length;
-							nex->len = end_len;
-							nex->type = RSPAMD_EXCEPTION_INVISIBLE;
-							nex->ptr = (void *)parent; /* ! */
-							ex->len = start_len;
-							*exceptions = g_list_prepend(*exceptions, ex);
-						}
-
-					}
+				else {
+					tag->block->set_display(css::css_display_value::DISPLAY_INLINE);
 				}
 			}
+
+			tag->block->compute_visibility();
 
 			for (const auto *cld_tag : tag->children) {
 				if (cld_tag->block) {
@@ -1581,6 +1576,10 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 		return true;
 	}, html_content::traverse_type::PRE_ORDER);
+
+	if (hc->root_tag) {
+		html_append_tag_content(start, end - start, hc, hc->root_tag);
+	}
 
 	/* Leftover */
 	switch (state) {

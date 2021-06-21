@@ -25,7 +25,6 @@ enum rspamd_exception_type {
 	RSPAMD_EXCEPTION_NEWLINE = 0,
 	RSPAMD_EXCEPTION_URL,
 	RSPAMD_EXCEPTION_GENERIC,
-	RSPAMD_EXCEPTION_INVISIBLE,
 };
 /**
  * Structure to point exception in text from processing
