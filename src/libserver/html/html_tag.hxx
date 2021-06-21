@@ -57,10 +57,11 @@ struct html_tag_component {
 };
 
 struct html_tag {
-	int id = -1;
-	unsigned int flags = 0;
+	unsigned int tag_start = 0;
 	mutable unsigned int content_length = 0; /* Allow content length propagation */
 	unsigned int content_offset = 0;
+	std::uint32_t flags = 0;
+	std::int16_t id = -1;
 
 	std::string_view name;
 	std::vector<html_tag_component> parameters;
