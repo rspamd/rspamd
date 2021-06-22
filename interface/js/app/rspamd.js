@@ -436,7 +436,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             }
 
             $("#settings").popover({
-                title: "WebUI settings",
                 container: "body",
                 placement: "bottom",
                 html: true,
@@ -445,6 +444,9 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                     // Using .clone() has the side-effect of producing elements with duplicate id attributes.
                     return $("#settings-popover").clone();
                 }
+            // Restore the tooltip of the element that the popover is attached to.
+            }).attr("title", function () {
+                return $(this).attr("data-original-title");
             });
             $("#settings").on("click", function (e) {
                 e.preventDefault();
@@ -506,12 +508,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             checked_server = this.value;
             $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
             tabClick("#" + $("#navBar > ul > .nav-item > .nav-link.active").attr("id"));
-        });
-
-        $("body").tooltip({
-            selector: ".symbol-default abbr[title]",
-            placement: "left",
-            html: true
         });
 
         // Radio buttons
