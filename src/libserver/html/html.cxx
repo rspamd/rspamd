@@ -1072,8 +1072,11 @@ static auto
 html_append_tag_content(const gchar *start, gsize len,
 						struct html_content *hc,
 						const html_tag *tag,
-						goffset next_tag_offset) -> goffset
+						std::vector<const html_tag *> &enclosed_tags) -> goffset
 {
+	auto is_visible = true, is_block = false;
+	goffset next_tag_offset = tag->content_length + tag->content_offset;
+
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
 		if (!hc->parsed.empty()) {
 			hc->parsed.append("\n");
@@ -1083,30 +1086,83 @@ html_append_tag_content(const gchar *start, gsize len,
 	}
 
 	if (!tag->block) {
-		return next_tag_offset; /* XXX: is it always true? */
+		is_visible = false;
+	}
+	else if (!tag->block->is_visible()) {
+		is_visible = false;
+	}
+	else {
+		is_block = tag->block->has_display() &&
+				   tag->block->display == css::css_display_value::DISPLAY_BLOCK;
 	}
 
-	auto is_block = tag->block->has_display() &&
-					tag->block->display == css::css_display_value::DISPLAY_BLOCK;
 	if (is_block) {
-		if (!hc->parsed.empty()) {
+		if (!hc->parsed.empty() && hc->parsed.back() != '\n') {
 			hc->parsed.append("\n");
 		}
 	}
 
-	if (tag->content_length + tag->content_offset <= next_tag_offset) {
-		if (tag->block->is_visible()) {
-			html_append_content(hc, {start + tag->content_offset,
-									 tag->content_length});
+	goffset cur_offset = tag->content_offset;
 
-			if (is_block) {
-				if (!hc->parsed.empty()) {
-					hc->parsed.append("\n");
-				}
+	do {
+		auto enclosed_end = 0, enclosed_start = 0;
+		decltype(tag) next_enclosed = nullptr;
+
+		if (!enclosed_tags.empty()) {
+			next_enclosed = enclosed_tags.back();
+			enclosed_start = next_enclosed->tag_start;
+			enclosed_end = next_enclosed->content_length +
+					next_enclosed->content_offset;
+
+			if (enclosed_end > next_tag_offset) {
+				next_tag_offset = enclosed_end;
+			}
+			enclosed_tags.pop_back();
+		}
+		else {
+			enclosed_start = next_tag_offset;
+		}
+
+		goffset initial_part_len = enclosed_start - cur_offset;
+
+		if (is_visible && initial_part_len > 0) {
+			html_append_content(hc, {start + cur_offset,
+									 std::size_t(initial_part_len)});
+		}
+
+		/* Deal with the remaining part */
+		std::decay_t<decltype(enclosed_tags)> nested_stack;
+
+		while (!enclosed_tags.empty() && enclosed_end > 0) {
+			const auto *last_tag = enclosed_tags.back();
+
+			if (last_tag->tag_start <= enclosed_end) {
+				nested_stack.push_back(last_tag);
+				enclosed_tags.pop_back();
+			}
+			else {
+				break;
 			}
 		}
 
-		return tag->content_length + tag->content_offset;
+		if (!nested_stack.empty() && next_enclosed) {
+			/* Recursively print enclosed tags */
+			std::reverse(std::begin(nested_stack), std::end(nested_stack));
+			cur_offset = html_append_tag_content(start, len, hc, next_enclosed, nested_stack);
+
+			initial_part_len = next_tag_offset - cur_offset;
+			if (is_visible && initial_part_len > 0) {
+				html_append_content(hc, {start + cur_offset,
+										 std::size_t(initial_part_len)});
+			}
+		}
+
+	} while (!enclosed_tags.empty());
+
+	if (is_block && is_visible) {
+		if (!hc->parsed.empty()) {
+			hc->parsed.append("\n");
+		}
 	}
 
 	return next_tag_offset;
@@ -1117,18 +1173,30 @@ html_append_tags_content(const gchar *start, gsize len,
 						struct html_content *hc) -> void
 {
 	auto cur_offset = 0;
+	std::vector<const html_tag *> enclosed_tags_stack;
 
-	for (auto i = 0; i < hc->all_tags.size(); i ++) {
+	for (auto i = 0; i < hc->all_tags.size();) {
 		const auto &tag = hc->all_tags[i];
 		html_tag *next_tag = nullptr;
-		auto next_offset = len;
+		auto next_offset = tag->content_offset + tag->content_length;
 
-		if (i + 1 < hc->all_tags.size()) {
-			next_tag = hc->all_tags[i + 1].get();
-			next_offset = next_tag->tag_start;
+		auto j = i + 1;
+		while (j < hc->all_tags.size()) {
+			next_tag = hc->all_tags[j].get();
+
+			if (next_tag->content_offset <= next_offset) {
+				enclosed_tags_stack.push_back(next_tag);
+				j ++;
+			}
+			else {
+				break;
+			}
 		}
 
-		cur_offset = html_append_tag_content(start, len, hc, tag.get(), next_offset);
+		std::reverse(enclosed_tags_stack.begin(), enclosed_tags_stack.end());
+		cur_offset = html_append_tag_content(start, len, hc, tag.get(),
+				enclosed_tags_stack);
+		i = j;
 	}
 }
 
@@ -1713,16 +1781,16 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"foo<br>baz", "foo\nbaz"},
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"test", "test"},
 			{"test   ", "test "},
 			{"test   foo,   bar", "test foo, bar"},
-			{"<p>text</p>", "text"},
+			{"<p>text</p>", "text\n"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
-			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 
-			{"<div>foo</div><div>bar</div>", "foo\nbar"},
+			{"foo<br>baz", "foo\nbaz"},
+			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 	};
 
 	rspamd_url_init(NULL);
