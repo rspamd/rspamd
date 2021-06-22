@@ -980,19 +980,6 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				}
 			}
 		}
-
-		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_ALT) {
-			if (!hc->parsed.empty() && !g_ascii_isspace (hc->parsed.back())) {
-				/* Add a space */
-				hc->parsed += ' ';
-			}
-			hc->parsed.append(param.value);
-
-			if (!g_ascii_isspace (hc->parsed.back())) {
-				/* Add a space */
-				hc->parsed += ' ';
-			}
-		}
 	}
 
 	if (img->embedded_image) {
@@ -1069,13 +1056,38 @@ html_append_content(struct html_content *hc, std::string_view data) -> auto
 }
 
 static auto
-html_append_tag_content(const gchar *start, gsize len,
+html_process_displayed_href_tag (rspamd_mempool_t *pool,
+								 struct html_content *hc,
+								 std::string_view data,
+								 const struct html_tag *cur_tag,
+								 GList **exceptions,
+								 khash_t (rspamd_url_hash) *url_set,
+								 goffset dest_offset) -> void
+{
+
+	if (std::holds_alternative<rspamd_url *>(cur_tag->extra)) {
+		auto *url = std::get<rspamd_url *>(cur_tag->extra);
+
+		html_check_displayed_url(pool,
+				exceptions, url_set,
+				data,
+				dest_offset,
+				url);
+	}
+}
+
+static auto
+html_append_tag_content(rspamd_mempool_t *pool,
+						const gchar *start, gsize len,
 						struct html_content *hc,
 						const html_tag *tag,
-						std::vector<const html_tag *> &enclosed_tags) -> goffset
+						std::vector<const html_tag *> &enclosed_tags,
+						GList **exceptions,
+						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false;
-	goffset next_tag_offset = tag->content_length + tag->content_offset;
+	goffset next_tag_offset = tag->content_length + tag->content_offset,
+			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
 		if (!hc->parsed.empty()) {
@@ -1086,7 +1098,7 @@ html_append_tag_content(const gchar *start, gsize len,
 	}
 
 	if (!tag->block) {
-		is_visible = false;
+		is_visible = true;
 	}
 	else if (!tag->block->is_visible()) {
 		is_visible = false;
@@ -1112,7 +1124,7 @@ html_append_tag_content(const gchar *start, gsize len,
 			next_enclosed = enclosed_tags.back();
 			enclosed_start = next_enclosed->tag_start;
 			enclosed_end = next_enclosed->content_length +
-					next_enclosed->content_offset;
+						   next_enclosed->content_offset;
 
 			if (enclosed_end > next_tag_offset) {
 				next_tag_offset = enclosed_end;
@@ -1148,7 +1160,8 @@ html_append_tag_content(const gchar *start, gsize len,
 		if (next_enclosed) {
 			/* Recursively print enclosed tags */
 			std::reverse(std::begin(nested_stack), std::end(nested_stack));
-			cur_offset = html_append_tag_content(start, len, hc, next_enclosed, nested_stack);
+			cur_offset = html_append_tag_content(pool, start, len, hc, next_enclosed,
+					nested_stack, exceptions, url_set);
 
 			initial_part_len = next_tag_offset - cur_offset;
 			if (is_visible && initial_part_len > 0) {
@@ -1165,12 +1178,42 @@ html_append_tag_content(const gchar *start, gsize len,
 		}
 	}
 
+	if (is_visible && !(tag->flags & FL_CLOSING)) {
+		if (tag->id == Tag_A) {
+			auto written_len = hc->parsed.size() - initial_dest_offset;
+			html_process_displayed_href_tag(pool, hc,
+					{hc->parsed.data() + initial_dest_offset, written_len},
+					tag, exceptions,
+					url_set, initial_dest_offset);
+		}
+		else if (tag->id == Tag_IMG) {
+			/* Process ALT if presented */
+			auto maybe_alt = tag->find_component(html_component_type::RSPAMD_HTML_COMPONENT_ALT);
+
+			if (maybe_alt) {
+				if (!hc->parsed.empty() && !g_ascii_isspace (hc->parsed.back())) {
+					/* Add a space */
+					hc->parsed += ' ';
+				}
+				hc->parsed.append(maybe_alt.value());
+
+				if (!g_ascii_isspace (hc->parsed.back())) {
+					/* Add a space */
+					hc->parsed += ' ';
+				}
+			}
+		}
+	}
+
 	return next_tag_offset;
 }
 
 static auto
-html_append_tags_content(const gchar *start, gsize len,
-						struct html_content *hc) -> void
+html_append_tags_content(rspamd_mempool_t *pool,
+						 const gchar *start, gsize len,
+						 struct html_content *hc,
+						 GList **exceptions,
+						 khash_t (rspamd_url_hash) *url_set) -> void
 {
 	auto cur_offset = 0;
 	std::vector<const html_tag *> enclosed_tags_stack;
@@ -1198,8 +1241,8 @@ html_append_tags_content(const gchar *start, gsize len,
 		}
 
 		std::reverse(enclosed_tags_stack.begin(), enclosed_tags_stack.end());
-		cur_offset = html_append_tag_content(start, len, hc, tag.get(),
-				enclosed_tags_stack);
+		cur_offset = html_append_tag_content(pool, start, len, hc, tag.get(),
+				enclosed_tags_stack, exceptions, url_set);
 		i = j;
 	}
 }
@@ -1543,46 +1586,6 @@ html_process_input(rspamd_mempool_t *pool,
 							href_offset = hc->parsed.size();
 						}
 					}
-
-					if (cur_tag->id == Tag_A) {
-						if (tags_stack.size() >= 2) {
-							const auto *prev_tag = tags_stack.back()->parent;
-
-							if (prev_tag && prev_tag->id == Tag_A &&
-								!(prev_tag->flags & (FL_CLOSING)) &&
-								std::holds_alternative<rspamd_url *>(prev_tag->extra)) {
-								auto *prev_url = std::get<rspamd_url *>(prev_tag->extra);
-
-								std::string_view disp_part{
-										hc->parsed.data() + href_offset,
-										hc->parsed.size() - href_offset};
-								html_check_displayed_url (pool,
-										exceptions, url_set,
-										disp_part,
-										href_offset,
-										prev_url);
-							}
-						}
-
-						if (cur_tag->flags & (FL_CLOSING)) {
-
-							/* Insert exception */
-							if (url != NULL && hc->parsed.size() > href_offset) {
-								std::string_view disp_part{
-										hc->parsed.data() + href_offset,
-										hc->parsed.size() - href_offset};
-								html_check_displayed_url (pool,
-										exceptions, url_set,
-										disp_part,
-										href_offset,
-										url);
-
-							}
-
-							href_offset = -1;
-							url = NULL;
-						}
-					}
 				}
 				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
 					/*
@@ -1675,7 +1678,7 @@ html_process_input(rspamd_mempool_t *pool,
 		std::sort(hc->all_tags.begin(), hc->all_tags.end(), [](const auto &pt1, const auto &pt2) -> auto {
 			return pt1->tag_start < pt2->tag_start;
 		});
-		html_append_tags_content(start, end - start, hc);
+		html_append_tags_content(pool, start, end - start, hc, exceptions, url_set);
 	}
 
 	/* Leftover */
@@ -1786,7 +1789,7 @@ TEST_CASE("html text extraction")
 
 	const std::vector<std::pair<std::string, std::string>> cases{
 			{"test", "test"},
-			{"test   ", "test "},
+			{"test   ", "test"},
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text\n"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
@@ -1794,6 +1797,8 @@ TEST_CASE("html text extraction")
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
 			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
+			{"<a href=https://example.com>test</a>", "test"},
+			{"<img alt=test>", "test"},
 	};
 
 	rspamd_url_init(NULL);
