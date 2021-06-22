@@ -1145,7 +1145,7 @@ html_append_tag_content(const gchar *start, gsize len,
 			}
 		}
 
-		if (!nested_stack.empty() && next_enclosed) {
+		if (next_enclosed) {
 			/* Recursively print enclosed tags */
 			std::reverse(std::begin(nested_stack), std::end(nested_stack));
 			cur_offset = html_append_tag_content(start, len, hc, next_enclosed, nested_stack);
@@ -1186,6 +1186,10 @@ html_append_tags_content(const gchar *start, gsize len,
 
 			if (next_tag->content_offset <= next_offset) {
 				enclosed_tags_stack.push_back(next_tag);
+				if (next_tag->content_offset + next_tag->content_length > next_offset) {
+					/* Tag spans over its parent */
+					next_offset = next_tag->content_offset + next_tag->content_length;
+				}
 				j ++;
 			}
 			else {
@@ -1781,14 +1785,13 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
-			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"test", "test"},
 			{"test   ", "test "},
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text\n"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
-
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
+			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
 			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 	};
