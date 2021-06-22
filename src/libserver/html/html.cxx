@@ -79,7 +79,8 @@ static auto
 html_check_balance(struct html_tag *tag,
 				   struct html_tag *parent,
 				   std::vector<html_tag *> &tags_stack,
-				   goffset tag_start_offset) -> bool
+				   goffset tag_start_offset,
+				   goffset tag_end_offset) -> bool
 {
 
 	if (tag->flags & FL_CLOSING) {
@@ -131,7 +132,8 @@ html_process_tag(rspamd_mempool_t *pool,
 				 struct html_content *hc,
 				 struct html_tag *tag,
 				 std::vector<html_tag *> &tags_stack,
-				 goffset tag_start_offset) -> bool
+				 goffset tag_start_offset,
+				 goffset tag_end_offset) -> bool
 {
 	struct html_tag *parent;
 
@@ -164,14 +166,14 @@ html_process_tag(rspamd_mempool_t *pool,
 				return false;
 			}
 
-			if (hc->total_tags < rspamd::html::max_tags) {
-				if (!html_check_balance(tag, parent, tags_stack, tag_start_offset)) {
-					msg_debug_html (
-							"mark part as unbalanced as it has not pairable closing tags");
-					hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
-				}
-
-				hc->total_tags++;
+			if (!html_check_balance(tag, parent, tags_stack,
+					tag_start_offset, tag_end_offset)) {
+				msg_debug_html (
+						"mark part as unbalanced as it has not pairable closing tags");
+				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+			}
+			else {
+				parent->children.push_back(tag);
 			}
 		}
 		else {
@@ -1076,12 +1078,18 @@ html_append_tag_content(const gchar *start, gsize len,
 	auto cur_offset = tag->content_offset;
 	auto total_len = tag->content_length;
 
+	if (tag->flags & FL_CLOSING) {
+		return;
+	}
+
 	if (cur_offset > len || total_len + cur_offset > len) {
 		RSPAMD_UNREACHABLE;
 	}
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
-		hc->parsed.append("\n");
+		if (!hc->parsed.empty()) {
+			hc->parsed.append("\n");
+		}
 		return;
 	}
 
@@ -1089,8 +1097,12 @@ html_append_tag_content(const gchar *start, gsize len,
 		return; /* XXX: is it always true? */
 	}
 
-	if (tag->block->has_display() && tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
-		hc->parsed.append("\n");
+	auto is_block = tag->block->has_display() &&
+			tag->block->display == css::css_display_value::DISPLAY_BLOCK;
+	if (is_block) {
+		if (!hc->parsed.empty()) {
+			hc->parsed.append("\n");
+		}
 	}
 
 	for (const auto &cld_tag : tag->children) {
@@ -1102,18 +1114,24 @@ html_append_tag_content(const gchar *start, gsize len,
 		}
 		html_append_tag_content(start, len, hc, cld_tag);
 		auto old_offset = cur_offset;
+
 		cur_offset = cld_tag->content_offset + cld_tag->content_length;
 
 		if (total_len < cur_offset - old_offset) {
 			/* Child tag spans over parent (e.g. wrong nesting) */
 			total_len = 0;
-			break;
 		}
-		total_len -= cur_offset - old_offset;
+		else {
+			total_len -= cur_offset - old_offset;
+		}
 	}
 
 	if (total_len > 0 && tag->block->is_visible()) {
 		html_append_content(hc, {start + cur_offset, total_len});
+	}
+
+	if (is_block) {
+		hc->parsed.append("\n");
 	}
 }
 
@@ -1412,7 +1430,7 @@ html_process_input(rspamd_mempool_t *pool,
 				cur_tag->content_offset = p - start + 1;
 
 				if (!html_process_tag(pool, hc, cur_tag, tags_stack,
-						c - start)) {
+						c - start, p - start)) {
 					if (cur_tag->id == Tag_STYLE) {
 						state = content_style;
 					}
@@ -1540,6 +1558,10 @@ html_process_input(rspamd_mempool_t *pool,
 
 	/* Propagate styles */
 	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
+		if (tag->flags & FL_CLOSING) {
+			return true;
+		}
+
 		if (hc->css_style) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
@@ -1688,14 +1710,13 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"test", "test"},
 			{"test   ", "test "},
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
-
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
 			{"<div>foo</div><div>bar</div>", "foo\nbar"},
 	};
