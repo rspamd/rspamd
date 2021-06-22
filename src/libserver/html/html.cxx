@@ -1694,6 +1694,24 @@ html_process_input(rspamd_mempool_t *pool,
 		break;
 	}
 
+	if (!hc->parsed.empty()) {
+		/* Trim extra spaces at the at the end if needed */
+		if (g_ascii_isspace(hc->parsed.back())) {
+			auto last_it = std::end(hc->parsed);
+
+			/* Allow last newline */
+			if (hc->parsed.back() == '\n') {
+				--last_it;
+			}
+
+			hc->parsed.erase(std::find_if(hc->parsed.rbegin(), hc->parsed.rend(),
+					[](auto ch) -> auto {
+						return !g_ascii_isspace(ch);
+					}).base(),
+					last_it);
+		}
+	}
+
 	return hc;
 }
 
