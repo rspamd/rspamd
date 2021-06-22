@@ -172,9 +172,6 @@ html_process_tag(rspamd_mempool_t *pool,
 						"mark part as unbalanced as it has not pairable closing tags");
 				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
 			}
-			else {
-				parent->children.push_back(tag);
-			}
 		}
 		else {
 			/* Opening block tag */
@@ -1073,65 +1070,65 @@ html_append_content(struct html_content *hc, std::string_view data) -> auto
 
 static auto
 html_append_tag_content(const gchar *start, gsize len,
-						struct html_content *hc, const struct html_tag *tag) -> void
+						struct html_content *hc,
+						const html_tag *tag,
+						goffset next_tag_offset) -> goffset
 {
-	auto cur_offset = tag->content_offset;
-	auto total_len = tag->content_length;
-
-	if (tag->flags & FL_CLOSING) {
-		return;
-	}
-
-	if (cur_offset > len || total_len + cur_offset > len) {
-		RSPAMD_UNREACHABLE;
-	}
-
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
 		if (!hc->parsed.empty()) {
 			hc->parsed.append("\n");
 		}
-		return;
+
+		return tag->content_offset;
 	}
 
 	if (!tag->block) {
-		return; /* XXX: is it always true? */
+		return next_tag_offset; /* XXX: is it always true? */
 	}
 
 	auto is_block = tag->block->has_display() &&
-			tag->block->display == css::css_display_value::DISPLAY_BLOCK;
+					tag->block->display == css::css_display_value::DISPLAY_BLOCK;
 	if (is_block) {
 		if (!hc->parsed.empty()) {
 			hc->parsed.append("\n");
 		}
 	}
 
-	for (const auto &cld_tag : tag->children) {
-		if (cld_tag->tag_start > cur_offset) {
-			if (tag->block->is_visible()) {
-				html_append_content(hc, {start + cur_offset,
-										 cld_tag->tag_start - cur_offset});
+	if (tag->content_length + tag->content_offset <= next_tag_offset) {
+		if (tag->block->is_visible()) {
+			html_append_content(hc, {start + tag->content_offset,
+									 tag->content_length});
+
+			if (is_block) {
+				if (!hc->parsed.empty()) {
+					hc->parsed.append("\n");
+				}
 			}
 		}
-		html_append_tag_content(start, len, hc, cld_tag);
-		auto old_offset = cur_offset;
 
-		cur_offset = cld_tag->content_offset + cld_tag->content_length;
-
-		if (total_len < cur_offset - old_offset) {
-			/* Child tag spans over parent (e.g. wrong nesting) */
-			total_len = 0;
-		}
-		else {
-			total_len -= cur_offset - old_offset;
-		}
+		return tag->content_length + tag->content_offset;
 	}
 
-	if (total_len > 0 && tag->block->is_visible()) {
-		html_append_content(hc, {start + cur_offset, total_len});
-	}
+	return next_tag_offset;
+}
 
-	if (is_block) {
-		hc->parsed.append("\n");
+static auto
+html_append_tags_content(const gchar *start, gsize len,
+						struct html_content *hc) -> void
+{
+	auto cur_offset = 0;
+
+	for (auto i = 0; i < hc->all_tags.size(); i ++) {
+		const auto &tag = hc->all_tags[i];
+		html_tag *next_tag = nullptr;
+		auto next_offset = len;
+
+		if (i + 1 < hc->all_tags.size()) {
+			next_tag = hc->all_tags[i + 1].get();
+			next_offset = next_tag->tag_start;
+		}
+
+		cur_offset = html_append_tag_content(start, len, hc, tag.get(), next_offset);
 	}
 }
 
@@ -1192,6 +1189,9 @@ html_process_input(rspamd_mempool_t *pool,
 			else {
 				/* We have no starting tag, so assume that it's content */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
+				hc->all_tags.emplace_back(std::make_unique<html_tag>());
+				cur_tag = hc->all_tags.back().get();
+				cur_tag->id = Tag_HTML;
 				state = content_before_start;
 			}
 			break;
@@ -1599,8 +1599,11 @@ html_process_input(rspamd_mempool_t *pool,
 		return true;
 	}, html_content::traverse_type::PRE_ORDER);
 
-	if (hc->root_tag) {
-		html_append_tag_content(start, end - start, hc, hc->root_tag);
+	if (!hc->all_tags.empty()) {
+		std::sort(hc->all_tags.begin(), hc->all_tags.end(), [](const auto &pt1, const auto &pt2) -> auto {
+			return pt1->tag_start < pt2->tag_start;
+		});
+		html_append_tags_content(start, end - start, hc);
 	}
 
 	/* Leftover */
@@ -1710,6 +1713,7 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			{"foo<br>baz", "foo\nbaz"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"test", "test"},
 			{"test   ", "test "},
@@ -1717,7 +1721,7 @@ TEST_CASE("html text extraction")
 			{"<p>text</p>", "text"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
 			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
-			{"foo<br>baz", "foo\nbaz"},
+
 			{"<div>foo</div><div>bar</div>", "foo\nbar"},
 	};
 
