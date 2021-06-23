@@ -1836,6 +1836,8 @@ TEST_CASE("html text extraction")
 			 "      <br>\n"
 			 "      test</div>"
 			 "</body>", "\n\n\ntest\n"},
+			{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
+			 "sh<span style=\"FONT-SIZE: 0px\">aring </span></div>", "fish\n"},
 	};
 
 	rspamd_url_init(NULL);
