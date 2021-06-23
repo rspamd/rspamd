@@ -152,6 +152,9 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				msg_debug_css("attached selector: %s", cur_selector->debug_str().c_str());
 				ret.push_back(std::move(cur_selector));
 			}
+			else {
+				msg_debug_css("not attached selector, state: %d", static_cast<int>(state));
+			}
 			can_continue = false;
 		}
 

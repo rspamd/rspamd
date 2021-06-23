@@ -1473,14 +1473,17 @@ html_process_input(rspamd_mempool_t *pool,
 		case content_style: {
 
 			/*
-			 * We just search for the first </s substring and then pass
+			 * We just search for the first </style> substring and then pass
 			 * the content to the parser (if needed)
+			 *
+			 * TODO: Handle other stuff, we actually need an FSM here to find
+			 * the ending tag...
 			 */
-			auto end_style = rspamd_substring_search (p, end - p,
-					"</", 2);
-			if (end_style == -1 || g_ascii_tolower (p[end_style + 2]) != 's') {
+			auto end_style = rspamd_substring_search_caseless(p, end - p,
+					"</style>", 8);
+			if (end_style == -1) {
 				/* Invalid style */
-				state = tag_content;
+				state = html_text_content;
 			}
 			else {
 
@@ -1540,16 +1543,11 @@ html_process_input(rspamd_mempool_t *pool,
 			content_parser_env.reset();
 
 			if (cur_tag != nullptr) {
-				state = html_text_content;
 
 				cur_tag->content_offset = p - start + 1;
 
-				if (!html_process_tag(pool, hc, cur_tag, tags_stack,
-						c - start, p - start)) {
-					if (cur_tag->id == Tag_STYLE) {
-						state = content_style;
-					}
-				}
+				html_process_tag(pool, hc, cur_tag, tags_stack,
+						c - start, p - start);
 
 				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
 					if (cur_tag->flags & CM_UNIQUE) {
@@ -1623,7 +1621,13 @@ html_process_input(rspamd_mempool_t *pool,
 				}
 			}
 
-			state = html_text_content;
+			if (cur_tag->id == Tag_STYLE && !(cur_tag->flags & FL_CLOSING)) {
+				state = content_style;
+			}
+			else {
+				state = html_text_content;
+			}
+
 			p++;
 			c = p;
 			cur_tag = NULL;
