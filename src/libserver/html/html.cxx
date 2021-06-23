@@ -1655,6 +1655,9 @@ html_process_input(rspamd_mempool_t *pool,
 				if (tag->flags & CM_BLOCK) {
 					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
 				}
+				else if (tag->flags & CM_HEAD) {
+					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN);
+				}
 				else {
 					tag->block->set_display(css::css_display_value::DISPLAY_INLINE);
 				}
