@@ -40,7 +40,7 @@ struct html_entity_def {
 #define ENTITY_DEF(name, code, replacement) html_entity_def{(name), (replacement), (code), false}
 #define ENTITY_DEF_HEUR(name, code, replacement) html_entity_def{(name), (replacement), (code), true}
 
-static const auto html_entities_array = std::vector<html_entity_def>{
+static const html_entity_def html_entities_array[] = {
 		ENTITY_DEF_HEUR("szlig", 223, "\xc3\x9f"),
 		ENTITY_DEF("prime", 8242, "\xe2\x80\xb2"),
 		ENTITY_DEF("lnsim", 8934, "\xe2\x8b\xa6"),
@@ -2173,8 +2173,9 @@ class html_entities_storage {
 	robin_hood::unordered_flat_map<unsigned, html_entity_def> entity_by_id;
 public:
 	html_entities_storage() {
-		entity_by_name.reserve(html_entities_array.size());
-		entity_by_id.reserve(html_entities_array.size());
+		auto nelts = G_N_ELEMENTS(html_entities_array);
+		entity_by_name.reserve(nelts);
+		entity_by_id.reserve(nelts);
 
 		for (const auto &e : html_entities_array) {
 			entity_by_name[e.name] = e;
