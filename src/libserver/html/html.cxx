@@ -1090,9 +1090,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
-		if (!hc->parsed.empty()) {
-			hc->parsed.append("\n");
-		}
+		hc->parsed.append("\n");
 
 		return tag->content_offset;
 	}
@@ -1163,17 +1161,19 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			cur_offset = html_append_tag_content(pool, start, len, hc, next_enclosed,
 					nested_stack, exceptions, url_set);
 
-			initial_part_len = next_tag_offset - cur_offset;
-			if (is_visible && initial_part_len > 0) {
-				html_append_content(hc, {start + cur_offset,
-										 std::size_t(initial_part_len)});
+			if (enclosed_tags.empty()) {
+				initial_part_len = next_tag_offset - cur_offset;
+				if (is_visible && initial_part_len > 0) {
+					html_append_content(hc, {start + cur_offset,
+											 std::size_t(initial_part_len)});
+				}
 			}
 		}
 
 	} while (!enclosed_tags.empty());
 
 	if (is_block && is_visible) {
-		if (!hc->parsed.empty()) {
+		if (!hc->parsed.empty() && hc->parsed.back() != '\n') {
 			hc->parsed.append("\n");
 		}
 	}
@@ -1817,6 +1817,14 @@ TEST_CASE("html text extraction")
 			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 			{"<a href=https://example.com>test</a>", "test"},
 			{"<img alt=test>", "test"},
+			{"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head>"
+			 "  <body>\n"
+			 "    <p><br>\n"
+			 "    </p>\n"
+			 "    <div class=\"moz-forward-container\"><br>\n"
+			 "      <br>\n"
+			 "      test</div>"
+			 "</body>", "\ntest\n"},
 	};
 
 	rspamd_url_init(NULL);

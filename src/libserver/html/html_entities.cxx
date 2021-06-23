@@ -2236,6 +2236,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		normal_content,
 		ampersand,
 		skip_multi_spaces,
+		skip_start_spaces,
 	} state = parser_state::normal_content;
 
 	end = s + len;
@@ -2441,6 +2442,10 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		return false;
 	};
 
+	if (norm_spaces && g_ascii_isspace(*h)) {
+		state = parser_state::skip_start_spaces;
+	}
+
 	while (h - s < len && t <= h) {
 		switch (state) {
 		case parser_state::normal_content:
@@ -2516,6 +2521,14 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				state = parser_state::normal_content;
 			}
 			break;
+		case parser_state::skip_start_spaces:
+			if (g_ascii_isspace(*h)) {
+				h ++;
+			}
+			else {
+				state = parser_state::normal_content;
+			}
+			break;
 		}
 	}
 
@@ -2534,6 +2547,16 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		if (h < end && t + (end - h) <= end) {
 			memmove(t, h, end - h);
 			t += end - h;
+		}
+	}
+
+	if (norm_spaces && g_ascii_isspace(*t)) {
+		do {
+			t --;
+		} while (t > s && g_ascii_isspace(*t));
+
+		if (!g_ascii_isspace(*t)) {
+			t++; /* Preserve last space character */
 		}
 	}
 
