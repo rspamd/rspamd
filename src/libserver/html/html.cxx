@@ -1257,7 +1257,7 @@ html_process_input(rspamd_mempool_t *pool,
 {
 	const gchar *p, *c, *end, *start;
 	guchar t;
-	gboolean closing = FALSE;
+	auto closing = false, in_head = false;
 	guint obrace = 0, ebrace = 0;
 	struct rspamd_url *url = NULL;
 	gint href_offset = -1;
@@ -1559,8 +1559,12 @@ html_process_input(rspamd_mempool_t *pool,
 					hc->tags_seen[cur_tag->id] = true;
 				}
 
+				if (cur_tag->id == Tag_HEAD) {
+					in_head = !(cur_tag->flags & FL_CLOSING);
+				}
+
 				/* XXX: uncomment when styles parsing is not so broken */
-				if (cur_tag->flags & FL_HREF /* && !(cur_tag->flags & FL_IGNORE) */) {
+				if (cur_tag->flags & FL_HREF && !in_head) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
 						auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
