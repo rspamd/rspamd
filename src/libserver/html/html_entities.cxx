@@ -2550,13 +2550,9 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		}
 	}
 
-	if (norm_spaces && g_ascii_isspace(*t)) {
-		do {
+	if (norm_spaces) {
+		while (t > s && g_ascii_isspace(*(t - 1))) {
 			t --;
-		} while (t > s && g_ascii_isspace(*t));
-
-		if (!g_ascii_isspace(*t)) {
-			t++; /* Preserve last space character */
 		}
 	}
 
@@ -2573,13 +2569,13 @@ TEST_SUITE("html") {
 				{"abc     def", "abc def"},
 				{"abc\ndef", "abc def"},
 				{"abc\n \tdef", "abc def"},
-				{"    abc def   ", " abc def "},
+				{"    abc def   ", "abc def"},
 				{"FOO&gt;BAR", "FOO>BAR"},
 				{"FOO&gtBAR", "FOO>BAR"},
 				{"FOO&gt BAR", "FOO>BAR"},
 				{"FOO&gt;;;BAR", "FOO>;;BAR"},
-				{"I'm &notit; ", "I'm ¬it; "},
-				{"I'm &notin; ", "I'm ∉ "},
+				{"I'm &notit; ", "I'm ¬it;"},
+				{"I'm &notin; ", "I'm ∉"},
 				{"FOO& BAR", "FOO& BAR"},
 				{"FOO&&&&gt;BAR", "FOO&&&>BAR"},
 				{"FOO&#41;BAR", "FOO)BAR"},

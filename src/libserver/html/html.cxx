@@ -1824,7 +1824,7 @@ TEST_CASE("html text extraction")
 			 "    <div class=\"moz-forward-container\"><br>\n"
 			 "      <br>\n"
 			 "      test</div>"
-			 "</body>", "\ntest\n"},
+			 "</body>", "\n\n\ntest\n"},
 	};
 
 	rspamd_url_init(NULL);
