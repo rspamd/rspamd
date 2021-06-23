@@ -2399,7 +2399,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 				UBool is_error = 0;
 
 				if (uc > 0) {
-					U8_APPEND (s, off, len, uc, is_error);
+					U8_APPEND ((std::uint8_t *)s, off, len, uc, is_error);
 
 					if (!is_error) {
 						t = s + off;
