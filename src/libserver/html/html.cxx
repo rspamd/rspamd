@@ -1625,7 +1625,7 @@ html_process_input(rspamd_mempool_t *pool,
 				}
 			}
 
-			if (cur_tag->id == Tag_STYLE && !(cur_tag->flags & FL_CLOSING)) {
+			if (cur_tag && (cur_tag->id == Tag_STYLE && !(cur_tag->flags & FL_CLOSING))) {
 				state = content_style;
 			}
 			else {
