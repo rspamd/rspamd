@@ -40,7 +40,7 @@ struct html_entity_def {
 #define ENTITY_DEF(name, code, replacement) html_entity_def{(name), (replacement), (code), false}
 #define ENTITY_DEF_HEUR(name, code, replacement) html_entity_def{(name), (replacement), (code), true}
 
-static const auto html_entities_array = rspamd::array_of<html_entity_def>(
+static const auto html_entities_array = std::vector<html_entity_def>{
 		ENTITY_DEF_HEUR("szlig", 223, "\xc3\x9f"),
 		ENTITY_DEF("prime", 8242, "\xe2\x80\xb2"),
 		ENTITY_DEF("lnsim", 8934, "\xe2\x8b\xa6"),
@@ -1735,7 +1735,7 @@ static const auto html_entities_array = rspamd::array_of<html_entity_def>(
 		ENTITY_DEF("die", 168, "\xc2\xa8"),
 		ENTITY_DEF("ngt", 8815, "\xe2\x89\xaf"),
 		ENTITY_DEF("vcy", 1074, "\xd0\xb2"),
-		ENTITY_DEF("fjlig", (unsigned)-1, "\x66\x6a"),
+		ENTITY_DEF("fjlig", (unsigned) -1, "\x66\x6a"),
 		ENTITY_DEF("submult", 10945, "\xe2\xab\x81"),
 		ENTITY_DEF("ubrcy", 1118, "\xd1\x9e"),
 		ENTITY_DEF("ovbar", 9021, "\xe2\x8c\xbd"),
@@ -2165,7 +2165,7 @@ static const auto html_entities_array = rspamd::array_of<html_entity_def>(
 		ENTITY_DEF("imped", 437, "\xc6\xb5"),
 		ENTITY_DEF("barwedge", 8965, "\xe2\x8c\x85"),
 		ENTITY_DEF("harrcir", 10568, "\xe2\xa5\x88")
-);
+};
 
 class html_entities_storage {
 	robin_hood::unordered_flat_map<std::string_view, html_entity_def> entity_by_name;
