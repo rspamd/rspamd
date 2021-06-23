@@ -701,9 +701,9 @@ html_process_url_tag(rspamd_mempool_t *pool,
 				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
 				auto nlen = (std::size_t)rspamd_snprintf(buf, len + 1,
 						"%*s%s%*s",
-						hc->base_url->urllen, hc->base_url->string,
+						(int)hc->base_url->urllen, hc->base_url->string,
 						need_slash ? "/" : "",
-						(gint) orig_len, href_value.size());
+						(gint)orig_len, href_value.data());
 				href_value = {buf, nlen};
 			}
 			else if (href_value[0] == '/' && href_value[1] != '/') {
@@ -713,8 +713,8 @@ html_process_url_tag(rspamd_mempool_t *pool,
 					   3 /* for :// */;
 				auto *buf = rspamd_mempool_alloc_buffer(pool, len + 1);
 				auto nlen = (std::size_t)rspamd_snprintf(buf, len + 1, "%*s://%*s/%*s",
-						hc->base_url->protocollen, hc->base_url->string,
-						hc->base_url->hostlen, rspamd_url_host_unsafe (hc->base_url),
+						(int)hc->base_url->protocollen, hc->base_url->string,
+						(int)hc->base_url->hostlen, rspamd_url_host_unsafe (hc->base_url),
 						(gint)orig_len, href_value.data());
 				href_value = {buf, nlen};
 			}
