@@ -180,7 +180,8 @@ local btc_bleach_re = [[/\b(?:(?:[a-zA-Z]\w+:)|(?:bc1))?[qpzry9x8gf2tvdw0s3jn54k
 
 config.regexp['BITCOIN_ADDR'] = {
   description = 'Message has a valid bitcoin wallet address',
-  re = string.format('(%s) || (%s)', normal_wallet_re, btc_bleach_re),
+  -- Use + operator to ensure that each expression is always evaluated
+  re = string.format('(%s) + (%s) > 0', normal_wallet_re, btc_bleach_re),
   re_conditions = {
     [normal_wallet_re] = function(task, txt, s, e)
       if e - s <= 2 then

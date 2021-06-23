@@ -1,0 +1,26 @@
+Received: by mail-lf1-f54.gulugulu.com with SMTP id j14so14439709lfg.9
+        for <test@test.ru>; Mon, 27 Apr 2020 09:54:21 -0700 (PDT)
+From: test@test.com
+Date: Mon, 27 Apr 2020 19:54:10 +0300
+Message-ID: <CA+1S=h4aGimA6vSBJF=t1F+5z-Mua5+Cimf+NU_NDWJk8ZNOcw@mail.gmail.com>
+Subject: Fwd:
+To: <test@test.ru>
+Content-Type: multipart/alternative; boundary="00000000000004de7805a4489190"
+
+--0000000000004bee6805a4484c02
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq
+bitcoincash:qztslqhavnjcgth9zwu6dw0jjcfy4zahfy7vf0smwp
+1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
+
+--0000000000004bee6805a4484c02
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+
+bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq
+bitcoincash:qztslqhavnjcgth9zwu6dw0jjcfy4zahfy7vf0smwp
+1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
+
+--0000000000004bee6805a4484c02--

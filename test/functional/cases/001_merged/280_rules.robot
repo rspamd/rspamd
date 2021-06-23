@@ -66,6 +66,12 @@ BITCOIN ADDR 3
   ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
   Expect Symbol  BITCOIN_ADDR
 
+BITCOIN ADDR 4
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc4.eml
+  ...  Settings={symbols_enabled = [BITCOIN_ADDR]}
+  Expect Symbol With Exact Options  BITCOIN_ADDR  1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
+  ...  bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq  bitcoincash:qztslqhavnjcgth9zwu6dw0jjcfy4zahfy7vf0smwp
+
 RCVD_COUNT_ONE
   Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
   ...  Settings={symbols_enabled = [RCVD_COUNT_ONE]}
