@@ -1849,6 +1849,26 @@ TEST_CASE("html text extraction")
 			 "</body>", "\n\n\ntest\n"},
 			{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
 			 "sh<span style=\"FONT-SIZE: 0px\">aring </span></div>", "fish\n"},
+			/* FIXME: broken until rework */
+			//{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
+			// "sh<span style=\"FONT-SIZE: 0px\">aring </div>foo</span>", "fish\nfoo"},
+			{"<p><!--comment-->test", "test"},
+			{"<!DOCTYPE html>\n"
+			 "<html lang=\"en\">\n"
+			 "  <head>\n"
+			 "    <meta charset=\"utf-8\">\n"
+			 "    <title>title</title>\n"
+			 "    <link rel=\"stylesheet\" href=\"style.css\">\n"
+			 "    <script src=\"script.js\"></script>\n"
+			 "  </head>\n"
+			 "  <body>\n"
+			 "    <!-- page content -->\n"
+			 "    Hello, world! <b>test</b>\n"
+			 "    <p>data<>\n"
+			 "    </P>\n"
+			 "    <b>stuff</p>?\n"
+			 "  </body>\n"
+			 "</html>", "Hello, world! test\ndata<> \nstuff?"}
 	};
 
 	rspamd_url_init(NULL);

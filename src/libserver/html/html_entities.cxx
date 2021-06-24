@@ -2552,8 +2552,15 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	}
 
 	if (norm_spaces) {
+		bool seen_spaces = false;
+
 		while (t > s && g_ascii_isspace(*(t - 1))) {
+			seen_spaces = true;
 			t --;
+		}
+
+		if (seen_spaces) {
+			*t++ = ' ';
 		}
 	}
 
