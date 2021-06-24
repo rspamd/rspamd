@@ -31,8 +31,8 @@
 namespace rspamd::html {
 
 struct html_entity_def {
-	std::string name;
-	std::string replacement;
+	const char *name;
+	const char *replacement;
 	unsigned code;
 	bool allow_heuristic;
 };
@@ -2248,8 +2248,8 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 															 		false);
 
 		auto replace_entity = [&]() -> void {
-			auto l = entity_def->replacement.size();
-			memcpy(t, entity_def->replacement.data(), l);
+			auto l = strlen(entity_def->replacement);
+			memcpy(t, entity_def->replacement, l);
 			t += l;
 		};
 
@@ -2384,10 +2384,10 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			const auto *entity_def = html_entities_defs.by_id(uc);
 
 			if (entity_def) {
-				auto rep_len = entity_def->replacement.size();
+				auto rep_len = strlen(entity_def->replacement);
 
 				if (end - t >= rep_len) {
-					memcpy(t, entity_def->replacement.data(),
+					memcpy(t, entity_def->replacement,
 							rep_len);
 					t += rep_len;
 				}
