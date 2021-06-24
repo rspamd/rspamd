@@ -58,19 +58,6 @@ struct html_image {
 };
 
 
-/* Public tags flags */
-/* XML tag */
-#define FL_XML          (1 << 23)
-/* Closing tag */
-#define FL_CLOSING      (1 << 24)
-/* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 25)
-#define FL_BROKEN       (1 << 26)
-#define FL_IGNORE       (1 << 27)
-#define FL_BLOCK        (1 << 28)
-#define FL_HREF         (1 << 29)
-#define FL_IMAGE        (1 << 30)
-
 /* Forwarded declaration */
 struct rspamd_task;
 

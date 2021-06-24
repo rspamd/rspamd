@@ -851,8 +851,6 @@ html_process_img_tag(rspamd_mempool_t *pool,
 
 	img = rspamd_mempool_alloc0_type (pool, struct html_image);
 	img->tag = tag;
-	tag->flags |= FL_IMAGE;
-
 
 	for (const auto &param : tag->parameters) {
 
@@ -1096,7 +1094,12 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	}
 
 	if (!tag->block) {
-		is_visible = true;
+		if ((tag->flags & (FL_COMMENT|FL_XML))) {
+			is_visible = false;
+		}
+		else {
+			is_visible = true;
+		}
 	}
 	else if (!tag->block->is_visible()) {
 		is_visible = false;
@@ -1328,10 +1331,17 @@ html_process_input(rspamd_mempool_t *pool,
 				break;
 			case '!':
 				state = sgml_tag;
+				hc->all_tags.emplace_back(std::make_unique<html_tag>());
+				cur_tag = hc->all_tags.back().get();
+				cur_tag->tag_start = c - start;
 				p ++;
 				break;
 			case '?':
 				state = xml_tag;
+				hc->all_tags.emplace_back(std::make_unique<html_tag>());
+				cur_tag = hc->all_tags.back().get();
+				cur_tag->tag_start = c - start;
+				cur_tag->flags |= FL_XML;
 				hc->flags |= RSPAMD_HTML_FLAG_XML;
 				p ++;
 				break;
@@ -1365,6 +1375,7 @@ html_process_input(rspamd_mempool_t *pool,
 				p ++;
 				break;
 			case '-':
+				cur_tag->flags |= FL_COMMENT;
 				state = comment_tag;
 				p ++;
 				break;
