@@ -468,6 +468,19 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 custom_locale = $(localeTextbox).val();
                 validateLocale(true);
             });
+
+            // Dismiss Bootstrap popover by clicking outside
+            $("body").on("click", function (e) {
+                $(".popover").each(function () {
+                    if (
+                        // Popover's descendant
+                        $(this).has(e.target).length ||
+                        // Button (or icon within a button) that triggers the popover.
+                        $(e.target).closest("button").attr("aria-describedby") === this.id
+                    ) return;
+                    $(this).popover("hide");
+                });
+            });
         }());
 
         $("#selData").change(function () {
