@@ -76,51 +76,136 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 INIT_LOG_MODULE(html)
 
 static auto
-html_check_balance(struct html_tag *tag,
+html_check_balance(struct html_content *hc,
+				   struct html_tag *tag,
 				   struct html_tag *parent,
 				   std::vector<html_tag *> &tags_stack,
 				   goffset tag_start_offset,
 				   goffset tag_end_offset) -> bool
 {
 
+	auto calculate_content_length = [tag_start_offset](html_tag *t) {
+		auto opening_content_offset = t->content_offset;
+
+		if (opening_content_offset <= tag_start_offset) {
+			t->content_length = tag_start_offset - opening_content_offset;
+		}
+		else {
+			t->content_length = 0;
+		}
+	};
+
+	auto balance_tag = [&]() -> void {
+		auto it = tags_stack.rbegin();
+
+		for (auto end_it = tags_stack.rend(); it != end_it; ++it) {
+			if ((*it)->id == tag->id && !((*it)->flags & FL_CLOSING)) {
+				break;
+			}
+			/* Insert a virtual closing tag for all tags that are not closed */
+			auto &&vtag = std::make_unique<html_tag>();
+			vtag->id = (*it)->id;
+			vtag->flags = FL_VIRTUAL|FL_CLOSING;
+			vtag->tag_start = tag->tag_start;
+			vtag->content_offset = tag->content_offset;
+			vtag->content_length = 0;
+			vtag->parent = (*it)->parent;
+			calculate_content_length(*it);
+			(*it)->flags |= FL_CLOSED;
+			hc->all_tags.emplace_back(std::move(vtag));
+		}
+
+		/* Remove tags */
+		tags_stack.erase(it.base(), std::end(tags_stack));
+	};
+
 	if (tag->flags & FL_CLOSING) {
-		/* Find the opening pair if any and check if it is correctly placed */
-		auto found_opening = std::find_if(tags_stack.rbegin(), tags_stack.rend(),
-				[&](const html_tag *t) {
-					return (t->flags & FL_CLOSED) == 0 && t->id == tag->id;
-				});
+		if (!tags_stack.empty()) {
+			auto *last_tag = tags_stack.back();
 
-		if (found_opening != tags_stack.rend()) {
-			auto *opening_tag = (*found_opening);
-			opening_tag->flags |= FL_CLOSED;
+			if (last_tag->id == tag->id && !(last_tag->flags & FL_CLOSED)) {
+				last_tag->flags |= FL_CLOSED;
 
-			/* Adjust size */
-			auto opening_content_offset = opening_tag->content_offset;
-
-			if (opening_content_offset <= tag_start_offset) {
-				opening_tag->content_length =
-						tag_start_offset - opening_content_offset;
-			}
-			else {
-				opening_tag->content_length = 0;
-			}
-
-			if (found_opening == tags_stack.rbegin()) {
+				calculate_content_length(last_tag);
 				tags_stack.pop_back();
 				/* All good */
 				return true;
 			}
 			else {
-				/* Move to front */
-				std::iter_swap(found_opening, tags_stack.rbegin());
-				tags_stack.pop_back();
+				balance_tag();
+
 				return false;
 			}
 		}
 		else {
-			/* We have unpaired tag */
-			return false;
+			/*
+			 * We have no opening tags in the stack, so we need to assume that there
+			 * is an opening tag at the beginning of the document.
+			 * There are two possibilities:
+			 *
+			 * 1) We have some block tag in hc->all_tags;
+			 * 2) We have no tags
+			 */
+
+			if (hc->all_tags.empty()) {
+				auto &&vtag = std::make_unique<html_tag>();
+				vtag->id = tag->id;
+				vtag->flags = FL_VIRTUAL|FL_CLOSED;
+				vtag->tag_start = 0;
+				vtag->content_offset = 0;
+				calculate_content_length(vtag.get());
+
+
+				if (!hc->root_tag) {
+					hc->root_tag = vtag.get();
+				}
+				else {
+					vtag->parent = hc->root_tag;
+				}
+				hc->all_tags.emplace_back(std::move(vtag));
+			}
+			else {
+				auto found_closing = std::find_if(hc->all_tags.rbegin(),
+						hc->all_tags.rend(),
+						[&](const auto &t) {
+							constexpr const auto expect_flags = FL_BLOCK|FL_CLOSING;
+							return (t->flags & expect_flags) == (expect_flags) &&
+									t.get() != tag &&
+									t->parent != nullptr;
+						});
+
+				if (found_closing != hc->all_tags.rend()) {
+					auto *closing_tag = (*found_closing).get();
+					auto &&vtag = std::make_unique<html_tag>();
+					vtag->id = tag->id;
+					vtag->flags = FL_VIRTUAL|FL_CLOSED;
+					vtag->tag_start = closing_tag->content_offset - 1;
+					vtag->content_offset = vtag->tag_start + 1;
+					vtag->parent = closing_tag->parent;
+					vtag->content_length = tag->tag_start - vtag->content_offset;
+					hc->all_tags.emplace_back(std::move(vtag));
+				}
+				else {
+					auto &&vtag = std::make_unique<html_tag>();
+					vtag->id = tag->id;
+					vtag->flags = FL_VIRTUAL|FL_CLOSED;
+					vtag->tag_start = 0;
+					vtag->content_offset = 0;
+					calculate_content_length(vtag.get());
+
+
+					if (!hc->root_tag) {
+						hc->root_tag = vtag.get();
+					}
+					else {
+						vtag->parent = hc->root_tag;
+					}
+					hc->all_tags.emplace_back(std::move(vtag));
+				}
+			}
 		}
+
+		return false;
 	}
 
 	/* Misuse */
@@ -166,7 +251,7 @@ html_process_tag(rspamd_mempool_t *pool,
 				return false;
 			}
 
-			if (!html_check_balance(tag, parent, tags_stack,
+			if (!html_check_balance(hc, tag, parent, tags_stack,
 					tag_start_offset, tag_end_offset)) {
 				msg_debug_html (
 						"mark part as unbalanced as it has not pairable closing tags");

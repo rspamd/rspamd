@@ -191,13 +191,10 @@ typedef enum {
 #define CM_NO_INDENT    (1 << 18)
 /* Elements that are obsolete (such as "dir", "menu"). */
 #define CM_OBSOLETE     (1 << 19)
-/* User defined elements. Used to determine how attributes without value
-   should be printed. */
-#define CM_NEW          (1 << 20)
 /* Elements that cannot be omitted. */
-#define CM_OMITST       (1 << 21)
+#define CM_OMITST       (1 << 20)
 /* Unique elements */
-#define CM_UNIQUE       (1 << 22)
+#define CM_UNIQUE       (1 << 21)
 
 #ifdef  __cplusplus
 }
