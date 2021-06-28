@@ -1,30 +1,10 @@
 context("HTML processing", function()
   local rspamd_util = require("rspamd_util")
   local logger = require("rspamd_logger")
-
-  test("Extract text from HTML", function()
-    local cases = {
+  local cases = {
       -- Entities
       {[[<html><body>.&#102;&#105;&#114;&#101;&#98;&#97;&#115;&#101;&#97;&#112;&#112;.&#99;&#111;&#109;</body></html>]],
        [[.firebaseapp.com]]},
-      {[[
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>title</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js"></script>
-  </head>
-  <body>
-    <!-- page content -->
-    Hello, world! <b>test</b>
-    <p>data<>
-    </P>
-    <b>stuff</p>?
-  </body>
-</html>
-      ]], "Hello, world! test\r\ndata\r\nstuff\r\n?"},
       {[[
 <?xml version="1.0" encoding="iso-8859-1"?>
  <!DOCTYPE html
@@ -42,7 +22,7 @@ context("HTML processing", function()
 
      </p>
    </body>
- </html>]], 'Hello, world!\r\n'},
+ </html>]], 'Hello, world!\n'},
        {[[
 <!DOCTYPE html>
 <html lang="en">
@@ -76,7 +56,7 @@ context("HTML processing", function()
     </div>
   </body>
 </html>
-      ]], 'Hello, world!\r\ntest\r\ncontent\r\nmore content\r\ncontent inside div\r\n'},
+      ]], 'Hello, world!\ntest\ncontent\nmore content\ncontent inside div\n'},
       {[[
 <html lang="en">
   <head>
@@ -103,7 +83,7 @@ context("HTML processing", function()
 
   </body>
 </html>
-      ]], 'content\r\nheada headb\r\ndata1 data2\r\n'},
+      ]], 'content\nheada headb\ndata1 data2\n'},
       {[[
 <html lang="en">
   <head>
@@ -118,14 +98,16 @@ context("HTML processing", function()
   </body>
 </html>
       ]], 'a b a > b a < b a & b \'a "a"'},
-    }
+  }
 
-    for _,c in ipairs(cases) do
+  for i,c in ipairs(cases) do
+    test("Extract text from HTML " .. tostring(i), function()
       local t = rspamd_util.parse_html(c[1])
 
       assert_not_nil(t)
       assert_equal(c[2], tostring(t), string.format("'%s' doesn't match with '%s'",
           c[2], t))
-    end
-  end)
+
+    end)
+  end
 end)
