@@ -244,7 +244,7 @@ html_process_tag(rspamd_mempool_t *pool,
 
 	if (!(tag->flags & (CM_EMPTY))) {
 		/* Block tag */
-		if ((tag->flags & (FL_CLOSING | FL_CLOSED))) {
+		if (tag->flags & FL_CLOSING) {
 			/* Closed block tag */
 			if (parent == nullptr) {
 				msg_debug_html ("bad parent node");
@@ -1178,20 +1178,20 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		return tag->content_offset;
 	}
 
-	if (!tag->block) {
-		if ((tag->flags & (FL_COMMENT|FL_XML))) {
-			is_visible = false;
-		}
-		else {
-			is_visible = true;
-		}
-	}
-	else if (!tag->block->is_visible()) {
+	if ((tag->flags & (FL_COMMENT|FL_XML))) {
 		is_visible = false;
 	}
 	else {
-		is_block = tag->block->has_display() &&
-				   tag->block->display == css::css_display_value::DISPLAY_BLOCK;
+		if (!tag->block) {
+			is_visible = true;
+		}
+		else if (!tag->block->is_visible()) {
+			is_visible = false;
+		}
+		else {
+			is_block = tag->block->has_display() &&
+					   tag->block->display == css::css_display_value::DISPLAY_BLOCK;
+		}
 	}
 
 	if (is_block) {
@@ -1913,6 +1913,12 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			/* XML tags */
+			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+			 " <!DOCTYPE html\n"
+			 "   PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
+			 "   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
+			 "<body>test</body>", "test"},
 			{"test", "test"},
 			{"test   ", "test"},
 			{"test   foo,   bar", "test foo, bar"},
@@ -1938,6 +1944,7 @@ TEST_CASE("html text extraction")
 			//{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
 			// "sh<span style=\"FONT-SIZE: 0px\">aring </div>foo</span>", "fish\nfoo"},
 			{"<p><!--comment-->test", "test"},
+			/* Complex html with bad tags */
 			{"<!DOCTYPE html>\n"
 			 "<html lang=\"en\">\n"
 			 "  <head>\n"
@@ -1953,7 +1960,7 @@ TEST_CASE("html text extraction")
 			 "    </P>\n"
 			 "    <b>stuff</p>?\n"
 			 "  </body>\n"
-			 "</html>", "Hello, world! test\ndata<> \nstuff?"}
+			 "</html>", "Hello, world! test\ndata<> \nstuff?"},
 	};
 
 	rspamd_url_init(NULL);
