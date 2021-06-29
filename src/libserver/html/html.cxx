@@ -369,12 +369,14 @@ find_tag_component_name(rspamd_mempool_t *pool,
 struct tag_content_parser_state {
 	int cur_state = 0;
 	const char *saved_p = nullptr;
+	const char *tag_name_start = nullptr;
 	std::optional<html_component_type> cur_component;
 
 	void reset()
 	{
 		cur_state = 0;
 		saved_p = nullptr;
+		tag_name_start = nullptr;
 		cur_component = std::nullopt;
 	}
 };
@@ -441,22 +443,22 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		else if (g_ascii_isalpha (*in)) {
 			state = parse_name;
-			tag->name = std::string_view{in, 0};
+			parser_env.tag_name_start = in;
 		}
 		break;
 
 	case parse_name:
-		if (g_ascii_isspace (*in) || *in == '>' || *in == '/') {
-			const auto *start = tag->name.begin();
+		if ((g_ascii_isspace (*in) || *in == '>' || *in == '/') && parser_env.tag_name_start) {
+			const auto *start = parser_env.tag_name_start;
 			g_assert (in >= start);
 
 			if (*in == '/') {
 				tag->flags |= FL_CLOSED;
 			}
 
-			tag->name = std::string_view{start, (std::size_t)(in - start)};
+			const auto tag_name_len = in - start;
 
-			if (tag->name.empty()) {
+			if (tag_name_len== 0) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->id = -1;
 				tag->flags |= FL_BROKEN;
@@ -466,14 +468,13 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				/*
 				 * Copy tag name to the temporary buffer for modifications
 				 */
-				auto *s = rspamd_mempool_alloc_buffer(pool, tag->name.size() + 1);
-				rspamd_strlcpy(s, tag->name.data(), tag->name.size() + 1);
+				auto *s = rspamd_mempool_alloc_buffer(pool, tag_name_len + 1);
+				rspamd_strlcpy(s, parser_env.tag_name_start, tag_name_len + 1);
 				auto nsize = rspamd_html_decode_entitles_inplace(s,
-						tag->name.size());
+						tag_name_len);
 				nsize =  rspamd_str_lc_utf8(s, nsize);
-				tag->name = std::string_view{s, nsize};
 
-				const auto *tag_def = rspamd::html::html_tags_defs.by_name(tag->name);
+				const auto *tag_def = rspamd::html::html_tags_defs.by_name({s, nsize});
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
@@ -1847,7 +1848,8 @@ html_debug_structure(const html_content &hc) -> std::string
 	if (hc.root_tag) {
 		auto rec_functor = [&](const html_tag *t, int level, auto rec_functor) -> void {
 			std::string pluses(level, '+');
-			output += fmt::format("{}{};", pluses, t->name);
+			output += fmt::format("{}{};", pluses,
+					html_tags_defs.name_by_id_safe(t->id));
 			for (const auto *cld : t->children) {
 				rec_functor(cld, level + 1, rec_functor);
 			}
@@ -2066,12 +2068,13 @@ const gchar *
 rspamd_html_tag_name(void *p, gsize *len)
 {
 	auto *tag = reinterpret_cast<rspamd::html::html_tag *>(p);
+	auto tname = rspamd::html::html_tags_defs.name_by_id_safe(tag->id);
 
 	if (len) {
-		*len = tag->name.size();
+		*len = tname.size();
 	}
 
-	return tag->name.data();
+	return tname.data();
 }
 
 struct html_image*

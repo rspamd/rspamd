@@ -78,7 +78,6 @@ struct html_tag {
 	std::uint32_t flags = 0;
 	std::int32_t id = -1;
 
-	std::string_view name;
 	std::vector<html_tag_component> parameters;
 
 	html_tag_extra_t extra;

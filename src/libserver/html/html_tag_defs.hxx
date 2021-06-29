@@ -190,6 +190,15 @@ public:
 
 		return nullptr;
 	}
+
+	auto name_by_id_safe(int id) const -> std::string_view {
+		auto it = tag_by_id.find(static_cast<tag_id_t>(id));
+		if (it != tag_by_id.end()) {
+			return it->second.name;
+		}
+
+		return "unknown";
+	}
 };
 
 }
