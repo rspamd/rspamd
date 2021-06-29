@@ -466,13 +466,16 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			}
 			else {
 				/*
-				 * Copy tag name to the temporary buffer for modifications
+				 * Copy tag name to the temporary buffer for modifications.
+				 * We use static buffer as legit tag names are usually short enough
+				 * to save some space in memory pool.
 				 */
-				auto *s = rspamd_mempool_alloc_buffer(pool, tag_name_len + 1);
-				rspamd_strlcpy(s, parser_env.tag_name_start, tag_name_len + 1);
-				auto nsize = rspamd_html_decode_entitles_inplace(s,
-						tag_name_len);
-				nsize =  rspamd_str_lc_utf8(s, nsize);
+				char s[32];
+
+				auto nsize = rspamd_strlcpy(s, parser_env.tag_name_start,
+						MIN(sizeof(s), tag_name_len + 1));
+				nsize = rspamd_html_decode_entitles_inplace(s, nsize);
+				nsize = rspamd_str_lc_utf8(s, nsize);
 
 				const auto *tag_def = rspamd::html::html_tags_defs.by_name({s, nsize});
 
