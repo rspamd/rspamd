@@ -270,7 +270,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		if (!g_ascii_isalpha (*in) && !g_ascii_isspace (*in)) {
 			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 			state = ignore_bad_tag;
-			tag->id = -1;
+			tag->id = N_TAGS;
 			tag->flags |= FL_BROKEN;
 		}
 		else if (g_ascii_isalpha (*in)) {
@@ -292,7 +292,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 			if (tag_name_len== 0) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				tag->id = -1;
+				tag->id = N_TAGS;
 				tag->flags |= FL_BROKEN;
 				state = ignore_bad_tag;
 			}
@@ -313,7 +313,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
-					tag->id = -1;
+					tag->id = N_TAGS;
 				}
 				else {
 					tag->id = tag_def->id;
@@ -1000,12 +1000,11 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						const gchar *start, gsize len,
 						struct html_content *hc,
 						const html_tag *tag,
-						std::vector<const html_tag *> &enclosed_tags,
 						GList **exceptions,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false;
-	goffset next_tag_offset = tag->closing.end,
+	goffset next_tag_offset = tag->closing.start,
 			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
@@ -1014,7 +1013,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		return tag->content_offset;
 	}
 
-	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE))) {
+	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE|CM_HEAD))) {
 		is_visible = false;
 	}
 	else {
@@ -1038,24 +1037,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 	goffset cur_offset = tag->content_offset;
 
-	do {
-		auto enclosed_end = 0, enclosed_start = 0;
-		decltype(tag) next_enclosed = nullptr;
-
-		if (!enclosed_tags.empty()) {
-			next_enclosed = enclosed_tags.back();
-			enclosed_start = next_enclosed->tag_start;
-			enclosed_end = next_enclosed->closing.end;
-
-			if (enclosed_end > next_tag_offset) {
-				next_tag_offset = enclosed_end;
-			}
-			enclosed_tags.pop_back();
-		}
-		else {
-			enclosed_start = next_tag_offset;
-		}
-
+	for (auto *cld : tag->children) {
+		auto enclosed_start = cld->tag_start;
 		goffset initial_part_len = enclosed_start - cur_offset;
 
 		if (is_visible && initial_part_len > 0) {
@@ -1063,37 +1046,19 @@ html_append_tag_content(rspamd_mempool_t *pool,
 									 std::size_t(initial_part_len)});
 		}
 
-		/* Deal with the remaining part */
-		std::decay_t<decltype(enclosed_tags)> nested_stack;
+		cur_offset = html_append_tag_content(pool, start, len,
+				hc, cld, exceptions, url_set);
 
-		while (!enclosed_tags.empty() && enclosed_end > 0) {
-			const auto *last_tag = enclosed_tags.back();
+	}
 
-			if (last_tag->tag_start <= enclosed_end) {
-				nested_stack.push_back(last_tag);
-				enclosed_tags.pop_back();
-			}
-			else {
-				break;
-			}
+	if (cur_offset < tag->closing.start) {
+		goffset final_part_len = tag->closing.start - cur_offset;
+
+		if (is_visible && final_part_len > 0) {
+			html_append_content(hc, {start + cur_offset,
+									 std::size_t(final_part_len)});
 		}
-
-		if (next_enclosed) {
-			/* Recursively print enclosed tags */
-			std::reverse(std::begin(nested_stack), std::end(nested_stack));
-			cur_offset = html_append_tag_content(pool, start, len, hc, next_enclosed,
-					nested_stack, exceptions, url_set);
-
-			if (enclosed_tags.empty()) {
-				initial_part_len = next_tag_offset - cur_offset;
-				if (is_visible && initial_part_len > 0) {
-					html_append_content(hc, {start + cur_offset,
-											 std::size_t(initial_part_len)});
-				}
-			}
-		}
-
-	} while (!enclosed_tags.empty());
+	}
 
 	if (is_block && is_visible) {
 		if (!hc->parsed.empty() && hc->parsed.back() != '\n') {
@@ -1138,36 +1103,7 @@ html_append_tags_content(rspamd_mempool_t *pool,
 						 GList **exceptions,
 						 khash_t (rspamd_url_hash) *url_set) -> void
 {
-	auto cur_offset = 0;
-	std::vector<const html_tag *> enclosed_tags_stack;
-
-	for (auto i = 0; i < hc->all_tags.size();) {
-		const auto &tag = hc->all_tags[i];
-		html_tag *next_tag = nullptr;
-		auto next_offset = tag->closing.end;
-
-		auto j = i + 1;
-		while (j < hc->all_tags.size()) {
-			next_tag = hc->all_tags[j].get();
-
-			if (next_tag->content_offset <= next_offset) {
-				enclosed_tags_stack.push_back(next_tag);
-				if (next_tag->closing.end > next_offset) {
-					/* Tag spans over its parent */
-					next_offset = next_tag->closing.end;
-				}
-				j ++;
-			}
-			else {
-				break;
-			}
-		}
-
-		std::reverse(enclosed_tags_stack.begin(), enclosed_tags_stack.end());
-		cur_offset = html_append_tag_content(pool, start, len, hc, tag.get(),
-				enclosed_tags_stack, exceptions, url_set);
-		i = j;
-	}
+	html_append_tag_content(pool, start, len, hc, hc->root_tag, exceptions, url_set);
 }
 
 static auto
@@ -1232,7 +1168,27 @@ html_process_input(rspamd_mempool_t *pool,
 			parent->children.push_back(ntag);
 		}
 		else {
-			hc->root_tag = ntag;
+			if (hc->root_tag) {
+				ntag->parent = hc->root_tag;
+				hc->root_tag->children.push_back(ntag);
+			}
+			else {
+				if (ntag->id == Tag_HTML) {
+					hc->root_tag = ntag;
+				}
+				else {
+					/* Insert a fake html tag */
+					hc->all_tags.emplace_back(std::make_unique<html_tag>());
+					auto *top_tag = hc->all_tags.back().get();
+					top_tag->tag_start = 0;
+					top_tag->flags = CM_HEAD|FL_VIRTUAL;
+					top_tag->id = Tag_HTML;
+					top_tag->content_offset = 0;
+					top_tag->children.push_back(ntag);
+					ntag->parent = top_tag;
+					hc->root_tag = top_tag;
+				}
+			}
 		}
 
 		return ntag;
@@ -1269,7 +1225,6 @@ html_process_input(rspamd_mempool_t *pool,
 			break;
 		case content_before_start:
 			if (t == '<') {
-				html_append_content(hc, {c, std::size_t(p - c)});
 				state = tag_begin;
 			}
 			else {
@@ -1499,7 +1454,6 @@ html_process_input(rspamd_mempool_t *pool,
 			if (t == '>') {
 				state = html_text_content;
 				/* We don't know a lot about sgml tags, ignore them */
-				cur_tag = nullptr;
 			}
 			p ++;
 			break;
@@ -1541,7 +1495,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 			if (cur_tag != nullptr) {
 
-				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
+				if (cur_tag->id < N_TAGS) {
 					if (cur_tag->flags & CM_UNIQUE) {
 						if (!hc->tags_seen[cur_tag->id]) {
 							/* Duplicate tag has been found */
@@ -1623,6 +1577,8 @@ html_process_input(rspamd_mempool_t *pool,
 			cur_tag = html_check_balance(hc, cur_tag,
 					c - start, p - start);
 			state = html_text_content;
+			p ++;
+			c = p;
 			break;
 		case tags_limit_overflow:
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
@@ -1810,6 +1766,7 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 			/* XML tags */
 			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 			 " <!DOCTYPE html\n"
@@ -1824,7 +1781,6 @@ TEST_CASE("html text extraction")
 			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
-			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 			{"<a href=https://example.com>test</a>", "test"},
 			{"<img alt=test>", "test"},
 			{"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head>"

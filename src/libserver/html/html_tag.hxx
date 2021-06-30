@@ -24,6 +24,8 @@
 #include <vector>
 #include <optional>
 
+#include "html_tags.h"
+
 namespace rspamd::html {
 
 enum class html_component_type : std::uint8_t {
@@ -83,7 +85,7 @@ struct html_tag {
 	unsigned int tag_start = 0;
 	unsigned int content_offset = 0;
 	std::uint32_t flags = 0;
-	std::int32_t id = -1;
+	tag_id_t id = N_TAGS;
 	html_closing_tag closing;
 
 	std::vector<html_tag_component> components;
@@ -114,7 +116,7 @@ struct html_tag {
 	}
 
 	auto clear(void) -> void {
-		id = -1;
+		id = N_TAGS;
 		tag_start = content_offset = 0;
 		extra = std::monostate{};
 		components.clear();
