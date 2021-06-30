@@ -1004,7 +1004,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false;
-	goffset next_tag_offset = tag->closing.start,
+	goffset next_tag_offset = tag->closing.end + 1,
 			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
@@ -1097,16 +1097,6 @@ html_append_tag_content(rspamd_mempool_t *pool,
 }
 
 static auto
-html_append_tags_content(rspamd_mempool_t *pool,
-						 const gchar *start, gsize len,
-						 struct html_content *hc,
-						 GList **exceptions,
-						 khash_t (rspamd_url_hash) *url_set) -> void
-{
-	html_append_tag_content(pool, start, len, hc, hc->root_tag, exceptions, url_set);
-}
-
-static auto
 html_process_input(rspamd_mempool_t *pool,
 					GByteArray *in,
 					GList **exceptions,
@@ -1120,7 +1110,7 @@ html_process_input(rspamd_mempool_t *pool,
 	guint obrace = 0, ebrace = 0;
 	struct rspamd_url *url = nullptr;
 	gint href_offset = -1;
-	struct html_tag *cur_tag = nullptr, cur_closing_tag;
+	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
 
 	enum {
@@ -1156,39 +1146,17 @@ html_process_input(rspamd_mempool_t *pool,
 			return nullptr;
 		}
 
-		auto *parent = cur_tag;
-
 		hc->all_tags.emplace_back(std::make_unique<html_tag>());
 		auto *ntag = hc->all_tags.back().get();
 		ntag->tag_start = c - start;
 		ntag->flags = flags;
 
-		if (parent) {
-			ntag->parent = parent;
-			parent->children.push_back(ntag);
+		if (cur_tag) {
+			parent_tag = cur_tag;
 		}
-		else {
-			if (hc->root_tag) {
-				ntag->parent = hc->root_tag;
-				hc->root_tag->children.push_back(ntag);
-			}
-			else {
-				if (ntag->id == Tag_HTML) {
-					hc->root_tag = ntag;
-				}
-				else {
-					/* Insert a fake html tag */
-					hc->all_tags.emplace_back(std::make_unique<html_tag>());
-					auto *top_tag = hc->all_tags.back().get();
-					top_tag->tag_start = 0;
-					top_tag->flags = CM_HEAD|FL_VIRTUAL;
-					top_tag->id = Tag_HTML;
-					top_tag->content_offset = 0;
-					top_tag->children.push_back(ntag);
-					ntag->parent = top_tag;
-					hc->root_tag = top_tag;
-				}
-			}
+
+		if (flags & FL_XML) {
+			return ntag;
 		}
 
 		return ntag;
@@ -1216,6 +1184,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 				if (cur_tag) {
 					cur_tag->id = Tag_HTML;
+					hc->root_tag = cur_tag;
 					state = content_before_start;
 				}
 				else {
@@ -1239,7 +1208,7 @@ html_process_input(rspamd_mempool_t *pool,
 				closing = FALSE;
 				break;
 			case '!':
-				cur_tag = new_tag(FL_XML);
+				cur_tag = new_tag(FL_XML|FL_CLOSED);
 				if (cur_tag) {
 					state = sgml_tag;
 				}
@@ -1249,7 +1218,7 @@ html_process_input(rspamd_mempool_t *pool,
 				p ++;
 				break;
 			case '?':
-				cur_tag = new_tag(FL_XML);
+				cur_tag = new_tag(FL_XML|FL_CLOSED);
 				if (cur_tag) {
 					state = xml_tag;
 				}
@@ -1503,9 +1472,43 @@ html_process_input(rspamd_mempool_t *pool,
 						}
 					}
 					hc->tags_seen[cur_tag->id] = true;
+
+					/* Shift to the first unclosed tag */
+					while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
+						parent_tag = parent_tag->parent;
+					}
+
+					if (parent_tag) {
+						cur_tag->parent = parent_tag;
+						parent_tag->children.push_back(cur_tag);
+					}
+					else {
+						if (hc->root_tag) {
+							cur_tag->parent = hc->root_tag;
+							hc->root_tag->children.push_back(cur_tag);
+							parent_tag = hc->root_tag;
+						}
+						else {
+							if (cur_tag->id == Tag_HTML) {
+								hc->root_tag = cur_tag;
+							}
+							else {
+								/* Insert a fake html tag */
+								hc->all_tags.emplace_back(std::make_unique<html_tag>());
+								auto *top_tag = hc->all_tags.back().get();
+								top_tag->tag_start = 0;
+								top_tag->flags = CM_HEAD|FL_VIRTUAL;
+								top_tag->id = Tag_HTML;
+								top_tag->content_offset = 0;
+								top_tag->children.push_back(cur_tag);
+								cur_tag->parent = top_tag;
+								hc->root_tag = top_tag;
+								parent_tag = top_tag;
+							}
+						}
+					}
 				}
 
-				/* XXX: uncomment when styles parsing is not so broken */
 				if (cur_tag->flags & FL_HREF && !in_head) {
 					auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
@@ -1637,7 +1640,8 @@ html_process_input(rspamd_mempool_t *pool,
 		std::sort(hc->all_tags.begin(), hc->all_tags.end(), [](const auto &pt1, const auto &pt2) -> auto {
 			return pt1->tag_start < pt2->tag_start;
 		});
-		html_append_tags_content(pool, start, end - start, hc, exceptions, url_set);
+		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
+				exceptions, url_set);
 	}
 
 	/* Leftover */
@@ -1766,7 +1770,23 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
+			/* Complex html with bad tags */
+			{"<!DOCTYPE html>\n"
+			 "<html lang=\"en\">\n"
+			 "  <head>\n"
+			 "    <meta charset=\"utf-8\">\n"
+			 "    <title>title</title>\n"
+			 "    <link rel=\"stylesheet\" href=\"style.css\">\n"
+			 "    <script src=\"script.js\"></script>\n"
+			 "  </head>\n"
+			 "  <body>\n"
+			 "    <!-- page content -->\n"
+			 "    Hello, world! <b>test</b>\n"
+			 "    <p>data<>\n"
+			 "    </P>\n"
+			 "    <b>stuff</p>?\n"
+			 "  </body>\n"
+			 "</html>", "Hello, world! test\ndata<> \nstuff?"},
 			/* XML tags */
 			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 			 " <!DOCTYPE html\n"
@@ -1778,6 +1798,7 @@ TEST_CASE("html text extraction")
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text\n"},
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
+			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
@@ -1797,23 +1818,7 @@ TEST_CASE("html text extraction")
 			//{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
 			// "sh<span style=\"FONT-SIZE: 0px\">aring </div>foo</span>", "fish\nfoo"},
 			{"<p><!--comment-->test", "test"},
-			/* Complex html with bad tags */
-			{"<!DOCTYPE html>\n"
-			 "<html lang=\"en\">\n"
-			 "  <head>\n"
-			 "    <meta charset=\"utf-8\">\n"
-			 "    <title>title</title>\n"
-			 "    <link rel=\"stylesheet\" href=\"style.css\">\n"
-			 "    <script src=\"script.js\"></script>\n"
-			 "  </head>\n"
-			 "  <body>\n"
-			 "    <!-- page content -->\n"
-			 "    Hello, world! <b>test</b>\n"
-			 "    <p>data<>\n"
-			 "    </P>\n"
-			 "    <b>stuff</p>?\n"
-			 "  </body>\n"
-			 "</html>", "Hello, world! test\ndata<> \nstuff?"},
+
 	};
 
 	rspamd_url_init(NULL);
