@@ -1321,7 +1321,10 @@ html_process_input(rspamd_mempool_t *pool,
 				if (g_ascii_isalpha(t)) {
 					state = tag_content;
 					content_parser_env.reset();
-					cur_tag = new_tag();
+
+					if (!closing) {
+						cur_tag = new_tag();
+					}
 
 					if (cur_tag) {
 						state = tag_content;
@@ -1494,10 +1497,9 @@ html_process_input(rspamd_mempool_t *pool,
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
-				state = tag_end_closing;
+				state = html_text_content;
 				/* We don't know a lot about sgml tags, ignore them */
 				cur_tag = nullptr;
-				continue;
 			}
 			p ++;
 			break;
@@ -1613,19 +1615,14 @@ html_process_input(rspamd_mempool_t *pool,
 				state = html_text_content;
 			}
 
-			if (!(cur_tag->flags & (FL_CLOSED|CM_EMPTY))) {
-				/* Pop stack to the parent */
-				cur_tag = cur_tag->parent;
-			}
-
 			p++;
 			c = p;
 			break;
 		case tag_end_closing:
 			/* cur_tag here is a closing tag */
-			html_check_balance(hc, cur_tag,
+			cur_tag = html_check_balance(hc, cur_tag,
 					c - start, p - start);
-			cur_tag = nullptr;
+			state = html_text_content;
 			break;
 		case tags_limit_overflow:
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
