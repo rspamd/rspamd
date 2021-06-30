@@ -75,259 +75,91 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 
 INIT_LOG_MODULE(html)
 
+/*
+ * This function is expected to be called on a closing tag to fill up all tags
+ * and return the current parent (meaning unclosed) tag
+ */
 static auto
 html_check_balance(struct html_content *hc,
 				   struct html_tag *tag,
-				   struct html_tag *parent,
-				   std::vector<html_tag *> &tags_stack,
 				   goffset tag_start_offset,
-				   goffset tag_end_offset) -> bool
+				   goffset tag_end_offset) -> html_tag *
 {
+	/* As agreed, the closing tag has the last opening at the parent ptr */
+	auto *opening_tag = tag->parent;
 
-	auto calculate_content_length = [tag_start_offset](html_tag *t) {
+	auto calculate_content_length = [tag_start_offset,tag_end_offset](html_tag *t) {
 		auto opening_content_offset = t->content_offset;
 
 		if (opening_content_offset <= tag_start_offset) {
-			t->content_length = tag_start_offset - opening_content_offset;
+			t->closing.start = tag_start_offset;
+			t->closing.end = tag_end_offset;
 		}
 		else {
-			t->content_length = 0;
+
+			t->closing.start = t->content_offset;
+			t->closing.end = tag_end_offset;
 		}
 	};
 
-	auto balance_tag = [&]() -> void {
-		auto it = tags_stack.rbegin();
+	auto balance_tag = [&]() -> html_tag * {
+		auto it = tag->parent;
 
-		for (auto end_it = tags_stack.rend(); it != end_it; ++it) {
-			if ((*it)->id == tag->id && !((*it)->flags & FL_CLOSING)) {
+		for (; it != nullptr; it = it->parent) {
+			if (it->id == tag->id && !(it->flags & FL_CLOSED)) {
 				break;
 			}
 			/* Insert a virtual closing tag for all tags that are not closed */
-			auto &&vtag = std::make_unique<html_tag>();
-			vtag->id = (*it)->id;
-			vtag->flags = FL_VIRTUAL|FL_CLOSING;
-			vtag->tag_start = tag->tag_start;
-			vtag->content_offset = tag->content_offset;
-			vtag->content_length = 0;
-			vtag->parent = (*it)->parent;
-			calculate_content_length(*it);
-			(*it)->flags |= FL_CLOSED;
-			hc->all_tags.emplace_back(std::move(vtag));
+			calculate_content_length(it);
+			it->flags |= FL_CLOSED;
 		}
 
 		/* Remove tags */
-		tags_stack.erase(it.base(), std::end(tags_stack));
+		return it;
 	};
 
-	if (tag->flags & FL_CLOSING) {
-		if (!tags_stack.empty()) {
-			auto *last_tag = tags_stack.back();
+	if (opening_tag) {
 
-			if (last_tag->id == tag->id && !(last_tag->flags & FL_CLOSED)) {
-				last_tag->flags |= FL_CLOSED;
+		if (opening_tag->id == tag->id) {
+			opening_tag->flags |= FL_CLOSED;
 
-				calculate_content_length(last_tag);
-				tags_stack.pop_back();
-				/* All good */
-				return true;
-			}
-			else {
-				balance_tag();
-
-				return false;
-			}
+			calculate_content_length(opening_tag);
+			/* All good */
+			return opening_tag->parent;
 		}
 		else {
-			/*
-			 * We have no opening tags in the stack, so we need to assume that there
-			 * is an opening tag at the beginning of the document.
-			 * There are two possibilities:
-			 *
-			 * 1) We have some block tag in hc->all_tags;
-			 * 2) We have no tags
-			 */
-
-			if (hc->all_tags.empty()) {
-				auto &&vtag = std::make_unique<html_tag>();
-				vtag->id = tag->id;
-				vtag->flags = FL_VIRTUAL|FL_CLOSED;
-				vtag->tag_start = 0;
-				vtag->content_offset = 0;
-				calculate_content_length(vtag.get());
-
-
-				if (!hc->root_tag) {
-					hc->root_tag = vtag.get();
-				}
-				else {
-					vtag->parent = hc->root_tag;
-				}
-				hc->all_tags.emplace_back(std::move(vtag));
-			}
-			else {
-				auto found_closing = std::find_if(hc->all_tags.rbegin(),
-						hc->all_tags.rend(),
-						[&](const auto &t) {
-							constexpr const auto expect_flags = FL_BLOCK|FL_CLOSING;
-							return (t->flags & expect_flags) == (expect_flags) &&
-									t.get() != tag &&
-									t->parent != nullptr;
-						});
-
-				if (found_closing != hc->all_tags.rend()) {
-					auto *closing_tag = (*found_closing).get();
-					auto &&vtag = std::make_unique<html_tag>();
-					vtag->id = tag->id;
-					vtag->flags = FL_VIRTUAL|FL_CLOSED;
-					vtag->tag_start = closing_tag->content_offset - 1;
-					vtag->content_offset = vtag->tag_start + 1;
-					vtag->parent = closing_tag->parent;
-					vtag->content_length = tag->tag_start - vtag->content_offset;
-					hc->all_tags.emplace_back(std::move(vtag));
-				}
-				else {
-					auto &&vtag = std::make_unique<html_tag>();
-					vtag->id = tag->id;
-					vtag->flags = FL_VIRTUAL|FL_CLOSED;
-					vtag->tag_start = 0;
-					vtag->content_offset = 0;
-					calculate_content_length(vtag.get());
-
-
-					if (!hc->root_tag) {
-						hc->root_tag = vtag.get();
-					}
-					else {
-						vtag->parent = hc->root_tag;
-					}
-					hc->all_tags.emplace_back(std::move(vtag));
-				}
-			}
-		}
-
-		return false;
-	}
-
-	/* Misuse */
-	RSPAMD_UNREACHABLE;
-}
-
-static auto
-html_process_tag(rspamd_mempool_t *pool,
-				 struct html_content *hc,
-				 struct html_tag *tag,
-				 std::vector<html_tag *> &tags_stack,
-				 goffset tag_start_offset,
-				 goffset tag_end_offset) -> bool
-{
-	struct html_tag *parent;
-
-	if (hc->total_tags > rspamd::html::max_tags) {
-		hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
-	}
-
-	if (tag->id == -1) {
-		/* Ignore unknown tags */
-		hc->total_tags++;
-		return false;
-	}
-
-
-	if (tags_stack.empty()) {
-		parent = hc->root_tag;
-	}
-	else {
-		parent = tags_stack.back();
-	}
-
-	tag->parent = parent;
-
-	if (!(tag->flags & (CM_EMPTY))) {
-		/* Block tag */
-		if (tag->flags & FL_CLOSING) {
-			/* Closed block tag */
-			if (parent == nullptr) {
-				msg_debug_html ("bad parent node");
-				return false;
-			}
-
-			if (!html_check_balance(hc, tag, parent, tags_stack,
-					tag_start_offset, tag_end_offset)) {
-				msg_debug_html (
-						"mark part as unbalanced as it has not pairable closing tags");
-				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
-			}
-		}
-		else {
-			/* Opening block tag */
-			if (parent) {
-				if ((parent->flags & FL_IGNORE)) {
-					tag->flags |= FL_IGNORE;
-				}
-
-				if (!(tag->flags & FL_CLOSED) &&
-					(parent->flags & CM_EMPTY)) {
-					/* We likely have some bad nesting */
-					if (parent->id == tag->id) {
-						/* Something like <a>bla<a>foo... */
-						hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
-						tag->parent = parent->parent;
-
-						if (hc->total_tags < rspamd::html::max_tags) {
-							parent->children.push_back(tag);
-							tags_stack.push_back(tag);
-							hc->total_tags++;
-						}
-
-						return true;
-					}
-				}
-
-				if (hc->total_tags < rspamd::html::max_tags) {
-					parent->children.push_back(tag);
-
-					if ((tag->flags & FL_CLOSED) == 0) {
-						tags_stack.push_back(tag);
-					}
-
-					hc->total_tags++;
-				}
-			}
-			else {
-				hc->root_tag = tag;
-				if (hc->total_tags < rspamd::html::max_tags) {
-					if ((tag->flags & FL_CLOSED) == 0) {
-						tags_stack.push_back(tag);
-					}
-
-					hc->total_tags++;
-				}
-			}
-
-			if (tag->flags & (CM_HEAD | CM_UNKNOWN | FL_IGNORE)) {
-				tag->flags |= FL_IGNORE;
-
-				return false;
-			}
+			return balance_tag();
 		}
 	}
 	else {
-		/* Inline tag */
-		if (parent) {
-			if (hc->total_tags < rspamd::html::max_tags) {
-				parent->children.push_back(tag);
+		/*
+		 * We have no opening tag
+		 * There are two possibilities:
+		 *
+		 * 1) We have some block tag in hc->all_tags;
+		 * 2) We have no tags
+		 */
 
-				hc->total_tags++;
-			}
-			if ((parent->flags & (CM_HEAD | CM_UNKNOWN | FL_IGNORE))) {
-				tag->flags |= FL_IGNORE;
+		if (hc->all_tags.empty()) {
+			auto &&vtag = std::make_unique<html_tag>();
+			vtag->id = tag->id;
+			vtag->flags = FL_VIRTUAL|FL_CLOSED;
+			vtag->tag_start = 0;
+			vtag->content_offset = 0;
+			calculate_content_length(vtag.get());
 
-				return false;
+
+			if (!hc->root_tag) {
+				hc->root_tag = vtag.get();
 			}
+			else {
+				vtag->parent = hc->root_tag;
+			}
+			hc->all_tags.emplace_back(std::move(vtag));
 		}
 	}
 
-	return true;
+	return nullptr;
 }
 
 auto
@@ -404,7 +236,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		spaces_before_eq,
 		spaces_after_eq,
 		spaces_after_param,
-		ignore_bad_tag
+		ignore_bad_tag,
 	} state;
 	gboolean store = FALSE;
 
@@ -425,7 +257,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				auto *s = rspamd_mempool_alloc_buffer(pool, sz);
 				memcpy(s, parser_env.saved_p, sz);
 				sz = rspamd_html_decode_entitles_inplace(s, in - parser_env.saved_p);
-				tag->parameters.emplace_back(parser_env.cur_component.value(),
+				tag->components.emplace_back(parser_env.cur_component.value(),
 						std::string_view{s, sz});
 		}
 
@@ -941,7 +773,7 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	img = rspamd_mempool_alloc0_type (pool, struct html_image);
 	img->tag = tag;
 
-	for (const auto &param : tag->parameters) {
+	for (const auto &param : tag->components) {
 
 		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_HREF) {
 			/* Check base url */
@@ -1103,7 +935,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 {
 	std::optional<css::css_value> maybe_fgcolor, maybe_bgcolor;
 
-	for (const auto &param : tag->parameters) {
+	for (const auto &param : tag->components) {
 		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_COLOR) {
 			maybe_fgcolor = css::css_value::maybe_color_from_string(param.value);
 		}
@@ -1173,7 +1005,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false;
-	goffset next_tag_offset = tag->content_length + tag->content_offset,
+	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
@@ -1182,7 +1014,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		return tag->content_offset;
 	}
 
-	if ((tag->flags & (FL_COMMENT|FL_XML))) {
+	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE))) {
 		is_visible = false;
 	}
 	else {
@@ -1213,8 +1045,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		if (!enclosed_tags.empty()) {
 			next_enclosed = enclosed_tags.back();
 			enclosed_start = next_enclosed->tag_start;
-			enclosed_end = next_enclosed->content_length +
-						   next_enclosed->content_offset;
+			enclosed_end = next_enclosed->closing.end;
 
 			if (enclosed_end > next_tag_offset) {
 				next_tag_offset = enclosed_end;
@@ -1270,7 +1101,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		}
 	}
 
-	if (is_visible && !(tag->flags & FL_CLOSING)) {
+	if (is_visible) {
 		if (tag->id == Tag_A) {
 			auto written_len = hc->parsed.size() - initial_dest_offset;
 			html_process_displayed_href_tag(pool, hc,
@@ -1313,7 +1144,7 @@ html_append_tags_content(rspamd_mempool_t *pool,
 	for (auto i = 0; i < hc->all_tags.size();) {
 		const auto &tag = hc->all_tags[i];
 		html_tag *next_tag = nullptr;
-		auto next_offset = tag->content_offset + tag->content_length;
+		auto next_offset = tag->closing.end;
 
 		auto j = i + 1;
 		while (j < hc->all_tags.size()) {
@@ -1321,9 +1152,9 @@ html_append_tags_content(rspamd_mempool_t *pool,
 
 			if (next_tag->content_offset <= next_offset) {
 				enclosed_tags_stack.push_back(next_tag);
-				if (next_tag->content_offset + next_tag->content_length > next_offset) {
+				if (next_tag->closing.end > next_offset) {
 					/* Tag spans over its parent */
-					next_offset = next_tag->content_offset + next_tag->content_length;
+					next_offset = next_tag->closing.end;
 				}
 				j ++;
 			}
@@ -1351,10 +1182,9 @@ html_process_input(rspamd_mempool_t *pool,
 	guchar t;
 	auto closing = false, in_head = false;
 	guint obrace = 0, ebrace = 0;
-	struct rspamd_url *url = NULL;
+	struct rspamd_url *url = nullptr;
 	gint href_offset = -1;
-	struct html_tag *cur_tag = NULL;
-	std::vector<html_tag *> tags_stack;
+	struct html_tag *cur_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
 
 	enum {
@@ -1368,10 +1198,12 @@ html_process_input(rspamd_mempool_t *pool,
 		comment_content,
 		sgml_content,
 		tag_content,
-		tag_end,
+		tag_end_opening,
+		tag_end_closing,
 		html_text_content,
 		xml_tag_end,
 		content_style,
+		tags_limit_overflow,
 	} state = parse_start;
 
 	g_assert (in != NULL);
@@ -1379,6 +1211,32 @@ html_process_input(rspamd_mempool_t *pool,
 
 	struct html_content *hc = new html_content;
 	rspamd_mempool_add_destructor(pool, html_content::html_content_dtor, hc);
+
+	auto new_tag = [&](int flags = 0) -> struct html_tag * {
+
+		if (hc->total_tags > rspamd::html::max_tags) {
+			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+
+			return nullptr;
+		}
+
+		auto *parent = cur_tag;
+
+		hc->all_tags.emplace_back(std::make_unique<html_tag>());
+		auto *ntag = hc->all_tags.back().get();
+		ntag->tag_start = c - start;
+		ntag->flags = flags;
+
+		if (parent) {
+			ntag->parent = parent;
+			parent->children.push_back(ntag);
+		}
+		else {
+			hc->root_tag = ntag;
+		}
+
+		return ntag;
+	};
 
 	p = (const char *)in->data;
 	c = p;
@@ -1392,14 +1250,21 @@ html_process_input(rspamd_mempool_t *pool,
 		case parse_start:
 			if (t == '<') {
 				state = tag_begin;
+				in_head = true;
 			}
 			else {
 				/* We have no starting tag, so assume that it's content */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
-				hc->all_tags.emplace_back(std::make_unique<html_tag>());
-				cur_tag = hc->all_tags.back().get();
-				cur_tag->id = Tag_HTML;
-				state = content_before_start;
+				in_head = false;
+				cur_tag = new_tag();
+
+				if (cur_tag) {
+					cur_tag->id = Tag_HTML;
+					state = content_before_start;
+				}
+				else {
+					state = tags_limit_overflow;
+				}
 			}
 			break;
 		case content_before_start:
@@ -1419,37 +1284,56 @@ html_process_input(rspamd_mempool_t *pool,
 				closing = FALSE;
 				break;
 			case '!':
-				state = sgml_tag;
-				hc->all_tags.emplace_back(std::make_unique<html_tag>());
-				cur_tag = hc->all_tags.back().get();
-				cur_tag->tag_start = c - start;
+				cur_tag = new_tag(FL_XML);
+				if (cur_tag) {
+					state = sgml_tag;
+				}
+				else {
+					state = tags_limit_overflow;
+				}
 				p ++;
 				break;
 			case '?':
-				state = xml_tag;
-				hc->all_tags.emplace_back(std::make_unique<html_tag>());
-				cur_tag = hc->all_tags.back().get();
-				cur_tag->tag_start = c - start;
-				cur_tag->flags |= FL_XML;
+				cur_tag = new_tag(FL_XML);
+				if (cur_tag) {
+					state = xml_tag;
+				}
+				else {
+					state = tags_limit_overflow;
+				}
 				hc->flags |= RSPAMD_HTML_FLAG_XML;
 				p ++;
 				break;
 			case '/':
 				closing = TRUE;
+				/* We fill fake closing tag to fill it with the content parser */
+				cur_closing_tag.clear();
+				cur_closing_tag.parent = cur_tag; /* For simplicity */
+				cur_tag = &cur_closing_tag;
 				p ++;
 				break;
 			case '>':
 				/* Empty tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				state = tag_end;
+				state = html_text_content;
 				continue;
 			default:
-				state = tag_content;
-				content_parser_env.reset();
+				if (g_ascii_isalpha(t)) {
+					state = tag_content;
+					content_parser_env.reset();
+					cur_tag = new_tag();
 
-				hc->all_tags.emplace_back(std::make_unique<html_tag>());
-				cur_tag = hc->all_tags.back().get();
-				cur_tag->tag_start = c - start;
+					if (cur_tag) {
+						state = tag_content;
+					}
+					else {
+						state = tags_limit_overflow;
+					}
+				}
+				else {
+					/* Wrong bad tag */
+					state = html_text_content;
+				}
 				break;
 			}
 
@@ -1482,7 +1366,7 @@ html_process_input(rspamd_mempool_t *pool,
 			else if (t == '>') {
 				/* Misformed xml tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				state = tag_end;
+				state = tag_end_opening;
 				continue;
 			}
 			/* We efficiently ignore xml tags */
@@ -1491,7 +1375,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 		case xml_tag_end:
 			if (t == '>') {
-				state = tag_end;
+				state = tag_end_opening;
 				continue;
 			}
 			else {
@@ -1508,16 +1392,16 @@ html_process_input(rspamd_mempool_t *pool,
 				ebrace ++;
 			}
 			else if (t == '>' && obrace == ebrace) {
-				state = tag_end;
+				state = tag_end_opening;
 				continue;
 			}
 			p ++;
 			break;
 
 		case comment_tag:
-			if (t != '-')  {
+			if (t != '-') {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				state = tag_end;
+				state = tag_end_opening;
 			}
 			else {
 				p++;
@@ -1534,11 +1418,11 @@ html_process_input(rspamd_mempool_t *pool,
 				if (p[0] == '-' && p + 1 < end && p[1] == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 					p ++;
-					state = tag_end;
+					state = tag_end_opening;
 				}
 				else if (*p == '>') {
 					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-					state = tag_end;
+					state = tag_end_opening;
 				}
 				else {
 					state = comment_content;
@@ -1551,7 +1435,7 @@ html_process_input(rspamd_mempool_t *pool,
 				ebrace ++;
 			}
 			else if (t == '>' && ebrace >= 2) {
-				state = tag_end;
+				state = tag_end_opening;
 				continue;
 			}
 			else {
@@ -1610,7 +1494,7 @@ html_process_input(rspamd_mempool_t *pool,
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
-				state = tag_end;
+				state = tag_end_closing;
 				/* We don't know a lot about sgml tags, ignore them */
 				cur_tag = nullptr;
 				continue;
@@ -1623,31 +1507,37 @@ html_process_input(rspamd_mempool_t *pool,
 
 			if (t == '>') {
 				if (closing) {
-					cur_tag->flags |= FL_CLOSING;
-
-					if (cur_tag->flags & FL_CLOSED) {
-						/* Bad mix of closed and closing */
-						hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-					}
+					cur_tag->closing.start = c - start;
+					cur_tag->closing.end = p - start + 1;
 
 					closing = FALSE;
+					if (cur_tag->id == Tag_HEAD) {
+						in_head = false;
+					}
+					state = tag_end_closing;
+				}
+				else {
+					cur_tag->content_offset = p - start + 1;
+					if (cur_tag->id == Tag_HEAD) {
+						in_head = true;
+					}
+					else if (cur_tag->id == Tag_BODY) {
+						in_head = false;
+					}
+
+					state = tag_end_opening;
 				}
 
-				state = tag_end;
+
 				continue;
 			}
 			p ++;
 			break;
 
-		case tag_end:
+		case tag_end_opening:
 			content_parser_env.reset();
 
 			if (cur_tag != nullptr) {
-
-				cur_tag->content_offset = p - start + 1;
-
-				html_process_tag(pool, hc, cur_tag, tags_stack,
-						c - start, p - start);
 
 				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
 					if (cur_tag->flags & CM_UNIQUE) {
@@ -1659,37 +1549,31 @@ html_process_input(rspamd_mempool_t *pool,
 					hc->tags_seen[cur_tag->id] = true;
 				}
 
-				if (cur_tag->id == Tag_HEAD) {
-					in_head = !(cur_tag->flags & FL_CLOSING);
-				}
-
 				/* XXX: uncomment when styles parsing is not so broken */
 				if (cur_tag->flags & FL_HREF && !in_head) {
-					if (!(cur_tag->flags & (FL_CLOSING))) {
-						auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+					auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
-						if (maybe_url) {
-							url = maybe_url.value();
+					if (maybe_url) {
+						url = maybe_url.value();
 
-							if (url_set != NULL) {
-								struct rspamd_url *maybe_existing =
-										rspamd_url_set_add_or_return (url_set, maybe_url.value());
-								if (maybe_existing == maybe_url.value()) {
-									html_process_query_url(pool, url, url_set,
-											part_urls);
-								}
-								else {
-									url = maybe_existing;
-									/* Increase count to avoid odd checks failure */
-									url->count ++;
-								}
+						if (url_set != NULL) {
+							struct rspamd_url *maybe_existing =
+									rspamd_url_set_add_or_return (url_set, maybe_url.value());
+							if (maybe_existing == maybe_url.value()) {
+								html_process_query_url(pool, url, url_set,
+										part_urls);
 							}
-
-							href_offset = hc->parsed.size();
+							else {
+								url = maybe_existing;
+								/* Increase count to avoid odd checks failure */
+								url->count ++;
+							}
 						}
+
+						href_offset = hc->parsed.size();
 					}
 				}
-				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
+				else if (cur_tag->id == Tag_BASE) {
 					/*
 					 * Base is allowed only within head tag but HTML is retarded
 					 */
@@ -1708,42 +1592,53 @@ html_process_input(rspamd_mempool_t *pool,
 					}
 				}
 
-				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
+				if (cur_tag->id == Tag_IMG) {
 					html_process_img_tag(pool, cur_tag, hc, url_set,
 							part_urls);
 				}
-				else if (cur_tag->id == Tag_LINK && !(cur_tag->flags & FL_CLOSING)) {
+				else if (cur_tag->id == Tag_LINK) {
 					html_process_link_tag(pool, cur_tag, hc, url_set,
 							part_urls);
 				}
 
 				if (!(cur_tag->flags & CM_EMPTY)) {
-
-					if (!(cur_tag->flags & FL_CLOSING)) {
-						html_process_block_tag(pool, cur_tag, hc);
-					}
+					html_process_block_tag(pool, cur_tag, hc);
 				}
 			}
 
-			if (cur_tag && (cur_tag->id == Tag_STYLE && !(cur_tag->flags & FL_CLOSING))) {
+			if (cur_tag && (cur_tag->id == Tag_STYLE)) {
 				state = content_style;
 			}
 			else {
 				state = html_text_content;
 			}
 
+			if (!(cur_tag->flags & (FL_CLOSED|CM_EMPTY))) {
+				/* Pop stack to the parent */
+				cur_tag = cur_tag->parent;
+			}
+
 			p++;
 			c = p;
-			cur_tag = NULL;
+			break;
+		case tag_end_closing:
+			/* cur_tag here is a closing tag */
+			html_check_balance(hc, cur_tag,
+					c - start, p - start);
+			cur_tag = nullptr;
+			break;
+		case tags_limit_overflow:
+			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
+				 " ignoring the rest of the HTML content",
+					(int)hc->all_tags.size(), (int)(p - start));
+			html_append_content(hc, {p, (std::size_t)(end - p)});
+			p = end;
 			break;
 		}
 	}
 
 	/* Propagate styles */
 	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
-		if (tag->flags & FL_CLOSING) {
-			return true;
-		}
 
 		if (hc->css_style) {
 			auto *css_block = hc->css_style->check_tag_block(tag);

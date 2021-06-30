@@ -114,7 +114,7 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 	}
 
 	/* First, find id in a tag and a class */
-	for (const auto &param : tag->parameters) {
+	for (const auto &param : tag->components) {
 		if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_ID) {
 			id_comp = param.value;
 		}

@@ -110,7 +110,7 @@ struct html_content {
 
 	auto traverse_all_tags(fu2::function<bool(const html_tag *)> &&func) const -> bool {
 		for (const auto &tag : all_tags) {
-			if (!(tag->flags & (FL_CLOSING|FL_XML))) {
+			if (!(tag->flags & (FL_XML|FL_VIRTUAL))) {
 				if (!func(tag.get())) {
 					return false;
 				}

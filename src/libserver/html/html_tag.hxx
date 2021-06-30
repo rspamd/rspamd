@@ -44,16 +44,14 @@ enum class html_component_type : std::uint8_t {
 /* Public tags flags */
 /* XML tag */
 #define FL_XML          (1 << 22)
-/* Closing tag */
-#define FL_CLOSING      (1 << 23)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 24)
-#define FL_BROKEN       (1 << 25)
-#define FL_IGNORE       (1 << 26)
-#define FL_BLOCK        (1 << 27)
-#define FL_HREF         (1 << 28)
-#define FL_COMMENT      (1 << 29)
-#define FL_VIRTUAL      (1 << 30)
+#define FL_CLOSED       (1 << 23)
+#define FL_BROKEN       (1 << 24)
+#define FL_IGNORE       (1 << 25)
+#define FL_BLOCK        (1 << 26)
+#define FL_HREF         (1 << 27)
+#define FL_COMMENT      (1 << 28)
+#define FL_VIRTUAL      (1 << 29)
 
 /**
  * Returns component type from a string
@@ -71,23 +69,33 @@ struct html_tag_component {
 		: type(type), value(value) {}
 };
 
+/* Pairing closing tag representation */
+struct html_closing_tag {
+	int start = -1;
+	int end = -1;
+
+	auto clear() -> void {
+		start = end = -1;
+	}
+};
+
 struct html_tag {
 	unsigned int tag_start = 0;
-	unsigned int content_length = 0;
 	unsigned int content_offset = 0;
 	std::uint32_t flags = 0;
 	std::int32_t id = -1;
+	html_closing_tag closing;
 
-	std::vector<html_tag_component> parameters;
+	std::vector<html_tag_component> components;
 
 	html_tag_extra_t extra;
-	mutable struct html_block *block = nullptr; /* TODO: temporary, must be handled by css */
+	mutable struct html_block *block = nullptr;
 	std::vector<struct html_tag *> children;
 	struct html_tag *parent;
 
 	auto find_component(html_component_type what) const -> std::optional<std::string_view>
 	{
-		for (const auto &comp : parameters) {
+		for (const auto &comp : components) {
 			if (comp.type == what) {
 				return comp.value;
 			}
@@ -103,6 +111,17 @@ struct html_tag {
 		}
 
 		return std::nullopt;
+	}
+
+	auto clear(void) -> void {
+		id = -1;
+		tag_start = content_offset = 0;
+		extra = std::monostate{};
+		components.clear();
+		flags = 0;
+		block = nullptr;
+		children.clear();
+		closing.clear();
 	}
 };
 
