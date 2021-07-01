@@ -1335,6 +1335,8 @@ html_process_input(rspamd_mempool_t *pool,
 		if (cur_tag->flags & FL_CLOSED) {
 			cur_tag->closing.end = cur_tag->content_offset;
 			cur_tag->closing.start = cur_tag->tag_start;
+
+			cur_tag = parent_tag;
 		}
 	};
 
@@ -1916,17 +1918,10 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			/* Tables */
-			{"<table>\n"
-			 "      <tr>\n"
-			 "        <th>heada</th>\n"
-			 "        <th>headb</th>\n"
-			 "      </tr>\n"
-			 "      <tr>\n"
-			 "        <td>data1</td>\n"
-			 "        <td>data2</td>\n"
-			 "      </tr>\n"
-			 "    </table>", "heada headb\ndata1 data2\n"},
+			{"  <body>\n"
+			 "    <!-- escape content -->\n"
+			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
+			 "  </body>", R"|(a b a > b a < b a & b 'a "a")|"},
 			/* XML tags */
 			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 			 " <!DOCTYPE html\n"
@@ -1975,7 +1970,17 @@ TEST_CASE("html text extraction")
 			 "  </body>\n"
 			 "</html>", "Hello, world! test\ndata<>\nstuff?"},
 			{"<p><!--comment-->test</br></hr><br>", "test\n"},
-
+			/* Tables */
+			{"<table>\n"
+			 "      <tr>\n"
+			 "        <th>heada</th>\n"
+			 "        <th>headb</th>\n"
+			 "      </tr>\n"
+			 "      <tr>\n"
+			 "        <td>data1</td>\n"
+			 "        <td>data2</td>\n"
+			 "      </tr>\n"
+			 "    </table>", "heada headb\ndata1 data2\n"},
 	};
 
 	rspamd_url_init(NULL);
