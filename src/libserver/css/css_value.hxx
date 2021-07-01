@@ -75,6 +75,7 @@ struct css_dimension {
 enum class css_display_value : std::uint8_t {
 	DISPLAY_INLINE,
 	DISPLAY_BLOCK,
+	DISPLAY_TABLE_ROW,
 	DISPLAY_HIDDEN
 };
 

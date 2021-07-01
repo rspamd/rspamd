@@ -310,14 +310,14 @@ constexpr const auto display_names_map = frozen::make_unordered_map<frozen::stri
 		{"list-item",          css_display_value::DISPLAY_BLOCK},
 		{"run-in",             css_display_value::DISPLAY_INLINE},
 		{"table",              css_display_value::DISPLAY_BLOCK},
-		{"table-caption",      css_display_value::DISPLAY_BLOCK},
-		{"table-column-group", css_display_value::DISPLAY_BLOCK},
-		{"table-header-group", css_display_value::DISPLAY_BLOCK},
-		{"table-footer-group", css_display_value::DISPLAY_BLOCK},
-		{"table-row-group",    css_display_value::DISPLAY_BLOCK},
-		{"table-cell",         css_display_value::DISPLAY_BLOCK},
-		{"table-column",       css_display_value::DISPLAY_BLOCK},
-		{"table-row",          css_display_value::DISPLAY_BLOCK},
+		{"table-caption",      css_display_value::DISPLAY_TABLE_ROW},
+		{"table-column-group", css_display_value::DISPLAY_TABLE_ROW},
+		{"table-header-group", css_display_value::DISPLAY_TABLE_ROW},
+		{"table-footer-group", css_display_value::DISPLAY_TABLE_ROW},
+		{"table-row-group",    css_display_value::DISPLAY_TABLE_ROW},
+		{"table-cell",         css_display_value::DISPLAY_TABLE_ROW},
+		{"table-column",       css_display_value::DISPLAY_TABLE_ROW},
+		{"table-row",          css_display_value::DISPLAY_TABLE_ROW},
 		{"initial",            css_display_value::DISPLAY_INLINE},
 });
 
@@ -363,6 +363,9 @@ auto css_value::debug_str() const -> std::string {
 				break;
 			case css_display_value::DISPLAY_INLINE:
 				ret += "inline";
+				break;
+			case css_display_value::DISPLAY_TABLE_ROW:
+				ret += "table_row";
 				break;
 			}
 		}

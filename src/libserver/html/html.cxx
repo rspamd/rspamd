@@ -1041,9 +1041,25 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						GList **exceptions,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
-	auto is_visible = true, is_block = false;
+	auto is_visible = true, is_block = false, is_spaces = false;
 	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
+
+	auto append_margin = [&](char c) -> void {
+		if (is_visible) {
+			if (!hc->parsed.empty() && hc->parsed.back() != c && hc->parsed.back() != '\n') {
+				if (hc->parsed.back() == ' ') {
+					/* We also strip extra spaces at the end */
+					hc->parsed.erase(std::find_if(hc->parsed.rbegin(), hc->parsed.rend(),
+							[](auto ch) -> auto {
+								return ch != ' ';
+							}).base(),
+							hc->parsed.end());
+				}
+				hc->parsed.push_back(c);
+			}
+		}
+	};
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
 		hc->parsed.append("\n");
@@ -1064,16 +1080,21 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		else if (!tag->block->is_visible()) {
 			is_visible = false;
 		}
-		else {
-			is_block = tag->block->has_display() &&
-					   tag->block->display == css::css_display_value::DISPLAY_BLOCK;
+		else if (tag->block->has_display()) {
+			if (tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
+				is_block = true;
+			}
+			else if (tag->block->display == css::css_display_value::DISPLAY_TABLE_ROW) {
+				is_spaces = true;
+			}
 		}
 	}
 
 	if (is_block) {
-		if (!hc->parsed.empty() && hc->parsed.back() != '\n') {
-			hc->parsed.append("\n");
-		}
+		append_margin('\n');
+	}
+	else if (is_spaces) {
+		append_margin(' ');
 	}
 
 	goffset cur_offset = tag->content_offset;
@@ -1104,11 +1125,11 @@ html_append_tag_content(rspamd_mempool_t *pool,
 									 std::size_t(final_part_len)});
 		}
 	}
-
-	if (is_block && is_visible) {
-		if (!hc->parsed.empty() && hc->parsed.back() != '\n') {
-			hc->parsed.append("\n");
-		}
+	if (is_block) {
+		append_margin('\n');
+	}
+	else if (is_spaces) {
+		append_margin(' ');
 	}
 
 	if (is_visible) {
@@ -1707,11 +1728,14 @@ html_process_input(rspamd_mempool_t *pool,
 		if (tag->block) {
 			if (!tag->block->has_display()) {
 				/* If we have no display field, we can check it by tag */
-				if (tag->flags & CM_BLOCK) {
+				if (tag->flags & (CM_BLOCK|CM_TABLE)) {
 					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
 				}
 				else if (tag->flags & CM_HEAD) {
 					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN);
+				}
+				else if (tag->flags & CM_ROW) {
+					tag->block->set_display(css::css_display_value::DISPLAY_TABLE_ROW);
 				}
 				else {
 					tag->block->set_display(css::css_display_value::DISPLAY_INLINE);
@@ -1892,6 +1916,17 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			/* Tables */
+			{"<table>\n"
+			 "      <tr>\n"
+			 "        <th>heada</th>\n"
+			 "        <th>headb</th>\n"
+			 "      </tr>\n"
+			 "      <tr>\n"
+			 "        <td>data1</td>\n"
+			 "        <td>data2</td>\n"
+			 "      </tr>\n"
+			 "    </table>", "heada headb\ndata1 data2\n"},
 			/* XML tags */
 			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
 			 " <!DOCTYPE html\n"
@@ -1938,7 +1973,7 @@ TEST_CASE("html text extraction")
 			 "    </P>\n"
 			 "    <b>stuff</p>?\n"
 			 "  </body>\n"
-			 "</html>", "Hello, world! test\ndata<> \nstuff?"},
+			 "</html>", "Hello, world! test\ndata<>\nstuff?"},
 			{"<p><!--comment-->test</br></hr><br>", "test\n"},
 
 	};
