@@ -94,7 +94,7 @@ html_check_balance(struct html_content *hc,
 		if (t->flags & (CM_EMPTY)) {
 			/* Attach closing tag just at the opening tag */
 			t->closing.start = t->tag_start;
-			t->closing.end = t->content_offset - 1;
+			t->closing.end = t->content_offset;
 		}
 		else {
 
@@ -112,18 +112,47 @@ html_check_balance(struct html_content *hc,
 
 	auto balance_tag = [&]() -> html_tag * {
 		auto it = tag->parent;
+		auto found_pair = false;
 
 		for (; it != nullptr; it = it->parent) {
 			if (it->id == tag->id && !(it->flags & FL_CLOSED)) {
+				found_pair = true;
 				break;
 			}
-			/* Insert a virtual closing tag for all tags that are not closed */
-			calculate_content_length(it);
-			it->flags |= FL_CLOSED;
+
 		}
 
-		/* Remove tags */
-		return it;
+		/*
+		 * If we have found a closing pair, then we need to close all tags and
+		 * return the top-most tag
+		 */
+		if (found_pair) {
+			for (it = tag->parent; it != nullptr; it = it->parent) {
+				it->flags |= FL_CLOSED;
+				/* Insert a virtual closing tag for all tags that are not closed */
+				calculate_content_length(it);
+				if (it->id == tag->id && !(it->flags & FL_CLOSED)) {
+					break;
+				}
+			}
+
+			return it;
+		}
+		else {
+			/*
+			 * We have not found a pair, so this closing tag is bogus and should
+			 * be ignored completely.
+			 * Unfortunately, it also means that we need to insert another tag,
+			 * as the current closing tag is unusable for that purposes.
+			 *
+			 * We assume that callee will recognise that and reconstruct the
+			 * tag at the tag_end_closing state, so we return nullptr...
+			 */
+
+		}
+
+		/* Tag must be ignored and reconstructed */
+		return nullptr;
 	};
 
 	if (opening_tag) {
@@ -156,7 +185,6 @@ html_check_balance(struct html_content *hc,
 			vtag->content_offset = 0;
 			calculate_content_length(vtag.get());
 
-
 			if (!hc->root_tag) {
 				hc->root_tag = vtag.get();
 			}
@@ -164,6 +192,8 @@ html_check_balance(struct html_content *hc,
 				vtag->parent = hc->root_tag;
 			}
 			hc->all_tags.emplace_back(std::move(vtag));
+
+			return vtag.get();
 		}
 	}
 
@@ -1012,7 +1042,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false;
-	goffset next_tag_offset = tag->closing.end + 1,
+	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
@@ -1021,7 +1051,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		return tag->content_offset;
 	}
 	else if (tag->id == Tag_HEAD || tag->id >= N_TAGS) {
-		return tag->closing.end + 1;
+		return tag->closing.end;
 	}
 
 	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE|CM_HEAD))) {
@@ -1597,14 +1627,45 @@ html_process_input(rspamd_mempool_t *pool,
 			p++;
 			c = p;
 			break;
-		case tag_end_closing:
-			/* cur_tag here is a closing tag */
-			cur_tag = html_check_balance(hc, cur_tag,
-					c - start, p - start);
+		case tag_end_closing: {
+			if (cur_tag) {
+				/* cur_tag here is a closing tag */
+				auto *next_cur_tag = html_check_balance(hc, cur_tag,
+						c - start, p - start + 1);
+
+				if (next_cur_tag != nullptr) {
+					cur_tag = next_cur_tag;
+				}
+				else {
+					/*
+					 * Here, we handle cases like <p>lala</b>...
+					 * So the tag </b> is bogus and unpaired
+					 * However, we need to exclude it from the output of <p> tag
+					 * To do that, we create a fake opening tag and insert that to
+					 * the current opening tag
+					 */
+					auto *cur_opening_tag = cur_tag->parent;
+
+					if (!cur_opening_tag) {
+						cur_opening_tag = hc->root_tag;
+					}
+					auto &&vtag = std::make_unique<html_tag>();
+					vtag->id = cur_tag->id;
+					vtag->flags = FL_VIRTUAL | FL_CLOSED | FL_IGNORE;
+					vtag->tag_start = cur_tag->closing.start;
+					vtag->content_offset = p - start;
+					vtag->closing = cur_tag->closing;
+					vtag->parent = cur_opening_tag;
+					cur_opening_tag->children.push_back(vtag.get());
+					hc->all_tags.emplace_back(std::move(vtag));
+					cur_tag = cur_opening_tag;
+				}
+			} /* if cur_tag != nullptr */
 			state = html_text_content;
-			p ++;
+			p++;
 			c = p;
 			break;
+		}
 		case tags_limit_overflow:
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
 				 " ignoring the rest of the HTML content",
