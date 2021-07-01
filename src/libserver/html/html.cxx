@@ -1786,10 +1786,14 @@ html_debug_structure(const html_content &hc) -> std::string
 	if (hc.root_tag) {
 		auto rec_functor = [&](const html_tag *t, int level, auto rec_functor) -> void {
 			std::string pluses(level, '+');
-			output += fmt::format("{}{};", pluses,
-					html_tags_defs.name_by_id_safe(t->id));
+
+			if (!(t->flags & (FL_VIRTUAL|FL_IGNORE))) {
+				output += fmt::format("{}{};", pluses,
+						html_tags_defs.name_by_id_safe(t->id));
+				level ++;
+			}
 			for (const auto *cld : t->children) {
-				rec_functor(cld, level + 1, rec_functor);
+				rec_functor(cld, level, rec_functor);
 			}
 		};
 
