@@ -1207,6 +1207,116 @@ html_process_input(rspamd_mempool_t *pool,
 		return ntag;
 	};
 
+	auto process_opening_tag = [&]() {
+		if (cur_tag->id < N_TAGS) {
+			if (cur_tag->flags & CM_UNIQUE) {
+				if (!hc->tags_seen[cur_tag->id]) {
+					/* Duplicate tag has been found */
+					hc->flags |= RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS;
+				}
+			}
+			hc->tags_seen[cur_tag->id] = true;
+		}
+
+		/* Shift to the first unclosed tag */
+		while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
+			parent_tag = parent_tag->parent;
+		}
+
+		if (parent_tag) {
+			cur_tag->parent = parent_tag;
+			parent_tag->children.push_back(cur_tag);
+		}
+		else {
+			if (hc->root_tag) {
+				cur_tag->parent = hc->root_tag;
+				hc->root_tag->children.push_back(cur_tag);
+				parent_tag = hc->root_tag;
+			}
+			else {
+				if (cur_tag->id == Tag_HTML) {
+					hc->root_tag = cur_tag;
+				}
+				else {
+					/* Insert a fake html tag */
+					hc->all_tags.emplace_back(std::make_unique<html_tag>());
+					auto *top_tag = hc->all_tags.back().get();
+					top_tag->tag_start = 0;
+					top_tag->flags = FL_VIRTUAL;
+					if (in_head) {
+						top_tag->flags |= CM_HEAD;
+					}
+					top_tag->id = Tag_HTML;
+					top_tag->content_offset = 0;
+					top_tag->children.push_back(cur_tag);
+					cur_tag->parent = top_tag;
+					hc->root_tag = top_tag;
+					parent_tag = top_tag;
+				}
+			}
+		}
+
+		if (cur_tag->flags & FL_HREF && !in_head) {
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+
+			if (maybe_url) {
+				url = maybe_url.value();
+
+				if (url_set != NULL) {
+					struct rspamd_url *maybe_existing =
+							rspamd_url_set_add_or_return (url_set, maybe_url.value());
+					if (maybe_existing == maybe_url.value()) {
+						html_process_query_url(pool, url, url_set,
+								part_urls);
+					}
+					else {
+						url = maybe_existing;
+						/* Increase count to avoid odd checks failure */
+						url->count ++;
+					}
+				}
+
+				href_offset = hc->parsed.size();
+			}
+		}
+		else if (cur_tag->id == Tag_BASE) {
+			/*
+			 * Base is allowed only within head tag but HTML is retarded
+			 */
+			if (hc->base_url == NULL) {
+				auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+
+				if (maybe_url) {
+					msg_debug_html ("got valid base tag");
+					hc->base_url = url;
+					cur_tag->extra = url;
+					cur_tag->flags |= FL_HREF;
+				}
+				else {
+					msg_debug_html ("got invalid base tag!");
+				}
+			}
+		}
+
+		if (cur_tag->id == Tag_IMG) {
+			html_process_img_tag(pool, cur_tag, hc, url_set,
+					part_urls);
+		}
+		else if (cur_tag->id == Tag_LINK) {
+			html_process_link_tag(pool, cur_tag, hc, url_set,
+					part_urls);
+		}
+
+		if (!(cur_tag->flags & CM_EMPTY)) {
+			html_process_block_tag(pool, cur_tag, hc);
+		}
+
+		if (cur_tag->flags & FL_CLOSED) {
+			cur_tag->closing.end = cur_tag->content_offset;
+			cur_tag->closing.start = cur_tag->tag_start;
+		}
+	};
+
 	p = (const char *)in->data;
 	c = p;
 	end = p + in->len;
@@ -1219,7 +1329,6 @@ html_process_input(rspamd_mempool_t *pool,
 		case parse_start:
 			if (t == '<') {
 				state = tag_begin;
-				in_head = true;
 			}
 			else {
 				/* We have no starting tag, so assume that it's content */
@@ -1349,6 +1458,7 @@ html_process_input(rspamd_mempool_t *pool,
 			if (t == '>') {
 				state = tag_end_opening;
 				cur_tag->content_offset = p - start + 1;
+				continue;
 			}
 			else {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
@@ -1366,6 +1476,7 @@ html_process_input(rspamd_mempool_t *pool,
 			else if (t == '>' && obrace == ebrace) {
 				state = tag_end_opening;
 				cur_tag->content_offset = p - start + 1;
+				continue;
 			}
 			p ++;
 			break;
@@ -1468,10 +1579,11 @@ html_process_input(rspamd_mempool_t *pool,
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
 				cur_tag->content_offset = p - start + 1;
-				state = html_text_content;
-				/* We don't know a lot about sgml tags, ignore them */
+				state = tag_end_opening;
 			}
-			p ++;
+			else {
+				p++;
+			}
 			break;
 
 		case tag_content:
@@ -1510,111 +1622,7 @@ html_process_input(rspamd_mempool_t *pool,
 			content_parser_env.reset();
 
 			if (cur_tag != nullptr) {
-
-				if (cur_tag->id < N_TAGS) {
-					if (cur_tag->flags & CM_UNIQUE) {
-						if (!hc->tags_seen[cur_tag->id]) {
-							/* Duplicate tag has been found */
-							hc->flags |= RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS;
-						}
-					}
-					hc->tags_seen[cur_tag->id] = true;
-				}
-
-				/* Shift to the first unclosed tag */
-				while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
-					parent_tag = parent_tag->parent;
-				}
-
-				if (parent_tag) {
-					cur_tag->parent = parent_tag;
-					parent_tag->children.push_back(cur_tag);
-				}
-				else {
-					if (hc->root_tag) {
-						cur_tag->parent = hc->root_tag;
-						hc->root_tag->children.push_back(cur_tag);
-						parent_tag = hc->root_tag;
-					}
-					else {
-						if (cur_tag->id == Tag_HTML) {
-							hc->root_tag = cur_tag;
-						}
-						else {
-							/* Insert a fake html tag */
-							hc->all_tags.emplace_back(std::make_unique<html_tag>());
-							auto *top_tag = hc->all_tags.back().get();
-							top_tag->tag_start = 0;
-							top_tag->flags = CM_HEAD|FL_VIRTUAL;
-							top_tag->id = Tag_HTML;
-							top_tag->content_offset = 0;
-							top_tag->children.push_back(cur_tag);
-							cur_tag->parent = top_tag;
-							hc->root_tag = top_tag;
-							parent_tag = top_tag;
-						}
-					}
-				}
-
-				if (cur_tag->flags & FL_HREF && !in_head) {
-					auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
-
-					if (maybe_url) {
-						url = maybe_url.value();
-
-						if (url_set != NULL) {
-							struct rspamd_url *maybe_existing =
-									rspamd_url_set_add_or_return (url_set, maybe_url.value());
-							if (maybe_existing == maybe_url.value()) {
-								html_process_query_url(pool, url, url_set,
-										part_urls);
-							}
-							else {
-								url = maybe_existing;
-								/* Increase count to avoid odd checks failure */
-								url->count ++;
-							}
-						}
-
-						href_offset = hc->parsed.size();
-					}
-				}
-				else if (cur_tag->id == Tag_BASE) {
-					/*
-					 * Base is allowed only within head tag but HTML is retarded
-					 */
-					if (hc->base_url == NULL) {
-						auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
-
-						if (maybe_url) {
-							msg_debug_html ("got valid base tag");
-							hc->base_url = url;
-							cur_tag->extra = url;
-							cur_tag->flags |= FL_HREF;
-						}
-						else {
-							msg_debug_html ("got invalid base tag!");
-						}
-					}
-				}
-
-				if (cur_tag->id == Tag_IMG) {
-					html_process_img_tag(pool, cur_tag, hc, url_set,
-							part_urls);
-				}
-				else if (cur_tag->id == Tag_LINK) {
-					html_process_link_tag(pool, cur_tag, hc, url_set,
-							part_urls);
-				}
-
-				if (!(cur_tag->flags & CM_EMPTY)) {
-					html_process_block_tag(pool, cur_tag, hc);
-				}
-
-				if (cur_tag->flags & FL_CLOSED) {
-					cur_tag->closing.end = cur_tag->content_offset;
-					cur_tag->closing.start = cur_tag->tag_start;
-				}
+				process_opening_tag();
 			}
 
 			if (cur_tag && (cur_tag->id == Tag_STYLE)) {
@@ -1646,14 +1654,19 @@ html_process_input(rspamd_mempool_t *pool,
 					 */
 					auto *cur_opening_tag = cur_tag->parent;
 
+					while (cur_opening_tag && (cur_opening_tag->flags & FL_CLOSED)) {
+						cur_opening_tag = cur_opening_tag->parent;
+					}
+
 					if (!cur_opening_tag) {
 						cur_opening_tag = hc->root_tag;
 					}
+
 					auto &&vtag = std::make_unique<html_tag>();
 					vtag->id = cur_tag->id;
-					vtag->flags = FL_VIRTUAL | FL_CLOSED | FL_IGNORE;
+					vtag->flags = FL_VIRTUAL | FL_CLOSED;
 					vtag->tag_start = cur_tag->closing.start;
-					vtag->content_offset = p - start;
+					vtag->content_offset = p - start + 1;
 					vtag->closing = cur_tag->closing;
 					vtag->parent = cur_opening_tag;
 					cur_opening_tag->children.push_back(vtag.get());
@@ -1719,6 +1732,18 @@ html_process_input(rspamd_mempool_t *pool,
 		return true;
 	}, html_content::traverse_type::PRE_ORDER);
 
+	/* Leftover before content */
+	switch (state) {
+	case tag_end_opening:
+		if (cur_tag != nullptr) {
+			process_opening_tag();
+		}
+		break;
+	default:
+		/* Do nothing */
+		break;
+	}
+
 	if (!hc->all_tags.empty()) {
 		std::sort(hc->all_tags.begin(), hc->all_tags.end(), [](const auto &pt1, const auto &pt2) -> auto {
 			return pt1->tag_start < pt2->tag_start;
@@ -1727,12 +1752,17 @@ html_process_input(rspamd_mempool_t *pool,
 				exceptions, url_set);
 	}
 
-	/* Leftover */
+	/* Leftover after content */
 	switch (state) {
 	case html_text_content:
 	case content_before_start:
 		if (p > c) {
 			html_append_content(hc, {c, std::size_t(p - c)});
+		}
+		break;
+	case tag_end_opening:
+		if (cur_tag != nullptr) {
+			process_opening_tag();
 		}
 		break;
 	default:
@@ -1788,8 +1818,13 @@ html_debug_structure(const html_content &hc) -> std::string
 			std::string pluses(level, '+');
 
 			if (!(t->flags & (FL_VIRTUAL|FL_IGNORE))) {
-				output += fmt::format("{}{};", pluses,
-						html_tags_defs.name_by_id_safe(t->id));
+				if (t->flags & FL_XML) {
+					output += fmt::format("{}xml;", pluses);
+				}
+				else {
+					output += fmt::format("{}{};", pluses,
+							html_tags_defs.name_by_id_safe(t->id));
+				}
 				level ++;
 			}
 			for (const auto *cld : t->children) {
@@ -1824,14 +1859,14 @@ TEST_CASE("html parsing")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<html><!DOCTYPE html><body>",                    "+html;++body;"},
+			{"<html><!DOCTYPE html><body>",                    "+html;++xml;++body;"},
 			{"<html><div><div></div></div></html>",            "+html;++div;+++div;"},
 			{"<html><div><div></div></html>",                  "+html;++div;+++div;"},
 			{"<html><div><div></div></html></div>",            "+html;++div;+++div;"},
 			{"<p><p><a></p></a></a>",                          "+p;++p;+++a;"},
 			{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
 			{"<html><!DOCTYPE html><body><head><body></body></html></body></html>",
-															   "+html;++body;+++head;++++body;"}
+															   "+html;++xml;++body;+++head;++++body;"}
 	};
 
 	rspamd_url_init(NULL);
@@ -1857,6 +1892,36 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			/* XML tags */
+			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+			 " <!DOCTYPE html\n"
+			 "   PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
+			 "   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
+			 "<body>test</body>", "test"},
+			{"test", "test"},
+			{"test   ", "test"},
+			{"test   foo,   bar", "test foo, bar"},
+			{"<p>text</p>", "text\n"},
+			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
+			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
+			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
+			{"foo<br>baz", "foo\nbaz"},
+			{"<a href=https://example.com>test</a>", "test"},
+			{"<img alt=test>", "test"},
+			{"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head>"
+			 "  <body>\n"
+			 "    <p><br>\n"
+			 "    </p>\n"
+			 "    <div class=\"moz-forward-container\"><br>\n"
+			 "      <br>\n"
+			 "      test</div>"
+			 "</body>", "\n\n\ntest\n"},
+			{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
+			 "sh<span style=\"FONT-SIZE: 0px\">aring </span></div>", "fish\n"},
+			/* FIXME: broken until rework of css parser */
+			//{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
+			// "sh<span style=\"FONT-SIZE: 0px\">aring </div>foo</span>", "fish\nfoo"},
 			/* Complex html with bad tags */
 			{"<!DOCTYPE html>\n"
 			 "<html lang=\"en\">\n"
@@ -1874,37 +1939,7 @@ TEST_CASE("html text extraction")
 			 "    <b>stuff</p>?\n"
 			 "  </body>\n"
 			 "</html>", "Hello, world! test\ndata<> \nstuff?"},
-			/* XML tags */
-			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-			 " <!DOCTYPE html\n"
-			 "   PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
-			 "   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
-			 "<body>test</body>", "test"},
-			{"test", "test"},
-			{"test   ", "test"},
-			{"test   foo,   bar", "test foo, bar"},
-			{"<p>text</p>", "text\n"},
-			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
-			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
-			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
-			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
-			{"foo<br>baz", "foo\nbaz"},
-			{"<a href=https://example.com>test</a>", "test"},
-			{"<img alt=test>", "test"},
-			{"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head>"
-			 "  <body>\n"
-			 "    <p><br>\n"
-			 "    </p>\n"
-			 "    <div class=\"moz-forward-container\"><br>\n"
-			 "      <br>\n"
-			 "      test</div>"
-			 "</body>", "\n\n\ntest\n"},
-			{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
-			 "sh<span style=\"FONT-SIZE: 0px\">aring </span></div>", "fish\n"},
-			/* FIXME: broken until rework */
-			//{"<div>fi<span style=\"FONT-SIZE: 0px\">le </span>"
-			// "sh<span style=\"FONT-SIZE: 0px\">aring </div>foo</span>", "fish\nfoo"},
-			{"<p><!--comment-->test", "test"},
+			{"<p><!--comment-->test</br></hr><br>", "test\n"},
 
 	};
 
@@ -1939,7 +1974,7 @@ TEST_CASE("html text extraction")
 
 }
 
-}
+} /* namespace rspamd::html */
 
 void *
 rspamd_html_process_part_full(rspamd_mempool_t *pool,
