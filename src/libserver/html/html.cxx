@@ -91,14 +91,22 @@ html_check_balance(struct html_content *hc,
 	auto calculate_content_length = [tag_start_offset,tag_end_offset](html_tag *t) {
 		auto opening_content_offset = t->content_offset;
 
-		if (opening_content_offset <= tag_start_offset) {
-			t->closing.start = tag_start_offset;
-			t->closing.end = tag_end_offset;
+		if (t->flags & (CM_EMPTY)) {
+			/* Attach closing tag just at the opening tag */
+			t->closing.start = t->tag_start;
+			t->closing.end = t->content_offset - 1;
 		}
 		else {
 
-			t->closing.start = t->content_offset;
-			t->closing.end = tag_end_offset;
+			if (opening_content_offset <= tag_start_offset) {
+				t->closing.start = tag_start_offset;
+				t->closing.end = tag_end_offset;
+			}
+			else {
+
+				t->closing.start = t->content_offset;
+				t->closing.end = tag_end_offset;
+			}
 		}
 	};
 
@@ -1012,6 +1020,9 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		return tag->content_offset;
 	}
+	else if (tag->id == Tag_HEAD || tag->id >= N_TAGS) {
+		return tag->closing.end + 1;
+	}
 
 	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE|CM_HEAD))) {
 		is_visible = false;
@@ -1046,9 +1057,13 @@ html_append_tag_content(rspamd_mempool_t *pool,
 									 std::size_t(initial_part_len)});
 		}
 
-		cur_offset = html_append_tag_content(pool, start, len,
+		auto next_offset = html_append_tag_content(pool, start, len,
 				hc, cld, exceptions, url_set);
 
+		/* Do not allow shifting back */
+		if (next_offset > cur_offset) {
+			cur_offset = next_offset;
+		}
 	}
 
 	if (cur_offset < tag->closing.start) {
@@ -1151,7 +1166,7 @@ html_process_input(rspamd_mempool_t *pool,
 		ntag->tag_start = c - start;
 		ntag->flags = flags;
 
-		if (cur_tag) {
+		if (cur_tag && !(cur_tag->flags & (CM_EMPTY|FL_CLOSED))) {
 			parent_tag = cur_tag;
 		}
 
@@ -1303,12 +1318,12 @@ html_process_input(rspamd_mempool_t *pool,
 		case xml_tag_end:
 			if (t == '>') {
 				state = tag_end_opening;
-				continue;
+				cur_tag->content_offset = p - start + 1;
 			}
 			else {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
-				p ++;
 			}
+			p++;
 			break;
 
 		case compound_tag:
@@ -1320,7 +1335,7 @@ html_process_input(rspamd_mempool_t *pool,
 			}
 			else if (t == '>' && obrace == ebrace) {
 				state = tag_end_opening;
-				continue;
+				cur_tag->content_offset = p - start + 1;
 			}
 			p ++;
 			break;
@@ -1362,6 +1377,7 @@ html_process_input(rspamd_mempool_t *pool,
 				ebrace ++;
 			}
 			else if (t == '>' && ebrace >= 2) {
+				cur_tag->content_offset = p - start + 1;
 				state = tag_end_opening;
 				continue;
 			}
@@ -1421,6 +1437,7 @@ html_process_input(rspamd_mempool_t *pool,
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
+				cur_tag->content_offset = p - start + 1;
 				state = html_text_content;
 				/* We don't know a lot about sgml tags, ignore them */
 			}
@@ -1472,39 +1489,39 @@ html_process_input(rspamd_mempool_t *pool,
 						}
 					}
 					hc->tags_seen[cur_tag->id] = true;
+				}
 
-					/* Shift to the first unclosed tag */
-					while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
-						parent_tag = parent_tag->parent;
-					}
+				/* Shift to the first unclosed tag */
+				while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
+					parent_tag = parent_tag->parent;
+				}
 
-					if (parent_tag) {
-						cur_tag->parent = parent_tag;
-						parent_tag->children.push_back(cur_tag);
+				if (parent_tag) {
+					cur_tag->parent = parent_tag;
+					parent_tag->children.push_back(cur_tag);
+				}
+				else {
+					if (hc->root_tag) {
+						cur_tag->parent = hc->root_tag;
+						hc->root_tag->children.push_back(cur_tag);
+						parent_tag = hc->root_tag;
 					}
 					else {
-						if (hc->root_tag) {
-							cur_tag->parent = hc->root_tag;
-							hc->root_tag->children.push_back(cur_tag);
-							parent_tag = hc->root_tag;
+						if (cur_tag->id == Tag_HTML) {
+							hc->root_tag = cur_tag;
 						}
 						else {
-							if (cur_tag->id == Tag_HTML) {
-								hc->root_tag = cur_tag;
-							}
-							else {
-								/* Insert a fake html tag */
-								hc->all_tags.emplace_back(std::make_unique<html_tag>());
-								auto *top_tag = hc->all_tags.back().get();
-								top_tag->tag_start = 0;
-								top_tag->flags = CM_HEAD|FL_VIRTUAL;
-								top_tag->id = Tag_HTML;
-								top_tag->content_offset = 0;
-								top_tag->children.push_back(cur_tag);
-								cur_tag->parent = top_tag;
-								hc->root_tag = top_tag;
-								parent_tag = top_tag;
-							}
+							/* Insert a fake html tag */
+							hc->all_tags.emplace_back(std::make_unique<html_tag>());
+							auto *top_tag = hc->all_tags.back().get();
+							top_tag->tag_start = 0;
+							top_tag->flags = CM_HEAD|FL_VIRTUAL;
+							top_tag->id = Tag_HTML;
+							top_tag->content_offset = 0;
+							top_tag->children.push_back(cur_tag);
+							cur_tag->parent = top_tag;
+							hc->root_tag = top_tag;
+							parent_tag = top_tag;
 						}
 					}
 				}
@@ -1562,6 +1579,11 @@ html_process_input(rspamd_mempool_t *pool,
 
 				if (!(cur_tag->flags & CM_EMPTY)) {
 					html_process_block_tag(pool, cur_tag, hc);
+				}
+
+				if (cur_tag->flags & FL_CLOSED) {
+					cur_tag->closing.end = cur_tag->content_offset;
+					cur_tag->closing.start = cur_tag->tag_start;
 				}
 			}
 
