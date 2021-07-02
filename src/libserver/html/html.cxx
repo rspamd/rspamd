@@ -1596,8 +1596,9 @@ html_process_input(rspamd_mempool_t *pool,
 						msg_info_pool ("cannot parse css: %*s",
 								(int)err_str.size(), err_str.data());
 					}
-
-					hc->css_style = ret_maybe.value();
+					else {
+						hc->css_style = ret_maybe.value();
+					}
 				}
 
 				p += end_style;
