@@ -620,7 +620,6 @@ lua_html_tag_get_extra (lua_State *L)
 	LUA_TRACE_POINT;
 	struct lua_html_tag *ltag = lua_check_html_tag (L, 1);
 	struct html_image *img;
-	struct rspamd_url **purl;
 
 	if (ltag) {
 		if (!std::holds_alternative<std::monostate>(ltag->tag->extra)) {
@@ -630,8 +629,8 @@ lua_html_tag_get_extra (lua_State *L)
 			}
 			else if (std::holds_alternative<struct rspamd_url *>(ltag->tag->extra)) {
 				/* For A that's URL */
-				purl = static_cast<rspamd_url **>(lua_newuserdata(L, sizeof(gpointer)));
-				*purl = std::get<struct rspamd_url *>(ltag->tag->extra);
+				auto *lua_url =  static_cast<rspamd_lua_url *>(lua_newuserdata(L, sizeof(rspamd_lua_url)));
+				lua_url->url = std::get<struct rspamd_url *>(ltag->tag->extra);
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
 			}
 			else {
