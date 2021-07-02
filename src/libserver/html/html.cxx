@@ -1931,13 +1931,6 @@ TEST_CASE("html text extraction")
 
 	const std::vector<std::pair<std::string, std::string>> cases{
 			{"  <body>\n"
-			 "    <!-- page content -->\n"
-			 "    Hello, world!<br>test</br><br>content</hr>more content<br>\n"
-			 "    <div>\n"
-			 "      content inside div\n"
-			 "    </div>\n"
-			 "  </body>", "Hello, world!\ntest\ncontent\nmore content\ncontent inside div\n"},
-			{"  <body>\n"
 			 "    <!-- escape content -->\n"
 			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
 			 "  </body>", R"|(a b a > b a < b a & b 'a "a")|"},
@@ -2000,7 +1993,13 @@ TEST_CASE("html text extraction")
 			 "        <td>data2</td>\n"
 			 "      </tr>\n"
 			 "    </table>", "heada headb\ndata1 data2\n"},
-
+			{"  <body>\n"
+			 "    <!-- page content -->\n"
+			 "    Hello, world!<br>test</br><br>content</hr>more content<br>\n"
+			 "    <div>\n"
+			 "      content inside div\n"
+			 "    </div>\n"
+			 "  </body>", "Hello, world!\ntest\ncontentmore content\ncontent inside div\n"},
 	};
 
 	rspamd_url_init(NULL);

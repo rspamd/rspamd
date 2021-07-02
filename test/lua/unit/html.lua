@@ -56,7 +56,7 @@ context("HTML processing", function()
     </div>
   </body>
 </html>
-      ]], 'Hello, world!\ntest\ncontent\nmore content\ncontent inside div\n'},
+      ]], 'Hello, world!\ntest\ncontentmore content\ncontent inside div\n'},
       {[[
 <html lang="en">
   <head>
