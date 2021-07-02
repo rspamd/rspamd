@@ -197,7 +197,7 @@ local function gen_auth_results(task, settings)
         -- Main type
         local sender
         local sender_type
-        local smtp_from = task:get_from('smtp')
+        local smtp_from = task:get_from({'smtp','orig'})
 
         if smtp_from and
             smtp_from[1] and
@@ -248,7 +248,7 @@ local function gen_auth_results(task, settings)
   end
 
   local u = task:get_user()
-  local smtp_from = task:get_from('smtp')
+  local smtp_from = task:get_from({'smtp','orig'})
 
   if u and smtp_from then
     local hdr = {[1] = 'auth=pass'}
