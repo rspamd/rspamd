@@ -1312,8 +1312,8 @@ html_process_input(rspamd_mempool_t *pool,
 
 				if (maybe_url) {
 					msg_debug_html ("got valid base tag");
-					hc->base_url = url;
-					cur_tag->extra = url;
+					hc->base_url = maybe_url.value();
+					cur_tag->extra = maybe_url.value();
 					cur_tag->flags |= FL_HREF;
 				}
 				else {
