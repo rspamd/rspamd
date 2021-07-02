@@ -1062,7 +1062,10 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	};
 
 	if (tag->id == Tag_BR || tag->id == Tag_HR) {
-		hc->parsed.append("\n");
+
+		if (!(tag->flags & FL_IGNORE)) {
+			hc->parsed.append("\n");
+		}
 
 		return tag->content_offset;
 	}
@@ -1330,6 +1333,10 @@ html_process_input(rspamd_mempool_t *pool,
 
 		if (!(cur_tag->flags & CM_EMPTY)) {
 			html_process_block_tag(pool, cur_tag, hc);
+		}
+		else {
+			/* Implicitly close */
+			cur_tag->flags |= FL_CLOSED;
 		}
 
 		if (cur_tag->flags & FL_CLOSED) {
@@ -1660,6 +1667,11 @@ html_process_input(rspamd_mempool_t *pool,
 			break;
 		case tag_end_closing: {
 			if (cur_tag) {
+
+				if (cur_tag->flags & CM_EMPTY) {
+					/* Ignore closing empty tags */
+					cur_tag->flags |= FL_IGNORE;
+				}
 				/* cur_tag here is a closing tag */
 				auto *next_cur_tag = html_check_balance(hc, cur_tag,
 						c - start, p - start + 1);
@@ -1687,7 +1699,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 					auto &&vtag = std::make_unique<html_tag>();
 					vtag->id = cur_tag->id;
-					vtag->flags = FL_VIRTUAL | FL_CLOSED;
+					vtag->flags = FL_VIRTUAL | FL_CLOSED | cur_tag->flags;
 					vtag->tag_start = cur_tag->closing.start;
 					vtag->content_offset = p - start + 1;
 					vtag->closing = cur_tag->closing;
@@ -1919,6 +1931,13 @@ TEST_CASE("html text extraction")
 
 	const std::vector<std::pair<std::string, std::string>> cases{
 			{"  <body>\n"
+			 "    <!-- page content -->\n"
+			 "    Hello, world!<br>test</br><br>content</hr>more content<br>\n"
+			 "    <div>\n"
+			 "      content inside div\n"
+			 "    </div>\n"
+			 "  </body>", "Hello, world!\ntest\ncontent\nmore content\ncontent inside div\n"},
+			{"  <body>\n"
 			 "    <!-- escape content -->\n"
 			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
 			 "  </body>", R"|(a b a > b a < b a & b 'a "a")|"},
@@ -1981,6 +2000,7 @@ TEST_CASE("html text extraction")
 			 "        <td>data2</td>\n"
 			 "      </tr>\n"
 			 "    </table>", "heada headb\ndata1 data2\n"},
+
 	};
 
 	rspamd_url_init(NULL);
