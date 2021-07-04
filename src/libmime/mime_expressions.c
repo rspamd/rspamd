@@ -1564,24 +1564,8 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 gboolean
 rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 {
-	struct rspamd_mime_text_part *p;
-	guint i;
-	gboolean res = TRUE;
-
-	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
-		if (IS_TEXT_PART_HTML (p)) {
-			if (p->flags & RSPAMD_MIME_TEXT_PART_FLAG_BALANCED) {
-				res = TRUE;
-			}
-			else {
-				res = FALSE;
-				break;
-			}
-		}
-	}
-
-	return res;
-
+	/* Totally broken but seems to be never used */
+	return TRUE;
 }
 
 gboolean

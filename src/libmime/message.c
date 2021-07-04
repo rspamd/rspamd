@@ -764,7 +764,6 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 	}
 
 
-	text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
 	text_part->html = rspamd_html_process_part_full (
 			task->task_pool,
 			text_part->utf_raw_content,
