@@ -1011,8 +1011,18 @@ html_append_content(struct html_content *hc, std::string_view data) -> auto
 {
 	auto cur_offset = hc->parsed.size();
 	hc->parsed.append(data);
+
+	if (cur_offset > 0 && data.size() > 0) {
+		auto last = hc->parsed.back();
+		auto first_appended = data.front();
+		if (first_appended == ' ' && !g_ascii_isspace(last)) {
+			cur_offset++;
+		}
+	}
+
 	auto nlen = decode_html_entitles_inplace(hc->parsed.data() + cur_offset,
 			hc->parsed.size() - cur_offset, true);
+
 	hc->parsed.resize(nlen + cur_offset);
 
 	return nlen;
