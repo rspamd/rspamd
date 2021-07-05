@@ -1937,9 +1937,9 @@ TEST_CASE("html text extraction")
 			{"</head>\n"
 			 "<body>\n"
 			 "<p> Hello. I have some bad news.\n"
-			 "<br /> <br /> <br /> <strong> <br /> <br /> <br /> <br /> <br /> <br /> <br /> <br /> </strong><span> <br /> </span></p>\n"
+			 "<br /> <br /> <br /> <strong> <br /> <br /> <br /> <br /> <br /> <br /> <br /> <br /> </strong><span> <br /> </span>test</p>\n"
 			 "</body>\n"
-			 "</html>", " Hello. I have some bad news.\n\n\n\n\n\n\n\n"},
+			 "</html>", "Hello. I have some bad news. \n\n\n\n\n\n\n\n\n\n\n\ntest\n"},
 			{"  <body>\n"
 			 "    <!-- escape content -->\n"
 			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
