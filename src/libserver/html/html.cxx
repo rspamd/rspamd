@@ -354,7 +354,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
-					tag->id = N_TAGS;
+					/* Assign -hash to match closing tag if needed */
+					auto nhash = static_cast<std::int32_t>(std::hash<std::string_view>{}({s, nsize}));
+					/* Always negative */
+					tag->id = static_cast<tag_id_t>(nhash | G_MININT32);
 				}
 				else {
 					tag->id = tag_def->id;
@@ -1040,13 +1043,27 @@ static auto
 html_append_tag_content(rspamd_mempool_t *pool,
 						const gchar *start, gsize len,
 						struct html_content *hc,
-						const html_tag *tag,
+						html_tag *tag,
 						GList **exceptions,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
 	auto is_visible = true, is_block = false, is_spaces = false;
 	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
+
+	if (tag->closing.end == -1) {
+		if (tag->closing.start != -1) {
+			next_tag_offset = tag->closing.start;
+			tag->closing.end = tag->closing.start;
+		}
+		else {
+			next_tag_offset = len;
+			tag->closing.end = len;
+		}
+	}
+	if (tag->closing.start == -1) {
+		tag->closing.start = tag->closing.end;
+	}
 
 	auto append_margin = [&](char c) -> void {
 		if (is_visible) {
@@ -1072,7 +1089,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		return tag->content_offset;
 	}
-	else if (tag->id == Tag_HEAD || tag->id >= N_TAGS) {
+	else if (tag->id == Tag_HEAD) {
 		return tag->closing.end;
 	}
 
@@ -1235,7 +1252,7 @@ html_process_input(rspamd_mempool_t *pool,
 	};
 
 	auto process_opening_tag = [&]() {
-		if (cur_tag->id < N_TAGS) {
+		if (cur_tag->id > Tag_UNKNOWN) {
 			if (cur_tag->flags & CM_UNIQUE) {
 				if (!hc->tags_seen[cur_tag->id]) {
 					/* Duplicate tag has been found */
@@ -1796,12 +1813,6 @@ html_process_input(rspamd_mempool_t *pool,
 
 	/* Leftover after content */
 	switch (state) {
-	case html_text_content:
-	case content_before_start:
-		if (p > c) {
-			html_append_content(hc, {c, std::size_t(p - c)});
-		}
-		break;
 	case tag_end_opening:
 		if (cur_tag != nullptr) {
 			process_opening_tag();
@@ -1934,12 +1945,6 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"</head>\n"
-			 "<body>\n"
-			 "<p> Hello. I have some bad news.\n"
-			 "<br /> <br /> <br /> <strong> <br /> <br /> <br /> <br /> <br /> <br /> <br /> <br /> </strong><span> <br /> </span>test</p>\n"
-			 "</body>\n"
-			 "</html>", "Hello. I have some bad news. \n\n\n\n\n\n\n\n\n\n\n\ntest\n"},
 			{"  <body>\n"
 			 "    <!-- escape content -->\n"
 			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
@@ -2003,6 +2008,7 @@ TEST_CASE("html text extraction")
 			 "        <td>data2</td>\n"
 			 "      </tr>\n"
 			 "    </table>", "heada headb\ndata1 data2\n"},
+			 /* Invalid closing br and hr + comment */
 			{"  <body>\n"
 			 "    <!-- page content -->\n"
 			 "    Hello, world!<br>test</br><br>content</hr>more content<br>\n"
@@ -2010,6 +2016,16 @@ TEST_CASE("html text extraction")
 			 "      content inside div\n"
 			 "    </div>\n"
 			 "  </body>", "Hello, world!\ntest\ncontentmore content\ncontent inside div\n"},
+			 /* First closing tag */
+			{"</head>\n"
+			 "<body>\n"
+			 "<p> Hello. I have some bad news.\n"
+			 "<br /> <br /> <br /> <strong> <br /> <br /> <br /> <br /> <br /> <br /> <br /> <br /> </strong><span> <br /> </span>test</p>\n"
+			 "</body>\n"
+			 "</html>", "Hello. I have some bad news. \n\n\n\n\n\n\n\n\n\n\n\ntest\n"},
+			/* Invalid tags */
+			{"lol <sht> omg </sht> oh my!\n"
+			 "<name>words words</name> goodbye","lol omg oh my! words words goodbye"},
 	};
 
 	rspamd_url_init(NULL);

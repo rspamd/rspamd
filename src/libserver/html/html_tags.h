@@ -22,7 +22,7 @@ extern "C" {
 
 /* Known HTML tags */
 typedef enum {
-	Tag_UNKNOWN, /**< Unknown tag! */
+	Tag_UNKNOWN = 0, /**< Unknown tag! */
 	Tag_A,      /**< A */
 	Tag_ABBR,   /**< ABBR */
 	Tag_ACRONYM, /**< ACRONYM */
@@ -143,8 +143,9 @@ typedef enum {
 	Tag_XMP,    /**< XMP */
 	Tag_XML,    /**< XML */
 	Tag_NEXTID, /**< NEXTID */
+	Tag_MAX,
 
-	N_TAGS      /**< Must be last */
+	N_TAGS  = -1 /**< Must be -1 */
 } tag_id_t;
 
 #define CM_UNKNOWN      0

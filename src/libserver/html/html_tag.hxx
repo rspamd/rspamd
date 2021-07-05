@@ -85,7 +85,7 @@ struct html_tag {
 	unsigned int tag_start = 0;
 	unsigned int content_offset = 0;
 	std::uint32_t flags = 0;
-	tag_id_t id = N_TAGS;
+	tag_id_t id = Tag_UNKNOWN;
 	html_closing_tag closing;
 
 	std::vector<html_tag_component> components;
@@ -116,7 +116,7 @@ struct html_tag {
 	}
 
 	auto clear(void) -> void {
-		id = N_TAGS;
+		id = Tag_UNKNOWN;
 		tag_start = content_offset = 0;
 		extra = std::monostate{};
 		components.clear();

@@ -51,7 +51,7 @@ struct html_content {
 
 	/* Preallocate and reserve all internal structures */
 	html_content() {
-		tags_seen.resize(N_TAGS, false);
+		tags_seen.resize(Tag_MAX, false);
 		all_tags.reserve(128);
 		parsed.reserve(256);
 	}
