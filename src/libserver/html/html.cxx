@@ -179,8 +179,8 @@ html_check_balance(struct html_content *hc,
 
 		if (hc->all_tags.empty()) {
 			auto &&vtag = std::make_unique<html_tag>();
-			vtag->id = tag->id;
-			vtag->flags = FL_VIRTUAL|FL_CLOSED;
+			vtag->id = Tag_HTML;
+			vtag->flags = FL_VIRTUAL;
 			vtag->tag_start = 0;
 			vtag->content_offset = 0;
 			calculate_content_length(vtag.get());
@@ -191,9 +191,12 @@ html_check_balance(struct html_content *hc,
 			else {
 				vtag->parent = hc->root_tag;
 			}
-			hc->all_tags.emplace_back(std::move(vtag));
 
-			return vtag.get();
+			hc->all_tags.emplace_back(std::move(vtag));
+			tag->parent = vtag.get();
+
+			/* Recursively call with a virtual <html> tag inserted */
+			return html_check_balance(hc, tag, tag_start_offset, tag_end_offset);
 		}
 	}
 
@@ -1931,6 +1934,12 @@ TEST_CASE("html text extraction")
 {
 
 	const std::vector<std::pair<std::string, std::string>> cases{
+			{"</head>\n"
+			 "<body>\n"
+			 "<p> Hello. I have some bad news.\n"
+			 "<br /> <br /> <br /> <strong> <br /> <br /> <br /> <br /> <br /> <br /> <br /> <br /> </strong><span> <br /> </span></p>\n"
+			 "</body>\n"
+			 "</html>", " Hello. I have some bad news.\n\n\n\n\n\n\n\n"},
 			{"  <body>\n"
 			 "    <!-- escape content -->\n"
 			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
