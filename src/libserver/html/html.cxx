@@ -1061,6 +1061,11 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
 
+	auto calculate_final_tag_offsets = [&tag, initial_dest_offset, hc]() -> void {
+		tag->content_offset = initial_dest_offset;
+		tag->closing.start = hc->parsed.size();
+	};
+
 	if (tag->closing.end == -1) {
 		if (tag->closing.start != -1) {
 			next_tag_offset = tag->closing.start;
@@ -1097,10 +1102,16 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			hc->parsed.append("\n");
 		}
 
-		return tag->content_offset;
+		auto ret = tag->content_offset;
+		calculate_final_tag_offsets();
+
+		return ret;
 	}
 	else if (tag->id == Tag_HEAD) {
-		return tag->closing.end;
+		auto ret = tag->closing.end;
+		calculate_final_tag_offsets();
+
+		return ret;
 	}
 
 	if ((tag->flags & (FL_COMMENT|FL_XML|FL_IGNORE|CM_HEAD))) {
@@ -1191,6 +1202,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			}
 		}
 	}
+
+	calculate_final_tag_offsets();
 
 	return next_tag_offset;
 }
