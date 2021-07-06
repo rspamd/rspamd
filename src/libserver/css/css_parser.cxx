@@ -797,15 +797,9 @@ parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 		processed_input = rspamd::css::unescape_css(pool, st);
 	}
 	else {
-		/* Lowercase inplace */
-		auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, st.length()));
-		auto *p = nspace;
-
-		for (const auto c : st) {
-			*p++ = g_ascii_tolower(c);
-		}
-
-		processed_input = std::string_view{nspace, (std::size_t)(p - nspace)};
+		auto *nspace = reinterpret_cast<char *>(rspamd_mempool_alloc(pool, st.size()));
+		auto nlen = rspamd_str_copy_lc(st.data(), nspace, st.size());
+		processed_input = std::string_view{nspace, nlen};
 	}
 	auto &&res = process_declaration_tokens(pool,
 			get_rules_parser_functor(pool, processed_input));
