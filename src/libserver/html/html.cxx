@@ -832,6 +832,7 @@ html_process_img_tag(rspamd_mempool_t *pool,
 				if (href_value.size() > sizeof("cid:") - 1 && memcmp(href_value.data(),
 						"cid:", sizeof("cid:") - 1) == 0) {
 					/* We have an embedded image */
+					img->src += sizeof("cid:") - 1;
 					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
 				}
 				else {
