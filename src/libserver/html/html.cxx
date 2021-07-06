@@ -193,9 +193,7 @@ html_check_balance(struct html_content *hc,
 			}
 
 			hc->all_tags.emplace_back(std::move(vtag));
-			msg_err("hu6");
 			tag->parent = vtag.get();
-			g_assert(tag->parent != tag);
 
 			/* Recursively call with a virtual <html> tag inserted */
 			return html_check_balance(hc, tag, tag_start_offset, tag_end_offset);
@@ -1499,7 +1497,7 @@ html_process_input(rspamd_mempool_t *pool,
 						cur_closing_tag.parent = nullptr;
 					}
 				}
-				else if (cur_tag->flags & FL_CLOSED) {
+				else if (cur_tag && cur_tag->flags & FL_CLOSED) {
 					/* Cur tag is already closed, we should find something else */
 					auto *tmp = cur_tag;
 					while (tmp) {
