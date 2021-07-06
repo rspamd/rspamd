@@ -27,6 +27,7 @@ constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string,
 		{"font-size", css_property_type::PROPERTY_FONT_SIZE},
 		{"color", css_property_type::PROPERTY_COLOR},
 		{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
+		{"background-color", css_property_type::PROPERTY_BGCOLOR},
 		{"background", css_property_type::PROPERTY_BACKGROUND},
 		{"height", css_property_type::PROPERTY_HEIGHT},
 		{"width", css_property_type::PROPERTY_WIDTH},
@@ -36,7 +37,7 @@ constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string,
 });
 
 /* Ensure that we have all cases listed */
-static_assert(prop_names_map.size() == static_cast<int>(css_property_type::PROPERTY_NYI));
+static_assert(prop_names_map.size() >= static_cast<int>(css_property_type::PROPERTY_NYI));
 
 auto token_string_to_property(const std::string_view &inp)
 	-> css_property_type

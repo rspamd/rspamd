@@ -1030,7 +1030,7 @@ html_append_content(struct html_content *hc, std::string_view data, bool transpa
 		/* Replace all visible characters with spaces */
 		auto start = std::next(hc->parsed.begin(), cur_offset);
 		std::replace_if(start, std::end(hc->parsed), [](const auto c) {
-			return g_ascii_isprint(c);
+			return !g_ascii_isspace(c);
 		}, ' ');
 	}
 
@@ -2073,6 +2073,11 @@ TEST_CASE("html text extraction")
 			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
 			 "&nbsp;</p>",
 					" Sincerely,\n Skype Web\n"},
+			/* bgcolor propagation */
+			{"<a style=\"display: inline-block; color: #ffffff; background-color: #00aff0;\">\n"
+			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>\n"
+			 "</span>w<span style=\"color: #00aff0;\">F<span style=\"opacity: 1;\">̹</span></span>",
+					" Review"},
 	};
 
 	rspamd_url_init(NULL);

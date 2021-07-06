@@ -115,11 +115,16 @@ struct html_block {
 		auto simple_prop = [&](auto mask_val, auto &our_val, auto other_val) constexpr -> void {
 			if (!(mask & mask_val) && (other.mask & mask_val)) {
 				our_val = other_val;
+				mask |= mask_val;
 			}
 		};
 		simple_prop(fg_color_mask, fg_color, other.fg_color);
 		simple_prop(bg_color_mask, bg_color, other.bg_color);
-		simple_prop(display_mask, display, other.display);
+
+		if (other.has_display() && !other.is_visible()) {
+			simple_prop(display_mask, display, other.display);
+			mask |= other.mask&(transparent_flag|invisible_flag);
+		}
 
 		/* Sizes are very different
 		 * We can have multiple cases:
