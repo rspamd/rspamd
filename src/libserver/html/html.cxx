@@ -193,7 +193,9 @@ html_check_balance(struct html_content *hc,
 			}
 
 			hc->all_tags.emplace_back(std::move(vtag));
+			msg_err("hu6");
 			tag->parent = vtag.get();
+			g_assert(tag->parent != tag);
 
 			/* Recursively call with a virtual <html> tag inserted */
 			return html_check_balance(hc, tag, tag_start_offset, tag_end_offset);
@@ -1306,11 +1308,13 @@ html_process_input(rspamd_mempool_t *pool,
 
 		if (parent_tag) {
 			cur_tag->parent = parent_tag;
+			g_assert(cur_tag->parent != cur_tag);
 			parent_tag->children.push_back(cur_tag);
 		}
 		else {
 			if (hc->root_tag) {
 				cur_tag->parent = hc->root_tag;
+				g_assert(cur_tag->parent != cur_tag);
 				hc->root_tag->children.push_back(cur_tag);
 				parent_tag = hc->root_tag;
 			}
@@ -1331,6 +1335,7 @@ html_process_input(rspamd_mempool_t *pool,
 					top_tag->content_offset = 0;
 					top_tag->children.push_back(cur_tag);
 					cur_tag->parent = top_tag;
+					g_assert(cur_tag->parent != cur_tag);
 					hc->root_tag = top_tag;
 					parent_tag = top_tag;
 				}
@@ -1473,7 +1478,44 @@ html_process_input(rspamd_mempool_t *pool,
 				closing = TRUE;
 				/* We fill fake closing tag to fill it with the content parser */
 				cur_closing_tag.clear();
-				cur_closing_tag.parent = cur_tag; /* For simplicity */
+				/*
+				 * For closing tags, we need to find some corresponding opening tag.
+				 * However, at this point we have not even parsed a name, so we
+				 * can not assume anything about balancing, etc.
+				 *
+				 * So we need to ensure that:
+				 * 1) We have some opening tag in the chain cur_tag->parent...
+				 * 2) cur_tag is nullptr - okay, html is just brain damaged
+				 * 3) cur_tag must NOT be equal to cur_closing tag. It means that
+				 * we had some poor closing tag but we still need to find an opening
+				 * tag... Somewhere...
+				 */
+
+				if (cur_tag == &cur_closing_tag) {
+					if (parent_tag != &cur_closing_tag) {
+						cur_closing_tag.parent = parent_tag;
+					}
+					else {
+						cur_closing_tag.parent = nullptr;
+					}
+				}
+				else if (cur_tag->flags & FL_CLOSED) {
+					/* Cur tag is already closed, we should find something else */
+					auto *tmp = cur_tag;
+					while (tmp) {
+						tmp = tmp->parent;
+
+						if (tmp == nullptr || !(tmp->flags & FL_CLOSED)) {
+							break;
+						}
+					}
+
+					cur_closing_tag.parent = tmp;
+				}
+				else {
+					cur_closing_tag.parent = cur_tag;
+				}
+
 				cur_tag = &cur_closing_tag;
 				p ++;
 				break;
@@ -1765,6 +1807,7 @@ html_process_input(rspamd_mempool_t *pool,
 					cur_opening_tag->children.push_back(vtag.get());
 					hc->all_tags.emplace_back(std::move(vtag));
 					cur_tag = cur_opening_tag;
+					parent_tag = cur_tag->parent;
 				}
 			} /* if cur_tag != nullptr */
 			state = html_text_content;
