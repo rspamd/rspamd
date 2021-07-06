@@ -413,7 +413,8 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 			opacity = vals.back().to_number().value_or(opacity);
 			break;
 		}
-		case css_property_type::PROPERTY_FONT_COLOR: {
+		case css_property_type::PROPERTY_FONT_COLOR:
+		case css_property_type::PROPERTY_COLOR: {
 			auto color = vals.back().to_color();
 			if (color) {
 				block->set_fgcolor(color.value());

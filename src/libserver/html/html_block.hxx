@@ -179,6 +179,21 @@ struct html_block {
 			}
 		}
 
+		auto is_similar_colors = [](const rspamd::css::css_color &fg, const rspamd::css::css_color &bg) -> bool {
+			auto diff_r = std::abs(fg.r - bg.r);
+			auto diff_g = std::abs(fg.g - bg.g);
+			auto diff_b = std::abs(fg.b - bg.b);
+			auto ravg = (fg.r + bg.r) / 2.0;
+
+			diff_r *= diff_r;
+			diff_g *= diff_g;
+			diff_b *= diff_b;
+
+			auto diff = std::sqrt(2.0 * diff_r + 4.0 * diff_g + 3.0 * diff_b +
+								  (ravg * (diff_r - diff_b) / 256.0)) / 256.0;
+
+			return diff < 0.1;
+		};
 		/* Check if we have both bg/fg colors */
 		if ((mask & (bg_color_mask|fg_color_mask)) == (bg_color_mask|fg_color_mask)) {
 			if (fg_color.alpha < 10) {
@@ -189,22 +204,31 @@ struct html_block {
 			}
 
 			if (bg_color.alpha > 10) {
-				auto diff_r = std::abs(fg_color.r - bg_color.r);
-				auto diff_g = std::abs(fg_color.g - bg_color.g);
-				auto diff_b = std::abs(fg_color.b - bg_color.b);
-				auto ravg = (fg_color.r + bg_color.r) / 2.0;
-
-				diff_r *= diff_r;
-				diff_g *= diff_g;
-				diff_b *= diff_b;
-
-				auto diff = std::sqrt(2.0 * diff_r + 4.0 * diff_g + 3.0 * diff_b +
-						  (ravg * (diff_r - diff_b) / 256.0)) / 256.0;
-
-				if (diff < 0.1) {
+				if (is_similar_colors(fg_color, bg_color)) {
 					mask |= invisible_flag|transparent_flag;
 					return;
 				}
+			}
+		}
+		else if (mask & fg_color_mask) {
+			/* Merely fg color */
+			if (fg_color.alpha < 10) {
+				/* Too transparent */
+				mask |= invisible_flag|transparent_flag;
+
+				return;
+			}
+
+			/* Implicit fg color */
+			if (is_similar_colors(fg_color, rspamd::css::css_color::white())) {
+				mask |= invisible_flag|transparent_flag;
+				return;
+			}
+		}
+		else if (mask & bg_color_mask) {
+			if (is_similar_colors(rspamd::css::css_color::black(), bg_color)) {
+				mask |= invisible_flag|transparent_flag;
+				return;
 			}
 		}
 
