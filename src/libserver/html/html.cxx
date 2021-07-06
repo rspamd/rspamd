@@ -1008,7 +1008,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 }
 
 static inline auto
-html_append_content(struct html_content *hc, std::string_view data) -> auto
+html_append_content(struct html_content *hc, std::string_view data, bool transparent) -> auto
 {
 	auto cur_offset = hc->parsed.size();
 	hc->parsed.append(data);
@@ -1025,6 +1025,14 @@ html_append_content(struct html_content *hc, std::string_view data) -> auto
 			hc->parsed.size() - cur_offset, true);
 
 	hc->parsed.resize(nlen + cur_offset);
+
+	if (transparent) {
+		/* Replace all visible characters with spaces */
+		auto start = std::next(hc->parsed.begin(), cur_offset);
+		std::replace_if(start, std::end(hc->parsed), [](const auto c) {
+			return g_ascii_isprint(c);
+		}, ' ');
+	}
 
 	return nlen;
 }
@@ -1058,7 +1066,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 						GList **exceptions,
 						khash_t (rspamd_url_hash) *url_set) -> goffset
 {
-	auto is_visible = true, is_block = false, is_spaces = false;
+	auto is_visible = true, is_block = false, is_spaces = false, is_transparent = false;
 	goffset next_tag_offset = tag->closing.end,
 			initial_dest_offset = hc->parsed.size();
 
@@ -1123,7 +1131,12 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			is_visible = true;
 		}
 		else if (!tag->block->is_visible()) {
-			is_visible = false;
+			if (!tag->block->is_transparent()) {
+				is_visible = false;
+			}
+			else {
+				is_transparent = true;
+			}
 		}
 		else if (tag->block->has_display()) {
 			if (tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
@@ -1150,7 +1163,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		if (is_visible && initial_part_len > 0) {
 			html_append_content(hc, {start + cur_offset,
-									 std::size_t(initial_part_len)});
+									 std::size_t(initial_part_len)}, is_transparent);
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
@@ -1167,7 +1180,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		if (is_visible && final_part_len > 0) {
 			html_append_content(hc, {start + cur_offset,
-									 std::size_t(final_part_len)});
+									 std::size_t(final_part_len)}, is_transparent);
 		}
 	}
 	if (is_block) {
@@ -1763,7 +1776,7 @@ html_process_input(rspamd_mempool_t *pool,
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
 				 " ignoring the rest of the HTML content",
 					(int)hc->all_tags.size(), (int)(p - start));
-			html_append_content(hc, {p, (std::size_t)(end - p)});
+			html_append_content(hc, {p, (std::size_t)(end - p)}, false);
 			p = end;
 			break;
 		}
@@ -2050,6 +2063,16 @@ TEST_CASE("html text extraction")
 			/* Invalid tags */
 			{"lol <sht> omg </sht> oh my!\n"
 			 "<name>words words</name> goodbye","lol omg oh my! words words goodbye"},
+			/* Invisible stuff */
+			{"<div style=\"color:#555555;font-family:Arial, 'Helvetica Neue', Helvetica, sans-serif;line-height:1.2;padding-top:10px;padding-right:10px;padding-bottom:10px;padding-left:10px;font-style: italic;\">\n"
+			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
+			 "<span style=\"color:#FFFFFF; \">F</span>Sincerely,</p>\n"
+			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
+			 "<span style=\"color:#FFFFFF; \">8</span>Sky<span style=\"opacity:1;\"></span>pe<span style=\"color:#FFFFFF; \">F</span>Web<span style=\"color:#FFFFFF; \">F</span></p>\n"
+			 "<span style=\"color:#FFFFFF; \">kreyes</span>\n"
+			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
+			 "&nbsp;</p>",
+					" Sincerely,\n Skype Web\n"},
 	};
 
 	rspamd_url_init(NULL);
