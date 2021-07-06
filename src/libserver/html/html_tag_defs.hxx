@@ -115,7 +115,7 @@ static const auto html_tag_defs_array = rspamd::array_of<html_tag_def>(
 		TAG_DEF(Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED)),
 		TAG_DEF(Tag_SELECT, "select", (CM_INLINE | CM_FIELD)),
 		TAG_DEF(Tag_SMALL, "small", (CM_INLINE)),
-		TAG_DEF(Tag_SPAN, "span", (CM_BLOCK | FL_BLOCK)),
+		TAG_DEF(Tag_SPAN, "span", (CM_NO_INDENT | FL_BLOCK)),
 		TAG_DEF(Tag_STRIKE, "strike", (CM_INLINE)),
 		TAG_DEF(Tag_STRONG, "strong", (CM_INLINE)),
 		TAG_DEF(Tag_STYLE, "style", (CM_HEAD)),
