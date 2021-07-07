@@ -1011,14 +1011,20 @@ static inline auto
 html_append_content(struct html_content *hc, std::string_view data, bool transparent) -> auto
 {
 	auto cur_offset = hc->parsed.size();
-	hc->parsed.append(data);
 
-	if (cur_offset > 0 && data.size() > 0) {
-		auto last = hc->parsed.back();
-		auto first_appended = data.front();
-		if (first_appended == ' ' && !g_ascii_isspace(last)) {
-			cur_offset++;
+	if (data.size() > 0) {
+		/* Handle multiple spaces at the begin */
+
+		if (cur_offset > 0) {
+			auto last = hc->parsed.back();
+			if (!g_ascii_isspace(last) && g_ascii_isspace(data.front())) {
+				hc->parsed.append(" ");
+				data = {data.data() + 1, data.size() - 1};
+				cur_offset ++;
+			}
 		}
+
+		hc->parsed.append(data);
 	}
 
 	auto nlen = decode_html_entitles_inplace(hc->parsed.data() + cur_offset,
@@ -2075,7 +2081,7 @@ TEST_CASE("html text extraction")
 			 "    </P>\n"
 			 "    <b>stuff</p>?\n"
 			 "  </body>\n"
-			 "</html>", "Hello, world! test\ndata<>\nstuff?"},
+			 "</html>", "Hello, world! test \ndata<>\nstuff?"},
 			{"<p><!--comment-->test</br></hr><br>", "test\n"},
 			/* Tables */
 			{"<table>\n"
@@ -2118,9 +2124,15 @@ TEST_CASE("html text extraction")
 					" Sincerely,\n Skype Web\n"},
 			/* bgcolor propagation */
 			{"<a style=\"display: inline-block; color: #ffffff; background-color: #00aff0;\">\n"
-			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>\n"
+			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>"
 			 "</span>w<span style=\"color: #00aff0;\">F<span style=\"opacity: 1;\">̹</span></span>",
 					" Review"},
+			/* Colors */
+			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>"
+			 "<span>world</span>", "goodbye cruelworld"},
+			/* Newline before tag -> must be space */
+			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>\n"
+			 "<span>world</span>", "goodbye cruel world"},
 	};
 
 	rspamd_url_init(NULL);
