@@ -110,14 +110,14 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 			ret = (std::uint8_t) (dbl / 100.0 * 255.0);
 		}
 		else {
-			if (dbl > 1) {
-				dbl = 1;
+			if (dbl > 255) {
+				dbl = 255;
 			}
 			else if (dbl < 0) {
 				dbl = 0;
 			}
 
-			ret = (std::uint8_t) (dbl * 255.0);
+			ret = (std::uint8_t) (dbl);
 		}
 	}
 
