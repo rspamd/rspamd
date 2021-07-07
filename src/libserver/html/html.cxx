@@ -1093,12 +1093,14 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		if (is_visible) {
 			if (!hc->parsed.empty() && hc->parsed.back() != c && hc->parsed.back() != '\n') {
 				if (hc->parsed.back() == ' ') {
-					/* We also strip extra spaces at the end */
-					hc->parsed.erase(std::find_if(hc->parsed.rbegin(), hc->parsed.rend(),
+					/* We also strip extra spaces at the end, but limiting the start */
+					auto last = std::make_reverse_iterator(hc->parsed.begin() + initial_dest_offset);
+					auto first = std::find_if(hc->parsed.rbegin(), last,
 							[](auto ch) -> auto {
 								return ch != ' ';
-							}).base(),
-							hc->parsed.end());
+							});
+					hc->parsed.erase(first.base(), hc->parsed.end());
+					g_assert(hc->parsed.size() >= initial_dest_offset);
 				}
 				hc->parsed.push_back(c);
 			}
