@@ -2474,6 +2474,11 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			if ((*h == ';' || g_ascii_isspace(*h)) && h > e) {
 				replace_entity();
 				state = parser_state::normal_content;
+
+				if (g_ascii_isspace(*h)) {
+					/* Avoid increase of h */
+					continue;
+				}
 			}
 			else if (*h == '&') {
 				/* Previous `&` was bogus */
@@ -2580,7 +2585,7 @@ TEST_SUITE("html") {
 				{"    abc def   ", "abc def "},
 				{"FOO&gt;BAR", "FOO>BAR"},
 				{"FOO&gtBAR", "FOO>BAR"},
-				{"FOO&gt BAR", "FOO>BAR"},
+				{"FOO&gt BAR", "FOO> BAR"},
 				{"FOO&gt;;;BAR", "FOO>;;BAR"},
 				{"I'm &notit;", "I'm ¬it;"},
 				{"I'm &notin;", "I'm ∉"},
