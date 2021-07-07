@@ -1285,7 +1285,7 @@ html_process_input(rspamd_mempool_t *pool,
 		ntag->tag_start = c - start;
 		ntag->flags = flags;
 
-		if (cur_tag && !(cur_tag->flags & (CM_EMPTY|FL_CLOSED))) {
+		if (cur_tag && !(cur_tag->flags & (CM_EMPTY|FL_CLOSED)) && cur_tag != &cur_closing_tag) {
 			parent_tag = cur_tag;
 		}
 
@@ -1308,13 +1308,16 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 
 		/* Shift to the first unclosed tag */
-		while (parent_tag && (parent_tag->flags & FL_CLOSED)) {
-			parent_tag = parent_tag->parent;
+		auto *pt = parent_tag;
+		while (pt && (pt->flags & FL_CLOSED)) {
+			pt = pt->parent;
 		}
 
-		if (parent_tag) {
-			cur_tag->parent = parent_tag;
+		if (pt) {
+			cur_tag->parent = pt;
 			g_assert(cur_tag->parent != cur_tag);
+			g_assert(cur_tag->parent != &cur_closing_tag);
+			parent_tag = pt;
 			parent_tag->children.push_back(cur_tag);
 		}
 		else {
@@ -1810,10 +1813,12 @@ html_process_input(rspamd_mempool_t *pool,
 					vtag->content_offset = p - start + 1;
 					vtag->closing = cur_tag->closing;
 					vtag->parent = cur_opening_tag;
+					g_assert(vtag->parent != &cur_closing_tag);
 					cur_opening_tag->children.push_back(vtag.get());
 					hc->all_tags.emplace_back(std::move(vtag));
 					cur_tag = cur_opening_tag;
 					parent_tag = cur_tag->parent;
+					g_assert(cur_tag->parent != &cur_closing_tag);
 				}
 			} /* if cur_tag != nullptr */
 			state = html_text_content;
