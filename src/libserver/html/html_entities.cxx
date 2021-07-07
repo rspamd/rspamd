@@ -2283,9 +2283,9 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 			heuristic_lookup_func(2);
 
 			/* Leave undecoded */
-			if (!entity_def && (end - t > h - e + 1)) {
-				memmove(t, e, h - e + 1);
-				t += h - e + 1;
+			if (!entity_def && (end - t > h - e)) {
+				memmove(t, e, h - e);
+				t += h - e;
 			}
 			else if (entity_def) {
 				return true;
