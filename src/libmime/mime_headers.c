@@ -403,7 +403,8 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			}
 
 			if (nh->decoded == NULL) {
-				nh->decoded = "";
+				/* As we strip comments in place... */
+				nh->decoded = rspamd_mempool_strdup (task->task_pool, "");
 			}
 
 			/* We also validate utf8 and replace all non-valid utf8 chars */

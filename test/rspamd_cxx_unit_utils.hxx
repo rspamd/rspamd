@@ -39,6 +39,7 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace") {
 			{"ab(olo\\)lo)c(foo)", "abc"},
 			{"ab(trol\\\1lo)c(foo)", "abc"},
 			{"\\ab(trol\\\1lo)c(foo)", "abc"},
+			{"", ""},
 	};
 
 	for (const auto &c : cases) {
