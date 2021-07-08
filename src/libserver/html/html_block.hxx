@@ -185,11 +185,12 @@ struct html_block {
 		}
 
 		auto is_similar_colors = [](const rspamd::css::css_color &fg, const rspamd::css::css_color &bg) -> bool {
-			auto diff_r = std::abs(fg.r - bg.r);
-			auto diff_g = std::abs(fg.g - bg.g);
-			auto diff_b = std::abs(fg.b - bg.b);
+			auto diff_r = ((float)fg.r - bg.r);
+			auto diff_g = ((float)fg.g - bg.g);
+			auto diff_b = ((float)fg.b - bg.b);
 			auto ravg = (fg.r + bg.r) / 2.0;
 
+			/* Square diffs */
 			diff_r *= diff_r;
 			diff_g *= diff_g;
 			diff_b *= diff_b;
