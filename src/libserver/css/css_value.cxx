@@ -40,10 +40,16 @@ namespace rspamd::css {
 
 auto css_value::maybe_color_from_string(const std::string_view &input)
 -> std::optional<css_value> {
-	auto found_it = css_colors_map.find(input);
 
-	if (found_it != css_colors_map.end()) {
-		return css_value{found_it->second};
+	if (input.size() > 1 && input.front() == '#') {
+		return css_value::maybe_color_from_hex(input.substr(1));
+	}
+	else {
+		auto found_it = css_colors_map.find(input);
+
+		if (found_it != css_colors_map.end()) {
+			return css_value{found_it->second};
+		}
 	}
 
 	return std::nullopt;

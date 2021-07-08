@@ -2132,6 +2132,9 @@ TEST_CASE("html text extraction")
 			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>"
 			 "</span>w<span style=\"color: #00aff0;\">F<span style=\"opacity: 1;\">̹</span></span>",
 					" Review"},
+			{"<td style=\"color:#ffffff\" bgcolor=\"#005595\">\n"
+			 "hello world\n"
+			 "</td>", "hello world"},
 			/* Colors */
 			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>"
 			 "<span>world</span>", "goodbye cruelworld"},
