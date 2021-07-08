@@ -2138,6 +2138,9 @@ TEST_CASE("html text extraction")
 			/* Colors */
 			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>"
 			 "<span>world</span>", "goodbye cruelworld"},
+			/* Font-size propagation */
+			{"<p style=\"font-size: 11pt;line-height:22px\">goodbye <span style=\"font-size:0px\">cruel</span>world</p>",
+					"goodbye world\n"},
 			/* Newline before tag -> must be space */
 			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>\n"
 			 "<span>world</span>", "goodbye cruel world"},

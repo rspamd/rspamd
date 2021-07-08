@@ -135,7 +135,7 @@ struct html_block {
 		 * 5) Parent size is undefined and our size is < 0 - tricky stuff, assume some defaults
 		 */
 		auto size_prop = [&](auto mask_val, auto &our_val, auto other_val, auto default_val) constexpr -> void {
-			if (!(mask & mask_val)) {
+			if ((mask & mask_val)) {
 				/* We have our value */
 				if (our_val < 0) {
 					if (other.mask & mask_val) {
