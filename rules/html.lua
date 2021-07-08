@@ -216,8 +216,8 @@ local vis_check_id = rspamd_config:register_symbol{
                 transp_rate = tr
                 arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
                     tag:get_type(),
-                    bl.color[1], bl.color[2], bl.color[3],
-                    bl.bgcolor[1], bl.bgcolor[2], bl.bgcolor[3])
+                    bl.color[1] or 0, bl.color[2] or 0, bl.color[3] or 0,
+                    bl.bgcolor[1] or 0, bl.bgcolor[2] or 0, bl.bgcolor[3] or 0)
               end
             end
           end
