@@ -185,20 +185,21 @@ struct html_block {
 		}
 
 		auto is_similar_colors = [](const rspamd::css::css_color &fg, const rspamd::css::css_color &bg) -> bool {
+			constexpr const auto min_visible_diff = 0.1f;
 			auto diff_r = ((float)fg.r - bg.r);
 			auto diff_g = ((float)fg.g - bg.g);
 			auto diff_b = ((float)fg.b - bg.b);
-			auto ravg = (fg.r + bg.r) / 2.0;
+			auto ravg = (fg.r + bg.r) / 2.0f;
 
 			/* Square diffs */
 			diff_r *= diff_r;
 			diff_g *= diff_g;
 			diff_b *= diff_b;
 
-			auto diff = std::sqrt(2.0 * diff_r + 4.0 * diff_g + 3.0 * diff_b +
-								  (ravg * (diff_r - diff_b) / 256.0)) / 256.0;
+			auto diff = std::sqrt(2.0f * diff_r + 4.0f * diff_g + 3.0f * diff_b +
+								  (ravg * (diff_r - diff_b) / 256.0f)) / 256.0f;
 
-			return diff < 0.1;
+			return diff < min_visible_diff;
 		};
 		/* Check if we have both bg/fg colors */
 		if ((mask & (bg_color_mask|fg_color_mask)) == (bg_color_mask|fg_color_mask)) {
