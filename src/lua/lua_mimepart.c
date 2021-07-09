@@ -209,11 +209,9 @@ LUA_FUNCTION_DEF (textpart, get_languages);
 /***
  * @method text_part:get_fuzzy_hashes(mempool)
  * @param {rspamd_mempool} mempool - memory pool (usually task pool)
- * Returns direct hash + array of shingles being calculated as following:
- * - [1] - fuzzy digest as a string
- * - [2..33] - fuzzy hashes as the following tables:
- *   - [1] - 64 bit integer represented as a string
- *   - [2..4] - strings used to generate this hash
+ * Returns direct hash of textpart as a string and array [1..32] of shingles each represented as a following table:
+ * - [1] - 64 bit fuzzy hash represented as a string
+ * - [2..4] - strings used to generate this hash
  * @return {string,array|tables} fuzzy hashes calculated
  */
 LUA_FUNCTION_DEF (textpart, get_fuzzy_hashes);
