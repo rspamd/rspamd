@@ -416,8 +416,8 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			break;
 		case 5:
 			/* Header has only name, no value */
-			nh->value = "";
-			nh->decoded = "";
+			nh->value = rspamd_mempool_strdup (task->task_pool, "");;
+			nh->decoded = rspamd_mempool_strdup (task->task_pool, "");;
 			nh->raw_len = p - nh->raw_value;
 			nh->order = norder ++;
 			rspamd_mime_header_add (task, &target->htb, order_ptr, nh, check_newlines);
