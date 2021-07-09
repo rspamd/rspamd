@@ -2572,6 +2572,13 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 	return (t - s);
 }
 
+auto
+decode_html_entitles_inplace(std::string &st) -> void
+{
+	auto nlen = decode_html_entitles_inplace(st.data(), st.size());
+	st.resize(nlen);
+}
+
 TEST_SUITE("html") {
 
 	TEST_CASE("html entities") {

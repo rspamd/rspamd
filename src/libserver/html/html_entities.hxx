@@ -19,10 +19,12 @@
 #pragma once
 
 #include <utility>
+#include <string>
 
 namespace rspamd::html {
 
-std::size_t decode_html_entitles_inplace (char *s, std::size_t len, bool norm_spaces = false);
+auto decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces = false) -> std::size_t ;
+auto decode_html_entitles_inplace(std::string &st) -> void;
 
 }
 
