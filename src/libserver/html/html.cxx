@@ -1169,7 +1169,7 @@ html_process_input(rspamd_mempool_t *pool,
 {
 	const gchar *p, *c, *end, *start;
 	guchar t;
-	auto closing = false, in_head = false;
+	auto closing = false;
 	guint obrace = 0, ebrace = 0;
 	struct rspamd_url *url = nullptr;
 	gint href_offset = -1;
@@ -1194,6 +1194,12 @@ html_process_input(rspamd_mempool_t *pool,
 		content_style,
 		tags_limit_overflow,
 	} state = parse_start;
+
+	enum class html_document_state {
+		doctype,
+		head,
+		body
+	} html_document_state = html_document_state::doctype;
 
 	g_assert (in != NULL);
 	g_assert (pool != NULL);
@@ -1266,9 +1272,6 @@ html_process_input(rspamd_mempool_t *pool,
 					auto *top_tag = hc->all_tags.back().get();
 					top_tag->tag_start = 0;
 					top_tag->flags = FL_VIRTUAL;
-					if (in_head) {
-						top_tag->flags |= CM_HEAD;
-					}
 					top_tag->id = Tag_HTML;
 					top_tag->content_offset = 0;
 					top_tag->children.push_back(cur_tag);
@@ -1280,7 +1283,7 @@ html_process_input(rspamd_mempool_t *pool,
 			}
 		}
 
-		if (cur_tag->flags & FL_HREF && !in_head) {
+		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
 			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
 			if (maybe_url) {
@@ -1363,8 +1366,8 @@ html_process_input(rspamd_mempool_t *pool,
 			else {
 				/* We have no starting tag, so assume that it's content */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
-				in_head = false;
 				cur_tag = new_tag();
+				html_document_state = html_document_state::body;
 
 				if (cur_tag) {
 					cur_tag->id = Tag_HTML;
@@ -1663,20 +1666,10 @@ html_process_input(rspamd_mempool_t *pool,
 					cur_tag->closing.end = p - start + 1;
 
 					closing = FALSE;
-					if (cur_tag->id == Tag_HEAD) {
-						in_head = false;
-					}
 					state = tag_end_closing;
 				}
 				else {
 					cur_tag->content_offset = p - start + 1;
-					if (cur_tag->id == Tag_HEAD) {
-						in_head = true;
-					}
-					else if (cur_tag->id == Tag_BODY) {
-						in_head = false;
-					}
-
 					state = tag_end_opening;
 				}
 
@@ -1690,14 +1683,36 @@ html_process_input(rspamd_mempool_t *pool,
 			content_parser_env.reset();
 
 			if (cur_tag != nullptr) {
-				process_opening_tag();
+
 			}
 
-			if (cur_tag && (cur_tag->id == Tag_STYLE)) {
-				state = content_style;
-			}
-			else {
-				state = html_text_content;
+			state = html_text_content;
+			if (cur_tag) {
+				if (cur_tag->id == Tag_STYLE) {
+					state = content_style;
+				}
+				if (html_document_state == html_document_state::doctype) {
+					if (cur_tag->id == Tag_HEAD) {
+						html_document_state = html_document_state::head;
+					}
+				}
+				else if (html_document_state == html_document_state::head) {
+					if (!(cur_tag->flags & (CM_EMPTY|CM_HEAD))) {
+						if (parent_tag && parent_tag->id == Tag_HEAD) {
+							/*
+							 * As by standard, we have to close the HEAD tag
+							 * and switch to the body state
+							 */
+							parent_tag->flags |= FL_CLOSED;
+							parent_tag->closing.start = cur_tag->tag_start;
+							parent_tag->closing.end = cur_tag->content_offset;
+
+							html_document_state = html_document_state::body;
+						}
+					}
+				}
+
+				process_opening_tag();
 			}
 
 			p++;
@@ -1709,6 +1724,14 @@ html_process_input(rspamd_mempool_t *pool,
 				if (cur_tag->flags & CM_EMPTY) {
 					/* Ignore closing empty tags */
 					cur_tag->flags |= FL_IGNORE;
+				}
+				if (html_document_state == html_document_state::doctype) {
+
+				}
+				else if (html_document_state == html_document_state::head) {
+					if (cur_tag->id == Tag_HEAD) {
+						html_document_state = html_document_state::body;
+					}
 				}
 				/* cur_tag here is a closing tag */
 				auto *next_cur_tag = html_check_balance(hc, cur_tag,
@@ -1783,11 +1806,11 @@ html_process_input(rspamd_mempool_t *pool,
 		if (tag->block) {
 			if (!tag->block->has_display()) {
 				/* If we have no display field, we can check it by tag */
-				if (tag->flags & (CM_BLOCK|CM_TABLE)) {
-					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
-				}
-				else if (tag->flags & CM_HEAD) {
+				if (tag->flags & CM_HEAD) {
 					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN);
+				}
+				else if (tag->flags & (CM_BLOCK|CM_TABLE)) {
+					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
 				}
 				else if (tag->flags & CM_ROW) {
 					tag->block->set_display(css::css_display_value::DISPLAY_TABLE_ROW);
@@ -1800,6 +1823,7 @@ html_process_input(rspamd_mempool_t *pool,
 			tag->block->compute_visibility();
 
 			for (const auto *cld_tag : tag->children) {
+
 				if (cld_tag->block) {
 					cld_tag->block->propagate_block(*tag->block);
 				}
@@ -2073,6 +2097,9 @@ TEST_CASE("html text extraction")
 			/* Newline before tag -> must be space */
 			{"goodbye <span style=\"COLOR: rgb(64,64,64)\">cruel</span>\n"
 			 "<span>world</span>", "goodbye cruel world"},
+			/* Head tag with some stuff */
+			{"<html><head><p>oh my god</head><body></body></html>", "oh my god\n"},
+			{"<html><head><title>oh my god</head><body></body></html>", ""},
 	};
 
 	rspamd_url_init(NULL);
