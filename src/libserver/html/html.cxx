@@ -216,40 +216,15 @@ html_component_from_string(const std::string_view &st) -> std::optional<html_com
 	}
 }
 
-static auto
-find_tag_component_name(rspamd_mempool_t *pool,
-					const gchar *begin,
-					const gchar *end) -> std::optional<html_component_type>
-{
-	if (end <= begin) {
-		return std::nullopt;
-	}
-
-	auto *p = rspamd_mempool_alloc_buffer(pool, end - begin);
-	memcpy(p, begin, end - begin);
-	auto len = decode_html_entitles_inplace(p, end - begin);
-	len = rspamd_str_lc(p, len);
-	auto known_component_it = html_components_map.find({p, len});
-
-	if (known_component_it != html_components_map.end()) {
-		return known_component_it->second;
-	}
-	else {
-		return std::nullopt;
-	}
-}
-
 struct tag_content_parser_state {
 	int cur_state = 0;
-	const char *saved_p = nullptr;
-	const char *tag_name_start = nullptr;
+	std::string buf;
 	std::optional<html_component_type> cur_component;
 
 	void reset()
 	{
 		cur_state = 0;
-		saved_p = nullptr;
-		tag_name_start = nullptr;
+		buf.clear();
 		cur_component = std::nullopt;
 	}
 };
@@ -273,13 +248,12 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		parse_sqvalue,
 		parse_end_squote,
 		parse_value,
-		spaces_after_name,
 		spaces_before_eq,
 		spaces_after_eq,
 		spaces_after_param,
 		ignore_bad_tag,
+		tag_end,
 	} state;
-	gboolean store = FALSE;
 
 	state = static_cast<enum tag_parser_state>(parser_env.cur_state);
 
@@ -289,21 +263,54 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	 * Parser env is set to clear the current html attribute fields (saved_p and
 	 * cur_component)
 	 */
-	auto store_tag_component = [&]() -> void {
-		if (parser_env.saved_p != nullptr && parser_env.cur_component &&
-			in > parser_env.saved_p) {
+	auto store_component_value = [&]() -> void {
+		if (parser_env.cur_component) {
 
-			/* We ignore repeated attributes */
-				auto sz = (std::size_t)(in - parser_env.saved_p);
-				auto *s = rspamd_mempool_alloc_buffer(pool, sz);
-				memcpy(s, parser_env.saved_p, sz);
-				sz = rspamd_html_decode_entitles_inplace(s, in - parser_env.saved_p);
+			if (parser_env.buf.empty()) {
+				tag->components.emplace_back(parser_env.cur_component.value(),
+						std::string_view{});
+			}
+			else {
+				/* We need to copy buf to a persistent storage */
+				auto *s = rspamd_mempool_alloc_buffer(pool, parser_env.buf.size());
+				memcpy(s, parser_env.buf.data(), parser_env.buf.size());
+				auto sz = rspamd_html_decode_entitles_inplace(s, parser_env.buf.size());
 				tag->components.emplace_back(parser_env.cur_component.value(),
 						std::string_view{s, sz});
+			}
 		}
 
-		parser_env.saved_p = nullptr;
+		parser_env.buf.clear();
 		parser_env.cur_component = std::nullopt;
+	};
+
+	auto store_component_name = [&]() -> bool {
+		decode_html_entitles_inplace(parser_env.buf);
+		auto known_component_it = html_components_map.find(std::string_view{parser_env.buf});
+		parser_env.buf.clear();
+
+		if (known_component_it != html_components_map.end()) {
+			parser_env.cur_component = known_component_it->second;
+
+			return true;
+		}
+		else {
+			parser_env.cur_component = std::nullopt;
+		}
+
+		return false;
+	};
+
+	auto store_value_character = [&](bool lc) -> void {
+		auto c = lc ? g_ascii_tolower(*in) : *in;
+
+		if (c == '\0') {
+			/* Replace with u0FFD */
+			parser_env.buf.append(u8"\uFFFD");
+		}
+		else {
+			parser_env.buf.push_back(c);
+		}
 	};
 
 	switch (state) {
@@ -316,46 +323,30 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		else if (g_ascii_isalpha (*in)) {
 			state = parse_name;
-			parser_env.tag_name_start = in;
+			store_value_character(true);
 		}
 		break;
 
 	case parse_name:
-		if ((g_ascii_isspace (*in) || *in == '>' || *in == '/') && parser_env.tag_name_start) {
-			const auto *start = parser_env.tag_name_start;
-			g_assert (in >= start);
-
+		if ((g_ascii_isspace (*in) || *in == '>' || *in == '/')) {
 			if (*in == '/') {
 				tag->flags |= FL_CLOSED;
 			}
 
-			const auto tag_name_len = in - start;
-
-			if (tag_name_len== 0) {
+			if (parser_env.buf.empty()) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->id = N_TAGS;
 				tag->flags |= FL_BROKEN;
 				state = ignore_bad_tag;
 			}
 			else {
-				/*
-				 * Copy tag name to the temporary buffer for modifications.
-				 * We use static buffer as legit tag names are usually short enough
-				 * to save some space in memory pool.
-				 */
-				char s[32];
-
-				auto nsize = rspamd_strlcpy(s, parser_env.tag_name_start,
-						MIN(sizeof(s), tag_name_len + 1));
-				nsize = rspamd_html_decode_entitles_inplace(s, nsize);
-				nsize = rspamd_str_lc_utf8(s, nsize);
-
-				const auto *tag_def = rspamd::html::html_tags_defs.by_name({s, nsize});
+				decode_html_entitles_inplace(parser_env.buf);
+				const auto *tag_def = rspamd::html::html_tags_defs.by_name(parser_env.buf);
 
 				if (tag_def == nullptr) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
 					/* Assign -hash to match closing tag if needed */
-					auto nhash = static_cast<std::int32_t>(std::hash<std::string_view>{}({s, nsize}));
+					auto nhash = static_cast<std::int32_t>(std::hash<std::string>{}(parser_env.buf));
 					/* Always negative */
 					tag->id = static_cast<tag_id_t>(nhash | G_MININT32);
 				}
@@ -364,90 +355,44 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 					tag->flags = tag_def->flags;
 				}
 
-				state = spaces_after_name;
+				parser_env.buf.clear();
+
+				state = spaces_after_param;
 			}
+		}
+		else {
+			store_value_character(true);
 		}
 		break;
 
 	case parse_attr_name:
-		if (parser_env.saved_p == nullptr) {
-			state = ignore_bad_tag;
+		if (*in == '=') {
+			store_component_name();
+			state = parse_equal;
+		}
+		else if (g_ascii_isspace(*in)) {
+			store_component_name();
+			state = spaces_before_eq;
+		}
+		else if (*in == '/') {
+			store_component_name();
+			tag->flags |= FL_CLOSED;
+			state = spaces_before_eq;
+		}
+		else if (*in == '>') {
+			store_component_name();
+			state = tag_end;
 		}
 		else {
-			const auto *attr_name_end = in;
-
-			if (*in == '=') {
-				state = parse_equal;
-			}
-			else if (*in == '"') {
-				/* No equal or something sane but we have quote character */
-				state = parse_start_dquote;
-				attr_name_end = in - 1;
-
-				while (attr_name_end > parser_env.saved_p) {
-					if (!g_ascii_isalnum (*attr_name_end)) {
-						attr_name_end--;
-					}
-					else {
-						break;
-					}
-				}
-
-				/* One character forward to obtain length */
-				attr_name_end++;
-			}
-			else if (g_ascii_isspace (*in)) {
-				state = spaces_before_eq;
-			}
-			else if (*in == '/') {
-				tag->flags |= FL_CLOSED;
-			}
-			else if (!g_ascii_isgraph (*in)) {
-				state = parse_value;
-				attr_name_end = in - 1;
-
-				while (attr_name_end > parser_env.saved_p) {
-					if (!g_ascii_isalnum (*attr_name_end)) {
-						attr_name_end--;
-					}
-					else {
-						break;
-					}
-				}
-
-				/* One character forward to obtain length */
-				attr_name_end++;
+			if (*in == '"' || *in == '\'' || *in == '<') {
+				/* Should never be in attribute names but ignored */
+				tag->flags |= FL_BROKEN;
 			}
 			else {
-				return;
-			}
-
-			parser_env.cur_component = find_tag_component_name(pool,
-					parser_env.saved_p,
-					attr_name_end);
-
-			if (!parser_env.cur_component) {
-				/* Ignore unknown params */
-				parser_env.saved_p = nullptr;
-			}
-			else if (state == parse_value) {
-				parser_env.saved_p = in + 1;
+				store_value_character(true);
 			}
 		}
 
-		break;
-
-	case spaces_after_name:
-		if (!g_ascii_isspace (*in)) {
-			parser_env.saved_p = in;
-
-			if (*in == '/') {
-				tag->flags |= FL_CLOSED;
-			}
-			else if (*in != '>') {
-				state = parse_attr_name;
-			}
-		}
 		break;
 
 	case spaces_before_eq:
@@ -468,21 +413,19 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				 * Should be okay (empty attribute). The rest is handled outside
 				 * this automata.
 				 */
-
+				state = tag_end;
 			}
-			else if (*in == '"' || *in == '\'') {
+			else if (*in == '"' || *in == '\'' || *in == '<') {
 				/* Attribute followed by quote... Missing '=' ? Dunno, need to test */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->flags |= FL_BROKEN;
-				state = ignore_bad_tag;
+				store_component_value();
+				state = spaces_after_param;
 			}
 			else {
-				/*
-				 * Just start another attribute ignoring an empty attributes for
-				 * now. We don't use them in fact...
-				 */
-				state = parse_attr_name;
-				parser_env.saved_p = in;
+				/* Empty attribute */
+				store_component_value();
+				state = spaces_after_param;
 			}
 		}
 		break;
@@ -495,10 +438,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else if (!g_ascii_isspace (*in)) {
-			if (parser_env.saved_p != nullptr) {
-				/* We need to save this param */
-				parser_env.saved_p = in;
-			}
+			store_value_character(true);
 			state = parse_value;
 		}
 		break;
@@ -514,81 +454,63 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_start_squote;
 		}
 		else {
-			if (parser_env.saved_p != nullptr) {
-				/* We need to save this param */
-				parser_env.saved_p = in;
-			}
+			store_value_character(true);
 			state = parse_value;
 		}
 		break;
 
 	case parse_start_dquote:
 		if (*in == '"') {
-			if (parser_env.saved_p != nullptr) {
-				/* We have an empty attribute value */
-				parser_env.saved_p = nullptr;
-			}
 			state = spaces_after_param;
 		}
 		else {
-			if (parser_env.saved_p != nullptr) {
-				/* We need to save this param */
-				parser_env.saved_p = in;
-			}
+			store_value_character(false);
 			state = parse_dqvalue;
 		}
 		break;
 
 	case parse_start_squote:
 		if (*in == '\'') {
-			if (parser_env.saved_p != nullptr) {
-				/* We have an empty attribute value */
-				parser_env.saved_p = nullptr;
-			}
 			state = spaces_after_param;
 		}
 		else {
-			if (parser_env.saved_p != nullptr) {
-				/* We need to save this param */
-				parser_env.saved_p = in;
-			}
+			store_value_character(false);
 			state = parse_sqvalue;
 		}
 		break;
 
 	case parse_dqvalue:
 		if (*in == '"') {
-			store = TRUE;
+			store_component_value();
 			state = parse_end_dquote;
 		}
-
-		if (store) {
-			store_tag_component();
+		else {
+			store_value_character(false);
 		}
 		break;
 
 	case parse_sqvalue:
 		if (*in == '\'') {
-			store = TRUE;
+			store_component_value();
 			state = parse_end_squote;
 		}
-		if (store) {
-			store_tag_component();
+		else {
+			store_value_character(false);
 		}
+
 		break;
 
 	case parse_value:
 		if (*in == '/' && *(in + 1) == '>') {
 			tag->flags |= FL_CLOSED;
-			store = TRUE;
+			store_component_value();
 		}
 		else if (g_ascii_isspace (*in) || *in == '>' || *in == '"') {
-			store = TRUE;
+			store_component_value();
 			state = spaces_after_param;
 		}
-
-		if (store) {
-			store_tag_component();
+		else {
+			store_value_character(false);
 		}
 		break;
 
@@ -603,7 +525,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		else {
 			/* No space, proceed immediately to the attribute name */
 			state = parse_attr_name;
-			parser_env.saved_p = in;
+			store_component_value();
+			store_value_character(true);
 		}
 		break;
 
@@ -612,13 +535,19 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			if (*in == '/' && *(in + 1) == '>') {
 				tag->flags |= FL_CLOSED;
 			}
-
-			state = parse_attr_name;
-			parser_env.saved_p = in;
+			else if (*in == '=') {
+				/* Attributes cannot start with '=' */
+				tag->flags |= FL_BROKEN;
+			}
+			else {
+				store_value_character(true);
+				state = parse_attr_name;
+			}
 		}
 		break;
 
 	case ignore_bad_tag:
+	case tag_end:
 		break;
 	}
 
