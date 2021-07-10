@@ -1963,7 +1963,7 @@ TEST_CASE("html parsing")
 			{"<p><p><a></p></a></a>",                          "+p;++p;+++a;"},
 			{"<div><a href=\"http://example.com\"></div></a>", "+div;++a;"},
 			{"<html><!DOCTYPE html><body><head><body></body></html></body></html>",
-															   "+html;++xml;++body;+++head;++++body;"}
+															   "+html;++xml;++body;+++head;+++body;"}
 	};
 
 	rspamd_url_init(NULL);
