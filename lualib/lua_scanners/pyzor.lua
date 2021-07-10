@@ -41,7 +41,7 @@ local function pyzor_config(opts)
     detection_category = "hash",
     cache_expire = 7200, -- expire redis in one hour
     message = '${SCANNER}: Pyzor bulk message found: "${VIRUS}"',
-    default_score = 1,
+    default_score = 1.5,
     action = false,
   }
 
@@ -139,33 +139,19 @@ local function pyzor_check(task, content, digest, rule)
         --rspamd_logger.infox(task, "%s - count=%s wl=%s", addr:to_string(), reported, whitelisted)
 
         --[[
-        @todo: Implement math function to calc the score dynamically based on return values.
-        Maybe check spamassassin implementation.
-        ]] --
-        local entries = reported - whitelisted
-
-        local weight = 0
-
-        if entries >= 100 then
-          weight = 1.5
-        elseif entries >= 25 then
-          weight = 1.25
-        elseif entries >= 5 then
-          weight = 1.0
-        elseif entries >= 1 and whitelisted == 0 then
-          weight = 0.2
-        end
-
-        if whitelisted >= 100 then
-          weight = weight - 1.5
-        elseif whitelisted >= 25 then
-          weight = weight - 1.25
-        elseif whitelisted >= 5 then
-          weight = weight - 1.0
-        elseif whitelisted >= 1 then
-          weight = weight - 0.2
-        end
-
+        Weight is Count - WL-Count of rule.default_score in percent, e.g.
+        SPAM:
+          Count: 100 (100%)
+          WL-Count: 1 (1%)
+          rule.default_score: 1
+          Weight: 0.99
+        HAM:
+          Count: 10 (100%)
+          WL-Count: 10 (100%)
+          rule.default_score: 1
+          Weight: 0
+        ]]
+        local weight = tonumber(string.format("%.2f", rule.default_score * (reported - whitelisted) / (reported + whitelisted)))
         local info = string.format("count=%d wl=%d", reported, whitelisted)
         local threat_string = string.format("bl_%d_wl_%d", reported, whitelisted)
 
