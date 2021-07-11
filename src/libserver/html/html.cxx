@@ -2095,7 +2095,7 @@ TEST_CASE("html text extraction")
 			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
 			 "&nbsp;</p>",
 					" Sincerely,\n Skype Web\n"},
-			{"lala<p hidden>fafa</p>", "lala\n"},
+			{"lala<p hidden>fafa</p>", "lala"},
 			/* bgcolor propagation */
 			{"<a style=\"display: inline-block; color: #ffffff; background-color: #00aff0;\">\n"
 			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>"
