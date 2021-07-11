@@ -41,6 +41,7 @@ enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_REL,
 	RSPAMD_HTML_COMPONENT_ALT,
 	RSPAMD_HTML_COMPONENT_ID,
+	RSPAMD_HTML_COMPONENT_HIDDEN,
 };
 
 /* Public tags flags */

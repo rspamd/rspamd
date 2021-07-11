@@ -66,6 +66,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 				{"rel", html_component_type::RSPAMD_HTML_COMPONENT_REL},
 				{"alt", html_component_type::RSPAMD_HTML_COMPONENT_ALT},
 				{"id", html_component_type::RSPAMD_HTML_COMPONENT_ID},
+				{"hidden", html_component_type::RSPAMD_HTML_COMPONENT_HIDDEN},
 		});
 
 #define msg_debug_html(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -908,6 +909,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 					   struct html_content *hc) -> void
 {
 	std::optional<css::css_value> maybe_fgcolor, maybe_bgcolor;
+	bool hidden = false;
 
 	for (const auto &param : tag->components) {
 		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_COLOR) {
@@ -921,10 +923,18 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_STYLE) {
 			tag->block = rspamd::css::parse_css_declaration(pool, param.value);
 		}
+
+		if (param.type == html_component_type::RSPAMD_HTML_COMPONENT_HIDDEN) {
+			hidden = true;
+		}
 	}
 
 	if (!tag->block) {
 		tag->block = html_block::undefined_html_block_pool(pool);
+	}
+
+	if (hidden) {
+		tag->block->set_display(false);
 	}
 
 	if (maybe_fgcolor) {
@@ -2080,6 +2090,7 @@ TEST_CASE("html text extraction")
 			 "<p style=\"font-size: 11px; line-height: 1.2; color: #555555; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; mso-line-height-alt: 14px; margin: 0;\">\n"
 			 "&nbsp;</p>",
 					" Sincerely,\n Skype Web\n"},
+			{"lala<p hidden>fafa</p>", "lala\n"},
 			/* bgcolor propagation */
 			{"<a style=\"display: inline-block; color: #ffffff; background-color: #00aff0;\">\n"
 			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>"
