@@ -1696,12 +1696,8 @@ html_process_input(rspamd_mempool_t *pool,
 
 		case tag_end_opening:
 			content_parser_env.reset();
-
-			if (cur_tag != nullptr) {
-
-			}
-
 			state = html_text_content;
+
 			if (cur_tag) {
 				if (cur_tag->id == Tag_STYLE) {
 					state = content_style;
@@ -1709,6 +1705,9 @@ html_process_input(rspamd_mempool_t *pool,
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD) {
 						html_document_state = html_document_state::head;
+					}
+					else {
+						html_document_state = html_document_state::body;
 					}
 				}
 				else if (html_document_state == html_document_state::head) {
