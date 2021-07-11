@@ -368,7 +368,9 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_attr_name:
 		if (*in == '=') {
-			store_component_name();
+			if (!parser_env.buf.empty()) {
+				store_component_name();
+			}
 			state = parse_equal;
 		}
 		else if (g_ascii_isspace(*in)) {
@@ -377,11 +379,13 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		}
 		else if (*in == '/') {
 			store_component_name();
+			store_component_value();
 			tag->flags |= FL_CLOSED;
 			state = spaces_before_eq;
 		}
 		else if (*in == '>') {
 			store_component_name();
+			store_component_value();
 			state = tag_end;
 		}
 		else {
@@ -414,6 +418,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				 * Should be okay (empty attribute). The rest is handled outside
 				 * this automata.
 				 */
+				store_component_value();
 				state = tag_end;
 			}
 			else if (*in == '"' || *in == '\'' || *in == '<') {
