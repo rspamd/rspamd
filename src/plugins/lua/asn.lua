@@ -71,8 +71,10 @@ local function asn_check(task)
       if dns_err and (dns_err ~= 'requested record is not found' and dns_err ~= 'no records with this name') then
         rspamd_logger.errx(task, 'error querying dns "%s" on %s: %s',
             req_name, serv, dns_err)
+        task:insert_result(options['symbol'] .. '_FAIL', 1, string.format('%s:%s', req_name, dns_err))
+        return
       end
-      if not (results and results[1]) then
+      if not (results or results[1]) then
         rspamd_logger.infox(task, 'cannot query ip %s on %s: no results',
             req_name, serv)
         return
@@ -145,6 +147,13 @@ if configure_asn_module() then
       flags = 'empty',
       score = 0,
     })
+    rspamd_config:register_symbol{
+      name = options['symbol'] .. '_FAIL',
+      parent = id,
+      type = 'virtual',
+      flags = 'nostat',
+      score = 0,
+    }
   end
 else
   lua_util.disable_module(N, 'config')
