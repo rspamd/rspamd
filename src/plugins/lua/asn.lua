@@ -74,7 +74,7 @@ local function asn_check(task)
         task:insert_result(options['symbol'] .. '_FAIL', 1, string.format('%s:%s', req_name, dns_err))
         return
       end
-      if not (results or results[1]) then
+      if not results or not results[1] then
         rspamd_logger.infox(task, 'cannot query ip %s on %s: no results',
             req_name, serv)
         return
