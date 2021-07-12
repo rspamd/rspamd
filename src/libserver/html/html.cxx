@@ -968,7 +968,26 @@ html_append_content(struct html_content *hc, std::string_view data, bool transpa
 			}
 		}
 
-		hc->parsed.append(data);
+		if (data.find('\0') != data.npos) {
+			auto replace_zero_func = [](auto input, auto output) {
+				const auto last = input.cend();
+				for (auto it = input.cbegin(); it != last; ++it) {
+					if (*it == '\0') {
+						output.append(u8"\uFFFD");
+					}
+					else {
+						output.push_back(*it);
+					}
+				}
+			};
+
+			hc->parsed.reserve(hc->parsed.size() + data.size() + sizeof(u8"\uFFFD"));
+			replace_zero_func(data, hc->parsed);
+			hc->flags |= RSPAMD_HTML_FLAG_HAS_ZEROS;
+		}
+		else {
+			hc->parsed.append(data);
+		}
 	}
 
 	auto nlen = decode_html_entitles_inplace(hc->parsed.data() + cur_offset,
@@ -2002,19 +2021,12 @@ TEST_CASE("html parsing")
 
 TEST_CASE("html text extraction")
 {
-
+	using namespace std::string_literals;
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"  <body>\n"
-			 "    <!-- escape content -->\n"
-			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
-			 "  </body>", R"|(a b a > b a < b a & b 'a "a")|"},
-			/* XML tags */
-			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-			 " <!DOCTYPE html\n"
-			 "   PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
-			 "   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
-			 "<body>test</body>", "test"},
 			{"test", "test"},
+			{"test\0"s, "test\uFFFD"},
+			{"test\0test"s, "test\uFFFDtest"},
+			{"test\0\0test"s, "test\uFFFD\uFFFDtest"},
 			{"test   ", "test"},
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text\n"},
@@ -2025,6 +2037,16 @@ TEST_CASE("html text extraction")
 			{"foo<br>baz", "foo\nbaz"},
 			{"<a href=https://example.com>test</a>", "test"},
 			{"<img alt=test>", "test"},
+			{"  <body>\n"
+			 "    <!-- escape content -->\n"
+			 "    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;\n"
+			 "  </body>", R"|(a b a > b a < b a & b 'a "a")|"},
+			/* XML tags */
+			{"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+			 " <!DOCTYPE html\n"
+			 "   PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
+			 "   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n"
+			 "<body>test</body>", "test"},
 			{"<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\"></head>"
 			 "  <body>\n"
 			 "    <p><br>\n"

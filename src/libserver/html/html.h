@@ -36,6 +36,7 @@ extern "C" {
 #define RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS (1 << 5)
 #define RSPAMD_HTML_FLAG_TOO_MANY_TAGS (1 << 6)
 #define RSPAMD_HTML_FLAG_HAS_DATA_URLS (1 << 7)
+#define RSPAMD_HTML_FLAG_HAS_ZEROS (1 << 8)
 
 /*
  * Image flags
