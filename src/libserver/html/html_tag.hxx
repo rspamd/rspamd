@@ -46,15 +46,15 @@ enum class html_component_type : std::uint8_t {
 
 /* Public tags flags */
 /* XML tag */
-#define FL_XML          (1 << 22)
+#define FL_XML          (1u << CM_USER_SHIFT)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 23)
-#define FL_BROKEN       (1 << 24)
-#define FL_IGNORE       (1 << 25)
-#define FL_BLOCK        (1 << 26)
-#define FL_HREF         (1 << 27)
-#define FL_COMMENT      (1 << 28)
-#define FL_VIRTUAL      (1 << 29)
+#define FL_CLOSED       (1 << (CM_USER_SHIFT + 1))
+#define FL_BROKEN       (1 << (CM_USER_SHIFT + 2))
+#define FL_IGNORE       (1 << (CM_USER_SHIFT + 3))
+#define FL_BLOCK        (1 << (CM_USER_SHIFT + 4))
+#define FL_HREF         (1 << (CM_USER_SHIFT + 5))
+#define FL_COMMENT      (1 << (CM_USER_SHIFT + 6))
+#define FL_VIRTUAL      (1 << (CM_USER_SHIFT + 7))
 
 /**
  * Returns component type from a string
@@ -127,6 +127,8 @@ struct html_tag {
 		closing.clear();
 	}
 };
+
+static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);
 
 }
 

@@ -27,16 +27,13 @@ typedef enum {
 	Tag_ABBR,   /**< ABBR */
 	Tag_ACRONYM, /**< ACRONYM */
 	Tag_ADDRESS, /**< ADDRESS */
-	Tag_ALIGN,  /**< ALIGN */
 	Tag_APPLET, /**< APPLET */
 	Tag_AREA,   /**< AREA */
 	Tag_B,      /**< B */
 	Tag_BASE,   /**< BASE */
 	Tag_BASEFONT, /**< BASEFONT */
 	Tag_BDO,    /**< BDO */
-	Tag_BGSOUND, /**< BGSOUND */
 	Tag_BIG,    /**< BIG */
-	Tag_BLINK,  /**< BLINK */
 	Tag_BLOCKQUOTE, /**< BLOCKQUOTE */
 	Tag_BODY,   /**< BODY */
 	Tag_BR,     /**< BR */
@@ -47,7 +44,6 @@ typedef enum {
 	Tag_CODE,   /**< CODE */
 	Tag_COL,    /**< COL */
 	Tag_COLGROUP, /**< COLGROUP */
-	Tag_COMMENT, /**< COMMENT */
 	Tag_DD,     /**< DD */
 	Tag_DEL,    /**< DEL */
 	Tag_DFN,    /**< DFN */
@@ -56,7 +52,6 @@ typedef enum {
 	Tag_DL,     /**< DL */
 	Tag_DT,     /**< DT */
 	Tag_EM,     /**< EM */
-	Tag_EMBED,  /**< EMBED */
 	Tag_FIELDSET, /**< FIELDSET */
 	Tag_FONT,   /**< FONT */
 	Tag_FORM,   /**< FORM */
@@ -73,7 +68,6 @@ typedef enum {
 	Tag_HTML,   /**< HTML */
 	Tag_I,      /**< I */
 	Tag_IFRAME, /**< IFRAME */
-	Tag_ILAYER, /**< ILAYER */
 	Tag_IMG,    /**< IMG */
 	Tag_INPUT,  /**< INPUT */
 	Tag_INS,    /**< INS */
@@ -81,21 +75,14 @@ typedef enum {
 	Tag_KBD,    /**< KBD */
 	Tag_KEYGEN, /**< KEYGEN */
 	Tag_LABEL,  /**< LABEL */
-	Tag_LAYER,  /**< LAYER */
 	Tag_LEGEND, /**< LEGEND */
 	Tag_LI,     /**< LI */
 	Tag_LINK,   /**< LINK */
 	Tag_LISTING, /**< LISTING */
 	Tag_MAP,    /**< MAP */
-	Tag_MARQUEE, /**< MARQUEE */
 	Tag_MENU,   /**< MENU */
 	Tag_META,   /**< META */
-	Tag_MULTICOL, /**< MULTICOL */
-	Tag_NOBR,   /**< NOBR */
-	Tag_NOEMBED, /**< NOEMBED */
 	Tag_NOFRAMES, /**< NOFRAMES */
-	Tag_NOLAYER, /**< NOLAYER */
-	Tag_NOSAVE, /**< NOSAVE */
 	Tag_NOSCRIPT, /**< NOSCRIPT */
 	Tag_OBJECT, /**< OBJECT */
 	Tag_OL,     /**< OL */
@@ -116,10 +103,7 @@ typedef enum {
 	Tag_SAMP,   /**< SAMP */
 	Tag_SCRIPT, /**< SCRIPT */
 	Tag_SELECT, /**< SELECT */
-	Tag_SERVER, /**< SERVER */
-	Tag_SERVLET, /**< SERVLET */
 	Tag_SMALL,  /**< SMALL */
-	Tag_SPACER, /**< SPACER */
 	Tag_SPAN,   /**< SPAN */
 	Tag_STRIKE, /**< STRIKE */
 	Tag_STRONG, /**< STRONG */
@@ -139,9 +123,7 @@ typedef enum {
 	Tag_U,      /**< U */
 	Tag_UL,     /**< UL */
 	Tag_VAR,    /**< VAR */
-	Tag_WBR,    /**< WBR */
 	Tag_XMP,    /**< XMP */
-	Tag_XML,    /**< XML */
 	Tag_NEXTID, /**< NEXTID */
 	Tag_MAX,
 
@@ -172,30 +154,20 @@ typedef enum {
 /* Elements whose content must be protected against white space movement.
    Includes some elements that can found in forms. */
 #define CM_FIELD        (1 << 10)
-/* Used to avoid propagating inline emphasis inside some elements
-   such as OBJECT or APPLET. */
-#define CM_OBJECT       (1 << 11)
+#define CM_RAW          (1 << 11)
 /* Elements that allows "PARAM". */
 #define CM_PARAM        (1 << 12)
-/* "FRAME", "FRAMESET", "NOFRAMES". Used in ParseFrameSet. */
-#define CM_FRAMES       (1 << 13)
-/* Heading elements (h1, h2, ...). */
-#define CM_HEADING      (1 << 14)
 /* Elements with an optional end tag. */
-#define CM_OPT          (1 << 15)
+#define CM_OPT          (1 << 13)
 /* Elements that use "align" attribute for vertical position. */
-#define CM_IMG          (1 << 16)
-/* Elements with inline and block model. Used to avoid calling InlineDup. */
-#define CM_MIXED        (1 << 17)
-/* Elements whose content needs to be indented only if containing one
-   CM_BLOCK element. */
-#define CM_NO_INDENT    (1 << 18)
-/* Elements that are obsolete (such as "dir", "menu"). */
-#define CM_OBSOLETE     (1 << 19)
+#define CM_IMG          (1 << 14)
+#define CM_NO_INDENT    (1 << 15)
 /* Elements that cannot be omitted. */
-#define CM_OMITST       (1 << 20)
+#define CM_OMITST       (1 << 16)
 /* Unique elements */
-#define CM_UNIQUE       (1 << 21)
+#define CM_UNIQUE       (1 << 17)
+
+#define CM_USER_SHIFT   (18)
 
 #ifdef  __cplusplus
 }
