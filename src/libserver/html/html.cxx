@@ -1703,10 +1703,10 @@ html_process_input(rspamd_mempool_t *pool,
 					state = content_style;
 				}
 				if (html_document_state == html_document_state::doctype) {
-					if (cur_tag->id == Tag_HEAD) {
+					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
 						html_document_state = html_document_state::head;
 					}
-					else {
+					else if (cur_tag->id != Tag_HTML) {
 						html_document_state = html_document_state::body;
 					}
 				}
