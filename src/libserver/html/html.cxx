@@ -952,7 +952,7 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 }
 
 static inline auto
-html_append_content(struct html_content *hc, std::string_view data, bool transparent) -> auto
+html_append_parsed(struct html_content *hc, std::string_view data, bool transparent) -> auto
 {
 	auto cur_offset = hc->parsed.size();
 
@@ -968,8 +968,8 @@ html_append_content(struct html_content *hc, std::string_view data, bool transpa
 			}
 		}
 
-		if (data.find('\0') != data.npos) {
-			auto replace_zero_func = [](auto input, auto output) {
+		if (data.find('\0') != std::string_view::npos) {
+			auto replace_zero_func = [](const auto &input, auto &output) {
 				const auto last = input.cend();
 				for (auto it = input.cbegin(); it != last; ++it) {
 					if (*it == '\0') {
@@ -1133,8 +1133,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		goffset initial_part_len = enclosed_start - cur_offset;
 
 		if (is_visible && initial_part_len > 0) {
-			html_append_content(hc, {start + cur_offset,
-									 std::size_t(initial_part_len)}, is_transparent);
+			html_append_parsed(hc, {start + cur_offset,
+									std::size_t(initial_part_len)}, is_transparent);
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
@@ -1150,8 +1150,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		goffset final_part_len = tag->closing.start - cur_offset;
 
 		if (is_visible && final_part_len > 0) {
-			html_append_content(hc, {start + cur_offset,
-									 std::size_t(final_part_len)}, is_transparent);
+			html_append_parsed(hc, {start + cur_offset,
+									std::size_t(final_part_len)}, is_transparent);
 		}
 	}
 	if (is_block) {
@@ -1815,7 +1815,7 @@ html_process_input(rspamd_mempool_t *pool,
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
 				 " ignoring the rest of the HTML content",
 					(int)hc->all_tags.size(), (int)(p - start));
-			html_append_content(hc, {p, (std::size_t)(end - p)}, false);
+			html_append_parsed(hc, {p, (std::size_t) (end - p)}, false);
 			p = end;
 			break;
 		}
@@ -2024,9 +2024,9 @@ TEST_CASE("html text extraction")
 	using namespace std::string_literals;
 	const std::vector<std::pair<std::string, std::string>> cases{
 			{"test", "test"},
-			{"test\0"s, "test\uFFFD"},
-			{"test\0test"s, "test\uFFFDtest"},
-			{"test\0\0test"s, "test\uFFFD\uFFFDtest"},
+			{"test\0"s, "test\uFFFD"s},
+			{"test\0test"s, "test\uFFFDtest"s},
+			{"test\0\0test"s, "test\uFFFD\uFFFDtest"s},
 			{"test   ", "test"},
 			{"test   foo,   bar", "test foo, bar"},
 			{"<p>text</p>", "text\n"},
@@ -2152,8 +2152,9 @@ TEST_CASE("html text extraction")
 		}
 	};
 
+	auto i = 1;
 	for (const auto &c : cases) {
-		SUBCASE((std::string("extract text from: ") + c.first).c_str()) {
+		SUBCASE((fmt::format("html extraction case {}", i)).c_str()) {
 			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
 			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
 			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
@@ -2164,6 +2165,7 @@ TEST_CASE("html text extraction")
 			CHECK(hc->parsed == expected);
 			g_byte_array_free(tmp, TRUE);
 		}
+		i ++;
 	}
 
 	rspamd_mempool_delete(pool);
