@@ -220,9 +220,15 @@ TEST_CASE("html text extraction")
 TEST_CASE("html urls extraction")
 {
 	using namespace std::string_literals;
-	const std::vector<std::pair<std::string, std::vector<std::string>>> cases{
-			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}},
-			{"<a <poo href=\"http://example.com\">hello</a>", {"http://example.com"}},
+	const std::vector<std::tuple<std::string, std::vector<std::string>, std::optional<std::string>>> cases{
+			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}, "test"},
+			{"<a <poo href=\"http://example.com\">hello</a>", {"http://example.com"}, "hello"},
+			{"<html>\n"
+			 "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=utf-8\">\n"
+			 "<body>\n"
+			 "<a href=\"https://www.example.com\">hello</a>\n"
+			 "</body>\n"
+			 "</html>", {"https://www.example.com"}, "hello"}
 	};
 
 	rspamd_url_init(NULL);
@@ -232,15 +238,20 @@ TEST_CASE("html urls extraction")
 	for (const auto &c : cases) {
 		SUBCASE((fmt::format("html url extraction case {}", i)).c_str()) {
 			GPtrArray *purls = g_ptr_array_new();
-			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
-			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+			auto input = std::get<0>(c);
+			GByteArray *tmp = g_byte_array_sized_new(input.size());
+			g_byte_array_append(tmp, (const guint8 *)input.data(), input.size());
 			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, purls, true);
 			CHECK(hc != nullptr);
-			auto expected = c.second;
-			CHECK(expected.size() == purls->len);
-			for (auto j = 0; j < expected.size(); ++j) {
+			auto &expected_text = std::get<2>(c);
+			if (expected_text.has_value()) {
+				CHECK(hc->parsed == expected_text.value());
+			}
+			const auto &expected_urls = std::get<1>(c);
+			CHECK(expected_urls.size() == purls->len);
+			for (auto j = 0; j < expected_urls.size(); ++j) {
 				auto *url = (rspamd_url *)g_ptr_array_index(purls, j);
-				CHECK(expected[j] == std::string{url->string, url->urllen});
+				CHECK(expected_urls[j] == std::string{url->string, url->urllen});
 			}
 			g_byte_array_free(tmp, TRUE);
 			g_ptr_array_free(purls, TRUE);

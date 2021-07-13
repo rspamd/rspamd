@@ -2579,9 +2579,9 @@ decode_html_entitles_inplace(std::string &st) -> void
 	st.resize(nlen);
 }
 
-TEST_SUITE("html") {
+TEST_SUITE("html entities") {
 
-	TEST_CASE("html entities") {
+	TEST_CASE("html entities decode") {
 		std::vector<std::pair<std::string, std::string>> cases{
 				{"", ""},
 				{"abc", "abc"},

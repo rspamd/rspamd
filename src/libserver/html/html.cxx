@@ -1724,6 +1724,9 @@ html_process_input(rspamd_mempool_t *pool,
 
 							html_document_state = html_document_state::body;
 						}
+						else if (cur_tag->id == Tag_BODY) {
+							html_document_state = html_document_state::body;
+						}
 					}
 				}
 
