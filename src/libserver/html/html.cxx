@@ -1223,7 +1223,8 @@ html_process_input(rspamd_mempool_t *pool,
 		tag_end_closing,
 		html_text_content,
 		xml_tag_end,
-		content_style,
+		tag_raw_text,
+		tag_raw_text_less_than,
 		tags_limit_overflow,
 	} state = parse_start;
 
@@ -1643,44 +1644,24 @@ html_process_input(rspamd_mempool_t *pool,
 			}
 			break;
 
-		case content_style: {
-
-			/*
-			 * We just search for the first </style> substring and then pass
-			 * the content to the parser (if needed)
-			 *
-			 * TODO: Handle other stuff, we actually need an FSM here to find
-			 * the ending tag...
-			 */
-			auto end_style = rspamd_substring_search_caseless(p, end - p,
-					"</style>", 8);
-			if (end_style == -1) {
-				/* Invalid style */
-				state = html_text_content;
+		case tag_raw_text:
+			if (t == '<') {
+				c = p;
+				state = tag_raw_text_less_than;
 			}
-			else {
-
-				if (allow_css) {
-					auto ret_maybe = rspamd::css::parse_css(pool, {p, std::size_t(end_style)},
-							std::move(hc->css_style));
-
-					if (!ret_maybe.has_value()) {
-						auto err_str = fmt::format("cannot parse css (error code: {}): {}",
-								static_cast<int>(ret_maybe.error().type),
-								ret_maybe.error().description.value_or("unknown error"));
-						msg_info_pool ("cannot parse css: %*s",
-								(int) err_str.size(), err_str.data());
-					}
-					else {
-						hc->css_style = ret_maybe.value();
-					}
-				}
-
-				p += end_style;
+			p ++;
+			break;
+		case tag_raw_text_less_than:
+			if (t == '/') {
+				/* Shift back */
+				p = c;
 				state = tag_begin;
 			}
+			else {
+				p ++;
+				state = tag_raw_text;
+			}
 			break;
-		}
 		case sgml_content:
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
@@ -1719,8 +1700,8 @@ html_process_input(rspamd_mempool_t *pool,
 			state = html_text_content;
 
 			if (cur_tag) {
-				if (cur_tag->id == Tag_STYLE) {
-					state = content_style;
+				if (cur_tag->id == Tag_STYLE || cur_tag->id == Tag_NOSCRIPT || cur_tag->id == Tag_SCRIPT) {
+					state = tag_raw_text;
 				}
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
@@ -1805,6 +1786,25 @@ html_process_input(rspamd_mempool_t *pool,
 					cur_tag = cur_opening_tag;
 					parent_tag = cur_tag->parent;
 					g_assert(cur_tag->parent != &cur_closing_tag);
+				}
+
+				if (cur_tag->id == Tag_STYLE && cur_tag->closing.start >  cur_tag->content_offset) {
+					if (allow_css) {
+						auto ret_maybe = rspamd::css::parse_css(pool,
+								{start + cur_tag->content_offset, cur_tag->closing.start - cur_tag->content_offset},
+								std::move(hc->css_style));
+
+						if (!ret_maybe.has_value()) {
+							auto err_str = fmt::format("cannot parse css (error code: {}): {}",
+									static_cast<int>(ret_maybe.error().type),
+									ret_maybe.error().description.value_or("unknown error"));
+							msg_info_pool ("cannot parse css: %*s",
+									(int) err_str.size(), err_str.data());
+						}
+						else {
+							hc->css_style = ret_maybe.value();
+						}
+					}
 				}
 			} /* if cur_tag != nullptr */
 			state = html_text_content;
