@@ -1331,6 +1331,9 @@ html_process_input(rspamd_mempool_t *pool,
 						url->count++;
 					}
 				}
+				if (part_urls) {
+					g_ptr_array_add(part_urls, url);
+				}
 
 				href_offset = hc->parsed.size();
 			}

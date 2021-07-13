@@ -217,6 +217,38 @@ TEST_CASE("html text extraction")
 	rspamd_mempool_delete(pool);
 }
 
+TEST_CASE("html urls extraction")
+{
+	using namespace std::string_literals;
+	const std::vector<std::pair<std::string, std::vector<std::string>>> cases{
+			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}}
+	};
+
+	rspamd_url_init(NULL);
+	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+			"html", 0);
+	auto i = 1;
+	for (const auto &c : cases) {
+		SUBCASE((fmt::format("html url extraction case {}", i)).c_str()) {
+			GPtrArray *purls = g_ptr_array_new();
+			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
+			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
+			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, purls, true);
+			CHECK(hc != nullptr);
+			auto expected = c.second;
+			CHECK(expected.size() == purls->len);
+			for (auto j = 0; j < expected.size(); ++j) {
+				auto *url = (rspamd_url *)g_ptr_array_index(purls, j);
+				CHECK(expected[j] == std::string{url->string, url->urllen});
+			}
+			g_byte_array_free(tmp, TRUE);
+			g_ptr_array_free(purls, TRUE);
+		}
+	}
+
+	rspamd_mempool_delete(pool);
+}
+
 }
 
 } /* namespace rspamd::html */
