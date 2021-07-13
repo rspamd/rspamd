@@ -221,7 +221,8 @@ TEST_CASE("html urls extraction")
 {
 	using namespace std::string_literals;
 	const std::vector<std::pair<std::string, std::vector<std::string>>> cases{
-			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}}
+			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}},
+			{"<a <poo href=\"http://example.com\">hello</a>", {"http://example.com"}},
 	};
 
 	rspamd_url_init(NULL);
@@ -244,6 +245,7 @@ TEST_CASE("html urls extraction")
 			g_byte_array_free(tmp, TRUE);
 			g_ptr_array_free(purls, TRUE);
 		}
+		++i;
 	}
 
 	rspamd_mempool_delete(pool);

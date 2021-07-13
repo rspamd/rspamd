@@ -388,9 +388,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				/* Should never be in attribute names but ignored */
 				tag->flags |= FL_BROKEN;
 			}
-			else {
-				store_value_character(true);
-			}
+
+			store_value_character(true);
 		}
 
 		break;
@@ -421,11 +420,13 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				tag->flags |= FL_BROKEN;
 				store_component_value();
+				store_value_character(true);
 				state = spaces_after_param;
 			}
 			else {
 				/* Empty attribute */
 				store_component_value();
+				store_value_character(true);
 				state = spaces_after_param;
 			}
 		}
@@ -539,6 +540,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			else if (*in == '=') {
 				/* Attributes cannot start with '=' */
 				tag->flags |= FL_BROKEN;
+				store_value_character(true);
+				state = parse_attr_name;
 			}
 			else {
 				store_value_character(true);
