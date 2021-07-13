@@ -1085,7 +1085,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		return ret;
 	}
-	else if (tag->id == Tag_HEAD) {
+	else if (tag->id == Tag_HEAD && (tag->flags & FL_IGNORE)) {
 		auto ret = tag->closing.end;
 		calculate_final_tag_offsets();
 
@@ -1706,6 +1706,7 @@ html_process_input(rspamd_mempool_t *pool,
 				if (html_document_state == html_document_state::doctype) {
 					if (cur_tag->id == Tag_HEAD || (cur_tag->flags & CM_HEAD)) {
 						html_document_state = html_document_state::head;
+						cur_tag->flags |= FL_IGNORE;
 					}
 					else if (cur_tag->id != Tag_HTML) {
 						html_document_state = html_document_state::body;
