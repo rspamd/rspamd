@@ -27,6 +27,7 @@
 
 #include <vector>
 #include <memory>
+#include <string>
 #include "function2/function2.hpp"
 
 namespace rspamd::css {
@@ -126,6 +127,13 @@ private:
 
 
 auto html_tag_by_name(const std::string_view &name) -> std::optional<tag_id_t>;
+auto html_process_input(rspamd_mempool_t *pool,
+				   GByteArray *in,
+				   GList **exceptions,
+				   khash_t (rspamd_url_hash) *url_set,
+				   GPtrArray *part_urls,
+				   bool allow_css) -> html_content *;
+auto html_debug_structure(const html_content &hc) -> std::string;
 
 }
 
