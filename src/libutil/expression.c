@@ -88,6 +88,15 @@ struct rspamd_expr_process_data {
         G_STRFUNC, \
         __VA_ARGS__)
 
+#ifdef DEBUG_EXPRESSIONS
+#define msg_debug_expression_verbose(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_expression_log_id, "expression", e->log_id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#else
+#define msg_debug_expression_verbose(...) do {} while(0)
+#endif
+
 INIT_LOG_MODULE(expression)
 
 static GQuark
@@ -364,11 +373,11 @@ rspamd_expr_is_operation (struct rspamd_expression *e,
 						NULL,
 						FALSE,
 						NULL)) {
-					msg_debug_expression ("found divide operation");
+					msg_debug_expression_verbose("found divide operation");
 					return TRUE;
 				}
 
-				msg_debug_expression ("false divide operation");
+				msg_debug_expression_verbose("false divide operation");
 				/* Fallback to PARSE_ATOM state */
 			}
 			else if (*p == '-') {
@@ -381,7 +390,7 @@ rspamd_expr_is_operation (struct rspamd_expression *e,
 					return TRUE;
 				}
 				/* Fallback to PARSE_ATOM state */
-				msg_debug_expression ("false minus operation");
+				msg_debug_expression_verbose("false minus operation");
 			}
 			else {
 				/* Generic operation */
@@ -1369,32 +1378,32 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 		}
 
 		acc = elt->value;
-		msg_debug_expression ("atom: elt=%s; acc=%.1f", elt->p.atom->str, acc);
+		msg_debug_expression_verbose ("atom: elt=%s; acc=%.1f", elt->p.atom->str, acc);
 		break;
 	case ELT_LIMIT:
 
 		acc = elt->p.lim;
-		msg_debug_expression ("limit: lim=%.1f; acc=%.1f;", elt->p.lim, acc);
+		msg_debug_expression_verbose ("limit: lim=%.1f; acc=%.1f;", elt->p.lim, acc);
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
 		op_name = rspamd_expr_op_to_str (elt->p.op.op);
 
 		if (elt->p.op.op_flags & RSPAMD_EXPRESSION_NARY) {
-			msg_debug_expression ("proceed nary operation %s", op_name);
+			msg_debug_expression_verbose ("proceed nary operation %s", op_name);
 			/* Proceed all ops in chain */
 			DL_FOREACH (node->children, cld) {
 				val = rspamd_ast_process_node (e, cld, process_data);
-				msg_debug_expression ("before op: op=%s; acc=%.1f; val = %.2f", op_name,
+				msg_debug_expression_verbose ("before op: op=%s; acc=%.1f; val = %.2f", op_name,
 						acc, val);
 				acc = rspamd_ast_do_nary_op (elt, val, acc);
-				msg_debug_expression ("after op: op=%s; acc=%.1f; val = %.2f", op_name,
+				msg_debug_expression_verbose ("after op: op=%s; acc=%.1f; val = %.2f", op_name,
 						acc, val);
 
 				/* Check if we need to process further */
 				if (!(process_data->flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
 					if (rspamd_ast_node_done (elt, acc)) {
-						msg_debug_expression ("optimizer: done");
+						msg_debug_expression_verbose ("optimizer: done");
 						return acc;
 					}
 				}
@@ -1407,15 +1416,15 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 			g_assert (c2->next == NULL);
 			gdouble val1, val2;
 
-			msg_debug_expression ("proceed binary operation %s",
+			msg_debug_expression_verbose ("proceed binary operation %s",
 					op_name);
 			val1 = rspamd_ast_process_node (e, c1, process_data);
 			val2 = rspamd_ast_process_node (e, c2, process_data);
 
-			msg_debug_expression ("before op: op=%s; op1 = %.1f, op2 = %.1f",
+			msg_debug_expression_verbose ("before op: op=%s; op1 = %.1f, op2 = %.1f",
 					op_name, val1, val2);
 			acc = rspamd_ast_do_binary_op (elt, val1, val2);
-			msg_debug_expression ("after op: op=%s; res=%.1f",
+			msg_debug_expression_verbose ("after op: op=%s; res=%.1f",
 					op_name, acc);
 		}
 		else if (elt->p.op.op_flags & RSPAMD_EXPRESSION_UNARY) {
@@ -1423,14 +1432,14 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 
 			g_assert (c1->next == NULL);
 
-			msg_debug_expression ("proceed unary operation %s",
+			msg_debug_expression_verbose ("proceed unary operation %s",
 					op_name);
 			val = rspamd_ast_process_node (e, c1, process_data);
 
-			msg_debug_expression ("before op: op=%s; op1 = %.1f",
+			msg_debug_expression_verbose ("before op: op=%s; op1 = %.1f",
 					op_name, val);
 			acc = rspamd_ast_do_unary_op (elt, val);
-			msg_debug_expression ("after op: op=%s; res=%.1f",
+			msg_debug_expression_verbose ("after op: op=%s; res=%.1f",
 					op_name, acc);
 		}
 		break;
