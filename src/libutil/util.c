@@ -2422,12 +2422,12 @@ rspamd_set_counter (struct rspamd_counter_data *cd, gdouble value)
 	return cd->mean;
 }
 
-double
+float
 rspamd_set_counter_ema (struct rspamd_counter_data *cd,
-		gdouble value,
-		gdouble alpha)
+		float value,
+		float alpha)
 {
-	gdouble diff, incr;
+	float diff, incr;
 
 	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
@@ -2438,7 +2438,7 @@ rspamd_set_counter_ema (struct rspamd_counter_data *cd,
 	diff = value - cd->mean;
 	incr = diff * alpha;
 	cd->mean += incr;
-	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
+	cd->stddev = (1.0f - alpha) * (cd->stddev + diff * incr);
 	cd->number ++;
 
 	return cd->mean;

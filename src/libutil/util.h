@@ -468,8 +468,8 @@ GPtrArray *rspamd_glob_path (const gchar *dir,
 							 GError **err);
 
 struct rspamd_counter_data {
-	gdouble mean;
-	gdouble stddev;
+	float mean;
+	float stddev;
 	guint64 number;
 };
 
@@ -480,9 +480,9 @@ struct rspamd_counter_data {
  * @param alpha decay coefficient (0..1)
  * @return new counter value
  */
-double rspamd_set_counter_ema (struct rspamd_counter_data *cd,
-							   gdouble value,
-							   gdouble alpha);
+float rspamd_set_counter_ema (struct rspamd_counter_data *cd,
+							   float value,
+							   float alpha);
 
 /**
  * Sets counter's data using flat moving average
