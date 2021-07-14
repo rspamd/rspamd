@@ -69,7 +69,6 @@ TEST_CASE("html text extraction")
 {
 	using namespace std::string_literals;
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<html><body><html><head>displayed</body></html></body></html>", "displayed"},
 			{"test", "test"},
 			{"test\0"s, "test\uFFFD"s},
 			{"test\0test"s, "test\uFFFDtest"s},
@@ -185,6 +184,7 @@ TEST_CASE("html text extraction")
 			/* Head tag with some stuff */
 			{"<html><head><p>oh my god</head><body></body></html>", "oh my god\n"},
 			{"<html><head><title>oh my god</head><body></body></html>", ""},
+			{"<html><body><html><head>displayed</body></html></body></html>", "displayed"},
 
 	};
 
