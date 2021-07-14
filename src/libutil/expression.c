@@ -739,15 +739,14 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 						expr->subr->priority (elt->p.atom);
 			}
 			elt->p.atom->hits = 0;
-			elt->p.atom->avg_ticks = 0.0;
 		}
 	}
 
 	return FALSE;
 }
 
-#define ATOM_PRIORITY(a) ((a)->p.atom->hits / ((a)->p.atom->avg_ticks > 0 ?	\
-				(a)->p.atom->avg_ticks * 10000000 : 1.0))
+#define ATOM_PRIORITY(a) ((a)->p.atom->hits / ((a)->p.atom->exec_time.mean > 0 ?	\
+				(a)->p.atom->exec_time.mean * 10000000 : 1.0))
 
 static gint
 rspamd_ast_priority_cmp (GNode *a, GNode *b)
@@ -769,7 +768,6 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 		w2 = ATOM_PRIORITY (eb);
 
 		ea->p.atom->hits = 0;
-		ea->p.atom->avg_ticks = 0.0;
 
 		return w1 - w2;
 	}
@@ -1337,7 +1335,8 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 	struct rspamd_expression_elt *elt;
 	GNode *cld;
 	gdouble acc = NAN;
-	gdouble t1, t2, val;
+	float t1, t2;
+	gdouble val;
 	gboolean calc_ticks = FALSE;
 	const gchar *op_name = NULL;
 
@@ -1346,15 +1345,11 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 	switch (elt->type) {
 	case ELT_ATOM:
 		if (!(elt->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {
-
 			/*
-			 * Sometimes get ticks for this expression. 'Sometimes' here means
-			 * that we get lowest 5 bits of the counter `evals` and 5 bits
-			 * of some shifted address to provide some sort of jittering for
-			 * ticks evaluation
+			 * Check once per 256 evaluations approx
 			 */
-			if ((e->evals & 0x1F) == (GPOINTER_TO_UINT (node) >> 4 & 0x1F)) {
-				calc_ticks = TRUE;
+			calc_ticks = (rspamd_random_uint64_fast() & 0xff) == 0xff;
+			if (calc_ticks) {
 				t1 = rspamd_get_ticks (TRUE);
 			}
 
@@ -1370,8 +1365,7 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 
 			if (calc_ticks) {
 				t2 = rspamd_get_ticks (TRUE);
-				elt->p.atom->avg_ticks += ((t2 - t1) - elt->p.atom->avg_ticks) /
-						(e->evals);
+				rspamd_set_counter_ema(&elt->p.atom->exec_time, (t2 - t1), 0.5f);
 			}
 
 			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;

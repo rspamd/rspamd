@@ -19,6 +19,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "fstring.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -55,13 +56,11 @@ typedef struct rspamd_expression_atom_s {
 	/* String representation of atom */
 	const gchar *str;
 	/* Length of the string representation of atom */
-	gsize len;
-	/* Average execution time (in ticks) */
-	gdouble avg_ticks;
-	/* Amount of positive triggers */
-	guint hits;
+	guint len;
 	/* Relative priority */
 	gint priority;
+	guint hits;
+	struct rspamd_counter_data exec_time;
 } rspamd_expression_atom_t;
 
 typedef gdouble (*rspamd_expression_process_cb) (gpointer runtime_data,
