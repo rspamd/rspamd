@@ -1714,7 +1714,7 @@ html_process_input(rspamd_mempool_t *pool,
 				}
 				else if (html_document_state == html_document_state::head) {
 					if (!(cur_tag->flags & (CM_EMPTY | CM_HEAD))) {
-						if (parent_tag && parent_tag->id == Tag_HEAD) {
+						if (parent_tag && (parent_tag->id == Tag_HEAD || !(parent_tag->flags & CM_HEAD))) {
 							/*
 							 * As by standard, we have to close the HEAD tag
 							 * and switch to the body state
@@ -1727,6 +1727,13 @@ html_process_input(rspamd_mempool_t *pool,
 						}
 						else if (cur_tag->id == Tag_BODY) {
 							html_document_state = html_document_state::body;
+						}
+						else {
+							/*
+							 * For propagation in something like
+							 * <title><p><a>ololo</a></p></title> - should be unprocessed
+							 */
+							cur_tag->flags |= CM_HEAD;
 						}
 					}
 				}

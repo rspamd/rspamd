@@ -223,6 +223,8 @@ TEST_CASE("html urls extraction")
 {
 	using namespace std::string_literals;
 	const std::vector<std::tuple<std::string, std::vector<std::string>, std::optional<std::string>>> cases{
+			{"<style></style><a href=\"https://www.example.com\">yolo</a>",
+					{"https://www.example.com"}, "yolo"},
 			{"<a href=\"https://example.com\">test</a>", {"https://example.com"}, "test"},
 			{"<a <poo href=\"http://example.com\">hello</a>", {"http://example.com"}, "hello"},
 			{"<html>\n"
@@ -230,7 +232,7 @@ TEST_CASE("html urls extraction")
 			 "<body>\n"
 			 "<a href=\"https://www.example.com\">hello</a>\n"
 			 "</body>\n"
-			 "</html>", {"https://www.example.com"}, "hello"}
+			 "</html>", {"https://www.example.com"}, "hello"},
 	};
 
 	rspamd_url_init(NULL);
