@@ -309,7 +309,7 @@ rspamd_regexp_t*
 rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		GError **err)
 {
-	const gchar *start = pattern, *end = start + len, *flags_str = NULL;
+	const gchar *start = pattern, *end = start + len, *flags_str = NULL, *flags_end;
 	gchar *err_str;
 	rspamd_regexp_t *res;
 	gboolean explicit_utf = FALSE;
@@ -347,21 +347,23 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 
 			rspamd_flags |= RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
-		if (g_ascii_isalnum (sep)) {
+		if (sep == 0) {
 			/* We have no flags, no separators and just use all line as expr */
 			start = pattern;
 			rspamd_flags &= ~RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		else {
-			end = rspamd_memrchr(pattern, sep, len);
+			gchar *last_sep = rspamd_memrchr(pattern, sep, len);
 
-			if (end == NULL || end <= start) {
+			if (last_sep == NULL || last_sep <= start) {
 				g_set_error (err, rspamd_regexp_quark(), EINVAL,
 						"pattern is not enclosed with %c: %s",
 						sep, pattern);
 				return NULL;
 			}
-			flags_str = end + 1;
+			flags_str = last_sep + 1;
+			flags_end = end;
+			end = last_sep;
 			start ++;
 		}
 	}
@@ -370,6 +372,7 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		strict_flags = TRUE;
 		start = pattern;
 		flags_str = flags;
+		flags_end = flags + strlen(flags);
 	}
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
@@ -382,7 +385,7 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 #endif
 
 	if (flags_str != NULL) {
-		while (flags_str < end) {
+		while (flags_str < flags_end) {
 			switch (*flags_str) {
 			case 'i':
 				regexp_flags |= PCRE_FLAG(CASELESS);
