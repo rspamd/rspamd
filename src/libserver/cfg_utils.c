@@ -57,6 +57,7 @@
 #include <sys/resource.h>
 #endif
 #include <math.h>
+#include "libserver/composites/composites.h"
 
 #include "blas-config.h"
 
@@ -200,8 +201,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 
 
 	rspamd_config_init_metric (cfg);
-	cfg->composite_symbols =
-		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->composites_manager = rspamd_composites_manager_create(cfg);
 	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -323,8 +323,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
 	ucl_object_unref (cfg->neighbours);
-	g_hash_table_remove_all (cfg->composite_symbols);
-	g_hash_table_unref (cfg->composite_symbols);
 	g_hash_table_remove_all (cfg->cfg_params);
 	g_hash_table_unref (cfg->cfg_params);
 	g_hash_table_unref (cfg->classifiers_symbols);

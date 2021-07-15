@@ -1374,128 +1374,20 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	struct rspamd_rcl_section *section,
 	GError **err)
 {
-	const ucl_object_t *val, *elt;
-	struct rspamd_expression *expr;
 	struct rspamd_config *cfg = ud;
-	struct rspamd_composite *composite;
-	const gchar *composite_name, *composite_expression, *group,
-		*description;
-	gdouble score;
-	gboolean new = TRUE;
+	void *composite;
+	const gchar *composite_name;
 
 	g_assert (key != NULL);
 
 	composite_name = key;
 
-	val = ucl_object_lookup (obj, "enabled");
-	if (val != NULL && !ucl_object_toboolean (val)) {
-		msg_info_config ("composite %s is disabled", composite_name);
-		return TRUE;
-	}
-
-	if (g_hash_table_lookup (cfg->composite_symbols, composite_name) != NULL) {
-		msg_warn_config ("composite %s is redefined", composite_name);
-		new = FALSE;
-	}
-
-	val = ucl_object_lookup (obj, "expression");
-	if (val == NULL || !ucl_object_tostring_safe (val, &composite_expression)) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"composite must have an expression defined");
-		return FALSE;
-	}
-
-	if (!rspamd_parse_expression (composite_expression, 0, &composite_expr_subr,
-				NULL, cfg->cfg_pool, err, &expr)) {
-		if (err && *err) {
-			msg_err_config ("cannot parse composite expression for %s: %e",
-				composite_name, *err);
-		}
-		else {
-			msg_err_config ("cannot parse composite expression for %s: unknown error",
-				composite_name);
-		}
-
-		return FALSE;
-	}
-
-	composite =
-		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_composite));
-	composite->expr = expr;
-	composite->id = g_hash_table_size (cfg->composite_symbols);
-	composite->str_expr = composite_expression;
-	composite->sym = composite_name;
-
-	val = ucl_object_lookup (obj, "score");
-	if (val != NULL && ucl_object_todouble_safe (val, &score)) {
-		/* Also set score in the metric */
-
-		val = ucl_object_lookup (obj, "group");
-		if (val != NULL) {
-			group = ucl_object_tostring (val);
-		}
-		else {
-			group = "composite";
-		}
-
-		val = ucl_object_lookup (obj, "description");
-		if (val != NULL) {
-			description = ucl_object_tostring (val);
-		}
-		else {
-			description = composite_expression;
-		}
-
-		rspamd_config_add_symbol (cfg, composite_name, score,
-				description, group,
-				0,
-				ucl_object_get_priority (obj), /* No +1 as it is default... */
-				1);
-
-		elt = ucl_object_lookup (obj, "groups");
-
-		if (elt) {
-			ucl_object_iter_t gr_it;
-			const ucl_object_t *cur_gr;
-
-			gr_it = ucl_object_iterate_new (elt);
-
-			while ((cur_gr = ucl_object_iterate_safe (gr_it, true)) != NULL) {
-				rspamd_config_add_symbol_group (cfg, key,
-						ucl_object_tostring (cur_gr));
-			}
-
-			ucl_object_iterate_free (gr_it);
-		}
-	}
-
-	val = ucl_object_lookup (obj, "policy");
-
-	if (val) {
-		composite->policy = rspamd_composite_policy_from_str (
-				ucl_object_tostring (val));
-
-		if (composite->policy == RSPAMD_COMPOSITE_POLICY_UNKNOWN) {
-			g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"composite %s has incorrect policy", composite_name);
-			return FALSE;
-		}
-	}
-
-	g_hash_table_insert (cfg->composite_symbols,
-			(gpointer)composite_name,
-			composite);
-
-	if (new) {
+	if ((composite = rspamd_composites_manager_add_from_ucl(cfg->composites_manager, obj)) != NULL) {
 		rspamd_symcache_add_symbol (cfg->cache, composite_name, 0,
 				NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 
-	return TRUE;
+	return composite != NULL;
 }
 
 static gboolean

@@ -419,7 +419,7 @@ struct rspamd_config {
 	ucl_object_t *config_comments;                  /**< comments saved from the config						*/
 	ucl_object_t *doc_strings;                      /**< documentation strings for config options			*/
 	GPtrArray *c_modules;                           /**< list of C modules			*/
-	GHashTable *composite_symbols;                 /**< hash of composite symbols indexed by its name		*/
+	void *composites_manager;                       /**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
 	GList *statfiles;                               /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */

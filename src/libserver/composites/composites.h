@@ -17,25 +17,37 @@
 #define SRC_LIBSERVER_COMPOSITES_H_
 
 #include "config.h"
+#include "contrib/libucl/ucl.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
 struct rspamd_task;
-
-/**
- * Subr for composite expressions
- */
-extern const struct rspamd_atom_subr composite_expr_subr;
+struct rspamd_config;
 
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config
  * @param task worker's task that present message from user
  */
-void rspamd_composites_process_task (struct rspamd_task *task);
+void rspamd_composites_process_task(struct rspamd_task *task);
 
-enum rspamd_composite_policy rspamd_composite_policy_from_str (const gchar *string);
+/**
+ * Creates a composites manager
+ * @param cfg
+ * @return
+ */
+void* rspamd_composites_manager_create(struct rspamd_config *cfg);
+/**
+ * Returns number of elements in a composite manager
+ * @return
+ */
+gsize rspamd_composites_manager_nelts(void *);
+/**
+ * Adds a composite from config
+ * @return
+ */
+void* rspamd_composites_manager_add_from_ucl(void *, const ucl_object_t *);
 
 #ifdef  __cplusplus
 }

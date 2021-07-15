@@ -26,6 +26,8 @@
 #include <variant>
 #include "contrib/robin-hood/robin_hood.h"
 
+#include "composites_internal.hxx"
+
 #define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "composites", task->task_pool->tag.uid, \
         G_STRFUNC, \
@@ -55,7 +57,6 @@ static gdouble rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t 
 static gint rspamd_composite_expr_priority(rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy(rspamd_expression_atom_t *atom);
 static void composites_foreach_callback(gpointer key, gpointer value, void *data);
-}
 
 const struct rspamd_atom_subr composite_expr_subr = {
 		.parse = rspamd::composites::rspamd_composite_expr_parse,
@@ -63,29 +64,11 @@ const struct rspamd_atom_subr composite_expr_subr = {
 		.priority = rspamd::composites::rspamd_composite_expr_priority,
 		.destroy = rspamd::composites::rspamd_composite_expr_destroy
 };
+}
 
 namespace rspamd::composites {
 
 static constexpr const double epsilon = 0.00001;
-
-enum class rspamd_composite_policy {
-	RSPAMD_COMPOSITE_POLICY_REMOVE_ALL = 0,
-	RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL,
-	RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT,
-	RSPAMD_COMPOSITE_POLICY_LEAVE,
-	RSPAMD_COMPOSITE_POLICY_UNKNOWN
-};
-
-/**
- * Static composites structure
- */
-struct rspamd_composite {
-	std::string str_expr;
-	std::string sym;
-	struct rspamd_expression *expr;
-	gint id;
-	rspamd_composite_policy policy;
-};
 
 struct symbol_remove_data {
 	const char *sym;
@@ -104,7 +87,7 @@ struct composites_data {
 
 	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres) :
 			task(task), composite(nullptr), metric_res(mres) {
-		checked.resize(g_hash_table_size(task->cfg->composite_symbols) * 2);
+		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2);
 	}
 };
 
@@ -164,7 +147,7 @@ enum class rspamd_composite_atom_type {
 struct rspamd_composite_atom {
 	std::string symbol;
 	rspamd_composite_atom_type comp_type = rspamd_composite_atom_type::ATOM_UNKNOWN;
-	struct rspamd_composite *ncomp; /* underlying composite */
+	const struct rspamd_composite *ncomp; /* underlying composite */
 	std::vector<rspamd_composite_option_match> opts;
 };
 
@@ -516,7 +499,7 @@ process_symbol_removal(rspamd_expression_atom_t *atom,
 
 static auto
 process_single_symbol(struct composites_data *cd,
-					  const gchar *sym,
+					  std::string_view sym,
 					  struct rspamd_symbol_result **pms,
 					  struct rspamd_composite_atom *atom) -> double
 {
@@ -524,16 +507,14 @@ process_single_symbol(struct composites_data *cd,
 	gdouble rc = 0;
 	struct rspamd_task *task = cd->task;
 
-	if ((ms = rspamd_task_find_symbol_result(cd->task, sym, cd->metric_res)) == nullptr) {
+	if ((ms = rspamd_task_find_symbol_result(cd->task, sym.data(), cd->metric_res)) == nullptr) {
 		msg_debug_composites ("not found symbol %s in composite %s", sym,
 				cd->composite->sym.c_str());
 
 		if (G_UNLIKELY(atom->comp_type == rspamd_composite_atom_type::ATOM_UNKNOWN)) {
-			struct rspamd_composite *ncomp;
+			const struct rspamd_composite *ncomp;
 
-			if ((ncomp =
-						 g_hash_table_lookup(cd->task->cfg->composite_symbols,
-								 sym)) != NULL) {
+			if ((ncomp = COMPOSITE_MANAGER_FROM_PTR(task->cfg->composites_manager)->find(sym)) != NULL) {
 				atom->comp_type = rspamd_composite_atom_type::ATOM_COMPOSITE;
 				atom->ncomp = ncomp;
 			}
@@ -558,7 +539,7 @@ process_single_symbol(struct composites_data *cd,
 				cd->composite = saved;
 				cd->checked[cd->composite->id * 2] = false;
 
-				ms = rspamd_task_find_symbol_result(cd->task, sym,
+				ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 						cd->metric_res);
 			}
 			else {
@@ -566,7 +547,7 @@ process_single_symbol(struct composites_data *cd,
 				 * XXX: in case of cyclic references this would return 0
 				 */
 				if (cd->checked[atom->ncomp->id * 2 + 1]) {
-					ms = rspamd_task_find_symbol_result(cd->task, sym,
+					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
 							cd->metric_res);
 				}
 			}
@@ -667,7 +648,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 
 				if (cond(sdef->score)) {
 					rc = process_single_symbol(cd,
-							sdef->name,
+							std::string_view(sdef->name),
 							&ms,
 							comp_atom);
 
@@ -700,7 +681,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 			rc = group_process_functor([](auto sc) { return sc < 0.; }, 3);
 		}
 		else {
-			rc = process_single_symbol(cd, sym.data(), &ms, comp_atom);
+			rc = process_single_symbol(cd, sym, &ms, comp_atom);
 
 			if (rc) {
 				process_symbol_removal(atom,
@@ -711,7 +692,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		}
 	}
 	else {
-		rc = process_single_symbol(cd, sym.data(), &ms, comp_atom);
+		rc = process_single_symbol(cd, sym, &ms, comp_atom);
 
 		if (fabs(rc) > epsilon) {
 			process_symbol_removal(atom,
@@ -923,25 +904,3 @@ rspamd_composites_process_task (struct rspamd_task *task)
 	}
 }
 
-
-enum rspamd_composite_policy
-rspamd_composite_policy_from_str (const gchar *string)
-{
-	enum rspamd_composite_policy ret = RSPAMD_COMPOSITE_POLICY_UNKNOWN;
-
-	if (strcmp (string, "remove") == 0 || strcmp (string, "remove_all") == 0 ||
-			strcmp (string, "default") == 0) {
-		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_ALL;
-	}
-	else if (strcmp (string, "remove_symbol") == 0) {
-		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL;
-	}
-	else if (strcmp (string, "remove_weight") == 0) {
-		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT;
-	}
-	else if (strcmp (string, "leave") == 0 || strcmp (string, "remove_none") == 0) {
-		ret = RSPAMD_COMPOSITE_POLICY_LEAVE;
-	}
-
-	return ret;
-}

@@ -1178,7 +1178,7 @@ rspamd_regexp_get_id (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
-	return re->id;
+	return (gpointer)re->id;
 }
 
 gpointer
