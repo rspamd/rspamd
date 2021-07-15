@@ -21,7 +21,7 @@
 #include "message.h"
 #include "lua/lua_common.h"
 #include "email_addr.h"
-#include "composites.h"
+#include "src/libserver/composites/composites.h"
 #include "stat_api.h"
 #include "unix-std.h"
 #include "utlist.h"

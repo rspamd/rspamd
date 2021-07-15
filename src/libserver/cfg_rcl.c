@@ -20,7 +20,7 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expression.h"
-#include "composites.h"
+#include "src/libserver/composites/composites.h"
 #include "libserver/worker_util.h"
 #include "unix-std.h"
 #include "cryptobox.h"

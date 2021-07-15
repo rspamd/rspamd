@@ -29,25 +29,6 @@ struct rspamd_task;
  */
 extern const struct rspamd_atom_subr composite_expr_subr;
 
-enum rspamd_composite_policy {
-	RSPAMD_COMPOSITE_POLICY_REMOVE_ALL = 0,
-	RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL,
-	RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT,
-	RSPAMD_COMPOSITE_POLICY_LEAVE,
-	RSPAMD_COMPOSITE_POLICY_UNKNOWN
-};
-
-/**
- * Composite structure
- */
-struct rspamd_composite {
-	const gchar *str_expr;
-	const gchar *sym;
-	struct rspamd_expression *expr;
-	gint id;
-	enum rspamd_composite_policy policy;
-};
-
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config
  * @param task worker's task that present message from user

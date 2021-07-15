@@ -21,7 +21,10 @@
 #include "scan_result.h"
 #include "composites.h"
 
-#include <math.h>
+#include <cmath>
+#include <vector>
+#include <variant>
+#include "contrib/robin-hood/robin_hood.h"
 
 #define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "composites", task->task_pool->tag.uid, \
@@ -43,6 +46,44 @@
 
 INIT_LOG_MODULE(composites)
 
+
+namespace rspamd::composites {
+static rspamd_expression_atom_t *rspamd_composite_expr_parse(const gchar *line, gsize len,
+															 rspamd_mempool_t *pool,
+															 gpointer ud, GError **err);
+static gdouble rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom);
+static gint rspamd_composite_expr_priority(rspamd_expression_atom_t *atom);
+static void rspamd_composite_expr_destroy(rspamd_expression_atom_t *atom);
+}
+
+const struct rspamd_atom_subr composite_expr_subr = {
+		.parse = rspamd::composites::rspamd_composite_expr_parse,
+		.process = rspamd::composites::rspamd_composite_expr_process,
+		.priority = rspamd::composites::rspamd_composite_expr_priority,
+		.destroy = rspamd::composites::rspamd_composite_expr_destroy
+};
+
+namespace rspamd::composites {
+
+enum class rspamd_composite_policy {
+	RSPAMD_COMPOSITE_POLICY_REMOVE_ALL = 0,
+	RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL,
+	RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT,
+	RSPAMD_COMPOSITE_POLICY_LEAVE,
+	RSPAMD_COMPOSITE_POLICY_UNKNOWN
+};
+
+/**
+ * Static composites structure
+ */
+struct rspamd_composite {
+	std::string str_expr;
+	std::string sym;
+	struct rspamd_expression *expr;
+	gint id;
+	rspamd_composite_policy policy;
+};
+
 struct composites_data {
 	struct rspamd_task *task;
 	struct rspamd_composite *composite;
@@ -53,57 +94,40 @@ struct composites_data {
 };
 
 struct rspamd_composite_option_match {
-	enum {
-		RSPAMD_COMPOSITE_OPTION_PLAIN,
-		RSPAMD_COMPOSITE_OPTION_RE
-	} type;
+	std::variant<rspamd_regexp_t *, std::string> match;
 
-	union {
-		rspamd_regexp_t *re;
-		gchar *match;
-	} data;
-	struct rspamd_composite_option_match *prev, *next;
+	~rspamd_composite_option_match() {
+		if (std::holds_alternative<rspamd_regexp_t *>(match)) {
+			rspamd_regexp_unref(std::get<rspamd_regexp_t *>(match));
+		}
+	}
 };
 
+enum class rspamd_composite_atom_type {
+	ATOM_UNKNOWN,
+	ATOM_COMPOSITE,
+	ATOM_PLAIN
+};
 struct rspamd_composite_atom {
-	gchar *symbol;
-	enum {
-		ATOM_UNKNOWN,
-		ATOM_COMPOSITE,
-		ATOM_PLAIN
-	} comp_type;
-
+	std::string symbol;
+	rspamd_composite_atom_type comp_type;
 	struct rspamd_composite *ncomp; /* underlying composite */
-	struct rspamd_composite_option_match *opts;
+	std::vector<rspamd_composite_option_match> opts;
 };
 
-enum rspamd_composite_action {
+enum rspamd_composite_action : std::uint8_t {
 	RSPAMD_COMPOSITE_UNTOUCH = 0,
-	RSPAMD_COMPOSITE_REMOVE_SYMBOL = (1 << 0),
-	RSPAMD_COMPOSITE_REMOVE_WEIGHT = (1 << 1),
-	RSPAMD_COMPOSITE_REMOVE_FORCED = (1 << 2)
+	RSPAMD_COMPOSITE_REMOVE_SYMBOL = (1u << 0),
+	RSPAMD_COMPOSITE_REMOVE_WEIGHT = (1u << 1),
+	RSPAMD_COMPOSITE_REMOVE_FORCED = (1u << 2)
 };
 
 struct symbol_remove_data {
-	const gchar *sym;
+	const char *sym;
 	struct rspamd_composite *comp;
 	GNode *parent;
-	guint action;
+	std::uint8_t action;
 	struct symbol_remove_data *prev, *next;
-};
-
-static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
-		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble rspamd_composite_expr_process (void *ud, rspamd_expression_atom_t *atom);
-static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
-static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
-static void composites_foreach_callback (gpointer key, gpointer value, void *data);
-
-const struct rspamd_atom_subr composite_expr_subr = {
-	.parse = rspamd_composite_expr_parse,
-	.process = rspamd_composite_expr_process,
-	.priority = rspamd_composite_expr_priority,
-	.destroy = rspamd_composite_expr_destroy
 };
 
 static GQuark
@@ -113,8 +137,9 @@ rspamd_composites_quark (void)
 }
 
 static rspamd_expression_atom_t *
-rspamd_composite_expr_parse (const gchar *line, gsize len,
-		rspamd_mempool_t *pool, gpointer ud, GError **err)
+rspamd_composite_expr_parse(const gchar *line, gsize len,
+							rspamd_mempool_t *pool,
+							gpointer ud, GError **err)
 {
 	gsize clen = 0;
 	rspamd_expression_atom_t *res;
@@ -142,7 +167,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 		switch (state) {
 		case comp_state_read_symbol:
-			clen = rspamd_memcspn (p, "[; \t()><!|&\n", len);
+			clen = rspamd_memcspn(p, "[; \t()><!|&\n", len);
 			p += clen;
 
 			if (*p == '[') {
@@ -153,10 +178,10 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 			}
 			break;
 		case comp_state_read_obrace:
-			p ++;
+			p++;
 
 			if (*p == '/') {
-				p ++;
+				p++;
 				state = comp_state_read_regexp;
 			}
 			else {
@@ -166,25 +191,25 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 		case comp_state_read_regexp:
 			if (*p == '\\' && p + 1 < end) {
 				/* Escaping */
-				p ++;
+				p++;
 			}
 			else if (*p == '/') {
 				/* End of regexp, possible flags */
 				state = comp_state_read_regexp_end;
 			}
-			p ++;
+			p++;
 			break;
 		case comp_state_read_option:
 		case comp_state_read_regexp_end:
 			if (*p == ',') {
-				p ++;
+				p++;
 				state = comp_state_read_comma;
 			}
 			else if (*p == ']') {
 				state = comp_state_read_ebrace;
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case comp_state_read_comma:
@@ -201,11 +226,11 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 			}
 			else {
 				/* Skip spaces after comma */
-				p ++;
+				p++;
 			}
 			break;
 		case comp_state_read_ebrace:
-			p ++;
+			p++;
 			state = comp_state_read_end;
 			break;
 		case comp_state_read_end:
@@ -214,8 +239,8 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	}
 
 	if (state != comp_state_read_end) {
-		g_set_error (err, rspamd_composites_quark (), 100, "invalid composite: %s;"
-														   "parser stopped in state %d",
+		g_set_error(err, rspamd_composites_quark(), 100, "invalid composite: %s;"
+														 "parser stopped in state %d",
 				line, state);
 		return NULL;
 	}
@@ -224,9 +249,9 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	p = line;
 	state = comp_state_read_symbol;
 
-	atom = rspamd_mempool_alloc0 (pool, sizeof (*atom));
+	atom = rspamd_mempool_alloc0 (pool, sizeof(*atom));
 	atom->comp_type = ATOM_UNKNOWN;
-	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
+	res = rspamd_mempool_alloc0 (pool, sizeof(*res));
 	res->len = clen;
 	res->str = line;
 
@@ -242,7 +267,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 		switch (state) {
 		case comp_state_read_symbol:
-			clen = rspamd_memcspn (p, "[; \t()><!|&\n", len);
+			clen = rspamd_memcspn(p, "[; \t()><!|&\n", len);
 			p += clen;
 
 			if (*p == '[') {
@@ -253,15 +278,15 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 			}
 
 			atom->symbol = rspamd_mempool_alloc (pool, clen + 1);
-			rspamd_strlcpy (atom->symbol, line, clen + 1);
+			rspamd_strlcpy(atom->symbol, line, clen + 1);
 
 			break;
 		case comp_state_read_obrace:
-			p ++;
+			p++;
 
 			if (*p == '/') {
 				opt_start = p;
-				p ++; /* Starting slash */
+				p++; /* Starting slash */
 				state = comp_state_read_regexp;
 			}
 			else {
@@ -273,23 +298,23 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 		case comp_state_read_regexp:
 			if (*p == '\\' && p + 1 < end) {
 				/* Escaping */
-				p ++;
+				p++;
 			}
 			else if (*p == '/') {
 				/* End of regexp, possible flags */
 				state = comp_state_read_regexp_end;
 			}
-			p ++;
+			p++;
 			break;
 		case comp_state_read_option:
 			if (*p == ',' || *p == ']') {
-				opt_match = rspamd_mempool_alloc (pool, sizeof (*opt_match));
+				opt_match = rspamd_mempool_alloc (pool, sizeof(*opt_match));
 				/* Plain match */
 				gchar *opt_buf;
 				gint opt_len = p - opt_start;
 
 				opt_buf = rspamd_mempool_alloc (pool, opt_len + 1);
-				rspamd_strlcpy (opt_buf, opt_start, opt_len + 1);
+				rspamd_strlcpy(opt_buf, opt_start, opt_len + 1);
 
 				opt_match->data.match = opt_buf;
 				opt_match->type = RSPAMD_COMPOSITE_OPTION_PLAIN;
@@ -305,33 +330,33 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 				}
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case comp_state_read_regexp_end:
 			if (*p == ',' || *p == ']') {
-				opt_match = rspamd_mempool_alloc (pool, sizeof (*opt_match));
+				opt_match = rspamd_mempool_alloc (pool, sizeof(*opt_match));
 				/* Plain match */
 				gchar *opt_buf;
 				gint opt_len = p - opt_start;
 
 				opt_buf = rspamd_mempool_alloc (pool, opt_len + 1);
-				rspamd_strlcpy (opt_buf, opt_start, opt_len + 1);
+				rspamd_strlcpy(opt_buf, opt_start, opt_len + 1);
 
 				rspamd_regexp_t *re;
 				GError *re_err = NULL;
 
-				re = rspamd_regexp_new (opt_buf, NULL, &re_err);
+				re = rspamd_regexp_new(opt_buf, NULL, &re_err);
 
 				if (re == NULL) {
 					msg_err_pool ("cannot create regexp from string %s: %e",
 							opt_buf, re_err);
 
-					g_error_free (re_err);
+					g_error_free(re_err);
 				}
 				else {
 					rspamd_mempool_add_destructor (pool,
-							(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+							(rspamd_mempool_destruct_t) rspamd_regexp_unref,
 							re);
 					opt_match->data.re = re;
 					opt_match->type = RSPAMD_COMPOSITE_OPTION_RE;
@@ -348,7 +373,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 				}
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case comp_state_read_comma:
@@ -367,11 +392,11 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 			}
 			else {
 				/* Skip spaces after comma */
-				p ++;
+				p++;
 			}
 			break;
 		case comp_state_read_ebrace:
-			p ++;
+			p++;
 			state = comp_state_read_end;
 			break;
 		case comp_state_read_end:
@@ -383,6 +408,11 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 	return res;
 }
+
+}
+
+static void composites_foreach_callback (gpointer key, gpointer value, void *data);
+
 
 static gdouble
 rspamd_composite_process_single_symbol (struct composites_data *cd,

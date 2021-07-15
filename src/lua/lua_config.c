@@ -16,7 +16,7 @@
 #include "lua_common.h"
 #include "libmime/message.h"
 #include "libutil/expression.h"
-#include "libserver/composites.h"
+#include "src/libserver/composites/composites.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
