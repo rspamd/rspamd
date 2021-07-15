@@ -30,13 +30,13 @@ composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_
 {
 	const static robin_hood::unordered_flat_map<std::string_view,
 			enum rspamd_composite_policy> names{
-			{"remove", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
-			{"remove_all", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
-			{"default", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+			{"remove",        rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+			{"remove_all",    rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+			{"default",       rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
 			{"remove_symbol", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL},
 			{"remove_weight", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT},
-			{"leave", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
-			{"remove_none", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
+			{"leave",         rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
+			{"remove_none",   rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
 	};
 
 	auto found = names.find(inp);
@@ -51,8 +51,8 @@ auto
 composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj) -> rspamd_composite *
 {
 
-	const auto *val = ucl_object_lookup (obj, "enabled");
-	if (val != nullptr && !ucl_object_toboolean (val)) {
+	const auto *val = ucl_object_lookup(obj, "enabled");
+	if (val != nullptr && !ucl_object_toboolean(val)) {
 		msg_info_config ("composite %s is disabled", composite_name.data());
 		return nullptr;
 	}
@@ -62,9 +62,9 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	}
 
 	const char *composite_expression = nullptr;
-	val = ucl_object_lookup (obj, "expression");
+	val = ucl_object_lookup(obj, "expression");
 
-	if (val == NULL || !ucl_object_tostring_safe (val, &composite_expression)) {
+	if (val == NULL || !ucl_object_tostring_safe(val, &composite_expression)) {
 		msg_err_config ("composite must have an expression defined in %s",
 				composite_name.data());
 		return nullptr;
@@ -92,20 +92,20 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	composite->sym = composite_name;
 
 	double score;
-	val = ucl_object_lookup (obj, "score");
-	if (val != nullptr && ucl_object_todouble_safe (val, &score)) {
+	val = ucl_object_lookup(obj, "score");
+	if (val != nullptr && ucl_object_todouble_safe(val, &score)) {
 		/* Also set score in the metric */
 
 		const auto *group = "composite";
-		val = ucl_object_lookup (obj, "group");
+		val = ucl_object_lookup(obj, "group");
 		if (val != nullptr) {
-			group = ucl_object_tostring (val);
+			group = ucl_object_tostring(val);
 		}
 
 		const auto *description = composite_expression;
-		val = ucl_object_lookup (obj, "description");
+		val = ucl_object_lookup(obj, "description");
 		if (val != nullptr) {
-			description = ucl_object_tostring (val);
+			description = ucl_object_tostring(val);
 		}
 		else {
 			description = composite_expression;
@@ -114,13 +114,13 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 		rspamd_config_add_symbol(cfg, composite_name.data(), score,
 				description, group,
 				0,
-				ucl_object_get_priority (obj), /* No +1 as it is default... */
+				ucl_object_get_priority(obj), /* No +1 as it is default... */
 				1);
 
-		const auto *elt = ucl_object_lookup (obj, "groups");
+		const auto *elt = ucl_object_lookup(obj, "groups");
 		if (elt) {
 			const ucl_object_t *cur_gr;
-			auto *gr_it = ucl_object_iterate_new (elt);
+			auto *gr_it = ucl_object_iterate_new(elt);
 
 			while ((cur_gr = ucl_object_iterate_safe(gr_it, true)) != nullptr) {
 				rspamd_config_add_symbol_group(cfg, composite_name.data(),
@@ -140,6 +140,37 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 			return nullptr;
 		}
 	}
+
+	composites[std::string(composite_name)] = composite;
+
+	return composite.get();
+}
+
+auto
+composites_manager::add_composite(std::string_view composite_name,
+								  std::string_view composite_expression) -> rspamd_composite *
+{
+	GError *err = nullptr;
+	rspamd_expression *expr = nullptr;
+
+	if (!rspamd_parse_expression(composite_expression.data(),
+			composite_expression.size(), &composite_expr_subr,
+			nullptr, cfg->cfg_pool, &err, &expr)) {
+		msg_err_config ("cannot parse composite expression for %s: %e",
+				composite_name.data(), err);
+
+		if (err) {
+			g_error_free(err);
+		}
+
+		return nullptr;
+	}
+
+	auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
+	composite->expr = expr;
+	composite->id = all_composites.size();
+	composite->str_expr = composite_expression;
+	composite->sym = composite_name;
 
 	composites[std::string(composite_name)] = composite;
 
@@ -168,4 +199,10 @@ void*
 rspamd_composites_manager_add_from_ucl(void *cm, const char *sym, const ucl_object_t *obj)
 {
 	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj));
+}
+
+void*
+rspamd_composites_manager_add_from_string(void *cm, const char *sym, const char *expr)
+{
+	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr));
 }

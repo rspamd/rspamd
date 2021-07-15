@@ -47,7 +47,13 @@ gsize rspamd_composites_manager_nelts(void *);
  * Adds a composite from config
  * @return
  */
-void* rspamd_composites_manager_add_from_ucl(void *, const ucl_object_t *);
+void* rspamd_composites_manager_add_from_ucl(void *,  const char *, const ucl_object_t *);
+
+/**
+ * Adds a composite from config
+ * @return
+ */
+void* rspamd_composites_manager_add_from_string(void *, const char *, const char *);
 
 #ifdef  __cplusplus
 }

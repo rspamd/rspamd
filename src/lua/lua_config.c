@@ -2600,47 +2600,22 @@ lua_config_add_composite (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	struct rspamd_expression *expr;
 	gchar *name;
 	const gchar *expr_str;
 	struct rspamd_composite *composite;
-	gboolean ret = FALSE, new = TRUE;
-	GError *err = NULL;
+	gboolean ret = FALSE;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		expr_str = luaL_checkstring (L, 3);
 
 		if (name && expr_str) {
-			if (!rspamd_parse_expression (expr_str, 0, &composite_expr_subr,
-					NULL, cfg->cfg_pool, &err, &expr)) {
-				msg_err_config ("cannot parse composite expression %s: %e",
-						expr_str,
-						err);
-				g_error_free (err);
-			}
-			else {
-				if (g_hash_table_lookup (cfg->composite_symbols, name) != NULL) {
-					msg_warn_config ("composite %s is redefined", name);
-					new = FALSE;
-				}
+			composite = rspamd_composites_manager_add_from_string(cfg->composites_manager,
+					name, expr_str);
 
-				composite = rspamd_mempool_alloc0 (cfg->cfg_pool,
-						sizeof (struct rspamd_composite));
-				composite->expr = expr;
-				composite->id = g_hash_table_size (cfg->composite_symbols);
-				composite->str_expr = rspamd_mempool_strdup (cfg->cfg_pool,
-						expr_str);
-				composite->sym = name;
-				g_hash_table_insert (cfg->composite_symbols,
-						(gpointer)name,
-						composite);
-
-				if (new) {
-					rspamd_symcache_add_symbol (cfg->cache, name,
-							0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
-				}
-
+			if (composite) {
+				rspamd_symcache_add_symbol (cfg->cache, name,
+						0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
 				ret = TRUE;
 			}
 		}
