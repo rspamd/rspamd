@@ -921,7 +921,7 @@ rspamd_task_find_symbol_result (struct rspamd_task *task, const char *sym,
 		result = task->result;
 	}
 
-	k = kh_get (rspamd_symbols_hash, result->symbols, sym);
+	k = kh_get(rspamd_symbols_hash, result->symbols, sym);
 
 	if (k != kh_end (result->symbols)) {
 		res = kh_value (result->symbols, k);
