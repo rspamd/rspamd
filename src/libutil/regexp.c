@@ -306,10 +306,10 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 }
 
 rspamd_regexp_t*
-rspamd_regexp_new (const gchar *pattern, const gchar *flags,
+rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		GError **err)
 {
-	const gchar *start = pattern, *end, *flags_str = NULL;
+	const gchar *start = pattern, *end = start + len, *flags_str = NULL;
 	gchar *err_str;
 	rspamd_regexp_t *res;
 	gboolean explicit_utf = FALSE;
@@ -331,7 +331,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		return NULL;
 	}
 
-	if (flags == NULL) {
+	if (flags == NULL && start < end) {
 		/* We need to parse pattern and detect flags set */
 		if (*start == '/') {
 			sep = '/';
@@ -347,14 +347,13 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 
 			rspamd_flags |= RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
-		if (sep == '\0' || g_ascii_isalnum (sep)) {
+		if (g_ascii_isalnum (sep)) {
 			/* We have no flags, no separators and just use all line as expr */
 			start = pattern;
-			end = start + strlen (pattern);
 			rspamd_flags &= ~RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		else {
-			end = strrchr (pattern, sep);
+			end = rspamd_memrchr(pattern, sep, len);
 
 			if (end == NULL || end <= start) {
 				g_set_error (err, rspamd_regexp_quark(), EINVAL,
@@ -370,7 +369,6 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		/* Strictly check all flags */
 		strict_flags = TRUE;
 		start = pattern;
-		end = pattern + strlen (pattern);
 		flags_str = flags;
 	}
 
@@ -384,7 +382,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 #endif
 
 	if (flags_str != NULL) {
-		while (*flags_str) {
+		while (flags_str < end) {
 			switch (*flags_str) {
 			case 'i':
 				regexp_flags |= PCRE_FLAG(CASELESS);
@@ -535,9 +533,16 @@ fin:
 	return res;
 }
 
+rspamd_regexp_t *
+rspamd_regexp_new (const gchar *pattern, const gchar *flags,
+									GError **err)
+{
+	return rspamd_regexp_new_len(pattern, strlen(pattern), flags, err);
+}
+
 #ifndef WITH_PCRE2
 gboolean
-rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
+rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 		const gchar **start, const gchar **end, gboolean raw,
 		GArray *captures)
 {
@@ -672,7 +677,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 #else
 /* PCRE 2 version */
 gboolean
-rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
+rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 		const gchar **start, const gchar **end, gboolean raw,
 		GArray *captures)
 {
@@ -788,7 +793,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 #endif
 
 const char*
-rspamd_regexp_get_pattern (rspamd_regexp_t *re)
+rspamd_regexp_get_pattern (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -808,7 +813,7 @@ rspamd_regexp_set_flags (rspamd_regexp_t *re, guint new_flags)
 }
 
 guint
-rspamd_regexp_get_flags (rspamd_regexp_t *re)
+rspamd_regexp_get_flags (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -816,7 +821,7 @@ rspamd_regexp_get_flags (rspamd_regexp_t *re)
 }
 
 guint
-rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re)
+rspamd_regexp_get_pcre_flags (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -824,7 +829,7 @@ rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re)
 }
 
 gint
-rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re)
+rspamd_regexp_get_nbackrefs (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -832,7 +837,7 @@ rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re)
 }
 
 gint
-rspamd_regexp_get_ncaptures (rspamd_regexp_t *re)
+rspamd_regexp_get_ncaptures (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -840,7 +845,7 @@ rspamd_regexp_get_ncaptures (rspamd_regexp_t *re)
 }
 
 guint
-rspamd_regexp_get_maxhits (rspamd_regexp_t *re)
+rspamd_regexp_get_maxhits (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -860,7 +865,7 @@ rspamd_regexp_set_maxhits (rspamd_regexp_t *re, guint new_maxhits)
 }
 
 guint64
-rspamd_regexp_get_cache_id (rspamd_regexp_t *re)
+rspamd_regexp_get_cache_id (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -880,7 +885,7 @@ rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id)
 }
 
 gboolean
-rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len,
+rspamd_regexp_match (const rspamd_regexp_t *re, const gchar *text, gsize len,
 		gboolean raw)
 {
 	const gchar *start = NULL, *end = NULL;
@@ -888,7 +893,7 @@ rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len,
 	g_assert (re != NULL);
 	g_assert (text != NULL);
 
-	if (len == 0 && text != NULL) {
+	if (len == 0) {
 		len = strlen (text);
 	}
 
@@ -926,7 +931,7 @@ rspamd_regexp_set_ud (rspamd_regexp_t *re, gpointer ud)
 }
 
 gpointer
-rspamd_regexp_get_ud (rspamd_regexp_t *re)
+rspamd_regexp_get_ud (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -1169,7 +1174,7 @@ rspamd_regexp_library_init (struct rspamd_config *cfg)
 }
 
 gpointer
-rspamd_regexp_get_id (rspamd_regexp_t *re)
+rspamd_regexp_get_id (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 
@@ -1177,7 +1182,7 @@ rspamd_regexp_get_id (rspamd_regexp_t *re)
 }
 
 gpointer
-rspamd_regexp_get_class (rspamd_regexp_t *re)
+rspamd_regexp_get_class (const rspamd_regexp_t *re)
 {
 	g_assert (re != NULL);
 

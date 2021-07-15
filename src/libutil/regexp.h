@@ -61,6 +61,16 @@ rspamd_regexp_t *rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 									GError **err);
 
 /**
+ * Create new rspamd regexp
+ * @param pattern regexp pattern
+ * @param flags flags (may be enclosed inside pattern)
+ * @param err error pointer set if compilation failed
+ * @return new regexp object
+ */
+rspamd_regexp_t *rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
+									GError **err);
+
+/**
  * Search the specified regexp in the text
  * @param re
  * @param text
@@ -71,7 +81,7 @@ rspamd_regexp_t *rspamd_regexp_new (const gchar *pattern, const gchar *flags,
  * @param captures array of captured strings of type rspamd_fstring_capture or NULL
  * @return
  */
-gboolean rspamd_regexp_search (rspamd_regexp_t *re,
+gboolean rspamd_regexp_search (const rspamd_regexp_t *re,
 							   const gchar *text, gsize len,
 							   const gchar **start, const gchar **end, gboolean raw,
 							   GArray *captures);
@@ -84,7 +94,7 @@ gboolean rspamd_regexp_search (rspamd_regexp_t *re,
  * @param len
  * @return
  */
-gboolean rspamd_regexp_match (rspamd_regexp_t *re,
+gboolean rspamd_regexp_match (const rspamd_regexp_t *re,
 							  const gchar *text, gsize len, gboolean raw);
 
 /**
@@ -110,31 +120,31 @@ void rspamd_regexp_set_ud (rspamd_regexp_t *re, gpointer ud);
  * @param re regexp object
  * @return opaque pointer
  */
-gpointer rspamd_regexp_get_ud (rspamd_regexp_t *re);
+gpointer rspamd_regexp_get_ud (const rspamd_regexp_t *re);
 
 /**
  * Get regexp ID suitable for hashing
  * @param re
  * @return
  */
-gpointer rspamd_regexp_get_id (rspamd_regexp_t *re);
+gpointer rspamd_regexp_get_id (const rspamd_regexp_t *re);
 
 /**
  * Get pattern for the specified regexp object
  * @param re
  * @return
  */
-const char *rspamd_regexp_get_pattern (rspamd_regexp_t *re);
+const char *rspamd_regexp_get_pattern (const rspamd_regexp_t *re);
 
 /**
  * Get PCRE flags for the regexp
  */
-guint rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re);
+guint rspamd_regexp_get_pcre_flags (const rspamd_regexp_t *re);
 
 /**
  * Get rspamd flags for the regexp
  */
-guint rspamd_regexp_get_flags (rspamd_regexp_t *re);
+guint rspamd_regexp_get_flags (const rspamd_regexp_t *re);
 
 /**
  * Set rspamd flags for the regexp
@@ -144,7 +154,7 @@ guint rspamd_regexp_set_flags (rspamd_regexp_t *re, guint new_flags);
 /**
  * Set regexp maximum hits
  */
-guint rspamd_regexp_get_maxhits (rspamd_regexp_t *re);
+guint rspamd_regexp_get_maxhits (const rspamd_regexp_t *re);
 
 /**
  * Get regexp maximum hits
@@ -154,17 +164,17 @@ guint rspamd_regexp_set_maxhits (rspamd_regexp_t *re, guint new_maxhits);
 /**
  * Returns number of backreferences in a regexp
  */
-gint rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re);
+gint rspamd_regexp_get_nbackrefs (const rspamd_regexp_t *re);
 
 /**
  * Returns number of capture groups in a regexp
  */
-gint rspamd_regexp_get_ncaptures (rspamd_regexp_t *re);
+gint rspamd_regexp_get_ncaptures (const rspamd_regexp_t *re);
 
 /**
  * Returns cache id for a regexp
  */
-guint64 rspamd_regexp_get_cache_id (rspamd_regexp_t *re);
+guint64 rspamd_regexp_get_cache_id (const rspamd_regexp_t *re);
 
 /**
  * Sets cache id for a regexp
@@ -174,7 +184,7 @@ guint64 rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id);
 /**
  * Get regexp class for the re object
  */
-gpointer rspamd_regexp_get_class (rspamd_regexp_t *re);
+gpointer rspamd_regexp_get_class (const rspamd_regexp_t *re);
 
 /**
  * Set regexp class for the re object
