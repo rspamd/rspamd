@@ -91,6 +91,18 @@ constexpr auto find_map(const C &c, const K &k) -> std::optional<std::reference_
 	return std::nullopt;
 }
 
+
+template <typename _It>
+inline constexpr auto make_string_view_from_it(_It begin, _It end)
+{
+	using result_type = std::string_view;
+
+	return result_type{((begin != end) ? &*begin : nullptr),
+					   (typename result_type::size_type)std::max(std::distance(begin, end),
+							   (typename result_type::difference_type)0)
+	};
+}
+
 }
 
 #endif //RSPAMD_UTIL_HXX
