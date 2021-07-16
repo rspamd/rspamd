@@ -24,6 +24,7 @@
 #include <cmath>
 #include <vector>
 #include <variant>
+#include "libutil/cxx/util.hxx"
 #include "contrib/robin-hood/robin_hood.h"
 
 #include "composites_internal.hxx"
@@ -146,6 +147,7 @@ enum class rspamd_composite_atom_type {
 
 struct rspamd_composite_atom {
 	std::string symbol;
+	std::string_view norm_symbol;
 	rspamd_composite_atom_type comp_type = rspamd_composite_atom_type::ATOM_UNKNOWN;
 	const struct rspamd_composite *ncomp; /* underlying composite */
 	std::vector<rspamd_composite_option_match> opts;
@@ -297,7 +299,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 		}
 
 		switch (state) {
-		case comp_state_read_symbol:
+		case comp_state_read_symbol: {
 			clen = rspamd_memcspn(p, "[; \t()><!|&\n", len);
 			p += clen;
 
@@ -309,7 +311,14 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 			}
 
 			atom->symbol = std::string{line, clen};
+			auto norm_start = std::find_if(atom->symbol.begin(), atom->symbol.end(),
+					[](char c) { return g_ascii_isalnum(c); });
+			if (norm_start == atom->symbol.end()) {
+				msg_err_pool("invalid composite atom: %s", atom->symbol.c_str());
+			}
+			atom->norm_symbol = make_string_view_from_it(norm_start, atom->symbol.end());
 			break;
+		}
 		case comp_state_read_obrace:
 			p++;
 
@@ -584,7 +593,7 @@ process_single_symbol(struct composites_data *cd,
 
 		if (ms) {
 			if (ms->score == 0) {
-				rc = 0.001; /* Distinguish from 0 */
+				rc = epsilon * 16.0; /* Distinguish from 0 */
 			}
 			else {
 				rc = ms->score;
@@ -609,7 +618,8 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 	if (cd->checked[cd->composite->id * 2]) {
 		/* We have already checked this composite, so just return its value */
 		if (cd->checked[cd->composite->id * 2 + 1]) {
-			ms = rspamd_task_find_symbol_result(cd->task, comp_atom->symbol.c_str(),
+			ms = rspamd_task_find_symbol_result(cd->task,
+					comp_atom->norm_symbol.data(),
 					cd->metric_res);
 		}
 
@@ -630,7 +640,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 	}
 
 	/* Note: sym is zero terminated as it is a view on std::string */
-	auto sym = std::string_view{comp_atom->symbol};
+	auto sym = comp_atom->norm_symbol;
 	auto group_process_functor = [&](auto cond, int sub_start) -> double {
 		auto max = 0.;
 		GHashTableIter it;
@@ -702,7 +712,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		}
 	}
 
-	msg_debug_composites ("%s: final result for composite %s is %.2f",
+	msg_debug_composites ("%s: final result for composite %s is %.4f",
 			cd->metric_res->name,
 			cd->composite->sym.c_str(), rc);
 
