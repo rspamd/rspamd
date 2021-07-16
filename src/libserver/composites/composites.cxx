@@ -747,7 +747,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		else {
 			rc = process_single_symbol(cd, sym, &ms, comp_atom);
 
-			if (rc) {
+			if (fabs(rc) > epsilon) {
 				process_symbol_removal(atom,
 						cd,
 						ms,
@@ -820,6 +820,10 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 
 				return;
 			}
+
+			msg_debug_composites ("%s: start processing composite %s",
+					cd->metric_res->name,
+					cd->composite->sym.c_str());
 
 			rc = rspamd_process_expression(comp->expr, RSPAMD_EXPRESSION_FLAG_NOOPT,
 					cd);

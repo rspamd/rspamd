@@ -29,7 +29,6 @@
 
 #define MIN_RESORT_EVALS 50
 #define MAX_RESORT_EVALS 150
-#define DOUBLE_EPSILON 1e-9
 
 enum rspamd_expression_elt_type {
 	ELT_OP = 0,
@@ -1232,7 +1231,7 @@ rspamd_ast_do_unary_op (struct rspamd_expression_elt *elt, gdouble operand)
 
 	switch (elt->p.op.op) {
 	case OP_NOT:
-		ret = fabs (operand) > DOUBLE_EPSILON ? 0.0 : 1.0;
+		ret = fabs (operand) > DBL_EPSILON ? 0.0 : 1.0;
 		break;
 	default:
 		g_assert_not_reached ();
@@ -1306,10 +1305,10 @@ rspamd_ast_do_nary_op (struct rspamd_expression_elt *elt, gdouble val, gdouble a
 		ret = acc * val;
 		break;
 	case OP_AND:
-		ret = (acc * val);
+		ret = (acc > DBL_EPSILON) && (val > DBL_EPSILON);
 		break;
 	case OP_OR:
-		ret = (acc + val);
+		ret = (acc > DBL_EPSILON) || (val > DBL_EPSILON);
 		break;
 	default:
 	case OP_NOT:
@@ -1355,7 +1354,7 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 
 			elt->value = process_data->process_closure (process_data->ud, elt->p.atom);
 
-			if (fabs (elt->value) > 1e-9) {
+			if (fabs (elt->value) > DBL_EPSILON) {
 				elt->p.atom->hits ++;
 
 				if (process_data->trace) {
