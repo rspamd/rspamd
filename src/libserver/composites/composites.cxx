@@ -43,7 +43,7 @@
 
 #define msg_debug_composites(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
         rspamd_composites_log_id, "composites", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(composites)
