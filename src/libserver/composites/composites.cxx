@@ -508,7 +508,7 @@ process_single_symbol(struct composites_data *cd,
 	struct rspamd_task *task = cd->task;
 
 	if ((ms = rspamd_task_find_symbol_result(cd->task, sym.data(), cd->metric_res)) == nullptr) {
-		msg_debug_composites ("not found symbol %s in composite %s", sym,
+		msg_debug_composites ("not found symbol %s in composite %s", sym.data(),
 				cd->composite->sym.c_str());
 
 		if (G_UNLIKELY(atom->comp_type == rspamd_composite_atom_type::ATOM_UNKNOWN)) {
@@ -525,11 +525,11 @@ process_single_symbol(struct composites_data *cd,
 
 		if (atom->comp_type == rspamd_composite_atom_type::ATOM_COMPOSITE) {
 			msg_debug_composites ("symbol %s for composite %s is another composite",
-					sym, cd->composite->sym.c_str());
+					sym.data(), cd->composite->sym.c_str());
 
 			if (!cd->checked[atom->ncomp->id * 2]) {
 				msg_debug_composites("composite dependency %s for %s is not checked",
-						sym, cd->composite->sym.c_str());
+						sym.data(), cd->composite->sym.c_str());
 				/* Set checked for this symbol to avoid cyclic references */
 				cd->checked[cd->composite->id * 2] = true;
 				auto *saved = cd->composite; /* Save the current composite */
@@ -556,7 +556,7 @@ process_single_symbol(struct composites_data *cd,
 
 	if (ms) {
 		msg_debug_composites("found symbol %s in composite %s, weight: %.3f",
-				sym, cd->composite->sym.c_str(), ms->score);
+				sym.data(), cd->composite->sym.c_str(), ms->score);
 
 		/* Now check options */
 		for (const auto &cur_opt : atom->opts) {
@@ -573,7 +573,7 @@ process_single_symbol(struct composites_data *cd,
 			if (!found) {
 				auto pat = cur_opt.get_pat();
 				msg_debug_composites ("symbol %s in composite %s misses required option %*s",
-						sym,
+						sym.data(),
 						cd->composite->sym.c_str(),
 						(int) pat.size(), pat.data());
 				ms = nullptr;
