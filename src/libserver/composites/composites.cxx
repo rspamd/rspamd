@@ -93,33 +93,56 @@ struct composites_data {
 };
 
 struct rspamd_composite_option_match {
-	std::variant<rspamd_regexp_t *, std::string_view> match;
+	struct rspamd_regexp_wrapper {
+		explicit rspamd_regexp_wrapper(rspamd_regexp_t *re) noexcept : re(rspamd_regexp_ref(re)) {}
+		~rspamd_regexp_wrapper() {
+			if (re) {
+				rspamd_regexp_unref(re);
+			}
+		}
+		rspamd_regexp_wrapper(const rspamd_regexp_wrapper &other) {
+			re = rspamd_regexp_ref(other.re);
+		}
+		rspamd_regexp_wrapper(rspamd_regexp_wrapper &&other) {
+			std::swap(re, other.re);
+		}
+		const rspamd_regexp_wrapper & operator= (const rspamd_regexp_wrapper &other) noexcept {
+			if (re) {
+				rspamd_regexp_unref(re);
+			}
+			re = rspamd_regexp_ref(other.re);
+			return *this;
+		}
+		const rspamd_regexp_wrapper & operator= (rspamd_regexp_wrapper &&other) noexcept {
+			std::swap(re, other.re);
+			return *this;
+		}
+		rspamd_regexp_wrapper() = default;
+		rspamd_regexp_t *re = nullptr;
+	};
 
-	explicit rspamd_composite_option_match(const char *start, std::size_t len)
+	std::variant<rspamd_regexp_wrapper, std::string_view> match;
+
+	explicit rspamd_composite_option_match(const char *start, std::size_t len) noexcept
 	{
 		match = std::string_view{start, len};
 	}
 
-	explicit rspamd_composite_option_match(rspamd_regexp_t *re)
+	explicit rspamd_composite_option_match(rspamd_regexp_t *re) noexcept
 	{
-		match = re;
+		match = rspamd_regexp_wrapper(re);
 	}
 
-	~rspamd_composite_option_match()
-	{
-		if (std::holds_alternative<rspamd_regexp_t *>(match)) {
-			rspamd_regexp_unref(std::get<rspamd_regexp_t *>(match));
-		}
-	}
+	~rspamd_composite_option_match() = default;
 
-	auto math_opt(const std::string_view &data) const -> bool
+	auto match_opt(const std::string_view &data) const -> bool
 	{
 		return std::visit([&](auto arg) -> bool {
 			if constexpr (std::is_same_v<decltype(arg), std::string_view>) {
 				return data == arg;
 			}
 			else {
-				return rspamd_regexp_search(arg,
+				return rspamd_regexp_search(arg.re,
 						data.data(), data.size(),
 						nullptr, nullptr, false, nullptr);
 			}
@@ -133,7 +156,7 @@ struct rspamd_composite_option_match {
 				return std::string_view(arg);
 			}
 			else {
-				return std::string_view(rspamd_regexp_get_pattern(arg));
+				return std::string_view(rspamd_regexp_get_pattern(arg.re));
 			}
 		}, match);
 	}
@@ -381,6 +404,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 				}
 				else {
 					atom->opts.emplace_back(re);
+					rspamd_regexp_unref(re);
 				}
 
 				if (*p == ',') {
@@ -573,7 +597,7 @@ process_single_symbol(struct composites_data *cd,
 			auto found = false;
 
 			DL_FOREACH (ms->opts_head, opt) {
-				if (cur_opt.math_opt({opt->option, opt->optlen})) {
+				if (cur_opt.match_opt({opt->option, opt->optlen})) {
 					found = true;
 					break;
 				}
