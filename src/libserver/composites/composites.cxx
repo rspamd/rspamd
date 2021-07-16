@@ -93,72 +93,102 @@ struct composites_data {
 };
 
 struct rspamd_composite_option_match {
-	struct rspamd_regexp_wrapper {
-		explicit rspamd_regexp_wrapper(rspamd_regexp_t *re) noexcept : re(rspamd_regexp_ref(re)) {}
-		~rspamd_regexp_wrapper() {
+	rspamd_regexp_t *re;
+	std::string match;
+
+	explicit rspamd_composite_option_match(const char *start, std::size_t len) noexcept :
+			re(nullptr), match(start, len) {}
+
+	explicit rspamd_composite_option_match(rspamd_regexp_t *re) noexcept :
+			re(rspamd_regexp_ref(re)) {}
+
+	rspamd_composite_option_match(const rspamd_composite_option_match &other) noexcept
+	{
+		if (other.re) {
+			re = rspamd_regexp_ref(other.re);
+		}
+		else {
+			match = other.match;
+			re = nullptr;
+		}
+	}
+	rspamd_composite_option_match& operator=(const rspamd_composite_option_match &other) noexcept
+	{
+		if (other.re) {
 			if (re) {
 				rspamd_regexp_unref(re);
 			}
-		}
-		rspamd_regexp_wrapper(const rspamd_regexp_wrapper &other) {
 			re = rspamd_regexp_ref(other.re);
 		}
-		rspamd_regexp_wrapper(rspamd_regexp_wrapper &&other) {
-			std::swap(re, other.re);
-		}
-		const rspamd_regexp_wrapper & operator= (const rspamd_regexp_wrapper &other) noexcept {
+		else {
 			if (re) {
 				rspamd_regexp_unref(re);
 			}
-			re = rspamd_regexp_ref(other.re);
-			return *this;
+			re = nullptr;
+			match = other.match;
 		}
-		const rspamd_regexp_wrapper & operator= (rspamd_regexp_wrapper &&other) noexcept {
-			std::swap(re, other.re);
-			return *this;
-		}
-		rspamd_regexp_wrapper() = default;
-		rspamd_regexp_t *re = nullptr;
-	};
 
-	std::variant<rspamd_regexp_wrapper, std::string_view> match;
-
-	explicit rspamd_composite_option_match(const char *start, std::size_t len) noexcept
-	{
-		match = std::string_view{start, len};
+		return *this;
 	}
 
-	explicit rspamd_composite_option_match(rspamd_regexp_t *re) noexcept
+	rspamd_composite_option_match(rspamd_composite_option_match &&other) noexcept
 	{
-		match = rspamd_regexp_wrapper(re);
+		if (other.re) {
+			re = other.re;
+			other.re = nullptr;
+		}
+		else {
+			re = nullptr;
+			match = std::move(other.match);
+		}
+	}
+	rspamd_composite_option_match& operator=(rspamd_composite_option_match &&other) noexcept
+	{
+		if (other.re) {
+			if (re) {
+				rspamd_regexp_unref(re);
+			}
+			re = other.re;
+			other.re = nullptr;
+		}
+		else {
+			if (re) {
+				rspamd_regexp_unref(re);
+			}
+			re = nullptr;
+			match = std::move(other.match);
+		}
+
+		return *this;
 	}
 
-	~rspamd_composite_option_match() = default;
+	~rspamd_composite_option_match()
+	{
+		if (re) {
+			rspamd_regexp_unref(re);
+		}
+	}
 
 	auto match_opt(const std::string_view &data) const -> bool
 	{
-		return std::visit([&](auto arg) -> bool {
-			if constexpr (std::is_same_v<decltype(arg), std::string_view>) {
-				return data == arg;
-			}
-			else {
-				return rspamd_regexp_search(arg.re,
-						data.data(), data.size(),
-						nullptr, nullptr, false, nullptr);
-			}
-		}, match);
+		if (re) {
+			return rspamd_regexp_search(re,
+					data.data(), data.size(),
+					nullptr, nullptr, false, nullptr);
+		}
+		else {
+			return data == match;
+		}
 	}
 
 	auto get_pat() const -> std::string_view
 	{
-		return std::visit([&](auto arg) -> std::string_view {
-			if constexpr (std::is_same_v<decltype(arg), std::string_view>) {
-				return std::string_view(arg);
-			}
-			else {
-				return std::string_view(rspamd_regexp_get_pattern(arg.re));
-			}
-		}, match);
+		if (re) {
+			return std::string_view(rspamd_regexp_get_pattern(re));
+		}
+		else {
+			return match;
+		}
 	}
 };
 
