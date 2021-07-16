@@ -57,7 +57,7 @@ public:
 	}
 
 	auto size(void) const -> std::size_t {
-		return composites.size();
+		return all_composites.size();
 	}
 
 	auto find(std::string_view name) const -> const rspamd_composite * {

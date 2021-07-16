@@ -87,7 +87,7 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 
 	auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
 	composite->expr = expr;
-	composite->id = all_composites.size();
+	composite->id = all_composites.size() - 1;
 	composite->str_expr = composite_expression;
 	composite->sym = composite_name;
 

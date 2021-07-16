@@ -88,7 +88,8 @@ struct composites_data {
 
 	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres) :
 			task(task), composite(nullptr), metric_res(mres) {
-		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2);
+		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2,
+				false);
 	}
 };
 
