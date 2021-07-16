@@ -766,8 +766,9 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		}
 	}
 
-	msg_debug_composites ("%s: final result for composite %s is %.4f",
+	msg_debug_composites ("%s: result for atom %s in composite %s is %.4f",
 			cd->metric_res->name,
+			comp_atom->norm_symbol.data(),
 			cd->composite->sym.c_str(), rc);
 
 	return rc;
@@ -825,6 +826,10 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 
 			/* Checked bit */
 			cd->checked[comp->id * 2] = true;
+
+			msg_debug_composites ("%s: final result for composite %s is %.4f",
+					cd->metric_res->name,
+					cd->composite->sym.c_str(), rc);
 
 			/* Result bit */
 			if (fabs(rc) > epsilon) {
