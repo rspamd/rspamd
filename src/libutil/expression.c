@@ -1305,10 +1305,10 @@ rspamd_ast_do_nary_op (struct rspamd_expression_elt *elt, gdouble val, gdouble a
 		ret = acc * val;
 		break;
 	case OP_AND:
-		ret = (acc > DBL_EPSILON) && (val > DBL_EPSILON);
+		ret = (fabs(acc) > DBL_EPSILON) && (fabs(val) > DBL_EPSILON);
 		break;
 	case OP_OR:
-		ret = (acc > DBL_EPSILON) || (val > DBL_EPSILON);
+		ret = (fabs(acc) > DBL_EPSILON) || (fabs(val) > DBL_EPSILON);
 		break;
 	default:
 	case OP_NOT:
