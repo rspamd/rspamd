@@ -196,7 +196,7 @@ Rspamd Teardown
   #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
-  Save Run Results  ${RSPAMD_TMPDIR}  rspamd.conf rspamd.log redis.log clickhouse-config.xml
+  Save Run Results  ${RSPAMD_TMPDIR}  configdump.stdout configdump.stderr rspamd.stderr rspamd.stdout rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
   Collect Lua Coverage
   Cleanup Temporary Directory  ${RSPAMD_TMPDIR}
