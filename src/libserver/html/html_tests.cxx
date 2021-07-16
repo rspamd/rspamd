@@ -164,6 +164,9 @@ TEST_CASE("html text extraction")
 			 "&nbsp;</p>",
 					" Sincerely,\n Skype Web\n"},
 			{"lala<p hidden>fafa</p>", "lala"},
+			{"<table style=\"FONT-SIZE: 0px;\"><tbody><tr><td>\n"
+			 "DONKEY\n"
+			 "</td></tr></tbody></table>", ""},
 			/* bgcolor propagation */
 			{"<a style=\"display: inline-block; color: #ffffff; background-color: #00aff0;\">\n"
 			 "<span style=\"color: #00aff0;\">F</span>Rev<span style=\"opacity: 1;\"></span></span>ie<span style=\"opacity: 1;\"></span>"

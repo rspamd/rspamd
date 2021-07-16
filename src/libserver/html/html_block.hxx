@@ -157,6 +157,7 @@ struct html_block {
 				/* We propagate parent if defined */
 				if (other.mask & mask_val) {
 					our_val = other_val;
+					mask |= mask_val;
 				}
 				/* Otherwise do nothing */
 			}
