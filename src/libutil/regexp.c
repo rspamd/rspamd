@@ -331,12 +331,12 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		return NULL;
 	}
 
-	if (flags == NULL && start < end) {
+	if (flags == NULL && start + 1 < end) {
 		/* We need to parse pattern and detect flags set */
 		if (*start == '/') {
 			sep = '/';
 		}
-		else if (*start == 'm') {
+		else if (*start == 'm' && !g_ascii_isalnum(start[1])) {
 			start ++;
 			sep = *start;
 
