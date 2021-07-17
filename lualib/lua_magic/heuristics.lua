@@ -45,13 +45,13 @@ local zip_trie
 local zip_patterns = {
   -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
   odt = {
-    [[mimetypeapplication/vnd\.oasis\.opendocument.text]],
-    [[mimetypeapplication/vnd\.oasis.opendocument\.image]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.text]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.image]],
     [[mimetypeapplication/vnd\.oasis\.opendocument\.graphic]]
   },
   ods = {
     [[mimetypeapplication/vnd\.oasis\.opendocument\.spreadsheet]],
-    [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.formula]],
     [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]
   },
   odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
