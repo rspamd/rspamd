@@ -309,7 +309,7 @@ rspamd_regexp_t*
 rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		GError **err)
 {
-	const gchar *start = pattern, *end = start + len, *flags_str = NULL, *flags_end;
+	const gchar *start = pattern, *end = start + len, *flags_str = NULL, *flags_end = NULL;
 	gchar *err_str;
 	rspamd_regexp_t *res;
 	gboolean explicit_utf = FALSE;
@@ -372,7 +372,9 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		strict_flags = TRUE;
 		start = pattern;
 		flags_str = flags;
-		flags_end = flags + strlen(flags);
+		if (flags) {
+			flags_end = flags + strlen(flags);
+		}
 	}
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
