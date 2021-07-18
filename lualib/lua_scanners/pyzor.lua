@@ -121,15 +121,17 @@ local function pyzor_check(task, content, digest, rule)
         -- pyzor output is unicode (\x09 -> tab, \0a -> newline)
         --   public.pyzor.org:24441  (200, 'OK')     21285091   206759
         --   server:port             Code  Diag      Count      WL-Count
-        lua_util.debugm(N, task, '%s: returned data: %s', rule.log_prefix, tostring(data))
+        local str_data = tostring(data)
+        lua_util.debugm(N, task, '%s: returned data: %s',
+            rule.log_prefix, str_data)
         -- If pyzor would return JSON this wouldn't be necessary
         local resp = {}
-        for v in string.gmatch(tostring(data), '[^\t]+') do
+        for v in string.gmatch(str_data, '[^\t]+') do
           table.insert(resp, v)
         end
         -- rspamd_logger.infox(task, 'resp: %s', resp)
-        if resp[2] ~= '(200, \'OK\')' then
-          rspamd_logger.errx(task, "error parsing response: %s", tostring(data))
+        if resp[2] ~= [[(200, 'OK')]] then
+          rspamd_logger.errx(task, "error parsing response: %s", str_data)
           return
         end
 
@@ -151,19 +153,24 @@ local function pyzor_check(task, content, digest, rule)
           rule.default_score: 1
           Weight: 0
         ]]
-        local weight = tonumber(string.format("%.2f", rule.default_score * (reported - whitelisted) / (reported + whitelisted)))
+        local weight = tonumber(string.format("%.2f",
+            rule.default_score * (reported - whitelisted) / (reported + whitelisted)))
         local info = string.format("count=%d wl=%d", reported, whitelisted)
-        local threat_string = string.format("bl_%d_wl_%d", reported, whitelisted)
+        local threat_string = string.format("bl_%d_wl_%d",
+            reported, whitelisted)
 
         if weight > 0 then
-          lua_util.debugm(N, task, '%s: returned result is spam - info: %s', rule.log_prefix, info)
+          lua_util.debugm(N, task, '%s: returned result is spam - info: %s',
+              rule.log_prefix, info)
           common.yield_result(task, rule, threat_string, weight)
           common.save_cache(task, digest, rule, threat_string, weight)
         else
           if rule.log_clean then
-            rspamd_logger.infox(task, '%s: clean, returned result is ham - info: %s', rule.log_prefix, info)
+            rspamd_logger.infox(task, '%s: clean, returned result is ham - info: %s',
+                rule.log_prefix, info)
           else
-            lua_util.debugm(N, task, '%s: returned result is ham - info: %s', rule.log_prefix, info)
+            lua_util.debugm(N, task, '%s: returned result is ham - info: %s',
+                rule.log_prefix, info)
           end
           common.save_cache(task, digest, rule, 'OK', weight)
         end
