@@ -1772,7 +1772,8 @@ html_process_input(rspamd_mempool_t *pool,
 				if (cur_tag->id == Tag_STYLE && allow_css) {
 					auto *opening_tag = cur_tag->parent;
 
-					if (opening_tag && opening_tag->content_offset < opening_tag->closing.start) {
+					if (opening_tag && opening_tag->id == Tag_STYLE &&
+						(int)opening_tag->content_offset < opening_tag->closing.start) {
 						auto ret_maybe = rspamd::css::parse_css(pool,
 								{start + opening_tag->content_offset,
 								 opening_tag->closing.start - opening_tag->content_offset},
