@@ -87,7 +87,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 					cur_selector = std::make_unique<css_selector>(
 							css_selector::selector_type::SELECTOR_ID);
 					cur_selector->value =
-							parser_tok.get_string_or_default("").substr(1);
+							parser_tok.get_string_or_default("");
 					state = selector_process_state::selector_ident_consumed;
 					break;
 				default:
