@@ -278,6 +278,8 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->c_modules = g_ptr_array_new ();
 	cfg->heartbeat_interval = 10.0;
 
+	cfg->enable_css_parser = true;
+
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
 	return cfg;
