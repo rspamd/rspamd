@@ -1759,9 +1759,32 @@ html_process_input(rspamd_mempool_t *pool,
 						html_document_state = html_document_state::body;
 					}
 				}
+
 				/* cur_tag here is a closing tag */
 				auto *next_cur_tag = html_check_balance(hc, cur_tag,
 						c - start, p - start + 1);
+
+				if (cur_tag->id == Tag_STYLE && allow_css) {
+					auto *opening_tag = cur_tag->parent;
+
+					if (opening_tag && opening_tag->content_offset < opening_tag->closing.start) {
+						auto ret_maybe = rspamd::css::parse_css(pool,
+								{start + cur_tag->content_offset,
+								 cur_tag->closing.start - cur_tag->content_offset},
+								std::move(hc->css_style));
+
+						if (!ret_maybe.has_value()) {
+							auto err_str = fmt::format("cannot parse css (error code: {}): {}",
+									static_cast<int>(ret_maybe.error().type),
+									ret_maybe.error().description.value_or("unknown error"));
+							msg_info_pool ("cannot parse css: %*s",
+									(int) err_str.size(), err_str.data());
+						}
+						else {
+							hc->css_style = ret_maybe.value();
+						}
+					}
+				}
 
 				if (next_cur_tag != nullptr) {
 					cur_tag = next_cur_tag;
@@ -1797,25 +1820,6 @@ html_process_input(rspamd_mempool_t *pool,
 					cur_tag = cur_opening_tag;
 					parent_tag = cur_tag->parent;
 					g_assert(cur_tag->parent != &cur_closing_tag);
-				}
-
-				if (cur_tag->id == Tag_STYLE && cur_tag->closing.start >  cur_tag->content_offset) {
-					if (allow_css) {
-						auto ret_maybe = rspamd::css::parse_css(pool,
-								{start + cur_tag->content_offset, cur_tag->closing.start - cur_tag->content_offset},
-								std::move(hc->css_style));
-
-						if (!ret_maybe.has_value()) {
-							auto err_str = fmt::format("cannot parse css (error code: {}): {}",
-									static_cast<int>(ret_maybe.error().type),
-									ret_maybe.error().description.value_or("unknown error"));
-							msg_info_pool ("cannot parse css: %*s",
-									(int) err_str.size(), err_str.data());
-						}
-						else {
-							hc->css_style = ret_maybe.value();
-						}
-					}
 				}
 			} /* if cur_tag != nullptr */
 			state = html_text_content;
