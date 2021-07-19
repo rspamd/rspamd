@@ -122,7 +122,7 @@ TEST_CASE("html text extraction")
 			 "    </P>\n"
 			 "    <b>stuff</p>?\n"
 			 "  </body>\n"
-			 "</html>", "Hello, world! test \ndata<>\nstuff?"},
+			 "</html>", "Hello, world! test \ndata<>\nstuff\n?"},
 			{"<p><!--comment-->test</br></hr><br>", "test\n"},
 			/* Tables */
 			{"<table>\n"

@@ -1104,10 +1104,15 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				is_visible = false;
 			}
 			else {
-				is_transparent = true;
+				if (tag->block->has_display() && tag->block->display == css::css_display_value::DISPLAY_HIDDEN) {
+					is_visible = false;
+				}
+				else {
+					is_transparent = true;
+				}
 			}
 		}
-		else if (tag->block->has_display()) {
+		else {
 			if (tag->block->display == css::css_display_value::DISPLAY_BLOCK) {
 				is_block = true;
 			}
@@ -1838,7 +1843,7 @@ html_process_input(rspamd_mempool_t *pool,
 	}
 
 	/* Propagate styles */
-	hc->traverse_block_tags([&hc](const html_tag *tag) -> bool {
+	hc->traverse_block_tags([&hc, &pool](const html_tag *tag) -> bool {
 
 		if (hc->css_style) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
@@ -1859,13 +1864,13 @@ html_process_input(rspamd_mempool_t *pool,
 					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN);
 				}
 				else if (tag->flags & (CM_BLOCK | CM_TABLE)) {
-					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK);
+					tag->block->set_display_implicit(css::css_display_value::DISPLAY_BLOCK);
 				}
 				else if (tag->flags & CM_ROW) {
-					tag->block->set_display(css::css_display_value::DISPLAY_TABLE_ROW);
+					tag->block->set_display_implicit(css::css_display_value::DISPLAY_TABLE_ROW);
 				}
 				else {
-					tag->block->set_display(css::css_display_value::DISPLAY_INLINE);
+					tag->block->set_display_implicit(css::css_display_value::DISPLAY_INLINE);
 				}
 			}
 
@@ -1877,7 +1882,8 @@ html_process_input(rspamd_mempool_t *pool,
 					cld_tag->block->propagate_block(*tag->block);
 				}
 				else {
-					cld_tag->block = tag->block;
+					cld_tag->block = rspamd_mempool_alloc0_type(pool, html_block);
+					*cld_tag->block = *tag->block;
 				}
 			}
 		}

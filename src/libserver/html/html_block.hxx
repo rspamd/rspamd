@@ -92,6 +92,10 @@ struct html_block {
 		display = v;
 		mask |= display_mask;
 	}
+	/* Set display, do not set mask */
+	auto set_display_implicit(rspamd::css::css_display_value v) -> void  {
+		display = v;
+	}
 	auto set_font_size(float fs, bool is_percent = false) -> void  {
 		fs = is_percent ? (-fs) : fs;
 		if (fs < INT8_MIN) {
@@ -121,9 +125,11 @@ struct html_block {
 		simple_prop(fg_color_mask, fg_color, other.fg_color);
 		simple_prop(bg_color_mask, bg_color, other.bg_color);
 
-		if (other.has_display() && !other.is_visible()) {
+		if (other.has_display()) {
 			simple_prop(display_mask, display, other.display);
-			mask |= other.mask&(transparent_flag|invisible_flag);
+			if (!other.is_visible()) {
+				mask |= other.mask & (transparent_flag | invisible_flag);
+			}
 		}
 
 		/* Sizes are very different
