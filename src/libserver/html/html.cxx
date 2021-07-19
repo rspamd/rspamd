@@ -1774,8 +1774,8 @@ html_process_input(rspamd_mempool_t *pool,
 
 					if (opening_tag && opening_tag->content_offset < opening_tag->closing.start) {
 						auto ret_maybe = rspamd::css::parse_css(pool,
-								{start + cur_tag->content_offset,
-								 cur_tag->closing.start - cur_tag->content_offset},
+								{start + opening_tag->content_offset,
+								 opening_tag->closing.start - opening_tag->content_offset},
 								std::move(hc->css_style));
 
 						if (!ret_maybe.has_value()) {
