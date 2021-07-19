@@ -214,10 +214,12 @@ local vis_check_id = rspamd_config:register_symbol{
               local tr = transp_len / (normal_len + transp_len)
               if tr > transp_rate then
                 transp_rate = tr
+                if not bl.color then bl.color = {0, 0, 0} end
+                if not bl.bgcolor then bl.bgcolor = {0, 0, 0} end
                 arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
                     tag:get_type(),
-                    bl.color[1] or 0, bl.color[2] or 0, bl.color[3] or 0,
-                    bl.bgcolor[1] or 0, bl.bgcolor[2] or 0, bl.bgcolor[3] or 0)
+                    bl.color[1], bl.color[2], bl.color[3],
+                    bl.bgcolor[1], bl.bgcolor[2], bl.bgcolor[3])
               end
             end
           end
