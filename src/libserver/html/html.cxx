@@ -2098,3 +2098,15 @@ rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest)
 
 	return true;
 }
+
+gsize
+rspamd_html_get_tags_count(void *html_content)
+{
+	auto *hc = rspamd::html::html_content::from_ptr(html_content);
+
+	if (!hc) {
+		return 0;
+	}
+
+	return hc->all_tags.size();
+}

@@ -121,6 +121,13 @@ struct html_image* rspamd_html_find_embedded_image(void *html_content,
  */
 bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest);
 
+/**
+ * Returns number of tags in the html content
+ * @param html_content
+ * @return
+ */
+gsize rspamd_html_get_tags_count(void *html_content);
+
 
 #ifdef  __cplusplus
 }
