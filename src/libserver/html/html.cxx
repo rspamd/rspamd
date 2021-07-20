@@ -1851,7 +1851,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 			if (css_block) {
 				if (tag->block) {
-					tag->block->propagate_block(*css_block);
+					tag->block->set_block(*css_block);
 				}
 				else {
 					tag->block = css_block;
@@ -1862,16 +1862,20 @@ html_process_input(rspamd_mempool_t *pool,
 			if (!tag->block->has_display()) {
 				/* If we have no display field, we can check it by tag */
 				if (tag->flags & CM_HEAD) {
-					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN);
+					tag->block->set_display(css::css_display_value::DISPLAY_HIDDEN,
+							html_block::set);
 				}
 				else if (tag->flags & (CM_BLOCK | CM_TABLE)) {
-					tag->block->set_display_implicit(css::css_display_value::DISPLAY_BLOCK);
+					tag->block->set_display(css::css_display_value::DISPLAY_BLOCK,
+							html_block::implicit);
 				}
 				else if (tag->flags & CM_ROW) {
-					tag->block->set_display_implicit(css::css_display_value::DISPLAY_TABLE_ROW);
+					tag->block->set_display(css::css_display_value::DISPLAY_TABLE_ROW,
+							html_block::implicit);
 				}
 				else {
-					tag->block->set_display_implicit(css::css_display_value::DISPLAY_INLINE);
+					tag->block->set_display(css::css_display_value::DISPLAY_INLINE,
+							html_block::implicit);
 				}
 			}
 

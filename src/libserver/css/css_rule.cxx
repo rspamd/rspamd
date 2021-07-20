@@ -456,7 +456,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 	}
 
 	/* Optional properties */
-	if (!(block->mask & rspamd::html::html_block::fg_color_mask) && font_rule) {
+	if (!(block->fg_color_mask) && font_rule) {
 		auto &vals = font_rule->get_values();
 
 		for (const auto &val : vals) {
@@ -468,7 +468,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 		}
 	}
 
-	if (!(block->mask & rspamd::html::html_block::font_size_mask) && font_rule) {
+	if (!(block->font_mask) && font_rule) {
 		auto &vals = font_rule->get_values();
 
 		for (const auto &val : vals) {
@@ -480,7 +480,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 		}
 	}
 
-	if (!(block->mask & rspamd::html::html_block::bg_color_mask) && background_rule) {
+	if (!(block->bg_color_mask) && background_rule) {
 		auto &vals = background_rule->get_values();
 
 		for (const auto &val : vals) {

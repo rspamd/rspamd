@@ -348,7 +348,7 @@ lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 
 	lua_createtable (L, 0, 6);
 
-	if (bl->mask & rspamd::html::html_block::fg_color_mask) {
+	if (bl->fg_color_mask) {
 		lua_pushstring (L, "color");
 		lua_createtable (L, 4, 0);
 		lua_pushinteger (L, bl->fg_color.r);
@@ -361,7 +361,7 @@ lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
-	if (bl->mask & rspamd::html::html_block::bg_color_mask) {
+	if (bl->bg_color_mask) {
 		lua_pushstring (L, "bgcolor");
 		lua_createtable (L, 4, 0);
 		lua_pushinteger (L, bl->bg_color.r);
@@ -375,7 +375,7 @@ lua_html_push_block (lua_State *L, const struct rspamd::html::html_block *bl)
 		lua_settable (L, -3);
 	}
 
-	if (bl->mask & rspamd::html::html_block::font_size_mask) {
+	if (bl->font_mask) {
 		lua_pushstring(L, "font_size");
 		lua_pushinteger(L, bl->font_size);
 		lua_settable(L, -3);
