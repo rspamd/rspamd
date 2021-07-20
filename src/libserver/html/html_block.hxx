@@ -49,15 +49,15 @@ struct html_block {
 	constexpr static const auto transparent_flag = 2;
 
 	/* Helpers to set mask when setting the elements */
-	auto set_fgcolor(const rspamd::css::css_color &c, int how = set) -> void {
+	auto set_fgcolor(const rspamd::css::css_color &c, int how =  html_block::set) -> void {
 		fg_color = c;
 		fg_color_mask = how;
 	}
-	auto set_bgcolor(const rspamd::css::css_color &c, int how = set) -> void {
+	auto set_bgcolor(const rspamd::css::css_color &c, int how =  html_block::set) -> void {
 		bg_color = c;
 		bg_color_mask = how;
 	}
-	auto set_height(float h, bool is_percent = false, int how = set) -> void {
+	auto set_height(float h, bool is_percent = false, int how =  html_block::set) -> void {
 		h = is_percent ? (-h) : h;
 		if (h < INT16_MIN) {
 			/* Negative numbers encode percents... */
@@ -71,7 +71,7 @@ struct html_block {
 		}
 		height_mask = how;
 	}
-	auto set_width(float w, bool is_percent = false, int how = set) -> void {
+	auto set_width(float w, bool is_percent = false, int how =  html_block::set) -> void {
 		w = is_percent ? (-w) : w;
 		if (w < INT16_MIN) {
 			width = INT16_MIN;
@@ -84,7 +84,7 @@ struct html_block {
 		}
 		width_mask = how;
 	}
-	auto set_display(bool v, int how = set) -> void  {
+	auto set_display(bool v, int how = html_block::set) -> void  {
 		if (v) {
 			display = rspamd::css::css_display_value::DISPLAY_INLINE;
 		}
@@ -93,11 +93,11 @@ struct html_block {
 		}
 		display_mask = how;
 	}
-	auto set_display(rspamd::css::css_display_value v, int how = set) -> void  {
+	auto set_display(rspamd::css::css_display_value v, int how =  html_block::set) -> void  {
 		display = v;
-		display_mask = implicit ? inherited : set;
+		display_mask = how;
 	}
-	auto set_font_size(float fs, bool is_percent = false, int how = set) -> void  {
+	auto set_font_size(float fs, bool is_percent = false, int how =  html_block::set) -> void  {
 		fs = is_percent ? (-fs) : fs;
 		if (fs < INT8_MIN) {
 			font_size = -100;
@@ -108,7 +108,7 @@ struct html_block {
 		else {
 			font_size = fs;
 		}
-		font_mask = implicit ? inherited : set;
+		font_mask = how;
 	}
 
 	/**
@@ -121,7 +121,7 @@ struct html_block {
 				auto other_val) constexpr -> int {
 			if (other_mask && other_mask > mask_val) {
 				our_val = other_val;
-				mask_val = inherited;
+				mask_val =  html_block::inherited;
 			}
 
 			return mask_val;
@@ -159,14 +159,14 @@ struct html_block {
 				}
 				else if (other_mask && other_mask > mask_val) {
 					our_val = other_val;
-					mask_val = inherited;
+					mask_val = html_block::inherited;
 				}
 			}
 			else {
 				/* We propagate parent if defined */
 				if (other_mask && other_mask > mask_val) {
 					our_val = other_val;
-					mask_val = inherited;
+					mask_val = html_block::inherited;
 				}
 				/* Otherwise do nothing */
 			}
@@ -185,7 +185,7 @@ struct html_block {
 	auto set_block(const html_block &other) -> void {
 		constexpr auto set_value = [](auto mask_val, auto other_mask, auto &our_val,
 									   auto other_val) constexpr -> int {
-			if (other_mask && mask_val != set) {
+			if (other_mask && mask_val != html_block::set) {
 				our_val = other_val;
 				mask_val = other_mask;
 			}
@@ -204,7 +204,7 @@ struct html_block {
 	auto compute_visibility(void) -> void {
 		if (display_mask) {
 			if (display == css::css_display_value::DISPLAY_HIDDEN) {
-				visibility_mask = invisible_flag;
+				visibility_mask = html_block::invisible_flag;
 
 				return;
 			}
@@ -212,7 +212,7 @@ struct html_block {
 
 		if (font_mask) {
 			if (font_size == 0) {
-				visibility_mask = invisible_flag;
+				visibility_mask = html_block::invisible_flag;
 
 				return;
 			}
@@ -239,14 +239,14 @@ struct html_block {
 		if (fg_color_mask && bg_color_mask) {
 			if (fg_color.alpha < 10) {
 				/* Too transparent */
-				visibility_mask = transparent_flag;
+				visibility_mask = html_block::transparent_flag;
 
 				return;
 			}
 
 			if (bg_color.alpha > 10) {
 				if (is_similar_colors(fg_color, bg_color)) {
-					visibility_mask = transparent_flag;
+					visibility_mask = html_block::transparent_flag;
 					return;
 				}
 			}
@@ -255,36 +255,36 @@ struct html_block {
 			/* Merely fg color */
 			if (fg_color.alpha < 10) {
 				/* Too transparent */
-				visibility_mask = transparent_flag;
+				visibility_mask = html_block::transparent_flag;
 
 				return;
 			}
 
 			/* Implicit fg color */
 			if (is_similar_colors(fg_color, rspamd::css::css_color::white())) {
-				visibility_mask = transparent_flag;
+				visibility_mask = html_block::transparent_flag;
 				return;
 			}
 		}
 		else if (bg_color_mask) {
 			if (is_similar_colors(rspamd::css::css_color::black(), bg_color)) {
-				visibility_mask = transparent_flag;
+				visibility_mask = html_block::transparent_flag;
 				return;
 			}
 		}
 
-		visibility_mask = 0;
+		visibility_mask = html_block::unset;
 	}
 
 	constexpr auto is_visible(void) const -> bool {
-		return visibility_mask == 0;
+		return visibility_mask == html_block::unset;
 	}
 
 	constexpr auto is_transparent(void) const -> bool {
-		return visibility_mask == transparent_flag;
+		return visibility_mask == html_block::transparent_flag;
 	}
 
-	constexpr auto has_display(int how = set) const -> bool {
+	constexpr auto has_display(int how = html_block::set) const -> bool {
 		return display_mask >= how;
 	}
 
@@ -299,13 +299,13 @@ struct html_block {
 				.width = 0,
 				.display = rspamd::css::css_display_value::DISPLAY_INLINE,
 				.font_size = 12,
-				.fg_color_mask = inherited,
-				.bg_color_mask = inherited,
-				.height_mask = unset,
-				.width_mask = unset,
-				.font_mask = unset,
-				.display_mask = inherited,
-				.visibility_mask = 0};
+				.fg_color_mask = html_block::inherited,
+				.bg_color_mask = html_block::inherited,
+				.height_mask = html_block::unset,
+				.width_mask = html_block::unset,
+				.font_mask = html_block::unset,
+				.display_mask = html_block::inherited,
+				.visibility_mask = html_block::unset};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool

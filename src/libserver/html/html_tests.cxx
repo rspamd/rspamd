@@ -69,7 +69,6 @@ TEST_CASE("html text extraction")
 {
 	using namespace std::string_literals;
 	const std::vector<std::pair<std::string, std::string>> cases{
-			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"test", "test"},
 			{"test\0"s, "test\uFFFD"s},
 			{"test\0test"s, "test\uFFFDtest"s},
@@ -80,7 +79,7 @@ TEST_CASE("html text extraction")
 			{"olo<p>text</p>lolo", "olo\ntext\nlolo"},
 			{"<div>foo</div><div>bar</div>", "foo\nbar\n"},
 			{"<b>foo<i>bar</b>baz</i>", "foobarbaz"},
-
+			{"<b>foo<i>bar</i>baz</b>", "foobarbaz"},
 			{"foo<br>baz", "foo\nbaz"},
 			{"<a href=https://example.com>test</a>", "test"},
 			{"<img alt=test>", "test"},
