@@ -269,7 +269,16 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			else {
 				/* We need to copy buf to a persistent storage */
 				auto *s = rspamd_mempool_alloc_buffer(pool, parser_env.buf.size());
-				memcpy(s, parser_env.buf.data(), parser_env.buf.size());
+
+				if (parser_env.cur_component.value() == html_component_type::RSPAMD_HTML_COMPONENT_ID ||
+						parser_env.cur_component.value() == html_component_type::RSPAMD_HTML_COMPONENT_CLASS) {
+					/* Lowercase */
+					rspamd_str_copy_lc(parser_env.buf.data(), s, parser_env.buf.size());
+				}
+				else {
+					memcpy(s, parser_env.buf.data(), parser_env.buf.size());
+				}
+
 				auto sz = rspamd_html_decode_entitles_inplace(s, parser_env.buf.size());
 				tag->components.emplace_back(parser_env.cur_component.value(),
 						std::string_view{s, sz});
@@ -1104,7 +1113,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 				is_visible = false;
 			}
 			else {
-				if (tag->block->has_display() && tag->block->display == css::css_display_value::DISPLAY_HIDDEN) {
+				if (tag->block->has_display() &&
+					tag->block->display == css::css_display_value::DISPLAY_HIDDEN) {
 					is_visible = false;
 				}
 				else {
