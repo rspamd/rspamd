@@ -1191,9 +1191,10 @@ html_append_tag_content(rspamd_mempool_t *pool,
 					/* Add a space */
 					hc->parsed += ' ';
 				}
+
 				hc->parsed.append(maybe_alt.value());
 
-				if (!g_ascii_isspace (hc->parsed.back())) {
+				if (!hc->parsed.empty() && !g_ascii_isspace (hc->parsed.back())) {
 					/* Add a space */
 					hc->parsed += ' ';
 				}
