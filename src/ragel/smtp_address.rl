@@ -30,7 +30,7 @@
   Local_part     = Dot_string >User_start %User_end | Quoted_string;
   Mailbox        = Local_part "@" (address_literal | Domain >Domain_start %Domain_end);
   UnangledPath = ( Adl ":" )? Mailbox >Addr_start %Addr_end "."?;
-  AngledPath = "<" UnangledPath ">" %Addr_has_angle;
+  AngledPath = "<" FWS? UnangledPath FWS? ">" %Addr_has_angle;
   Path = AngledPath | UnangledPath;
   SMTPAddr = space* (Path | "<>" %Empty_addr ) %Valid_addr space*;
 }%%
