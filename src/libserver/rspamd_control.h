@@ -48,6 +48,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_LOG_PIPE,
 	RSPAMD_SRV_ON_FORK,
 	RSPAMD_SRV_HEARTBEAT,
+	RSPAMD_SRV_HEALTH,
 };
 
 enum rspamd_log_pipe_type {
@@ -172,6 +173,9 @@ struct rspamd_srv_command {
 			guint status;
 			/* TODO: add more fields */
 		} heartbeat;
+		struct {
+			guint status;
+		} health;
 	} cmd;
 };
 
@@ -197,6 +201,12 @@ struct rspamd_srv_reply {
 		struct {
 			gint status;
 		} heartbeat;
+		struct {
+			guint status;
+			guint workers_count;
+			guint scanners_count;
+			guint workers_hb_lost;
+		} health;
 	} reply;
 };
 
