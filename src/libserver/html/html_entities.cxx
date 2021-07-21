@@ -2300,7 +2300,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		int n = 0;
 
 		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (g_ascii_isdigit(*str) && len > 0) {
+		while (len > 0 && g_ascii_isdigit(*str)) {
 			n = 10 * n - (*str++ - '0');
 			len --;
 		}
@@ -2316,7 +2316,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		int n = 0;
 
 		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (g_ascii_isxdigit(*str) && len > 0) {
+		while (len > 0 && g_ascii_isxdigit(*str)) {
 			if (*str <= 0x39) {
 				n = 16 * n - (*str++ - '0');
 			}
@@ -2337,7 +2337,7 @@ decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces)
 		int n = 0;
 
 		/* Avoid INT_MIN overflow by moving to negative numbers */
-		while (g_ascii_isdigit(*str) && len > 0) {
+		while (len > 0 && g_ascii_isdigit(*str)) {
 			if (*str > '7') {
 				break;
 			}
