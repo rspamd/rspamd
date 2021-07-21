@@ -248,7 +248,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
 								gint max_elements)
 {
 	GPtrArray *res = src;
-	gboolean seen_at = FALSE;
+	gboolean seen_at = FALSE, seen_obrace = FALSE;
 
 	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
 	GString *ns, *cpy;
@@ -434,6 +434,12 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
 				state = skip_spaces;
 				next_state = parse_name;
 			}
+			else if (*p == '@' && seen_obrace) {
+				seen_at = TRUE;
+			}
+			else if (*p == '<') {
+				seen_obrace = TRUE;
+			}
 			p ++;
 			break;
 		case parse_addr:
@@ -518,6 +524,17 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr,
 		break;
 	case parse_quoted:
 		/* Unfinished quoted string or a comment */
+		/* If we have seen obrace + at, then we still can try to resolve address */
+		if (seen_at && seen_obrace) {
+			p = rspamd_memrchr (cpy->str, '<', cpy->len);
+			g_assert (p != NULL);
+			if (rspamd_email_address_check_and_add (p, end - p,
+					res, pool, ns, max_elements) == 0) {
+				if (res->len == 0) {
+					rspamd_email_address_add (pool, res, NULL, ns);
+				}
+			}
+		}
 		break;
 	default:
 		/* Do nothing */

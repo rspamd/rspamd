@@ -4,7 +4,7 @@ context("SMTP address check functions", function()
   local logger = require("rspamd_logger")
   local ffi = require("ffi")
   local util = require("rspamd_util")
-  require "fun" ()
+  local fun = require "fun"
   ffi.cdef[[
   struct rspamd_email_address {
     const char *raw;
@@ -47,13 +47,13 @@ context("SMTP address check functions", function()
   }
 
 
-  each(function(case)
+  fun.each(function(case)
     test("Parse valid smtp addr: " .. case[1], function()
       local st = ffi.C.rspamd_email_address_from_smtp(case[1], #case[1])
 
       assert_not_nil(st, "should be able to parse " .. case[1])
 
-      each(function(k, ex)
+      fun.each(function(k, ex)
         if k == 'user' then
           local str = ffi.string(st.user, st.user_len)
           assert_equal(str, ex)
@@ -81,7 +81,7 @@ context("SMTP address check functions", function()
       '<a@example.com><>',
     }
 
-  each(function(case)
+  fun.each(function(case)
     test("Parse invalid smtp addr: " .. case, function()
       local st = ffi.C.rspamd_email_address_from_smtp(case, #case)
 
