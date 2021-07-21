@@ -177,6 +177,12 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_rrd_file *rrd;
 	struct rspamd_lang_detector *lang_det;
 	gdouble task_timeout;
+
+	/* Health check stuff */
+	guint workers_count;
+	guint scanners_count;
+	guint workers_hb_lost;
+	ev_timer health_check_timer;
 };
 
 struct rspamd_controller_plugin_cbdata {
@@ -1589,16 +1595,23 @@ err:
  */
 static int
 rspamd_controller_handle_healthy (struct rspamd_http_connection_entry *conn_ent,
-        struct rspamd_http_message *msg)
+								  struct rspamd_http_message *msg)
 {
-    struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 
-    if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
-        return 0;
-    }
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
 
-    rspamd_controller_send_string (conn_ent, "{\"success\":true}");
-    return 0;
+	if (session->ctx->workers_hb_lost != 0) {
+		rspamd_controller_send_error (conn_ent, 500,
+				"%d workers are not responding", session->ctx->workers_hb_lost);
+	}
+	else {
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	}
+
+	return 0;
 }
 
 /*
@@ -1609,16 +1622,22 @@ rspamd_controller_handle_healthy (struct rspamd_http_connection_entry *conn_ent,
  */
 static int
 rspamd_controller_handle_ready (struct rspamd_http_connection_entry *conn_ent,
-        struct rspamd_http_message *msg)
+								struct rspamd_http_message *msg)
 {
-    struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 
-    if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
-        return 0;
-    }
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
 
-    rspamd_controller_send_string (conn_ent, "{\"success\":true}");
-    return 0;
+	if (session->ctx->scanners_count == 0) {
+		rspamd_controller_send_error (conn_ent, 500, "no healthy scanner workers are running");
+	}
+	else {
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	}
+
+	return 0;
 }
 
 /*
@@ -3852,6 +3871,33 @@ rspamd_controller_register_plugins_paths (struct rspamd_controller_worker_ctx *c
 	lua_pop (L, 1); /* rspamd_plugins global */
 }
 
+static void
+rspamd_controller_health_rep (struct rspamd_worker *worker,
+				struct rspamd_srv_reply *rep, gint rep_fd,
+				gpointer ud)
+{
+	struct rspamd_controller_worker_ctx *ctx = (struct rspamd_controller_worker_ctx *)ud;
+
+	ctx->workers_count = rep->reply.health.workers_count;
+	ctx->scanners_count = rep->reply.health.scanners_count;
+	ctx->workers_hb_lost = rep->reply.health.workers_hb_lost;
+
+	ev_timer_again (ctx->event_loop, &ctx->health_check_timer);
+}
+
+static void
+rspamd_controller_health_timer (EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_controller_worker_ctx *ctx = (struct rspamd_controller_worker_ctx *)w->data;
+	struct rspamd_srv_command srv_cmd;
+
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_HEALTH;
+	rspamd_srv_send_command (ctx->worker, ctx->event_loop, &srv_cmd, -1,
+			rspamd_controller_health_rep, ctx);
+	ev_timer_stop (EV_A_ w);
+}
+
 /*
  * Start worker process
  */
@@ -4047,6 +4093,12 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_stat_init (worker->srv->cfg, ctx->event_loop);
 	rspamd_worker_init_controller (worker, &ctx->rrd);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop, worker);
+
+	/* TODO: maybe make it configurable */
+	ev_timer_init (&ctx->health_check_timer, rspamd_controller_health_timer,
+			1.0, 60.0);
+	ctx->health_check_timer.data = ctx;
+	ev_timer_start (ctx->event_loop, &ctx->health_check_timer);
 
 #ifdef WITH_HYPERSCAN
 	rspamd_control_worker_add_cmd_handler (worker,
