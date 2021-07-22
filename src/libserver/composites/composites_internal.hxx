@@ -102,6 +102,20 @@ private:
 		}
 	};
 
+	auto new_composite(std::string_view composite_name, rspamd_expression *expr,
+						std::string_view composite_expression) -> auto
+	{
+		auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
+		composite->expr = expr;
+		composite->id = all_composites.size() - 1;
+		composite->str_expr = composite_expression;
+		composite->sym = composite_name;
+
+		composites[composite->sym] = composite;
+
+		return composite;
+	}
+
 	robin_hood::unordered_flat_map<std::string,
 			std::shared_ptr<rspamd_composite>, smart_str_hash, smart_str_equal> composites;
 	/* Store all composites here, even if we have duplicates */

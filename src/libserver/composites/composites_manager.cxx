@@ -85,11 +85,7 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 		return nullptr;
 	}
 
-	auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
-	composite->expr = expr;
-	composite->id = all_composites.size() - 1;
-	composite->str_expr = composite_expression;
-	composite->sym = composite_name;
+	const auto &composite = new_composite(composite_name, expr, composite_expression);
 
 	double score;
 	val = ucl_object_lookup(obj, "score");
@@ -141,8 +137,6 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 		}
 	}
 
-	composites[std::string(composite_name)] = composite;
-
 	return composite.get();
 }
 
@@ -166,15 +160,7 @@ composites_manager::add_composite(std::string_view composite_name,
 		return nullptr;
 	}
 
-	auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
-	composite->expr = expr;
-	composite->id = all_composites.size();
-	composite->str_expr = composite_expression;
-	composite->sym = composite_name;
-
-	composites[std::string(composite_name)] = composite;
-
-	return composite.get();
+	return new_composite(composite_name, expr, composite_expression).get();
 }
 
 }
