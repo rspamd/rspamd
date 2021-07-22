@@ -146,7 +146,7 @@ public:
 			cnt->add_shared();
 		}
 	}
-	local_shared_ptr(nullptr_t) : local_shared_ptr() { }
+	local_shared_ptr(std::nullptr_t) : local_shared_ptr() { }
 
 	~local_shared_ptr() {
 		if (cnt) {
