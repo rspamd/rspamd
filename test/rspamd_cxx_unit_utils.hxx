@@ -23,23 +23,27 @@
 #include "doctest/doctest.h"
 
 #include "libmime/mime_headers.h"
+#include "libutil/cxx/local_shared_ptr.hxx"
 #include <vector>
 #include <utility>
 #include <string>
 
-TEST_CASE("rspamd_strip_smtp_comments_inplace") {
+TEST_SUITE("rspamd utils") {
+
+TEST_CASE("rspamd_strip_smtp_comments_inplace")
+{
 	std::vector<std::pair<std::string, std::string>> cases{
-			{"abc", "abc"},
-			{"abc(foo)", "abc"},
-			{"abc(foo()", "abc"},
-			{"abc(foo))", "abc)"},
-			{"abc(foo(bar))", "abc"},
-			{"(bar)abc(foo)", "abc"},
-			{"ab(ololo)c(foo)", "abc"},
-			{"ab(olo\\)lo)c(foo)", "abc"},
-			{"ab(trol\\\1lo)c(foo)", "abc"},
+			{"abc",                    "abc"},
+			{"abc(foo)",               "abc"},
+			{"abc(foo()",              "abc"},
+			{"abc(foo))",              "abc)"},
+			{"abc(foo(bar))",          "abc"},
+			{"(bar)abc(foo)",          "abc"},
+			{"ab(ololo)c(foo)",        "abc"},
+			{"ab(olo\\)lo)c(foo)",     "abc"},
+			{"ab(trol\\\1lo)c(foo)",   "abc"},
 			{"\\ab(trol\\\1lo)c(foo)", "abc"},
-			{"", ""},
+			{"",                       ""},
 	};
 
 	for (const auto &c : cases) {
@@ -51,6 +55,157 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace") {
 			delete[] cpy;
 		}
 	}
+}
+
+
+TEST_CASE("shared_ptr from nullptr")
+{
+	rspamd::local_shared_ptr<int const> pi(static_cast<int *>(nullptr));
+	CHECK((!!pi ? false : true));
+	CHECK(!pi);
+	CHECK(pi.get() == nullptr);
+	CHECK(pi.use_count() == 1);
+	CHECK(pi.unique());
+
+
+}
+TEST_CASE("shared_ptr from ptr")
+{
+	int *p = new int(7);
+	rspamd::local_shared_ptr<int> pi(p);
+	CHECK((pi? true: false));
+	CHECK(!!pi);
+	CHECK(pi.get() == p);
+	CHECK(pi.use_count() == 1);
+	CHECK(pi.unique());
+	CHECK(*pi == 7);
+}
+
+TEST_CASE("shared_ptr copy")
+{
+	rspamd::local_shared_ptr<int> pi;
+
+	rspamd::local_shared_ptr<int> pi2(pi);
+	CHECK(pi2 == pi);
+	CHECK((pi2? false: true));
+	CHECK(!pi2);
+	CHECK(pi2.get() == nullptr);
+	CHECK(pi2.use_count() == pi.use_count());
+
+	rspamd::local_shared_ptr<int> pi3(pi);
+	CHECK(pi3 == pi);
+	CHECK((pi3? false: true));
+	CHECK(!pi3);
+	CHECK(pi3.get() == nullptr);
+	CHECK(pi3.use_count() == pi.use_count());
+
+	rspamd::local_shared_ptr<int> pi4(pi3);
+	CHECK(pi4 == pi3);
+	CHECK((pi4? false: true));
+	CHECK(!pi4);
+	CHECK(pi4.get() == nullptr);
+	CHECK(pi4.use_count() == pi3.use_count());
+
+	int * p = new int(7);
+	rspamd::local_shared_ptr<int> pi5(p);
+
+	rspamd::local_shared_ptr<int> pi6(pi5);
+	CHECK(pi5 == pi6);
+	CHECK((pi6? true: false));
+	CHECK(!!pi6);
+	CHECK(pi6.get() == p);
+	CHECK(pi6.use_count() == 2);
+	CHECK(!pi6.unique());
+	CHECK(*pi6 == 7);
+	CHECK(pi6.use_count() == pi6.use_count());
+	CHECK(!(pi5 < pi6 || pi5 < pi6)); // shared ownership test
+
+	auto pi7 = pi6;
+	CHECK(pi5 == pi7);
+	CHECK((pi7? true: false));
+	CHECK(!!pi7);
+	CHECK(pi7.get() == p);
+	CHECK(pi7.use_count() == 3);
+	CHECK(!pi7.unique());
+	CHECK(*pi7 == 7);
+	CHECK(pi7.use_count() == pi7.use_count());
+	CHECK(!(pi5 < pi7 || pi5 < pi7)); // shared ownership test
+}
+
+TEST_CASE("shared_ptr move")
+{
+	rspamd::local_shared_ptr<int> pi(new int);
+
+	rspamd::local_shared_ptr<int> pi2(std::move(pi));
+	CHECK(!(pi2 == pi));
+	CHECK((!pi2? false: true));
+	CHECK(!pi);
+	CHECK(pi.get() == nullptr);
+	CHECK(pi2.get() != nullptr);
+	CHECK(pi.use_count() != pi2.use_count());
+
+	std::swap(pi, pi2);
+	CHECK(!(pi2 == pi));
+	CHECK((!pi? false: true));
+	CHECK(!pi2);
+	CHECK(pi.get() != nullptr);
+	CHECK(pi2.get() == nullptr);
+	CHECK(pi.use_count() != pi2.use_count());
+}
+
+struct deleter_test {
+	bool *pv;
+	deleter_test(bool &v) {
+		v = false;
+		pv = &v;
+	}
+	~deleter_test() {
+		*pv = true;
+	}
+};
+TEST_CASE("shared_ptr dtor") {
+	bool t;
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+	}
+
+	CHECK(t == true);
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+
+		rspamd::local_shared_ptr<deleter_test> pi2(pi);
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		pi.reset();
+		CHECK(!(pi2 == pi));
+		CHECK(pi2.use_count() == 1);
+		CHECK(t == false);
+
+		pi = pi2;
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		CHECK(t == false);
+	}
+
+	CHECK(t == true);
+}
+
 }
 
 #endif
