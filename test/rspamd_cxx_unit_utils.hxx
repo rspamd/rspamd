@@ -236,6 +236,85 @@ TEST_CASE("make_shared dtor") {
 	CHECK(t == true);
 }
 
+TEST_CASE("shared_ptr dtor") {
+	bool t;
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+	}
+
+	CHECK(t == true);
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+
+		rspamd::local_shared_ptr<deleter_test> pi2(pi);
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		pi.reset();
+		CHECK(!(pi2 == pi));
+		CHECK(pi2.use_count() == 1);
+		CHECK(t == false);
+
+		pi = pi2;
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		CHECK(t == false);
+	}
+
+	CHECK(t == true);
+}
+
+TEST_CASE("weak_ptr") {
+	bool t;
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+
+		rspamd::local_weak_ptr<deleter_test> wp(pi);
+		CHECK(wp.lock().get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(wp.use_count() == 1);
+		pi.reset();
+		CHECK(pi.use_count() == 0);
+		CHECK(wp.use_count() == 0);
+	}
+
+	CHECK(t == true);
+
+	rspamd::local_weak_ptr<deleter_test> wp;
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+		wp = pi;
+		CHECK(!wp.expired());
+		CHECK(wp.lock().get() != nullptr);
+	}
+
+	CHECK(t == true);
+	CHECK(wp.expired());
+}
+
 }
 
 #endif

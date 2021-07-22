@@ -39,6 +39,9 @@ public:
 	constexpr auto add_shared() -> refcount_t {
 		return ++ref_shared;
 	}
+	constexpr auto add_weak() -> refcount_t {
+		return ++ref_weak;
+	}
 	constexpr auto release_shared() -> refcount_t {
 		return --ref_shared;
 	}
@@ -47,6 +50,9 @@ public:
 	}
 	constexpr auto shared_count() const -> refcount_t {
 		return ref_shared;
+	}
+	constexpr auto weak_count() const -> refcount_t {
+		return ref_weak;
 	}
 	virtual ~ref_cnt() {}
 	virtual void dispose() = 0;
@@ -135,7 +141,11 @@ public:
 		r.px = nullptr;
 		r.cnt = nullptr;
 	}
-	template<class Y> explicit local_shared_ptr(const local_weak_ptr<Y>& r);
+	template<class Y> explicit local_shared_ptr(const local_weak_ptr<Y>& r) : px(r.px), cnt(r.cnt) {
+		if (cnt) {
+			cnt->add_shared();
+		}
+	}
 	local_shared_ptr(nullptr_t) : local_shared_ptr() { }
 
 	~local_shared_ptr() {
@@ -143,7 +153,7 @@ public:
 			if (cnt->release_shared() <= 0) {
 				cnt->dispose();
 
-				if (cnt->release_weak() <= 0) {
+				if (cnt->weak_count() == 0) {
 					delete cnt;
 				}
 			}
@@ -213,6 +223,7 @@ private:
 
 	template<class _T, class ... Args>
 	friend local_shared_ptr<_T> local_make_shared(Args && ... args);
+	friend class local_weak_ptr<T>;
 };
 
 template<class T, class ... Args>
@@ -226,6 +237,119 @@ local_shared_ptr<T> local_make_shared(Args && ... args)
 	return ptr;
 }
 
+template<class T>
+class local_weak_ptr
+{
+public:
+	typedef T element_type;
+
+	// constructors
+	constexpr local_weak_ptr() noexcept : px(nullptr), cnt(nullptr) {}
+	template<class Y, typename std::enable_if<
+			std::is_convertible<Y*, element_type*>::value, bool>::type = true>
+	local_weak_ptr(local_shared_ptr<Y> const& r) noexcept : px(r.px),cnt(r.cnt) {
+		if (cnt) {
+			cnt->add_weak();
+		}
+	}
+
+	local_weak_ptr(local_weak_ptr const& r) noexcept : px(r.px),cnt(r.cnt) {
+		if (cnt) {
+			cnt->add_weak();
+		}
+	}
+	local_weak_ptr(local_weak_ptr && r) noexcept : px(r.px), cnt(r.cnt) {
+		r.px = nullptr;
+		r.cnt = nullptr;
+	}
+
+	~local_weak_ptr()
+	{
+		if (cnt) {
+			if (cnt->release_weak() <= 0 && cnt->shared_count() == 0) {
+				delete cnt;
+			}
+		}
+	}
+
+	// assignment
+	local_weak_ptr& operator=(local_weak_ptr const& r) noexcept {
+		local_weak_ptr(r).swap(*this);
+		return *this;
+	}
+	local_weak_ptr& operator=(local_shared_ptr<T> const& r) noexcept {
+		local_weak_ptr(r).swap(*this);
+		return *this;
+	}
+
+	template<class Y, typename std::enable_if<
+			std::is_convertible<Y*, element_type*>::value, bool>::type = true>
+	local_weak_ptr& operator=(local_weak_ptr<Y> const& r) noexcept {
+		local_weak_ptr(r).swap(*this);
+		return *this;
+	}
+	local_weak_ptr& operator=(local_weak_ptr&& r) noexcept {
+		local_weak_ptr(std::move(r)).swap(*this);
+		return *this;
+	}
+
+	// modifiers
+	void swap(local_weak_ptr& r) noexcept {
+		std::swap(this->cnt, r.cnt);
+		std::swap(this->px, r.px);
+	}
+	void reset() noexcept {
+		local_weak_ptr().swap(*this);
+	}
+
+	// observers
+	long use_count() const noexcept {
+		if (cnt) {
+			return cnt->shared_count();
+		}
+		return 0;
+	}
+	bool expired() const noexcept {
+		if (cnt) {
+			return cnt->shared_count() == 0;
+		}
+
+		return true;
+	}
+
+	local_shared_ptr<T> lock() const noexcept {
+		local_shared_ptr<T> tmp;
+		tmp.cnt = cnt;
+
+		if (cnt) {
+			cnt->add_shared();
+			tmp.px = px;
+		}
+
+		return tmp;
+	}
+private:
+	element_type* px;
+	detail::ref_cnt *cnt;
+};
+
+
+}
+
+/* Hashing stuff */
+namespace std {
+template <class T>
+struct hash<rspamd::local_shared_ptr<T>> {
+	inline size_t operator()(const rspamd::local_shared_ptr<T> &p) const noexcept {
+		return hash<T *>()(p.get());
+	}
+};
+template <class T>
+struct hash<rspamd::local_weak_ptr<T>> {
+	inline size_t operator()(const rspamd::local_weak_ptr<T> &p) const noexcept {
+		return hash<T *>()(p.get());
+	}
+};
 }
 
 #endif //RSPAMD_LOCAL_SHARED_PTR_HXX
