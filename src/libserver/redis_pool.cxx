@@ -156,17 +156,17 @@ static void
 rspamd_redis_pool_elt_dtor (gpointer p)
 {
 	GList *cur;
-	struct rspamd_redis_pool_elt *elt = p;
+	struct rspamd_redis_pool_elt *elt = (struct rspamd_redis_pool_elt *)p;
 	struct rspamd_redis_pool_connection *c;
 
 	for (cur = elt->active->head; cur != NULL; cur = g_list_next (cur)) {
-		c = cur->data;
+		c = (struct rspamd_redis_pool_connection *)cur->data;
 		c->entry = NULL;
 		REF_RELEASE (c);
 	}
 
 	for (cur = elt->inactive->head; cur != NULL; cur = g_list_next (cur)) {
-		c = cur->data;
+		c = (struct rspamd_redis_pool_connection *)cur->data;
 		c->entry = NULL;
 		REF_RELEASE (c);
 	}
@@ -260,7 +260,7 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 static void
 rspamd_redis_pool_on_disconnect (const struct redisAsyncContext *ac, int status)
 {
-	struct rspamd_redis_pool_connection *conn = ac->data;
+	struct rspamd_redis_pool_connection *conn = (struct rspamd_redis_pool_connection *)ac->data;
 
 	/*
 	 * Here, we know that redis itself will free this connection
@@ -304,7 +304,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			return NULL;
 		}
 		else {
-			conn = g_malloc0 (sizeof (*conn));
+			conn = (struct rspamd_redis_pool_connection *)g_malloc0 (sizeof (*conn));
 			conn->entry = g_list_prepend (NULL, conn);
 			conn->elt = elt;
 			conn->state = RSPAMD_REDIS_POOL_CONN_ACTIVE;
@@ -313,7 +313,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			g_queue_push_head_link (elt->active, conn->entry);
 			conn->ctx = ctx;
 			ctx->data = conn;
-			rspamd_random_hex (conn->tag, sizeof (conn->tag));
+			rspamd_random_hex ((guchar *)conn->tag, sizeof (conn->tag));
 			REF_INIT_RETAIN (conn, rspamd_redis_pool_conn_dtor);
 			msg_debug_rpool ("created new connection to %s:%d: %p", ip, port, ctx);
 
@@ -341,7 +341,7 @@ rspamd_redis_pool_new_elt (struct rspamd_redis_pool *pool)
 {
 	struct rspamd_redis_pool_elt *elt;
 
-	elt = g_malloc0 (sizeof (*elt));
+	elt = (struct rspamd_redis_pool_elt *)g_malloc0 (sizeof (*elt));
 	elt->active = g_queue_new ();
 	elt->inactive = g_queue_new ();
 	elt->pool = pool;
@@ -354,7 +354,7 @@ rspamd_redis_pool_init (void)
 {
 	struct rspamd_redis_pool *pool;
 
-	pool = g_malloc0 (sizeof (*pool));
+	pool = (struct rspamd_redis_pool *)g_malloc0 (sizeof (*pool));
 	pool->elts_by_key = g_hash_table_new_full (g_int64_hash, g_int64_equal,
 			NULL, rspamd_redis_pool_elt_dtor);
 	pool->elts_by_ctx = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -391,12 +391,12 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 	g_assert (ip != NULL);
 
 	key = rspamd_redis_pool_get_key (db, password, ip, port);
-	elt = g_hash_table_lookup (pool->elts_by_key, &key);
+	elt = (struct rspamd_redis_pool_elt *)g_hash_table_lookup (pool->elts_by_key, &key);
 
 	if (elt) {
 		if (g_queue_get_length (elt->inactive) > 0) {
 			conn_entry = g_queue_pop_head_link (elt->inactive);
-			conn = conn_entry->data;
+			conn = (struct rspamd_redis_pool_connection *)conn_entry->data;
 			g_assert (conn->state != RSPAMD_REDIS_POOL_CONN_ACTIVE);
 
 			if (conn->ctx->err == REDIS_OK) {
@@ -469,7 +469,7 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
 
-	conn = g_hash_table_lookup (pool->elts_by_ctx, ctx);
+	conn = (struct rspamd_redis_pool_connection *)g_hash_table_lookup (pool->elts_by_ctx, ctx);
 	if (conn != NULL) {
 		g_assert (conn->state == RSPAMD_REDIS_POOL_CONN_ACTIVE);
 
@@ -529,7 +529,7 @@ rspamd_redis_pool_destroy (struct rspamd_redis_pool *pool)
 	g_hash_table_iter_init (&it, pool->elts_by_key);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
-		elt = v;
+		elt = (struct rspamd_redis_pool_elt *)v;
 		rspamd_redis_pool_elt_dtor (elt);
 		g_hash_table_iter_steal (&it);
 	}
