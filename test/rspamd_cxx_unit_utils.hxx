@@ -206,6 +206,36 @@ TEST_CASE("shared_ptr dtor") {
 	CHECK(t == true);
 }
 
+TEST_CASE("make_shared dtor") {
+	bool t;
+
+	{
+		auto pi = rspamd::local_make_shared<deleter_test>(t);
+
+		CHECK((!pi ? false : true));
+		CHECK(!!pi);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+
+		rspamd::local_shared_ptr<deleter_test> pi2(pi);
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		pi.reset();
+		CHECK(!(pi2 == pi));
+		CHECK(pi2.use_count() == 1);
+		CHECK(t == false);
+
+		pi = pi2;
+		CHECK(pi2 == pi);
+		CHECK(pi.use_count() == 2);
+		CHECK(t == false);
+	}
+
+	CHECK(t == true);
+}
+
 }
 
 #endif
