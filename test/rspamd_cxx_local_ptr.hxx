@@ -279,6 +279,32 @@ TEST_CASE("weak_ptr") {
 	CHECK(t == true);
 	CHECK(wp.expired());
 }
+
+TEST_CASE("std::swap") {
+	bool t;
+
+	{
+		rspamd::local_shared_ptr<deleter_test> pi(new deleter_test{t});
+		CHECK(pi.use_count() == 1);
+		CHECK(pi.unique());
+		CHECK(t == false);
+
+		rspamd::local_shared_ptr<deleter_test> pi1;
+		CHECK(pi1.get() == nullptr);
+		CHECK(pi1.use_count() == 0);
+		std::swap(pi1, pi);
+		CHECK(pi.use_count() == 0);
+		CHECK(pi.get() == nullptr);
+		CHECK(pi1.get() != nullptr);
+		std::swap(pi, pi1);
+		CHECK(pi.use_count() != 0);
+		CHECK(pi.get() != nullptr);
+		CHECK(pi1.get() == nullptr);
+	}
+
+	CHECK(t == true);
+}
+
 }
 
 #endif //RSPAMD_RSPAMD_CXX_LOCAL_PTR_HXX

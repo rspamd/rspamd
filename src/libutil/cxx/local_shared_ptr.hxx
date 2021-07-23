@@ -340,16 +340,29 @@ private:
 namespace std {
 template <class T>
 struct hash<rspamd::local_shared_ptr<T>> {
-	inline size_t operator()(const rspamd::local_shared_ptr<T> &p) const noexcept {
+	inline auto operator()(const rspamd::local_shared_ptr<T> &p) const noexcept -> auto {
 		return hash<T *>()(p.get());
 	}
 };
 template <class T>
 struct hash<rspamd::local_weak_ptr<T>> {
-	inline size_t operator()(const rspamd::local_weak_ptr<T> &p) const noexcept {
+	inline auto operator()(const rspamd::local_weak_ptr<T> &p) const noexcept -> auto {
 		return hash<T *>()(p.get());
 	}
 };
+
+template<class T>
+inline void swap(rspamd::local_shared_ptr<T> &x, rspamd::local_shared_ptr<T> &y) noexcept
+{
+	x.swap(y);
+}
+
+template<class T>
+inline void swap(rspamd::local_weak_ptr<T> &x, rspamd::local_weak_ptr<T> &y) noexcept
+{
+	x.swap(y);
+}
+
 }
 
 #endif //RSPAMD_LOCAL_SHARED_PTR_HXX
