@@ -166,7 +166,7 @@ public:
 	 * Process a single css rule
 	 */
 	std::unique_ptr<css_consumed_block> consume_css_rule(const std::string_view &sv);
-	bool consume_input(const std::string_view &sv);
+	std::optional<css_parse_error> consume_input(const std::string_view &sv);
 
 	auto get_object_maybe(void) -> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error> {
 		if (style_object) {
@@ -599,13 +599,20 @@ css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_
 	return rule_block;
 }
 
-bool css_parser::consume_input(const std::string_view &sv)
+std::optional<css_parse_error>
+css_parser::consume_input(const std::string_view &sv)
 {
 	auto &&consumed_blocks = consume_css_blocks(sv);
 	const auto &rules = consumed_blocks->get_blocks_or_empty();
 
 	if (rules.empty()) {
-		return false;
+		if (error.type == css_parse_error_type::PARSE_ERROR_UNKNOWN_ERROR) {
+			return css_parse_error(css_parse_error_type::PARSE_ERROR_EMPTY,
+					"no css rules consumed");
+		}
+		else {
+			return error;
+		}
 	}
 
 	if (!style_object) {
@@ -691,7 +698,7 @@ bool css_parser::consume_input(const std::string_view &sv)
 	auto debug_str = consumed_blocks->debug_str();
 	msg_debug_css("consumed css: {%*s}", (int)debug_str.size(), debug_str.data());
 
-	return true;
+	return std::nullopt;
 }
 
 auto
@@ -779,12 +786,12 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 		processed_input = std::string_view{nspace, st.size()};
 	}
 
-	if (parser.consume_input(processed_input)) {
+	auto maybe_error = parser.consume_input(processed_input);
+	if (!maybe_error) {
 		return parser.get_object_maybe();
 	}
 
-	return tl::make_unexpected(css_parse_error{css_parse_error_type::PARSE_ERROR_INVALID_SYNTAX,
-											   "cannot parse input"});
+	return tl::make_unexpected(maybe_error.value());
 }
 
 auto
