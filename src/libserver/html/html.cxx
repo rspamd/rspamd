@@ -1918,10 +1918,7 @@ html_process_input(rspamd_mempool_t *pool,
 		break;
 	}
 
-	if (!hc->all_tags.empty()) {
-		std::sort(hc->all_tags.begin(), hc->all_tags.end(), [](const auto &pt1, const auto &pt2) -> auto {
-			return pt1->tag_start < pt2->tag_start;
-		});
+	if (!hc->all_tags.empty() && hc->root_tag) {
 		html_append_tag_content(pool, start, end - start, hc, hc->root_tag,
 				exceptions, url_set);
 	}
