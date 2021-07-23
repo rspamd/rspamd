@@ -22,7 +22,36 @@
 
 #include "libutil/cxx/local_shared_ptr.hxx"
 
+namespace test_internal {
+struct deleter_test {
+	bool *pv;
+
+	deleter_test(bool &v)
+	{
+		v = false;
+		pv = &v;
+	}
+
+	~deleter_test()
+	{
+		*pv = true;
+	}
+};
+}
+
+namespace std {
+template<>
+struct std::hash<test_internal::deleter_test> {
+	inline auto operator()(const test_internal::deleter_test &) const noexcept -> auto
+	{
+		return 42;
+	}
+};
+}
+
 TEST_SUITE("local_ptr") {
+using namespace test_internal;
+
 TEST_CASE("shared_ptr from nullptr")
 {
 	rspamd::local_shared_ptr<int const> pi(static_cast<int *>(nullptr));
@@ -118,16 +147,6 @@ TEST_CASE("shared_ptr move")
 	CHECK(pi.use_count() != pi2.use_count());
 }
 
-struct deleter_test {
-	bool *pv;
-	deleter_test(bool &v) {
-		v = false;
-		pv = &v;
-	}
-	~deleter_test() {
-		*pv = true;
-	}
-};
 TEST_CASE("shared_ptr dtor") {
 	bool t;
 
@@ -303,6 +322,17 @@ TEST_CASE("std::swap") {
 	}
 
 	CHECK(t == true);
+}
+
+TEST_CASE("std::hash") {
+	bool v;
+	deleter_test dt(v);
+	CHECK(std::hash<deleter_test>()(dt) == 42);
+	auto pi = rspamd::local_make_shared<deleter_test>(v);
+	rspamd::local_shared_ptr<deleter_test> pi1;
+	CHECK(std::hash<decltype(pi)>()(pi) == 42);
+	// No hash for nullptr, different from std::smart_pointers!
+	CHECK_THROWS(std::hash<decltype(pi)>()(pi1));
 }
 
 }

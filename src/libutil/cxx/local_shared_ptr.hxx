@@ -340,14 +340,20 @@ private:
 namespace std {
 template <class T>
 struct hash<rspamd::local_shared_ptr<T>> {
-	inline auto operator()(const rspamd::local_shared_ptr<T> &p) const noexcept -> auto {
-		return hash<T *>()(p.get());
+	inline auto operator()(const rspamd::local_shared_ptr<T> &p) const -> auto {
+		if (!p) {
+			throw std::logic_error("no hash for dangling pointer");
+		}
+		return hash<T>()(*p.get());
 	}
 };
 template <class T>
 struct hash<rspamd::local_weak_ptr<T>> {
-	inline auto operator()(const rspamd::local_weak_ptr<T> &p) const noexcept -> auto {
-		return hash<T *>()(p.get());
+	inline auto operator()(const rspamd::local_weak_ptr<T> &p) const -> auto {
+		if (!p) {
+			throw std::logic_error("no hash for dangling pointer");
+		}
+		return hash<T>()(*p.get());
 	}
 };
 
