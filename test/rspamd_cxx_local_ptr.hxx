@@ -41,7 +41,7 @@ struct deleter_test {
 
 namespace std {
 template<>
-struct std::hash<test_internal::deleter_test> {
+struct hash<test_internal::deleter_test> {
 	inline auto operator()(const test_internal::deleter_test &) const noexcept -> auto
 	{
 		return 42;
