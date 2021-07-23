@@ -66,7 +66,7 @@ auto html_components_map = frozen::make_unordered_map<frozen::string, html_compo
 
 #define msg_debug_html(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_html_log_id, "html", pool->tag.uid, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(html)
