@@ -1791,11 +1791,14 @@ html_process_input(rspamd_mempool_t *pool,
 								std::move(hc->css_style));
 
 						if (!ret_maybe.has_value()) {
-							auto err_str = fmt::format("cannot parse css (error code: {}): {}",
-									static_cast<int>(ret_maybe.error().type),
-									ret_maybe.error().description.value_or("unknown error"));
-							msg_info_pool ("cannot parse css: %*s",
-									(int) err_str.size(), err_str.data());
+							if (ret_maybe.error().is_fatal()) {
+								auto err_str = fmt::format(
+										"cannot parse css (error code: {}): {}",
+										static_cast<int>(ret_maybe.error().type),
+										ret_maybe.error().description.value_or("unknown error"));
+								msg_info_pool ("cannot parse css: %*s",
+										(int) err_str.size(), err_str.data());
+							}
 						}
 						else {
 							hc->css_style = ret_maybe.value();

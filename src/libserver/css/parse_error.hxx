@@ -31,10 +31,11 @@ enum class css_parse_error_type {
 	PARSE_ERROR_UNKNOWN_OPTION,
 	PARSE_ERROR_INVALID_SYNTAX,
 	PARSE_ERROR_BAD_NESTING,
-	PARSE_ERROR_EMPTY,
 	PARSE_ERROR_NYI,
 	PARSE_ERROR_UNKNOWN_ERROR,
+	/* All above is treated as fatal error in parsing */
 	PARSE_ERROR_NO_ERROR,
+	PARSE_ERROR_EMPTY,
 };
 
 struct css_parse_error {
@@ -45,6 +46,10 @@ struct css_parse_error {
 		type(type), description(description) {}
 	explicit css_parse_error (css_parse_error_type type = css_parse_error_type::PARSE_ERROR_NO_ERROR) :
 			type(type) {}
+
+	constexpr auto is_fatal(void) const -> bool {
+		return type < css_parse_error_type::PARSE_ERROR_NO_ERROR;
+	}
 };
 
 }

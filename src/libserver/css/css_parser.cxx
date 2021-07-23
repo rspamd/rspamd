@@ -606,7 +606,7 @@ css_parser::consume_input(const std::string_view &sv)
 	const auto &rules = consumed_blocks->get_blocks_or_empty();
 
 	if (rules.empty()) {
-		if (error.type == css_parse_error_type::PARSE_ERROR_UNKNOWN_ERROR) {
+		if (error.type == css_parse_error_type::PARSE_ERROR_NO_ERROR) {
 			return css_parse_error(css_parse_error_type::PARSE_ERROR_EMPTY,
 					"no css rules consumed");
 		}
