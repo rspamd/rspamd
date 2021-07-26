@@ -150,7 +150,13 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 		rep->code = rcode;
 		req->reply = rep;
 		rep->authenticated = false;
-		rep->requested_name = req->requested_names[0].name;
+
+		if (req) {
+			rep->requested_name = req->requested_names[0].name;
+		}
+		else {
+			rep->requested_name = NULL;
+		}
 	}
 
 	return rep;
