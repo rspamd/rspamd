@@ -1356,7 +1356,6 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				else if (*p != '.' && *p != '-' && *p != '_' && *p != '%') {
 					if (*p & 0x80) {
-						(*flags) |= RSPAMD_URL_FLAG_IDN;
 						guint i = 0;
 
 						U8_NEXT (((const guchar *)p), i, last - p, uc);
@@ -1381,6 +1380,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 									}
 								}
 							}
+						}
+						else {
+							(*flags) |= RSPAMD_URL_FLAG_IDN;
 						}
 
 						p = p + i;
