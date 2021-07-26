@@ -258,7 +258,7 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 	bool parsed = false;
 
 	/* Skip the whole name */
-	if (! rdns_parse_labels (resolver, in, NULL, &p, rep, remain, false)) {
+	if (!rdns_parse_labels (resolver, in, NULL, &p, rep, remain, false)) {
 		rdns_info ("bad RR name");
 		return -1;
 	}
