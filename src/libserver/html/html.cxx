@@ -574,20 +574,16 @@ html_is_absolute_url(std::string_view st) -> bool
 			[](auto c) {return !g_ascii_isalnum(c);});
 
 	if (alnum_pos != std::end(st)) {
-		std::advance(alnum_pos, 1);
+		if (*alnum_pos == ':') {
+			if (st.substr(0, std::distance(std::begin(st), alnum_pos)) == "mailto") {
+				return true;
+			}
 
-		if (alnum_pos != std::end(st)) {
-			if (*alnum_pos == ':') {
-				if (st.substr(0, std::distance(std::begin(st), alnum_pos)) == "mailto") {
+			std::advance(alnum_pos, 1);
+			if (alnum_pos != std::end(st)) {
+				/* Include even malformed urls */
+				if (*alnum_pos == '/' || *alnum_pos == '\\') {
 					return true;
-				}
-
-				std::advance(alnum_pos, 1);
-				if (alnum_pos != std::end(st)) {
-					/* Include even malformed urls */
-					if (*alnum_pos == '/' || *alnum_pos == '\\') {
-						return true;
-					}
 				}
 			}
 		}
