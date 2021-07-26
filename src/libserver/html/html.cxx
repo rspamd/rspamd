@@ -573,7 +573,7 @@ html_is_absolute_url(std::string_view st) -> bool
 	auto alnum_pos = std::find_if(std::begin(st), std::end(st),
 			[](auto c) {return !g_ascii_isalnum(c);});
 
-	if (alnum_pos != std::end(st)) {
+	if (alnum_pos != std::end(st) && alnum_pos != std::begin(st)) {
 		if (*alnum_pos == ':') {
 			if (st.substr(0, std::distance(std::begin(st), alnum_pos)) == "mailto") {
 				return true;
