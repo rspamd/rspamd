@@ -567,6 +567,35 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 	parser_env.cur_state = state;
 }
 
+static inline auto
+html_is_absolute_url(std::string_view st) -> bool
+{
+	auto alnum_pos = std::find_if(std::begin(st), std::end(st),
+			[](auto c) {return !g_ascii_isalnum(c);});
+
+	if (alnum_pos != std::end(st)) {
+		std::advance(alnum_pos, 1);
+
+		if (alnum_pos != std::end(st)) {
+			if (*alnum_pos == ':') {
+				if (st.substr(0, std::distance(std::begin(st), alnum_pos)) == "mailto") {
+					return true;
+				}
+
+				std::advance(alnum_pos, 1);
+				if (alnum_pos != std::end(st)) {
+					/* Include even malformed urls */
+					if (*alnum_pos == '/' || *alnum_pos == '\\') {
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 static auto
 html_process_url_tag(rspamd_mempool_t *pool,
 					 struct html_tag *tag,
@@ -586,7 +615,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			 * slash
 			 */
 
-			if (rspamd_substring_search(href_value.data(), href_value.size(), "://", 3) == -1) {
+			if (!html_is_absolute_url(href_value)) {
 
 				if (href_value.size() >= sizeof("data:") &&
 					g_ascii_strncasecmp(href_value.data(), "data:", sizeof("data:") - 1) == 0) {
