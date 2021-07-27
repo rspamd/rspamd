@@ -1821,8 +1821,7 @@ html_process_input(rspamd_mempool_t *pool,
 										"cannot parse css (error code: {}): {}",
 										static_cast<int>(ret_maybe.error().type),
 										ret_maybe.error().description.value_or("unknown error"));
-								msg_info_pool ("cannot parse css: %*s",
-										(int) err_str.size(), err_str.data());
+								msg_info_pool ("%*s", (int) err_str.size(), err_str.data());
 							}
 						}
 						else {
