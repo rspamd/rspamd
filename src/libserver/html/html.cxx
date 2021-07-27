@@ -1082,8 +1082,8 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			tag->closing.end = tag->closing.start;
 		}
 		else {
-			next_tag_offset = len;
-			tag->closing.end = len;
+			next_tag_offset = tag->content_offset;
+			tag->closing.end = tag->content_offset;
 		}
 	}
 	if (tag->closing.start == -1) {
@@ -1879,6 +1879,14 @@ html_process_input(rspamd_mempool_t *pool,
 			p = end;
 			break;
 		}
+	}
+
+	if (cur_tag && !(cur_tag->flags & FL_CLOSED) && cur_tag != &cur_closing_tag) {
+		cur_closing_tag.parent = cur_tag;
+		cur_closing_tag.id = cur_tag->id;
+		cur_tag = &cur_closing_tag;
+		html_check_balance(hc, cur_tag,
+				end - start, end - start);
 	}
 
 	/* Propagate styles */
