@@ -149,6 +149,7 @@ public:
 	css_parser(void) = delete; /* Require mempool to be set for logging */
 	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {
 		style_object.reset();
+		error.type = css_parse_error_type::PARSE_ERROR_NO_ERROR;
 	}
 
 	/*
@@ -156,7 +157,9 @@ public:
 	 * destruct it on errors (we assume that it is owned somewhere else)
 	 */
 	explicit css_parser(std::shared_ptr<css_style_sheet> &&existing, rspamd_mempool_t *pool) :
-			style_object(existing), pool(pool) {}
+			style_object(existing), pool(pool) {
+		error.type = css_parse_error_type::PARSE_ERROR_NO_ERROR;
+	}
 
 	/*
 	 * Process input css blocks
@@ -241,7 +244,8 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
-		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
+				"maximum nesting has reached when parsing function value");
 		return false;
 	}
 
@@ -289,7 +293,8 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 
 	if (!consume_current && ++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
-		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
+				"maximum nesting has reached when parsing simple block value");
 		return false;
 	}
 
@@ -340,7 +345,8 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
-		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
+				"maximum nesting has reached when parsing qualified rule value");
 		return false;
 	}
 
@@ -399,7 +405,8 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
-		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
+				"maximum nesting has reached when parsing at keyword");
 		return false;
 	}
 
@@ -463,7 +470,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
-		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING);
+		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
+				"maximum nesting has reached when parsing component value");
 		return false;
 	}
 
