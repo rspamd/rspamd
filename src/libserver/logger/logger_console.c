@@ -279,6 +279,11 @@ rspamd_log_console_log (const gchar *module, const gchar *id,
 			mremain -= mr;
 		}
 
+		/* Ensure that we have a space at the end */
+		if (m > modulebuf && *(m - 1) != ' ') {
+			*(m - 1) = ' ';
+		}
+
 		iov[niov].iov_base = tmpbuf;
 		iov[niov++].iov_len = r;
 		iov[niov].iov_base = modulebuf;

@@ -561,6 +561,11 @@ rspamd_log_file_log (const gchar *module, const gchar *id,
 		mremain -= mr;
 	}
 
+	/* Ensure that we have a space at the end */
+	if (m > modulebuf && *(m - 1) != ' ') {
+		*(m - 1) = ' ';
+	}
+
 	/* Construct IOV for log line */
 	iov[0].iov_base = tmpbuf;
 	iov[0].iov_len = r;
