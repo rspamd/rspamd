@@ -1875,7 +1875,7 @@ html_process_input(rspamd_mempool_t *pool,
 			msg_warn_pool("tags limit of %d tags is reached at the position %d;"
 						  " ignoring the rest of the HTML content",
 					(int) hc->all_tags.size(), (int) (p - start));
-			html_append_parsed(hc, {p, (std::size_t) (end - p)}, false);
+			c = p;
 			p = end;
 			break;
 		}
@@ -1956,6 +1956,9 @@ html_process_input(rspamd_mempool_t *pool,
 		if (cur_tag != nullptr) {
 			process_opening_tag();
 		}
+		break;
+	case tags_limit_overflow:
+		html_append_parsed(hc, {c, (std::size_t) (end - c)}, false);
 		break;
 	default:
 		/* Do nothing */
