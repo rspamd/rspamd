@@ -984,9 +984,15 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 }
 
 static inline auto
-html_append_parsed(struct html_content *hc, std::string_view data, bool transparent) -> auto
+html_append_parsed(struct html_content *hc, std::string_view data, bool transparent,
+		std::size_t input_len) -> std::size_t
 {
 	auto cur_offset = hc->parsed.size();
+
+	if (hc->parsed.size() > input_len) {
+		/* Impossible case, refuse to append */
+		return 0;
+	}
 
 	if (data.size() > 0) {
 		/* Handle multiple spaces at the begin */
@@ -1171,8 +1177,9 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		goffset initial_part_len = enclosed_start - cur_offset;
 
 		if (is_visible && initial_part_len > 0) {
-			html_append_parsed(hc, {start + cur_offset,
-									std::size_t(initial_part_len)}, is_transparent);
+			html_append_parsed(hc,
+					{start + cur_offset, std::size_t(initial_part_len)},
+					is_transparent, len);
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
@@ -1188,8 +1195,10 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		goffset final_part_len = tag->closing.start - cur_offset;
 
 		if (is_visible && final_part_len > 0) {
-			html_append_parsed(hc, {start + cur_offset,
-									std::size_t(final_part_len)}, is_transparent);
+			html_append_parsed(hc,
+					{start + cur_offset, std::size_t(final_part_len)},
+					 is_transparent,
+					 len);
 		}
 	}
 	if (is_block) {
@@ -1966,7 +1975,7 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 		break;
 	case tags_limit_overflow:
-		html_append_parsed(hc, {c, (std::size_t) (end - c)}, false);
+		html_append_parsed(hc, {c, (std::size_t) (end - c)}, false, end - start);
 		break;
 	default:
 		/* Do nothing */
