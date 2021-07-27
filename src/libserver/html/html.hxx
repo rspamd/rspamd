@@ -43,7 +43,6 @@ struct html_content {
 	struct rspamd_url *base_url = nullptr;
 	struct html_tag *root_tag = nullptr;
 	gint flags = 0;
-	guint total_tags = 0;
 	std::vector<bool> tags_seen;
 	std::vector<html_image *> images;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;

@@ -1283,7 +1283,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 	auto new_tag = [&](int flags = 0) -> struct html_tag * {
 
-		if (hc->total_tags > rspamd::html::max_tags) {
+		if (hc->all_tags.size() > rspamd::html::max_tags) {
 			hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
 
 			return nullptr;
