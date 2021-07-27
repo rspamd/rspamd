@@ -249,128 +249,133 @@ struct rspamd_logger_funcs* rspamd_logger_set_log_function (rspamd_logger_t *log
 /* Typical functions */
 
 extern guint rspamd_task_log_id;
+#ifdef __cplusplus
+#define RSPAMD_LOG_FUNC __FUNCTION__
+#else
+#define RSPAMD_LOG_FUNC G_STRFUNC
+#endif
 
 /* Logging in postfix style */
 #define msg_err(...)    rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         NULL, NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         NULL, NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         NULL, NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
         NULL, NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
         NULL, NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #define debug_task(...) rspamd_conditional_debug_fast (NULL, \
         task->from_addr, \
         rspamd_task_log_id, "task", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 /* Use the following macros if you have `task` in the function */
 #define msg_err_task(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_task(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice_task(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_task(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_task(...)  rspamd_conditional_debug_fast (NULL,  task->from_addr, \
         rspamd_task_log_id, "task", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_err_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_task_encrypted(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_MESSAGE|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_task_encrypted(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 /* Check for NULL pointer first */
 #define msg_err_task_check(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_task_check(...)  rspamd_conditional_debug_fast (NULL, \
         task ? task->from_addr : NULL, \
         rspamd_task_log_id, "task", task ? task->task_pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 /* Use the following macros if you have `pool` in the function */
 #define msg_err_pool(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         pool->tag.tagname, pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_pool(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         pool->tag.tagname, pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_pool(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         pool->tag.tagname, pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_pool(...)  rspamd_conditional_debug (NULL, NULL, \
         pool->tag.tagname, pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 /* Check for NULL pointer first */
 #define msg_err_pool_check(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_pool_check(...)  rspamd_conditional_debug (NULL, NULL, \
         pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #ifdef  __cplusplus
