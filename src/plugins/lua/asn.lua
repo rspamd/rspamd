@@ -71,7 +71,7 @@ local function asn_check(task)
       if dns_err and (dns_err ~= 'requested record is not found' and dns_err ~= 'no records with this name') then
         rspamd_logger.errx(task, 'error querying dns "%s" on %s: %s',
             req_name, serv, dns_err)
-        task:insert_result(options['symbol'] .. '_FAIL', 1, string.format('%s:%s', req_name, dns_err))
+        task:insert_result(options['symbol_fail'], 0, string.format('%s:%s', req_name, dns_err))
         return
       end
       if not results or not results[1] then
@@ -128,6 +128,13 @@ local configure_asn_module = function()
     rspamd_logger.errx("Unknown provider_type: %s", options['provider_type'])
     return false
   end
+
+  if options['symbol'] then
+    options['symbol_fail'] = options['symbol'] .. '_FAIL'
+  else
+    options['symbol_fail'] = 'ASN_FAIL'
+  end
+
   return true
 end
 
@@ -144,17 +151,17 @@ if configure_asn_module() then
       name = options['symbol'],
       parent = id,
       type = 'virtual',
-      flags = 'empty',
+      flags = 'empty,nostat',
       score = 0,
     })
-    rspamd_config:register_symbol{
-      name = options['symbol'] .. '_FAIL',
-      parent = id,
-      type = 'virtual',
-      flags = 'nostat',
-      score = 0,
-    }
   end
+  rspamd_config:register_symbol{
+    name = options['symbol_fail'],
+    parent = id,
+    type = 'virtual',
+    flags = 'empty,nostat',
+    score = 0,
+  }
 else
   lua_util.disable_module(N, 'config')
 end
