@@ -823,9 +823,10 @@ html_process_img_tag(rspamd_mempool_t *pool,
 								struct rspamd_url *existing;
 
 								img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
-								existing = rspamd_url_set_add_or_return(url_set, img->url);
+								existing = rspamd_url_set_add_or_return(url_set,
+										img->url);
 
-								if (existing != img->url) {
+								if (existing && existing != img->url) {
 									/*
 									 * We have some other URL that could be
 									 * found, e.g. from another part. However,
