@@ -1700,7 +1700,8 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 {
 	gboolean need_refork = TRUE;
 
-	if (wrk->state != rspamd_worker_state_running || rspamd_main->wanna_die) {
+	if (wrk->state != rspamd_worker_state_running || rspamd_main->wanna_die ||
+			(wrk->flags & RSPAMD_WORKER_OLD_CONFIG)) {
 		/* Do not refork workers that are intended to be terminated */
 		need_refork = FALSE;
 	}
@@ -1708,20 +1709,29 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 	if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 		/* Normal worker termination, do not fork one more */
 
-		if (wrk->hb.nbeats < 0 && rspamd_main->cfg->heartbeats_loss_max > 0 &&
-		        -(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
-			msg_info_main ("%s process %P terminated normally, but lost %L "
-				  "heartbeats, refork it",
-					g_quark_to_string (wrk->type),
-					wrk->pid,
-					-(wrk->hb.nbeats));
-			need_refork = TRUE;
-		}
-		else {
+		if (wrk->flags & RSPAMD_WORKER_OLD_CONFIG) {
+			/* Never re-fork old workers */
 			msg_info_main ("%s process %P terminated normally",
-					g_quark_to_string (wrk->type),
+					g_quark_to_string(wrk->type),
 					wrk->pid);
 			need_refork = FALSE;
+		}
+		else {
+			if (wrk->hb.nbeats < 0 && rspamd_main->cfg->heartbeats_loss_max > 0 &&
+				-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
+				msg_info_main ("%s process %P terminated normally, but lost %L "
+							   "heartbeats, refork it",
+						g_quark_to_string(wrk->type),
+						wrk->pid,
+						-(wrk->hb.nbeats));
+				need_refork = TRUE;
+			}
+			else {
+				msg_info_main ("%s process %P terminated normally",
+						g_quark_to_string(wrk->type),
+						wrk->pid);
+				need_refork = FALSE;
+			}
 		}
 	}
 	else {

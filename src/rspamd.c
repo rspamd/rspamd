@@ -781,13 +781,12 @@ static void
 mark_old_workers (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker *w = value;
-	struct rspamd_main __attribute__ ((unused)) *rspamd_main;
-
-	rspamd_main = w->srv;
 
 	if (w->state == rspamd_worker_state_running) {
 		w->state = rspamd_worker_state_wanna_die;
 	}
+
+	w->flags |= RSPAMD_WORKER_OLD_CONFIG;
 }
 
 static void
