@@ -13,3 +13,7 @@ Newlines
   Expect Symbol  CONFIG_SELECTOR_RE_RCPT_SUBJECT
   Expect Symbol  LUA_SELECTOR_RE
 
+Rspamd_text selector
+  Scan File  ${MESSAGE}
+  ...  Settings={symbols_enabled = [RSPAMD_TEXT_SELECTOR]}
+  Expect Symbol  RSPAMD_TEXT_SELECTOR
