@@ -493,7 +493,7 @@ exports.combine_selectors = function(_, selectors, delimiter)
         rawset(tbl, i, fun.duplicate(tostring(s)))
       else
         -- Raw table
-        rawset(tbl, i, s)
+        rawset(tbl, i, fun.map(tostring, s))
       end
     end
 
