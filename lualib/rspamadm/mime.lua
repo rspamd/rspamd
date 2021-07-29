@@ -385,8 +385,8 @@ local function extract_handler(opts)
             if opts.structure then
               local hc = part:get_html()
               local res = {}
-              process_func = function(k, v)
-                return rspamd_logger.slog("%s = %s", k, v)
+              process_func = function(elt)
+                return rspamd_logger.slog("%s", elt)
               end
 
               hc:foreach_tag('any', function(tag)
@@ -399,6 +399,10 @@ local function extract_handler(opts)
                 local content = tag:get_content()
                 if content then
                   elt.content = tostring(content)
+                end
+                local style = tag:get_style()
+                if style then
+                  elt.style = style
                 end
                 table.insert(res, elt)
               end)
