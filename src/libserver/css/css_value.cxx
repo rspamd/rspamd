@@ -147,14 +147,14 @@ constexpr static inline auto alpha_component_convert(const css_parser_token &tok
 			ret = (dbl / 100.0);
 		}
 		else {
-			if (dbl > 255) {
-				dbl = 255;
+			if (dbl > 1.0) {
+				dbl = 1.0;
 			}
 			else if (dbl < 0) {
 				dbl = 0;
 			}
 
-			ret = dbl / 255.0;
+			ret = dbl;
 		}
 	}
 
