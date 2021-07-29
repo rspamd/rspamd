@@ -349,6 +349,43 @@ end
 
 exports.rspamd_maybe_check_map = rspamd_maybe_check_map
 
+--[[[
+-- @function lua_maps.fill_config_maps(mname, options, defs)
+-- Fill maps that could be defined in defs, from the config in the options
+-- Defs is a table indexed by a map's parameter name and defining it's config,
+-- for example:
+defs = {
+  my_map = {
+    type = 'map',
+    description = 'my cool map',
+    optional = true,
+  }
+}
+-- Then this function will look for opts.my_map parameter and try to replace it's with
+-- a map with the specific type, description but not failing if it was empty.
+-- It will also set options.my_map_orig to the original value defined in the map
+--]]
+exports.fill_config_maps = function(mname, opts, map_defs)
+  assert(type(opts) == 'table')
+  assert(type(map_defs) == 'table')
+  for k, v in pairs(map_defs) do
+    if opts[k] then
+      local map = rspamd_map_add_from_ucl(opts[k], v.type or 'map', v.description)
+      if not map then
+        rspamd_logger.errx(rspamd_config, 'map add error %s for module %s', k, mname)
+        return false
+      end
+      opts[k..'_orig'] = opts[k]
+      opts[k] = map
+    elseif not v.optional then
+      rspamd_logger.errx(rspamd_config, 'cannot find non optional map %s for module %s', k, mname)
+      return false
+    end
+  end
+
+  return true
+end
+
 exports.map_schema = ts.one_of{
   ts.string, -- 'http://some_map'
   ts.array_of(ts.string), -- ['foo', 'bar']
