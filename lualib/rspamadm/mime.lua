@@ -406,7 +406,7 @@ local function extract_handler(opts)
                 end
                 table.insert(res, elt)
               end)
-              out_elts[fname] = res
+              table.insert(out_elts[fname], res)
             else
               table.insert(out_elts[fname], tostring(part:get_content(how)))
             end
