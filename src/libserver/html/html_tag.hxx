@@ -137,6 +137,20 @@ struct html_tag {
 
 		return 0;
 	}
+
+	constexpr auto get_content(std::string_view parsed) const -> std::string_view {
+		const auto clen = get_content_length();
+		if (content_offset < parsed.size()) {
+			if (parsed.size() - content_offset >= clen) {
+				return parsed.substr(content_offset, clen);
+			}
+			else {
+				return parsed.substr(content_offset, parsed.size() - content_offset);
+			}
+		}
+
+		return std::string_view{};
+	}
 };
 
 static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);

@@ -448,8 +448,9 @@ lua_html_foreach_tag (lua_State *L)
 				auto *ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
 				ltag->tag = tag;
 				ltag->html = hc;
+				auto ct = ltag->tag->get_content(hc->parsed);
 				rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
-				lua_pushinteger (L, tag->get_content_length());
+				lua_pushinteger (L, ct.size());
 
 				/* Leaf flag */
 				if (tag->children.empty()) {
@@ -579,17 +580,16 @@ lua_html_tag_get_content (lua_State *L)
 	struct rspamd_lua_text *t;
 
 	if (ltag) {
-		auto clen = ltag->tag->get_content_length();
-		if (ltag->html && clen && ltag->html->parsed.size() > ltag->tag->content_offset) {
-			if (ltag->html->parsed.size() - ltag->tag->content_offset < clen) {
-				clen = ltag->html->parsed.size() - ltag->tag->content_offset;
+
+		if (ltag->html) {
+			auto ct = ltag->tag->get_content(ltag->html->parsed);
+			if (ct.size() > 0) {
+				t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
+				rspamd_lua_setclass(L, "rspamd{text}", -1);
+				t->start = ct.data();
+				t->len = ct.size();
+				t->flags = 0;
 			}
-			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
-			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->start = reinterpret_cast<const char *>(ltag->html->parsed.data()) +
-					ltag->tag->content_offset;
-			t->len = clen;
-			t->flags = 0;
 		}
 		else {
 			lua_pushnil (L);
@@ -609,7 +609,13 @@ lua_html_tag_get_content_length (lua_State *L)
 	struct lua_html_tag *ltag = lua_check_html_tag (L, 1);
 
 	if (ltag) {
-		lua_pushinteger (L, ltag->tag->closing.start - ltag->tag->content_offset);
+		if (ltag->html) {
+			auto ct = ltag->tag->get_content(ltag->html->parsed);
+			lua_pushinteger (L, ct.size());
+		}
+		else {
+			lua_pushinteger (L, ltag->tag->get_content_length());
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

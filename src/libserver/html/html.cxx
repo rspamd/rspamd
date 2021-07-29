@@ -1976,7 +1976,8 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 		break;
 	case tags_limit_overflow:
-		html_append_parsed(hc, {c, (std::size_t) (end - c)}, false, end - start);
+		html_append_parsed(hc, {c, (std::size_t) (end - c)},
+				false, end - start);
 		break;
 	default:
 		/* Do nothing */
