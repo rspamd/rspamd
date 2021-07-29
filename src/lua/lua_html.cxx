@@ -441,13 +441,15 @@ lua_html_foreach_tag (lua_State *L)
 	if (hc && (any || !tags.empty()) && lua_isfunction (L, 3)) {
 		hc->traverse_all_tags([&](const rspamd::html::html_tag *tag) -> bool {
 			if (tag && (any || tags.contains(tag->id))) {
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				auto err_idx = lua_gettop(L);
 				lua_pushvalue(L, 3);
 
 				auto *ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
 				ltag->tag = tag;
 				ltag->html = hc;
 				rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
-				lua_pushinteger (L, tag->closing.start - tag->content_offset);
+				lua_pushinteger (L, tag->get_content_length());
 
 				/* Leaf flag */
 				if (tag->children.empty()) {
@@ -457,18 +459,18 @@ lua_html_foreach_tag (lua_State *L)
 					lua_pushboolean (L, false);
 				}
 
-				if (lua_pcall (L, 3, 1, 0) != 0) {
+				if (lua_pcall (L, 3, 1, err_idx) != 0) {
 					msg_err ("error in foreach_tag callback: %s", lua_tostring (L, -1));
-					lua_pop (L, 1);
+					lua_settop(L, err_idx - 1);
 					return false;
 				}
 
 				if (lua_toboolean (L, -1)) {
-					lua_pop(L, 1);
+					lua_settop(L, err_idx - 1);
 					return false;
 				}
 
-				lua_pop(L, 1);
+				lua_settop(L, err_idx - 1);
 			}
 
 			return true;
@@ -577,7 +579,7 @@ lua_html_tag_get_content (lua_State *L)
 	struct rspamd_lua_text *t;
 
 	if (ltag) {
-		auto clen = ltag->tag->closing.start - ltag->tag->content_offset;
+		auto clen = ltag->tag->get_content_length();
 		if (ltag->html && clen &&
 				ltag->html->parsed.size() >= ltag->tag->content_offset + clen) {
 			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));

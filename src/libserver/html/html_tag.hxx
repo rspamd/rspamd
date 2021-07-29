@@ -126,6 +126,17 @@ struct html_tag {
 		children.clear();
 		closing.clear();
 	}
+
+	constexpr auto get_content_length() const -> std::size_t {
+		if (flags & (FL_IGNORE|CM_HEAD)) {
+			return 0;
+		}
+		if (closing.start > content_offset) {
+			return closing.start - content_offset;
+		}
+
+		return 0;
+	}
 };
 
 static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);
