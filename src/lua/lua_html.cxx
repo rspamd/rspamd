@@ -580,8 +580,10 @@ lua_html_tag_get_content (lua_State *L)
 
 	if (ltag) {
 		auto clen = ltag->tag->get_content_length();
-		if (ltag->html && clen &&
-				ltag->html->parsed.size() >= ltag->tag->content_offset + clen) {
+		if (ltag->html && clen && ltag->html->parsed.size() > ltag->tag->content_offset) {
+			if (ltag->html->parsed.size() - ltag->tag->content_offset < clen) {
+				clen = ltag->html->parsed.size() - ltag->tag->content_offset;
+			}
 			t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->start = reinterpret_cast<const char *>(ltag->html->parsed.data()) +
