@@ -386,28 +386,38 @@ local function extract_handler(opts)
               local hc = part:get_html()
               local res = {}
               process_func = function(elt)
-                return rspamd_logger.slog("%s", elt)
+                local fun = require "fun"
+                if type(elt) == 'table' then
+                  return table.concat(fun.totable(
+                      fun.map(
+                          function(t)
+                            return rspamd_logger.slog("%s", t)
+                          end,
+                          elt)), '\n')
+                else
+                  return rspamd_logger.slog("%s", elt)
+                end
               end
 
               hc:foreach_tag('any', function(tag)
-                local elt = {}
-                local ex = tag:get_extra()
-                elt.tag = tag:get_type()
-                if ex then
-                  elt.extra = ex
-                end
-                local content = tag:get_content()
-                if content then
-                  elt.content = tostring(content)
-                end
-                local style = tag:get_style()
-                if style then
-                  elt.style = style
-                end
-                table.insert(res, elt)
+                  local elt = {}
+                  local ex = tag:get_extra()
+                  elt.tag = tag:get_type()
+                  if ex then
+                    elt.extra = ex
+                  end
+                  local content = tag:get_content()
+                  if content then
+                    elt.content = tostring(content)
+                  end
+                  local style = tag:get_style()
+                  if style then
+                    elt.style = style
+                  end
+                  table.insert(res, elt)
               end)
               table.insert(out_elts[fname], res)
-            else
+            else -- opts.structure
               table.insert(out_elts[fname], tostring(part:get_content(how)))
             end
           end
