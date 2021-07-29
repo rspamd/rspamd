@@ -590,6 +590,9 @@ lua_html_tag_get_content (lua_State *L)
 				t->len = ct.size();
 				t->flags = 0;
 			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 		else {
 			lua_pushnil (L);
