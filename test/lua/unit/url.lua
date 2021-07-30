@@ -140,7 +140,7 @@ context("URL check functions", function()
       user = "@", host = "example.com"
     }},
     {"https://example.com\\_Resources\\ClientImages\\UserData?ol\\o#ololo\\", true, {
-      host = "example.com", path = "_Resources/ClientImages/UserData",
+      host = "example.com", path = "_Resources\\ClientImages\\UserData",
       query = "ol\\o", fragment = "ololo\\",
     }},
   }
