@@ -1165,7 +1165,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					st = parse_port;
 					c = p + 1;
 				}
-				else if (*p == '/') {
+				else if (*p == '/' || *p == '\\') {
 					st = parse_path;
 					c = p + 1;
 				}
@@ -1309,11 +1309,11 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				/* Too large domain */
 				goto out;
 			}
-			if (t == '/' || t == ':' || t == '?' || t == '#') {
+			if (t == '/' || t == '\\' || t == ':' || t == '?' || t == '#') {
 				if (p - c == 0) {
 					goto out;
 				}
-				if (t == '/') {
+				if (t == '/' || t == '\\') {
 					SET_U (u, UF_HOST);
 					st = parse_suffix_slash;
 				}
@@ -1463,7 +1463,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			}
 			break;
 		case parse_port:
-			if (t == '/') {
+			if (t == '/' || t == '\\') {
 				pt = strtoul (c, NULL, 10);
 				if (pt == 0 || pt > 65535) {
 					goto out;
@@ -1515,7 +1515,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			p++;
 			break;
 		case parse_suffix_slash:
-			if (t != '/') {
+			if (t != '/' && t != '\\') {
 				c = p;
 				st = parse_path;
 			}

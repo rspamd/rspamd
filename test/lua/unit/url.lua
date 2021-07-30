@@ -138,7 +138,11 @@ context("URL check functions", function()
     }},
     {"http://@@example.com", true, {
       user = "@", host = "example.com"
-    }}
+    }},
+    {"https://example.com\\_Resources\\ClientImages\\UserData?ol\\o#ololo\\", true, {
+      host = "example.com", path = "_Resources/ClientImages/UserData",
+      query = "ol\\o", fragment = "ololo\\",
+    }},
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc
