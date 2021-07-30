@@ -59,11 +59,12 @@ local settings = {
   reporting = {
     redis_keys = {
       index_prefix = 'dmarc_idx',
-      report_prefix = 'dmarc',
+      report_prefix = 'dmarc_rpt',
       join_char = ';',
     },
     enabled = false,
     max_entries = 1000,
+    keys_expire = 172800,
     only_domains = nil,
   },
   actions = {},
@@ -73,15 +74,26 @@ local redis_params = nil
 
 local E = {}
 
+-- Keys:
+-- 1 = index key (string)
+-- 2 = report key (string)
+-- 3 = max report elements (number)
+-- 4 = expiry time for elements (number)
+-- Arguments
+-- 1 = dmarc domain
+-- 2 = dmarc report
 local take_report_id
 local take_report_script = [[
 local index_key = KEYS[1]
 local report_key = KEYS[2]
+local max_entries = -(tonumber(KEYS[3]) + 1)
+local keys_expiry = tonumber(KEYS[4])
 local dmarc_domain = ARGV[1]
 local report = ARGV[2]
 redis.call('SADD', index_key, report_key)
 redis.call('EXPIRE', index_key, 172800)
-redis.call('HINCRBY', report_key, report, 1)
+redis.call('ZINCRBY', report_key, 1, report)
+redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
 redis.call('EXPIRE', report_key, 172800)
 ]]
 
@@ -494,7 +506,8 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       rspamd_redis.exec_redis_script(take_report_id,
           {task = task, is_write = true},
           dmarc_report_cb,
-          {idx_key, dmarc_domain_key},
+          {idx_key, dmarc_domain_key,
+           tostring(settings.reporting.max_entries), tostring(settings.reporting.keys_expire)},
           {hdrfromdom, report_data})
     end
   end
@@ -682,6 +695,7 @@ elseif settings.reporting.enabled then
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
   else
+    rspamd_logger.infox(rspamd_config, 'dmarc reporting is enabled')
     take_report_id = rspamd_redis.add_redis_script(take_report_script, redis_params)
   end
 end
