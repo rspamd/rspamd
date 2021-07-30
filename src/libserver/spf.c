@@ -31,7 +31,9 @@
 #define SPF_ALL "all"
 #define SPF_A "a"
 #define SPF_IP4 "ip4"
+#define SPF_IP4_ALT "ipv4"
 #define SPF_IP6 "ip6"
+#define SPF_IP6_ALT "ipv6"
 #define SPF_PTR "ptr"
 #define SPF_MX "mx"
 #define SPF_EXISTS "exists"
@@ -2191,16 +2193,19 @@ spf_process_element (struct spf_record *rec,
 			break;
 		case 'i':
 			/* include or ip4 */
-			if (g_ascii_strncasecmp (begin, SPF_IP4,
-					sizeof (SPF_IP4) - 1) == 0) {
+			if (g_ascii_strncasecmp (begin, SPF_IP4, sizeof (SPF_IP4) - 1) == 0) {
 				res = parse_spf_ip4 (rec, addr);
 			}
-			else if (g_ascii_strncasecmp (begin, SPF_INCLUDE,
-					sizeof (SPF_INCLUDE) - 1) == 0) {
+			else if (g_ascii_strncasecmp (begin, SPF_INCLUDE, sizeof (SPF_INCLUDE) - 1) == 0) {
 				res = parse_spf_include (rec, addr);
 			}
-			else if (g_ascii_strncasecmp (begin, SPF_IP6, sizeof (SPF_IP6) -
-														  1) == 0) {
+			else if (g_ascii_strncasecmp (begin, SPF_IP6, sizeof (SPF_IP6) - 1) == 0) {
+				res = parse_spf_ip6 (rec, addr);
+			}
+			else if (g_ascii_strncasecmp (begin, SPF_IP4_ALT, sizeof (SPF_IP4_ALT) - 1) == 0) {
+				res = parse_spf_ip4 (rec, addr);
+			}
+			else if (g_ascii_strncasecmp (begin, SPF_IP6_ALT, sizeof (SPF_IP6_ALT) - 1) == 0) {
 				res = parse_spf_ip6 (rec, addr);
 			}
 			else {
