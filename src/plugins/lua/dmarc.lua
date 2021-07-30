@@ -57,6 +57,7 @@ local settings = {
   no_sampling_domains = nil,
   no_reporting_domains = nil,
   reporting = {
+    report_local_controller = false, -- Store reports for local/controller scans (for testing only)
     redis_keys = {
       index_prefix = 'dmarc_idx',
       report_prefix = 'dmarc_rpt',
@@ -135,19 +136,30 @@ end
 -- Returns a key used to be inserted into dmarc report sample
 local function dmarc_report(task, spf_ok, dkim_ok, disposition,
     sampled_out, hfromdom, spfdom, dres, spf_result)
+  local rspamd_lua_utils = require "lua_util"
+
   local ip = task:get_from_ip()
   if ip and not ip:is_valid() then
+    rspamd_logger.infox(task, 'cannot store dmarc report for %s: no valid source IP',
+        hfromdom)
     return nil
   end
-  local rspamd_lua_utils = require "lua_util"
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+
+  ip = ip:to_string()
+
+  if rspamd_lua_utils.is_rspamc_or_controller(task) and not settings.reporting.report_local_controller then
+    rspamd_logger.infox(task, 'cannot store dmarc report for %s from IP %s: has come from controller/rspamc',
+        hfromdom, ip)
+    return
+  end
+
   local dkim_pass = table.concat(dres.pass or E, '|')
   local dkim_fail = table.concat(dres.fail or E, '|')
   local dkim_temperror = table.concat(dres.temperror or E, '|')
   local dkim_permerror = table.concat(dres.permerror or E, '|')
   local disposition_to_return = (disposition == "softfail") and "none" or disposition
   local res = table.concat({
-    ip:to_string(), spf_ok, dkim_ok,
+    ip, spf_ok, dkim_ok,
     disposition_to_return, (sampled_out and 'sampled_out' or ''), hfromdom,
     dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, spfdom, spf_result}, ',')
 
@@ -449,18 +461,18 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     if settings.no_reporting_domains then
       if settings.no_reporting_domains:get_key(policy.domain) or
           settings.no_reporting_domains:get_key(rspamd_util.get_tld(policy.domain)) then
-        rspamd_logger.infox(task, 'DMARC reporting suppressed for %1', policy.domain)
+        rspamd_logger.infox(task, 'DMARC reporting suppressed for %s', policy.domain)
         return
       end
     end
 
     local function dmarc_report_cb(err)
       if not err then
-        rspamd_logger.infox(task, '<%1> dmarc report saved for %2',
-            task:get_message_id(), hdrfromdom)
+        rspamd_logger.infox(task, 'dmarc report saved for %s (rua = %s)',
+            hdrfromdom, policy.rua)
       else
-        rspamd_logger.errx(task, '<%1> dmarc report is not saved for %2: %3',
-            task:get_message_id(), hdrfromdom, err)
+        rspamd_logger.errx(task, 'dmarc report is not saved for %s: %s',
+            hdrfromdom, err)
       end
     end
 
@@ -486,8 +498,10 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     -- Prepare and send redis report element
     local period = os.date('!%Y%m%d',
         task:get_date({format = 'connect', gmt = true}))
+
+    -- Dmarc domain key must include dmarc domain, rua and period
     local dmarc_domain_key = table.concat(
-        {settings.reporting.redis_keys.report_prefix, hdrfromdom, period},
+        {settings.reporting.redis_keys.report_prefix, hdrfromdom, policy.rua, period},
         settings.reporting.redis_keys.join_char)
     local report_data = dmarc_report(task,
         spf_ok and 'pass' or 'fail',
@@ -499,8 +513,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
         dkim_results,
         spf_result)
 
-    local idx_key = table.concat({settings.redis_keys.index_prefix, period},
-        settings.redis_keys.join_char)
+
+    local idx_key = table.concat({settings.reporting.redis_keys.index_prefix, period},
+        settings.reporting.redis_keys.join_char)
 
     if report_data then
       rspamd_redis.exec_redis_script(take_report_id,
