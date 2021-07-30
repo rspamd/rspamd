@@ -312,8 +312,7 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 		st_got_dot_dot,
 		st_got_slash,
 		st_got_slash_slash,
-		st_replace_backslash,
-	} state = st_normal, next_state;
+	} state = st_normal;
 
 	p = path;
 	end = path + len;
@@ -330,11 +329,6 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 				state = st_got_dot;
 				dot = p;
 			}
-			else if (G_UNLIKELY (*p == '\\')) {
-				state = st_replace_backslash;
-				next_state = st_normal;
-				continue;
-			}
 			else {
 				*o++ = *p;
 			}
@@ -345,11 +339,6 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 				/* Ignore double slash */
 				*o++ = *p;
 				state = st_got_slash_slash;
-			}
-			else if (G_UNLIKELY (*p == '\\')) {
-				state = st_replace_backslash;
-				next_state = st_got_slash;
-				continue;
 			}
 			else if (G_UNLIKELY (*p == '.')) {
 				dot = p;
@@ -385,11 +374,6 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 				dot = NULL;
 				/* Ignore last slash */
 				state = st_normal;
-			}
-			else if (G_UNLIKELY (*p == '\\')) {
-				state = st_replace_backslash;
-				next_state = st_got_dot;
-				continue;
 			}
 			else if (*p == '.') {
 				/* Double dot character */
@@ -452,11 +436,6 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 					continue;
 				}
 			}
-			else if (G_UNLIKELY (*p == '\\')) {
-				state = st_replace_backslash;
-				next_state = st_got_dot_dot;
-				continue;
-			}
 			else {
 				/* We have something like ..bla or ... */
 				if (slash) {
@@ -475,14 +454,6 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen)
 			}
 
 			p ++;
-			break;
-		case st_replace_backslash:
-			/*
-			 * Replace backslash and return to the previous state as it was
-			 * a normal slash
-			 */
-			*(gchar *)p = '/';
-			state = next_state;
 			break;
 		}
 	}
