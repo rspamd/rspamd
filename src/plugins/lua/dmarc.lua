@@ -19,7 +19,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local rspamd_redis = require "lua_redis"
+local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 
 if confighelp then
@@ -518,7 +518,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
         settings.reporting.redis_keys.join_char)
 
     if report_data then
-      rspamd_redis.exec_redis_script(take_report_id,
+      lua_redis.exec_redis_script(take_report_id,
           {task = task, is_write = true},
           dmarc_report_cb,
           {idx_key, dmarc_domain_key,
@@ -706,12 +706,12 @@ lua_maps.fill_config_maps(N, settings, {
 if settings.reporting == true then
   rspamd_logger.errx(rspamd_config, 'old style dmarc reporting is NO LONGER supported, please read the documentation')
 elseif settings.reporting.enabled then
-  redis_params = rspamd_parse_redis_server('dmarc')
+  redis_params = lua_redis.parse_redis_server('dmarc', opts)
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
   else
     rspamd_logger.infox(rspamd_config, 'dmarc reporting is enabled')
-    take_report_id = rspamd_redis.add_redis_script(take_report_script, redis_params)
+    take_report_id = lua_redis.add_redis_script(take_report_script, redis_params)
   end
 end
 
