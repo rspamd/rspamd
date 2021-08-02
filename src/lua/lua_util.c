@@ -260,6 +260,18 @@ LUA_FUNCTION_DEF (util, strcasecmp_ascii);
  */
 LUA_FUNCTION_DEF (util, strequal_caseless);
 
+
+/***
+ * @function util.strequal_caseless(str1, str2)
+ * Compares two utf8 strings regardless of their case. Return `true` if `str1` is
+ * equal to `str2`
+ * @param {string} str1 utf8 encoded string
+ * @param {string} str2 utf8 encoded string
+ * @return {bool} result of comparison
+ */
+LUA_FUNCTION_DEF (util, strequal_caseless_utf8);
+
+
 /***
  * @function util.get_ticks()
  * Returns current number of ticks as floating point number
@@ -673,6 +685,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, lower_utf8),
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
+	LUA_INTERFACE_DEF (util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF (util, get_ticks),
 	LUA_INTERFACE_DEF (util, get_time),
 	LUA_INTERFACE_DEF (util, time_to_string),
@@ -1638,6 +1651,34 @@ lua_util_strequal_caseless (lua_State *L)
 	}
 
 	lua_pushboolean (L, (ret == 0) ? true : false);
+	return 1;
+}
+
+static gint
+lua_util_strequal_caseless_utf8 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t1, *t2;
+	gint ret = -1;
+
+	t1 = lua_check_text_or_string (L, 1);
+	t2 = lua_check_text_or_string (L, 2);
+
+	if (t1 && t2) {
+
+		if (t1->len == t2->len) {
+			ret = rspamd_utf8_strcmp_sizes(t1->start, t1->len, t2->start, t2->len);
+		}
+		else {
+			ret = t1->len - t2->len;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, (ret == 0) ? true : false);
+
 	return 1;
 }
 
