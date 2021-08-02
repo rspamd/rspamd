@@ -51,6 +51,15 @@ enum rspamd_normalise_result {
  */
 enum rspamd_normalise_result rspamd_normalise_unicode_inplace(gchar *start, gsize *len);
 
+/**
+ * Compare two strings using libicu collator
+ * @param s1
+ * @param s2
+ * @param n
+ * @return an integer greater than, equal to, or less than 0, according as the string s1 is greater than, equal to, or less than the string s2.
+ */
+int rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n);
+
 #ifdef  __cplusplus
 }
 #endif
