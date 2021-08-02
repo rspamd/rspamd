@@ -176,18 +176,23 @@ struct rspamd_icu_collate_storage {
 static rspamd_icu_collate_storage collate_storage;
 
 int
-rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n)
+rspamd_utf8_strcmp_sizes(const char *s1, gsize n1, const char *s2, gsize n2)
 {
-	if (n >= std::numeric_limits<int>::max()) {
+	if (n1 >= std::numeric_limits<int>::max() || n2 >= std::numeric_limits<int>::max()) {
 		/*
 		 * It's hard to say what to do here... But libicu wants int, so we fall
 		 * back to g_ascii_strcasecmp which can deal with size_t
 		 */
-		return g_ascii_strncasecmp(s1, s2, n);
+		if (n1 == n2) {
+			return g_ascii_strncasecmp(s1, s2, n1);
+		}
+		else {
+			return n1 - n2;
+		}
 	}
 
 	UErrorCode success = U_ZERO_ERROR;
-	auto res = collate_storage.collator->compareUTF8({s1, (int) n}, {s2, (int) n},
+	auto res = collate_storage.collator->compareUTF8({s1, (int) n1}, {s2, (int) n2},
 			success);
 
 	switch (res) {
@@ -199,6 +204,12 @@ rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n)
 	default:
 		return -1;
 	}
+}
+
+int
+rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n)
+{
+	return rspamd_utf8_strcmp_sizes(s1, n, s2, n);
 }
 
 TEST_SUITE("utf8 utils") {

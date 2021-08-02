@@ -59,6 +59,15 @@ enum rspamd_normalise_result rspamd_normalise_unicode_inplace(gchar *start, gsiz
  * @return an integer greater than, equal to, or less than 0, according as the string s1 is greater than, equal to, or less than the string s2.
  */
 int rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n);
+/**
+ * Similar to rspamd_utf8_strcmp but accepts two sizes
+ * @param s1
+ * @param n1
+ * @param s2
+ * @param n2
+ * @return
+ */
+int rspamd_utf8_strcmp_sizes(const char *s1, gsize n1, const char *s2, gsize n2);
 
 #ifdef  __cplusplus
 }
