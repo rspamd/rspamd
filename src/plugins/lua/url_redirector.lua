@@ -107,7 +107,7 @@ local function cache_url(task, orig_url, url, key, param)
             redis_trim_cb, --callback
             'ZREMRANGEBYRANK', -- command
             {settings.top_urls_key, '0',
-              tostring(settings.top_urls_count + 1)} -- arguments
+              tostring(-(settings.top_urls_count + 1))} -- arguments
           )
           if not ret then
             rspamd_logger.errx(task, 'cannot trim top urls set')
