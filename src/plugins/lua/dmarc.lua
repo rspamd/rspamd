@@ -58,40 +58,6 @@ redis.call('ZREMRANGEBYRANK', report_key, 0, max_entries)
 redis.call('EXPIRE', report_key, 172800)
 ]]
 
-local function gen_dmarc_grammar()
-  local lpeg = require "lpeg"
-  lpeg.locale(lpeg)
-  local space = lpeg.space^0
-  local name = lpeg.C(lpeg.alpha^1) * space
-  local sep = (lpeg.S("\\;") * space) + (lpeg.space^1)
-  local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
-  local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
-  local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
-  local version = lpeg.P("v") * space * lpeg.P("=") * space * lpeg.P("DMARC1")
-  local record = version * sep * list
-
-  return record
-end
-
-local dmarc_grammar = gen_dmarc_grammar()
-
-local function dmarc_key_value_case(elts)
-  if type(elts) ~= "table" then
-    return elts
-  end
-  local result = {}
-  for k, v in pairs(elts) do
-    k = k:lower()
-    if k ~= "v" then
-      v = v:lower()
-    end
-
-    result[k] = v
-  end
-
-  return result
-end
-
 local function maybe_force_action(task, disposition)
   if disposition then
     local force_action = settings.actions[disposition]
@@ -100,90 +66,6 @@ local function maybe_force_action(task, disposition)
       task:set_pre_result(force_action, 'Action set by DMARC', N, nil, nil, 'least')
     end
   end
-end
-
---[[
--- Used to check dmarc record, check elements and produce dmarc policy processed
--- result.
--- Returns:
---     false,false - record is garbadge
---     false,error_message - record is invalid
---     true,policy_table - record is valid and parsed
-]]
-local function dmarc_check_record(task, record, is_tld)
-  local failed_policy
-  local result = {
-    dmarc_policy = 'none'
-  }
-
-  local elts = dmarc_grammar:match(record)
-  lua_util.debugm(N, task, "got DMARC record: %s, tld_flag=%s, processed=%s",
-      record, is_tld, elts)
-
-  if elts then
-    elts = dmarc_key_value_case(elts)
-
-    local dkim_pol = elts['adkim']
-    if dkim_pol then
-      if dkim_pol == 's' then
-        result.strict_dkim = true
-      elseif dkim_pol ~= 'r' then
-        failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
-        return false,failed_policy
-      end
-    end
-
-    local spf_pol = elts['aspf']
-    if spf_pol then
-      if spf_pol == 's' then
-        result.strict_spf = true
-      elseif spf_pol ~= 'r' then
-        failed_policy = 'aspf tag has invalid value: ' .. spf_pol
-        return false,failed_policy
-      end
-    end
-
-    local policy = elts['p']
-    if policy then
-      if (policy == 'reject') then
-        result.dmarc_policy = 'reject'
-      elseif (policy == 'quarantine') then
-        result.dmarc_policy = 'quarantine'
-      elseif (policy ~= 'none') then
-        failed_policy = 'p tag has invalid value: ' .. policy
-        return false,failed_policy
-      end
-    end
-
-    -- Adjust policy if we are in tld mode
-    local subdomain_policy = elts['sp']
-    if elts['sp'] and is_tld then
-      result.subdomain_policy = elts['sp']
-
-      if (subdomain_policy == 'reject') then
-        result.dmarc_policy = 'reject'
-      elseif (subdomain_policy == 'quarantine') then
-        result.dmarc_policy = 'quarantine'
-      elseif (subdomain_policy == 'none') then
-        result.dmarc_policy = 'none'
-      elseif (subdomain_policy ~= 'none') then
-        failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
-        return false,failed_policy
-      end
-    end
-    result.pct = elts['pct']
-    if result.pct then
-      result.pct = tonumber(result.pct)
-    end
-
-    if elts.rua then
-      result.rua = elts['rua']
-    end
-  else
-    return false,false -- Ignore garbadge
-  end
-
-  return true, result
 end
 
 local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
@@ -538,7 +420,7 @@ local function dmarc_callback(task)
           local has_valid_policy = false
 
           for _,rec in ipairs(results) do
-            local ret,results_or_err = dmarc_check_record(task, rec, is_tld)
+            local ret,results_or_err = dmarc_common.dmarc_check_record(task, rec, is_tld)
 
             if not ret then
               if results_or_err then

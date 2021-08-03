@@ -17,6 +17,7 @@ limitations under the License.
 
 -- Common dmarc stuff
 local rspamd_logger = require "rspamd_logger"
+local lua_util = require "lua_util"
 local N = "dmarc"
 
 local exports = {}
@@ -56,6 +57,12 @@ exports.default_settings = {
       report_prefix = 'dmarc_rpt',
       join_char = ';',
     },
+    helo = 'rspamd.localhost',
+    smtp = '127.0.0.1',
+    smtp_port = 25,
+    retries = 2,
+    from_name = 'Rspamd',
+    msgid_from = 'rspamd',
     enabled = false,
     max_entries = 1000,
     keys_expire = 172800,
@@ -100,7 +107,6 @@ end
 
 
 exports.gen_munging_callback = function(munging_opts, settings)
-  local lua_util = require "lua_util"
   local rspamd_util = require "rspamd_util"
   local lua_mime = require "lua_mime"
   return function (task)
@@ -229,5 +235,125 @@ exports.gen_munging_callback = function(munging_opts, settings)
     task:insert_result('DMARC_MUNGED', 1.0, from.addr)
   end
 end
+
+local function gen_dmarc_grammar()
+  local lpeg = require "lpeg"
+  lpeg.locale(lpeg)
+  local space = lpeg.space^0
+  local name = lpeg.C(lpeg.alpha^1) * space
+  local sep = (lpeg.S("\\;") * space) + (lpeg.space^1)
+  local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
+  local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
+  local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
+  local version = lpeg.P("v") * space * lpeg.P("=") * space * lpeg.P("DMARC1")
+  local record = version * sep * list
+
+  return record
+end
+
+local dmarc_grammar = gen_dmarc_grammar()
+
+local function dmarc_key_value_case(elts)
+  if type(elts) ~= "table" then
+    return elts
+  end
+  local result = {}
+  for k, v in pairs(elts) do
+    k = k:lower()
+    if k ~= "v" then
+      v = v:lower()
+    end
+
+    result[k] = v
+  end
+
+  return result
+end
+
+--[[
+-- Used to check dmarc record, check elements and produce dmarc policy processed
+-- result.
+-- Returns:
+--     false,false - record is garbadge
+--     false,error_message - record is invalid
+--     true,policy_table - record is valid and parsed
+]]
+local function dmarc_check_record(log_obj, record, is_tld)
+  local failed_policy
+  local result = {
+    dmarc_policy = 'none'
+  }
+
+  local elts = dmarc_grammar:match(record)
+  lua_util.debugm(N, log_obj, "got DMARC record: %s, tld_flag=%s, processed=%s",
+      record, is_tld, elts)
+
+  if elts then
+    elts = dmarc_key_value_case(elts)
+
+    local dkim_pol = elts['adkim']
+    if dkim_pol then
+      if dkim_pol == 's' then
+        result.strict_dkim = true
+      elseif dkim_pol ~= 'r' then
+        failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
+        return false,failed_policy
+      end
+    end
+
+    local spf_pol = elts['aspf']
+    if spf_pol then
+      if spf_pol == 's' then
+        result.strict_spf = true
+      elseif spf_pol ~= 'r' then
+        failed_policy = 'aspf tag has invalid value: ' .. spf_pol
+        return false,failed_policy
+      end
+    end
+
+    local policy = elts['p']
+    if policy then
+      if (policy == 'reject') then
+        result.dmarc_policy = 'reject'
+      elseif (policy == 'quarantine') then
+        result.dmarc_policy = 'quarantine'
+      elseif (policy ~= 'none') then
+        failed_policy = 'p tag has invalid value: ' .. policy
+        return false,failed_policy
+      end
+    end
+
+    -- Adjust policy if we are in tld mode
+    local subdomain_policy = elts['sp']
+    if elts['sp'] and is_tld then
+      result.subdomain_policy = elts['sp']
+
+      if (subdomain_policy == 'reject') then
+        result.dmarc_policy = 'reject'
+      elseif (subdomain_policy == 'quarantine') then
+        result.dmarc_policy = 'quarantine'
+      elseif (subdomain_policy == 'none') then
+        result.dmarc_policy = 'none'
+      elseif (subdomain_policy ~= 'none') then
+        failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
+        return false,failed_policy
+      end
+    end
+    result.pct = elts['pct']
+    if result.pct then
+      result.pct = tonumber(result.pct)
+    end
+
+    if elts.rua then
+      result.rua = elts['rua']
+    end
+  else
+    return false,false -- Ignore garbadge
+  end
+
+  return true, result
+end
+
+exports.dmarc_check_record = dmarc_check_record
 
 return exports
