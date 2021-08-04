@@ -1591,6 +1591,7 @@ lua_dkim_canonicalize_handler (lua_State *L)
 
 	if (hname && hvalue && nlen > 0) {
 		inlen = nlen + vlen + sizeof (":" CRLF);
+		inlen += rspamd_count_comma(hvalue);
 
 		if (inlen > sizeof (st_buf)) {
 			buf = g_malloc (inlen);

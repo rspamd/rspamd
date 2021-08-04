@@ -518,6 +518,8 @@ struct rspamd_controller_pbkdf {
 
 extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
+guint rspamd_count_comma(const gchar *str);
+
 #ifdef  __cplusplus
 }
 #endif

@@ -2460,3 +2460,19 @@ rspamd_ptr_array_shuffle (GPtrArray *ar)
 		g_ptr_array_index (ar, i) = t;
 	}
 }
+
+guint rspamd_count_comma(const gchar *str)
+{
+       const gchar *p = str;
+       guint cnt = 0;
+
+       do {
+               p = strchr(p, ',');
+               if (p) {
+                       cnt++;
+                       p++;
+               }
+       } while (p);
+
+       return cnt;
+}

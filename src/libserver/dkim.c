@@ -2210,7 +2210,7 @@ rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
 {
 	gchar *t;
 	const guchar *h;
-	gboolean got_sp;
+	gboolean got_sp, got_quote_1, got_quote_2, got_escape, got_seperator;
 
 	/* Name part */
 	t = out;
@@ -2234,9 +2234,14 @@ rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
 	}
 
 	got_sp = FALSE;
+	got_quote_1 = FALSE;
+	got_quote_2 = FALSE;
+	got_escape = FALSE;
+	got_seperator = FALSE;
 
 	while (*h && (t - out < outlen))  {
 		if (g_ascii_isspace (*h)) {
+			got_seperator = FALSE;
 			if (got_sp) {
 				h++;
 				continue;
@@ -2249,10 +2254,36 @@ rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
 			}
 		}
 		else {
+			if (got_seperator) {
+				got_seperator = FALSE;
+				*t++ = ' ';
+				/*
+				 * Not setting got_sp, the next iteration will
+				 * be a non-sp character because *h remains
+				 * unchanged. This accounts for the missing
+				 * space after a comma.
+				 */
+				continue;
+			}
+
 			got_sp = FALSE;
+			if (*h == '\\' && !got_escape) {
+				got_escape = TRUE;
+				*t++ = *h++;
+				continue;
+			} else if (*h == '\'' && !got_escape && !got_quote_2) {
+				got_quote_1 ^= TRUE;
+
+			} else if (*h == '"' && !got_escape && !got_quote_1) {
+				got_quote_2 ^= TRUE;
+
+			} else if (*h == ',' && !got_quote_1 && !got_quote_2) {
+				   got_seperator = TRUE;
+			}
 		}
 
 		*t++ = *h++;
+		got_escape = FALSE;
 	}
 
 	if (g_ascii_isspace (*(t - 1))) {
@@ -2284,7 +2315,8 @@ rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
 	goffset r;
 	gboolean allocated = FALSE;
 
-	inlen = strlen (header) + strlen (header_name) + sizeof (":" CRLF);
+	inlen = strlen (header) + rspamd_count_comma (header) + strlen (header_name) +
+		sizeof (":" CRLF);
 
 	if (inlen > sizeof (st_buf)) {
 		buf = g_malloc (inlen);
