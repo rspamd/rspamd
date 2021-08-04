@@ -1094,6 +1094,12 @@ exports.enable_debug_logging = function()
   unconditional_debug = true
 end
 
+exports.enable_debug_modules = function(...)
+  for _,m in ipairs({...}) do
+    debug_modules[m] = true
+  end
+end
+
 exports.disable_debug_logging = function()
   unconditional_debug = false
 end
