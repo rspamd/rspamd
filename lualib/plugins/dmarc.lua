@@ -347,6 +347,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
     if elts.rua then
       result.rua = elts['rua']
     end
+    result.raw_elts = elts
   else
     return false,false -- Ignore garbadge
   end
