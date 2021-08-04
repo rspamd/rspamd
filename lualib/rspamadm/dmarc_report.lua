@@ -23,6 +23,7 @@ local lupa = require "lupa"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_url = require "rspamd_url"
 local rspamd_text = require "rspamd_text"
+local rspamd_util = require "rspamd_util"
 
 local N = 'dmarc_report'
 
@@ -383,6 +384,19 @@ local function validate_reporting_domain(reporting_domain)
   return nil
 end
 
+local function rcpt_list(tbl, func)
+  local res = {}
+  for _,r in ipairs(tbl) do
+    if func then
+      table.insert(res, func(r))
+    else
+      table.insert(res, r)
+    end
+  end
+
+  return table.concat(res, ',')
+end
+
 local function prepare_report(opts, start_time, rep_key)
   local rua = get_rua(rep_key)
   local reporting_domain = get_domain(rep_key)
@@ -395,7 +409,6 @@ local function prepare_report(opts, start_time, rep_key)
     logger.errx('report %s has no valid reporting_domain, skip it', rep_key)
     return nil
   end
-
 
   local ret, results = lua_redis.request(redis_params, redis_attrs,
       {'EXISTS', rep_key})
@@ -427,15 +440,53 @@ local function prepare_report(opts, start_time, rep_key)
   ret, results = lua_redis.request(redis_params, redis_attrs,
       {'ZRANGE', rep_key, '0', '-1', 'WITHSCORES'})
   local report_entries = {}
+  local end_time = os.time()
   table.insert(report_entries,
-      report_header(reporting_domain, start_time, os.time(), dmarc_record))
+      report_header(reporting_domain, start_time, end_time, dmarc_record))
   for i=1,#results,2 do
     local xml_record = entry_to_xml(process_report_entry(results[i], results[i + 1]))
     table.insert(report_entries, xml_record)
   end
   table.insert(report_entries, '</feedback>')
-  local compressed_xml = rspamd_text.fromtable(report_entries)
-  lua_util.debugm(N, 'got compressed xml: %s', compressed_xml)
+  local xml_to_compress = rspamd_text.fromtable(report_entries)
+  lua_util.debugm(N, 'got xml: %s', xml_to_compress)
+
+  -- Prepare SMTP message
+  local report_settings = dmarc_settings.reporting
+  local rcpt_string = rcpt_list(dmarc_record.rua, function(rua_elt)
+    return string.format('%s@%s', rua_elt:get_user(), rua_elt:get_host())
+  end)
+  local bcc_string
+  if report_settings.bcc_addrs then
+    bcc_string = rcpt_list(report_settings.bcc_addrs)
+  end
+  local uuid = gen_uuid()
+  local rhead = lua_util.jinja_template(report_template, {
+    from_name = report_settings.from_name,
+    from_addr = report_settings.email,
+    rcpt = rcpt_string,
+    bcc = bcc_string,
+    uuid = uuid,
+    reporting_domain = reporting_domain,
+    submitter = report_settings.domain,
+    report_id = string.format('%s.%d.%d', reporting_domain, start_time,
+        end_time),
+    report_date = rspamd_util.time_to_string(rspamd_util.get_time()),
+    message_id = rspamd_util.random_hex(16) .. '@' .. report_settings.msgid_from,
+    report_start = start_time,
+    report_end = end_time
+  }, true)
+  local rfooter = lua_util.jinja_template(report_footer, {
+    uuid = uuid,
+  }, true)
+  local message = rspamd_text.fromtable{
+    (rhead:gsub("\n", "\r\n")),
+    rspamd_util.encode_base64(rspamd_util.gzip_compress(xml_to_compress), 73),
+    rfooter:gsub("\n", "\r\n"),
+  }
+
+
+  lua_util.debugm(N, 'got final message: %s', message)
 
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
@@ -533,6 +584,8 @@ local function handler(args)
     start_time = tonumber(results)
   end
 
+  lua_util.debugm(N, 'previous last report date is %s', start_time)
+
   if not opts.date or #opts.date == 0 then
     opts.date = {os.date('!%Y%m%d', os.time())}
   end
@@ -549,6 +602,7 @@ local function handler(args)
   end
 
   if not opts.no_opt then
+    lua_util.debugm(N, 'set last report date to %s', os.time())
     lua_redis.request(redis_params, redis_attrs,
         {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire,
          tostring(os.time())})
