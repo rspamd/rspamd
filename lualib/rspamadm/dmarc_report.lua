@@ -24,6 +24,7 @@ local rspamd_mempool = require "rspamd_mempool"
 local rspamd_url = require "rspamd_url"
 local rspamd_text = require "rspamd_text"
 local rspamd_util = require "rspamd_util"
+local rspamd_dns = require "rspamd_dns"
 
 local N = 'dmarc_report'
 
@@ -48,16 +49,6 @@ parser:argument "date"
        :description "Date to process (today by default)"
        :argname "<DDMMYYYY>"
        :args "*"
-
-
--- return the timezone offset in seconds, as it was on the time given by ts
--- Eric Feliksik
-local function get_timezone_offset(ts)
-  local utcdate   = os.date("!*t", ts)
-  local localdate = os.date("*t", ts)
-  localdate.isdst = false -- this is the trick
-  return os.difftime(os.time(localdate), os.time(utcdate))
-end
 
 local report_template = [[From: "{= from_name =}" <{= from_addr =}>
 To: {= rcpt =}
@@ -94,7 +85,6 @@ local report_footer = [[
 
 ------=_NextPart_{= uuid =}--]]
 
-local tz_offset = get_timezone_offset(os.time())
 local dmarc_settings = {}
 local redis_params
 local redis_attrs = {
@@ -121,10 +111,12 @@ local function load_config(opts)
   end
 end
 
+-- Concat elements using redis_keys.join_char
 local function redis_prefix(...)
   return table.concat({...}, dmarc_settings.reporting.redis_keys.join_char)
 end
 
+-- Helper to shuffle a Lua table
 local function shuffle(tbl)
   local size = #tbl
   for i = size, 1, -1 do
@@ -192,6 +184,7 @@ end
 -- Enable xml escaping in lupa templates
 lupa.filters.escape_xml = escape_xml
 
+-- Creates report XML header
 local function report_header(reporting_domain, report_start, report_end, domain_policy)
   local report_id = string.format('%s.%d.%d',
       reporting_domain, report_start, report_end)
@@ -226,6 +219,7 @@ local function report_header(reporting_domain, report_start, report_end, domain_
   }, true)
 end
 
+-- Generate xml entry for a preprocessed redis row
 local function entry_to_xml(data)
   local xml_template = [[<record>
   <row>
@@ -262,6 +256,7 @@ local function entry_to_xml(data)
   return lua_util.jinja_template(xml_template, {data = data}, true)
 end
 
+-- Process a report entry stored in Redis splitting it to a lua table
 local function process_report_entry(data, score)
   local split = lua_util.str_split(data, ',')
   local row = {
@@ -293,6 +288,7 @@ local function process_report_entry(data, score)
   return row
 end
 
+-- Process a single rua entry, validating in DNS if needed
 local function process_rua(reporting_domain, rua)
   local parts = lua_util.str_split(rua, ',')
 
@@ -345,8 +341,9 @@ local function process_rua(reporting_domain, rua)
   return nil
 end
 
+-- Validate reporting domain, extracting rua and checking 3rd party report domains
+-- This function returns a full dmarc record processed + rua as a list of url objects
 local function validate_reporting_domain(reporting_domain)
-  local rspamd_dns = require "rspamd_dns"
   -- Now check the domain policy
   local is_ok, results = rspamd_dns.request({
     config = rspamd_config,
@@ -384,6 +381,7 @@ local function validate_reporting_domain(reporting_domain)
   return nil
 end
 
+-- Returns a list of recipients from a table as a string processing elements if needed
 local function rcpt_list(tbl, func)
   local res = {}
   for _,r in ipairs(tbl) do
@@ -395,6 +393,47 @@ local function rcpt_list(tbl, func)
   end
 
   return table.concat(res, ',')
+end
+
+-- Synchronous smtp send function
+local function send_reports_by_smtp(opts, reports)
+  local lua_smtp = require "lua_smtp"
+  local reports_remaining = #reports
+  local reports_failed = 0
+  local report_settings = dmarc_settings.reporting
+
+  local function gen_sendmail_cb(report)
+    return function(ret, err)
+      reports_remaining = reports_remaining - 1
+      if not ret then
+        logger.errx("Couldn't send mail for %s: %s", report.reporting_domain, err)
+        reports_failed = reports_failed + 1
+      else
+        lua_util.debugm(N, 'successfully sent a report for %s: %s bytes sent',
+            report.reporting_domain, #report.message)
+      end
+    end
+  end
+
+  for _,report in ipairs(reports) do
+    local ret = lua_smtp.sendmail({
+      ev_base = rspamadm_ev_base,
+      session = rspamadm_session,
+      config = rspamd_config,
+      host = report_settings.smtp,
+      port = report_settings.smtp_port or 25,
+      resolver = rspamadm_dns_resolver,
+      from = report_settings.email,
+      recipients = report.rcpts,
+      helo = report_settings.helo or 'rspamd.localhost',
+    }, report.message, gen_sendmail_cb(report))
+
+    if ret then
+      reports_remaining = reports_remaining + 1
+    end
+  end
+
+  return reports_remaining
 end
 
 local function prepare_report(opts, start_time, rep_key)
@@ -492,6 +531,12 @@ local function prepare_report(opts, start_time, rep_key)
     lua_redis.request(redis_params, redis_attrs,
         {'DEL', rep_key})
   end
+
+  return {
+    message = message,
+    rcpts = lua_util.str_split(rcpt_string .. (bcc_string or ''), ','),
+    reporting_domain = reporting_domain
+  }
 end
 
 local function process_report_date(opts, start_time, date)
@@ -532,6 +577,7 @@ local function process_report_date(opts, start_time, date)
     end
   end
 
+  -- Shuffle reports to make sending more fair
   shuffle(reports)
   -- Remove processed key
   if not opts.no_opt then
@@ -539,7 +585,7 @@ local function process_report_date(opts, start_time, date)
         {'DEL', idx_key})
   end
 
-  return #reports
+  return send_reports_by_smtp(opts, reports)
 end
 
 local function handler(args)
