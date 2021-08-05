@@ -122,6 +122,12 @@ constexpr auto sv_equals(std::string_view s1, std::string_view s2) -> auto {
 		});
 }
 
+constexpr auto
+is_transfer_proto(struct rspamd_url *u) -> bool
+{
+	return (u->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_FTP)) != 0;
+}
+
 auto
 html_url_is_phished(rspamd_mempool_t *pool,
 					struct rspamd_url *href_url,
@@ -141,11 +147,23 @@ html_url_is_phished(rspamd_mempool_t *pool,
 				RSPAMD_URL_FIND_ALL,
 				&url_pos, NULL) && url_str != nullptr) {
 
+		if (url_pos > 0) {
+			/*
+			 * We have some url at some offset, so we need to check what is
+			 * at the start of the text
+			 */
+			for (const auto p : text_data)
+				if (!g_ascii_isspace(p)) {
+					return std::nullopt;
+				}
+			}
+		}
+
 		text_url = rspamd_mempool_alloc0_type (pool, struct rspamd_url);
 		auto rc = rspamd_url_parse(text_url, url_str, strlen(url_str), pool,
 				RSPAMD_URL_PARSE_TEXT);
 
-		if (rc == URI_ERRNO_OK) {
+		if (rc == URI_ERRNO_OK && is_transfer_proto(text_url) == is_transfer_proto(href_url)) {
 			disp_tok = convert_idna_hostname_maybe(pool, text_url, false);
 			href_tok = convert_idna_hostname_maybe(pool, href_url, false);
 
