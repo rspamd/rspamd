@@ -92,7 +92,7 @@ reconf['HAS_X_ANTIABUSE'] = {
 }
 
 reconf['X_PHP_EVAL'] = {
-  re = "X-PHP-Script=/eval\\(\\)\\'d/Hi || X-PHP-Originating-Script=/eval\\(\\)\\'d/Hi",
+  re = [[X-PHP-Script=/eval\(\)'d code/H || X-PHP-Originating-Script=/eval\(\)'d code/H]],
   description = "Message sent using eval'd PHP",
   score = 4.0,
   group = "compromised_hosts"
