@@ -152,7 +152,7 @@ html_url_is_phished(rspamd_mempool_t *pool,
 			 * We have some url at some offset, so we need to check what is
 			 * at the start of the text
 			 */
-			for (const auto p : text_data)
+			for (const auto p : text_data) {
 				if (!g_ascii_isspace(p)) {
 					return std::nullopt;
 				}
