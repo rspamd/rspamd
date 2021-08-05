@@ -303,13 +303,13 @@ local function process_rua(reporting_domain, rua)
     local u = rspamd_url.create(pool, a:gsub('!%d+[kmg]?$', ''))
     if u then
       -- Check each address for sanity
-      if u:get_tld() == reporting_domain then
+      if reporting_domain == u:get_tld() or reporting_domain == u:get_host() then
         -- Same domain - always include
         table.insert(addrs, u)
       else
         -- We need to check authority
         local resolve_str = string.format('%s._report._dmarc.%s',
-            reporting_domain, u:get_tld())
+            reporting_domain, u:get_host())
         local is_ok, results = rspamd_dns.request({
           config = rspamd_config,
           session = rspamadm_session,
@@ -318,7 +318,7 @@ local function process_rua(reporting_domain, rua)
         })
 
         if not is_ok then
-          logger.errx('cannot resolve %s: %s; exclude %s', reporting_domain, results, a)
+          logger.errx('cannot resolve %s: %s; exclude %s', resolve_str, results, a)
         else
           local found = false
           for _,t in ipairs(results) do
@@ -357,7 +357,7 @@ local function validate_reporting_domain(reporting_domain)
     name = '_dmarc.' .. reporting_domain ,
   })
 
-  if not is_ok then
+  if not is_ok or not results then
     logger.errx('cannot resolve _dmarc.%s: %s', reporting_domain, results)
     return nil
   end
