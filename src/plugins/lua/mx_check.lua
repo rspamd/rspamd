@@ -156,6 +156,7 @@ local function mx_check(task)
         mxes[name].checked = true
       else
         -- Try to open TCP connection to port 25
+
         for _,res in ipairs(results) do
           local t_ret = rspamd_tcp.new({
             task = task,

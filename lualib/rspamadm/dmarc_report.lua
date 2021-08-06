@@ -121,15 +121,7 @@ local function redis_prefix(...)
   return table.concat({...}, dmarc_settings.reporting.redis_keys.join_char)
 end
 
--- Helper to shuffle a Lua table
-local function shuffle(tbl)
-  local size = #tbl
-  for i = size, 1, -1 do
-    local rand = math.random(size)
-    tbl[i], tbl[rand] = tbl[rand], tbl[i]
-  end
-  return tbl
-end
+
 
 local function get_rua(rep_key)
   local parts = lua_util.str_split(rep_key, dmarc_settings.reporting.redis_keys.join_char)
@@ -605,7 +597,7 @@ local function process_report_date(opts, start_time, date)
   end
 
   -- Shuffle reports to make sending more fair
-  shuffle(reports)
+  lua_util.shuffle(reports)
   -- Remove processed key
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
