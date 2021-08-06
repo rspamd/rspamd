@@ -152,24 +152,23 @@ local function mx_check(task)
         check_results(mxes)
       end
 
-      if err or not results then
+      if err or not results or #results == 0 then
         mxes[name].checked = true
       else
-        -- Try to open TCP connection to port 25
+        -- Try to open TCP connection to port 25 for a random IP address
+        -- see #3839 on GitHub
+        lua_util.shuffle(results)
+        local t_ret = rspamd_tcp.new({
+          task = task,
+          host = results[1]:to_string(),
+          callback = io_cb,
+          on_connect = on_connect_cb,
+          timeout = settings.timeout,
+          port = 25
+        })
 
-        for _,res in ipairs(results) do
-          local t_ret = rspamd_tcp.new({
-            task = task,
-            host = res:to_string(),
-            callback = io_cb,
-            on_connect = on_connect_cb,
-            timeout = settings.timeout,
-            port = 25
-          })
-
-          if not t_ret then
-            mxes[name].checked = true
-          end
+        if not t_ret then
+          mxes[name].checked = true
         end
       end
       check_results(mxes)
