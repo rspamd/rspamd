@@ -159,24 +159,29 @@ html_url_is_phished(rspamd_mempool_t *pool,
 		auto rc = rspamd_url_parse(text_url, url_str, strlen(url_str), pool,
 				RSPAMD_URL_PARSE_TEXT);
 
-		if (rc == URI_ERRNO_OK && is_transfer_proto(text_url) == is_transfer_proto(href_url)) {
-			disp_tok = convert_idna_hostname_maybe(pool, text_url, false);
-			href_tok = convert_idna_hostname_maybe(pool, href_url, false);
+		if (rc == URI_ERRNO_OK) {
+			text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 
-			if (!sv_equals(disp_tok, href_tok) &&
-				text_url->tldlen > 0 && href_url->tldlen > 0) {
+			/* Check for phishing */
+			if (is_transfer_proto(text_url) == is_transfer_proto(href_url)) {
+				disp_tok = convert_idna_hostname_maybe(pool, text_url, false);
+				href_tok = convert_idna_hostname_maybe(pool, href_url, false);
 
-				/* Apply the same logic for TLD */
-				disp_tok = convert_idna_hostname_maybe(pool, text_url, true);
-				href_tok = convert_idna_hostname_maybe(pool, href_url, true);
+				if (!sv_equals(disp_tok, href_tok) &&
+					text_url->tldlen > 0 && href_url->tldlen > 0) {
 
-				if (!sv_equals(disp_tok, href_tok)) {
-					/* Check if one url is a subdomain for another */
+					/* Apply the same logic for TLD */
+					disp_tok = convert_idna_hostname_maybe(pool, text_url, true);
+					href_tok = convert_idna_hostname_maybe(pool, href_url, true);
 
-					if (!rspamd_url_is_subdomain(disp_tok, href_tok)) {
-						href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
-						href_url->linked_url = text_url;
-						text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+					if (!sv_equals(disp_tok, href_tok)) {
+						/* Check if one url is a subdomain for another */
+
+						if (!rspamd_url_is_subdomain(disp_tok, href_tok)) {
+							href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
+							href_url->linked_url = text_url;
+							text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+						}
 					}
 				}
 			}
