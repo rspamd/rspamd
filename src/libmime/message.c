@@ -229,7 +229,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 	const gchar *p = begin, *c = begin;
-	gboolean crlf_added = FALSE;
+	gboolean crlf_added = FALSE, is_utf = IS_TEXT_PART_UTF (part);
 	gboolean url_open_bracket = FALSE;
 	UChar32 uc;
 
@@ -240,7 +240,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 	} state = normal_char;
 
 	while (p < pe) {
-		if (IS_TEXT_PART_UTF (part)) {
+		if (G_LIKELY(is_utf)) {
 			gint32 off = p - begin;
 			U8_NEXT (begin, off, pe - begin, uc);
 
