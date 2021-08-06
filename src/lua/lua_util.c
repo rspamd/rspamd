@@ -239,21 +239,10 @@ LUA_FUNCTION_DEF (util, strlen_utf8);
  */
 LUA_FUNCTION_DEF (util, lower_utf8);
 
-
-/***
- * @function util.strcasecmp(str1, str2)
- * Compares two ascii strings regardless of their case. Return value >0, 0 and <0
- * if `str1` is more, equal or less than `str2`
- * @param {string} str1 plain string
- * @param {string} str2 plain string
- * @return {number} result of comparison
- */
-LUA_FUNCTION_DEF (util, strcasecmp_ascii);
-
 /***
  * @function util.strequal_caseless(str1, str2)
- * Compares two utf8 strings regardless of their case. Return `true` if `str1` is
- * equal to `str2`
+ * Compares two strings regardless of their case using ascii comparison.
+ * Returns `true` if `str1` is equal to `str2`
  * @param {string} str1 utf8 encoded string
  * @param {string} str2 utf8 encoded string
  * @return {bool} result of comparison
@@ -262,9 +251,9 @@ LUA_FUNCTION_DEF (util, strequal_caseless);
 
 
 /***
- * @function util.strequal_caseless(str1, str2)
- * Compares two utf8 strings regardless of their case. Return `true` if `str1` is
- * equal to `str2`
+ * @function util.strequal_caseless_utf8(str1, str2)
+ * Compares two utf8 strings regardless of their case using utf8 collation rules.
+ * Returns `true` if `str1` is equal to `str2`
  * @param {string} str1 utf8 encoded string
  * @param {string} str2 utf8 encoded string
  * @return {bool} result of comparison
@@ -683,7 +672,6 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
 	LUA_INTERFACE_DEF (util, lower_utf8),
-	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -1601,33 +1589,6 @@ lua_util_lower_utf8 (lua_State *L)
 }
 
 static gint
-lua_util_strcasecmp_ascii (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t1, *t2;
-	gint ret = -1;
-
-	t1 = lua_check_text_or_string (L, 1);
-	t2 = lua_check_text_or_string (L, 2);
-
-	if (t1 && t2) {
-
-		if (t1->len == t2->len) {
-			ret = rspamd_lc_cmp (t1->start, t2->start, t1->len);
-		}
-		else {
-			ret = t1->len - t2->len;
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	lua_pushinteger (L, ret);
-	return 1;
-}
-
-static gint
 lua_util_strequal_caseless (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -1665,13 +1626,7 @@ lua_util_strequal_caseless_utf8 (lua_State *L)
 	t2 = lua_check_text_or_string (L, 2);
 
 	if (t1 && t2) {
-
-		if (t1->len == t2->len) {
-			ret = rspamd_utf8_strcmp_sizes(t1->start, t1->len, t2->start, t2->len);
-		}
-		else {
-			ret = t1->len - t2->len;
-		}
+		ret = rspamd_utf8_strcmp_sizes(t1->start, t1->len, t2->start, t2->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
