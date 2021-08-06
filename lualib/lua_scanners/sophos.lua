@@ -78,7 +78,7 @@ local function sophos_config(opts)
   return nil
 end
 
-local function sophos_check(task, content, digest, rule)
+local function sophos_check(task, content, digest, rule, maybe_part)
   local function sophos_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -115,7 +115,8 @@ local function sophos_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed',
+              0.0, 'fail', maybe_part)
         end
       else
         upstream:ok()
@@ -125,8 +126,8 @@ local function sophos_check(task, content, digest, rule)
         local vname = string.match(data, 'VIRUS (%S+) ')
         local cached
         if vname then
-          common.yield_result(task, rule, vname)
-          common.save_cache(task, digest, rule, vname)
+          common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
+          common.save_cache(task, digest, rule, vname, 1.0, maybe_part)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
@@ -141,21 +142,25 @@ local function sophos_check(task, content, digest, rule)
             conn:add_read(sophos_callback)
           elseif string.find(data, 'FAIL 0212') then
             rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
-            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'encrypted')
+            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)',
+                0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           elseif string.find(data, 'REJ 4') then
             rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
-            common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)', 0.0, 'fail')
+            common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)',
+                0.0, 'fail', maybe_part)
             -- excplicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
-            common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)', 0.0, 'fail')
+            common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)',
+                0.0, 'fail', maybe_part)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            common.yield_result(task, rule, 'unhandled response: ' .. data, 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled response: ' .. data,
+                0.0, 'fail', maybe_part)
           end
           if cached then
-            common.save_cache(task, digest, rule, cached)
+            common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
           end
         end
       end
@@ -171,7 +176,8 @@ local function sophos_check(task, content, digest, rule)
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, sophos_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      sophos_check_uncached, maybe_part) then
     return
   else
     sophos_check_uncached()

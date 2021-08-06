@@ -222,7 +222,8 @@ local function check_mime_type(task)
     end
 
     -- Decode hex encoded characters
-    fname = string.gsub(fname, '%%(%x%x)', function (hex) return string.char(tonumber(hex,16)) end )
+    fname = string.gsub(fname, '%%(%x%x)',
+        function (hex) return string.char(tonumber(hex,16)) end )
 
     -- Replace potentially bad characters with '?'
     fname = fname:gsub('[^%s%g]', '?')

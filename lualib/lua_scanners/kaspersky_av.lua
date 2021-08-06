@@ -79,7 +79,7 @@ local function kaspersky_config(opts)
   return nil
 end
 
-local function kaspersky_check(task, content, digest, rule)
+local function kaspersky_check(task, content, digest, rule, maybe_part)
   local function kaspersky_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -138,7 +138,9 @@ local function kaspersky_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
+          common.yield_result(task, rule,
+              'failed to scan and retransmits exceed', 0.0, 'fail',
+              maybe_part)
         end
 
       else
@@ -154,15 +156,16 @@ local function kaspersky_check(task, content, digest, rule)
         else
           local vname = string.match(data, ': (.+) FOUND')
           if vname then
-            common.yield_result(task, rule, vname)
+            common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
             cached = vname
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            common.yield_result(task, rule, 'unhandled response', 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled response',
+                0.0, 'fail', maybe_part)
           end
         end
         if cached then
-          common.save_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
       end
     end
@@ -178,7 +181,8 @@ local function kaspersky_check(task, content, digest, rule)
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, kaspersky_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      kaspersky_check_uncached, maybe_part) then
     return
   else
     kaspersky_check_uncached()

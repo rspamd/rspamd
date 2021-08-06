@@ -62,13 +62,20 @@ local function match_patterns(default_sym, found, patterns, dyn_weight)
   end
 end
 
-local function yield_result(task, rule, vname, dyn_weight, is_fail)
+local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
   local all_whitelisted = true
   local patterns
   local symbol
-  local threat_table = {}
+  local threat_table
   local threat_info
   local flags
+
+  if type(vname) == 'string' then
+    threat_table = {vname}
+  elseif type(vname) == 'table' then
+    threat_table = vname
+  end
+
 
   -- This should be more generic
   if not is_fail then
@@ -93,11 +100,6 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
     dyn_weight = 1.0
   end
 
-  if type(vname) == 'string' then
-    table.insert(threat_table, vname)
-  elseif type(vname) == 'table' then
-    threat_table = vname
-  end
 
   for _, tm in ipairs(threat_table) do
     local symname, symscore = match_patterns(symbol, tm, patterns, dyn_weight)
@@ -107,7 +109,15 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
       all_whitelisted = false
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
           rule.log_prefix, threat_info, tm, symscore)
-      task:insert_result(symname, symscore, tm)
+
+      if maybe_part and rule.show_attachments and maybe_part:get_filename() then
+        local fname = maybe_part:get_filename()
+        task:insert_result(symname, symscore, string.format("%s|%s",
+            tm, fname))
+      else
+        task:insert_result(symname, symscore, tm)
+      end
+
     end
   end
 
@@ -196,7 +206,7 @@ local function dynamic_scan(task, rule)
   end
 end
 
-local function need_check(task, content, rule, digest, fn)
+local function need_check(task, content, rule, digest, fn, maybe_part)
 
   local uncached = true
   local key = digest
@@ -207,15 +217,18 @@ local function need_check(task, content, rule, digest, fn)
       data = lua_util.str_split(data, '\t')
       local threat_string = lua_util.str_split(data[1], '\v')
       local score = data[2] or rule.default_score
+
       if threat_string[1] ~= 'OK' then
         if threat_string[1] == 'MACRO' then
-          yield_result(task, rule, 'File contains macros', 0.0, 'macro')
+          yield_result(task, rule, 'File contains macros',
+              0.0, 'macro', maybe_part)
         elseif threat_string[1] == 'ENCRYPTED' then
-          yield_result(task, rule, 'File is encrypted', 0.0, 'encrypted')
+          yield_result(task, rule, 'File is encrypted',
+              0.0, 'encrypted', maybe_part)
         else
           lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
               rule.log_prefix, key, threat_string[1], score)
-          yield_result(task, rule, threat_string, score)
+          yield_result(task, rule, threat_string, score, false, maybe_part)
         end
 
       else
@@ -266,7 +279,7 @@ local function need_check(task, content, rule, digest, fn)
 
 end
 
-local function save_cache(task, digest, rule, to_save, dyn_weight)
+local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
   local key = digest
   if not dyn_weight then dyn_weight = 1.0 end
 
@@ -285,7 +298,12 @@ local function save_cache(task, digest, rule, to_save, dyn_weight)
     to_save = table.concat(to_save, '\v')
   end
 
-  local value = table.concat({to_save, dyn_weight}, '\t')
+  local value_tbl = {to_save, dyn_weight}
+  if maybe_part and rule.show_attachments and maybe_part:get_filename() then
+    local fname = maybe_part:get_filename()
+    table.insert(value_tbl, fname)
+  end
+  local value = table.concat(value_tbl, '\t')
 
   if rule.redis_params and rule.prefix then
     key = rule.prefix .. key

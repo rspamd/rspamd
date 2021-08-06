@@ -98,7 +98,7 @@ local function icap_config(opts)
   return nil
 end
 
-local function icap_check(task, content, digest, rule)
+local function icap_check(task, content, digest, rule, maybe_part)
   local function icap_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -162,7 +162,8 @@ local function icap_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed - error: %s', rule.log_prefix, err_m or '')
-          common.yield_result(task, rule, 'failed - error: ' .. err_m or '', 0.0, 'fail')
+          common.yield_result(task, rule, 'failed - error: ' .. err_m or '',
+              0.0, 'fail', maybe_part)
         end
       end
 
@@ -248,7 +249,8 @@ local function icap_check(task, content, digest, rule)
             -- error returned
             lua_util.debugm(rule.name, task,
                 '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
-            common.yield_result(task, rule, icap_threat, 0, 'fail')
+            common.yield_result(task, rule, icap_threat, 0,
+                'fail', maybe_part)
           else
             lua_util.debugm(rule.name, task,
                 '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
@@ -295,10 +297,10 @@ local function icap_check(task, content, digest, rule)
           end
         end
         if #threat_string > 0 then
-          common.yield_result(task, rule, threat_string, rule.default_score)
-          common.save_cache(task, digest, rule, threat_string, rule.default_score)
+          common.yield_result(task, rule, threat_string, rule.default_score, nil, maybe_part)
+          common.save_cache(task, digest, rule, threat_string, rule.default_score, maybe_part)
         else
-          common.save_cache(task, digest, rule, 'OK', 0)
+          common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
           common.log_clean(task, rule)
         end
       end
@@ -323,12 +325,15 @@ local function icap_check(task, content, digest, rule)
               ICAP/1.0 500 Server error
             ]]--
             rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
-            common.yield_result(task, rule, icap_headers.icap, 0.0, 'fail')
+            common.yield_result(task, rule, icap_headers.icap, 0.0,
+                'fail', maybe_part)
             return false
           else
             rspamd_logger.errx(task, '%s: unhandled response |%s|',
               rule.log_prefix, string.gsub(result, "\r\n", ", "))
-            common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap or "-", 0.0, 'fail')
+            common.yield_result(task, rule,
+                'unhandled icap response: ' .. icap_headers.icap or "-",
+                0.0, 'fail', maybe_part)
           end
         end
       end
@@ -371,12 +376,14 @@ local function icap_check(task, content, digest, rule)
             else
               rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
                 rule.log_prefix, icap_headers['Methods'])
-              common.yield_result(task, rule, 'NO RESPMOD', 0.0, 'fail')
+              common.yield_result(task, rule, 'NO RESPMOD', 0.0,
+                  'fail', maybe_part)
             end
           else
             rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
               rule.log_prefix, icap_headers.icap or "-")
-            common.yield_result(task, rule, 'OPTIONS query failed', 0.0, 'fail')
+            common.yield_result(task, rule, 'OPTIONS query failed', 0.0,
+                'fail', maybe_part)
           end
         end
       end
@@ -402,7 +409,8 @@ local function icap_check(task, content, digest, rule)
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, icap_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      icap_check_uncached, maybe_part) then
     return
   else
     icap_check_uncached()

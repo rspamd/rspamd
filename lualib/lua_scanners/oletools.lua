@@ -87,7 +87,7 @@ local function oletools_config(opts)
   return nil
 end
 
-local function oletools_check(task, content, digest, rule)
+local function oletools_check(task, content, digest, rule, maybe_part)
   local function oletools_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -125,7 +125,9 @@ local function oletools_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
               'exceed - err: %s', rule.log_prefix, error)
-          common.yield_result(task, rule, 'failed to scan, maximum retransmits exceed - err: ' .. error, 0.0, 'fail')
+          common.yield_result(task, rule,
+              'failed to scan, maximum retransmits exceed - err: ' .. error,
+              0.0, 'fail', maybe_part)
         end
       end
 
@@ -191,7 +193,7 @@ local function oletools_check(task, content, digest, rule)
               rspamd_logger.errx(task, '%s: ERROR found: %s', rule.log_prefix,
                   v.error)
               if v.error == 'File too small' then
-                common.save_cache(task, digest, rule, 'OK')
+                common.save_cache(task, digest, rule, 'OK', 1.0, maybe_part)
                 common.log_clean(task, rule, 'File too small to be scanned for macros')
                 return
               else
@@ -210,20 +212,26 @@ local function oletools_check(task, content, digest, rule)
               local oletools_rc_code = tonumber(v.return_code)
               if oletools_rc_code == 9 then
                 rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
-                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'encrypted')
-                common.save_cache(task, digest, rule, 'encrypted')
+                common.yield_result(task, rule,
+                    'failed - err: ' .. oletools_rc[oletools_rc_code],
+                    0.0, 'encrypted', maybe_part)
+                common.save_cache(task, digest, rule, 'encrypted', 1.0, maybe_part)
                 return
               elseif oletools_rc_code == 5 then
                 rspamd_logger.warnx(task, '%s: olefy could not open the file - error: %s', rule.log_prefix,
                     result[2]['message'])
-                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'fail')
+                common.yield_result(task, rule,
+                    'failed - err: ' .. oletools_rc[oletools_rc_code],
+                    0.0, 'fail', maybe_part)
                 return
               elseif oletools_rc_code > 6 then
                 rspamd_logger.errx(task, '%s: MetaInfo section error code: %s',
                     rule.log_prefix, oletools_rc[oletools_rc_code])
                 rspamd_logger.errx(task, '%s: MetaInfo section message: %s',
                     rule.log_prefix, result[2]['message'])
-                common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[oletools_rc_code], 0.0, 'fail')
+                common.yield_result(task, rule,
+                    'failed - err: ' .. oletools_rc[oletools_rc_code],
+                    0.0, 'fail', maybe_part)
                 return
               elseif oletools_rc_code > 1 then
                 rspamd_logger.errx(task, '%s: Error message: %s',
@@ -296,8 +304,8 @@ local function oletools_check(task, content, digest, rule)
             -- use single string as virus name
             local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
             lua_util.debugm(rule.name, task, '%s: threat result: %s', rule.log_prefix, threat)
-            common.yield_result(task, rule, threat, rule.default_score)
-            common.save_cache(task, digest, rule, threat, rule.default_score)
+            common.yield_result(task, rule, threat, rule.default_score, nil, maybe_part)
+            common.save_cache(task, digest, rule, threat, rule.default_score, maybe_part)
 
           elseif rule.extended == true and #analysis_keyword_table > 0 then
             -- report any flags (types) and any most keywords as individual virus name
@@ -317,15 +325,17 @@ local function oletools_check(task, content, digest, rule)
             lua_util.debugm(rule.name, task, '%s: extended threat result: %s',
                 rule.log_prefix, table.concat(analysis_keyword_table, ','))
 
-            common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
-            common.save_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
+            common.yield_result(task, rule, analysis_keyword_table,
+                rule.default_score, nil, maybe_part)
+            common.save_cache(task, digest, rule, analysis_keyword_table,
+                rule.default_score, maybe_part)
 
           elseif analysis_cat_table.macro_exist == '-' and #analysis_keyword_table == 0 then
-            common.save_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK', 1.0, maybe_part)
             common.log_clean(task, rule, 'No macro found')
 
           else
-            common.save_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK', 1.0, maybe_part)
             common.log_clean(task, rule, 'Scanned Macro is OK')
           end
         end
@@ -344,7 +354,8 @@ local function oletools_check(task, content, digest, rule)
 
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, oletools_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      oletools_check_uncached, maybe_part) then
     return
   else
     oletools_check_uncached()

@@ -78,7 +78,7 @@ local function fprot_config(opts)
   return nil
 end
 
-local function fprot_check(task, content, digest, rule)
+local function fprot_check(task, content, digest, rule, maybe_part)
   local function fprot_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -119,7 +119,8 @@ local function fprot_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed',
+              0.0, 'fail', maybe_part)
         end
       else
         upstream:ok()
@@ -140,12 +141,12 @@ local function fprot_check(task, content, digest, rule)
           if not vname then
             rspamd_logger.errx(task, 'Unhandled response: %s', data)
           else
-            common.yield_result(task, rule, vname)
+            common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
             cached = vname
           end
         end
         if cached then
-          common.save_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
       end
     end
@@ -161,7 +162,8 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, fprot_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      fprot_check_uncached, maybe_part) then
     return
   else
     fprot_check_uncached()

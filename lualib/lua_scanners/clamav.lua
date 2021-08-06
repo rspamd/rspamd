@@ -79,7 +79,7 @@ local function clamav_config(opts)
   return nil
 end
 
-local function clamav_check(task, content, digest, rule)
+local function clamav_check(task, content, digest, rule, maybe_part)
   local function clamav_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -117,7 +117,9 @@ local function clamav_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed', rule.log_prefix)
-          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
+          common.yield_result(task, rule,
+              'failed to scan and retransmits exceed', 0.0, 'fail',
+              maybe_part)
         end
 
       else
@@ -138,25 +140,28 @@ local function clamav_check(task, content, digest, rule)
           local vname = string.match(data, 'stream: (.+) FOUND')
           if string.find(vname, '^Heuristics%.Encrypted') then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
-            common.yield_result(task, rule, 'File is encrypted: '.. vname, 0.0, 'encrypted')
+            common.yield_result(task, rule, 'File is encrypted: '.. vname,
+                0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           elseif string.find(vname, '^Heuristics%.OLE2%.ContainsMacros') then
             rspamd_logger.errx(task, '%s: ClamAV Found an OLE2 Office Macro', rule.log_prefix)
-            common.yield_result(task, rule, vname, 0.0, 'macro')
+            common.yield_result(task, rule, vname, 0.0, 'macro', maybe_part)
             cached = 'MACRO'
           elseif string.find(vname, '^Heuristics%.Limits%.Exceeded') then
             rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
-            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0, 'fail')
+            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0,
+                'fail', maybe_part)
           elseif vname then
-            common.yield_result(task, rule, vname)
+            common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
             cached = vname
           else
             rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
-            common.yield_result(task, rule, 'unhandled response:' .. vname, 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled response:' .. vname, 0.0,
+                'fail', maybe_part)
           end
         end
         if cached then
-          common.save_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
       end
     end
@@ -172,7 +177,8 @@ local function clamav_check(task, content, digest, rule)
     })
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, clamav_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      clamav_check_uncached, maybe_part) then
     return
   else
     clamav_check_uncached()

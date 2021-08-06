@@ -152,7 +152,7 @@ local function vade_config(opts)
   return nil
 end
 
-local function vade_check(task, content, digest, rule)
+local function vade_check(task, content, digest, rule, maybe_part)
   local function vade_check_uncached()
     local function vade_url(addr)
       local url
@@ -331,7 +331,8 @@ local function vade_check(task, content, digest, rule)
     http.request(request_data)
   end
 
-  if common.condition_check_and_continue(task, content, rule, digest, vade_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest,
+      vade_check_uncached, maybe_part) then
     return
   else
     vade_check_uncached()

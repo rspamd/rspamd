@@ -88,7 +88,7 @@ local function kaspersky_se_config(opts)
   return nil
 end
 
-local function kaspersky_se_check(task, content, digest, rule)
+local function kaspersky_se_check(task, content, digest, rule, maybe_part)
   local function kaspersky_se_check_uncached()
     local function make_url(addr)
       local url
@@ -220,19 +220,21 @@ local function kaspersky_se_check(task, content, digest, rule)
                   rule.log_prefix)
             end
           elseif data == 'CLEAN AND CONTAINS OFFICE MACRO' then
-            common.yield_result(task, rule, 'File contains macros', 0.0, 'macro')
+            common.yield_result(task, rule, 'File contains macros',
+                0.0, 'macro', maybe_part)
             cached = 'MACRO'
           else
             rspamd_logger.errx(task, '%s: unhandled clean response: %s', rule.log_prefix, data)
-            common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled response:' .. data,
+                0.0, 'fail', maybe_part)
           end
         elseif data == 'SERVER_ERROR' then
           rspamd_logger.errx(task, '%s: error: %s', rule.log_prefix, data)
           common.yield_result(task, rule, 'error:' .. data,
-              0.0, 'fail')
+              0.0, 'fail', maybe_part)
         elseif string.match(data, 'DETECT (.+)') then
           local vname = string.match(data, 'DETECT (.+)')
-          common.yield_result(task, rule, vname)
+          common.yield_result(task, rule, vname, 1.0, nil, maybe_part)
           cached = vname
         elseif string.match(data, 'NON_SCANNED %((.+)%)') then
           local why = string.match(data, 'NON_SCANNED %((.+)%)')
@@ -240,18 +242,20 @@ local function kaspersky_se_check(task, content, digest, rule)
           if why == 'PASSWORD PROTECTED' then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
             common.yield_result(task, rule, 'File is encrypted: '.. why,
-                0.0, 'encrypted')
+                0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           else
-            common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled response:' .. data,
+                0.0, 'fail', maybe_part)
           end
         else
           rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
-          common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
+          common.yield_result(task, rule, 'unhandled response:' .. data,
+              0.0, 'fail', maybe_part)
         end
 
         if cached then
-          common.save_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
 
       end
@@ -262,7 +266,7 @@ local function kaspersky_se_check(task, content, digest, rule)
   end
 
   if common.condition_check_and_continue(task, content, rule, digest,
-      kaspersky_se_check_uncached) then
+      kaspersky_se_check_uncached, maybe_part) then
     return
   else
 

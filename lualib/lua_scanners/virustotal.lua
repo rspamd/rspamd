@@ -74,7 +74,7 @@ local function virustotal_config(opts)
   return default_conf
 end
 
-local function virustotal_check(task, content, digest, rule)
+local function virustotal_check(task, content, digest, rule, maybe_part)
   local function virustotal_check_uncached()
     local function make_url(hash)
       return string.format('%s/report?apikey=%s&resource=%s',
@@ -172,7 +172,7 @@ local function virustotal_check(task, content, digest, rule)
                 end
                 local sopt = string.format("%s:%s/%s",
                     hash, obj.positives, obj.total)
-                common.yield_result(task, rule, sopt, dyn_score)
+                common.yield_result(task, rule, sopt, dyn_score, nil, maybe_part)
                 cached = sopt
               end
             end
@@ -186,7 +186,7 @@ local function virustotal_check(task, content, digest, rule)
         end
 
         if cached then
-          common.save_cache(task, digest, rule, cached, dyn_score)
+          common.save_cache(task, digest, rule, cached, dyn_score, maybe_part)
         end
       end
     end

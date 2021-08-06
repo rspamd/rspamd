@@ -136,7 +136,7 @@ local function add_antivirus_rule(sym, opts)
       fun.each(function(p)
         local content = p:get_content()
         if content and #content > 0 then
-          cfg.check(task, content, p:get_digest(), rule)
+          cfg.check(task, content, p:get_digest(), rule, p)
         end
       end, common.check_parts_match(task, rule))
 
@@ -266,7 +266,7 @@ if opts and type(opts) == 'table' then
               })
             end
           end
-        end        
+        end
         if m['score'] then
           -- Register metric symbol
           local description = 'antivirus symbol'
