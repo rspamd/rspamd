@@ -161,6 +161,7 @@ html_url_is_phished(rspamd_mempool_t *pool,
 
 		if (rc == URI_ERRNO_OK) {
 			text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+			href_url->flags |= RSPAMD_URL_FLAG_DISPLAY_URL;
 
 			/* Check for phishing */
 			if (is_transfer_proto(text_url) == is_transfer_proto(href_url)) {
@@ -251,7 +252,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 			{url->visible_part, dlen});
 
 	if (maybe_url) {
-		url->flags |= saved_flags | RSPAMD_URL_FLAG_DISPLAY_URL;
+		url->flags |= saved_flags;
 		displayed_url = maybe_url.value();
 	}
 
