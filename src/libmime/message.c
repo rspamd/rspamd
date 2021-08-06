@@ -240,7 +240,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 	} state = normal_char;
 
 	while (p < pe) {
-		if (G_LIKELY(is_utf)) {
+		if (is_utf) {
 			gint32 off = p - begin;
 			U8_NEXT (begin, off, pe - begin, uc);
 
@@ -284,7 +284,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 			 */
 			break;
 		}
-		else if (G_UNLIKELY (*p) == '\r') {
+		else if (*p == '\r') {
 			switch (state) {
 			case normal_char:
 				state = seen_cr;
@@ -321,7 +321,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 
 			p ++;
 		}
-		else if (G_UNLIKELY (*p == '\n')) {
+		else if (*p == '\n') {
 			switch (state) {
 			case normal_char:
 				state = seen_lf;
@@ -392,7 +392,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 
 			switch (state) {
 			case normal_char:
-				if (G_UNLIKELY (*p) == ' ') {
+				if (*p == ' ') {
 					part->spaces ++;
 
 					if (p > begin && *(p - 1) == ' ') {
@@ -402,7 +402,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				else {
 					part->non_spaces ++;
 
-					if (G_UNLIKELY (*p & 0x80)) {
+					if ((*p) & 0x80) {
 						part->non_ascii_chars ++;
 					}
 					else {
@@ -427,7 +427,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				}
 
 				/* Skip initial spaces */
-				if (G_UNLIKELY (*p == ' ')) {
+				if (*p == ' ') {
 					if (!crlf_added) {
 						g_byte_array_append (part->utf_stripped_content,
 								(const guint8 *)" ", 1);
@@ -464,7 +464,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 					(const guint8 *)c, p - c);
 
 			while (c < p) {
-				if (G_UNLIKELY (*c) == ' ') {
+				if (*c == ' ') {
 					part->spaces ++;
 
 					if (c > begin && *(c - 1) == ' ') {
@@ -474,7 +474,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				else {
 					part->non_spaces ++;
 
-					if (G_UNLIKELY (*c & 0x80)) {
+					if ((*c) & 0x80) {
 						part->non_ascii_chars ++;
 					}
 					else {
