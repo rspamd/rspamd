@@ -99,7 +99,7 @@ local redis_attrs = {
   log_obj = rspamd_config,
   resolver = rspamadm_dns_resolver,
 }
-local pool = rspamd_mempool.create()
+local pool
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -618,6 +618,7 @@ end
 local function handler(args)
   local opts = parser:parse(args)
 
+  pool = rspamd_mempool.create()
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
