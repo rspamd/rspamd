@@ -1099,14 +1099,14 @@ local function add_multimap_rule(key, newrule)
       ret = true
     end
   elseif type(newrule['map']) == 'string' and
-      string.find(newrule['map'], '^redis+selector://.*$') then
+      string.find(newrule['map'], '^redis%+selector://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
           'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
       return nil
     end
 
-    local selector_str = string.match(newrule['map'], '^redis+selector://(.*)$')
+    local selector_str = string.match(newrule['map'], '^redis%+selector://(.*)$')
     local selector = lua_selectors.create_selector_closure(
         rspamd_config, selector_str, newrule['delimiter'] or "")
 
