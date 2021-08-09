@@ -551,9 +551,17 @@ local function prepare_report(opts, start_time, rep_key)
         {'DEL', rep_key})
   end
 
+  local report_rcpts = lua_util.str_split(rcpt_string, ',')
+
+  if report_settings.bcc_addrs then
+    for _,b in ipairs(report_settings.bcc_addrs) do
+      table.insert(report_rcpts, b)
+    end
+  end
+
   return {
     message = message,
-    rcpts = lua_util.str_split(rcpt_string .. (bcc_string or ''), ','),
+    rcpts = report_rcpts,
     reporting_domain = reporting_domain
   }
 end
