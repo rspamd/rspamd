@@ -685,13 +685,18 @@ local function handler(args)
   local function finish_cb(nsuccess, nfail)
     if not opts.no_opt then
       lua_util.debugm(N, 'set last report date to %s', os.time())
+      -- Hack to avoid coroutines + async functions mess: we use async redis call here
+      redis_attrs.callback = function()
+        logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
+            ndates, nreports, nsuccess, nfail)
+      end
       lua_redis.request(redis_params, redis_attrs,
           {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire,
            tostring(os.time())})
+    else
+      logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
+          ndates, nreports, nsuccess, nfail)
     end
-
-    logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
-        ndates, nreports, nsuccess, nfail)
 
     pool:destroy()
   end
