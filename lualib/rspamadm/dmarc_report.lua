@@ -286,7 +286,7 @@ local function process_report_entry(data, score)
 end
 
 -- Process a single rua entry, validating in DNS if needed
-local function process_rua(reporting_domain, rua)
+local function process_rua(dmarc_domain, rua)
   local parts = lua_util.str_split(rua, ',')
 
   -- Remove size limitation, as we don't care about them
@@ -295,13 +295,13 @@ local function process_rua(reporting_domain, rua)
     local u = rspamd_url.create(pool, a:gsub('!%d+[kmg]?$', ''))
     if u then
       -- Check each address for sanity
-      if reporting_domain == u:get_tld() or reporting_domain == u:get_host() then
+      if dmarc_domain == u:get_tld() or dmarc_domain == u:get_host() then
         -- Same domain - always include
         table.insert(addrs, u)
       else
         -- We need to check authority
         local resolve_str = string.format('%s._report._dmarc.%s',
-            reporting_domain, u:get_host())
+            dmarc_domain, u:get_host())
         local is_ok, results = rspamd_dns.request({
           config = rspamd_config,
           session = rspamadm_session,
@@ -342,15 +342,17 @@ end
 -- This function returns a full dmarc record processed + rua as a list of url objects
 local function validate_reporting_domain(reporting_domain)
   -- Now check the domain policy
+  -- DMARC domain is a esld for the reporting domain
+  local dmarc_domain = rspamd_util.get_tld(reporting_domain)
   local is_ok, results = rspamd_dns.request({
     config = rspamd_config,
     session = rspamadm_session,
     type = 'txt',
-    name = '_dmarc.' .. reporting_domain ,
+    name = '_dmarc.' .. dmarc_domain ,
   })
 
   if not is_ok or not results then
-    logger.errx('cannot resolve _dmarc.%s: %s', reporting_domain, results)
+    logger.errx('cannot resolve _dmarc.%s: %s', dmarc_domain, results)
     return nil
   end
 
@@ -358,7 +360,7 @@ local function validate_reporting_domain(reporting_domain)
     local processed,rec = dmarc_common.dmarc_check_record(rspamd_config, r, false)
     if processed and rec.rua then
       -- We need to check or alter rua if needed
-      local processed_rua = process_rua(reporting_domain, rec.rua)
+      local processed_rua = process_rua(dmarc_domian, rec.rua)
       if processed_rua then
         rec = rec.raw_elts
         rec.rua = processed_rua
