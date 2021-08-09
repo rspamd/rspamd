@@ -491,7 +491,7 @@ local function prepare_report(opts, start_time, rep_key)
           {'DEL', rep_key})
     end
     logger.messagex('Cannot process reports for domain %s; invalid dmarc record', reporting_domain)
-    return 0
+    return nil
   end
 
   -- Get all reports for a domain
