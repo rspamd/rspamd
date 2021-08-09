@@ -445,7 +445,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				}
 
 				state = normal_char;
-				break;
+				continue;
 			}
 
 			p ++;
