@@ -240,7 +240,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 	} state = normal_char;
 
 	while (p < pe) {
-		if (is_utf) {
+		if (U8_IS_LEAD(*p) && is_utf) {
 			gint32 off = p - begin;
 			U8_NEXT (begin, off, pe - begin, uc);
 
