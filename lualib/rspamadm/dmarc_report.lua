@@ -321,7 +321,7 @@ local function process_rua(dmarc_domain, rua)
           end
 
           if not found then
-            logger.errx('%s is not authorized to process reports on %s', reporting_domain, u:get_tld())
+            logger.errx('%s is not authorized to process reports on %s', dmarc_domain, u:get_host())
           else
             -- All good
             table.insert(addrs, u)
@@ -360,7 +360,7 @@ local function validate_reporting_domain(reporting_domain)
     local processed,rec = dmarc_common.dmarc_check_record(rspamd_config, r, false)
     if processed and rec.rua then
       -- We need to check or alter rua if needed
-      local processed_rua = process_rua(dmarc_domian, rec.rua)
+      local processed_rua = process_rua(dmarc_domain, rec.rua)
       if processed_rua then
         rec = rec.raw_elts
         rec.rua = processed_rua
