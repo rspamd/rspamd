@@ -23,6 +23,7 @@ limitations under the License.
 local N = "aws"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local fun = require "fun"
 local rspamd_crypto_hash = require "rspamd_cryptobox_hash"
 
 local exports = {}
@@ -122,5 +123,60 @@ local function aws_signing_key(date_str, secret_key, region, service, req_type)
 end
 
 exports.aws_signing_key = aws_signing_key
+
+--[[[
+-- @function lua_aws.aws_canon_request_hash(method, path, headers_to_sign, hex_hash)
+-- Returns an Authorization header required for AWS
+--]]
+local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
+  lua_util.debugm(N, 'huis')
+  assert(type(method) == 'string')
+  assert(type(uri) == 'string')
+  assert(type(headers_to_sign) == 'table')
+
+  if not hex_hash then
+    hex_hash = headers_to_sign['x-amz-content-sha256']
+  end
+
+  assert(type(hex_hash) == 'string')
+
+  local sha_ctx = rspamd_crypto_hash.create_specific('sha256')
+
+  sha_ctx:update(method .. '\n')
+  sha_ctx:update(uri .. '\n')
+  -- XXX add query string canonicalisation
+  sha_ctx:update('\n')
+  -- Sort auth headers and canonicalise them as requested
+  local hdr_canon = fun.tomap(fun.map(function(k, v)
+    return k:lower(), lua_util.str_trim(v)
+  end, headers_to_sign))
+  local header_names = lua_util.keys(hdr_canon)
+  table.sort(header_names)
+  for _,hn in ipairs(header_names) do
+    local v = hdr_canon[hn]
+    lua_util.debugm(N, 'update signature with the header %s, %s',
+        hn, v)
+    sha_ctx:update(string.format('%s:%s\n', hn, v))
+  end
+  local hdrs_list = table.concat(header_names, ';')
+  lua_util.debugm(N, 'headers list to sign: %s', hdrs_list)
+  sha_ctx:update(string.format('\n%s\n%s', hdrs_list, hex_hash))
+
+  return sha_ctx:hex()
+end
+
+exports.aws_canon_request_hash = aws_canon_request_hash
+
+-- A simple tests according to AWS docs to check sanity
+local test_request_hdrs = {
+  ['Host'] = 'examplebucket.s3.amazonaws.com',
+  ['x-amz-date'] = '20130524T000000Z',
+  ['Range'] = 'bytes=0-9',
+  ['x-amz-content-sha256'] = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  ['x-amz-date'] = '20130524T000000Z '
+}
+
+assert(aws_canon_request_hash('GET', '/test.txt', test_request_hdrs) ==
+    '7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972')
 
 return exports
