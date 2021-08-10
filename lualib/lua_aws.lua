@@ -21,7 +21,7 @@ limitations under the License.
 --]]
 
 local N = "aws"
-local rspamd_logger = require "rspamd_logger"
+--local rspamd_logger = require "rspamd_logger"
 local ts = (require "tableshape").types
 local lua_util = require "lua_util"
 local fun = require "fun"
@@ -167,7 +167,7 @@ end
 
 exports.aws_canon_request_hash = aws_canon_request_hash
 
-local args_schema = ts.shape{
+local aws_authorization_hdr_args_schema = ts.shape{
   date = ts.string + ts['nil'] / today_canonical,
   secret_key = ts.string,
   method = ts.string + ts['nil'] / function() return 'GET' end,
@@ -175,19 +175,40 @@ local args_schema = ts.shape{
   region = ts.string,
   service = ts.string + ts['nil'] / function() return 's3' end,
   req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
-  headers_to_sign = ts.map_of(ts.string, ts.string),
+  headers = ts.map_of(ts.string, ts.string),
   key_id = ts.string,
 }
-
-local function aws_authorization_hdr(tbl)
-  local res,err = args_schema:transform(tbl)
-  assert(res, err)
+--[[[
+-- @function lua_aws.aws_authorization_hdr(params)
+-- Produces an authorization header as required by AWS
+-- Parameters schema is the following:
+ts.shape{
+  date = ts.string + ts['nil'] / today_canonical,
+  secret_key = ts.string,
+  method = ts.string + ts['nil'] / function() return 'GET' end,
+  uri = ts.string,
+  region = ts.string,
+  service = ts.string + ts['nil'] / function() return 's3' end,
+  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
+  headers = ts.map_of(ts.string, ts.string),
+  key_id = ts.string,
+}
+--
+--]]
+local function aws_authorization_hdr(tbl, transformed)
+  local res,err
+  if not transformed then
+    res,err = aws_authorization_hdr_args_schema:transform(tbl)
+    assert(res, err)
+  else
+    res = tbl
+  end
 
   local signing_key = aws_signing_key(res.date, res.secret_key, res.region, res.service,
       res.req_type)
   assert(signing_key ~= nil)
   local signed_sha,signed_hdrs = aws_canon_request_hash(res.method, res.uri,
-      res.headers_to_sign)
+      res.headers)
 
   if not signed_sha then
     return nil
@@ -210,13 +231,46 @@ end
 
 exports.aws_authorization_hdr = aws_authorization_hdr
 
+
+
+--[[[
+-- @function lua_aws.aws_request_enrich(params, content)
+-- Produces an authorization header as required by AWS
+-- Parameters schema is the following:
+ts.shape{
+  date = ts.string + ts['nil'] / today_canonical,
+  secret_key = ts.string,
+  method = ts.string + ts['nil'] / function() return 'GET' end,
+  uri = ts.string,
+  region = ts.string,
+  service = ts.string + ts['nil'] / function() return 's3' end,
+  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
+  headers = ts.map_of(ts.string, ts.string),
+  key_id = ts.string,
+}
+This method returns new/modified in place table of the headers
+--
+--]]
+local function aws_request_enrich(tbl, content)
+  local res,err = aws_authorization_hdr_args_schema:transform(tbl)
+  assert(res, err)
+  local content_sha256 = rspamd_crypto_hash.create_specific('sha256', content):hex()
+  local hdrs = res.headers
+  hdrs['x-amz-content-sha256'] = content_sha256
+  hdrs['x-amz-date'] = aws_date(res.date)
+  hdrs['Authorization'] = aws_authorization_hdr(res, true)
+
+  return hdrs
+end
+
+exports.aws_request_enrich = aws_request_enrich
+
 -- A simple tests according to AWS docs to check sanity
 local test_request_hdrs = {
   ['Host'] = 'examplebucket.s3.amazonaws.com',
-  ['x-amz-date'] = '20130524T000000Z',
+  ['x-amz-date'] = '20130524T000000Z ',
   ['Range'] = 'bytes=0-9',
   ['x-amz-content-sha256'] = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-  ['x-amz-date'] = '20130524T000000Z '
 }
 
 assert(aws_canon_request_hash('GET', '/test.txt', test_request_hdrs) ==
@@ -225,7 +279,7 @@ assert(aws_canon_request_hash('GET', '/test.txt', test_request_hdrs) ==
 assert(aws_authorization_hdr{
   date = '20130524',
   region = 'us-east-1',
-  headers_to_sign = test_request_hdrs,
+  headers = test_request_hdrs,
   uri = '/test.txt',
   key_id = 'AKIAIOSFODNN7EXAMPLE',
   secret_key = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
