@@ -1382,6 +1382,8 @@ html_process_input(rspamd_mempool_t *pool,
 					}
 					else {
 						url = maybe_existing;
+						/* Replace extra as well */
+						cur_tag->extra = maybe_existing;
 						/* Increase count to avoid odd checks failure */
 						url->count++;
 					}
