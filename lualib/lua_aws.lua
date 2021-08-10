@@ -22,6 +22,7 @@ limitations under the License.
 
 local N = "aws"
 local rspamd_logger = require "rspamd_logger"
+local ts = (require "tableshape").types
 local lua_util = require "lua_util"
 local fun = require "fun"
 local rspamd_crypto_hash = require "rspamd_cryptobox_hash"
@@ -112,10 +113,9 @@ local function aws_signing_key(date_str, secret_key, region, service, req_type)
   end
 
   local hmac1 = rspamd_crypto_hash.create_specific_keyed("AWS4" .. secret_key, "sha256", date_str):bin()
-  local hmac2 = rspamd_crypto_hash.create_specific_keyed(hmac1, "sha256", date_str):bin()
-  local hmac3 = rspamd_crypto_hash.create_specific_keyed(hmac2, "sha256",region):bin()
-  local hmac4 = rspamd_crypto_hash.create_specific_keyed(hmac3, "sha256", service):bin()
-  local final_key = rspamd_crypto_hash.create_specific_keyed(hmac4, "sha256", req_type):bin()
+  local hmac2 = rspamd_crypto_hash.create_specific_keyed(hmac1, "sha256",region):bin()
+  local hmac3 = rspamd_crypto_hash.create_specific_keyed(hmac2, "sha256", service):bin()
+  local final_key = rspamd_crypto_hash.create_specific_keyed(hmac3, "sha256", req_type):bin()
 
   save_cached_key(date_str, secret_key, region, service, req_type, final_key)
 
@@ -126,7 +126,7 @@ exports.aws_signing_key = aws_signing_key
 
 --[[[
 -- @function lua_aws.aws_canon_request_hash(method, path, headers_to_sign, hex_hash)
--- Returns an Authorization header required for AWS
+-- Returns a hash + list of headers as required to produce signature afterwards
 --]]
 local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
   lua_util.debugm(N, 'huis')
@@ -162,10 +162,53 @@ local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
   lua_util.debugm(N, 'headers list to sign: %s', hdrs_list)
   sha_ctx:update(string.format('\n%s\n%s', hdrs_list, hex_hash))
 
-  return sha_ctx:hex()
+  return sha_ctx:hex(),hdrs_list
 end
 
 exports.aws_canon_request_hash = aws_canon_request_hash
+
+local args_schema = ts.shape{
+  date = ts.string + ts['nil'] / today_canonical,
+  secret_key = ts.string,
+  method = ts.string + ts['nil'] / function() return 'GET' end,
+  uri = ts.string,
+  region = ts.string,
+  service = ts.string + ts['nil'] / function() return 's3' end,
+  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
+  headers_to_sign = ts.map_of(ts.string, ts.string),
+  key_id = ts.string,
+}
+
+local function aws_authorization_hdr(tbl)
+  local res,err = args_schema:transform(tbl)
+  assert(res, err)
+
+  local signing_key = aws_signing_key(res.date, res.secret_key, res.region, res.service,
+      res.req_type)
+  assert(signing_key ~= nil)
+  local signed_sha,signed_hdrs = aws_canon_request_hash(res.method, res.uri,
+      res.headers_to_sign)
+
+  if not signed_sha then
+    return nil
+  end
+
+  local string_to_sign = string.format('AWS4-HMAC-SHA256\n%s\n%s/%s/%s/%s\n%s',
+      aws_date(res.date),
+      res.date, res.region, res.service, res.req_type,
+      signed_sha)
+  lua_util.debugm(N, "string to sign: %s", string_to_sign)
+  local hmac = rspamd_crypto_hash.create_specific_keyed(signing_key, 'sha256', string_to_sign):hex()
+  lua_util.debugm(N, "hmac: %s", hmac)
+  local auth_hdr = string.format('AWS4-HMAC-SHA256 Credential=%s/%s/%s/%s/%s,'..
+      'SignedHeaders=%s,Signature=%s',
+      res.key_id, res.date, res.region, res.service, res.req_type,
+      signed_hdrs, hmac)
+
+  return auth_hdr
+end
+
+exports.aws_authorization_hdr = aws_authorization_hdr
 
 -- A simple tests according to AWS docs to check sanity
 local test_request_hdrs = {
@@ -178,5 +221,16 @@ local test_request_hdrs = {
 
 assert(aws_canon_request_hash('GET', '/test.txt', test_request_hdrs) ==
     '7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972')
+
+assert(aws_authorization_hdr{
+  date = '20130524',
+  region = 'us-east-1',
+  headers_to_sign = test_request_hdrs,
+  uri = '/test.txt',
+  key_id = 'AKIAIOSFODNN7EXAMPLE',
+  secret_key = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+} == 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,' ..
+    'SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,' ..
+    'Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41')
 
 return exports
