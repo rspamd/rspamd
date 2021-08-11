@@ -1871,31 +1871,58 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			}
 			else {
 				if (conn->priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
-					rspamd_printf_fstring (buf,
-							"%s %s://%s:%d/%V HTTP/1.1\r\n"
-							"Connection: %s\r\n"
-							"Host: %s\r\n"
-							"Content-Length: %z\r\n",
-							http_method_str (msg->method),
-							(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
-							host,
-							msg->port,
-							msg->url,
-							conn_type,
-							host,
-							bodylen);
+					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
+						rspamd_printf_fstring(buf,
+								"%s %s://%s:%d/%V HTTP/1.1\r\n"
+								"Connection: %s\r\n"
+								"Content-Length: %z\r\n",
+								http_method_str(msg->method),
+								(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
+								msg->port,
+								msg->url,
+								conn_type,
+								host,
+								bodylen);
+					}
+					else {
+						rspamd_printf_fstring(buf,
+								"%s %s://%s:%d/%V HTTP/1.1\r\n"
+								"Connection: %s\r\n"
+								"Host: %s\r\n"
+								"Content-Length: %z\r\n",
+								http_method_str(msg->method),
+								(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
+								host,
+								msg->port,
+								msg->url,
+								conn_type,
+								host,
+								bodylen);
+					}
 				}
 				else {
-					rspamd_printf_fstring (buf,
-							"%s %V HTTP/1.1\r\n"
-							"Connection: %s\r\n"
-							"Host: %s\r\n"
-							"Content-Length: %z\r\n",
-							http_method_str (msg->method),
-							msg->url,
-							conn_type,
-							host,
-							bodylen);
+					if ((msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER)) {
+						rspamd_printf_fstring(buf,
+								"%s %V HTTP/1.1\r\n"
+								"Connection: %s\r\n"
+								"Content-Length: %z\r\n",
+								http_method_str(msg->method),
+								msg->url,
+								conn_type,
+								bodylen);
+					}
+					else {
+						rspamd_printf_fstring(buf,
+								"%s %V HTTP/1.1\r\n"
+								"Connection: %s\r\n"
+								"Host: %s\r\n"
+								"Content-Length: %z\r\n",
+								http_method_str(msg->method),
+								msg->url,
+								conn_type,
+								host,
+								bodylen);
+					}
 				}
 
 				if (bodylen > 0) {

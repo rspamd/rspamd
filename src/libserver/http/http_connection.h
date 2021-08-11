@@ -80,6 +80,10 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_SSL_NOVERIFY (1 << 6)
 /**
+ * Body has been set for a message
+ */
+#define RSPAMD_HTTP_FLAG_HAS_HOST_HEADER (1 << 6)
+/**
  * Options for HTTP connection
  */
 enum rspamd_http_options {

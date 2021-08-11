@@ -1008,8 +1008,19 @@ lua_http_request (lua_State *L)
 		cbd->item = rspamd_symcache_get_cur_item (task);
 	}
 
-	if (msg->host) {
+
+	const rspamd_ftok_t *host_header_tok = rspamd_http_message_find_header (msg, "Host");
+	if (host_header_tok != NULL) {
+		if (msg->host) {
+			g_string_free (msg->host, true);
+		}
+		msg->host = g_string_new_len (host_header_tok->begin, host_header_tok->len);
 		cbd->host = msg->host->str;
+	}
+	else {
+		if (msg->host) {
+			cbd->host = msg->host->str;
+		}
 	}
 
 	if (body) {
