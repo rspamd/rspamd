@@ -31,7 +31,7 @@ local exports = {}
 
 -- Returns a canonical representation of today date
 local function today_canonical()
-  return os.date('!%Y%m%d', os.time())
+  return os.date('!%Y%m%d')
 end
 
 --[[[
@@ -43,7 +43,7 @@ local function aws_date(date_str)
     date_str = today_canonical()
   end
 
-  return date_str .. 'T000000Z'
+  return date_str .. os.date('!T%H%M%SZ')
 end
 
 exports.aws_date = aws_date
@@ -129,7 +129,6 @@ exports.aws_signing_key = aws_signing_key
 -- Returns a hash + list of headers as required to produce signature afterwards
 --]]
 local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
-  lua_util.debugm(N, 'huis')
   assert(type(method) == 'string')
   assert(type(uri) == 'string')
   assert(type(headers_to_sign) == 'table')
@@ -142,7 +141,11 @@ local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
 
   local sha_ctx = rspamd_crypto_hash.create_specific('sha256')
 
+  lua_util.debugm(N, 'update signature with the method %s',
+      method)
   sha_ctx:update(method .. '\n')
+  lua_util.debugm(N, 'update signature with the uri %s',
+      uri)
   sha_ctx:update(uri .. '\n')
   -- XXX add query string canonicalisation
   sha_ctx:update('\n')
@@ -215,7 +218,7 @@ local function aws_authorization_hdr(tbl, transformed)
   end
 
   local string_to_sign = string.format('AWS4-HMAC-SHA256\n%s\n%s/%s/%s/%s\n%s',
-      aws_date(res.date),
+      res.headers['x-amz-date'] or aws_date(),
       res.date, res.region, res.service, res.req_type,
       signed_sha)
   lua_util.debugm(N, "string to sign: %s", string_to_sign)
@@ -257,7 +260,9 @@ local function aws_request_enrich(tbl, content)
   local content_sha256 = rspamd_crypto_hash.create_specific('sha256', content):hex()
   local hdrs = res.headers
   hdrs['x-amz-content-sha256'] = content_sha256
-  hdrs['x-amz-date'] = aws_date(res.date)
+  if not hdrs['x-amz-date'] then
+    hdrs['x-amz-date'] = aws_date(res.date)
+  end
   hdrs['Authorization'] = aws_authorization_hdr(res, true)
 
   return hdrs
@@ -268,7 +273,7 @@ exports.aws_request_enrich = aws_request_enrich
 -- A simple tests according to AWS docs to check sanity
 local test_request_hdrs = {
   ['Host'] = 'examplebucket.s3.amazonaws.com',
-  ['x-amz-date'] = '20130524T000000Z ',
+  ['x-amz-date'] = '20130524T000000Z',
   ['Range'] = 'bytes=0-9',
   ['x-amz-content-sha256'] = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 }
