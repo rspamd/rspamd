@@ -1878,10 +1878,10 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 								"Content-Length: %z\r\n",
 								http_method_str(msg->method),
 								(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
+								host,
 								msg->port,
 								msg->url,
 								conn_type,
-								host,
 								bodylen);
 					}
 					else {
