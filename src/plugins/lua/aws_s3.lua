@@ -37,6 +37,7 @@ local settings_schema = ts.shape{
   s3_key_id = ts.string,
   s3_timeout = ts.number + ts.string / lua_util.parse_time_interval,
   enabled = ts.boolean:is_optional(),
+  fail_action = ts.string:is_optional(),
 }
 
 local function s3_aws_callback(task)
@@ -64,7 +65,18 @@ local function s3_aws_callback(task)
   }, task:get_content())
 
   local function s3_http_callback(http_err, code, body, headers)
-    rspamd_logger.errx('obj=%s, err=%s, code=%s, body=%s, headers=%s',
+
+    if http_err then
+      if settings.fail_action then
+        task:set_pre_result(settings.fail_action,
+            string.format('S3 save failed: %s', http_err), N,
+            nil, nil, 'least')
+      end
+      rspamd_logger.errx(task, 'cannot save %s to AWS S3: %s', path, http_err)
+    else
+      rspamd_logger.messagex(task, 'saved message successfully in S3 object %s', path)
+    end
+    lua_util.debugm(N, task, 'obj=%s, err=%s, code=%s, body=%s, headers=%s',
       path, http_err, code, body, headers)
   end
 
@@ -98,7 +110,7 @@ rspamd_logger.infox(rspamd_config, 'enabled AWS s3 dump to %s', res.s3_bucket)
 settings = res
 rspamd_config:register_symbol({
   name = 'EXPORT_AWS_S3',
-  type = 'idempotent',
+  type = settings.fail_action and 'postfilter' or 'idempotent',
   callback = s3_aws_callback,
   priority = 10,
   flags = 'empty,explicit_disable,ignore_passthrough,nostat',
