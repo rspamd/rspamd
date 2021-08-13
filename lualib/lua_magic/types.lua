@@ -284,6 +284,10 @@ local types = {
     ct = 'image/vnd.dwg',
   },
   -- Text
+  xml = {
+    ct = 'application/xml',
+    type = 'text',
+  },
   txt = {
     type = 'text',
     ct = 'text/plain',

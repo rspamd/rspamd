@@ -63,15 +63,15 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    {[[(?i)\s*<html\b]], 30},
-    {[[(?i)\s*<script\b]], 20}, -- Commonly used by spammers
-    {[[(?i)\s*<\!DOCTYPE HTML\b]], 30},
-    {[[(?i)\s*<body\b]], 20},
-    {[[(?i)\s*<table\b]], 20},
-    {[[(?i)\s*<a\b]], 10},
-    {[[(?i)\s*<p\b]], 10},
-    {[[(?i)\s*<div\b]], 10},
-    {[[(?i)\s*<span\b]], 10},
+    {[[(?i)<html\b]], 32},
+    {[[(?i)<script\b]], 20}, -- Commonly used by spammers
+    {[[(?i)<\!DOCTYPE HTML\b]], 33},
+    {[[(?i)<body\b]], 20},
+    {[[(?i)<table\b]], 20},
+    {[[(?i)<a\b]], 10},
+    {[[(?i)<p\b]], 10},
+    {[[(?i)<div\b]], 10},
+    {[[(?i)<span\b]], 10},
   },
   csv = {
     {[[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]], 20}
@@ -82,6 +82,9 @@ local txt_patterns = {
   vcf = {
     {[[^BEGIN:VCARD\r?\n]], 40},
   },
+  xml = {
+    {[[(?i)\s*<\?xml\b.+\?>]], 31},
+  }
 }
 
 -- Used to match pattern index and extension
