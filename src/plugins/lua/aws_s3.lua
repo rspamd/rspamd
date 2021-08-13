@@ -21,6 +21,7 @@ local rspamd_logger = require "rspamd_logger"
 local ts = (require "tableshape").types
 local rspamd_text = require "rspamd_text"
 local rspamd_http = require "rspamd_http"
+local rspamd_util = require "rspamd_util"
 
 local settings = {
   s3_bucket = nil,
@@ -38,6 +39,7 @@ local settings_schema = ts.shape{
   s3_timeout = ts.number + ts.string / lua_util.parse_time_interval,
   enabled = ts.boolean:is_optional(),
   fail_action = ts.string:is_optional(),
+  zstd_compress = ts.boolean:is_optional(),
 }
 
 local function s3_aws_callback(task)
@@ -45,24 +47,36 @@ local function s3_aws_callback(task)
   -- Create a nonce
   local nonce = rspamd_text.randombytes(16):base32()
   local queue_id = task:get_queue_id()
+  local ext, content, content_type
+
+  if settings.zstd_compress then
+    ext = 'eml.zst'
+    content = rspamd_util.zstd_compress(task:get_content())
+    content_type = 'application/zstd'
+  else
+    ext = 'eml'
+    content = task:get_content()
+    content_type = 'message/rfc-822'
+  end
 
   if not queue_id then
     queue_id = rspamd_text.randombytes(8):base32()
   end
-  local path = string.format('/%s-%s', queue_id, nonce)
+  local path = string.format('/%s-%s.%s', queue_id, nonce, ext)
   -- Hack to pass host
   local aws_host = string.format('%s.s3.amazonaws.com', settings.s3_bucket)
+
   local hdrs = lua_aws.aws_request_enrich({
     region = settings.s3_region,
     headers = {
-      ['Content-Type'] = 'message/rfc-822',
+      ['Content-Type'] = content_type,
       ['Host'] = aws_host
     },
     uri = path,
     key_id = settings.s3_key_id,
     secret_key = settings.s3_secret_key,
     method = 'PUT',
-  }, task:get_content())
+  }, content)
 
   local function s3_http_callback(http_err, code, body, headers)
 
@@ -84,7 +98,7 @@ local function s3_aws_callback(task)
     url = uri .. path,
     task = task,
     method = 'PUT',
-    body = task:get_content(),
+    body = content,
     callback = s3_http_callback,
     headers = hdrs,
     timeout = settings.s3_timeout,
