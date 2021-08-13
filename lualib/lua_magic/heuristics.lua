@@ -66,7 +66,6 @@ local txt_patterns = {
     {[[(?i)\s*<html\b]], 30},
     {[[(?i)\s*<script\b]], 20}, -- Commonly used by spammers
     {[[(?i)\s*<\!DOCTYPE HTML\b]], 30},
-    {[[(?i)\s*<xml\b]], 20},
     {[[(?i)\s*<body\b]], 20},
     {[[(?i)\s*<table\b]], 20},
     {[[(?i)\s*<a\b]], 10},
