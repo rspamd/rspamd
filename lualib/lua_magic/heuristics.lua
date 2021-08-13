@@ -83,7 +83,7 @@ local txt_patterns = {
     {[[^BEGIN:VCARD\r?\n]], 40},
   },
   xml = {
-    {[[(?i)\s*<\?xml\b.+\?>]], 31},
+    {[[<\?xml\b.+\?>]], 31},
   }
 }
 
