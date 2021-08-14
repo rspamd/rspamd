@@ -180,6 +180,11 @@ local settings = {
     ace = 1,
     ['7z'] = 1,
     cab = 1,
+    bz2 = 1,
+    egg = 1,
+    alz = 1,
+    xz = 1,
+    lz = 1,
   },
 
   -- Not really archives
