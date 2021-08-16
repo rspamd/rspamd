@@ -663,7 +663,12 @@ local function handler(args)
   lua_util.debugm(N, 'previous last report date is %s', start_time)
 
   if not opts.date or #opts.date == 0 then
-    opts.date = {os.date('!%Y%m%d', os.time())}
+    local now = os.time()
+    opts.date = {}
+    while now >= start_time do
+      table.insert(opts.date, os.date('!%Y%m%d', now))
+      now = now - 86400
+    end
   end
 
   local ndates = 0
@@ -691,7 +696,7 @@ local function handler(args)
             ndates, nreports, nsuccess, nfail)
       end
       lua_redis.request(redis_params, redis_attrs,
-          {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire,
+          {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire * 2,
            tostring(os.time())})
     else
       logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
