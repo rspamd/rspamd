@@ -312,11 +312,12 @@ local function extract_handler(opts)
         local mtype,msubtype = part:get_type()
         local det_mtype,det_msubtype = part:get_detected_type()
         table.insert(out,
-            rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s, size: %s',
+            rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s (%s detected ext), size: %s',
                 part:get_digest():sub(1,8),
                 mtype, msubtype,
                 det_mtype, det_msubtype,
                 part:get_filename(),
+                part:get_detected_ext(),
                 part:get_length()))
       end
     end

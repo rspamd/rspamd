@@ -47,7 +47,7 @@ parser:flag "-n --no-opt"
 
 parser:argument "date"
        :description "Date to process (today by default)"
-       :argname "<DDMMYYYY>"
+       :argname "<YYYYMMDD>"
        :args "*"
 parser:option "-b --batch-size"
       :description "Send reports in batches up to <batch-size> messages"
