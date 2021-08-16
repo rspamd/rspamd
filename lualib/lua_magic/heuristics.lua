@@ -429,6 +429,8 @@ exports.text_part_heuristic = function(part, log_obj, _)
       local start_span = content:span(1, span_len)
       local matches = txt_trie:match(start_span)
       local res = {}
+      local fname = part:get_filename()
+
       if matches then
         -- Require at least 2 occurrences of those patterns
         for n,positions in pairs(matches) do
@@ -447,8 +449,12 @@ exports.text_part_heuristic = function(part, log_obj, _)
 
         local ext, weight = process_top_detected(res)
 
-        if weight and weight >= 40 then
-          return ext, weight
+        if weight then
+          if weight >= 40 then
+            return ext, weight
+          elseif fname and weight >= 20 then
+            return ext, weight
+          end
         end
       end
 
@@ -466,8 +472,6 @@ exports.text_part_heuristic = function(part, log_obj, _)
                 and file:sub(-ext_len - 1, -ext_len - 1) == '.'
       end
 
-
-      local fname = part:get_filename()
       if fname and (has_extension(fname, 'htm') or has_extension(fname, 'html')) then
         return 'html',21
       end
