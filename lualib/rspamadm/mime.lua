@@ -301,7 +301,6 @@ local function extract_handler(opts)
                 return string.format('%s:%s', k,v)
               end
             end, '', part:get_stats())))
-        table.insert(out, '\n')
       end
     end
   end
@@ -310,11 +309,13 @@ local function extract_handler(opts)
     if opts.part then
 
       if not opts.json and not opts.ucl then
+        local mtype,msubtype = part:get_type()
+        local det_mtype,det_msubtype = part:get_detected_type()
         table.insert(out,
-            rspamd_logger.slog('Mime Part: %s: %s/%s, filename: %s, size: %s',
+            rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s, size: %s',
                 part:get_digest():sub(1,8),
-                ({part:get_type()})[1],
-                ({part:get_type()})[2],
+                mtype, msubtype,
+                det_mtype, det_msubtype,
                 part:get_filename(),
                 part:get_length()))
       end
@@ -368,6 +369,11 @@ local function extract_handler(opts)
 
         if part and opts.text and not part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
+          maybe_print_mime_part_info(mime_part, out_elts[fname])
+          if not opts.json and not opts.ucl then
+            table.insert(out_elts[fname], '\n')
+          end
+
           if opts.words then
             local howw = opts['words_format'] or 'stem'
             table.insert(out_elts[fname], print_words(part:get_words(howw),
@@ -377,6 +383,11 @@ local function extract_handler(opts)
           end
         elseif part and opts.html and part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
+          maybe_print_mime_part_info(mime_part, out_elts[fname])
+          if not opts.json and not opts.ucl then
+            table.insert(out_elts[fname], '\n')
+          end
+
           if opts.words then
             local howw = opts['words_format'] or 'stem'
             table.insert(out_elts[fname], print_words(part:get_words(howw),
