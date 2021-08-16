@@ -1446,6 +1446,19 @@ rspamd_message_process (struct rspamd_task *task)
 						part->detected_type = rspamd_mempool_strdup (task->task_pool,
 								lua_tostring (L, -1));
 					}
+
+					lua_pop (L, 1);
+
+					lua_pushstring (L, "no_text");
+					lua_gettable (L, -2);
+
+					if (lua_isboolean (L, -1)) {
+						if (!!lua_toboolean (L, -1)) {
+							part->flags |= RSPAMD_MIME_PART_NO_TEXT_EXTRACTION;
+						}
+					}
+
+					lua_pop (L, 1);
 				}
 			}
 
@@ -1479,7 +1492,8 @@ rspamd_message_process (struct rspamd_task *task)
 		rspamd_images_process_mime_part_maybe (task, part);
 
 		/* Still no content detected, try text heuristic */
-		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
+		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED &&
+				!(part->flags & RSPAMD_MIME_PART_NO_TEXT_EXTRACTION)) {
 			rspamd_message_process_text_part_maybe (task, part);
 		}
 	}

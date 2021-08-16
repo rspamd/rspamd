@@ -287,6 +287,7 @@ local types = {
   xml = {
     ct = 'application/xml',
     type = 'text',
+    no_text = true,
   },
   txt = {
     type = 'text',
@@ -302,16 +303,19 @@ local types = {
     type = 'text',
     ct = 'text/csv',
     av_check = false,
+    no_text = true,
   },
   ics = {
     type = 'text',
     ct = 'text/calendar',
     av_check = false,
+    no_text = true,
   },
   vcf = {
     type = 'text',
     ct = 'text/vcard',
     av_check = false,
+    no_text = true,
   },
   eml = {
     type = 'message',

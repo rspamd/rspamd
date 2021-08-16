@@ -31,9 +31,10 @@ struct rspamd_image;
 struct rspamd_archive;
 
 enum rspamd_mime_part_flags {
-	RSPAMD_MIME_PART_ATTACHEMENT = (1 << 1),
-	RSPAMD_MIME_PART_BAD_CTE = (1 << 4),
-	RSPAMD_MIME_PART_MISSING_CTE = (1 << 5),
+	RSPAMD_MIME_PART_ATTACHEMENT = (1u << 1u),
+	RSPAMD_MIME_PART_BAD_CTE = (1u << 4u),
+	RSPAMD_MIME_PART_MISSING_CTE = (1u << 5u),
+	RSPAMD_MIME_PART_NO_TEXT_EXTRACTION = (1u << 6u),
 };
 
 enum rspamd_mime_part_type {
