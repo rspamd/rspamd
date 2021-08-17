@@ -1236,6 +1236,20 @@ html_append_tag_content(rspamd_mempool_t *pool,
 			}
 		}
 	}
+	else {
+		/* Invisible stuff */
+		if (std::holds_alternative<rspamd_url *>(tag->extra)) {
+			auto *url_enclosed = std::get<rspamd_url *>(tag->extra);
+
+			/*
+			 * TODO: when hash is fixed to include flags we need to remove and add
+			 * url to the hash set
+			 */
+			if (url_enclosed) {
+				url_enclosed->flags |= RSPAMD_URL_FLAG_INVISIBLE;
+			}
+		}
+	}
 
 	calculate_final_tag_offsets();
 
