@@ -244,6 +244,7 @@ struct rspamd_url_flag_name {
 		{"no_tld", RSPAMD_URL_FLAG_NO_TLD, -1},
 		{"truncated", RSPAMD_URL_FLAG_TRUNCATED, -1},
 		{"redirect_target", RSPAMD_URL_FLAG_REDIRECT_TARGET, -1},
+		{"invisible", RSPAMD_URL_FLAG_INVISIBLE, -1},
 };
 
 

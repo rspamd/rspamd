@@ -2116,7 +2116,7 @@ lua_mimepart_get_urls (lua_State * L)
 	}
 
 	if (!lua_url_cbdata_fill (L, 2, &cb, default_protocols_mask,
-			~(0), max_urls)) {
+			~(RSPAMD_URL_FLAG_INVISIBLE), max_urls)) {
 		return luaL_error (L, "invalid arguments");
 	}
 
