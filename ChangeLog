@@ -1,3 +1,276 @@
+3.0: 19 Aug 2021
+  * [Conf] Align ARC scores with DKIM scores
+  * [CritFix] Neural: Fix sorting application
+  * [Feature] Add a simple dumper for bayes tokens
+  * [Feature] Add lua_maps.fill_config_maps function
+  * [Feature] Add preliminary exporter to AWS S3
+  * [Feature] Add preliminary restore bayes support
+  * [Feature] Add race condition protection against hs_helper restarts
+  * [Feature] Add rspamd_utf8_strcmp utility
+  * [Feature] Add zstd streaming API
+  * [Feature] Allow to log severity level explicitly
+  * [Feature] Allow to save and show attachment name when inserting AV scan results
+  * [Feature] Allow to sort urls for Lua
+  * [Feature] Allow to specify different timeouts/retransmits for fuzzy rules
+  * [Feature] Aws_s3: Allow to compress data stored
+  * [Feature] CMakeLists.txt: Change check and run-test to use rspamd-test-cxx * fixes #3807
+  * [Feature] Dmarc_report: allow sending reports in batches
+  * [Feature] Fuzzy_check: Allow to disable subject when making short text hash
+  * [Feature] Lua_cryptobox: Add keyed ssl hash functions via HMAC
+  * [Feature] Lua_task: Add get_urls_filtered method
+  * [Feature] Make monitored checks less frequent
+  * [Feature] Milter_headers: Add x-rspamd-pre-result header
+  * [Feature] Neural: Allow to balance FP/FN for the network
+  * [Feature] Ppopagate monitored errors from rbl module
+  * [Feature] Pyzor calculate score dynamically Count - WL-Count of default_score in percent
+  * [Feature] Rbl: Distinguish flattened and non-flattened selectors in RBL requests
+  * [Feature] Re-add pyzor support
+  * [Feature] Settings: add ip_map check and rework structure slightly
+  * [Feature] Spamassassin: Allow to set the default priority for SA scores
+  * [Feature] Strip smtp comments from message id
+  * [Feature] add SYSTEM_ZSTD cmake option To use the system zstd instead on the bundled version
+  * [Feature] external_relay plugin
+  * [Feature] rspamadm clickhouse neural_train subcommand
+  * [Fix] #3400 milter_headers: fix inverted logic for extended_headers_rcpt
+  * [Fix] ASN: fix _FAIL symbol for when main symbol is disabled
+  * [Fix] Add a special logic for text part with no text extraction
+  * [Fix] Add diacritics flag for several eu languages
+  * [Fix] Another FSM fix to accomodate possibility of multiple consequent ?
+  * [Fix] Avoid curse of dynamic array referencing
+  * [Fix] Avoid reinitialising neural settings
+  * [Fix] Check remain before processing TXT records
+  * [Fix] Enable error multiplier on http errors
+  * [Fix] Finally rework parsing entities logic
+  * [Fix] Fix '==' parsing in the content type attributes parser
+  * [Fix] Fix IPv6 expansion for SPF macros
+  * [Fix] Fix Mozilla Message-ID detection
+  * [Fix] Fix an edge case in BITCOIN_ADDR rule
+  * [Fix] Fix brain-damaged behaviour when http request has a custom Host header
+  * [Fix] Fix check of limits in email address parsing
+  * [Fix] Fix copy&paste error and rework
+  * [Fix] Fix expressions logic for and/or and float values
+  * [Fix] Fix fuzzy retransmits
+  * [Fix] Fix http maps with no or invalid expires data
+  * [Fix] Fix last quote character parsing in the content-type state machine
+  * [Fix] Fix normalisation flags propagation
+  * [Fix] Fix overflow when appending many broken tags
+  * [Fix] Fix parsing of rfc2047 tokens with '?' inside
+  * [Fix] Fix phishing flag set
+  * [Fix] Fix rfc2047 embedded into rfc2231 pieces in special headers
+  * [Fix] Fix round-robin rotation
+  * [Fix] Fix searching for symbols
+  * [Fix] Fix storing of the regexps inside variant
+  * [Fix] Fix tokenization near exceptions
+  * [Fix] Fix visibility calculations
+  * [Fix] Html: Attach inline tags to the structure
+  * [Fix] Html: Do not treat empty tags as block tags
+  * [Fix] Ical: Do not extract urls from all flags using merely specific ones
+  * [Fix] Initialise symcache even if it cannot be loaded properly
+  * [Fix] Lua_fuzzy: Remove text parts check when checking image dimensions
+  * [Fix] Lua_maps: Fix adjustments for the map type in the complex map definitions
+  * [Fix] Lua_task: Fix deleted symbols in has_symbol/get_symbol
+  * [Fix] Move metric and symcache link from validation to the init stage
+  * [Fix] Oletools: Another try to fix table sorting
+  * [Fix] One more default behaviour fix
+  * [Fix] Phishing: Rework urls processing
+  * [Fix] RBL: was missing some config schema
+  * [Fix] Replies: Fix 'Reply-To' handling in task:get_reply_sender
+  * [Fix] Rework metrics handling
+  * [Fix] Save symcache on exit
+  * [Fix] Selectors: Filter nil elements in lists
+  * [Fix] Selectors: Properly fix implicit tostring for nils
+  * [Fix] Try to fix some broken code in DMARC reporting plugin
+  * [Fix] Urls: Fix processing of html urls when it comes to the flags
+  * [Fix] Use proper buffer length
+  * [Fix] Various visibility fixes
+  * [Fix]: ASN: dns cb func should also return in case of an error
+  * [Project] Add a simple css rule definition
+  * [Project] Add css style skeleton
+  * [Project] Add css syntax (adopted from ebnf)
+  * [Project] Add css_selectors
+  * [Project] Add doctest unit testing library
+  * [Project] Add expected library
+  * [Project] Add fmt library for simple string ops
+  * [Project] Add fu2 library to better functions abstractions
+  * [Project] Add hashing method
+  * [Project] Add parsers skeleton
+  * [Project] Add preliminary support of vcard parser
+  * [Project] Add process exceptions for invisible text
+  * [Project] Add some methods for css parser
+  * [Project] Allow static libstdc++
+  * [Project] Another whitespace hack
+  * [Project] CSS: Various fixes in the declarations and values parsing
+  * [Project] Cpp: Add robin-hood hash map library
+  * [Project] Css: Add AST debug
+  * [Project] Css: Add colors conversion functions
+  * [Project] Css: Add dimensions handling
+  * [Project] Css: Add display value support
+  * [Project] Css: Add frozen library from https://github.com/serge-sans-paille/frozen/
+  * [Project] Css: Add opacity support
+  * [Project] Css: Add parser helpers to simplify debugging
+  * [Project] Css: Add preliminary stylesheet support
+  * [Project] Css: Add rules processing functions and tests
+  * [Project] Css: Add simple selectors unit tests
+  * [Project] Css: Add some c++ unit tests
+  * [Project] Css: Add some debug methods
+  * [Project] Css: Add some debug statements for the css parser
+  * [Project] Css: Add some logical skeleton for declarations parser
+  * [Project] Css: Add url/function tokens
+  * [Project] Css: Allow at rules parsing
+  * [Project] Css: Declarations parsing logic skeleton
+  * [Project] Css: Enable conditional css parsing support from the HTML parser
+  * [Project] Css: Finish generic lexer cases
+  * [Project] Css: Fix HSL conversion
+  * [Project] Css: Fix minus parsing
+  * [Project] Css: Fix parser consumers nesting
+  * [Project] Css: Fix parsing of the qualified rules
+  * [Project] Css: Fix rules merging
+  * [Project] Css: Further fixes to lexer
+  * [Project] Css: Further steps to parse css colors + rework
+  * [Project] Css: Further work on parser's methods
+  * [Project] Css: Implement backlog of css tokens
+  * [Project] Css: Implement numbers and ident parsers
+  * [Project] Css: Implement simple css selectors lookup
+  * [Project] Css: Implement styles merging
+  * [Project] Css: Make debug strings json like to simplify tests
+  * [Project] Css: Minor adjustments
+  * [Project] Css: More meat to the lexer
+  * [Project] Css: Move some of the tests to the doctest
+  * [Project] Css: Projected a parser
+  * [Project] Css: Properties attachment logic
+  * [Project] Css: Remove ragel from build targets (maybe keep for reference)
+  * [Project] Css: Rework css block structure
+  * [Project] Css: Rework flags of css properties
+  * [Project] Css: Rework tokens structure
+  * [Project] Css: Several fixes + tests
+  * [Project] Css: Simplify checks
+  * [Project] Css: Simplify debug code
+  * [Project] Css: Start css selectors parsing logic
+  * [Project] Css: Start semantic parsing for rules
+  * [Project] Css: Start stylesheet implementation
+  * [Project] Css: Tidy up lambdas
+  * [Project] Css: rework tokeniser
+  * [Project] Dmarc: Add dmarc report tool (WIP)
+  * [Project] Dmarc: Add munging configuration
+  * [Project] Dmarc: Add preliminary munging logic
+  * [Project] Dmarc: Fix header removal
+  * [Project] Dmarc: Fix munging logic
+  * [Project] Dmarc: Use full recipient address instead of a domain map
+  * [Project] Dmarc: Use zlists for dmarc reports
+  * [Project] Dmarc_report: Add message generation logic
+  * [Project] Dmarc_report: Add preliminary sending support
+  * [Project] Fix lua bindings
+  * [Project] Fix xml/sgml tags processing
+  * [Project] Handle new modification
+  * [Project] Html/CSS: Add transform from a CSS rule to html block
+  * [Project] Html/CSS: Link html and css styles
+  * [Project] Html/CSS: Switch styles parsing to css parser
+  * [Project] Html/Css: Fix some issues found
+  * [Project] Html/Css: Implement visibility rules for a block
+  * [Project] Html: Add more tests cases and fix some more corner issues
+  * [Project] Html: Add rows display type support
+  * [Project] Html: Allow decode entities function to normalise spaces + unit tests
+  * [Project] Html: Another rework of the tags structure
+  * [Project] Html: Another try to fix unbalanced cases
+  * [Project] Html: Fix crossing spans
+  * [Project] Html: Fix parent propagation
+  * [Project] Html: Further rework of the html parsing stuff
+  * [Project] Html: Implement logic for tags pairing
+  * [Project] Html: Implement rawtext state machine
+  * [Project] Html: Insert closing tags as well :(
+  * [Project] Html: More fixes
+  * [Project] Html: More fixes
+  * [Project] Html: More spaces logic fixes
+  * [Project] Html: One more attempt to write text content
+  * [Project] Html: Replace \0 in html content
+  * [Project] Html: Rework img/a tags handling
+  * [Project] Html: Rework propagation method
+  * [Project] Html: Rework tags placement
+  * [Project] Html: Rework transparency logic
+  * [Project] Html: Support 'hidden' attribute
+  * [Project] Html: Try another approach to append tags content
+  * [Project] Html: Try to deal with bad unknown tags properly
+  * [Project] Lua_aws: Add canonicalisation utility
+  * [Project] Lua_aws: Add function to produce AWS Authorisation header
+  * [Project] Lua_aws: Implement request signing
+  * [Project] Lua_mime: Add lua_mime.modify_headers routine
+  * [Project] Lua_task: Add modify_header method
+  * [Project] Lua_task: Allow to extract modified headers
+  * [Project] Make unescape code public for unit testing
+  * [Project] More fixes for closed tags
+  * [Project] More fixes to calculations
+  * [Project] Rework API for the modified headers
+  * [Project] Rework html visibility rule
+  * [Project] Skeleton of the css library
+  * [Project] Start headers modification API structure
+  * [Project] Start working on AWS Lua API
+  * [Project] Use lua_mime to modify headers
+  * [Project] Use modified headers on dkim signing
+  * [Project] Use string_view to constexpr variant unpacking
+  * [Rework] Add composites manager concept
+  * [Rework] Add tags definitions
+  * [Rework] Allow C code to be compiled with C++ compiler
+  * [Rework] Clickhouse: Store url flags
+  * [Rework] Composites: Rewrite the composites logic
+  * [Rework] Composites: Start rework of the composites framework
+  * [Rework] Dmarc: Move check policy function to the common utils
+  * [Rework] Dmarc: Rework reports keys structure
+  * [Rework] Further work to make html content private
+  * [Rework] Html/CSS: Remove css C bindings as they are useless now
+  * [Rework] Html/CSS: Rework Lua bindings
+  * [Rework] Html/Css: Start rework of the html blocks
+  * [Rework] Html: Add images processing logic
+  * [Rework] Html: Add traverse function
+  * [Rework] Html: Another steps to get rid of gnode
+  * [Rework] Html: Convert to variant
+  * [Rework] Html: Deal with the utf_content part
+  * [Rework] Html: Final rework part for the html processing code
+  * [Rework] Html: Fix Lua bindings
+  * [Rework] Html: Forgot to add the internal include
+  * [Rework] Html: Further html urls rework
+  * [Rework] Html: Further rework of the tags content extraction
+  * [Rework] Html: Make parameters as a vector again
+  * [Rework] Html: Move blocks part
+  * [Rework] Html: Move images processing stuff
+  * [Rework] Html: Rework lua bindings
+  * [Rework] Html: Start html text extraction rework
+  * [Rework] Html: Start refactoring of the html tags handling
+  * [Rework] Html: Start removing of GNode stuff
+  * [Rework] Html: Start rework of the html content structure
+  * [Rework] Lua_magic: Try to detect text parts with 8bit characters for non-utf8 encodings
+  * [Rework] Move HTML url functions and rework them
+  * [Rework] Move and adopt entities handling logic
+  * [Rework] Move common and rarely used dmarc code to the library
+  * [Rework] Move compression routines outside of rspamd_util library
+  * [Rework] Move entities/tags handling
+  * [Rework] Phishing: Split from redirectors usage
+  * [Rework] Redesign html blocks propagation logic
+  * [Rework] Remove tag name string
+  * [Rework] Rename phished url to a linked url
+  * [Rework] Reorganize dmarc plugin and remove unsupported reporting code
+  * [Rework] Reputation: Use more flexible types in get/set functions
+  * [Rework] Require proper C++ environment for Rspamd build
+  * [Rework] Rework extended urls output
+  * [Rework] Rework tags parsing machine
+  * [Rework] Slightly improve old regexp API
+  * [Rework] Start conversion of the redis pool code to c++
+  * [Rework] Try to resolve failed upstreams more agressively
+  * [Rework] Use C++ utf8 library with unit tests to trim whitespaces
+  * [Rework] Use C++ version for unicode normalisation
+  * [Rework] Use C++ version of the lua threads pool
+  * [Rules] Add raw addresses to MULTIPLE_FROM options
+  * [Rules] Another fix to HTTP_TO_HTTPS rule
+  * [Rules] Do not trigger HTML_SHORT_LINK_IMG on external images
+  * [Rules] Extend FORGED_X_MAILER
+  * [Rules] Extend OLD_X_MAILER
+  * [Rules] Fix CTYPE_MIXED_BOGUS for text attachments
+  * [Rules] Fix FPs for CTYPE_MIXED_BOGUS
+  * [Rules] Fix HTTP_TO_HTTPS rule
+  * [Rules] Fix HTTP_TO_HTTPS rule
+  * [Rules] Fix zerofont rule (partially)
+  * [Rules] Micro-optimize X_PHP_EVAL
+  * [Rules] Reduce default weight for R_MISSING_CHARSET
+
 2.7: 08 Jan 2021
   * [Conf] Add R_DKIM_PERMFAIL to the metric
   * [CritFix] Dkim: Fix simple canonicalisation if multiple signatures are presented
