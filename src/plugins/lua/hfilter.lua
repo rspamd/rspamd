@@ -357,7 +357,7 @@ local function hfilter_callback(task)
               local lines =  html_text_part:get_lines_count()
               if lines > 0 and lines < 2 then
                 task:insert_result('HFILTER_URL_ONELINE', 1.00,
-                  string.format('html:%d:%d', sc, lines))
+                  string.format('html:%d:%d', math.floor(sc), lines))
               end
             end
           end
@@ -376,7 +376,7 @@ local function hfilter_callback(task)
             local lines = plain_text_part:get_lines_count()
             if lines > 0 and lines < 2 then
               task:insert_result('HFILTER_URL_ONELINE', 1.00,
-                string.format('plain:%d:%d', rel, lines))
+                string.format('plain:%d:%d', math.floor(rel), lines))
             end
           end
         end

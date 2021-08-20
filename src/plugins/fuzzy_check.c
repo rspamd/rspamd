@@ -1006,6 +1006,9 @@ fuzzy_check_module_config (struct rspamd_config *cfg, bool validate)
 		fuzzy_module_ctx->enabled = FALSE;
 	}
 	else {
+#if LUA_VERSION_NUM >= 504
+		lua_settop(L, -2);
+#endif
 		if (lua_type (L, -1) != LUA_TTABLE) {
 			msg_err_config ("lua fuzzy must return "
 							"table and not %s",
