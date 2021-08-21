@@ -58,6 +58,7 @@ OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" 
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
 OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
+OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [defalut: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
 
@@ -117,7 +118,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
 		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
 		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
-		"${CMAKE_SOURCE_DIR}/contrib/fmt/include"
 		"${CMAKE_SOURCE_DIR}/contrib/doctest"
 		"${CMAKE_SOURCE_DIR}/contrib/fu2/include"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
@@ -650,7 +650,12 @@ ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
 ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
-ADD_SUBDIRECTORY(contrib/fmt)
+IF(SYSTEM_FMT MATCHES "OFF")
+	ADD_SUBDIRECTORY(contrib/fmt)
+	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/fmt/include")
+ELSE()
+	find_package(fmt)
+ENDIF()
 ADD_SUBDIRECTORY(contrib/doctest)
 
 IF (NOT WITH_LUAJIT)
