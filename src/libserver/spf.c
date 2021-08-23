@@ -783,26 +783,34 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 	 * or incorrect records (e.g. spf2 records)
 	 */
 	LL_FOREACH (reply->entries, elt) {
-		if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
+		if (elt->type == RDNS_REQUEST_TXT) {
+			if (strncmp(elt->content.txt.data, "v=spf1", sizeof("v=spf1") - 1)
 				== 0) {
-			selected = elt;
-			rspamd_mempool_set_variable (rec->task->task_pool,
-					RSPAMD_MEMPOOL_SPF_RECORD,
-					rspamd_mempool_strdup (rec->task->task_pool,
-							elt->content.txt.data), NULL);
-			break;
+				selected = elt;
+				rspamd_mempool_set_variable(rec->task->task_pool,
+						RSPAMD_MEMPOOL_SPF_RECORD,
+						rspamd_mempool_strdup (rec->task->task_pool,
+								elt->content.txt.data), NULL);
+				break;
+			}
 		}
 	}
 
 	if (!selected) {
 		LL_FOREACH (reply->entries, elt) {
-			if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
-				ret = TRUE;
-				rspamd_mempool_set_variable (rec->task->task_pool,
-						RSPAMD_MEMPOOL_SPF_RECORD,
-						rspamd_mempool_strdup (rec->task->task_pool,
-								elt->content.txt.data), NULL);
-				break;
+			/*
+			 * Rubbish spf record? Let's still try to process it, but merely for
+			 * TXT RRs
+			 */
+			if (elt->type == RDNS_REQUEST_TXT) {
+				if (start_spf_parse(rec, resolved, elt->content.txt.data)) {
+					ret = TRUE;
+					rspamd_mempool_set_variable(rec->task->task_pool,
+							RSPAMD_MEMPOOL_SPF_RECORD,
+							rspamd_mempool_strdup (rec->task->task_pool,
+									elt->content.txt.data), NULL);
+					break;
+				}
 			}
 		}
 	}
