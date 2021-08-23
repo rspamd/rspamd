@@ -51,7 +51,9 @@ reconf['SPAM_FLAG'] = {
 }
 
 reconf['UNITEDINTERNET_SPAM'] = {
-  re = 'X-UI-Out-Filterresults=/^junk:/H',
+  re = string.format('%s || %s',
+       'X-UI-Filterresults=/^junk:/H',
+       'X-UI-Out-Filterresults=/^junk:/H'),
   score = 5.0,
   description = "United Internet says this message is spam",
   group = 'upstream_spam_filters'
