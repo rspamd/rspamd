@@ -370,6 +370,16 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 					*remain -= txtlen + 1;
 				}
 				else {
+
+					if (txtlen + copied + parts > datalen) {
+						/* Incorrect datalen reported ! */
+						rdns_err ("incorrect txtlen (%d) > datalen (%d) reported; domain %s",
+								(txtlen + copied + parts), datalen,
+								rep->requested_name);
+						return -1;
+					}
+
+					/* Reported equal to the actual data copied */
 					break;
 				}
 			}
@@ -425,7 +435,7 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		*remain -= datalen;
 		break;
 	default:
-		rdns_debug ("unexpected RR type: %d; domain %s", type, rep->requested_name);
+		rdns_info ("unexpected RR type: %d; domain %s", type, rep->requested_name);
 		p += datalen;
 		*remain -= datalen;
 		break;
