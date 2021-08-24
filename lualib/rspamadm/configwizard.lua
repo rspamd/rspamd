@@ -696,7 +696,6 @@ return {
     local args = opts['checks'] or {}
 
     local _r,err = rspamd_config:load_ucl(opts['config'])
-    local cfg = rspamd_config:get_ucl()
 
     if not _r then
       rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
@@ -708,6 +707,8 @@ return {
       rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
       os.exit(1)
     end
+
+    local cfg = rspamd_config:get_ucl()
 
     if not rspamd_config:init_modules() then
       rspamd_logger.errx('cannot init modules when parsing %s', opts['config'])

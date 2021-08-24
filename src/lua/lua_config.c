@@ -1092,13 +1092,18 @@ lua_config_get_ucl (lua_State * L)
 			lua_rawgeti (L, LUA_REGISTRYINDEX, cached->ref);
 		}
 		else {
-			ucl_object_push_lua (L, cfg->rcl_obj, true);
-			lua_pushvalue (L, -1);
-			cached = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*cached));
-			cached->L = L;
-			cached->ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			rspamd_mempool_set_variable (cfg->cfg_pool, "ucl_cached",
-					cached, lua_config_ucl_dtor);
+			if (cfg->rcl_obj) {
+				ucl_object_push_lua(L, cfg->rcl_obj, true);
+				lua_pushvalue(L, -1);
+				cached = rspamd_mempool_alloc (cfg->cfg_pool, sizeof(*cached));
+				cached->L = L;
+				cached->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+				rspamd_mempool_set_variable(cfg->cfg_pool, "ucl_cached",
+						cached, lua_config_ucl_dtor);
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 	}
 	else {
