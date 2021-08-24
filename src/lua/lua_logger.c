@@ -150,6 +150,13 @@ LUA_FUNCTION_DEF (logger, slog);
  */
 LUA_FUNCTION_DEF (logger, logx);
 
+/***
+ * @function logger.log_level()
+ * Returns log level for a logger
+ * @return {string} current log level
+ */
+LUA_FUNCTION_DEF (logger, log_level);
+
 static const struct luaL_reg loggerlib_f[] = {
 		LUA_INTERFACE_DEF (logger, err),
 		LUA_INTERFACE_DEF (logger, warn),
@@ -166,6 +173,7 @@ static const struct luaL_reg loggerlib_f[] = {
 		LUA_INTERFACE_DEF (logger, debugm),
 		LUA_INTERFACE_DEF (logger, slog),
 		LUA_INTERFACE_DEF (logger, logx),
+		LUA_INTERFACE_DEF (logger, log_level),
 		{"__tostring", rspamd_lua_class_tostring},
 		{NULL, NULL}
 };
@@ -1053,6 +1061,16 @@ static gint
 lua_logger_slog (lua_State *L)
 {
 	return lua_logger_do_log (L, 0, TRUE, 1);
+}
+
+static gint
+lua_logger_log_level (lua_State *L)
+{
+	gint log_level = rspamd_log_get_log_level (NULL);
+
+	lua_pushstring (L, rspamd_get_log_severity_string(log_level));
+
+	return 1;
 }
 
 /*** Init functions ***/

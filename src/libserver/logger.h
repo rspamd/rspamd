@@ -89,6 +89,8 @@ rspamd_logger_t * rspamd_log_open_specific (rspamd_mempool_t *pool,
  * @param level
  */
 void rspamd_log_set_log_level (rspamd_logger_t *logger, gint level);
+gint rspamd_log_get_log_level (rspamd_logger_t *logger);
+const gchar *rspamd_get_log_severity_string(gint level_flags);
 /**
  * Set log flags (from enum rspamd_log_flags)
  * @param logger
