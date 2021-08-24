@@ -1,13 +1,18 @@
 #ifndef REPLXX_CONVERSION_HXX_INCLUDED
 #define REPLXX_CONVERSION_HXX_INCLUDED 1
 
-#include "ConvertUTF.h"
-
 #ifdef __has_include
 #if __has_include( <version> )
 #include <version>
 #endif
 #endif
+
+typedef enum {
+	conversionOK,    /* conversion successful */
+	sourceExhausted, /* partial character in source, but hit end */
+	targetExhausted, /* insuff. room in target for conversion */
+	sourceIllegal    /* source sequence is illegal/malformed */
+} ConversionResult;
 
 #if ! ( defined( __cpp_lib_char8_t ) || ( defined( __clang_major__ ) && ( __clang_major__ >= 8 ) && ( __cplusplus > 201703L ) ) )
 namespace replxx {

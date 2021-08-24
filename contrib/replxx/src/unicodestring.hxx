@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <cstring>
+#include <string>
 
 #include "conversion.hxx"
 
