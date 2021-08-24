@@ -10,7 +10,7 @@
 | libottery     | ?       | Public Domain / CC0 | YES     | many changes       |
 | librdns       | ?       | BSD-2-Clause        | YES     |                    |
 | libucl        | ?       | BSD-2-Clause        | YES     |                    |
-| replxx        | 0.0.2   | BSD-2-Clause        | YES     | libicu usage       |
+| replxx        |  6d93360 | BSD-2-Clause       | YES     | libicu usage       |
 | lua-argparse  | 0.7.0   | MIT                 | NO      |                    |
 | lua-bit       | 1.0.2   | MIT                 | YES     | build fixes        |
 | lua-fun       | ?       | MIT                 | YES     | rspamd text        |

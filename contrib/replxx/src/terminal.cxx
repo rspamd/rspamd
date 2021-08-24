@@ -16,6 +16,10 @@
 #define write _write
 #define STDIN_FILENO 0
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+static DWORD const ENABLE_VIRTUAL_TERMINAL_PROCESSING = 4;
+#endif
+
 #include "windows.hxx"
 
 #else /* _WIN32 */
@@ -24,10 +28,11 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #endif /* _WIN32 */
 
-#include "io.hxx"
+#include "terminal.hxx"
 #include "conversion.hxx"
 #include "escape.hxx"
 #include "replxx.hxx"
@@ -65,21 +70,35 @@ bool out( is_a_tty( 1 ) );
 
 }
 
+#ifndef _WIN32
+Terminal* _terminal_ = nullptr;
+static void WindowSizeChanged( int ) {
+	if ( ! _terminal_ ) {
+		return;
+	}
+	_terminal_->notify_event( Terminal::EVENT_TYPE::RESIZE );
+}
+#endif
+
+
 Terminal::Terminal( void )
 #ifdef _WIN32
 	: _consoleOut( INVALID_HANDLE_VALUE )
 	, _consoleIn( INVALID_HANDLE_VALUE )
-	, _oldMode()
+	, _origOutMode()
+	, _origInMode()
 	, _oldDisplayAttribute()
 	, _inputCodePage( GetConsoleCP() )
 	, _outputCodePage( GetConsoleOutputCP() )
 	, _interrupt( INVALID_HANDLE_VALUE )
 	, _events()
+	, _empty()
 #else
 	: _origTermios()
 	, _interrupt()
 #endif
-	, _rawMode( false ) {
+	, _rawMode( false )
+	, _utf8() {
 #ifdef _WIN32
 	_interrupt = CreateEvent( nullptr, true, false, TEXT( "replxx_interrupt_event" ) );
 #else
@@ -100,26 +119,20 @@ Terminal::~Terminal( void ) {
 }
 
 void Terminal::write32( char32_t const* text32, int len32 ) {
-	int len8 = 4 * len32 + 1;
-	unique_ptr<char[]> text8(new char[len8]);
-	int count8 = 0;
-
-	copyString32to8(text8.get(), len8, text32, len32, &count8);
-	int nWritten( 0 );
-#ifdef _WIN32
-	nWritten = win_write( text8.get(), count8 );
-#else
-	nWritten = write( 1, text8.get(), count8 );
-#endif
-	if ( nWritten != count8 ) {
-		throw std::runtime_error( "write failed" );
-	}
+	_utf8.assign( text32, len32 );
+	write8( _utf8.get(), _utf8.size() );
 	return;
 }
 
 void Terminal::write8( char const* data_, int size_ ) {
 #ifdef _WIN32
-	int nWritten( win_write( data_, size_ ) );
+	if ( ! _rawMode ) {
+		enable_out();
+	}
+	int nWritten( win_write( _consoleOut, _autoEscape, data_, size_ ) );
+	if ( ! _rawMode ) {
+		disable_out();
+	}
 #else
 	int nWritten( write( 1, data_, size_ ) );
 #endif
@@ -164,18 +177,45 @@ inline int notty( void ) {
 }
 }
 
+void Terminal::enable_out( void ) {
+#ifdef _WIN32
+	_consoleOut = GetStdHandle( STD_OUTPUT_HANDLE );
+	SetConsoleOutputCP( 65001 );
+	GetConsoleMode( _consoleOut, &_origOutMode );
+	_autoEscape = SetConsoleMode( _consoleOut, _origOutMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING ) != 0;
+#endif
+}
+
+void Terminal::disable_out( void ) {
+#ifdef _WIN32
+	SetConsoleMode( _consoleOut, _origOutMode );
+	SetConsoleOutputCP( _outputCodePage );
+	_consoleOut = INVALID_HANDLE_VALUE;
+	_autoEscape = false;
+#endif
+}
+
+void Terminal::enable_bracketed_paste( void ) {
+	static char const  BRACK_PASTE_INIT[] = "\033[?2004h";
+	write8( BRACK_PASTE_INIT, sizeof ( BRACK_PASTE_INIT ) - 1 );
+}
+
+void Terminal::disable_bracketed_paste( void ) {
+	static char const  BRACK_PASTE_DISABLE[] = "\033[?2004l";
+	write8( BRACK_PASTE_DISABLE, sizeof ( BRACK_PASTE_DISABLE ) - 1 );
+}
+
 int Terminal::enable_raw_mode( void ) {
 	if ( ! _rawMode ) {
 #ifdef _WIN32
 		_consoleIn = GetStdHandle( STD_INPUT_HANDLE );
-		_consoleOut = GetStdHandle( STD_OUTPUT_HANDLE );
 		SetConsoleCP( 65001 );
-		SetConsoleOutputCP( 65001 );
-		GetConsoleMode( _consoleIn, &_oldMode );
+		GetConsoleMode( _consoleIn, &_origInMode );
 		SetConsoleMode(
 			_consoleIn,
-			_oldMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT )
+			_origInMode & ~( ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT )
 		);
+		enable_out();
 #else
 		struct termios raw;
 
@@ -208,21 +248,22 @@ int Terminal::enable_raw_mode( void ) {
 		if ( tcsetattr(0, TCSADRAIN, &raw) < 0 ) {
 			return ( notty() );
 		}
+		_terminal_ = this;
 #endif
 		_rawMode = true;
 	}
-	return 0;
+	return ( 0 );
 }
 
 void Terminal::disable_raw_mode(void) {
 	if ( _rawMode ) {
 #ifdef _WIN32
-		SetConsoleMode( _consoleIn, _oldMode );
+		disable_out();
+		SetConsoleMode( _consoleIn, _origInMode );
 		SetConsoleCP( _inputCodePage );
-		SetConsoleOutputCP( _outputCodePage );
 		_consoleIn = INVALID_HANDLE_VALUE;
-		_consoleOut = INVALID_HANDLE_VALUE;
 #else
+		_terminal_ = nullptr;
 		if ( tcsetattr( 0, TCSADRAIN, &_origTermios ) == -1 ) {
 			return;
 		}
@@ -320,31 +361,23 @@ char32_t Terminal::read_char( void ) {
 			}
 		}
 #endif
-		if (rec.EventType != KEY_EVENT) {
+		if ( rec.EventType != KEY_EVENT ) {
 			continue;
 		}
-		// Windows provides for entry of characters that are not on your keyboard by
-		// sending the
-		// Unicode characters as a "key up" with virtual keycode 0x12 (VK_MENU ==
-		// Alt key) ...
+		// Windows provides for entry of characters that are not on your keyboard by sending the
+		// Unicode characters as a "key up" with virtual keycode 0x12 (VK_MENU == Alt key) ...
 		// accept these characters, otherwise only process characters on "key down"
-		if (!rec.Event.KeyEvent.bKeyDown &&
-				rec.Event.KeyEvent.wVirtualKeyCode != VK_MENU) {
+		if ( !rec.Event.KeyEvent.bKeyDown && ( rec.Event.KeyEvent.wVirtualKeyCode != VK_MENU ) ) {
 			continue;
 		}
 		modifierKeys = 0;
-		// AltGr is encoded as ( LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED ), so don't
-		// treat this
-		// combination as either CTRL or META we just turn off those two bits, so it
-		// is still
-		// possible to combine CTRL and/or META with an AltGr key by using
-		// right-Ctrl and/or
+		// AltGr is encoded as ( LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED ), so don't treat this
+		// combination as either CTRL or META we just turn off those two bits, so it is still
+		// possible to combine CTRL and/or META with an AltGr key by using right-Ctrl and/or
 		// left-Alt
-		if ((rec.Event.KeyEvent.dwControlKeyState &
-				 (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) ==
-				(LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) {
-			rec.Event.KeyEvent.dwControlKeyState &=
-					~(LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED);
+		DWORD const AltGr( LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED );
+		if ( ( rec.Event.KeyEvent.dwControlKeyState & AltGr ) == AltGr ) {
+			rec.Event.KeyEvent.dwControlKeyState &= ~( LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED );
 		}
 		if ( rec.Event.KeyEvent.dwControlKeyState & ( RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED ) ) {
 			modifierKeys |= Replxx::KEY::BASE_CONTROL;
@@ -352,7 +385,7 @@ char32_t Terminal::read_char( void ) {
 		if ( rec.Event.KeyEvent.dwControlKeyState & ( RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED ) ) {
 			modifierKeys |= Replxx::KEY::BASE_META;
 		}
-		if (escSeen) {
+		if ( escSeen ) {
 			modifierKeys |= Replxx::KEY::BASE_META;
 		}
 		int key( rec.Event.KeyEvent.uChar.UnicodeChar );
@@ -417,7 +450,7 @@ char32_t Terminal::read_char( void ) {
 				key += 0x10000;
 			}
 			if ( is_control_code( key ) ) {
-				key += 0x40;
+				key = control_to_human( key );
 				modifierKeys |= Replxx::KEY::BASE_CONTROL;
 			}
 			key |= modifierKeys;
@@ -474,7 +507,7 @@ char32_t Terminal::read_char( void ) {
 					friendlyTextPtr = const_cast<char*>("DEL");
 				} else {
 					friendlyTextBuf[0] = '^';
-					friendlyTextBuf[1] = keyCopy + 0x40;
+					friendlyTextBuf[1] = control_to_human( keyCopy );
 					friendlyTextBuf[2] = 0;
 					friendlyTextPtr = friendlyTextBuf;
 				}
@@ -494,7 +527,7 @@ char32_t Terminal::read_char( void ) {
 
 	c = EscapeSequenceProcessing::doDispatch(c);
 	if ( is_control_code( c ) ) {
-		c = Replxx::KEY::control( c + 0x40 );
+		c = Replxx::KEY::control( control_to_human( c ) );
 	}
 #endif // #_WIN32
 	return ( c );
@@ -504,7 +537,7 @@ Terminal::EVENT_TYPE Terminal::wait_for_input( int long timeout_ ) {
 #ifdef _WIN32
 	std::array<HANDLE,2> handles = { _consoleIn, _interrupt };
 	while ( true ) {
-		DWORD event( WaitForMultipleObjects( handles.size (), handles.data(), false, timeout_ > 0 ? timeout_ : INFINITE ) );
+		DWORD event( WaitForMultipleObjects( static_cast<DWORD>( handles.size() ), handles.data(), false, timeout_ > 0 ? timeout_ : INFINITE ) );
 		switch ( event ) {
 			case ( WAIT_OBJECT_0 + 0 ): {
 				// peek events that will be skipped
@@ -580,6 +613,9 @@ Terminal::EVENT_TYPE Terminal::wait_for_input( int long timeout_ ) {
 			if ( data == 'm' ) {
 				return ( EVENT_TYPE::MESSAGE );
 			}
+			if ( data == 'r' ) {
+				return ( EVENT_TYPE::RESIZE );
+			}
 		}
 		if ( FD_ISSET( 0, &fdSet ) ) {
 			return ( EVENT_TYPE::KEY_PRESS );
@@ -593,7 +629,7 @@ void Terminal::notify_event( EVENT_TYPE eventType_ ) {
 	_events.push_back( eventType_ );
 	SetEvent( _interrupt );
 #else
-	char data( eventType_ == EVENT_TYPE::KEY_PRESS ? 'k' : 'm' );
+	char data( ( eventType_ == EVENT_TYPE::KEY_PRESS ) ? 'k' : ( eventType_ == EVENT_TYPE::MESSAGE ? 'm' : 'r' ) );
 	static_cast<void>( write( _interrupt[1], &data, 1 ) == 1 );
 #endif
 }
@@ -603,31 +639,38 @@ void Terminal::notify_event( EVENT_TYPE eventType_ ) {
  */
 void Terminal::clear_screen( CLEAR_SCREEN clearScreen_ ) {
 #ifdef _WIN32
+	if ( _autoEscape ) {
+#endif
+		if ( clearScreen_ == CLEAR_SCREEN::WHOLE ) {
+			char const clearCode[] = "\033c\033[H\033[2J\033[0m";
+			static_cast<void>( write(1, clearCode, sizeof ( clearCode ) - 1) >= 0 );
+		} else {
+			char const clearCode[] = "\033[J";
+			static_cast<void>( write(1, clearCode, sizeof ( clearCode ) - 1) >= 0 );
+		}
+		return;
+#ifdef _WIN32
+	}
 	COORD coord = { 0, 0 };
 	CONSOLE_SCREEN_BUFFER_INFO inf;
-	bool toEnd( clearScreen_ == CLEAR_SCREEN::TO_END );
 	HANDLE consoleOut( _consoleOut != INVALID_HANDLE_VALUE ? _consoleOut : GetStdHandle( STD_OUTPUT_HANDLE ) );
 	GetConsoleScreenBufferInfo( consoleOut, &inf );
-	if ( ! toEnd ) {
-		SetConsoleCursorPosition( consoleOut, coord );
-	} else {
+	if ( clearScreen_ == CLEAR_SCREEN::TO_END ) {
 		coord = inf.dwCursorPosition;
-	}
-	DWORD nWritten( 0 );
-	DWORD toWrite(
-		toEnd
-			? ( inf.dwSize.Y - inf.dwCursorPosition.Y ) * inf.dwSize.X - inf.dwCursorPosition.X
-			: inf.dwSize.X * inf.dwSize.Y
-	);
-	FillConsoleOutputCharacterA( consoleOut, ' ', toWrite, coord, &nWritten );
-#else
-	if ( clearScreen_ == CLEAR_SCREEN::WHOLE ) {
-		char const clearCode[] = "\033c\033[H\033[2J\033[0m";
-		static_cast<void>( write(1, clearCode, sizeof ( clearCode ) - 1) >= 0 );
+		DWORD nWritten( 0 );
+		SHORT height( inf.srWindow.Bottom - inf.srWindow.Top );
+		DWORD yPos( inf.dwCursorPosition.Y - inf.srWindow.Top );
+		DWORD toWrite( ( height + 1 - yPos ) * inf.dwSize.X - inf.dwCursorPosition.X );
+//		FillConsoleOutputCharacterA( consoleOut, ' ', toWrite, coord, &nWritten );
+		_empty.resize( toWrite - 1, ' ' );
+		WriteConsoleA( consoleOut, _empty.data(), toWrite - 1, &nWritten, nullptr );
 	} else {
-		char const clearCode[] = "\033[J";
-		static_cast<void>( write(1, clearCode, sizeof ( clearCode ) - 1) >= 0 );
+		COORD scrollTarget = { 0, -inf.dwSize.Y };
+		CHAR_INFO fill{ TEXT( ' ' ), inf.wAttributes };
+		SMALL_RECT scrollRect = { 0, 0, inf.dwSize.X, inf.dwSize.Y };
+		ScrollConsoleScreenBuffer( consoleOut, &scrollRect, nullptr, scrollTarget, &fill );
 	}
+	SetConsoleCursorPosition( consoleOut, coord );
 #endif
 }
 
@@ -653,6 +696,18 @@ void Terminal::jump_cursor( int xPos_, int yOffset_ ) {
 #endif
 }
 
+#ifdef _WIN32
+void Terminal::set_cursor_visible( bool visible_ ) {
+	CONSOLE_CURSOR_INFO     cursorInfo;
+	GetConsoleCursorInfo( _consoleOut, &cursorInfo );
+	cursorInfo.bVisible = visible_;
+	SetConsoleCursorInfo( _consoleOut, &cursorInfo );
+	return;
+}
+#else
+void Terminal::set_cursor_visible( bool ) {}
+#endif
+
 #ifndef _WIN32
 int Terminal::read_verbatim( char32_t* buffer_, int size_ ) {
 	int len( 0 );
@@ -668,6 +723,18 @@ int Terminal::read_verbatim( char32_t* buffer_, int size_ ) {
 	}
 	::fcntl( STDIN_FILENO, F_SETFL, statusFlags );
 	return ( len );
+}
+
+int Terminal::install_window_change_handler( void ) {
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = &WindowSizeChanged;
+
+	if (sigaction(SIGWINCH, &sa, nullptr) == -1) {
+		return errno;
+	}
+	return 0;
 }
 #endif
 

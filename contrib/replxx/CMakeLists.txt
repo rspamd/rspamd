@@ -55,11 +55,11 @@ set(
 	src/escape.cxx
 	src/history.cxx
 	src/replxx_impl.cxx
-	src/io.cxx
 	src/prompt.cxx
 	src/replxx.cxx
 	src/util.cxx
 	src/wcwidth.cpp
+	src/terminal.cxx
 	src/windows.cxx
 )
 
