@@ -71,7 +71,6 @@ struct rspamd_regexp_s {
 	gint flags;
 	gint pcre_flags;
 	gint ncaptures;
-	gint nbackref;
 };
 
 struct rspamd_regexp_cache {
@@ -516,23 +515,11 @@ fin:
 			&ncaptures) == 0) {
 		res->ncaptures = ncaptures;
 	}
-
-	/* Check number of backrefs */
-	if (pcre_fullinfo (res->raw_re, res->extra, PCRE_INFO_BACKREFMAX,
-			&ncaptures) == 0) {
-		res->nbackref = ncaptures;
-	}
 #else
 	/* Check number of captures */
 	if (pcre2_pattern_info (res->raw_re, PCRE2_INFO_CAPTURECOUNT,
 			&ncaptures) == 0) {
 		res->ncaptures = ncaptures;
-	}
-
-	/* Check number of backrefs */
-	if (pcre2_pattern_info (res->raw_re, PCRE2_INFO_BACKREFMAX,
-			&ncaptures) == 0) {
-		res->nbackref = ncaptures;
 	}
 #endif
 
@@ -836,22 +823,6 @@ rspamd_regexp_get_pcre_flags (const rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->pcre_flags;
-}
-
-gint
-rspamd_regexp_get_nbackrefs (const rspamd_regexp_t *re)
-{
-	g_assert (re != NULL);
-
-	return re->nbackref;
-}
-
-gint
-rspamd_regexp_get_ncaptures (const rspamd_regexp_t *re)
-{
-	g_assert (re != NULL);
-
-	return re->ncaptures;
 }
 
 guint

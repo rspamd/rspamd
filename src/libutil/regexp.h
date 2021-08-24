@@ -162,16 +162,6 @@ guint rspamd_regexp_get_maxhits (const rspamd_regexp_t *re);
 guint rspamd_regexp_set_maxhits (rspamd_regexp_t *re, guint new_maxhits);
 
 /**
- * Returns number of backreferences in a regexp
- */
-gint rspamd_regexp_get_nbackrefs (const rspamd_regexp_t *re);
-
-/**
- * Returns number of capture groups in a regexp
- */
-gint rspamd_regexp_get_ncaptures (const rspamd_regexp_t *re);
-
-/**
  * Returns cache id for a regexp
  */
 guint64 rspamd_regexp_get_cache_id (const rspamd_regexp_t *re);
