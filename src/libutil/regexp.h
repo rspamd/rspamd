@@ -182,6 +182,16 @@ guint64 rspamd_regexp_get_cache_id (const rspamd_regexp_t *re);
 guint64 rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id);
 
 /**
+ * Returns match limit for a regexp
+ */
+gsize rspamd_regexp_get_match_limit (const rspamd_regexp_t *re);
+
+/**
+ * Sets cache id for a regexp
+ */
+gsize rspamd_regexp_set_match_limit (rspamd_regexp_t *re, gsize lim);
+
+/**
  * Get regexp class for the re object
  */
 gpointer rspamd_regexp_get_class (const rspamd_regexp_t *re);

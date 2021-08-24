@@ -126,7 +126,6 @@ struct rspamd_lua_regexp {
 	rspamd_regexp_t *re;
 	gchar *module;
 	gchar *re_pattern;
-	gsize match_limit;
 	gint re_flags;
 };
 

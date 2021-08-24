@@ -399,10 +399,10 @@ lua_regexp_set_limit (lua_State *L)
 
 	if (re && re->re && !IS_DESTROYED (re)) {
 		if (lim > 0) {
-			re->match_limit = lim;
+			rspamd_regexp_set_match_limit(re->re, lim);
 		}
 		else {
-			re->match_limit = 0;
+			rspamd_regexp_set_match_limit(re->re, 0);
 		}
 	}
 
@@ -522,10 +522,6 @@ lua_regexp_search (lua_State *L)
 			lua_newtable (L);
 			i = 0;
 
-			if (re->match_limit > 0) {
-				len = MIN (len, re->match_limit);
-			}
-
 			while (rspamd_regexp_search (re->re, data, len, &start, &end, raw,
 					captures)) {
 
@@ -605,10 +601,6 @@ lua_regexp_match (lua_State *L)
 		}
 
 		if (data && len > 0) {
-			if (re->match_limit > 0) {
-				len = MIN (len, re->match_limit);
-			}
-
 			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, raw, NULL)) {
 				lua_pushboolean (L, TRUE);
 			}
@@ -670,11 +662,6 @@ lua_regexp_matchn (lua_State *L)
 		}
 
 		if (data && len > 0) {
-
-			if (re->match_limit > 0) {
-				len = MIN (len, re->match_limit);
-			}
-
 			for (;;) {
 				if (rspamd_regexp_search (re->re, data, len, &start, &end, raw,
 						NULL)) {
@@ -738,10 +725,6 @@ lua_regexp_split (lua_State *L)
 			data = t->start;
 			len = t->len;
 			is_text = TRUE;
-		}
-
-		if (re->match_limit > 0) {
-			len = MIN (len, re->match_limit);
 		}
 
 		if (data && len > 0) {
