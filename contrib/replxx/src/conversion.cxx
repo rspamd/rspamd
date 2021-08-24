@@ -2,10 +2,7 @@
 #include <string>
 #include <cstring>
 #include <cctype>
-#include <clocale>
-
-#include "unicode/utf8.h"
-
+#include <locale.h>
 
 #include "conversion.hxx"
 
@@ -47,38 +44,20 @@ bool is8BitEncoding( is_8bit_encoding() );
 ConversionResult copyString8to32(char32_t* dst, int dstSize, int& dstCount, const char* src) {
 	ConversionResult res = ConversionResult::conversionOK;
 	if ( ! locale::is8BitEncoding ) {
-		auto sourceStart = reinterpret_cast<const unsigned char*>(src);
-		auto slen = strlen(src);
-		auto targetStart = reinterpret_cast<UChar32*>(dst);
-		int i = 0, j = 0;
+		const UTF8* sourceStart = reinterpret_cast<const UTF8*>(src);
+		const UTF8* sourceEnd = sourceStart + strlen(src);
+		UTF32* targetStart = reinterpret_cast<UTF32*>(dst);
+		UTF32* targetEnd = targetStart + dstSize;
 
-		while (i < slen && j < dstSize) {
-			UChar32 uc;
-			auto prev_i = i;
-			U8_NEXT (sourceStart, i, slen, uc);
+		res = ConvertUTF8toUTF32(
+				&sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion);
 
-			if (uc <= 0) {
-				if (U8_IS_LEAD (sourceStart[prev_i])) {
-					auto lead_byte = sourceStart[prev_i];
-					auto trailing_bytes = (((uint8_t)(lead_byte)>=0xc2)+
-							((uint8_t)(lead_byte)>=0xe0)+
-							((uint8_t)(lead_byte)>=0xf0));
+		if (res == conversionOK) {
+			dstCount = static_cast<int>( targetStart - reinterpret_cast<UTF32*>( dst ) );
 
-					if (trailing_bytes + i > slen) {
-						return ConversionResult::sourceExhausted;
-					}
-				}
-
-				/* Replace with 0xFFFD */
-				uc = 0x0000FFFD;
+			if (dstCount < dstSize) {
+				*targetStart = 0;
 			}
-			targetStart[j++] = uc;
-		}
-
-		dstCount = j;
-
-		if (j < dstSize) {
-			targetStart[j] = 0;
 		}
 	} else {
 		for ( dstCount = 0; ( dstCount < dstSize ) && src[dstCount]; ++ dstCount ) {
@@ -94,28 +73,22 @@ ConversionResult copyString8to32(char32_t* dst, int dstSize, int& dstCount, cons
 	);
 }
 
-void copyString32to8(
-	char* dst, int dstSize, const char32_t* src, int srcSize, int* dstCount
-) {
+int copyString32to8( char* dst, int dstSize, const char32_t* src, int srcSize ) {
+	int resCount( 0 );
 	if ( ! locale::is8BitEncoding ) {
-		int j = 0;
-		UBool is_error = 0;
+		const UTF32* sourceStart = reinterpret_cast<const UTF32*>(src);
+		const UTF32* sourceEnd = sourceStart + srcSize;
+		UTF8* targetStart = reinterpret_cast<UTF8*>(dst);
+		UTF8* targetEnd = targetStart + dstSize;
 
-		for (auto i = 0; i < srcSize; i ++) {
-			U8_APPEND ((uint8_t *)dst, j, dstSize, src[i], is_error);
+		ConversionResult res = ConvertUTF32toUTF8(
+			&sourceStart, sourceEnd, &targetStart, targetEnd, lenientConversion
+		);
 
-			if (is_error) {
-				break;
-			}
-		}
-
-		if (!is_error) {
-			if (dstCount) {
-				*dstCount = j;
-			}
-
-			if (j < dstSize) {
-				dst[j] = '\0';
+		if ( res == conversionOK ) {
+			resCount = static_cast<int>( targetStart - reinterpret_cast<UTF8*>( dst ) );
+			if ( resCount < dstSize ) {
+				*targetStart = 0;
 			}
 		}
 	} else {
@@ -123,13 +96,12 @@ void copyString32to8(
 		for ( i = 0; ( i < dstSize ) && ( i < srcSize ) && src[i]; ++ i ) {
 			dst[i] = static_cast<char>( src[i] );
 		}
-		if ( dstCount ) {
-			*dstCount = i;
-		}
+		resCount = i;
 		if ( i < dstSize ) {
 			dst[i] = 0;
 		}
 	}
+	return ( resCount );
 }
 
 }

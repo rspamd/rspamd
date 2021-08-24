@@ -131,6 +131,8 @@ public:
 		static char32_t const F23          = F22       + 1;
 		static char32_t const F24          = F23       + 1;
 		static char32_t const MOUSE        = F24       + 1;
+		static char32_t const PASTE_START  = MOUSE     + 1;
+		static char32_t const PASTE_FINISH = PASTE_START + 1;
 		static constexpr char32_t shift( char32_t key_ ) {
 			return ( key_ | BASE_SHIFT );
 		}
@@ -148,19 +150,25 @@ public:
 	 */
 	enum class ACTION {
 		INSERT_CHARACTER,
+		NEW_LINE,
 		DELETE_CHARACTER_UNDER_CURSOR,
 		DELETE_CHARACTER_LEFT_OF_CURSOR,
 		KILL_TO_END_OF_LINE,
 		KILL_TO_BEGINING_OF_LINE,
 		KILL_TO_END_OF_WORD,
 		KILL_TO_BEGINING_OF_WORD,
+		KILL_TO_END_OF_SUBWORD,
+		KILL_TO_BEGINING_OF_SUBWORD,
 		KILL_TO_WHITESPACE_ON_LEFT,
 		YANK,
 		YANK_CYCLE,
+		YANK_LAST_ARG,
 		MOVE_CURSOR_TO_BEGINING_OF_LINE,
 		MOVE_CURSOR_TO_END_OF_LINE,
 		MOVE_CURSOR_ONE_WORD_LEFT,
 		MOVE_CURSOR_ONE_WORD_RIGHT,
+		MOVE_CURSOR_ONE_SUBWORD_LEFT,
+		MOVE_CURSOR_ONE_SUBWORD_RIGHT,
 		MOVE_CURSOR_LEFT,
 		MOVE_CURSOR_RIGHT,
 		HISTORY_NEXT,
@@ -174,12 +182,16 @@ public:
 		CAPITALIZE_WORD,
 		LOWERCASE_WORD,
 		UPPERCASE_WORD,
+		CAPITALIZE_SUBWORD,
+		LOWERCASE_SUBWORD,
+		UPPERCASE_SUBWORD,
 		TRANSPOSE_CHARACTERS,
 		TOGGLE_OVERWRITE_MODE,
 #ifndef _WIN32
 		VERBATIM_INSERT,
 		SUSPEND,
 #endif
+		BRACKETED_PASTE,
 		CLEAR_SCREEN,
 		CLEAR_SELF,
 		REPAINT,
@@ -222,7 +234,59 @@ public:
 		}
 	};
 	typedef std::vector<Completion> completions_t;
+	class HistoryEntry {
+		std::string _timestamp;
+		std::string _text;
+	public:
+		HistoryEntry( std::string const& timestamp_, std::string const& text_ )
+			: _timestamp( timestamp_ )
+			, _text( text_ ) {
+		}
+		std::string const& timestamp( void ) const {
+			return ( _timestamp );
+		}
+		std::string const& text( void ) const {
+			return ( _text );
+		}
+	};
+	class HistoryScanImpl;
+	class HistoryScan {
+	public:
+		typedef std::unique_ptr<HistoryScanImpl, void (*)( HistoryScanImpl* )> impl_t;
+	private:
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4251)
+#endif
+		impl_t _impl;
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+	public:
+		HistoryScan( impl_t );
+		HistoryScan( HistoryScan&& ) = default;
+		HistoryScan& operator = ( HistoryScan&& ) = default;
+		bool next( void );
+		HistoryEntry const& get( void ) const;
+	private:
+		HistoryScan( HistoryScan const& ) = delete;
+		HistoryScan& operator = ( HistoryScan const& ) = delete;
+	};
 	typedef std::vector<std::string> hints_t;
+
+	/*! \brief Line modification callback type definition.
+	 *
+	 * User can observe and modify line contents (and cursor position)
+	 * in response to changes to both introduced by the user through
+	 * normal interactions.
+	 *
+	 * When callback returns Replxx updates current line content
+	 * and current cursor position to the ones updated by the callback.
+	 *
+	 * \param line[in,out] - a R/W reference to an UTF-8 encoded input entered by the user so far.
+	 * \param cursorPosition[in,out] - a R/W reference to current cursor position.
+	 */
+	typedef std::function<void ( std::string& line, int& cursorPosition )> modify_callback_t;
 
 	/*! \brief Completions callback type definition.
 	 *
@@ -234,8 +298,8 @@ public:
 	 * input == "if ( obj.me"
 	 * contextLen == 2 (depending on \e set_word_break_characters())
 	 *
-	 * Client application is free to update \e contextLen to be 6 (or any orther non-negative
-	 * number not greated than the number of code points in input) if it makes better sense
+	 * Client application is free to update \e contextLen to be 6 (or any other non-negative
+	 * number not greater than the number of code points in input) if it makes better sense
 	 * for given client application semantics.
 	 *
 	 * \param input - UTF-8 encoded input entered by the user until current cursor position.
@@ -252,7 +316,7 @@ public:
 	 * displayed user input.
 	 *
 	 * Size of \e colors buffer is equal to number of code points in user \e input
-	 * which will be different from simple `input.lenght()`!
+	 * which will be different from simple `input.length()`!
 	 *
 	 * \param input - an UTF-8 encoded input entered by the user so far.
 	 * \param colors - output buffer for color information.
@@ -269,8 +333,8 @@ public:
 	 * input == "if ( obj.me"
 	 * contextLen == 2 (depending on \e set_word_break_characters())
 	 *
-	 * Client application is free to update \e contextLen to be 6 (or any orther non-negative
-	 * number not greated than the number of code points in input) if it makes better sense
+	 * Client application is free to update \e contextLen to be 6 (or any other non-negative
+	 * number not greater than the number of code points in input) if it makes better sense
 	 * for given client application semantics.
 	 *
 	 * \param input - UTF-8 encoded input entered by the user until current cursor position.
@@ -283,7 +347,7 @@ public:
 	/*! \brief Key press handler type definition.
 	 *
 	 * \param code - the key code replxx got from terminal.
-	 * \return Decition on how should input() behave after this key handler returns.
+	 * \return Decision on how should input() behave after this key handler returns.
 	 */
 	typedef std::function<ACTION_RESULT ( char32_t code )> key_press_handler_t;
 
@@ -307,12 +371,12 @@ public:
 	class ReplxxImpl;
 private:
 	typedef std::unique_ptr<ReplxxImpl, void (*)( ReplxxImpl* )> impl_t;
-#ifdef _WIN32
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable:4251)
 #endif
 	impl_t _impl;
-#ifdef _WIN32
+#ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
@@ -320,6 +384,12 @@ public:
 	Replxx( void );
 	Replxx( Replxx&& ) = default;
 	Replxx& operator = ( Replxx&& ) = default;
+
+	/*! \brief Register modify callback.
+	 *
+	 * \param fn - user defined callback function.
+	 */
+	void set_modify_callback( modify_callback_t const& fn );
 
 	/*! \brief Register completion callback.
 	 *
@@ -340,6 +410,8 @@ public:
 	void set_hint_callback( hint_callback_t const& fn );
 
 	/*! \brief Read line of user input.
+	 *
+	 * Returned pointer is managed by the library and is not to be freed in the client.
 	 *
 	 * \param prompt - prompt to be displayed before getting user input.
 	 * \return An UTF-8 encoded input given by the user (or nullptr on EOF).
@@ -370,10 +442,16 @@ public:
 	 *
 	 * \param fmt - printf style format.
 	 */
-#ifdef __GNUC__
-	__attribute__((format(printf, 2, 3)))
-#endif
 	void print( char const* fmt, ... );
+
+	/*! \brief Prints a char array with the given length to standard output.
+	 *
+	 * \copydetails print
+	 *
+	 * \param str - The char array to print.
+	 * \param length - The length of the array.
+	 */
+	void write( char const* str, int length );
 
 	/*! \brief Schedule an emulated key press event.
 	 *
@@ -398,11 +476,60 @@ public:
 	 */
 	void bind_key( char32_t code, key_press_handler_t handler );
 
+	/*! \brief Bind internal `replxx` action (by name) to handle given key-press event.
+	 *
+	 * Action names are the same as names of Replxx::ACTION enumerations
+	 * but in lower case, e.g.: an action for recalling previous history line
+	 * is \e Replxx::ACTION::HISTORY_PREVIOUS so action name to be used in this
+	 * interface for the same effect is "history_previous".
+	 *
+	 * \param code - handle this key-press event with following handler.
+	 * \param actionName - name of internal action to be invoked on key press.
+	 */
+	void bind_key_internal( char32_t code, char const* actionName );
+
 	void history_add( std::string const& line );
-	int history_save( std::string const& filename );
-	int history_load( std::string const& filename );
+
+	/*! \brief Synchronize REPL's history with given file.
+	 *
+	 * Synchronizing means loading existing history from given file,
+	 * merging it with current history sorted by timestamps,
+	 * saving merged version to given file,
+	 * keeping merged version as current REPL's history.
+	 *
+	 * This call is an equivalent of calling:
+	 * history_save( "some-file" );
+	 * history_load( "some-file" );
+	 *
+	 * \param filename - a path to the file with which REPL's current history should be synchronized.
+	 * \return True iff history file was successfully created.
+	 */
+	bool history_sync( std::string const& filename );
+
+	/*! \brief Save REPL's history into given file.
+	 *
+	 * Saving means loading existing history from given file,
+	 * merging it with current history sorted by timestamps,
+	 * saving merged version to given file,
+	 * keeping original (NOT merged) version as current REPL's history.
+	 *
+	 * \param filename - a path to the file where REPL's history should be saved.
+	 * \return True iff history file was successfully created.
+	 */
+	bool history_save( std::string const& filename );
+
+	/*! \brief Load REPL's history from given file.
+	 *
+	 * \param filename - a path to the file which contains REPL's history that should be loaded.
+	 * \return True iff history file was successfully opened.
+	 */
+	bool history_load( std::string const& filename );
+
+	/*! \brief Clear REPL's in-memory history.
+	 */
+	void history_clear( void );
 	int history_size( void ) const;
-	std::string history_line( int index );
+	HistoryScan history_scan( void ) const;
 
 	void set_preload_buffer( std::string const& preloadText );
 
@@ -446,6 +573,23 @@ public:
 	 */
 	void set_beep_on_ambiguous_completion( bool val );
 
+	/*! \brief Set complete next/complete previous behavior.
+	 *
+	 * COMPLETE_NEXT/COMPLETE_PREVIOUS actions have two modes of operations,
+	 * in case when a partial completion is possible complete only partial part (`false` setting)
+	 * or complete first proposed completion fully (`true` setting).
+	 * The default is to complete fully (a `true` setting - complete immediately).
+	 *
+	 * \param val - complete immediately.
+	 */
+	void set_immediate_completion( bool val );
+
+	/*! \brief Set history duplicate entries behaviour.
+	 *
+	 * \param val - should history contain only unique entries?
+	 */
+	void set_unique_history( bool val );
+
 	/*! \brief Disable output coloring.
 	 *
 	 * \param val - if set to non-zero disable output colors.
@@ -457,6 +601,8 @@ public:
 	void set_max_history_size( int len );
 	void clear_screen( void );
 	int install_window_change_handler( void );
+	void enable_bracketed_paste( void );
+	void disable_bracketed_paste( void );
 
 private:
 	Replxx( Replxx const& ) = delete;

@@ -102,7 +102,17 @@
 #include "replxx.h"
 #include "replxx.hxx"
 #include "replxx_impl.hxx"
-#include "io.hxx"
+#include "history.hxx"
+
+static_assert(
+	static_cast<int>( replxx::Replxx::ACTION::SEND_EOF ) == static_cast<int>( REPLXX_ACTION_SEND_EOF ),
+	"C and C++ `ACTION` APIs are missaligned!"
+);
+
+static_assert(
+	static_cast<int>( replxx::Replxx::KEY::PASTE_FINISH ) == static_cast<int>( REPLXX_KEY_PASTE_FINISH ),
+	"C and C++ `KEY` APIs are missaligned!"
+);
 
 using namespace std;
 using namespace std::placeholders;
@@ -124,6 +134,10 @@ void Replxx::set_completion_callback( completion_callback_t const& fn ) {
 	_impl->set_completion_callback( fn );
 }
 
+void Replxx::set_modify_callback( modify_callback_t const& fn ) {
+	_impl->set_modify_callback( fn );
+}
+
 void Replxx::set_highlighter_callback( highlighter_callback_t const& fn ) {
 	_impl->set_highlighter_callback( fn );
 }
@@ -140,20 +154,28 @@ void Replxx::history_add( std::string const& line ) {
 	_impl->history_add( line );
 }
 
-int Replxx::history_save( std::string const& filename ) {
+bool Replxx::history_sync( std::string const& filename ) {
+	return ( _impl->history_sync( filename ) );
+}
+
+bool Replxx::history_save( std::string const& filename ) {
 	return ( _impl->history_save( filename ) );
 }
 
-int Replxx::history_load( std::string const& filename ) {
+bool Replxx::history_load( std::string const& filename ) {
 	return ( _impl->history_load( filename ) );
+}
+
+void Replxx::history_clear( void ) {
+	_impl->history_clear();
 }
 
 int Replxx::history_size( void ) const {
 	return ( _impl->history_size() );
 }
 
-std::string Replxx::history_line( int index ) {
-	return ( _impl->history_line( index ) );
+Replxx::HistoryScan Replxx::history_scan( void ) const {
+	return ( _impl->history_scan() );
 }
 
 void Replxx::set_preload_buffer( std::string const& preloadText ) {
@@ -188,6 +210,14 @@ void Replxx::set_beep_on_ambiguous_completion( bool val ) {
 	_impl->set_beep_on_ambiguous_completion( val );
 }
 
+void Replxx::set_immediate_completion( bool val ) {
+	_impl->set_immediate_completion( val );
+}
+
+void Replxx::set_unique_history( bool val ) {
+	_impl->set_unique_history( val );
+}
+
 void Replxx::set_no_color( bool val ) {
 	_impl->set_no_color( val );
 }
@@ -212,6 +242,10 @@ void Replxx::bind_key( char32_t keyPress_, key_press_handler_t handler_ ) {
 	_impl->bind_key( keyPress_, handler_ );
 }
 
+void Replxx::bind_key_internal( char32_t keyPress_, char const* actionName_ ) {
+	_impl->bind_key_internal( keyPress_, actionName_ );
+}
+
 Replxx::State Replxx::get_state( void ) const {
 	return ( _impl->get_state() );
 }
@@ -224,6 +258,14 @@ int Replxx::install_window_change_handler( void ) {
 	return ( _impl->install_window_change_handler() );
 }
 
+void Replxx::enable_bracketed_paste( void ) {
+	_impl->enable_bracketed_paste();
+}
+
+void Replxx::disable_bracketed_paste( void ) {
+	_impl->disable_bracketed_paste();
+}
+
 void Replxx::print( char const* format_, ... ) {
 	::std::va_list ap;
 	va_start( ap, format_ );
@@ -234,6 +276,10 @@ void Replxx::print( char const* format_, ... ) {
 	vsnprintf( buf.get(), static_cast<size_t>( size + 1 ), format_, ap );
 	va_end( ap );
 	return ( _impl->print( buf.get(), size ) );
+}
+
+void Replxx::write( char const* str, int length ) {
+	return ( _impl->print( str, length ) );
 }
 
 }
@@ -271,6 +317,16 @@ void replxx_bind_key( ::Replxx* replxx_, int code_, key_press_handler_t handler_
 	replxx->bind_key( code_, std::bind( key_press_handler_forwarder, handler_, _1, userData_ ) );
 }
 
+int replxx_bind_key_internal( ::Replxx* replxx_, int code_, char const* actionName_ ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	try {
+		replxx->bind_key_internal( code_, actionName_ );
+	} catch ( ... ) {
+		return ( -1 );
+	}
+	return ( 0 );
+}
+
 void replxx_get_state( ::Replxx* replxx_, ReplxxState* state ) {
 	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
 	replxx::Replxx::State s( replxx->get_state() );
@@ -303,8 +359,8 @@ void replxx_set_preload_buffer(::Replxx* replxx_, const char* preloadText) {
  * user
  *
  * @param prompt text of prompt to display to the user
- * @return the returned string belongs to the caller on return and must be
- * freed to prevent memory leaks
+ * @return the returned string is managed by replxx library
+ * and it must NOT be freed in the client.
  */
 char const* replxx_input( ::Replxx* replxx_, const char* prompt ) {
 	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
@@ -329,6 +385,16 @@ int replxx_print( ::Replxx* replxx_, char const* format_, ... ) {
 	return ( size );
 }
 
+int replxx_write( ::Replxx* replxx_, char const* str, int length ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	try {
+		replxx->print( str, length );
+	} catch ( ... ) {
+		return ( -1 );
+	}
+	return static_cast<int>( length );
+}
+
 struct replxx_completions {
 	replxx::Replxx::completions_t data;
 };
@@ -336,6 +402,23 @@ struct replxx_completions {
 struct replxx_hints {
 	replxx::Replxx::hints_t data;
 };
+
+void modify_fwd( replxx_modify_callback_t fn, std::string& line_, int& cursorPosition_, void* userData_ ) {
+#ifdef _WIN32
+#define strdup _strdup
+#endif
+	char* s( strdup( line_.c_str() ) );
+#undef strdup
+	fn( &s, &cursorPosition_, userData_ );
+	line_ = s;
+	free( s );
+	return;
+}
+
+void replxx_set_modify_callback(::Replxx* replxx_, replxx_modify_callback_t* fn, void* userData) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	replxx->set_modify_callback( std::bind( &modify_fwd, fn, _1, _2, userData ) );
+}
 
 replxx::Replxx::completions_t completions_fwd( replxx_completion_callback_t fn, std::string const& input_, int& contextLen_, void* userData ) {
 	replxx_completions completions;
@@ -359,7 +442,7 @@ void highlighter_fwd( replxx_highlighter_callback_t fn, std::string const& input
 			return ( static_cast<ReplxxColor>( c ) );
 		}
 	);
-	fn( input.c_str(), colorsTmp.data(), colors.size(), userData );
+	fn( input.c_str(), colorsTmp.data(), static_cast<int>( colors.size() ), userData );
 	std::transform(
 		colorsTmp.begin(),
 		colorsTmp.end(),
@@ -395,7 +478,7 @@ void replxx_add_completion( replxx_completions* lc, const char* str ) {
 	lc->data.emplace_back( str );
 }
 
-void replxx_add_completion( replxx_completions* lc, const char* str, ReplxxColor color ) {
+void replxx_add_color_completion( replxx_completions* lc, const char* str, ReplxxColor color ) {
 	lc->data.emplace_back( str, static_cast<replxx::Replxx::Color>( color ) );
 }
 
@@ -449,19 +532,58 @@ void replxx_set_beep_on_ambiguous_completion( ::Replxx* replxx_, int val ) {
 	replxx->set_beep_on_ambiguous_completion( val ? true : false );
 }
 
-/* Fetch a line of the history by (zero-based) index.	If the requested
- * line does not exist, NULL is returned.	The return value is a heap-allocated
- * copy of the line. */
-char const* replxx_history_line( ::Replxx* replxx_, int index ) {
+void replxx_set_immediate_completion( ::Replxx* replxx_, int val ) {
 	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
-	return ( replxx->history_line( index ).c_str() );
+	replxx->set_immediate_completion( val ? true : false );
+}
+
+void replxx_set_unique_history( ::Replxx* replxx_, int val ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	replxx->set_unique_history( val ? true : false );
+}
+
+void replxx_enable_bracketed_paste( ::Replxx* replxx_ ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	replxx->enable_bracketed_paste();
+}
+
+void replxx_disable_bracketed_paste( ::Replxx* replxx_ ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	replxx->disable_bracketed_paste();
+}
+
+ReplxxHistoryScan* replxx_history_scan_start( ::Replxx* replxx_ ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	return ( reinterpret_cast<ReplxxHistoryScan*>( replxx->history_scan().release() ) );
+}
+
+void replxx_history_scan_stop( ::Replxx*, ReplxxHistoryScan* historyScan_ ) {
+	delete reinterpret_cast<replxx::Replxx::HistoryScanImpl*>( historyScan_ );
+}
+
+int replxx_history_scan_next( ::Replxx*, ReplxxHistoryScan* historyScan_, ReplxxHistoryEntry* historyEntry_ ) {
+	replxx::Replxx::HistoryScanImpl* historyScan( reinterpret_cast<replxx::Replxx::HistoryScanImpl*>( historyScan_ ) );
+	bool hasNext( historyScan->next() );
+	if ( hasNext ) {
+		replxx::Replxx::HistoryEntry const& historyEntry( historyScan->get() );
+		historyEntry_->timestamp = historyEntry.timestamp().c_str();
+		historyEntry_->text = historyEntry.text().c_str();
+	}
+	return ( hasNext ? 0 : -1 );
+}
+
+/* Save the history in the specified file. On success 0 is returned
+ * otherwise -1 is returned. */
+int replxx_history_sync( ::Replxx* replxx_, const char* filename ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	return ( replxx->history_sync( filename ) ? 0 : -1 );
 }
 
 /* Save the history in the specified file. On success 0 is returned
  * otherwise -1 is returned. */
 int replxx_history_save( ::Replxx* replxx_, const char* filename ) {
 	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
-	return ( replxx->history_save( filename ) );
+	return ( replxx->history_save( filename ) ? 0 : -1 );
 }
 
 /* Load the history from the specified file. If the file does not exist
@@ -471,7 +593,12 @@ int replxx_history_save( ::Replxx* replxx_, const char* filename ) {
  * on error -1 is returned. */
 int replxx_history_load( ::Replxx* replxx_, const char* filename ) {
 	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
-	return ( replxx->history_load( filename ) );
+	return ( replxx->history_load( filename ) ? 0 : -1 );
+}
+
+void replxx_history_clear( ::Replxx* replxx_ ) {
+	replxx::Replxx::ReplxxImpl* replxx( reinterpret_cast<replxx::Replxx::ReplxxImpl*>( replxx_ ) );
+	replxx->history_clear();
 }
 
 int replxx_history_size( ::Replxx* replxx_ ) {

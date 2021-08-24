@@ -1,5 +1,7 @@
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <wctype.h>
 
 #include "util.hxx"
@@ -7,18 +9,6 @@
 namespace replxx {
 
 int mk_wcwidth( char32_t );
-
-/**
- * Recompute widths of all characters in a char32_t buffer
- * @param text      - input buffer of Unicode characters
- * @param widths    - output buffer of character widths
- * @param charCount - number of characters in buffer
- */
-void recompute_character_widths( char32_t const* text, char* widths, int charCount ) {
-	for (int i = 0; i < charCount; ++i) {
-		widths[i] = mk_wcwidth(text[i]);
-	}
-}
 
 /**
  * Calculate a new screen position given a starting position, screen width and
@@ -146,6 +136,22 @@ char const* ansi_color( Replxx::Color color_ ) {
 		case Replxx::Color::DEFAULT:       code = reset;         break;
 	}
 	return ( code );
+}
+
+std::string now_ms_str( void ) {
+	std::chrono::milliseconds ms( std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now().time_since_epoch() ) );
+	time_t t( ms.count() / 1000 );
+	tm broken;
+#ifdef _WIN32
+#define localtime_r( t, b ) localtime_s( ( b ), ( t ) )
+#endif
+	localtime_r( &t, &broken );
+#undef localtime_r
+	static int const BUFF_SIZE( 32 );
+	char str[BUFF_SIZE];
+	strftime( str, BUFF_SIZE, "%Y-%m-%d %H:%M:%S.", &broken );
+	snprintf( str + sizeof ( "YYYY-mm-dd HH:MM:SS" ), 5, "%03d", static_cast<int>( ms.count() % 1000 ) );
+	return ( str );
 }
 
 }

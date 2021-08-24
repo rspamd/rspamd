@@ -1,147 +1,401 @@
+#include <algorithm>
+#include <memory>
 #include <fstream>
 #include <cstring>
 
 #ifndef _WIN32
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 
 #endif /* _WIN32 */
 
+#include "replxx.hxx"
 #include "history.hxx"
-#include "utf8string.hxx"
 
 using namespace std;
 
 namespace replxx {
 
+namespace {
+void delete_ReplxxHistoryScanImpl( Replxx::HistoryScanImpl* impl_ ) {
+	delete impl_;
+}
+}
+
 static int const REPLXX_DEFAULT_HISTORY_MAX_LEN( 1000 );
 
-History::History( void )
-	: _data()
-	, _maxSize( REPLXX_DEFAULT_HISTORY_MAX_LEN )
-	, _maxLineLength( 0 )
-	, _index( 0 )
-	, _previousIndex( -2 )
-	, _recallMostRecent( false ) {
+Replxx::HistoryScan::HistoryScan( impl_t impl_ )
+	: _impl( std::move( impl_ ) ) {
 }
 
-void History::add( UnicodeString const& line ) {
-	if ( ( _maxSize > 0 ) && ( _data.empty() || ( line != _data.back() ) ) ) {
-		if ( size() > _maxSize ) {
-			_data.erase( _data.begin() );
-			if ( -- _previousIndex < -1 ) {
-				_previousIndex = -2;
-			}
-		}
-		if ( static_cast<int>( line.length() ) > _maxLineLength ) {
-			_maxLineLength = static_cast<int>( line.length() );
-		}
-		_data.push_back( line );
+bool Replxx::HistoryScan::next( void ) {
+	return ( _impl->next() );
+}
+
+Replxx::HistoryScanImpl::HistoryScanImpl( History::entries_t const& entries_ )
+	: _entries( entries_ )
+	, _it( _entries.end() )
+	, _utf8Cache()
+	, _entryCache( std::string(), std::string() )
+	, _cacheValid( false ) {
+}
+
+Replxx::HistoryEntry const& Replxx::HistoryScan::get( void ) const {
+	return ( _impl->get() );
+}
+
+bool Replxx::HistoryScanImpl::next( void ) {
+	if ( _it == _entries.end() ) {
+		_it = _entries.begin();
+	} else {
+		++ _it;
 	}
+	_cacheValid = false;
+	return ( _it != _entries.end() );
 }
 
-int History::save( std::string const& filename ) {
+Replxx::HistoryEntry const& Replxx::HistoryScanImpl::get( void ) const {
+	if ( _cacheValid ) {
+		return ( _entryCache );
+	}
+	_utf8Cache.assign( _it->text() );
+	_entryCache = Replxx::HistoryEntry( _it->timestamp(), _utf8Cache.get() );
+	_cacheValid = true;
+	return ( _entryCache );
+}
+
+Replxx::HistoryScan::impl_t History::scan( void ) const {
+	return ( Replxx::HistoryScan::impl_t( new Replxx::HistoryScanImpl( _entries ), delete_ReplxxHistoryScanImpl ) );
+}
+
+History::History( void )
+	: _entries()
+	, _maxSize( REPLXX_DEFAULT_HISTORY_MAX_LEN )
+	, _current( _entries.begin() )
+	, _yankPos( _entries.end() )
+	, _previous( _entries.begin() )
+	, _recallMostRecent( false )
+	, _unique( true ) {
+}
+
+void History::add( UnicodeString const& line, std::string const& when ) {
+	if ( _maxSize <= 0 ) {
+		return;
+	}
+	if ( ! _entries.empty() && ( line == _entries.back().text() ) ) {
+		_entries.back() = Entry( now_ms_str(), line );
+		return;
+	}
+	remove_duplicate( line );
+	trim_to_max_size();
+	_entries.emplace_back( when, line );
+	_locations.insert( make_pair( line, last() ) );
+	if ( _current == _entries.end() ) {
+		_current = last();
+	}
+	_yankPos = _entries.end();
+}
+
 #ifndef _WIN32
-	mode_t old_umask = umask( S_IXUSR | S_IRWXG| S_IRWXO );
+class FileLock {
+	std::string _path;
+	int _lockFd;
+public:
+	FileLock( std::string const& name_ )
+		: _path( name_ + ".lock" )
+		, _lockFd( ::open( _path.c_str(), O_CREAT | O_RDWR, 0600 ) ) {
+		static_cast<void>( ::lockf( _lockFd, F_LOCK, 0 ) == 0 );
+	}
+	~FileLock( void ) {
+		static_cast<void>( ::lockf( _lockFd, F_ULOCK, 0 ) == 0 );
+		::close( _lockFd );
+		::unlink( _path.c_str() );
+		return;
+	}
+};
 #endif
+
+bool History::save( std::string const& filename, bool sync_ ) {
+#ifndef _WIN32
+	mode_t old_umask = umask( S_IXUSR | S_IRWXG | S_IRWXO );
+	FileLock fileLock( filename );
+#endif
+	entries_t entries;
+	locations_t locations;
+	if ( ! sync_ ) {
+		entries.swap( _entries );
+		locations.swap( _locations );
+		_entries = entries;
+		reset_iters();
+	}
+	do_load( filename );
+	sort();
+	remove_duplicates();
+	trim_to_max_size();
 	ofstream histFile( filename );
 	if ( ! histFile ) {
-		return ( -1 );
+		return ( false );
 	}
 #ifndef _WIN32
 	umask( old_umask );
 	chmod( filename.c_str(), S_IRUSR | S_IWUSR );
 #endif
 	Utf8String utf8;
-	for ( UnicodeString const& h : _data ) {
-		if ( ! h.is_empty() ) {
-			utf8.assign( h );
-			histFile << utf8.get() << endl;
+	for ( Entry const& h : _entries ) {
+		if ( ! h.text().is_empty() ) {
+			utf8.assign( h.text() );
+			histFile << "### " << h.timestamp() << "\n" << utf8.get() << endl;
 		}
 	}
-	return ( 0 );
+	if ( ! sync_ ) {
+		_entries = std::move( entries );
+		_locations = std::move( locations );
+	}
+	reset_iters();
+	return ( true );
 }
 
-int History::load( std::string const& filename ) {
+namespace {
+
+bool is_timestamp( std::string const& s ) {
+	static char const TIMESTAMP_PATTERN[] = "### dddd-dd-dd dd:dd:dd.ddd";
+	static int const TIMESTAMP_LENGTH( sizeof ( TIMESTAMP_PATTERN ) - 1 );
+	if ( s.length() != TIMESTAMP_LENGTH ) {
+		return ( false );
+	}
+	for ( int i( 0 ); i < TIMESTAMP_LENGTH; ++ i ) {
+		if ( TIMESTAMP_PATTERN[i] == 'd' ) {
+			if ( ! isdigit( s[i] ) ) {
+				return ( false );
+			}
+		} else if ( s[i] != TIMESTAMP_PATTERN[i] ) {
+			return ( false );
+		}
+	}
+	return ( true );
+}
+
+}
+
+bool History::do_load( std::string const& filename ) {
 	ifstream histFile( filename );
 	if ( ! histFile ) {
-		return ( -1 );
+		return ( false );
 	}
 	string line;
+	string when( "0000-00-00 00:00:00.000" );
 	while ( getline( histFile, line ).good() ) {
 		string::size_type eol( line.find_first_of( "\r\n" ) );
 		if ( eol != string::npos ) {
 			line.erase( eol );
 		}
+		if ( is_timestamp( line ) ) {
+			when.assign( line, 4, std::string::npos );
+			continue;
+		}
 		if ( ! line.empty() ) {
-			add( UnicodeString( line ) );
+			_entries.emplace_back( when, UnicodeString( line ) );
 		}
 	}
-	return 0;
+	return ( true );
+}
+
+bool History::load( std::string const& filename ) {
+	clear();
+	bool success( do_load( filename ) );
+	sort();
+	remove_duplicates();
+	trim_to_max_size();
+	_previous = _current = last();
+	_yankPos = _entries.end();
+	return ( success );
+}
+
+void History::sort( void ) {
+	typedef std::vector<Entry> sortable_entries_t;
+	_locations.clear();
+	sortable_entries_t sortableEntries( _entries.begin(), _entries.end() );
+	std::stable_sort( sortableEntries.begin(), sortableEntries.end() );
+	_entries.clear();
+	_entries.insert( _entries.begin(), sortableEntries.begin(), sortableEntries.end() );
+}
+
+void History::clear( void ) {
+	_locations.clear();
+	_entries.clear();
+	_current = _entries.begin();
+	_recallMostRecent = false;
 }
 
 void History::set_max_size( int size_ ) {
 	if ( size_ >= 0 ) {
 		_maxSize = size_;
-		int curSize( size() );
-		if ( _maxSize < curSize ) {
-			_data.erase( _data.begin(), _data.begin() + ( curSize - _maxSize ) );
-		}
+		trim_to_max_size();
 	}
 }
 
-void History::reset_pos( int pos_ ) {
-	if ( pos_ == -1 ) {
-		_index = size() - 1;
-		_recallMostRecent = false;
-	} else {
-		_index = pos_;
+void History::reset_yank_iterator( void ) {
+	_yankPos = _entries.end();
+}
+
+bool History::next_yank_position( void ) {
+	bool resetYankSize( false );
+	if ( _yankPos == _entries.end() ) {
+		resetYankSize = true;
 	}
+	if ( ( _yankPos != _entries.begin() ) && ( _yankPos != _entries.end() ) ) {
+		-- _yankPos;
+	} else {
+		_yankPos = moved( _entries.end(), -2 );
+	}
+	return ( resetYankSize );
 }
 
 bool History::move( bool up_ ) {
-	if (_previousIndex != -2 && ! up_ ) {
-		_index = 1 + _previousIndex;	// emulate Windows down-arrow
-	} else {
-		_index += up_ ? -1 : 1;
+	bool doRecall( _recallMostRecent && ! up_ );
+	if ( doRecall ) {
+		_current = _previous; // emulate Windows down-arrow
 	}
-	_previousIndex = -2;
-	if (_index < 0) {
-		_index = 0;
-		return ( false );
-	} else if ( _index >= size() ) {
-		_index = size() - 1;
-		return ( false );
-	}
-	_recallMostRecent = true;
-	return ( true );
+	_recallMostRecent = false;
+	return ( doRecall || move( _current, up_ ? -1 : 1 ) );
 }
 
-void History::jump( bool start_ ) {
-	_index = start_ ? 0 : size() - 1;
-	_previousIndex = -2;
-	_recallMostRecent = true;
+void History::jump( bool start_, bool reset_ ) {
+	if ( start_ ) {
+		_current = _entries.begin();
+	} else {
+		_current = last();
+	}
+	if ( reset_ ) {
+		_recallMostRecent = false;
+	}
+}
+
+void History::save_pos( void ) {
+	_previous = _current;
+}
+
+void History::restore_pos( void ) {
+	_current = _previous;
 }
 
 bool History::common_prefix_search( UnicodeString const& prefix_, int prefixSize_, bool back_ ) {
-	int direct( size() + ( back_ ? -1 : 1 ) );
-	int i( ( _index + direct ) % _data.size() );
-	while ( i != _index ) {
-		if ( _data[i].starts_with( prefix_.begin(), prefix_.begin() + prefixSize_ ) ) {
-			_index = i;
-			_previousIndex = -2;
-			_recallMostRecent = true;
+	int step( back_ ? -1 : 1 );
+	entries_t::const_iterator it( moved( _current, step, true ) );
+	while ( it != _current ) {
+		if ( it->text().starts_with( prefix_.begin(), prefix_.begin() + prefixSize_ ) ) {
+			_current = it;
+			commit_index();
 			return ( true );
 		}
-		i += direct;
-		i %= _data.size();
+		move( it, step, true );
 	}
 	return ( false );
 }
 
-UnicodeString const& History::operator[] ( int idx_ ) const {
-	return ( _data[ idx_ ] );
+bool History::move( entries_t::const_iterator& it_, int by_, bool wrapped_ ) const {
+	if ( by_ > 0 ) {
+		for ( int i( 0 ); i < by_; ++ i ) {
+			++ it_;
+			if ( it_ != _entries.end() ) {
+			} else if ( wrapped_ ) {
+				it_ = _entries.begin();
+			} else {
+				-- it_;
+				return ( false );
+			}
+		}
+	} else {
+		for ( int i( 0 ); i > by_; -- i ) {
+			if ( it_ != _entries.begin() ) {
+				-- it_;
+			} else if ( wrapped_ ) {
+				it_ = last();
+			} else {
+				return ( false );
+			}
+		}
+	}
+	return ( true );
+}
+
+History::entries_t::const_iterator History::moved( entries_t::const_iterator it_, int by_, bool wrapped_ ) const {
+	move( it_, by_, wrapped_ );
+	return ( it_ );
+}
+
+void History::erase( entries_t::const_iterator it_ ) {
+	bool invalidated( it_ == _current );
+	_locations.erase( it_->text() );
+	it_ = _entries.erase( it_ );
+	if ( invalidated ) {
+		_current = it_;
+	}
+	if ( ( _current == _entries.end() ) && ! _entries.empty() ) {
+		-- _current;
+	}
+	_yankPos = _entries.end();
+	_previous = _current;
+}
+
+void History::trim_to_max_size( void ) {
+	while ( size() > _maxSize ) {
+		erase( _entries.begin() );
+	}
+}
+
+void History::remove_duplicate( UnicodeString const& line_ ) {
+	if ( ! _unique ) {
+		return;
+	}
+	locations_t::iterator it( _locations.find( line_ ) );
+	if ( it == _locations.end() ) {
+		return;
+	}
+	erase( it->second );
+}
+
+void History::remove_duplicates( void ) {
+	if ( ! _unique ) {
+		return;
+	}
+	_locations.clear();
+	typedef std::pair<locations_t::iterator, bool> locations_insertion_result_t;
+	for ( entries_t::iterator it( _entries.begin() ), end( _entries.end() ); it != end; ++ it ) {
+		locations_insertion_result_t locationsInsertionResult( _locations.insert( make_pair( it->text(), it ) ) );
+		if ( ! locationsInsertionResult.second ) {
+			_entries.erase( locationsInsertionResult.first->second );
+			locationsInsertionResult.first->second = it;
+		}
+	}
+}
+
+void History::update_last( UnicodeString const& line_ ) {
+	if ( _unique ) {
+		_locations.erase( _entries.back().text() );
+		remove_duplicate( line_ );
+		_locations.insert( make_pair( line_, last() ) );
+	}
+	_entries.back() = Entry( now_ms_str(), line_ );
+}
+
+void History::drop_last( void ) {
+	erase( last() );
+}
+
+bool History::is_last( void ) const {
+	return ( _current == last() );
+}
+
+History::entries_t::const_iterator History::last( void ) const {
+	return ( moved( _entries.end(), -1 ) );
+}
+
+void History::reset_iters( void ) {
+	_previous = _current = last();
+	_yankPos = _entries.end();
 }
 
 }

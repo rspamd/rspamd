@@ -35,7 +35,7 @@ class WinAttributes {
 	int _consoleColor;
 };
 
-int win_write( char const*, int );
+int win_write( HANDLE, bool, char const*, int );
 
 extern WinAttributes WIN_ATTR;
 

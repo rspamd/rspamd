@@ -17,9 +17,11 @@ class KillRing {
 public:
 	enum action { actionOther, actionKill, actionYank };
 	action lastAction;
-	size_t lastYankSize;
 
-	KillRing() : size(0), index(0), lastAction(actionOther) {
+	KillRing()
+		: size(0)
+		, index(0)
+		, lastAction(actionOther) {
 		theRing.reserve(capacity);
 	}
 
