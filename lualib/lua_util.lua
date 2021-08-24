@@ -1108,7 +1108,6 @@ end
 -- Performs fast debug log for a specific module
 --]]
 exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
-  local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
     if type(obj_or_fmt) == 'string' then
       logger.logx(log_level, mod, '', 2, obj_or_fmt, fmt_or_something, ...)
@@ -1123,7 +1122,6 @@ end
 -- Add debugging alias so logging to `alias` will be treated as logging to `mod`
 --]]
 exports.add_debug_alias = function(mod, alias)
-  local logger = require "rspamd_logger"
   debug_aliases[alias] = mod
 
   if debug_modules[mod] then
