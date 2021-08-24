@@ -48,9 +48,21 @@ rspamd_log_emergency_logger (void)
 void
 rspamd_log_set_log_level (rspamd_logger_t *logger, gint level)
 {
-	g_assert (logger != NULL);
+	if (logger == NULL) {
+		logger = default_logger;
+	}
 
 	logger->log_level = level;
+}
+
+gint
+rspamd_log_get_log_level (rspamd_logger_t *logger)
+{
+	if (logger == NULL) {
+		logger = default_logger;
+	}
+
+	return logger->log_level;
 }
 
 void
