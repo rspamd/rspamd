@@ -603,7 +603,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 		/* Check base url */
 		auto &href_value = found_href_maybe.value();
 
-		if (hc && hc->base_url && href_value.size() > 2) {
+		if (hc && hc->base_url) {
 			/*
 			 * Relative url cannot start from the following:
 			 * schema://
@@ -638,7 +638,7 @@ html_process_url_tag(rspamd_mempool_t *pool,
 						(gint) orig_len, href_value.data());
 				href_value = {buf, nlen};
 			}
-			else if (href_value[0] == '/' && href_value[1] != '/') {
+			else if (href_value.size() > 2 && href_value[0] == '/' && href_value[1] != '/') {
 				/* Relative to the hostname */
 				auto orig_len = href_value.size();
 				auto len = orig_len + hc->base_url->hostlen + hc->base_url->protocollen +
