@@ -33,7 +33,6 @@ local categories = {'pyzor','bulk', 'hash', 'scanner'}
 local function pyzor_config(opts)
 
   local pyzor_conf = {
-    text_part_min_words = 2,
     default_port = 5953,
     timeout = 15.0,
     log_clean = false,
