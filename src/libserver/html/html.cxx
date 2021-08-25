@@ -1413,18 +1413,22 @@ html_process_input(rspamd_mempool_t *pool,
 			/*
 			 * Base is allowed only within head tag but HTML is retarded
 			 */
-			if (hc->base_url == NULL) {
-				auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
+			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
-				if (maybe_url) {
-					msg_debug_html ("got valid base tag");
+			if (maybe_url) {
+				msg_debug_html ("got valid base tag");
+				cur_tag->extra = maybe_url.value();
+				cur_tag->flags |= FL_HREF;
+
+				if (hc->base_url == nullptr) {
 					hc->base_url = maybe_url.value();
-					cur_tag->extra = maybe_url.value();
-					cur_tag->flags |= FL_HREF;
 				}
 				else {
-					msg_debug_html ("got invalid base tag!");
+					msg_debug_html ("ignore redundant base tag");
 				}
+			}
+			else {
+				msg_debug_html ("got invalid base tag!");
 			}
 		}
 
