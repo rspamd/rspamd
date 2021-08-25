@@ -17,111 +17,6 @@
 #include "lpvm.h"
 #include "lpprint.h"
 
-#ifdef LPEG_LUD_WORKAROUND
-#include <sys/mman.h>
-
-#define MAX_PIECES (1u << 2u)
-
-/* 64 bytes, 1 cache line */
-struct poor_slab {
-	struct slab_piece {
-		unsigned char *ptr;
-		uint32_t sz;
-		uint32_t occupied;
-	} pieces[MAX_PIECES];
-};
-
-/* Used to optimize pages allocation */
-RSPAMD_ALIGNED (64) struct poor_slab slabs;
-
-static uint64_t xorshifto_seed[2] = {0xdeadbabe, 0xdeadbeef};
-
-static inline uint64_t
-xoroshiro_rotl (const uint64_t x, int k) {
-	return (x << k) | (x >> (64 - k));
-}
-
-void *
-lpeg_allocate_mem_low (size_t sz)
-{
-	unsigned char *cp;
-	unsigned flags = MAP_PRIVATE | MAP_ANON;
-	void *base_addr = NULL;
-
-	/* Check slabs */
-	for (unsigned i = 0; i < MAX_PIECES; i ++) {
-		if (!slabs.pieces[i].occupied && slabs.pieces[i].sz == sz) {
-			/* Reuse, short path */
-			slabs.pieces[i].occupied = 1;
-			return slabs.pieces[i].ptr + sizeof (size_t);
-		}
-	}
-
-#ifdef MAP_32BIT
-	flags |= MAP_32BIT;
-#else
-	const uint64_t s0 = xorshifto_seed[0];
-	uint64_t s1 = xorshifto_seed[1];
-
-	s1 ^= s0;
-	xorshifto_seed[0] = xoroshiro_rotl (s0, 55) ^ s1 ^ (s1 << 14);
-	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
-	flags |= MAP_FIXED;
-	/* Get 46 bits */
-	base_addr = (void *)((xorshifto_seed[0] + xorshifto_seed[1]) & 0x7FFFFFFFF000ULL);
-#endif
-
-	cp = mmap (base_addr, sz + sizeof (sz), PROT_WRITE | PROT_READ,
-			flags, -1, 0);
-	assert (cp != MAP_FAILED);
-	memcpy (cp, &sz, sizeof (sz));
-
-	for (unsigned i = 0; i < MAX_PIECES; i ++) {
-		if (slabs.pieces[i].occupied == 0) {
-			/* Store piece */
-			slabs.pieces[i].sz = sz;
-			slabs.pieces[i].ptr = cp;
-			slabs.pieces[i].occupied = 1;
-
-			return cp + sizeof (sz);
-		}
-	}
-
-	/* Not enough free pieces, pop some */
-	unsigned sel = ((uintptr_t)cp) & ((MAX_PIECES * 2) - 1);
-	/* Here we free memory in fact */
-	munmap (slabs.pieces[sel].ptr, slabs.pieces[sel].sz + sizeof (sz));
-	slabs.pieces[sel].sz = sz;
-	slabs.pieces[sel].ptr = cp;
-	slabs.pieces[sel].occupied = 1;
-
-	return cp + sizeof (sz);
-}
-
-void
-lpeg_free_mem_low(void *p)
-{
-	unsigned char *cp = (unsigned char *)p;
-	size_t sz;
-
-	/* Base address */
-	cp -= sizeof (sz);
-	memcpy (&sz, cp, sizeof (sz));
-
-	for (unsigned i = 0; i < MAX_PIECES; i ++) {
-		if (slabs.pieces[i].occupied && slabs.pieces[i].ptr == cp) {
-			/* Return back */
-			slabs.pieces[i].occupied = 0;
-
-			return;
-		}
-	}
-
-	/* No match, unmapped by allocation */
-}
-
-#endif
-
 /* initial size for call/backtrack stack */
 #if !defined(INITBACK)
 #define INITBACK	MAXBACK
@@ -265,11 +160,7 @@ static int removedyncap (lua_State *L, Capture *capture,
 */
 const char *match (lua_State *L, const char *o, const char *s, const char *e,
                    Instruction *op, Capture *capture, int ptop) {
-#ifdef LPEG_LUD_WORKAROUND
-  Stack *stackbase = lpeg_allocate_mem_low(sizeof (Stack) * INITBACK);
-#else
   Stack stackbase[INITBACK];
-#endif
   Stack *stacklimit = stackbase + INITBACK;
   Stack *stack = stackbase;  /* point to first empty slot in stack */
   int capsize = INITCAPSIZE;
@@ -290,16 +181,10 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         assert(stack == getstackbase(L, ptop) + 1);
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
-#ifdef LPEG_LUD_WORKAROUND
-        lpeg_free_mem_low(stackbase);
-#endif
         return s;
       }
       case IGiveup: {
         assert(stack == getstackbase(L, ptop));
-#ifdef LPEG_LUD_WORKAROUND
-        lpeg_free_mem_low(stackbase);
-#endif
         return NULL;
       }
       case IRet: {
