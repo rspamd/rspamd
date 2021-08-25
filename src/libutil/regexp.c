@@ -693,6 +693,10 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 		len = strlen (text);
 	}
 
+	if (re->match_limit > 0 && len > re->match_limit) {
+		len = re->match_limit;
+	}
+
 	if (end != NULL && *end != NULL) {
 		/* Incremental search */
 		mt = (*end);
