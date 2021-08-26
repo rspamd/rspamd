@@ -157,21 +157,24 @@ local function message_not_too_small(task, content, rule)
 end
 
 local function message_min_words(task, rule)
-  if rule.text_part_min_words then
-    local text_parts_empty = false
+  if rule.text_part_min_words and tonumber(rule.text_part_min_words) > 0 then
+    local text_part_above_limit = false
     local text_parts = task:get_text_parts()
 
     local filter_func = function(p)
-      return p:get_words_count() <= tonumber(rule.text_part_min_words)
+      return p:get_words_count() >= tonumber(rule.text_part_min_words)
     end
 
     fun.each(function(p)
-      text_parts_empty = true
-      rspamd_logger.infox(task, '%s: #words is less then text_part_min_words: %s',
-        rule.log_prefix, rule.text_part_min_words)
+      text_part_above_limit = true
     end, fun.filter(filter_func, text_parts))
 
-    return text_parts_empty
+    if not text_part_above_limit then
+      rspamd_logger.infox(task, '%s: #words in all text parts is below text_part_min_words limit: %s',
+        rule.log_prefix, rule.text_part_min_words)
+    end
+
+    return text_part_above_limit
   else
     return true
   end
