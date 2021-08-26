@@ -401,7 +401,7 @@ LUA_FUNCTION_DEF (util, gzip_decompress);
 LUA_FUNCTION_DEF (util, inflate);
 
 /***
- * @function util.gzip_compress(data)
+ * @function util.gzip_compress(data, [level=1])
  * Compresses input using gzip compression
  *
  * @param {string/rspamd_text} data input data

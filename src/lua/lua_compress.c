@@ -323,7 +323,7 @@ lua_compress_zlib_compress (lua_State *L)
 	struct rspamd_lua_text *t = NULL, *res;
 	gsize sz;
 	z_stream strm;
-	gint rc;
+	gint rc, comp_level = Z_DEFAULT_COMPRESSION;
 	guchar *p;
 	gsize remain;
 
@@ -333,9 +333,18 @@ lua_compress_zlib_compress (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
+	if (lua_isnumber (L, 2)) {
+		comp_level = lua_tointeger (L, 2);
+
+		if (comp_level > Z_BEST_COMPRESSION || comp_level < Z_BEST_SPEED) {
+			return luaL_error (L, "invalid arguments: compression level must be between %d and %d",
+					Z_BEST_SPEED, Z_BEST_COMPRESSION);
+		}
+	}
+
 
 	memset (&strm, 0, sizeof (strm));
-	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+	rc = deflateInit2 (&strm, comp_level, Z_DEFLATED,
 			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
 
 	if (rc != Z_OK) {
