@@ -1060,25 +1060,31 @@ rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 	switch (mime_atom->type) {
 	case MIME_ATOM_INTERNAL_FUNCTION:
 		/* Prioritize internal functions slightly */
-		ret = 50;
+		ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 8;
 		break;
 	case MIME_ATOM_LUA_FUNCTION:
 	case MIME_ATOM_LOCAL_LUA_FUNCTION:
-		ret = 50;
+		ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 4;
 		break;
 	case MIME_ATOM_REGEXP:
 		switch (mime_atom->d.re->type) {
 		case RSPAMD_RE_HEADER:
 		case RSPAMD_RE_RAWHEADER:
-			ret = 100;
+			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 16;
 			break;
 		case RSPAMD_RE_URL:
 		case RSPAMD_RE_EMAIL:
-			ret = 90;
+			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 8;
+			break;
+		case RSPAMD_RE_SELECTOR:
+			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 8;
 			break;
 		case RSPAMD_RE_MIME:
 		case RSPAMD_RE_RAWMIME:
-			ret = 10;
+		case RSPAMD_RE_WORDS:
+		case RSPAMD_RE_RAWWORDS:
+		case RSPAMD_RE_STEMWORDS:
+			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 2;
 			break;
 		default:
 			/* For message regexp */
