@@ -368,7 +368,7 @@ local function check_mime_type(task)
     end
 
     local mt = settings['extension_map'][ext]
-    if mt and ct then
+    if mt and ct and ct ~= 'application/octet-stream' then
       local found
       local mult
       for _,v in ipairs(mt) do
@@ -379,7 +379,7 @@ local function check_mime_type(task)
         end
       end
 
-      if not found  then
+      if not found then
         task:insert_result(settings['symbol_attachment'], mult, ext)
       end
     end
