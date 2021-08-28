@@ -1081,13 +1081,13 @@ rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 			break;
 		case RSPAMD_RE_MIME:
 		case RSPAMD_RE_RAWMIME:
+			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 2;
+			break;
 		case RSPAMD_RE_WORDS:
 		case RSPAMD_RE_RAWWORDS:
 		case RSPAMD_RE_STEMWORDS:
-			ret = RSPAMD_EXPRESSION_MAX_PRIORITY - RSPAMD_EXPRESSION_MAX_PRIORITY / 2;
-			break;
 		default:
-			/* For message regexp */
+			/* For expensive regexps */
 			ret = 0;
 			break;
 		}
