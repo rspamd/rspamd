@@ -186,14 +186,14 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		g_option_context_free (context);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	g_option_context_free (context);
 
 	if (argc <= 1) {
 		rspamd_fprintf (stderr, "command required\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	cmd = argv[1];
@@ -220,13 +220,13 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	if (!rspamd_parse_inet_address (&addr,
 			control_path, strlen (control_path), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_fprintf (stderr, "bad control path: %s\n", control_path);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 

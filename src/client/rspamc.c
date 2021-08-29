@@ -1727,7 +1727,7 @@ rspamc_process_input (struct ev_loop *ev_base, struct rspamc_command *cmd,
 	else {
 		rspamd_fprintf (stderr, "cannot connect to %s: %s\n", connect_str,
 				strerror (errno));
-		exit (-errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_free (hostbuf);

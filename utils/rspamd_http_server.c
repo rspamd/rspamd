@@ -264,7 +264,7 @@ main (int argc, gchar **argv)
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	maps = g_hash_table_new (g_int_hash, g_int_equal);

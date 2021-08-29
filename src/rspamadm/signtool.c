@@ -143,7 +143,7 @@ rspamadm_edit_file (const gchar *fname)
 		if (fd_out == -1) {
 			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
 					strerror (errno));
-			exit (errno);
+			exit (EXIT_FAILURE);
 		}
 
 		close (fd_out);
@@ -154,7 +154,7 @@ rspamadm_edit_file (const gchar *fname)
 		if (map == NULL) {
 			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
 					strerror (errno));
-			exit (errno);
+			exit (EXIT_FAILURE);
 		}
 	}
 
@@ -167,7 +167,7 @@ rspamadm_edit_file (const gchar *fname)
 	if (fd_out == -1) {
 		rspamd_fprintf (stderr, "cannot open tempfile %s: %s\n", tmppath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	if (len > 0 && write (fd_out, map, len) == -1) {
@@ -176,7 +176,7 @@ rspamadm_edit_file (const gchar *fname)
 		unlink (tmppath);
 		munmap (map, len);
 		close (fd_out);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	if (len > 0) {
@@ -193,7 +193,7 @@ rspamadm_edit_file (const gchar *fname)
 		rspamd_fprintf (stderr, "cannot exec %s: %e\n", editor,
 				err);
 		unlink (tmppath);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	if (!g_spawn_async (NULL, child_argv, NULL,
@@ -202,7 +202,7 @@ rspamadm_edit_file (const gchar *fname)
 		rspamd_fprintf (stderr, "cannot exec %s: %e\n", editor,
 						err);
 		unlink (tmppath);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_strfreev (child_argv);
@@ -216,7 +216,7 @@ rspamadm_edit_file (const gchar *fname)
 			rspamd_fprintf (stderr, "failed to wait for %s: %s\n", editor,
 					strerror (errno));
 			unlink (tmppath);
-			exit (errno);
+			exit (EXIT_FAILURE);
 		}
 	}
 
@@ -225,7 +225,7 @@ rspamadm_edit_file (const gchar *fname)
 		unlink (tmppath);
 		rspamd_fprintf (stderr, "%s returned error code: %d - %e\n", editor,
 				retcode, err);
-		exit (retcode);
+		exit (EXIT_FAILURE);
 	}
 #else
 	if (retcode != 0) {
@@ -242,7 +242,7 @@ rspamadm_edit_file (const gchar *fname)
 		rspamd_fprintf (stderr, "cannot map %s: %s\n", tmppath,
 				strerror (errno));
 		unlink (tmppath);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	rspamd_snprintf (run_cmdline, sizeof (run_cmdline), "%s.new", fname);
@@ -254,7 +254,7 @@ rspamadm_edit_file (const gchar *fname)
 				strerror (errno));
 		unlink (tmppath);
 		munmap (map, len);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	if (write (fd_out, map, len) == -1) {
@@ -264,7 +264,7 @@ rspamadm_edit_file (const gchar *fname)
 		unlink (run_cmdline);
 		close (fd_out);
 		munmap (map, len);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	unlink (tmppath);
@@ -299,7 +299,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 	if (fd_input == -1) {
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_assert (fstat (fd_input, &st) != -1);
@@ -311,7 +311,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 		close (fd_input);
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", sigpath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd_input, 0);
@@ -321,7 +321,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 		close (fd_sig);
 		rspamd_fprintf (stderr, "cannot map %s: %s\n", fname,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_assert (rspamd_cryptobox_MAX_SIGBYTES >=
@@ -337,7 +337,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 		if (rename (sigpath, fname) == -1) {
 			rspamd_fprintf (stderr, "cannot rename %s to %s: %s\n", sigpath, fname,
 					strerror (errno));
-			exit (errno);
+			exit (EXIT_FAILURE);
 		}
 
 		unlink (sigpath);
@@ -348,7 +348,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 	if (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) == -1) {
 		rspamd_fprintf (stderr, "cannot write signature to %s: %s\n", sigpath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	close (fd_sig);
@@ -408,7 +408,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 	if (fd_input == -1) {
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_assert (fstat (fd_input, &st) != -1);
@@ -420,7 +420,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		close (fd_input);
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", sigpath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd_input, 0);
@@ -430,7 +430,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		close (fd_sig);
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", sigpath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	g_assert (fstat (fd_sig, &st_sig) != -1);
@@ -440,7 +440,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		rspamd_fprintf (stderr, "invalid signature size %s: %ud\n", fname,
 				(guint)st_sig.st_size);
 		munmap (map, st.st_size);
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	map_sig = mmap (NULL, st_sig.st_size, PROT_READ, MAP_SHARED, fd_sig, 0);
@@ -450,7 +450,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		munmap (map, st.st_size);
 		rspamd_fprintf (stderr, "cannot map %s: %s\n", sigpath,
 				strerror (errno));
-		exit (errno);
+		exit (EXIT_FAILURE);
 	}
 
 	ret = rspamd_cryptobox_verify (map_sig, st_sig.st_size,
@@ -496,7 +496,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		g_option_context_free (context);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	g_option_context_free (context);
@@ -507,11 +507,11 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 	if (verify && (!pubkey && !pubkey_file)) {
 		rspamd_fprintf (stderr, "no pubkey for verification\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 	else if (!verify && (!keypair_file)) {
 		rspamd_fprintf (stderr, "no keypair for signing\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	if (verify) {
@@ -527,7 +527,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			if (fd == -1) {
 				rspamd_fprintf (stderr, "cannot open %s: %s\n", pubkey_file,
 						strerror (errno));
-				exit (errno);
+				exit (EXIT_FAILURE);
 			}
 
 			g_assert (fstat (fd, &st) != -1);
@@ -539,7 +539,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			if (map == MAP_FAILED) {
 				rspamd_fprintf (stderr, "cannot read %s: %s\n", pubkey_file,
 						strerror (errno));
-				exit (errno);
+				exit (EXIT_FAILURE);
 			}
 
 			/* XXX: assume base32 pubkey now */
@@ -555,7 +555,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 						pubkey_file,
 						(guint)flen,
 						rspamd_cryptobox_pk_sig_bytes (mode));
-				exit (errno);
+				exit (EXIT_FAILURE);
 			}
 
 			munmap (map, fsize);
@@ -569,7 +569,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 						pubkey_file,
 						(guint)strlen (pubkey),
 						rspamd_cryptobox_pk_sig_bytes (mode));
-				exit (errno);
+				exit (EXIT_FAILURE);
 			}
 		}
 
@@ -591,7 +591,7 @@ rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 				(top = ucl_parser_get_object (parser)) == NULL) {
 			rspamd_fprintf (stderr, "cannot load keypair: %s\n",
 					ucl_parser_get_error (parser));
-			exit (EINVAL);
+			exit (EXIT_FAILURE);
 		}
 
 		ucl_parser_free (parser);

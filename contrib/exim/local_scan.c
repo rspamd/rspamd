@@ -1,26 +1,26 @@
 /*
-    This program is RSPAMD agent for use with 
+    This program is RSPAMD agent for use with
     exim (http://www.exim.org) MTA by its local_scan feature.
 
     To enable exim local scan please copy this file to exim source tree
-    Local/local_scan.c, edit Local/Makefile to add  
-    
-    LOCAL_SCAN_SOURCE=Local/local_scan.c 
+    Local/local_scan.c, edit Local/Makefile to add
+
+    LOCAL_SCAN_SOURCE=Local/local_scan.c
     LOCAL_SCAN_HAS_OPTIONS=yes
-    
-    and compile exim. 
-    
+
+    and compile exim.
+
     Comment out RSPAM_UNIXSOCKET definition below if you have remote RSPAMD
     daemon
-    
+
     AND
-    
+
     use Exim parameters daemonIP and daemonPort to configure remote
     RSPAMD daemon.
-    
-    For exim compilation with local scan feature details please visit 
+
+    For exim compilation with local scan feature details please visit
     http://www.exim.org/exim-html-4.50/doc/html/spec_toc.html#TOC333
-    
+
     For RSPAMD details please visit
     http://rspamd.sourceforge.net
 */
@@ -62,13 +62,13 @@ static uschar *temp_dir = US"/var/tmp";
 static uschar *socket_name = US"/var/run/rspamd.sock";
 static int strange = 0;
 
-optionlist local_scan_options[] = 
-{ 
-    {"rspam_ip", opt_stringptr, &daemonIP}, 
+optionlist local_scan_options[] =
+{
+    {"rspam_ip", opt_stringptr, &daemonIP},
     {"rspam_port", opt_int, &daemonPort},
     {"rspam_tmp", opt_stringptr, &temp_dir},
     {"rspam_sock", opt_stringptr, &socket_name},
-    
+
 };
 
 int local_scan_options_count = sizeof (local_scan_options) / sizeof (optionlist);
@@ -107,9 +107,9 @@ static int ReadFd (int iFdMsg, int fd)
     char psMsg [MAX_SIZE_FILE]; /* max size SO can swallow */
     int iLen, result = _OK;
 
-    if ((iLen = read (fd, psMsg, sizeof (psMsg))) > 0) 
+    if ((iLen = read (fd, psMsg, sizeof (psMsg))) > 0)
     {
-        if (write (iFdMsg, psMsg, (unsigned int) iLen) != iLen) 
+        if (write (iFdMsg, psMsg, (unsigned int) iLen) != iLen)
             result = ERR_WRITE;
     }
     else
@@ -123,7 +123,7 @@ static int ReadFd (int iFdMsg, int fd)
 
 void CleanupInp (char *sName)
 {
-    if (sName) unlink (sName); 
+    if (sName) unlink (sName);
 
     close (iFdInp);
     return;
@@ -180,7 +180,7 @@ static int written (socket_t fd, const char *vptr, int n)
     size_t nleft;
     int nwritten;
     const char *ptr;
-      
+
     ptr = vptr;
     nleft = n;
     while (nleft > 0)
@@ -192,11 +192,11 @@ static int written (socket_t fd, const char *vptr, int n)
             else
                 return (-1);
         }
-    
+
         nleft -= nwritten;
         ptr += nwritten;
     }
-    
+
     return (n);
 }
 
@@ -212,22 +212,22 @@ static int SendEnvelope (char *sFile)
 	log_write (0, LOG_MAIN, "rspam-exim: file %s is great %d bytes", sFile, MAX_SIZE_FILE);
         return ERR_WRITE;
     }
-    
+
     /* send greeting */
 //    if(FakeSMTPCommand(sock, "PROCESS", "RSPAMC/1.0", sFile, 1, 0) != _OK)
 //        return ERR_WRITE;
     if(FakeSMTPCommand(sock, "SYMBOLS", "RSPAMC/1.1", sFile, 1, 0) != _OK)
 //    if(FakeSMTPCommand(sock, "CHECK", "RSPAMC/1.0", sFile, 1, 0) != _OK)
         return ERR_WRITE;
-	
-	
+
+
 
     /* sender IP */
     if (FakeSMTPCommand (sock, "IP:", sender_host_address, sFile, 1, 0) != _OK)
         return ERR_WRITE;
 
     /* mail from */
-    if (FakeSMTPCommand (sock, "From:", 
+    if (FakeSMTPCommand (sock, "From:",
                          strlen (sender_address) == 0 ?  "MAILER-DAEMON" : (char*) sender_address, sFile, 1, 0) != _OK)
         return ERR_WRITE;
 
@@ -244,7 +244,7 @@ static int SendEnvelope (char *sFile)
     sprintf(str, "%d", recipients_count);
     if (FakeSMTPCommand (sock, "Recipient-Number:", str, sFile, 1, 0) != _OK)
         return ERR_WRITE;
-    
+
     /* envelope rcpto */
     for (i = 0; i < recipients_count; i ++)
     {
@@ -262,7 +262,7 @@ static int SendEnvelope (char *sFile)
 
         if (FakeSMTPCommand (sock, "\r\n", "", sFile, 1, 0) != _OK)
             return ERR_WRITE;
-            
+
         if (written (sock, psBuf, bytesRead) != bytesRead)
             return ERR_WRITE;
     }
@@ -285,9 +285,9 @@ int GetFiles (char *pInpFile, int local_scan_fd)
     */
     int iStatus;
     struct header_line *h_line;
-            
+
     iFdInp = mOpenTmp ((char *)temp_dir, "sp-inp", pInpFile);
-    if (iFdInp == -1) 
+    if (iFdInp == -1)
     {
         return ERR_WRITE;
     }
@@ -301,7 +301,7 @@ int GetFiles (char *pInpFile, int local_scan_fd)
             h_line = h_line->next;
             continue;
         }
-        
+
         if (write (iFdInp, h_line->text, strlen (h_line->text)) != strlen (h_line->text))
         {
             CleanupInp ("");
@@ -314,9 +314,9 @@ int GetFiles (char *pInpFile, int local_scan_fd)
         CleanupInp ("");
         return ERR_WRITE;
     }
-    
+
     /* Read msg */
-    if ((iStatus = ReadFd (iFdInp, local_scan_fd))) 
+    if ((iStatus = ReadFd (iFdInp, local_scan_fd)))
     {
         return iStatus;
     }
@@ -367,7 +367,7 @@ int GetAndTransferMessage (int fd, char *sFile)
         else
             break;
     }
-    
+
     iStatus = SendEnvelope (sFile);
     if (iStatus != _OK)
     {
@@ -375,7 +375,7 @@ int GetAndTransferMessage (int fd, char *sFile)
         close (sock);
         return iStatus;
     }
-    
+
     /* fprintf (stderr, "Transmit OK\n"); */
     return _OK;
 }
@@ -392,11 +392,11 @@ void header_del (uschar *hdr)
             h_line = h_line->next;
             continue;
         }
-        
+
         if (strncasecmp (h_line->text, hdr, strlen(hdr)) == 0)
         {
             h_line->type = '*';
-            while (h_line->next && 
+            while (h_line->next &&
                    (*h_line->next->text == ' ' || *h_line->next->text == '\t'))
             {
                 h_line = h_line->next;
@@ -413,7 +413,7 @@ void AlterSubject (char *label)
     char *subject, *strP;
 
     h_line = header_list;
-    
+
     while (h_line != NULL)
     {
         if (h_line->type == '*') /* internal header */
@@ -421,7 +421,7 @@ void AlterSubject (char *label)
             h_line = h_line->next;
             continue;
         }
-        
+
         if (strncasecmp (h_line->text, "Subject", strlen("Subject")) == 0)
         {
             strP = strchr (h_line->text, ':');
@@ -441,17 +441,17 @@ void AlterSubject (char *label)
     header_add (' ', "Subject: %s%s", label, subject ? subject : "");
 }
 
-int 
+int
 io_read(int fd, char *buf, size_t size)
 {
     int nfd, next = 0, rcount = 15;
     size_t len = 0;
     fd_set fds;
     struct timeval tv;
-    
+
     if((sock < 0) || (buf == NULL))
 	return -1;
-	
+
     FD_ZERO(&fds);
 
 repeat_read:
@@ -459,7 +459,7 @@ repeat_read:
     tv.tv_sec = 5;
     tv.tv_usec = 0;
     FD_SET(fd, &fds);
-    
+
 //    log_write(0, LOG_MAIN, "rspam-exim: before select");
 
     if((nfd=select(fd+1, &fds, NULL, NULL, &tv)) == -1) {
@@ -468,11 +468,11 @@ repeat_read:
     }
 
 //    log_write(0, LOG_MAIN, "rspam-exim: select return %d fds, rcount %d, next %d", nfd, rcount, next);
-    
+
     if((nfd>0) && (FD_ISSET(fd, &fds))) {
 	next += len = read(fd, buf + next, size - next);
 //        log_write(0, LOG_MAIN, "rspam-exim: read %d bytes", len);
-//	if(next<size) 
+//	if(next<size)
 //	    goto repeat_read;
     }
     rcount--;
@@ -490,7 +490,7 @@ int WaitForScanResult (uschar **resStr)
     char *hdr = NULL, *hdrv = NULL, *spmStr = NULL, *symbols=NULL, *urls=NULL;
     char answ [4096], state[6], metric[128], back;
     float sm=0, smd=0, smr=0;
-    
+
     memset (answ, '\0', sizeof (answ));
 //    log_write(0, LOG_MAIN, "rspam-exim: before read from %d", sock);
 //    Len = read (sock, answ, sizeof (answ) - 1);
@@ -524,12 +524,12 @@ int WaitForScanResult (uschar **resStr)
                 continue;
             }
 
-	    /* Metric: default; False; 6.00 / 10.00 */           
+	    /* Metric: default; False; 6.00 / 10.00 */
             /* Process metric */
             if (strncmp (tok, "Metric:", 7) == 0)
             {
         	tmp = tok;
-        	while(	(*tmp++) && 
+        	while(	(*tmp++) &&
         		((*tmp!='\r') || (*tmp!='\n'))
         		);
         	back = *tmp;
@@ -553,11 +553,11 @@ int WaitForScanResult (uschar **resStr)
 		*tmp = back;
                 continue;
             }
-            
+
             if (strncmp (tok, "Symbol:", 7) == 0)
             {
         	tmp = tok;
-        	while(	(*tmp++) && 
+        	while(	(*tmp++) &&
         		((*tmp!='\r') || (*tmp!='\n'))
         		);
         	back = *tmp;
@@ -581,14 +581,14 @@ int WaitForScanResult (uschar **resStr)
             if (strncmp (tok, "Urls:", 5) == 0)
             {
         	tmp = tok;
-        	while(	(*tmp++) && 
+        	while(	(*tmp++) &&
         		((*tmp!='\r') || (*tmp!='\n'))
         		);
         	back = *tmp;
         	*tmp = '\0';
 		if(urf>0) {
 		    tok[0] = tok[1]= tok[2]= tok[3]= tok[4] = ' ';
-		    urls = string_sprintf ("%s\n%s", urls, tok+3);    
+		    urls = string_sprintf ("%s\n%s", urls, tok+3);
 		} else {
 		    tok += 5;
 		    while(*tok && isspace(*tok)) tok++;
@@ -600,7 +600,7 @@ int WaitForScanResult (uschar **resStr)
 	    }
         }
 
-        
+
         /* do not forget the symbols */
         if (symbols != NULL && strlen(symbols))
         {
@@ -626,9 +626,9 @@ int WaitForScanResult (uschar **resStr)
             header_del ((uschar *) "X-Spam-Urls");
             header_add (' ', "%s: %s\n", "X-Spam-Urls", urls);
         }
-        
+
         log_write (0, LOG_MAIN, "rspam-exim: For message from %s will return %s, mailfrom: <%s>, rcpto: <%s>", sender_host_address, rej == 2 ? "DISCARD" : rej == 1 ? "REJECT" : "ACCEPT", sender_address, recipients_list[0].address);
-        
+
     }
     else
     {
@@ -638,7 +638,7 @@ int WaitForScanResult (uschar **resStr)
 
     if((sm>0) && (smr>0) && (sm>=smr)) {
 	result = LOCAL_SCAN_REJECT;
-    }        
+    }
     return result;
 }
 
@@ -656,7 +656,7 @@ local_scan(int fd, uschar **return_text)
     if ((sock = socket (AF_UNIX, SOCK_STREAM, 0)) < 0)
     {
         log_write(0, LOG_MAIN, "rspam-exim: socket() failed");
-        exit (1);    
+        exit (EXIT_FAILURE);
     }
     memset (&ssun, '\0', sizeof (struct sockaddr_un));
     ssun.sun_family = AF_UNIX;
@@ -664,14 +664,14 @@ local_scan(int fd, uschar **return_text)
     {
         close (sock);
         log_write(0, LOG_MAIN, "rspam-exim: UNIX socket name %s too long", socket_name);
-        exit (1);
+        exit (EXIT_FAILURE);
     }
     strcpy (ssun.sun_path, socket_name);
 #else
     if ((sock = socket (AF_INET, SOCK_STREAM, 0)) < 0)
     {
         log_write(0, LOG_MAIN, "rspam-exim: socket() failed");
-        exit (1);    
+        exit (EXIT_FAILURE);
     }
     memset (&ssin, '\0', sizeof (struct sockaddr_in));
     ssin.sin_family = AF_INET;
@@ -686,14 +686,14 @@ local_scan(int fd, uschar **return_text)
         SPOOL_DATA_START_OFFSET;
 	return REJECT_ON_ERROR ? LOCAL_SCAN_TEMPREJECT:LOCAL_SCAN_ACCEPT;
     }
-    
+
     retval = WaitForScanResult (return_text);
 
     if(!strange)
 	unlink (sFileInp);
     close (sock);
     SPOOL_DATA_START_OFFSET;
-    
+
     return retval;
 }
 

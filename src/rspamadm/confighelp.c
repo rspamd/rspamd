@@ -218,7 +218,7 @@ rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		g_option_context_free (context);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	g_option_context_free (context);

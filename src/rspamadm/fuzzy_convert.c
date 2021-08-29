@@ -94,22 +94,22 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		g_option_context_free (context);
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	g_option_context_free (context);
 
 	if (!source_db) {
 		rspamd_fprintf (stderr, "source db is missing\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 	if (!redis_host) {
 		rspamd_fprintf (stderr, "redis host is missing\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 	if (!fuzzy_expiry) {
 		rspamd_fprintf (stderr, "expiry is missing\n");
-		exit (1);
+		exit (EXIT_FAILURE);
 	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
