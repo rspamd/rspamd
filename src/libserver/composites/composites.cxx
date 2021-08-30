@@ -223,7 +223,7 @@ rspamd_composites_quark(void)
 static auto
 rspamd_composite_atom_dtor(void *ptr)
 {
-	auto *atom = reinterpret_cast<rspamd_expression_atom_t *>(ptr);
+	auto *atom = reinterpret_cast<rspamd_composite_atom *>(ptr);
 
 	delete atom;
 }
