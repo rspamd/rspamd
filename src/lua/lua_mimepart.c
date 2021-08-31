@@ -1240,7 +1240,16 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 	rspamd_stat_token_t *word;
 	struct lua_shingle_filter_cbdata cbd;
 
-	if (part && pool) {
+
+	if (part == NULL || pool == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (IS_TEXT_PART_EMPTY (part) || part->utf_words == NULL) {
+		lua_pushnil (L);
+		lua_pushnil (L);
+	}
+	else {
 		/* TODO: add keys and algorithms support */
 		rspamd_cryptobox_hash (key, "rspamd", strlen ("rspamd"), NULL, 0);
 
@@ -1293,9 +1302,6 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 				lua_rawseti (L, -2, i + 1); /* Store table */
 			}
 		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
 	}
 
 	return 2;
