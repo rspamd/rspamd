@@ -186,8 +186,8 @@ public:
 
 	auto next_token(void) -> struct css_parser_token;
 	auto get_offset(void) const { return offset; }
-	auto pushback_token(struct css_parser_token &&t) const -> void {
-		backlog.push_back(std::forward<css_parser_token>(t));
+	auto pushback_token(const struct css_parser_token &t) const -> void {
+		backlog.push_back(t);
 	}
 private:
 	std::string_view input;

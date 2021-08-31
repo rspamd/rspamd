@@ -319,7 +319,7 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 			/* Ignore whitespaces */
 			break;
 		default:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = component_value_consumer(consume_current ? top : block);
 			break;
 		}
@@ -379,7 +379,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 			/* Ignore whitespaces */
 			break;
 		default:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = component_value_consumer(block);
 			break;
 		};
@@ -442,7 +442,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 			want_more = false;
 			break;
 		default:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = component_value_consumer(block);
 			break;
 		};
@@ -559,11 +559,11 @@ css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<cs
 			eof = true;
 			break;
 		case css_parser_token::token_type::at_keyword_token:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = at_rule_consumer(consumed_blocks);
 			break;
 		default:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = qualified_rule_consumer(consumed_blocks);
 			break;
 		}
@@ -595,7 +595,7 @@ css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_
 			/* Ignore whitespaces */
 			break;
 		default:
-			tokeniser->pushback_token(std::move(next_token));
+			tokeniser->pushback_token(next_token);
 			ret = component_value_consumer(rule_block);
 			break;
 		}
