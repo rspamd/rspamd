@@ -82,7 +82,7 @@ struct rspamd_storage_shmem {
 /**
  * Body has been set for a message
  */
-#define RSPAMD_HTTP_FLAG_HAS_HOST_HEADER (1 << 6)
+#define RSPAMD_HTTP_FLAG_HAS_HOST_HEADER (1 << 7)
 /**
  * Options for HTTP connection
  */
