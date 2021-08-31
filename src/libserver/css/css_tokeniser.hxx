@@ -31,6 +31,7 @@ namespace rspamd::css {
 struct css_parser_token_placeholder {}; /* For empty tokens */
 
 struct css_parser_token {
+
 	enum class token_type : std::uint8_t {
 		whitespace_token,
 		ident_token,
@@ -97,6 +98,7 @@ struct css_parser_token {
 	explicit css_parser_token(token_type type, const value_type &value) :
 			value(value), type(type) {}
 	css_parser_token(css_parser_token &&other) = default;
+	css_parser_token(const css_parser_token &token) = default;
 	auto operator=(css_parser_token &&other) -> css_parser_token& = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 

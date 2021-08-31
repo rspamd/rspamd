@@ -423,7 +423,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 {
 	/* Check pushback queue */
 	if (!backlog.empty()) {
-		auto tok = std::move(backlog.front());
+		auto tok = backlog.front();
 		backlog.pop_front();
 
 		return tok;
