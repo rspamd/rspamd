@@ -1095,6 +1095,8 @@ rspamd_re_maps_cache_cleanup_dtor (gpointer ud)
 
 			g_free (basename);
 		}
+
+		g_ptr_array_free (cache_files, TRUE);
 	}
 
 	g_hash_table_unref (cbd->valid_re_hashes);
