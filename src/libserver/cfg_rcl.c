@@ -1299,7 +1299,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 	ccf->tokenizer = tkcf;
 
 	/* Handle lua conditions */
-	val = ucl_object_lookup_any (obj, "condition", "learn_condition", NULL);
+	val = ucl_object_lookup_any (obj, "learn_condition", NULL);
 
 	if (val) {
 		LL_FOREACH (val, cur) {
@@ -1310,7 +1310,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 
 				lua_script = ucl_object_tolstring(cur, &slen);
 				ref_idx = rspamd_lua_function_ref_from_str(L,
-						lua_script, slen, err);
+						lua_script, slen, "learn_condition", err);
 
 				if (ref_idx == LUA_NOREF) {
 					return FALSE;
@@ -1320,6 +1320,32 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 				ccf->learn_conditions = rspamd_mempool_glist_append(
 						cfg->cfg_pool,
 						ccf->learn_conditions,
+						GINT_TO_POINTER (ref_idx));
+			}
+		}
+	}
+
+	val = ucl_object_lookup_any (obj, "classify_condition", NULL);
+
+	if (val) {
+		LL_FOREACH (val, cur) {
+			if (ucl_object_type(cur) == UCL_STRING) {
+				const gchar *lua_script;
+				gsize slen;
+				gint ref_idx;
+
+				lua_script = ucl_object_tolstring(cur, &slen);
+				ref_idx = rspamd_lua_function_ref_from_str(L,
+						lua_script, slen, "classify_condition", err);
+
+				if (ref_idx == LUA_NOREF) {
+					return FALSE;
+				}
+
+				rspamd_lua_add_ref_dtor (L, cfg->cfg_pool, ref_idx);
+				ccf->classify_conditions = rspamd_mempool_glist_append(
+						cfg->cfg_pool,
+						ccf->classify_conditions,
 						GINT_TO_POINTER (ref_idx));
 			}
 		}

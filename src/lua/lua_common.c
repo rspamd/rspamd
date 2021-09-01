@@ -2294,7 +2294,7 @@ rspamd_lua_require_function (lua_State *L, const gchar *modname,
 
 gint
 rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
-								  GError **err)
+								  const gchar *modname, GError **err)
 {
 	gint err_idx, ref_idx;
 
@@ -2302,11 +2302,12 @@ rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
 	err_idx = lua_gettop (L);
 
 	/* Load file */
-	if (luaL_loadbuffer (L, str, slen, "lua_embedded_str") != 0) {
+	if (luaL_loadbuffer (L, str, slen, modname) != 0) {
 		g_set_error (err,
 				lua_error_quark(),
 				EINVAL,
-				"cannot load lua script: %s",
+				"%s: cannot load lua script: %s",
+				modname,
 				lua_tostring (L, -1));
 		lua_settop (L, err_idx - 1); /* Error function */
 
@@ -2318,7 +2319,8 @@ rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
 		g_set_error (err,
 				lua_error_quark(),
 				EINVAL,
-				"cannot init lua script: %s",
+				"%s: cannot init lua script: %s",
+				modname,
 				lua_tostring (L, -1));
 		lua_settop (L, err_idx - 1);
 
@@ -2329,8 +2331,10 @@ rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
 		g_set_error (err,
 				lua_error_quark(),
 				EINVAL,
-				"cannot init lua script: "
-				"must return function");
+				"%s: cannot init lua script: "
+				"must return function not %s",
+				modname,
+				lua_typename (L, lua_type (L, -1)));
 		lua_settop (L, err_idx - 1);
 
 		return LUA_NOREF;

@@ -192,6 +192,7 @@ struct rspamd_classifier_config {
 	const gchar *backend;                           /**< name of statfile's backend							*/
 	ucl_object_t *opts;                             /**< other options                                      */
 	GList *learn_conditions;                        /**< list of learn condition callbacks					*/
+	GList *classify_conditions;                     /**< list of classify condition callbacks					*/
 	gchar *name;                                    /**< unique name of classifier							*/
 	guint32 min_tokens;                             /**< minimal number of tokens to process classifier 	*/
 	guint32 max_tokens;                             /**< maximum number of tokens							*/
