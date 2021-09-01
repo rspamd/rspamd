@@ -551,7 +551,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 		while (cur) {
 			cb_ref = GPOINTER_TO_INT (cur->data);
 
-			lua_settop (L, 0);
+			gint old_top = lua_gettop (L);
 			lua_rawgeti (L, LUA_REGISTRYINDEX, cb_ref);
 			/* Push task and two booleans: is_spam and is_unlearn */
 			ptask = lua_newuserdata (L, sizeof (*ptask));
@@ -576,13 +576,13 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 									lua_tostring (L, 2));
 						}
 
-						lua_settop (L, 0);
+						lua_settop (L, old_top);
 						break;
 					}
 				}
 			}
 
-			lua_settop (L, 0);
+			lua_settop (L, old_top);
 			cur = g_list_next (cur);
 		}
 

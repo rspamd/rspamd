@@ -566,6 +566,15 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 							  gint ref);
 
 /**
+ * Returns a lua reference from a function like string, e.g. `return function(...) end`
+ * @param L
+ * @param str
+ * @return
+ */
+gint rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
+									   GError **err);
+
+/**
 * Tries to load some module using `require` and get some method from it
 * @param L
 * @param modname

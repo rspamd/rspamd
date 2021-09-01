@@ -2292,6 +2292,56 @@ rspamd_lua_require_function (lua_State *L, const gchar *modname,
 	return FALSE;
 }
 
+gint
+rspamd_lua_function_ref_from_str (lua_State *L, const gchar *str, gsize slen,
+								  GError **err)
+{
+	gint err_idx, ref_idx;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Load file */
+	if (luaL_loadbuffer (L, str, slen, "lua_embedded_str") != 0) {
+		g_set_error (err,
+				lua_error_quark(),
+				EINVAL,
+				"cannot load lua script: %s",
+				lua_tostring (L, -1));
+		lua_settop (L, err_idx - 1); /* Error function */
+
+		return LUA_NOREF;
+	}
+
+	/* Now call it */
+	if (lua_pcall (L, 0, 1, err_idx) != 0) {
+		g_set_error (err,
+				lua_error_quark(),
+				EINVAL,
+				"cannot init lua script: %s",
+				lua_tostring (L, -1));
+		lua_settop (L, err_idx - 1);
+
+		return LUA_NOREF;
+	}
+
+	if (!lua_isfunction (L, -1)) {
+		g_set_error (err,
+				lua_error_quark(),
+				EINVAL,
+				"cannot init lua script: "
+				"must return function");
+		lua_settop (L, err_idx - 1);
+
+		return LUA_NOREF;
+	}
+
+	ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+	lua_settop (L, err_idx - 1);
+
+	return ref_idx;
+}
+
 
 gboolean
 rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,

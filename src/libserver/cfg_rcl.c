@@ -1220,7 +1220,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
 	struct rspamd_tokenizer_config *tkcf = NULL;
-	lua_State *L;
+	lua_State *L = cfg->lua_state;
 
 	g_assert (key != NULL);
 	ccf = rspamd_config_new_classifier (cfg, NULL);
@@ -1303,59 +1303,24 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 
 	if (val) {
 		LL_FOREACH (val, cur) {
-			if (ucl_object_type (cur) == UCL_STRING) {
+			if (ucl_object_type(cur) == UCL_STRING) {
 				const gchar *lua_script;
 				gsize slen;
-				gint err_idx, ref_idx;
+				gint ref_idx;
 
-				lua_script = ucl_object_tolstring (cur, &slen);
-				L = cfg->lua_state;
-				lua_pushcfunction (L, &rspamd_lua_traceback);
-				err_idx = lua_gettop (L);
+				lua_script = ucl_object_tolstring(cur, &slen);
+				ref_idx = rspamd_lua_function_ref_from_str(L,
+						lua_script, slen, err);
 
-
-				/* Load file */
-				if (luaL_loadbuffer (L, lua_script, slen, "learn_condition") != 0) {
-					g_set_error (err,
-							CFG_RCL_ERROR,
-							EINVAL,
-							"cannot load lua condition script: %s",
-							lua_tostring (L, -1));
-					lua_settop (L, 0); /* Error function */
-
+				if (ref_idx == LUA_NOREF) {
 					return FALSE;
 				}
 
-				/* Now do it */
-				if (lua_pcall (L, 0, 1, err_idx) != 0) {
-					g_set_error (err,
-							CFG_RCL_ERROR,
-							EINVAL,
-							"cannot init lua condition script: %s",
-							lua_tostring (L, -1));
-					lua_settop (L, 0);
-
-					return FALSE;
-				}
-
-				if (!lua_isfunction (L, -1)) {
-					g_set_error (err,
-							CFG_RCL_ERROR,
-							EINVAL,
-							"cannot init lua condition script: "
-							"must return function");
-					lua_settop (L, 0);
-
-					return FALSE;
-				}
-
-				ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-				rspamd_lua_add_ref_dtor (L, cfg->cfg_pool, ref_idx);
-				ccf->learn_conditions = rspamd_mempool_glist_append (
+				rspamd_lua_add_ref_dtor(L, cfg->cfg_pool, ref_idx);
+				ccf->learn_conditions = rspamd_mempool_glist_append(
 						cfg->cfg_pool,
 						ccf->learn_conditions,
 						GINT_TO_POINTER (ref_idx));
-				lua_settop (L, 0);
 			}
 		}
 	}
