@@ -201,6 +201,7 @@ rspamd_stat_classifier_is_skipped (struct rspamd_task *task,
 	while (cur) {
 		gint cb_ref = GPOINTER_TO_INT (cur->data);
 		gint old_top = lua_gettop (L);
+		gint nargs;
 
 		lua_rawgeti (L, LUA_REGISTRYINDEX, cb_ref);
 		/* Push task and two booleans: is_spam and is_unlearn */
@@ -212,9 +213,13 @@ rspamd_stat_classifier_is_skipped (struct rspamd_task *task,
 			lua_pushboolean(L, is_spam);
 			lua_pushboolean(L,
 					task->flags & RSPAMD_TASK_FLAG_UNLEARN ? true : false);
+			nargs = 3;
+		}
+		else {
+			nargs = 1;
 		}
 
-		if (lua_pcall (L, 3, LUA_MULTRET, 0) != 0) {
+		if (lua_pcall (L, nargs, LUA_MULTRET, 0) != 0) {
 			msg_err_task ("call to %s failed: %s",
 					"condition callback",
 					lua_tostring (L, -1));
