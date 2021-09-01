@@ -59,6 +59,7 @@ OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
 OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [defalut: OFF]" OFF)
+OPTION(SYSTEM_DOCTEST      "Use system doctest instead of bundled one [default: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
 
@@ -118,7 +119,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
 		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
 		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
-		"${CMAKE_SOURCE_DIR}/contrib/doctest"
 		"${CMAKE_SOURCE_DIR}/contrib/fu2/include"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
@@ -656,7 +656,12 @@ IF(SYSTEM_FMT MATCHES "OFF")
 ELSE()
 	find_package(fmt)
 ENDIF()
-ADD_SUBDIRECTORY(contrib/doctest)
+IF(SYSTEM_DOCTEST MATCHES "OFF")
+	ADD_SUBDIRECTORY(contrib/doctest)
+	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/doctest")
+ELSE()
+	find_package(doctest)
+ENDIF()
 
 IF (NOT WITH_LUAJIT)
 	ADD_SUBDIRECTORY(contrib/lua-bit)
