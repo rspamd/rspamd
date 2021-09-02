@@ -31,6 +31,7 @@ local lua_selectors = require "lua_selectors"
 local lua_settings = require "lua_settings"
 local ucl = require "ucl"
 local fun = require "fun"
+local rspamd_mempool = require "rspamd_mempool"
 
 local redis_params
 
@@ -586,7 +587,7 @@ local function gen_check_closure(expected, check_func)
 end
 
 -- Process settings based on their priority
-local function process_settings_table(tbl, allow_ids, is_static)
+local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
   -- Check the setting element internal data
   local process_setting_elt = function(name, elt)
@@ -976,7 +977,7 @@ local function process_settings_table(tbl, allow_ids, is_static)
 
       local rspamd_expression = require "rspamd_expression"
       out.expression = rspamd_expression.create(elt.expression, parse_atom,
-          rspamd_config:get_mempool())
+          mempool)
       out.checks = checks
 
       if not out.expression then
@@ -1094,6 +1095,7 @@ local function process_settings_table(tbl, allow_ids, is_static)
 end
 
 -- Parse settings map from the ucl line
+local settings_map_pool
 local function process_settings_map(map_text)
   local parser = ucl.parser()
   local res,err
@@ -1107,11 +1109,18 @@ local function process_settings_map(map_text)
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
   else
+    if settings_map_pool then
+      settings_map_pool:destroy()
+    end
+
+    settings_map_pool = rspamd_mempool.create()
     local obj = parser:get_object()
     if obj['settings'] then
-      process_settings_table(obj['settings'], false, false)
+      process_settings_table(obj['settings'], false,
+          settings_map_pool, false)
     else
-      process_settings_table(obj, false, false)
+      process_settings_table(obj, false, settings_map_pool,
+          false)
     end
   end
 
@@ -1231,6 +1240,7 @@ if set_section and set_section[1] and type(set_section[1]) == "string" then
     rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
 elseif set_section and type(set_section) == "table" then
+  settings_map_pool = rspamd_mempool.create()
   -- We need to check this table and register static symbols first
   -- Postponed settings init is needed to ensure that all symbols have been
   -- registered BEFORE settings plugin. Otherwise, we can have inconsistent settings expressions
@@ -1261,6 +1271,12 @@ elseif set_section and type(set_section) == "table" then
           end, set_section)
   )
   rspamd_config:add_post_init(function ()
-    process_settings_table(set_section, true, true)
+    process_settings_table(set_section, true, settings_map_pool, true)
   end, 100)
 end
+
+rspamd_config:add_config_unload(function()
+  if settings_map_pool then
+    settings_map_pool:destroy()
+  end
+end)
