@@ -790,6 +790,7 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 			if (strncmp(elt->content.txt.data, "v=spf1", sizeof("v=spf1") - 1)
 				== 0) {
 				selected = elt;
+
 				if (pselected != NULL) {
 					*pselected = selected;
 				}
@@ -809,7 +810,7 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 				if (start_spf_parse(rec, resolved, elt->content.txt.data)) {
 					ret = TRUE;
 					if (pselected != NULL) {
-						*pselected = selected;
+						*pselected = elt;
 					}
 					break;
 				}
