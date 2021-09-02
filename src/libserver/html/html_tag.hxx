@@ -26,6 +26,9 @@
 
 #include "html_tags.h"
 
+struct rspamd_url;
+struct html_image;
+
 namespace rspamd::html {
 
 enum class html_component_type : std::uint8_t {

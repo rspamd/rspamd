@@ -26,7 +26,6 @@ extern "C" {
 
 struct rspamd_task;
 struct controller_session;
-struct html_content;
 struct rspamd_image;
 struct rspamd_archive;
 
@@ -144,7 +143,7 @@ struct rspamd_mime_text_part {
 	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
 
 	GPtrArray *newlines;    /**< positions of newlines in text, relative to content*/
-	struct html_content *html;
+	void *html;
 	GList *exceptions;    /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 

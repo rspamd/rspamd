@@ -128,14 +128,12 @@ static const gchar *
 rspamadm_lua_command_help (gboolean full_help,
 						  const struct rspamadm_command *cmd)
 {
-	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
-
-	lua_State *L = thread->lua_state;
-
 	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
 
 	if (full_help) {
+		struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
 
+		lua_State *L = thread->lua_state;
 		lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
 		/* Function */
 		lua_pushstring (L, "handler");
@@ -152,8 +150,11 @@ rspamadm_lua_command_help (gboolean full_help,
 		if (lua_repl_thread_call (thread, 1, (void *)cmd, lua_thread_str_error_cb) != 0) {
 			exit (EXIT_FAILURE);
 		}
+
+		lua_settop (L, 0);
 	}
 	else {
+		lua_State *L = rspamd_main->cfg->lua_state;
 		lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
 		lua_pushstring (L, "description");
 		lua_gettable (L, -2);
@@ -164,9 +165,9 @@ rspamadm_lua_command_help (gboolean full_help,
 		else {
 			printf ("  %-18s %-60s\n", cmd->name, "no description available");
 		}
-	}
 
-	lua_settop (L, 0);
+		lua_settop (L, 0);
+	}
 
 	return NULL; /* Must be handled in rspamadm itself */
 }
