@@ -92,6 +92,7 @@ enum rspamd_spf_resolved_flags {
 
 struct spf_resolved {
 	gchar *domain;
+	gchar *top_record;
 	guint ttl;
 	gint flags;
 	gdouble timestamp;

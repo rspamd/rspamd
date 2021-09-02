@@ -57,6 +57,7 @@ struct spf_record {
 	/* Array of struct spf_resolved_element */
 	const gchar *sender;
 	const gchar *sender_domain;
+	const gchar *top_record;
 	gchar *local_part;
 	struct rspamd_task *task;
 	spf_cb_t callback;
@@ -380,6 +381,7 @@ rspamd_flatten_record_dtor (struct spf_resolved *r)
 		g_free (addr->spf_string);
 	}
 
+	g_free (r->top_record);
 	g_free (r->domain);
 	g_array_free (r->elts, TRUE);
 	g_free (r);
@@ -500,6 +502,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	/* Not precise but okay */
 	res->timestamp = rec->task->task_timestamp;
 	res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
+	res->top_record = g_strdup (rec->top_record);
 	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
 	if (rec->resolved) {
@@ -773,7 +776,7 @@ spf_record_addr_set (struct spf_addr *addr, gboolean allow_any)
 
 static gboolean
 spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *resolved,
-		struct rdns_reply *reply)
+		struct rdns_reply *reply, struct rdns_reply_entry **pselected)
 {
 	struct rdns_reply_entry *elt, *selected = NULL;
 	gboolean ret = FALSE;
@@ -787,10 +790,10 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 			if (strncmp(elt->content.txt.data, "v=spf1", sizeof("v=spf1") - 1)
 				== 0) {
 				selected = elt;
-				rspamd_mempool_set_variable(rec->task->task_pool,
-						RSPAMD_MEMPOOL_SPF_RECORD,
-						rspamd_mempool_strdup (rec->task->task_pool,
-								elt->content.txt.data), NULL);
+				if (pselected != NULL) {
+					*pselected = selected;
+				}
+
 				break;
 			}
 		}
@@ -805,10 +808,9 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 			if (elt->type == RDNS_REQUEST_TXT) {
 				if (start_spf_parse(rec, resolved, elt->content.txt.data)) {
 					ret = TRUE;
-					rspamd_mempool_set_variable(rec->task->task_pool,
-							RSPAMD_MEMPOOL_SPF_RECORD,
-							rspamd_mempool_strdup (rec->task->task_pool,
-									elt->content.txt.data), NULL);
+					if (pselected != NULL) {
+						*pselected = selected;
+					}
 					break;
 				}
 			}
@@ -932,7 +934,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 									reply->entries[0].content.txt.data);
 						}
 
-						if (!spf_process_txt_record (rec, cb->resolved, reply)) {
+						if (!spf_process_txt_record (rec, cb->resolved, reply, NULL)) {
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
 					}
@@ -948,7 +950,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						}
 
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
-						spf_process_txt_record (rec, cb->resolved, reply);
+						spf_process_txt_record (rec, cb->resolved, reply, NULL);
 					}
 					goto end;
 
@@ -2440,7 +2442,9 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	}
 
 	if (resolved) {
-		if (!spf_process_txt_record (rec, resolved, reply)) {
+		struct rdns_reply_entry *selected = NULL;
+
+		if (!spf_process_txt_record (rec, resolved, reply, &selected)) {
 			resolved = g_ptr_array_index(rec->resolved, 0);
 
 			if (rec->resolved->len > 1) {
@@ -2464,6 +2468,13 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 				}
 				g_ptr_array_insert (resolved->elts, 0, addr);
 			}
+		}
+		else {
+			rec->top_record = rspamd_mempool_strdup(rec->task->task_pool,
+					selected->content.txt.data);
+			rspamd_mempool_set_variable(rec->task->task_pool,
+					RSPAMD_MEMPOOL_SPF_RECORD,
+					(gpointer)rec->top_record, NULL);
 		}
 	}
 
@@ -2564,6 +2575,13 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 
 		if (cached) {
 			cached->flags |= RSPAMD_SPF_FLAG_CACHED;
+
+			if (cached->top_record) {
+				rspamd_mempool_set_variable(task->task_pool,
+						RSPAMD_MEMPOOL_SPF_RECORD,
+						rspamd_mempool_strdup (task->task_pool,
+								cached->top_record), NULL);
+			}
 			callback (cached, task, cbdata);
 
 			return TRUE;
