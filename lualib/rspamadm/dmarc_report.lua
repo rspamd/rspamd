@@ -226,23 +226,23 @@ local function entry_to_xml(data)
       <disposition>{= data.disposition =}</disposition>
       <dkim>{= data.dkim_disposition =}</dkim>
       <spf>{= data.spf_disposition =}</spf>
-      {% if data.override and data.override ~= '' %}
+      {% if data.override and data.override ~= '' -%}
       <reason><type>{= data.override =}</type></reason>
-      {% endif %}
+      {%- endif %}
     </policy_evaluated>
   </row>
   <identifiers>
     <header_from>{= data.header_from =}</header_from>
   </identifiers>
   <auth_results>
-    {% if data.dkim_results[1] %}
-    {% for d in data.dkim_results[1] %}
+    {% if data.dkim_results[1] -%}
+    {% for d in data.dkim_results -%}
     <dkim>
       <domain>{= d.domain =}</domain>
       <result>{= d.result =}</result>
     </dkim>
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
+    {%- endif %}
     <spf>
       <domain>{= data.spf_domain =}</domain>
       <result>{= data.spf_result =}</result>
