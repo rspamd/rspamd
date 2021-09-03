@@ -1701,7 +1701,7 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 	gchar *t;
 	guint len, inlen;
 	gssize octets_remain;
-	gboolean got_sp;
+	gboolean got_sp, ret = TRUE;
 	gchar buf[1024];
 
 	len = size;
@@ -1772,6 +1772,8 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 			t --;
 			octets_remain ++;
 		}
+
+		ret = FALSE;
 	}
 
 	*start = h;
@@ -1785,10 +1787,9 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 				"(%z size, %z -> %z remain)",
 						cklen, *remain, octets_remain);
 		*remain = octets_remain;
-
 	}
 
-	return ((len != 0) && (octets_remain != 0));
+	return ret && ((len > 0) && (octets_remain > 0));
 }
 
 static gboolean
