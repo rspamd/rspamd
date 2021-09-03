@@ -2037,7 +2037,7 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	gboolean sign)
 {
 	const gchar *p;
-	gssize remain = ctx->len ? ctx->len : -1;
+	gssize remain = ctx->len ? ctx->len : G_MAXSSIZE;
 	guint total_len = end - start;
 	gboolean need_crlf = FALSE;
 
