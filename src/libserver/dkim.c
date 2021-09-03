@@ -1711,7 +1711,7 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 	got_sp = FALSE;
 	octets_remain = *remain;
 
-	while (len > 0 && inlen > 0 && (octets_remain != 0)) {
+	while (len > 0 && inlen > 0 && (octets_remain > 0)) {
 
 		if (*h == '\r' || *h == '\n') {
 			if (got_sp) {
@@ -1764,6 +1764,14 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 		inlen--;
 		len--;
 		octets_remain --;
+	}
+
+	if (octets_remain < 0) {
+		/* Absurdic l tag value, but we still need to rewind the t pointer back */
+		while (t > buf && octets_remain < 0) {
+			t --;
+			octets_remain ++;
+		}
 	}
 
 	*start = h;
