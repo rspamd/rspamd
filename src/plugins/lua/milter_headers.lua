@@ -356,9 +356,9 @@ local function milter_headers(task)
     local score = common['metric_score'][1]
     local spambar
     if score <= -1 then
-      spambar = string.rep(local_mod.negative, score * (-1))
+      spambar = string.rep(local_mod.negative, math.floor(score * -1))
     elseif score >= 1 then
-      spambar = string.rep(local_mod.positive, score)
+      spambar = string.rep(local_mod.positive, math.floor(score))
     else
       spambar = local_mod.neutral
     end
