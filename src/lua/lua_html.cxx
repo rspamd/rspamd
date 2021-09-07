@@ -448,7 +448,7 @@ lua_html_foreach_tag (lua_State *L)
 				auto *ltag = static_cast<lua_html_tag *>(lua_newuserdata(L, sizeof(lua_html_tag)));
 				ltag->tag = tag;
 				ltag->html = hc;
-				auto ct = ltag->tag->get_content(hc->parsed);
+				auto ct = ltag->tag->get_content(hc);
 				rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
 				lua_pushinteger (L, ct.size());
 
@@ -582,7 +582,7 @@ lua_html_tag_get_content (lua_State *L)
 	if (ltag) {
 
 		if (ltag->html) {
-			auto ct = ltag->tag->get_content(ltag->html->parsed);
+			auto ct = ltag->tag->get_content(ltag->html);
 			if (ct.size() > 0) {
 				t = static_cast<rspamd_lua_text *>(lua_newuserdata(L, sizeof(*t)));
 				rspamd_lua_setclass(L, "rspamd{text}", -1);
@@ -613,7 +613,7 @@ lua_html_tag_get_content_length (lua_State *L)
 
 	if (ltag) {
 		if (ltag->html) {
-			auto ct = ltag->tag->get_content(ltag->html->parsed);
+			auto ct = ltag->tag->get_content(ltag->html);
 			lua_pushinteger (L, ct.size());
 		}
 		else {

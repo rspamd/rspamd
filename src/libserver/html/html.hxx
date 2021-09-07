@@ -47,6 +47,7 @@ struct html_content {
 	std::vector<html_image *> images;
 	std::vector<std::unique_ptr<struct html_tag>> all_tags;
 	std::string parsed;
+	std::string invisible;
 	std::shared_ptr<css::css_style_sheet> css_style;
 
 	/* Preallocate and reserve all internal structures */

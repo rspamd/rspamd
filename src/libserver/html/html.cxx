@@ -985,12 +985,15 @@ html_process_block_tag(rspamd_mempool_t *pool, struct html_tag *tag,
 }
 
 static inline auto
-html_append_parsed(struct html_content *hc, std::string_view data, bool transparent,
-		std::size_t input_len) -> std::size_t
+html_append_parsed(struct html_content *hc,
+				   std::string_view data,
+				   bool transparent,
+				   std::size_t input_len,
+				   std::string &dest) -> std::size_t
 {
-	auto cur_offset = hc->parsed.size();
+	auto cur_offset = dest.size();
 
-	if (hc->parsed.size() > input_len) {
+	if (dest.size() > input_len) {
 		/* Impossible case, refuse to append */
 		return 0;
 	}
@@ -999,9 +1002,9 @@ html_append_parsed(struct html_content *hc, std::string_view data, bool transpar
 		/* Handle multiple spaces at the begin */
 
 		if (cur_offset > 0) {
-			auto last = hc->parsed.back();
+			auto last = dest.back();
 			if (!g_ascii_isspace(last) && g_ascii_isspace(data.front())) {
-				hc->parsed.append(" ");
+				dest.append(" ");
 				data = {data.data() + 1, data.size() - 1};
 				cur_offset++;
 			}
@@ -1020,24 +1023,24 @@ html_append_parsed(struct html_content *hc, std::string_view data, bool transpar
 				}
 			};
 
-			hc->parsed.reserve(hc->parsed.size() + data.size() + sizeof(u8"\uFFFD"));
-			replace_zero_func(data, hc->parsed);
+			dest.reserve(dest.size() + data.size() + sizeof(u8"\uFFFD"));
+			replace_zero_func(data, dest);
 			hc->flags |= RSPAMD_HTML_FLAG_HAS_ZEROS;
 		}
 		else {
-			hc->parsed.append(data);
+			dest.append(data);
 		}
 	}
 
-	auto nlen = decode_html_entitles_inplace(hc->parsed.data() + cur_offset,
-			hc->parsed.size() - cur_offset, true);
+	auto nlen = decode_html_entitles_inplace(dest.data() + cur_offset,
+			dest.size() - cur_offset, true);
 
-	hc->parsed.resize(nlen + cur_offset);
+	dest.resize(nlen + cur_offset);
 
 	if (transparent) {
 		/* Replace all visible characters with spaces */
-		auto start = std::next(hc->parsed.begin(), cur_offset);
-		std::replace_if(start, std::end(hc->parsed), [](const auto c) {
+		auto start = std::next(dest.begin(), cur_offset);
+		std::replace_if(start, std::end(dest), [](const auto c) {
 			return !g_ascii_isspace(c);
 		}, ' ');
 	}
@@ -1076,11 +1079,18 @@ html_append_tag_content(rspamd_mempool_t *pool,
 {
 	auto is_visible = true, is_block = false, is_spaces = false, is_transparent = false;
 	goffset next_tag_offset = tag->closing.end,
-			initial_dest_offset = hc->parsed.size();
+			initial_parsed_offset = hc->parsed.size(),
+			initial_invisible_offset = hc->invisible.size();
 
-	auto calculate_final_tag_offsets = [&tag, initial_dest_offset, hc]() -> void {
-		tag->content_offset = initial_dest_offset;
-		tag->closing.start = hc->parsed.size();
+	auto calculate_final_tag_offsets = [&]() -> void {
+		if (is_visible) {
+			tag->content_offset = initial_parsed_offset;
+			tag->closing.start = hc->parsed.size();
+		}
+		else {
+			tag->content_offset = initial_invisible_offset;
+			tag->closing.start = hc->invisible.size();
+		}
 	};
 
 	if (tag->closing.end == -1) {
@@ -1098,17 +1108,18 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	}
 
 	auto append_margin = [&](char c) -> void {
+		/* We do care about visible margins only */
 		if (is_visible) {
 			if (!hc->parsed.empty() && hc->parsed.back() != c && hc->parsed.back() != '\n') {
 				if (hc->parsed.back() == ' ') {
 					/* We also strip extra spaces at the end, but limiting the start */
-					auto last = std::make_reverse_iterator(hc->parsed.begin() + initial_dest_offset);
+					auto last = std::make_reverse_iterator(hc->parsed.begin() + initial_parsed_offset);
 					auto first = std::find_if(hc->parsed.rbegin(), last,
 							[](auto ch) -> auto {
 								return ch != ' ';
 							});
 					hc->parsed.erase(first.base(), hc->parsed.end());
-					g_assert(hc->parsed.size() >= initial_dest_offset);
+					g_assert(hc->parsed.size() >= initial_parsed_offset);
 				}
 				hc->parsed.push_back(c);
 			}
@@ -1177,10 +1188,17 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		auto enclosed_start = cld->tag_start;
 		goffset initial_part_len = enclosed_start - cur_offset;
 
-		if (is_visible && initial_part_len > 0) {
-			html_append_parsed(hc,
-					{start + cur_offset, std::size_t(initial_part_len)},
-					is_transparent, len);
+		if (initial_part_len > 0) {
+			if (is_visible) {
+				html_append_parsed(hc,
+						{start + cur_offset, std::size_t(initial_part_len)},
+						is_transparent, len, hc->parsed);
+			}
+			else {
+				html_append_parsed(hc,
+						{start + cur_offset, std::size_t(initial_part_len)},
+						is_transparent, len, hc->invisible);
+			}
 		}
 
 		auto next_offset = html_append_tag_content(pool, start, len,
@@ -1195,11 +1213,21 @@ html_append_tag_content(rspamd_mempool_t *pool,
 	if (cur_offset < tag->closing.start) {
 		goffset final_part_len = tag->closing.start - cur_offset;
 
-		if (is_visible && final_part_len > 0) {
-			html_append_parsed(hc,
-					{start + cur_offset, std::size_t(final_part_len)},
-					 is_transparent,
-					 len);
+		if (final_part_len > 0) {
+			if (is_visible) {
+				html_append_parsed(hc,
+						{start + cur_offset, std::size_t(final_part_len)},
+						is_transparent,
+						len,
+						hc->parsed);
+			}
+			else {
+				html_append_parsed(hc,
+						{start + cur_offset, std::size_t(final_part_len)},
+						is_transparent,
+						len,
+						hc->invisible);
+			}
 		}
 	}
 	if (is_block) {
@@ -1211,11 +1239,11 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 	if (is_visible) {
 		if (tag->id == Tag_A) {
-			auto written_len = hc->parsed.size() - initial_dest_offset;
+			auto written_len = hc->parsed.size() - initial_parsed_offset;
 			html_process_displayed_href_tag(pool, hc,
-					{hc->parsed.data() + initial_dest_offset, written_len},
+					{hc->parsed.data() + initial_parsed_offset, written_len},
 					tag, exceptions,
-					url_set, initial_dest_offset);
+					url_set, initial_parsed_offset);
 		}
 		else if (tag->id == Tag_IMG) {
 			/* Process ALT if presented */
@@ -1997,7 +2025,7 @@ html_process_input(rspamd_mempool_t *pool,
 		break;
 	case tags_limit_overflow:
 		html_append_parsed(hc, {c, (std::size_t) (end - c)},
-				false, end - start);
+				false, end - start, hc->parsed);
 		break;
 	default:
 		/* Do nothing */
@@ -2082,6 +2110,27 @@ auto html_tag_by_name(const std::string_view &name)
 	}
 
 	return std::nullopt;
+}
+
+auto
+html_tag::get_content(const struct html_content *hc) const -> std::string_view
+{
+	const std::string *dest = &hc->parsed;
+
+	if (block && !block->is_visible()) {
+		dest = &hc->invisible;
+	}
+	const auto clen = get_content_length();
+	if (content_offset < dest->size()) {
+		if (dest->size() - content_offset >= clen) {
+			return std::string_view{*dest}.substr(content_offset, clen);
+		}
+		else {
+			return std::string_view{*dest}.substr(content_offset, dest->size() - content_offset);
+		}
+	}
+
+	return std::string_view{};
 }
 
 }

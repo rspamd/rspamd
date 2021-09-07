@@ -31,6 +31,8 @@ struct html_image;
 
 namespace rspamd::html {
 
+struct html_content; /* Forward declaration */
+
 enum class html_component_type : std::uint8_t {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
 	RSPAMD_HTML_COMPONENT_HREF,
@@ -141,19 +143,7 @@ struct html_tag {
 		return 0;
 	}
 
-	constexpr auto get_content(std::string_view parsed) const -> std::string_view {
-		const auto clen = get_content_length();
-		if (content_offset < parsed.size()) {
-			if (parsed.size() - content_offset >= clen) {
-				return parsed.substr(content_offset, clen);
-			}
-			else {
-				return parsed.substr(content_offset, parsed.size() - content_offset);
-			}
-		}
-
-		return std::string_view{};
-	}
+	auto get_content(const struct html_content *hc) const -> std::string_view;
 };
 
 static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);
