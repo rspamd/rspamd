@@ -104,11 +104,19 @@ LUA_FUNCTION_DEF (html, get_images);
  */
 LUA_FUNCTION_DEF (html, foreach_tag);
 
+/***
+ * @method html:get_invisible()
+ * Returns invisible content of the HTML data
+ * @return
+ */
+LUA_FUNCTION_DEF (html, get_invisible);
+
 static const struct luaL_reg htmllib_m[] = {
 	LUA_INTERFACE_DEF (html, has_tag),
 	LUA_INTERFACE_DEF (html, has_property),
 	LUA_INTERFACE_DEF (html, get_images),
 	LUA_INTERFACE_DEF (html, foreach_tag),
+	LUA_INTERFACE_DEF (html, get_invisible),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -482,6 +490,22 @@ lua_html_foreach_tag (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_html_get_invisible (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	auto *hc = lua_check_html (L, 1);
+
+	if (hc != NULL) {
+		lua_new_text (L, hc->invisible.c_str(), hc->invisible.size(), false);
+	}
+	else {
+		lua_newtable (L);
+	}
+
+	return 1;
 }
 
 static gint
