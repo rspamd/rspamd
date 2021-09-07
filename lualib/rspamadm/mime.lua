@@ -77,6 +77,8 @@ extract:flag "-p --part"
        :description "Show part info"
 extract:flag "-s --structure"
        :description "Show structure info (e.g. HTML tags)"
+extract:flag "-i --invisible"
+       :description "Show invisible content for HTML parts"
 extract:option "-F --words-format"
        :description "Words format ('stem', 'norm', 'raw', 'full')"
        :argname("<type>")
@@ -431,6 +433,11 @@ local function extract_handler(opts)
               table.insert(out_elts[fname], res)
             else -- opts.structure
               table.insert(out_elts[fname], tostring(part:get_content(how)))
+            end
+            if opts.invisible then
+              local hc = part:get_html()
+              table.insert(out_elts[fname], string.format('invisible content: %s',
+                  tostring(hc:get_invisible())))
             end
           end
         end
