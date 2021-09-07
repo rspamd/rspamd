@@ -198,11 +198,11 @@ local vis_check_id = rspamd_config:register_symbol{
         hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag, clen, is_leaf)
           local bl = tag:get_style()
           if bl then
-            if not bl.visible and is_leaf then
+            if not bl.visible and clen > 0 and is_leaf then
               invisible_blocks = invisible_blocks + 1
             end
 
-            if (bl.font_size or 12) == 0 and is_leaf then
+            if (bl.font_size or 12) == 0 and clen > 0 and is_leaf then
               zero_size_blocks = zero_size_blocks + 1
             end
 
