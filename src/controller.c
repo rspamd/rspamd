@@ -2911,20 +2911,18 @@ rspamd_controller_metrics_fin_task (void *ud) {
 		rspamd_fstring_t *languages;
 		rspamd_fstring_t *users;
 
-		revision = rspamd_fstring_sized_new (256);
-		used = rspamd_fstring_sized_new (256);
-		total = rspamd_fstring_sized_new (256);
-		size = rspamd_fstring_sized_new (256);
-		languages = rspamd_fstring_sized_new (256);
-		users = rspamd_fstring_sized_new (256);
+		revision = rspamd_fstring_sized_new (16);
+		used = rspamd_fstring_sized_new (16);
+		total = rspamd_fstring_sized_new (16);
+		size = rspamd_fstring_sized_new (16);
+		languages = rspamd_fstring_sized_new (16);
+		users = rspamd_fstring_sized_new (16);
 
 		while ((cur_elt = ucl_object_iterate (cbdata->stat, &it, true))) {
-			if (ucl_object_lookup (cur_elt, "symbol") &&
-				ucl_object_lookup (cur_elt, "type")) {
+			const char *sym = ucl_object_tostring (ucl_object_lookup (cur_elt, "symbol"));
+			const char *type = ucl_object_tostring (ucl_object_lookup (cur_elt, "type"));
 
-				const char *sym = ucl_object_tostring (ucl_object_lookup (cur_elt, "symbol"));
-				const char *type = ucl_object_tostring (ucl_object_lookup (cur_elt, "type"));
-
+			if (sym && type) {
 				rspamd_printf_fstring (&revision, "rspamd_statfiles_revision{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
@@ -2955,33 +2953,46 @@ rspamd_controller_metrics_fin_task (void *ud) {
 		if (RSPAMD_FSTRING_LEN(revision) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_revision Stat files revision.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_revision gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(revision), RSPAMD_FSTRING_LEN(revision));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(revision), RSPAMD_FSTRING_LEN(revision));
 		}
 		if (RSPAMD_FSTRING_LEN(used) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_used Stat files used.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_used gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(used), RSPAMD_FSTRING_LEN(used));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(used), RSPAMD_FSTRING_LEN(used));
 		}
 		if (RSPAMD_FSTRING_LEN(total) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_totals Stat files total.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_totals gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(total), RSPAMD_FSTRING_LEN(total));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(total), RSPAMD_FSTRING_LEN(total));
 		}
 		if (RSPAMD_FSTRING_LEN(size) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_size Stat files size.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_size gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(size), RSPAMD_FSTRING_LEN(size));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(size), RSPAMD_FSTRING_LEN(size));
 		}
 		if (RSPAMD_FSTRING_LEN(languages) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_languages Stat files languages.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_languages gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(languages), RSPAMD_FSTRING_LEN(languages));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(languages), RSPAMD_FSTRING_LEN(languages));
 		}
 		if (RSPAMD_FSTRING_LEN(users) > 0) {
 			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_users Stat files users.\n");
 			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_users gauge\n");
-			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(users), RSPAMD_FSTRING_LEN(users));
+			output = rspamd_fstring_append (output,
+					RSPAMD_FSTRING_DATA(users), RSPAMD_FSTRING_LEN(users));
 		}
+
+		rspamd_fstring_free (revision);
+		rspamd_fstring_free (used);
+		rspamd_fstring_free (total);
+		rspamd_fstring_free (size);
+		rspamd_fstring_free (languages);
+		rspamd_fstring_free (users);
 	}
 
 	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
