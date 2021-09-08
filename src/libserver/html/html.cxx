@@ -1752,9 +1752,49 @@ html_process_input(rspamd_mempool_t *pool,
 			break;
 		case tag_raw_text_less_than:
 			if (t == '/') {
-				/* Shift back */
-				p = c;
-				state = tag_begin;
+				/* Here are special things: we look for obrace and then ensure
+				 * that if there is any closing brace nearby
+				 * (we look maximum at 30 characters). We also need to ensure
+				 * that we have no special characters, such as punctuation marks and
+				 * so on.
+				 * Basically, we validate the input to be sane.
+				 * Since closing tags must not have attributes, these assumptions
+				 * seems to be reasonable enough for our toy parser.
+				 */
+				gint cur_lookahead = 1;
+				gint max_lookahead = MIN (end - p, 30);
+				bool valid_closing_tag = true;
+
+				if (p + 1 < end && !g_ascii_isalpha (p[1])) {
+					valid_closing_tag = false;
+				}
+				else {
+					while (cur_lookahead < max_lookahead) {
+						gchar tt = p[cur_lookahead];
+						if (tt == '>') {
+							break;
+						}
+						else if (tt < '\n' || tt == ',') {
+							valid_closing_tag = false;
+							break;
+						}
+						cur_lookahead ++;
+					}
+
+					if (cur_lookahead == max_lookahead) {
+						valid_closing_tag = false;
+					}
+				}
+
+				if (valid_closing_tag) {
+					/* Shift back */
+					p = c;
+					state = tag_begin;
+				}
+				else {
+					p ++;
+					state = tag_raw_text;
+				}
 			}
 			else {
 				p ++;
