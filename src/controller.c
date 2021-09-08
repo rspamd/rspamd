@@ -2803,59 +2803,99 @@ rspamd_controller_metrics_fin_task (void *ud) {
 			ucl_object_fromint (cbdata->learned), "total_learns", 0, false);
 
 	output = rspamd_fstring_sized_new (1024);
-	rspamd_printf_fstring (&output, "build_info{version=\"%s\"} 1\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_build_info A metric with a constant '1' value labeled by version from which rspamd was built.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_build_info gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_build_info{version=\"%s\"} 1\n",
 		ucl_object_tostring (ucl_object_lookup (top, "version")));
-	rspamd_printf_fstring (&output, "config{id=\"%s\"} 1\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_config A metric with a constant '1' value labeled by id of the current config.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_config gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_config{id=\"%s\"} 1\n",
 		ucl_object_tostring (ucl_object_lookup (top, "config_id")));
+	rspamd_printf_fstring (&output, "# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.\n");
+	rspamd_printf_fstring (&output, "# TYPE process_start_time_seconds gauge\n");
 	rspamd_printf_fstring (&output, "process_start_time_seconds %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "start_time")));
-	rspamd_printf_fstring (&output, "read_only %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_read_only Whether the rspamd instance is read-only.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_read_only gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_read_only %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "read_only")));
-	rspamd_printf_fstring (&output, "scanned %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_scanned_total Scanned messages.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_scanned_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_scanned_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "scanned")));
-	rspamd_printf_fstring (&output, "learned %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_learned_total Learned messages.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_learned_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_learned_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "learned")));
-	rspamd_printf_fstring (&output, "spam_count %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_spam_total Messages classified as spam.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_spam_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_spam_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "spam_count")));
-	rspamd_printf_fstring (&output, "ham_count %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_ham_total Messages classified as ham.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_ham_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_ham_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "ham_count")));
-	rspamd_printf_fstring (&output, "connections %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_connections Active connections.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_connections gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_connections %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "connections")));
-	rspamd_printf_fstring (&output, "control_connections %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_control_connections_total Control connections.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_control_connections_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_control_connections_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "control_connections")));
-	rspamd_printf_fstring (&output, "pools_allocated %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_pools_allocated Pools allocated.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_pools_allocated gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_pools_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_allocated")));
-	rspamd_printf_fstring (&output, "pools_freed %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_pools_freed Pools freed.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_pools_freed gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_pools_freed %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "pools_freed")));
-	rspamd_printf_fstring (&output, "bytes_allocated %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_allocated_bytes Bytes allocated.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_allocated_bytes gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_allocated_bytes %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "bytes_allocated")));
-	rspamd_printf_fstring (&output, "chunks_allocated %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_chunks_allocated Chunks allocated.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_chunks_allocated gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_chunks_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_allocated")));
-	rspamd_printf_fstring (&output, "shared_chunks_allocated %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_shared_chunks_allocated Shared chunks allocated.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_shared_chunks_allocated gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_shared_chunks_allocated %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "shared_chunks_allocated")));
-	rspamd_printf_fstring (&output, "chunks_freed %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_chunks_freed Chunks freed.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_chunks_freed gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_chunks_freed %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_freed")));
-	rspamd_printf_fstring (&output, "chunks_oversized %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_chunks_oversized Chunks oversized.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_chunks_oversized gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_chunks_oversized %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "chunks_oversized")));
-	rspamd_printf_fstring (&output, "fragmented %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_fragmented Fragmented.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_fragmented gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_fragmented %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "fragmented")));
-	rspamd_printf_fstring (&output, "total_learns %L\n",
+	rspamd_printf_fstring (&output, "# HELP rspamd_learns_total Total learns.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_learns_total counter\n");
+	rspamd_printf_fstring (&output, "rspamd_learns_total %L\n",
 		ucl_object_toint (ucl_object_lookup (top, "total_learns")));
 
 	const ucl_object_t *acts_obj = ucl_object_lookup (top, "actions");
 
 	if (acts_obj) {
+		rspamd_printf_fstring (&output, "# HELP rspamd_actions_total Actions labelled by action type.\n");
+		rspamd_printf_fstring (&output, "# TYPE rspamd_actions_total counter\n");
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
 			const char *str_act = rspamd_action_to_str (i);
 			const ucl_object_t *act = ucl_object_lookup (acts_obj, str_act);
 
 			if (act) {
-				rspamd_printf_fstring(&output, "actions{type=\"%s\"} %L\n",
+				rspamd_printf_fstring(&output, "rspamd_actions_total{type=\"%s\"} %L\n",
 						str_act,
 						ucl_object_toint(act));
 			}
 			else {
-				rspamd_printf_fstring (&output, "actions{type=\"%s\"} 0\n",
+				rspamd_printf_fstring (&output, "rspamd_actions_total{type=\"%s\"} 0\n",
 						str_act);
 			}
 		}
@@ -2864,6 +2904,20 @@ rspamd_controller_metrics_fin_task (void *ud) {
 	if (cbdata->stat) {
 		const ucl_object_t *cur_elt;
 		ucl_object_iter_t it = NULL;
+		rspamd_fstring_t *revision;
+		rspamd_fstring_t *used;
+		rspamd_fstring_t *total;
+		rspamd_fstring_t *size;
+		rspamd_fstring_t *languages;
+		rspamd_fstring_t *users;
+
+		revision = rspamd_fstring_sized_new (256);
+		used = rspamd_fstring_sized_new (256);
+		total = rspamd_fstring_sized_new (256);
+		size = rspamd_fstring_sized_new (256);
+		languages = rspamd_fstring_sized_new (256);
+		users = rspamd_fstring_sized_new (256);
+
 		while ((cur_elt = ucl_object_iterate (cbdata->stat, &it, true))) {
 			if (ucl_object_lookup (cur_elt, "symbol") &&
 				ucl_object_lookup (cur_elt, "type")) {
@@ -2871,42 +2925,75 @@ rspamd_controller_metrics_fin_task (void *ud) {
 				const char *sym = ucl_object_tostring (ucl_object_lookup (cur_elt, "symbol"));
 				const char *type = ucl_object_tostring (ucl_object_lookup (cur_elt, "type"));
 
-				rspamd_printf_fstring (&output, "statfiles_revision{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&revision, "rspamd_statfiles_revision{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "revision")));
-				rspamd_printf_fstring (&output, "statfiles_used{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&used, "rspamd_statfiles_used{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "used")));
-				rspamd_printf_fstring (&output, "statfiles_total{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&total, "rspamd_statfiles_totals{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "total")));
-				rspamd_printf_fstring (&output, "statfiles_size{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&size, "rspamd_statfiles_size{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "size")));
-				rspamd_printf_fstring (&output, "statfiles_languages{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&languages, "rspamd_statfiles_languages{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "languages")));
-				rspamd_printf_fstring (&output, "statfiles_users{symbol=\"%s\", type=\"%s\"} %L\n",
+				rspamd_printf_fstring (&users, "rspamd_statfiles_users{symbol=\"%s\",type=\"%s\"} %L\n",
 						sym,
 						type,
 						ucl_object_toint (ucl_object_lookup (cur_elt, "users")));
 			}
+		}
+
+		if (RSPAMD_FSTRING_LEN(revision) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_revision Stat files revision.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_revision gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(revision), RSPAMD_FSTRING_LEN(revision));
+		}
+		if (RSPAMD_FSTRING_LEN(used) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_used Stat files used.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_used gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(used), RSPAMD_FSTRING_LEN(used));
+		}
+		if (RSPAMD_FSTRING_LEN(total) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_totals Stat files total.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_totals gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(total), RSPAMD_FSTRING_LEN(total));
+		}
+		if (RSPAMD_FSTRING_LEN(size) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_size Stat files size.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_size gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(size), RSPAMD_FSTRING_LEN(size));
+		}
+		if (RSPAMD_FSTRING_LEN(languages) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_languages Stat files languages.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_languages gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(languages), RSPAMD_FSTRING_LEN(languages));
+		}
+		if (RSPAMD_FSTRING_LEN(users) > 0) {
+			rspamd_printf_fstring (&output, "# HELP rspamd_statfiles_users Stat files users.\n");
+			rspamd_printf_fstring (&output, "# TYPE rspamd_statfiles_users gauge\n");
+			output = rspamd_fstring_append (output, RSPAMD_FSTRING_DATA(users), RSPAMD_FSTRING_LEN(users));
 		}
 	}
 
 	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
 
 	if (fuzzy_elts) {
+		rspamd_printf_fstring (&output, "# HELP rspamd_fuzzy_stat Fuzzy stat labelled by storage.\n");
+		rspamd_printf_fstring (&output, "# TYPE rspamd_fuzzy_stat gauge\n");
 		for (cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
 			entry = cur->data;
 
 			if (entry->name) {
-				rspamd_printf_fstring (&output, "fuzzy_stat{storage=\"%s\"} %ud\n",
+				rspamd_printf_fstring (&output, "rspamd_fuzzy_stat{storage=\"%s\"} %ud\n",
 						entry->name, entry->fuzzy_cnt);
 			}
 		}
