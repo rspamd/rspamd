@@ -91,7 +91,8 @@ local function normalise_results(tbl, task)
   local seconds = task:get_timeval()['tv_sec']
   tbl.unix_time = seconds
 
-  tbl.subject = task:get_header('subject') or 'unknown'
+  local subject = task:get_header('subject') or 'unknown'
+  tbl.subject = lua_util.maybe_obfuscate_string(subject, settings, 'subject')
   tbl.size = task:get_size()
   local ip = task:get_from_ip()
   if ip and ip:is_valid() then
@@ -219,9 +220,6 @@ local function handle_history_request(task, conn, from, to, reset)
             (rspamd_util:get_ticks() - t1) * 1000.0)
         collectgarbage()
         t1 = rspamd_util:get_ticks()
-        fun.each(function(e)
-          e.subject = lua_util.maybe_obfuscate_string(e.subject, settings, 'subject')
-        end, data)
         reply.rows = data
         conn:send_ucl(reply)
         lua_util.debugm(N, task, 'process + sending took %s ms',
