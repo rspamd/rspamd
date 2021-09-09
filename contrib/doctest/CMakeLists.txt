@@ -8,7 +8,7 @@ endif()
 ## DOCTEST
 ################################################################################
 
-project(doctest VERSION 2.4.5 LANGUAGES CXX)
+project(doctest VERSION 2.4.6 LANGUAGES CXX)
 
 # Determine if doctest is built as a subproject (using add_subdirectory) or if it is the main project.
 set(MAIN_PROJECT OFF)

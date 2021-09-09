@@ -45,8 +45,8 @@
 
 #define DOCTEST_VERSION_MAJOR 2
 #define DOCTEST_VERSION_MINOR 4
-#define DOCTEST_VERSION_PATCH 5
-#define DOCTEST_VERSION_STR "2.4.5"
+#define DOCTEST_VERSION_PATCH 6
+#define DOCTEST_VERSION_STR "2.4.6"
 
 #define DOCTEST_VERSION                                                                            \
     (DOCTEST_VERSION_MAJOR * 10000 + DOCTEST_VERSION_MINOR * 100 + DOCTEST_VERSION_PATCH)
@@ -778,6 +778,29 @@ namespace detail {
     template<class T> struct remove_reference<T&>  { typedef T type; };
     template<class T> struct remove_reference<T&&> { typedef T type; };
 
+    template<typename T, typename U = T&&> U declval(int); 
+
+    template<typename T> T declval(long); 
+
+    template<typename T> auto declval() DOCTEST_NOEXCEPT -> decltype(declval<T>(0)) ;
+
+    template<class T> struct is_lvalue_reference { const static bool value=false; };
+    template<class T> struct is_lvalue_reference<T&> { const static bool value=true; };
+
+    template <class T>
+    inline T&& forward(typename remove_reference<T>::type& t) DOCTEST_NOEXCEPT
+    {
+        return static_cast<T&&>(t);
+    }
+
+    template <class T>
+    inline T&& forward(typename remove_reference<T>::type&& t) DOCTEST_NOEXCEPT
+    {
+        static_assert(!is_lvalue_reference<T>::value,
+                        "Can not forward an rvalue as an lvalue.");
+        return static_cast<T&&>(t);
+    }
+
     template<class T> struct remove_const          { typedef T type; };
     template<class T> struct remove_const<const T> { typedef T type; };
 #ifdef DOCTEST_CONFIG_INCLUDE_TYPE_TRAITS
@@ -1045,10 +1068,20 @@ namespace detail {
         return toString(lhs) + op + toString(rhs);
     }
 
+#if DOCTEST_CLANG && DOCTEST_CLANG < DOCTEST_COMPILER(3, 6, 0)
+DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
+#endif
+
+// This will check if there is any way it could find a operator like member or friend and uses it.
+// If not it doesn't find the operator or if the operator at global scope is defined after
+// this template, the template won't be instantiated due to SFINAE. Once the template is not
+// instantiated it can look for global operator using normal conversions.
+#define SFINAE_OP(ret,op) decltype(doctest::detail::declval<L>() op doctest::detail::declval<R>(),static_cast<ret>(0))
+
 #define DOCTEST_DO_BINARY_EXPRESSION_COMPARISON(op, op_str, op_macro)                              \
     template <typename R>                                                                          \
-    DOCTEST_NOINLINE Result operator op(const DOCTEST_REF_WRAP(R) rhs) {                           \
-        bool res = op_macro(lhs, rhs);                                                             \
+    DOCTEST_NOINLINE SFINAE_OP(Result,op) operator op(R&& rhs) {             \
+	    bool res = op_macro(doctest::detail::forward<L>(lhs), doctest::detail::forward<R>(rhs));                                                             \
         if(m_at & assertType::is_false)                                                            \
             res = !res;                                                                            \
         if(!res || doctest::getContextOptions()->success)                                          \
@@ -1176,12 +1209,16 @@ namespace detail {
         L                lhs;
         assertType::Enum m_at;
 
-        explicit Expression_lhs(L in, assertType::Enum at)
-                : lhs(in)
+        explicit Expression_lhs(L&& in, assertType::Enum at)
+                : lhs(doctest::detail::forward<L>(in))
                 , m_at(at) {}
 
         DOCTEST_NOINLINE operator Result() {
-            bool res = !!lhs;
+// this is needed only foc MSVC 2015:
+// https://ci.appveyor.com/project/onqtam/doctest/builds/38181202
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4800) // 'int': forcing value to bool
+            bool res = static_cast<bool>(lhs);
+DOCTEST_MSVC_SUPPRESS_WARNING_POP
             if(m_at & assertType::is_false) //!OCLINT bitwise operator in conditional
                 res = !res;
 
@@ -1189,6 +1226,10 @@ namespace detail {
                 return Result(res, toString(lhs));
             return Result(res);
         }
+
+	/* This is required for user-defined conversions from Expression_lhs to L */
+	//operator L() const { return lhs; }
+	operator L() const { return lhs; }
 
         // clang-format off
         DOCTEST_DO_BINARY_EXPRESSION_COMPARISON(==, " == ", DOCTEST_CMP_EQ) //!OCLINT bitwise operator in conditional
@@ -1230,6 +1271,10 @@ namespace detail {
 
 #endif // DOCTEST_CONFIG_NO_COMPARISON_WARNING_SUPPRESSION
 
+#if DOCTEST_CLANG && DOCTEST_CLANG < DOCTEST_COMPILER(3, 6, 0)
+DOCTEST_CLANG_SUPPRESS_WARNING_POP
+#endif
+
     struct DOCTEST_INTERFACE ExpressionDecomposer
     {
         assertType::Enum m_at;
@@ -1241,8 +1286,8 @@ namespace detail {
         // https://github.com/catchorg/Catch2/issues/870
         // https://github.com/catchorg/Catch2/issues/565
         template <typename L>
-        Expression_lhs<const DOCTEST_REF_WRAP(L)> operator<<(const DOCTEST_REF_WRAP(L) operand) {
-            return Expression_lhs<const DOCTEST_REF_WRAP(L)>(operand, m_at);
+	Expression_lhs<L> operator<<(L &&operand) {
+            return Expression_lhs<L>(doctest::detail::forward<L>(operand), m_at);
         }
     };
 
@@ -1531,7 +1576,7 @@ namespace detail {
 
     template <typename L> class ContextScope : public ContextScopeBase
     {
-        const L &lambda_;
+        const L lambda_;
 
     public:
         explicit ContextScope(const L &lambda) : lambda_(lambda) {}
@@ -1930,10 +1975,12 @@ int registerReporter(const char* name, int priority, bool isReporter) {
             static DOCTEST_NOINLINE doctest::detail::TestSuite& getCurrentTestSuite() {            \
                 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4640)                                      \
                 DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wexit-time-destructors")                \
-                static doctest::detail::TestSuite data;                                            \
+                DOCTEST_GCC_SUPPRESS_WARNING_WITH_PUSH("-Wmissing-field-initializers")             \
+                static doctest::detail::TestSuite data{};                                          \
                 static bool                       inited = false;                                  \
                 DOCTEST_MSVC_SUPPRESS_WARNING_POP                                                  \
                 DOCTEST_CLANG_SUPPRESS_WARNING_POP                                                 \
+                DOCTEST_GCC_SUPPRESS_WARNING_POP                                                   \
                 if(!inited) {                                                                      \
                     data* decorators;                                                              \
                     inited = true;                                                                 \
@@ -1988,17 +2035,15 @@ int registerReporter(const char* name, int priority, bool isReporter) {
 // for logging
 #define DOCTEST_INFO(...)                                                                          \
     DOCTEST_INFO_IMPL(DOCTEST_ANONYMOUS(_DOCTEST_CAPTURE_), DOCTEST_ANONYMOUS(_DOCTEST_CAPTURE_),  \
-                      DOCTEST_ANONYMOUS(_DOCTEST_CAPTURE_), __VA_ARGS__)
+                      __VA_ARGS__)
 
-#define DOCTEST_INFO_IMPL(lambda_name, mb_name, s_name, ...)                                       \
-    DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4626)                                                  \
-    auto lambda_name = [&](std::ostream* s_name) {                                                 \
+#define DOCTEST_INFO_IMPL(mb_name, s_name, ...)                                       \
+    auto DOCTEST_ANONYMOUS(_DOCTEST_CAPTURE_) = doctest::detail::MakeContextScope(                 \
+        [&](std::ostream* s_name) {                                                                \
         doctest::detail::MessageBuilder mb_name(__FILE__, __LINE__, doctest::assertType::is_warn); \
         mb_name.m_stream = s_name;                                                                 \
         mb_name * __VA_ARGS__;                                                                     \
-    };                                                                                             \
-    DOCTEST_MSVC_SUPPRESS_WARNING_POP                                                              \
-    auto DOCTEST_ANONYMOUS(_DOCTEST_CAPTURE_) = doctest::detail::MakeContextScope(lambda_name)
+    })
 
 #define DOCTEST_CAPTURE(x) DOCTEST_INFO(#x " := ", x)
 
