@@ -380,7 +380,8 @@ local function check_mime_type(task)
       end
 
       if not found then
-        task:insert_result(settings['symbol_attachment'], mult, ext)
+        task:insert_result(settings['symbol_attachment'], mult, string.format('%s:%s',
+            ext, ct))
       end
     end
   end
