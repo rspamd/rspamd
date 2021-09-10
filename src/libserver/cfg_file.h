@@ -363,7 +363,6 @@ struct rspamd_config {
 	GHashTable *groups;                            /**< groups of symbols								*/
 	struct rspamd_action *actions;                  /**< all actions of the metric						*/
 
-	gboolean raw_mode;                              /**< work in raw mode instead of utf one				*/
 	gboolean one_shot_mode;                         /**< rules add only one symbol							*/
 	gboolean check_text_attachements;               /**< check text attachements as text					*/
 	gboolean check_all_filters;                     /**< check all filters									*/
@@ -480,7 +479,6 @@ struct rspamd_config {
 	guint max_blas_threads;                         /**< maximum threads for openblas when learning ANN		*/
 	guint max_opts_len;                             /**< maximum length for all options for a symbol		*/
 
-	GList *classify_headers;                        /**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;                /**< list of compiled C modules							*/
 	struct worker_s **compiled_workers;                /**< list of compiled C modules							*/
 	struct rspamd_log_format *log_format;            /**< parsed log format									*/

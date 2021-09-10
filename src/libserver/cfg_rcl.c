@@ -1760,12 +1760,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_INT_32,
 				"Maximum DNS requests per task (default: 64)");
 		rspamd_rcl_add_default_handler (sub,
-				"classify_headers",
-				rspamd_rcl_parse_struct_string_list,
-				G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
-				0,
-				"List of headers used for classifiers");
-		rspamd_rcl_add_default_handler (sub,
 				"control_socket",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
@@ -1783,12 +1777,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
 				0,
 				"Allow non MIME input for rspamd");
-		rspamd_rcl_add_default_handler (sub,
-				"raw_mode",
-				rspamd_rcl_parse_struct_boolean,
-				G_STRUCT_OFFSET (struct rspamd_config, raw_mode),
-				0,
-				"Don't try to convert all messages to utf8");
 		rspamd_rcl_add_default_handler (sub,
 				"one_shot",
 				rspamd_rcl_parse_struct_boolean,
