@@ -832,6 +832,12 @@ rspamd_content_disposition_parse (const gchar *in,
 	struct rspamd_content_disposition *res = NULL, val;
 
 	if (rspamd_content_disposition_parser (in, len, &val, pool)) {
+
+		if (val.type == RSPAMD_CT_UNKNOWN) {
+			/* 'Fix' type to attachment as MUA does */
+			val.type = RSPAMD_CT_ATTACHMENT;
+		}
+
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
 		res->lc_data = rspamd_mempool_alloc (pool, len + 1);

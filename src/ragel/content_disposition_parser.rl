@@ -122,5 +122,5 @@ rspamd_content_disposition_parser (const char *data, size_t len, struct rspamd_c
     free (st_storage.data);
   }
 
-  return cd->type != RSPAMD_CT_UNKNOWN;
+  return cd->attrs != NULL || cd->type != RSPAMD_CT_UNKNOWN;
 }
