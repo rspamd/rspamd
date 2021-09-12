@@ -96,6 +96,7 @@ class redis_pool_elt {
 	 */
 	std::list<redis_pool_connection_ptr> active;
 	std::list<redis_pool_connection_ptr> inactive;
+	std::list<redis_pool_connection_ptr> terminating;
 	std::string ip;
 	std::string db;
 	std::string password;
@@ -121,19 +122,31 @@ public:
 
 	auto new_connection() -> redisAsyncContext *;
 
-	auto release_active(const redis_pool_connection *conn) -> void
+	auto release_connection(const redis_pool_connection *conn) -> void
 	{
-		active.erase(conn->elt_pos);
+		switch(conn->state) {
+		case RSPAMD_REDIS_POOL_CONN_ACTIVE:
+			active.erase(conn->elt_pos);
+			break;
+		case RSPAMD_REDIS_POOL_CONN_INACTIVE:
+			inactive.erase(conn->elt_pos);
+			break;
+		case RSPAMD_REDIS_POOL_CONN_FINALISING:
+			terminating.erase(conn->elt_pos);
+			break;
+		}
 	}
 
-	auto release_inactive(const redis_pool_connection *conn) -> void
-	{
-		inactive.erase(conn->elt_pos);
-	}
-
-	auto move_to_inactive(const redis_pool_connection *conn) -> void
+	auto move_to_inactive(redis_pool_connection *conn) -> void
 	{
 		inactive.splice(std::end(inactive), active, conn->elt_pos);
+		conn->elt_pos = std::prev(std::end(inactive));
+	}
+
+	auto move_to_terminating(redis_pool_connection *conn) -> void
+	{
+		inactive.splice(std::end(inactive), terminating, conn->elt_pos);
+		conn->elt_pos = std::prev(std::end(terminating));
 	}
 
 	inline static auto make_key(const gchar *db, const gchar *password,
@@ -308,6 +321,7 @@ redis_pool_connection::redis_conn_timeout_cb(EV_P_ ev_timer *w, int revents) -> 
 		conn->state = RSPAMD_REDIS_POOL_CONN_FINALISING;
 		ev_timer_again(EV_A_ w);
 		redisAsyncCommand(conn->ctx, redis_pool_connection::redis_quit_cb, conn, "QUIT");
+		conn->elt->move_to_terminating(conn);
 	}
 	else {
 		/* Finalising by timeout */
@@ -316,7 +330,7 @@ redis_pool_connection::redis_conn_timeout_cb(EV_P_ ev_timer *w, int revents) -> 
 				conn->ctx);
 
 		/* Erasure of shared pointer will cause it to be removed */
-		conn->elt->release_inactive(conn);
+		conn->elt->release_connection(conn);
 	}
 
 }
@@ -338,7 +352,7 @@ redis_pool_connection::redis_on_disconnect(const struct redisAsyncContext *ac, i
 		}
 
 		/* Erasure of shared pointer will cause it to be removed */
-		conn->elt->release_inactive(conn);
+		conn->elt->release_connection(conn);
 	}
 }
 
@@ -523,7 +537,7 @@ auto redis_pool::release_connection(redisAsyncContext *ctx,
 			}
 		}
 
-		conn->elt->release_active(conn);
+		conn->elt->release_connection(conn);
 	}
 	else {
 		RSPAMD_UNREACHABLE;
