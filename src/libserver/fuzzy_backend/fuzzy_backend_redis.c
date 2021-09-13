@@ -172,7 +172,7 @@ rspamd_fuzzy_backend_redis_dtor (struct rspamd_fuzzy_backend_redis *backend)
 {
 	lua_State *L = backend->L;
 
-	if (backend->conf_ref) {
+	if (backend->conf_ref != -1) {
 		luaL_unref (L, LUA_REGISTRYINDEX, backend->conf_ref);
 	}
 
