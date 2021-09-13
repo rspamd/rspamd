@@ -145,7 +145,7 @@ public:
 
 	auto move_to_terminating(redis_pool_connection *conn) -> void
 	{
-		inactive.splice(std::end(inactive), terminating, conn->elt_pos);
+		terminating.splice(std::end(terminating), terminating, conn->elt_pos);
 		conn->elt_pos = std::prev(std::end(terminating));
 	}
 
