@@ -775,7 +775,7 @@ rspamd_upstream_fail (struct upstream *upstream,
 			upstream->name,
 			reason);
 
-	if (upstream->ctx && upstream->active_idx != -1) {
+	if (upstream->ctx && upstream->active_idx != -1 && upstream->ls) {
 		sec_cur = rspamd_get_ticks (FALSE);
 
 		RSPAMD_UPSTREAM_LOCK (upstream);
@@ -885,7 +885,7 @@ rspamd_upstream_ok (struct upstream *upstream)
 	struct upstream_list_watcher *w;
 
 	RSPAMD_UPSTREAM_LOCK (upstream);
-	if (upstream->errors > 0 && upstream->active_idx != -1) {
+	if (upstream->errors > 0 && upstream->active_idx != -1 && upstream->ls) {
 		/* We touch upstream if and only if it is active */
 		msg_debug_upstream ("reset errors on upstream %s (was %ud)", upstream->name, upstream->errors);
 		upstream->errors = 0;
