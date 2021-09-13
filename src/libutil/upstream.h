@@ -299,6 +299,18 @@ struct upstream *rspamd_upstream_get_except (struct upstream_list *ups,
  */
 void rspamd_upstream_reresolve (struct upstream_ctx *ctx);
 
+/**
+ * Share ownership on upstream
+ * @param up
+ * @return
+ */
+struct upstream* rspamd_upstream_ref (struct upstream *up);
+/**
+ * Unshare ownership on upstream
+ * @param up
+ */
+void rspamd_upstream_unref (struct upstream *up);
+
 #ifdef  __cplusplus
 }
 #endif

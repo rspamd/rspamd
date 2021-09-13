@@ -395,7 +395,8 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 
 	pool->register_context(ctx, this);
 	ctx->data = this;
-	rspamd_random_hex((guchar *) tag, sizeof(tag));
+	memset(tag, 0, sizeof(tag));
+	rspamd_random_hex((guchar *)tag, sizeof(tag) - 1);
 
 	redisLibevAttach(pool->event_loop, ctx);
 	redisAsyncSetDisconnectCallback(ctx, redis_pool_connection::redis_on_disconnect);

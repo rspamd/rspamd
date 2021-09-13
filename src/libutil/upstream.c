@@ -1714,3 +1714,16 @@ void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
 
 	DL_APPEND (ups->watchers, nw);
 }
+
+struct upstream*
+rspamd_upstream_ref (struct upstream *up)
+{
+	REF_RETAIN (up);
+	return up;
+}
+
+void
+rspamd_upstream_unref (struct upstream *up)
+{
+	REF_RELEASE (up);
+}

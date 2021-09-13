@@ -163,6 +163,7 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
 	rspamd_fuzzy_redis_session_free_args (session);
 
 	REF_RELEASE (session->backend);
+	rspamd_upstream_unref (session->up);
 	g_free (session);
 }
 
@@ -678,7 +679,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 			NULL,
 			0);
 
-	session->up = up;
+	session->up = rspamd_upstream_ref (up);
 	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 	session->ctx = rspamd_redis_pool_connect (backend->pool,
@@ -818,7 +819,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 			NULL,
 			0);
 
-	session->up = up;
+	session->up = rspamd_upstream_ref (up);
 	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 	session->ctx = rspamd_redis_pool_connect (backend->pool,
@@ -956,7 +957,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 			NULL,
 			0);
 
-	session->up = up;
+	session->up = rspamd_upstream_ref (up);
 	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 	session->ctx = rspamd_redis_pool_connect (backend->pool,
@@ -1530,7 +1531,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			NULL,
 			0);
 
-	session->up = up;
+	session->up = rspamd_upstream_ref (up);
 	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 	session->ctx = rspamd_redis_pool_connect (backend->pool,
