@@ -341,7 +341,7 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 	ev_timer_stop (session->event_loop, &session->timeout);
 	memset (&rep, 0, sizeof (rep));
 
-	if (c->err == 0) {
+	if (c->err == 0 && reply != NULL) {
 		rspamd_upstream_ok (session->up);
 
 		if (reply->type == REDIS_REPLY_ARRAY &&
@@ -462,9 +462,8 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 
 		if (c->errstr) {
 			msg_err_redis_session ("error getting shingles: %s", c->errstr);
+			rspamd_upstream_fail (session->up, FALSE,  c->errstr);
 		}
-
-		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -541,7 +540,7 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 	ev_timer_stop (session->event_loop, &session->timeout);
 	memset (&rep, 0, sizeof (rep));
 
-	if (c->err == 0) {
+	if (c->err == 0 && reply != NULL) {
 		rspamd_upstream_ok (session->up);
 
 		if (reply->type == REDIS_REPLY_ARRAY && reply->elements >= 2) {
@@ -609,9 +608,8 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting hashes on %s: %s",
 					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
 					c->errstr);
+			rspamd_upstream_fail (session->up, FALSE, c->errstr);
 		}
-
-		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -730,7 +728,7 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 
 	ev_timer_stop (session->event_loop, &session->timeout);
 
-	if (c->err == 0) {
+	if (c->err == 0 && reply != NULL) {
 		rspamd_upstream_ok (session->up);
 
 		if (reply->type == REDIS_REPLY_INTEGER) {
@@ -764,9 +762,9 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting count on %s: %s",
 					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
 					c->errstr);
+			rspamd_upstream_fail (session->up, FALSE, c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -868,7 +866,7 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 
 	ev_timer_stop (session->event_loop, &session->timeout);
 
-	if (c->err == 0) {
+	if (c->err == 0 && reply != NULL) {
 		rspamd_upstream_ok (session->up);
 
 		if (reply->type == REDIS_REPLY_INTEGER) {
@@ -902,9 +900,8 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting version on %s: %s",
 					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
 					c->errstr);
+			rspamd_upstream_fail (session->up, FALSE,  c->errstr);
 		}
-
-		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -1374,7 +1371,7 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 
 	ev_timer_stop (session->event_loop, &session->timeout);
 
-	if (c->err == 0) {
+	if (c->err == 0 && reply != NULL) {
 		rspamd_upstream_ok (session->up);
 
 		if (reply->type == REDIS_REPLY_ARRAY) {
@@ -1407,9 +1404,8 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error sending update to redis %s: %s",
 					rspamd_inet_address_to_string_pretty (rspamd_upstream_addr_cur (session->up)),
 					c->errstr);
+			rspamd_upstream_fail (session->up, FALSE,  c->errstr);
 		}
-
-		rspamd_upstream_fail (session->up, FALSE,  strerror (errno));
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
