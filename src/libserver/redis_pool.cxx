@@ -34,19 +34,19 @@ class redis_pool;
 
 #define msg_err_rpool(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "redis_pool", conn->tag, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 #define msg_warn_rpool(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "redis_pool", conn->tag, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 #define msg_info_rpool(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "redis_pool", conn->tag, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 #define msg_debug_rpool(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_redis_pool_log_id, "redis_pool", conn->tag, \
-        G_STRFUNC, \
+        __FUNCTION__, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(redis_pool)
