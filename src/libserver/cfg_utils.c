@@ -334,7 +334,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_unref (cfg->trusted_keys);
 
 	rspamd_re_cache_unref (cfg->re_cache);
-	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	g_ptr_array_free (cfg->c_modules, TRUE);
 
 	if (cfg->lua_state && cfg->own_lua_state) {
@@ -352,6 +351,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
 
+	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	HASH_CLEAR (hh, cfg->actions);
 
 	rspamd_mempool_destructors_enforce (cfg->cfg_pool);
