@@ -336,11 +336,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_re_cache_unref (cfg->re_cache);
 	g_ptr_array_free (cfg->c_modules, TRUE);
 
-	if (cfg->lua_state && cfg->own_lua_state) {
-		lua_thread_pool_free (cfg->lua_thread_pool);
-		lua_close (cfg->lua_state);
-	}
-
 #ifdef WITH_HIREDIS
 	if (cfg->redis_pool) {
 		rspamd_redis_pool_destroy (cfg->redis_pool);
@@ -349,6 +344,11 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
+	}
+
+	if (cfg->lua_state && cfg->own_lua_state) {
+		lua_thread_pool_free (cfg->lua_thread_pool);
+		lua_close (cfg->lua_state);
 	}
 
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
