@@ -26,7 +26,7 @@
 #endif
 
 static gpointer init_hs_helper (struct rspamd_config *cfg);
-static void start_hs_helper (struct rspamd_worker *worker);
+__attribute__((noreturn)) static void start_hs_helper (struct rspamd_worker *worker);
 
 worker_t hs_helper_worker = {
 		"hs_helper",                /* Name */
