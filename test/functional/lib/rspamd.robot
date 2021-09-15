@@ -3,6 +3,9 @@ Library         Collections
 Library         OperatingSystem
 Library         Process
 
+*** Variables ***
+${SET_LOCAL_CONFDIR}  --var=LOCAL_CONFDIR=/no/no/no/
+
 *** Keywords ***
 Check Controller Errors
   @{result} =  HTTP  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /errors
@@ -226,7 +229,7 @@ Run Rspamd
   Export Rspamd Variables To Environment
 
   # Dump templated config or errors to log
-  ${result} =  Run Process  ${RSPAMADM}  configdump  -c  ${CONFIG}
+  ${result} =  Run Process  ${RSPAMADM}  ${SET_LOCAL_CONFDIR}  configdump  -c  ${CONFIG}
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
   ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout
@@ -237,7 +240,7 @@ Run Rspamd
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   # Run Rspamd
-  ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
+  ${result} =  Run Process  ${RSPAMD}  ${SET_LOCAL_CONFDIR}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
   ...  -c  ${CONFIG}  env:TMPDIR=${RSPAMD_TMPDIR}  env:DBDIR=${RSPAMD_TMPDIR}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
