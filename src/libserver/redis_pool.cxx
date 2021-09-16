@@ -261,32 +261,35 @@ redis_pool_connection::~redis_pool_connection()
 	const auto *conn = this; /* For debug */
 
 	if (state == RSPAMD_REDIS_POOL_CONN_ACTIVE) {
-		msg_debug_rpool ("active connection destructed");
+		msg_debug_rpool ("active connection destructed: %p", ctx);
 
 		if (ctx) {
+			pool->unregister_context(ctx);
+
 			if (!(ctx->c.flags & REDIS_FREEING)) {
 				auto *ac = ctx;
 				ctx = nullptr;
-				pool->unregister_context(ac);
 				ac->onDisconnect = nullptr;
 				redisAsyncFree(ac);
 			}
 		}
 	}
 	else {
-		msg_debug_rpool("inactive connection destructed");
+		msg_debug_rpool("inactive connection destructed: %p", ctx);
 
 		ev_timer_stop(pool->event_loop, &timeout);
+		if (ctx) {
+			pool->unregister_context(ctx);
 
-		if (ctx && !(ctx->c.flags & REDIS_FREEING)) {
-			redisAsyncContext *ac = ctx;
+			if (!(ctx->c.flags & REDIS_FREEING)) {
+				redisAsyncContext *ac = ctx;
 
-			/* To prevent on_disconnect here */
-			state = RSPAMD_REDIS_POOL_CONN_FINALISING;
-			pool->unregister_context(ac);
-			ctx = nullptr;
-			ac->onDisconnect = nullptr;
-			redisAsyncFree(ac);
+				/* To prevent on_disconnect here */
+				state = RSPAMD_REDIS_POOL_CONN_FINALISING;
+				ctx = nullptr;
+				ac->onDisconnect = nullptr;
+				redisAsyncFree(ac);
+			}
 		}
 	}
 }
