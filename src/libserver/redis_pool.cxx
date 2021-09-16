@@ -282,10 +282,8 @@ redis_pool_connection::~redis_pool_connection()
 			pool->unregister_context(ctx);
 
 			if (!(ctx->c.flags & REDIS_FREEING)) {
-				redisAsyncContext *ac = ctx;
-
+				auto *ac = ctx;
 				/* To prevent on_disconnect here */
-				state = RSPAMD_REDIS_POOL_CONN_FINALISING;
 				ctx = nullptr;
 				ac->onDisconnect = nullptr;
 				redisAsyncFree(ac);
@@ -558,6 +556,8 @@ auto redis_pool::release_connection(redisAsyncContext *ctx,
 			conn->elt->release_connection(conn);
 		}
 		else {
+			msg_err("fatal internal error, connection with ctx %p is not found in the Redis pool",
+					ctx);
 			RSPAMD_UNREACHABLE;
 		}
 	}
