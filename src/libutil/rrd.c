@@ -747,7 +747,7 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), ENOMEM, "mmap failed: %s", strerror (errno));
-		g_free (file);
+
 		return FALSE;
 	}
 

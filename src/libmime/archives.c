@@ -254,6 +254,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 		else {
 			g_free (f);
+
+			return;
 		}
 
 		/* Process extra fields */

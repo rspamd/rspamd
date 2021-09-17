@@ -652,6 +652,7 @@ rspamd_process_fake_reply (struct rspamd_config *cfg,
 					else {
 						DL_APPEND (replies, rep);
 					}
+					break;
 				case RDNS_REQUEST_SRV:
 				default:
 					msg_err_config ("invalid or unsupported reply element "
