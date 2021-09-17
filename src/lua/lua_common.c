@@ -2623,6 +2623,7 @@ rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 			g_set_error (err, lua_error_quark (), EINVAL,
 					"invalid argument character: %c at %s",
 					*argp, argp);
+			va_end (ap);
 
 			return false;
 		}
@@ -2635,6 +2636,7 @@ rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 				"error when calling lua function from %s: %s",
 				strloc, lua_tostring (L, -1));
 		lua_settop (L, err_idx - 1);
+		va_end (ap);
 
 		return false;
 	}
