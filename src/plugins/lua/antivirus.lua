@@ -16,6 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_antivirus = require("lua_scanners").filter('antivirus')
@@ -63,12 +64,19 @@ antivirus {
     }
     # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
     whitelist = "/etc/rspamd/antivirus.wl";
+    # Replace content that exactly matches the following string to the EICAR pattern
+    # Useful for E2E testing when another party removes/blocks EICAR attachments
+    #eicar_fake_pattern = 'testpatterneicar';
   }
 }
 ]])
   return
 end
 
+-- Encode as base32 in the source to avoid crappy stuff
+local eicar_pattern = rspamd_util.decode_base32(
+    [[akp6woykfbonrepmwbzyfpbmibpone3mj3pgwbffzj9e1nfjdkorisckwkohrnfe1nt41y3jwk1cirjki4w4nkieuni4ndfjcktnn1yjmb1wn]]
+)
 
 local function add_antivirus_rule(sym, opts)
   if not opts.type then
@@ -135,7 +143,21 @@ local function add_antivirus_rule(sym, opts)
 
       fun.each(function(p)
         local content = p:get_content()
-        if content and #content > 0 then
+        local clen = #content
+        if content and clen > 0 then
+          if opts.eicar_fake_pattern then
+            if type(opts.eicar_fake_pattern) == 'string' then
+              -- Convert it to Rspamd text
+              local rspamd_text = require "rspamd_text"
+              opts.eicar_fake_pattern = rspamd_text.fromstring(opts.eicar_fake_pattern)
+            end
+
+            if clen == #opts.eicar_fake_pattern and content == opts.eicar_fake_pattern then
+              rspamd_logger.infox(task, 'found eicar fake replacement part in the part (filename="%s")',
+                p:get_filename())
+              content = eicar_pattern
+            end
+          end
           cfg.check(task, content, p:get_digest(), rule, p)
         end
       end, common.check_parts_match(task, rule))
