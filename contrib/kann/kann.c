@@ -498,7 +498,6 @@ kann_t *kann_load_fp(FILE *fp)
 
 	(void) !fread(magic, 1, 4, fp);
 	if (strncmp(magic, KANN_MAGIC, 4) != 0) {
-		fclose(fp);
 		return 0;
 	}
 	ann = (kann_t*)calloc(1, sizeof(kann_t));

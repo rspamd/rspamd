@@ -1093,6 +1093,7 @@ rspamd_protocol_rewrite_subject (struct rspamd_task *task)
 				g_string_append_c (subj_buf, '%');
 				c = p + 2;
 				p += 2;
+				break;
 			default:
 				p ++; /* Just % something unknown */
 				break;
