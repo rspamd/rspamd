@@ -1336,7 +1336,7 @@ lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd)
 
 gsize
 lua_url_adjust_skip_prob (gdouble timestamp,
-						  guchar *digest,
+						  guchar digest[16],
 						  struct lua_tree_cb_data *cb,
 						  gsize sz)
 {
@@ -1346,10 +1346,10 @@ lua_url_adjust_skip_prob (gdouble timestamp,
 		 * Use task dependent probabilistic seed to ensure that
 		 * consequent task:get_urls return the same list of urls
 		 */
+		memset (cb->xoroshiro_state, 0, sizeof (cb->xoroshiro_state));
 		memcpy (&cb->xoroshiro_state[0], &timestamp,
 				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (timestamp)));
-		memcpy (&cb->xoroshiro_state[1], digest,
-				sizeof (cb->xoroshiro_state[1]) * 3);
+		memcpy (&cb->xoroshiro_state[1], digest, 16);
 		sz = cb->max_urls;
 	}
 
