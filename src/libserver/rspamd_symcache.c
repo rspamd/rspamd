@@ -952,21 +952,17 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 
 	rspamd_snprintf (path, sizeof (path), "%s.new", name);
 
-	for (;;) {
-		fd = open (path, O_CREAT | O_WRONLY | O_EXCL, 00644);
+	fd = open (path, O_CREAT | O_WRONLY | O_EXCL, 00644);
 
-		if (fd == -1) {
-			if (errno == EEXIST) {
-				/* Some other process is already writing data, give up silently */
-				return TRUE;
-			}
-
-			msg_err_cache ("cannot open file %s, error %d, %s", path,
-					errno, strerror (errno));
-			return FALSE;
+	if (fd == -1) {
+		if (errno == EEXIST) {
+			/* Some other process is already writing data, give up silently */
+			return TRUE;
 		}
 
-		break;
+		msg_err_cache ("cannot open file %s, error %d, %s", path,
+				errno, strerror (errno));
+		return FALSE;
 	}
 
 	rspamd_file_lock (fd, FALSE);
