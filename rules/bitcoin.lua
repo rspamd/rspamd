@@ -184,7 +184,8 @@ config.regexp['BITCOIN_ADDR'] = {
   re = string.format('(%s) + (%s) > 0', normal_wallet_re, btc_bleach_re),
   re_conditions = {
     [normal_wallet_re] = function(task, txt, s, e)
-      if e - s <= 2 then
+      local len = e - s
+      if len <= 2 or len > 1024 then
         return false
       end
 
@@ -205,7 +206,8 @@ config.regexp['BITCOIN_ADDR'] = {
       end
     end,
     [btc_bleach_re] = function(task, txt, s, e)
-      if e - s <= 2 then
+      local len = e - s
+      if len <= 2 or len > 1024 then
         return false
       end
 
