@@ -225,7 +225,7 @@ TEST_CASE("utf8 normalise") {
 			{"13\u200C_\u0020\u0308\u0301\u038e\u03ab\u200D", "13_ ̈́ΎΫ",
 					RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			/* Buffer overflow case */
-			{"u\xC2\xC2\xC2\xC2\xC2\xC2""abcdef""abcdef", "u������",
+			{"u\xC2\xC2\xC2\xC2\xC2\xC2""abcdef""abcdef", "u\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD",
 					RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ERROR},
 	};
 
