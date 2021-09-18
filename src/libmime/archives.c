@@ -141,7 +141,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	guint32 cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
 	guint16 extra_len, fname_len, comment_len;
 	struct rspamd_archive *arch;
-	struct rspamd_archive_file *f;
+	struct rspamd_archive_file *f = NULL;
 
 	/* Zip files have interesting data at the end of archive */
 	p = part->parsed_data.begin + part->parsed_data.len - 1;
@@ -1263,6 +1263,7 @@ rspamd_7zip_read_substreams_info (struct rspamd_task *task,
 	}
 
 	folder_nstreams = g_alloca (sizeof (guint64) * num_folders);
+	memset (folder_nstreams, 0, sizeof (guint64) * num_folders);
 
 	while (p != NULL && p < end) {
 		/*
@@ -1410,9 +1411,10 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 	 */
 
 	proptype = *p;
-	SZ_SKIP_BYTES(1);
 
 	if (p != NULL) {
+		SZ_SKIP_BYTES(1);
+
 		while (proptype != 0) {
 			SZ_READ_VINT(proplen);
 

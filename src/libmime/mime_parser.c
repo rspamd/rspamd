@@ -596,14 +596,14 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	g_assert (part != NULL);
 
 	rspamd_mime_part_get_cte (task, part->raw_headers, part,
-			!(part->ct->flags & RSPAMD_CONTENT_TYPE_MESSAGE));
+			part->ct && !(part->ct->flags & RSPAMD_CONTENT_TYPE_MESSAGE));
 	rspamd_mime_part_get_cd (task, part);
 
 	switch (part->cte) {
 	case RSPAMD_CTE_7BIT:
 	case RSPAMD_CTE_8BIT:
 	case RSPAMD_CTE_UNKNOWN:
-		if (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING) {
+		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING)) {
 			if (part->cte != RSPAMD_CTE_7BIT) {
 				/* We have something that has a missing content-type,
 				 * but it has non-7bit characters.
@@ -658,7 +658,9 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		}
 		else {
 			msg_err_task ("invalid quoted-printable encoded part, assume 8bit");
-			part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			if (part->ct) {
+				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			}
 			part->cte = RSPAMD_CTE_8BIT;
 			memcpy (parsed->str, part->raw_data.begin, part->raw_data.len);
 			parsed->len = part->raw_data.len;
@@ -694,7 +696,9 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		}
 		else {
 			msg_err_task ("invalid uuencoding in encoded part, assume 8bit");
-			part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			if (part->ct) {
+				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			}
 			part->cte = RSPAMD_CTE_8BIT;
 			parsed->len = MIN (part->raw_data.len, parsed->allocated);
 			memcpy (parsed->str, part->raw_data.begin, parsed->len);

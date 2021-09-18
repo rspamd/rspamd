@@ -638,14 +638,14 @@ rspamd_mime_charset_find_by_content_maybe_split (const gchar *in, gsize inlen)
 				RSPAMD_CHARSET_MAX_CONTENT, false);
 
 		/* 7bit stuff */
-		if (strcmp (c1, "US-ASCII") == 0) {
+		if (c1 && strcmp (c1, "US-ASCII") == 0) {
 			c1 = NULL; /* Invalid - we have 8 bit there */
 		}
-		if (strcmp (c2, "US-ASCII") == 0) {
+		if (c2 && strcmp (c2, "US-ASCII") == 0) {
 			c2 = NULL; /* Invalid - we have 8 bit there */
 		}
-		if (strcmp (c3, "US-ASCII") == 0) {
-			c2 = NULL; /* Invalid - we have 8 bit there */
+		if (c3 && strcmp (c3, "US-ASCII") == 0) {
+			c3 = NULL; /* Invalid - we have 8 bit there */
 		}
 
 		if (!c1) {
