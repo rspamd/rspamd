@@ -1694,6 +1694,7 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 
 	rep.reply.fuzzy_sync.status = 0;
+	rep.type = RSPAMD_CONTROL_FUZZY_SYNC;
 
 	if (ctx->backend && worker->index == 0) {
 		rspamd_fuzzy_process_updates_queue (ctx, local_db_name, FALSE);
@@ -1734,8 +1735,8 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 			worker->cf->options, rspamd_main->cfg,
 			&err)) == NULL) {
 		msg_err ("cannot open backend after reload: %e", err);
-		g_error_free (err);
 		rep.reply.reload.status = err->code;
+		g_error_free (err);
 	}
 	else {
 		rep.reply.reload.status = 0;
@@ -1898,9 +1899,15 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 static int
 lua_fuzzy_add_pre_handler (lua_State *L)
 {
-	struct rspamd_worker *wrk = *(struct rspamd_worker **)
+	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
 			rspamd_lua_check_udata (L, 1, "rspamd{worker}");
 	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	if (!pwrk) {
+		return luaL_error (L, "invalid arguments, worker + function are expected");
+	}
+
+	wrk = *pwrk;
 
 	if (wrk && lua_isfunction (L, 2)) {
 		ctx = (struct rspamd_fuzzy_storage_ctx *)wrk->ctx;
@@ -1923,9 +1930,15 @@ lua_fuzzy_add_pre_handler (lua_State *L)
 static int
 lua_fuzzy_add_post_handler (lua_State *L)
 {
-	struct rspamd_worker *wrk = *(struct rspamd_worker **)
+	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
 			rspamd_lua_check_udata (L, 1, "rspamd{worker}");
 	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	if (!pwrk) {
+		return luaL_error (L, "invalid arguments, worker + function are expected");
+	}
+
+	wrk = *pwrk;
 
 	if (wrk && lua_isfunction (L, 2)) {
 		ctx = (struct rspamd_fuzzy_storage_ctx *)wrk->ctx;

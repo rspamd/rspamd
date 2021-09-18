@@ -1410,9 +1410,8 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 	 * }
 	 */
 
-	proptype = *p;
-
 	if (p != NULL) {
+		proptype = *p;
 		SZ_SKIP_BYTES(1);
 
 		while (proptype != 0) {

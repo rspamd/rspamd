@@ -349,6 +349,9 @@ check_uncached:
 			/* We have some unknown salt here */
 			msg_info_ctx ("incorrect key: %z, while %z expected",
 					key_len, pbkdf->key_len);
+			g_free (salt_decoded);
+			g_free (key_decoded); /* valid even if key_decoded == NULL */
+
 			return FALSE;
 		}
 
@@ -1357,6 +1360,7 @@ rspamd_controller_handle_graph (
 	rspamd_controller_send_ucl (conn_ent, res);
 	ucl_object_unref (res);
 	g_free (acc);
+	g_free (rrd_result);
 
 	return 0;
 }

@@ -4163,6 +4163,8 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 			if (ucl_object_type (cur) != UCL_OBJECT) {
 				msg_err_config ("Bad path while lookup for '%s' at %s",
 						doc_path, *comp);
+				g_strfreev (path_components);
+
 				return NULL;
 			}
 
