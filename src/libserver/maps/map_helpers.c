@@ -1868,6 +1868,7 @@ rspamd_cdb_list_read (gchar *chunk,
 		cdb = g_malloc0 (sizeof (struct cdb));
 
 		if (cdb_init (cdb, fd) == -1) {
+			g_free (cdb);
 			msg_err_map ("cannot init cdb map from %s: %s", chunk, strerror (errno));
 
 			return NULL;

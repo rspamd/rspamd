@@ -596,6 +596,8 @@ read_map_file_chunks (struct rspamd_map *map, struct map_cb_data *cbdata,
 	if (lseek (fd, off, SEEK_SET) == -1) {
 		msg_err_map ("can't seek in map to pos %d for buffered reading %s: %s",
 				(gint)off, fname, strerror (errno));
+		close (fd);
+
 		return FALSE;
 	}
 

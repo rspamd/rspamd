@@ -1169,6 +1169,8 @@ lua_url_cbdata_fill (lua_State *L,
 			}
 			else {
 				msg_info ("bad url protocol: %s", *cvec);
+				g_strfreev (strvec);
+
 				return FALSE;
 			}
 

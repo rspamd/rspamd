@@ -920,6 +920,10 @@ lua_text_split (lua_State *L)
 	struct rspamd_lua_regexp *re;
 	gboolean stringify = FALSE, own_re = FALSE;
 
+	if (t == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
 	if (lua_type (L, 2) == LUA_TUSERDATA) {
 		re = lua_check_regexp (L, 2);
 	}
@@ -947,7 +951,7 @@ lua_text_split (lua_State *L)
 		own_re = TRUE;
 	}
 
-	if (t && re) {
+	if (re) {
 		if (lua_isboolean (L, 3)) {
 			stringify = lua_toboolean (L, 3);
 		}

@@ -1213,6 +1213,9 @@ rspamd_stat_statistics (struct rspamd_task *task,
 	if (target) {
 		*target = res;
 	}
+	else {
+		ucl_object_unref (res);
+	}
 
 	return RSPAMD_STAT_PROCESS_OK;
 }

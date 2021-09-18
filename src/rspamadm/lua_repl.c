@@ -721,7 +721,7 @@ rspamadm_lua_accept_cb (EV_P_ ev_io *w, int revents)
 {
 	struct rspamadm_lua_repl_context *ctx =
 			(struct rspamadm_lua_repl_context *)w->data;
-	rspamd_inet_addr_t *addr;
+	rspamd_inet_addr_t *addr = NULL;
 	struct rspamadm_lua_repl_session *session;
 	gint nfd;
 
@@ -732,6 +732,7 @@ rspamadm_lua_accept_cb (EV_P_ ev_io *w, int revents)
 	}
 	/* Check for EAGAIN */
 	if (nfd == 0) {
+		rspamd_inet_address_free (addr);
 		return;
 	}
 

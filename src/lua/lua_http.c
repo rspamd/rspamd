@@ -978,6 +978,12 @@ lua_http_request (lua_State *L)
 	}
 
 	if (ev_base == NULL) {
+		g_free (auth);
+		rspamd_http_message_unref (msg);
+		if (body) {
+			rspamd_fstring_free (body);
+		}
+
 		return luaL_error (L,
 				"Bad params to rspamd_http:request(): ev_base isn't passed");
 	}

@@ -145,6 +145,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 		}
 		/* Check for EAGAIN */
 		if (nfd == 0) {
+			rspamd_inet_address_free (addr);
 			return;
 		}
 

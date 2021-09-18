@@ -53,7 +53,7 @@ static void
 rspamd_server_accept (gint fd, short what, void *arg)
 {
 	struct rspamd_http_connection_router *rt = arg;
-	rspamd_inet_addr_t *addr;
+	rspamd_inet_addr_t *addr = NULL;
 	gint nfd;
 
 	if ((nfd =
@@ -63,6 +63,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 	}
 	/* Check for EAGAIN */
 	if (nfd == 0) {
+		rspamd_inet_address_free (addr);
 		return;
 	}
 

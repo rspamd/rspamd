@@ -3712,22 +3712,25 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 	struct rspamd_cryptobox_keypair *decrypt_keypair = NULL;
 	gchar *data;
 
-	if (stat (filename, &st) == -1) {
-		g_set_error (err, cfg_rcl_error_quark (), errno,
-				"cannot stat %s: %s", filename, strerror (errno));
-		return FALSE;
-	}
 	if ((fd = open (filename, O_RDONLY)) == -1) {
 		g_set_error (err, cfg_rcl_error_quark (), errno,
 				"cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
 
 	}
+	if (fstat (fd, &st) == -1) {
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot stat %s: %s", filename, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
 	/* Now mmap this file to simplify reading process */
 	if ((data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 		g_set_error (err, cfg_rcl_error_quark (), errno,
 				"cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
+
 		return FALSE;
 	}
 
@@ -3736,8 +3739,7 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 	/* Try to load keyfile if available */
 	rspamd_snprintf (keypair_path, sizeof (keypair_path), "%s.key",
 			filename);
-	if (stat (keypair_path, &st) == -1 &&
-		(fd = open (keypair_path, O_RDONLY)) != -1) {
+	if ((fd = open (keypair_path, O_RDONLY)) != -1) {
 		struct ucl_parser *kp_parser;
 
 		kp_parser = ucl_parser_new (0);
@@ -3769,6 +3771,7 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 		}
 
 		ucl_parser_free (kp_parser);
+		close (fd);
 	}
 
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
@@ -4178,6 +4181,8 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 				cur = found;
 			}
 		}
+
+		g_strfreev (path_components);
 	}
 
 	return rspamd_rcl_add_doc_obj (ucl_object_ref (cur),

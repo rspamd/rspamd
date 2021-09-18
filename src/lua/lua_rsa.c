@@ -664,6 +664,8 @@ lua_rsa_sign_memory (lua_State *L)
 				signature->str, (guint *)&signature->len, rsa);
 
 		if (ret != 1) {
+			rspamd_fstring_free (signature);
+
 			return luaL_error (L, "cannot sign: %s",
 					ERR_error_string (ERR_get_error (), NULL));
 		}

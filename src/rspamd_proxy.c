@@ -2185,7 +2185,7 @@ proxy_accept_socket (EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
 	struct rspamd_proxy_ctx *ctx;
-	rspamd_inet_addr_t *addr;
+	rspamd_inet_addr_t *addr = NULL;
 	struct rspamd_proxy_session *session;
 	gint nfd;
 
@@ -2199,6 +2199,7 @@ proxy_accept_socket (EV_P_ ev_io *w, int revents)
 	}
 	/* Check for EAGAIN */
 	if (nfd == 0) {
+		rspamd_inet_address_free (addr);
 		return;
 	}
 
