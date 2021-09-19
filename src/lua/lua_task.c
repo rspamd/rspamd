@@ -5725,7 +5725,7 @@ lua_task_set_settings (lua_State *L)
 					if (!isnan (act_score)) {
 						struct rspamd_action *new_act;
 
-						HASH_FIND_PTR (task->cfg->actions, act_name, new_act);
+						HASH_FIND_STR (task->cfg->actions, act_name, new_act);
 
 						if (new_act == NULL) {
 							/* New action! */
