@@ -432,6 +432,12 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 	if (r->cfg) {
 		serv = rdns_resolver_add_server (r->r, rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr), 0, r->cfg->dns_io_per_server);
+
+		elt = rspamd_mempool_alloc0 (r->cfg->cfg_pool, sizeof (*elt));
+		elt->server = serv;
+		elt->lib_data = up;
+
+		rspamd_upstream_set_data (up, elt);
 	}
 	else {
 		serv = rdns_resolver_add_server (r->r, rspamd_inet_address_to_string (addr),
@@ -439,12 +445,6 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 	}
 
 	g_assert (serv != NULL);
-
-	elt = rspamd_mempool_alloc0 (r->cfg->cfg_pool, sizeof (*elt));
-	elt->server = serv;
-	elt->lib_data = up;
-
-	rspamd_upstream_set_data (up, elt);
 }
 
 static void

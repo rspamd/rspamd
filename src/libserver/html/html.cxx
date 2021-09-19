@@ -174,22 +174,22 @@ html_check_balance(struct html_content *hc,
 		 */
 
 		if (hc->all_tags.empty()) {
-			auto &&vtag = std::make_unique<html_tag>();
+			hc->all_tags.emplace_back();
+			auto *vtag = hc->all_tags.back().get();
 			vtag->id = Tag_HTML;
 			vtag->flags = FL_VIRTUAL;
 			vtag->tag_start = 0;
 			vtag->content_offset = 0;
-			calculate_content_length(vtag.get());
+			calculate_content_length(vtag);
 
 			if (!hc->root_tag) {
-				hc->root_tag = vtag.get();
+				hc->root_tag = vtag;
 			}
 			else {
 				vtag->parent = hc->root_tag;
 			}
 
-			hc->all_tags.emplace_back(std::move(vtag));
-			tag->parent = vtag.get();
+			tag->parent = vtag;
 
 			/* Recursively call with a virtual <html> tag inserted */
 			return html_check_balance(hc, tag, tag_start_offset, tag_end_offset);

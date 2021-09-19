@@ -1117,7 +1117,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			}
 			else {
 				msg_info_dkim ("dkim parse failed: unknown error when parsing %c tag",
-						*tag);
+						tag ? *tag : '?');
 				return NULL;
 			}
 			break;
@@ -2639,7 +2639,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 
-	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
+	/* Use cached BH for all but arc seal, if it is not NULL we are not in arc seal mode */
+	if (cached_bh != NULL) {
 		if (!cached_bh->digest_normal) {
 			/* Copy md_ctx to deal with broken CRLF at the end */
 			cpy_ctx = EVP_MD_CTX_create ();

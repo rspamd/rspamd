@@ -908,8 +908,8 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 					 * In general, don't use it for anything but ping checks
 					 */
 					memset (&http_callbacks, 0, sizeof (http_callbacks));
-					http_parser_init (&http_parser, HTTP_REQUEST);
 					http_parser.data = url;
+					http_parser_init (&http_parser, HTTP_REQUEST);
 					http_callbacks.on_url = rspamd_milter_http_on_url;
 					http_parser_execute (&http_parser, &http_callbacks,
 							priv->parser.buf->str, priv->parser.buf->len);
