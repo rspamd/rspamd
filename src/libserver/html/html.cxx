@@ -174,7 +174,7 @@ html_check_balance(struct html_content *hc,
 		 */
 
 		if (hc->all_tags.empty()) {
-			hc->all_tags.emplace_back();
+			hc->all_tags.push_back(std::make_unique<html_tag>());
 			auto *vtag = hc->all_tags.back().get();
 			vtag->id = Tag_HTML;
 			vtag->flags = FL_VIRTUAL;
