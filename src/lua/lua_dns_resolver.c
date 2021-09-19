@@ -504,16 +504,18 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	}
 
 	return 1;
+
 err:
+	/* Callback is not called in this case */
+	if (cbdata->cbref != -1) {
+		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cbref);
+	}
+
 	if (!pool) {
 		/* Free resources */
 		g_free (cbdata->to_resolve);
 		g_free (cbdata->user_str);
-	}
-
-	/* Callback is not called in this case */
-	if (cbdata->cbref != -1) {
-		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cbref);
+		g_free (cbdata);
 	}
 
 	lua_pushnil (L);

@@ -5059,22 +5059,28 @@ lua_task_get_symbols_tokens (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct tokens_foreach_cbdata cbd;
 
-	cbd.task = task;
-	cbd.L = L;
-	cbd.idx = 1;
-	cbd.normalize = TRUE;
+	if (task) {
+		cbd.task = task;
+		cbd.L = L;
+		cbd.idx = 1;
+		cbd.normalize = TRUE;
 
-	if (lua_type (L, 2) == LUA_TBOOLEAN) {
-		cbd.normalize = lua_toboolean (L, 2);
+		if (lua_type(L, 2) == LUA_TBOOLEAN) {
+			cbd.normalize = lua_toboolean(L, 2);
+		}
+		else {
+			cbd.normalize = TRUE;
+		}
+
+		lua_createtable(L,
+				rspamd_symcache_stats_symbols_count(task->cfg->cache), 0);
+		rspamd_symcache_foreach(task->cfg->cache, tokens_foreach_cb, &cbd);
 	}
 	else {
-		cbd.normalize = TRUE;
+		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_createtable (L,
-			rspamd_symcache_stats_symbols_count (task->cfg->cache), 0);
-	rspamd_symcache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
-
+	/* Return type is table created */
 	return 1;
 }
 
@@ -6058,7 +6064,7 @@ lua_task_store_in_file (lua_State *L)
 	gboolean force_new = FALSE, keep = FALSE;
 	gchar fpath[PATH_MAX];
 	const gchar *tmpmask = NULL, *fname = NULL;
-	guint64 mode = 00600;
+	guint mode = 00600;
 	gint fd;
 	struct lua_file_cbdata *cbdata;
 	GError *err = NULL;
@@ -6097,7 +6103,7 @@ lua_task_store_in_file (lua_State *L)
 					rspamd_snprintf (fpath, sizeof (fpath), "%s", tmpmask);
 				}
 
-				fd = mkstemp (fpath);
+				fd = g_mkstemp_full (fpath, O_WRONLY|O_CREAT|O_EXCL, mode);
 				fname = fpath;
 
 				if (fd != -1) {

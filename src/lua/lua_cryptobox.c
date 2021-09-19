@@ -706,6 +706,9 @@ lua_cryptobox_signature_load (lua_State *L)
 						alg = RSPAMD_CRYPTOBOX_MODE_25519;
 					}
 					else {
+						munmap (data, st.st_size);
+						close (fd);
+
 						return luaL_error (L, "invalid keypair algorithm: %s", str);
 					}
 				}
@@ -1192,6 +1195,7 @@ lua_cryptobox_hash_create (lua_State *L)
 		t = lua_check_text (L, 1);
 
 		if (!t) {
+			REF_RELEASE (h);
 			return luaL_error (L, "invalid arguments");
 		}
 
@@ -1243,6 +1247,7 @@ lua_cryptobox_hash_create_specific (lua_State *L)
 		t = lua_check_text (L, 2);
 
 		if (!t) {
+			REF_RELEASE (h);
 			return luaL_error (L, "invalid arguments");
 		}
 
@@ -1289,6 +1294,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 			t = lua_check_text (L, 2);
 
 			if (!t) {
+				REF_RELEASE (h);
 				return luaL_error (L, "invalid arguments");
 			}
 
@@ -1332,6 +1338,10 @@ lua_cryptobox_hash_create_specific_keyed (lua_State *L)
 	if (key != NULL && type != NULL) {
 		h = rspamd_lua_hash_create (type, key, keylen);
 
+		if (h == NULL) {
+			return luaL_error (L, "invalid hash type: %s", type);
+		}
+
 		if (lua_type (L, 3) == LUA_TSTRING) {
 			s = lua_tolstring (L, 3, &len);
 		}
@@ -1339,6 +1349,8 @@ lua_cryptobox_hash_create_specific_keyed (lua_State *L)
 			t = lua_check_text (L, 3);
 
 			if (!t) {
+				REF_RELEASE (h);
+
 				return luaL_error (L, "invalid arguments");
 			}
 
@@ -1962,6 +1974,7 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 	struct rspamd_lua_text *t, *res;
 	gsize len = 0, outlen = 0;
 	GError *err = NULL;
+	bool owned_pk = false;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_keypair}")) {
@@ -1979,13 +1992,14 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 		pk = rspamd_pubkey_from_base32 (b32, blen, RSPAMD_KEYPAIR_KEX,
 				lua_toboolean (L, 3) ?
 				RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
+		owned_pk = true;
 	}
 
 	if (lua_isuserdata (L, 2)) {
 		t = lua_check_text (L, 2);
 
 		if (!t) {
-			return luaL_error (L, "invalid arguments");
+			goto err;
 		}
 
 		data = t->start;
@@ -1997,7 +2011,7 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 
 
 	if (!(kp || pk) || !data) {
-		return luaL_error (L, "invalid arguments");
+		goto err;
 	}
 
 	if (kp) {
@@ -2008,7 +2022,7 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 			return ret;
 		}
 	}
-	else if (pk) {
+	else {
 		if (!rspamd_pubkey_encrypt (pk, data, len, &out, &outlen, &err)) {
 			gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
 			g_error_free (err);
@@ -2023,7 +2037,18 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 	res->len = outlen;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
+	if (owned_pk) {
+		rspamd_pubkey_unref (pk);
+	}
+
 	return 1;
+err:
+
+	if (owned_pk) {
+		rspamd_pubkey_unref (pk);
+	}
+
+	return luaL_error (L, "invalid arguments");
 }
 
 /***
@@ -2045,6 +2070,7 @@ lua_cryptobox_encrypt_file (lua_State *L)
 	struct rspamd_lua_text *res;
 	gsize len = 0, outlen = 0;
 	GError *err = NULL;
+	bool own_pk = false;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_keypair}")) {
@@ -2062,13 +2088,14 @@ lua_cryptobox_encrypt_file (lua_State *L)
 		pk = rspamd_pubkey_from_base32 (b32, blen, RSPAMD_KEYPAIR_KEX,
 				lua_toboolean (L, 3) ?
 				RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
+		own_pk = true;
 	}
 
 	filename = luaL_checkstring (L, 2);
 	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
 
 	if (!(kp || pk) || !data) {
-		return luaL_error (L, "invalid arguments");
+		goto err;
 	}
 
 	if (kp) {
@@ -2098,8 +2125,17 @@ lua_cryptobox_encrypt_file (lua_State *L)
 	res->len = outlen;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	munmap (data, len);
+	if (own_pk) {
+		rspamd_pubkey_unref (pk);
+	}
 
 	return 1;
+
+err:
+	if (own_pk) {
+		rspamd_pubkey_unref (pk);
+	}
+	return luaL_error (L, "invalid arguments");
 }
 
 /***
@@ -2178,12 +2214,15 @@ lua_cryptobox_decrypt_file (lua_State *L)
 	GError *err = NULL;
 
 	kp = lua_check_cryptobox_keypair (L, 1);
+	if (!kp) {
+		return luaL_error (L, "invalid arguments; keypair is expected");
+	}
+
 	filename = luaL_checkstring (L, 2);
 	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
-
-
-	if (!kp || !data) {
-		return luaL_error (L, "invalid arguments");
+	if (!data) {
+		return luaL_error (L, "invalid arguments; cannot mmap %s: %s",
+				filename, strerror(errno));
 	}
 
 	if (!rspamd_keypair_decrypt (kp, data, len, &out, &outlen, &err)) {
@@ -2446,6 +2485,7 @@ lua_cryptobox_pbkdf (lua_State *L)
 
 	if (pwlen == 0) {
 		lua_pushnil (L);
+		g_free (password);
 
 		return 1;
 	}

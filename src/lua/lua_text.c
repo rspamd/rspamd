@@ -1519,7 +1519,7 @@ lua_text_oneline (lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	const gchar *p, *end;
 	gchar *dest, *d;
-	gsize byteset[32 / sizeof(gsize)]; /* Bitset for ascii */
+	guint64 byteset[32 / sizeof(guint64)]; /* Bitset for ascii */
 	gboolean copy = TRUE, seen_8bit = FALSE;
 	guint *plen;
 
@@ -1553,14 +1553,14 @@ lua_text_oneline (lua_State *L)
 		/* Fill pattern bitset */
 		memset (byteset, 0, sizeof byteset);
 		/* All spaces */
-		byteset[0] |= GSIZE_FROM_LE (0x100003600);
+		byteset[0] |= GUINT64_FROM_LE (0x100003600LLU);
 		/* Control characters */
-		byteset[0] |= GSIZE_FROM_LE (0xffffffff);
+		byteset[0] |= GUINT64_FROM_LE (0xffffffffLLU);
 		/* Del character */
-		byteset[1] |= GSIZE_FROM_LE (0x8000000000000000);
+		byteset[1] |= GUINT64_FROM_LE (0x8000000000000000LLU);
 		/* 8 bit characters */
-		byteset[2] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
-		byteset[3] |= GSIZE_FROM_LE (0xffffffffffffffffLLU);
+		byteset[2] |= GUINT64_FROM_LE (0xffffffffffffffffLLU);
+		byteset[3] |= GUINT64_FROM_LE (0xffffffffffffffffLLU);
 
 		p = t->start;
 		end = t->start + t->len;

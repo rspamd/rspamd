@@ -1614,9 +1614,9 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 			rspamd_symcache_set_allowed_settings_ids (cfg->cache, name,
 					ids, nids);
-
-			g_free (ids);
 		}
+
+		g_free (ids);
 	}
 
 	if (forbidden_ids) {
@@ -1636,9 +1636,9 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 			rspamd_symcache_set_forbidden_settings_ids (cfg->cache, name,
 					ids, nids);
-
-			g_free (ids);
 		}
+
+		g_free (ids);
 	}
 
 	return ret;
@@ -4417,9 +4417,10 @@ lua_config_init_subsystem (lua_State *L)
 				rspamd_symcache_init (cfg->cache);
 			}
 			else {
+				int ret = luaL_error (L, "invalid param: %s", parts[i]);
 				g_strfreev (parts);
 
-				return luaL_error (L, "invalid param: %s", parts[i]);
+				return ret;
 			}
 		}
 

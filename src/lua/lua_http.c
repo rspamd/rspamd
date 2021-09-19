@@ -441,13 +441,13 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 
 		if (cbd->task) {
 			cbd->conn->log_tag = cbd->task->task_pool->tag.uid;
+
+			if (cbd->item) {
+				rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
+			}
 		}
 		else if (cbd->cfg) {
 			cbd->conn->log_tag = cbd->cfg->cfg_pool->tag.uid;
-		}
-
-		if (cbd->item) {
-			rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 		}
 
 		struct rspamd_http_message *msg = cbd->msg;
@@ -652,10 +652,13 @@ lua_http_request (lua_State *L)
 
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->event_loop;
-			resolver = task->resolver;
-			session = task->s;
-			cfg = task->cfg;
+
+			if (task) {
+				ev_base = task->event_loop;
+				resolver = task->resolver;
+				session = task->s;
+				cfg = task->cfg;
+			}
 		}
 		lua_pop (L, 1);
 
@@ -823,7 +826,10 @@ lua_http_request (lua_State *L)
 				}
 				else {
 					t = lua_check_text (L, -1);
-					body = rspamd_fstring_append (body, t->start, t->len);
+
+					if (t) {
+						body = rspamd_fstring_append(body, t->start, t->len);
+					}
 				}
 
 				lua_pop (L, 1);
@@ -1043,7 +1049,7 @@ lua_http_request (lua_State *L)
 		cbd->session = session;
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr,
+	if (msg->host && rspamd_parse_inet_address (&cbd->addr,
 			msg->host->str, msg->host->len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		/* Host is numeric IP, no need to resolve */
 		gboolean ret;

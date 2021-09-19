@@ -450,7 +450,6 @@ lua_rsa_signature_load (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			sig = g_malloc (sizeof (rspamd_fstring_t));
 			if (fstat (fd, &st) == -1 ||
 				(data =
 				mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0))
@@ -660,8 +659,10 @@ lua_rsa_sign_memory (lua_State *L)
 
 	if (rsa != NULL && data != NULL) {
 		signature = rspamd_fstring_sized_new (RSA_size (rsa));
+
+		guint siglen = signature->len;
 		ret = RSA_sign (NID_sha256, data, sz,
-				signature->str, (guint *)&signature->len, rsa);
+				signature->str, &siglen, rsa);
 
 		if (ret != 1) {
 			rspamd_fstring_free (signature);
@@ -670,6 +671,7 @@ lua_rsa_sign_memory (lua_State *L)
 					ERR_error_string (ERR_get_error (), NULL));
 		}
 		else {
+			signature->len = siglen;
 			psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
 			rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 			*psig = signature;

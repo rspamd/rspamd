@@ -803,11 +803,11 @@ lua_kann_new_weight_conv1d (lua_State *L)
 static int
 lua_kann_new_leaf (lua_State *L)
 {
-	gint dim = luaL_checkinteger (L, 1), i, *ar;
+	int dim = luaL_checkinteger (L, 1), i, *ar;
 	kad_node_t *t;
 
 	if (dim >= 1 && dim < KAD_MAX_DIM && lua_istable (L, 2)) {
-		ar = g_malloc0 (sizeof (ar) * dim);
+		ar = g_new0 (int, dim);
 
 		for (i = 0; i < dim; i ++) {
 			lua_rawgeti (L, 2, i + 1);
@@ -962,6 +962,10 @@ lua_kann_load (lua_State *L)
 
 		t = lua_check_text (L, 1);
 
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
 #ifndef HAVE_FMEMOPEN
 		return luaL_error (L, "no support of loading from memory on your system");
 #endif
@@ -1043,7 +1047,7 @@ lua_kann_train1 (lua_State *L)
 		}
 
 		if (n_out <= 0) {
-			return luaL_error (L, "invalid outputs count: %d", n_in);
+			return luaL_error (L, "invalid outputs count: %d", n_out);
 		}
 
 		if (n != rspamd_lua_table_size (L, 3) || n == 0) {

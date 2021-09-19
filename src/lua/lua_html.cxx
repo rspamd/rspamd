@@ -565,7 +565,7 @@ lua_html_tag_get_flags (lua_State *L)
 	struct lua_html_tag *ltag = lua_check_html_tag (L, 1);
 	gint i = 1;
 
-	if (ltag->tag) {
+	if (ltag && ltag->tag) {
 		/* Push flags */
 		lua_createtable (L, 4, 0);
 		if (ltag->tag->flags & FL_HREF) {

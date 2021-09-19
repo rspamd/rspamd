@@ -785,6 +785,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	struct iovec *start;
 	guint niov, i;
 	gint flags = 0;
+	bool allocated_iov = false;
 	gsize remain;
 	gssize r;
 	struct iovec *cur_iov;
@@ -811,6 +812,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	}
 	else {
 		cur_iov = g_malloc0 (niov * sizeof (struct iovec));
+		allocated_iov = true;
 	}
 
 	memcpy (cur_iov, wh->iov, niov * sizeof (struct iovec));
@@ -848,7 +850,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 		r = sendmsg (cbd->fd, &msg, flags);
 	}
 
-	if (niov >= 1024) {
+	if (allocated_iov) {
 		g_free (cur_iov);
 	}
 
@@ -1242,7 +1244,7 @@ lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
 static void
 lua_tcp_register_watcher (struct lua_tcp_cbdata *cbd)
 {
-	if (cbd->item) {
+	if (cbd->item && cbd->task) {
 		rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 	}
 }
@@ -1690,6 +1692,7 @@ lua_tcp_request (lua_State *L)
 	}
 
 	if (resolver == NULL && cfg == NULL && task == NULL) {
+		g_free (cbd);
 		return luaL_error (L, "tcp request has bad params: one of "
 						"{resolver,task,config} should be set");
 	}

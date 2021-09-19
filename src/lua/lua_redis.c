@@ -1348,6 +1348,8 @@ lua_redis_make_request_sync (lua_State *L)
 			rspamd_inet_address_free (ip);
 		}
 		msg_err ("bad arguments for redis request");
+		lua_redis_free_args (args, arglens, nargs);
+
 		lua_pushboolean (L, FALSE);
 	}
 
