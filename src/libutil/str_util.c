@@ -2427,9 +2427,15 @@ decode:
 			remain --;
 			ret = 0;
 
-			if      (c >= '0' && c <= '9') { ret = c - '0'; }
-			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
-			else if (c >= 'a' && c <= 'f') { ret = c - 'a' + 10; }
+			if (c >= '0' && c <= '9') {
+				ret = c - '0';
+			}
+			else if (c >= 'A' && c <= 'F') {
+				ret = c - 'A' + 10;
+			}
+			else if (c >= 'a' && c <= 'f') {
+				ret = c - 'a' + 10;
+			}
 			else if (c == '\r') {
 				/* Eat one more endline */
 				if (remain > 0 && *p == '\n') {
@@ -2445,8 +2451,12 @@ decode:
 			}
 			else {
 				/* Hack, hack, hack, treat =<garbadge> as =<garbadge> */
-				if (remain > 0) {
+				if (end - o > 1) {
+					*o++ = '=';
 					*o++ = *(p - 1);
+				}
+				else {
+					return (-1);
 				}
 
 				continue;
@@ -2455,10 +2465,30 @@ decode:
 			if (remain > 0) {
 				c = *p++;
 				ret *= 16;
+				remain --;
 
-				if      (c >= '0' && c <= '9') { ret += c - '0'; }
-				else if (c >= 'A' && c <= 'F') { ret += c - 'A' + 10; }
-				else if (c >= 'a' && c <= 'f') { ret += c - 'a' + 10; }
+				if (c >= '0' && c <= '9') {
+					ret += c - '0';
+				}
+				else if (c >= 'A' && c <= 'F') {
+					ret += c - 'A' + 10;
+				}
+				else if (c >= 'a' && c <= 'f') {
+					ret += c - 'a' + 10;
+				}
+				else {
+					/* Treat =<good><rubbish> as =<good><rubbish> */
+					if (end - o > 2) {
+						*o++ = '=';
+						*o++ = *(p - 2);
+						*o++ = *(p - 1);
+					}
+					else {
+						return (-1);
+					}
+
+					continue;
+				}
 
 				if (end - o > 0) {
 					*o++ = (gchar)ret;
@@ -2466,8 +2496,6 @@ decode:
 				else {
 					return (-1);
 				}
-
-				remain --;
 			}
 		}
 		else {
