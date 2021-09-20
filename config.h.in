@@ -10,42 +10,28 @@
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine GLIB_RE_COMPAT		 1
 #cmakedefine GLIB_UNISCRIPT_COMPAT		 1
-#cmakedefine HAVE_AIO_H          1
 #cmakedefine HAVE_ARPA_INET_H    1
-#cmakedefine HAVE_ASM_PAUSE      1
 #cmakedefine HAVE_ATOMIC_BUILTINS 1
 #cmakedefine HAVE_CLOCK_GETCPUCLOCKID 1
 #cmakedefine HAVE_CLOCK_GETTIME  1
 #cmakedefine HAVE_CLOCK_PROCESS_CPUTIME_ID  1
 #cmakedefine HAVE_CLOCK_VIRTUAL  1
-#cmakedefine HAVE_COMPATIBLE_QUEUE_H    1
 #cmakedefine HAVE_CPUID_H        1
 #cmakedefine HAVE_CTYPE_H        1
 #cmakedefine HAVE_DIRENT_H       1
 #cmakedefine HAVE_DIRFD          1
 #cmakedefine HAVE_ENDIAN_H       1
-#cmakedefine HAVE_EXP2L          1
-#cmakedefine HAVE_EXPL           1
-#cmakedefine HAVE_EXPLICIT_BZERO 1
-#cmakedefine HAVE_FADVISE        1
 #cmakedefine HAVE_FALLOCATE      1
 #cmakedefine HAVE_FCNTL_H        1
-#cmakedefine HAVE_FDATASYNC      1
 #cmakedefine HAVE_FETCH_H        1
 #cmakedefine HAVE_FIPS_MODE      1
 #cmakedefine HAVE_FLOCK          1
 #cmakedefine HAVE_FPATHCONF      1
 #cmakedefine HAVE_GETPAGESIZE    1
-#cmakedefine HAVE_GET_CPUID      1
 #cmakedefine HAVE_GLOB_H         1
 #cmakedefine HAVE_GRP_H          1
-#cmakedefine HAVE_INET_PTON      1
 #cmakedefine HAVE_INTTYPES_H     1
 #cmakedefine HAVE_IPV6_V6ONLY    1
-#cmakedefine HAVE_LIBAIO_H       1
-#cmakedefine HAVE_LIBEVENT2      1
-#cmakedefine HAVE_EVENT_NO_CACHE_TIME_FLAG 1
-#cmakedefine HAVE_EVENT_NO_CACHE_TIME_FUNC 1
 #cmakedefine HAVE_LIBGEN_H       1
 #cmakedefine HAVE_LIBUTIL_H      1
 #cmakedefine HAVE_LOCALE_H       1
@@ -53,21 +39,16 @@
 #cmakedefine HAVE_MAXPATHLEN     1
 #cmakedefine HAVE_FMEMOPEN       1
 #cmakedefine HAVE_MEMRCHR        1
-#cmakedefine HAVE_MEMSET_S       1
 #cmakedefine HAVE_MKSTEMP        1
 #cmakedefine HAVE_MMAP_ANON      1
-#cmakedefine HAVE_MMAP_NOCORE    1
-#cmakedefine HAVE_MMAP_SHARED    1
 #cmakedefine HAVE_NANOSLEEP      1
 #cmakedefine HAVE_NETDB_H        1
 #cmakedefine HAVE_NETINET_IN_H   1
 #cmakedefine HAVE_NETINET_TCP_H  1
 #cmakedefine HAVE_NFTW           1
-#cmakedefine HAVE_OASYNC         1
 #cmakedefine HAVE_OCLOEXEC       1
 #cmakedefine HAVE_ONOFOLLOW      1
 #cmakedefine HAVE_OPENMEMSTREAM  1
-#cmakedefine HAVE_O_DIRECT       1
 #cmakedefine HAVE_PATH_MAX       1
 
 /* OSX has broken JIT support in PCRE, disable it */
@@ -88,14 +69,9 @@
 #cmakedefine HAVE_RUSAGE_SELF    1
 #cmakedefine HAVE_SA_SIGINFO     1
 #cmakedefine HAVE_SANE_SHMEM     1
-#cmakedefine HAVE_SANE_TZSET     1
 #cmakedefine HAVE_SCHED_YIELD    1
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1
-#cmakedefine HAVE_SEARCH_H       1
-#cmakedefine HAVE_SENDFILE       1
-#cmakedefine HAVE_SETITIMER      1
 #cmakedefine HAVE_SETPROCTITLE   1
-#cmakedefine HAVE_SETSIG         1
 #cmakedefine HAVE_SIGALTSTACK    1
 #cmakedefine HAVE_SIGINFO_H      1
 #cmakedefine HAVE_SOCK_SEQPACKET 1
@@ -106,39 +82,27 @@
 #cmakedefine HAVE_STDLIB_H       1
 #cmakedefine HAVE_STRINGS_H      1
 #cmakedefine HAVE_STRING_H       1
-#cmakedefine HAVE_STROPS_H       1
 #cmakedefine HAVE_SYSLOG_H       1
 #cmakedefine HAVE_SYS_CDEFS_H    1
 #cmakedefine HAVE_SYS_ENDIAN_H   1
 #cmakedefine HAVE_SYS_EVENTFD_H  1
 #cmakedefine HAVE_SYS_FILE_H     1
-#cmakedefine HAVE_SYS_IOCTL_H    1
 #cmakedefine HAVE_SYS_MMAN_H     1
 #cmakedefine HAVE_SYS_PARAM_H    1
-#cmakedefine HAVE_SYS_QUEUE_H    1
 #cmakedefine HAVE_SYS_RESOURCE_H 1
-#cmakedefine HAVE_SYS_SENDFILE_H 1
 #cmakedefine HAVE_SYS_SOCKET_H   1
 #cmakedefine HAVE_SYS_STAT_H     1
 #cmakedefine HAVE_SYS_TIMEB_H    1
-#cmakedefine HAVE_SYS_TIME_H     1
 #cmakedefine HAVE_SYS_TYPES_H    1
 #cmakedefine HAVE_SYS_UCONTEXT_H 1
 #cmakedefine HAVE_SYS_UIO_H      1
 #cmakedefine HAVE_SYS_UN_H       1
-#cmakedefine HAVE_SYS_UTSNAME_H  1
 #cmakedefine HAVE_SYS_WAIT_H     1
 #cmakedefine HAVE_TANH           1
-#cmakedefine HAVE_TANHL          1
 #cmakedefine HAVE_TERMIOS_H      1
 #cmakedefine HAVE_TIME_H         1
 #cmakedefine HAVE_UCONTEXT_H     1
 #cmakedefine HAVE_UNISTD_H       1
-#cmakedefine HAVE_VFORK          1
-#cmakedefine HAVE_WAIT4          1
-#cmakedefine HAVE_WAITPID        1
-#cmakedefine HAVE_WEAK_SYMBOLS   1
-#cmakedefine LIBEVENT_EVHTTP     1
 #cmakedefine PARAM_H_HAS_BITSET  1
 #cmakedefine WITH_DB             1
 #cmakedefine WITH_GPERF_TOOLS    1
@@ -150,8 +114,6 @@
 #cmakedefine WITH_PCRE2          1
 #cmakedefine WITH_SNOWBALL       1
 #cmakedefine WITH_SQLITE         1
-#cmakedefine WITH_SYSTEM_HIREDIS 1
-#cmakedefine WITH_TORCH          1
 #cmakedefine WITH_LIBUNWIND      1
 #cmakedefine WITH_LUA_TRACE      1
 #cmakedefine WITH_LUA_REPL       1
@@ -287,10 +249,6 @@
 /* time */
 #ifdef HAVE_TIME_H
 #include <time.h>
-#endif
-
-#ifdef HAVE_STDLIB_H
-#include <stdlib.h>
 #endif
 
 /* string */
