@@ -112,6 +112,16 @@ context("Quoted-Printable encoding", function()
       'foo\r\nbar',
       'Soft newline followed by hard newline (CRLF)',
     },
+    {
+      '=gB',
+      '=gB',
+      'Second character is okay, the first character is garbage'
+    },
+    {
+      '=bG',
+      '=bG',
+      'First character okay, the second character is rubbish'
+    }
   }
 
   for _,c in ipairs(cases) do
