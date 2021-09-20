@@ -17,9 +17,6 @@
 #include "expression.h"
 #include "src/libserver/composites/composites.h"
 
-#ifdef HAVE_SYS_UTSNAME_H
-#endif
-
 /*
  * This is implementation of lua routines to handle config file params
  */
