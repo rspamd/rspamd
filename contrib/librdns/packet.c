@@ -75,10 +75,7 @@ rdns_maybe_punycode_label (const uint8_t *begin,
 		p ++;
 	}
 
-	if (*p) {
-		*label_len = p - begin;
-	}
-	else {
+	if (label_len) {
 		*label_len = p - begin;
 	}
 
