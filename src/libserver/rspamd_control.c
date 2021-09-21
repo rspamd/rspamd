@@ -782,7 +782,7 @@ rspamd_control_ignore_io_handler (int fd, short what, void *ud)
 
 	/* At this point we just ignore replies from the workers */
 	if (read (fd, &rep, sizeof (rep)) == -1) {
-		msg_debug("cannot read %d bytes: %s", sizeof(rep), strerror(errno));
+		msg_debug("cannot read %d bytes: %s", (int)sizeof(rep), strerror(errno));
 	}
 	rspamd_control_stop_pending (elt);
 }
