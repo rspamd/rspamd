@@ -969,6 +969,9 @@ lua_http_request (lua_State *L)
 		if (body) {
 			rspamd_fstring_free (body);
 		}
+		if (local_kp) {
+			rspamd_keypair_unref (local_kp);
+		}
 
 		return 1;
 	}
@@ -977,6 +980,9 @@ lua_http_request (lua_State *L)
 		rspamd_http_message_unref (msg);
 		if (body) {
 			rspamd_fstring_free (body);
+		}
+		if (local_kp) {
+			rspamd_keypair_unref (local_kp);
 		}
 
 		return luaL_error (L,
@@ -988,6 +994,9 @@ lua_http_request (lua_State *L)
 		rspamd_http_message_unref (msg);
 		if (body) {
 			rspamd_fstring_free (body);
+		}
+		if (local_kp) {
+			rspamd_keypair_unref (local_kp);
 		}
 
 		return luaL_error (L,
