@@ -51,7 +51,7 @@ class redis_pool;
 
 INIT_LOG_MODULE(redis_pool)
 
-enum rspamd_redis_pool_connection_state {
+enum class rspamd_redis_pool_connection_state : std::uint8_t {
 	RSPAMD_REDIS_POOL_CONN_INACTIVE = 0,
 	RSPAMD_REDIS_POOL_CONN_ACTIVE,
 	RSPAMD_REDIS_POOL_CONN_FINALISING
@@ -65,8 +65,8 @@ struct redis_pool_connection {
 	redis_pool *pool;
 	conn_iter_t elt_pos;
 	ev_timer timeout;
-	enum rspamd_redis_pool_connection_state state;
 	gchar tag[MEMPOOL_UID_LEN];
+	rspamd_redis_pool_connection_state state;
 
 	auto schedule_timeout() -> void;
 	~redis_pool_connection();
@@ -125,13 +125,13 @@ public:
 	auto release_connection(const redis_pool_connection *conn) -> void
 	{
 		switch(conn->state) {
-		case RSPAMD_REDIS_POOL_CONN_ACTIVE:
+		case rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE:
 			active.erase(conn->elt_pos);
 			break;
-		case RSPAMD_REDIS_POOL_CONN_INACTIVE:
+		case rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_INACTIVE:
 			inactive.erase(conn->elt_pos);
 			break;
-		case RSPAMD_REDIS_POOL_CONN_FINALISING:
+		case rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_FINALISING:
 			terminating.erase(conn->elt_pos);
 			break;
 		}
@@ -260,7 +260,7 @@ redis_pool_connection::~redis_pool_connection()
 {
 	const auto *conn = this; /* For debug */
 
-	if (state == RSPAMD_REDIS_POOL_CONN_ACTIVE) {
+	if (state == rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE) {
 		msg_debug_rpool ("active connection destructed: %p", ctx);
 
 		if (ctx) {
@@ -323,12 +323,12 @@ redis_pool_connection::redis_conn_timeout_cb(EV_P_ ev_timer *w, int revents) -> 
 {
 	auto *conn = (struct redis_pool_connection *) w->data;
 
-	g_assert (conn->state != RSPAMD_REDIS_POOL_CONN_ACTIVE);
+	g_assert (conn->state != rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE);
 
-	if (conn->state == RSPAMD_REDIS_POOL_CONN_INACTIVE) {
+	if (conn->state == rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_INACTIVE) {
 		msg_debug_rpool("scheduled soft removal of connection %p",
 				conn->ctx);
-		conn->state = RSPAMD_REDIS_POOL_CONN_FINALISING;
+		conn->state = rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_FINALISING;
 		ev_timer_again(EV_A_ w);
 		redisAsyncCommand(conn->ctx, redis_pool_connection::redis_quit_cb, conn, "QUIT");
 		conn->elt->move_to_terminating(conn);
@@ -354,7 +354,7 @@ redis_pool_connection::redis_on_disconnect(const struct redisAsyncContext *ac, i
 	 * Here, we know that redis itself will free this connection
 	 * so, we need to do something very clever about it
 	 */
-	if (conn->state != RSPAMD_REDIS_POOL_CONN_ACTIVE) {
+	if (conn->state != rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE) {
 		/* Do nothing for active connections as it is already handled somewhere */
 		if (conn->ctx) {
 			msg_debug_rpool("inactive connection terminated: %s",
@@ -401,7 +401,7 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 		: ctx(_ctx), elt(_elt), pool(_pool)
 {
 
-	state = RSPAMD_REDIS_POOL_CONN_ACTIVE;
+	state = rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE;
 
 	pool->register_context(ctx, this);
 	ctx->data = this;
@@ -429,7 +429,7 @@ redis_pool_elt::new_connection() -> redisAsyncContext *
 		conn.swap(inactive.back());
 		inactive.pop_back();
 
-		g_assert (conn->state != RSPAMD_REDIS_POOL_CONN_ACTIVE);
+		g_assert (conn->state != rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE);
 		if (conn->ctx->err == REDIS_OK) {
 			/* Also check SO_ERROR */
 			gint err;
@@ -450,7 +450,7 @@ redis_pool_elt::new_connection() -> redisAsyncContext *
 			else {
 				/* Reuse connection */
 				ev_timer_stop(pool->event_loop, &conn->timeout);
-				conn->state = RSPAMD_REDIS_POOL_CONN_ACTIVE;
+				conn->state = rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE;
 				msg_debug_rpool("reused existing connection to %s:%d: %p",
 						ip.c_str(), port, conn->ctx);
 				active.emplace_front(std::move(conn));
@@ -518,7 +518,7 @@ auto redis_pool::release_connection(redisAsyncContext *ctx,
 		auto conn_it = conns_by_ctx.find(ctx);
 		if (conn_it != conns_by_ctx.end()) {
 			auto *conn = conn_it->second;
-			g_assert (conn->state == RSPAMD_REDIS_POOL_CONN_ACTIVE);
+			g_assert (conn->state == rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_ACTIVE);
 
 			if (ctx->err != REDIS_OK) {
 				/* We need to terminate connection forcefully */
@@ -529,7 +529,7 @@ auto redis_pool::release_connection(redisAsyncContext *ctx,
 					/* Ensure that there are no callbacks attached to this conn */
 					if (ctx->replies.head == nullptr) {
 						/* Just move it to the inactive queue */
-						conn->state = RSPAMD_REDIS_POOL_CONN_INACTIVE;
+						conn->state = rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_INACTIVE;
 						conn->elt->move_to_inactive(conn);
 						conn->schedule_timeout();
 						msg_debug_rpool("mark connection %p inactive", conn->ctx);
