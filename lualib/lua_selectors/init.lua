@@ -58,7 +58,7 @@ local function implicit_tostring(t, ud_or_table)
 
     return logger.slog("%s", ud_or_table),'string'
   elseif t == 'userdata' then
-    if t.cookie and t.cookie == text_cookie then
+    if ud_or_table.cookie and ud_or_table.cookie == text_cookie then
       -- Preserve opaque
       return ud_or_table,'string'
     else
