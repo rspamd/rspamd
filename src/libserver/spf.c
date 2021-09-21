@@ -570,8 +570,11 @@ rspamd_spf_record_postprocess (struct spf_resolved *rec, struct rspamd_task *tas
 		if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV6) {
 			guint64 t[3];
 
+			/*
+			 * Fill hash entry for ipv6 addr with 2 int64 from ipv6 address,
+			 * the remaining int64 has mech + mask
+			 */
 			memcpy (t, cur_addr->addr6, sizeof (guint64) * 2);
-			t[2] = 0;
 			t[2] = ((guint64) (cur_addr->mech)) << 48u;
 			t[2] |= cur_addr->m.dual.mask_v6;
 
