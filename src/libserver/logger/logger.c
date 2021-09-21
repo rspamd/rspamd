@@ -227,16 +227,21 @@ rspamd_log_open_specific (rspamd_mempool_t *pool,
 
 	const struct rspamd_logger_funcs *funcs = NULL;
 
-	switch (cfg->log_type) {
-	case RSPAMD_LOG_CONSOLE:
+	if (cfg) {
+		switch (cfg->log_type) {
+		case RSPAMD_LOG_CONSOLE:
+			funcs = &console_log_funcs;
+			break;
+		case RSPAMD_LOG_SYSLOG:
+			funcs = &syslog_log_funcs;
+			break;
+		case RSPAMD_LOG_FILE:
+			funcs = &file_log_funcs;
+			break;
+		}
+	}
+	else {
 		funcs = &console_log_funcs;
-		break;
-	case RSPAMD_LOG_SYSLOG:
-		funcs = &syslog_log_funcs;
-		break;
-	case RSPAMD_LOG_FILE:
-		funcs = &file_log_funcs;
-		break;
 	}
 
 	g_assert (funcs != NULL);

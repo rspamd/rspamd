@@ -199,6 +199,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	rspamd_http_router_insert_headers (entry->rt, reply_msg);
 
 	if (!rspamd_http_message_set_body_from_fd (reply_msg, fd)) {
+		rspamd_http_message_free (reply_msg);
 		close (fd);
 		return FALSE;
 	}

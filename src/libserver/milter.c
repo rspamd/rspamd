@@ -846,25 +846,25 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 		case st_len_1:
 			/* The first length byte in big endian order */
 			priv->parser.datalen = 0;
-			priv->parser.datalen |= *p << 24;
+			priv->parser.datalen |= ((gsize)*p) << 24;
 			priv->parser.state = st_len_2;
 			p++;
 			break;
 		case st_len_2:
 			/* The second length byte in big endian order */
-			priv->parser.datalen |= *p << 16;
+			priv->parser.datalen |= ((gsize)*p) << 16;
 			priv->parser.state = st_len_3;
 			p++;
 			break;
 		case st_len_3:
 			/* The third length byte in big endian order */
-			priv->parser.datalen |= *p << 8;
+			priv->parser.datalen |= ((gsize)*p) << 8;
 			priv->parser.state = st_len_4;
 			p++;
 			break;
 		case st_len_4:
 			/* The fourth length byte in big endian order */
-			priv->parser.datalen |= *p;
+			priv->parser.datalen |= ((gsize)*p);
 			priv->parser.state = st_read_cmd;
 			p++;
 			break;
