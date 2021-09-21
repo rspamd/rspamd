@@ -1035,7 +1035,8 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 	const ucl_object_t *cur, *sym, *weight, *freq, *freq_dev, *nhits;
 	ucl_object_iter_t iter = NULL;
 	gchar fmt_buf[64], dash_buf[82], sym_buf[82];
-	gint l, max_len = INT_MIN, i;
+	gint l, i;
+	gint max_len = sizeof("Symbol") - 1;
 	static const gint dashes = 44;
 
 	if (obj->type != UCL_ARRAY) {
@@ -1054,11 +1055,12 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		if (sym != NULL) {
 			l = sym->len;
 			if (l > max_len) {
-				max_len = MIN (sizeof (dash_buf) - dashes - 1, l);
+				max_len = l;
 			}
 		}
 	}
 
+	max_len = MIN (sizeof (dash_buf) - dashes - 1, max_len);
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
 		"| %%3s | %%%ds | %%7s | %%13s | %%7s |\n", max_len);
 	memset (dash_buf, '-', dashes + max_len);
