@@ -637,7 +637,7 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct ev_loop *ev_base,
 	conn->verify_peer = verify_peer;
 
 	if (log_tag) {
-		rspamd_strlcpy (conn->log_tag, log_tag, sizeof (log_tag));
+		rspamd_strlcpy (conn->log_tag, log_tag, sizeof (conn->log_tag));
 	}
 	else {
 		rspamd_random_hex (conn->log_tag, sizeof (log_tag) - 1);

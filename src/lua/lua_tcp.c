@@ -1521,6 +1521,8 @@ lua_tcp_request (lua_State *L)
 				event_loop = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
+				g_free (cbd);
+
 				return luaL_error (L, "event loop is required");
 			}
 			lua_pop (L, 1);
@@ -1693,6 +1695,8 @@ lua_tcp_request (lua_State *L)
 
 	if (resolver == NULL && cfg == NULL && task == NULL) {
 		g_free (cbd);
+		g_free (iov);
+
 		return luaL_error (L, "tcp request has bad params: one of "
 						"{resolver,task,config} should be set");
 	}

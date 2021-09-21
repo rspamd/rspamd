@@ -588,8 +588,10 @@ rspamd_symcache_process_dep (struct rspamd_symcache *cache,
 		vdit = rspamd_symcache_find_filter (cache, dep->sym, false);
 
 		if (!vdit) {
-			msg_err_cache ("cannot add dependency from %s on %s: no dependency symbol registered",
-					dep->sym, dit->symbol);
+			if (dit) {
+				msg_err_cache ("cannot add dependency from %s on %s: no dependency symbol registered",
+						dep->sym, dit->symbol);
+			}
 		}
 		else {
 			msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", it->symbol,
@@ -698,7 +700,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		vit = rspamd_symcache_find_filter (cache, ddep->from, false);
 		it = rspamd_symcache_find_filter (cache, ddep->from, true);
 
-		if (it == NULL) {
+		if (it == NULL || vit == NULL) {
 			msg_err_cache ("cannot register delayed dependency between %s and %s: "
 					"%s is missing", ddep->from, ddep->to, ddep->from);
 		}

@@ -1183,7 +1183,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	return TRUE;
 
 error_label:
-	msg_debug_expression ("fatal error: %e", *err);
+	if (err && *err) {
+		msg_debug_expression ("fatal expression parse error: %e", *err);
+	}
 
 	while ((tmp = rspamd_expr_stack_elt_pop (operand_stack)) != NULL) {
 		g_node_destroy (tmp);

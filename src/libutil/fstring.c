@@ -272,25 +272,22 @@ rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 
 	p = str->begin;
 	hval = str->len;
+	end = p + str->len;
 
 	if (is_utf) {
-		while (end < str->begin + str->len) {
-			if (rspamd_fast_utf8_validate (p, str->len) != 0) {
-				return rspamd_fstrhash_lc (str, FALSE);
-			}
-			while (p < end) {
-				uc = g_unichar_tolower (g_utf8_get_char (p));
-				for (j = 0; j < sizeof (gunichar); j++) {
-					t = (uc >> (j * 8)) & 0xff;
-					if (t != 0) {
-						hval = fstrhash_c (t, hval);
-					}
-				}
-				p = g_utf8_next_char (p);
-			}
-			p = end + 1;
+		if (rspamd_fast_utf8_validate (p, str->len) != 0) {
+			return rspamd_fstrhash_lc (str, FALSE);
 		}
-
+		while (p < end) {
+			uc = g_unichar_tolower (g_utf8_get_char (p));
+			for (j = 0; j < sizeof (gunichar); j++) {
+				t = (uc >> (j * 8)) & 0xff;
+				if (t != 0) {
+					hval = fstrhash_c (t, hval);
+				}
+			}
+			p = g_utf8_next_char (p);
+		}
 	}
 	else {
 		for (i = 0; i < str->len; i++, p++) {
