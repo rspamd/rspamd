@@ -1359,9 +1359,6 @@ gint
 rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key)
 {
 #ifdef HAVE_READPASSPHRASE_H
-	gint len = 0;
-	gchar pass[BUFSIZ];
-
 	if (readpassphrase ("Enter passphrase: ", buf, size, RPP_ECHO_OFF |
 		RPP_REQUIRE_TTY) == NULL) {
 		return 0;
