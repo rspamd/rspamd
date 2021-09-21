@@ -2065,15 +2065,15 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				g_free (hs_pats[j]);
 			}
 
+			err = g_error_new (rspamd_re_cache_quark (), EINVAL,
+					"cannot create tree of regexp when processing '%s': %s",
+					hs_pats[hs_errors->expression], hs_errors->message);
 			g_free (hs_pats);
 			g_free (hs_exts);
 			close (fd);
 			unlink (path);
 			hs_free_compile_error (hs_errors);
 
-			err = g_error_new (rspamd_re_cache_quark (), EINVAL,
-					"cannot create tree of regexp when processing '%s': %s",
-					hs_pats[hs_errors->expression], hs_errors->message);
 			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
 
 			return;
