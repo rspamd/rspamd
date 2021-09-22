@@ -1035,7 +1035,6 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 	const ucl_object_t *cur, *sym, *weight, *freq, *freq_dev, *nhits;
 	ucl_object_iter_t iter = NULL;
 	gchar fmt_buf[64], dash_buf[82], sym_buf[82];
-	gint l, max_len = INT_MIN, i;
 	static const gint dashes = 44;
 
 	if (obj->type != UCL_ARRAY) {
@@ -1049,16 +1048,17 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 	}
 
 	/* Find maximum width of symbol's name */
+	gint max_len = sizeof("Symbol") - 1;
 	while ((cur = ucl_object_iterate (obj, &iter, true)) != NULL) {
 		sym = ucl_object_lookup (cur, "symbol");
 		if (sym != NULL) {
-			l = sym->len;
-			if (l > max_len) {
-				max_len = MIN (sizeof (dash_buf) - dashes - 1, l);
+			if (sym->len > max_len) {
+				max_len = sym->len;
 			}
 		}
 	}
 
+	max_len = MIN (sizeof (dash_buf) - dashes - 1, max_len);
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
 		"| %%3s | %%%ds | %%7s | %%13s | %%7s |\n", max_len);
 	memset (dash_buf, '-', dashes + max_len);
@@ -1079,7 +1079,7 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		"| %%3d | %%%ds | %%7.1f | %%6.3f(%%5.3f) | %%7ju |\n", max_len);
 
 	iter = NULL;
-	i = 0;
+	gint i = 0;
 	while ((cur = ucl_object_iterate (obj, &iter, true)) != NULL) {
 		printf (" %s \n", dash_buf);
 		sym = ucl_object_lookup (cur, "symbol");
