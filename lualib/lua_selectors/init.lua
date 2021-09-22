@@ -57,7 +57,7 @@ local function implicit_tostring(t, ud_or_table)
     end
 
     return logger.slog("%s", ud_or_table),'string'
-  elseif t == 'userdata' then
+  elseif (t == 'string' or t == 'text') and type(ud_or_table) == 'userdata' then
     if ud_or_table.cookie and ud_or_table.cookie == text_cookie then
       -- Preserve opaque
       return ud_or_table,'string'
@@ -73,7 +73,7 @@ end
 
 local function process_selector(task, sel)
   local function allowed_type(t)
-    if t == 'string' or t == 'text' or t == 'string_list' or t == 'text_list' then
+    if t == 'string' or t == 'string_list' then
       return true
     end
 
