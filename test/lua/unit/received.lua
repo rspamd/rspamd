@@ -130,6 +130,14 @@ context("Received headers parser", function()
          by_hostname = 'x.com.br',
        }
     },
+    {[[from [127.0.0.1] ([127.0.0.2])
+        by smtp.gmail.com with ESMTPSA id xxxololo]],
+     {
+       from_hostname = '127.0.0.1',
+       real_ip = '127.0.0.2',
+       by_hostname = 'smtp.gmail.com'
+     }
+    },
   }
 
   local task = ffi.C.rspamd_task_new(nil, nil)
