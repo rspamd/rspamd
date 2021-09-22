@@ -1309,6 +1309,34 @@ rspamd_smtp_received_process_rdns (struct rspamd_task *task,
 	p = begin;
 	end = begin + len;
 
+	if (len == 0) {
+		return FALSE;
+	}
+
+	if (*p == '[' && *(end - 1) == ']' && len > 2) {
+		/* We have enclosed ip address */
+		rspamd_inet_addr_t  *addr = rspamd_parse_inet_address_pool (p + 1,
+				(end - p) - 2,
+				task->task_pool,
+				RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
+
+		if (addr) {
+			const gchar *addr_str;
+			gchar *dest;
+
+			if (rspamd_inet_address_get_port (addr) != 0) {
+				addr_str = rspamd_inet_address_to_string_pretty (addr);
+			}
+			else {
+				addr_str = rspamd_inet_address_to_string (addr);
+			}
+			dest = rspamd_mempool_strdup (task->task_pool, addr_str);
+			*pdest = dest;
+
+			return TRUE;
+		}
+	}
+
 	while (p < end) {
 		if (!g_ascii_isspace (*p) && rspamd_url_is_domain (*p)) {
 			if (*p == '.') {
@@ -1481,7 +1509,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 						rh->from_ip = rh->real_ip;
 					}
 				}
-			} else if (g_ascii_isxdigit (rpart->data[0])) {
+			}
+			else if (g_ascii_isxdigit (rpart->data[0])) {
 				/* Try to parse IP address */
 				rspamd_inet_addr_t *addr;
 				addr = rspamd_parse_inet_address_pool (rpart->data,
