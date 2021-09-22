@@ -98,14 +98,14 @@ struct rspamd_regexp_map_helper {
 	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	key = g_malloc (p - c + 1); \
 	rspamd_strlcpy (key, c, p - c + 1); \
-	key = g_strstrip (key); \
+	stripped_key = g_strstrip (key); \
 } while (0)
 
 #define MAP_STORE_VALUE do { \
 	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	value = g_malloc (p - c + 1); \
 	rspamd_strlcpy (value, c, p - c + 1); \
-	value = g_strstrip (value); \
+	stripped_value = g_strstrip (value); \
 } while (0)
 
 gchar *
@@ -132,7 +132,7 @@ rspamd_parse_kv_list (
 		map_read_eol,
 	};
 
-	gchar *c, *p, *key = NULL, *value = NULL, *end;
+	gchar *c, *p, *key = NULL, *value = NULL, *stripped_key, *stripped_value, *end;
 	struct rspamd_map *map = data->map;
 	guint line_number = 0;
 
@@ -171,9 +171,9 @@ rspamd_parse_kv_list (
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_KEY;
-					func (data->cur_data, key, default_value);
+					func (data->cur_data, stripped_key, default_value);
 					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
-							key, default_value, line_number);
+							stripped_key, default_value, line_number);
 					g_free (key);
 				}
 
@@ -184,9 +184,9 @@ rspamd_parse_kv_list (
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_KEY;
-					func (data->cur_data, key, default_value);
+					func (data->cur_data, stripped_key, default_value);
 					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
-							key, default_value, line_number);
+							stripped_key, default_value, line_number);
 					g_free (key);
 				}
 
@@ -254,9 +254,9 @@ rspamd_parse_kv_list (
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_KEY;
-					func (data->cur_data, key, default_value);
+					func (data->cur_data, stripped_key, default_value);
 					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
-							key, default_value, line_number);
+							stripped_key, default_value, line_number);
 					g_free (key);
 					key = NULL;
 				}
@@ -267,10 +267,10 @@ rspamd_parse_kv_list (
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_KEY;
-					func (data->cur_data, key, default_value);
+					func (data->cur_data, stripped_key, default_value);
 
 					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
-							key, default_value, line_number);
+							stripped_key, default_value, line_number);
 					g_free (key);
 					key = NULL;
 				}
@@ -320,17 +320,17 @@ rspamd_parse_kv_list (
 					if (p - c > 0) {
 						/* Store a single key */
 						MAP_STORE_VALUE;
-						func (data->cur_data, key, value);
+						func (data->cur_data, stripped_key, stripped_value);
 						msg_debug_map ("insert key value pair: %s -> %s; line: %d",
-								key, value, line_number);
+								stripped_key, stripped_value, line_number);
 						g_free (key);
 						g_free (value);
 						key = NULL;
 						value = NULL;
 					} else {
-						func (data->cur_data, key, default_value);
+						func (data->cur_data, stripped_key, default_value);
 						msg_debug_map ("insert key only pair: %s -> %s; line: %d",
-								key, default_value, line_number);
+								stripped_key, default_value, line_number);
 						g_free (key);
 						key = NULL;
 					}
@@ -340,17 +340,17 @@ rspamd_parse_kv_list (
 					if (p - c > 0) {
 						/* Store a single key */
 						MAP_STORE_VALUE;
-						func (data->cur_data, key, value);
+						func (data->cur_data, stripped_key, stripped_value);
 						msg_debug_map ("insert key value pair: %s -> %s",
-								key, value);
+								stripped_key, stripped_value);
 						g_free (key);
 						g_free (value);
 						key = NULL;
 						value = NULL;
 					} else {
-						func (data->cur_data, key, default_value);
+						func (data->cur_data, stripped_key, default_value);
 						msg_debug_map ("insert key only pair: %s -> %s",
-								key, default_value);
+								stripped_key, default_value);
 						g_free (key);
 						key = NULL;
 					}
@@ -408,10 +408,10 @@ rspamd_parse_kv_list (
 			if (p - c > 0) {
 				/* Store a single key */
 				MAP_STORE_KEY;
-				func (data->cur_data, key, default_value);
+				func (data->cur_data, stripped_key, default_value);
 				msg_debug_map ("insert key only pair: %s -> %s",
-						key, default_value);
-				g_free (key);
+						stripped_key, default_value);
+				g_free (stripped_key);
 				key = NULL;
 			}
 			break;
@@ -425,17 +425,17 @@ rspamd_parse_kv_list (
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_VALUE;
-					func (data->cur_data, key, value);
+					func (data->cur_data, stripped_key, stripped_value);
 					msg_debug_map ("insert key value pair: %s -> %s",
-							key, value);
+							stripped_key, stripped_value);
 					g_free (key);
 					g_free (value);
 					key = NULL;
 					value = NULL;
 				} else {
-					func (data->cur_data, key, default_value);
+					func (data->cur_data, stripped_key, default_value);
 					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
+							stripped_key, default_value);
 					g_free (key);
 					key = NULL;
 				}
@@ -1491,7 +1491,7 @@ rspamd_glob_list_read_multiple (
 void
 rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 {
-	struct rspamd_regexp_map_helper *re_map, *old_re_map;
+	struct rspamd_regexp_map_helper *re_map = NULL, *old_re_map;
 	struct rspamd_map *map = data->map;
 
 	if (data->cur_data) {
@@ -1513,7 +1513,7 @@ rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 		old_re_map = data->prev_data;
 
 #ifdef WITH_HYPERSCAN
-		if (memcmp (re_map->re_digest, old_re_map->re_digest,
+		if (re_map && memcmp (re_map->re_digest, old_re_map->re_digest,
 				sizeof (re_map->re_digest)) != 0) {
 			/* Cleanup old stuff */
 			rspamd_re_map_cache_cleanup_old (old_re_map);
