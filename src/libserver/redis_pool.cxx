@@ -386,6 +386,9 @@ redis_pool_connection::schedule_timeout() -> void
 			ctx, real_timeout);
 
 	timeout.data = this;
+	/* Restore in case if these fields have been modified externally */
+	ctx->data = this;
+	redisAsyncSetDisconnectCallback(ctx, redis_pool_connection::redis_on_disconnect);
 	ev_timer_init(&timeout,
 			redis_pool_connection::redis_conn_timeout_cb,
 			real_timeout, real_timeout / 2.0);
@@ -527,7 +530,7 @@ auto redis_pool::release_connection(redisAsyncContext *ctx,
 			else {
 				if (how == RSPAMD_REDIS_RELEASE_DEFAULT) {
 					/* Ensure that there are no callbacks attached to this conn */
-					if (ctx->replies.head == nullptr) {
+					if (ctx->replies.head == nullptr && (ctx->c.flags & REDIS_CONNECTED)) {
 						/* Just move it to the inactive queue */
 						conn->state = rspamd_redis_pool_connection_state::RSPAMD_REDIS_POOL_CONN_INACTIVE;
 						conn->elt->move_to_inactive(conn);
