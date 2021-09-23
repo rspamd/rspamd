@@ -411,7 +411,7 @@ rspamd_parse_kv_list (
 				func (data->cur_data, stripped_key, default_value);
 				msg_debug_map ("insert key only pair: %s -> %s",
 						stripped_key, default_value);
-				g_free (stripped_key);
+				g_free (key);
 				key = NULL;
 			}
 			break;
