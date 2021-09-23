@@ -1614,6 +1614,39 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	return (gpointer)backend;
 }
 
+/*
+ * This callback is called when Redis is disconnected somehow, and the structure
+ * itself is usually freed by hiredis itself
+ */
+static void
+rspamd_stat_redis_on_disconnect(const struct redisAsyncContext *ac, int status)
+{
+	struct redis_stat_runtime *rt = (struct redis_stat_runtime *)ac->data;
+
+	if (ev_can_stop (&rt->timeout_event)) {
+		ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
+	}
+	rt->redis = NULL;
+}
+
+static void
+rspamd_stat_redis_on_connect(const struct redisAsyncContext *ac, int status)
+{
+	struct redis_stat_runtime *rt = (struct redis_stat_runtime *)ac->data;
+
+
+	if (status == REDIS_ERR) {
+		/*
+		 * We also need to reset rt->redis as it will be subsequently freed without
+		 * calling for redis_on_disconnect callback...
+		 */
+		if (ev_can_stop (&rt->timeout_event)) {
+			ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
+		}
+		rt->redis = NULL;
+	}
+}
+
 gpointer
 rspamd_redis_runtime (struct rspamd_task *task,
 		struct rspamd_statfile_config *stcf,
@@ -1706,6 +1739,9 @@ rspamd_redis_runtime (struct rspamd_task *task,
 
 	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (ctx, rt->redis);
+	rt->redis->data = rt;
+	redisAsyncSetDisconnectCallback (rt->redis, rspamd_stat_redis_on_disconnect);
+	redisAsyncSetConnectCallback (rt->redis, rspamd_stat_redis_on_connect);
 
 	rspamd_mempool_add_destructor (task->task_pool, rspamd_redis_fin, rt);
 
