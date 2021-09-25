@@ -2019,6 +2019,10 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 			gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
 			g_error_free (err);
 
+			if (owned_pk) {
+				rspamd_pubkey_unref (pk);
+			}
+
 			return ret;
 		}
 	}
@@ -2026,6 +2030,10 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 		if (!rspamd_pubkey_encrypt (pk, data, len, &out, &outlen, &err)) {
 			gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
 			g_error_free (err);
+
+			if (owned_pk) {
+				rspamd_pubkey_unref (pk);
+			}
 
 			return ret;
 		}
@@ -2065,7 +2073,7 @@ lua_cryptobox_encrypt_file (lua_State *L)
 	struct rspamd_cryptobox_keypair *kp = NULL;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	const gchar *filename;
-	gchar *data;
+	gchar *data = NULL;
 	guchar *out = NULL;
 	struct rspamd_lua_text *res;
 	gsize len = 0, outlen = 0;
@@ -2104,6 +2112,9 @@ lua_cryptobox_encrypt_file (lua_State *L)
 					err->message);
 			g_error_free (err);
 			munmap (data, len);
+			if (own_pk) {
+				rspamd_pubkey_unref (pk);
+			}
 
 			return ret;
 		}
@@ -2114,6 +2125,10 @@ lua_cryptobox_encrypt_file (lua_State *L)
 					err->message);
 			g_error_free (err);
 			munmap (data, len);
+
+			if (own_pk) {
+				rspamd_pubkey_unref (pk);
+			}
 
 			return ret;
 		}
@@ -2132,6 +2147,9 @@ lua_cryptobox_encrypt_file (lua_State *L)
 	return 1;
 
 err:
+	if (data) {
+		munmap (data, len);
+	}
 	if (own_pk) {
 		rspamd_pubkey_unref (pk);
 	}

@@ -258,9 +258,11 @@ lua_spf_resolve (lua_State * L)
 static gint
 lua_spf_record_dtor (lua_State *L)
 {
-	struct spf_resolved *record =
-			* (struct spf_resolved **)rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		spf_record_unref (record);
@@ -398,9 +400,10 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 static gint
 lua_spf_record_check_ip (lua_State *L)
 {
-	struct spf_resolved *record =
-			* (struct spf_resolved **)rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 	struct rspamd_lua_ip *ip = NULL;
 	gint nres = 0;
 	gboolean need_free_ip = FALSE;
@@ -474,9 +477,10 @@ lua_spf_record_check_ip (lua_State *L)
 static gint
 lua_spf_record_get_domain (lua_State *L)
 {
-	struct spf_resolved *record =
-			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		lua_pushstring (L, record->domain);
@@ -495,9 +499,10 @@ lua_spf_record_get_domain (lua_State *L)
 static gint
 lua_spf_record_get_ttl (lua_State *L)
 {
-	struct spf_resolved *record =
-			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		lua_pushinteger (L, record->ttl);
@@ -516,9 +521,10 @@ lua_spf_record_get_ttl (lua_State *L)
 static gint
 lua_spf_record_get_timestamp (lua_State *L)
 {
-	struct spf_resolved *record =
-			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		lua_pushnumber (L, record->timestamp);
@@ -537,9 +543,10 @@ lua_spf_record_get_timestamp (lua_State *L)
 static gint
 lua_spf_record_get_digest (lua_State *L)
 {
-	struct spf_resolved *record =
-			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		gchar hexbuf[64];
@@ -567,9 +574,10 @@ lua_spf_record_get_digest (lua_State *L)
 static gint
 lua_spf_record_get_elts (lua_State *L)
 {
-	struct spf_resolved *record =
-			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
-					SPF_RECORD_CLASS);
+	struct spf_resolved *record;
+	RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, 1, SPF_RECORD_CLASS,
+			struct spf_resolved,
+			record);
 
 	if (record) {
 		guint i;

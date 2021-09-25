@@ -527,6 +527,14 @@ gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
 */
 void *rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname);
 
+#define RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, pos, classname, type, dest)  do { \
+    type **_maybe_ptr = (type **)rspamd_lua_check_udata((L), (pos), (classname)); \
+    if (_maybe_ptr == NULL) { \
+        return luaL_error (L, "%s: invalid arguments; pos = %d; expected = %s", G_STRFUNC, (pos), (classname)); \
+    } \
+    (dest) = *(_maybe_ptr);                                                          \
+} while(0)
+
 /**
 * Safely checks userdata to match specified class
 * @param L

@@ -2031,8 +2031,8 @@ lua_mimepart_headers_foreach (lua_State *L)
 			lua_gettable (L, 3);
 
 			if (lua_isuserdata (L, -1)) {
-				re = *(struct rspamd_lua_regexp **)
-						rspamd_lua_check_udata (L, -1, "rspamd{regexp}");
+				RSPAMD_LUA_CHECK_UDATA_PTR_OR_RETURN(L, -1, "rspamd{regexp}",
+						struct rspamd_lua_regexp, re);
 			}
 
 			lua_pop (L, 1);
