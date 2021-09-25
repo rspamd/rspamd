@@ -449,18 +449,6 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-
-			if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
-				if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
-					gsize unsecaped_len = end - logbuf;
-					gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
-					log_line = logbuf_escaped;
-
-					end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
-							logbuf_escaped, unsecaped_len + nescaped * 4);
-				}
-			}
-
 			rspamd_fprintf (stderr, "%*s\n", (gint)(end - log_line),
 					log_line);
 		}
@@ -859,13 +847,13 @@ RSPAMD_DESTRUCTOR (rspamd_debug_modules_dtor)
 	}
 }
 
-guint
+gint
 rspamd_logger_add_debug_module (const gchar *mname)
 {
 	struct rspamd_log_module *m;
 
 	if (mname == NULL) {
-		return (guint)-1;
+		return -1;
 	}
 
 	if (log_modules == NULL) {

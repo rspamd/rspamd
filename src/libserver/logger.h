@@ -150,7 +150,7 @@ bool rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
  * @param mod
  * @return
  */
-guint rspamd_logger_add_debug_module (const gchar *mod);
+gint rspamd_logger_add_debug_module (const gchar *mod);
 
 /*
  * Macro to use for faster debug modules
