@@ -340,6 +340,8 @@ check_uncached:
 			/* We have some unknown salt here */
 			msg_info_ctx ("incorrect salt: %z, while %z expected",
 					salt_len, pbkdf->salt_len);
+			g_free (salt_decoded);
+
 			return FALSE;
 		}
 

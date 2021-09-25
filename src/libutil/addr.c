@@ -336,6 +336,12 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target,
 		tokens = rspamd_string_len_split (src, len, " ,", -1, pool);
 
 		if (tokens[0] == NULL) {
+
+			if (!pool) {
+				rspamd_inet_address_free(addr);
+				g_strfreev (tokens);
+			}
+
 			return FALSE;
 		}
 
@@ -351,6 +357,17 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target,
 #if defined(FREEBSD) || defined(__APPLE__)
 		addr->u.un->addr.sun_len = SUN_LEN (&addr->u.un->addr);
 #endif
+
+		if (target) {
+			rspamd_ip_validate_af (addr);
+			*target = addr;
+		}
+		else {
+			if (!pool) {
+				rspamd_inet_address_free(addr);
+			}
+		}
+
 		return TRUE;
 	}
 
@@ -415,24 +432,29 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target,
 	}
 
 	g_free (pwbuf);
-	g_strfreev (tokens);
+
+	if (!pool) {
+		g_strfreev(tokens);
+	}
 
 	if (target) {
 		rspamd_ip_validate_af (addr);
 		*target = addr;
 	}
 	else {
-		rspamd_inet_address_free (addr);
+		if (!pool) {
+			rspamd_inet_address_free(addr);
+		}
 	}
 
 	return TRUE;
 
 err:
 
-	g_strfreev (tokens);
 	g_free (pwbuf);
 
 	if (!pool) {
+		g_strfreev(tokens);
 		rspamd_inet_address_free (addr);
 	}
 
@@ -1302,7 +1324,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 	rspamd_ip_check_ipv6 ();
 
 	if (rspamd_parse_inet_address (&cur_addr,
-			begin, len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+			begin, len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT) && cur_addr != NULL) {
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full (1,
 					(GDestroyNotify) rspamd_inet_address_free);
@@ -1389,6 +1411,10 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 			/* Should never ever happen */
 			g_assert (0);
 		}
+	}
+
+	if (pool == NULL) {
+		g_free (addr_cpy);
 	}
 
 	return ret;

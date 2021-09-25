@@ -1889,7 +1889,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 	guint *hs_flags = NULL;
 	const hs_expr_ext_t **hs_exts = NULL;
 	gchar **hs_pats = NULL;
-	gchar *hs_serialized;
+	gchar *hs_serialized = NULL;
 	gsize serialized_len;
 	struct iovec iov[7];
 	struct rspamd_re_cache *cache;
@@ -1918,7 +1918,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 
 		/* Read number of regexps */
 		g_assert (fd != -1);
-		lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
+		g_assert (lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET) != -1);
 		g_assert (read (fd, &n, sizeof (n)) == sizeof (n));
 		close (fd);
 
@@ -2212,6 +2212,9 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				(gint)g_hash_table_size (re_class->re),
 				path);
 
+		g_free (hs_serialized);
+		g_free (hs_ids);
+		g_free (hs_flags);
 		unlink (path);
 		close (fd);
 		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);

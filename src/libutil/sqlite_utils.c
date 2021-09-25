@@ -356,7 +356,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	else {
 		pid_t myself = getpid ();
 		msg_debug_pool_check ("locking %s to block other processes", lock_path);
-		(void) !write (lock_fd, &myself, sizeof (myself));
+		(void)write (lock_fd, &myself, sizeof (myself));
 
 		g_assert (rspamd_file_lock (lock_fd, FALSE));
 		has_lock = TRUE;

@@ -2661,6 +2661,14 @@ err:
 		g_free (hdata);
 	}
 
+	if (fdata) {
+		g_free (fdata);
+	}
+
+	if (sdata) {
+		g_free (sdata);
+	}
+
 	return NULL;
 }
 
