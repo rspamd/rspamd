@@ -1544,7 +1544,7 @@ void
 rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		const void *data, gsize len)
 {
-	if (G_LIKELY (st->type) == RSPAMD_CRYPTOBOX_T1HA) {
+	if (st->type == RSPAMD_CRYPTOBOX_T1HA) {
 		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
 		t1ha2_update (rst, data, len);
 	}
@@ -1614,7 +1614,7 @@ rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 {
 	guint64 ret;
 
-	if (G_LIKELY (st->type) == RSPAMD_CRYPTOBOX_T1HA) {
+	if (st->type == RSPAMD_CRYPTOBOX_T1HA) {
 		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
 
 		return t1ha2_final (rst, NULL);
