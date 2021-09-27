@@ -2337,6 +2337,12 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	gint hdr_cnt = 0;
 	bool use_idx = false, is_sign = ctx->is_sign;
 
+	/*
+	 * TODO:
+	 * Temporary hack to prevent linked list being misused until refactored
+	 */
+	const guint max_list_iters = 1000;
+
 	if (count < 0) {
 		use_idx = true;
 		count = -(count); /* use i= in header content as it is arc stuff */
@@ -2356,7 +2362,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 
 					hdr_cnt++;
 
-					if (cur == rh) {
+					if (cur == rh || hdr_cnt >= max_list_iters) {
 						/* Cycle */
 						break;
 					}
@@ -2386,13 +2392,17 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				}
 			}
 			else {
+				/*
+				 * This branch is used for ARC headers, and it orders them based on
+				 * i=<number> string and not their real order in the list of headers
+				 */
 				gchar idx_buf[16];
-				gint id_len;
+				gint id_len, i;
 
 				id_len = rspamd_snprintf (idx_buf, sizeof (idx_buf), "i=%d;",
 						count);
 
-				for (cur = rh->prev; ; cur = cur->prev) {
+				for (cur = rh->prev, i = 0; i < max_list_iters; cur = cur->prev, i ++) {
 					if (cur->decoded &&
 						rspamd_substring_search (cur->decoded, strlen (cur->decoded),
 								idx_buf, id_len) != -1) {
