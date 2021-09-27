@@ -64,7 +64,11 @@ set(
 )
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-add_library(rspamd-replxx SHARED ${REPLXX_SOURCES})
+if(ENABLE_STATIC MATCHES "ON")
+	add_library(rspamd-replxx STATIC ${REPLXX_SOURCES})
+else()
+	add_library(rspamd-replxx SHARED ${REPLXX_SOURCES})
+endif()
 
 target_include_directories(
 	rspamd-replxx
