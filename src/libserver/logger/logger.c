@@ -319,7 +319,7 @@ rspamd_log_on_fork (GQuark ptype, struct rspamd_config *cfg,
 
 inline gboolean
 rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
-		guint module_id)
+		gint module_id)
 {
 	g_assert (rspamd_log != NULL);
 
@@ -328,7 +328,7 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		return TRUE;
 	}
 
-	if (module_id != (guint)-1 && isset (log_modules->bitset, module_id)) {
+	if (module_id != -1 && isset (log_modules->bitset, module_id)) {
 		return TRUE;
 	}
 
@@ -582,7 +582,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 	static gchar logbuf[LOGBUF_LEN];
 	va_list vp;
 	gchar *end;
-	guint mod_id;
+	gint mod_id;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
@@ -618,7 +618,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 bool
 rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 		rspamd_inet_addr_t *addr,
-		guint mod_id, const gchar *module, const gchar *id,
+		gint mod_id, const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...)
 {
 	static gchar logbuf[LOGBUF_LEN];
@@ -657,7 +657,7 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 bool
 rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
 							   rspamd_inet_addr_t *addr,
-							   guint mod_id, const gchar *module, guint64 id,
+							   gint mod_id, const gchar *module, guint64 id,
 							   const gchar *function, const gchar *fmt, ...)
 {
 	static gchar logbuf[LOGBUF_LEN], idbuf[64];

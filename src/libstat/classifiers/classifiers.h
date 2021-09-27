@@ -75,7 +75,7 @@ gboolean lua_classifier_learn_spam (struct rspamd_classifier *ctx,
 									gboolean unlearn,
 									GError **err);
 
-extern guint rspamd_bayes_log_id;
+extern gint rspamd_bayes_log_id;
 #define msg_debug_bayes(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
         rspamd_bayes_log_id, "bayes", task->task_pool->tag.uid, \
         G_STRFUNC, \

@@ -32,7 +32,7 @@ struct html_block;
 
 namespace rspamd::css {
 
-extern unsigned int rspamd_css_log_id;
+extern int rspamd_css_log_id;
 
 #define msg_debug_css(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_css_log_id, "css", pool->tag.uid, \
