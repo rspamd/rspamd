@@ -249,6 +249,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		spaces_after_param,
 		ignore_bad_tag,
 		tag_end,
+		slash_after_value,
 	} state;
 
 	state = static_cast<enum tag_parser_state>(parser_env.cur_state);
@@ -384,8 +385,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		else if (*in == '/') {
 			store_component_name();
 			store_component_value();
-			tag->flags |= FL_CLOSED;
-			state = spaces_before_eq;
+			state = slash_after_value;
 		}
 		else if (*in == '>') {
 			store_component_name();
@@ -512,8 +512,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		if (*in == '/' && *(in + 1) == '>') {
-			tag->flags |= FL_CLOSED;
+		if (*in == '/') {
+			state = slash_after_value;
 			store_component_value();
 		}
 		else if (g_ascii_isspace (*in) || *in == '>' || *in == '"') {
@@ -530,8 +530,10 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		if (g_ascii_isspace (*in)) {
 			state = spaces_after_param;
 		}
-		else if (*in == '/' && *(in + 1) == '>') {
-			tag->flags |= FL_CLOSED;
+		else if (*in == '/') {
+			store_component_value();
+			store_value_character(true);
+			state = slash_after_value;
 		}
 		else {
 			/* No space, proceed immediately to the attribute name */
@@ -543,8 +545,8 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case spaces_after_param:
 		if (!g_ascii_isspace (*in)) {
-			if (*in == '/' && *(in + 1) == '>') {
-				tag->flags |= FL_CLOSED;
+			if (*in == '/') {
+				state = slash_after_value;
 			}
 			else if (*in == '=') {
 				/* Attributes cannot start with '=' */
@@ -558,7 +560,16 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			}
 		}
 		break;
-
+	case slash_after_value:
+		if (*in == '>') {
+			tag->flags |= FL_CLOSED;
+			state = tag_end;
+		}
+		else if (!g_ascii_isspace(*in)) {
+			tag->flags |= FL_BROKEN;
+			state = parse_attr_name;
+		}
+		break;
 	case ignore_bad_tag:
 	case tag_end:
 		break;
