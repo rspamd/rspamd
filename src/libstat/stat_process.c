@@ -339,14 +339,12 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 {
 	guint i;
 	struct rspamd_statfile *st;
-	struct rspamd_classifier *cl;
 	gpointer bk_run;
 
 	g_assert (task->stat_runtimes != NULL);
 
 	for (i = 0; i < st_ctx->statfiles->len; i++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
-		cl = st->classifier;
 		bk_run = g_ptr_array_index (task->stat_runtimes, i);
 
 		if (bk_run != NULL) {
@@ -677,7 +675,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 	gpointer bk_run;
 	guint i, j;
 	gint id;
-	gboolean res = FALSE;
+	gboolean res = FALSE, backend_found = FALSE;
 
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
@@ -714,10 +712,13 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 					goto end;
 				}
 
-				msg_warn_task ("no runtime for backend %s; classifier %s; symbol %s",
+				msg_debug_task ("no runtime for backend %s; classifier %s; symbol %s",
 						st->backend->name, cl->cfg->name, st->stcf->symbol);
 				continue;
 			}
+
+			/* We set sel merely when we have runtime */
+			backend_found = TRUE;
 
 			if (!(task->flags & RSPAMD_TASK_FLAG_UNLEARN)) {
 				if (!!spam != !!st->stcf->is_spam) {
@@ -748,26 +749,36 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 	}
 
 end:
-	if (!res && err) {
-		return res;
-	}
-
-	if (!res && sel == NULL) {
-		if (classifier) {
-			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
-					"with name %s", classifier);
-		}
-		else {
-			g_set_error (err, rspamd_stat_quark (), 404, "no classifiers defined");
-		}
-
-		return FALSE;
-	}
 
 	if (!res) {
-		g_set_error (err, rspamd_stat_quark (), 404, "cannot find statfile "
-				"backend to learn %s in %s", spam ? "spam" : "ham",
-				classifier ? classifier : "default classifier");
+		if (err && *err) {
+			/* Error has been set already */
+			return res;
+		}
+
+		if (sel == NULL) {
+			if (classifier) {
+				g_set_error(err, rspamd_stat_quark(), 404, "cannot find classifier "
+														   "with name %s", classifier);
+			}
+			else {
+				g_set_error(err, rspamd_stat_quark(), 404, "no classifiers defined");
+			}
+
+			return FALSE;
+		}
+		else if (!backend_found) {
+			g_set_error(err, rspamd_stat_quark(), 404, "all learn conditions "
+													   "denied learning %s in %s",
+					spam ? "spam" : "ham",
+					classifier ? classifier : "default classifier");
+		}
+		else {
+			g_set_error(err, rspamd_stat_quark(), 404, "cannot find statfile "
+													   "backend to learn %s in %s",
+					spam ? "spam" : "ham",
+					classifier ? classifier : "default classifier");
+		}
 	}
 
 	return res;
