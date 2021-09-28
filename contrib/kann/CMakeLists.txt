@@ -1,6 +1,10 @@
 SET(LIBKANNSRC	kautodiff.c kann.c)
 
-ADD_LIBRARY(rspamd-kann SHARED ${LIBKANNSRC})
+IF(ENABLE_STATIC MATCHES "ON")
+	ADD_LIBRARY(rspamd-kann STATIC ${LIBKANNSRC})
+ELSE()
+	ADD_LIBRARY(rspamd-kann SHARED ${LIBKANNSRC})
+ENDIF()
 
 IF(WITH_BLAS)
     MESSAGE(STATUS "Use openblas to accelerate kann")
