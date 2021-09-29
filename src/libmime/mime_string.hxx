@@ -28,7 +28,7 @@
 #include "unicode/utf8.h"
 #include "contrib/fastutf8/fastutf8.h"
 
-namespace rspamd {
+namespace rspamd::mime {
 /*
  * The motivation for another string is to have utf8 valid string replacing
  * all bad things with FFFFD replacement character and filtering \0 and other
@@ -64,12 +64,227 @@ bool operator !(mime_string_flags fl)
 	return fl == mime_string_flags::MIME_STRING_DEFAULT;
 }
 
+// Codepoint iterator base class
+template<typename Container, bool Raw = false>
+struct iterator_base
+{
+	template<typename, typename>
+	friend class basic_mime_string;
+
+public:
+	using value_type = typename Container::value_type;
+	using difference_type = typename Container::difference_type;
+	using codepoint_type = typename Container::codepoint_type;
+	using reference_type = codepoint_type;
+	using iterator_category = std::bidirectional_iterator_tag;
+
+	bool operator==(const iterator_base &it) const noexcept
+	{
+		return idx == it.idx;
+	}
+
+	bool operator!=(const iterator_base &it) const noexcept
+	{
+		return idx != it.idx;
+	}
+
+	iterator_base(difference_type index, Container *instance) noexcept:
+			idx(index), cont_instance(instance) {}
+	iterator_base() noexcept = default;
+	iterator_base(const iterator_base &) noexcept = default;
+
+	iterator_base &operator=(const iterator_base &) noexcept = default;
+
+	Container *get_instance() const noexcept
+	{
+		return cont_instance;
+	}
+
+	codepoint_type get_value() const noexcept {
+		auto i = idx;
+		codepoint_type uc;
+		U8_NEXT_UNSAFE(cont_instance->data(), i, uc);
+		return uc;
+	}
+
+protected:
+	difference_type		idx;
+	Container*			cont_instance = nullptr;
+protected:
+	void advance(difference_type n) noexcept {
+		if (n > 0) {
+			U8_FWD_N_UNSAFE(cont_instance->data(), idx, n);
+		}
+		else if (n < 0) {
+			U8_BACK_N_UNSAFE(cont_instance->data(), idx, (-n));
+		}
+	}
+	void increment() noexcept {
+		codepoint_type uc;
+		U8_NEXT_UNSAFE(cont_instance->data(), idx, uc);
+	}
+
+	void decrement() noexcept {
+		codepoint_type uc;
+		U8_PREV_UNSAFE(cont_instance->data(), idx, uc);
+	}
+};
+
+// Partial spec for raw Byte-based iterator base
+template<typename Container>
+struct iterator_base<Container, true>
+{
+	template<typename, typename, typename>
+	friend class basic_string;
+
+public:
+	using value_type = typename Container::value_type;
+	using difference_type = typename Container::difference_type;
+	using reference_type = value_type;
+	using iterator_category = std::bidirectional_iterator_tag;
+
+	bool operator==( const iterator_base& it ) const noexcept { return idx == it.idx; }
+	bool operator!=( const iterator_base& it ) const noexcept { return idx != it.idx; }
+
+	iterator_base(difference_type index, Container *instance) noexcept:
+			idx(index), cont_instance(instance) {}
+
+	iterator_base() noexcept = default;
+	iterator_base( const iterator_base& ) noexcept = default;
+	iterator_base& operator=( const iterator_base& ) noexcept = default;
+	Container* get_instance() const noexcept { return cont_instance; }
+
+	value_type get_value() const noexcept { return cont_instance->storage.at(idx, std::nothrow); }
+protected:
+	difference_type		idx;
+	Container*			cont_instance = nullptr;
+
+protected:
+
+	//! Advance the iterator n times (negative values allowed!)
+	void advance( difference_type n ) noexcept {
+		idx += n;
+	}
+
+	void increment() noexcept { idx ++; }
+	void decrement() noexcept { idx --; }
+};
+
+template<typename Container, bool Raw> struct iterator;
+template<typename Container, bool Raw> struct const_iterator;
+
+template<typename Container, bool Raw = false>
+struct iterator : iterator_base<Container, Raw> {
+	iterator(typename iterator_base<Container, Raw>::difference_type index, Container *instance) noexcept:
+			iterator_base<Container, Raw>(index, instance)
+	{
+	}
+	iterator() noexcept = default;
+	iterator(const iterator &) noexcept = default;
+
+	iterator &operator=(const iterator &) noexcept = default;
+	/* Disallow creating from const_iterator */
+	iterator(const const_iterator<Container, Raw> &) = delete;
+
+	/* Prefix */
+	iterator &operator++() noexcept
+	{
+		this->increment();
+		return *this;
+	}
+
+	/* Postfix */
+	iterator operator++(int) noexcept
+	{
+		iterator tmp{this->idx, this->cont_instance};
+		this->increment();
+		return tmp;
+	}
+
+	/* Prefix */
+	iterator &operator--() noexcept
+	{
+		this->decrement();
+		return *this;
+	}
+
+	/* Postfix */
+	iterator operator--(int) noexcept
+	{
+		iterator tmp{this->idx, this->cont_instance};
+		this->decrement();
+		return tmp;
+	}
+
+	iterator operator+(typename iterator_base<Container, Raw>::difference_type n) const noexcept
+	{
+		iterator it{*this};
+		it.advance(n);
+		return it;
+	}
+
+	iterator &operator+=(typename iterator_base<Container, Raw>::difference_type n) noexcept
+	{
+		this->advance(n);
+		return *this;
+	}
+
+	iterator operator-(typename iterator_base<Container, Raw>::difference_type n) const noexcept
+	{
+		iterator it{*this};
+		it.advance(-n);
+		return it;
+	}
+
+	iterator &operator-=(typename iterator_base<Container, Raw>::difference_type n) noexcept
+	{
+		this->advance(-n);
+		return *this;
+	}
+
+	typename iterator::reference_type operator*() const noexcept
+	{
+		return this->get_value();
+	}
+};
+
+template<typename Container, bool Raw>
+struct const_iterator : iterator<Container, Raw> {
+	const_iterator(typename iterator_base<Container, Raw>::difference_type index, const Container *instance) noexcept:
+			iterator<Container, Raw>(index, const_cast<Container *>(instance))
+	{
+	}
+
+	const_iterator(const iterator<Container, Raw> &other) noexcept:
+			iterator<Container, Raw>(other)
+	{
+	}
+
+	const_iterator() noexcept = default;
+
+	const_iterator(const const_iterator &) noexcept = default;
+
+	const_iterator &operator=(const const_iterator &) noexcept = default;
+
+	const typename iterator<Container, Raw>::reference_type operator*() const noexcept
+	{
+		return this->get_value();
+	}
+};
+
 template<class T, class Allocator>
 class basic_mime_string : private Allocator {
 public:
 	using storage_type = std::basic_string<T, std::char_traits<T>, Allocator>;
 	using view_type = std::basic_string_view<T, std::char_traits<T>>;
 	using filter_type = fu2::function_view<UChar32 (UChar32)>;
+	using codepoint_type = UChar32;
+	using value_type = T;
+	using difference_type = std::ptrdiff_t;
+	using iterator = rspamd::mime::iterator<basic_mime_string, false>;
+	using const_iterator = rspamd::mime::const_iterator<basic_mime_string, false>;
+	using raw_iterator = rspamd::mime::iterator<basic_mime_string, true>;
+	using raw_const_iterator = rspamd::mime::const_iterator<basic_mime_string, true>;
 	/* Ctors */
 	basic_mime_string() noexcept : Allocator() {}
 	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
@@ -204,6 +419,47 @@ public:
 		return false;
 	}
 
+	inline iterator begin() noexcept
+	{
+		return {0, this};
+	}
+
+	inline const_iterator begin() const noexcept
+	{
+		return {0, this};
+	}
+
+	inline raw_iterator raw_begin() noexcept
+	{
+		return {0, this};
+	}
+
+	inline raw_const_iterator raw_begin() const noexcept
+	{
+		return {0, this};
+	}
+
+	inline iterator end() noexcept
+	{
+		return {(difference_type) size(), this};
+	}
+
+	inline const_iterator end() const noexcept
+	{
+		return {(difference_type) size(), this};
+	}
+
+	inline raw_iterator raw_end() noexcept
+	{
+		return {(difference_type) size(), this};
+	}
+
+	inline raw_const_iterator raw_end() const noexcept
+	{
+		return {(difference_type) size(), this};
+	}
+
+	/* For doctest stringify */
 	friend std::ostream& operator<< (std::ostream& os, const T& value) {
 		os << value.storage;
 		return os;

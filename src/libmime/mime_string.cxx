@@ -20,34 +20,35 @@
 #include "unicode/uchar.h"
 
 TEST_SUITE("mime_string") {
+using namespace rspamd::mime;
 TEST_CASE("mime_string unfiltered ctors")
 {
 	SUBCASE("empty") {
-		rspamd::mime_string st;
+		mime_string st;
 		CHECK(st.size() == 0);
 		CHECK(st == "");
 	}
 	SUBCASE("unfiltered valid") {
-		rspamd::mime_string st{std::string_view("abcd")};
+		mime_string st{std::string_view("abcd")};
 		CHECK(st == "abcd");
 	}
 	SUBCASE("unfiltered zero character") {
-		rspamd::mime_string st{"abc\0d", 5};
+		mime_string st{"abc\0d", 5};
 		CHECK(st.has_zeroes());
 		CHECK(st == "abcd");
 	}
 	SUBCASE("unfiltered invalid character - middle") {
-		rspamd::mime_string st{std::string("abc\234d")};
+		mime_string st{std::string("abc\234d")};
 		CHECK(st.has_invalid());
 		CHECK(st == "abc\uFFFDd");
 	}
 	SUBCASE("unfiltered invalid character - end") {
-		rspamd::mime_string st{std::string("abc\234")};
+		mime_string st{std::string("abc\234")};
 		CHECK(st.has_invalid());
 		CHECK(st == "abc\uFFFD");
 	}
 	SUBCASE("unfiltered invalid character - start") {
-		rspamd::mime_string st{std::string("\234abc")};
+		mime_string st{std::string("\234abc")};
 		CHECK(st.has_invalid());
 		CHECK(st == "\uFFFDabc");
 	}
@@ -68,32 +69,47 @@ TEST_CASE("mime_string filtered ctors")
 	};
 
 	SUBCASE("empty") {
-		rspamd::mime_string st{std::string_view(""), tolower_filter};
+		mime_string st{std::string_view(""), tolower_filter};
 		CHECK(st.size() == 0);
 		CHECK(st == "");
 	}
 	SUBCASE("filtered valid") {
-		rspamd::mime_string st{std::string("AbCdУ"), tolower_filter};
+		mime_string st{std::string("AbCdУ"), tolower_filter};
 		CHECK(st == "abcdу");
 	}
 	SUBCASE("filtered invalid + filtered") {
-		rspamd::mime_string st{std::string("abcd\234\1"), print_filter};
+		mime_string st{std::string("abcd\234\1"), print_filter};
 		CHECK(st == "abcd\uFFFD");
 	}
 }
 TEST_CASE("mime_string assign")
 {
 	SUBCASE("assign from valid") {
-		rspamd::mime_string st;
+		mime_string st;
 
 		CHECK(st.assign_if_valid(std::string("test")));
 		CHECK(st == "test");
 	}
 	SUBCASE("assign from invalid") {
-		rspamd::mime_string st;
+		mime_string st;
 
 		CHECK(!st.assign_if_valid(std::string("test\234t")));
 		CHECK(st == "");
+	}
+}
+
+TEST_CASE("mime_string iterators")
+{
+
+	SUBCASE("unfiltered iterator ascii") {
+		auto in = std::string("abcd");
+		mime_string st{in};
+		CHECK(st == "abcd");
+
+		int i = 0;
+		for (auto &&c : st) {
+			CHECK(c == in[i++]);
+		}
 	}
 }
 }
