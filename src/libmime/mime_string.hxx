@@ -20,7 +20,6 @@
 #include <string>
 #include <string_view>
 #include <memory>
-#include <optional>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -89,6 +88,14 @@ public:
 					  const Allocator& alloc = Allocator()) noexcept :
 			basic_mime_string(st.data(), st.size(), alloc) {}
 
+	/**
+	 * Creates a string with a filter function. It is calee responsibility to
+	 * ensure that the filter functor survives long enough to work with a string
+	 * @param str
+	 * @param sz
+	 * @param filt
+	 * @param alloc
+	 */
 	basic_mime_string(const T* str, std::size_t sz,
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
@@ -132,7 +139,7 @@ public:
 	 * @return
 	 */
 	[[nodiscard]] auto assign_if_valid(storage_type &&other) -> bool {
-		if (filter_func.has_value()) {
+		if (filter_func) {
 			/* No way */
 			return false;
 		}
@@ -153,7 +160,7 @@ public:
 	auto assign_copy(const storage_type &other) {
 		storage.clear();
 
-		if (filter_func.has_value()) {
+		if (filter_func) {
 			append_c_string_filtered(other.data(), other.size());
 		}
 		else {
@@ -162,7 +169,7 @@ public:
 	}
 
 	auto append(const T* str, std::size_t size) -> std::size_t {
-		if (filter_func.has_value()) {
+		if (filter_func) {
 			return append_c_string_filtered(str, size);
 		}
 		else {
@@ -204,7 +211,7 @@ public:
 private:
 	mime_string_flags flags = mime_string_flags::MIME_STRING_DEFAULT;
 	storage_type storage;
-	std::optional<filter_type> filter_func;
+	filter_type filter_func;
 
 	auto append_c_string_unfiltered(const T* str, std::size_t len) -> std::size_t {
 		/* This is fast path */
@@ -268,8 +275,8 @@ private:
 				flags = flags | mime_string_flags::MIME_STRING_SEEN_INVALID;
 			}
 			else {
-				if (filter_func.has_value()) {
-					uc = filter_func.value()(uc);
+				if (filter_func) {
+					uc = filter_func(uc);
 				}
 
 				if (uc == 0) {
