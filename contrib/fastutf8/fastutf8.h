@@ -29,6 +29,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 enum rspamd_fast_utf8_cpu_flags {
 	RSPAMD_FAST_UTF8_FLAG_SSE41 = 1u << 0u,
 	RSPAMD_FAST_UTF8_FLAG_AVX2 = 1u << 1u,
@@ -38,7 +41,7 @@ enum rspamd_fast_utf8_cpu_flags {
  * Called to init codecs
  * @param flags
  */
-void rspamd_fast_utf8_library_init (unsigned flags);
+void rspamd_fast_utf8_library_init(unsigned flags);
 
 /**
  * Called to validate input using fast codec
@@ -46,7 +49,7 @@ void rspamd_fast_utf8_library_init (unsigned flags);
  * @param len
  * @return
  */
-off_t rspamd_fast_utf8_validate (const unsigned char *data, size_t len);
+off_t rspamd_fast_utf8_validate(const unsigned char *data, size_t len);
 
 /**
  * Use plain C implementation
@@ -54,6 +57,9 @@ off_t rspamd_fast_utf8_validate (const unsigned char *data, size_t len);
  * @param len
  * @return
  */
-off_t rspamd_fast_utf8_validate_ref (const unsigned char *data, size_t len);
+off_t rspamd_fast_utf8_validate_ref(const unsigned char *data, size_t len);
 
+#ifdef  __cplusplus
+}
+#endif
 #endif
