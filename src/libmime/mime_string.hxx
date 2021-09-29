@@ -23,6 +23,7 @@
 #include <optional>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <iosfwd>
 #include "function2/function2.hpp"
 #include "unicode/utf8.h"
