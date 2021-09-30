@@ -32,11 +32,14 @@ namespace rspamd::mime {
 /*
  * The motivation for another string is to have utf8 valid string replacing
  * all bad things with FFFFD replacement character and filtering \0 and other
- * strange stuff defined by policies
+ * strange stuff defined by policies.
  * This string always exclude \0 characters and ignore them! This is how MUA acts,
- * and we also store a flag about bad characters
+ * and we also store a flag about bad characters.
+ * Mime string iterators are always const, so the underlying storage should not
+ * be modified externally.
  */
-template<class T=char, class Allocator = std::allocator<T>> class basic_mime_string;
+template<class T=char, class Allocator = std::allocator<T>,
+		class Functor = fu2::function_view<UChar32(UChar32)>> class basic_mime_string;
 
 using mime_string = basic_mime_string<char>;
 
@@ -68,7 +71,7 @@ bool operator !(mime_string_flags fl)
 template<typename Container, bool Raw = false>
 struct iterator_base
 {
-	template<typename, typename>
+	template<typename, typename, typename>
 	friend class basic_mime_string;
 
 public:
@@ -154,7 +157,7 @@ public:
 	iterator_base& operator=( const iterator_base& ) noexcept = default;
 	Container* get_instance() const noexcept { return cont_instance; }
 
-	value_type get_value() const noexcept { return cont_instance->storage.at(idx, std::nothrow); }
+	value_type get_value() const noexcept { return cont_instance->get_storage().at(idx); }
 protected:
 	difference_type		idx;
 	Container*			cont_instance = nullptr;
@@ -248,43 +251,17 @@ struct iterator : iterator_base<Container, Raw> {
 	}
 };
 
-template<typename Container, bool Raw>
-struct const_iterator : iterator<Container, Raw> {
-	const_iterator(typename iterator_base<Container, Raw>::difference_type index, const Container *instance) noexcept:
-			iterator<Container, Raw>(index, const_cast<Container *>(instance))
-	{
-	}
-
-	const_iterator(const iterator<Container, Raw> &other) noexcept:
-			iterator<Container, Raw>(other)
-	{
-	}
-
-	const_iterator() noexcept = default;
-
-	const_iterator(const const_iterator &) noexcept = default;
-
-	const_iterator &operator=(const const_iterator &) noexcept = default;
-
-	const typename iterator<Container, Raw>::reference_type operator*() const noexcept
-	{
-		return this->get_value();
-	}
-};
-
-template<class T, class Allocator>
+template<class T, class Allocator, class Functor>
 class basic_mime_string : private Allocator {
 public:
 	using storage_type = std::basic_string<T, std::char_traits<T>, Allocator>;
 	using view_type = std::basic_string_view<T, std::char_traits<T>>;
-	using filter_type = fu2::function_view<UChar32 (UChar32)>;
+	using filter_type = Functor;
 	using codepoint_type = UChar32;
 	using value_type = T;
 	using difference_type = std::ptrdiff_t;
 	using iterator = rspamd::mime::iterator<basic_mime_string, false>;
-	using const_iterator = rspamd::mime::const_iterator<basic_mime_string, false>;
 	using raw_iterator = rspamd::mime::iterator<basic_mime_string, true>;
-	using raw_const_iterator = rspamd::mime::const_iterator<basic_mime_string, true>;
 	/* Ctors */
 	basic_mime_string() noexcept : Allocator() {}
 	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
@@ -419,44 +396,29 @@ public:
 		return false;
 	}
 
-	inline iterator begin() noexcept
+	inline auto begin() noexcept -> iterator
 	{
 		return {0, this};
 	}
 
-	inline const_iterator begin() const noexcept
+	inline auto raw_begin() noexcept -> raw_iterator
 	{
 		return {0, this};
 	}
 
-	inline raw_iterator raw_begin() noexcept
-	{
-		return {0, this};
-	}
-
-	inline raw_const_iterator raw_begin() const noexcept
-	{
-		return {0, this};
-	}
-
-	inline iterator end() noexcept
+	inline auto end() noexcept -> iterator
 	{
 		return {(difference_type) size(), this};
 	}
 
-	inline const_iterator end() const noexcept
+	inline auto raw_end() noexcept -> raw_iterator
 	{
 		return {(difference_type) size(), this};
 	}
 
-	inline raw_iterator raw_end() noexcept
+	inline auto get_storage() const noexcept -> const storage_type &
 	{
-		return {(difference_type) size(), this};
-	}
-
-	inline raw_const_iterator raw_end() const noexcept
-	{
-		return {(difference_type) size(), this};
+		return storage;
 	}
 
 	/* For doctest stringify */
