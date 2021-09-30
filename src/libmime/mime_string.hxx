@@ -265,6 +265,8 @@ public:
 	/* Ctors */
 	basic_mime_string() noexcept : Allocator() {}
 	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
+	explicit basic_mime_string(filter_type &&filt, const Allocator& alloc = Allocator()) noexcept :
+		Allocator(alloc), filter_func(std::forward<filter_type>(filt)) {}
 
 	basic_mime_string(const CharT* str, std::size_t sz, const Allocator& alloc = Allocator()) noexcept :
 			Allocator(alloc)
