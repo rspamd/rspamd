@@ -251,14 +251,14 @@ struct iterator : iterator_base<Container, Raw> {
 	}
 };
 
-template<class T, class Allocator, class Functor>
+template<class CharT, class Allocator, class Functor>
 class basic_mime_string : private Allocator {
 public:
-	using storage_type = std::basic_string<T, std::char_traits<T>, Allocator>;
-	using view_type = std::basic_string_view<T, std::char_traits<T>>;
+	using storage_type = std::basic_string<CharT, std::char_traits<CharT>, Allocator>;
+	using view_type = std::basic_string_view<CharT, std::char_traits<CharT>>;
 	using filter_type = Functor;
 	using codepoint_type = UChar32;
-	using value_type = T;
+	using value_type = CharT;
 	using difference_type = std::ptrdiff_t;
 	using iterator = rspamd::mime::iterator<basic_mime_string, false>;
 	using raw_iterator = rspamd::mime::iterator<basic_mime_string, true>;
@@ -266,7 +266,7 @@ public:
 	basic_mime_string() noexcept : Allocator() {}
 	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
 
-	basic_mime_string(const T* str, std::size_t sz, const Allocator& alloc = Allocator()) noexcept :
+	basic_mime_string(const CharT* str, std::size_t sz, const Allocator& alloc = Allocator()) noexcept :
 			Allocator(alloc)
 	{
 		append_c_string_unfiltered(str, sz);
@@ -288,7 +288,7 @@ public:
 	 * @param filt
 	 * @param alloc
 	 */
-	basic_mime_string(const T* str, std::size_t sz,
+	basic_mime_string(const CharT* str, std::size_t sz,
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
 			Allocator(alloc),
@@ -310,7 +310,7 @@ public:
 		return storage.size();
 	}
 
-	auto data() const -> const T* {
+	auto data() const -> const CharT* {
 		return storage.data();
 	}
 
@@ -360,7 +360,8 @@ public:
 		}
 	}
 
-	auto append(const T* str, std::size_t size) -> std::size_t {
+	/* Mutators */
+	auto append(const CharT* str, std::size_t size) -> std::size_t {
 		if (filter_func) {
 			return append_c_string_filtered(str, size);
 		}
@@ -375,6 +376,30 @@ public:
 		return append(other.data(), other.size());
 	}
 
+	auto ltrim(const view_type &what) -> void
+	{
+		auto it = std::find_if(storage.begin(), storage.end(),
+				[&what](CharT c) {
+					return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
+				});
+		storage.erase(storage.begin(), it);
+	}
+
+	auto rtrim(const view_type &what) -> void
+	{
+		auto it = std::find_if(storage.rbegin(), storage.rend(),
+				[&what](CharT c) {
+					return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
+				});
+		storage.erase(it.base(), storage.end());
+	}
+
+	auto trim(const view_type &what) -> void {
+		ltrim(what);
+		rtrim(what);
+	}
+
+	/* Comparison */
 	auto operator ==(const basic_mime_string &other) {
 		return other.storage == storage;
 	}
@@ -384,7 +409,7 @@ public:
 	auto operator ==(const view_type &other) {
 		return other == storage;
 	}
-	auto operator ==(const T* other) {
+	auto operator ==(const CharT* other) {
 		if (other == NULL) {
 			return false;
 		}
@@ -396,6 +421,7 @@ public:
 		return false;
 	}
 
+	/* Iterators */
 	inline auto begin() noexcept -> iterator
 	{
 		return {0, this};
@@ -416,13 +442,14 @@ public:
 		return {(difference_type) size(), this};
 	}
 
+	/* Utility */
 	inline auto get_storage() const noexcept -> const storage_type &
 	{
 		return storage;
 	}
 
 	/* For doctest stringify */
-	friend std::ostream& operator<< (std::ostream& os, const T& value) {
+	friend std::ostream& operator<< (std::ostream& os, const CharT& value) {
 		os << value.storage;
 		return os;
 	}
@@ -431,7 +458,7 @@ private:
 	storage_type storage;
 	filter_type filter_func;
 
-	auto append_c_string_unfiltered(const T* str, std::size_t len) -> std::size_t {
+	auto append_c_string_unfiltered(const CharT* str, std::size_t len) -> std::size_t {
 		/* This is fast path */
 		const auto *p = str;
 		const auto *end = str + len;
@@ -475,7 +502,7 @@ private:
 		return storage.size() - orig_size;
 	}
 
-	auto append_c_string_filtered(const T* str, std::size_t len) -> std::size_t {
+	auto append_c_string_filtered(const CharT* str, std::size_t len) -> std::size_t {
 		std::ptrdiff_t i = 0, o = 0;
 		UChar32 uc;
 		char tmp[4];
