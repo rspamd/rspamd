@@ -111,5 +111,41 @@ TEST_CASE("mime_string iterators")
 			CHECK(c == in[i++]);
 		}
 	}
+
+	SUBCASE("unfiltered iterator utf8") {
+		auto in = std::string("тест");
+		UChar32 ucs[4] = {1090, 1077, 1089, 1090};
+		mime_string st{in};
+		CHECK(st == "тест");
+
+		int i = 0;
+		for (auto &&c : st) {
+			CHECK(c == ucs[i++]);
+		}
+		CHECK(i == sizeof(ucs) / sizeof(ucs[0]));
+	}
+
+	SUBCASE("unfiltered raw iterator ascii") {
+		auto in = std::string("abcd");
+		mime_string st{in};
+		CHECK(st == "abcd");
+
+		int i = 0;
+		for (auto it = st.raw_begin(); it != st.raw_end(); ++it) {
+			CHECK(*it == in[i++]);
+		}
+	}
+
+	SUBCASE("unfiltered raw iterator utf8") {
+		auto in = std::string("тест");
+		mime_string st{in};
+		CHECK(st == "тест");
+
+		int i = 0;
+		for (auto it = st.raw_begin(); it != st.raw_end(); ++it) {
+			CHECK(*it == in[i++]);
+		}
+		CHECK(i == in.size());
+	}
 }
 }
