@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iosfwd>
+#include "libutil/mem_pool.h"
 #include "function2/function2.hpp"
 #include "unicode/utf8.h"
 #include "contrib/fastutf8/fastutf8.h"
@@ -42,6 +43,7 @@ template<class T=char, class Allocator = std::allocator<T>,
 		class Functor = fu2::function_view<UChar32(UChar32)>> class basic_mime_string;
 
 using mime_string = basic_mime_string<char>;
+using mime_pool_string = basic_mime_string<char, mempool_allocator<char>>;
 
 /* Helpers for type safe flags */
 enum class mime_string_flags : std::uint8_t {
@@ -352,6 +354,16 @@ public:
 	 * @return
 	 */
 	auto assign_copy(const storage_type &other) {
+		storage.clear();
+
+		if (filter_func) {
+			append_c_string_filtered(other.data(), other.size());
+		}
+		else {
+			append_c_string_unfiltered(other.data(), other.size());
+		}
+	}
+	auto assign_copy(const view_type &other) {
 		storage.clear();
 
 		if (filter_func) {

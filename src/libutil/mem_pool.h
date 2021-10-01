@@ -397,4 +397,34 @@ GList *rspamd_mempool_glist_append (rspamd_mempool_t *pool,
 }
 #endif
 
+#ifdef  __cplusplus
+#include <memory> /* For allocator */
+namespace rspamd {
+
+template<class T>
+class mempool_allocator {
+public:
+	typedef T value_type;
+
+	mempool_allocator() = delete;
+	template<class U>
+	mempool_allocator(const mempool_allocator<U> &other) : pool(other.pool) {}
+	mempool_allocator(rspamd_mempool_t *_pool) : pool(_pool) {}
+	[[nodiscard]] constexpr T* allocate(std::size_t n)
+	{
+		if (G_MAXSIZE / 2 / sizeof(T) > n) {
+			throw std::runtime_error("integer overflow");
+		}
+		return reinterpret_cast<T*>(rspamd_mempool_alloc(pool, n * sizeof(T)));
+	}
+	constexpr void deallocate(T* p, std::size_t n) {
+		/* Do nothing */
+	}
+private:
+	rspamd_mempool_t *pool;
+};
+
+}
+#endif
+
 #endif
