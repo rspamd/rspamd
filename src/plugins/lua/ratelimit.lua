@@ -288,6 +288,9 @@ local bucket_schema = ts.shape{
   burst = ts.number + ts.string / lua_util.dehumanize_number,
   rate = ts.number + ts.string / str_to_rate,
   skip_recipients = ts.boolean:is_optional(),
+  symbol = ts.string:is_optional(),
+  message = ts.string:is_optional(),
+  skip_soft_reject = ts.boolean:is_optional(),
 }
 
 local function parse_limit(name, data)
@@ -598,27 +601,33 @@ local function ratelimit_cb(task)
 
         if data[1] == 1 then
           -- set symbol only and do NOT soft reject
-          if settings.symbol then
-            task:insert_result(settings.symbol, 1.0,
+          if bucket.symbol then
+            -- Per bucket symbol
+            task:insert_result(bucket.symbol, 1.0,
                 string.format('%s(%s)', lim_name, lim_key))
-            rspamd_logger.infox(task,
-                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
-                lim_name, prefix,
-                bucket.burst, bucket.rate,
-                data[2], data[3], data[4], lim_key)
-            return
-            -- set INFO symbol and soft reject
-          elseif settings.info_symbol then
-            task:insert_result(settings.info_symbol, 1.0,
-                string.format('%s(%s)', lim_name, lim_key))
+          else
+            if settings.symbol then
+              task:insert_result(settings.symbol, 1.0,
+                  string.format('%s(%s)', lim_name, lim_key))
+            elseif settings.info_symbol then
+              task:insert_result(settings.info_symbol, 1.0,
+                  string.format('%s(%s)', lim_name, lim_key))
+            end
           end
           rspamd_logger.infox(task,
               'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
               lim_name, prefix,
               bucket.burst, bucket.rate,
               data[2], data[3], data[4], lim_key)
-          task:set_pre_result('soft reject',
-              message_func(task, lim_name, prefix, bucket, lim_key), N)
+
+          if not settings.symbol and not bucket.skip_soft_reject then
+            if not bucket.message then
+              task:set_pre_result('soft reject',
+                  message_func(task, lim_name, prefix, bucket, lim_key), N)
+            else
+              task:set_pre_result('soft reject', bucket.message)
+            end
+          end
         end
       end
     end
@@ -865,6 +874,23 @@ if opts then
     }
 
     local id = rspamd_config:register_symbol(s)
+
+    -- Register per bucket symbols
+    -- Display what's enabled
+    fun.each(function(set)
+      if set.buckets then
+        for _,b in ipairs(set.buckets) do
+          if b.symbol then
+            rspamd_config:register_symbol{
+              type = 'virtual',
+              name = b.symbol,
+              score = 0.0,
+              parent = id
+            }
+          end
+        end
+      end
+    end, settings.limits)
 
     if settings.info_symbol then
       rspamd_config:register_symbol{
