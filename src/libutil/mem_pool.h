@@ -398,7 +398,8 @@ GList *rspamd_mempool_glist_append (rspamd_mempool_t *pool,
 #endif
 
 #ifdef  __cplusplus
-#include <memory> /* For allocator */
+#include <stdexcept> /* For std::runtime_error */
+
 namespace rspamd {
 
 template<class T>
