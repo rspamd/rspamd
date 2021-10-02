@@ -353,6 +353,16 @@ public:
 	 * @param other
 	 * @return
 	 */
+	 auto assign_copy(const view_type &other) {
+		storage.clear();
+
+		if (filter_func) {
+			append_c_string_filtered(other.data(), other.size());
+		}
+		else {
+			append_c_string_unfiltered(other.data(), other.size());
+		}
+	}
 	auto assign_copy(const storage_type &other) {
 		storage.clear();
 
@@ -363,7 +373,7 @@ public:
 			append_c_string_unfiltered(other.data(), other.size());
 		}
 	}
-	auto assign_copy(const view_type &other) {
+	auto assign_copy(const basic_mime_string &other) {
 		storage.clear();
 
 		if (filter_func) {
@@ -462,6 +472,18 @@ public:
 		return storage;
 	}
 
+	inline auto as_view() const noexcept -> view_type {
+		return view_type{storage};
+	}
+
+	constexpr CharT operator[](std::size_t pos) const {
+		return storage[pos];
+	}
+	constexpr CharT at(std::size_t pos) const {
+		return storage.at(pos);
+	}
+
+
 	/* For doctest stringify */
 	friend std::ostream& operator<< (std::ostream& os, const CharT& value) {
 		os << value.storage;
@@ -555,5 +577,6 @@ private:
 };
 
 }
+
 
 #endif //RSPAMD_MIME_STRING_HXX
