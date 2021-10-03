@@ -58,7 +58,6 @@ struct rspamd_email_address {
 	guint flags;
 };
 
-struct rspamd_received_header;
 struct rspamd_task;
 
 /**

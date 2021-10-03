@@ -174,7 +174,7 @@ struct rspamd_message {
 	GPtrArray *parts;				/**< list of parsed parts							*/
 	GPtrArray *text_parts;			/**< list of text parts								*/
 	struct rspamd_message_raw_headers_content raw_headers_content;
-	struct rspamd_received_header *received;	/**< list of received headers						*/
+	void *received_headers;			/**< list of received headers						*/
 	khash_t (rspamd_url_hash) *urls;
 	struct rspamd_mime_headers_table *raw_headers;	/**< list of raw headers						*/
 	struct rspamd_mime_header *headers_order;	/**< order of raw headers							*/
