@@ -310,19 +310,19 @@ public:
 					  const Allocator& alloc = Allocator()) noexcept :
 			basic_mime_string(st.data(), st.size(), std::forward<filter_type>(filt), alloc) {}
 
-	auto size() const -> std::size_t {
+	constexpr auto size() const noexcept -> std::size_t {
 		return storage.size();
 	}
 
-	auto data() const -> const CharT* {
+	constexpr auto data() const noexcept -> const CharT* {
 		return storage.data();
 	}
 
-	constexpr auto has_zeroes() const -> bool {
+	constexpr auto has_zeroes() const noexcept -> bool {
 		return !!(flags & mime_string_flags::MIME_STRING_SEEN_ZEROES);
 	}
 
-	constexpr auto has_invalid() const -> bool {
+	constexpr auto has_invalid() const noexcept -> bool {
 		return !!(flags & mime_string_flags::MIME_STRING_SEEN_INVALID);
 	}
 
@@ -476,11 +476,14 @@ public:
 		return view_type{storage};
 	}
 
-	constexpr CharT operator[](std::size_t pos) const {
+	constexpr CharT operator[](std::size_t pos) const noexcept {
 		return storage[pos];
 	}
 	constexpr CharT at(std::size_t pos) const {
 		return storage.at(pos);
+	}
+	constexpr bool empty() const noexcept {
+		return storage.empty();
 	}
 
 
