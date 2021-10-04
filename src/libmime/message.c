@@ -39,6 +39,7 @@
 #include "lua/lua_common.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/t1ha/t1ha.h"
+#include "received.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -1114,7 +1115,6 @@ rspamd_message_new (struct rspamd_task *task)
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
-	struct rspamd_received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
 	guint i;
@@ -1221,86 +1221,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		task->queue_id = "undef";
 	}
 
-	if (MESSAGE_FIELD (task, received)) {
-		gboolean need_recv_correction = FALSE;
-		rspamd_inet_addr_t *raddr;
-
-		recv = MESSAGE_FIELD (task, received);
-		/*
-		 * For the first header we must ensure that
-		 * received is consistent with the IP that we obtain through
-		 * client.
-		 */
-
-		raddr = recv->addr;
-		if (recv->real_ip == NULL || (task->cfg && task->cfg->ignore_received)) {
-			need_recv_correction = TRUE;
-		}
-		else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
-			if (!raddr) {
-				need_recv_correction = TRUE;
-			}
-			else {
-				if (rspamd_inet_address_compare (raddr, task->from_addr, FALSE) != 0) {
-					need_recv_correction = TRUE;
-				}
-			}
-		}
-
-		if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
-				&& task->from_addr) {
-			msg_debug_task ("the first received seems to be"
-					" not ours, prepend it with fake one");
-
-			trecv = rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct rspamd_received_header));
-			trecv->flags |= RSPAMD_RECEIVED_FLAG_ARTIFICIAL;
-
-			if (task->flags & RSPAMD_TASK_FLAG_SSL) {
-				trecv->flags |= RSPAMD_RECEIVED_FLAG_SSL;
-			}
-
-			if (task->user) {
-				trecv->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
-			}
-
-			trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
-					rspamd_inet_address_to_string (task->from_addr));
-			trecv->from_ip = trecv->real_ip;
-			trecv->by_hostname = rspamd_mempool_get_variable (task->task_pool,
-					RSPAMD_MEMPOOL_MTA_NAME);
-			trecv->addr = rspamd_inet_address_copy (task->from_addr);
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)rspamd_inet_address_free,
-					trecv->addr);
-
-			if (task->hostname) {
-				trecv->real_hostname = task->hostname;
-				trecv->from_hostname = trecv->real_hostname;
-			}
-
-			DL_PREPEND (MESSAGE_FIELD (task, received), trecv);
-		}
-	}
-
-	/* Extract data from received header if we were not given IP */
-	if (MESSAGE_FIELD (task, received) && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
-			(task->cfg && !task->cfg->ignore_received)) {
-		recv = MESSAGE_FIELD (task, received);
-		if (recv->real_ip) {
-			if (!rspamd_parse_inet_address (&task->from_addr,
-					recv->real_ip,
-					strlen (recv->real_ip),
-					RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
-				msg_warn_task ("cannot get IP from received header: '%s'",
-						recv->real_ip);
-				task->from_addr = NULL;
-			}
-		}
-		if (recv->real_hostname) {
-			task->hostname = recv->real_hostname;
-		}
-	}
+	rspamd_received_maybe_fix_task(task);
 
 	struct rspamd_mime_part *part;
 

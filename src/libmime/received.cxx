@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
+#include <mempool_vars_internal.h>
 #include "config.h"
-#include "received.h"
-#include "libserver/task.h"
 #include "libserver/url.h"
+#include "libserver/cfg_file.h"
 #include "mime_string.hxx"
 #include "smtp_parsers.h"
 #include "message.h"
-
-#include <vector>
-#include <string_view>
-#include <utility>
+#include "received.hxx"
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
@@ -37,64 +34,6 @@ enum class received_part_type {
 	RSPAMD_RECEIVED_PART_WITH,
 	RSPAMD_RECEIVED_PART_ID,
 	RSPAMD_RECEIVED_PART_UNKNOWN,
-};
-
-static inline auto
-received_char_filter(UChar32 uc) -> UChar32
-{
-	if (u_isprint(uc)) {
-		return u_tolower(uc);
-	}
-
-	return 0;
-}
-
-
-struct received_header {
-	mime_string from_hostname;
-	std::string_view from_ip;
-	mime_string real_hostname;
-	mime_string real_ip;
-	mime_string by_hostname;
-	std::string_view for_mbox;
-	struct rspamd_email_address *for_addr = nullptr;
-	rspamd_inet_addr_t *addr = nullptr;
-	struct rspamd_mime_header *hdr = nullptr;
-	time_t timestamp = 0;
-	int flags = 0; /* See enum rspamd_received_type */
-
-	received_header() noexcept
-			: from_hostname(received_char_filter),
-			  real_hostname(received_char_filter),
-			  real_ip(received_char_filter),
-			  by_hostname(received_char_filter),
-			  for_mbox(received_char_filter) {}
-
-	~received_header() {
-		if (for_addr) {
-			rspamd_email_address_free(for_addr);
-		}
-	}
-};
-
-class received_header_chain {
-public:
-	explicit received_header_chain(struct rspamd_task *_task) : task(_task) {
-		headers.reserve(2);
-		rspamd_mempool_add_destructor(task->task_pool,
-				received_header_chain::received_header_chain_pool_dtor, this);
-	}
-
-	auto new_received() -> received_header & {
-		headers.emplace_back();
-		return headers.back();
-	}
-private:
-	static auto received_header_chain_pool_dtor(void *ptr) -> void {
-		delete static_cast<received_header_chain *>(ptr);
-	}
-	std::vector<received_header> headers;
-	struct rspamd_task *task;
 };
 
 struct received_part {
@@ -642,7 +581,7 @@ received_process_from(struct rspamd_task *task,
 	}
 }
 
-auto
+static auto
 received_header_parse(struct rspamd_task *task, const std::string_view &in,
 					  struct rspamd_mime_header *hdr) -> bool
 {
@@ -734,6 +673,94 @@ received_header_parse(struct rspamd_task *task, const std::string_view &in,
 	return true;
 }
 
+static auto
+received_maybe_fix_task(struct rspamd_task *task) -> bool
+{
+	auto *recv_chain_ptr = static_cast<received_header_chain *>(MESSAGE_FIELD(task, received_headers));
+
+	if (recv_chain_ptr) {
+		auto need_recv_correction = false;
+
+		auto top_recv_maybe = recv_chain_ptr->get_received(0);
+
+		if (top_recv_maybe.has_value()) {
+			auto &top_recv = top_recv_maybe.value().get();
+
+			const auto *raddr = top_recv.addr;
+			if (top_recv.real_ip.size() == 0 || (task->cfg && task->cfg->ignore_received)) {
+				need_recv_correction = true;
+			}
+			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
+				if (!raddr) {
+					need_recv_correction = true;
+				}
+				else {
+					if (rspamd_inet_address_compare(raddr, task->from_addr, FALSE) != 0) {
+						need_recv_correction = true;
+					}
+				}
+			}
+
+			if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
+					&& task->from_addr) {
+				msg_debug_task ("the first received seems to be"
+								" not ours, prepend it with fake one");
+
+				auto trecv = recv_chain_ptr->new_received(received_header_chain::append_type::append_head);
+				trecv.flags |= RSPAMD_RECEIVED_FLAG_ARTIFICIAL;
+
+				if (task->flags & RSPAMD_TASK_FLAG_SSL) {
+					trecv.flags |= RSPAMD_RECEIVED_FLAG_SSL;
+				}
+
+				if (task->user) {
+					trecv.flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+				}
+
+				trecv.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(task->from_addr)));
+				trecv.from_ip = trecv.real_ip.as_view();
+
+				const auto *mta_name = (const char*)rspamd_mempool_get_variable(task->task_pool,
+						RSPAMD_MEMPOOL_MTA_NAME);
+
+				if (mta_name) {
+					trecv.by_hostname.assign_copy(std::string_view(mta_name));
+				}
+				trecv.addr = rspamd_inet_address_copy(task->from_addr);
+
+				if (task->hostname) {
+					trecv.real_hostname.assign_copy(std::string_view(task->hostname));
+					trecv.from_hostname.assign_copy(trecv.real_hostname);
+				}
+
+				return true;
+			}
+
+			/* Extract data from received header if we were not given IP */
+			if (!need_recv_correction && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
+				(task->cfg && !task->cfg->ignore_received)) {
+				if (!top_recv.real_ip.empty()) {
+					if (!rspamd_parse_inet_address (&task->from_addr,
+							top_recv.real_ip.data(),
+							top_recv.real_ip.size(),
+							RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
+						msg_warn_task ("cannot get IP from received header: '%s'",
+								top_recv.real_ip.data());
+						task->from_addr = nullptr;
+					}
+				}
+				if (!top_recv.real_hostname.empty()) {
+					task->hostname = top_recv.real_hostname.data();
+				}
+
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 } // namespace rspamd::mime
 
 bool
@@ -742,4 +769,10 @@ rspamd_received_header_parse(struct rspamd_task *task,
 							 struct rspamd_mime_header *hdr)
 {
 	return rspamd::mime::received_header_parse(task, std::string_view{data, sz}, hdr);
+}
+
+bool
+rspamd_received_maybe_fix_task(struct rspamd_task *task)
+{
+	return rspamd::mime::received_maybe_fix_task(task);
 }

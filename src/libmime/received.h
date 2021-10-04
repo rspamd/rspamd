@@ -24,6 +24,9 @@
 #ifdef  __cplusplus
 extern "C" {
 #endif
+/*
+ * C bindings for C++ received code
+ */
 
 enum rspamd_received_type {
 	RSPAMD_RECEIVED_SMTP = 1u << 0u,
@@ -58,8 +61,24 @@ struct rspamd_email_address;
 struct rspamd_received_header_chain;
 struct rspamd_mime_header;
 
+/**
+ * Parse received header from an input header data
+ * @param task
+ * @param data
+ * @param sz
+ * @param hdr
+ * @return
+ */
 bool rspamd_received_header_parse(struct rspamd_task *task,
 		const char *data, size_t sz, struct rspamd_mime_header *hdr);
+
+
+/**
+ * Process task data and the most top received and fix either part if needed
+ * @param task
+ * @return
+ */
+bool rspamd_received_maybe_fix_task(struct rspamd_task *task);
 
 #ifdef  __cplusplus
 }

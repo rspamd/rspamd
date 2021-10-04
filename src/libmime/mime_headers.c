@@ -38,7 +38,6 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		struct rspamd_mime_header *rh)
 {
 	guint64 h;
-	struct rspamd_received_header *recv;
 	const gchar *p, *end;
 	gchar *id;
 	gint max_recipients = -1, len;
@@ -51,16 +50,9 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 
 	switch (h) {
 	case 0x88705DC4D9D61ABULL:	/* received */
-		recv = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct rspamd_received_header));
-		recv->hdr = rh;
-
-		if (rspamd_smtp_received_parse (task, rh->decoded,
-				strlen (rh->decoded), recv) != -1) {
-			DL_APPEND (MESSAGE_FIELD (task, received), recv);
+		if (rspamd_received_header_parse(task, rh->decoded, strlen (rh->decoded), rh)) {
+			rh->flags |= RSPAMD_HEADER_RECEIVED;
 		}
-
-		rh->flags |= RSPAMD_HEADER_RECEIVED;
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */
 		MESSAGE_FIELD (task, rcpt_mime) = rspamd_email_address_from_mime (task->task_pool,
