@@ -1,4 +1,4 @@
-Received: by mail-lf1-f54.gulugulu.com with SMTP id j14so14439709lfg.9
+Received: from localhost by mail-lf1-f54.gulugulu.com with SMTP id j14so14439709lfg.9
         for <test@test.ru>; Mon, 27 Apr 2020 09:54:21 -0700 (PDT)
 From: test@test.com
 Date: Mon, 27 Apr 2020 19:54:10 +0300
