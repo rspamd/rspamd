@@ -166,7 +166,7 @@ public:
 
 		return std::nullopt;
 	}
-	constexpr auto size() const -> std::size_t {
+	auto size() const -> std::size_t {
 		return headers.size();
 	}
 	constexpr auto as_vector() const -> const std::vector<received_header>& {
