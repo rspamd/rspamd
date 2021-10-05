@@ -31,6 +31,7 @@
 #include "libserver/maps/map_helpers.h"
 
 #include <math.h>
+#include "libmime/received.h"
 
 /***
  * @module rspamd_task
@@ -3139,9 +3140,6 @@ lua_task_get_received_headers (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_received_header *rh;
-	const gchar *proto;
-	guint k = 1;
 
 	if (task) {
 		if (!task->message) {
@@ -3151,115 +3149,15 @@ lua_task_get_received_headers (lua_State * L)
 		}
 
 		if (!lua_task_get_cached (L, task, "received")) {
-			lua_createtable (L, 0, 0);
 
-			DL_FOREACH (MESSAGE_FIELD (task, received), rh) {
-				lua_createtable (L, 0, 10);
-
-				if (rh->hdr && rh->hdr->decoded) {
-					rspamd_lua_table_set (L, "raw", rh->hdr->decoded);
-				}
-
-				lua_pushstring (L, "flags");
-				lua_createtable (L, 0, 3);
-
-				lua_pushstring (L, "artificial");
-				if (rh->flags & RSPAMD_RECEIVED_FLAG_ARTIFICIAL) {
-					lua_pushboolean (L, true);
-				}
-				else {
-					lua_pushboolean (L, false);
-				}
-				lua_settable (L, -3);
-
-				lua_pushstring (L, "authenticated");
-				if (rh->flags & RSPAMD_RECEIVED_FLAG_AUTHENTICATED) {
-					lua_pushboolean (L, true);
-				}
-				else {
-					lua_pushboolean (L, false);
-				}
-				lua_settable (L, -3);
-
-				lua_pushstring (L, "ssl");
-				if (rh->flags & RSPAMD_RECEIVED_FLAG_SSL) {
-					lua_pushboolean (L, true);
-				}
-				else {
-					lua_pushboolean (L, false);
-				}
-				lua_settable (L, -3);
-
-				lua_settable (L, -3);
-
-				if (G_UNLIKELY (rh->from_ip == NULL &&
-						rh->real_ip == NULL &&
-						rh->real_hostname == NULL &&
-						rh->by_hostname == NULL && rh->timestamp == 0 &&
-						rh->for_mbox == NULL)) {
-					lua_rawseti (L, -2, k ++);
-
-					continue;
-				}
-
-				rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
-				rspamd_lua_table_set (L, "from_ip", rh->from_ip);
-				rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
-				lua_pushstring (L, "real_ip");
-				rspamd_lua_ip_push (L, rh->addr);
-				lua_settable (L, -3);
-				lua_pushstring (L, "proto");
-
-				switch (rh->flags & RSPAMD_RECEIVED_FLAG_TYPE_MASK) {
-				case RSPAMD_RECEIVED_SMTP:
-					proto = "smtp";
-					break;
-				case RSPAMD_RECEIVED_ESMTP:
-					proto = "esmtp";
-					break;
-				case RSPAMD_RECEIVED_ESMTPS:
-					proto = "esmtps";
-					break;
-				case RSPAMD_RECEIVED_ESMTPA:
-					proto = "esmtpa";
-					break;
-				case RSPAMD_RECEIVED_ESMTPSA:
-					proto = "esmtpsa";
-					break;
-				case RSPAMD_RECEIVED_LMTP:
-					proto = "lmtp";
-					break;
-				case RSPAMD_RECEIVED_IMAP:
-					proto = "imap";
-					break;
-				case RSPAMD_RECEIVED_HTTP:
-					proto = "http";
-					break;
-				case RSPAMD_RECEIVED_LOCAL:
-					proto = "local";
-					break;
-				case RSPAMD_RECEIVED_MAPI:
-					proto = "mapi";
-					break;
-				case RSPAMD_RECEIVED_UNKNOWN:
-				default:
-					proto = "unknown";
-					break;
-				}
-
-				lua_pushstring (L, proto);
-				lua_settable (L, -3);
-
-				lua_pushstring (L, "timestamp");
-				lua_pushinteger (L, rh->timestamp);
-				lua_settable (L, -3);
-
-				rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
-				rspamd_lua_table_set (L, "for", rh->for_mbox);
-				lua_rawseti (L, -2, k ++);
+			if (rspamd_received_export_to_lua(task, L)) {
+				lua_task_set_cached (L, task, "received", -1);
 			}
-
-			lua_task_set_cached (L, task, "received", -1);
+			else {
+				/* no received, preserve compatibility */
+				lua_newtable (L);
+				return 1;
+			}
 		}
 	}
 	else {

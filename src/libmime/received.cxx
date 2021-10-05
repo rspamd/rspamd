@@ -17,6 +17,7 @@
 #include <mempool_vars_internal.h>
 #include "config.h"
 #include "libserver/url.h"
+#include "lua/lua_common.h"
 #include "libserver/cfg_file.h"
 #include "mime_string.hxx"
 #include "smtp_parsers.h"
@@ -587,18 +588,24 @@ received_header_parse(struct rspamd_task *task, const std::string_view &in,
 {
 	std::ptrdiff_t date_pos = -1;
 
-	static constexpr const auto protos_map = frozen::make_unordered_map<frozen::string, int>({
-			{"smtp",    RSPAMD_RECEIVED_SMTP},
-			{"esmtp",   RSPAMD_RECEIVED_ESMTP},
-			{"esmtpa",  RSPAMD_RECEIVED_ESMTPA | RSPAMD_RECEIVED_FLAG_AUTHENTICATED},
-			{"esmtpsa", RSPAMD_RECEIVED_ESMTPSA | RSPAMD_RECEIVED_FLAG_SSL | RSPAMD_RECEIVED_FLAG_AUTHENTICATED},
-			{"esmtps",  RSPAMD_RECEIVED_ESMTPS | RSPAMD_RECEIVED_FLAG_SSL},
-			{"lmtp",    RSPAMD_RECEIVED_LMTP},
-			{"imap",    RSPAMD_RECEIVED_IMAP},
-			{"imaps",   RSPAMD_RECEIVED_IMAP | RSPAMD_RECEIVED_FLAG_SSL},
-			{"http",    RSPAMD_RECEIVED_HTTP},
-			{"https",   RSPAMD_RECEIVED_HTTP | RSPAMD_RECEIVED_FLAG_SSL},
-			{"local",   RSPAMD_RECEIVED_LOCAL}
+	static constexpr const auto protos_map = frozen::make_unordered_map<frozen::string, received_flags>({
+			{"smtp",    received_flags::SMTP},
+			{"esmtp",   received_flags::ESMTP},
+			{"esmtpa",  received_flags::ESMTPA |
+						received_flags::AUTHENTICATED},
+			{"esmtpsa", received_flags::ESMTPSA |
+						received_flags::SSL |
+						received_flags::AUTHENTICATED},
+			{"esmtps",  received_flags::ESMTPS |
+						received_flags::SSL},
+			{"lmtp",    received_flags::LMTP},
+			{"imap",    received_flags::IMAP},
+			{"imaps",   received_flags::IMAP |
+						received_flags::SSL},
+			{"http",    received_flags::HTTP},
+			{"https",   received_flags::HTTP |
+						received_flags::SSL},
+			{"local",   received_flags::LOCAL}
 	});
 
 	auto parts = received_spill(task, in, date_pos);
@@ -617,7 +624,7 @@ received_header_parse(struct rspamd_task *task, const std::string_view &in,
 
 	auto &rh = recv_chain_ptr->new_received();
 
-	rh.flags = RSPAMD_RECEIVED_UNKNOWN;
+	rh.flags = received_flags::UNKNOWN;
 	rh.hdr = hdr;
 
 	for (const auto &part : parts) {
@@ -707,14 +714,14 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 								" not ours, prepend it with fake one");
 
 				auto trecv = recv_chain_ptr->new_received(received_header_chain::append_type::append_head);
-				trecv.flags |= RSPAMD_RECEIVED_FLAG_ARTIFICIAL;
+				trecv.flags |= received_flags::ARTIFICIAL;
 
 				if (task->flags & RSPAMD_TASK_FLAG_SSL) {
-					trecv.flags |= RSPAMD_RECEIVED_FLAG_SSL;
+					trecv.flags |= received_flags::SSL;
 				}
 
 				if (task->user) {
-					trecv.flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+					trecv.flags |= received_flags::AUTHENTICATED;
 				}
 
 				trecv.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(task->from_addr)));
@@ -761,6 +768,99 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 	return false;
 }
 
+static auto
+received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
+{
+	if (chain == nullptr) {
+		return false;
+	}
+
+	lua_createtable(L, chain->size(), 0);
+
+	auto push_flag = [L](const received_header &rh, received_flags fl, const char *name) {
+		lua_pushboolean(L, !!(rh.flags & fl));
+		lua_setfield(L, -2, name);
+	};
+
+	auto i = 1;
+
+	for (const auto &rh : chain->as_vector()) {
+		lua_createtable (L, 0, 10);
+
+		if (rh.hdr && rh.hdr->decoded) {
+			rspamd_lua_table_set(L, "raw", rh.hdr->decoded);
+		}
+
+		lua_createtable(L, 0, 3);
+		push_flag(rh, received_flags::ARTIFICIAL, "artificial");
+		push_flag(rh, received_flags::AUTHENTICATED, "authenticated");
+		push_flag(rh, received_flags::SSL, "ssl");
+		lua_setfield(L, -2, "flags");
+
+		lua_pushlstring(L, rh.from_hostname.data(), rh.from_hostname.size());
+		lua_setfield(L, -2, "from_hostname");
+		lua_pushlstring(L, rh.real_hostname.data(), rh.real_hostname.size());
+		lua_setfield(L, -2, "real_hostname");
+		lua_pushlstring(L, rh.from_ip.data(), rh.from_ip.size());
+		lua_setfield(L, -2, "from_ip");
+		lua_pushlstring(L, rh.by_hostname.data(), rh.by_hostname.size());
+		lua_setfield(L, -2, "by_hostname");
+		lua_pushlstring(L, rh.for_mbox.data(), rh.for_mbox.size());
+		lua_setfield(L, -2, "for");
+
+		rspamd_lua_ip_push (L, rh.addr);
+		lua_setfield(L, -2, "real_ip");
+
+		const auto *proto = "unknown";
+
+		switch (received_type_apply_maks(rh.flags)) {
+		case received_flags::SMTP:
+			proto = "smtp";
+			break;
+		case received_flags::ESMTP:
+			proto = "esmtp";
+			break;
+		case received_flags::ESMTPS:
+			proto = "esmtps";
+			break;
+		case received_flags::ESMTPA:
+			proto = "esmtpa";
+			break;
+		case received_flags::ESMTPSA:
+			proto = "esmtpsa";
+			break;
+		case received_flags::LMTP:
+			proto = "lmtp";
+			break;
+		case received_flags::IMAP:
+			proto = "imap";
+			break;
+		case received_flags::HTTP:
+			proto = "http";
+			break;
+		case received_flags::LOCAL:
+			proto = "local";
+			break;
+		case received_flags::MAPI:
+			proto = "mapi";
+			break;
+		default:
+			proto = "unknown";
+			break;
+		}
+
+		lua_pushstring(L, proto);
+		lua_setfield(L, -2, "proto");
+
+		lua_pushinteger(L, rh.timestamp);
+		lua_setfield(L, -2, "timestamp");
+
+		lua_rawseti(L, -2, i++);
+	}
+
+	return true;
+}
+
 } // namespace rspamd::mime
 
 bool
@@ -775,4 +875,12 @@ bool
 rspamd_received_maybe_fix_task(struct rspamd_task *task)
 {
 	return rspamd::mime::received_maybe_fix_task(task);
+}
+
+bool
+rspamd_received_export_to_lua(struct rspamd_task *task, lua_State *L)
+{
+	return rspamd::mime::received_export_to_lua(
+			static_cast<rspamd::mime::received_header_chain *>(MESSAGE_FIELD(task, received_headers)),
+			L);
 }

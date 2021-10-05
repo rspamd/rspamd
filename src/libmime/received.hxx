@@ -41,6 +41,73 @@ received_char_filter(UChar32 uc) -> UChar32
 	return 0;
 }
 
+enum class received_flags {
+	DEFAULT = 0,
+	SMTP = 1u << 0u,
+	ESMTP = 1u << 1u,
+	ESMTPA = 1u << 2u,
+	ESMTPS = 1u << 3u,
+	ESMTPSA = 1u << 4u,
+	LMTP = 1u << 5u,
+	IMAP = 1u << 6u,
+	LOCAL = 1u << 7u,
+	HTTP = 1u << 8u,
+	MAPI = 1u << 9u,
+	UNKNOWN = 1u << 10u,
+	ARTIFICIAL = (1u << 11u),
+	SSL = (1u << 12u),
+	AUTHENTICATED = (1u << 13u),
+};
+
+#define RSPAMD_RECEIVED_FLAG_TYPE_MASK (received_flags::SMTP| \
+            RSPAMD_RECEIVED_ESMTP| \
+            RSPAMD_RECEIVED_ESMTPA| \
+            RSPAMD_RECEIVED_ESMTPS| \
+            RSPAMD_RECEIVED_ESMTPSA| \
+            RSPAMD_RECEIVED_LMTP| \
+            RSPAMD_RECEIVED_IMAP| \
+            RSPAMD_RECEIVED_LOCAL| \
+            RSPAMD_RECEIVED_HTTP| \
+            RSPAMD_RECEIVED_MAPI| \
+            RSPAMD_RECEIVED_UNKNOWN)
+
+constexpr received_flags operator |(received_flags lhs, received_flags rhs)
+{
+	using ut = std::underlying_type<received_flags>::type;
+	return static_cast<received_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
+}
+
+constexpr received_flags operator |=(received_flags &lhs, const received_flags rhs)
+{
+	using ut = std::underlying_type<received_flags>::type;
+	lhs = static_cast<received_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
+	return lhs;
+}
+
+constexpr received_flags operator &(received_flags lhs, received_flags rhs)
+{
+	using ut = std::underlying_type<received_flags>::type;
+	return static_cast<received_flags>(static_cast<ut>(lhs) & static_cast<ut>(rhs));
+}
+
+constexpr bool operator !(received_flags fl)
+{
+	return fl == received_flags::DEFAULT;
+}
+
+constexpr received_flags received_type_apply_maks(received_flags fl) {
+	return fl & (received_flags::SMTP|
+			received_flags::ESMTP|
+			received_flags::ESMTPA|
+			received_flags::ESMTPS|
+			received_flags::ESMTPSA|
+			received_flags::IMAP|
+			received_flags::HTTP|
+			received_flags::LOCAL|
+			received_flags::MAPI|
+			received_flags::LMTP);
+}
+
 struct received_header {
 	mime_string from_hostname;
 	std::string_view from_ip;
@@ -52,7 +119,7 @@ struct received_header {
 	rspamd_inet_addr_t *addr = nullptr;
 	struct rspamd_mime_header *hdr = nullptr;
 	time_t timestamp = 0;
-	int flags = 0; /* See enum rspamd_received_type */
+	received_flags flags = received_flags::DEFAULT; /* See enum rspamd_received_type */
 
 	received_header() noexcept
 			: from_hostname(received_char_filter),
@@ -98,6 +165,12 @@ public:
 		}
 
 		return std::nullopt;
+	}
+	constexpr auto size() const -> std::size_t {
+		return headers.size();
+	}
+	constexpr auto as_vector() const -> const std::vector<received_header>& {
+		return headers;
 	}
 private:
 	static auto received_header_chain_pool_dtor(void *ptr) -> void {
