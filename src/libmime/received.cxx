@@ -489,9 +489,9 @@ received_process_host_tcpinfo(struct rspamd_task *task,
 			auto obrace_pos = in.find('[');
 
 			if (obrace_pos != std::string_view::npos) {
-				auto ebrace_pos = in.rfind(']', obrace_pos);
+				auto ebrace_pos = in.rfind(']');
 
-				if (ebrace_pos != std::string_view::npos) {
+				if (ebrace_pos != std::string_view::npos && ebrace_pos > obrace_pos) {
 					auto substr_addr = in.substr(obrace_pos + 1,
 							ebrace_pos - obrace_pos - 1);
 					addr = rspamd_parse_inet_address_pool(substr_addr.data(),
