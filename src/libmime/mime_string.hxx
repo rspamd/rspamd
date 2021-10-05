@@ -501,7 +501,7 @@ private:
 		/* This is fast path */
 		const auto *p = str;
 		const auto *end = str + len;
-		std::ptrdiff_t err_offset;
+		std::int32_t err_offset; // We have to use int32_t here as old libicu is brain-damaged
 		auto orig_size = storage.size();
 
 		storage.reserve(len + storage.size());
