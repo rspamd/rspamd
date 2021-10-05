@@ -250,6 +250,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		ignore_bad_tag,
 		tag_end,
 		slash_after_value,
+		slash_in_unqouted_value,
 	} state;
 
 	state = static_cast<enum tag_parser_state>(parser_env.cur_state);
@@ -513,8 +514,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_value:
 		if (*in == '/') {
-			state = slash_after_value;
-			store_component_value();
+			state = slash_in_unqouted_value;
 		}
 		else if (g_ascii_isspace (*in) || *in == '>' || *in == '"') {
 			store_component_value();
@@ -568,6 +568,20 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		else if (!g_ascii_isspace(*in)) {
 			tag->flags |= FL_BROKEN;
 			state = parse_attr_name;
+		}
+		break;
+	case slash_in_unqouted_value:
+		if (*in == '>') {
+			/* That slash was in fact closing tag slash, wohoo */
+			tag->flags |= FL_CLOSED;
+			state = tag_end;
+			store_component_value();
+		}
+		else {
+			/* Welcome to the world of html, revert state and save missing / */
+			parser_env.buf.push_back('/');
+			store_value_character(false);
+			state = parse_value;
 		}
 		break;
 	case ignore_bad_tag:
