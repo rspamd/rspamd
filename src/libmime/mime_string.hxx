@@ -52,19 +52,19 @@ enum class mime_string_flags : std::uint8_t {
 	MIME_STRING_SEEN_INVALID = 0x1 << 1,
 };
 
-mime_string_flags operator |(mime_string_flags lhs, mime_string_flags rhs)
+constexpr mime_string_flags operator |(mime_string_flags lhs, mime_string_flags rhs)
 {
 	using ut = std::underlying_type<mime_string_flags>::type;
 	return static_cast<mime_string_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
 }
 
-mime_string_flags operator &(mime_string_flags lhs, mime_string_flags rhs)
+constexpr mime_string_flags operator &(mime_string_flags lhs, mime_string_flags rhs)
 {
 	using ut = std::underlying_type<mime_string_flags>::type;
 	return static_cast<mime_string_flags>(static_cast<ut>(lhs) & static_cast<ut>(rhs));
 }
 
-bool operator !(mime_string_flags fl)
+constexpr bool operator !(mime_string_flags fl)
 {
 	return fl == mime_string_flags::MIME_STRING_DEFAULT;
 }
