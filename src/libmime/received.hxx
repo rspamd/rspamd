@@ -59,18 +59,6 @@ enum class received_flags {
 	AUTHENTICATED = (1u << 13u),
 };
 
-#define RSPAMD_RECEIVED_FLAG_TYPE_MASK (received_flags::SMTP| \
-            RSPAMD_RECEIVED_ESMTP| \
-            RSPAMD_RECEIVED_ESMTPA| \
-            RSPAMD_RECEIVED_ESMTPS| \
-            RSPAMD_RECEIVED_ESMTPSA| \
-            RSPAMD_RECEIVED_LMTP| \
-            RSPAMD_RECEIVED_IMAP| \
-            RSPAMD_RECEIVED_LOCAL| \
-            RSPAMD_RECEIVED_HTTP| \
-            RSPAMD_RECEIVED_MAPI| \
-            RSPAMD_RECEIVED_UNKNOWN)
-
 constexpr received_flags operator |(received_flags lhs, received_flags rhs)
 {
 	using ut = std::underlying_type<received_flags>::type;
@@ -126,6 +114,27 @@ struct received_header {
 			  real_hostname(received_char_filter),
 			  real_ip(received_char_filter),
 			  by_hostname(received_char_filter) {}
+	/* We have raw C pointers, so copy is explicitly disabled */
+	received_header(const received_header &other) = delete;
+	received_header(received_header &&other) noexcept {
+		*this = std::move(other);
+	}
+
+	received_header& operator=(received_header &&other) noexcept {
+		if (this != &other) {
+			from_hostname = std::move(other.from_hostname);
+			from_ip = std::move(other.from_ip);
+			real_hostname = std::move(other.real_hostname);
+			by_hostname = std::move(other.by_hostname);
+			for_mbox = std::move(other.for_mbox);
+			timestamp = other.timestamp;
+			flags = other.flags;
+			std::swap(for_addr, other.for_addr);
+			std::swap(addr, other.addr);
+			std::swap(hdr, other.hdr);
+		}
+		return *this;
+	}
 
 	~received_header() {
 		if (for_addr) {
@@ -154,7 +163,7 @@ public:
 			return headers.back();
 		}
 		else {
-			headers.insert(std::begin(headers), {});
+			headers.insert(std::begin(headers), received_header());
 
 			return headers.front();
 		}

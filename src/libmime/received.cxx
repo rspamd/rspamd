@@ -713,7 +713,7 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 				msg_debug_task ("the first received seems to be"
 								" not ours, prepend it with fake one");
 
-				auto trecv = recv_chain_ptr->new_received(received_header_chain::append_type::append_head);
+				auto &trecv = recv_chain_ptr->new_received(received_header_chain::append_type::append_head);
 				trecv.flags |= received_flags::ARTIFICIAL;
 
 				if (task->flags & RSPAMD_TASK_FLAG_SSL) {
