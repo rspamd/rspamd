@@ -268,7 +268,7 @@ public:
 	basic_mime_string() noexcept : Allocator() {}
 	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
 	explicit basic_mime_string(filter_type &&filt, const Allocator& alloc = Allocator()) noexcept :
-		Allocator(alloc), filter_func(std::forward<filter_type>(filt)) {}
+		Allocator(alloc), filter_func(std::move(filt)) {}
 
 	basic_mime_string(const CharT* str, std::size_t sz, const Allocator& alloc = Allocator()) noexcept :
 			Allocator(alloc)
@@ -296,7 +296,7 @@ public:
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
 			Allocator(alloc),
-			filter_func(std::forward<filter_type>(filt))
+			filter_func(std::move(filt))
 	{
 		append_c_string_filtered(str, sz);
 	}
@@ -304,11 +304,11 @@ public:
 	basic_mime_string(const storage_type &st,
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), std::forward<filter_type>(filt), alloc) {}
+			basic_mime_string(st.data(), st.size(), std::move(filt), alloc) {}
 	basic_mime_string(const view_type &st,
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), std::forward<filter_type>(filt), alloc) {}
+			basic_mime_string(st.data(), st.size(), std::move(filt), alloc) {}
 
 	constexpr auto size() const noexcept -> std::size_t {
 		return storage.size();
