@@ -895,7 +895,7 @@ TEST_CASE("parse received")
 			 "\t(Client did not present a certificate)\n"
 			 "\tby mx1.freebsd.org (Postfix) with ESMTPS id CF0171862\n"
 			 "\tfor <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)\n"
-			 "\t(envelope-from upwest201diana@outlook.com)",
+			 "\t(envelope-from upwest201diana@outlook.com)"sv,
 					{
 							{"real_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
 							{"from_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
@@ -909,7 +909,7 @@ TEST_CASE("parse received")
 			 " by hummus.csx.cam.ac.uk with esmtp (Exim 4.91-pdpfix1)\n"
 			 " (envelope-from <exim-dev-bounces@exim.org>)\n"
 			 " id 1fZ55o-0006DP-3H\n"
-			 " for <xxx@xxx.xxx>; Sat, 30 Jun 2018 02:54:28 +0100",
+			 " for <xxx@xxx.xxx>; Sat, 30 Jun 2018 02:54:28 +0100"sv,
 					{
 							{"from_hostname", "localhost"},
 							{"from_ip", "127.0.0.1"},
@@ -924,7 +924,7 @@ TEST_CASE("parse received")
 			 " by hummus.csx.cam.ac.uk with esmtpsa (TLSv1.3:TLS_AES_256_GCM_SHA384:256)\n"
 			 " (Exim 4.91-pdpfix1+cc) (envelope-from <xxx@exim.org>)\n"
 			 " id 1fZ55k-0006CO-9M\n"
-			 " for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100",
+			 " for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100"sv,
 					{
 							{"from_hostname", "smtp.spodhuis.org"},
 							{"from_ip", "2a02:898:31:0:48:4558:736d:7470"},
@@ -936,7 +936,7 @@ TEST_CASE("parse received")
 			// Haraka received
 			{"from aaa.cn ([1.1.1.1]) by localhost.localdomain (Haraka/2.8.18) with "
 			 "ESMTPA id 349C9C2B-491A-4925-A687-3EF14038C344.1 envelope-from <huxin@xxx.com> "
-			 "(authenticated bits=0); Tue, 03 Jul 2018 14:18:13 +0200",
+			 "(authenticated bits=0); Tue, 03 Jul 2018 14:18:13 +0200"sv,
 					{
 							{"from_hostname", "aaa.cn"},
 							{"from_ip", "1.1.1.1"},
@@ -947,7 +947,7 @@ TEST_CASE("parse received")
 			// Invalid by
 			{"from [192.83.172.101] (HELLO 148.251.238.35) (148.251.238.35) "
 			 "by guovswzqkvry051@sohu.com with gg login "
-			 "by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300",
+			 "by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300"sv,
 					{
 							{"from_hostname", "192.83.172.101"},
 							{"from_ip", "192.83.172.101"},
@@ -956,7 +956,7 @@ TEST_CASE("parse received")
 			},
 			// Invalid hostinfo
 			{"from example.com ([]) by example.com with ESMTP id 2019091111 ;"
-			 " Thu, 26 Sep 2019 11:19:07 +0200",
+			 " Thu, 26 Sep 2019 11:19:07 +0200"sv,
 					{
 							{"by_hostname", "example.com"},
 							{"from_hostname", "example.com"},
@@ -966,7 +966,7 @@ TEST_CASE("parse received")
 			// Different real and announced hostnames + broken crap
 			{"from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) "
 			 "with;ESMTP id 44QShF6xj4z1X for <hey@y.br>; Thu, 21 Mar 2019 23:45:46 -0300 "
-			 ": <g @yi.br>",
+			 ": <g @yi.br>"sv,
 					{
 							{"real_ip", "1.1.1.1"},
 							{"from_ip", "1.1.1.1"},
@@ -976,12 +976,32 @@ TEST_CASE("parse received")
 					}
 			},
 			// Different real and announced ips + no hostname
-			{"from [127.0.0.1] ([127.0.0.2]) by smtp.gmail.com with ESMTPSA id xxxololo",
+			{"from [127.0.0.1] ([127.0.0.2]) by smtp.gmail.com with ESMTPSA id xxxololo"sv,
 					{
 							{"real_ip", "127.0.0.2"},
 							{"from_ip", "127.0.0.2"},
 							{"from_hostname", "127.0.0.1"},
 							{"by_hostname", "smtp.gmail.com"},
+					}
+			},
+			// Different real and hostanes
+			{"from 185.118.166.127 (steven2.zhou01.pserver.ru [185.118.166.127]) "
+			 "by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
+					{
+							{"real_ip", "185.118.166.127"},
+							{"from_ip", "185.118.166.127"},
+							{"from_hostname", "185.118.166.127"},
+							{"real_hostname", "steven2.zhou01.pserver.ru"},
+							{"by_hostname", "mail.832zsu.cn"},
+					}
+			},
+			// \0 in received must be filtered
+			{"from smtp11.mailt\0rack.pl (smtp11.mail\0track.pl [1\085.243.30.90])"sv,
+					{
+							{"real_ip", "185.243.30.90"},
+							{"from_ip", "185.243.30.90"},
+							{"real_hostname", "smtp11.mailtrack.pl"},
+							{"from_hostname", "smtp11.mailtrack.pl"}
 					}
 			},
 	};
