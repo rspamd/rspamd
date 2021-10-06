@@ -142,6 +142,8 @@ rspamd_mempool_t *rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags,
 
 #define rspamd_mempool_new(size, tag, flags) \
 	rspamd_mempool_new_((size), (tag), (flags), G_STRLOC)
+#define rspamd_mempool_new_default(tag, flags) \
+	rspamd_mempool_new_(rspamd_mempool_suggest_size_(G_STRLOC), (tag), (flags), G_STRLOC)
 
 /**
  * Get memory from pool
