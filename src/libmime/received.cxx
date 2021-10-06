@@ -629,15 +629,9 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 			}
 			break;
 		case received_part_type::RSPAMD_RECEIVED_PART_FOR:
-			rh.for_addr = rspamd_email_address_from_smtp(part.data.data(),
-					part.data.size());
-
-			if (rh.for_addr) {
-				if (rh.for_addr->addr_len > 0) {
-					rh.for_mbox = std::string_view{rh.for_addr->addr,
-												   rh.for_addr->addr_len};
-				}
-			}
+			rh.for_mbox.assign_copy(part.data);
+			rh.for_addr = rspamd_email_address_from_smtp(rh.for_mbox.data(),
+					rh.for_mbox.size());
 			break;
 		default:
 			/* Do nothing */

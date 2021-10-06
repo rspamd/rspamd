@@ -103,7 +103,7 @@ struct received_header {
 	mime_string real_hostname;
 	mime_string real_ip;
 	mime_string by_hostname;
-	std::string_view for_mbox;
+	mime_string for_mbox;
 	struct rspamd_email_address *for_addr = nullptr;
 	rspamd_inet_addr_t *addr = nullptr;
 	struct rspamd_mime_header *hdr = nullptr;
@@ -128,7 +128,7 @@ struct received_header {
 			real_hostname = std::move(other.real_hostname);
 			real_ip = std::move(other.real_ip);
 			by_hostname = std::move(other.by_hostname);
-			for_mbox = other.for_mbox;
+			for_mbox = std::move(other.for_mbox);
 			timestamp = other.timestamp;
 			flags = other.flags;
 			std::swap(for_addr, other.for_addr);
@@ -159,7 +159,7 @@ struct received_header {
 			rh.from_ip = map.at("from_ip"sv);
 		}
 		if (map.contains("for_mbox")) {
-			rh.for_mbox = map.at("for_mbox"sv);
+			rh.for_mbox.assign_copy(map.at("for_mbox"sv));
 		}
 
 		return rh;
@@ -185,7 +185,7 @@ struct received_header {
 			map["from_ip"] = from_ip;
 		}
 		if (!for_mbox.empty()) {
-			map["for_mbox"] = for_mbox;
+			map["for_mbox"] = for_mbox.as_view();
 		}
 
 		return map;
