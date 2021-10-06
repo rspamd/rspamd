@@ -99,7 +99,6 @@ constexpr received_flags received_type_apply_maks(received_flags fl) {
 
 struct received_header {
 	mime_string from_hostname;
-	std::string_view from_ip;
 	mime_string real_hostname;
 	mime_string real_ip;
 	mime_string by_hostname;
@@ -125,7 +124,6 @@ struct received_header {
 	received_header& operator=(received_header &&other) noexcept {
 		if (this != &other) {
 			from_hostname = std::move(other.from_hostname);
-			from_ip = other.from_ip;
 			real_hostname = std::move(other.real_hostname);
 			real_ip = std::move(other.real_ip);
 			by_hostname = std::move(other.by_hostname);
@@ -156,9 +154,6 @@ struct received_header {
 		if (map.contains("real_ip")) {
 			rh.real_ip.assign_copy(map.at("real_ip"sv));
 		}
-		if (map.contains("from_ip")) {
-			rh.from_ip = map.at("from_ip"sv);
-		}
 		if (map.contains("for_mbox")) {
 			rh.for_mbox.assign_copy(map.at("for_mbox"sv));
 		}
@@ -181,9 +176,6 @@ struct received_header {
 		}
 		if (!real_ip.empty()) {
 			map["real_ip"] = real_ip.as_view();
-		}
-		if (!from_ip.empty()) {
-			map["from_ip"] = from_ip;
 		}
 		if (!for_mbox.empty()) {
 			map["for_mbox"] = for_mbox.as_view();

@@ -459,7 +459,6 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 			if (addr) {
 				rh.addr = addr;
 				rh.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(addr)));
-				rh.from_ip = rh.real_ip.as_view();
 			}
 		}
 	}
@@ -471,7 +470,6 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 			if (addr) {
 				rh.addr = addr;
 				rh.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(addr)));
-				rh.from_ip = rh.real_ip.as_view();
 			}
 		}
 
@@ -493,7 +491,6 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 					if (addr) {
 						rh.addr = addr;
 						rh.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(addr)));
-						rh.from_ip = rh.real_ip.as_view();
 
 						/* Process with rDNS */
 						auto rdns_substr = in.substr(0, obrace_pos);
@@ -639,10 +636,6 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 		}
 	}
 
-	if (!rh.real_ip.empty() && rh.from_ip.empty()) {
-		rh.from_ip = rh.real_ip.as_view();
-	}
-
 	if (!rh.real_hostname.empty() && rh.from_hostname.empty()) {
 		rh.from_hostname.assign_copy(rh.real_hostname);
 	}
@@ -701,7 +694,6 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 				}
 
 				trecv.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(task->from_addr)));
-				trecv.from_ip = trecv.real_ip.as_view();
 
 				const auto *mta_name = (const char*)rspamd_mempool_get_variable(task->task_pool,
 						RSPAMD_MEMPOOL_MTA_NAME);
@@ -777,7 +769,7 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 		lua_setfield(L, -2, "from_hostname");
 		lua_pushlstring(L, rh.real_hostname.data(), rh.real_hostname.size());
 		lua_setfield(L, -2, "real_hostname");
-		lua_pushlstring(L, rh.from_ip.data(), rh.from_ip.size());
+		lua_pushlstring(L, rh.real_ip.data(), rh.real_ip.size());
 		lua_setfield(L, -2, "from_ip");
 		lua_pushlstring(L, rh.by_hostname.data(), rh.by_hostname.size());
 		lua_setfield(L, -2, "by_hostname");
@@ -884,7 +876,6 @@ TEST_CASE("parse received")
 			{"from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])"sv,
 					{
 							{"real_ip", "185.243.30.90"},
-							{"from_ip", "185.243.30.90"},
 							{"real_hostname", "smtp11.mailtrack.pl"},
 							{"from_hostname", "smtp11.mailtrack.pl"}
 					}
@@ -898,7 +889,6 @@ TEST_CASE("parse received")
 			 "\t(envelope-from upwest201diana@outlook.com)"sv,
 					{
 							{"real_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
-							{"from_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
 							{"from_hostname", "server.chat-met-vreemden.nl"},
 							{"by_hostname", "mx1.freebsd.org"},
 							{"for_mbox", "<test@example.com>"}
@@ -912,7 +902,6 @@ TEST_CASE("parse received")
 			 " for <xxx@xxx.xxx>; Sat, 30 Jun 2018 02:54:28 +0100"sv,
 					{
 							{"from_hostname", "localhost"},
-							{"from_ip", "127.0.0.1"},
 							{"real_ip", "127.0.0.1"},
 							{"for_mbox", "<xxx@xxx.xxx>"},
 							{"by_hostname", "hummus.csx.cam.ac.uk"},
@@ -927,7 +916,6 @@ TEST_CASE("parse received")
 			 " for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100"sv,
 					{
 							{"from_hostname", "smtp.spodhuis.org"},
-							{"from_ip", "2a02:898:31:0:48:4558:736d:7470"},
 							{"real_ip", "2a02:898:31:0:48:4558:736d:7470"},
 							{"for_mbox", "exim-dev@exim.org"},
 							{"by_hostname", "hummus.csx.cam.ac.uk"},
@@ -939,7 +927,6 @@ TEST_CASE("parse received")
 			 "(authenticated bits=0); Tue, 03 Jul 2018 14:18:13 +0200"sv,
 					{
 							{"from_hostname", "aaa.cn"},
-							{"from_ip", "1.1.1.1"},
 							{"real_ip", "1.1.1.1"},
 							{"by_hostname", "localhost.localdomain"},
 					}
@@ -950,7 +937,6 @@ TEST_CASE("parse received")
 			 "by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300"sv,
 					{
 							{"from_hostname", "192.83.172.101"},
-							{"from_ip", "192.83.172.101"},
 							{"real_ip", "192.83.172.101"},
 					}
 			},
@@ -969,7 +955,6 @@ TEST_CASE("parse received")
 			 ": <g @yi.br>"sv,
 					{
 							{"real_ip", "1.1.1.1"},
-							{"from_ip", "1.1.1.1"},
 							{"from_hostname", "171-29.br"},
 							{"real_hostname", "1-1-1-1.z.com.br"},
 							{"by_hostname", "x.com.br"},
@@ -979,7 +964,6 @@ TEST_CASE("parse received")
 			{"from [127.0.0.1] ([127.0.0.2]) by smtp.gmail.com with ESMTPSA id xxxololo"sv,
 					{
 							{"real_ip", "127.0.0.2"},
-							{"from_ip", "127.0.0.2"},
 							{"from_hostname", "127.0.0.1"},
 							{"by_hostname", "smtp.gmail.com"},
 					}
@@ -989,7 +973,6 @@ TEST_CASE("parse received")
 			 "by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
 					{
 							{"real_ip", "185.118.166.127"},
-							{"from_ip", "185.118.166.127"},
 							{"from_hostname", "185.118.166.127"},
 							{"real_hostname", "steven2.zhou01.pserver.ru"},
 							{"by_hostname", "mail.832zsu.cn"},
@@ -999,7 +982,6 @@ TEST_CASE("parse received")
 			{"from smtp11.mailt\0rack.pl (smtp11.mail\0track.pl [1\085.243.30.90])"sv,
 					{
 							{"real_ip", "185.243.30.90"},
-							{"from_ip", "185.243.30.90"},
 							{"real_hostname", "smtp11.mailtrack.pl"},
 							{"from_hostname", "smtp11.mailtrack.pl"}
 					}
