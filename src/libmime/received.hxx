@@ -24,6 +24,7 @@
 #include "mime_string.hxx"
 #include "libmime/email_addr.h"
 #include "libserver/task.h"
+#include "contrib/robin-hood/robin_hood.h"
 #include <vector>
 #include <string_view>
 #include <utility>
@@ -123,10 +124,11 @@ struct received_header {
 	received_header& operator=(received_header &&other) noexcept {
 		if (this != &other) {
 			from_hostname = std::move(other.from_hostname);
-			from_ip = std::move(other.from_ip);
+			from_ip = other.from_ip;
 			real_hostname = std::move(other.real_hostname);
+			real_ip = std::move(other.real_ip);
 			by_hostname = std::move(other.by_hostname);
-			for_mbox = std::move(other.for_mbox);
+			for_mbox = other.for_mbox;
 			timestamp = other.timestamp;
 			flags = other.flags;
 			std::swap(for_addr, other.for_addr);
@@ -134,6 +136,59 @@ struct received_header {
 			std::swap(hdr, other.hdr);
 		}
 		return *this;
+	}
+
+	/* Unit tests helper */
+	static auto from_map(const robin_hood::unordered_flat_map<std::string_view, std::string_view> &map) -> received_header {
+		using namespace std::string_view_literals;
+		received_header rh;
+
+		if (map.contains("from_hostname")) {
+			rh.from_hostname.assign_copy(map.at("from_hostname"sv));
+		}
+		if (map.contains("real_hostname")) {
+			rh.real_hostname.assign_copy(map.at("real_hostname"sv));
+		}
+		if (map.contains("by_hostname")) {
+			rh.by_hostname.assign_copy(map.at("by_hostname"sv));
+		}
+		if (map.contains("real_ip")) {
+			rh.real_ip.assign_copy(map.at("real_ip"sv));
+		}
+		if (map.contains("from_ip")) {
+			rh.from_ip = map.at("from_ip"sv);
+		}
+		if (map.contains("for_mbox")) {
+			rh.for_mbox = map.at("for_mbox"sv);
+		}
+
+		return rh;
+	}
+
+	auto as_map() const -> robin_hood::unordered_flat_map<std::string_view, std::string_view>
+	{
+		robin_hood::unordered_flat_map<std::string_view, std::string_view> map;
+
+		if (!from_hostname.empty()) {
+			map["from_hostname"] = from_hostname.as_view();
+		}
+		if (!real_hostname.empty()) {
+			map["real_hostname"] = real_hostname.as_view();
+		}
+		if (!by_hostname.empty()) {
+			map["by_hostname"] = by_hostname.as_view();
+		}
+		if (!real_ip.empty()) {
+			map["real_ip"] = real_ip.as_view();
+		}
+		if (!from_ip.empty()) {
+			map["from_ip"] = from_ip;
+		}
+		if (!for_mbox.empty()) {
+			map["for_mbox"] = for_mbox;
+		}
+
+		return map;
 	}
 
 	~received_header() {
@@ -145,10 +200,13 @@ struct received_header {
 
 class received_header_chain {
 public:
-	explicit received_header_chain(struct rspamd_task *_task) : task(_task) {
+	explicit received_header_chain(struct rspamd_task *task) {
 		headers.reserve(2);
 		rspamd_mempool_add_destructor(task->task_pool,
 				received_header_chain::received_header_chain_pool_dtor, this);
+	}
+	explicit received_header_chain() {
+		headers.reserve(2);
 	}
 
 	enum class append_type {
@@ -164,6 +222,18 @@ public:
 		}
 		else {
 			headers.insert(std::begin(headers), received_header());
+
+			return headers.front();
+		}
+	}
+	auto new_received(received_header &&hdr, append_type how = append_type::append_tail) -> received_header & {
+		if (how == append_type::append_tail) {
+			headers.emplace_back(std::move(hdr));
+
+			return headers.back();
+		}
+		else {
+			headers.insert(std::begin(headers), std::move(hdr));
 
 			return headers.front();
 		}
@@ -186,7 +256,6 @@ private:
 		delete static_cast<received_header_chain *>(ptr);
 	}
 	std::vector<received_header> headers;
-	struct rspamd_task *task;
 };
 
 }
