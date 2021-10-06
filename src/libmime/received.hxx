@@ -114,7 +114,8 @@ struct received_header {
 			: from_hostname(received_char_filter),
 			  real_hostname(received_char_filter),
 			  real_ip(received_char_filter),
-			  by_hostname(received_char_filter) {}
+			  by_hostname(received_char_filter),
+			  for_mbox() {}
 	/* We have raw C pointers, so copy is explicitly disabled */
 	received_header(const received_header &other) = delete;
 	received_header(received_header &&other) noexcept {

@@ -880,6 +880,7 @@ TEST_CASE("parse received")
 	using namespace std::string_view_literals;
 	using map_type = robin_hood::unordered_flat_map<std::string_view, std::string_view>;
 	std::vector<std::pair<std::string_view, map_type>> cases{
+			// Simple received
 			{"from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])"sv,
 					{
 							{"real_ip", "185.243.30.90"},
@@ -887,7 +888,102 @@ TEST_CASE("parse received")
 							{"real_hostname", "smtp11.mailtrack.pl"},
 							{"from_hostname", "smtp11.mailtrack.pl"}
 					}
-			}
+			},
+			// Real Postfix IPv6 received
+			{"from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])\n"
+			 "\t(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))\n"
+			 "\t(Client did not present a certificate)\n"
+			 "\tby mx1.freebsd.org (Postfix) with ESMTPS id CF0171862\n"
+			 "\tfor <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)\n"
+			 "\t(envelope-from upwest201diana@outlook.com)",
+					{
+							{"real_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
+							{"from_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
+							{"from_hostname", "server.chat-met-vreemden.nl"},
+							{"by_hostname", "mx1.freebsd.org"},
+							{"for_mbox", "<test@example.com>"}
+					}
+			},
+			// Exim IPv4 received
+			{"from localhost ([127.0.0.1]:49019 helo=hummus.csx.cam.ac.uk)\n"
+			 " by hummus.csx.cam.ac.uk with esmtp (Exim 4.91-pdpfix1)\n"
+			 " (envelope-from <exim-dev-bounces@exim.org>)\n"
+			 " id 1fZ55o-0006DP-3H\n"
+			 " for <xxx@xxx.xxx>; Sat, 30 Jun 2018 02:54:28 +0100",
+					{
+							{"from_hostname", "localhost"},
+							{"from_ip", "127.0.0.1"},
+							{"real_ip", "127.0.0.1"},
+							{"for_mbox", "<xxx@xxx.xxx>"},
+							{"by_hostname", "hummus.csx.cam.ac.uk"},
+					}
+			},
+			// Exim IPv6 received
+			{"from smtp.spodhuis.org ([2a02:898:31:0:48:4558:736d:7470]:38689\n"
+			 " helo=mx.spodhuis.org)\n"
+			 " by hummus.csx.cam.ac.uk with esmtpsa (TLSv1.3:TLS_AES_256_GCM_SHA384:256)\n"
+			 " (Exim 4.91-pdpfix1+cc) (envelope-from <xxx@exim.org>)\n"
+			 " id 1fZ55k-0006CO-9M\n"
+			 " for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100",
+					{
+							{"from_hostname", "smtp.spodhuis.org"},
+							{"from_ip", "2a02:898:31:0:48:4558:736d:7470"},
+							{"real_ip", "2a02:898:31:0:48:4558:736d:7470"},
+							{"for_mbox", "exim-dev@exim.org"},
+							{"by_hostname", "hummus.csx.cam.ac.uk"},
+					}
+			},
+			// Haraka received
+			{"from aaa.cn ([1.1.1.1]) by localhost.localdomain (Haraka/2.8.18) with "
+			 "ESMTPA id 349C9C2B-491A-4925-A687-3EF14038C344.1 envelope-from <huxin@xxx.com> "
+			 "(authenticated bits=0); Tue, 03 Jul 2018 14:18:13 +0200",
+					{
+							{"from_hostname", "aaa.cn"},
+							{"from_ip", "1.1.1.1"},
+							{"real_ip", "1.1.1.1"},
+							{"by_hostname", "localhost.localdomain"},
+					}
+			},
+			// Invalid by
+			{"from [192.83.172.101] (HELLO 148.251.238.35) (148.251.238.35) "
+			 "by guovswzqkvry051@sohu.com with gg login "
+			 "by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300",
+					{
+							{"from_hostname", "192.83.172.101"},
+							{"from_ip", "192.83.172.101"},
+							{"real_ip", "192.83.172.101"},
+					}
+			},
+			// Invalid hostinfo
+			{"from example.com ([]) by example.com with ESMTP id 2019091111 ;"
+			 " Thu, 26 Sep 2019 11:19:07 +0200",
+					{
+							{"by_hostname", "example.com"},
+							{"from_hostname", "example.com"},
+							{"real_hostname", "example.com"},
+					}
+			},
+			// Different real and announced hostnames + broken crap
+			{"from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) "
+			 "with;ESMTP id 44QShF6xj4z1X for <hey@y.br>; Thu, 21 Mar 2019 23:45:46 -0300 "
+			 ": <g @yi.br>",
+					{
+							{"real_ip", "1.1.1.1"},
+							{"from_ip", "1.1.1.1"},
+							{"from_hostname", "171-29.br"},
+							{"real_hostname", "1-1-1-1.z.com.br"},
+							{"by_hostname", "x.com.br"},
+					}
+			},
+			// Different real and announced ips + no hostname
+			{"from [127.0.0.1] ([127.0.0.2]) by smtp.gmail.com with ESMTPSA id xxxololo",
+					{
+							{"real_ip", "127.0.0.2"},
+							{"from_ip", "127.0.0.2"},
+							{"from_hostname", "127.0.0.1"},
+							{"by_hostname", "smtp.gmail.com"},
+					}
+			},
 	};
 	rspamd_mempool_t *pool = rspamd_mempool_new_default("rcvd test", 0);
 
