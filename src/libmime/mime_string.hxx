@@ -542,7 +542,7 @@ private:
 	}
 
 	auto append_c_string_filtered(const CharT* str, std::size_t len) -> std::size_t {
-		std::ptrdiff_t i = 0, o = 0;
+		std::int32_t i = 0; // We have to use int32_t here as old libicu is brain-damaged
 		UChar32 uc;
 		char tmp[4];
 		auto orig_size = storage.size();
@@ -568,7 +568,7 @@ private:
 					flags = flags | mime_string_flags::MIME_STRING_SEEN_ZEROES;
 				}
 				else {
-					o = 0;
+					std::int32_t o = 0;
 					U8_APPEND_UNSAFE(tmp, o, uc);
 					storage.append(tmp, o);
 				}
