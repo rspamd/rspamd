@@ -541,7 +541,9 @@ local function arc_sign_seal(task, params, header)
       ['ARC-Message-Signature'] = {order = 1, value = header},
       ['ARC-Seal'] = {order = 1, value = lua_util.fold_header(task,
               'ARC-Seal', cur_arc_seal) }
-    }
+    },
+    -- RFC requires a strict order for these headers to be inserted
+    order = {'ARC-Authentication-Results', 'ARC-Message-Signature', 'ARC-Seal'},
   })
   task:insert_result(settings.sign_symbol, 1.0,
       string.format('%s:s=%s:i=%d', params.domain, params.selector, cur_idx))
