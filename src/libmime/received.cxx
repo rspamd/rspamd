@@ -765,16 +765,21 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 		push_flag(rh, received_flags::SSL, "ssl");
 		lua_setfield(L, -2, "flags");
 
-		lua_pushlstring(L, rh.from_hostname.data(), rh.from_hostname.size());
-		lua_setfield(L, -2, "from_hostname");
-		lua_pushlstring(L, rh.real_hostname.data(), rh.real_hostname.size());
-		lua_setfield(L, -2, "real_hostname");
-		lua_pushlstring(L, rh.real_ip.data(), rh.real_ip.size());
-		lua_setfield(L, -2, "from_ip");
-		lua_pushlstring(L, rh.by_hostname.data(), rh.by_hostname.size());
-		lua_setfield(L, -2, "by_hostname");
-		lua_pushlstring(L, rh.for_mbox.data(), rh.for_mbox.size());
-		lua_setfield(L, -2, "for");
+		auto push_nullable_string = [L](const mime_string &st, const char *field) {
+			if (st.empty()) {
+				lua_pushnil(L);
+			}
+			else {
+				lua_pushlstring(L, st.data(), st.size());
+			}
+			lua_setfield(L, -2, field);
+		};
+
+		push_nullable_string(rh.from_hostname, "from_hostname");
+		push_nullable_string(rh.real_hostname, "real_hostname");
+		push_nullable_string(rh.real_ip, "from_ip");
+		push_nullable_string(rh.by_hostname, "by_hostname");
+		push_nullable_string(rh.for_mbox, "for");
 
 		rspamd_lua_ip_push (L, rh.addr);
 		lua_setfield(L, -2, "real_ip");
