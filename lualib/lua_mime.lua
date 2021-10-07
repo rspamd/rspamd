@@ -519,7 +519,8 @@ exports.modify_headers = function(task, hdr_alterations)
   local remove = hdr_alterations.remove or {}
 
   local hdr_flattened = {} -- For C API
-  for hname,hdr in pairs(add) do
+
+  local function flatten_add_header(hname, hdr)
     if not hdr_flattened[hname] then
       hdr_flattened[hname] = {add = {}}
     end
@@ -532,6 +533,17 @@ exports.modify_headers = function(task, hdr_alterations)
       end
     end
   end
+  if hdr_alterations.order then
+    -- Get headers alterations ordered
+    for _,hname in ipairs(hdr_alterations.order) do
+      flatten_add_header(hname, add[hname])
+    end
+  else
+    for hname,hdr in pairs(add) do
+      flatten_add_header(hname, hdr)
+    end
+  end
+
 
   for hname,hdr in pairs(remove) do
     if not hdr_flattened[hname] then
