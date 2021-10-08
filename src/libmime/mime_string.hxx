@@ -283,6 +283,11 @@ public:
 	basic_mime_string(const view_type &st,
 					  const Allocator& alloc = Allocator()) noexcept :
 			basic_mime_string(st.data(), st.size(), alloc) {}
+	/* Explicit move ctor */
+	basic_mime_string(basic_mime_string &&other) noexcept {
+		*this = std::move(other);
+	}
+
 
 	/**
 	 * Creates a string with a filter function. It is calee responsibility to
@@ -309,6 +314,14 @@ public:
 					  filter_type &&filt,
 					  const Allocator& alloc = Allocator()) noexcept :
 			basic_mime_string(st.data(), st.size(), std::move(filt), alloc) {}
+
+	/* It seems some libc++ implementations still perform copy, this might fix them */
+	basic_mime_string& operator=(basic_mime_string &&other) {
+		storage = std::move(other.storage);
+		filter_func = std::move(other.filter_func);
+
+		return *this;
+	}
 
 	constexpr auto size() const noexcept -> std::size_t {
 		return storage.size();
