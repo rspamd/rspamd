@@ -51,6 +51,7 @@ BLACKLISTS
 
 WHITELIST_WL_ONLY - VALID SPF AND VALID DKIM
   Scan File  ${M_DKIM_RSPAMD_OK}
+  ...  IP=88.99.142.95
   Expect Symbol With Score  WHITELIST_DKIM  -2
   Do Not Expect Symbol  BLACKLIST_DKIM
   Expect Symbol With Score  R_SPF_ALLOW  1
@@ -59,6 +60,7 @@ WHITELIST_WL_ONLY - VALID SPF AND VALID DKIM
 
 BLACKLISTS_WL_ONLY - VALID SPF AND INVALID DKIM
   Scan File  ${M_DKIM_RSPAMD_BAD}
+  ...  IP=88.99.142.95
   Expect Symbol With Score  R_DKIM_REJECT  1
   Do Not Expect Symbol  WHITELIST_DKIM
   Do Not Expect Symbol  BLACKLIST_DKIM
@@ -69,6 +71,7 @@ BLACKLISTS_WL_ONLY - VALID SPF AND INVALID DKIM
 
 VALID SPF and NO DKIM
   Scan File  ${M_NO_DKIM_VALID_SPF}
+  ...  IP=88.99.142.95
   Expect Symbol With Score  R_SPF_ALLOW  1
   Expect Symbol With Score  R_DKIM_NA  1
   Do Not Expect Symbol  R_DKIM_REJECT
