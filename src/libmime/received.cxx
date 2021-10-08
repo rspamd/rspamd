@@ -253,6 +253,7 @@ received_spill(const std::string_view &in,
 {
 	std::vector<received_part> parts;
 	std::ptrdiff_t pos = 0;
+	auto seen_from = false, seen_by = false;
 
 	const auto *p = in.data();
 	const auto *end = p + in.size();
@@ -289,6 +290,7 @@ received_spill(const std::string_view &in,
 		g_assert (pos != 0);
 		p += pos;
 		len = end > p ? end - p : 0;
+		seen_from = true;
 	}
 
 	if (len > 2 && lit_compare_lowercase<2>("by", p)) {
@@ -301,6 +303,12 @@ received_spill(const std::string_view &in,
 		g_assert (pos != 0);
 		p += pos;
 		len = end > p ? end - p : 0;
+		seen_by = true;
+	}
+
+	if (!seen_from && !seen_by) {
+		/* Useless received */
+		return {};
 	}
 
 	while (p < end) {
