@@ -258,11 +258,40 @@ received_spill(const std::string_view &in,
 	const auto *p = in.data();
 	const auto *end = p + in.size();
 
+	/* Skip spaces */
 	while (p < end && g_ascii_isspace (*p)) {
 		p++;
 	}
 
+	/* And SMTP comments */
+	if (*p == '(') {
+		auto obraces = 0, ebraces = 0;
+
+		while (p < end) {
+			if (*p == ')') {
+				ebraces ++;
+			}
+			else if (*p == '(') {
+				obraces ++;
+			}
+
+			p ++;
+
+			if (obraces == ebraces) {
+				/* Skip spaces after  */
+				while (p < end && g_ascii_isspace (*p)) {
+					p++;
+				}
+				break;
+			}
+		}
+	}
+
 	auto len = end - p;
+
+	if (len == 0) {
+		return {};
+	}
 
 	auto maybe_process_part = [&](received_part_type what) -> bool {
 		parts.emplace_back(what);
@@ -1001,6 +1030,14 @@ TEST_CASE("parse received")
 			{"by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
 					{
 							{"by_hostname", "mail.832zsu.cn"},
+					}
+			},
+			// From part is in the comment
+			{"(from asterisk@localhost)\n"
+			 "        by pbx.xxx.com (8.14.7/8.14.7/Submit) id 076Go4wD014562;\n"
+			 "        Thu, 6 Aug 2020 11:50:04 -0500"sv,
+					{
+							{"by_hostname", "pbx.xxx.com"},
 					}
 			},
 	};
