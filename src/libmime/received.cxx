@@ -816,7 +816,12 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 		push_nullable_string(rh.by_hostname, "by_hostname");
 		push_nullable_string(rh.for_mbox, "for");
 
-		rspamd_lua_ip_push (L, rh.addr);
+		if (rh.addr) {
+			rspamd_lua_ip_push(L, rh.addr);
+		}
+		else {
+			lua_pushnil(L);
+		}
 		lua_setfield(L, -2, "real_ip");
 
 		const auto *proto = "unknown";
