@@ -263,13 +263,6 @@ received_spill(const std::string_view &in,
 
 	auto len = end - p;
 
-	/* Ignore all received but those started from from part */
-	if (len <= 4 || !lit_compare_lowercase<4>("from", p)) {
-		return {};
-	}
-
-	p += sizeof("from") - 1;
-
 	auto maybe_process_part = [&](received_part_type what) -> bool {
 		parts.emplace_back(what);
 		auto &rcvd_part = parts.back();
@@ -284,14 +277,19 @@ received_spill(const std::string_view &in,
 		return true;
 	};
 
-	/* We can now store from part */
-	if (!maybe_process_part(received_part_type::RSPAMD_RECEIVED_PART_FROM)) {
-		return {};
-	}
+	if (len > 4 && lit_compare_lowercase<4>("from", p)) {
+		p += sizeof("from") - 1;
 
-	g_assert (pos != 0);
-	p += pos;
-	len = end > p ? end - p : 0;
+		/* We can now store from part */
+		if (!maybe_process_part(received_part_type::RSPAMD_RECEIVED_PART_FROM)) {
+			/* Do not accept malformed from */
+			return {};
+		}
+
+		g_assert (pos != 0);
+		p += pos;
+		len = end > p ? end - p : 0;
+	}
 
 	if (len > 2 && lit_compare_lowercase<2>("by", p)) {
 		p += sizeof("by") - 1;
@@ -989,6 +987,12 @@ TEST_CASE("parse received")
 							{"real_ip", "185.243.30.90"},
 							{"real_hostname", "smtp11.mailtrack.pl"},
 							{"from_hostname", "smtp11.mailtrack.pl"}
+					}
+			},
+			// No from part
+			{"by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
+					{
+							{"by_hostname", "mail.832zsu.cn"},
 					}
 			},
 	};
