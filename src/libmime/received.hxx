@@ -84,7 +84,7 @@ constexpr bool operator !(received_flags fl)
 	return fl == received_flags::DEFAULT;
 }
 
-constexpr received_flags received_type_apply_maks(received_flags fl) {
+constexpr received_flags received_type_apply_protocols_mask(received_flags fl) {
 	return fl & (received_flags::SMTP|
 			received_flags::ESMTP|
 			received_flags::ESMTPA|
@@ -95,6 +95,47 @@ constexpr received_flags received_type_apply_maks(received_flags fl) {
 			received_flags::LOCAL|
 			received_flags::MAPI|
 			received_flags::LMTP);
+}
+
+constexpr const char *received_protocol_to_string(received_flags fl) {
+	const auto *proto = "unknown";
+
+	switch (received_type_apply_protocols_mask(fl)) {
+	case received_flags::SMTP:
+		proto = "smtp";
+		break;
+	case received_flags::ESMTP:
+		proto = "esmtp";
+		break;
+	case received_flags::ESMTPS:
+		proto = "esmtps";
+		break;
+	case received_flags::ESMTPA:
+		proto = "esmtpa";
+		break;
+	case received_flags::ESMTPSA:
+		proto = "esmtpsa";
+		break;
+	case received_flags::LMTP:
+		proto = "lmtp";
+		break;
+	case received_flags::IMAP:
+		proto = "imap";
+		break;
+	case received_flags::HTTP:
+		proto = "http";
+		break;
+	case received_flags::LOCAL:
+		proto = "local";
+		break;
+	case received_flags::MAPI:
+		proto = "mapi";
+		break;
+	default:
+		break;
+	}
+
+	return proto;
 }
 
 struct received_header {
@@ -251,6 +292,6 @@ private:
 	std::vector<received_header> headers;
 };
 
-}
+} // namespace rspamd::mime
 
 #endif //RSPAMD_RECEIVED_HXX

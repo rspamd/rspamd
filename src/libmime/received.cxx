@@ -258,12 +258,15 @@ received_spill(const std::string_view &in,
 	const auto *p = in.data();
 	const auto *end = p + in.size();
 
-	/* Skip spaces */
-	while (p < end && g_ascii_isspace (*p)) {
-		p++;
-	}
+	auto skip_spaces = [&p, end]() {
+		while (p < end && g_ascii_isspace (*p)) {
+			p++;
+		}
+	};
 
-	/* And SMTP comments */
+	skip_spaces();
+
+	/* Skip SMTP comments */
 	if (*p == '(') {
 		auto obraces = 0, ebraces = 0;
 
@@ -279,9 +282,7 @@ received_spill(const std::string_view &in,
 
 			if (obraces == ebraces) {
 				/* Skip spaces after  */
-				while (p < end && g_ascii_isspace (*p)) {
-					p++;
-				}
+				skip_spaces();
 				break;
 			}
 		}
@@ -290,7 +291,7 @@ received_spill(const std::string_view &in,
 	auto len = end - p;
 
 	if (len == 0) {
-		return {};
+		return parts;
 	}
 
 	auto maybe_process_part = [&](received_part_type what) -> bool {
@@ -824,45 +825,7 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 		}
 		lua_setfield(L, -2, "real_ip");
 
-		const auto *proto = "unknown";
-
-		switch (received_type_apply_maks(rh.flags)) {
-		case received_flags::SMTP:
-			proto = "smtp";
-			break;
-		case received_flags::ESMTP:
-			proto = "esmtp";
-			break;
-		case received_flags::ESMTPS:
-			proto = "esmtps";
-			break;
-		case received_flags::ESMTPA:
-			proto = "esmtpa";
-			break;
-		case received_flags::ESMTPSA:
-			proto = "esmtpsa";
-			break;
-		case received_flags::LMTP:
-			proto = "lmtp";
-			break;
-		case received_flags::IMAP:
-			proto = "imap";
-			break;
-		case received_flags::HTTP:
-			proto = "http";
-			break;
-		case received_flags::LOCAL:
-			proto = "local";
-			break;
-		case received_flags::MAPI:
-			proto = "mapi";
-			break;
-		default:
-			proto = "unknown";
-			break;
-		}
-
-		lua_pushstring(L, proto);
+		lua_pushstring(L, received_protocol_to_string(rh.flags));
 		lua_setfield(L, -2, "proto");
 
 		lua_pushinteger(L, rh.timestamp);
