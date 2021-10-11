@@ -1862,12 +1862,19 @@ struct rspamd_re_cache_hs_compile_cbdata {
 
 static void
 rspamd_re_cache_compile_err (EV_P_ ev_timer *w, GError *err,
-		struct rspamd_re_cache_hs_compile_cbdata *cbdata)
+		struct rspamd_re_cache_hs_compile_cbdata *cbdata, bool is_fatal)
 {
-	ev_timer_stop (EV_A_ w);
 	cbdata->cb (cbdata->total, err, cbdata->cbd);
-	g_free (w);
-	g_free (cbdata);
+
+	if (is_fatal) {
+		ev_timer_stop(EV_A_ w);
+		g_free(w);
+		g_free(cbdata);
+	}
+	else {
+		/* Continue compilation */
+		ev_timer_again(EV_A_ w);
+	}
 	g_error_free (err);
 }
 
@@ -1954,7 +1961,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 	if (fd == -1) {
 		err = g_error_new (rspamd_re_cache_quark (), errno,
 				"cannot open file %s: %s", path, strerror (errno));
-		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 		return;
 	}
 
@@ -2074,7 +2081,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 			unlink (path);
 			hs_free_compile_error (hs_errors);
 
-			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 
 			return;
 		}
@@ -2099,7 +2106,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 			g_free (hs_flags);
 			hs_free_database (test_db);
 
-			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 			return;
 		}
 
@@ -2156,7 +2163,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 			g_free (hs_flags);
 			g_free (hs_serialized);
 
-			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 			return;
 		}
 
@@ -2197,7 +2204,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 			unlink (path);
 			close (fd);
 
-			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 			return;
 		}
 
@@ -2217,7 +2224,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		g_free (hs_flags);
 		unlink (path);
 		close (fd);
-		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata, false);
 
 		return;
 	}
