@@ -583,25 +583,6 @@ enum rspamd_post_load_options {
 gboolean rspamd_config_post_load (struct rspamd_config *cfg,
 								  enum rspamd_post_load_options opts);
 
-/**
- * Calculate checksum for config file
- * @param cfg config file
- */
-gboolean rspamd_config_calculate_checksum (struct rspamd_config *cfg);
-
-
-/**
- * Replace all \" with a single " in given string
- * @param line input string
- */
-void rspamd_config_unescape_quotes (gchar *line);
-
-/*
- * Convert comma separated string to a list of strings
- */
-GList *rspamd_config_parse_comma_list (rspamd_mempool_t *pool,
-									   const gchar *line);
-
 /*
  * Return a new classifier_config structure, setting default and non-conflicting attributes
  */
