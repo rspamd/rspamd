@@ -446,9 +446,9 @@ LUA_FUNCTION_DEF (task, modify_header);
  * the following structure:
  *
  * - `from_hostname` - string that represents hostname provided by a peer
- * - `from_ip` - string representation of IP address as provided by a peer
+ * - `from_ip` - string representation of sending IP address
  * - `real_hostname` - hostname as resolved by MTA
- * - `real_ip` - string representation of IP as resolved by PTR request of MTA
+ * - `real_ip` - rspamd_ip object representing sending IP address
  * - `by_hostname` - MTA hostname
  * - `proto` - protocol, e.g. ESMTP or ESMTPS
  * - `timestamp` - received timestamp
