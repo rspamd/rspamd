@@ -194,7 +194,7 @@ steps:
       - >
         for core in $core_files;
         do
-        exe=$(gdb --batch -ex 'info proc mappings' -c $core | awk 'h {print $5; exit}; /objfile/ {h=1}');
+        exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}');
         gdb --batch -ex 'bt' -c $core $exe; echo '---';
         done
       - exit $EXIT_CODE
