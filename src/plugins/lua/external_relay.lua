@@ -24,7 +24,6 @@ end
 
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
-local rspamd_ip = require "rspamd_ip"
 local rspamd_logger = require "rspamd_logger"
 local ts = require("tableshape").types
 
