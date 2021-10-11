@@ -267,9 +267,11 @@ struct html_block {
 			}
 		}
 		else if (bg_color_mask) {
-			if (is_similar_colors(rspamd::css::css_color::black(), bg_color)) {
-				visibility_mask = html_block::transparent_flag;
-				return;
+			if (bg_color.alpha > 10) {
+				if (is_similar_colors(rspamd::css::css_color::black(), bg_color)) {
+					visibility_mask = html_block::transparent_flag;
+					return;
+				}
 			}
 		}
 
