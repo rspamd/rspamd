@@ -1162,7 +1162,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 
 		return ret;
 	}
-	else if (tag->id == Tag_HEAD && (tag->flags & FL_IGNORE)) {
+	else if (tag->id == Tag_HEAD || (tag->flags & CM_HEAD)) {
 		auto ret = tag->closing.end;
 		calculate_final_tag_offsets();
 
