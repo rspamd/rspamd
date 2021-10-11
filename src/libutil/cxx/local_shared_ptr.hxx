@@ -100,7 +100,7 @@ private:
 		ptr = nullptr;
 	}
 public:
-	explicit ptr_and_refcnt(T *_ptr, D d = std::default_delete<T>()) : ptr(_ptr),
+	explicit ptr_and_refcnt(T *_ptr, D &&d = std::default_delete<T>()) : ptr(_ptr),
 			deleter(std::move(d)) {}
 	virtual ~ptr_and_refcnt() = default;
 };
@@ -128,7 +128,7 @@ public:
 	// custom deleter
 	template<class Y, class D, typename std::enable_if<
 			std::is_convertible<Y*, element_type*>::value, bool>::type = true>
-	explicit local_shared_ptr(Y* p, D d) : px(p), cnt(new detail::ptr_and_refcnt(p, std::move(d)))
+	explicit local_shared_ptr(Y* p, D &&d) : px(p), cnt(new detail::ptr_and_refcnt(p, std::forward<D>(d)))
 	{
 	}
 
