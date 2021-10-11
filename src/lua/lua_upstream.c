@@ -78,12 +78,14 @@ static const struct luaL_reg upstream_list_f[] = {
 LUA_FUNCTION_DEF (upstream, ok);
 LUA_FUNCTION_DEF (upstream, fail);
 LUA_FUNCTION_DEF (upstream, get_addr);
+LUA_FUNCTION_DEF (upstream, get_name);
 LUA_FUNCTION_DEF (upstream, destroy);
 
 static const struct luaL_reg upstream_m[] = {
 	LUA_INTERFACE_DEF (upstream, ok),
 	LUA_INTERFACE_DEF (upstream, fail),
 	LUA_INTERFACE_DEF (upstream, get_addr),
+	LUA_INTERFACE_DEF (upstream, get_name),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_upstream_destroy},
 	{NULL, NULL}
@@ -118,6 +120,27 @@ lua_upstream_get_addr (lua_State *L)
 
 	if (up) {
 		rspamd_lua_ip_push (L, rspamd_upstream_addr_next (up->up));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method upstream:get_name()
+ * Get name of upstream
+ * @return {string} name of the upstream
+ */
+static gint
+lua_upstream_get_name (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+
+	if (up) {
+		lua_pushstring (L, rspamd_upstream_name (up->up));
 	}
 	else {
 		lua_pushnil (L);
