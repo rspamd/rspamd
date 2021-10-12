@@ -24,7 +24,6 @@ end
 
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
-local rspamd_ip = require "rspamd_ip"
 local rspamd_logger = require "rspamd_logger"
 local ts = require("tableshape").types
 
@@ -66,25 +65,19 @@ local config_schema = ts.shape{
   ),
 }
 
-local function set_from_rcvd(task, rcvd, remote_rcvd_ip)
-  if not remote_rcvd_ip then
-    if not rcvd.from_ip then
-      rspamd_logger.errx(task, 'no IP in header: %s', rcvd)
-      return
-    end
-    remote_rcvd_ip = rspamd_ip.from_string(rcvd.from_ip)
-    if not remote_rcvd_ip and remote_rcvd_ip:is_valid() then
-      rspamd_logger.errx(task, 'invalid remote IP: %s', rcvd.from_ip)
-      return
-    end
+local function set_from_rcvd(task, rcvd)
+  local rcvd_ip = rcvd.real_ip
+  if not (rcvd_ip and rcvd_ip:is_valid()) then
+    rspamd_logger.errx(task, 'no IP in header: %s', rcvd)
+    return
   end
-  task:set_from_ip(remote_rcvd_ip)
+  task:set_from_ip(rcvd_ip)
   if rcvd.from_hostname then
     task:set_hostname(rcvd.from_hostname)
     task:set_helo(rcvd.from_hostname) -- use fake value for HELO
   else
     rspamd_logger.warnx(task, "couldn't get hostname from headers")
-    local ipstr = string.format('[%s]', rcvd.from_ip)
+    local ipstr = string.format('[%s]', rcvd_ip)
     task:set_hostname(ipstr) -- returns nil from task:get_hostname()
     task:set_helo(ipstr)
   end
@@ -174,7 +167,7 @@ strategies.hostname_map = function(rule)
     local rcvd_hdrs = task:get_received_headers()
     -- Try find sending hostname in Received headers
     for _, rcvd in ipairs(rcvd_hdrs) do
-      if rcvd.by_hostname == from_hn and rcvd.from_ip then
+      if rcvd.by_hostname == from_hn and rcvd.real_ip then
         if not hostname_map:get_key(rcvd.from_hostname) then
           -- Remote hostname is not another relay, use this header
           return set_from_rcvd(task, rcvd)
@@ -206,10 +199,10 @@ strategies['local'] = function(rule)
     local num_rcvd = #rcvd_hdrs
     -- Try find first non-local IP in Received headers
     for i, rcvd in ipairs(rcvd_hdrs) do
-      if rcvd.from_ip then
-        local remote_rcvd_ip = rspamd_ip.from_string(rcvd.from_ip)
-        if remote_rcvd_ip and remote_rcvd_ip:is_valid() and (not remote_rcvd_ip:is_local() or i == num_rcvd) then
-          return set_from_rcvd(task, rcvd, remote_rcvd_ip)
+      if rcvd.real_ip then
+        local rcvd_ip = rcvd.real_ip
+        if rcvd_ip and rcvd_ip:is_valid() and (not rcvd_ip:is_local() or i == num_rcvd) then
+          return set_from_rcvd(task, rcvd)
         end
       end
     end
