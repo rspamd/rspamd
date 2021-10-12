@@ -153,15 +153,17 @@ rspamd_redis_expand_object (const gchar *pattern,
 	gint err_idx;
 
 	g_assert (ctx != NULL);
+	g_assert (task != NULL);
 	stcf = ctx->stcf;
 
 	L = task->cfg->lua_state;
+	g_assert (L != NULL);
 
 	if (ctx->enable_users) {
 		if (ctx->cbref_user == -1) {
 			rcpt = rspamd_task_get_principal_recipient (task);
 		}
-		else if (L) {
+		else {
 			/* Execute lua function to get userdata */
 			lua_pushcfunction (L, &rspamd_lua_traceback);
 			err_idx = lua_gettop (L);
@@ -269,7 +271,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 	}
 
 
-	if (target == NULL || task == NULL) {
+	if (target == NULL) {
 		return -1;
 	}
 

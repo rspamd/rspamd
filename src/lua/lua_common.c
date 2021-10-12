@@ -1001,10 +1001,10 @@ rspamd_lua_init (bool wipe_mem)
 
 	/* Set PRNG */
 	lua_getglobal (L, "math");
-	lua_pushstring (L, "randomseed");
+	lua_pushstring (L, "randomseed"); /* Push math.randomseed function on top of the stack */
 	lua_gettable (L, -2);
 	lua_pushinteger (L, ottery_rand_uint64 ());
-	lua_pcall (L, 1, 0, 0);
+	g_assert (lua_pcall (L, 1, 0, 0) == 0);
 	lua_pop (L, 1); /* math table */
 
 	/* Modules state */

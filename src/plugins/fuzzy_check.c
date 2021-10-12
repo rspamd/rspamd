@@ -3846,6 +3846,7 @@ static gint
 fuzzy_lua_unlearn_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	g_assert (task != NULL);
 	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);

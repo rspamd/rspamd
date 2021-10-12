@@ -571,6 +571,7 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 	lock_fd = open (lock, O_WRONLY|O_CREAT|O_EXCL, 00600);
 
 	if (lock_fd == -1) {
+		g_free (lock);
 		msg_info_pool ("cannot open file %s, it is locked by another process",
 				filename);
 		return NULL;
