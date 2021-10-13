@@ -72,6 +72,21 @@ lua_cdb_create (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
+#ifdef HAVE_READAHEAD
+			struct stat st;
+			/*
+			 * Do not readahead more than 100mb,
+			 * which is enough for the vast majority of the use cases
+			 */
+			static const size_t max_readahead = 100 * 0x100000;
+
+			if (fstat(cdb_fileno(cdb), &st) != 1) {
+				/* Must always be true because cdb_init calls it as well */
+				if (readahead(cdb_fileno(cdb), 0, MIN(max_readahead, st.st_size)) == -1) {
+					msg_warn ("cannot readahead cdb: %s, %s", filename, strerror (errno));
+				}
+			}
+#endif
 			cdb_add_timer (cdb, ev_base, CDB_REFRESH_TIME);
 			pcdb = lua_newuserdata (L, sizeof (struct cdb *));
 			rspamd_lua_setclass (L, "rspamd{cdb}", -1);
