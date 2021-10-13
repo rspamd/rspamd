@@ -486,6 +486,11 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 						  int main (int argc, char **argv) {
 							return ((int*)(&recvmmsg))[argc];
 						  }" HAVE_RECVMMSG)
+	CHECK_C_SOURCE_COMPILES ("#define _GNU_SOURCE
+						  #include <fcntl.h>
+						  int main (int argc, char **argv) {
+							return ((int*)(&readahead))[argc];
+						  }" HAVE_READAHEAD)
 ELSE()
 	CHECK_C_SOURCE_RUNS("
 	#include <sys/mman.h>

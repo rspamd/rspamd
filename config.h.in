@@ -64,6 +64,7 @@
 #cmakedefine HAVE_PTHREAD_PROCESS_SHARED 1
 #cmakedefine HAVE_PWD_H          1
 #cmakedefine HAVE_RDTSC          1
+#cmakedefine HAVE_READAHEAD      1
 #cmakedefine HAVE_READPASSPHRASE_H  1
 #cmakedefine HAVE_RECVMMSG       1
 #cmakedefine HAVE_RUSAGE_SELF    1
