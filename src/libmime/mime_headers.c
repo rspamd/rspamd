@@ -948,6 +948,16 @@ rspamd_message_get_header_array (struct rspamd_task *task, const gchar *field,
 			field, need_modified);
 }
 
+gsize
+rspamd_mime_headers_count (struct rspamd_mime_headers_table *hdrs)
+{
+	if (hdrs) {
+		return kh_size (&hdrs->htb);
+	}
+
+	return 0;
+}
+
 static void
 rspamd_message_headers_dtor (struct rspamd_mime_headers_table *hdrs)
 {

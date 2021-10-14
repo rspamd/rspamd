@@ -161,6 +161,13 @@ struct rspamd_mime_headers_table * rspamd_message_headers_ref (struct rspamd_mim
 struct rspamd_mime_headers_table* rspamd_message_headers_new (void);
 
 /**
+ * Returns size for a headers table
+ * @param hdrs
+ * @return
+ */
+gsize rspamd_mime_headers_count (struct rspamd_mime_headers_table *hdrs);
+
+/**
  * Strip rfc822 CFWS sequences from a string in place
  * @param input input
  * @param len length of the input
