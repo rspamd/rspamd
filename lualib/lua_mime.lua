@@ -572,4 +572,16 @@ exports.modify_headers = function(task, hdr_alterations)
   end
 end
 
+--[[[
+-- @function lua_mime.message_to_ucl(task)
+-- Exports a message to an ucl object
+--]]
+exports.message_to_ucl = function(task)
+  local result = {}
+  result.size = task:get_size()
+  result.digest = task:get_digest()
+
+  return result
+end
+
 return exports

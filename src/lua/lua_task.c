@@ -424,6 +424,13 @@ LUA_FUNCTION_DEF (task, get_header_count);
 LUA_FUNCTION_DEF (task, get_raw_headers);
 
 /***
+ * @method task:get_headers([need_modified=false])
+ * Get all headers of a message in the same format as get_header_full
+ * @return {table of headers data} all headers for a message
+ */
+LUA_FUNCTION_DEF (task, get_headers);
+
+/***
  * @method task:modify_header(name, mods)
  * Modify an existing or non-existing header with the name `name`
  * Mods is a table with the following structure:
@@ -1243,6 +1250,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_header_full),
 	LUA_INTERFACE_DEF (task, get_header_count),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
+	LUA_INTERFACE_DEF (task, get_headers),
 	LUA_INTERFACE_DEF (task, modify_header),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_queue_id),
@@ -3111,6 +3119,29 @@ static gint
 lua_task_has_header (lua_State * L)
 {
 	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_HAS);
+}
+
+static gint
+lua_task_get_headers (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task && task->message) {
+		struct rspamd_mime_header *cur;
+
+		lua_createtable (L, rspamd_mime_headers_count(MESSAGE_FIELD(task, raw_headers)), 0);
+		DL_FOREACH(MESSAGE_FIELD(task, headers_order), cur) {
+			rspamd_lua_push_header_array(L, cur->name, cur, RSPAMD_TASK_HEADER_PUSH_FULL,
+					false);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+
+	return 1;
 }
 
 static gint
