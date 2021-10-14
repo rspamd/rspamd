@@ -167,6 +167,16 @@ struct rspamd_mime_headers_table* rspamd_message_headers_new (void);
  */
 gsize rspamd_mime_headers_count (struct rspamd_mime_headers_table *hdrs);
 
+typedef bool(rspamd_hdr_traverse_func_t)(const gchar *, const struct rspamd_mime_header *, void *);
+/**
+ * Traverse all headers in a table
+ * @param func
+ * @param ud
+ * @return
+ */
+bool rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *,
+		rspamd_hdr_traverse_func_t func, void *ud);
+
 /**
  * Strip rfc822 CFWS sequences from a string in place
  * @param input input

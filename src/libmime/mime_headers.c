@@ -958,6 +958,22 @@ rspamd_mime_headers_count (struct rspamd_mime_headers_table *hdrs)
 	return 0;
 }
 
+bool
+rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *hdrs,
+								 rspamd_hdr_traverse_func_t func, void *ud)
+{
+	const gchar *name;
+	struct rspamd_mime_header *hdr;
+
+	kh_foreach(&hdrs->htb, name, hdr, {
+		if (!func(name, hdr, ud)) {
+			return false;
+		}
+	});
+
+	return true;
+}
+
 static void
 rspamd_message_headers_dtor (struct rspamd_mime_headers_table *hdrs)
 {
