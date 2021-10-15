@@ -82,6 +82,11 @@ static ucl_object_t* ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_f
 
 static void *ucl_null;
 
+struct _rspamd_lua_text {
+	const char *start;
+	unsigned int len;
+	unsigned int flags;
+};
 
 enum lua_ucl_push_flags {
 	LUA_UCL_DEFAULT_FLAGS = 0,
@@ -501,6 +506,14 @@ ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_flags_t flags)
 		if (lua_topointer (L, idx) == ucl_null) {
 			obj = ucl_object_typed_new (UCL_NULL);
 		}
+		else {
+			/* Assume it is a text like object */
+			struct _rspamd_lua_text *t = lua_touserdata (L, idx);
+
+			if (t) {
+				obj = ucl_object_fromstring_common(t->start, t->len, 0);
+			}
+		}
 		break;
 	case LUA_TTABLE:
 	case LUA_TFUNCTION:
@@ -833,12 +846,6 @@ lua_ucl_parser_parse_string (lua_State *L)
 
 	return ret;
 }
-
-struct _rspamd_lua_text {
-	const char *start;
-	unsigned int len;
-	unsigned int flags;
-};
 
 /***
  * @method parser:parse_text(input)
@@ -1440,10 +1447,11 @@ lua_ucl_to_format (lua_State *L)
 				format = UCL_EMIT_YAML;
 			}
 			else if (strcasecmp (strtype, "config") == 0 ||
-				strcasecmp (strtype, "ucl") == 0) {
+					 strcasecmp (strtype, "ucl") == 0) {
 				format = UCL_EMIT_CONFIG;
 			}
-			else if (strcasecmp (strtype, "msgpack") == 0) {
+			else if (strcasecmp (strtype, "msgpack") == 0 ||
+					 strcasecmp (strtype, "messagepack") == 0) {
 				format = UCL_EMIT_MSGPACK;
 			}
 		}
