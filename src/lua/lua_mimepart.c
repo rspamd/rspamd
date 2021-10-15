@@ -1725,11 +1725,13 @@ lua_mimepart_get_headers (lua_State *L)
 
 	if (part) {
 		struct rspamd_mime_header *cur;
+		int i = 1;
 
 		lua_createtable (L, rspamd_mime_headers_count(part->raw_headers), 0);
 		LL_FOREACH2(part->headers_order, cur, ord_next) {
 			rspamd_lua_push_header_array(L, cur->name, cur, RSPAMD_TASK_HEADER_PUSH_FULL,
 					need_modified);
+			lua_rawseti(L, -2, i++);
 		}
 	}
 	else {
