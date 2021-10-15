@@ -3126,14 +3126,15 @@ lua_task_get_headers (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	bool need_modified = lua_isnoneornil(L, 2) ? false : lua_toboolean(L, 2);
 
 	if (task && task->message) {
 		struct rspamd_mime_header *cur;
 
 		lua_createtable (L, rspamd_mime_headers_count(MESSAGE_FIELD(task, raw_headers)), 0);
-		DL_FOREACH(MESSAGE_FIELD(task, headers_order), cur) {
+		LL_FOREACH2(MESSAGE_FIELD(task, headers_order), cur, ord_next) {
 			rspamd_lua_push_header_array(L, cur->name, cur, RSPAMD_TASK_HEADER_PUSH_FULL,
-					false);
+					need_modified);
 		}
 	}
 	else {

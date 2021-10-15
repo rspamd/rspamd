@@ -329,6 +329,12 @@ LUA_FUNCTION_DEF (mimepart, get_header_count);
  */
 LUA_FUNCTION_DEF (mimepart, get_raw_headers);
 
+/***
+ * @method mimepart:get_headers()
+ * Get all undecoded headers of a mime part as a string
+ * @return {rspamd_text} all raw headers for a message as opaque text
+ */
+LUA_FUNCTION_DEF (mimepart, get_headers);
 
 /***
  * @method mime_part:get_content()
@@ -568,6 +574,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_header_full),
 	LUA_INTERFACE_DEF (mimepart, get_header_count),
 	LUA_INTERFACE_DEF (mimepart, get_raw_headers),
+	LUA_INTERFACE_DEF (mimepart, get_headers),
 	LUA_INTERFACE_DEF (mimepart, is_image),
 	LUA_INTERFACE_DEF (mimepart, get_image),
 	LUA_INTERFACE_DEF (mimepart, is_archive),
@@ -1708,6 +1715,31 @@ lua_mimepart_get_raw_headers (lua_State *L)
 
 	return 1;
 }
+
+static gint
+lua_mimepart_get_headers (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	bool need_modified = lua_isnoneornil(L, 2) ? false : lua_toboolean(L, 2);
+
+	if (part) {
+		struct rspamd_mime_header *cur;
+
+		lua_createtable (L, rspamd_mime_headers_count(part->raw_headers), 0);
+		LL_FOREACH2(part->headers_order, cur, ord_next) {
+			rspamd_lua_push_header_array(L, cur->name, cur, RSPAMD_TASK_HEADER_PUSH_FULL,
+					need_modified);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+
+	return 1;
+}
+
 
 static gint
 lua_mimepart_is_image (lua_State * L)
