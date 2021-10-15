@@ -581,6 +581,24 @@ exports.message_to_ucl = function(task)
   result.size = task:get_size()
   result.digest = task:get_digest()
 
+  result.headers = task:get_headers(true) or {}
+
+  local parts = task:get_parts() or {}
+  result.parts = {}
+  for _,part in ipairs(parts) do
+    local l = part:get_length()
+    if l > 0 then
+      local p = {}
+      p.size = l
+      p.type = string.format('%s/%s', part:get_type())
+      p.detected_type = string.format('%s/%s', part:get_detected_type())
+      p.filename = part:get_filename()
+      p.content = part:get_content()
+      p.headers = part:get_headers(true) or {}
+      table.insert(result.parts, p)
+    end
+  end
+
   return result
 end
 
