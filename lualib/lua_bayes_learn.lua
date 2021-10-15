@@ -92,6 +92,11 @@ exports.autolearn = function(task, conf)
         log_can_autolearn(verdict, score, conf.spam_threshold)
         learn_spam = true
       end
+    elseif verdict == 'junk' then
+      if conf.junk_threshold and score >= conf.junk_threshold then
+        log_can_autolearn(verdict, score, conf.junk_threshold)
+        learn_spam = true
+      end
     elseif verdict == 'ham' then
       if conf.ham_threshold and score <= conf.ham_threshold then
         log_can_autolearn(verdict, score, conf.ham_threshold)
