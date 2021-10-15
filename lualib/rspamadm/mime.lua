@@ -41,7 +41,9 @@ parser:mutex(
     parser:flag "-j --json"
           :description "JSON output",
     parser:flag "-U --ucl"
-          :description "UCL output"
+          :description "UCL output",
+    parser:flag "-M --messagepack"
+        :description "MessagePack output"
 )
 parser:flag "-C --compact"
       :description "Use compact format"
@@ -194,6 +196,22 @@ sign:option "-o --output"
     }
     :default 'message'
 
+local dump = parser:command "dump"
+                   :description "Dumps a raw message in different formats"
+dump:argument "file"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
+-- Duplicate format for convenience
+dump:mutex(
+    parser:flag "-j --json"
+          :description "JSON output",
+    parser:flag "-U --ucl"
+          :description "UCL output",
+    parser:flag "-M --messagepack"
+          :description "MessagePack output"
+)
+
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
 
@@ -239,16 +257,22 @@ local function maybe_print_fname(opts, fname)
   end
 end
 
+local function output_fmt(opts)
+  local fmt = 'json'
+  if opts.compact then fmt = 'json-compact' end
+  if opts.ucl then fmt = 'ucl' end
+  if opts.messagepack then fmt = 'msgpack' end
+
+  return fmt
+end
+
 -- Print elements in form
 -- filename -> table of elements
 local function print_elts(elts, opts, func)
   local fun = require "fun"
 
   if opts.json or opts.ucl then
-    local fmt = 'json'
-    if opts.compact then fmt = 'json-compact' end
-    if opts.ucl then fmt = 'ucl' end
-    io.write(ucl.to_format(elts, fmt))
+    io.write(ucl.to_format(elts, output_fmt(opts)))
   else
     fun.each(function(fname, elt)
 
@@ -849,6 +873,24 @@ local function sign_handler(opts)
   end
 end
 
+local function dump_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+
+    if opts.ucl or opts.json or opts.messagepack then
+      local ucl_object = lua_mime.message_to_ucl(task)
+      io.write(ucl.to_format(ucl_object, output_fmt(opts)))
+    else
+      task:get_content():save_in_file(1)
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -870,6 +912,8 @@ local function handler(args)
     modify_handler(opts)
   elseif command == 'sign' then
     sign_handler(opts)
+  elseif command == 'dump' then
+    dump_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
