@@ -385,7 +385,9 @@ rspamadm_lua_exec_handler (lua_State *L, gint argc, gchar **argv)
 			return;
 		}
 
-		lua_repl_thread_call (thread, 0, argv[i], lua_thread_str_error_cb);
+		if (lua_repl_thread_call (thread, 0, argv[i], lua_thread_str_error_cb) != 0) {
+			return;
+		}
 	}
 }
 
