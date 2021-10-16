@@ -1501,7 +1501,13 @@ lua_util_glob (lua_State *L)
 		pattern = luaL_checkstring (L, i);
 
 		if (pattern) {
-			glob (pattern, flags, NULL, &gl);
+			if (glob (pattern, flags, NULL, &gl) != 0) {
+				/* There is no way to return error here, so just create an table */
+				lua_createtable (L, 0, 0);
+				globfree (&gl);
+
+				return 1;
+			}
 		}
 	}
 
