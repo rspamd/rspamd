@@ -2756,7 +2756,11 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 
 			/* Toggle FIPS mode */
 			if (mode == 0) {
+#if defined(OPENSSL_VERSION_MAJOR) && (OPENSSL_VERSION_MAJOR >= 3)
+				if (EVP_set_default_properties (NULL, "fips=yes") != 1) {
+#else
 				if (FIPS_mode_set (1) != 1) {
+#endif
 					err = ERR_get_error ();
 				}
 			}
@@ -2765,7 +2769,11 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			}
 
 			if (err != (unsigned long)-1) {
+#if defined(OPENSSL_VERSION_MAJOR) && (OPENSSL_VERSION_MAJOR >= 3)
+				msg_err_config ("EVP_set_default_properties failed: %s",
+#else
 				msg_err_config ("FIPS_mode_set failed: %s",
+#endif
 						ERR_error_string (err, NULL));
 				ret = FALSE;
 			}
