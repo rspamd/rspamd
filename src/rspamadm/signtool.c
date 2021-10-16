@@ -374,6 +374,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 
 			if (b32_pk) {
 				rspamd_fprintf (pub_fp, "%v", b32_pk);
+				g_string_free (b32_pk, TRUE);
 			}
 
 			fclose (pub_fp);

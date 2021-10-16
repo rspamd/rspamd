@@ -3768,6 +3768,11 @@ static gint
 fuzzy_lua_learn_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
 	guint flag = 0, weight = 1, send_flags = 0;
 	const gchar *symbol;
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
@@ -3926,6 +3931,11 @@ static gint
 fuzzy_lua_gen_hashes_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
 	guint flag = 0, weight = 1, send_flags = 0;
 	const gchar *symbol;
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
@@ -3934,120 +3944,116 @@ fuzzy_lua_gen_hashes_handler (lua_State *L)
 	gint cmd = FUZZY_WRITE;
 	gint i;
 
-	if (task) {
-		if (lua_type (L, 2) == LUA_TNUMBER) {
-			flag = lua_tonumber (L, 2);
-		}
-		else if (lua_type (L, 2) == LUA_TSTRING) {
-			struct fuzzy_rule *rule;
-			guint i;
-			GHashTableIter it;
-			gpointer k, v;
-			struct fuzzy_mapping *map;
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		flag = lua_tonumber (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		struct fuzzy_rule *rule;
+		guint i;
+		GHashTableIter it;
+		gpointer k, v;
+		struct fuzzy_mapping *map;
 
-			symbol = lua_tostring (L, 2);
-
-			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
-				if (flag != 0) {
-					break;
-				}
-
-				g_hash_table_iter_init (&it, rule->mappings);
-
-				while (g_hash_table_iter_next (&it, &k, &v)) {
-					map = v;
-
-					if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
-						flag = map->fuzzy_flag;
-						break;
-					}
-				}
-			}
-		}
-
-		if (flag == 0) {
-			return luaL_error (L, "bad flag");
-		}
-
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			weight = lua_tonumber (L, 3);
-		}
-
-		/* Flags */
-		if (lua_type (L, 4) == LUA_TTABLE) {
-			const gchar *sf;
-
-			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-				sf = lua_tostring (L, -1);
-
-				if (sf) {
-					if (g_ascii_strcasecmp (sf, "noimages") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
-					}
-					else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
-					}
-					else if (g_ascii_strcasecmp (sf, "notext") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
-					}
-				}
-			}
-		}
-
-		/* Type */
-		if (lua_type (L, 5) == LUA_TSTRING) {
-			const gchar *cmd_name = lua_tostring (L, 5);
-
-			if (strcmp (cmd_name, "add") == 0 || strcmp (cmd_name, "write") == 0) {
-				cmd = FUZZY_WRITE;
-			}
-			else if (strcmp (cmd_name, "delete") == 0 || strcmp (cmd_name, "remove") == 0) {
-				cmd = FUZZY_DEL;
-			}
-			else {
-				return luaL_error (L, "invalid command: %s", cmd_name);
-			}
-		}
-
-		lua_createtable (L, 0, fuzzy_module_ctx->fuzzy_rules->len);
+		symbol = lua_tostring (L, 2);
 
 		PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
-			if (rule->read_only) {
-				continue;
+			if (flag != 0) {
+				break;
 			}
 
-			/* Check for flag */
-			if (g_hash_table_lookup (rule->mappings,
-					GINT_TO_POINTER (flag)) == NULL) {
-				msg_info_task ("skip rule %s as it has no flag %d defined"
-							   " false", rule->name, flag);
-				continue;
-			}
+			g_hash_table_iter_init (&it, rule->mappings);
 
-			commands = fuzzy_generate_commands (task, rule, cmd, flag,
-					weight, send_flags);
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				map = v;
 
-			if (commands != NULL) {
-				struct fuzzy_cmd_io *io;
-				gint j;
-
-				lua_pushstring (L, rule->name);
-				lua_createtable (L, commands->len, 0);
-
-				PTR_ARRAY_FOREACH (commands, j, io) {
-					lua_pushlstring (L, io->io.iov_base, io->io.iov_len);
-					lua_rawseti (L, -2, j + 1);
+				if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
+					flag = map->fuzzy_flag;
+					break;
 				}
-
-				lua_settable (L, -3); /* ret[rule->name] = {raw_fuzzy1, ..., raw_fuzzyn} */
-
-				g_ptr_array_free (commands, TRUE);
 			}
 		}
 	}
-	else {
-		return luaL_error (L, "invalid arguments");
+
+	if (flag == 0) {
+		return luaL_error (L, "bad flag");
 	}
+
+	if (lua_type (L, 3) == LUA_TNUMBER) {
+		weight = lua_tonumber (L, 3);
+	}
+
+	/* Flags */
+	if (lua_type (L, 4) == LUA_TTABLE) {
+		const gchar *sf;
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			sf = lua_tostring (L, -1);
+
+			if (sf) {
+				if (g_ascii_strcasecmp (sf, "noimages") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+				}
+				else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+				}
+				else if (g_ascii_strcasecmp (sf, "notext") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
+				}
+			}
+		}
+	}
+
+	/* Type */
+	if (lua_type (L, 5) == LUA_TSTRING) {
+		const gchar *cmd_name = lua_tostring (L, 5);
+
+		if (strcmp (cmd_name, "add") == 0 || strcmp (cmd_name, "write") == 0) {
+			cmd = FUZZY_WRITE;
+		}
+		else if (strcmp (cmd_name, "delete") == 0 || strcmp (cmd_name, "remove") == 0) {
+			cmd = FUZZY_DEL;
+		}
+		else {
+			return luaL_error (L, "invalid command: %s", cmd_name);
+		}
+	}
+
+	lua_createtable (L, 0, fuzzy_module_ctx->fuzzy_rules->len);
+
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+		if (rule->read_only) {
+			continue;
+		}
+
+		/* Check for flag */
+		if (g_hash_table_lookup (rule->mappings,
+				GINT_TO_POINTER (flag)) == NULL) {
+			msg_info_task ("skip rule %s as it has no flag %d defined"
+						   " false", rule->name, flag);
+			continue;
+		}
+
+		commands = fuzzy_generate_commands (task, rule, cmd, flag,
+				weight, send_flags);
+
+		if (commands != NULL) {
+			struct fuzzy_cmd_io *io;
+			gint j;
+
+			lua_pushstring (L, rule->name);
+			lua_createtable (L, commands->len, 0);
+
+			PTR_ARRAY_FOREACH (commands, j, io) {
+				lua_pushlstring (L, io->io.iov_base, io->io.iov_len);
+				lua_rawseti (L, -2, j + 1);
+			}
+
+			lua_settable (L, -3); /* ret[rule->name] = {raw_fuzzy1, ..., raw_fuzzyn} */
+
+			g_ptr_array_free (commands, TRUE);
+		}
+	}
+
 
 	return 1;
 }
