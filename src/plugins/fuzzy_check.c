@@ -3777,73 +3777,67 @@ fuzzy_lua_learn_handler (lua_State *L)
 	const gchar *symbol;
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
-	if (task) {
-		if (lua_type (L, 2) == LUA_TNUMBER) {
-			flag = lua_tonumber (L, 2);
-		}
-		else if (lua_type (L, 2) == LUA_TSTRING) {
-			struct fuzzy_rule *rule;
-			guint i;
-			GHashTableIter it;
-			gpointer k, v;
-			struct fuzzy_mapping *map;
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		flag = lua_tointeger (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		struct fuzzy_rule *rule;
+		guint i;
+		GHashTableIter it;
+		gpointer k, v;
+		struct fuzzy_mapping *map;
 
-			symbol = lua_tostring (L, 2);
+		symbol = lua_tostring (L, 2);
 
-			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
-				if (flag != 0) {
+		PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+			if (flag != 0) {
+				break;
+			}
+
+			g_hash_table_iter_init (&it, rule->mappings);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				map = v;
+
+				if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
+					flag = map->fuzzy_flag;
 					break;
 				}
+			}
+		}
+	}
 
-				g_hash_table_iter_init (&it, rule->mappings);
+	if (flag == 0) {
+		return luaL_error (L, "bad flag");
+	}
 
-				while (g_hash_table_iter_next (&it, &k, &v)) {
-					map = v;
+	if (lua_type (L, 3) == LUA_TNUMBER) {
+		weight = lua_tonumber (L, 3);
+	}
 
-					if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
-						flag = map->fuzzy_flag;
-						break;
-					}
+	if (lua_type (L, 4) == LUA_TTABLE) {
+		const gchar *sf;
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			sf = lua_tostring (L, -1);
+
+			if (sf) {
+				if (g_ascii_strcasecmp (sf, "noimages") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+				}
+				else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+				}
+				else if (g_ascii_strcasecmp (sf, "notext") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
 				}
 			}
 		}
-
-		if (flag == 0) {
-			return luaL_error (L, "bad flag");
-		}
-
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			weight = lua_tonumber (L, 3);
-		}
-
-		if (lua_type (L, 4) == LUA_TTABLE) {
-			const gchar *sf;
-
-			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-				sf = lua_tostring (L, -1);
-
-				if (sf) {
-					if (g_ascii_strcasecmp (sf, "noimages") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
-					}
-					else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
-					}
-					else if (g_ascii_strcasecmp (sf, "notext") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
-					}
-				}
-			}
-		}
-
-		lua_pushboolean (L,
-				fuzzy_check_lua_process_learn (task, FUZZY_WRITE, weight, flag,
-						send_flags));
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
 	}
 
+	lua_pushboolean (L,
+			fuzzy_check_lua_process_learn (task, FUZZY_WRITE, weight, flag,
+					send_flags));
 	return 1;
 }
 
@@ -3851,78 +3845,76 @@ static gint
 fuzzy_lua_unlearn_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	g_assert (task != NULL);
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
 	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
-	if (task) {
-		if (lua_type (L, 2) == LUA_TNUMBER) {
-			flag = lua_tonumber (L, 1);
-		}
-		else if (lua_type (L, 2) == LUA_TSTRING) {
-			struct fuzzy_rule *rule;
-			guint i;
-			GHashTableIter it;
-			gpointer k, v;
-			struct fuzzy_mapping *map;
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		flag = lua_tonumber (L, 1);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		struct fuzzy_rule *rule;
+		guint i;
+		GHashTableIter it;
+		gpointer k, v;
+		struct fuzzy_mapping *map;
 
-			symbol = lua_tostring (L, 2);
+		symbol = lua_tostring (L, 2);
 
-			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+		PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 
-				if (flag != 0) {
+			if (flag != 0) {
+				break;
+			}
+
+			g_hash_table_iter_init (&it, rule->mappings);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				map = v;
+
+				if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
+					flag = map->fuzzy_flag;
 					break;
 				}
+			}
+		}
+	}
 
-				g_hash_table_iter_init (&it, rule->mappings);
+	if (flag == 0) {
+		return luaL_error (L, "bad flag");
+	}
 
-				while (g_hash_table_iter_next (&it, &k, &v)) {
-					map = v;
+	if (lua_type (L, 3) == LUA_TNUMBER) {
+		weight = lua_tonumber (L, 3);
+	}
 
-					if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
-						flag = map->fuzzy_flag;
-						break;
-					}
+	if (lua_type (L, 4) == LUA_TTABLE) {
+		const gchar *sf;
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			sf = lua_tostring (L, -1);
+
+			if (sf) {
+				if (g_ascii_strcasecmp (sf, "noimages") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+				}
+				else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+				}
+				else if (g_ascii_strcasecmp (sf, "notext") == 0) {
+					send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
 				}
 			}
 		}
-
-		if (flag == 0) {
-			return luaL_error (L, "bad flag");
-		}
-
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			weight = lua_tonumber (L, 3);
-		}
-
-		if (lua_type (L, 4) == LUA_TTABLE) {
-			const gchar *sf;
-
-			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-				sf = lua_tostring (L, -1);
-
-				if (sf) {
-					if (g_ascii_strcasecmp (sf, "noimages") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
-					}
-					else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
-					}
-					else if (g_ascii_strcasecmp (sf, "notext") == 0) {
-						send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
-					}
-				}
-			}
-		}
-
-		lua_pushboolean (L,
-				fuzzy_check_lua_process_learn (task, FUZZY_DEL, weight, flag,
-						send_flags));
 	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
+
+	lua_pushboolean (L,
+			fuzzy_check_lua_process_learn (task, FUZZY_DEL, weight, flag,
+					send_flags));
 
 	return 1;
 }
