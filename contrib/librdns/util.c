@@ -207,7 +207,7 @@ rdns_make_client_socket (const char *credits,
 		hints.ai_flags |= AI_NUMERICHOST | AI_NUMERICSERV;
 
 		snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
-		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
+		if (getaddrinfo (credits, portbuf, &hints, &res) == 0) {
 			r = rdns_make_inet_socket (type, res, psockaddr, psocklen);
 
 			if (r != -1 && psockaddr) {
@@ -217,6 +217,7 @@ rdns_make_client_socket (const char *credits,
 
 				if (cpy == NULL) {
 					close (r);
+					freeaddrinfo (res);
 
 					return -1;
 				}

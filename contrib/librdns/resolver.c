@@ -150,13 +150,7 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 		rep->code = rcode;
 		req->reply = rep;
 		rep->authenticated = false;
-
-		if (req) {
-			rep->requested_name = req->requested_names[0].name;
-		}
-		else {
-			rep->requested_name = NULL;
-		}
+		rep->requested_name = req->requested_names[0].name;
 	}
 
 	return rep;
@@ -1133,4 +1127,6 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 
 		HASH_ADD (hh, resolver->fake_elts, key, sizeof (*srch) + len, fake_rep);
 	}
+
+	free (srch);
 }

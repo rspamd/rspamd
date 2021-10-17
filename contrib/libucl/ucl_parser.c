@@ -685,6 +685,8 @@ ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
 			ucl_object_unref (obj);
 		}
 
+		UCL_FREE(sizeof (struct ucl_stack), st);
+
 		return NULL;
 	}
 
@@ -2888,7 +2890,9 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 
 				if (!special_handler->handler (parser, data, len, &ndata, &nlen,
 						special_handler->user_data)) {
+					UCL_FREE(sizeof (struct ucl_chunk), chunk);
 					ucl_create_err (&parser->err, "call for external handler failed");
+
 					return false;
 				}
 

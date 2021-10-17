@@ -715,6 +715,7 @@ rdns_curve_send (struct rdns_request *req, void *plugin_data,
 		boxed_len = req->pos + crypto_box_ZEROBYTES;
 		m = malloc (boxed_len);
 		if (m == NULL) {
+			free(creq);
 			return -1;
 		}
 

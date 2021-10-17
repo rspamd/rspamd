@@ -92,7 +92,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 	char *o;
 	int labels = 0;
 	size_t label_len, olen, remain;
-	uint32_t *uclabel;
+	uint32_t *uclabel = NULL;
 	size_t punylabel_len, uclabel_len;
 	char tmp_label[DNS_D_MAXLABEL];
 	bool need_encode = false;
@@ -163,6 +163,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 				}
 
 				free (uclabel);
+				uclabel = NULL;
 
 				if (dot) {
 					p = dot + 1;
@@ -230,9 +231,11 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 
 	return true;
 
-	err:
+err:
 	free (*out);
 	*out = NULL;
+	free (uclabel);
+
 	return false;
 }
 

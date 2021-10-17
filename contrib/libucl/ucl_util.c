@@ -887,43 +887,48 @@ ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *bufl
 {
 	int fd;
 	struct stat st;
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		ucl_create_err (err, "cannot open file %s: %s",
+				filename, strerror (errno));
+		return false;
+	}
 
-	if (stat (filename, &st) == -1) {
+	if (fstat (fd, &st) == -1) {
 		if (must_exist || errno == EPERM) {
 			ucl_create_err (err, "cannot stat file %s: %s",
 					filename, strerror (errno));
 		}
+		close (fd);
+
 		return false;
 	}
 	if (!S_ISREG (st.st_mode)) {
 		if (must_exist) {
 			ucl_create_err (err, "file %s is not a regular file", filename);
 		}
+		close (fd);
 
 		return false;
 	}
+
 	if (st.st_size == 0) {
 		/* Do not map empty files */
 		*buf = NULL;
 		*buflen = 0;
 	}
 	else {
-		if ((fd = open (filename, O_RDONLY)) == -1) {
-			ucl_create_err (err, "cannot open file %s: %s",
-					filename, strerror (errno));
-			return false;
-		}
-		if ((*buf = ucl_mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-			close (fd);
-			ucl_create_err (err, "cannot mmap file %s: %s",
-					filename, strerror (errno));
+		if ((*buf = ucl_mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+			close(fd);
+			ucl_create_err(err, "cannot mmap file %s: %s",
+					filename, strerror(errno));
 			*buf = NULL;
 
 			return false;
 		}
 		*buflen = st.st_size;
-		close (fd);
 	}
+
+	close (fd);
 
 	return true;
 }
@@ -1136,6 +1141,10 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 		/* We need to check signature first */
 		snprintf (filebuf, sizeof (filebuf), "%s.sig", realbuf);
 		if (!ucl_fetch_file (filebuf, &sigbuf, &siglen, &parser->err, true)) {
+			if (buf) {
+				ucl_munmap (buf, buflen);
+			}
+
 			return false;
 		}
 		if (!ucl_sig_check (buf, buflen, sigbuf, siglen, parser)) {
@@ -1145,8 +1154,13 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 			if (sigbuf) {
 				ucl_munmap (sigbuf, siglen);
 			}
+			if (buf) {
+				ucl_munmap (buf, buflen);
+			}
+
 			return false;
 		}
+
 		if (sigbuf) {
 			ucl_munmap (sigbuf, siglen);
 		}
@@ -1254,6 +1268,8 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 						if (buf) {
 							ucl_munmap (buf, buflen);
 						}
+
+						ucl_object_unref (new_obj);
 
 						return false;
 					}
