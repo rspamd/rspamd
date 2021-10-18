@@ -131,7 +131,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
     for _,opt in ipairs(opts) do
       local check_res = string.sub(opt, -1)
-      local domain = string.sub(opt, 1, -3)
+      local domain = string.sub(opt, 1, -3):lower()
 
       if check_res == '+' then
         table.insert(dkim_results.pass, domain)
@@ -357,6 +357,8 @@ local function dmarc_callback(task)
 
   -- Do some initial sanity checks, detect tld domain if different
   if hfromdom and hfromdom ~= '' and not (from or E)[2] then
+    -- Lowercase domain as per #3940
+    hfromdom = hfromdom:lower()
     dmarc_domain = rspamd_util.get_tld(hfromdom)
   elseif (from or E)[2] then
     task:insert_result(settings.symbols['na'], 1.0, 'Duplicate From header')
