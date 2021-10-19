@@ -149,9 +149,6 @@ lua_cdb_lookup (lua_State *L)
 	struct cdb *cdb = lua_check_cdb (L, 1);
 	gsize klen;
 	const gchar *what = luaL_checklstring(L, 2, &klen);
-	gchar *value;
-	gsize vlen;
-	gint64 vpos;
 
 	if (!cdb || what == NULL) {
 		return lua_error (L);
@@ -159,12 +156,7 @@ lua_cdb_lookup (lua_State *L)
 
 	if (cdb_find (cdb, what, klen) > 0) {
 		/* Extract and push value to lua as string */
-		vpos = cdb_datapos (cdb);
-		vlen = cdb_datalen (cdb);
-		value = g_malloc (vlen);
-		cdb_read (cdb, value, vlen, vpos);
-		lua_pushlstring (L, value, vlen);
-		g_free (value);
+		lua_pushlstring (L, cdb_getdata (cdb), cdb_datalen (cdb));
 	}
 	else {
 		lua_pushnil (L);
