@@ -307,11 +307,15 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 		cdbp = cdb_shared_storage::new_cdb();
 
 		if (cdb_init(cdbp.get(), fd) == -1) {
+			close(fd);
+
 			return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
 					path, strerror(errno)));
 		}
 
 		cdbp = cdb_shared_storage.push_cdb(path, cdbp);
+
+		close(fd);
 	}
 	else {
 		cdbp = cached_cdb_maybe.value();
