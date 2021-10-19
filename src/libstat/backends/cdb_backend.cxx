@@ -27,14 +27,81 @@
 #include <string>
 #include <optional>
 #include "contrib/expected/expected.hpp"
+#include "contrib/robin-hood/robin_hood.h"
 #include "fmt/core.h"
 
 namespace rspamd::stat::cdb {
 
+/*
+ * Utility class to share cdb instances over statfiles instances, as each
+ * cdb has tokens for both ham and spam classes
+ */
+class cdb_shared_storage {
+public:
+	using cdb_element_t = std::shared_ptr<struct cdb>;
+	cdb_shared_storage() noexcept = default;
+
+	auto get_cdb(const char *path) const -> std::optional<cdb_element_t> {
+		auto found = elts.find(path);
+
+		if (found != elts.end()) {
+			if (!found->second.expired()) {
+				return found->second.lock();
+			}
+		}
+
+		return std::nullopt;
+	}
+	/* Create a new smart pointer over POD cdb structure */
+	static auto new_cdb() -> cdb_element_t {
+		auto ret = cdb_element_t(new struct cdb, cdb_deleter());
+		memset(ret.get(), 0, sizeof(struct cdb));
+		return ret;
+	}
+	/* Enclose cdb into storage */
+	auto push_cdb(const char *path, cdb_element_t cdbp) -> cdb_element_t {
+		auto found = elts.find(path);
+
+		if (found != elts.end()) {
+			if (found->second.expired()) {
+				/* OK, move in lieu of the expired weak pointer */
+
+				found->second = cdbp;
+				return cdbp;
+			}
+			else {
+				/*
+				 * Existing and not expired, return the existing one
+				 */
+				return found->second.lock();
+			}
+		}
+		else {
+			/* Not existing, make a weak ptr and return the original */
+			elts.emplace(path,std::weak_ptr<struct cdb>(cdbp));
+			return cdbp;
+		}
+	}
+private:
+	/*
+	 * We store weak pointers here to allow owning cdb statfiles to free
+	 * expensive cdb before this cache is terminated (e.g. on dynamic cdb reload)
+	 */
+	robin_hood::unordered_flat_map<std::string, std::weak_ptr<struct cdb>> elts;
+
+	struct cdb_deleter {
+		void operator()(struct cdb *c) const {
+			cdb_free(c);
+		}
+	};
+};
+
+static cdb_shared_storage cdb_shared_storage;
+
 class ro_backend final {
 public:
-	explicit ro_backend(struct rspamd_statfile *_st, std::unique_ptr<struct cdb> &&_db)
-			: st(_st), db(std::move(_db)) {}
+	explicit ro_backend(struct rspamd_statfile *_st, cdb_shared_storage::cdb_element_t _db)
+			: st(_st), db(_db) {}
 	ro_backend() = delete;
 	ro_backend(const ro_backend &) = delete;
 	ro_backend(ro_backend &&other) noexcept {
@@ -47,18 +114,13 @@ public:
 
 		return *this;
 	}
-	~ro_backend() {
-		if (db) {
-			// Might be worth to use unique ptr with a custom deleter
-			cdb_free(db.get());
-		}
-	}
+	~ro_backend() {}
 
 	auto load_cdb() -> tl::expected<bool, std::string>;
 	auto process_token(const rspamd_token_t *tok) const -> std::optional<float>;
 private:
 	struct rspamd_statfile *st;
-	std::unique_ptr<struct cdb> db;
+	cdb_shared_storage::cdb_element_t db;
 	bool loaded = false;
 	std::uint64_t learns_spam = 0;
 	std::uint64_t learns_ham = 0;
@@ -190,21 +252,35 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 	if (filename && ucl_object_type(filename) == UCL_STRING) {
 		const auto *path = ucl_object_tostring(filename);
 
-		auto fd = rspamd_file_xopen(path, O_RDONLY, 0, true);
+		auto cached_cdb_maybe = cdb_shared_storage.get_cdb(path);
+		cdb_shared_storage::cdb_element_t cdbp;
 
-		if (fd == -1) {
-			return tl::make_unexpected(fmt::format("cannot open {}: {}",
-					path, strerror(errno)));
+		if (!cached_cdb_maybe) {
+
+			auto fd = rspamd_file_xopen(path, O_RDONLY, 0, true);
+
+			if (fd == -1) {
+				return tl::make_unexpected(fmt::format("cannot open {}: {}",
+						path, strerror(errno)));
+			}
+
+			cdbp = cdb_shared_storage::new_cdb();
+
+			if (cdb_init(cdbp.get(), fd) == -1) {
+				return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
+						path, strerror(errno)));
+			}
+		}
+		else {
+			cdbp = cached_cdb_maybe.value();
 		}
 
-		auto &&cdbs = std::make_unique<struct cdb>();
-
-		if (cdb_init(cdbs.get(), fd) == -1) {
-			return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
-					path, strerror(errno)));
+		if (!cdbp) {
+			return tl::make_unexpected(fmt::format("cannot init cdb in {}: internal error",
+					path));
 		}
 
-		ro_backend bk{st, std::move(cdbs)};
+		ro_backend bk{st, cdbp};
 
 		auto res = bk.load_cdb();
 
