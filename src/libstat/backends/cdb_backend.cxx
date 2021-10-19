@@ -118,6 +118,20 @@ public:
 
 	auto load_cdb() -> tl::expected<bool, std::string>;
 	auto process_token(const rspamd_token_t *tok) const -> std::optional<float>;
+	constexpr auto is_spam() const -> bool {
+		return st->stcf->is_spam;
+	}
+	auto get_learns() const -> std::uint64_t {
+		if (is_spam()) {
+			return learns_spam;
+		}
+		else {
+			return learns_ham;
+		}
+	}
+	auto get_total_learns() const -> std::uint64_t {
+		return learns_spam + learns_ham;
+	}
 private:
 	struct rspamd_statfile *st;
 	cdb_shared_storage::cdb_element_t db;
@@ -230,7 +244,7 @@ ro_backend::process_token(const rspamd_token_t *tok) const -> std::optional<floa
 	if (maybe_value) {
 		auto [spam_count, ham_count] = maybe_value.value();
 
-		if (st->stcf->is_spam) {
+		if (is_spam()) {
 			return spam_count;
 		}
 		else {
@@ -321,6 +335,8 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 
 }
 
+#define CDB_FROM_RAW(p) (reinterpret_cast<rspamd::stat::cdb::ro_backend *>(p))
+
 /* C exports */
 gpointer
 rspamd_cdb_init(struct rspamd_stat_ctx* ctx,
@@ -357,14 +373,42 @@ rspamd_cdb_process_tokens(struct rspamd_task* task,
 								   gint id,
 								   gpointer ctx)
 {
-	return false;
+	auto *cdbp = CDB_FROM_RAW(ctx);
+	bool seen_values = false;
+
+	for (auto i = 0u; i < tokens->len; i++) {
+		rspamd_token_t *tok;
+		tok = reinterpret_cast<rspamd_token_t *>(g_ptr_array_index(tokens, i));
+
+		auto res = cdbp->process_token(tok);
+
+		if (res) {
+			tok->values[id] = res.value();
+			seen_values = true;
+		}
+		else {
+			tok->values[id] = 0;
+		}
+	}
+
+	if (seen_values) {
+		if (cdbp->is_spam()) {
+			task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
+		}
+		else {
+			task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
+		}
+	}
+
+	return true;
+
 }
 gboolean
 rspamd_cdb_finalize_process(struct rspamd_task* task,
 									 gpointer runtime,
 									 gpointer ctx)
 {
-	return false;
+	return true;
 }
 gboolean
 rspamd_cdb_learn_tokens(struct rspamd_task* task,
@@ -387,7 +431,8 @@ gulong rspamd_cdb_total_learns(struct rspamd_task* task,
 							   gpointer runtime,
 							   gpointer ctx)
 {
-	return 0;
+	auto *cdbp = CDB_FROM_RAW(ctx);
+	return cdbp->get_total_learns();
 }
 gulong
 rspamd_cdb_inc_learns(struct rspamd_task* task,
@@ -408,7 +453,8 @@ rspamd_cdb_learns(struct rspamd_task* task,
 						 gpointer runtime,
 						 gpointer ctx)
 {
-	return 0;
+	auto *cdbp = CDB_FROM_RAW(ctx);
+	return cdbp->get_learns();
 }
 ucl_object_t*
 rspamd_cdb_get_stat(gpointer runtime, gpointer ctx)
@@ -423,5 +469,6 @@ rspamd_cdb_load_tokenizer_config(gpointer runtime, gsize* len)
 void
 rspamd_cdb_close(gpointer ctx)
 {
-
+	auto *cdbp = CDB_FROM_RAW(ctx);
+	delete cdbp;
 }
