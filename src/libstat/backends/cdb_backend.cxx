@@ -244,55 +244,79 @@ ro_backend::process_token(const rspamd_token_t *tok) const -> std::optional<floa
 auto
 open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 {
+	const char *path = nullptr;
 	const auto *stf = st->stcf;
 
-	const auto *filename = ucl_object_lookup_any(stf->opts,
-			"filename", "path", "cdb", nullptr);
+	auto get_filename = [](const ucl_object_t *obj) -> const char * {
+		const auto *filename = ucl_object_lookup_any(obj,
+				"filename", "path", "cdb", nullptr);
 
-	if (filename && ucl_object_type(filename) == UCL_STRING) {
-		const auto *path = ucl_object_tostring(filename);
-
-		auto cached_cdb_maybe = cdb_shared_storage.get_cdb(path);
-		cdb_shared_storage::cdb_element_t cdbp;
-
-		if (!cached_cdb_maybe) {
-
-			auto fd = rspamd_file_xopen(path, O_RDONLY, 0, true);
-
-			if (fd == -1) {
-				return tl::make_unexpected(fmt::format("cannot open {}: {}",
-						path, strerror(errno)));
-			}
-
-			cdbp = cdb_shared_storage::new_cdb();
-
-			if (cdb_init(cdbp.get(), fd) == -1) {
-				return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
-						path, strerror(errno)));
-			}
-		}
-		else {
-			cdbp = cached_cdb_maybe.value();
+		if (filename && ucl_object_type(filename) == UCL_STRING) {
+			return ucl_object_tostring(filename);
 		}
 
-		if (!cdbp) {
-			return tl::make_unexpected(fmt::format("cannot init cdb in {}: internal error",
-					path));
-		}
+		return nullptr;
+	};
 
-		ro_backend bk{st, cdbp};
-
-		auto res = bk.load_cdb();
-
-		if (!res) {
-			return tl::make_unexpected(res.error());
-		}
-
-		return bk;
+	/* First search in backend configuration */
+	const auto *obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
+	if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+		path = get_filename(obj);
 	}
-	else {
+
+	/* Now try statfiles config */
+	if (!path && stf->opts) {
+		path = get_filename(stf->opts);
+	}
+
+	/* Now try classifier config */
+	if (!path && st->classifier->cfg->opts) {
+		path = get_filename(st->classifier->cfg->opts);
+	}
+
+	if (!path) {
 		return tl::make_unexpected("missing/malformed filename attribute");
 	}
+
+	auto cached_cdb_maybe = cdb_shared_storage.get_cdb(path);
+	cdb_shared_storage::cdb_element_t cdbp;
+
+	if (!cached_cdb_maybe) {
+
+		auto fd = rspamd_file_xopen(path, O_RDONLY, 0, true);
+
+		if (fd == -1) {
+			return tl::make_unexpected(fmt::format("cannot open {}: {}",
+					path, strerror(errno)));
+		}
+
+		cdbp = cdb_shared_storage::new_cdb();
+
+		if (cdb_init(cdbp.get(), fd) == -1) {
+			return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
+					path, strerror(errno)));
+		}
+
+		cdbp = cdb_shared_storage.push_cdb(path, cdbp);
+	}
+	else {
+		cdbp = cached_cdb_maybe.value();
+	}
+
+	if (!cdbp) {
+		return tl::make_unexpected(fmt::format("cannot init cdb in {}: internal error",
+				path));
+	}
+
+	ro_backend bk{st, cdbp};
+
+	auto res = bk.load_cdb();
+
+	if (!res) {
+		return tl::make_unexpected(res.error());
+	}
+
+	return bk;
 }
 
 }
