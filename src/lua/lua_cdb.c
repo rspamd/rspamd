@@ -18,13 +18,65 @@
 
 #define CDB_REFRESH_TIME 60
 
+/***
+ * @module rspamd_cdb
+ * Rspamd CDB module is used to read and write key/value pairs to the CDB file
+ *
+ * @example
+local rspamd_cdb = require "rspamd_cdb"
+rspamd_cdb.build('/tmp/test.cdb'):add('test', 'value'):finalize()
+local c = rspamd_cdb.open('/tmp/test.cdb')
+c:find('test')
+-- will return 'value'
+ */
+
+/***
+ * @function rspamd_cdb.open(filename, [ev_base])
+ * Opens an existing CDB for reading. If `ev_base` is specified, then cdb file is added
+ * for monitoring, that will get updates on disk file changes.
+ * @param {string} filename path to file
+ * @param {ev_base} event loop object
+ * @return {rspamd_cdb} cdb object
+ */
 LUA_FUNCTION_DEF (cdb, create);
+/***
+ * @method rspamd_cdb:find(key)
+ * Finds a specific key in cdb and returns a string or nil if a key has not been found
+ * @param {string} key key to find
+ * @return {string/nil} value for the specific key
+ */
 LUA_FUNCTION_DEF (cdb, lookup);
+/***
+ * @method rspamd_cdb:get_name()
+ * Returns filename for the specific cdb
+ * @return {string} filename for cdb
+ */
 LUA_FUNCTION_DEF (cdb, get_name);
 LUA_FUNCTION_DEF (cdb, destroy);
 
+/***
+ * @function rspamd_cdb.build(filename, [mode])
+ * Creates a new cdb in a file (existing one will be overwritten!). The object
+ * returned can be used merely for adding data. Upon finalizing, the data is written to
+ * disk and cdb can no longer be changed.
+ * @param {string} filename path to file
+ * @param {int} mode numeric mode to create a file
+ * @return {rspamd_cdb_builder} cdb builder object (or nil + error message)
+ */
 LUA_FUNCTION_DEF (cdb, build);
+/***
+ * @method rspamd_cdb_builder:add(key, value)
+ * Adds new value to cdb in the builder mode
+ * @param {string} key key to add
+ * @param {string} value value to associate with the key
+ * @return {rspamd_cdb_builder} the same object to allow chaining calls
+ */
 LUA_FUNCTION_DEF (cdb_builder, add);
+/***
+ * @method rspamd_cdb_builder:finalize()
+ * Finalizes the CDB and writes it to disk. This method also closes FD associated with
+ * CDB builder. No further additions are allowed after this point
+ */
 LUA_FUNCTION_DEF (cdb_builder, finalize);
 LUA_FUNCTION_DEF (cdb_builder, dtor);
 
