@@ -122,6 +122,45 @@ lua_check_cdb_builder (lua_State * L, int pos)
 	return ud ? ((struct cdb_make *)ud) : NULL;
 }
 
+static const char *
+lua_cdb_get_input (lua_State *L, int pos, gsize *olen)
+{
+	int t = lua_type (L, pos);
+
+	switch (t) {
+	case LUA_TSTRING:
+		return lua_tolstring (L, pos, olen);
+	case LUA_TNUMBER: {
+		static char numbuf[sizeof(lua_Number)];
+		lua_Number n = lua_tonumber(L, pos);
+		memcpy(numbuf, &n, sizeof(numbuf));
+		*olen = sizeof(n);
+		return numbuf;
+	}
+	case LUA_TUSERDATA: {
+		void *p = rspamd_lua_check_udata_maybe (L, pos, "rspamd{text}");
+		if (p) {
+			struct rspamd_lua_text *t = (struct rspamd_lua_text *)p;
+			*olen = t->len;
+			return t->start;
+		}
+
+		p = rspamd_lua_check_udata_maybe (L, pos, "rspamd{int64}");
+		if (p) {
+			static char numbuf[sizeof(gint64)];
+
+			memcpy(numbuf, p, sizeof(numbuf));
+			*olen = sizeof(numbuf);
+			return numbuf;
+		}
+	}
+	default:
+		break;
+	}
+
+	return NULL;
+}
+
 static gint
 lua_cdb_create (lua_State *L)
 {
@@ -200,7 +239,7 @@ lua_cdb_lookup (lua_State *L)
 {
 	struct cdb *cdb = lua_check_cdb (L, 1);
 	gsize klen;
-	const gchar *what = luaL_checklstring(L, 2, &klen);
+	const gchar *what = lua_cdb_get_input(L, 2, &klen);
 
 	if (!cdb || what == NULL) {
 		return lua_error (L);
@@ -275,8 +314,8 @@ lua_cdb_builder_add (lua_State *L)
 {
 	struct cdb_make *cdbm = lua_check_cdb_builder(L, 1);
 	gsize data_sz, key_sz;
-	const char *key = lua_tolstring (L, 2, &key_sz);
-	const char *data = lua_tolstring (L, 3, &data_sz);
+	const char *key = lua_cdb_get_input (L, 2, &key_sz);
+	const char *data = lua_cdb_get_input (L, 3, &data_sz);
 
 	if (cdbm == NULL || key == NULL || data == NULL || cdbm->cdb_fd == -1) {
 		return luaL_error(L, "invalid arguments");
