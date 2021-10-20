@@ -19,6 +19,10 @@ local rspamd_logger = require "rspamd_logger"
 local argparse = require "argparse"
 local rspamd_zstd = require "rspamd_zstd"
 local rspamd_text = require "rspamd_text"
+local rspamd_util = require "rspamd_util"
+local rspamd_cdb = require "rspamd_cdb"
+local lua_util = require "lua_util"
+local rspamd_i64 = require "rspamd_int64"
 local ucl = require "ucl"
 
 local N = "statistics_dump"
@@ -41,8 +45,12 @@ parser:option "-c --config"
 -- Extract subcommand
 local dump = parser:command "dump d"
                    :description "Dump bayes statistics"
-dump:flag "-j --json"
-    :description "Json output"
+dump:mutex(
+    dump:flag "-j --json"
+        :description "Json output",
+    dump:flag "-C --cdb"
+        :description "CDB output"
+)
 dump:flag "-c --compress"
     :description "Compress output"
 dump:option "-b --batch-size"
@@ -50,6 +58,7 @@ dump:option "-b --batch-size"
     :argname("<elts>")
     :convert(tonumber)
     :default(1000)
+
 
 -- Restore
 local restore = parser:command "restore r"
@@ -166,10 +175,12 @@ local function redis_map_zip(ar)
   return data
 end
 
--- Used to clear plain numeric tables
+-- Used to clear tables
 local clear_fcn = table.clear or function(tbl)
-  local l = #tbl
-  for i=1,l do tbl[i] = nil end
+  local keys = lua_util.keys(tbl)
+  for _,k in ipairs(keys) do
+    tbl[k] = nil
+  end
 end
 
 local compress_ctx
@@ -192,7 +203,27 @@ local function dump_out(out, opts, last)
   end
 end
 
-local function dump_pattern(conn, pattern, opts, out)
+local function dump_cdb(out, opts, last, pattern)
+  local results = out[pattern]
+
+  if not out.cdb_builder then
+    -- First invocation
+    out.cdb_builder = rspamd_cdb.build(string.format('%s.cdb', pattern))
+    out.cdb_builder:add('_lrnspam', rspamd_i64.fromstring(results.learns_spam or '0'))
+    out.cdb_builder:add('_lrnham_', rspamd_i64.fromstring(results.learns_ham or '0'))
+  end
+
+  for _,o in ipairs(results.elts) do
+    out.cdb_builder:add(o.key, o.value)
+  end
+
+  if last then
+    out.cdb_builder:finalize()
+    out.cdb_builder = nil
+  end
+end
+
+local function dump_pattern(conn, pattern, opts, out, key)
   local cursor = 0
 
   repeat
@@ -232,8 +263,16 @@ local function dump_pattern(conn, pattern, opts, out)
     -- Output keeping track of the commas
     for i,d in ipairs(tokens) do
       if cursor == 0 and i == #tokens or not opts.json then
-        out[#out + 1] = rspamd_logger.slog('"%s": %s\n', d.key,
-            ucl.to_format(d.data, "json-compact"))
+        if opts.cdb then
+          table.insert(out[key].elts, {
+            key = rspamd_i64.fromstring(string.match(d.key, '%d+')),
+            value = rspamd_util.pack('<n<n', tonumber(d.data["S"] or '0') or 0,
+                tonumber(d.data["H"] or '0'))
+          })
+        else
+          out[#out + 1] = rspamd_logger.slog('"%s": %s\n', d.key,
+              ucl.to_format(d.data, "json-compact"))
+        end
       else
         out[#out + 1] = rspamd_logger.slog('"%s": %s,\n', d.key,
             ucl.to_format(d.data, "json-compact"))
@@ -247,8 +286,15 @@ local function dump_pattern(conn, pattern, opts, out)
 
     -- Do not write the last chunk of out as it will be processed afterwards
     if not cursor == 0 then
-      dump_out(out, opts, false)
-      clear_fcn(out)
+      if opts.cdb then
+        dump_out(out, opts, false)
+        clear_fcn(out)
+      else
+        dump_cdb(out, opts, false, key)
+        out[key].elts = {}
+      end
+    elseif opts.cdb then
+      dump_cdb(out, opts, true, key)
     end
 
   until cursor == 0
@@ -289,11 +335,14 @@ local function dump_handler(opts)
             if opts.json then
               out[#out + 1] = string.format('{"pattern": "%s", "meta": %s, "elts": {\n',
                   k, ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
+            elseif opts.cdb then
+              out[k] = redis_map_zip(additional_keys)
+              out[k].elts = {}
             else
               out[#out + 1] = string.format('"%s": %s\n', k,
                   ucl.to_format(redis_map_zip(additional_keys), 'json-compact'))
             end
-            dump_pattern(conn, pat, opts, out)
+            dump_pattern(conn, pat, opts, out, k)
             patterns_seen[pat] = true
           end
         end

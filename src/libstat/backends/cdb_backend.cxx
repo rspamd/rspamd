@@ -198,7 +198,7 @@ ro_backend::load_cdb() -> tl::expected<bool, std::string>
 
 	/* Now get number of learns */
 	std::int64_t cdb_key;
-	static const char learn_spam_key[8] = "lrnspam", learn_ham_key[8] = "lrnham";
+	static const char learn_spam_key[9] = "_lrnspam", learn_ham_key[9] = "_lrnham_";
 
 	auto check_key = [&](const char *key, std::uint64_t &target) -> tl::expected<bool, std::string> {
 		memcpy((void *)&cdb_key, key, sizeof(cdb_key));
