@@ -58,6 +58,7 @@ struct rspamd_fuzzy_backend_redis {
 	struct rspamd_redis_pool *pool;
 	gdouble timeout;
 	gint conf_ref;
+	bool terminated;
 	ref_entry_t ref;
 };
 
@@ -170,10 +171,8 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
 static void
 rspamd_fuzzy_backend_redis_dtor (struct rspamd_fuzzy_backend_redis *backend)
 {
-	lua_State *L = backend->L;
-
-	if (backend->conf_ref != -1) {
-		luaL_unref (L, LUA_REGISTRYINDEX, backend->conf_ref);
+	if (!backend->terminated && backend->conf_ref != -1) {
+		luaL_unref (backend->L, LUA_REGISTRYINDEX, backend->conf_ref);
 	}
 
 	if (backend->id) {
@@ -1641,5 +1640,17 @@ rspamd_fuzzy_backend_close_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
+	/*
+	 * XXX: we leak lua registry element there to avoid crashing
+	 * due to chicken-egg problem between lua state termination and
+	 * redis pool termination.
+	 * Here, we assume that redis pool is destroyed AFTER lua_state,
+	 * so all connections pending will release references but due to
+	 * `terminated` hack they will not try to access Lua stuff
+	 * This is enabled merely if we have connections pending (e.g. refcount > 1)
+	 */
+	if (backend->ref.refcount > 1) {
+		backend->terminated = true;
+	}
 	REF_RELEASE (backend);
 }
