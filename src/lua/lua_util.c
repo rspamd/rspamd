@@ -3536,7 +3536,7 @@ lua_int64_tonumber (lua_State *L)
 	gdouble d;
 
 	d = n;
-	lua_pushnumber (L, d);
+	lua_pushinteger (L, d);
 
 	return 1;
 }
