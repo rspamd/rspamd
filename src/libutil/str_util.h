@@ -141,6 +141,7 @@ gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
  * Try to convert a string of length to unsigned long
  */
 gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
+gboolean rspamd_strtou64 (const gchar *s, gsize len, guint64 *value);
 
 /*
  * Try to convert a hex string of length to unsigned long

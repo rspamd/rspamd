@@ -526,6 +526,28 @@ rspamd_strtol (const gchar *s, gsize len, glong *value)
 /*
  * Try to convert string of length to long
  */
+#define CONV_STR_LIM_DECIMAL(max_num) do { \
+    while (p < end) { \
+        c = *p; \
+        if (c >= '0' && c <= '9') { \
+            c -= '0'; \
+            if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) { \
+                *value = (max_num); \
+                return FALSE; \
+            } \
+            else { \
+                v *= 10; \
+                v += c; \
+            } \
+        } \
+        else { \
+            *value = v; \
+            return FALSE; \
+        } \
+    p++; \
+    } \
+} while(0)
+
 gboolean
 rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 {
@@ -535,27 +557,22 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
 	/* Some preparations for range errors */
-	while (p < end) {
-		c = *p;
-		if (c >= '0' && c <= '9') {
-			c -= '0';
-			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
-				/* Range error */
-				*value = G_MAXULONG;
-				return FALSE;
-			}
-			else {
-				v *= 10;
-				v += c;
-			}
-		}
-		else {
-			*value = v;
+	CONV_STR_LIM_DECIMAL(G_MAXULONG);
 
-			return FALSE;
-		}
-		p++;
-	}
+	*value = v;
+	return TRUE;
+}
+
+gboolean
+rspamd_strtou64 (const gchar *s, gsize len, guint64 *value)
+{
+	const gchar *p = s, *end = s + len;
+	gchar c;
+	guint64 v = 0;
+	const guint64 cutoff = G_MAXUINT64 / 10, cutlim = G_MAXUINT64 % 10;
+
+	/* Some preparations for range errors */
+	CONV_STR_LIM_DECIMAL(G_MAXUINT64);
 
 	*value = v;
 	return TRUE;
