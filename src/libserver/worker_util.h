@@ -292,19 +292,19 @@ gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_main(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice_main(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_main(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #ifdef  __cplusplus

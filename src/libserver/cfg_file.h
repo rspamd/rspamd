@@ -841,26 +841,27 @@ gboolean rspamd_ip_is_local_cfg (struct rspamd_config *cfg,
 gboolean rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 							 struct rspamd_config *cfg);
 
+
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_err_config_forced(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL|RSPAMD_LOG_FORCED, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_config(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_config(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 extern guint rspamd_config_log_id;
 #define msg_debug_config(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_config_log_id, "config", cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #ifdef  __cplusplus
