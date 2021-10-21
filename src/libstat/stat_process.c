@@ -314,6 +314,12 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
+		if (st->backend->read_only) {
+			/* Read only backend, skip it */
+			g_ptr_array_index (task->stat_runtimes, i) = NULL;
+			continue;
+		}
+
 		if (!rspamd_symcache_is_symbol_enabled (task, task->cfg->cache,
 				st->stcf->symbol)) {
 			g_ptr_array_index (task->stat_runtimes, i) = NULL;

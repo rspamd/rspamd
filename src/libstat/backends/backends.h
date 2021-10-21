@@ -36,6 +36,7 @@ struct rspamd_task;
 
 struct rspamd_stat_backend {
 	const char *name;
+	bool read_only;
 
 	gpointer (*init) (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg,
 					  struct rspamd_statfile *st);

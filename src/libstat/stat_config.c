@@ -55,9 +55,10 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 };
 
 #define RSPAMD_STAT_BACKEND_ELT(nam, eltn) { \
-		.name = #nam, \
-		.init = rspamd_##eltn##_init, \
-		.runtime = rspamd_##eltn##_runtime, \
+		.name = #nam,                              \
+        .read_only = false,                        \
+		.init = rspamd_##eltn##_init,              \
+		.runtime = rspamd_##eltn##_runtime,        \
 		.process_tokens = rspamd_##eltn##_process_tokens, \
 		.finalize_process = rspamd_##eltn##_finalize_process, \
 		.learn_tokens = rspamd_##eltn##_learn_tokens, \
@@ -69,10 +70,27 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.load_tokenizer_config = rspamd_##eltn##_load_tokenizer_config, \
 		.close = rspamd_##eltn##_close \
 	}
+#define RSPAMD_STAT_BACKEND_ELT_READONLY(nam, eltn) { \
+		.name = #nam,                              \
+        .read_only = true,                         \
+		.init = rspamd_##eltn##_init,              \
+		.runtime = rspamd_##eltn##_runtime,        \
+		.process_tokens = rspamd_##eltn##_process_tokens, \
+		.finalize_process = rspamd_##eltn##_finalize_process, \
+		.learn_tokens = NULL, \
+		.finalize_learn = NULL, \
+		.total_learns = rspamd_##eltn##_total_learns, \
+		.inc_learns = NULL, \
+		.dec_learns = NULL, \
+		.get_stat = rspamd_##eltn##_get_stat, \
+		.load_tokenizer_config = rspamd_##eltn##_load_tokenizer_config, \
+		.close = rspamd_##eltn##_close \
+	}
 
 static struct rspamd_stat_backend stat_backends[] = {
 		RSPAMD_STAT_BACKEND_ELT(mmap, mmaped_file),
 		RSPAMD_STAT_BACKEND_ELT(sqlite3, sqlite3),
+		RSPAMD_STAT_BACKEND_ELT_READONLY(cdb, cdb),
 #ifdef WITH_HIREDIS
 		RSPAMD_STAT_BACKEND_ELT(redis, redis)
 #endif
@@ -275,23 +293,28 @@ rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 		/* Init classifier cache */
 		cache_name = NULL;
 
-		if (clf->opts) {
-			cache_obj = ucl_object_lookup (clf->opts, "cache");
-			cache_name_obj = NULL;
+		if (!bk->read_only) {
+			if (clf->opts) {
+				cache_obj = ucl_object_lookup(clf->opts, "cache");
+				cache_name_obj = NULL;
 
-			if (cache_obj && ucl_object_type (cache_obj) == UCL_NULL) {
-				skip_cache = TRUE;
-			}
-			else {
-				if (cache_obj) {
-					cache_name_obj = ucl_object_lookup_any (cache_obj,
-							"name", "type", NULL);
+				if (cache_obj && ucl_object_type(cache_obj) == UCL_NULL) {
+					skip_cache = TRUE;
 				}
+				else {
+					if (cache_obj) {
+						cache_name_obj = ucl_object_lookup_any(cache_obj,
+								"name", "type", NULL);
+					}
 
-				if (cache_name_obj) {
-					cache_name = ucl_object_tostring (cache_name_obj);
+					if (cache_name_obj) {
+						cache_name = ucl_object_tostring(cache_name_obj);
+					}
 				}
 			}
+		}
+		else {
+			skip_cache = true;
 		}
 
 		if (cache_name == NULL && !skip_cache) {
