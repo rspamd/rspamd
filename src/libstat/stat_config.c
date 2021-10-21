@@ -330,10 +330,10 @@ rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 			st->classifier = cl;
 			st->stcf = stf;
 
-			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) && bk) {
+			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 				st->backend = bk;
 				st->bkcf = bk->init (stat_ctx, cfg, st);
-				msg_debug_config ("added backend %s for symbol %s",
+				msg_info_config ("added backend %s for symbol %s",
 						bk->name, stf->symbol);
 			}
 			else {

@@ -111,6 +111,9 @@ public:
 	{
 		std::swap(st, other.st);
 		std::swap(db, other.db);
+		std::swap(loaded, other.loaded);
+		std::swap(learns_spam, other.learns_spam);
+		std::swap(learns_ham, other.learns_ham);
 
 		return *this;
 	}
