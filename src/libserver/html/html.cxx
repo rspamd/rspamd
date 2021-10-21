@@ -1266,7 +1266,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 		if (tag->id == Tag_A) {
 			auto written_len = hc->parsed.size() - initial_parsed_offset;
 			html_process_displayed_href_tag(pool, hc,
-					{hc->parsed.data() + initial_parsed_offset, written_len},
+					{hc->parsed.data() + initial_parsed_offset, std::size_t(written_len)},
 					tag, exceptions,
 					url_set, initial_parsed_offset);
 		}
