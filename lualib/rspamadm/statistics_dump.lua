@@ -266,7 +266,7 @@ local function dump_pattern(conn, pattern, opts, out, key)
         if opts.cdb then
           table.insert(out[key].elts, {
             key = rspamd_i64.fromstring(string.match(d.key, '%d+')),
-            value = rspamd_util.pack('<n<n', tonumber(d.data["S"] or '0') or 0,
+            value = rspamd_util.pack('ff', tonumber(d.data["S"] or '0') or 0,
                 tonumber(d.data["H"] or '0'))
           })
         else

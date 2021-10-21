@@ -145,7 +145,7 @@ private:
 
 template<typename T>
 static inline auto
-cdb_get_key_as_double(struct cdb *cdb, T key) -> std::optional<double>
+cdb_get_key_as_int64(struct cdb *cdb, T key) -> std::optional<std::int64_t>
 {
 	auto pos = cdb_find(cdb, (void *)&key, sizeof(key));
 
@@ -153,8 +153,8 @@ cdb_get_key_as_double(struct cdb *cdb, T key) -> std::optional<double>
 		auto vpos = cdb_datapos(cdb);
 		auto vlen = cdb_datalen(cdb);
 
-		if (vlen == sizeof(double)) {
-			double ret;
+		if (vlen == sizeof(std::int64_t)) {
+			std::int64_t ret;
 			cdb_read(cdb, (void *)&ret, vlen, vpos);
 
 			return ret;
@@ -206,13 +206,12 @@ ro_backend::load_cdb() -> tl::expected<bool, std::string>
 	auto check_key = [&](const char *key, std::uint64_t &target) -> tl::expected<bool, std::string> {
 		memcpy((void *)&cdb_key, key, sizeof(cdb_key));
 
-		auto maybe_value = cdb_get_key_as_double(db.get(), cdb_key);
+		auto maybe_value = cdb_get_key_as_int64(db.get(), cdb_key);
 
 		if (!maybe_value) {
 			return tl::make_unexpected(fmt::format("missing {} key", key));
 		}
 
-		// Convert from double to int
 		target = (std::uint64_t)maybe_value.value();
 
 		return true;
