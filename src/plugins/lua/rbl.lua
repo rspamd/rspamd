@@ -22,6 +22,7 @@ end
 local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
+local rspamd_ip = require "rspamd_ip"
 local fun = require 'fun'
 local lua_util = require 'lua_util'
 local selectors = require "lua_selectors"
@@ -538,12 +539,27 @@ local function gen_rbl_callback(rule)
     local urls = lua_util.extract_specific_urls(ex_params)
 
     for _,u in ipairs(urls) do
-      local url_tld = u:get_tld()
-      if rule.url_compose_map then
-        url_tld = rule.url_compose_map:process_url(task, url_tld, u:get_host())
+      local flags = u:get_flags()
+
+      if flags.numeric then
+        -- For numeric urls we convert data to the ip address and
+        -- reverse octets. See #3948 for details
+        local to_resolve = u:get_host()
+        local addr = rspamd_ip.from_string(to_resolve)
+
+        if addr then
+          to_resolve = table.concat(addr:inversed_str_octets(), ".")
+        end
+        add_dns_request(task, to_resolve, false,
+            false, requests_table, 'url', whitelist)
+      else
+        local url_tld = u:get_tld()
+        if rule.url_compose_map then
+          url_tld = rule.url_compose_map:process_url(task, url_tld, u:get_host())
+        end
+        add_dns_request(task, url_tld, false,
+            false, requests_table, 'url', whitelist)
       end
-      add_dns_request(task, url_tld, false,
-          false, requests_table, 'url', whitelist)
     end
 
     return true
