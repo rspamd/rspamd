@@ -228,7 +228,7 @@ steps:
       event: [push, tag]
 
   - name: eslint
-    image: node:16-alpine
+    image: node:17-alpine
     pull: if-not-exists
     commands:
       - npm install
@@ -276,6 +276,6 @@ trigger:
 
 ---
 kind: signature
-hmac: d6fd7697432e07b03b7dd15af130e6432fa996c0a5135a6b7bfed3806ad20d4c
+hmac: 7f6cf1f220412438eb05bcddf8b4354e2f7344d5cd925cd952eee9ab88772d9d
 
 ...
