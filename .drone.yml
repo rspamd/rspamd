@@ -227,17 +227,17 @@ steps:
       # don't send coverage report for pull request
       event: [push, tag]
 
-  - name: eslint
-    image: node:17-alpine
-    pull: if-not-exists
-    commands:
-      - npm install
-      - ./node_modules/.bin/eslint -v
-      - ./node_modules/.bin/eslint ./
-      # Run stylelint checks
-      - ./node_modules/.bin/stylelint -v
-      - npm show stylelint-config-standard version
-      - ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
+#  - name: eslint
+#    image: node:17-alpine
+#    pull: if-not-exists
+#    commands:
+#      - npm install
+#      - ./node_modules/.bin/eslint -v
+#      - ./node_modules/.bin/eslint ./
+#      # Run stylelint checks
+#      - ./node_modules/.bin/stylelint -v
+#      - npm show stylelint-config-standard version
+#      - ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
 
   - name: perl-tidyall
     # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
@@ -276,6 +276,6 @@ trigger:
 
 ---
 kind: signature
-hmac: b7d24cad8fd31136de93cb36b35b08691ba64196c6e0e3617e2c60139916647a
+hmac: 7eaf784102771243c4c36503d303e6323c9239e673a97d33a65ef4110dad24f2
 
 ...
