@@ -2321,7 +2321,7 @@ lua_task_set_pre_result (lua_State * L)
 						action->name, action->threshold);
 			}
 
-			return luaL_error (L, "unknown action %s", lua_tostring (L, 2));
+			return luaL_error (L, "unknown action %s", act_str);
 		}
 
 		if (module == NULL) {

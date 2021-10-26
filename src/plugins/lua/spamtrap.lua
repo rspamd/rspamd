@@ -63,23 +63,23 @@ local function spamtrap_cb(task)
     end
     task:insert_result(settings['symbol'], 1, rcpt)
 
-    if settings['action'] then
+    if settings.action then
       rspamd_logger.infox(task, 'spamtrap found: <%s>', rcpt)
+      local smtp_message
       if settings.smtp_message then
-        task:set_pre_result(settings['action'],
-          lua_util.template(settings.smtp_message, { rcpt = rcpt}), 'spamtrap')
+        smtp_message = lua_util.template(settings.smtp_message, { rcpt = rcpt})
       else
-        local smtp_message = 'unknown error'
+        smtp_message = 'unknown error'
         if settings.action == 'no action' then
           smtp_message = 'message accepted'
         elseif settings.action == 'reject' then
           smtp_message = 'message rejected'
         end
-        task:set_pre_result{action = settings['action'],
-                            message = smtp_message,
-                            module = 'spamtrap',
-                            flags = act_flags}
       end
+      task:set_pre_result{action = settings.action,
+                          message = smtp_message,
+                          module = 'spamtrap',
+                          flags = act_flags}
     end
   end
 
