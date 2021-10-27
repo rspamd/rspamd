@@ -958,21 +958,11 @@ end
 ]]
 local function get_last_removal_ago()
   local ts_file = string.format('%s/%s', rspamd_paths['DBDIR'], 'clickhouse_retention_run')
-  local f, err = io.open(ts_file, 'r')
-  local write_file
   local last_ts
-
-  if err then
-    lua_util.debugm(N, rspamd_config, 'Failed to open %s: %s', ts_file, err)
-  else
-    last_ts = tonumber(f:read('*number'))
-    f:close()
-  end
-
   local current_ts = os.time()
 
-  if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
-    write_file, err = io.open(ts_file, 'w')
+  local function write_ts_to_file()
+    local write_file, err = io.open(ts_file, 'w')
     if err then
       rspamd_logger.errx(rspamd_config, 'Failed to open %s, will not perform retention: %s', ts_file, err)
       return nil
@@ -981,11 +971,33 @@ local function get_last_removal_ago()
     local res
     res, err = write_file:write(tostring(current_ts))
     if err or res == nil then
+      write_file:close()
       rspamd_logger.errx(rspamd_config, 'Failed to write %s, will not perform retention: %s', ts_file, err)
       return nil
     end
     write_file:close()
-    return 0
+
+    return true
+  end
+
+  local f, err = io.open(ts_file, 'r')
+  if err then
+    lua_util.debugm(N, rspamd_config, 'Failed to open %s: %s', ts_file, err)
+  else
+    last_ts = tonumber(f:read('*number'))
+    f:close()
+  end
+
+  if last_ts > current_ts then
+    -- Clock skew detected, overwrite last_ts with current_ts and wait for the next
+    -- retention period
+    rspamd_logger.errx(rspamd_config, 'Last collection time is in future: %s; overwrite it with %s in %s',
+        last_ts, current_ts, ts_file)
+    return write_ts_to_file() and -1
+  end
+
+  if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
+    return write_ts_to_file() and 0
   end
 
   return (last_ts + settings.retention.period) - current_ts
