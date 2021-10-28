@@ -239,7 +239,7 @@ exports.full_extensions_map = {
     {"java", "application/octet-stream"},
     {"jck", "application/liquidmotion"},
     {"jcz", "application/liquidmotion"},
-    {"jfif", "image/pjpeg"},
+    {"jfif", {"image/jpeg", "image/pjpeg"}},
     {"jnlp", "application/x-java-jnlp-file"},
     {"jpb", "application/octet-stream"},
     {"jpe", {"image/jpeg", "image/pjpeg"}},
