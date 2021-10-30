@@ -106,9 +106,9 @@ namespace std {
 template<>
 class hash<rspamd::css::css_selector> {
 public:
-	auto operator() (const rspamd::css::css_selector &sel) const -> auto {
+	auto operator() (const rspamd::css::css_selector &sel) const -> std::size_t {
 		if (sel.type == rspamd::css::css_selector::selector_type::SELECTOR_TAG) {
-			return static_cast<std::uint64_t>(std::get<tag_id_t>(sel.value));
+			return static_cast<std::size_t>(std::get<tag_id_t>(sel.value));
 		}
 		else {
 			const auto &sv = std::get<std::string_view>(sel.value);
