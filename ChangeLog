@@ -1,3 +1,63 @@
+3.1: 01 Nov 2021
+  * [Feature] Add junk_threshold for autolearn
+  * [Feature] Add neural test command
+  * [Feature] Antivirus: Allow to set fake eicar patterns for testing AV engines
+  * [Feature] Lua_cdb: Add cdb building interface
+  * [Feature] Ratelimit: Add per bucket configurations
+  * [Feature] S3: Allow to store structured data in messagepack
+  * [Fix] Add concept of uncancellable events to prevent use-after-free
+  * [Fix] Add temporary guard to prevent linked list exploitation
+  * [Fix] Another rework of the ucl hashing
+  * [Fix] Another try to fix references safety
+  * [Fix] Another try to fix rspamd_text passing in the selectors
+  * [Fix] Avoid copy for received structure as it has raw C pointers
+  * [Fix] Avoid dangling reference
+  * [Fix] Correctly check numeric URLs in URL DNS lists
+  * [Fix] Delete the correct pointer type
+  * [Fix] Dmarc: Always lowercase domain
+  * [Fix] Fix compilation of the hyperscan databases with errors
+  * [Fix] Fix hash table lookup
+  * [Fix] Fix http message flag shift
+  * [Fix] Fix parsing of the from_hostname when it is an IP address
+  * [Fix] Fix parsing of the unquoted attributes in HTML
+  * [Fix] Fix passing of rspamd_text in selectors pipelines
+  * [Fix] Fix rubbish QP sequences decoding
+  * [Fix] Fix some complicated case with the closing tags parsing
+  * [Fix] Fix the case when l tag is too small
+  * [Fix] Html: Fix the case where only bgcolor is explicitly set
+  * [Fix] Libucl: Fix deletion from ucl objects
+  * [Fix] Namespace and add metadata for OpenMetrics, fix interleaving
+  * [Fix] Plug memory leak in http settings reload
+  * [Fix] Preserve SPF top record in the mempool variable
+  * [Fix] Remove aarch64 GC64 workaround
+  * [Fix] Remove bogus G_LIKELY
+  * [Fix] Spf: Do not parse non TXT DNS replies as TXT replies
+  * [Fix] Try to use on_connect/on_disconnect callbacks to handle internal Redis failures
+  * [Fix] buffer overflow in rspamc counters
+  * [Fix] fix static building
+  * [Fix] lua_scanners - message_min_words logic
+  * [Fix] src/lua/lua_mimepart.c: fix null dereference
+  * [Project] Add constant iterators
+  * [Project] Add helper library to handle mime strings in a more safe matter
+  * [Project] Add preliminary support of CDB bayes dump
+  * [Project] Add trim operations
+  * [Project] Allow mempool allocated mime strings
+  * [Project] Cdb: Finish backend implementation
+  * [Project] Cdb: Fix configuration load
+  * [Project] Cdb: Use shared data between cdb statfiles
+  * [Project] Cdb: continue statistics backend implementation
+  * [Project] Finish received headers rework part
+  * [Project] Move C++ specific declarations to C++ header
+  * [Project] Rework received headers parsing to C++
+  * [Project] Start using of the new received structure
+  * [Project] Start work on cdb backend
+  * [Rework] Further rework of the redis pool
+  * [Rework] Redis_pool: fix issues found
+  * [Rework] Rework learn and add classify condition
+  * [Rework] Save invisible content to a separate buffer
+  * [Rework] Start rewriting of the redis pool logic
+  * [Rules] Improve zero font rule
+
 3.0: 19 Aug 2021
   * [Conf] Align ARC scores with DKIM scores
   * [CritFix] Neural: Fix sorting application
