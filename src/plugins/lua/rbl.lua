@@ -29,6 +29,7 @@ local selectors = require "lua_selectors"
 local bit = require 'bit'
 local lua_maps = require "lua_maps"
 local rbl_common = require "plugins/rbl"
+local rspamd_url = require "rspamd_url"
 
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
@@ -43,6 +44,7 @@ local white_symbols = {}
 local black_symbols = {}
 local monitored_addresses = {}
 local known_selectors = {} -- map from selector string to selector id
+local url_flag_bits = rspamd_url.flags
 
 local function get_monitored(rbl)
   local default_monitored = '1.0.0.127'
@@ -539,9 +541,9 @@ local function gen_rbl_callback(rule)
     local urls = lua_util.extract_specific_urls(ex_params)
 
     for _,u in ipairs(urls) do
-      local flags = u:get_flags()
+      local flags = u:get_flags_num()
 
-      if flags.numeric then
+      if bit.band(flags, url_flag_bits.numeric) ~= 0 then
         -- For numeric urls we convert data to the ip address and
         -- reverse octets. See #3948 for details
         local to_resolve = u:get_host()
