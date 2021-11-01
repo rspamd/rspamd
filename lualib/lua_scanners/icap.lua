@@ -15,17 +15,56 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
---[[[
--- @module icap
--- This module contains icap access functions.
--- Currently tested with
---  - Symantec
---  - Sophos Savdi
---  - ClamAV/c-icap
---  - Kaspersky Web Traffic Security
---  - Trend Micro IWSVA
---  - F-Secure Internet Gatekeeper Strings
---]]
+--[[
+@module icap
+This module contains icap access functions.
+Currently tested with
+ - Symantec (Rspam <3.2)
+ - Sophos Savdi
+ - ClamAV/c-icap
+ - Kaspersky Web Traffic Security
+ - Trend Micro IWSVA
+ - F-Secure Internet Gatekeeper
+ - McAfee Web Gateway
+
+@TODO
+ - Preview / Continue
+ - Reqmod URL's
+ - Content-Type / Filename
+]] --
+
+--[[
+Configuration Notes:
+
+C-ICAP Squidclamav
+  scheme = "squidclamav";
+
+ESET Gateway Security / Antivirus for Linux example:
+  scheme = "scan";
+
+F-Secure Internet Gatekeeper example:
+  scheme = "respmod";
+  x_client_header = true;
+  x_rcpt_header = true;
+  x_from_header = true;
+
+Kaspersky Web Traffic Security example:
+  scheme = "av/respmod";
+
+McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
+  scheme = "respmod";
+  x_client_header = true;
+
+Sophos SAVDI example:
+  scheme as configured in savdi.conf
+
+Symantec example:
+  scheme = "avscan";
+
+Trend Micro IWSVA example:
+  scheme = "avscan";
+]] --
+
 
 local lua_util = require "lua_util"
 local tcp = require "rspamd_tcp"
@@ -58,6 +97,12 @@ local function icap_config(opts)
     action = false,
     dynamic_scan = false,
     user_agent = "Rspamd",
+    x_client_header = false,
+    x_rcpt_header = false,
+    x_from_header = false,
+    req_headers_enabled = true,
+    req_fake_url = "http://127.0.0.1/mail",
+    http_headers_enabled = true,
   }
 
   icap_conf = lua_util.override_defaults(icap_conf, opts)
@@ -103,7 +148,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local respond_headers = {}
+    local http_headers = {}
+    local req_headers = {}
 
     -- Build extended User Agent
     if rule.user_agent == "extended" then
@@ -116,7 +162,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
     -- Build the icap queries
     local options_request = {
-      string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(true), rule.scheme),
+      string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(), rule.scheme),
       string.format('Host: %s\r\n', addr:to_string()),
       string.format("User-Agent: %s\r\n", rule.user_agent),
       "Encapsulated: null-body=0\r\n\r\n",
@@ -125,7 +171,14 @@ local function icap_check(task, content, digest, rule, maybe_part)
       table.remove(options_request, 3)
     end
 
-    local size = string.format("%x", tonumber(#content))
+    local respond_headers = {
+        -- Add main RESPMOD header before any other
+        string.format('RESPMOD icap://%s/%s ICAP/1.0\r\n', addr:to_string(), rule.scheme),
+        string.format('Host: %s\r\n', addr:to_string()),
+    }
+
+    local size = tonumber(#content)
+    local chunked_size = string.format("%x", size)
 
     local function icap_callback(err, conn)
 
@@ -167,11 +220,76 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
+      local function get_req_headers()
+
+        local req_hlen = 2
+        table.insert(req_headers, string.format('GET %s HTTP/1.0\r\n', rule.req_fake_url))
+        table.insert(req_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
+        --table.insert(http_headers, string.format('Content-Type: %s\r\n', 'text/html'))
+        if rule.user_agent ~= "none" then 
+          table.insert(req_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
+        end
+
+        for _, h in ipairs(req_headers) do
+          req_hlen = req_hlen + tonumber(#h)
+        end
+
+        return req_hlen, req_headers
+
+      end
+
+      local function get_http_headers()
+        local http_hlen = 2
+        table.insert(http_headers, 'HTTP/1.0 200 OK\r\n')
+        table.insert(http_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
+        table.insert(http_headers, string.format('Server: %s\r\n', 'Apache/2.4'))
+        if rule.user_agent ~= "none" then 
+          table.insert(http_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
+        end
+        --table.insert(http_headers, string.format('Content-Type: %s\r\n', 'text/html'))
+        table.insert(http_headers, string.format('Content-Length: %s\r\n', size))
+
+        for _, h in ipairs(http_headers) do
+          http_hlen = http_hlen + tonumber(#h)
+        end
+
+        return http_hlen, http_headers
+
+      end
+
       local function get_respond_query()
-        table.insert(respond_headers, 1, string.format(
-            'RESPMOD icap://%s:%s/%s ICAP/1.0\r\n', addr:to_string(), addr:get_port(), rule.scheme))
+        local req_hlen = 0
+        local resp_req_headers
+        local http_hlen = 0
+        local resp_http_headers
+
+        -- Append all extra headers
+        if rule.user_agent ~= "none" then 
+          table.insert(respond_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
+        end
+
+        if rule.req_headers_enabled then
+          req_hlen, resp_req_headers = get_req_headers()
+        end
+        if rule.http_headers_enabled then
+          http_hlen, resp_http_headers = get_http_headers()
+        end
+
+        if rule.req_headers_enabled and rule.http_headers_enabled then
+          local res_body_hlen = req_hlen + http_hlen
+          table.insert(respond_headers, string.format('Encapsulated: req-hdr=0, res-hdr=%s, res-body=%s\r\n', req_hlen, res_body_hlen))
+        elseif rule.http_headers_enabled then
+          table.insert(respond_headers, string.format('Encapsulated: res-hdr=0, res-body=%s\r\n', http_hlen))
+        else
+          table.insert(respond_headers, 'Encapsulated: res-body=0\r\n')
+        end
+
         table.insert(respond_headers, '\r\n')
-        table.insert(respond_headers, size .. '\r\n')
+        for _,h in ipairs(resp_req_headers) do table.insert(respond_headers, h) end
+        table.insert(respond_headers, '\r\n')
+        for _,h in ipairs(resp_http_headers) do table.insert(respond_headers, h) end
+        table.insert(respond_headers, '\r\n')
+        table.insert(respond_headers, chunked_size .. '\r\n')
         table.insert(respond_headers, content)
         table.insert(respond_headers, '\r\n0\r\n\r\n')
         return respond_headers
@@ -187,12 +305,12 @@ local function icap_check(task, content, digest, rule, maybe_part)
         local icap_headers = {}
         for s in result:gmatch("[^\r\n]+") do
           if string.find(s, '^ICAP') then
-            icap_headers['icap'] = s
+            icap_headers['icap'] = tostring(s)
           end
           if string.find(s, '[%a%d-+]-:') then
             local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
             if key ~= nil then
-              icap_headers[key] = value
+              icap_headers[key] = tostring(value)
             end
           end
         end
@@ -239,8 +357,21 @@ local function icap_check(task, content, digest, rule, maybe_part)
           X-Infection-Found: Type=0; Resolution=0; Threat=VBA/TrojanDownloader.Agent.JOA;
           X-Virus-ID: Trojaner
           X-Response-Info: Blocked
+
+        McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
+          X-Virus-ID: EICAR test file
+          X-Media-Type: text/plain
+          X-Block-Result: 80
+          X-Block-Reason: Malware found
+          X-Block-Reason: Archive not supported
+          X-Block-Reason: Media Type (Block List)
+
+        C-ICAP Squidclamav
+          X-Infection-Found: Type=0; Resolution=2; Threat={HEX}EICAR.TEST.3.UNOFFICIAL;
+          X-Virus-ID: {HEX}EICAR.TEST.3.UNOFFICIAL
         ]] --
 
+        -- Generic ICAP Headers
         if icap_headers['X-Infection-Found'] then
           local _,_,icap_type,_,icap_threat =
             icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
@@ -270,6 +401,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           else
             table.insert(threat_string, icap_headers['X-Virus-ID'])
           end
+        -- FSecure X-Headers
         elseif icap_headers['X-FSecure-Scan-Result'] and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
 
           local infected_filename = ""
@@ -295,7 +427,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
           else
             table.insert(threat_string, infection_name)
           end
+        -- McAfee Web Gateway manual extra headers
+        elseif icap_headers['X-MWG-Block-Reason'] and icap_headers['X-MWG-Block-Reason'] ~= "" then
+          table.insert(threat_string, icap_headers['X-MWG-Block-Reason'])
         end
+
         if #threat_string > 0 then
           common.yield_result(task, rule, threat_string, rule.default_score, nil, maybe_part)
           common.save_cache(task, digest, rule, threat_string, rule.default_score, maybe_part)
@@ -354,21 +490,29 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             if icap_headers['Methods'] and string.find(icap_headers['Methods'], 'RESPMOD') then
-              if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
-                add_respond_header('Allow', '204')
-              end
-              if icap_headers['Service'] and string.find(icap_headers['Service'], 'IWSVA 6.5') then
-                add_respond_header('Encapsulated', 'res-hdr=0 res-body=0')
-              else
-                add_respond_header('Encapsulated', 'res-body=0')
-              end
-              if icap_headers['Server'] and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
-                local from = task:get_from('mime')
-                local rcpt_to = task:get_principal_recipient()
+              -- Preview is currently ununsed
+              --if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
+              --  add_respond_header('Allow', '204')
+              --end
+
+              if rule.x_client_header then
                 local client = task:get_from_ip()
                 if client then add_respond_header('X-Client-IP', client:to_string()) end
-                add_respond_header('X-Mail-From', from[1].addr)
-                add_respond_header('X-Rcpt-To', rcpt_to)
+              end
+
+              -- F-Secure extra headers
+              if icap_headers['Server'] and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
+
+                if rule.x_rcpt_header then
+                  local rcpt_to = task:get_principal_recipient()
+                  if rcpt_to then add_respond_header('X-Rcpt-To', rcpt_to) end
+                end
+
+                if rule.x_from_header then
+                  local mail_from = task:get_principal_recipient()
+                  if mail_from and mail_from[1] then add_respond_header('X-Rcpt-To', mail_from[1].addr) end
+                end
+
               end
 
               conn:add_write(icap_w_respond_cb, get_respond_query())
