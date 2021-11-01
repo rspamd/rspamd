@@ -87,6 +87,8 @@ local function icap_config(opts)
     scan_image_mime = false,
     scheme = "scan",
     default_port = 1344,
+    ssl = false,
+    no_ssl_verify = false,
     timeout = 10.0,
     log_clean = false,
     retransmits = 2,
@@ -150,6 +152,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
     local retransmits = rule.retransmits
     local http_headers = {}
     local req_headers = {}
+    local tcp_options = {}
 
     -- Build extended User Agent
     if rule.user_agent == "extended" then
@@ -202,16 +205,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
             rule.log_prefix, addr, addr:get_port())
 
-          tcp.request({
-            task = task,
-            host = addr:to_string(),
-            port = addr:get_port(),
-            timeout = rule.timeout,
-            stop_pattern = '\r\n',
-            data = options_request,
-            read = false,
-            callback = icap_callback,
-          })
+          tcp_options.host = addr:to_string()
+          tcp_options.port = addr:get_port()
+
+          tcp.request(tcp_options)
+
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed - error: %s', rule.log_prefix, err_m or '')
@@ -541,16 +539,24 @@ local function icap_check(task, content, digest, rule, maybe_part)
       end
     end
 
-    tcp.request({
-      task = task,
-      host = addr:to_string(),
-      port = addr:get_port(),
-      timeout = rule.timeout,
-      stop_pattern = '\r\n',
-      data = options_request,
-      read = false,
-      callback = icap_callback,
-    })
+    tcp_options.task = task
+    tcp_options.stop_pattern = '\r\n'
+    tcp_options.read = false
+    tcp_options.timeout = rule.timeout
+    tcp_options.callback = icap_callback
+    tcp_options.data = options_request
+
+    if rule.ssl then
+      tcp_options.ssl = true
+      if rule.no_ssl_verify then
+        tcp_options.no_ssl_verify = true
+      end
+    end
+
+    tcp_options.host = addr:to_string()
+    tcp_options.port = addr:get_port()
+
+    tcp.request(tcp_options)
   end
 
   if common.condition_check_and_continue(task, content, rule, digest,
