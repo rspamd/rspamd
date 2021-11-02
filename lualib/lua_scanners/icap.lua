@@ -19,13 +19,14 @@ limitations under the License.
 @module icap
 This module contains icap access functions.
 Currently tested with
- - Symantec (Rspam <3.2)
- - Sophos Savdi
- - ClamAV/c-icap
- - Kaspersky Web Traffic Security
- - Trend Micro IWSVA
+ - C-ICAP Squidclamav / echo
  - F-Secure Internet Gatekeeper
+ - Kaspersky Web Traffic Security
  - McAfee Web Gateway
+ - Sophos Savdi
+ - Symantec (Rspamd <3.2, >=3.2 untested)
+ - Trend Micro IWSVA
+ - Trend Micro Web Gateway
 
 @TODO
  - Preview / Continue
@@ -50,19 +51,26 @@ F-Secure Internet Gatekeeper example:
 
 Kaspersky Web Traffic Security example:
   scheme = "av/respmod";
+  x_client_header = true;
 
 McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
   scheme = "respmod";
   x_client_header = true;
 
 Sophos SAVDI example:
-  scheme as configured in savdi.conf
+  # scheme as configured in savdi.conf (name option in service section)
+  scheme = "respmod";
 
 Symantec example:
   scheme = "avscan";
 
-Trend Micro IWSVA example:
+Trend Micro IWSVA example (X-Virus-ID/X-Infection-Found headers must be activated):
   scheme = "avscan";
+  x_client_header = true;
+
+Trend Micro Web Gateway example (X-Virus-ID/X-Infection-Found headers must be activated):
+  scheme = "interscan";
+  x_client_header = true;
 ]] --
 
 
@@ -328,48 +336,55 @@ local function icap_check(task, content, digest, rule, maybe_part)
         @ToDo: handle type in response
 
         Generic Strings:
-          X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
-          X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
+          icap: X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
+          icap: X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
 
         Symantec String:
-          X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
-          X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
+          icap: X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
+          icap: X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
 
         Sophos Strings:
-          X-Virus-ID: Troj/DocDl-OYC
+          icap: X-Virus-ID: Troj/DocDl-OYC
+          http: X-Blocked: Virus found during virus scan
+          http: X-Blocked-By: Sophos Anti-Virus
 
         Kaspersky Web Traffic Security Strings:
-          X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
-          X-Response-Info: blocked
-          X-Virus-ID: no threats
-          X-Response-Info: blocked
-          X-Response-Info: passed
+          icap: X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
+          icap: X-Response-Info: blocked
+          icap: X-Virus-ID: no threats
+          icap: X-Response-Info: blocked
+          icap: X-Response-Info: passed
+          http: HTTP/1.1 403 Forbidden
 
-        Trend Micro IWSVA Strings:
-          X-Virus-ID: Trojan.W97M.POWLOAD.SMTHF1
-          X-Infection-Found: Type=0; Resolution=2; Threat=Trojan.W97M.POWLOAD.SMTHF1;
+        Trend Micro Strings:
+          icap: X-Virus-ID: Trojan.W97M.POWLOAD.SMTHF1
+          icap: X-Infection-Found: Type=0; Resolution=2; Threat=Trojan.W97M.POWLOAD.SMTHF1;
+          http: HTTP/1.1 403 Forbidden (TMWS Blocked)
+          http: HTTP/1.1 403 Forbidden
 
         F-Secure Internet Gatekeeper Strings:
-          X-FSecure-Scan-Result: infected
-          X-FSecure-Infection-Name: "Malware.W97M/Agent.32584203"
-          X-FSecure-Infected-Filename: "virus.doc"
+          icap: X-FSecure-Scan-Result: infected
+          icap: X-FSecure-Infection-Name: "Malware.W97M/Agent.32584203"
+          icap: X-FSecure-Infected-Filename: "virus.doc"
 
         ESET File Security for Linux 7.0
-          X-Infection-Found: Type=0; Resolution=0; Threat=VBA/TrojanDownloader.Agent.JOA;
-          X-Virus-ID: Trojaner
-          X-Response-Info: Blocked
+          icap: X-Infection-Found: Type=0; Resolution=0; Threat=VBA/TrojanDownloader.Agent.JOA;
+          icap: X-Virus-ID: Trojaner
+          icap: X-Response-Info: Blocked
 
         McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
-          X-Virus-ID: EICAR test file
-          X-Media-Type: text/plain
-          X-Block-Result: 80
-          X-Block-Reason: Malware found
-          X-Block-Reason: Archive not supported
-          X-Block-Reason: Media Type (Block List)
+          icap: X-Virus-ID: EICAR test file
+          icap: X-Media-Type: text/plain
+          icap: X-Block-Result: 80
+          icap: X-Block-Reason: Malware found
+          icap: X-Block-Reason: Archive not supported
+          icap: X-Block-Reason: Media Type (Block List)
+          http: HTTP/1.0 403 VirusFound
 
         C-ICAP Squidclamav
-          X-Infection-Found: Type=0; Resolution=2; Threat={HEX}EICAR.TEST.3.UNOFFICIAL;
-          X-Virus-ID: {HEX}EICAR.TEST.3.UNOFFICIAL
+          icap/http: X-Infection-Found: Type=0; Resolution=2; Threat={HEX}EICAR.TEST.3.UNOFFICIAL;
+          icap/http: X-Virus-ID: {HEX}EICAR.TEST.3.UNOFFICIAL
+          http: HTTP/1.0 307 Temporary Redirect
         ]] --
 
         -- Generic ICAP Headers
@@ -504,6 +519,12 @@ local function icap_check(task, content, digest, rule, maybe_part)
               ICAP/1.0 539 Aborted - No AV scanning license
             SquidClamAV/C-ICAP:
               ICAP/1.0 500 Server error
+            Eset:
+              ICAP/1.0 405 Forbidden
+            TrendMicro:
+              ICAP/1.0 400 Bad request
+            McAfee:
+              ICAP/1.0 418 Bad composition
             ]]--
             rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
             common.yield_result(task, rule, icap_headers.icap, 0.0,
