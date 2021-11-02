@@ -1503,10 +1503,13 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 	const gchar *c, *p, *end, *key = NULL, *alg = "rsa";
 	enum {
 		read_tag = 0,
+		read_tag_before_eqsign,
 		read_eqsign,
 		read_p_tag,
 		read_k_tag,
-	} state = read_tag;
+		ignore_value,
+		skip_spaces,
+	} state = read_tag, next_state;
 	gchar tag = '\0';
 	gsize klen = 0, alglen = 0;
 
@@ -1519,23 +1522,52 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 		case read_tag:
 			if (*p == '=') {
 				state = read_eqsign;
-			} else {
+			}
+			else if (g_ascii_isspace (*p)) {
+				state = skip_spaces;
+
+				if (tag != '\0') {
+					/* We had tag letter */
+					next_state = read_tag_before_eqsign;
+				}
+				else {
+					/* We had no tag letter, so we ignore empty tag */
+					next_state = read_tag;
+				}
+			}
+			else {
 				tag = *p;
 			}
 			p++;
 			break;
-		case read_eqsign:
-			if (tag == 'p') {
-				state = read_p_tag;
-				c = p;
-			} else if (tag == 'k') {
-				state = read_k_tag;
-				c = p;
-			} else {
-				/* Unknown tag, ignore */
+		case read_tag_before_eqsign:
+			/* Input: spaces before eqsign
+			 * Output: either read a next tag (previous had no value), or read value
+			 * p is moved forward
+			 */
+			if (*p == '=') {
+				state = read_eqsign;
+			}
+			else {
+				tag = *p;
 				state = read_tag;
+			}
+			p ++;
+			break;
+		case read_eqsign:
+			/* Always switch to skip spaces state and do not advance p */
+			state = skip_spaces;
+
+			if (tag == 'p') {
+				next_state = read_p_tag;
+			}
+			else if (tag == 'k') {
+				next_state = read_k_tag;
+			}
+			else {
+				/* Unknown tag, ignore */
+				next_state = ignore_value;
 				tag = '\0';
-				p++;
 			}
 			break;
 		case read_p_tag:
@@ -1544,8 +1576,18 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 				key = c;
 				state = read_tag;
 				tag = '\0';
+				p++;
 			}
-			p++;
+			else if (g_ascii_isspace (*p)) {
+				klen = p - c;
+				key = c;
+				state = skip_spaces;
+				next_state = read_tag;
+				tag = '\0';
+			}
+			else {
+				p ++;
+			}
 			break;
 		case read_k_tag:
 			if (*p == ';') {
@@ -1553,8 +1595,43 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 				alg = c;
 				state = read_tag;
 				tag = '\0';
+				p++;
 			}
-			p++;
+			else if (g_ascii_isspace (*p)) {
+				alglen = p - c;
+				alg = c;
+				state = skip_spaces;
+				next_state = read_tag;
+				tag = '\0';
+			}
+			else {
+				p ++;
+			}
+			break;
+		case ignore_value:
+			if (*p == ';') {
+				state = read_tag;
+				tag = '\0';
+				p ++;
+			}
+			else if (g_ascii_isspace (*p)) {
+				state = skip_spaces;
+				next_state = read_tag;
+				tag = '\0';
+			}
+			else {
+				p ++;
+			}
+			break;
+		case skip_spaces:
+			/* Skip spaces and switch to the next state if needed */
+			if (g_ascii_isspace(*p)) {
+				p ++;
+			}
+			else {
+				c = p;
+				state = next_state;
+			}
 			break;
 		default:
 			break;
