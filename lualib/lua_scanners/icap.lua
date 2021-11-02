@@ -272,7 +272,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         local resp_http_headers
 
         -- Append all extra headers
-        if rule.user_agent ~= "none" then 
+        if rule.user_agent ~= "none" then
           table.insert(respond_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
         end
 
@@ -472,7 +472,6 @@ local function icap_check(task, content, digest, rule, maybe_part)
           icap_requery(err_m, "icap_r_respond_http_cb")
         else
           local result = tostring(data)
-          connection:close()
 
           local icap_http_headers = result_header_table(result) or {}
           -- Find HTTP/[12].x [234]xx response
@@ -550,16 +549,16 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
-      local function icap_w_respond_cb(err_m, conn)
-        if err_m or conn == nil then
+      local function icap_w_respond_cb(err_m, connection)
+        if err_m or connection == nil then
           icap_requery(err_m, "icap_w_respond_cb")
         else
-          conn:add_read(icap_r_respond_cb, '\r\n\r\n')
+          connection:add_read(icap_r_respond_cb, '\r\n\r\n')
         end
       end
 
-      local function icap_r_options_cb(err_m, data, conn)
-        if err_m or conn == nil then
+      local function icap_r_options_cb(err_m, data, connection)
+        if err_m or connection == nil then
           icap_requery(err_m, "icap_r_options_cb")
         else
           local icap_headers = result_header_table(tostring(data))
@@ -592,7 +591,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
               end
 
-              conn:add_write(icap_w_respond_cb, get_respond_query())
+              connection:add_write(icap_w_respond_cb, get_respond_query())
 
             else
               rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
