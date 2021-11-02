@@ -556,10 +556,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             if icap_headers['Methods'] and string.find(icap_headers['Methods'], 'RESPMOD') then
-              --Preview is currently ununsed
-              --if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
-              -- add_respond_header('Allow', '204')
-              --end
+              -- Allow "204 No Content" responses 
+              -- https://datatracker.ietf.org/doc/html/rfc3507#section-4.6
+              if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
+                add_respond_header('Allow', '204')
+              end
 
               if rule.x_client_header then
                 local client = task:get_from_ip()
