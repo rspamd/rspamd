@@ -105,6 +105,8 @@ local function icap_config(opts)
     req_headers_enabled = true,
     req_fake_url = "http://127.0.0.1/mail",
     http_headers_enabled = true,
+    use_http_result_header = true,
+    use_http_3xx_as_threat = false,
   }
 
   icap_conf = lua_util.override_defaults(icap_conf, opts)
@@ -299,13 +301,14 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
-      local function icap_result_header_table(result)
+      local function result_header_table(result)
         local icap_headers = {}
         for s in result:gmatch("[^\r\n]+") do
           if string.find(s, '^ICAP') then
             icap_headers['icap'] = tostring(s)
-          end
-          if string.find(s, '[%a%d-+]-:') then
+          elseif string.find(s, '^HTTP') then
+            icap_headers['http'] = tostring(s)
+          elseif string.find(s, '[%a%d-+]-:') then
             local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
             if key ~= nil then
               icap_headers[key] = tostring(value)
@@ -317,7 +320,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         return icap_headers
       end
 
-      local function icap_parse_result(icap_headers)
+      local function icap_parse_result(headers)
 
         local threat_string = {}
 
@@ -370,9 +373,9 @@ local function icap_check(task, content, digest, rule, maybe_part)
         ]] --
 
         -- Generic ICAP Headers
-        if icap_headers['X-Infection-Found'] then
+        if headers['X-Infection-Found'] then
           local _,_,icap_type,_,icap_threat =
-            icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
+            headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
 
           if not icap_type or icap_type == 2 then
             -- error returned
@@ -386,30 +389,30 @@ local function icap_check(task, content, digest, rule, maybe_part)
             table.insert(threat_string, icap_threat)
           end
 
-        elseif icap_headers['X-Virus-ID'] and icap_headers['X-Virus-ID'] ~= "no threats" then
+        elseif headers['X-Virus-ID'] and headers['X-Virus-ID'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
-              '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
+              '%s: icap X-Virus-ID: %s', rule.log_prefix, headers['X-Virus-ID'])
 
-          if string.find(icap_headers['X-Virus-ID'], ', ') then
-            local vnames = lua_util.str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
+          if string.find(headers['X-Virus-ID'], ', ') then
+            local vnames = lua_util.str_split(string.gsub(headers['X-Virus-ID'], "%s", ""), ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
             end
           else
-            table.insert(threat_string, icap_headers['X-Virus-ID'])
+            table.insert(threat_string, headers['X-Virus-ID'])
           end
         -- FSecure X-Headers
-        elseif icap_headers['X-FSecure-Scan-Result'] and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
+        elseif headers['X-FSecure-Scan-Result'] and headers['X-FSecure-Scan-Result'] ~= "clean" then
 
           local infected_filename = ""
           local infection_name = "-unknown-"
 
-          if icap_headers['X-FSecure-Infected-Filename'] then
-            infected_filename = string.gsub(icap_headers['X-FSecure-Infected-Filename'], '[%s"]', '')
+          if headers['X-FSecure-Infected-Filename'] then
+            infected_filename = string.gsub(headers['X-FSecure-Infected-Filename'], '[%s"]', '')
           end
-          if icap_headers['X-FSecure-Infection-Name'] then
-            infection_name = string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', '')
+          if headers['X-FSecure-Infection-Name'] then
+            infection_name = string.gsub(headers['X-FSecure-Infection-Name'], '[%s"]', '')
           end
 
           lua_util.debugm(rule.name, task,
@@ -426,16 +429,49 @@ local function icap_check(task, content, digest, rule, maybe_part)
             table.insert(threat_string, infection_name)
           end
         -- McAfee Web Gateway manual extra headers
-        elseif icap_headers['X-MWG-Block-Reason'] and icap_headers['X-MWG-Block-Reason'] ~= "" then
-          table.insert(threat_string, icap_headers['X-MWG-Block-Reason'])
+        elseif headers['X-MWG-Block-Reason'] and headers['X-MWG-Block-Reason'] ~= "" then
+          table.insert(threat_string, headers['X-MWG-Block-Reason'])
+        -- Sophos SAVDI special http headers 
+        elseif headers['X-Blocked'] and headers['X-Blocked'] ~= "" then
+          table.insert(threat_string, headers['X-MWG-Block-Reason'])
+        -- last try HTTP [4]xx return
+        elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
+          local message = string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
+          table.insert(threat_string, message)
+        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d') then
+          local message = string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
+          table.insert(threat_string, message)
         end
 
         if #threat_string > 0 then
           common.yield_result(task, rule, threat_string, rule.default_score, nil, maybe_part)
           common.save_cache(task, digest, rule, threat_string, rule.default_score, maybe_part)
+          return true
         else
           common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
           common.log_clean(task, rule)
+          return false
+        end
+      end
+
+      local function icap_r_respond_http_cb(err_m, data, connection)
+        if err_m or connection == nil then
+          icap_requery(err_m, "icap_r_respond_http_cb")
+        else
+          local result = tostring(data)
+          connection:close()
+
+          local icap_http_headers = result_header_table(result) or {}
+          -- Find HTTP/[12].x [234]xx response
+          if icap_http_headers.http and string.find(icap_http_headers.http, 'HTTP%/[12]%.. [234]%d%d') then
+            icap_parse_result(icap_http_headers)
+          else
+            rspamd_logger.errx(task, '%s: unhandled response |%s|',
+              rule.log_prefix, string.gsub(result, "\r\n", ", "))
+            common.yield_result(task, rule,
+                'unhandled icap response: ' .. icap_http_headers.icap or "-",
+                0.0, 'fail', maybe_part)
+          end
         end
       end
 
@@ -444,12 +480,23 @@ local function icap_check(task, content, digest, rule, maybe_part)
           icap_requery(err_m, "icap_r_respond_cb")
         else
           local result = tostring(data)
-          conn:close()
 
-          local icap_headers = icap_result_header_table(result) or {}
+          local icap_headers = result_header_table(result) or {}
           -- Find ICAP/1.x 2xx response
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
-            icap_parse_result(icap_headers)
+            local icap_header_result = icap_parse_result(icap_headers)
+            if icap_header_result then
+              -- Threat found - close connection
+              connection:close()
+            elseif not icap_header_result 
+              and rule.use_http_result_header 
+              and not string.find(icap_headers.Encapsulated, 'null%-body=0') 
+              then
+              -- Try to read encapsulated HTTP Headers
+              lua_util.debugm(rule.name, task, '%s: no ICAP virus header found - try HTTP headers',
+                rule.log_prefix)
+              connection:add_read(icap_r_respond_http_cb, '\r\n\r\n')
+            end
           elseif icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
             -- Find ICAP/1.x 5/4xx response
             --[[
@@ -472,25 +519,25 @@ local function icap_check(task, content, digest, rule, maybe_part)
         end
       end
 
-      local function icap_w_respond_cb(err_m, connection)
-        if err_m or connection == nil then
+      local function icap_w_respond_cb(err_m, conn)
+        if err_m or conn == nil then
           icap_requery(err_m, "icap_w_respond_cb")
         else
-          connection:add_read(icap_r_respond_cb, '\r\n\r\n')
+          conn:add_read(icap_r_respond_cb, '\r\n\r\n')
         end
       end
 
-      local function icap_r_options_cb(err_m, data, connection)
-        if err_m or connection == nil then
+      local function icap_r_options_cb(err_m, data, conn)
+        if err_m or conn == nil then
           icap_requery(err_m, "icap_r_options_cb")
         else
-          local icap_headers = icap_result_header_table(tostring(data))
+          local icap_headers = result_header_table(tostring(data))
 
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             if icap_headers['Methods'] and string.find(icap_headers['Methods'], 'RESPMOD') then
-              -- Preview is currently ununsed
+              --Preview is currently ununsed
               --if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
-              --  add_respond_header('Allow', '204')
+              -- add_respond_header('Allow', '204')
               --end
 
               if rule.x_client_header then
