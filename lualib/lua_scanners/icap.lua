@@ -463,8 +463,6 @@ local function icap_check(task, content, digest, rule, maybe_part)
           common.save_cache(task, digest, rule, threat_string, rule.default_score, maybe_part)
           return true
         else
-          common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
-          common.log_clean(task, rule)
           return false
         end
       end
@@ -479,7 +477,14 @@ local function icap_check(task, content, digest, rule, maybe_part)
           local icap_http_headers = result_header_table(result) or {}
           -- Find HTTP/[12].x [234]xx response
           if icap_http_headers.http and string.find(icap_http_headers.http, 'HTTP%/[12]%.. [234]%d%d') then
-            icap_parse_result(icap_http_headers)
+            local icap_http_header_result = icap_parse_result(icap_http_headers)
+            if icap_http_header_result then
+              -- Threat found - close connection
+              connection:close()
+            else
+              common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
+              common.log_clean(task, rule)
+            end
           else
             rspamd_logger.errx(task, '%s: unhandled response |%s|',
               rule.log_prefix, string.gsub(result, "\r\n", ", "))
@@ -503,14 +508,19 @@ local function icap_check(task, content, digest, rule, maybe_part)
             if icap_header_result then
               -- Threat found - close connection
               connection:close()
-            elseif not icap_header_result 
-              and rule.use_http_result_header 
+            elseif not icap_header_result
+              and rule.use_http_result_header
+              and icap_headers.Encapsulated
               and not string.find(icap_headers.Encapsulated, 'null%-body=0') 
               then
               -- Try to read encapsulated HTTP Headers
               lua_util.debugm(rule.name, task, '%s: no ICAP virus header found - try HTTP headers',
                 rule.log_prefix)
               connection:add_read(icap_r_respond_http_cb, '\r\n\r\n')
+            else
+              connection:close()
+              common.save_cache(task, digest, rule, 'OK', 0, maybe_part)
+              common.log_clean(task, rule)
             end
           elseif icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
             -- Find ICAP/1.x 5/4xx response
