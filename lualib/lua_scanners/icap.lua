@@ -22,10 +22,11 @@ Currently tested with
  - C-ICAP Squidclamav / echo
  - F-Secure Internet Gatekeeper
  - Kaspersky Web Traffic Security
- - McAfee Web Gateway
+ - Kaspersky Scan Engine 2.0
+ - McAfee Web Gateway 11
  - Sophos Savdi
  - Symantec (Rspamd <3.2, >=3.2 untested)
- - Trend Micro IWSVA
+ - Trend Micro IWSVA 6.0
  - Trend Micro Web Gateway
 
 @TODO
@@ -51,6 +52,10 @@ F-Secure Internet Gatekeeper example:
 
 Kaspersky Web Traffic Security example:
   scheme = "av/respmod";
+  x_client_header = true;
+
+Kaspersky Web Traffic Security (as configured in kavicapd.xml):
+  scheme = "resp";
   x_client_header = true;
 
 McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
@@ -178,6 +183,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
       string.format("OPTIONS icap://%s/%s ICAP/1.0\r\n", addr:to_string(), rule.scheme),
       string.format('Host: %s\r\n', addr:to_string()),
       string.format("User-Agent: %s\r\n", rule.user_agent),
+      "Connection: keep-alive\r\n",
       "Encapsulated: null-body=0\r\n\r\n",
     }
     if rule.user_agent == "none" then
@@ -319,7 +325,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           elseif string.find(s, '[%a%d-+]-:') then
             local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
             if key ~= nil then
-              icap_headers[key] = tostring(value)
+              icap_headers[key:lower()] = tostring(value)
             end
           end
         end
@@ -356,6 +362,10 @@ local function icap_check(task, content, digest, rule, maybe_part)
           icap: X-Response-Info: passed
           http: HTTP/1.1 403 Forbidden
 
+        Kaspersky Scan Engine 2.0 (ICAP mode)
+          icap: X-Virus-ID: EICAR-Test-File
+          http: HTTP/1.0 403 Forbidden
+
         Trend Micro Strings:
           icap: X-Virus-ID: Trojan.W97M.POWLOAD.SMTHF1
           icap: X-Infection-Found: Type=0; Resolution=2; Threat=Trojan.W97M.POWLOAD.SMTHF1;
@@ -388,9 +398,9 @@ local function icap_check(task, content, digest, rule, maybe_part)
         ]] --
 
         -- Generic ICAP Headers
-        if headers['X-Infection-Found'] then
+        if headers['x-infection-found'] then
           local _,_,icap_type,_,icap_threat =
-            headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
+            headers['x-infection-found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
 
           if not icap_type or icap_type == 2 then
             -- error returned
@@ -404,30 +414,30 @@ local function icap_check(task, content, digest, rule, maybe_part)
             table.insert(threat_string, icap_threat)
           end
 
-        elseif headers['X-Virus-ID'] and headers['X-Virus-ID'] ~= "no threats" then
+        elseif headers['x-virus-id'] and headers['x-virus-id'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
-              '%s: icap X-Virus-ID: %s', rule.log_prefix, headers['X-Virus-ID'])
+              '%s: icap X-Virus-ID: %s', rule.log_prefix, headers['x-virus-id'])
 
-          if string.find(headers['X-Virus-ID'], ', ') then
-            local vnames = lua_util.str_split(string.gsub(headers['X-Virus-ID'], "%s", ""), ',') or {}
+          if string.find(headers['x-virus-id'], ', ') then
+            local vnames = lua_util.str_split(string.gsub(headers['x-virus-id'], "%s", ""), ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
             end
           else
-            table.insert(threat_string, headers['X-Virus-ID'])
+            table.insert(threat_string, headers['x-virus-id'])
           end
         -- FSecure X-Headers
-        elseif headers['X-FSecure-Scan-Result'] and headers['X-FSecure-Scan-Result'] ~= "clean" then
+        elseif headers['x-fsecure-scan-result'] and headers['x-fsecure-scan-result'] ~= "clean" then
 
           local infected_filename = ""
           local infection_name = "-unknown-"
 
-          if headers['X-FSecure-Infected-Filename'] then
-            infected_filename = string.gsub(headers['X-FSecure-Infected-Filename'], '[%s"]', '')
+          if headers['x-fsecure-infected-filename'] then
+            infected_filename = string.gsub(headers['x-fsecure-infected-filename'], '[%s"]', '')
           end
-          if headers['X-FSecure-Infection-Name'] then
-            infection_name = string.gsub(headers['X-FSecure-Infection-Name'], '[%s"]', '')
+          if headers['x-fsecure-infection-name'] then
+            infection_name = string.gsub(headers['x-fsecure-infection-name'], '[%s"]', '')
           end
 
           lua_util.debugm(rule.name, task,
@@ -444,11 +454,11 @@ local function icap_check(task, content, digest, rule, maybe_part)
             table.insert(threat_string, infection_name)
           end
         -- McAfee Web Gateway manual extra headers
-        elseif headers['X-MWG-Block-Reason'] and headers['X-MWG-Block-Reason'] ~= "" then
-          table.insert(threat_string, headers['X-MWG-Block-Reason'])
+        elseif headers['x-mwg-block-reason'] and headers['x-mwg-block-reason'] ~= "" then
+          table.insert(threat_string, headers['x-mwg-block-reason'])
         -- Sophos SAVDI special http headers 
-        elseif headers['X-Blocked'] and headers['X-Blocked'] ~= "" then
-          table.insert(threat_string, headers['X-MWG-Block-Reason'])
+        elseif headers['x-blocked'] and headers['x-blocked'] ~= "" then
+          table.insert(threat_string, headers['x-blocked'])
         -- last try HTTP [4]xx return
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
           local message = string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
@@ -509,8 +519,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
               connection:close()
             elseif not icap_header_result
               and rule.use_http_result_header
-              and icap_headers.Encapsulated
-              and not string.find(icap_headers.Encapsulated, 'null%-body=0') 
+              and icap_headers.encapsulated
+              and not string.find(icap_headers.encapsulated, 'null%-body=0') 
               then
               -- Try to read encapsulated HTTP Headers
               lua_util.debugm(rule.name, task, '%s: no ICAP virus header found - try HTTP headers',
@@ -564,10 +574,10 @@ local function icap_check(task, content, digest, rule, maybe_part)
           local icap_headers = result_header_table(tostring(data))
 
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
-            if icap_headers['Methods'] and string.find(icap_headers['Methods'], 'RESPMOD') then
+            if icap_headers['methods'] and string.find(icap_headers['methods'], 'RESPMOD') then
               -- Allow "204 No Content" responses 
               -- https://datatracker.ietf.org/doc/html/rfc3507#section-4.6
-              if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
+              if icap_headers['allow'] and string.find(icap_headers['allow'], '204') then
                 add_respond_header('Allow', '204')
               end
 
@@ -577,7 +587,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
               end
 
               -- F-Secure extra headers
-              if icap_headers['Server'] and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
+              if icap_headers['server'] and string.find(icap_headers['server'], 'f-secure icap server') then
 
                 if rule.x_rcpt_header then
                   local rcpt_to = task:get_principal_recipient()
@@ -591,11 +601,20 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
               end
 
-              connection:add_write(icap_w_respond_cb, get_respond_query())
+              if icap_headers.connection and icap_headers.connection:lower() == 'close' then
+                lua_util.debugm(rule.name, task, '%s: OPTIONS request Connection: %s - using new connection',
+                  rule.log_prefix, icap_headers.connection)
+                connection:close()
+                tcp_options.callback = icap_w_respond_cb
+                tcp_options.data = get_respond_query()
+                tcp.request(tcp_options)
+              else
+                connection:add_write(icap_w_respond_cb, get_respond_query())
+              end
 
             else
               rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
-                rule.log_prefix, icap_headers['Methods'])
+                rule.log_prefix, icap_headers['methods'])
               common.yield_result(task, rule, 'NO RESPMOD', 0.0,
                   'fail', maybe_part)
             end
