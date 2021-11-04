@@ -242,7 +242,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         table.insert(req_headers, string.format('GET %s HTTP/1.0\r\n', rule.req_fake_url))
         table.insert(req_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
         --table.insert(http_headers, string.format('Content-Type: %s\r\n', 'text/html'))
-        if rule.user_agent ~= "none" then 
+        if rule.user_agent ~= "none" then
           table.insert(req_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
         end
 
@@ -259,7 +259,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         table.insert(http_headers, 'HTTP/1.0 200 OK\r\n')
         table.insert(http_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
         table.insert(http_headers, string.format('Server: %s\r\n', 'Apache/2.4'))
-        if rule.user_agent ~= "none" then 
+        if rule.user_agent ~= "none" then
           table.insert(http_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
         end
         --table.insert(http_headers, string.format('Content-Type: %s\r\n', 'text/html'))
@@ -281,7 +281,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
         -- Append all extra headers
         if rule.user_agent ~= "none" then
-          table.insert(respond_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
+          table.insert(respond_headers,
+              string.format("User-Agent: %s\r\n", rule.user_agent))
         end
 
         if rule.req_headers_enabled then
@@ -293,9 +294,13 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
         if rule.req_headers_enabled and rule.http_headers_enabled then
           local res_body_hlen = req_hlen + http_hlen
-          table.insert(respond_headers, string.format('Encapsulated: req-hdr=0, res-hdr=%s, res-body=%s\r\n', req_hlen, res_body_hlen))
+          table.insert(respond_headers,
+              string.format('Encapsulated: req-hdr=0, res-hdr=%s, res-body=%s\r\n',
+                  req_hlen, res_body_hlen))
         elseif rule.http_headers_enabled then
-          table.insert(respond_headers, string.format('Encapsulated: res-hdr=0, res-body=%s\r\n', http_hlen))
+          table.insert(respond_headers,
+              string.format('Encapsulated: res-hdr=0, res-body=%s\r\n',
+                  http_hlen))
         else
           table.insert(respond_headers, 'Encapsulated: res-body=0\r\n')
         end
@@ -459,7 +464,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         -- McAfee Web Gateway manual extra headers
         elseif headers['x-mwg-block-reason'] and headers['x-mwg-block-reason'] ~= "" then
           table.insert(threat_string, headers['x-mwg-block-reason'])
-        -- Sophos SAVDI special http headers 
+        -- Sophos SAVDI special http headers
         elseif headers['x-blocked'] and headers['x-blocked'] ~= "" then
           table.insert(threat_string, headers['x-blocked'])
         -- last try HTTP [4]xx return
@@ -523,7 +528,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
             elseif not icap_header_result
               and rule.use_http_result_header
               and icap_headers.encapsulated
-              and not string.find(icap_headers.encapsulated, 'null%-body=0') 
+              and not string.find(icap_headers.encapsulated, 'null%-body=0')
               then
               -- Try to read encapsulated HTTP Headers
               lua_util.debugm(rule.name, task, '%s: no ICAP virus header found - try HTTP headers',
@@ -578,7 +583,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
           if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             if icap_headers['methods'] and string.find(icap_headers['methods'], 'RESPMOD') then
-              -- Allow "204 No Content" responses 
+              -- Allow "204 No Content" responses
               -- https://datatracker.ietf.org/doc/html/rfc3507#section-4.6
               if icap_headers['allow'] and string.find(icap_headers['allow'], '204') then
                 add_respond_header('Allow', '204')
