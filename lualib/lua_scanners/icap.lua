@@ -223,6 +223,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
           tcp_options.host = addr:to_string()
           tcp_options.port = addr:get_port()
+          tcp_options.callback = icap_callback
+          tcp_options.data = options_request
 
           tcp.request(tcp_options)
 
@@ -408,6 +410,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
                 '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
             common.yield_result(task, rule, icap_threat, 0,
                 'fail', maybe_part)
+            return true
           else
             lua_util.debugm(rule.name, task,
                 '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
