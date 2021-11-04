@@ -162,7 +162,7 @@ local function spamassassin_check(task, content, digest, rule)
         local spam_score
         for s in header:gmatch("[^\r\n]+") do
           if string.find(s, 'X%-Spam%-Status: %S+, score') then
-            local pattern_symbols = "X%-Spam%-Status: %S+, score%=(%d+%.%d+) .* tests=(.*,)( +%S+).*"
+            local pattern_symbols = "X%-Spam%-Status: %S+, score%=(%d+%.%d+) .* tests=(.*,)(%s*%S+).*"
             spam_score = string.gsub(s, pattern_symbols, "%1")
             lua_util.debugm(rule.N, task, '%s: spamd Spam line: %s', rule.log_prefix, spam_score)
             symbols = string.gsub(s, pattern_symbols, "%2%3")
