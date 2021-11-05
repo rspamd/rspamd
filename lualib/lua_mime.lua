@@ -584,7 +584,7 @@ exports.message_to_ucl = function(task)
   local result = {}
   result.size = task:get_size()
   result.digest = task:get_digest()
-
+  result.newlines = task:get_newlines_type()
   result.headers = task:get_headers(true) or {}
 
   local parts = task:get_parts() or {}
