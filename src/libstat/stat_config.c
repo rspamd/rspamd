@@ -278,6 +278,12 @@ rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 				continue;
 			}
 		}
+		else {
+			/* This actually is not implemented so it should never happen */
+			g_free (cl);
+			cur = g_list_next (cur);
+			continue;
+		}
 
 		/* XXX:
 		 * Here we get the first classifier tokenizer config as the only one
