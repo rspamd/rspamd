@@ -599,7 +599,7 @@ exports.message_to_ucl = function(task)
       p.filename = part:get_filename()
       p.content = part:get_content()
       p.headers = part:get_headers(true) or {}
-      p.boundary = part:get_boundary()
+      p.boundary = part:get_enclosing_boundary()
       table.insert(result.parts, p)
     end
   end
