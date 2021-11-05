@@ -469,6 +469,14 @@ LUA_FUNCTION_DEF (mimepart, is_message);
 LUA_FUNCTION_DEF (mimepart, get_boundary);
 
 /***
+ * @method mime_part:get_enclosing_boundary()
+ * Returns an enclosing boundary for a part even for multiparts. For normal parts
+ * this method is identical to `get_boundary`
+ * @return {string} boundary value or nil
+ */
+LUA_FUNCTION_DEF (mimepart, get_enclosing_boundary);
+
+/***
  * @method mime_part:get_children()
  * Returns rspamd_mimepart table of part's childer. Returns nil if mime part is not multipart
  * or a message part.
@@ -569,6 +577,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
 	LUA_INTERFACE_DEF (mimepart, get_boundary),
+	LUA_INTERFACE_DEF (mimepart, get_enclosing_boundary),
 	LUA_INTERFACE_DEF (mimepart, get_header),
 	LUA_INTERFACE_DEF (mimepart, get_header_raw),
 	LUA_INTERFACE_DEF (mimepart, get_header_full),
@@ -1634,6 +1643,29 @@ lua_mimepart_get_boundary (lua_State * L)
 			lua_pushlstring (L, parent->specific.mp->boundary.begin,
 					parent->specific.mp->boundary.len);
 		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_enclosing_boundary (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L), *parent;
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	parent = part->parent_part;
+
+	if (!parent || !IS_PART_MULTIPART (parent)) {
+		lua_pushnil (L);
+	}
+	else {
+		lua_pushlstring (L, parent->specific.mp->boundary.begin,
+				parent->specific.mp->boundary.len);
 	}
 
 	return 1;
