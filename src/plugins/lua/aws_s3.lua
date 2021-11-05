@@ -26,6 +26,7 @@ local rspamd_util = require "rspamd_util"
 local settings = {
   s3_bucket = nil,
   s3_region = 'us-east-1',
+  s3_host = 's3.amazonaws.com',
   s3_secret_key = nil,
   s3_key_id = nil,
   s3_timeout = 10,
@@ -36,6 +37,7 @@ local settings = {
 local settings_schema = ts.shape{
   s3_bucket = ts.string,
   s3_region = ts.string,
+  s3_host = ts.string,
   s3_secret_key = ts.string,
   s3_key_id = ts.string,
   s3_timeout = ts.number + ts.string / lua_util.parse_time_interval,
@@ -85,7 +87,7 @@ local function structured_data(task, nonce, queue_id)
 end
 
 local function s3_aws_callback(task)
-  local uri = string.format('https://%s.s3.amazonaws.com', settings.s3_bucket)
+  local uri = string.format('https://%s.%s', settings.s3_bucket, settings.s3_host)
   -- Create a nonce
   local nonce = rspamd_text.randombytes(16):base32()
   local queue_id = task:get_queue_id()
@@ -93,7 +95,7 @@ local function s3_aws_callback(task)
     queue_id = rspamd_text.randombytes(8):base32()
   end
   -- Hack to pass host
-  local aws_host = string.format('%s.s3.amazonaws.com', settings.s3_bucket)
+  local aws_host = string.format('%s.%s', settings.s3_bucket, settings.s3_host)
 
   local function gen_s3_http_callback(path)
     return function (http_err, code, body, headers)
