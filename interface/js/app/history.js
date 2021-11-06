@@ -80,7 +80,8 @@ define(["jquery", "footable"],
                 breakpoints: "xs sm md",
                 style: {
                     "font-size": "11px",
-                    "minWidth": 88
+                    "minWidth": 88,
+                    "word-break": "break-all"
                 }
             }, {
                 name: "sender_mime",
