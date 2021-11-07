@@ -176,7 +176,7 @@ local function make_helper_request(task, domain, record, redis_server)
     sync = is_sync,
     redis_server = redis_server,
     redis_prefix = settings.redis_prefix,
-    redis_expiry = settings.redis_min_expiry,
+    redis_expiry = settings.redis_min_expiry * 1000.0, -- helper accepts milliseconds
     domain = domain
   }
 
@@ -207,12 +207,24 @@ local function check_bimi_vmc(task, domain, record)
     else
       if type(data) == 'string' then
         -- We got a cached record, good stuff
+        lua_util.debugm(N, task, "got valid cached BIMI result for domain: %s",
+            domain)
         process_bimi_json(task, domain, data)
       else
         -- Get server addr + port
-        -- TODO: add db/password support maybe?
-        local redis_server = string.format('redis://%s',
-            upstream:get_addr():to_string(true))
+        -- We need to fix IPv6 address as redis-rs has no support of
+        -- the braced IPv6 addresses
+        local db, password = '', ''
+        if redis_params.db then
+          db = string.format('/%s', redis_params.db)
+        end
+        if redis_params.password then
+          password = string.format(':%s@', redis_params.password)
+        end
+        local redis_server = string.format('redis://%s%s:%s%s',
+            password,
+            upstream:get_name(), upstream:get_port(),
+            db)
         make_helper_request(task, domain, record, redis_server)
       end
     end
