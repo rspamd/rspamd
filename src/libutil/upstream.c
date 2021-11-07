@@ -1021,6 +1021,15 @@ rspamd_upstream_name (struct upstream *up)
 	return up->name;
 }
 
+gint
+rspamd_upstream_port (struct upstream *up)
+{
+	struct upstream_addr_elt *elt;
+
+	elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+	return rspamd_inet_address_get_port (elt->addr);
+}
+
 gboolean
 rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 		guint16 def_port, enum rspamd_upstream_parse_type parse_type,
