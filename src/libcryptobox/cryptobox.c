@@ -118,7 +118,7 @@ rspamd_cryptobox_test_instr (gint instr)
 	}
 
 	switch (instr) {
-#ifdef HAVE_SSE2
+#if defined HAVE_SSE2 && defined (__x86_64__)
 	case CPUID_SSE2:
 		__asm__ volatile ("psubb %xmm0, %xmm0");
 		break;
@@ -146,7 +146,7 @@ rspamd_cryptobox_test_instr (gint instr)
 		__asm__ volatile ("pcmpeqq %xmm0, %xmm0");
 		break;
 #endif
-#ifdef HAVE_SSE42
+#if defined HAVE_SSE42 && defined(__x86_64__)
 	case CPUID_SSE42:
 		__asm__ volatile ("pushq %rax\n"
 				"xorq %rax, %rax\n"
