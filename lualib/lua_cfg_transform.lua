@@ -374,11 +374,17 @@ return function(cfg)
             not cfg.actions['accept'] then
       for _,d in ipairs(actions_defs) do
         if cfg.actions[d] then
-          if type(cfg.actions[d]) ~= 'table' then
-            break
-          elseif type(cfg.actions[d]) ~= 'number' then
+
+          local action_score = nil
+          if type(cfg.actions[d]) == 'number' then
+            action_score = cfg.actions[d]
+          elseif type(cfg.actions[d]) == 'table' and cfg.actions[d]['score'] then
+            action_score = cfg.actions[d]['score']
+          end
+
+          if type(cfg.actions[d]) ~= 'table' and not action_score then
             cfg.actions[d] = nil
-          elseif cfg.actions[d] < 0 then
+          elseif type(action_score) == 'number' and action_score < 0 then
             cfg.actions['no_action'] = cfg.actions[d] - 0.001
             logger.infox(rspamd_config, 'set no_action score to: %s, as action %s has negative score',
                     cfg.actions['no_action'], d)
