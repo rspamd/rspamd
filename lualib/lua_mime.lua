@@ -515,7 +515,7 @@ end
 -- Adds/removes headers both internal and in the milter reply
 --]]
 exports.modify_headers = function(task, hdr_alterations)
-  if task:has_flag('skip') then
+  if task:has_flag('skip_process') then
     -- Cannot set flags for skipped (and unprocessed) task
     return
   end
