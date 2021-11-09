@@ -434,6 +434,13 @@ rspamd_ssl_connection_dtor (struct rspamd_ssl_connection *conn)
 		g_free (conn->hostname);
 	}
 
+	/*
+	 * Try to workaround for the race between timeout and ssl error
+	 */
+	if (conn->shut_ev != conn->ev && ev_can_stop (&conn->ev->tm)) {
+		rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
+	}
+
 	if (conn->shut_ev) {
 		rspamd_ev_watcher_stop (conn->event_loop, conn->shut_ev);
 		g_free (conn->shut_ev);
