@@ -335,44 +335,37 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 }
 
 static gboolean
-rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
+rspamd_fuzzy_check_client (struct rspamd_fuzzy_storage_ctx *ctx,
+		rspamd_inet_addr_t *addr)
 {
-	if (session->ctx->blocked_ips != NULL) {
-		if (rspamd_match_radix_map_addr (session->ctx->blocked_ips,
-				session->addr) != NULL) {
+	if (ctx->blocked_ips != NULL) {
+		if (rspamd_match_radix_map_addr (ctx->blocked_ips,
+				addr) != NULL) {
 			return FALSE;
-		}
-	}
-
-	if (is_write) {
-		if (session->ctx->read_only) {
-			return FALSE;
-		}
-
-		if (session->ctx->update_ips != NULL) {
-			if (rspamd_match_radix_map_addr (session->ctx->update_ips,
-					session->addr) == NULL) {
-				return FALSE;
-			}
-			else {
-				return TRUE;
-			}
-		}
-
-		return FALSE;
-	}
-
-	/* Non write */
-	if (session->ctx->ratelimit_buckets) {
-		if (session->ctx->ratelimit_log_only) {
-			(void)rspamd_fuzzy_check_ratelimit (session); /* Check but ignore */
-		}
-		else {
-			return rspamd_fuzzy_check_ratelimit (session);
 		}
 	}
 
 	return TRUE;
+}
+
+static gboolean
+rspamd_fuzzy_check_write (struct fuzzy_session *session)
+{
+	if (session->ctx->read_only) {
+		return FALSE;
+	}
+
+	if (session->ctx->update_ips != NULL) {
+		if (rspamd_match_radix_map_addr (session->ctx->update_ips,
+				session->addr) == NULL) {
+			return FALSE;
+		}
+		else {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 static void
@@ -1108,7 +1101,18 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 
 	if (cmd->cmd == FUZZY_CHECK) {
-		if (rspamd_fuzzy_check_client (session, FALSE)) {
+		bool can_continue = true;
+
+		if (session->ctx->ratelimit_buckets) {
+			if (session->ctx->ratelimit_log_only) {
+				(void)rspamd_fuzzy_check_ratelimit (session); /* Check but ignore */
+			}
+			else {
+				can_continue = rspamd_fuzzy_check_ratelimit (session);
+			}
+		}
+
+		if (can_continue) {
 			REF_RETAIN (session);
 			rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 					rspamd_fuzzy_check_callback, session);
@@ -1127,7 +1131,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		rspamd_fuzzy_make_reply (cmd, &result, session, send_flags);
 	}
 	else {
-		if (rspamd_fuzzy_check_client (session, TRUE)) {
+		if (rspamd_fuzzy_check_write (session)) {
 			/* Check whitelist */
 			if (session->ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
 				rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
@@ -1273,7 +1277,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 
 	if (rk == NULL) {
 		msg_err ("bad key; ip=%s",
-				rspamd_inet_address_to_string_pretty(s->addr));
+				rspamd_inet_address_to_string (s->addr));
 		return FALSE;
 	}
 
@@ -1284,7 +1288,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 			rspamd_pubkey_get_nm (rk, key->key),
 			hdr.mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err ("decryption failed; ip=%s",
-				rspamd_inet_address_to_string_pretty(s->addr));
+				rspamd_inet_address_to_string (s->addr));
 		rspamd_pubkey_unref (rk);
 
 		return FALSE;
@@ -1621,14 +1625,24 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 #endif
 
 			for (int i = 0; i < r; i ++) {
+				rspamd_inet_addr_t *client_addr;
+
+				client_addr = rspamd_inet_address_from_sa (MSG_FIELD(msg[i], msg_name),
+						MSG_FIELD(msg[i], msg_namelen));
+
+				if (!rspamd_fuzzy_check_client (worker->ctx, client_addr)) {
+					/* Disallow forbidden clients silently */
+					rspamd_inet_address_free (client_addr);
+					continue;
+				}
+
 				session = g_malloc0 (sizeof (*session));
 				REF_INIT_RETAIN (session, fuzzy_session_destroy);
 				session->worker = worker;
 				session->fd = w->fd;
 				session->ctx = worker->ctx;
 				session->time = (guint64) time (NULL);
-				session->addr = rspamd_inet_address_from_sa (MSG_FIELD(msg[i], msg_name),
-						MSG_FIELD(msg[i], msg_namelen));
+				session->addr = client_addr;
 				worker->nconns++;
 
 				/* Each message can have its length in case of recvmmsg */
