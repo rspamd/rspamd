@@ -225,7 +225,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           local vec = neural_common.result_to_vector(task, set)
 
           local str = rspamd_util.zstd_compress(table.concat(vec, ';'))
-          local target_key = set.ann.redis_key .. '_' .. learn_type
+          local target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
 
           local function learn_vec_cb(_err)
             if _err then
@@ -244,7 +244,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
               nil,
               true, -- is write
               learn_vec_cb, --callback
-              'LPUSH', -- command
+              'SADD', -- command
               { target_key, str } -- arguments
           )
         else
@@ -363,8 +363,8 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
         nil,
         false, -- is write
         redis_ham_cb, --callback
-        'LRANGE', -- command
-        {ann_key .. '_ham', '0', '-1'}
+        'SMEMBERS', -- command
+        {ann_key .. '_ham_set'}
       )
     end
   end
@@ -381,8 +381,8 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
         nil,
         false, -- is write
         redis_spam_cb, --callback
-        'LRANGE', -- command
-        {ann_key .. '_spam', '0', '-1'}
+        'SMEMBERS', -- command
+        {ann_key .. '_spam_set'}
       )
 
       rspamd_logger.infox(rspamd_config, 'lock ANN %s:%s (key name %s) for learning',
@@ -700,8 +700,8 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
           nil,
           false, -- is write
           redis_len_cb_gen(initiate_train, 'ham', true), --callback
-          'LLEN', -- command
-          {ann_key .. '_ham'}
+          'SCARD', -- command
+          {ann_key .. '_ham_set'}
       )
     end
 
@@ -711,8 +711,8 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         nil,
         false, -- is write
         redis_len_cb_gen(check_ham_len, 'spam', false), --callback
-        'LLEN', -- command
-        {ann_key .. '_spam'}
+        'SCARD', -- command
+        {ann_key .. '_spam_set'}
     )
   end
 end
