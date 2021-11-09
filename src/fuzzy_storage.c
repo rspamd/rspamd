@@ -1272,7 +1272,8 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 			RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
 	if (rk == NULL) {
-		msg_err ("bad key");
+		msg_err ("bad key; ip=%s",
+				rspamd_inet_address_to_string_pretty(s->addr));
 		return FALSE;
 	}
 
@@ -1282,7 +1283,8 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 	if (!rspamd_cryptobox_decrypt_nm_inplace (buf, buflen, hdr.nonce,
 			rspamd_pubkey_get_nm (rk, key->key),
 			hdr.mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err ("decryption failed");
+		msg_err ("decryption failed; ip=%s",
+				rspamd_inet_address_to_string_pretty(s->addr));
 		rspamd_pubkey_unref (rk);
 
 		return FALSE;
