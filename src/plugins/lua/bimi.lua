@@ -135,7 +135,7 @@ end
 
 local function make_helper_request(task, domain, record, redis_server)
   local is_sync = settings.helper_sync
-  local helper_url = string.format('%s/check', settings.helper_url)
+  local helper_url = string.format('%s/v1/check', settings.helper_url)
 
   local function http_helper_callback(http_err, code, body, _)
     if http_err then
