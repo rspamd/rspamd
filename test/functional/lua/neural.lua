@@ -1,20 +1,23 @@
 local logger = require "rspamd_logger"
 
-rspamd_config:register_symbol({
-  name = 'SPAM_SYMBOL',
-  score = 5.0,
-  callback = function()
-    return true, 'Fires always'
-  end
-})
+for i = 1,10 do
+  rspamd_config:register_symbol({
+    name = 'SPAM_SYMBOL'..tostring(i),
+    score = 5.0,
+    callback = function()
+      return true, 'Fires always'
+    end
+  })
+  rspamd_config:register_symbol({
+    name = 'HAM_SYMBOL'..tostring(i),
+    score = -3.0,
+    callback = function()
+      return true, 'Fires always'
+    end
+  })
+end
 
-rspamd_config:register_symbol({
-  name = 'HAM_SYMBOL',
-  score = -3.0,
-  callback = function()
-    return true, 'Fires always'
-  end
-})
+
 
 rspamd_config:register_symbol({
   name = 'NEUTRAL_SYMBOL',
