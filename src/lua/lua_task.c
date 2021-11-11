@@ -444,6 +444,7 @@ LUA_FUNCTION_DEF (task, get_headers);
  * remove from the end
  * Order in addition means addition from the top: 0 means the most top header, 1 one after, etc
  * negative order means addtion to the end, e.g. -1 is appending header.
+ * @return {bool} true if header could be modified (always true unless we don't have an unparsed message)
  */
 LUA_FUNCTION_DEF (task, modify_header);
 
@@ -6671,17 +6672,24 @@ lua_task_modify_header (lua_State *L)
 	const gchar *hname = luaL_checkstring (L, 2);
 
 	if (hname && task && lua_type (L, 3) == LUA_TTABLE) {
-		ucl_object_t *mods = ucl_object_lua_import (L, 3);
+		if (task->message) {
+			ucl_object_t *mods = ucl_object_lua_import(L, 3);
 
-		rspamd_message_set_modified_header (task,
-				MESSAGE_FIELD_CHECK (task, raw_headers), hname, mods);
-		ucl_object_unref (mods);
+			rspamd_message_set_modified_header(task,
+					MESSAGE_FIELD_CHECK (task, raw_headers), hname, mods);
+			ucl_object_unref(mods);
+
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	return 1;
 }
 
 static gint
