@@ -797,8 +797,8 @@ if opts then
   end, fun.map(function(n,d)
     return string.format('%s [%s]', n,
         table.concat(fun.totable(fun.map(function(v)
-          return string.format('%s msgs burst, %s msgs/sec rate',
-              v.burst, v.rate)
+          return string.format('symbol: %s, %s msgs burst, %s msgs/sec rate',
+              v.symbol, v.burst, v.rate)
         end, d.buckets)), '; ')
     )
   end, settings.limits))
@@ -877,9 +877,9 @@ if opts then
 
     -- Register per bucket symbols
     -- Display what's enabled
-    fun.each(function(set)
-      if set.buckets then
-        for _,b in ipairs(set.buckets) do
+    fun.each(function(set, lim)
+      if type(lim.buckets) == 'table' then
+        for _,b in ipairs(lim.buckets) do
           if b.symbol then
             rspamd_config:register_symbol{
               type = 'virtual',
