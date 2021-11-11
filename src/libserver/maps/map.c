@@ -2155,6 +2155,15 @@ rspamd_map_watch (struct rspamd_config *cfg,
 
 				data = bk->data.fd;
 
+				if (map->user_data == NULL || *map->user_data == NULL) {
+					/* Map has not been read, init it's reading if possible */
+					struct stat st;
+
+					if (stat (data->filename, &st) != -1) {
+						data->need_modify = TRUE;
+					}
+				}
+
 				ev_stat_init (&data->st_ev, rspamd_map_on_stat,
 						data->filename, map->poll_timeout * cfg->map_file_watch_multiplier);
 				data->st_ev.data = map;
