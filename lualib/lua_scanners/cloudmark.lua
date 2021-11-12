@@ -83,7 +83,7 @@ local function cloudmark_config(opts)
 
   if cloudmark_conf.upstreams then
 
-    cloudmark_conf.symbols = {cloudmark_conf.symbol_spam}
+    cloudmark_conf.symbols = {{ symbol = cloudmark_conf.symbol_spam, score = 5.0 }}
     lua_util.add_debug_alias('external_services', cloudmark_conf.name)
     return cloudmark_conf
   end
