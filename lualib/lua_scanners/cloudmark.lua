@@ -27,6 +27,7 @@ local ucl = require "ucl"
 local rspamd_util = require "rspamd_util"
 local common = require "lua_scanners/common"
 local fun = require "fun"
+local lua_mime = require "lua_mime"
 
 local N = 'cloudmark'
 -- Boundary for multipart transfers, generated on module init
@@ -108,6 +109,7 @@ local function cloudmark_config(opts)
     symbol_fail = 'CLOUDMARK_FAIL',
     symbol = 'CLOUDMARK_CHECK',
     symbol_spam = 'CLOUDMARK_SPAM',
+    add_headers = false, -- allow addition of the headers from Cloudmark
   }
 
   cloudmark_conf = lua_util.override_defaults(cloudmark_conf, opts)
@@ -223,6 +225,17 @@ local function parse_cloudmark_reply(task, rule, body)
   local score = tonumber(obj.score) or 0
   if score >= rule.score_threshold then
     task:insert_result(rule.symbol_spam, 1.0, tostring(score))
+  end
+
+  if rule.add_headers and type(obj.appendHeaders) == 'table' then
+    local headers_add = fun.tomap(fun.map(function(h)
+      return h.headerField,{
+        order = 1, value = h.body
+      }
+    end, obj.appendHeaders))
+    lua_mime.modify_headers(task, {
+      add = headers_add
+    })
   end
 
 end
