@@ -49,6 +49,7 @@ require_scanner('spamassassin')
 require_scanner('p0f')
 require_scanner('razor')
 require_scanner('pyzor')
+require_scanner('cloudmark')
 
 exports.add_scanner = function(name, t, conf_func, check_func)
   assert(type(conf_func) == 'function' and type(check_func) == 'function',
