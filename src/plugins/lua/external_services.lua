@@ -378,6 +378,15 @@ if opts and type(opts) == 'table' then
             group = group
           })
         end
+
+        -- Add preloads if a module requires that
+        if type(m.preloads) == 'table' then
+          for _,preload in ipairs(m.preloads) do
+            rspamd_config:add_on_load(function(cfg, ev_base, worker)
+              preload(m, cfg, ev_base, worker)
+            end)
+          end
+        end
       end
     end
   end
