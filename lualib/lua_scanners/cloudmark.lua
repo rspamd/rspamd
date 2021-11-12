@@ -32,6 +32,62 @@ local N = 'cloudmark'
 -- Boundary for multipart transfers, generated on module init
 local static_boundary = rspamd_util.random_hex(32)
 
+local function cloudmark_url(rule, addr, maybe_url)
+  local url
+  local port = addr:get_port()
+
+  maybe_url = maybe_url or rule.url
+  if port == 0 then
+    port = rule.default_port
+  end
+  if rule.use_https then
+    url = string.format('https://%s:%d%s', tostring(addr),
+        port, maybe_url)
+  else
+    url = string.format('http://%s:%d%s', tostring(addr),
+        port, maybe_url)
+  end
+
+  return url
+end
+
+-- Detect cloudmark max size
+local function cloudmark_preload(rule, cfg, ev_base, _)
+  local upstream = rule.upstreams:get_upstream_round_robin()
+  local addr = upstream:get_addr()
+  local function max_message_size_cb(http_err, code, body, _)
+    if http_err then
+      rspamd_logger.errx(ev_base, 'HTTP error when getting max message size: %s',
+          http_err)
+      return
+    end
+    if code ~= 200 then
+      rspamd_logger.errx(ev_base, 'bad HTTP code when getting max message size: %s', code)
+    end
+    local parser = ucl.parser()
+    local ret, err = parser:parse_string(body)
+    if not ret then
+      rspamd_logger.errx(ev_base, 'could not parse response body [%s]: %s', body, err)
+      return
+    end
+    local obj = parser:get_object()
+    local ms = obj.maxMessageSize
+    if not ms then
+      rspamd_logger.errx(ev_base, 'missing maxMessageSize in the response body (JSON): %s', obj)
+      return
+    end
+
+    rule.max_size = ms
+    lua_util.debugm(N, cfg, 'set maximum message size set to %s bytes', ms)
+  end
+  http.request({
+    ev_base = ev_base,
+    config = cfg,
+    url =  cloudmark_url(rule, addr, '/score/v2/max-message-size'),
+    callback = max_message_size_cb,
+  })
+end
+
 local function cloudmark_config(opts)
 
   local cloudmark_conf = {
@@ -44,6 +100,7 @@ local function cloudmark_config(opts)
     retransmits = 1,
     score_threshold = 90, -- minimum score to considerate reply
     message = '${SCANNER}: spam message found: "${VIRUS}"',
+    max_message = 0,
     detection_category = "hash",
     default_score = 1,
     action = false,
@@ -84,6 +141,7 @@ local function cloudmark_config(opts)
   if cloudmark_conf.upstreams then
 
     cloudmark_conf.symbols = {{ symbol = cloudmark_conf.symbol_spam, score = 5.0 }}
+    cloudmark_conf.preloads = {cloudmark_preload}
     lua_util.add_debug_alias('external_services', cloudmark_conf.name)
     return cloudmark_conf
   end
@@ -149,6 +207,7 @@ local function parse_cloudmark_reply(task, rule, body)
     return
   end
   local obj = parser:get_object()
+  lua_util.debugm(N, task, 'cloudmark reply is: %s', obj)
 
   if not obj.score then
     rspamd_logger.errx(task, '%s: bad response body (raw): %s', N, body)
@@ -165,33 +224,20 @@ end
 
 local function cloudmark_check(task, content, digest, rule, maybe_part)
   local function cloudmark_check_uncached()
-    local function cloudmark_url(addr)
-      local url
-      local port = addr:get_port()
-
-      if port == 0 then
-        port = rule.default_port
-      end
-      if rule.use_https then
-        url = string.format('https://%s:%d%s', tostring(addr),
-            port, rule.url)
-      else
-        url = string.format('http://%s:%d%s', tostring(addr),
-            port, rule.url)
-      end
-
-      return url
-    end
-
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
 
-    local url = cloudmark_url(addr)
+    local url = cloudmark_url(rule, addr)
+    local message_data = task:get_content()
+    if rule.max_message and rule.max_message > 0 and #message_data > rule.max_message then
+      task:insert_result(rule['symbol_fail'], 0.0, 'Message too large: ' .. #message_data)
+      return
+    end
     local request = {
       rfc822 = {
         ['Content-Type'] = 'message/rfc822',
-        data = task:get_content()
+        data = message_data,
       }
     }
 
@@ -253,7 +299,7 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
-          url = cloudmark_url(addr)
+          url = cloudmark_url(rule, addr)
 
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
               rule.log_prefix, addr, addr:get_port())
