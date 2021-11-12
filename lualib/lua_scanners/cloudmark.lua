@@ -107,7 +107,7 @@ local function cloudmark_config(opts)
     log_spamcause = true,
     symbol_fail = 'CLOUDMARK_FAIL',
     symbol = 'CLOUDMARK_CHECK',
-    symbol_spam = 'CLOUDMARK_SPAM'
+    symbol_spam = 'CLOUDMARK_SPAM',
   }
 
   cloudmark_conf = lua_util.override_defaults(cloudmark_conf, opts)
@@ -213,6 +213,11 @@ local function parse_cloudmark_reply(task, rule, body)
     rspamd_logger.errx(task, '%s: bad response body (raw): %s', N, body)
     task:insert_result(rule.symbol_fail, 1.0, 'Parser error: no score')
     return
+  end
+
+  if obj.analysis then
+    -- Report analysis string
+    rspamd_logger.infox(task, 'cloudmark report string: %s', obj.analysis)
   end
 
   local score = tonumber(obj.score) or 0
