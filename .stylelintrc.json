@@ -1,5 +1,15 @@
 {
     "extends": "stylelint-config-standard",
+    "overrides": [
+        {
+            "files": ["**/*.html"],
+            "customSyntax": "postcss-html"
+        },
+        {
+            "files": ["**/*.js"],
+            "customSyntax": "@stylelint/postcss-css-in-js"
+        }
+    ],
     "ignoreFiles": [
         "**/*.min.css",
         "**/*.min.js",
