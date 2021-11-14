@@ -257,7 +257,7 @@ steps:
       - test-fedora-clang
       - functional
       - send-coverage
-      #- eslint
+      - eslint
       - perl-tidyall
     settings:
       from: noreply@rspamd.com
@@ -276,6 +276,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 7eaf784102771243c4c36503d303e6323c9239e673a97d33a65ef4110dad24f2
+hmac: 5c692f24a4708c4382027d4c1ca6fef7c774bf264e4c084f5aa7c37e1d054f28
 
 ...
