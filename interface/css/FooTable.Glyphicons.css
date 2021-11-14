@@ -1,9 +1,11 @@
-/* Glyphicons Icons - We're not actually using Glyphicons classes but instead provide a simple mapping from Glyphicons to FooTable class names. */
+/* Glyphicons Icons - We're not actually using Glyphicons classes but instead provide a simple mapping
+   from Glyphicons to FooTable class names. */
 .fooicon {
     position: relative;
     top: 1px;
     display: inline-block;
-    font-family: 'Glyphicons Halflings' !important; /* stylelint-disable-line font-family-no-missing-generic-family-keyword */
+    /* stylelint-disable-next-line font-family-no-missing-generic-family-keyword */
+    font-family: "Glyphicons Halflings" !important;
     font-style: normal;
     font-weight: 400;
     line-height: 1;

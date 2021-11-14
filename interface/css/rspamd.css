@@ -23,6 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+/* stylelint-disable selector-id-pattern */
+
 /* bootstrap 4 overrides */
 :root {
     font-size: 14px;
@@ -44,9 +46,7 @@ small,
     padding-top: 0;
     padding-bottom: 0;
     margin-bottom: 20px;
-    border-bottom-color: rgb(231, 231, 231);
-    border-bottom-style: solid;
-    border-bottom-width: 1px;
+    border-bottom: 1px solid rgb(231 231 231);
 }
 .nav-pills .nav-link.active {
     background-color: #e7e7e7;
@@ -92,7 +92,7 @@ fieldset[disabled] .btn {
     content: none;
 }
 .footable .btn-outline-secondary {
-    border-color: rgb(108, 117, 125);
+    border-color: rgb(108 117 125);
 }
 .footable .btn-group > .btn:not(:first-child),
 .footable .btn-group > .btn-group:not(:first-child) > .btn {
@@ -217,8 +217,10 @@ table#symbolsTable input[type="number"] {
     background-image: -ms-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     background-image: -o-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
+
+    /* IE6-9 */
     /* stylelint-disable-next-line function-name-case */
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#fdfdfd", endColorstr="#eaeaea", GradientType=0);
 }
 .card-header > .icon > svg {
     vertical-align: middle;
@@ -286,7 +288,7 @@ table#symbolsTable input[type="number"] {
 }
 
 /* Font Awesome icons size */
-.svg-inline--fa {
+.svg-inline--fa { /* stylelint-disable-line selector-class-pattern */
     font-size: 16px;
 }
 /* Increase refresh button spinner speed */
@@ -386,10 +388,10 @@ table#symbolsTable input[type="number"] {
 }
 
 .scorebar-spam {
-    background-color: rgba(240, 0, 0, 0.1) !important;
+    background-color: rgba(240 0 0 / 0.1) !important;
 }
 .scorebar-ham {
-    background: rgba(100, 230, 80, 0.1) !important;
+    background: rgba(100 230 80 / 0.1) !important;
 }
 
 .danger .icon {
@@ -537,7 +539,7 @@ table#symbolsTable input[type="number"] {
 .codejar-wrap,
 #editor.map-textarea,
 #editor.map-textarea:focus {
-    background: rgb(0, 47, 79);
+    background: rgb(0 47 79);
     color: silver;
 }
 .codejar-wrap {
@@ -545,9 +547,9 @@ table#symbolsTable input[type="number"] {
     scrollbar-width: thin;
 }
 .codejar-linenumbers {
-    background: rgba(255, 255, 255, 0.07) !important;
+    background: rgba(255 255 255 / 0.07) !important;
     bottom: unset !important;
-    color: rgba(120, 120, 120, 1) !important;
+    color: rgba(120 120 120 / 1) !important;
     height: inherit;
     mix-blend-mode: unset !important;
     text-align: right;
