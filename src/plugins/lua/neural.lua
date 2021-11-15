@@ -120,31 +120,47 @@ local function ann_scores_filter(task)
 
       if score > 0 then
         local result = score
+        
+        -- If spam_score_threshold is defined, override all other thresholds.
+        local spam_threshold = 0
+        if rule.spam_score_threshold then
+          spam_threshold = rule.spam_score_threshold
+        elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          spam_threshold = set.ann.roc_thresholds[1]
+        end
 
-        if not rule.spam_score_threshold or result >= rule.spam_score_threshold then
+        if result >= spam_threshold then
           if rule.flat_threshold_curve then
             task:insert_result(rule.symbol_spam, 1.0, symscore)
           else
             task:insert_result(rule.symbol_spam, result, symscore)
           end
         else
-          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (spam_score_threshold)',
+          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (spam threshold)',
               rule.prefix, set.name, set.ann.version, symscore,
-              rule.spam_score_threshold)
+              spam_threshold)
         end
       else
         local result = -(score)
 
-        if not rule.ham_score_threshold or result >= rule.ham_score_threshold then
+        -- If ham_score_threshold is defined, override all other thresholds.
+        local ham_threshold = 0
+        if rule.ham_score_threshold then
+          ham_threshold = rule.ham_score_threshold
+        elseif rule.roc_enabled and not set.ann.roc_thresholds then
+          ham_threshold = set.ann.roc_thresholds[2]
+        end
+
+        if result >= ham_threshold then
           if rule.flat_threshold_curve then
             task:insert_result(rule.symbol_ham, 1.0, symscore)
           else
             task:insert_result(rule.symbol_ham, result, symscore)
           end
         else
-          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (ham_score_threshold)',
+          lua_util.debugm(N, task, '%s:%s:%s ann score: %s < %s (ham threshold)',
               rule.prefix, set.name, set.ann.version, result,
-              rule.ham_score_threshold)
+              ham_threshold)
         end
       end
     end
@@ -481,16 +497,32 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
           lua_util.debugm(N, rspamd_config, 'missing ANN for %s:%s in Redis key %s',
               rule.prefix, set.name, ann_key)
         end
+
         if set.ann and set.ann.ann and type(data[2]) == 'userdata' and data[2].cookie == text_cookie then
+          if rule.roc_enabled then
+            local ucl = require "ucl"
+            local parser = ucl.parser()
+            local ok, parse_err = parser:parse_text(data[2])
+            assert(ok, parse_err)
+            local roc_thresholds = parser:get_object()
+            set.ann.roc_thresholds = roc_thresholds
+            rspamd_logger.infox(rspamd_config, 
+                                'loaded ROC thresholds for %s:%s; version=%s',
+                                rule.prefix, set.name, profile.version)
+            rspamd_logger.debugx("ROC thresholds: %s", roc_thresholds)
+          end
+        end
+
+        if set.ann and set.ann.ann and type(data[3]) == 'userdata' and data[3].cookie == text_cookie then
           -- PCA table
-          local _err,pca_data = rspamd_util.zstd_decompress(data[2])
+          local _err,pca_data = rspamd_util.zstd_decompress(data[3])
           if pca_data then
             if rule.max_inputs then
               -- We can use PCA
               set.ann.pca = rspamd_tensor.load(pca_data)
               rspamd_logger.infox(rspamd_config,
                   'loaded PCA for ANN for %s:%s from %s; %s bytes compressed; version=%s',
-                  rule.prefix, set.name, ann_key, #data[2], profile.version)
+                  rule.prefix, set.name, ann_key, #data[3], profile.version)
             else
               -- no need in pca, why is it there?
               rspamd_logger.warnx(rspamd_config,
@@ -509,6 +541,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             end
           end
         end
+
       else
         lua_util.debugm(N, rspamd_config, 'no ANN key for %s:%s in Redis key %s',
             rule.prefix, set.name, ann_key)
@@ -522,7 +555,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
       false, -- is write
       data_cb, --callback
       'HMGET', -- command
-      {ann_key, 'ann', 'pca'}, -- arguments
+      {ann_key, 'ann', 'roc_thresholds', 'pca'}, -- arguments
       {opaque_data = true}
   )
 end
