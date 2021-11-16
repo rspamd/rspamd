@@ -710,7 +710,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				/* XXX: must be error */
 				if (task->result->passthrough_result) {
 					/* Passthrough email, cannot learn */
-					g_set_error (err, rspamd_stat_quark (), 500,
+					g_set_error (err, rspamd_stat_quark (), 204,
 							"Cannot learn statistics when passthrough "
 							"result has been set; not classified");
 
@@ -774,7 +774,7 @@ end:
 			return FALSE;
 		}
 		else if (!backend_found) {
-			g_set_error(err, rspamd_stat_quark(), 404, "all learn conditions "
+			g_set_error(err, rspamd_stat_quark(), 204, "all learn conditions "
 													   "denied learning %s in %s",
 					spam ? "spam" : "ham",
 					classifier ? classifier : "default classifier");
