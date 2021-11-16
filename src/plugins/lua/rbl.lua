@@ -457,7 +457,8 @@ local function gen_rbl_callback(rule)
         -- We check merely mime from
         mime_from_domain = ((task:get_from('mime') or E)[1] or E).domain
         if mime_from_domain then
-          local mime_from_domain_tld = rspamd_util.get_tld(mime_from_domain)
+          local mime_from_domain_tld = rule.url_full_hostname and
+              rspamd_util.get_tld(mime_from_domain) or mime_from_domain
 
           if rule.url_compose_map then
             mime_from_domain = rule.url_compose_map:process_url(task, mime_from_domain_tld, mime_from_domain)
@@ -482,6 +483,8 @@ local function gen_rbl_callback(rule)
 
               if rule.url_compose_map then
                 domain_tld = rule.url_compose_map:process_url(task, domain_tld, domain)
+              elseif rule.url_full_hostname then
+                domain_tld = domain
               end
             end
 
@@ -494,6 +497,8 @@ local function gen_rbl_callback(rule)
               local domain_tld = rspamd_util.get_tld(domain)
               if rule.url_compose_map then
                 domain_tld = rule.url_compose_map:process_url(task, domain_tld, domain)
+              elseif rule.url_full_hostname then
+                domain_tld = domain
               end
               add_dns_request(task, domain_tld,
                   false, false, requests_table, 'dkim', whitelist)
@@ -555,9 +560,10 @@ local function gen_rbl_callback(rule)
         add_dns_request(task, to_resolve, false,
             false, requests_table, 'url', whitelist)
       else
-        local url_tld = u:get_tld()
+        local url_hostname = u:get_host()
+        local url_tld = rule.url_full_hostname and u:get_tld() or url_hostname
         if rule.url_compose_map then
-          url_tld = rule.url_compose_map:process_url(task, url_tld, u:get_host())
+          url_tld = rule.url_compose_map:process_url(task, url_tld, url_hostname)
         end
         add_dns_request(task, url_tld, false,
             false, requests_table, 'url', whitelist)
@@ -683,7 +689,7 @@ local function gen_rbl_callback(rule)
 
     for _,email in ipairs(emails) do
       local domain
-      if rule.emails_domainonly then
+      if rule.emails_domainonly and not rule.url_full_hostname then
         if rule.url_compose_map then
           domain = rule.url_compose_map:process_url(task, email:get_tld(), email:get_host())
         else

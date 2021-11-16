@@ -132,6 +132,7 @@ local rule_schema_tbl = {
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
   unknown = ts.boolean:is_optional(),
   url_compose_map = lua_maps.map_schema:is_optional(),
+  url_full_hostname = ts.boolean:is_optional(),
   urls = ts.boolean:is_optional(),
   whitelist = lua_maps.map_schema:is_optional(),
   whitelist_exception = (
