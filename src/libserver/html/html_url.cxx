@@ -376,6 +376,8 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	/*
 	 * We also need to remove all internal newlines, spaces
 	 * and encode unsafe characters
+	 * Another obfuscation find in the wild was encoding of the SAFE url characters,
+	 * including essential ones
 	 */
 	for (auto i = 0; i < sz; i++) {
 		if (G_UNLIKELY (g_ascii_isspace(s[i]))) {
@@ -387,6 +389,43 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 			*d++ = hexdigests[(s[i] >> 4) & 0xf];
 			*d++ = hexdigests[s[i] & 0xf];
 			has_bad_chars = TRUE;
+		}
+		else if (G_UNLIKELY (s[i] == '%')) {
+			if (i + 2 < sz) {
+				auto [c1, c2] = std::tuple(s[i + 1], s[i + 2]);
+
+				if (g_ascii_isxdigit(c1) && g_ascii_isxdigit(c2)) {
+					auto codepoint = 0;
+
+					if      (c1 >= '0' && c1 <= '9') codepoint = c1 - '0';
+					else if (c1 >= 'A' && c1 <= 'F') codepoint = c1 - 'A' + 10;
+					else if (c1 >= 'a' && c1 <= 'f') codepoint = c1 - 'a' + 10;
+
+					codepoint <<= 4;
+
+					if      (c2 >= '0' && c2 <= '9') codepoint += c2 - '0';
+					else if (c2 >= 'A' && c2 <= 'F') codepoint += c2 - 'A' + 10;
+					else if (c2 >= 'a' && c2 <= 'f') codepoint += c2 - 'a' + 10;
+
+					/* Now check for 'interesting' codepoints */
+					if (codepoint == '@' || codepoint == ':' || codepoint == '|' ||
+						codepoint == '?' || codepoint == '\\' || codepoint == '/') {
+						/* Replace it back */
+						*d++ = (char)(codepoint & 0xff);
+						i += 2;
+						has_bad_chars = TRUE;
+					}
+					else {
+						*d++ = s[i];
+					}
+				}
+				else {
+					*d++ = s[i];
+				}
+			}
+			else {
+				*d++ = s[i];
+			}
 		}
 		else {
 			*d++ = s[i];
