@@ -854,8 +854,29 @@ rspamd_mailto_parse (struct http_parser_url *u,
 				st = parse_query;
 				break;
 			case parse_query:
-				if (!is_mailsafe (t)) {
+				if (t == '#') {
+					if (p - c != 0) {
+						SET_U (u, UF_QUERY);
+					}
+					c = p + 1;
+					ret = 0;
+
 					goto out;
+				}
+				else if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && is_url_end (t)) {
+					ret = 0;
+					goto out;
+				}
+				else if (is_lwsp (t)) {
+					if (!(parse_flags & RSPAMD_URL_PARSE_CHECK)) {
+						if (g_ascii_isspace (t)) {
+							ret = 0;
+						}
+						goto out;
+					}
+					else {
+						goto out;
+					}
 				}
 				p++;
 				break;
