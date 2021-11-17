@@ -80,7 +80,7 @@ define(["jquery", "footable"],
                 breakpoints: "xs sm md",
                 style: {
                     "font-size": "11px",
-                    "minWidth": 88,
+                    "minWidth": "calc(7.6em + 8px)",
                     "word-break": "break-all"
                 }
             }, {
