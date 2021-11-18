@@ -392,7 +392,8 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 		}
 		else if (G_UNLIKELY (s[i] == '%')) {
 			if (i + 2 < sz) {
-				auto [c1, c2] = std::tuple(s[i + 1], s[i + 2]);
+				auto c1 = s[i + 1];
+				auto c2 = s[i + 2];
 
 				if (g_ascii_isxdigit(c1) && g_ascii_isxdigit(c2)) {
 					auto codepoint = 0;
