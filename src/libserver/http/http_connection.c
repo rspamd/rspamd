@@ -1056,7 +1056,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			}
 		}
 		else if (r == 0) {
-			if (!conn->finished) {
+			if (!conn->finished && !priv->ssl) {
 				err = g_error_new (HTTP_ERROR, 408,
 						"IO timeout");
 				conn->error_handler (conn, err);
@@ -1069,10 +1069,12 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else {
-			err = g_error_new (HTTP_ERROR, 408,
-					"IO timeout");
-			conn->error_handler (conn, err);
-			g_error_free (err);
+			if (!priv->ssl) {
+				err = g_error_new(HTTP_ERROR, 408,
+						"IO timeout");
+				conn->error_handler(conn, err);
+				g_error_free(err);
+			}
 
 			REF_RELEASE (pbuf);
 			rspamd_http_connection_unref (conn);
