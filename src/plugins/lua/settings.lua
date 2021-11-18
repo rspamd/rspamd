@@ -41,9 +41,19 @@ local settings_initialized = false
 local max_pri = 0
 local module_sym_id -- Main module symbol
 
-local function apply_settings(task, to_apply, id)
+local function apply_settings(task, to_apply, id, name)
+  local cached_name = task:cache_get('settings_name')
+  if cached_name then
+    local cached_settings = task:cache_get('settings')
+    rspamd_logger.warnx(task, "cannot apply settings rule %s (id=%s):" ..
+        " settings has been already applied by rule %s (id=%s)",
+        name, id, cached_name, cached_settings.id)
+    return false
+  end
+
   task:set_settings(to_apply)
   task:cache_set('settings', to_apply)
+  task:cache_set('settings_name', name or 'unknown')
 
   if id then
     task:set_settings_id(id)
@@ -93,6 +103,8 @@ local function apply_settings(task, to_apply, id)
       task:append_message(message, category)
     end, to_apply.messages)
   end
+
+  return true
 end
 
 -- Checks for overridden settings within query params and returns 3 values:
@@ -311,11 +323,11 @@ local function check_settings(task)
   local function maybe_apply_query_settings()
     if query_apply then
       if id_elt then
-        apply_settings(task, query_apply, id_elt.id)
+        apply_settings(task, query_apply, id_elt.id, id_elt.name)
         rspamd_logger.infox(task, "applied settings id %s(%s); priority %s",
             id_elt.name, id_elt.id, priority_to_string(priority))
       else
-        apply_settings(task, query_apply, nil)
+        apply_settings(task, query_apply, nil, 'HTTP query')
         rspamd_logger.infox(task, "applied settings from query; priority %s",
             priority_to_string(priority))
       end
@@ -369,14 +381,14 @@ local function check_settings(task)
                     cached.name, s.rule.id,
                     table.concat(matched, ','),
                     priority_to_string(pri))
-                apply_settings(task, cached.settings.apply, s.rule.id)
+                apply_settings(task, cached.settings.apply, s.rule.id, s.name)
               end
 
             else
               -- Dynamic settings
               rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
                   task:get_message_id(), s.name, table.concat(matched, ','))
-              apply_settings(task, s.rule.apply, nil)
+              apply_settings(task, s.rule.apply, nil, s.name)
             end
 
             applied = true
@@ -1082,7 +1094,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       nrules = nrules + 1
     end
   end, ft)
-  -- sort settings with equal priopities in alphabetical order
+  -- sort settings with equal priorities in alphabetical order
   for pri,_ in pairs(settings) do
     table.sort(settings[pri], function(a,b) return a.name < b.name end)
   end
@@ -1144,7 +1156,7 @@ local function gen_redis_callback(handler, id)
               local obj = parser:get_object()
               rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
                 task:get_message_id(), id)
-              apply_settings(task, obj, nil)
+              apply_settings(task, obj, nil, 'redis')
               break
             end
           end
