@@ -120,7 +120,7 @@ local function ann_scores_filter(task)
 
       if score > 0 then
         local result = score
-        
+
         -- If spam_score_threshold is defined, override all other thresholds.
         local spam_threshold = 0
         if rule.spam_score_threshold then
@@ -506,7 +506,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             assert(ok, parse_err)
             local roc_thresholds = parser:get_object()
             set.ann.roc_thresholds = roc_thresholds
-            rspamd_logger.infox(rspamd_config, 
+            rspamd_logger.infox(rspamd_config,
                                 'loaded ROC thresholds for %s:%s; version=%s',
                                 rule.prefix, set.name, profile.version)
             rspamd_logger.debugx("ROC thresholds: %s", roc_thresholds)
