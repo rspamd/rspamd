@@ -2083,11 +2083,6 @@ html_process_input(rspamd_mempool_t *pool,
 
 	/* Leftover after content */
 	switch (state) {
-	case tag_end_opening:
-		if (cur_tag != nullptr) {
-			process_opening_tag();
-		}
-		break;
 	case tags_limit_overflow:
 		html_append_parsed(hc, {c, (std::size_t) (end - c)},
 				false, end - start, hc->parsed);
