@@ -499,6 +499,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'f':
 			case 'F':
 				IF_HEADER (FROM_HEADER) {
+					if (hv_tok->len == 0) {
+						/* Replace '' with '<>' to fix parsing issue */
+						RSPAMD_FTOK_ASSIGN(hv_tok, "<>");
+					}
 					task->from_envelope = rspamd_email_address_from_smtp (
 							hv_tok->begin,
 							hv_tok->len);
