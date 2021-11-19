@@ -414,7 +414,6 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 						/* Replace it back */
 						*d++ = (char)(codepoint & 0xff);
 						i += 2;
-						has_bad_chars = TRUE;
 					}
 					else {
 						*d++ = s[i];
