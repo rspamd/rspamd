@@ -1400,18 +1400,20 @@ html_process_input(rspamd_mempool_t *pool,
 		}
 
 		if (pt) {
+			g_assert(cur_tag != pt);
 			cur_tag->parent = pt;
-			g_assert(cur_tag->parent != cur_tag);
 			g_assert(cur_tag->parent != &cur_closing_tag);
 			parent_tag = pt;
 			parent_tag->children.push_back(cur_tag);
 		}
 		else {
 			if (hc->root_tag) {
-				cur_tag->parent = hc->root_tag;
-				g_assert(cur_tag->parent != cur_tag);
-				hc->root_tag->children.push_back(cur_tag);
-				parent_tag = hc->root_tag;
+				if (cur_tag != hc->root_tag) {
+					cur_tag->parent = hc->root_tag;
+					g_assert(cur_tag->parent != cur_tag);
+					hc->root_tag->children.push_back(cur_tag);
+					parent_tag = hc->root_tag;
+				}
 			}
 			else {
 				if (cur_tag->id == Tag_HTML) {
