@@ -269,9 +269,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
 	cfg->neighbours = ucl_object_typed_new (UCL_OBJECT);
-#ifdef WITH_HIREDIS
 	cfg->redis_pool = rspamd_redis_pool_init ();
-#endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
 	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
 	cfg->maps_cache_dir = rspamd_mempool_strdup (cfg->cfg_pool, RSPAMD_DBDIR);
@@ -345,11 +343,9 @@ rspamd_config_free (struct rspamd_config *cfg)
 		lua_close (cfg->lua_state);
 	}
 
-#ifdef WITH_HIREDIS
 	if (cfg->redis_pool) {
 		rspamd_redis_pool_destroy (cfg->redis_pool);
 	}
-#endif
 
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	HASH_CLEAR (hh, cfg->actions);

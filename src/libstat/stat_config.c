@@ -91,9 +91,7 @@ static struct rspamd_stat_backend stat_backends[] = {
 		RSPAMD_STAT_BACKEND_ELT(mmap, mmaped_file),
 		RSPAMD_STAT_BACKEND_ELT(sqlite3, sqlite3),
 		RSPAMD_STAT_BACKEND_ELT_READONLY(cdb, cdb),
-#ifdef WITH_HIREDIS
 		RSPAMD_STAT_BACKEND_ELT(redis, redis)
-#endif
 };
 
 #define RSPAMD_STAT_CACHE_ELT(nam, eltn) { \
@@ -107,9 +105,7 @@ static struct rspamd_stat_backend stat_backends[] = {
 
 static struct rspamd_stat_cache stat_caches[] = {
 		RSPAMD_STAT_CACHE_ELT(sqlite3, sqlite3),
-#ifdef WITH_HIREDIS
 		RSPAMD_STAT_CACHE_ELT(redis, redis),
-#endif
 };
 
 void

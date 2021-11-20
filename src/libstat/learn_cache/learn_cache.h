@@ -70,12 +70,7 @@ struct rspamd_stat_cache {
         void rspamd_stat_cache_##name##_close (gpointer ctx)
 
 RSPAMD_STAT_CACHE_DEF(sqlite3);
-
-#ifdef WITH_HIREDIS
-
 RSPAMD_STAT_CACHE_DEF(redis);
-
-#endif
 
 #ifdef  __cplusplus
 }

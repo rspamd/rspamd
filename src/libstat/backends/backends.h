@@ -115,12 +115,7 @@ struct rspamd_stat_backend {
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);
 RSPAMD_STAT_BACKEND_DEF(sqlite3);
 RSPAMD_STAT_BACKEND_DEF(cdb);
-
-#ifdef WITH_HIREDIS
-
 RSPAMD_STAT_BACKEND_DEF(redis);
-
-#endif
 
 #ifdef  __cplusplus
 }

@@ -19,8 +19,6 @@
 #include "upstream.h"
 #include "lua/lua_common.h"
 #include "libserver/mempool_vars_internal.h"
-
-#ifdef WITH_HIREDIS
 #include "hiredis.h"
 #include "adapters/libev.h"
 #include "ref.h"
@@ -2061,5 +2059,3 @@ rspamd_redis_load_tokenizer_config (gpointer runtime,
 {
 	return NULL;
 }
-
-#endif

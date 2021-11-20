@@ -89,7 +89,6 @@ static const struct luaL_reg redislib_m[] = {
 #define REDIS_RELEASE REF_RELEASE
 #endif
 
-#ifdef WITH_HIREDIS
 struct lua_redis_request_specific_userdata;
 /**
  * Struct for userdata representation
@@ -1612,67 +1611,6 @@ lua_redis_exec (lua_State *L)
 		}
 	}
 }
-#else
-static int
-lua_redis_make_request (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_make_request_sync (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_connect (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_connect_sync (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_add_cmd (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_exec (lua_State *L)
-{
-	msg_warn ("rspamd is compiled with no redis support");
-
-	lua_pushboolean (L, FALSE);
-
-	return 1;
-}
-static int
-lua_redis_gc (lua_State *L)
-{
-	return 0;
-}
-#endif
 
 static gint
 lua_load_redis (lua_State * L)

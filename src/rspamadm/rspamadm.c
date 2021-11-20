@@ -488,10 +488,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_lua_set_globals (cfg, L);
 	rspamadm_add_lua_globals (resolver);
-
-#ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->event_loop);
-#endif
 
 	/* Init rspamadm global */
 	lua_newtable (L);
