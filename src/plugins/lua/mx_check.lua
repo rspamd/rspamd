@@ -43,6 +43,7 @@ local redis_params
 local exclude_domains
 
 local E = {}
+local CRLF = '\r\n'
 
 local function mx_check(task)
   local ip_addr = task:get_ip()
@@ -130,26 +131,30 @@ local function mx_check(task)
     return function(_, _, results, err)
       mxes[name].ips = results
 
-      local function io_cb(io_err)
+      local function io_cb(io_err, _, conn)
         if io_err then
           mxes[name].checked = true
+          conn:close()
         else
           mxes[name].checked = true
           mxes[name].working = true
           valid = true
         end
         check_results(mxes)
+        conn:add_write(function(_)
+          conn:close()
+        end, string.format('QUIT%s', CRLF))
       end
       local function on_connect_cb(conn)
         if err then
           mxes[name].checked = true
+          conn:close()
+          check_results(mxes)
         else
           mxes[name].checked = true
           valid = true
           mxes[name].working = true
         end
-        conn:close()
-        check_results(mxes)
       end
 
       if err or not results or #results == 0 then
@@ -162,6 +167,7 @@ local function mx_check(task)
           task = task,
           host = results[1]:to_string(),
           callback = io_cb,
+          stop_pattern = CRLF,
           on_connect = on_connect_cb,
           timeout = settings.timeout,
           port = 25

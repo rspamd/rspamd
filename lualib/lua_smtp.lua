@@ -59,7 +59,7 @@ local function sendmail(opts, message, callback)
           mdata = tostring(mdata)
         end
         if string.sub(mdata, 1, 1) ~= wantcode then
-          callback(false, string.format('bad smtp responce on stage %s: "%s" when "%s" expected',
+          callback(false, string.format('bad smtp response on stage %s: "%s" when "%s" expected',
               stage, mdata, wantcode))
           if conn then
             conn:close()
@@ -169,7 +169,7 @@ local function sendmail(opts, message, callback)
       end
     end
 
-    -- HELLO stage
+    -- HELO stage
     local function hello_cb(merr)
       if no_error_write(merr) then
         conn:add_read(hello_done_cb, CRLF)
