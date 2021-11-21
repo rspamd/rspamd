@@ -38,6 +38,7 @@ local settings = {
   greylist_invalid = true, -- Greylist first message with invalid MX (require greylist plugin)
   key_prefix = 'rmx',
   max_mx_a_records = 5, -- Maximum number of A records to check per MX request
+  wait_for_greeting = false, -- Wait for SMTP greeting and emit `quit` command
 }
 local redis_params
 local exclude_domains
@@ -154,6 +155,12 @@ local function mx_check(task)
           mxes[name].checked = true
           valid = true
           mxes[name].working = true
+        end
+
+        -- Disconnect without SMTP dialog
+        if not settings.wait_for_greeting then
+          check_results(mxes)
+          conn:close()
         end
       end
 
