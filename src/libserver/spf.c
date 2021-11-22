@@ -991,7 +991,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_MX:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot find MX"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1003,7 +1003,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_A:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve A"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1018,7 +1018,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_AAA:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve AAAA"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1031,7 +1031,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 			case SPF_RESOLVE_PTR:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve PTR"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1045,7 +1045,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_REDIRECT:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve REDIRECT"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1056,7 +1056,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 			case SPF_RESOLVE_INCLUDE:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve INCLUDE"
 							" record for %s: %s",
 							cb->rec->sender_domain,
@@ -1070,7 +1070,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 			case SPF_RESOLVE_EXISTS:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
-					msg_debug_spf (
+					msg_info_spf (
 							"spf error for domain %s: cannot resolve EXISTS"
 							" record for %s: %s",
 							cb->rec->sender_domain,
