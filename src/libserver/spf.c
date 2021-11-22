@@ -607,6 +607,7 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 {
 	struct spf_resolved *flat;
 	struct rspamd_task *task = rec->task;
+	bool cached = false;
 
 	if (rec->requests_inflight == 0 && !rec->done) {
 		flat = rspamd_spf_record_flatten (rec);
@@ -620,14 +621,24 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 						spf_record_ref (flat),
 						flat->timestamp, flat->ttl);
 
-				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
+				msg_info_task ("stored SPF record for %s (0x%xuL) in LRU cache for %d seconds, "
 							   "%d/%d elements in the cache",
 						flat->domain,
 						flat->digest,
 						flat->ttl,
 						rspamd_lru_hash_size (spf_lib_ctx->spf_hash),
 						rspamd_lru_hash_capacity (spf_lib_ctx->spf_hash));
+				cached = true;
 			}
+		}
+
+		if (!cached) {
+			/* Still write a log line */
+			msg_info_task ("not stored SPF record for %s (0x%xuL) in LRU cache; flags=%d; ttl=%d",
+					flat->domain,
+					flat->digest,
+					flat->flags,
+					flat->ttl);
 		}
 
 		rec->callback (flat, rec->task, rec->cbdata);
