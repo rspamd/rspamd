@@ -1,6 +1,6 @@
 local logger = require "rspamd_logger"
 
-for i = 1,10 do
+for i = 1,14 do
   rspamd_config:register_symbol({
     name = 'SPAM_SYMBOL'..tostring(i),
     score = 5.0,
