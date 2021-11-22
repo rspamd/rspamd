@@ -140,11 +140,13 @@ local function mx_check(task)
           mxes[name].checked = true
           mxes[name].working = true
           valid = true
+          if settings.wait_for_greeting then
+            conn:add_write(function(_)
+              conn:close()
+            end, string.format('QUIT%s', CRLF))
+          end
         end
         check_results(mxes)
-        conn:add_write(function(_)
-          conn:close()
-        end, string.format('QUIT%s', CRLF))
       end
       local function on_connect_cb(conn)
         if err then
