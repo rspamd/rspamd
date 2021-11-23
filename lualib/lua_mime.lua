@@ -582,6 +582,15 @@ exports.message_to_ucl = function(task)
   result.digest = task:get_digest()
   result.newlines = task:get_newlines_type()
   result.headers = task:get_headers(true) or {}
+  -- Envelope (smtp) information form email
+  local envelope = {}
+  envelope.from_smtp = task:get_from('smtp')
+  envelope.recipients_smtp = task:get_recipients('smtp')
+  envelope.helo = task:get_helo()
+  envelope.hostname = task:get_hostname()
+  envelope.client_ip = task:get_client_ip()
+  envelope.from_ip = task:get_from_ip()
+  result.envelope = envelope
 
   local parts = task:get_parts() or {}
   result.parts = {}
