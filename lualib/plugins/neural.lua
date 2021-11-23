@@ -620,7 +620,7 @@ local function spawn_train(params)
             params.rule.prefix, params.set.name)
       end
 
-      local roc_thresholds
+      local roc_thresholds = {}
       if params.rule.roc_enabled then
         local spam_threshold = get_roc_thresholds(train_ann,
                                                   inputs,
@@ -633,10 +633,10 @@ local function spawn_train(params)
                                                   params.rule.roc_misclassification_cost,
                                                   1 - params.rule.roc_misclassification_cost)
         roc_thresholds = {spam_threshold, ham_threshold}
-      end
 
-      rspamd_logger.messagex("ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
-                              roc_thresholds[1], roc_thresholds[2])
+        rspamd_logger.messagex("ROC thresholds: (spam_threshold: %s, ham_threshold: %s)",
+                                roc_thresholds[1], roc_thresholds[2])
+      end
 
       if not seen_nan then
         -- Convert to strings as ucl cannot rspamd_text properly
