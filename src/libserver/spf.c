@@ -1070,9 +1070,9 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 			case SPF_RESOLVE_EXISTS:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
-					msg_info_spf (
-							"spf error for domain %s: cannot resolve EXISTS"
-							" record for %s: %s",
+					msg_debug_spf (
+							"spf macro resolution for domain %s: cannot resolve EXISTS"
+							" macro for %s: %s",
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
