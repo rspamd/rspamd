@@ -6,18 +6,17 @@ void rspamd_url_init (const char *tld_file);
 ]]
 local exports = {}
 
-function exports.init_url_parser(file)
-  if not file then
-    local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-    file = string.format('%s/unit/%s', test_dir, "test_tld.dat")
-  end
+local function default_tld_file()
+  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
+  return string.format('%s/unit/%s', test_dir, "test_tld.dat")
+end
 
-  ffi.C.rspamd_url_init(file)
+function exports.init_url_parser(file)
+  ffi.C.rspamd_url_init(file or default_tld_file())
 end
 
 function exports.default_config()
-  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-  local tld_file = string.format('%s/%s', test_dir, "test_tld.dat")
+  local tld_file = default_tld_file()
 
   local config = {
     options = {
