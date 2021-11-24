@@ -573,11 +573,14 @@ exports.modify_headers = function(task, hdr_alterations)
 end
 
 --[[[
--- @function lua_mime.message_to_ucl(task)
+-- @function lua_mime.message_to_ucl(task, [stringify_content])
 -- Exports a message to an ucl object
 --]]
-exports.message_to_ucl = function(task)
+exports.message_to_ucl = function(task, stringify_content)
   local E = {}
+
+  local maybe_stringify_f = stringify_content and
+    tostring or function(t) return t  end
   local result = {
     size = task:get_size(),
     digest = task:get_digest(),
@@ -613,7 +616,7 @@ exports.message_to_ucl = function(task)
         type = string.format('%s/%s', part:get_type()),
         detected_type = string.format('%s/%s', part:get_detected_type()),
         filename = part:get_filename(),
-        content = part:get_content(),
+        content = maybe_stringify_f(part:get_content()),
         headers =  part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary()
       }
