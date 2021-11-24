@@ -15,4 +15,32 @@ function exports.init_url_parser(file)
   ffi.C.rspamd_url_init(file)
 end
 
+function exports.default_config()
+  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
+  local tld_file = string.format('%s/%s', test_dir, "test_tld.dat")
+
+  local config = {
+    options = {
+      filters = {'spf', 'dkim', 'regexp'},
+      url_tld = tld_file,
+      dns = {
+        nameserver = {'8.8.8.8'}
+      },
+    },
+    logging = {
+      type = 'console',
+      level = 'debug'
+    },
+    metric = {
+      name = 'default',
+      actions = {
+        reject = 100500,
+      },
+      unknown_weight = 1
+    }
+  }
+
+  return config
+end
+
 return exports

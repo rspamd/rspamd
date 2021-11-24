@@ -203,31 +203,10 @@ end)
 context("Lua util - extract_specific_urls message", function()
 
 --[[ ******************* kinda functional *************************************** ]]
-  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-  local tld_file = string.format('%s/%s', test_dir, "test_tld.dat")
 
-  local config = {
-    options = {
-      filters = {'spf', 'dkim', 'regexp'},
-      url_tld = tld_file,
-      dns = {
-        nameserver = {'8.8.8.8'}
-      },
-    },
-    logging = {
-      type = 'console',
-      level = 'debug'
-    },
-    metric = {
-      name = 'default',
-      actions = {
-        reject = 100500,
-      },
-      unknown_weight = 1
-    }
-  }
 
-  local cfg = rspamd_util.config_from_ucl(config, "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+  local cfg = rspamd_util.config_from_ucl(rspamd_test_helper.default_config(),
+      "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
   local res,task = rspamd_task.load_from_string(msg, cfg)
 
   if not res then
