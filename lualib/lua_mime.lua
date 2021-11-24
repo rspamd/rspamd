@@ -577,34 +577,46 @@ end
 -- Exports a message to an ucl object
 --]]
 exports.message_to_ucl = function(task)
-  local result = {}
-  result.size = task:get_size()
-  result.digest = task:get_digest()
-  result.newlines = task:get_newlines_type()
-  result.headers = task:get_headers(true) or {}
-  -- Envelope (smtp) information form email
-  local envelope = {}
-  envelope.from_smtp = task:get_from('smtp')
-  envelope.recipients_smtp = task:get_recipients('smtp')
-  envelope.helo = task:get_helo()
-  envelope.hostname = task:get_hostname()
-  envelope.client_ip = task:get_client_ip()
-  envelope.from_ip = task:get_from_ip()
-  result.envelope = envelope
+  local E = {}
+  local result = {
+    size = task:get_size(),
+    digest = task:get_digest(),
+    newlines = task:get_newlines_type(),
+    headers = task:get_headers(true) or E
+  }
 
-  local parts = task:get_parts() or {}
+  -- Utility to convert ip addr to a string or nil if invalid/absent
+  local function maybe_stringify_ip(addr)
+    if addr and addr:is_valid() then
+      return addr:to_string()
+    end
+
+    return nil
+  end
+  -- Envelope (smtp) information form email
+  result.envelope = {
+    from_smtp = (task:get_from('smtp') or E)[1],
+    recipients_smtp = task:get_recipients('smtp'),
+    helo = task:get_helo(),
+    hostname = task:get_hostname(),
+    client_ip = maybe_stringify_ip(task:get_client_ip()),
+    from_ip = maybe_stringify_ip(task:get_from_ip()),
+  }
+
+  local parts = task:get_parts() or E
   result.parts = {}
   for _,part in ipairs(parts) do
     local l = part:get_length()
     if l > 0 then
-      local p = {}
-      p.size = l
-      p.type = string.format('%s/%s', part:get_type())
-      p.detected_type = string.format('%s/%s', part:get_detected_type())
-      p.filename = part:get_filename()
-      p.content = part:get_content()
-      p.headers = part:get_headers(true) or {}
-      p.boundary = part:get_enclosing_boundary()
+      local p = {
+        size = l,
+        type = string.format('%s/%s', part:get_type()),
+        detected_type = string.format('%s/%s', part:get_detected_type()),
+        filename = part:get_filename(),
+        content = part:get_content(),
+        headers =  part:get_headers(true) or E,
+        boundary = part:get_enclosing_boundary()
+      }
       table.insert(result.parts, p)
     end
   end
