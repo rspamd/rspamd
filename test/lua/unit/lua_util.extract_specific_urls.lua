@@ -204,8 +204,8 @@ context("Lua util - extract_specific_urls message", function()
 
 --[[ ******************* kinda functional *************************************** ]]
 
-
-  local cfg = rspamd_util.config_from_ucl(rspamd_test_helper.default_config(),
+  local test_helper = require "rspamd_test_helper"
+  local cfg = rspamd_util.config_from_ucl(test_helper.default_config(),
       "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
   local res,task = rspamd_task.load_from_string(msg, cfg)
 
