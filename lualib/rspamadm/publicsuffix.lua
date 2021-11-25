@@ -30,7 +30,7 @@ parser:option '-c --config'
       :argname('config_file')
       :default(rspamd_paths['CONFDIR'] .. '/rspamd.conf')
 
-local compile_cmd = parser:command 'compile'
+parser:command 'compile'
     :description 'Compile publicsuffix list if needed'
 
 local function load_config(config_file)
