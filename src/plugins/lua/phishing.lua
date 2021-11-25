@@ -266,9 +266,8 @@ local function phishing_cb(task)
               lua_util.debugm(N, task, "confusable: %1 -> %2: different characters",
                       tld, ptld, why)
             else
-              -- We have totally different strings in tld, so penalize it significantly
-              if dist > 2 then dist = 2 end
-              weight = util.tanh((2 - dist) * 0.5)
+              -- We have totally different strings in tld, so penalize it somehow
+              weight = 0.5
             end
           end
 
