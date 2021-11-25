@@ -230,10 +230,11 @@ local function phishing_cb(task)
         local b,_ = string.find(tld, '%.[^%.]+$')
         local b1,_ = string.find(ptld, '%.[^%.]+$')
 
+        local stripped_tld,stripped_ptld = tld, ptld
         if b1 and b then
           if string.sub(tld, b) == string.sub(ptld, b1) then
-            ptld = string.gsub(ptld, '%.[^%.]+$', '')
-            tld = string.gsub(tld, '%.[^%.]+$', '')
+            stripped_ptld = string.gsub(ptld, '%.[^%.]+$', '')
+            stripped_tld = string.gsub(tld, '%.[^%.]+$', '')
           end
 
           if #ptld == 0 or #tld == 0 then
@@ -247,8 +248,8 @@ local function phishing_cb(task)
           lua_util.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
           weight = 1.0
         else
-          local dist = util.levenshtein_distance(tld, ptld, 2)
-          dist = 2 * dist / (#tld + #ptld)
+          local dist = util.levenshtein_distance(stripped_tld, stripped_ptld, 2)
+          dist = 2 * dist / (#stripped_tld + #stripped_ptld)
 
           if dist > 0.3 and dist <= 1.0 then
             -- Use distance to penalize the total weight
@@ -274,16 +275,24 @@ local function phishing_cb(task)
           lua_util.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
         end
 
+        local function is_url_in_map(map, furl)
+          for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
+            if map:get_key(dn) then
+              return true,dn
+            end
+          end
+
+          return false
+        end
         local function found_in_map(map, furl, sweight)
           if not furl then furl = url end
           if not sweight then sweight = weight end
           if #map > 0 then
             for _,rule in ipairs(map) do
-              for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
-                if rule['map']:get_key(dn) then
-                  task:insert_result(rule['symbol'], sweight, ptld .. '->' .. dn)
-                  return true
-                end
+              local found,dn = is_url_in_map(rule.map, furl)
+              if found then
+                task:insert_result(rule.symbol, sweight, ptld .. '->' .. dn)
+                return true
               end
             end
           end
@@ -292,7 +301,7 @@ local function phishing_cb(task)
         if not found_in_map(exceptions_maps) then
           if not found_in_map(strict_domains, purl, 1.0) then
             if domains then
-              if domains:get_key(ptld) then
+              if is_url_in_map(domains, purl) then
                 task:insert_result(symbol, weight, ptld .. '->' .. tld)
               end
             else
