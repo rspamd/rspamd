@@ -199,6 +199,7 @@ application/p2p-overlay+xml 0
 application/patch-ops-error+xml 0
 application/pdf 0
 application/pgp-encrypted 0
+application/pgp-keys 0
 application/pgp-signature 0
 application/pidf+xml 0
 application/pidf-diff+xml 0
