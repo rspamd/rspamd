@@ -51,6 +51,9 @@ context("Task piecewise split", function()
       rspamd_parsers.parse_mail_address("Test1 <test1@example.com>")[1],
       rspamd_parsers.parse_mail_address("Test2 <test2@example.com>")[1]
     }, 'rewrite')
+    task:set_from_ip("198.172.22.91")
+    task:set_user("cool user name")
+    task:set_helo("hello mail")
     task:process_message()
 
     local expected_json = [[
@@ -108,6 +111,28 @@ context("Task piecewise split", function()
     "newlines": "lf",
     "digest": "043cf1a314d0a1af95951d6aec932faf",
     "envelope": {
+        "recipients_smtp": [
+            {
+                "addr": "test1@example.com",
+                "raw": "<test1@example.com>",
+                "flags": {
+                    "valid": true
+                },
+                "user": "test1",
+                "name": "Test1",
+                "domain": "example.com"
+            },
+            {
+                "addr": "test2@example.com",
+                "raw": "<test2@example.com>",
+                "flags": {
+                    "valid": true
+                },
+                "user": "test2",
+                "name": "Test2",
+                "domain": "example.com"
+            }
+        ],
         "from_smtp": {
             "addr": "test@example.com",
             "raw": "<test@example.com>",
@@ -117,7 +142,9 @@ context("Task piecewise split", function()
             "user": "test",
             "name": "Test",
             "domain": "example.com"
-        }
+        },
+        "helo": "hello mail",
+        "from_ip": "198.172.22.91"
     },
     "size": 666,
     "headers": [
