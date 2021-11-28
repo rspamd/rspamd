@@ -3703,7 +3703,13 @@ lua_task_set_recipients (lua_State *L)
 		switch (what) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
-			ptrs = task->rcpt_envelope;
+			if (task->rcpt_envelope) {
+				ptrs = task->rcpt_envelope;
+			}
+			else {
+				ptrs = g_ptr_array_new ();
+				task->rcpt_envelope = ptrs;
+			}
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
@@ -3713,7 +3719,13 @@ lua_task_set_recipients (lua_State *L)
 		case RSPAMD_ADDRESS_ANY:
 		default:
 			if (task->rcpt_envelope) {
-				ptrs = task->rcpt_envelope;
+				if (task->rcpt_envelope) {
+					ptrs = task->rcpt_envelope;
+				}
+				else {
+					ptrs = g_ptr_array_new ();
+					task->rcpt_envelope = ptrs;
+				}
 			}
 			else {
 				ptrs = MESSAGE_FIELD_CHECK (task, rcpt_mime);
