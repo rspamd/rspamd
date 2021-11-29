@@ -146,7 +146,7 @@ reconf['R_RCVD_SPAMBOTS'] = {
 -- Charset is missing in message
 reconf['R_MISSING_CHARSET'] = {
   re = string.format('!is_empty_body() & content_type_is_type(text) & content_type_is_subtype(plain) & !content_type_has_param(charset) & !%s',
-    'compare_transfer_encoding(7bit)'),
+      'compare_transfer_encoding(7bit)'),
   score = 0.5,
   description = 'Charset is missing in a message',
   group = 'headers',
@@ -318,7 +318,8 @@ local sympatico_msgid = 'Message-Id=/^<?BAYC\\d+-PASMTP\\d+[A-Z0-9]{25}\\@CEZ\\.
 local mailman_msgid = [[Message-ID=/^<mailman\.\d+\.\d+\.\d+\.[-+.:=\w]+@[-a-zA-Z\d.]+>$/H]]
 -- Message id seems to be forged
 local unusable_msgid = string.format('(%s | %s | %s | %s | %s | %s)',
-					lyris_ezml_remailer, wacky_sendmail_version, iplanet_messaging_server, hotmail_baydav_msgid, sympatico_msgid, mailman_msgid)
+    lyris_ezml_remailer, wacky_sendmail_version,
+    iplanet_messaging_server, hotmail_baydav_msgid, sympatico_msgid, mailman_msgid)
 -- Outlook express data seems to be forged
 local forged_oe = string.format('(%s & !%s & !%s & !%s)', oe_mua, oe_msgid_1, oe_msgid_2, unusable_msgid)
 -- Outlook specific headers
@@ -328,7 +329,7 @@ local vista_msgid = 'Message-Id=/^<?[A-F\\d]{32}\\@\\S+>?$/H'
 local ims_msgid = 'Message-Id=/^<?[A-F\\d]{36,40}\\@\\S+>?$/H'
 -- Forged outlook headers
 local forged_outlook_dollars = string.format('(%s & !%s & !%s & !%s & !%s & !%s)',
-					outlook_dollars_mua, oe_msgid_2, outlook_dollars_other, vista_msgid, ims_msgid, unusable_msgid)
+    outlook_dollars_mua, oe_msgid_2, outlook_dollars_other, vista_msgid, ims_msgid, unusable_msgid)
 -- Outlook versions that should be excluded from summary rule
 local fmo_excl_o3416 = 'X-Mailer=/^Microsoft Outlook, Build 10.0.3416$/H'
 local fmo_excl_oe3790 = 'X-Mailer=/^Microsoft Outlook Express 6.00.3790.3959$/H'
@@ -589,18 +590,18 @@ reconf['YANDEX_RU_MAILER'] = {
 
 -- Detect 1C v8.2 and v8.3 mailers
 reconf['MAILER_1C_8'] = {
-    re = 'X-Mailer=/^1C:Enterprise 8\\.[23]$/H',
-    score = 0.0,
-    description = 'Sent with 1C:Enterprise 8',
-    group = 'headers'
+  re = 'X-Mailer=/^1C:Enterprise 8\\.[23]$/H',
+  score = 0.0,
+  description = 'Sent with 1C:Enterprise 8',
+  group = 'headers'
 }
 
 -- Detect rogue 'strongmail' MTA with IPv4 and '(-)' in Received line
 reconf['STRONGMAIL'] = {
-    re = [[Received=/^from\s+strongmail\s+\(\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\]\) by \S+ \(-\); /mH]],
-    score = 6.0,
-    description = 'Sent via rogue "strongmail" MTA',
-    group = 'headers'
+  re = [[Received=/^from\s+strongmail\s+\(\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\]\) by \S+ \(-\); /mH]],
+  score = 6.0,
+  description = 'Sent via rogue "strongmail" MTA',
+  group = 'headers'
 }
 
 -- Two received headers with ip addresses
@@ -653,10 +654,10 @@ local yandex_received = 'Received=/^\\s*from \\S+\\.(yandex\\.ru|yandex\\.net)/m
 local yandex = string.format('(%s) & ((%s) | (%s) | (%s))', yandex_received, yandex_from, yandex_x_envelope_from, yandex_return_path)
 -- Tabs as delimiters between header names and header values
 function check_header_delimiter_tab(task, header_name)
-	for _,rh in ipairs(task:get_header_full(header_name)) do
-		if rh['tab_separated'] then return true end
-	end
-	return false
+  for _,rh in ipairs(task:get_header_full(header_name)) do
+    if rh['tab_separated'] then return true end
+  end
+  return false
 end
 reconf['HEADER_FROM_DELIMITER_TAB'] = {
   re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(From)', yandex),
@@ -689,41 +690,58 @@ reconf['HEADER_DATE_DELIMITER_TAB'] = {
   group = 'headers'
 }
 -- Empty delimiters between header names and header values
-function check_header_delimiter_empty(task, header_name)
-	for _,rh in ipairs(task:get_header_full(header_name)) do
-		if rh['empty_separator'] then return true end
-	end
-	return false
+local function gen_check_header_delimiter_empty(header_name)
+  return function(task)
+    for _,rh in ipairs(task:get_header_full(header_name)) do
+      if rh['empty_separator'] then return true end
+    end
+    return false
+  end
 end
 reconf['HEADER_FROM_EMPTY_DELIMITER'] = {
-  re = string.format('(%s)', 'check_header_delimiter_empty(From)'),
+  re = string.format('(%s)', 'lua:check_from_delim_empty'),
   score = 1.0,
   description = 'Header From has no delimiter between header name and header value',
-  group = 'headers'
+  group = 'headers',
+  functions = {
+    check_from_delim_empty = gen_check_header_delimiter_empty('From')
+  }
 }
 reconf['HEADER_TO_EMPTY_DELIMITER'] = {
-  re = string.format('(%s)', 'check_header_delimiter_empty(To)'),
+  re = string.format('(%s)', 'lua:check_to_delim_empty'),
   score = 1.0,
   description = 'Header To has no delimiter between header name and header value',
-  group = 'headers'
+  group = 'headers',
+  functions = {
+    check_to_delim_empty = gen_check_header_delimiter_empty('To')
+  }
 }
 reconf['HEADER_CC_EMPTY_DELIMITER'] = {
-  re = string.format('(%s)', 'check_header_delimiter_empty(Cc)'),
+  re = string.format('(%s)', 'lua:check_cc_delim_empty'),
   score = 1.0,
   description = 'Header Cc has no delimiter between header name and header value',
-  group = 'headers'
+  group = 'headers',
+  functions = {
+    check_cc_delim_empty = gen_check_header_delimiter_empty('Cc')
+  }
 }
 reconf['HEADER_REPLYTO_EMPTY_DELIMITER'] = {
-  re = string.format('(%s)', 'check_header_delimiter_empty(Reply-To)'),
+  re = string.format('(%s)', 'lua:check_repto_delim_empty'),
   score = 1.0,
   description = 'Header Reply-To has no delimiter between header name and header value',
-  group = 'headers'
+  group = 'headers',
+  functions = {
+    check_repto_delim_empty = gen_check_header_delimiter_empty('Reply-To')
+  }
 }
 reconf['HEADER_DATE_EMPTY_DELIMITER'] = {
-  re = string.format('(%s)', 'check_header_delimiter_empty(Date)'),
+  re = string.format('(%s)', 'lua:check_date_delim_empty'),
   score = 1.0,
   description = 'Header Date has no delimiter between header name and header value',
-  group = 'headers'
+  group = 'headers',
+  functions = {
+    check_date_delim_empty = gen_check_header_delimiter_empty('Date')
+  }
 }
 
 -- Definitions of received headers regexp
@@ -740,7 +758,8 @@ local MAIL_RU_From		= 'From=/\\@mail\\.ru>?$/iX'
 local MAIL_RU_Received		= 'Received=/from mail\\.ru \\(/mH'
 
 reconf['FAKE_RECEIVED_mail_ru'] = {
-  re = string.format('(%s) & !(((%s) | (%s)) & (%s))', MAIL_RU_Received, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, MAIL_RU_From),
+  re = string.format('(%s) & !(((%s) | (%s)) & (%s))',
+      MAIL_RU_Received, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, MAIL_RU_From),
   score = 4.0,
   description = 'Fake helo mail.ru in header Received from non mail.ru sender address',
   group = 'headers'
@@ -765,7 +784,14 @@ local RECEIVED_smtp_yandex_ru_8	= 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.r
 local RECEIVED_smtp_yandex_ru_9	= 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] helo=smtp\\.yandex\\.ru\\)/iX'
 
 reconf['FAKE_RECEIVED_smtp_yandex_ru'] = {
-  re = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s)))) & (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', MAIL_RU_From, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, GMAIL_COM_From, GMAIL_COM_Return_Path, GMAIL_COM_X_Envelope_From, UKR_NET_From, UKR_NET_Return_Path, UKR_NET_X_Envelope_From, RECEIVED_smtp_yandex_ru_1, RECEIVED_smtp_yandex_ru_2, RECEIVED_smtp_yandex_ru_3, RECEIVED_smtp_yandex_ru_4, RECEIVED_smtp_yandex_ru_5, RECEIVED_smtp_yandex_ru_6, RECEIVED_smtp_yandex_ru_7, RECEIVED_smtp_yandex_ru_8, RECEIVED_smtp_yandex_ru_9),
+  re = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) '..
+      ' | ((%s) & ((%s) | (%s)))) & (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)',
+      MAIL_RU_From, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, GMAIL_COM_From,
+      GMAIL_COM_Return_Path, GMAIL_COM_X_Envelope_From, UKR_NET_From, UKR_NET_Return_Path,
+      UKR_NET_X_Envelope_From, RECEIVED_smtp_yandex_ru_1, RECEIVED_smtp_yandex_ru_2,
+      RECEIVED_smtp_yandex_ru_3, RECEIVED_smtp_yandex_ru_4, RECEIVED_smtp_yandex_ru_5,
+      RECEIVED_smtp_yandex_ru_6, RECEIVED_smtp_yandex_ru_7, RECEIVED_smtp_yandex_ru_8,
+      RECEIVED_smtp_yandex_ru_9),
   score = 4.0,
   description = 'Fake smtp.yandex.ru Received',
   group = 'headers'
@@ -836,11 +862,11 @@ reconf['CTE_CASE'] = {
 
 reconf['HAS_INTERSPIRE_SIG'] = {
   re = string.format('((%s) & (%s) & (%s) & (%s)) | (%s)',
-                     'header_exists(X-Mailer-LID)',
-                     'header_exists(X-Mailer-RecptId)',
-                     'header_exists(X-Mailer-SID)',
-                     'header_exists(X-Mailer-Sent-By)',
-                     'List-Unsubscribe=/\\/unsubscribe\\.php\\?M=[^&]+&C=[^&]+&L=[^&]+&N=[^>]+>$/Xi'),
+      'header_exists(X-Mailer-LID)',
+      'header_exists(X-Mailer-RecptId)',
+      'header_exists(X-Mailer-SID)',
+      'header_exists(X-Mailer-Sent-By)',
+      'List-Unsubscribe=/\\/unsubscribe\\.php\\?M=[^&]+&C=[^&]+&L=[^&]+&N=[^>]+>$/Xi'),
   description = "Has Interspire fingerprint",
   score = 1.0,
   group = 'headers'
@@ -924,10 +950,10 @@ reconf['HAS_LIST_UNSUB'] = {
 }
 
 reconf['HAS_GUC_PROXY_URI'] = {
-   re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
-   description = 'Has googleusercontent.com proxy URI',
-   score = 0.01,
-   group = 'experimental'
+  re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
+  description = 'Has googleusercontent.com proxy URI',
+  score = 0.01,
+  group = 'experimental'
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
@@ -939,10 +965,10 @@ reconf['HAS_GOOGLE_REDIR'] = {
 
 reconf['XM_UA_NO_VERSION'] = {
   re = string.format('(!%s && !%s) && (%s || %s)',
-                     'X-Mailer=/https?:/H',
-                     'User-Agent=/https?:/H',
-                     'X-Mailer=/^[^0-9]+$/H',
-                     'User-Agent=/^[^0-9]+$/H'),
+      'X-Mailer=/https?:/H',
+      'User-Agent=/https?:/H',
+      'X-Mailer=/^[^0-9]+$/H',
+      'User-Agent=/^[^0-9]+$/H'),
   description = 'X-Mailer/User-Agent has no version',
   score = 0.01,
   group = 'experimental'
@@ -997,7 +1023,7 @@ local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \((?:1[AC]|[34][AB]|5[ABCFGH]|7
 reconf['FORGED_X_MAILER'] = {
   description = 'Forged X-Mailer header',
   re = string.format('X-Mailer=/^(?:%s)/{header} && !X-Mailer=/^%s/{header}',
-    table.concat(bad_x_mailers, '|'), apple_ios_x_mailer),
+      table.concat(bad_x_mailers, '|'), apple_ios_x_mailer),
   score = 4.5,
   group = 'headers',
 }
