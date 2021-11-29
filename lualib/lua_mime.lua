@@ -579,26 +579,13 @@ end
 exports.message_to_ucl = function(task, stringify_content)
   local E = {}
 
-  local function flatten_headers(hdrs)
-    local res = {}
-
-    for _,e in ipairs(hdrs) do
-      if type(e) == 'table' and e[1] then
-        for _,h in ipairs(e) do table.insert(res, h) end
-      else
-        table.insert(res, e)
-      end
-    end
-
-    return res
-  end
   local maybe_stringify_f = stringify_content and
     tostring or function(t) return t  end
   local result = {
     size = task:get_size(),
     digest = task:get_digest(),
     newlines = task:get_newlines_type(),
-    headers = flatten_headers(task:get_headers(true) or E)
+    headers = task:get_headers(true)
   }
 
   -- Utility to convert ip addr to a string or nil if invalid/absent
@@ -630,7 +617,7 @@ exports.message_to_ucl = function(task, stringify_content)
         detected_type = string.format('%s/%s', part:get_detected_type()),
         filename = part:get_filename(),
         content = maybe_stringify_f(part:get_content()),
-        headers =  flatten_headers(part:get_headers(true) or E),
+        headers =  part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary()
       }
       table.insert(result.parts, p)
