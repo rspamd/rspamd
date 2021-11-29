@@ -646,49 +646,6 @@ reconf['MISSING_MIMEOLE'] = {
   group = 'headers'
 }
 
--- Header delimiters
-local yandex_from = 'From=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
-local yandex_x_envelope_from = 'X-Envelope-From=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
-local yandex_return_path = 'Return-Path=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
-local yandex_received = 'Received=/^\\s*from \\S+\\.(yandex\\.ru|yandex\\.net)/mH'
-local yandex = string.format('(%s) & ((%s) | (%s) | (%s))', yandex_received, yandex_from, yandex_x_envelope_from, yandex_return_path)
--- Tabs as delimiters between header names and header values
-function check_header_delimiter_tab(task, header_name)
-  for _,rh in ipairs(task:get_header_full(header_name)) do
-    if rh['tab_separated'] then return true end
-  end
-  return false
-end
-reconf['HEADER_FROM_DELIMITER_TAB'] = {
-  re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(From)', yandex),
-  score = 1.0,
-  description = 'Header From begins with tab',
-  group = 'headers'
-}
-reconf['HEADER_TO_DELIMITER_TAB'] = {
-  re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(To)', yandex),
-  score = 1.0,
-  description = 'Header To begins with tab',
-  group = 'headers'
-}
-reconf['HEADER_CC_DELIMITER_TAB'] = {
-  re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Cc)', yandex),
-  score = 1.0,
-  description = 'Header To begins with tab',
-  group = 'headers'
-}
-reconf['HEADER_REPLYTO_DELIMITER_TAB'] = {
-  re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Reply-To)', yandex),
-  score = 1.0,
-  description = 'Header Reply-To begins with tab',
-  group = 'headers'
-}
-reconf['HEADER_DATE_DELIMITER_TAB'] = {
-  re = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Date)', yandex),
-  score = 1.0,
-  description = 'Header Date begins with tab',
-  group = 'headers'
-}
 -- Empty delimiters between header names and header values
 local function gen_check_header_delimiter_empty(header_name)
   return function(task)

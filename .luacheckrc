@@ -10,8 +10,6 @@ exclude_files = {
 }
 
 globals = {
-  'check_header_delimiter_empty',
-  'check_header_delimiter_tab',
   'classifiers',
   'config',
   'confighelp',
