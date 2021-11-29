@@ -3135,9 +3135,19 @@ lua_task_get_headers (lua_State *L)
 
 		lua_createtable (L, rspamd_mime_headers_count(MESSAGE_FIELD(task, raw_headers)), 0);
 		LL_FOREACH2(MESSAGE_FIELD(task, headers_order), cur, ord_next) {
-			rspamd_lua_push_header_array(L, cur->name, cur, RSPAMD_TASK_HEADER_PUSH_FULL,
-					need_modified);
-			lua_rawseti(L, -2, i++);
+			if (need_modified && cur->modified_chain) {
+				struct rspamd_mime_header *cur_modified;
+
+				LL_FOREACH(cur->modified_chain, cur_modified) {
+					rspamd_lua_push_header(L, cur_modified, RSPAMD_TASK_HEADER_PUSH_FULL);
+					lua_rawseti(L, -2, i++);
+				}
+			}
+			else {
+				rspamd_lua_push_header(L, cur, RSPAMD_TASK_HEADER_PUSH_FULL);
+				lua_rawseti(L, -2, i++);
+			}
+
 		}
 	}
 	else {
