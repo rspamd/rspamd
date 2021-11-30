@@ -649,7 +649,7 @@ reconf['MISSING_MIMEOLE'] = {
 -- Empty delimiters between header names and header values
 local function gen_check_header_delimiter_empty(header_name)
   return function(task)
-    for _,rh in ipairs(task:get_header_full(header_name)) do
+    for _,rh in ipairs(task:get_header_full(header_name) or {}) do
       if rh['empty_separator'] then return true end
     end
     return false
