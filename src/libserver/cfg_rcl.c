@@ -539,7 +539,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			return FALSE;
 		}
 
-		if (ucl_object_toboolean (elt)) {
+		if (!ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_DISABLED;
 		}
 	}
