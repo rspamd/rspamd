@@ -149,7 +149,7 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 		rep->entries = NULL;
 		rep->code = rcode;
 		req->reply = rep;
-		rep->authenticated = false;
+		rep->flags = 0;
 		rep->requested_name = req->requested_names[0].name;
 	}
 
@@ -223,7 +223,11 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	rep = rdns_make_reply (req, header->rcode);
 
 	if (header->ad) {
-		rep->authenticated = true;
+		rep->flags |= RDNS_AUTH;
+	}
+
+	if (header->tc) {
+		rep->flags |= RDNS_TRUNCATED;
 	}
 
 	if (rep == NULL) {

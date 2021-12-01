@@ -129,13 +129,18 @@ enum dns_rcode {
 	RDNS_RC_NOREC = 13
 };
 
+enum dns_reply_flags {
+	RDNS_AUTH = (1u << 0u),
+	RDNS_TRUNCATED = (1u << 1u)
+};
+
 struct rdns_reply {
 	struct rdns_request *request;
 	struct rdns_resolver *resolver;
 	struct rdns_reply_entry *entries;
 	const char *requested_name;
 	enum dns_rcode code;
-	bool authenticated;
+	uint8_t flags; /* see enum dns_reply_flags */
 };
 
 typedef void (*rdns_periodic_callback)(void *user_data);
