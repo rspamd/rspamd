@@ -859,9 +859,17 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	if (reply->flags & RDNS_TRUNCATED) {
 		/* Do not process truncated DNS replies */
 		truncated = true;
-		msg_warn_spf ("got a truncated record when trying to resolve %s (%s type) for SPF domain %s",
-				req_name, rdns_str_from_type (req_name->type),
-				rec->sender_domain);
+
+		if (req_name) {
+			msg_warn_spf ("got a truncated record when trying to resolve %s (%s type) for SPF domain %s",
+					req_name->name, rdns_str_from_type(req_name->type),
+					rec->sender_domain);
+		}
+		else {
+			msg_warn_spf ("got a truncated record when trying to resolve ??? "
+						  "(internal error) for SPF domain %s",
+					rec->sender_domain);
+		}
 	}
 
 	if (reply->code == RDNS_RC_NOERROR && !truncated) {
