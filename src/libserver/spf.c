@@ -847,15 +847,24 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct spf_addr *addr;
 	struct spf_record *rec;
 	const struct rdns_request_name *req_name;
+	bool truncated = false;
 
 	rec = cb->rec;
 	task = rec->task;
 
 	cb->rec->requests_inflight--;
 	addr = cb->addr;
+	req_name = rdns_request_get_name (reply->request, NULL);
 
-	if (reply->code == RDNS_RC_NOERROR) {
-		req_name = rdns_request_get_name (reply->request, NULL);
+	if (reply->flags & RDNS_TRUNCATED) {
+		/* Do not process truncated DNS replies */
+		truncated = true;
+		msg_warn_spf ("got a truncated record when trying to resolve %s (%s type) for SPF domain %s",
+				req_name, rdns_str_from_type (req_name->type),
+				rec->sender_domain);
+	}
+
+	if (reply->code == RDNS_RC_NOERROR && !truncated) {
 
 		LL_FOREACH (reply->entries, elt_data) {
 			/* Adjust ttl if a resolved record has lower ttl than spf record itself */
@@ -2434,26 +2443,40 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	rec->requests_inflight--;
 
-	if (reply->code == RDNS_RC_NOERROR) {
-		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		if (rec->resolved->len == 1) {
-			/* Top level resolved element */
-			rec->ttl = reply->entries->ttl;
-		}
-	}
-	else if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
-			&& rec->dns_requests == 0) {
-		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		addr = g_malloc0 (sizeof(*addr));
-		addr->flags |= RSPAMD_SPF_FLAG_NA;
-		g_ptr_array_insert (resolved->elts, 0, addr);
-	}
-	else if (reply->code != RDNS_RC_NOREC && reply->code != RDNS_RC_NXDOMAIN
-			&& rec->dns_requests == 0) {
-		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		addr = g_malloc0 (sizeof(*addr));
+	if (reply->flags & RDNS_TRUNCATED) {
+		msg_warn_spf ("got a truncated record when trying to resolve TXT record for %s",
+				rec->sender_domain);
+		resolved = rspamd_spf_new_addr_list(rec, rec->sender_domain);
+		addr = g_malloc0(sizeof(*addr));
 		addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
-		g_ptr_array_insert (resolved->elts, 0, addr);
+		g_ptr_array_insert(resolved->elts, 0, addr);
+
+		rspamd_spf_maybe_return (rec);
+
+		return;
+	}
+	else {
+		if (reply->code == RDNS_RC_NOERROR) {
+			resolved = rspamd_spf_new_addr_list(rec, rec->sender_domain);
+			if (rec->resolved->len == 1) {
+				/* Top level resolved element */
+				rec->ttl = reply->entries->ttl;
+			}
+		}
+		else if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
+				 && rec->dns_requests == 0) {
+			resolved = rspamd_spf_new_addr_list(rec, rec->sender_domain);
+			addr = g_malloc0(sizeof(*addr));
+			addr->flags |= RSPAMD_SPF_FLAG_NA;
+			g_ptr_array_insert(resolved->elts, 0, addr);
+		}
+		else if (reply->code != RDNS_RC_NOREC && reply->code != RDNS_RC_NXDOMAIN
+				 && rec->dns_requests == 0) {
+			resolved = rspamd_spf_new_addr_list(rec, rec->sender_domain);
+			addr = g_malloc0(sizeof(*addr));
+			addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+			g_ptr_array_insert(resolved->elts, 0, addr);
+		}
 	}
 
 	if (resolved) {
