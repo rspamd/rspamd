@@ -169,7 +169,7 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	 * 3 - entries | nil
 	 * 4 - error | nil
 	 * 5 - user_str
-	 * 6 - reply->authenticated
+	 * 6 - reply->flags & RDNS_AUTH
 	 * 7 - server
 	 */
 	if (reply->code != RDNS_RC_NOERROR) {
@@ -183,7 +183,7 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 		lua_pushnil (L);
 	}
 
-	lua_pushboolean (L, reply->authenticated);
+	lua_pushboolean (L, reply->flags & RDNS_AUTH);
 
 	const gchar *servname = rdns_request_get_server (reply->request);
 

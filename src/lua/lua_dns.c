@@ -166,8 +166,11 @@ lua_dns_callback (struct rdns_reply *reply, void *arg)
 	else {
 		lua_push_dns_reply (L, reply);
 
-		lua_pushboolean (L, reply->authenticated);
+		lua_pushboolean (L, reply->flags & RDNS_AUTH);
 		lua_setfield (L, -3, "authenticated");
+
+		lua_pushboolean (L, reply->flags & RDNS_TRUNCATED);
+		lua_setfield (L, -3, "truncated");
 
 		/* result 1 - not and error */
 		lua_pushboolean (L, true);
