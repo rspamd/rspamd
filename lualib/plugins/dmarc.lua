@@ -78,7 +78,7 @@ exports.dmarc_report = function (task, settings, data)
   local E = {}
 
   local ip = task:get_from_ip()
-  if ip and not ip:is_valid() then
+  if not ip or not ip:is_valid() then
     rspamd_logger.infox(task, 'cannot store dmarc report for %s: no valid source IP',
         data.domain)
     return nil
