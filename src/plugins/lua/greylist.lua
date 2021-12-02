@@ -40,19 +40,32 @@ if confighelp then
       "Performs adaptive greylisting using Redis",
       [[
 greylist {
-  expire = 1d; # Buckets expire (1 day by default)
-  timeout = 5m; # Greylisting timeout
-  key_prefix = 'rg'; # Redis prefix
-  max_data_len = 10k; # Use boy hash up to this value of bytes for greylisting
-  message = 'Try again later'; # Default greylisting message
-  symbol = 'GREYLIST'; # Append symbol
-  action = 'soft reject'; # Default action change (for Exim use `greylist`)
-  whitelist_symbols = []; # Skip greylisting if one of the following symbols has been found
-  ipv4_mask = 19; # Mask bits for ipv4
-  ipv6_mask = 64; # Mask bits for ipv6
-  report_time = false; # Tell when greylisting is expired (appended to `message`)
-  check_local = false; # Greylist local messages
-  check_authed = false; # Greylist authenticated users
+  # Buckets expire (1 day by default)
+  expire = 1d;
+  # Greylisting timeout
+  timeout = 5m;
+  # Redis prefix
+  key_prefix = 'rg';
+  # Use body hash up to this value of bytes for greylisting
+  max_data_len = 10k;
+  # Default greylisting message
+  message = 'Try again later';
+  # Append symbol on greylisting
+  symbol = 'GREYLIST';
+  # Default action change (for Exim use `greylist`)
+  action = 'soft reject';
+  # Skip greylisting if one of the following symbols has been found
+  whitelist_symbols = [];
+  # Mask bits for ipv4
+  ipv4_mask = 19;
+  # Mask bits for ipv6
+  ipv6_mask = 64;
+   # Tell when greylisting is expired (appended to `message`)
+  report_time = false;
+  # Greylist local messages
+  check_local = false;
+  # Greylist messages from authenticated users
+  check_authed = false;
 }
   ]])
   return
