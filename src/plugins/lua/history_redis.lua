@@ -19,13 +19,20 @@ if confighelp then
       "Store history of checks for WebUI using Redis",
       [[
 redis_history {
-  key_prefix = 'rs_history', # default key name
-  nrows = 200; # default rows limit
-  compress = true; # use zstd compression when storing data in redis
-  subject_privacy = false; # subject privacy is off
-  subject_privacy_alg = 'blake2'; # default hash-algorithm to obfuscate subject
-  subject_privacy_prefix = 'obf'; # prefix to show it's obfuscated
-  subject_privacy_length = 16; # cut the length of the hash
+  # History key name
+  key_prefix = 'rs_history';
+  # History rows limit
+  nrows = 200;
+  # Use zstd compression when storing data in redis
+  compress = true;
+  # Obfuscate subjects for privacy
+  subject_privacy = false;
+  # Default hash-algorithm to obfuscate subject
+  subject_privacy_alg = 'blake2';
+  # Prefix to show it's obfuscated
+  subject_privacy_prefix = 'obf';
+  # Cut the length of the hash if desired
+  subject_privacy_length = 16;
 }
   ]])
   return
