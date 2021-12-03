@@ -3569,12 +3569,15 @@ rspamd_str_has_8bit_u64 (const guchar *beg, gsize len)
 	guint8 orb = 0;
 
 	if (len >= 16) {
-		const guchar *nextd = beg+8;
+		const guchar *nextd = beg + sizeof(guint64);
 		guint64 n1 = 0, n2 = 0;
 
 		do {
-			n1 |= *(const guint64 *)beg;
-			n2 |= *(const guint64 *)nextd;
+			guint64 t;
+			memcpy(&t, beg, sizeof(t));
+			n1 |= t;
+			memcpy(&t, nextd, sizeof(t));
+			n2 |= t;
 			beg += 16;
 			nextd += 16;
 			len -= 16;
