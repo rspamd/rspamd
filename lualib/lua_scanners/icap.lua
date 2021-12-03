@@ -404,37 +404,47 @@ local function icap_check(task, content, digest, rule, maybe_part)
           http: HTTP/1.0 307 Temporary Redirect
         ]] --
 
+        local function string_to_threat_table(header_string)
+          if string.find(header_string, ', ') then
+            local vnames = lua_util.str_split(string.gsub(header_string, "%s", ""), ',') or {}
+
+            for _,v in ipairs(vnames) do
+              table.insert(threat_string, v)
+            end
+          else
+            table.insert(threat_string, header_string)
+          end
+        end
+
         -- Generic ICAP Headers
         if headers['x-infection-found'] then
           local _,_,icap_type,_,icap_threat =
             headers['x-infection-found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
 
-          if not icap_type or icap_type == 2 then
+          if icap_type == 2 then
             -- error returned
             lua_util.debugm(rule.name, task,
                 '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
             common.yield_result(task, rule, icap_threat, 0,
                 'fail', maybe_part)
             return true
-          else
+          elseif icap_threat ~= nil then
             lua_util.debugm(rule.name, task,
                 '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
             table.insert(threat_string, icap_threat)
+          elseif not icap_threat and headers['x-virus-name']then
+            string_to_threat_table(headers['x-virus-name'])
+          else
+            table.insert(threat_string, headers['x-infection-found'])
           end
-
+        elseif headers['x-virus-name'] and headers['x-virus-name'] ~= "no threats" then
+          lua_util.debugm(rule.name, task,
+              '%s: icap X-Virus-Name: %s', rule.log_prefix, headers['x-virus-name'])
+          string_to_threat_table(headers['x-virus-name'])
         elseif headers['x-virus-id'] and headers['x-virus-id'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
               '%s: icap X-Virus-ID: %s', rule.log_prefix, headers['x-virus-id'])
-
-          if string.find(headers['x-virus-id'], ', ') then
-            local vnames = lua_util.str_split(string.gsub(headers['x-virus-id'], "%s", ""), ',') or {}
-
-            for _,v in ipairs(vnames) do
-              table.insert(threat_string, v)
-            end
-          else
-            table.insert(threat_string, headers['x-virus-id'])
-          end
+          string_to_threat_table(headers['x-virus-id'])
         -- FSecure X-Headers
         elseif headers['x-fsecure-scan-result'] and headers['x-fsecure-scan-result'] ~= "clean" then
 
@@ -467,6 +477,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
         -- Sophos SAVDI special http headers
         elseif headers['x-blocked'] and headers['x-blocked'] ~= "" then
           table.insert(threat_string, headers['x-blocked'])
+        elseif headers['x-block-reason'] and headers['x-block-reason'] ~= "" then
+          table.insert(threat_string, headers['x-block-reason'])
         -- last try HTTP [4]xx return
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
           local message = string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
