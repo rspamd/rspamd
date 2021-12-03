@@ -320,6 +320,67 @@ local function detect_archive_flaw(part, arch, log_obj, _)
   return arch_type:lower(),40
 end
 
+local csv_grammar
+-- Returns a grammar that will count commas
+local function get_csv_grammar()
+  if not csv_grammar then
+    local lpeg = require'lpeg'
+
+    local field = '"' * lpeg.Cs(((lpeg.P(1) - '"') + lpeg.P'""' / '"')^0) * '"' +
+        lpeg.C((1 - lpeg.S',\n"')^0)
+
+    csv_grammar = lpeg.Cf(lpeg.Cc(0) * field * lpeg.P( (lpeg.P(',') +
+        lpeg.P('\t')) * field)^1 * (lpeg.S'\r\n' + -1),
+        function(acc) return acc + 1 end)
+  end
+
+  return csv_grammar
+end
+local function validate_csv(part, content, log_obj)
+  local max_chunk = 32768
+  local chunk = content:sub(1, max_chunk)
+
+  local expected_commas
+  local matched_lines = 0
+  local max_matched_lines = 10
+
+  lua_util.debugm(N, log_obj, "check for csv pattern")
+
+  for s in chunk:lines() do
+    local ncommas = get_csv_grammar():match(s)
+
+    if not ncommas then
+      lua_util.debugm(N, log_obj, "not a csv line at line number %s",
+          matched_lines)
+      return false
+    end
+
+    if expected_commas and ncommas ~= expected_commas then
+      -- Mismatched commas
+      lua_util.debugm(N, log_obj, "missmatched commas on line %s: %s != %s",
+          matched_lines, ncommas, expected_commas)
+      return false
+    elseif not expected_commas then
+      if ncommas == 0 then
+        lua_util.debugm(N, log_obj, "no commas in the first line")
+        return false
+      end
+      expected_commas = ncommas
+    end
+
+    matched_lines = matched_lines + 1
+
+    if matched_lines > max_matched_lines then
+      break
+    end
+  end
+
+  lua_util.debugm(N, log_obj, "csv content is sane: %s fields; %s lines checked",
+      expected_commas, matched_lines)
+
+  return true
+end
+
 exports.mime_part_heuristic = function(part, log_obj, _)
   if part:is_archive() then
     local arch = part:get_archive()
@@ -452,7 +513,10 @@ exports.text_part_heuristic = function(part, log_obj, _)
 
         if weight then
           if weight >= 40 then
-            return ext, weight
+            -- Extra validation for csv extension
+            if ext ~= 'csv' or validate_csv(part, content, log_obj) then
+              return ext, weight
+            end
           elseif fname and weight >= 20 then
             return ext, weight
           end
