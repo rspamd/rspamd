@@ -24,7 +24,7 @@
 | snowball      | ?       | BSD-3-Clause        | NO      |                    |
 | t1ha          | ?       | Zlib                | NO      |                    |
 | uthash        | 1.9.8   | BSD                 | YES     |                    |
-| xxhash        | ?       | BSD                 | NO      |                    |
+| xxhash        | 0.8.1   | BSD                 | NO      |                    |
 | zstd          | 1.4.5   | BSD                 | NO      |                    |
 | google-ced    | 37529e6 | Apache 2            | YES     | build fixes        |
 | kann          |  ?      | MIT                 | YES     | blas/lapack changes|

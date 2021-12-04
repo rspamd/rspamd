@@ -1480,8 +1480,6 @@ void rspamd_cryptobox_hash (guchar *out,
 
 G_STATIC_ASSERT (sizeof (t1ha_context_t) <=
 		sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
-G_STATIC_ASSERT (sizeof (XXH64_state_t) <=
-				 sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
 
 
 struct RSPAMD_ALIGNED(16) _mum_iuf {
