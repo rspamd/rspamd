@@ -527,7 +527,8 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size, gsize alignment,
 				g_atomic_int_add (&mem_pool_stat->fragmented_size,
 						free);
 				pool->priv->entry->elts[pool->priv->entry->cur_elts].fragmentation += free;
-				new = rspamd_mempool_chain_new (alignment, size + pool->priv->elt_len, pool_type);
+				new = rspamd_mempool_chain_new (size + pool->priv->elt_len, alignment,
+						pool_type);
 			}
 
 			/* Connect to pool subsystem */
