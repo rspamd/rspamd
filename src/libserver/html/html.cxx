@@ -2017,7 +2017,7 @@ html_process_input(rspamd_mempool_t *pool,
 	/* Propagate styles */
 	hc->traverse_block_tags([&hc, &pool](const html_tag *tag) -> bool {
 
-		if (hc->css_style) {
+		if (hc->css_style && tag->id > Tag_UNKNOWN && tag->id < Tag_MAX) {
 			auto *css_block = hc->css_style->check_tag_block(tag);
 
 			if (css_block) {

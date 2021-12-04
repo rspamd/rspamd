@@ -91,7 +91,7 @@ struct html_tag {
 	unsigned int tag_start = 0;
 	unsigned int content_offset = 0;
 	std::uint32_t flags = 0;
-	tag_id_t id = Tag_UNKNOWN;
+	std::int32_t id = Tag_UNKNOWN;
 	html_closing_tag closing;
 
 	std::vector<html_tag_component> components;
