@@ -46,7 +46,7 @@ if (SANITIZE)
             set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libubsan")
             set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libubsan")
         endif ()
-
+    else ()
         message (FATAL_ERROR "Unknown sanitizer type: ${SANITIZE}")
     endif ()
     message (STATUS "Add sanitizer: ${SANITIZE}")
