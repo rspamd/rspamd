@@ -161,7 +161,8 @@ void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, gsize alignment
 #define rspamd_mempool_alloc(pool, size) \
 	rspamd_mempool_alloc_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 #define rspamd_mempool_alloc_type(pool, type) \
-	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), RSPAMD_ALIGNOF(type), (G_STRLOC)))
+	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), \
+	MAX(MIN_MEM_ALIGNMENT, RSPAMD_ALIGNOF(type)), (G_STRLOC)))
 #define rspamd_mempool_alloc_buffer(pool, buflen) \
 	(char *)(rspamd_mempool_alloc_((pool), sizeof(char) * (buflen), MIN_MEM_ALIGNMENT, (G_STRLOC)))
 /**
@@ -185,7 +186,8 @@ void *rspamd_mempool_alloc0_ (rspamd_mempool_t *pool, gsize size, gsize alignmen
 #define rspamd_mempool_alloc0(pool, size) \
 	rspamd_mempool_alloc0_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 #define rspamd_mempool_alloc0_type(pool, type) \
-	(type *)(rspamd_mempool_alloc0_((pool), sizeof(type), RSPAMD_ALIGNOF(type), (G_STRLOC)))
+	(type *)(rspamd_mempool_alloc0_((pool), sizeof(type), \
+		MAX(MIN_MEM_ALIGNMENT, RSPAMD_ALIGNOF(type)), (G_STRLOC)))
 
 /**
  * Make a copy of string in pool

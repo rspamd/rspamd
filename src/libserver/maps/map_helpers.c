@@ -741,7 +741,7 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 				NULL, 0);
 	}
 
-	htb = rspamd_mempool_alloc0 (pool, sizeof (*htb));
+	htb = rspamd_mempool_alloc0_type(pool, struct rspamd_hash_map_helper);
 	htb->htb = kh_init (rspamd_map_hash);
 	htb->pool = pool;
 	htb->map = map;
@@ -801,7 +801,7 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 				NULL, 0);
 	}
 
-	r = rspamd_mempool_alloc0 (pool, sizeof (*r));
+	r = rspamd_mempool_alloc0_type (pool, struct rspamd_radix_map_helper);
 	r->trie = radix_create_compressed_with_pool (pool, name);
 	r->htb = kh_init (rspamd_map_hash);
 	r->pool = pool;
@@ -855,7 +855,7 @@ rspamd_map_helper_new_regexp (struct rspamd_map *map,
 	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			map->tag, 0);
 
-	re_map = rspamd_mempool_alloc0 (pool, sizeof (*re_map));
+	re_map = rspamd_mempool_alloc0_type (pool, struct rspamd_regexp_map_helper);
 	re_map->pool = pool;
 	re_map->values = g_ptr_array_new ();
 	re_map->regexps = g_ptr_array_new ();
