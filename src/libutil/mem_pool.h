@@ -67,7 +67,12 @@ struct f_str_s;
 #define MEMPOOL_TAG_LEN 20
 #define MEMPOOL_UID_LEN 20
 /* All pointers are aligned as this variable */
-#define MIN_MEM_ALIGNMENT   sizeof (guint64)
+#define MIN_MEM_ALIGNMENT   G_MEM_ALIGN
+#ifndef __cplusplus
+#define RSPAMD_ALIGNOF G_ALIGNOF
+#else
+#define RSPAMD_ALIGNOF(t) alignof(t)
+#endif
 /**
  * Destructor type definition
  */
@@ -151,14 +156,14 @@ rspamd_mempool_t *rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags,
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
+void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc(pool, size) \
-	rspamd_mempool_alloc_((pool), (size), (G_STRLOC))
+	rspamd_mempool_alloc_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 #define rspamd_mempool_alloc_type(pool, type) \
-	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), (G_STRLOC)))
+	(type *)(rspamd_mempool_alloc_((pool), sizeof(type), RSPAMD_ALIGNOF(type), (G_STRLOC)))
 #define rspamd_mempool_alloc_buffer(pool, buflen) \
-	(char *)(rspamd_mempool_alloc_((pool), sizeof(char) * (buflen), (G_STRLOC)))
+	(char *)(rspamd_mempool_alloc_((pool), sizeof(char) * (buflen), MIN_MEM_ALIGNMENT, (G_STRLOC)))
 /**
  * Notify external memory usage for memory pool
  * @param pool
@@ -175,12 +180,12 @@ void rspamd_mempool_notify_alloc_ (rspamd_mempool_t *pool, gsize size, const gch
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void *rspamd_mempool_alloc0_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
+void *rspamd_mempool_alloc0_ (rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc0(pool, size) \
-	rspamd_mempool_alloc0_((pool), (size), (G_STRLOC))
+	rspamd_mempool_alloc0_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 #define rspamd_mempool_alloc0_type(pool, type) \
-	(type *)(rspamd_mempool_alloc0_((pool), sizeof(type), (G_STRLOC)))
+	(type *)(rspamd_mempool_alloc0_((pool), sizeof(type), RSPAMD_ALIGNOF(type), (G_STRLOC)))
 
 /**
  * Make a copy of string in pool
@@ -202,7 +207,7 @@ gchar *rspamd_mempool_strdup_ (rspamd_mempool_t *pool, const gchar *src, const g
 gchar *rspamd_mempool_fstrdup_ (rspamd_mempool_t *pool,
 								const struct f_str_s *src,
 								const gchar *loc)
-RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
 #define rspamd_mempool_fstrdup(pool, src) \
 	rspamd_mempool_fstrdup_ ((pool), (src), G_STRLOC)
 
@@ -226,15 +231,15 @@ RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
  * @param pool memory pool object
  * @param size bytes to allocate
  */
-void *rspamd_mempool_alloc_shared_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
+void *rspamd_mempool_alloc_shared_ (rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc_shared(pool, size) \
-	rspamd_mempool_alloc_shared_((pool), (size), (G_STRLOC))
+	rspamd_mempool_alloc_shared_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 
-void *rspamd_mempool_alloc0_shared_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
+void *rspamd_mempool_alloc0_shared_ (rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc0_shared(pool, size) \
-	rspamd_mempool_alloc0_shared_((pool), (size), (G_STRLOC))
+	rspamd_mempool_alloc0_shared_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
 
 /**
  * Add destructor callback to pool
