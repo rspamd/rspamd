@@ -40,6 +40,12 @@ rspamd_config:register_symbol({
         ['hex'] = 'cf25ddc406c50de0c13de2b79d127646',
         ['reset'] = true,
       },
+      {
+        ['init'] = 'hello',
+        ['specific'] = 'xxh3',
+        ['str'] = 'hello',
+        ['hex'] = 'c1156ae6cb7ff175',
+      }
     }
 
     for _, t in ipairs(test_data) do
