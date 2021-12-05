@@ -1011,7 +1011,7 @@ lua_cryptobox_hash_dtor (struct rspamd_lua_cryptobox_hash *h)
 		free (h->content.h); /* Allocated by posix_memalign */
 	}
 	else {
-		g_free (h->content.fh);
+		rspamd_cryptobox_fast_hash_free (h->content.fh);
 	}
 
 	g_free (h);
@@ -1023,7 +1023,7 @@ rspamd_lua_hash_init_default (struct rspamd_lua_cryptobox_hash *h,
 {
 	h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
 	if (posix_memalign ((void **)&h->content.h,
-			_Alignof (rspamd_cryptobox_hash_state_t),
+			RSPAMD_ALIGNOF(rspamd_cryptobox_hash_state_t),
 			sizeof (*h->content.h)) != 0) {
 		g_assert_not_reached ();
 	}
@@ -1128,28 +1128,28 @@ rspamd_lua_hash_create (const gchar *type, const gchar *key, gsize keylen)
 		}
 		else if (g_ascii_strcasecmp (type, "xxh64") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_XXHASH64;
-			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			h->content.fh = rspamd_cryptobox_fast_hash_new ();
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH64, 0);
 			h->out_len = sizeof (guint64);
 		}
 		else if (g_ascii_strcasecmp (type, "xxh32") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_XXHASH32;
-			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			h->content.fh = rspamd_cryptobox_fast_hash_new ();
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH32, 0);
 			h->out_len = sizeof (guint32);
 		}
 		else if (g_ascii_strcasecmp (type, "mum") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_MUM;
-			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			h->content.fh = rspamd_cryptobox_fast_hash_new ();
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_MUMHASH, 0);
 			h->out_len = sizeof (guint64);
 		}
 		else if (g_ascii_strcasecmp (type, "t1ha") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_T1HA;
-			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			h->content.fh = rspamd_cryptobox_fast_hash_new ();
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_T1HA, 0);
 			h->out_len = sizeof (guint64);

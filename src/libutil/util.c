@@ -17,7 +17,6 @@
 #include "util.h"
 #include "unix-std.h"
 
-#include "xxhash.h"
 #include "ottery.h"
 #include "cryptobox.h"
 

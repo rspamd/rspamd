@@ -27,6 +27,8 @@
 #include "base64/base64.h"
 #include "ottery.h"
 #include "printf.h"
+#define XXH_INLINE_ALL
+#define XXH_PRIVATE_API
 #include "xxhash.h"
 #define MUM_TARGET_INDEPENDENT_HASH 1 /* For 32/64 bit equal hashes */
 #include "../../contrib/mumhash/mum.h"
@@ -1461,7 +1463,7 @@ void
 rspamd_cryptobox_hash_final (rspamd_cryptobox_hash_state_t *p, guchar *out)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
-			_Alignof(crypto_generichash_blake2b_state));
+			RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
 	crypto_generichash_blake2b_final (st, out, crypto_generichash_blake2b_BYTES_MAX);
 }
 
@@ -1480,6 +1482,8 @@ void rspamd_cryptobox_hash (guchar *out,
 
 G_STATIC_ASSERT (sizeof (t1ha_context_t) <=
 		sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
+G_STATIC_ASSERT (sizeof (struct XXH3_state_s) <=
+				 sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
 
 
 struct RSPAMD_ALIGNED(16) _mum_iuf {
@@ -1491,13 +1495,33 @@ struct RSPAMD_ALIGNED(16) _mum_iuf {
 	unsigned rem;
 };
 
+rspamd_cryptobox_fast_hash_state_t*
+rspamd_cryptobox_fast_hash_new(void)
+{
+	rspamd_cryptobox_fast_hash_state_t *nst;
+	int ret = posix_memalign ((void **)&nst, RSPAMD_ALIGNOF(rspamd_cryptobox_fast_hash_state_t),
+			sizeof(rspamd_cryptobox_fast_hash_state_t));
+
+	if (ret != 0) {
+		abort();
+	}
+
+	return nst;
+}
+
+void
+rspamd_cryptobox_fast_hash_free(rspamd_cryptobox_fast_hash_state_t *st)
+{
+	free(st);
+}
+
 void
 rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed)
 {
-	t1ha_context_t *rst = (t1ha_context_t *)st->opaque;
-	st->type = RSPAMD_CRYPTOBOX_T1HA;
-	t1ha2_init (rst, seed, 0);
+	XXH3_state_t *rst = (XXH3_state_t *)st->opaque;
+	st->type = RSPAMD_CRYPTOBOX_XXHASH3;
+	XXH3_64bits_reset_withSeed (rst, seed);
 }
 
 void
@@ -1525,6 +1549,13 @@ rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st
 		XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
 		st->type = RSPAMD_CRYPTOBOX_XXHASH32;
 		XXH32_reset (xst, seed);
+		break;
+	}
+	case RSPAMD_CRYPTOBOX_XXHASH3:
+	{
+		XXH3_state_t *xst = (XXH3_state_t *)  st->opaque;
+		st->type = RSPAMD_CRYPTOBOX_XXHASH3;
+		XXH3_64bits_reset_withSeed (xst, seed);
 		break;
 	}
 	case RSPAMD_CRYPTOBOX_MUMHASH: {
@@ -1557,6 +1588,12 @@ rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		{
 			XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
 			XXH32_update (xst, data, len);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_XXHASH3:
+		{
+			XXH3_state_t *xst = (XXH3_state_t *)  st->opaque;
+			XXH3_64bits_update (xst, data, len);
 			break;
 		}
 		case RSPAMD_CRYPTOBOX_MUMHASH: {
@@ -1629,6 +1666,11 @@ rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 			ret = XXH32_digest (xst);
 			break;
 		}
+		case RSPAMD_CRYPTOBOX_XXHASH3: {
+			XXH3_state_t *xst = (XXH3_state_t *)  st->opaque;
+			ret = XXH3_64bits_digest (xst);
+			break;
+		}
 		case RSPAMD_CRYPTOBOX_MUMHASH: {
 			struct _mum_iuf *iuf = (struct _mum_iuf *)  st->opaque;
 			iuf->h = mum_hash_step (iuf->h, iuf->buf.ll);
@@ -1656,14 +1698,14 @@ static inline guint64
 rspamd_cryptobox_fast_hash_machdep (const void *data,
 		gsize len, guint64 seed)
 {
-	return t1ha2_atonce (data, len, seed);
+	return XXH3_64bits_withSeed(data, len, seed);
 }
 
 static inline guint64
 rspamd_cryptobox_fast_hash_indep (const void *data,
 		gsize len, guint64 seed)
 {
-	return t1ha2_atonce (data, len, seed);
+	return XXH3_64bits_withSeed(data, len, seed);
 }
 
 guint64
@@ -1682,6 +1724,8 @@ rspamd_cryptobox_fast_hash_specific (
 	switch (type) {
 	case RSPAMD_CRYPTOBOX_XXHASH32:
 		return XXH32 (data, len, seed);
+	case RSPAMD_CRYPTOBOX_XXHASH3:
+		return XXH3_64bits_withSeed (data, len, seed);
 	case RSPAMD_CRYPTOBOX_XXHASH64:
 		return XXH64 (data, len, seed);
 	case RSPAMD_CRYPTOBOX_MUMHASH:

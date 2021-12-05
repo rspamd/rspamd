@@ -348,6 +348,7 @@ void rspamd_cryptobox_hash (guchar *out,
 enum rspamd_cryptobox_fast_hash_type {
 	RSPAMD_CRYPTOBOX_XXHASH64 = 0,
 	RSPAMD_CRYPTOBOX_XXHASH32,
+	RSPAMD_CRYPTOBOX_XXHASH3,
 	RSPAMD_CRYPTOBOX_MUMHASH,
 	RSPAMD_CRYPTOBOX_T1HA,
 	RSPAMD_CRYPTOBOX_HASHFAST,
@@ -355,10 +356,18 @@ enum rspamd_cryptobox_fast_hash_type {
 };
 
 /* Non crypto hash IUF interface */
-typedef struct rspamd_cryptobox_fast_hash_state_s {
-	guint64 opaque[11];
+typedef struct CRYPTO_ALIGN(64) rspamd_cryptobox_fast_hash_state_s {
+	guchar opaque[576]; /* Required for xxhash3 */
 	enum rspamd_cryptobox_fast_hash_type type;
 } rspamd_cryptobox_fast_hash_state_t;
+
+
+/**
+ * Creates a new cryptobox state properly aligned
+ * @return
+ */
+rspamd_cryptobox_fast_hash_state_t* rspamd_cryptobox_fast_hash_new(void);
+void rspamd_cryptobox_fast_hash_free(rspamd_cryptobox_fast_hash_state_t *st);
 
 /**
  * Init cryptobox hash state using key if needed, `st` must point to the buffer

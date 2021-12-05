@@ -164,7 +164,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	rspamd_mempool_t *pool;
 
 	pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg", 0);
-	cfg = rspamd_mempool_alloc0 (pool, sizeof (*cfg));
+	cfg = rspamd_mempool_alloc0_type(pool, struct rspamd_config);
 	/* Allocate larger pool for cfg */
 	cfg->cfg_pool = pool;
 	cfg->dns_timeout = 1.0;
