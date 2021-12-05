@@ -45,6 +45,7 @@ enum lua_cryptobox_hash_type {
 	LUA_CRYPTOBOX_HASH_HMAC,
 	LUA_CRYPTOBOX_HASH_XXHASH64,
 	LUA_CRYPTOBOX_HASH_XXHASH32,
+	LUA_CRYPTOBOX_HASH_XXHASH3,
 	LUA_CRYPTOBOX_HASH_MUM,
 	LUA_CRYPTOBOX_HASH_T1HA,
 };
@@ -977,6 +978,7 @@ rspamd_lua_hash_update (struct rspamd_lua_cryptobox_hash *h,
 			break;
 		case LUA_CRYPTOBOX_HASH_XXHASH64:
 		case LUA_CRYPTOBOX_HASH_XXHASH32:
+		case LUA_CRYPTOBOX_HASH_XXHASH3:
 		case LUA_CRYPTOBOX_HASH_MUM:
 		case LUA_CRYPTOBOX_HASH_T1HA:
 			rspamd_cryptobox_fast_hash_update (h->content.fh, p, len);
@@ -1139,6 +1141,13 @@ rspamd_lua_hash_create (const gchar *type, const gchar *key, gsize keylen)
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH32, 0);
 			h->out_len = sizeof (guint32);
+		}
+		else if (g_ascii_strcasecmp (type, "xxh3") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_XXHASH3;
+			h->content.fh = rspamd_cryptobox_fast_hash_new ();
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH3, 0);
+			h->out_len = sizeof (guint64);
 		}
 		else if (g_ascii_strcasecmp (type, "mum") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_MUM;
@@ -1467,6 +1476,10 @@ lua_cryptobox_hash_reset (lua_State *L)
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_XXHASH32, 0);
 			break;
+		case LUA_CRYPTOBOX_HASH_XXHASH3:
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH3, 0);
+			break;
 		case LUA_CRYPTOBOX_HASH_MUM:
 			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
 					RSPAMD_CRYPTOBOX_MUMHASH, 0);
@@ -1518,6 +1531,7 @@ lua_cryptobox_hash_finish (struct rspamd_lua_cryptobox_hash *h)
 		break;
 	case LUA_CRYPTOBOX_HASH_XXHASH64:
 	case LUA_CRYPTOBOX_HASH_XXHASH32:
+	case LUA_CRYPTOBOX_HASH_XXHASH3:
 	case LUA_CRYPTOBOX_HASH_MUM:
 	case LUA_CRYPTOBOX_HASH_T1HA:
 		ll = rspamd_cryptobox_fast_hash_final (h->content.fh);
