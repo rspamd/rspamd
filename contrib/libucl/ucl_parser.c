@@ -850,6 +850,10 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 						dv *= ucl_lex_num_multiplier (*p, false);
 					}
 					p += 2;
+					if (end - p > 0 && !ucl_lex_is_atom_end (*p)) {
+						*pos = start;
+						return EINVAL;
+					}
 					goto set_obj;
 				}
 				else if (number_bytes || (p[1] == 'b' || p[1] == 'B')) {
@@ -860,6 +864,10 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 					}
 					lv *= ucl_lex_num_multiplier (*p, true);
 					p += 2;
+					if (end - p > 0 && !ucl_lex_is_atom_end (*p)) {
+						*pos = start;
+						return EINVAL;
+					}
 					goto set_obj;
 				}
 				else if (ucl_lex_is_atom_end (p[1])) {
@@ -884,6 +892,10 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 						is_time = true;
 						dv *= 60.;
 						p += 3;
+						if (end - p > 0 && !ucl_lex_is_atom_end (*p)) {
+							*pos = start;
+							return EINVAL;
+						}
 						goto set_obj;
 					}
 				}
@@ -896,6 +908,10 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 					lv *= ucl_lex_num_multiplier (*p, number_bytes);
 				}
 				p ++;
+				if (end - p > 0 && !ucl_lex_is_atom_end (*p)) {
+					*pos = start;
+					return EINVAL;
+				}
 				goto set_obj;
 			}
 			break;
