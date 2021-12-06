@@ -588,7 +588,7 @@ static gsize
 rspamd_cryptobox_auth_ctx_len (enum rspamd_cryptobox_mode mode)
 {
 	if (G_LIKELY (mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
-		return sizeof (crypto_onetimeauth_state) + _Alignof (crypto_onetimeauth_state);
+		return sizeof (crypto_onetimeauth_state) + RSPAMD_ALIGNOF(crypto_onetimeauth_state);
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
@@ -1440,7 +1440,7 @@ void
 rspamd_cryptobox_hash_init (rspamd_cryptobox_hash_state_t *p, const guchar *key, gsize keylen)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
-			_Alignof(crypto_generichash_blake2b_state));
+			RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
 	crypto_generichash_blake2b_init (st, key, keylen,
 			crypto_generichash_blake2b_BYTES_MAX);
 }
@@ -1452,7 +1452,7 @@ void
 rspamd_cryptobox_hash_update (rspamd_cryptobox_hash_state_t *p, const guchar *data, gsize len)
 {
 	crypto_generichash_blake2b_state *st = cryptobox_align_ptr (p,
-			_Alignof(crypto_generichash_blake2b_state));
+			RSPAMD_ALIGNOF(crypto_generichash_blake2b_state));
 	crypto_generichash_blake2b_update (st, data, len);
 }
 

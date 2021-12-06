@@ -68,11 +68,7 @@ struct f_str_s;
 #define MEMPOOL_UID_LEN 20
 /* All pointers are aligned as this variable */
 #define MIN_MEM_ALIGNMENT   G_MEM_ALIGN
-#ifndef __cplusplus
-#define RSPAMD_ALIGNOF G_ALIGNOF
-#else
-#define RSPAMD_ALIGNOF(t) alignof(t)
-#endif
+
 /**
  * Destructor type definition
  */

@@ -473,7 +473,7 @@ gsize rspamd_memspn (const gchar *s, const gchar *e, gsize len);
  * Check if a pointer is aligned; n must be power of two
  */
 #define rspamd_is_aligned(p, n) (((uintptr_t)(p) & ((uintptr_t)(n) - 1)) == 0)
-#define rspamd_is_aligned_as(p, v) rspamd_is_aligned(p, _Alignof(__typeof((v))))
+#define rspamd_is_aligned_as(p, v) rspamd_is_aligned(p, RSPAMD_ALIGNOF(__typeof((v))))
 gboolean rspamd_str_has_8bit (const guchar *beg, gsize len);
 
 struct UConverter;

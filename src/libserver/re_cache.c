@@ -406,7 +406,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		rspamd_regexp_set_cache_id (re, i);
 
 		if (re_class->st == NULL) {
-			(void) !posix_memalign ((void **)&re_class->st, _Alignof (rspamd_cryptobox_hash_state_t),
+			(void) !posix_memalign ((void **)&re_class->st, RSPAMD_ALIGNOF(rspamd_cryptobox_hash_state_t),
 			 		sizeof (*re_class->st));
 			g_assert (re_class->st != NULL);
 			rspamd_cryptobox_hash_init (re_class->st, NULL, 0);

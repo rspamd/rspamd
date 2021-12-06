@@ -322,6 +322,17 @@ typedef off_t goffset;
 #endif
 #endif
 
+#ifndef __cplusplus
+# ifdef G_ALIGNOF
+#  define RSPAMD_ALIGNOF G_ALIGNOF
+# else
+#  define RSPAMD_ALIGNOF(t) _Alignof(t)
+# endif
+#else
+/* glib G_ALIGNOF nor C11 _Alignof are not good enough for C++, nuff said... */
+# define RSPAMD_ALIGNOF(t) alignof(t)
+#endif
+
 /* Address sanitizer */
 #ifdef __clang__
 #  if __has_feature(address_sanitizer)
