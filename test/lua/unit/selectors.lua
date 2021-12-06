@@ -201,9 +201,10 @@ context("Selectors test", function()
       selector = "specific_urls({need_emails = true, limit = 2})",
       expect = {{"test@example.net", "http://subdomain.example.net"}}},
 
-    ["specific_urls + emails limit"] = {
-      selector = "specific_urls({need_emails = true, limit = 1})",
-      expect = {{"test@example.net"}}},
+    -- Broken test as order depends on the hash function internally
+    --["specific_urls + emails limit"] = {
+    --  selector = "specific_urls({need_emails = true, limit = 1})",
+    --  expect = {{"test@example.net"}}},
 
     ["pool_var str, default type"] = {
                 selector = [[pool_var("str_var")]],
