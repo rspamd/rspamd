@@ -1,4 +1,4 @@
-SET(XXHASHSRC xxhash.c xxh_x86dispatch.c)
+SET(XXHASHSRC xxhash.c)
 
 ADD_LIBRARY(xxhash STATIC ${XXHASHSRC})
 
