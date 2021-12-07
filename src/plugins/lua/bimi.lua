@@ -136,6 +136,8 @@ end
 local function make_helper_request(task, domain, record, redis_server)
   local is_sync = settings.helper_sync
   local helper_url = string.format('%s/v1/check', settings.helper_url)
+  local redis_key = string.format('%s%s', settings.redis_prefix,
+      domain)
 
   local function http_helper_callback(http_err, code, body, _)
     if http_err then
@@ -163,6 +165,31 @@ local function make_helper_request(task, domain, record, redis_server)
           lua_util.debugm(N, task, "invalid BIMI for %s: %s",
               domain, d.error)
         end
+
+        local ret, upstream
+        local function redis_set_cb(redis_err, _)
+          if redis_err then
+            rspamd_logger.warnx(task, 'cannot get reply from Redis when storing image %s: %s',
+                upstream:get_addr():to_string(), redis_err)
+            upstream:fail()
+          else
+            lua_util.debugm(N, task, 'stored bimi image in Redis for domain %s; key=%s',
+              domain, redis_key)
+          end
+        end
+
+        ret,_,upstream = lua_redis.redis_make_request(task,
+            redis_params, -- connect params
+            redis_key, -- hash key
+            true, -- is write
+            redis_set_cb, --callback
+            'PSETEX', -- command
+            {redis_key, tostring(settings.redis_min_expiry * 1000.0), d.content})
+
+        if not ret then
+          rspamd_logger.warnx(task, 'cannot make request to Redis when storing image; domain %s',
+              domain)
+        end
       end
     else
       -- In async mode we skip request and use merely Redis to insert indicators
@@ -174,11 +201,17 @@ local function make_helper_request(task, domain, record, redis_server)
   local request_data = {
     url = record.a,
     sync = is_sync,
-    redis_server = redis_server,
-    redis_prefix = settings.redis_prefix,
-    redis_expiry = settings.redis_min_expiry * 1000.0, -- helper accepts milliseconds
     domain = domain
   }
+
+  if not is_sync then
+    -- Allow bimi helper to save data in Redis
+    request_data.redis_server = redis_server
+    request_data.redis_prefix = settings.redis_prefix
+    request_data.redis_expiry = settings.redis_min_expiry * 1000.0
+  else
+    request_data.skip_redis = true
+  end
 
   local serialised = ucl.to_format(request_data, 'json-compact')
   lua_util.debugm(N, task, "send request to BIMI helper: %s",
@@ -202,7 +235,7 @@ local function check_bimi_vmc(task, domain, record)
   local function redis_cached_cb(err, data)
     if err then
       rspamd_logger.warnx(task, 'cannot get reply from Redis %s: %s',
-          upstream:get_addr():to_string())
+          upstream:get_addr():to_string(), err)
       upstream:fail()
     else
       if type(data) == 'string' then
@@ -233,8 +266,8 @@ local function check_bimi_vmc(task, domain, record)
   -- We first check Redis and then try to use helper
   ret,_,upstream = lua_redis.redis_make_request(task,
       redis_params, -- connect params
-      nil, -- hash key
-      true, -- is write
+      redis_key, -- hash key
+      false, -- is write
       redis_cached_cb, --callback
       'GET', -- command
       {redis_key})
