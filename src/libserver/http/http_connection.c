@@ -2303,29 +2303,26 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			return FALSE;
 		}
 		else {
-			if (priv->ssl) {
-				/* Cleanup the existing connection */
-				rspamd_ssl_connection_free (priv->ssl);
-			}
+			if (!priv->ssl) {
+				priv->ssl = rspamd_ssl_connection_new (ssl_ctx, priv->ctx->event_loop,
+						!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY),
+						conn->log_tag);
+				g_assert (priv->ssl != NULL);
 
-			priv->ssl = rspamd_ssl_connection_new (ssl_ctx, priv->ctx->event_loop,
-					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY),
-					conn->log_tag);
-			g_assert (priv->ssl != NULL);
+				if (!rspamd_ssl_connect_fd (priv->ssl, conn->fd, host, &priv->ev,
+						priv->timeout, rspamd_http_event_handler,
+						rspamd_http_ssl_err_handler, conn)) {
 
-			if (!rspamd_ssl_connect_fd (priv->ssl, conn->fd, host, &priv->ev,
-					priv->timeout, rspamd_http_event_handler,
-					rspamd_http_ssl_err_handler, conn)) {
-
-				err = g_error_new (HTTP_ERROR, 400,
-						"ssl connection error: ssl error=%s, errno=%s",
-						ERR_error_string (ERR_get_error (), NULL),
-						strerror (errno));
-				rspamd_http_connection_ref (conn);
-				conn->error_handler (conn, err);
-				rspamd_http_connection_unref (conn);
-				g_error_free (err);
-				return FALSE;
+					err = g_error_new (HTTP_ERROR, 400,
+							"ssl connection error: ssl error=%s, errno=%s",
+							ERR_error_string (ERR_get_error (), NULL),
+							strerror (errno));
+					rspamd_http_connection_ref (conn);
+					conn->error_handler (conn, err);
+					rspamd_http_connection_unref (conn);
+					g_error_free (err);
+					return FALSE;
+				}
 			}
 		}
 	}
