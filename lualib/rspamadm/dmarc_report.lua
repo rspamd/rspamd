@@ -618,6 +618,10 @@ local function process_report_date(opts, start_time, date)
 end
 
 local function handler(args)
+  local start_time
+  -- Preserve start time as report sending might take some time
+  local start_collection = os.time()
+
   local opts = parser:parse(args)
 
   pool = rspamd_mempool.create()
@@ -653,7 +657,6 @@ local function handler(args)
     'GET', 'rspamd_dmarc_last_collection'
   })
 
-  local start_time
   if not ret or not tonumber(results) then
     start_time = os.time() - 86400
   else
@@ -663,9 +666,10 @@ local function handler(args)
   lua_util.debugm(N, 'previous last report date is %s', start_time)
 
   if not opts.date or #opts.date == 0 then
-    local now = os.time()
+    local now = start_collection
     opts.date = {}
-    while now >= start_time do
+    -- Allow some fuzz when adding dates
+    while now >= start_time - 60 do
       table.insert(opts.date, os.date('!%Y%m%d', now))
       now = now - 86400
     end
@@ -689,7 +693,7 @@ local function handler(args)
 
   local function finish_cb(nsuccess, nfail)
     if not opts.no_opt then
-      lua_util.debugm(N, 'set last report date to %s', os.time())
+      lua_util.debugm(N, 'set last report date to %s', start_collection)
       -- Hack to avoid coroutines + async functions mess: we use async redis call here
       redis_attrs.callback = function()
         logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
@@ -697,7 +701,7 @@ local function handler(args)
       end
       lua_redis.request(redis_params, redis_attrs,
           {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire * 2,
-           tostring(os.time())})
+           tostring(start_collection)})
     else
       logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
           ndates, nreports, nsuccess, nfail)
