@@ -192,8 +192,9 @@ local function phishing_cb(task)
   end
 
   local urls = task:get_urls() or {}
-  for _,url in ipairs(urls) do
+  for _,url_iter in ipairs(urls) do
     local function do_loop_iter() -- to emulate continue
+      local url = url_iter
       if generic_service_hash then
         check_phishing_map(generic_service_data, url, generic_service_symbol)
       end
@@ -206,8 +207,23 @@ local function phishing_cb(task)
         check_phishing_dns(phishtank_suffix, url, phishtank_symbol)
       end
 
-      if url:is_phished() and not url:is_redirected() then
-        local purl = url:get_phished()
+      if url:is_phished() then
+        local purl
+
+        if url:is_redirected() then
+          local rspamd_url = require "rspamd_url"
+          -- Examine the real redirect target instead of the url
+          local redirected_url = url:get_redirected()
+          if not redirected_url then
+            return
+          end
+
+          purl = rspamd_url.create(task:get_mempool(), url:get_visible())
+          url = redirected_url
+        else
+          purl = url:get_phished()
+        end
+
 
         if not purl then
           return
