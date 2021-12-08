@@ -74,9 +74,9 @@ struct rspamd_http_context *rspamd_http_context_default (void);
  * @param host
  * @return
  */
-struct rspamd_http_connection *rspamd_http_context_check_keepalive (
-		struct rspamd_http_context *ctx, const rspamd_inet_addr_t *addr,
-		const gchar *host);
+struct rspamd_http_connection *
+rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx, const rspamd_inet_addr_t *addr, const gchar *host,
+									bool is_ssl);
 
 /**
  * Prepares keepalive key for a connection by creating a new entry or by reusing existent
@@ -86,10 +86,8 @@ struct rspamd_http_connection *rspamd_http_context_check_keepalive (
  * @param addr
  * @param host
  */
-void rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
-											struct rspamd_http_connection *conn,
-											const rspamd_inet_addr_t *addr,
-											const gchar *host);
+void rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx, struct rspamd_http_connection *conn,
+										   const rspamd_inet_addr_t *addr, const gchar *host, bool is_ssl);
 
 /**
  * Pushes a connection to keepalive pool after client request is finished,

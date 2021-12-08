@@ -365,21 +365,29 @@ rspamd_http_context_default (void)
 gint32
 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key *k)
 {
-	gint32 h;
+	guint32 h;
 
 	h = rspamd_inet_address_port_hash (k->addr);
 
 	if (k->host) {
-		h = rspamd_cryptobox_fast_hash (k->host, strlen (k->host), h);
+		h ^= rspamd_cryptobox_fast_hash (k->host, strlen (k->host), h);
 	}
 
-	return h;
+	if (k->is_ssl) {
+		h = ~h;
+	}
+
+	return (gint32)h;
 }
 
 bool
 rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
 								  struct rspamd_keepalive_hash_key *k2)
 {
+	if (k1->is_ssl != k2->is_ssl) {
+		return false;
+	}
+
 	if (k1->host && k2->host) {
 		if (rspamd_inet_address_port_equal (k1->addr, k2->addr)) {
 			return strcmp (k1->host, k2->host) == 0;
@@ -393,16 +401,18 @@ rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
 	return false;
 }
 
-struct rspamd_http_connection*
-rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
-		const rspamd_inet_addr_t *addr,
-		const gchar *host)
+struct rspamd_http_connection *
+rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
+									const rspamd_inet_addr_t *addr,
+									const gchar *host,
+									bool is_ssl)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
 
 	hk.addr = (rspamd_inet_addr_t *)addr;
 	hk.host = (gchar *)host;
+	hk.is_ssl = is_ssl;
 
 	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
@@ -430,20 +440,23 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 			if (err != 0) {
 				rspamd_http_connection_unref (conn);
 
-				msg_debug_http_context ("invalid reused keepalive element %s (%s); "
+				msg_debug_http_context ("invalid reused keepalive element %s (%s, ssl=%b); "
 							"%s error; "
 							"%d connections queued",
 						rspamd_inet_address_to_string_pretty (phk->addr),
 						phk->host,
+						phk->is_ssl,
 						g_strerror (err),
 						conns->length);
 
 				return NULL;
 			}
 
-			msg_debug_http_context ("reused keepalive element %s (%s), %d connections queued",
+			msg_debug_http_context ("reused keepalive element %s (%s, ssl=%b), %d connections queued",
 					rspamd_inet_address_to_string_pretty (phk->addr),
-					phk->host, conns->length);
+					phk->host,
+					phk->is_ssl,
+					conns->length);
 
 			/* We transfer refcount here! */
 			return conn;
@@ -459,16 +472,18 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 }
 
 void
-rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
-											struct rspamd_http_connection *conn,
-											const rspamd_inet_addr_t *addr,
-											const gchar *host)
+rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
+									  struct rspamd_http_connection *conn,
+									  const rspamd_inet_addr_t *addr,
+									  const gchar *host,
+									  bool is_ssl)
 {
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
 
 	hk.addr = (rspamd_inet_addr_t *)addr;
 	hk.host = (gchar *)host;
+	hk.is_ssl = is_ssl;
 
 	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
@@ -487,6 +502,7 @@ rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 		phk = g_malloc (sizeof (*phk));
 		phk->conns = empty_init;
 		phk->host = g_strdup (host);
+		phk->is_ssl = is_ssl;
 		phk->addr = rspamd_inet_address_copy (addr);
 
 		kh_put (rspamd_keep_alive_hash, ctx->keep_alive_hash, phk, &r);

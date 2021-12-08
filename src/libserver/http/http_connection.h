@@ -68,7 +68,7 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
 /**
- * Use tls for this message
+ * Use tls for this message (how the fuck SSL flag could be used PER MESSAGE???)
  */
 #define RSPAMD_HTTP_FLAG_SSL (1 << 4)
 /**

@@ -1255,7 +1255,7 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 		ctx = rspamd_http_context_default ();
 	}
 
-	conn = rspamd_http_context_check_keepalive (ctx, addr, host);
+	conn = rspamd_http_context_check_keepalive(ctx, addr, host, false);
 
 	if (conn) {
 		return conn;
@@ -1267,7 +1267,7 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 			addr);
 
 	if (conn) {
-		rspamd_http_context_prepare_keepalive (ctx, conn, addr, host);
+		rspamd_http_context_prepare_keepalive(ctx, conn, addr, host, );
 	}
 
 	return conn;
