@@ -666,6 +666,8 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 
 	g_assert (conn != NULL);
 
+	/* Ensure that we start from the empty SSL errors stack */
+	ERR_clear_error ();
 	conn->ssl = SSL_new (conn->ssl_ctx->s);
 
 	if (hostname) {

@@ -2871,6 +2871,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		if (RSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_rsa) != 1) {
 			msg_debug_dkim ("headers rsa verify failed");
+			ERR_clear_error ();
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers rsa verify failed";
 
@@ -2898,6 +2899,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 					RSPAMD_DKIM_KEY_ID_LEN, rspamd_dkim_key_id (key),
 					ctx->dkim_header);
 			msg_debug_dkim ("headers ecdsa verify failed");
+			ERR_clear_error ();
 			res->rcode = DKIM_REJECT;
 			res->fail_reason = "headers ecdsa verify failed";
 		}

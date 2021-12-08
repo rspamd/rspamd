@@ -620,9 +620,10 @@ lua_rsa_verify_memory (lua_State *L)
 				signature->str, signature->len, rsa);
 
 		if (ret == 0) {
-			msg_info ("cannot check rsa signature for data: %s",
-				ERR_error_string (ERR_get_error (), NULL));
 			lua_pushboolean (L, FALSE);
+			lua_pushstring (L, ERR_error_string (ERR_get_error (), NULL));
+
+			return 2;
 		}
 		else {
 			lua_pushboolean (L, TRUE);
