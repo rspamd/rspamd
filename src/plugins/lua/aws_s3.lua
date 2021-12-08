@@ -47,7 +47,7 @@ local settings_schema = ts.shape{
   zstd_compress = ts.boolean:is_optional(),
   save_raw = ts.boolean:is_optional(),
   save_structure = ts.boolean:is_optional(),
-  inline_content_limit = (ts.integer + ts.string / tonumber):is_optional(),
+  inline_content_limit = ts.number:is_optional(),
 }
 
 local function raw_data(task, nonce, queue_id)
@@ -68,10 +68,10 @@ local function raw_data(task, nonce, queue_id)
   return path, content, content_type
 end
 
-local function gen_ext()
-  local ext = 'msgpack'
+local function gen_ext(base)
+  local ext = base
   if settings.zstd_compress then
-    ext = 'msgpack.zst'
+    ext = base .. '.zst'
   end
 
   return ext
@@ -79,7 +79,7 @@ end
 
 local function convert_to_ref(task, nonce, queue_id, part, external_refs)
   local path = string.format('/%s-%s-%s.%s', queue_id, nonce,
-      rspamd_text.randombytes(8):base32(), gen_ext())
+      rspamd_text.randombytes(8):base32(), gen_ext('raw'))
   local content = part.content
 
   if settings.zstd_compress then
@@ -101,9 +101,9 @@ local function structured_data(task, nonce, queue_id)
   local ucl = require "ucl"
 
   local message_split = lua_mime.message_to_ucl(task)
-
   if settings.inline_content_limit and settings.inline_content_limit > 0 then
-    for i,part in ipairs(message_split.parts() or {}) do
+
+    for i,part in ipairs(message_split.parts or {}) do
       if part.content and #part.content >= settings.inline_content_limit then
         local ref = convert_to_ref(task, nonce, queue_id, part, external_refs)
         lua_util.debugm(N, task, "convert part number %s to a reference %s",
@@ -113,14 +113,14 @@ local function structured_data(task, nonce, queue_id)
   end
 
   if settings.zstd_compress then
-    content = rspamd_util.zstd_compress(ucl.to_format(lua_mime.message_to_ucl(task), 'msgpack'))
+    content = rspamd_util.zstd_compress(ucl.to_format(message_split, 'msgpack'))
     content_type = 'application/zstd'
   else
-    content = ucl.to_format(lua_mime.message_to_ucl(task), 'msgpack')
+    content = ucl.to_format(message_split, 'msgpack')
     content_type = 'application/msgpack'
   end
 
-  local path = string.format('/%s-%s.%s', queue_id, nonce, gen_ext())
+  local path = string.format('/%s-%s.%s', queue_id, nonce, gen_ext('msgpack'))
 
   return path, content, content_type, external_refs
 end
@@ -200,14 +200,25 @@ local function s3_aws_callback(task)
       timeout = settings.s3_timeout,
     })
 
-    for _,ref in ipairs(external_refs) do
+    for ref,part_content in pairs(external_refs) do
+      local part_hdrs = lua_aws.aws_request_enrich({
+        region = settings.s3_region,
+        headers = {
+          ['Content-Type'] = content_type,
+          ['Host'] = aws_host
+        },
+        uri = ref,
+        key_id = settings.s3_key_id,
+        secret_key = settings.s3_secret_key,
+        method = 'PUT',
+      }, part_content)
       rspamd_http.request({
         url = uri .. ref,
         task = task,
         method = 'PUT',
-        body = content,
+        body = part_content,
         callback = gen_s3_http_callback(ref, 'part content'),
-        headers = hdrs,
+        headers = part_hdrs,
         timeout = settings.s3_timeout,
       })
     end
