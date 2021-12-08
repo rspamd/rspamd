@@ -821,7 +821,6 @@ local function multimap_callback(task, rule)
         end
       else
         local hv = task:get_header_full(rule['header'])
-        lua_util.debugm(N, task, "hui: %s", hv)
         match_list(rule, hv, {'decoded'})
       end
     end,
