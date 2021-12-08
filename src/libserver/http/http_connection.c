@@ -1260,6 +1260,17 @@ rspamd_http_connection_new_client_keepalive (struct rspamd_http_context *ctx,
 			opts & RSPAMD_HTTP_CLIENT_SSL);
 
 	if (conn) {
+		struct rspamd_http_connection_private *priv;
+
+		priv = conn->priv;
+
+		if (priv->ssl) {
+			rspamd_ssl_connection_restore_handlers (priv->ssl,
+					rspamd_http_event_handler,
+					rspamd_http_ssl_err_handler,
+					conn);
+		}
+
 		return conn;
 	}
 

@@ -754,6 +754,21 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	return TRUE;
 }
 
+void
+rspamd_ssl_connection_restore_handlers (struct rspamd_ssl_connection *conn,
+										rspamd_ssl_handler_t handler,
+										rspamd_ssl_error_handler_t err_handler,
+										gpointer handler_data)
+{
+	conn->handler = handler;
+	conn->err_handler = err_handler;
+	conn->handler_data = handler_data;
+
+	rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
+	rspamd_ev_watcher_init (conn->ev, conn->fd, EV_WRITE, rspamd_ssl_event_handler, conn);
+	rspamd_ev_watcher_start (conn->event_loop, conn->ev, conn->ev->timeout);
+}
+
 gssize
 rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 		gsize buflen)

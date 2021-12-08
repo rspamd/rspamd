@@ -57,6 +57,18 @@ gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 								gpointer handler_data);
 
 /**
+ * Restores SSL handlers for the existing ssl connection (e.g. after keepalive)
+ * @param conn
+ * @param handler
+ * @param err_handler
+ * @param handler_data
+ */
+void rspamd_ssl_connection_restore_handlers (struct rspamd_ssl_connection *conn,
+											 rspamd_ssl_handler_t handler,
+											 rspamd_ssl_error_handler_t err_handler,
+											 gpointer handler_data);
+
+/**
  * Perform async read from SSL socket
  * @param conn
  * @param buf
