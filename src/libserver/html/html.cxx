@@ -2254,10 +2254,12 @@ rspamd_html_tag_seen(void *ptr, const gchar *tagname)
 const gchar *
 rspamd_html_tag_by_id(gint id)
 {
-	const auto *td = rspamd::html::html_tags_defs.by_id(id);
+	if (id > Tag_UNKNOWN && id < Tag_MAX) {
+		const auto *td = rspamd::html::html_tags_defs.by_id(id);
 
-	if (td != nullptr) {
-		return td->name.c_str();
+		if (td != nullptr) {
+			return td->name.c_str();
+		}
 	}
 
 	return nullptr;
