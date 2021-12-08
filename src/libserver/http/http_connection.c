@@ -1242,12 +1242,13 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 }
 
 struct rspamd_http_connection *
-rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
-									  rspamd_http_body_handler_t body_handler,
-									  rspamd_http_error_handler_t error_handler,
-									  rspamd_http_finish_handler_t finish_handler,
-									  rspamd_inet_addr_t *addr,
-									  const gchar *host)
+rspamd_http_connection_new_client_keepalive (struct rspamd_http_context *ctx,
+											 rspamd_http_body_handler_t body_handler,
+											 rspamd_http_error_handler_t error_handler,
+											 rspamd_http_finish_handler_t finish_handler,
+											 unsigned opts,
+											 rspamd_inet_addr_t *addr,
+											 const gchar *host)
 {
 	struct rspamd_http_connection *conn;
 
@@ -1255,7 +1256,8 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 		ctx = rspamd_http_context_default ();
 	}
 
-	conn = rspamd_http_context_check_keepalive(ctx, addr, host, false);
+	conn = rspamd_http_context_check_keepalive(ctx, addr, host,
+			opts & RSPAMD_HTTP_CLIENT_SSL);
 
 	if (conn) {
 		return conn;
@@ -1263,11 +1265,12 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 
 	conn = rspamd_http_connection_new_client (ctx,
 			body_handler, error_handler, finish_handler,
-			RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_KEEP_ALIVE,
+			opts|RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_KEEP_ALIVE,
 			addr);
 
 	if (conn) {
-		rspamd_http_context_prepare_keepalive(ctx, conn, addr, host, );
+		rspamd_http_context_prepare_keepalive(ctx, conn, addr, host,
+				opts & RSPAMD_HTTP_CLIENT_SSL);
 	}
 
 	return conn;
@@ -1879,7 +1882,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 								"Connection: %s\r\n"
 								"Content-Length: %z\r\n",
 								http_method_str(msg->method),
-								(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
+								(conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
 								host,
 								msg->port,
 								msg->url,
@@ -1893,7 +1896,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 								"Host: %s\r\n"
 								"Content-Length: %z\r\n",
 								http_method_str(msg->method),
-								(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
+								(conn->opts & RSPAMD_HTTP_CLIENT_SSL) ? "https" : "http",
 								host,
 								msg->port,
 								msg->url,
@@ -1985,6 +1988,16 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
 	priv->buf->data = rspamd_fstring_sized_new (512);
 	buf = priv->buf->data;
+
+	if ((msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) && !(conn->opts & RSPAMD_HTTP_CLIENT_SSL)) {
+		err = g_error_new (HTTP_ERROR, 400,
+				"SSL connection requested but not created properly, internal error");
+		rspamd_http_connection_ref (conn);
+		conn->error_handler (conn, err);
+		rspamd_http_connection_unref (conn);
+		g_error_free (err);
+		return FALSE;
+	}
 
 	if (priv->peer_key && priv->local_key) {
 		priv->msg->peer_key = priv->peer_key;
@@ -2282,14 +2295,19 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 
-	if (priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
+	if ((priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) && (conn->opts & RSPAMD_HTTP_CLIENT_SSL)) {
 		/* We need to disable SSL flag! */
-		msg->flags &=~ RSPAMD_HTTP_FLAG_SSL;
+		err = g_error_new (HTTP_ERROR, 400, "cannot use proxy for SSL connections");
+		rspamd_http_connection_ref (conn);
+		conn->error_handler (conn, err);
+		rspamd_http_connection_unref (conn);
+		g_error_free (err);
+		return FALSE;
 	}
 
 	rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
 
-	if (msg->flags & RSPAMD_HTTP_FLAG_SSL) {
+	if (conn->opts & RSPAMD_HTTP_CLIENT_SSL) {
 		gpointer ssl_ctx = (msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY) ?
 				priv->ctx->ssl_ctx_noverify : priv->ctx->ssl_ctx;
 

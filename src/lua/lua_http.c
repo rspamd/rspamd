@@ -388,14 +388,20 @@ static gboolean
 lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
+	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
+
+	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
+		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
+	}
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
 		cbd->fd = -1; /* FD is owned by keepalive connection */
-		cbd->conn = rspamd_http_connection_new_keepalive (
+		cbd->conn = rspamd_http_connection_new_client_keepalive(
 				NULL, /* Default context */
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
+				http_opts,
 				cbd->addr,
 				cbd->host);
 	}
@@ -406,7 +412,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
-				RSPAMD_HTTP_CLIENT_SIMPLE,
+				http_opts,
 				cbd->addr);
 	}
 

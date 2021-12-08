@@ -91,11 +91,6 @@ write_http_request (struct http_callback_data *cbd)
 	struct rspamd_http_message *msg;
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
-
-	if (cbd->bk->protocol == MAP_PROTO_HTTPS) {
-		msg->flags |= RSPAMD_HTTP_FLAG_SSL;
-	}
-
 	if (cbd->check) {
 		msg->method = HTTP_HEAD;
 	}
@@ -1268,6 +1263,9 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 retry:
 		msg_debug_map ("try open http connection to %s",
 				rspamd_inet_address_to_string_pretty (cbd->addr));
+		if (cbd->bk->protocol == MAP_PROTO_HTTPS) {
+			flags |= RSPAMD_HTTP_CLIENT_SSL;
+		}
 		cbd->conn = rspamd_http_connection_new_client (NULL,
 				NULL,
 				http_map_error,
@@ -1792,6 +1790,11 @@ check:
 			strlen (data->host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_inet_address_set_port (addr, cbd->data->port);
 		g_ptr_array_add (cbd->addrs, (void *)addr);
+
+		if (bk->protocol == MAP_PROTO_HTTPS) {
+			flags |= RSPAMD_HTTP_CLIENT_SSL;
+		}
+
 		cbd->conn = rspamd_http_connection_new_client (
 				NULL,
 				NULL,

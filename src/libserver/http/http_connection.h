@@ -68,10 +68,6 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
 /**
- * Use tls for this message (how the fuck SSL flag could be used PER MESSAGE???)
- */
-#define RSPAMD_HTTP_FLAG_SSL (1 << 4)
-/**
  * Body has been set for a message
  */
 #define RSPAMD_HTTP_FLAG_HAS_BODY (1 << 5)
@@ -84,6 +80,10 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_HAS_HOST_HEADER (1 << 7)
 /**
+ * Message is intended for SSL connection
+ */
+#define RSPAMD_HTTP_FLAG_WANT_SSL (1 << 8)
+/**
  * Options for HTTP connection
  */
 enum rspamd_http_options {
@@ -93,6 +93,7 @@ enum rspamd_http_options {
 	RSPAMD_HTTP_CLIENT_SHARED = 1u << 3, /**< Store reply in shared memory */
 	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 1u << 4,
 	RSPAMD_HTTP_CLIENT_KEEP_ALIVE = 1u << 5,
+	RSPAMD_HTTP_CLIENT_SSL = 1u << 6u,
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
@@ -154,11 +155,12 @@ struct rspamd_http_connection *rspamd_http_connection_new_server (
  * @param host
  * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new_keepalive (
+struct rspamd_http_connection *rspamd_http_connection_new_client_keepalive (
 		struct rspamd_http_context *ctx,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
 		rspamd_inet_addr_t *addr,
 		const gchar *host);
 

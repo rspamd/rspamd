@@ -75,7 +75,7 @@ rspamd_http_message_from_url (const gchar *url)
 	if ((pu.field_set & (1 << UF_SCHEMA))) {
 		if (pu.field_data[UF_SCHEMA].len == sizeof ("https") - 1 &&
 			memcmp (url + pu.field_data[UF_SCHEMA].off, "https", 5) == 0) {
-			flags |= RSPAMD_HTTP_FLAG_SSL;
+			flags |= RSPAMD_HTTP_FLAG_WANT_SSL;
 		}
 	}
 
@@ -97,7 +97,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 	else {
 		/* XXX: magic constant */
-		if (flags & RSPAMD_HTTP_FLAG_SSL) {
+		if (flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 			msg->port = 443;
 		}
 		else {

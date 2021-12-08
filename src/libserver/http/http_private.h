@@ -86,7 +86,7 @@ struct rspamd_http_message {
 struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;
 	gchar *host;
-	bool is_ssl;
+	gboolean is_ssl;
 	GQueue conns;
 };
 
