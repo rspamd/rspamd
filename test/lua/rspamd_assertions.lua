@@ -39,15 +39,17 @@ local function format_line(level, key, v_expect, v_actual)
   local prefix
   if v_expect == v_actual then
     prefix = string.rep(' ', level * 2 + 1)
-    return string.format("%s[%s] = %s", prefix, tostring(key), tostring(v_expect))
+    return logger.slog("%s[%s] = %s", prefix, key, v_expect)
   else
     prefix = string.rep(' ', level * 2)
     local ret = {}
     if v_expect then
-      ret[#ret + 1] = string.format("-%s[%s] = %s: %s", prefix, tostring(key), type(v_expect), tostring(v_expect))
+      ret[#ret + 1] = logger.slog("-%s[%s] = %s: %s", prefix, key,
+          type(v_expect), v_expect)
     end
     if v_actual then
-      ret[#ret + 1] = string.format("+%s[%s] = %s: %s", prefix, tostring(key), type(v_actual), tostring(v_actual))
+      ret[#ret + 1] = logger.slog("+%s[%s] = %s: %s", prefix,
+          (key), type(v_actual), (v_actual))
     end
     return table.concat(ret, "\n")
   end
