@@ -365,19 +365,18 @@ rspamd_http_context_default (void)
 gint32
 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key *k)
 {
-	guint32 h;
+	rspamd_cryptobox_fast_hash_state_t hst;
 
-	h = rspamd_inet_address_port_hash (k->addr);
+	rspamd_cryptobox_fast_hash_init (&hst, 0);
 
 	if (k->host) {
-		h ^= rspamd_cryptobox_fast_hash (k->host, strlen (k->host), h);
+		rspamd_cryptobox_fast_hash_update (&hst, k->host, strlen (k->host));
 	}
 
-	if (k->is_ssl) {
-		h = ~h;
-	}
+	rspamd_cryptobox_fast_hash_update (&hst, &k->port, sizeof(k->port));
+	rspamd_cryptobox_fast_hash_update (&hst, &k->is_ssl, sizeof(k->is_ssl));
 
-	return (gint32)h;
+	return rspamd_cryptobox_fast_hash_final (&hst);
 }
 
 bool
@@ -389,12 +388,12 @@ rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
 	}
 
 	if (k1->host && k2->host) {
-		if (rspamd_inet_address_port_equal (k1->addr, k2->addr)) {
+		if (k1->port == k2->port) {
 			return strcmp (k1->host, k2->host) == 0;
 		}
 	}
 	else if (!k1->host && !k2->host) {
-		return rspamd_inet_address_port_equal (k1->addr, k2->addr);
+		return (k1->port == k2->port);
 	}
 
 	/* One has host and another has no host */
@@ -410,8 +409,13 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 	struct rspamd_keepalive_hash_key hk, *phk;
 	khiter_t k;
 
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
+	}
+
 	hk.addr = (rspamd_inet_addr_t *)addr;
 	hk.host = (gchar *)host;
+	hk.port = rspamd_inet_address_get_port (addr);
 	hk.is_ssl = is_ssl;
 
 	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
@@ -471,6 +475,37 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 	return NULL;
 }
 
+const rspamd_inet_addr_t *
+rspamd_http_context_has_keepalive(struct rspamd_http_context *ctx,
+								  const gchar *host,
+								  unsigned port,
+								  bool is_ssl)
+{
+	struct rspamd_keepalive_hash_key hk, *phk;
+	khiter_t k;
+
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
+	}
+
+	hk.host = (gchar *)host;
+	hk.port = port;
+	hk.is_ssl = is_ssl;
+
+	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
+
+	if (k != kh_end (ctx->keep_alive_hash)) {
+		phk = kh_key (ctx->keep_alive_hash, k);
+		GQueue *conns = &phk->conns;
+
+		if (g_queue_get_length(conns) > 0) {
+			return phk->addr;
+		}
+	}
+
+	return NULL;
+}
+
 void
 rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 									  struct rspamd_http_connection *conn,
@@ -484,6 +519,7 @@ rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 	hk.addr = (rspamd_inet_addr_t *)addr;
 	hk.host = (gchar *)host;
 	hk.is_ssl = is_ssl;
+	hk.port = rspamd_inet_address_get_port (addr);
 
 	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
 
@@ -504,6 +540,8 @@ rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 		phk->host = g_strdup (host);
 		phk->is_ssl = is_ssl;
 		phk->addr = rspamd_inet_address_copy (addr);
+		phk->port = hk.port;
+
 
 		kh_put (rspamd_keep_alive_hash, ctx->keep_alive_hash, phk, &r);
 		conn->keepalive_hash_key = phk;

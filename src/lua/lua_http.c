@@ -389,6 +389,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
 	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
+	struct rspamd_http_message *msg = cbd->msg;
 
 	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
@@ -1036,20 +1037,6 @@ lua_http_request (lua_State *L)
 	}
 
 
-	const rspamd_ftok_t *host_header_tok = rspamd_http_message_find_header (msg, "Host");
-	if (host_header_tok != NULL) {
-		if (msg->host) {
-			g_string_free (msg->host, true);
-		}
-		msg->host = g_string_new_len (host_header_tok->begin, host_header_tok->len);
-		cbd->host = msg->host->str;
-	}
-	else {
-		if (msg->host) {
-			cbd->host = msg->host->str;
-		}
-	}
-
 	if (body) {
 		if (gzip) {
 			if (rspamd_fstring_gzip (&body)) {
@@ -1064,8 +1051,31 @@ lua_http_request (lua_State *L)
 		cbd->session = session;
 	}
 
-	if (msg->host && rspamd_parse_inet_address (&cbd->addr,
-			msg->host->str, msg->host->len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+	bool numeric_ip = false;
+
+	/* Check if we can skip resolving */
+	if (msg->host) {
+		cbd->host = msg->host->str;
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
+			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
+					msg->host->str, msg->port, msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
+
+			if (ka_addr) {
+				cbd->addr = rspamd_inet_address_copy(ka_addr);
+				numeric_ip = true;
+			}
+		}
+
+		if (!cbd->addr) {
+			if (rspamd_parse_inet_address (&cbd->addr,
+					msg->host->str, msg->host->len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+				numeric_ip = true;
+			}
+		}
+	}
+
+	if (numeric_ip) {
 		/* Host is numeric IP, no need to resolve */
 		gboolean ret;
 

@@ -87,6 +87,7 @@ struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;
 	gchar *host;
 	gboolean is_ssl;
+	unsigned port;
 	GQueue conns;
 };
 
