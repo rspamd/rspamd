@@ -1264,13 +1264,6 @@ rspamd_http_connection_new_client_keepalive (struct rspamd_http_context *ctx,
 
 		priv = conn->priv;
 
-		if (priv->ssl) {
-			rspamd_ssl_connection_restore_handlers (priv->ssl,
-					rspamd_http_event_handler,
-					rspamd_http_ssl_err_handler,
-					conn);
-		}
-
 		return conn;
 	}
 
@@ -2352,6 +2345,13 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 					g_error_free (err);
 					return FALSE;
 				}
+			}
+			else {
+				/* Just restore SSL handlers */
+				rspamd_ssl_connection_restore_handlers (priv->ssl,
+						rspamd_http_event_handler,
+						rspamd_http_ssl_err_handler,
+						conn);
 			}
 		}
 	}
