@@ -626,6 +626,7 @@ exports.message_to_ucl = function(task, stringify_content)
         type = string.format('%s/%s', part:get_type()),
         headers =  part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary(),
+        size = 0,
       }
 
       if part:is_multipart() then
@@ -661,7 +662,8 @@ exports.message_to_ucl_schema = function()
 
   local function part_schema()
     return ts.shape{
-      content =  ts.string:describe('Decoded content'),
+      content =  ts.string:describe('Decoded content'):is_optional(),
+      multipart_boundary = ts.string:describe('Multipart service boundary'):is_optional(),
       size = ts.integer:describe('Size of the part'),
       type = ts.string:describe('Announced type'):is_optional(),
       detected_type = ts.string:describe('Detected type'):is_optional(),
