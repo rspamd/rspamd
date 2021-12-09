@@ -60,6 +60,12 @@ context("Task piecewise split", function()
 {
     "parts": [
         {
+            "type": "multipart/alternative",
+            "multipart_boundary": "_000_6be055295eab48a5af7ad4022f33e2d0_",
+            "size": 0,
+            "headers": []
+        },
+        {
             "content": "Hello world\n\n\n",
             "size": 14,
             "type": "text/plain",
