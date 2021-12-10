@@ -1057,7 +1057,7 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
 
     clickhouse_send_data(nil, ev_base, reason, saved_rows, saved_custom)
 
-    if settings.collect_garbadge then
+    if settings.collect_garbage then
       collectgarbage()
     end
   end
@@ -1484,7 +1484,7 @@ if opts then
         clickhouse_send_data(task, nil, 'final collection',
             saved_rows, saved_custom)
 
-        if settings.collect_garbadge then
+        if settings.collect_garbage then
           collectgarbage()
         end
       end
