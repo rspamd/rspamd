@@ -75,7 +75,7 @@ struct lua_http_cbdata {
 	struct rspamd_cryptobox_pubkey *peer_pk;
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
-	gchar *host;
+	const gchar *host;
 	gchar *auth;
 	const gchar *url;
 	gsize max_size;
@@ -1054,12 +1054,13 @@ lua_http_request (lua_State *L)
 	bool numeric_ip = false;
 
 	/* Check if we can skip resolving */
-	if (msg->host) {
-		cbd->host = msg->host->str;
+	cbd->host = rspamd_http_message_get_http_host (msg);
 
+	if (cbd->host) {
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
 			const rspamd_inet_addr_t *ka_addr = rspamd_http_context_has_keepalive(NULL,
-					msg->host->str, msg->port, msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
+					rspamd_http_message_get_http_host (msg),
+					msg->port, msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
 
 			if (ka_addr) {
 				cbd->addr = rspamd_inet_address_copy(ka_addr);
@@ -1068,8 +1069,10 @@ lua_http_request (lua_State *L)
 		}
 
 		if (!cbd->addr) {
+			/* We use msg->host here, not cbd->host ! */
 			if (rspamd_parse_inet_address (&cbd->addr,
-					msg->host->str, msg->host->len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+					msg->host->str, msg->host->len,
+					RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				numeric_ip = true;
 			}
 		}

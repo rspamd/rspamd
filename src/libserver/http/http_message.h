@@ -229,6 +229,14 @@ void rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p);
  */
 guint rspamd_http_message_get_flags (struct rspamd_http_message *msg);
 
+/**
+ * Returns an HTTP hostname for a message, derived from a header if it has it
+ * or from a url if it doesn't
+ * @param msg
+ * @return
+ */
+const gchar* rspamd_http_message_get_http_host (struct rspamd_http_message *msg);
+
 #ifdef  __cplusplus
 }
 #endif
