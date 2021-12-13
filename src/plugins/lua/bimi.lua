@@ -184,7 +184,8 @@ local function make_helper_request(task, domain, record, redis_server)
             true, -- is write
             redis_set_cb, --callback
             'PSETEX', -- command
-            {redis_key, tostring(settings.redis_min_expiry * 1000.0), d.content})
+            {redis_key, tostring(settings.redis_min_expiry * 1000.0),
+             ucl.to_format(d, "json-compact")})
 
         if not ret then
           rspamd_logger.warnx(task, 'cannot make request to Redis when storing image; domain %s',
