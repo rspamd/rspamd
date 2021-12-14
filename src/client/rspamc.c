@@ -1383,8 +1383,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			g_string_erase (symbuf, symbuf->len - 1, 1);
 		}
 
-		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
-				symbuf->str,
+		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols", strlen ("X-Spam-Symbols"),
+				symbuf->str, symbuf->len,
 				0, nl_type, ",");
 		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v%s",
 				folded_symbuf, line_end);

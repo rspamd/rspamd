@@ -1512,12 +1512,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 					if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER ||
 						!task->message) {
 
-						folded_header = rspamd_header_value_fold ("DKIM-Signature",
-								dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
+						folded_header = rspamd_header_value_fold (
+								"DKIM-Signature", strlen ("DKIM-Signature"),
+								dkim_sig->str, dkim_sig->len,
+								80, RSPAMD_TASK_NEWLINES_LF, NULL);
 					}
 					else {
-						folded_header = rspamd_header_value_fold ("DKIM-Signature",
-								dkim_sig->str, 80,
+						folded_header = rspamd_header_value_fold (
+								"DKIM-Signature", strlen ("DKIM-Signature"),
+								dkim_sig->str, dkim_sig->len,
+								80,
 								MESSAGE_FIELD (task, nlines_type),
 								NULL);
 					}
@@ -1539,12 +1543,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				dkim_sig = (GString *) dkim_sigs->data;
 
 				if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
-					folded_header = rspamd_header_value_fold ("DKIM-Signature",
-							dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
+					folded_header = rspamd_header_value_fold (
+							"DKIM-Signature", strlen ("DKIM-Signature"),
+							dkim_sig->str, dkim_sig->len,
+							80, RSPAMD_TASK_NEWLINES_LF, NULL);
 				}
 				else {
-					folded_header = rspamd_header_value_fold ("DKIM-Signature",
-							dkim_sig->str, 80, MESSAGE_FIELD (task, nlines_type),
+					folded_header = rspamd_header_value_fold (
+							"DKIM-Signature", strlen ("DKIM-Signature"),
+							dkim_sig->str, dkim_sig->len,
+							80, MESSAGE_FIELD (task, nlines_type),
 							NULL);
 				}
 
