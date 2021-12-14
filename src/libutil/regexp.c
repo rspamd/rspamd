@@ -547,6 +547,7 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 	const gchar *mt;
 	gsize remain = 0;
 	gint rc, match_flags = 0, *ovec, ncaptures, i;
+	const int junk = 0xdeadbabe;
 
 	g_assert (re != NULL);
 	g_assert (text != NULL);
@@ -607,6 +608,11 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 	ncaptures = (re->ncaptures + 1) * 3;
 	ovec = g_alloca (sizeof (gint) * ncaptures);
 
+
+	for (i = 0; i < ncaptures; i ++) {
+		ovec[i] = junk;
+	}
+
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
 # if defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
@@ -637,11 +643,21 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 	}
 
 	if (rc >= 0) {
-		if (start) {
-			*start = mt + ovec[0];
+		if (rc > 0) {
+			if (start) {
+				*start = mt + ovec[0];
+			}
+			if (end) {
+				*end = mt + ovec[1];
+			}
 		}
-		if (end) {
-			*end = mt + ovec[1];
+		else {
+			if (start) {
+				*start = mt;
+			}
+			if (end) {
+				*end = mt + remain;
+			}
 		}
 
 		if (captures != NULL && rc >= 1) {
@@ -652,9 +668,16 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 			g_array_set_size (captures, rc);
 
 			for (i = 0; i < rc; i ++) {
-				elt = &g_array_index (captures, struct rspamd_re_capture, i);
-				elt->p = mt + ovec[i * 2];
-				elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
+				if (ovec[i * 2] != junk && ovec[i * 2] >= 0) {
+					elt = &g_array_index (captures, struct rspamd_re_capture, i);
+					elt->p = mt + ovec[i * 2];
+					elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
+				}
+				else {
+					/* Runtime match returned fewer captures than expected */
+					g_array_set_size (captures, i);
+					break;
+				}
 
 			}
 		}
@@ -682,7 +705,8 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 	pcre2_match_context *mcontext;
 	PCRE_T *r;
 	const gchar *mt;
-	gsize remain = 0, *ovec;
+	PCRE2_SIZE remain = 0, *ovec;
+	const PCRE2_SIZE junk = 0xdeadbabeeeeeeeeULL;
 	gint rc, match_flags, novec, i;
 	gboolean ret = FALSE;
 
@@ -731,6 +755,14 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 	}
 
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
+	novec = pcre2_get_ovector_count (match_data);
+	ovec = pcre2_get_ovector_pointer (match_data);
+
+	/* Fill ovec with crap, so we can stop if actual matches is less than announced */
+	for (i = 0; i < novec; i ++) {
+		ovec[i * 2] = junk;
+		ovec[i * 2 + 1] = junk;
+	}
 
 #ifdef HAVE_PCRE_JIT
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT) && can_jit) {
@@ -752,14 +784,21 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 #endif
 
 	if (rc >= 0) {
-		novec = pcre2_get_ovector_count (match_data);
-		ovec = pcre2_get_ovector_pointer (match_data);
-
-		if (start) {
-			*start = mt + ovec[0];
+		if (novec > 0) {
+			if (start) {
+				*start = mt + ovec[0];
+			}
+			if (end) {
+				*end = mt + ovec[1];
+			}
 		}
-		if (end) {
-			*end = mt + ovec[1];
+		else {
+			if (start) {
+				*start = mt;
+			}
+			if (end) {
+				*end = mt + remain;
+			}
 		}
 
 		if (captures != NULL && novec >= 1) {
@@ -770,10 +809,15 @@ rspamd_regexp_search (const rspamd_regexp_t *re, const gchar *text, gsize len,
 			g_array_set_size (captures, novec);
 
 			for (i = 0; i < novec; i ++) {
-				elt = &g_array_index (captures, struct rspamd_re_capture, i);
-				elt->p = mt + ovec[i * 2];
-				elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
-
+				if (ovec[i * 2] != junk && ovec[i * 2] != PCRE2_UNSET) {
+					elt = &g_array_index (captures, struct rspamd_re_capture, i);
+					elt->p = mt + ovec[i * 2];
+					elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
+				}
+				else {
+					g_array_set_size (captures, i);
+					break;
+				}
 			}
 		}
 
