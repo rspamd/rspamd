@@ -22,6 +22,7 @@ local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 local lua_mime = require "lua_mime"
 local rspamd_http = require "rspamd_http"
+local rspamd_util = require "rspamd_util"
 
 local settings = {
   helper_url = "http://127.0.0.1:3030",
@@ -108,9 +109,15 @@ local function check_bimi_record(task, rec)
 end
 
 local function insert_bimi_headers(task, domain, bimi_content)
+  local hdr_name = 'BIMI-Indicator'
   lua_mime.modify_headers(task, {
-    remove = {['BIMI-Indicator'] = 0},
-    add = {['BIMI-Indicator'] = {order = 0, value = bimi_content}}
+    remove = {[hdr_name] = 0},
+    add = {
+      [hdr_name] = {
+        order = 0,
+        value = rspamd_util.fold_header(hdr_name, bimi_content)
+      }
+    }
   })
   task:insert_result('BIMI_VALID', 1.0, {domain})
 end
