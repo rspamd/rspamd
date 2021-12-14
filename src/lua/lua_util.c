@@ -1366,11 +1366,12 @@ static gint
 lua_util_fold_header (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *name, *value, *how, *stop_chars = NULL;
+	const gchar *how, *stop_chars = NULL;
+	struct rspamd_lua_text *name, *value;
 	GString *folded;
 
-	name = luaL_checkstring (L, 1);
-	value = luaL_checkstring (L, 2);
+	name = lua_check_text_or_string (L, 1);
+	value = lua_check_text_or_string (L, 2);
 
 	if (name && value) {
 
@@ -1383,20 +1384,25 @@ lua_util_fold_header (lua_State *L)
 			}
 
 			if (strcmp (how, "cr") == 0) {
-				folded = rspamd_header_value_fold (name, value, 0,
+				folded = rspamd_header_value_fold (name->start, name->len,
+						value->start, value->len,
+						0,
 						RSPAMD_TASK_NEWLINES_CR, stop_chars);
 			}
 			else if (strcmp (how, "lf") == 0) {
-				folded = rspamd_header_value_fold (name, value, 0,
+				folded = rspamd_header_value_fold (name->start, name->len,
+						value->start, value->len, 0,
 						RSPAMD_TASK_NEWLINES_LF, stop_chars);
 			}
 			else {
-				folded = rspamd_header_value_fold (name, value, 0,
+				folded = rspamd_header_value_fold (name->start, name->len,
+						value->start, value->len, 0,
 						RSPAMD_TASK_NEWLINES_CRLF, stop_chars);
 			}
 		}
 		else {
-			folded = rspamd_header_value_fold (name, value, 0,
+			folded = rspamd_header_value_fold (name->start, name->len,
+					value->start, value->len, 0,
 					RSPAMD_TASK_NEWLINES_CRLF, stop_chars);
 		}
 

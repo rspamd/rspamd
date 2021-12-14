@@ -292,7 +292,7 @@ lua_check_text_or_string (lua_State * L, gint pos)
 		 * Fake static lua_text, we allow to use this function multiple times
 		 * by having a small array of static structures.
 		 */
-		static int cur_txt_idx = 0;
+		static unsigned cur_txt_idx = 0;
 		static struct rspamd_lua_text fake_text[4];
 		gsize len;
 		int sel_idx;
