@@ -366,7 +366,9 @@ gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
  * @return new GString with the folded value
  */
 GString *rspamd_header_value_fold (const gchar *name,
+								   gsize name_len,
 								   const gchar *value,
+								   gsize value_len,
 								   guint fold_max,
 								   enum rspamd_newlines_type how,
 								   const gchar *fold_on_chars);

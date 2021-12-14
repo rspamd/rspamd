@@ -1571,18 +1571,18 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 }
 
 GString *
-rspamd_header_value_fold (const gchar *name,
-		const gchar *value,
-		guint fold_max,
-		enum rspamd_newlines_type how,
-		const gchar *fold_on_chars)
+rspamd_header_value_fold (const gchar *name, gsize name_len,
+						  const gchar *value,
+						  gsize value_len,
+						  guint fold_max,
+						  enum rspamd_newlines_type how,
+						  const gchar *fold_on_chars)
 {
 	GString *res;
 	const guint default_fold_max = 76;
 	guint cur_len;
-	const gchar *p, *c;
+	const gchar *p, *c, *end;
 	guint nspaces = 0;
-	const gchar *last;
 	gboolean first_token = TRUE;
 	enum {
 		fold_before = 0,
@@ -1603,14 +1603,15 @@ rspamd_header_value_fold (const gchar *name,
 		fold_max = default_fold_max;
 	}
 
-	res = g_string_sized_new (strlen (value));
+	res = g_string_sized_new (value_len);
 
 	c = value;
 	p = c;
+	end = value + value_len;
 	/* name:<WSP> */
-	cur_len = strlen (name) + 2;
+	cur_len = name_len + 2;
 
-	while (*p) {
+	while (p < end) {
 		switch (state) {
 
 		case read_token:
@@ -1697,7 +1698,7 @@ rspamd_header_value_fold (const gchar *name,
 					 * Check any spaces that are appended to the result
 					 * before folding
 					 */
-					last = &res->str[res->len - 1];
+					const gchar *last = &res->str[res->len - 1];
 
 					while (g_ascii_isspace (*last)) {
 						last --;
