@@ -1581,7 +1581,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 	GString *res;
 	const guint default_fold_max = 76;
 	guint cur_len;
-	const gchar *p, *c, *end;
+	const gchar *p, *c, *end, *fold_sequence;
 	guint nspaces = 0;
 	gboolean first_token = TRUE;
 	enum {
@@ -1601,6 +1601,19 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 	/* Filter insane values */
 	if (fold_max < 20) {
 		fold_max = default_fold_max;
+	}
+
+	switch (how) {
+	case RSPAMD_TASK_NEWLINES_LF:
+		fold_sequence = "\n\t";
+		break;
+	case RSPAMD_TASK_NEWLINES_CR:
+		fold_sequence = "\r\t";
+		break;
+	case RSPAMD_TASK_NEWLINES_CRLF:
+	default:
+		fold_sequence ="\r\n\t";
+		break;
 	}
 
 	res = g_string_sized_new (value_len);
@@ -1653,16 +1666,44 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 						state = fold_token;
 						next_state = read_token;
 					} else {
-						/* Reset line length */
-						cur_len = 0;
+						/* We need to ensure that it is a folding and not something else */
 
-						while (g_ascii_isspace (*p)) {
-							p++;
+						const char *t = p;
+						bool seen_fold = false;
+
+						while (t < end) {
+							if (*t == ' ' || *t == '\t') {
+								seen_fold = true;
+								break;
+							}
+							else if (!g_ascii_isspace(*t)) {
+								break;
+							}
+
+							t++;
 						}
 
-						g_string_append_len (res, c, p - c);
-						c = p;
-						first_token = TRUE;
+						if (seen_fold) {
+							/* Reset line length */
+							cur_len = 0;
+
+							while (g_ascii_isspace (*p)) {
+								p++;
+							}
+
+							g_string_append_len(res, c, p - c);
+							c = p;
+							first_token = TRUE;
+						}
+						else {
+							/* Not seen folding, inject it */
+							g_string_append_len (res, c, p - c);
+							g_string_append (res, fold_sequence);
+							p = t; /* Adjust p to ensure that we do not append extra stuff */
+							state = read_token;
+							first_token = TRUE;
+							c = p;
+						}
 					}
 				} else if (g_ascii_isspace (*p)) {
 					if (cur_len > fold_max * 0.8 && cur_len < fold_max) {
@@ -1707,18 +1748,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 					}
 				}
 
-				switch (how) {
-				case RSPAMD_TASK_NEWLINES_LF:
-					g_string_append_len (res, "\n\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CR:
-					g_string_append_len (res, "\r\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CRLF:
-				default:
-					g_string_append_len (res, "\r\n\t", 3);
-					break;
-				}
+				g_string_append (res, fold_sequence);
 
 				/* Skip space if needed */
 				if (g_ascii_isspace (*p)) {
@@ -1753,18 +1783,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 						res->len --;
 					}
 
-					switch (how) {
-					case RSPAMD_TASK_NEWLINES_LF:
-						g_string_append_len (res, "\n\t", 2);
-						break;
-					case RSPAMD_TASK_NEWLINES_CR:
-						g_string_append_len (res, "\r\t", 2);
-						break;
-					case RSPAMD_TASK_NEWLINES_CRLF:
-					default:
-						g_string_append_len (res, "\r\n\t", 3);
-						break;
-					}
+					g_string_append (res, fold_sequence);
 				}
 
 				/* Move leftover spaces */
@@ -1816,18 +1835,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 			if (g_ascii_isspace (*c)) {
 				c ++;
 			}
-			switch (how) {
-			case RSPAMD_TASK_NEWLINES_LF:
-				g_string_append_len (res, "\n\t", 2);
-				break;
-			case RSPAMD_TASK_NEWLINES_CR:
-				g_string_append_len (res, "\r\t", 2);
-				break;
-			case RSPAMD_TASK_NEWLINES_CRLF:
-			default:
-				g_string_append_len (res, "\r\n\t", 3);
-				break;
-			}
+			g_string_append (res, fold_sequence);
 			g_string_append_len (res, c, p - c);
 		}
 		else {
@@ -1846,18 +1854,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 		else {
 			if (*c != '\r' && *c != '\n') {
 				/* We need to add folding as well */
-				switch (how) {
-				case RSPAMD_TASK_NEWLINES_LF:
-					g_string_append_len (res, "\n\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CR:
-					g_string_append_len (res, "\r\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CRLF:
-				default:
-					g_string_append_len (res, "\r\n\t", 3);
-					break;
-				}
+				g_string_append (res, fold_sequence);
 				g_string_append_len (res, c, p - c);
 			}
 			else {
