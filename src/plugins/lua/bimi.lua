@@ -110,12 +110,16 @@ end
 
 local function insert_bimi_headers(task, domain, bimi_content)
   local hdr_name = 'BIMI-Indicator'
+  -- Re-encode base64...
+  local content = rspamd_util.encode_base64(rspamd_util.decode_base64(bimi_content),
+      73, task:get_newlines_type())
   lua_mime.modify_headers(task, {
     remove = {[hdr_name] = 0},
     add = {
       [hdr_name] = {
         order = 0,
-        value = rspamd_util.fold_header(hdr_name, bimi_content)
+        value = rspamd_util.fold_header(hdr_name, content,
+            task:get_newlines_type())
       }
     }
   })
