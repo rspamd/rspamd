@@ -197,10 +197,10 @@ exports.gen_munging_callback = function(munging_opts, settings)
 
     local hdr_encoded = rspamd_util.fold_header('From',
         rspamd_util.mime_header_encode(string.format('%s <%s>',
-            via_name, via_addr)))
+            via_name, via_addr)), task:get_newlines_type())
     local orig_from_encoded = rspamd_util.fold_header('X-Original-From',
         rspamd_util.mime_header_encode(string.format('%s <%s>',
-            from.name or '', from.addr)))
+            from.name or '', from.addr)), task:get_newlines_type())
     local add_hdrs = {
       ['From'] = { order = 1, value = hdr_encoded },
     }
