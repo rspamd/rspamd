@@ -459,14 +459,15 @@ local function check_parts_match(task, rule)
     end
 
     if rule.scan_all_mime_parts ~= false then
+      local is_part_checkable = (p:is_attachment() and (not p:is_image() or rule.scan_image_mime))
       if detected_ext then
         -- We know what to scan!
         local magic = lua_magic_types[detected_ext] or {}
 
-        if p:is_attachment() or magic.av_check ~= false then
+        if magic.av_check ~= false or is_part_checkable then
           return true
         end
-      elseif p:is_attachment() then
+      elseif is_part_checkable then
         -- Just rely on attachment property
         return true
       end
