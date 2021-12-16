@@ -191,7 +191,7 @@ public:
 		width_mask = html_block::size_prop(width_mask, other.width_mask,
 				width, other.width, static_cast<std::int16_t>(1024));
 		font_mask = html_block::size_prop(font_mask, other.font_mask,
-				font_size, other.font_size, static_cast<std::int8_t>(1024));
+				font_size, other.font_size, static_cast<std::int8_t>(10));
 	}
 
 	/*
