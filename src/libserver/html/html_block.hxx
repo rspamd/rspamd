@@ -71,7 +71,8 @@ struct html_block {
 		}
 		height_mask = how;
 	}
-	auto set_width(float w, bool is_percent = false, int how =  html_block::set) -> void {
+
+	auto set_width(float w, bool is_percent = false, int how = html_block::set) -> void {
 		w = is_percent ? (-w) : w;
 		if (w < INT16_MIN) {
 			width = INT16_MIN;
@@ -84,6 +85,7 @@ struct html_block {
 		}
 		width_mask = how;
 	}
+
 	auto set_display(bool v, int how = html_block::set) -> void  {
 		if (v) {
 			display = rspamd::css::css_display_value::DISPLAY_INLINE;
@@ -93,11 +95,13 @@ struct html_block {
 		}
 		display_mask = how;
 	}
-	auto set_display(rspamd::css::css_display_value v, int how =  html_block::set) -> void  {
+
+	auto set_display(rspamd::css::css_display_value v, int how = html_block::set) -> void  {
 		display = v;
 		display_mask = how;
 	}
-	auto set_font_size(float fs, bool is_percent = false, int how =  html_block::set) -> void  {
+
+	auto set_font_size(float fs, bool is_percent = false, int how = html_block::set) -> void  {
 		fs = is_percent ? (-fs) : fs;
 		if (fs < INT8_MIN) {
 			font_size = -100;
@@ -111,72 +115,83 @@ struct html_block {
 		font_mask = how;
 	}
 
+private:
+	template<typename T, typename MT>
+	static constexpr auto simple_prop(MT mask_val, MT other_mask, T &our_val,
+									  T other_val) -> MT
+	{
+		if (other_mask && other_mask > mask_val) {
+			our_val = other_val;
+			mask_val =  html_block::inherited;
+		}
+
+		return mask_val;
+	}
+
+	/* Sizes propagation logic
+	 * We can have multiple cases:
+	 * 1) Our size is > 0 and we can use it as is
+	 * 2) Parent size is > 0 and our size is undefined, so propagate parent
+	 * 3) Parent size is < 0 and our size is undefined - propagate parent
+	 * 4) Parent size is > 0 and our size is < 0 - multiply parent by abs(ours)
+	 * 5) Parent size is undefined and our size is < 0 - tricky stuff, assume some defaults
+	 */
+	template<typename T, typename MT>
+	static constexpr auto size_prop (MT mask_val, MT other_mask, T &our_val,
+									 T other_val, T default_val) -> MT
+	{
+		if (mask_val) {
+			/* We have our value */
+			if (our_val < 0) {
+				if (other_mask > 0) {
+					if (other_val >= 0) {
+						our_val = other_val * (-our_val / 100.0);
+					}
+					else {
+						our_val *= (-other_val / 100.0);
+					}
+				}
+				else {
+					/* Parent value is not defined and our value is relative */
+					our_val = default_val * (-our_val / 100.0);
+				}
+			}
+			else if (other_mask && other_mask > mask_val) {
+				our_val = other_val;
+				mask_val = html_block::inherited;
+			}
+		}
+		else {
+			/* We propagate parent if defined */
+			if (other_mask && other_mask > mask_val) {
+				our_val = other_val;
+				mask_val = html_block::inherited;
+			}
+			/* Otherwise do nothing */
+		}
+
+		return mask_val;
+	}
+public:
 	/**
 	 * Propagate values from the block if they are not defined by the current block
 	 * @param other
 	 * @return
 	 */
 	auto propagate_block(const html_block &other) -> void {
-		auto simple_prop = [](auto mask_val, auto other_mask, auto &our_val,
-				auto other_val) constexpr -> int {
-			if (other_mask && other_mask > mask_val) {
-				our_val = other_val;
-				mask_val =  html_block::inherited;
-			}
+		fg_color_mask = html_block::simple_prop(fg_color_mask, other.fg_color_mask,
+				fg_color, other.fg_color);
+		bg_color_mask = html_block::simple_prop(bg_color_mask, other.bg_color_mask,
+				bg_color, other.bg_color);
+		display_mask = html_block::simple_prop(display_mask, other.display_mask,
+				display, other.display);
 
-			return mask_val;
-		};
-
-		fg_color_mask = simple_prop(fg_color_mask, other.fg_color_mask, fg_color, other.fg_color);
-		bg_color_mask = simple_prop(bg_color_mask, other.bg_color_mask, bg_color, other.bg_color);
-		display_mask = simple_prop(display_mask, other.display_mask, display, other.display);
-
-		/* Sizes are very different
-		 * We can have multiple cases:
-		 * 1) Our size is > 0 and we can use it as is
-		 * 2) Parent size is > 0 and our size is undefined, so propagate parent
-		 * 3) Parent size is < 0 and our size is undefined - propagate parent
-		 * 4) Parent size is > 0 and our size is < 0 - multiply parent by abs(ours)
-		 * 5) Parent size is undefined and our size is < 0 - tricky stuff, assume some defaults
-		 */
-		auto size_prop = [](auto mask_val, auto other_mask, auto &our_val,
-				auto other_val, auto default_val) constexpr -> int {
-			if (mask_val) {
-				/* We have our value */
-				if (our_val < 0) {
-					if (other_mask > 0) {
-						if (other_val >= 0) {
-							our_val = other_val * (-our_val / 100.0);
-						}
-						else {
-							our_val *= (-other_val / 100.0);
-						}
-					}
-					else {
-						/* Parent value is not defined and our value is relative */
-						our_val = default_val * (-our_val / 100.0);
-					}
-				}
-				else if (other_mask && other_mask > mask_val) {
-					our_val = other_val;
-					mask_val = html_block::inherited;
-				}
-			}
-			else {
-				/* We propagate parent if defined */
-				if (other_mask && other_mask > mask_val) {
-					our_val = other_val;
-					mask_val = html_block::inherited;
-				}
-				/* Otherwise do nothing */
-			}
-
-			return mask_val;
-		};
-
-		height_mask = size_prop(height_mask, other.height_mask, height, other.height, 800);
-		width_mask = size_prop(width_mask, other.width_mask, width, other.width, 1024);
-		font_mask = size_prop(font_mask, other.font_mask, font_size, other.font_size, 1024);
+		height_mask = html_block::size_prop(height_mask, other.height_mask,
+				height, other.height, static_cast<std::int16_t>(800));
+		width_mask = html_block::size_prop(width_mask, other.width_mask,
+				width, other.width, static_cast<std::int16_t>(1024));
+		font_mask = html_block::size_prop(font_mask, other.font_mask,
+				font_size, other.font_size, static_cast<std::int8_t>(1024));
 	}
 
 	/*
