@@ -570,6 +570,7 @@ rspamd_re_cache_check_lua_condition (struct rspamd_task *task,
 		msg_warn_task ("cannot call for re_cache_check_lua_condition for re %s: %e",
 				rspamd_regexp_get_pattern (re), err);
 		g_error_free (err);
+		lua_settop (L, text_pos - 1);
 
 		return TRUE;
 	}
