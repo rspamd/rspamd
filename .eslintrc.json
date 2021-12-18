@@ -47,6 +47,7 @@
         "padded-blocks": "off",
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
+        "prefer-object-has-own": "off",
         "prefer-spread": "off",
         "prefer-template": "off",
         "quote-props" : ["error", "consistent-as-needed"],
