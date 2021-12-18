@@ -589,6 +589,11 @@
 				<form id="connectForm">
 					<div class="form-group">
 						<div class="input-group">
+							<!-- In recent browser versions username is required to save credentials in a password manager.
+							    Browser detects passwords by form.elements[n].type == "password" and then detects
+								the username field by searching backwards through form elements for the text field
+								immediately before the password fields. -->
+							<input value="Rspamd controller password" style="display: none;"/>
 							<input class="form-control"
 								   type="password"
 								   id="connectPassword"
