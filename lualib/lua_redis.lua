@@ -276,7 +276,7 @@ local function add_redis_sentinels(params)
 
   rspamd_config:add_on_load(function(_, ev_base, worker)
     local initialised = false
-    if worker:is_scanner() then
+    if worker:is_scanner() or worker:get_type() == 'fuzzy' then
       rspamd_config:add_periodic(ev_base, 0.0, function()
         redis_query_sentinel(ev_base, params, initialised)
         initialised = true
