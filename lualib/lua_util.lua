@@ -1473,4 +1473,19 @@ exports.shuffle = function(tbl)
   return tbl
 end
 
+--
+local hex_table = {}
+for idx = 0, 255 do
+  hex_table[("%02X"):format(idx)] = string.char(idx)
+  hex_table[("%02x"):format(idx)] = string.char(idx)
+end
+
+---[[[
+-- @function lua_util.unhex(str)
+-- Decode hex encoded string
+-- @param {string} str string to decode
+-- @return {string} hex decoded string (valid hex pairs are decoded, everything else is printed as is)
+--]]]
+exports.unhex = function(str) return str:gsub('(..)', hex_table) end
+
 return exports
