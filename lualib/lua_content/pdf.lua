@@ -181,17 +181,14 @@ local function generic_grammar_elts()
 
   -- Helper functions
   local function pdf_hexstring_unescape(s)
-    local function ue(cc)
-      return string.char(tonumber(cc, 16))
-    end
     if #s % 2 == 0 then
       -- Sane hex string
-      return s:gsub('..', ue)
+      return lua_util.unhex(s)
     end
 
     -- WTF hex string
     -- Append '0' to it and unescape...
-    return s:sub(1, #s - 1):gsub('..' , ue) .. (s:sub(#s) .. '0'):gsub('..' , ue)
+    return lua_util.unhex(s:sub(1, #s - 1)) .. lua_util.unhex((s:sub(#s) .. '0'))
   end
 
   local function pdf_string_unescape(s)
