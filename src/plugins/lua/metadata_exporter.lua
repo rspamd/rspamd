@@ -91,7 +91,11 @@ local function get_general_metadata(task, flatten, no_content)
       r.fuzzy = table.concat(fz, ', ')
     end
   else
-    r.fuzzy = 'unknown'
+    if not flatten then
+      r.fuzzy = {}
+    else
+      r.fuzzy = ''
+    end
   end
 
   local rcpt = task:get_recipients('smtp')
