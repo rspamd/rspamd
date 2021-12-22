@@ -50,6 +50,7 @@ struct rspamd_map;
 struct map_cb_data {
 	struct rspamd_map *map;
 	gint state;
+	bool errored;
 	void *prev_data;
 	void *cur_data;
 };

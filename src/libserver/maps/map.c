@@ -983,8 +983,8 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	map = periodic->map;
 	msg_debug_map ("periodic dtor %p", periodic);
 
-	if (periodic->need_modify) {
-		/* We are done */
+	if (periodic->need_modify || periodic->cbdata.errored) {
+		/* Need to notify the real data structure */
 		periodic->map->fin_callback (&periodic->cbdata, periodic->map->user_data);
 	}
 	else {
@@ -1138,7 +1138,6 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 	}
 
 	cbd = g_malloc0 (sizeof (*cbd));
-	cbd->cbdata.state = 0;
 	cbd->cbdata.prev_data = *map->user_data;
 	cbd->cbdata.cur_data = NULL;
 	cbd->cbdata.map = map;
@@ -2000,13 +1999,16 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	}
 
 	if (cbd->errored) {
-		/* We should not check other backends if some backend has failed */
+		/* We should not check other backends if some backend has failed*/
 		rspamd_map_schedule_periodic (cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
 		if (cbd->locked) {
 			g_atomic_int_set (cbd->map->locked, 0);
 			cbd->locked = FALSE;
 		}
+
+		/* Also set error flag for the map consumer */
+		cbd->cbdata.errored = true;
 
 		msg_debug_map ("unlocked map %s, refcount=%d", cbd->map->name,
 				cbd->ref.refcount);

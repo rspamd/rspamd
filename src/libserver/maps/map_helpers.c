@@ -940,22 +940,34 @@ rspamd_kv_list_fin (struct map_cb_data *data, void **target)
 	struct rspamd_map *map = data->map;
 	struct rspamd_hash_map_helper *htb;
 
-	if (data->cur_data) {
-		htb = (struct rspamd_hash_map_helper *)data->cur_data;
-		msg_info_map ("read hash of %d elements from %s", kh_size (htb->htb),
-				map->name);
-		data->map->traverse_function = rspamd_map_helper_traverse_hash;
-		data->map->nelts = kh_size (htb->htb);
-		data->map->digest = rspamd_cryptobox_fast_hash_final (&htb->hst);
+	if (data->errored) {
+		/* Clean up the current data and do not touch prev data */
+		if (data->cur_data) {
+			msg_info_map ("cleanup unfinished new data as error occurred for %s",
+					map->name);
+			htb = (struct rspamd_hash_map_helper *) data->cur_data;
+			rspamd_map_helper_destroy_hash(htb);
+			data->cur_data = NULL;
+		}
 	}
+	else {
+		if (data->cur_data) {
+			htb = (struct rspamd_hash_map_helper *) data->cur_data;
+			msg_info_map ("read hash of %d elements from %s", kh_size(htb->htb),
+					map->name);
+			data->map->traverse_function = rspamd_map_helper_traverse_hash;
+			data->map->nelts = kh_size (htb->htb);
+			data->map->digest = rspamd_cryptobox_fast_hash_final(&htb->hst);
+		}
 
-	if (target) {
-		*target = data->cur_data;
-	}
+		if (target) {
+			*target = data->cur_data;
+		}
 
-	if (data->prev_data) {
-		htb = (struct rspamd_hash_map_helper *)data->prev_data;
-		rspamd_map_helper_destroy_hash (htb);
+		if (data->prev_data) {
+			htb = (struct rspamd_hash_map_helper *) data->prev_data;
+			rspamd_map_helper_destroy_hash(htb);
+		}
 	}
 }
 
@@ -1000,22 +1012,34 @@ rspamd_radix_fin (struct map_cb_data *data, void **target)
 	struct rspamd_map *map = data->map;
 	struct rspamd_radix_map_helper *r;
 
-	if (data->cur_data) {
-		r = (struct rspamd_radix_map_helper *)data->cur_data;
-		msg_info_map ("read radix trie of %z elements: %s",
-				radix_get_size (r->trie), radix_get_info (r->trie));
-		data->map->traverse_function = rspamd_map_helper_traverse_radix;
-		data->map->nelts = kh_size (r->htb);
-		data->map->digest = rspamd_cryptobox_fast_hash_final (&r->hst);
+	if (data->errored) {
+		/* Clean up the current data and do not touch prev data */
+		if (data->cur_data) {
+			msg_info_map ("cleanup unfinished new data as error occurred for %s",
+					map->name);
+			r = (struct rspamd_radix_map_helper *) data->cur_data;
+			rspamd_map_helper_destroy_radix(r);
+			data->cur_data = NULL;
+		}
 	}
+	else {
+		if (data->cur_data) {
+			r = (struct rspamd_radix_map_helper *) data->cur_data;
+			msg_info_map ("read radix trie of %z elements: %s",
+					radix_get_size(r->trie), radix_get_info(r->trie));
+			data->map->traverse_function = rspamd_map_helper_traverse_radix;
+			data->map->nelts = kh_size (r->htb);
+			data->map->digest = rspamd_cryptobox_fast_hash_final(&r->hst);
+		}
 
-	if (target) {
-		*target = data->cur_data;
-	}
+		if (target) {
+			*target = data->cur_data;
+		}
 
-	if (data->prev_data) {
-		r = (struct rspamd_radix_map_helper *)data->prev_data;
-		rspamd_map_helper_destroy_radix (r);
+		if (data->prev_data) {
+			r = (struct rspamd_radix_map_helper *) data->prev_data;
+			rspamd_map_helper_destroy_radix(r);
+		}
 	}
 }
 
@@ -1494,33 +1518,45 @@ rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 	struct rspamd_regexp_map_helper *re_map = NULL, *old_re_map;
 	struct rspamd_map *map = data->map;
 
-	if (data->cur_data) {
-		re_map = data->cur_data;
-		rspamd_cryptobox_hash_final (&re_map->hst, re_map->re_digest);
-		memcpy (&data->map->digest, re_map->re_digest, sizeof (data->map->digest));
-		rspamd_re_map_finalize (re_map);
-		msg_info_map ("read regexp list of %ud elements",
-				re_map->regexps->len);
-		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
-		data->map->nelts = kh_size (re_map->htb);
+	if (data->errored) {
+		/* Clean up the current data and do not touch prev data */
+		if (data->cur_data) {
+			msg_info_map ("cleanup unfinished new data as error occurred for %s",
+					map->name);
+			re_map = (struct rspamd_regexp_map_helper *)data->cur_data;
+			rspamd_map_helper_destroy_regexp (re_map);
+			data->cur_data = NULL;
+		}
 	}
+	else {
+		if (data->cur_data) {
+			re_map = data->cur_data;
+			rspamd_cryptobox_hash_final(&re_map->hst, re_map->re_digest);
+			memcpy(&data->map->digest, re_map->re_digest, sizeof(data->map->digest));
+			rspamd_re_map_finalize(re_map);
+			msg_info_map ("read regexp list of %ud elements",
+					re_map->regexps->len);
+			data->map->traverse_function = rspamd_map_helper_traverse_regexp;
+			data->map->nelts = kh_size (re_map->htb);
+		}
 
-	if (target) {
-		*target = data->cur_data;
-	}
+		if (target) {
+			*target = data->cur_data;
+		}
 
-	if (data->prev_data) {
-		old_re_map = data->prev_data;
+		if (data->prev_data) {
+			old_re_map = data->prev_data;
 
 #ifdef WITH_HYPERSCAN
-		if (re_map && memcmp (re_map->re_digest, old_re_map->re_digest,
-				sizeof (re_map->re_digest)) != 0) {
-			/* Cleanup old stuff */
-			rspamd_re_map_cache_cleanup_old (old_re_map);
-		}
+			if (re_map && memcmp(re_map->re_digest, old_re_map->re_digest,
+					sizeof(re_map->re_digest)) != 0) {
+				/* Cleanup old stuff */
+				rspamd_re_map_cache_cleanup_old(old_re_map);
+			}
 #endif
 
-		rspamd_map_helper_destroy_regexp (old_re_map);
+			rspamd_map_helper_destroy_regexp(old_re_map);
+		}
 	}
 }
 void
@@ -1889,21 +1925,33 @@ rspamd_cdb_list_fin (struct map_cb_data *data, void **target)
 	struct rspamd_map *map = data->map;
 	struct rspamd_cdb_map_helper *cdb_data;
 
-	if (data->cur_data) {
-		cdb_data = (struct rspamd_cdb_map_helper *)data->cur_data;
-		msg_info_map ("read cdb of %Hz size", cdb_data->total_size);
-		data->map->traverse_function = NULL;
-		data->map->nelts = 0;
-		data->map->digest = rspamd_cryptobox_fast_hash_final (&cdb_data->hst);
+	if (data->errored) {
+		/* Clean up the current data and do not touch prev data */
+		if (data->cur_data) {
+			msg_info_map ("cleanup unfinished new data as error occurred for %s",
+					map->name);
+			cdb_data = (struct rspamd_cdb_map_helper *) data->cur_data;
+			rspamd_map_helper_destroy_cdb(cdb_data);
+			data->cur_data = NULL;
+		}
 	}
+	else {
+		if (data->cur_data) {
+			cdb_data = (struct rspamd_cdb_map_helper *) data->cur_data;
+			msg_info_map ("read cdb of %Hz size", cdb_data->total_size);
+			data->map->traverse_function = NULL;
+			data->map->nelts = 0;
+			data->map->digest = rspamd_cryptobox_fast_hash_final(&cdb_data->hst);
+		}
 
-	if (target) {
-		*target = data->cur_data;
-	}
+		if (target) {
+			*target = data->cur_data;
+		}
 
-	if (data->prev_data) {
-		cdb_data = (struct rspamd_cdb_map_helper *)data->prev_data;
-		rspamd_map_helper_destroy_cdb (cdb_data);
+		if (data->prev_data) {
+			cdb_data = (struct rspamd_cdb_map_helper *) data->prev_data;
+			rspamd_map_helper_destroy_cdb(cdb_data);
+		}
 	}
 }
 void

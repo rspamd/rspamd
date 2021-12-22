@@ -430,60 +430,76 @@ lua_map_fin (struct map_cb_data *data, void **target)
 
 	map = data->map;
 
-	if (data->cur_data) {
-		cbdata = (struct lua_map_callback_data *)data->cur_data;
+	if (data->errored) {
+		if (data->cur_data) {
+			cbdata = (struct lua_map_callback_data *)data->cur_data;
+			if (cbdata->ref != -1) {
+				luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+			}
+
+			if (cbdata->data) {
+				rspamd_fstring_free (cbdata->data);
+			}
+
+			data->cur_data = NULL;
+		}
 	}
 	else {
-		msg_err_map ("no data read for map");
-		return;
-	}
-
-	if (cbdata->ref == -1) {
-		msg_err_map ("map has no callback set");
-	}
-	else if (cbdata->data != NULL && cbdata->data->len != 0) {
-
-		lua_pushcfunction (cbdata->L, &rspamd_lua_traceback);
-		int err_idx = lua_gettop (cbdata->L);
-
-		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
-
-		if (!cbdata->opaque) {
-			lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
+		if (data->cur_data) {
+			cbdata = (struct lua_map_callback_data *) data->cur_data;
 		}
 		else {
-			struct rspamd_lua_text *t;
-
-			t = lua_newuserdata (cbdata->L, sizeof (*t));
-			rspamd_lua_setclass (cbdata->L, "rspamd{text}", -1);
-			t->flags = 0;
-			t->len = cbdata->data->len;
-			t->start = cbdata->data->str;
+			msg_err_map ("no data read for map");
+			return;
 		}
 
-		pmap = lua_newuserdata (cbdata->L, sizeof (void *));
-		*pmap = cbdata->lua_map;
-		rspamd_lua_setclass (cbdata->L, "rspamd{map}", -1);
+		if (cbdata->ref == -1) {
+			msg_err_map ("map has no callback set");
+		}
+		else if (cbdata->data != NULL && cbdata->data->len != 0) {
 
-		gint ret = lua_pcall (cbdata->L, 2, 0, err_idx);
+			lua_pushcfunction (cbdata->L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop(cbdata->L);
 
-		if (ret != 0) {
-			msg_info_map ("call to %s failed (%d): %s", "map fin function",
-				ret,
-				lua_tostring (cbdata->L, -1));
+			lua_rawgeti(cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
+
+			if (!cbdata->opaque) {
+				lua_pushlstring(cbdata->L, cbdata->data->str, cbdata->data->len);
+			}
+			else {
+				struct rspamd_lua_text *t;
+
+				t = lua_newuserdata(cbdata->L, sizeof(*t));
+				rspamd_lua_setclass(cbdata->L, "rspamd{text}", -1);
+				t->flags = 0;
+				t->len = cbdata->data->len;
+				t->start = cbdata->data->str;
+			}
+
+			pmap = lua_newuserdata(cbdata->L, sizeof(void *));
+			*pmap = cbdata->lua_map;
+			rspamd_lua_setclass(cbdata->L, "rspamd{map}", -1);
+
+			gint ret = lua_pcall(cbdata->L, 2, 0, err_idx);
+
+			if (ret != 0) {
+				msg_info_map ("call to %s failed (%d): %s", "map fin function",
+						ret,
+						lua_tostring(cbdata->L, -1));
+			}
+
+			lua_settop(cbdata->L, err_idx - 1);
 		}
 
-		lua_settop (cbdata->L, err_idx - 1);
-	}
+		cbdata->data = rspamd_fstring_assign(cbdata->data, "", 0);
 
-	cbdata->data = rspamd_fstring_assign (cbdata->data, "", 0);
+		if (target) {
+			*target = data->cur_data;
+		}
 
-	if (target) {
-		*target = data->cur_data;
-	}
-
-	if (data->prev_data) {
-		data->prev_data = NULL;
+		if (data->prev_data) {
+			data->prev_data = NULL;
+		}
 	}
 }
 
