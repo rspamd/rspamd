@@ -413,24 +413,6 @@ rspamd_config:register_symbol({
   groups = {'arc'},
 })
 
-if settings.whitelisted_signers_map then
-  local lua_maps = require "lua_maps"
-  settings.whitelisted_signers_map = lua_maps.map_add_from_ucl(settings.whitelisted_signers_map,
-      'set',
-      'ARC trusted signers domains')
-  if settings.whitelisted_signers_map then
-    arc_symbols.trusted_allow = arc_symbols.trusted_allow or 'ARC_ALLOW_TRUSTED'
-    rspamd_config:register_symbol({
-      name = arc_symbols.trusted_allow,
-      parent = id,
-      type = 'virtual',
-      score = -2.0,
-      group = 'policies',
-      groups = {'arc'},
-    })
-  end
-end
-
 rspamd_config:register_dependency('ARC_CALLBACK', 'SPF_CHECK')
 rspamd_config:register_dependency('ARC_CALLBACK', 'DKIM_CHECK')
 
@@ -739,6 +721,18 @@ if type(settings.allowed_ids) == 'table' then
 end
 if type(settings.forbidden_ids) == 'table' then
   sym_reg_tbl.forbidden_ids = settings.forbidden_ids
+end
+
+if settings.whitelisted_signers_map then
+  arc_symbols.trusted_allow = arc_symbols.trusted_allow or 'ARC_ALLOW_TRUSTED'
+  rspamd_config:register_symbol({
+    name = arc_symbols.trusted_allow,
+    parent = id,
+    type = 'virtual',
+    score = -2.0,
+    group = 'policies',
+    groups = {'arc'},
+  })
 end
 
 rspamd_config:register_symbol(sym_reg_tbl)

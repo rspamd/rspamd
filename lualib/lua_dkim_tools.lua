@@ -705,6 +705,8 @@ exports.process_signing_settings = function(N, settings, opts)
       else
         logger.errx(rspamd_config, 'cannot load sign condition %s: %s', v, f)
       end
+    elseif k == 'whitelisted_signers_map' then
+      settings[k] = lua_maps.map_add(N, k, 'set', 'ARC trusted signers domains')
     else
       settings[k] = v
     end
