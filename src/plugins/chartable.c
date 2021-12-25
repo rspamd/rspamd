@@ -674,7 +674,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		ignore_diacritics = TRUE;
 	}
 
-	if (task->meta_words != NULL) {
+	if (task->meta_words != NULL && task->meta_words->len > 0) {
 		rspamd_stat_token_t *w;
 		gdouble cur_score = 0;
 		gsize arlen = task->meta_words->len;

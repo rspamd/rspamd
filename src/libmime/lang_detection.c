@@ -1308,6 +1308,10 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 	gdouble adj;
 	gdouble proba_adjusted, probb_adjusted, freqa, freqb;
 
+	if (cbd->d->total_occurencies == 0) {
+		return 0;
+	}
+
 	freqa = ((gdouble)canda->elt->occurencies) /
 			(gdouble)cbd->d->total_occurencies;
 	freqb = ((gdouble)candb->elt->occurencies) /
