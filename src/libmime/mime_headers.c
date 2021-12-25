@@ -907,6 +907,10 @@ rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *hdrs,
 									 const gchar *field,
 									 gboolean need_modified)
 {
+	if (hdrs == NULL) {
+		return NULL;
+	}
+
 	khiter_t k;
 	khash_t(rspamd_mime_headers_htb) *htb = &hdrs->htb;
 	struct rspamd_mime_header *hdr;
