@@ -363,12 +363,12 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 	if (i > offset) {
 		/* I wish it was supported properly */
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
-		char numbuf[128], *endptr = NULL;
+		char numbuf[128], *endptr = nullptr;
 		rspamd_strlcpy(numbuf, &input[offset], MIN(i - offset + 1, sizeof(numbuf)));
 		auto num = g_ascii_strtod(numbuf, &endptr);
 		offset = i;
 
-		if ((endptr && *endptr != '\0') || num >= G_MAXFLOAT || num <= G_MINFLOAT || std::isnan(num)) {
+		if (fabs (num) >= G_MAXFLOAT || std::isnan(num)) {
 			msg_debug_css("invalid number: %s", numbuf);
 			return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
 		}
