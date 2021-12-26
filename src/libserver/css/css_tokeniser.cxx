@@ -20,6 +20,7 @@
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
 #include <string>
+#include <cmath>
 
 namespace rspamd::css {
 
@@ -29,8 +30,8 @@ namespace rspamd::css {
  * This helper is intended to create tokens either with a tag and value
  * or with just a tag.
  */
-template<css_parser_token::token_type T, typename ...Args>
-auto make_token(const Args&... args) -> css_parser_token;
+template<css_parser_token::token_type T, class Arg>
+auto make_token(const Arg &arg) -> css_parser_token;
 
 template<>
 auto make_token<css_parser_token::token_type::string_token, std::string_view>(const std::string_view &s)
@@ -76,7 +77,7 @@ auto make_token<css_parser_token::token_type::delim_token, char>(const char &c)
 
 template<>
 auto make_token<css_parser_token::token_type::number_token, float>(const float &d)
--> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::number_token, d};
 }
@@ -360,51 +361,52 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 	}
 
 	if (i > offset) {
-		float num;
-
 		/* I wish it was supported properly */
 		//auto conv_res = std::from_chars(&input[offset], &input[i], num);
 		char numbuf[128], *endptr = NULL;
 		rspamd_strlcpy(numbuf, &input[offset], MIN(i - offset + 1, sizeof(numbuf)));
-		num = g_ascii_strtod(numbuf, &endptr);
-
-		if (endptr && *endptr != '\0') {
-			msg_debug_css("invalid number: %s", numbuf);
-		}
+		auto num = g_ascii_strtod(numbuf, &endptr);
 		offset = i;
 
-		auto ret = make_token<css_parser_token::token_type::number_token>(num);
+		if ((endptr && *endptr != '\0') || num >= G_MAXFLOAT || num <= G_MINFLOAT || isnan(num)) {
+			msg_debug_css("invalid number: %s", numbuf);
+			return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
+		}
+		else {
 
-		if (i < input.size()) {
-			if (input[i] == '%') {
-				ret.flags |= css_parser_token::number_percent;
-				i ++;
+			auto ret = make_token<css_parser_token::token_type::number_token>(static_cast<float>(num));
 
-				offset = i;
-			}
-			else if (is_plain_ident_start(input[i])) {
-				auto dim_token = consume_ident();
+			if (i < input.size()) {
+				if (input[i] == '%') {
+					ret.flags |= css_parser_token::number_percent;
+					i++;
 
-				if (dim_token.type == css_parser_token::token_type::ident_token) {
-					if (!ret.adjust_dim(dim_token)) {
-						auto sv = std::get<std::string_view>(dim_token.value);
-						msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
-								(int)sv.size(), sv.begin(), num);
-						/* Unconsume ident */
-						offset = i;
+					offset = i;
+				}
+				else if (is_plain_ident_start(input[i])) {
+					auto dim_token = consume_ident();
+
+					if (dim_token.type == css_parser_token::token_type::ident_token) {
+						if (!ret.adjust_dim(dim_token)) {
+							auto sv = std::get<std::string_view>(dim_token.value);
+							msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
+									(int) sv.size(), sv.begin(), num);
+							/* Unconsume ident */
+							offset = i;
+						}
+					}
+					else {
+						/* We have no option but to uncosume ident token in this case */
+						msg_debug_css("got invalid ident like token after number, unconsume it");
 					}
 				}
 				else {
-					/* We have no option but to uncosume ident token in this case */
-					msg_debug_css("got invalid ident like token after number, unconsume it");
+					/* Plain number, nothing to do */
 				}
 			}
-			else {
-				/* Plain number, nothing to do */
-			}
-		}
 
-		return ret;
+			return ret;
+		}
 	}
 	else {
 		msg_err_css("internal error: invalid number, empty token");
