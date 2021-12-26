@@ -368,7 +368,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 		auto num = g_ascii_strtod(numbuf, &endptr);
 		offset = i;
 
-		if ((endptr && *endptr != '\0') || num >= G_MAXFLOAT || num <= G_MINFLOAT || isnan(num)) {
+		if ((endptr && *endptr != '\0') || num >= G_MAXFLOAT || num <= G_MINFLOAT || std::isnan(num)) {
 			msg_debug_css("invalid number: %s", numbuf);
 			return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
 		}
