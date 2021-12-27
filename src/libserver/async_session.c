@@ -257,7 +257,7 @@ rspamd_session_destroy (struct rspamd_async_session *session)
 
 	if (!rspamd_session_blocked (session)) {
 		session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
-		rspamd_session_cleanup (session);
+		rspamd_session_cleanup (session, false);
 
 		if (session->cleanup != NULL) {
 			session->cleanup (session->user_data);
@@ -268,7 +268,7 @@ rspamd_session_destroy (struct rspamd_async_session *session)
 }
 
 void
-rspamd_session_cleanup (struct rspamd_async_session *session)
+rspamd_session_cleanup (struct rspamd_async_session *session, bool forced_cleanup)
 {
 	struct rspamd_async_event *ev;
 
@@ -285,15 +285,32 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 		int ret;
 
 		if (ev->fin != NULL) {
-			msg_debug_session ("removed event on destroy: %p, subsystem: %s",
-					ev->user_data,
-					ev->subsystem);
+			if (forced_cleanup) {
+				msg_info_session ("forced removed event on destroy: %p, subsystem: %s, scheduled from: %s",
+						ev->user_data,
+						ev->subsystem,
+						ev->loc);
+			}
+			else {
+				msg_debug_session("removed event on destroy: %p, subsystem: %s",
+						ev->user_data,
+						ev->subsystem);
+			}
 			ev->fin (ev->user_data);
 		}
 		else {
-			msg_debug_session ("NOT removed event on destroy - uncancellable: %p, subsystem: %s",
-					ev->user_data,
-					ev->subsystem);
+			if (forced_cleanup) {
+				msg_info_session ("NOT forced removed event on destroy - uncancellable: "
+								  "%p, subsystem: %s, scheduled from: %s",
+						ev->user_data,
+						ev->subsystem,
+						ev->loc);
+			}
+			else {
+				msg_debug_session("NOT removed event on destroy - uncancellable: %p, subsystem: %s",
+						ev->user_data,
+						ev->subsystem);
+			}
 			/* Assume an event is uncancellable, move it to a new hash table */
 			kh_put (rspamd_events_hash, uncancellable_events, ev, &ret);
 		}
@@ -301,7 +318,13 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 
 	kh_destroy (rspamd_events_hash, session->events);
 	session->events = uncancellable_events;
-	msg_debug_session ("pending %d uncancellable events", kh_size (uncancellable_events));
+	if (forced_cleanup) {
+		msg_info_session ("pending %d uncancellable events", kh_size (uncancellable_events));
+	}
+	else {
+		msg_debug_session ("pending %d uncancellable events", kh_size (uncancellable_events));
+	}
+
 	session->flags &= ~RSPAMD_SESSION_FLAG_CLEANUP;
 }
 

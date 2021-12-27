@@ -1911,7 +1911,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 
 		ev_timer_again (EV_A_ w);
 		task->processed_stages |= RSPAMD_TASK_STAGE_FILTERS;
-		rspamd_session_cleanup (task->s);
+		rspamd_session_cleanup (task->s, true);
 		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 		rspamd_session_pending (task->s);
 	}
@@ -1940,7 +1940,7 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 
 		ev_timer_stop (EV_A_ w);
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-		rspamd_session_cleanup (task->s);
+		rspamd_session_cleanup (task->s, true);
 		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 		rspamd_session_pending (task->s);
 	}

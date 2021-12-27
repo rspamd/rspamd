@@ -83,7 +83,7 @@ gboolean rspamd_session_destroy (struct rspamd_async_session *session);
 /**
  * Try to remove all events pending
  */
-void rspamd_session_cleanup (struct rspamd_async_session *session);
+void rspamd_session_cleanup (struct rspamd_async_session *session, bool forced_cleanup);
 
 /**
  * Returns mempool associated with async session
