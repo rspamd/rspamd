@@ -55,7 +55,7 @@ rspamd_session_add_event_full (struct rspamd_async_session *session,
 							   event_finalizer_t fin,
 							   gpointer user_data,
 							   const gchar *subsystem,
-							   const gchar *loc);
+							   const gchar *event_source);
 
 #define rspamd_session_add_event(session, fin, user_data, subsystem) \
     rspamd_session_add_event_full(session, fin, user_data, subsystem, G_STRLOC)
@@ -69,7 +69,7 @@ rspamd_session_add_event_full (struct rspamd_async_session *session,
 void rspamd_session_remove_event_full (struct rspamd_async_session *session,
 									   event_finalizer_t fin,
 									   gpointer ud,
-									   const gchar *loc);
+									   const gchar *event_source);
 
 #define rspamd_session_remove_event(session, fin, user_data) \
     rspamd_session_remove_event_full(session, fin, user_data, G_STRLOC)
