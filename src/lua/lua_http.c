@@ -389,7 +389,6 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
 	unsigned http_opts = RSPAMD_HTTP_CLIENT_SIMPLE;
-	struct rspamd_http_message *msg = cbd->msg;
 
 	if (cbd->msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
 		http_opts |= RSPAMD_HTTP_CLIENT_SSL;
@@ -440,9 +439,16 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		}
 
 		if (cbd->session) {
-			rspamd_session_add_event (cbd->session,
-					(event_finalizer_t) lua_http_fin, cbd,
-					M);
+			if (cbd->item) {
+				rspamd_session_add_event_full (cbd->session,
+						(event_finalizer_t) lua_http_fin, cbd,
+						M, rspamd_symcache_item_name (cbd->item));
+			}
+			else {
+				rspamd_session_add_event (cbd->session,
+						(event_finalizer_t) lua_http_fin, cbd,
+						M);
+			}
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
