@@ -20,6 +20,8 @@
 #include "libcryptobox/cryptobox.h"
 #include "contrib/libottery/ottery.h"
 #include "lua/lua_common.h"
+#include "unix-std.h"
+
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
 #include <openssl/pem.h>
@@ -108,15 +110,33 @@ rspamd_dkim_generate_rsa_keypair (const gchar *domain, const gchar *selector,
 	g_assert (EVP_PKEY_set1_RSA (pk, r) == 1);
 
 	if (priv_fname) {
-		privout = BIO_new_file (priv_fname, "w");
+		int fd = open (priv_fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+		if (fd < 0) {
+			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
+					priv_fname, strerror (errno));
+			exit (EXIT_FAILURE);
+		}
+
+		FILE *fp = fdopen (fd, "w");
+
+		if (fp == NULL) {
+			close (fd);
+			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
+					priv_fname, strerror (errno));
+			exit (EXIT_FAILURE);
+		}
+
+		privout = BIO_new_fp (fp, BIO_CLOSE);
 
 		if (privout == NULL) {
+			fclose (fp);
 			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
 					priv_fname, strerror (errno));
 			exit (EXIT_FAILURE);
 		}
 	} else {
-		privout = BIO_new_fp (stdout, 0);
+		privout = BIO_new_fp (stdout, BIO_NOCLOSE);
 	}
 
 	rc = PEM_write_bio_PrivateKey (privout, pk, NULL, NULL, 0, NULL, NULL);
