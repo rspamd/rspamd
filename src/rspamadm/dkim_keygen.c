@@ -110,7 +110,7 @@ rspamd_dkim_generate_rsa_keypair (const gchar *domain, const gchar *selector,
 	g_assert (EVP_PKEY_set1_RSA (pk, r) == 1);
 
 	if (priv_fname) {
-		int fd = open (priv_fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+		int fd = open (priv_fname, O_WRONLY | O_CREAT | O_TRUNC, 0640);
 
 		if (fd < 0) {
 			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
