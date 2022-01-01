@@ -41,29 +41,37 @@
 #include "logger.h"
 #include "compression.h"
 
+__KHASH_IMPL(rdns_requests_hash, kh_inline, int, struct rdns_request *, true,
+		kh_int_hash_func, kh_int_hash_equal);
+
 static int
 rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 {
-	int r;
+	ssize_t r;
 	struct rdns_server *serv = req->io->srv;
 	struct rdns_resolver *resolver = req->resolver;
-	struct rdns_request *tmp;
 	struct dns_header *header;
 	const int max_id_cycles = 32;
+	khiter_t k;
 
 	/* Find ID collision */
 	if (new_req) {
 		r = 0;
-		HASH_FIND_INT (req->io->requests, &req->id, tmp);
-		while (tmp != NULL) {
-			/* Check for unique id */
-			header = (struct dns_header *)req->packet;
-			header->qid = rdns_permutor_generate_id ();
-			req->id = header->qid;
-			if (++r > max_id_cycles) {
-				return -1;
+
+		for (;;) {
+			k = kh_get(rdns_requests_hash, req->io->requests, req->id);
+			if (k != kh_end(req->io->requests)) {
+				/* Check for unique id */
+				header = (struct dns_header *) req->packet;
+				header->qid = rdns_permutor_generate_id();
+				req->id = header->qid;
+				if (++r > max_id_cycles) {
+					return -1;
+				}
 			}
-			HASH_FIND_INT (req->io->requests, &req->id, tmp);
+			else {
+				break;
+			}
 		}
 	}
 
@@ -95,7 +103,10 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		if (errno == EAGAIN || errno == EINTR) {
 			if (new_req) {
 				/* Write when socket is ready */
-				HASH_ADD_INT (req->io->requests, id, req);
+				int pr;
+
+				k = kh_put(rdns_requests_hash, req->io->requests, req->id, &pr);
+				kh_value(req->io->requests, k) = req;
 				req->async_event = resolver->async->add_write (resolver->async->data,
 					fd, req);
 				req->state = RDNS_REQUEST_WAIT_SEND;
@@ -126,7 +137,9 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 
 	if (new_req) {
 		/* Add request to hash table */
-		HASH_ADD_INT (req->io->requests, id, req);
+		int pr;
+		k = kh_put(rdns_requests_hash, req->io->requests, req->id, &pr);
+		kh_value(req->io->requests, k) = req;
 		/* Fill timeout */
 		req->async_event = resolver->async->add_timer (resolver->async->data,
 				req->timeout, req);
@@ -160,18 +173,18 @@ static struct rdns_request *
 rdns_find_dns_request (uint8_t *in, struct rdns_io_channel *ioc)
 {
 	struct dns_header *header = (struct dns_header *)in;
-	struct rdns_request *req;
 	int id;
 	struct rdns_resolver *resolver = ioc->resolver;
 
 	id = header->qid;
-	HASH_FIND_INT (ioc->requests, &id, req);
-	if (req == NULL) {
+	khiter_t k = kh_get(rdns_requests_hash, ioc->requests, id);
+
+	if (k == kh_end(ioc->requests)) {
 		/* No such requests found */
-		rdns_debug ("DNS request with id %d has not been found for IO channel", (int)id);
+		rdns_debug ("DNS request with id %d has not been found for IO channel", id);
 	}
 
-	return req;
+	return kh_value(ioc->requests, k);
 }
 
 static bool
@@ -442,7 +455,7 @@ rdns_process_timer (void *arg)
 			req->async->del_timer (req->async->data,
 					req->async_event);
 			req->async_event = NULL;
-			HASH_DEL (req->io->requests, req);
+			kh_del(rdns_requests_hash, req->io->requests, req->id);
 		}
 
 		/* We have not scheduled timeout actually due to send error */
@@ -479,25 +492,13 @@ rdns_process_ioc_refresh (void *arg)
 				ioc = serv->io_channels[i];
 				if (ioc->uses > resolver->max_ioc_uses) {
 					/* Schedule IOC removing */
-					nioc = calloc (1, sizeof (struct rdns_io_channel));
+					nioc = rdns_ioc_new (serv, resolver, false);
+
 					if (nioc == NULL) {
 						rdns_err ("calloc fails to allocate rdns_io_channel");
 						continue;
 					}
-					nioc->sock = rdns_make_client_socket (serv->name, serv->port,
-							SOCK_DGRAM, &nioc->saddr, &nioc->slen);
-					if (nioc->sock == -1) {
-						rdns_err ("cannot open socket to %s: %s", serv->name,
-								strerror (errno));
-						free (nioc);
-						continue;
-					}
-					nioc->srv = serv;
-					nioc->flags = RDNS_CHANNEL_ACTIVE;
-					nioc->resolver = resolver;
-					nioc->async_io = resolver->async->add_read (resolver->async->data,
-							nioc->sock, nioc);
-					REF_INIT_RETAIN (nioc, rdns_ioc_free);
+
 					serv->io_channels[i] = nioc;
 					rdns_debug ("scheduled io channel for server %s to be refreshed after "
 							"%lu usages", serv->name, (unsigned long)ioc->uses);
@@ -883,30 +884,14 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 	UPSTREAM_FOREACH (resolver->servers, serv) {
 		serv->io_channels = calloc (serv->io_cnt, sizeof (struct rdns_io_channel *));
 		for (i = 0; i < serv->io_cnt; i ++) {
-			ioc = calloc (1, sizeof (struct rdns_io_channel));
+			ioc = rdns_ioc_new(serv, resolver, false);
+
 			if (ioc == NULL) {
 				rdns_err ("cannot allocate memory for the resolver IO channels");
 				return false;
 			}
 
-			ioc->sock = rdns_make_client_socket (serv->name, serv->port, SOCK_DGRAM,
-					&ioc->saddr, &ioc->slen);
-
-			if (ioc->sock == -1) {
-				rdns_err ("cannot open socket to %s:%d %s",
-						serv->name, serv->port, strerror (errno));
-				free (ioc);
-
-				return false;
-			}
-			else {
-				ioc->srv = serv;
-				ioc->resolver = resolver;
-				ioc->async_io = resolver->async->add_read (resolver->async->data,
-						ioc->sock, ioc);
-				REF_INIT_RETAIN (ioc, rdns_ioc_free);
-				serv->io_channels[i] = ioc;
-			}
+			serv->io_channels[i] = ioc;
 		}
 	}
 

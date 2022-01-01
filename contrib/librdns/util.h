@@ -51,6 +51,13 @@ uint16_t rdns_permutor_generate_id (void);
 void rdns_ioc_free (struct rdns_io_channel *ioc);
 
 /**
+ * C
+ */
+struct rdns_io_channel * rdns_ioc_new (struct rdns_server *srv,
+									   struct rdns_resolver *resolver,
+									   bool is_tcp);
+
+/**
  * Free request
  * @param req
  */

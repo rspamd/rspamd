@@ -27,6 +27,7 @@
 #include "config.h"
 #include "uthash.h"
 #include "utlist.h"
+#include "khash.h"
 #include "rdns.h"
 #include "upstream.h"
 #include "ref.h"
@@ -107,7 +108,7 @@ enum rdns_io_channel_flags {
 #define IS_CHANNEL_CONNECTED(ioc) (((ioc)->flags & RDNS_CHANNEL_CONNECTED) != 0)
 #define IS_CHANNEL_ACTIVE(ioc) (((ioc)->flags & RDNS_CHANNEL_ACTIVE) != 0)
 
-
+KHASH_DECLARE(rdns_requests_hash, int, struct rdns_request *);
 /**
  * IO channel for a specific DNS server
  */
@@ -119,7 +120,7 @@ struct rdns_io_channel {
 	int sock; /**< persistent socket                                          */
 	int flags; /**< see enum rdns_io_channel_flags */
 	void *async_io; /** async opaque ptr */
-	struct rdns_request *requests; /**< requests in flight                                         */
+	khash_t(rdns_requests_hash) *requests;
 	uint64_t uses;
 	ref_entry_t ref;
 };

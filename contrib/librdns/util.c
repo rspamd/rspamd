@@ -458,14 +458,18 @@ rdns_request_free (struct rdns_request *req)
 				req->async->del_timer (req->async->data,
 						req->async_event);
 				/* Remove from id hashes */
-				HASH_DEL (req->io->requests, req);
+				if (req->io) {
+					kh_del(rdns_requests_hash, req->io->requests, req->id);
+				}
 				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 				/* Remove retransmit event */
 				req->async->del_write (req->async->data,
 						req->async_event);
-				HASH_DEL (req->io->requests, req);
+				if (req->io) {
+					kh_del(rdns_requests_hash, req->io->requests, req->id);
+				}
 				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_FAKE) {
@@ -492,17 +496,49 @@ rdns_request_free (struct rdns_request *req)
 void
 rdns_ioc_free (struct rdns_io_channel *ioc)
 {
-	struct rdns_request *req, *rtmp;
+	struct rdns_request *req;
 
-	HASH_ITER (hh, ioc->requests, req, rtmp) {
+	kh_foreach_value(ioc->requests, req, {
 		REF_RELEASE (req);
-	}
+	});
 
 	ioc->resolver->async->del_read (ioc->resolver->async->data,
 			ioc->async_io);
+	kh_destroy(rdns_requests_hash, ioc->requests);
 	close (ioc->sock);
 	free (ioc->saddr);
 	free (ioc);
+}
+
+struct rdns_io_channel *
+rdns_ioc_new (struct rdns_server *serv,
+			  struct rdns_resolver *resolver,
+			  bool is_tcp)
+{
+	struct rdns_io_channel *nioc = calloc (1, sizeof (struct rdns_io_channel));
+	if (nioc == NULL) {
+		rdns_err ("calloc fails to allocate rdns_io_channel");
+		return NULL;
+	}
+
+	nioc->sock = rdns_make_client_socket (serv->name, serv->port,
+			is_tcp ? SOCK_STREAM : SOCK_DGRAM, &nioc->saddr, &nioc->slen);
+	if (nioc->sock == -1) {
+		rdns_err ("cannot open socket to %s: %s", serv->name,
+				strerror (errno));
+		free (nioc);
+		return NULL;
+	}
+
+	nioc->srv = serv;
+	nioc->flags = RDNS_CHANNEL_ACTIVE;
+	nioc->resolver = resolver;
+	nioc->async_io = resolver->async->add_read (resolver->async->data,
+			nioc->sock, nioc);
+	nioc->requests = kh_init(rdns_requests_hash);
+	REF_INIT_RETAIN (nioc, rdns_ioc_free);
+
+	return nioc;
 }
 
 void
@@ -526,14 +562,18 @@ rdns_request_unschedule (struct rdns_request *req)
 			req->async->del_timer (req->async->data,
 					req->async_event);
 			/* Remove from id hashes */
-			HASH_DEL (req->io->requests, req);
+			if (req->io) {
+				kh_del(rdns_requests_hash, req->io->requests, req->id);
+			}
 			req->async_event = NULL;
 		}
 		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 			req->async->del_write (req->async->data,
 					req->async_event);
 			/* Remove from id hashes */
-			HASH_DEL (req->io->requests, req);
+			if (req->io) {
+				kh_del(rdns_requests_hash, req->io->requests, req->id);
+			}
 			req->async_event = NULL;
 		}
 	}
