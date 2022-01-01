@@ -530,11 +530,42 @@ rdns_ioc_new (struct rdns_server *serv,
 		return NULL;
 	}
 
+	if (is_tcp) {
+		/* We also need to connect a TCP channel */
+		int r = connect (nioc->sock, nioc->saddr, nioc->slen);
+
+		if (r == -1) {
+			if (errno != EAGAIN && errno != EINTR && errno != EINPROGRESS) {
+				rdns_err ("cannot connect a TCP socket: %s for server %s",
+						strerror(errno), serv->name);
+				close(nioc->sock);
+				free(nioc);
+
+				return NULL;
+			}
+			else {
+				/* We need to wait for write readiness here */
+				nioc->async_io = resolver->async->add_write (resolver->async->data,
+						nioc->sock, nioc);
+			}
+		}
+		else {
+			nioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+		}
+
+		nioc->flags |= RDNS_CHANNEL_TCP;
+	}
+
 	nioc->srv = serv;
-	nioc->flags = RDNS_CHANNEL_ACTIVE;
 	nioc->resolver = resolver;
-	nioc->async_io = resolver->async->add_read (resolver->async->data,
-			nioc->sock, nioc);
+
+	/* If it is not NULL then we are in a delayed connection state */
+	if (nioc->async_io == NULL) {
+		nioc->flags |= RDNS_CHANNEL_ACTIVE;
+		nioc->async_io = resolver->async->add_read(resolver->async->data,
+				nioc->sock, nioc);
+	}
+
 	nioc->requests = kh_init(rdns_requests_hash);
 	REF_INIT_RETAIN (nioc, rdns_ioc_free);
 

@@ -893,6 +893,18 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 
 			serv->io_channels[i] = ioc;
 		}
+
+		serv->tcp_io_channels = calloc (serv->tcp_io_cnt, sizeof (struct rdns_io_channel *));
+		for (i = 0; i < serv->tcp_io_cnt; i ++) {
+			ioc = rdns_ioc_new (serv, resolver, true);
+
+			if (ioc == NULL) {
+				rdns_err ("cannot allocate memory for the resolver IO channels");
+				return false;
+			}
+
+			serv->tcp_io_channels[i] = ioc;
+		}
 	}
 
 	if (resolver->async->add_periodic) {
@@ -952,6 +964,8 @@ rdns_resolver_add_server (struct rdns_resolver *resolver,
 	}
 
 	serv->io_cnt = io_cnt;
+	/* TODO: make it configurable maybe? */
+	serv->tcp_io_cnt = default_tcp_io_cnt;
 	serv->port = port;
 
 	UPSTREAM_ADD (resolver->servers, serv, priority);
@@ -1026,7 +1040,10 @@ rdns_resolver_free (struct rdns_resolver *resolver)
 				ioc = serv->io_channels[i];
 				REF_RELEASE (ioc);
 			}
-			serv->io_cnt = 0;
+			for (i = 0; i < serv->tcp_io_cnt; i ++) {
+				ioc = serv->tcp_io_channels[i];
+				REF_RELEASE (ioc);
+			}
 			UPSTREAM_DEL (resolver->servers, serv);
 			free (serv->io_channels);
 			free (serv->name);

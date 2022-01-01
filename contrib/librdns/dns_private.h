@@ -34,6 +34,7 @@
 
 static const int dns_port = 53;
 static const int default_io_cnt = 8;
+static const int default_tcp_io_cnt = 2;
 
 #define UDP_PACKET_SIZE (4096 * 2)
 
@@ -51,8 +52,10 @@ struct rdns_server {
 	char *name;
 	unsigned int port;
 	unsigned int io_cnt;
+	unsigned int tcp_io_cnt;
 
 	struct rdns_io_channel **io_channels;
+	struct rdns_io_channel **tcp_io_channels;
 	void *ups_elt;
 	upstream_entry_t up;
 };
