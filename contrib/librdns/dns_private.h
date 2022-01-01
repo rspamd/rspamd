@@ -98,6 +98,16 @@ struct rdns_request {
 };
 
 
+enum rdns_io_channel_flags {
+	RDNS_CHANNEL_CONNECTED = 1u << 0u,
+	RDNS_CHANNEL_ACTIVE = 1u << 1u,
+	RDNS_CHANNEL_TCP = 1u << 2u,
+};
+
+#define IS_CHANNEL_CONNECTED(ioc) (((ioc)->flags & RDNS_CHANNEL_CONNECTED) != 0)
+#define IS_CHANNEL_ACTIVE(ioc) (((ioc)->flags & RDNS_CHANNEL_ACTIVE) != 0)
+
+
 /**
  * IO channel for a specific DNS server
  */
@@ -107,8 +117,7 @@ struct rdns_io_channel {
 	struct sockaddr *saddr;
 	socklen_t slen;
 	int sock; /**< persistent socket                                          */
-	bool active;
-	bool connected;
+	int flags; /**< see enum rdns_io_channel_flags */
 	void *async_io; /** async opaque ptr */
 	struct rdns_request *requests; /**< requests in flight                                         */
 	uint64_t uses;
@@ -131,7 +140,6 @@ struct rdns_fake_reply {
 
 struct rdns_resolver {
 	struct rdns_server *servers;
-	struct rdns_io_channel *io_channels; /**< hash of io chains indexed by socket        */
 	struct rdns_async_context *async; /** async callbacks */
 	void *periodic; /** periodic event for resolver */
 	struct rdns_upstream_context *ups;

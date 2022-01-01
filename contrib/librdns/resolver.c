@@ -68,7 +68,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 	}
 
 	if (resolver->curve_plugin == NULL) {
-		if (!req->io->connected) {
+		if (!IS_CHANNEL_CONNECTED(req->io)) {
 			r = sendto (fd, req->packet, req->pos, 0,
 					req->io->saddr,
 					req->io->slen);
@@ -78,7 +78,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		}
 	}
 	else {
-		if (!req->io->connected) {
+		if (!IS_CHANNEL_CONNECTED(req->io)) {
 			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
 					resolver->curve_plugin->data,
 					req->io->saddr,
@@ -111,7 +111,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 			return -1;
 		}
 	}
-	else if (!req->io->connected) {
+	else if (!IS_CHANNEL_CONNECTED(req->io)) {
 		/* Connect socket */
 		r = connect (fd, req->io->saddr, req->io->slen);
 
@@ -120,7 +120,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 					strerror (errno), serv->name);
 		}
 		else {
-			req->io->connected = true;
+			req->io->flags |= RDNS_CHANNEL_CONNECTED;
 		}
 	}
 
@@ -356,7 +356,7 @@ rdns_process_timer (void *arg)
 		return;
 	}
 
-	if (!req->io->active || req->retransmits == 1) {
+	if (!IS_CHANNEL_ACTIVE(req->io) || req->retransmits == 1) {
 
 		if (resolver->ups) {
 			cnt = resolver->ups->count (resolver->ups->data);
@@ -368,7 +368,7 @@ rdns_process_timer (void *arg)
 			}
 		}
 
-		if (!req->io->active || cnt > 1) {
+		if (!IS_CHANNEL_ACTIVE(req->io) || cnt > 1) {
 			/* Do not reschedule IO requests on inactive sockets */
 			rdns_debug ("reschedule request with id: %d", (int)req->id);
 			rdns_request_unschedule (req);
@@ -493,7 +493,7 @@ rdns_process_ioc_refresh (void *arg)
 						continue;
 					}
 					nioc->srv = serv;
-					nioc->active = true;
+					nioc->flags = RDNS_CHANNEL_ACTIVE;
 					nioc->resolver = resolver;
 					nioc->async_io = resolver->async->add_read (resolver->async->data,
 							nioc->sock, nioc);
@@ -501,7 +501,7 @@ rdns_process_ioc_refresh (void *arg)
 					serv->io_channels[i] = nioc;
 					rdns_debug ("scheduled io channel for server %s to be refreshed after "
 							"%lu usages", serv->name, (unsigned long)ioc->uses);
-					ioc->active = false;
+					ioc->flags &= ~RDNS_CHANNEL_ACTIVE;
 					REF_RELEASE (ioc);
 				}
 			}
@@ -893,10 +893,10 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 					&ioc->saddr, &ioc->slen);
 
 			if (ioc->sock == -1) {
-				ioc->active = false;
 				rdns_err ("cannot open socket to %s:%d %s",
 						serv->name, serv->port, strerror (errno));
 				free (ioc);
+
 				return false;
 			}
 			else {
