@@ -515,7 +515,16 @@ rdns_ioc_new (struct rdns_server *serv,
 			  struct rdns_resolver *resolver,
 			  bool is_tcp)
 {
-	struct rdns_io_channel *nioc = calloc (1, sizeof (struct rdns_io_channel));
+	struct rdns_io_channel *nioc;
+
+	if (is_tcp) {
+		nioc = calloc (1, sizeof (struct rdns_io_channel)
+				+ sizeof (struct rdns_tcp_channel));
+	}
+	else {
+		nioc = calloc (1, sizeof (struct rdns_io_channel));
+	}
+
 	if (nioc == NULL) {
 		rdns_err ("calloc fails to allocate rdns_io_channel");
 		return NULL;
@@ -531,7 +540,8 @@ rdns_ioc_new (struct rdns_server *serv,
 	}
 
 	if (is_tcp) {
-		/* We also need to connect a TCP channel */
+		/* We also need to connect a TCP channel and set a TCP buffer */
+		nioc->tcp = (struct rdns_tcp_channel *)(((unsigned char *)nioc) + sizeof(*nioc));
 		int r = connect (nioc->sock, nioc->saddr, nioc->slen);
 
 		if (r == -1) {
@@ -550,7 +560,10 @@ rdns_ioc_new (struct rdns_server *serv,
 			}
 		}
 		else {
+			/* Always be ready to read from a TCP socket */
 			nioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+			nioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
+					nioc->sock, nioc);
 		}
 
 		nioc->flags |= RDNS_CHANNEL_TCP;
@@ -560,7 +573,7 @@ rdns_ioc_new (struct rdns_server *serv,
 	nioc->resolver = resolver;
 
 	/* If it is not NULL then we are in a delayed connection state */
-	if (nioc->async_io == NULL) {
+	if (!is_tcp) {
 		nioc->flags |= RDNS_CHANNEL_ACTIVE;
 		nioc->async_io = resolver->async->add_read(resolver->async->data,
 				nioc->sock, nioc);

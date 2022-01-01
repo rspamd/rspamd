@@ -45,6 +45,41 @@ static const int default_tcp_io_cnt = 2;
 
 #define RESOLV_CONF "/etc/resolv.conf"
 
+struct dns_header {
+	unsigned int qid :16;
+
+#if BYTE_ORDER == BIG_ENDIAN
+	unsigned int qr:1;
+	unsigned int opcode:4;
+	unsigned int aa:1;
+	unsigned int tc:1;
+	unsigned int rd:1;
+
+	unsigned int ra:1;
+	unsigned int cd : 1;
+	unsigned int ad : 1;
+	unsigned int z : 1;
+	unsigned int rcode:4;
+#else
+	unsigned int rd :1;
+	unsigned int tc :1;
+	unsigned int aa :1;
+	unsigned int opcode :4;
+	unsigned int qr :1;
+
+	unsigned int rcode :4;
+	unsigned int z : 1;
+	unsigned int ad : 1;
+	unsigned int cd : 1;
+	unsigned int ra :1;
+#endif
+
+	unsigned int qdcount :16;
+	unsigned int ancount :16;
+	unsigned int nscount :16;
+	unsigned int arcount :16;
+};
+
 /**
  * Represents DNS server
  */
@@ -110,6 +145,33 @@ enum rdns_io_channel_flags {
 
 #define IS_CHANNEL_CONNECTED(ioc) (((ioc)->flags & RDNS_CHANNEL_CONNECTED) != 0)
 #define IS_CHANNEL_ACTIVE(ioc) (((ioc)->flags & RDNS_CHANNEL_ACTIVE) != 0)
+#define IS_CHANNEL_TCP(ioc) (((ioc)->flags & RDNS_CHANNEL_TCP) != 0)
+
+/**
+ * Used to chain output DNS requests for a TCP connection
+ */
+struct rdns_tcp_output_chain {
+	uint16_t next_write_size;
+	struct rdns_request *req;
+	uint16_t cur_write;
+	struct rdns_tcp_output_chain *prev, *next;
+};
+
+/**
+ * Specific stuff for a TCP IO chain
+ */
+struct rdns_tcp_channel {
+	uint16_t next_read_size;
+	unsigned char *cur_read_buf;
+	uint16_t cur_read;
+
+	/* Chained set of the planned writes */
+	struct rdns_tcp_output_chain *output_chain;
+	unsigned cur_output_chains;
+
+	void *async_read; /** async read event */
+	void *async_write; /** async write event */
+};
 
 KHASH_DECLARE(rdns_requests_hash, int, struct rdns_request *);
 /**
@@ -124,6 +186,15 @@ struct rdns_io_channel {
 	int flags; /**< see enum rdns_io_channel_flags */
 	void *async_io; /** async opaque ptr */
 	khash_t(rdns_requests_hash) *requests;
+	/*
+	 * For DNS replies parsing we use per-channel structure
+	 * which is used for two purposes:
+	 * 1) We read the next DNS header
+	 * 2) We find the corresponding request (if any)
+	 * 3) We read the remaining packet (associated with a request or dangling)
+	 * This structure is filled on each read-readiness for an IO channel
+	 */
+	struct rdns_tcp_channel *tcp;
 	uint64_t uses;
 	ref_entry_t ref;
 };
@@ -167,45 +238,9 @@ struct rdns_resolver {
 	ref_entry_t ref;
 };
 
-struct dns_header;
 struct dns_query;
 
 /* Internal DNS structs */
-
-struct dns_header {
-	unsigned int qid :16;
-
-#if BYTE_ORDER == BIG_ENDIAN
-	unsigned int qr:1;
-	unsigned int opcode:4;
-	unsigned int aa:1;
-	unsigned int tc:1;
-	unsigned int rd:1;
-
-	unsigned int ra:1;
-	unsigned int cd : 1;
-	unsigned int ad : 1;
-	unsigned int z : 1;
-	unsigned int rcode:4;
-#else
-	unsigned int rd :1;
-	unsigned int tc :1;
-	unsigned int aa :1;
-	unsigned int opcode :4;
-	unsigned int qr :1;
-
-	unsigned int rcode :4;
-	unsigned int z : 1;
-	unsigned int ad : 1;
-	unsigned int cd : 1;
-	unsigned int ra :1;
-#endif
-
-	unsigned int qdcount :16;
-	unsigned int ancount :16;
-	unsigned int nscount :16;
-	unsigned int arcount :16;
-};
 
 enum dns_section {
 	DNS_S_QD = 0x01,

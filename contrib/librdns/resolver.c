@@ -286,10 +286,43 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	return true;
 }
 
-void
-rdns_process_read (int fd, void *arg)
+static void
+rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 {
-	struct rdns_io_channel *ioc = arg;
+
+}
+
+static void
+rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
+{
+	struct rdns_resolver *resolver = ioc->resolver;
+	struct rdns_server *serv = ioc->srv;
+	int r = connect (ioc->sock, ioc->saddr, ioc->slen);
+
+	if (r == -1) {
+		if (errno != EAGAIN && errno != EINTR && errno != EINPROGRESS) {
+			rdns_err ("cannot connect a TCP socket: %s for server %s",
+					strerror(errno), serv->name);
+			resolver->async->del_write (resolver->async->data, ioc->async_io);
+		}
+		else {
+			/* We need to wait again for write readiness here */
+			ioc->async_io = resolver->async->add_write (resolver->async->data,
+					ioc->sock, ioc);
+		}
+	}
+	else {
+		/* Always be ready to read from a TCP socket */
+		resolver->async->del_write (resolver->async->data, ioc->async_io);
+		ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+		ioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
+				ioc->sock, ioc);
+	}
+}
+
+static void
+rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
+{
 	struct rdns_resolver *resolver;
 	struct rdns_request *req = NULL;
 	ssize_t r;
@@ -310,7 +343,7 @@ rdns_process_read (int fd, void *arg)
 				sizeof (in), resolver->curve_plugin->data, &req,
 				ioc->saddr, ioc->slen);
 		if (req == NULL &&
-				r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
+			r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 			req = rdns_find_dns_request (in, ioc);
 		}
 	}
@@ -333,6 +366,25 @@ rdns_process_read (int fd, void *arg)
 	else {
 		/* Still want to increase uses */
 		ioc->uses ++;
+	}
+}
+
+void
+rdns_process_read (int fd, void *arg)
+{
+	struct rdns_io_channel *ioc = (struct rdns_io_channel *)arg;
+
+
+	if (IS_CHANNEL_TCP(ioc)) {
+		if (IS_CHANNEL_CONNECTED(ioc)) {
+			rdns_process_tcp_read (fd, ioc);
+		}
+		else {
+			rdns_process_tcp_connect (fd, ioc);
+		}
+	}
+	else {
+		rdns_process_udp_read (fd, ioc);
 	}
 }
 
