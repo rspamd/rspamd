@@ -540,6 +540,7 @@ rdns_ioc_new (struct rdns_server *serv,
 		return NULL;
 	}
 
+	nioc->struct_magic = RDNS_IO_CHANNEL_TAG;
 	nioc->sock = rdns_make_client_socket (serv->name, serv->port,
 			is_tcp ? SOCK_STREAM : SOCK_DGRAM, &nioc->saddr, &nioc->slen);
 	if (nioc->sock == -1) {

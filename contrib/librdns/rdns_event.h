@@ -85,7 +85,7 @@ rdns_libevent_read_event (int fd, short what, void *ud)
 static void
 rdns_libevent_write_event (int fd, short what, void *ud)
 {
-	rdns_process_retransmit (fd, ud);
+	rdns_process_write (fd, ud);
 }
 
 static void

@@ -480,7 +480,7 @@ bool rdns_format_dns_name (struct rdns_resolver *resolver,
 
 void rdns_process_read (int fd, void *arg);
 void rdns_process_timer (void *arg);
-void rdns_process_retransmit (int fd, void *arg);
+void rdns_process_write (int fd, void *arg);
 
 #ifdef  __cplusplus
 }

@@ -562,10 +562,9 @@ rdns_process_ioc_refresh (void *arg)
 	}
 }
 
-void
-rdns_process_retransmit (int fd, void *arg)
+static void
+rdns_process_udp_retransmit (int fd, struct rdns_request *req)
 {
-	struct rdns_request *req = (struct rdns_request *)arg;
 	struct rdns_resolver *resolver;
 	struct rdns_reply *rep;
 	int r;
@@ -589,7 +588,7 @@ rdns_process_retransmit (int fd, void *arg)
 	if (r == 0) {
 		/* Retransmit one more time */
 		req->async_event = req->async->add_write (req->async->data,
-						fd, req);
+				fd, req);
 		req->state = RDNS_REQUEST_WAIT_SEND;
 	}
 	else if (r == -1) {
@@ -608,8 +607,47 @@ rdns_process_retransmit (int fd, void *arg)
 	}
 	else {
 		req->async_event = req->async->add_timer (req->async->data,
-			req->timeout, req);
+				req->timeout, req);
 		req->state = RDNS_REQUEST_WAIT_REPLY;
+	}
+}
+
+static void
+rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
+{
+
+}
+
+void
+rdns_process_write (int fd, void *arg)
+{
+	/*
+	 * We first need to dispatch *arg to understand what has caused the write
+	 * readiness event.
+	 * The one possibility is that it was a UDP retransmit request, so our
+	 * arg will be struct rdns_request *
+	 * Another possibility is that write event was triggered by some TCP related
+	 * stuff. In this case the only possibility is that our arg is struct rdns_io_channel *
+	 * To distinguish these two cases (due to flaws in the rdns architecture in the first
+	 * place) we compare the first 8 bytes with RDNS_IO_CHANNEL_TAG
+	 */
+	uint64_t tag;
+
+	memcpy (&tag, arg, sizeof(tag));
+
+	if (tag == RDNS_IO_CHANNEL_TAG) {
+		struct rdns_io_channel *ioc = (struct rdns_io_channel *) arg;
+
+		if (IS_CHANNEL_CONNECTED(ioc)) {
+			rdns_process_tcp_write(fd, ioc);
+		}
+		else {
+			rdns_process_tcp_connect(fd, ioc);
+		}
+	}
+	else {
+		struct rdns_request *req = (struct rdns_request *) arg;
+		rdns_process_udp_retransmit(fd, req);
 	}
 }
 
@@ -1116,6 +1154,7 @@ rdns_resolver_free (struct rdns_resolver *resolver)
 			}
 			UPSTREAM_DEL (resolver->servers, serv);
 			free (serv->io_channels);
+			free (serv->tcp_io_channels);
 			free (serv->name);
 			free (serv);
 		}

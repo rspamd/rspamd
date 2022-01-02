@@ -34,7 +34,7 @@
 
 static const int dns_port = 53;
 static const int default_io_cnt = 8;
-static const int default_tcp_io_cnt = 2;
+static const int default_tcp_io_cnt = 1;
 
 #define UDP_PACKET_SIZE (4096 * 2)
 
@@ -174,10 +174,12 @@ struct rdns_tcp_channel {
 };
 
 KHASH_DECLARE(rdns_requests_hash, int, struct rdns_request *);
+#define RDNS_IO_CHANNEL_TAG UINT64_C(0xe190a5ba12f094c8)
 /**
  * IO channel for a specific DNS server
  */
 struct rdns_io_channel {
+	uint64_t struct_magic; /**< tag for this structure */
 	struct rdns_server *srv;
 	struct rdns_resolver *resolver;
 	struct sockaddr *saddr;
