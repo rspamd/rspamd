@@ -507,7 +507,7 @@ rdns_process_timer (void *arg)
 			req->async->del_timer (req->async->data,
 					req->async_event);
 			req->async_event = NULL;
-			kh_del(rdns_requests_hash, req->io->requests, req->id);
+			rdns_request_remove_from_hash(req);
 		}
 
 		/* We have not scheduled timeout actually due to send error */

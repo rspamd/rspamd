@@ -40,6 +40,21 @@
 #include "logger.h"
 #include "rdns.h"
 
+inline void
+rdns_request_remove_from_hash (struct rdns_request *req)
+{
+	/* Remove from id hashes */
+	if (req->io) {
+		khiter_t k;
+
+		k = kh_get(rdns_requests_hash, req->io->requests, req->id);
+
+		if (k != kh_end(req->io->requests)) {
+			kh_del(rdns_requests_hash, req->io->requests, req->id);
+		}
+	}
+}
+
 static int
 rdns_make_socket_nonblocking (int fd)
 {
@@ -457,19 +472,14 @@ rdns_request_free (struct rdns_request *req)
 				/* Remove timer */
 				req->async->del_timer (req->async->data,
 						req->async_event);
-				/* Remove from id hashes */
-				if (req->io) {
-					kh_del(rdns_requests_hash, req->io->requests, req->id);
-				}
+				rdns_request_remove_from_hash(req);
 				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 				/* Remove retransmit event */
 				req->async->del_write (req->async->data,
 						req->async_event);
-				if (req->io) {
-					kh_del(rdns_requests_hash, req->io->requests, req->id);
-				}
+				rdns_request_remove_from_hash(req);
 				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_FAKE) {
@@ -605,19 +615,14 @@ rdns_request_unschedule (struct rdns_request *req)
 		if (req->state == RDNS_REQUEST_WAIT_REPLY) {
 			req->async->del_timer (req->async->data,
 					req->async_event);
-			/* Remove from id hashes */
-			if (req->io) {
-				kh_del(rdns_requests_hash, req->io->requests, req->id);
-			}
+
 			req->async_event = NULL;
 		}
 		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 			req->async->del_write (req->async->data,
 					req->async_event);
 			/* Remove from id hashes */
-			if (req->io) {
-				kh_del(rdns_requests_hash, req->io->requests, req->id);
-			}
+			rdns_request_remove_from_hash(req);
 			req->async_event = NULL;
 		}
 	}

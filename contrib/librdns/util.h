@@ -64,6 +64,12 @@ struct rdns_io_channel * rdns_ioc_new (struct rdns_server *srv,
 void rdns_request_free (struct rdns_request *req);
 
 /**
+ * Removes request from a channel's hash (e.g. if needed to migrate to another channel)
+ * @param req
+ */
+void rdns_request_remove_from_hash (struct rdns_request *req);
+
+/**
  * Free reply
  * @param rep
  */
