@@ -352,12 +352,49 @@
 									<label for="scanMsgSource">Message source:</label>
 									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder="Paste raw message source"></textarea>
 								</div>
+								<div class="collapse row mr-0 mt-3" id="scanOptions">
+									<div class="col-lg-6">
+										<div class="form-group row text-nowrap" title="Emulate IP address from which this message was received">
+											<label for="scan-opt-ip" class="col-form-label col-sm-2">IP:</label>
+											<input name="scan-opt-ip" id="scan-opt-ip" class="form-control col-sm-10" type="text"/>
+										</div>
+										<div class="form-group row text-nowrap" title="Emulate username of the authenticated SMTP client">
+											<label for="scan-opt-user" class="col-form-label col-sm-2">User:</label>
+											<input name="scan-opt-user" id="scan-opt-user" class="form-control col-sm-10" type="text"/>
+										</div>
+										<div class="form-group row text-nowrap" title="Emulate SMTP 'MAIL FROM' command data">
+											<label for="scan-opt-from" class="col-form-label col-sm-2">From:</label>
+											<input name="scan-opt-from" id="scan-opt-from" class="form-control col-sm-10" type="text"/>
+										</div>
+									</div>
+									<div class="col-lg-6">
+										<div class="form-group row text-nowrap" title="Emulate SMTP 'RCPT TO' command data">
+											<label for="scan-opt-rcpt" class="col-form-label col-sm-2">Rcpt:</label>
+											<input name="scan-opt-rcpt" id="scan-opt-rcpt" class="form-control col-sm-10" type="text"/>
+										</div>
+										<div class="form-group row text-nowrap" title="Imitate SMTP 'HELO' passing from the MTA">
+											<label for="scan-opt-helo" class="col-form-label col-sm-2">Helo:</label>
+											<input name="scan-opt-helo" id="scan-opt-helo" class="form-control col-sm-10" type="text"/>
+										</div>
+										<div class="form-group row text-nowrap" title="Imitate resolved hostname passing from the MTA">
+											<label for="scan-opt-hostname" class="col-form-label col-sm-2">Hostname:</label>
+											<input name="scan-opt-hostname" id="scan-opt-hostname" class="form-control col-sm-10" type="text"/>
+										</div>
+										<div class="form-check row text-nowrap pl-0" title="Pass all filters">
+											<label for="scan-opt-pass-all" class="form-check-label col-sm-2">Pass: all</label>
+											<input name="scan-opt-pass-all" id="scan-opt-pass-all" class="form-check-input-reverse" type="checkbox"/>
+										</div>
+									</div>
+								</div>
 							</form>
 						</div>
 					</div>
 					<div class="card-footer">
 						<button type="submit" class="btn btn-primary" data-upload="scan"><i class="fas fa-search"></i> Scan message</button>
-						<button class="btn btn-secondary float-right" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
+						<div class="form-inline float-right">
+							<button class="btn btn-secondary d-inline-block" id="scanOptionsToggle" data-toggle="collapse" data-target="#scanOptions"><i class="fas fa-bars"></i> Options</button>
+							<button class="btn btn-secondary ml-2" id="scanClean"><i class="fas fa-trash-alt"></i> Clean form</button>
+						</div>
 					</div>
 				</div>
 				<div class="card ro-hide" style="display: none;">
