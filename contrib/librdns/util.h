@@ -51,11 +51,23 @@ uint16_t rdns_permutor_generate_id (void);
 void rdns_ioc_free (struct rdns_io_channel *ioc);
 
 /**
- * C
+ * Creates a new IO channel
  */
 struct rdns_io_channel * rdns_ioc_new (struct rdns_server *srv,
 									   struct rdns_resolver *resolver,
 									   bool is_tcp);
+
+/**
+ * Resets inactive/errored TCP chain as recommended by RFC
+ * @param ioc
+ */
+void rdns_ioc_tcp_reset (struct rdns_io_channel *ioc);
+
+/**
+ * Connect TCP IO channel to a server
+ * @param ioc
+ */
+bool rdns_ioc_tcp_connect (struct rdns_io_channel *ioc);
 
 /**
  * Free request

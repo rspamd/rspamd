@@ -526,8 +526,21 @@ static void
 rdns_process_periodic (void *arg)
 {
 	struct rdns_resolver *resolver = (struct rdns_resolver*)arg;
+	struct rdns_server *serv;
 
 	UPSTREAM_RESCAN (resolver->servers, time (NULL));
+
+	UPSTREAM_FOREACH (resolver->servers, serv) {
+		for (int i = 0; i < serv->tcp_io_cnt; i ++) {
+			if (IS_CHANNEL_CONNECTED(serv->tcp_io_channels[i])) {
+				/* Disconnect channels with no requests in flight */
+				if (kh_size(serv->tcp_io_channels[i]->requests) == 0) {
+					rdns_debug ("reset inactive TCP connection to %s", serv->name);
+					rdns_ioc_tcp_reset (serv->tcp_io_channels[i]);
+				}
+			}
+		}
+	}
 }
 
 static void

@@ -515,8 +515,15 @@ rdns_ioc_free (struct rdns_io_channel *ioc)
 	ioc->resolver->async->del_read (ioc->resolver->async->data,
 			ioc->async_io);
 	kh_destroy(rdns_requests_hash, ioc->requests);
-	close (ioc->sock);
-	free (ioc->saddr);
+
+	if (ioc->sock != -1) {
+		close(ioc->sock);
+	}
+
+	if (ioc->saddr != NULL) {
+		free(ioc->saddr);
+	}
+
 	free (ioc);
 }
 
@@ -553,28 +560,12 @@ rdns_ioc_new (struct rdns_server *serv,
 	if (is_tcp) {
 		/* We also need to connect a TCP channel and set a TCP buffer */
 		nioc->tcp = (struct rdns_tcp_channel *)(((unsigned char *)nioc) + sizeof(*nioc));
-		int r = connect (nioc->sock, nioc->saddr, nioc->slen);
 
-		if (r == -1) {
-			if (errno != EAGAIN && errno != EINTR && errno != EINPROGRESS) {
-				rdns_err ("cannot connect a TCP socket: %s for server %s",
-						strerror(errno), serv->name);
-				close(nioc->sock);
-				free(nioc);
-
-				return NULL;
-			}
-			else {
-				/* We need to wait for write readiness here */
-				nioc->async_io = resolver->async->add_write (resolver->async->data,
-						nioc->sock, nioc);
-			}
-		}
-		else {
-			/* Always be ready to read from a TCP socket */
-			nioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
-			nioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
-					nioc->sock, nioc);
+		if (!rdns_ioc_tcp_connect(nioc)) {
+			rdns_err ("cannot connect TCP socket to %s: %s", serv->name,
+					strerror (errno));
+			free (nioc);
+			return NULL;
 		}
 
 		nioc->flags |= RDNS_CHANNEL_TCP;
@@ -634,6 +625,93 @@ rdns_request_release (struct rdns_request *req)
 {
 	rdns_request_unschedule (req);
 	REF_RELEASE (req);
+}
+
+void
+rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
+{
+	struct rdns_resolver *resolver = ioc->resolver;
+
+	if (IS_CHANNEL_CONNECTED(ioc)) {
+		if (ioc->tcp->async_write) {
+			resolver->async->del_write (resolver->async->data, ioc->tcp->async_write);
+			ioc->tcp->async_write = NULL;
+		}
+		if (ioc->tcp->async_read) {
+			resolver->async->del_read (resolver->async->data, ioc->tcp->async_read);
+			ioc->tcp->async_read = NULL;
+		}
+
+		ioc->flags &= ~RDNS_CHANNEL_CONNECTED;
+	}
+
+	if (ioc->sock != -1) {
+		close (ioc->sock);
+		ioc->sock = -1;
+	}
+	if (ioc->saddr) {
+		free (ioc->saddr);
+		ioc->saddr = NULL;
+	}
+}
+
+bool
+rdns_ioc_tcp_connect (struct rdns_io_channel *ioc)
+{
+	struct rdns_resolver *resolver = ioc->resolver;
+
+	if (IS_CHANNEL_CONNECTED(ioc)) {
+		rdns_err ("trying to connect already connected IO channel!");
+		return false;
+	}
+
+	if (ioc->sock == -1) {
+		ioc->sock = rdns_make_client_socket (ioc->srv->name, ioc->srv->port,
+				SOCK_STREAM, &ioc->saddr, &ioc->slen);
+		if (ioc->sock == -1) {
+			rdns_err ("cannot open socket to %s: %s", ioc->srv->name,
+					strerror (errno));
+
+			if (ioc->saddr) {
+				free (ioc->saddr);
+				ioc->saddr = NULL;
+			}
+
+			return false;
+		}
+	}
+
+	int r = connect (ioc->sock, ioc->saddr, ioc->slen);
+
+	if (r == -1) {
+		if (errno != EAGAIN && errno != EINTR && errno != EINPROGRESS) {
+			rdns_err ("cannot connect a TCP socket: %s for server %s",
+					strerror(errno), ioc->srv->name);
+			close (ioc->sock);
+
+			if (ioc->saddr) {
+				free (ioc->saddr);
+				ioc->saddr = NULL;
+			}
+
+			ioc->sock = -1;
+
+			return false;
+		}
+		else {
+			/* We need to wait for write readiness here */
+			ioc->tcp->async_write = resolver->async->add_write (resolver->async->data,
+					ioc->sock, ioc);
+		}
+	}
+	else {
+		/* Always be ready to read from a TCP socket */
+		ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+		ioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
+				ioc->sock, ioc);
+	}
+
+	return true;
 }
 
 static bool
