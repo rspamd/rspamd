@@ -127,13 +127,14 @@ define(["jquery"],
         }
 
         // @upload text
-        function scanText(rspamd, tables, data, server) {
+        function scanText(rspamd, tables, data, server, headers) {
             rspamd.query("checkv2", {
                 data: data,
                 params: {
                     processData: false,
                 },
                 method: "POST",
+                headers: headers,
                 success: function (neighbours_status) {
                     function scrollTop(rows_total) {
                         // Is there a way to get an event when all rows are loaded?
@@ -199,7 +200,7 @@ define(["jquery"],
             });
 
             function enable_disable_scan_btn() {
-                $("#scan button").prop("disabled", ($.trim($("textarea").val()).length === 0));
+                $("#scan button:not(#scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
             }
             enable_disable_scan_btn();
             $("textarea").on("input", function () {
@@ -207,8 +208,8 @@ define(["jquery"],
             });
 
             $("#scanClean").on("click", function () {
-                $("#scan button").attr("disabled", true);
-                $("#scanMsgSource").val("");
+                $("#scan button:not(#scanOptionsToggle)").attr("disabled", true);
+                $("#scanForm")[0].reset();
                 $("#scanResult").hide();
                 $("#scanOutput tbody").remove();
                 $("html, body").animate({scrollTop:0}, 1000);
@@ -218,18 +219,25 @@ define(["jquery"],
             $("[data-upload]").on("click", function () {
                 var source = $(this).data("upload");
                 var data = $("#scanMsgSource").val();
-                var headers = (source === "fuzzy")
-                    ? {
-                        flag: $("#fuzzyFlagText").val(),
-                        weight: $("#fuzzyWeightText").val()
-                    }
-                    : {};
+                var headers = {};
                 if ($.trim(data).length > 0) {
                     if (source === "scan") {
                         var checked_server = rspamd.getSelector("selSrv");
                         var server = (checked_server === "All SERVERS") ? "local" : checked_server;
-                        scanText(rspamd, tables, data, server);
+                        headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
+                            var value = $("#scan-opt-" + header.toLowerCase()).val();
+                            if (value !== "") o[header] = value;
+                            return o;
+                        }, {});
+                        if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
+                        scanText(rspamd, tables, data, server, headers);
                     } else {
+                        if (source === "fuzzy") {
+                            headers = {
+                                flag: $("#fuzzyFlagText").val(),
+                                weight: $("#fuzzyWeightText").val()
+                            };
+                        }
                         uploadText(rspamd, data, source, headers);
                     }
                 } else {
