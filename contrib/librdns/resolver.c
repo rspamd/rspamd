@@ -935,28 +935,46 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 	/* Now init io channels to all servers */
 	UPSTREAM_FOREACH (resolver->servers, serv) {
 		serv->io_channels = calloc (serv->io_cnt, sizeof (struct rdns_io_channel *));
+
+		if (serv->io_channels == NULL) {
+			rdns_err ("cannot allocate memory for the resolver IO channels");
+			return false;
+		}
+
 		for (i = 0; i < serv->io_cnt; i ++) {
 			ioc = rdns_ioc_new(serv, resolver, false);
 
 			if (ioc == NULL) {
-				rdns_err ("cannot allocate memory for the resolver IO channels");
+				rdns_err ("cannot allocate memory or init the IO channel");
 				return false;
 			}
 
 			serv->io_channels[i] = ioc;
 		}
 
+		int ntcp_channels = 0;
+
+		/*
+		 * We are more forgiving for TCP IO channels: we can have zero of them
+		 * if DNS is misconfigured and still be able to resolve stuff
+		 */
 		serv->tcp_io_channels = calloc (serv->tcp_io_cnt, sizeof (struct rdns_io_channel *));
+		if (serv->tcp_io_channels == NULL) {
+			rdns_err ("cannot allocate memory for the resolver TCP IO channels");
+			return false;
+		}
 		for (i = 0; i < serv->tcp_io_cnt; i ++) {
 			ioc = rdns_ioc_new (serv, resolver, true);
 
 			if (ioc == NULL) {
-				rdns_err ("cannot allocate memory for the resolver IO channels");
-				return false;
+				rdns_err ("cannot allocate memory or init the TCP IO channel");
+				continue;
 			}
 
-			serv->tcp_io_channels[i] = ioc;
+			serv->tcp_io_channels[ntcp_channels++] = ioc;
 		}
+
+		serv->tcp_io_cnt = ntcp_channels;
 	}
 
 	if (resolver->async->add_periodic) {
