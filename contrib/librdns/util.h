@@ -82,6 +82,13 @@ void rdns_request_free (struct rdns_request *req);
 void rdns_request_remove_from_hash (struct rdns_request *req);
 
 /**
+ * Creates a new reply
+ * @param req
+ * @param rcode
+ * @return
+ */
+struct rdns_reply * rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode);
+/**
  * Free reply
  * @param rep
  */

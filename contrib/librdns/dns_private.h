@@ -102,6 +102,8 @@ enum rdns_request_state {
 	RDNS_REQUEST_WAIT_REPLY,
 	RDNS_REQUEST_REPLIED,
 	RDNS_REQUEST_FAKE,
+	RDNS_REQUEST_ERROR,
+	RDNS_REQUEST_TCP,
 };
 
 struct rdns_request {
@@ -151,8 +153,8 @@ enum rdns_io_channel_flags {
  * Used to chain output DNS requests for a TCP connection
  */
 struct rdns_tcp_output_chain {
-	uint16_t next_write_size;
-	uint16_t cur_write;
+	uint16_t next_write_size; /* Network byte order! */
+	uint16_t cur_write; /* Cur bytes written including `next_write_size` */
 	struct rdns_request *req;
 	struct rdns_tcp_output_chain *prev, *next;
 };
@@ -161,9 +163,10 @@ struct rdns_tcp_output_chain {
  * Specific stuff for a TCP IO chain
  */
 struct rdns_tcp_channel {
-	uint16_t next_read_size;
-	uint16_t cur_read;
+	uint16_t next_read_size; /* Network byte order on read, then host byte order */
+	uint16_t cur_read; /* Cur bytes read including `next_read_size` */
 	unsigned char *cur_read_buf;
+	unsigned read_buf_allocated;
 
 	/* Chained set of the planned writes */
 	struct rdns_tcp_output_chain *output_chain;

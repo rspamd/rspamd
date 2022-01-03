@@ -406,6 +406,24 @@ rdns_permutor_generate_id (void)
 	return id;
 }
 
+struct rdns_reply *
+rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
+{
+	struct rdns_reply *rep;
+
+	rep = malloc (sizeof (struct rdns_reply));
+	if (rep != NULL) {
+		rep->request = req;
+		rep->resolver = req->resolver;
+		rep->entries = NULL;
+		rep->code = rcode;
+		req->reply = rep;
+		rep->flags = 0;
+		rep->requested_name = req->requested_names[0].name;
+	}
+
+	return rep;
+}
 
 void
 rdns_reply_free (struct rdns_reply *rep)
@@ -508,12 +526,18 @@ rdns_ioc_free (struct rdns_io_channel *ioc)
 {
 	struct rdns_request *req;
 
+	if (IS_CHANNEL_TCP(ioc)) {
+		rdns_ioc_tcp_reset(ioc);
+	}
+
 	kh_foreach_value(ioc->requests, req, {
 		REF_RELEASE (req);
 	});
 
-	ioc->resolver->async->del_read (ioc->resolver->async->data,
-			ioc->async_io);
+	if (ioc->async_io) {
+		ioc->resolver->async->del_read(ioc->resolver->async->data,
+				ioc->async_io);
+	}
 	kh_destroy(rdns_requests_hash, ioc->requests);
 
 	if (ioc->sock != -1) {
@@ -640,6 +664,8 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 			ioc->tcp->async_read = NULL;
 		}
 
+		/* Clean all buffers and temporaries */
+
 		ioc->flags &= ~RDNS_CHANNEL_CONNECTED;
 	}
 
@@ -651,6 +677,17 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		free (ioc->saddr);
 		ioc->saddr = NULL;
 	}
+
+	/* Remove all requests pending as we are unable to complete them */
+	struct rdns_request *req;
+	kh_foreach_value(ioc->requests, req, {
+		struct rdns_reply *rep = rdns_make_reply (req, RDNS_RC_NETERR);
+		req->state = RDNS_REQUEST_REPLIED;
+		req->func (rep, req->arg);
+		REF_RELEASE (req);
+	});
+
+	kh_clear(rdns_requests_hash, ioc->requests);
 }
 
 bool

@@ -40,6 +40,6 @@ bool rdns_write_name_compressed (struct rdns_request *req,
 		const char *name, unsigned int namelen,
 		struct rdns_compression_entry **comp);
 
-void rnds_compression_free (struct rdns_compression_entry *comp);
+void rdns_compression_free (struct rdns_compression_entry *comp);
 
 #endif /* COMPRESSION_H_ */

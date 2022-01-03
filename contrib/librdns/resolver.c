@@ -151,25 +151,6 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 }
 
 
-static struct rdns_reply *
-rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
-{
-	struct rdns_reply *rep;
-
-	rep = malloc (sizeof (struct rdns_reply));
-	if (rep != NULL) {
-		rep->request = req;
-		rep->resolver = req->resolver;
-		rep->entries = NULL;
-		rep->code = rcode;
-		req->reply = rep;
-		rep->flags = 0;
-		rep->requested_name = req->requested_names[0].name;
-	}
-
-	return rep;
-}
-
 static struct rdns_request *
 rdns_find_dns_request (uint8_t *in, struct rdns_io_channel *ioc)
 {
@@ -287,18 +268,173 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	return true;
 }
 
+static bool
+rdns_tcp_maybe_realloc_read_buf (struct rdns_io_channel *ioc)
+{
+	if (ioc->tcp->read_buf_allocated == 0 && ioc->tcp->next_read_size > 0) {
+		ioc->tcp->cur_read_buf = malloc(ioc->tcp->next_read_size);
+
+		if (ioc->tcp->cur_read_buf == NULL) {
+			return false;
+		}
+		ioc->tcp->read_buf_allocated = ioc->tcp->next_read_size;
+	}
+	else if (ioc->tcp->read_buf_allocated < ioc->tcp->next_read_size) {
+		/* Need to realloc */
+		unsigned next_shift = ioc->tcp->next_read_size;
+
+		if (next_shift < ioc->tcp->read_buf_allocated * 2) {
+			if (next_shift < UINT16_MAX && ioc->tcp->read_buf_allocated * 2 <= UINT16_MAX) {
+				next_shift = ioc->tcp->read_buf_allocated * 2;
+			}
+		}
+		void *next_buf = realloc(ioc->tcp->cur_read_buf, next_shift);
+
+		if (next_buf == NULL) {
+			free (ioc->tcp->cur_read_buf);
+			ioc->tcp->cur_read_buf = NULL;
+			return false;
+		}
+
+		ioc->tcp->cur_read_buf = next_buf;
+	}
+
+	return true;
+}
+
 static void
 rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 {
+	ssize_t r;
+	struct rdns_resolver *resolver = ioc->resolver;
 
+	if (ioc->tcp->cur_read == 0) {
+		/* We have to read size first */
+		r = read(fd, &ioc->tcp->next_read_size, sizeof(ioc->tcp->next_read_size));
+
+		if (r == -1 || r == 0) {
+			goto err;
+		}
+
+		ioc->tcp->cur_read += r;
+
+		if (r == sizeof(ioc->tcp->next_read_size)) {
+			ioc->tcp->next_read_size = ntohl(ioc->tcp->next_read_size);
+
+			/* We have read the size, so we can try read one more time */
+			if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
+				rdns_err("failed to allocate %d bytes: %s",
+						(int)ioc->tcp->next_read_size, strerror(errno));
+				r = -1;
+				goto err;
+			}
+		}
+		else {
+			/* We have read one byte, need to retry... */
+			return;
+		}
+	}
+	else if (ioc->tcp->cur_read == 1) {
+		r = read(fd, ((unsigned char *)&ioc->tcp->next_read_size) + 1, 1);
+
+		if (r == -1 || r == 0) {
+			goto err;
+		}
+
+		ioc->tcp->cur_read += r;
+		ioc->tcp->next_read_size = ntohl(ioc->tcp->next_read_size);
+
+		/* We have read the size, so we can try read one more time */
+		if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
+			rdns_err("failed to allocate %d bytes: %s",
+					(int)ioc->tcp->next_read_size, strerror(errno));
+			r = -1;
+			goto err;
+		}
+	}
+
+	if (ioc->tcp->next_read_size < sizeof(struct dns_header)) {
+		/* Truncated reply, reset channel */
+		rdns_err("got truncated size: %d on TCP read", ioc->tcp->next_read_size);
+		r = -1;
+		errno = EINVAL;
+		goto err;
+	}
+
+	/* Try to read the full packet if we can */
+	int to_read = ioc->tcp->next_read_size - (ioc->tcp->cur_read - 2);
+
+	if (to_read <= 0) {
+		/* Internal error */
+		rdns_err("internal buffer error on reading!");
+		r = -1;
+		errno = EINVAL;
+		goto err;
+	}
+
+	r = read(fd, ioc->tcp->cur_read_buf + (ioc->tcp->cur_read - 2), to_read);
+	ioc->tcp->cur_read += r;
+
+	if ((ioc->tcp->cur_read - 2) == ioc->tcp->next_read_size) {
+		/* We have a full packet ready, process it */
+		struct rdns_request *req = rdns_find_dns_request (ioc->tcp->cur_read_buf, ioc);
+
+		if (req != NULL) {
+			struct rdns_reply *rep;
+
+			if (rdns_parse_reply (ioc->tcp->cur_read_buf,
+					ioc->tcp->next_read_size, req, &rep)) {
+				UPSTREAM_OK (req->io->srv);
+
+				if (req->resolver->ups && req->io->srv->ups_elt) {
+					req->resolver->ups->ok (req->io->srv->ups_elt,
+							req->resolver->ups->data);
+				}
+
+				rdns_request_unschedule (req);
+				req->state = RDNS_REQUEST_REPLIED;
+				req->func (rep, req->arg);
+				REF_RELEASE (req);
+			}
+		}
+		else {
+			rdns_warn("unwanted DNS id received over TCP");
+		}
+
+		ioc->tcp->next_read_size = 0;
+		ioc->tcp->cur_read = 0;
+
+		/* Retry read the next packet to avoid unnecessary polling */
+		rdns_process_tcp_read (fd, ioc);
+	}
+
+	return;
+
+err:
+	if (r == 0) {
+		/* Got EOF, just close the socket */
+		rdns_debug ("closing TCP channel due to EOF");
+		rdns_ioc_tcp_reset (ioc);
+	}
+	else if (errno == EINTR || errno == EAGAIN) {
+		/* We just retry later as there is no real error */
+		return;
+	}
+	else {
+		rdns_debug ("closing TCP channel due to IO error: %s", strerror(errno));
+		rdns_ioc_tcp_reset (ioc);
+	}
 }
 
 static void
 rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
 {
 	ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
-	ioc->tcp->async_read = ioc->resolver->async->add_read(ioc->resolver->async->data,
-			ioc->sock, ioc);
+
+	if (ioc->tcp->async_read == NULL) {
+		ioc->tcp->async_read = ioc->resolver->async->add_read(ioc->resolver->async->data,
+				ioc->sock, ioc);
+	}
 }
 
 static void
@@ -677,7 +813,7 @@ rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 				return;
 			}
 		}
-		else if (oc->next_write_size < oc->cur_write) {
+		else if (ntohl(oc->next_write_size) < oc->cur_write) {
 			/* Packet has been fully written, remove it */
 			DL_DELETE(ioc->tcp->output_chain, oc);
 			/* Data in output buffer belongs to request */
@@ -937,20 +1073,20 @@ rdns_make_request_full (
 				if (!rdns_add_rr (req, cur_name, clen, type, &comp)) {
 					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
-					rnds_compression_free (comp);
+					rdns_compression_free(comp);
 					return NULL;
 				}
 			} else {
 				if (!rdns_add_rr (req, cur_name, clen, type, NULL)) {
 					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
-					rnds_compression_free (comp);
+					rdns_compression_free(comp);
 					return NULL;
 				}
 			}
 		}
 
-		rnds_compression_free (comp);
+		rdns_compression_free(comp);
 
 		/* Add EDNS RR */
 		rdns_add_edns0 (req);
