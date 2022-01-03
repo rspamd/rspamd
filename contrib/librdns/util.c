@@ -665,6 +665,21 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		}
 
 		/* Clean all buffers and temporaries */
+		if (ioc->tcp->cur_read_buf) {
+			free (ioc->tcp->cur_read_buf);
+			ioc->tcp->read_buf_allocated = 0;
+			ioc->tcp->next_read_size = 0;
+			ioc->tcp->cur_read = 0;
+		}
+
+		struct rdns_tcp_output_chain *oc, *tmp;
+		DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
+			REF_RELEASE(oc->req);
+			DL_DELETE (ioc->tcp->output_chain, oc);
+			free (oc);
+		}
+
+		ioc->tcp->cur_output_chains = 0;
 
 		ioc->flags &= ~RDNS_CHANNEL_CONNECTED;
 	}

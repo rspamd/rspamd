@@ -817,6 +817,7 @@ rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 			/* Packet has been fully written, remove it */
 			DL_DELETE(ioc->tcp->output_chain, oc);
 			/* Data in output buffer belongs to request */
+			REF_RELEASE(oc->req);
 			free (oc);
 			ioc->tcp->cur_output_chains --;
 		}
