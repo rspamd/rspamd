@@ -152,8 +152,8 @@ enum rdns_io_channel_flags {
  */
 struct rdns_tcp_output_chain {
 	uint16_t next_write_size;
-	struct rdns_request *req;
 	uint16_t cur_write;
+	struct rdns_request *req;
 	struct rdns_tcp_output_chain *prev, *next;
 };
 
@@ -162,8 +162,8 @@ struct rdns_tcp_output_chain {
  */
 struct rdns_tcp_channel {
 	uint16_t next_read_size;
-	unsigned char *cur_read_buf;
 	uint16_t cur_read;
+	unsigned char *cur_read_buf;
 
 	/* Chained set of the planned writes */
 	struct rdns_tcp_output_chain *output_chain;

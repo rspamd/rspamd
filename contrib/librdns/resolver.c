@@ -31,6 +31,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <sys/uio.h>
 
 #include "rdns.h"
 #include "dns_private.h"
@@ -607,9 +608,88 @@ rdns_process_udp_retransmit (int fd, struct rdns_request *req)
 	}
 }
 
+static ssize_t
+rdns_write_output_chain (struct rdns_io_channel *ioc, struct rdns_tcp_output_chain *oc)
+{
+	ssize_t r;
+	struct iovec iov[2];
+	int niov, already_written;
+
+	switch (oc->cur_write) {
+	case 0:
+		/* Size + DNS request in full */
+		iov[0].iov_base = &oc->next_write_size;
+		iov[0].iov_len = sizeof (oc->next_write_size);
+		iov[1].iov_base = oc->req->packet;
+		iov[1].iov_len = oc->req->packet_len;
+		niov = 2;
+		break;
+	case 1:
+		/* Partial Size + DNS request in full */
+		iov[0].iov_base = ((unsigned char *)&oc->next_write_size) + 1;
+		iov[0].iov_len = 1;
+		iov[1].iov_base = oc->req->packet;
+		iov[1].iov_len = oc->req->packet_len;
+		niov = 2;
+		break;
+	default:
+		/* Merely DNS packet */
+		already_written = oc->cur_write - 2;
+		if (oc->req->packet_len <= already_written) {
+			errno = EINVAL;
+			return -1;
+		}
+		iov[0].iov_base = oc->req->packet + already_written;
+		iov[0].iov_len = oc->req->packet_len - already_written;
+		niov = 1;
+		break;
+	}
+
+	r = writev(ioc->sock, iov, niov);
+
+	if (r > 0) {
+		oc->cur_write += r;
+	}
+
+	return r;
+}
+
 static void
 rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 {
+	struct rdns_resolver *resolver = ioc->resolver;
+
+
+	/* Try to write as much as we can */
+	struct rdns_tcp_output_chain *oc, *tmp;
+	DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
+		ssize_t r = rdns_write_output_chain (ioc, oc);
+
+		if (r == -1) {
+			if (errno == EAGAIN || errno == EINTR) {
+				/* Write even is persistent */
+				return;
+			}
+			else {
+				rdns_err ("error when trying to write request to %s: %s",
+						ioc->srv->name, strerror (errno));
+				rdns_ioc_tcp_reset (ioc);
+				return;
+			}
+		}
+		else if (oc->next_write_size < oc->cur_write) {
+			/* Packet has been fully written, remove it */
+			DL_DELETE(ioc->tcp->output_chain, oc);
+			/* Data in output buffer belongs to request */
+			free (oc);
+			ioc->tcp->cur_output_chains --;
+		}
+		else {
+			/* Buffer is not yet processed, stop unless we can continue */
+			break;
+		}
+	}
+
 	if (ioc->tcp->cur_output_chains == 0) {
 		/* Unregister write event */
 		ioc->resolver->async->del_write (ioc->resolver->async->data,
