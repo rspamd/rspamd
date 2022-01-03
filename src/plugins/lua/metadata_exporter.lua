@@ -245,6 +245,10 @@ local selectors = {
     local action = task:get_metric_action('default')
     return (action == 'reject')
   end,
+  is_not_soft_reject = function(task)
+    local action = task:get_metric_action('default')
+    return (action ~= 'soft reject')
+  end,
 }
 
 local function maybe_defer(task, rule)
