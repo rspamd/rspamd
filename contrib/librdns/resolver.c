@@ -295,29 +295,9 @@ rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 static void
 rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
 {
-	struct rdns_resolver *resolver = ioc->resolver;
-	struct rdns_server *serv = ioc->srv;
-	int r = connect (ioc->sock, ioc->saddr, ioc->slen);
-
-	if (r == -1) {
-		if (errno != EAGAIN && errno != EINTR && errno != EINPROGRESS) {
-			rdns_err ("cannot connect a TCP socket: %s for server %s",
-					strerror(errno), serv->name);
-			resolver->async->del_write (resolver->async->data, ioc->async_io);
-		}
-		else {
-			/* We need to wait again for write readiness here */
-			ioc->async_io = resolver->async->add_write (resolver->async->data,
-					ioc->sock, ioc);
-		}
-	}
-	else {
-		/* Always be ready to read from a TCP socket */
-		resolver->async->del_write (resolver->async->data, ioc->async_io);
-		ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
-		ioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
-				ioc->sock, ioc);
-	}
+	ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+	ioc->tcp->async_read = ioc->resolver->async->add_read(ioc->resolver->async->data,
+			ioc->sock, ioc);
 }
 
 static void
@@ -373,14 +353,16 @@ void
 rdns_process_read (int fd, void *arg)
 {
 	struct rdns_io_channel *ioc = (struct rdns_io_channel *)arg;
+	struct rdns_resolver *resolver;
 
+	resolver = ioc->resolver;
 
 	if (IS_CHANNEL_TCP(ioc)) {
 		if (IS_CHANNEL_CONNECTED(ioc)) {
 			rdns_process_tcp_read (fd, ioc);
 		}
 		else {
-			rdns_process_tcp_connect (fd, ioc);
+			rdns_err ("read readiness on non connected TCP channel!");
 		}
 	}
 	else {
@@ -628,7 +610,12 @@ rdns_process_udp_retransmit (int fd, struct rdns_request *req)
 static void
 rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 {
-
+	if (ioc->tcp->cur_output_chains == 0) {
+		/* Unregister write event */
+		ioc->resolver->async->del_write (ioc->resolver->async->data,
+				ioc->tcp->async_write);
+		ioc->tcp->async_write = NULL;
+	}
 }
 
 void
@@ -656,6 +643,7 @@ rdns_process_write (int fd, void *arg)
 		}
 		else {
 			rdns_process_tcp_connect(fd, ioc);
+			rdns_process_tcp_write(fd, ioc);
 		}
 	}
 	else {

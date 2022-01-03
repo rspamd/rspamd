@@ -548,6 +548,9 @@ rdns_ioc_new (struct rdns_server *serv,
 	}
 
 	nioc->struct_magic = RDNS_IO_CHANNEL_TAG;
+	nioc->srv = serv;
+	nioc->resolver = resolver;
+
 	nioc->sock = rdns_make_client_socket (serv->name, serv->port,
 			is_tcp ? SOCK_STREAM : SOCK_DGRAM, &nioc->saddr, &nioc->slen);
 	if (nioc->sock == -1) {
@@ -570,12 +573,7 @@ rdns_ioc_new (struct rdns_server *serv,
 
 		nioc->flags |= RDNS_CHANNEL_TCP;
 	}
-
-	nioc->srv = serv;
-	nioc->resolver = resolver;
-
-	/* If it is not NULL then we are in a delayed connection state */
-	if (!is_tcp) {
+	else {
 		nioc->flags |= RDNS_CHANNEL_ACTIVE;
 		nioc->async_io = resolver->async->add_read(resolver->async->data,
 				nioc->sock, nioc);
