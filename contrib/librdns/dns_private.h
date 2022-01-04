@@ -134,7 +134,6 @@ struct rdns_request {
 	void *curve_plugin_data;
 #endif
 
-	UT_hash_handle hh;
 	ref_entry_t ref;
 };
 

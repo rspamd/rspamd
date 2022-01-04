@@ -437,6 +437,55 @@ rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
 	}
 }
 
+static bool
+rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv)
+{
+	struct rdns_resolver *resolver;
+	struct rdns_io_channel *old_ioc = req->io,
+			*ioc = serv->tcp_io_channels[ottery_rand_uint32 () % serv->tcp_io_cnt];
+
+	resolver = req->resolver;
+
+	if (ioc != NULL) {
+		if (!IS_CHANNEL_CONNECTED(ioc)) {
+			if (!rdns_ioc_tcp_connect(ioc)) {
+				return false;
+			}
+		}
+
+		struct rdns_tcp_output_chain *oc;
+
+		oc = calloc(1, sizeof(*oc));
+
+		if (oc == NULL) {
+			rdns_err("failed to allocate output buffer for TCP ioc: %s",
+					strerror(errno));
+			return false;
+		}
+
+		oc->req = req;
+		oc->next_write_size = req->packet_len;
+
+		DL_APPEND(ioc->tcp->output_chain, oc);
+
+		if (ioc->tcp->async_write == NULL) {
+			ioc->tcp->async_write = resolver->async->add_write (
+					resolver->async->data,
+					ioc->sock, ioc);
+		}
+
+		req->state = RDNS_REQUEST_TCP;
+		/* Switch IO channel from UDP to TCP */
+		req->io = ioc;
+		REF_RETAIN(ioc);
+		REF_RELEASE(old_ioc);
+
+		return true;
+	}
+
+	return false;
+}
+
 static void
 rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
 {
@@ -475,9 +524,24 @@ rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
 			}
 
 			rdns_request_unschedule (req);
-			req->state = RDNS_REQUEST_REPLIED;
-			req->func (rep, req->arg);
-			REF_RELEASE (req);
+
+			if (!(rep->flags & RDNS_TRUNCATED)) {
+				req->state = RDNS_REQUEST_REPLIED;
+				req->func(rep, req->arg);
+				REF_RELEASE (req);
+			}
+			else {
+				rdns_debug("truncated UDP reply for %s", req->requested_names[0].name);
+				if (req->io->srv->tcp_io_cnt > 0) {
+					/* Reschedule via TCP */
+					if (!rdns_reschedule_req_over_tcp (req, req->io->srv)) {
+						/* Use truncated reply as we have no other options */
+						req->state = RDNS_REQUEST_REPLIED;
+						req->func(rep, req->arg);
+						REF_RELEASE (req);
+					}
+				}
+			}
 		}
 	}
 	else {
