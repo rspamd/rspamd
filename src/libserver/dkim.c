@@ -346,7 +346,7 @@ rspamd_dkim_parse_domain (rspamd_dkim_context_t * ctx,
 			g_set_error (err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_INVALID_H,
-					"invalid dkim domain tag %*.s: idna failed",
+					"invalid dkim domain tag %.*s: idna failed",
 					(int)len, param);
 
 			return FALSE;
@@ -447,7 +447,7 @@ rspamd_dkim_parse_selector (rspamd_dkim_context_t * ctx,
 			g_set_error (err,
 					DKIM_ERROR,
 					DKIM_SIGERROR_INVALID_H,
-					"invalid dkim selector tag %*.s: idna failed",
+					"invalid dkim selector tag %.*s: idna failed",
 					(int)len, param);
 
 			return FALSE;

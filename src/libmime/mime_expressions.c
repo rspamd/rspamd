@@ -784,7 +784,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 		case bad_atom:
 			g_set_error (err, rspamd_mime_expr_quark(), 100, "cannot parse"
 					" mime atom '%s' when reading symbol '%c' at offset %d, "
-					"near %*.s", line, t, (gint)(p - line),
+					"near %.*s", line, t, (gint)(p - line),
 					(gint)MIN (end - p, 10), p);
 			return NULL;
 		case end_atom:
@@ -966,14 +966,14 @@ set:
 
 		if (function_obj == NULL) {
 			g_set_error (err, rspamd_mime_expr_quark(), 320,
-					"function %*.s is not found for '%s'",
+					"function %.*s is not found for '%s'",
 					(int)(p - c), c, mime_atom->str);
 			goto err;
 		}
 
 		if (ucl_object_type (function_obj) != UCL_USERDATA) {
 			g_set_error (err, rspamd_mime_expr_quark(), 320,
-					"function %*.s has invalid type for '%s'",
+					"function %.*s has invalid type for '%s'",
 					(int)(p - c), c, mime_atom->str);
 			goto err;
 		}
