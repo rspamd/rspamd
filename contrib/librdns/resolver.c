@@ -154,16 +154,19 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 static struct rdns_request *
 rdns_find_dns_request (uint8_t *in, struct rdns_io_channel *ioc)
 {
-	struct dns_header *header = (struct dns_header *)in;
+	struct dns_header header;
 	int id;
 	struct rdns_resolver *resolver = ioc->resolver;
 
-	id = header->qid;
+	memcpy (&header, in, sizeof(header));
+	id = header.qid;
 	khiter_t k = kh_get(rdns_requests_hash, ioc->requests, id);
 
 	if (k == kh_end(ioc->requests)) {
 		/* No such requests found */
 		rdns_debug ("DNS request with id %d has not been found for IO channel", id);
+
+		return NULL;
 	}
 
 	return kh_value(ioc->requests, k);
@@ -319,7 +322,7 @@ rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 		ioc->tcp->cur_read += r;
 
 		if (r == sizeof(ioc->tcp->next_read_size)) {
-			ioc->tcp->next_read_size = ntohl(ioc->tcp->next_read_size);
+			ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
 
 			/* We have read the size, so we can try read one more time */
 			if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
@@ -342,7 +345,7 @@ rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 		}
 
 		ioc->tcp->cur_read += r;
-		ioc->tcp->next_read_size = ntohl(ioc->tcp->next_read_size);
+		ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
 
 		/* We have read the size, so we can try read one more time */
 		if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
@@ -464,7 +467,7 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 		}
 
 		oc->req = req;
-		oc->next_write_size = req->packet_len;
+		oc->next_write_size = htons(req->packet_len);
 
 		DL_APPEND(ioc->tcp->output_chain, oc);
 
@@ -477,8 +480,30 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 		req->state = RDNS_REQUEST_TCP;
 		/* Switch IO channel from UDP to TCP */
 		req->io = ioc;
+
+		khiter_t k;
+		for (;;) {
+			int pr;
+			k = kh_put(rdns_requests_hash, ioc->requests, req->id, &pr);
+
+			if (pr == 0) {
+				/* We have already a request with this id, so we have to regenerate ID */
+				req->id = rdns_permutor_generate_id ();
+				/* Update packet as well */
+				uint16_t raw_id = req->id;
+				memcpy(req->packet, &raw_id, sizeof(raw_id));
+			}
+			else {
+				break;
+			}
+		}
+
+		kh_value(req->io->requests, k) = req;
 		REF_RETAIN(ioc);
 		REF_RELEASE(old_ioc);
+
+		/* We do extra ref as we push a request into a TCP hash table */
+		REF_RETAIN(req);
 
 		return true;
 	}
@@ -877,7 +902,7 @@ rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 				return;
 			}
 		}
-		else if (ntohl(oc->next_write_size) < oc->cur_write) {
+		else if (ntohs(oc->next_write_size) < oc->cur_write) {
 			/* Packet has been fully written, remove it */
 			DL_DELETE(ioc->tcp->output_chain, oc);
 			/* Data in output buffer belongs to request */
