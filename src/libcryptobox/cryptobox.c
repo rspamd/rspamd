@@ -1519,9 +1519,10 @@ void
 rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed)
 {
-	XXH3_state_t *rst = (XXH3_state_t *)st->opaque;
+	XXH3_state_t *xst = (XXH3_state_t *)st->opaque;
 	st->type = RSPAMD_CRYPTOBOX_XXHASH3;
-	XXH3_64bits_reset_withSeed (rst, seed);
+	XXH3_INITSTATE (xst);
+	XXH3_64bits_reset_withSeed (xst, seed);
 }
 
 void
@@ -1540,6 +1541,7 @@ rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st
 	}
 	case RSPAMD_CRYPTOBOX_XXHASH64: {
 		XXH64_state_t *xst = (XXH64_state_t *)  st->opaque;
+		memset(xst, 0, sizeof(*xst));
 		st->type = RSPAMD_CRYPTOBOX_XXHASH64;
 		XXH64_reset (xst, seed);
 		break;
@@ -1547,6 +1549,7 @@ rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st
 	case RSPAMD_CRYPTOBOX_XXHASH32:
 	{
 		XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
+		memset(xst, 0, sizeof(*xst));
 		st->type = RSPAMD_CRYPTOBOX_XXHASH32;
 		XXH32_reset (xst, seed);
 		break;
@@ -1554,6 +1557,7 @@ rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st
 	case RSPAMD_CRYPTOBOX_XXHASH3:
 	{
 		XXH3_state_t *xst = (XXH3_state_t *)  st->opaque;
+		XXH3_INITSTATE(xst);
 		st->type = RSPAMD_CRYPTOBOX_XXHASH3;
 		XXH3_64bits_reset_withSeed (xst, seed);
 		break;
