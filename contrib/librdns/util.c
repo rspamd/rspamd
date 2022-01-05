@@ -637,7 +637,7 @@ rdns_request_unschedule (struct rdns_request *req)
 		if (req->state == RDNS_REQUEST_WAIT_REPLY) {
 			req->async->del_timer (req->async->data,
 					req->async_event);
-
+			rdns_request_remove_from_hash(req);
 			req->async_event = NULL;
 		}
 		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
