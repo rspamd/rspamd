@@ -394,8 +394,6 @@ rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
 							req->resolver->ups->data);
 				}
 
-				rdns_request_unschedule (req);
-				req->state = RDNS_REQUEST_REPLIED;
 				req->func (rep, req->arg);
 				REF_RELEASE (req);
 			}
@@ -458,7 +456,7 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 
 		struct rdns_tcp_output_chain *oc;
 
-		oc = calloc(1, sizeof(*oc));
+		oc = calloc(1, sizeof(*oc) + req->packet_len);
 
 		if (oc == NULL) {
 			rdns_err("failed to allocate output buffer for TCP ioc: %s",
@@ -466,7 +464,8 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 			return false;
 		}
 
-		oc->req = req;
+		oc->write_buf = ((unsigned char *)oc) + sizeof(*oc);
+		memcpy(oc->write_buf, req->packet, req->packet_len);
 		oc->next_write_size = htons(req->packet_len);
 
 		DL_APPEND(ioc->tcp->output_chain, oc);
@@ -479,6 +478,7 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 
 		req->state = RDNS_REQUEST_TCP;
 		/* Switch IO channel from UDP to TCP */
+		rdns_request_remove_from_hash (req);
 		req->io = ioc;
 
 		khiter_t k;
@@ -502,11 +502,8 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 				req->timeout, req);
 
 		kh_value(req->io->requests, k) = req;
-		REF_RETAIN(ioc);
 		REF_RELEASE(old_ioc);
-
-		/* We do extra ref as we push a request into a TCP hash table */
-		REF_RETAIN(req);
+		REF_RETAIN(ioc);
 
 		return true;
 	}
@@ -852,33 +849,34 @@ rdns_write_output_chain (struct rdns_io_channel *ioc, struct rdns_tcp_output_cha
 	ssize_t r;
 	struct iovec iov[2];
 	int niov, already_written;
+	int packet_len = ntohs (oc->next_write_size);
 
 	switch (oc->cur_write) {
 	case 0:
 		/* Size + DNS request in full */
 		iov[0].iov_base = &oc->next_write_size;
 		iov[0].iov_len = sizeof (oc->next_write_size);
-		iov[1].iov_base = oc->req->packet;
-		iov[1].iov_len = oc->req->packet_len;
+		iov[1].iov_base = oc->write_buf;
+		iov[1].iov_len = packet_len;
 		niov = 2;
 		break;
 	case 1:
 		/* Partial Size + DNS request in full */
 		iov[0].iov_base = ((unsigned char *)&oc->next_write_size) + 1;
 		iov[0].iov_len = 1;
-		iov[1].iov_base = oc->req->packet;
-		iov[1].iov_len = oc->req->packet_len;
+		iov[1].iov_base = oc->write_buf;
+		iov[1].iov_len = packet_len;
 		niov = 2;
 		break;
 	default:
 		/* Merely DNS packet */
 		already_written = oc->cur_write - 2;
-		if (oc->req->packet_len <= already_written) {
+		if (packet_len <= already_written) {
 			errno = EINVAL;
 			return -1;
 		}
-		iov[0].iov_base = oc->req->packet + already_written;
-		iov[0].iov_len = oc->req->packet_len - already_written;
+		iov[0].iov_base = oc->write_buf + already_written;
+		iov[0].iov_len = packet_len - already_written;
 		niov = 1;
 		break;
 	}
@@ -918,9 +916,7 @@ rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
 		else if (ntohs(oc->next_write_size) < oc->cur_write) {
 			/* Packet has been fully written, remove it */
 			DL_DELETE(ioc->tcp->output_chain, oc);
-			/* Data in output buffer belongs to request */
-			REF_RELEASE(oc->req);
-			free (oc);
+			free (oc); /* It also frees write buf */
 			ioc->tcp->cur_output_chains --;
 		}
 		else {

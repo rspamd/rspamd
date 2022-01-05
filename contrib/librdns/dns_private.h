@@ -154,7 +154,7 @@ enum rdns_io_channel_flags {
 struct rdns_tcp_output_chain {
 	uint16_t next_write_size; /* Network byte order! */
 	uint16_t cur_write; /* Cur bytes written including `next_write_size` */
-	struct rdns_request *req;
+	unsigned char *write_buf;
 	struct rdns_tcp_output_chain *prev, *next;
 };
 

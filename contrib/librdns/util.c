@@ -50,7 +50,7 @@ rdns_request_remove_from_hash (struct rdns_request *req)
 		k = kh_get(rdns_requests_hash, req->io->requests, req->id);
 
 		if (k != kh_end(req->io->requests)) {
-			kh_del(rdns_requests_hash, req->io->requests, req->id);
+			kh_del(rdns_requests_hash, req->io->requests, k);
 		}
 	}
 }
@@ -507,6 +507,11 @@ rdns_request_free (struct rdns_request *req)
 			}
 		}
 		if (req->state == RDNS_REQUEST_TCP) {
+			if (req->async_event) {
+				req->async->del_timer (req->async->data,
+						req->async_event);
+			}
+
 			rdns_request_remove_from_hash(req);
 		}
 #ifdef TWEETNACL
@@ -644,6 +649,8 @@ rdns_request_unschedule (struct rdns_request *req)
 		}
 	}
 	else if (req->state == RDNS_REQUEST_TCP) {
+		rdns_request_remove_from_hash(req);
+
 		req->async->del_timer(req->async->data,
 				req->async_event);
 
@@ -683,7 +690,6 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 
 		struct rdns_tcp_output_chain *oc, *tmp;
 		DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
-			REF_RELEASE(oc->req);
 			DL_DELETE (ioc->tcp->output_chain, oc);
 			free (oc);
 		}
