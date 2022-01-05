@@ -506,6 +506,9 @@ rdns_request_free (struct rdns_request *req)
 				req->async_event = NULL;
 			}
 		}
+		if (req->state == RDNS_REQUEST_TCP) {
+			rdns_request_remove_from_hash(req);
+		}
 #ifdef TWEETNACL
 		if (req->curve_plugin_data != NULL) {
 			req->resolver->curve_plugin->cb.curve_plugin.finish_cb (

@@ -36,7 +36,7 @@ static const int dns_port = 53;
 static const int default_io_cnt = 8;
 static const int default_tcp_io_cnt = 1;
 
-#define UDP_PACKET_SIZE (4096 * 2)
+#define UDP_PACKET_SIZE (512)
 
 #define DNS_COMPRESSION_BITS 0xC0
 
