@@ -2391,7 +2391,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 				p = map + RSPAMD_HS_MAGIC_LEN + sizeof (test_plt);
 				end = map + len;
-				n = *(gint *)p;
+				memcpy(&n, p, sizeof(n));
 				p += sizeof (gint);
 
 				if (n <= 0 || 2 * n * sizeof (gint) + /* IDs + flags */
