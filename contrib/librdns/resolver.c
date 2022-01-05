@@ -31,6 +31,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <sys/uio.h>
 
 #include "rdns.h"
 #include "dns_private.h"
@@ -41,34 +42,42 @@
 #include "logger.h"
 #include "compression.h"
 
+__KHASH_IMPL(rdns_requests_hash, kh_inline, int, struct rdns_request *, true,
+		kh_int_hash_func, kh_int_hash_equal);
+
 static int
 rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 {
-	int r;
+	ssize_t r;
 	struct rdns_server *serv = req->io->srv;
 	struct rdns_resolver *resolver = req->resolver;
-	struct rdns_request *tmp;
 	struct dns_header *header;
 	const int max_id_cycles = 32;
+	khiter_t k;
 
 	/* Find ID collision */
 	if (new_req) {
 		r = 0;
-		HASH_FIND_INT (req->io->requests, &req->id, tmp);
-		while (tmp != NULL) {
-			/* Check for unique id */
-			header = (struct dns_header *)req->packet;
-			header->qid = rdns_permutor_generate_id ();
-			req->id = header->qid;
-			if (++r > max_id_cycles) {
-				return -1;
+
+		for (;;) {
+			k = kh_get(rdns_requests_hash, req->io->requests, req->id);
+			if (k != kh_end(req->io->requests)) {
+				/* Check for unique id */
+				header = (struct dns_header *) req->packet;
+				header->qid = rdns_permutor_generate_id();
+				req->id = header->qid;
+				if (++r > max_id_cycles) {
+					return -1;
+				}
 			}
-			HASH_FIND_INT (req->io->requests, &req->id, tmp);
+			else {
+				break;
+			}
 		}
 	}
 
 	if (resolver->curve_plugin == NULL) {
-		if (!req->io->connected) {
+		if (!IS_CHANNEL_CONNECTED(req->io)) {
 			r = sendto (fd, req->packet, req->pos, 0,
 					req->io->saddr,
 					req->io->slen);
@@ -78,7 +87,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		}
 	}
 	else {
-		if (!req->io->connected) {
+		if (!IS_CHANNEL_CONNECTED(req->io)) {
 			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
 					resolver->curve_plugin->data,
 					req->io->saddr,
@@ -95,7 +104,10 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		if (errno == EAGAIN || errno == EINTR) {
 			if (new_req) {
 				/* Write when socket is ready */
-				HASH_ADD_INT (req->io->requests, id, req);
+				int pr;
+
+				k = kh_put(rdns_requests_hash, req->io->requests, req->id, &pr);
+				kh_value(req->io->requests, k) = req;
 				req->async_event = resolver->async->add_write (resolver->async->data,
 					fd, req);
 				req->state = RDNS_REQUEST_WAIT_SEND;
@@ -111,7 +123,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 			return -1;
 		}
 	}
-	else if (!req->io->connected) {
+	else if (!IS_CHANNEL_CONNECTED(req->io)) {
 		/* Connect socket */
 		r = connect (fd, req->io->saddr, req->io->slen);
 
@@ -120,13 +132,15 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 					strerror (errno), serv->name);
 		}
 		else {
-			req->io->connected = true;
+			req->io->flags |= RDNS_CHANNEL_CONNECTED;
 		}
 	}
 
 	if (new_req) {
 		/* Add request to hash table */
-		HASH_ADD_INT (req->io->requests, id, req);
+		int pr;
+		k = kh_put(rdns_requests_hash, req->io->requests, req->id, &pr);
+		kh_value(req->io->requests, k) = req;
 		/* Fill timeout */
 		req->async_event = resolver->async->add_timer (resolver->async->data,
 				req->timeout, req);
@@ -137,41 +151,25 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 }
 
 
-static struct rdns_reply *
-rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
-{
-	struct rdns_reply *rep;
-
-	rep = malloc (sizeof (struct rdns_reply));
-	if (rep != NULL) {
-		rep->request = req;
-		rep->resolver = req->resolver;
-		rep->entries = NULL;
-		rep->code = rcode;
-		req->reply = rep;
-		rep->flags = 0;
-		rep->requested_name = req->requested_names[0].name;
-	}
-
-	return rep;
-}
-
 static struct rdns_request *
 rdns_find_dns_request (uint8_t *in, struct rdns_io_channel *ioc)
 {
-	struct dns_header *header = (struct dns_header *)in;
-	struct rdns_request *req;
+	struct dns_header header;
 	int id;
 	struct rdns_resolver *resolver = ioc->resolver;
 
-	id = header->qid;
-	HASH_FIND_INT (ioc->requests, &id, req);
-	if (req == NULL) {
+	memcpy (&header, in, sizeof(header));
+	id = header.qid;
+	khiter_t k = kh_get(rdns_requests_hash, ioc->requests, id);
+
+	if (k == kh_end(ioc->requests)) {
 		/* No such requests found */
-		rdns_debug ("DNS request with id %d has not been found for IO channel", (int)id);
+		rdns_debug ("DNS request with id %d has not been found for IO channel", id);
+
+		return NULL;
 	}
 
-	return req;
+	return kh_value(ioc->requests, k);
 }
 
 static bool
@@ -273,10 +271,249 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	return true;
 }
 
-void
-rdns_process_read (int fd, void *arg)
+static bool
+rdns_tcp_maybe_realloc_read_buf (struct rdns_io_channel *ioc)
 {
-	struct rdns_io_channel *ioc = arg;
+	if (ioc->tcp->read_buf_allocated == 0 && ioc->tcp->next_read_size > 0) {
+		ioc->tcp->cur_read_buf = malloc(ioc->tcp->next_read_size);
+
+		if (ioc->tcp->cur_read_buf == NULL) {
+			return false;
+		}
+		ioc->tcp->read_buf_allocated = ioc->tcp->next_read_size;
+	}
+	else if (ioc->tcp->read_buf_allocated < ioc->tcp->next_read_size) {
+		/* Need to realloc */
+		unsigned next_shift = ioc->tcp->next_read_size;
+
+		if (next_shift < ioc->tcp->read_buf_allocated * 2) {
+			if (next_shift < UINT16_MAX && ioc->tcp->read_buf_allocated * 2 <= UINT16_MAX) {
+				next_shift = ioc->tcp->read_buf_allocated * 2;
+			}
+		}
+		void *next_buf = realloc(ioc->tcp->cur_read_buf, next_shift);
+
+		if (next_buf == NULL) {
+			free (ioc->tcp->cur_read_buf);
+			ioc->tcp->cur_read_buf = NULL;
+			return false;
+		}
+
+		ioc->tcp->cur_read_buf = next_buf;
+	}
+
+	return true;
+}
+
+static void
+rdns_process_tcp_read (int fd, struct rdns_io_channel *ioc)
+{
+	ssize_t r;
+	struct rdns_resolver *resolver = ioc->resolver;
+
+	if (ioc->tcp->cur_read == 0) {
+		/* We have to read size first */
+		r = read(fd, &ioc->tcp->next_read_size, sizeof(ioc->tcp->next_read_size));
+
+		if (r == -1 || r == 0) {
+			goto err;
+		}
+
+		ioc->tcp->cur_read += r;
+
+		if (r == sizeof(ioc->tcp->next_read_size)) {
+			ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
+
+			/* We have read the size, so we can try read one more time */
+			if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
+				rdns_err("failed to allocate %d bytes: %s",
+						(int)ioc->tcp->next_read_size, strerror(errno));
+				r = -1;
+				goto err;
+			}
+		}
+		else {
+			/* We have read one byte, need to retry... */
+			return;
+		}
+	}
+	else if (ioc->tcp->cur_read == 1) {
+		r = read(fd, ((unsigned char *)&ioc->tcp->next_read_size) + 1, 1);
+
+		if (r == -1 || r == 0) {
+			goto err;
+		}
+
+		ioc->tcp->cur_read += r;
+		ioc->tcp->next_read_size = ntohs(ioc->tcp->next_read_size);
+
+		/* We have read the size, so we can try read one more time */
+		if (!rdns_tcp_maybe_realloc_read_buf(ioc)) {
+			rdns_err("failed to allocate %d bytes: %s",
+					(int)ioc->tcp->next_read_size, strerror(errno));
+			r = -1;
+			goto err;
+		}
+	}
+
+	if (ioc->tcp->next_read_size < sizeof(struct dns_header)) {
+		/* Truncated reply, reset channel */
+		rdns_err("got truncated size: %d on TCP read", ioc->tcp->next_read_size);
+		r = -1;
+		errno = EINVAL;
+		goto err;
+	}
+
+	/* Try to read the full packet if we can */
+	int to_read = ioc->tcp->next_read_size - (ioc->tcp->cur_read - 2);
+
+	if (to_read <= 0) {
+		/* Internal error */
+		rdns_err("internal buffer error on reading!");
+		r = -1;
+		errno = EINVAL;
+		goto err;
+	}
+
+	r = read(fd, ioc->tcp->cur_read_buf + (ioc->tcp->cur_read - 2), to_read);
+	ioc->tcp->cur_read += r;
+
+	if ((ioc->tcp->cur_read - 2) == ioc->tcp->next_read_size) {
+		/* We have a full packet ready, process it */
+		struct rdns_request *req = rdns_find_dns_request (ioc->tcp->cur_read_buf, ioc);
+
+		if (req != NULL) {
+			struct rdns_reply *rep;
+
+			if (rdns_parse_reply (ioc->tcp->cur_read_buf,
+					ioc->tcp->next_read_size, req, &rep)) {
+				UPSTREAM_OK (req->io->srv);
+
+				if (req->resolver->ups && req->io->srv->ups_elt) {
+					req->resolver->ups->ok (req->io->srv->ups_elt,
+							req->resolver->ups->data);
+				}
+
+				req->func (rep, req->arg);
+				REF_RELEASE (req);
+			}
+		}
+		else {
+			rdns_warn("unwanted DNS id received over TCP");
+		}
+
+		ioc->tcp->next_read_size = 0;
+		ioc->tcp->cur_read = 0;
+
+		/* Retry read the next packet to avoid unnecessary polling */
+		rdns_process_tcp_read (fd, ioc);
+	}
+
+	return;
+
+err:
+	if (r == 0) {
+		/* Got EOF, just close the socket */
+		rdns_debug ("closing TCP channel due to EOF");
+		rdns_ioc_tcp_reset (ioc);
+	}
+	else if (errno == EINTR || errno == EAGAIN) {
+		/* We just retry later as there is no real error */
+		return;
+	}
+	else {
+		rdns_debug ("closing TCP channel due to IO error: %s", strerror(errno));
+		rdns_ioc_tcp_reset (ioc);
+	}
+}
+
+static void
+rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
+{
+	ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+
+	if (ioc->tcp->async_read == NULL) {
+		ioc->tcp->async_read = ioc->resolver->async->add_read(ioc->resolver->async->data,
+				ioc->sock, ioc);
+	}
+}
+
+static bool
+rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv)
+{
+	struct rdns_resolver *resolver;
+	struct rdns_io_channel *old_ioc = req->io,
+			*ioc = serv->tcp_io_channels[ottery_rand_uint32 () % serv->tcp_io_cnt];
+
+	resolver = req->resolver;
+
+	if (ioc != NULL) {
+		if (!IS_CHANNEL_CONNECTED(ioc)) {
+			if (!rdns_ioc_tcp_connect(ioc)) {
+				return false;
+			}
+		}
+
+		struct rdns_tcp_output_chain *oc;
+
+		oc = calloc(1, sizeof(*oc) + req->packet_len);
+
+		if (oc == NULL) {
+			rdns_err("failed to allocate output buffer for TCP ioc: %s",
+					strerror(errno));
+			return false;
+		}
+
+		oc->write_buf = ((unsigned char *)oc) + sizeof(*oc);
+		memcpy(oc->write_buf, req->packet, req->packet_len);
+		oc->next_write_size = htons(req->packet_len);
+
+		DL_APPEND(ioc->tcp->output_chain, oc);
+
+		if (ioc->tcp->async_write == NULL) {
+			ioc->tcp->async_write = resolver->async->add_write (
+					resolver->async->data,
+					ioc->sock, ioc);
+		}
+
+		req->state = RDNS_REQUEST_TCP;
+		/* Switch IO channel from UDP to TCP */
+		rdns_request_remove_from_hash (req);
+		req->io = ioc;
+
+		khiter_t k;
+		for (;;) {
+			int pr;
+			k = kh_put(rdns_requests_hash, ioc->requests, req->id, &pr);
+
+			if (pr == 0) {
+				/* We have already a request with this id, so we have to regenerate ID */
+				req->id = rdns_permutor_generate_id ();
+				/* Update packet as well */
+				uint16_t raw_id = req->id;
+				memcpy(req->packet, &raw_id, sizeof(raw_id));
+			}
+			else {
+				break;
+			}
+		}
+
+		req->async_event = resolver->async->add_timer (resolver->async->data,
+				req->timeout, req);
+
+		kh_value(req->io->requests, k) = req;
+		REF_RELEASE(old_ioc);
+		REF_RETAIN(ioc);
+
+		return true;
+	}
+
+	return false;
+}
+
+static void
+rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
+{
 	struct rdns_resolver *resolver;
 	struct rdns_request *req = NULL;
 	ssize_t r;
@@ -297,7 +534,7 @@ rdns_process_read (int fd, void *arg)
 				sizeof (in), resolver->curve_plugin->data, &req,
 				ioc->saddr, ioc->slen);
 		if (req == NULL &&
-				r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
+			r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 			req = rdns_find_dns_request (in, ioc);
 		}
 	}
@@ -312,14 +549,50 @@ rdns_process_read (int fd, void *arg)
 			}
 
 			rdns_request_unschedule (req);
-			req->state = RDNS_REQUEST_REPLIED;
-			req->func (rep, req->arg);
-			REF_RELEASE (req);
+
+			if (!(rep->flags & RDNS_TRUNCATED)) {
+				req->state = RDNS_REQUEST_REPLIED;
+				req->func(rep, req->arg);
+				REF_RELEASE (req);
+			}
+			else {
+				rdns_debug("truncated UDP reply for %s", req->requested_names[0].name);
+				if (req->io->srv->tcp_io_cnt > 0) {
+					/* Reschedule via TCP */
+					if (!rdns_reschedule_req_over_tcp (req, req->io->srv)) {
+						/* Use truncated reply as we have no other options */
+						req->state = RDNS_REQUEST_REPLIED;
+						req->func(rep, req->arg);
+						REF_RELEASE (req);
+					}
+				}
+			}
 		}
 	}
 	else {
 		/* Still want to increase uses */
 		ioc->uses ++;
+	}
+}
+
+void
+rdns_process_read (int fd, void *arg)
+{
+	struct rdns_io_channel *ioc = (struct rdns_io_channel *)arg;
+	struct rdns_resolver *resolver;
+
+	resolver = ioc->resolver;
+
+	if (IS_CHANNEL_TCP(ioc)) {
+		if (IS_CHANNEL_CONNECTED(ioc)) {
+			rdns_process_tcp_read (fd, ioc);
+		}
+		else {
+			rdns_err ("read readiness on non connected TCP channel!");
+		}
+	}
+	else {
+		rdns_process_udp_read (fd, ioc);
 	}
 }
 
@@ -345,6 +618,16 @@ rdns_process_timer (void *arg)
 		UPSTREAM_FAIL (req->io->srv, time (NULL));
 	}
 
+	if (req->state == RDNS_REQUEST_TCP) {
+		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
+		rdns_request_unschedule (req);
+		req->state = RDNS_REQUEST_REPLIED;
+		req->func (rep, req->arg);
+		REF_RELEASE (req);
+
+		return;
+	}
+
 	if (req->retransmits == 0) {
 
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
@@ -356,7 +639,7 @@ rdns_process_timer (void *arg)
 		return;
 	}
 
-	if (!req->io->active || req->retransmits == 1) {
+	if (!IS_CHANNEL_ACTIVE(req->io) || req->retransmits == 1) {
 
 		if (resolver->ups) {
 			cnt = resolver->ups->count (resolver->ups->data);
@@ -368,7 +651,7 @@ rdns_process_timer (void *arg)
 			}
 		}
 
-		if (!req->io->active || cnt > 1) {
+		if (!IS_CHANNEL_ACTIVE(req->io) || cnt > 1) {
 			/* Do not reschedule IO requests on inactive sockets */
 			rdns_debug ("reschedule request with id: %d", (int)req->id);
 			rdns_request_unschedule (req);
@@ -442,7 +725,7 @@ rdns_process_timer (void *arg)
 			req->async->del_timer (req->async->data,
 					req->async_event);
 			req->async_event = NULL;
-			HASH_DEL (req->io->requests, req);
+			rdns_request_remove_from_hash(req);
 		}
 
 		/* We have not scheduled timeout actually due to send error */
@@ -461,8 +744,21 @@ static void
 rdns_process_periodic (void *arg)
 {
 	struct rdns_resolver *resolver = (struct rdns_resolver*)arg;
+	struct rdns_server *serv;
 
 	UPSTREAM_RESCAN (resolver->servers, time (NULL));
+
+	UPSTREAM_FOREACH (resolver->servers, serv) {
+		for (int i = 0; i < serv->tcp_io_cnt; i ++) {
+			if (IS_CHANNEL_CONNECTED(serv->tcp_io_channels[i])) {
+				/* Disconnect channels with no requests in flight */
+				if (kh_size(serv->tcp_io_channels[i]->requests) == 0) {
+					rdns_debug ("reset inactive TCP connection to %s", serv->name);
+					rdns_ioc_tcp_reset (serv->tcp_io_channels[i]);
+				}
+			}
+		}
+	}
 }
 
 static void
@@ -479,29 +775,17 @@ rdns_process_ioc_refresh (void *arg)
 				ioc = serv->io_channels[i];
 				if (ioc->uses > resolver->max_ioc_uses) {
 					/* Schedule IOC removing */
-					nioc = calloc (1, sizeof (struct rdns_io_channel));
+					nioc = rdns_ioc_new (serv, resolver, false);
+
 					if (nioc == NULL) {
 						rdns_err ("calloc fails to allocate rdns_io_channel");
 						continue;
 					}
-					nioc->sock = rdns_make_client_socket (serv->name, serv->port,
-							SOCK_DGRAM, &nioc->saddr, &nioc->slen);
-					if (nioc->sock == -1) {
-						rdns_err ("cannot open socket to %s: %s", serv->name,
-								strerror (errno));
-						free (nioc);
-						continue;
-					}
-					nioc->srv = serv;
-					nioc->active = true;
-					nioc->resolver = resolver;
-					nioc->async_io = resolver->async->add_read (resolver->async->data,
-							nioc->sock, nioc);
-					REF_INIT_RETAIN (nioc, rdns_ioc_free);
+
 					serv->io_channels[i] = nioc;
 					rdns_debug ("scheduled io channel for server %s to be refreshed after "
 							"%lu usages", serv->name, (unsigned long)ioc->uses);
-					ioc->active = false;
+					ioc->flags &= ~RDNS_CHANNEL_ACTIVE;
 					REF_RELEASE (ioc);
 				}
 			}
@@ -509,10 +793,9 @@ rdns_process_ioc_refresh (void *arg)
 	}
 }
 
-void
-rdns_process_retransmit (int fd, void *arg)
+static void
+rdns_process_udp_retransmit (int fd, struct rdns_request *req)
 {
-	struct rdns_request *req = (struct rdns_request *)arg;
 	struct rdns_resolver *resolver;
 	struct rdns_reply *rep;
 	int r;
@@ -536,7 +819,7 @@ rdns_process_retransmit (int fd, void *arg)
 	if (r == 0) {
 		/* Retransmit one more time */
 		req->async_event = req->async->add_write (req->async->data,
-						fd, req);
+				fd, req);
 		req->state = RDNS_REQUEST_WAIT_SEND;
 	}
 	else if (r == -1) {
@@ -555,8 +838,132 @@ rdns_process_retransmit (int fd, void *arg)
 	}
 	else {
 		req->async_event = req->async->add_timer (req->async->data,
-			req->timeout, req);
+				req->timeout, req);
 		req->state = RDNS_REQUEST_WAIT_REPLY;
+	}
+}
+
+static ssize_t
+rdns_write_output_chain (struct rdns_io_channel *ioc, struct rdns_tcp_output_chain *oc)
+{
+	ssize_t r;
+	struct iovec iov[2];
+	int niov, already_written;
+	int packet_len = ntohs (oc->next_write_size);
+
+	switch (oc->cur_write) {
+	case 0:
+		/* Size + DNS request in full */
+		iov[0].iov_base = &oc->next_write_size;
+		iov[0].iov_len = sizeof (oc->next_write_size);
+		iov[1].iov_base = oc->write_buf;
+		iov[1].iov_len = packet_len;
+		niov = 2;
+		break;
+	case 1:
+		/* Partial Size + DNS request in full */
+		iov[0].iov_base = ((unsigned char *)&oc->next_write_size) + 1;
+		iov[0].iov_len = 1;
+		iov[1].iov_base = oc->write_buf;
+		iov[1].iov_len = packet_len;
+		niov = 2;
+		break;
+	default:
+		/* Merely DNS packet */
+		already_written = oc->cur_write - 2;
+		if (packet_len <= already_written) {
+			errno = EINVAL;
+			return -1;
+		}
+		iov[0].iov_base = oc->write_buf + already_written;
+		iov[0].iov_len = packet_len - already_written;
+		niov = 1;
+		break;
+	}
+
+	r = writev(ioc->sock, iov, niov);
+
+	if (r > 0) {
+		oc->cur_write += r;
+	}
+
+	return r;
+}
+
+static void
+rdns_process_tcp_write (int fd, struct rdns_io_channel *ioc)
+{
+	struct rdns_resolver *resolver = ioc->resolver;
+
+
+	/* Try to write as much as we can */
+	struct rdns_tcp_output_chain *oc, *tmp;
+	DL_FOREACH_SAFE(ioc->tcp->output_chain, oc, tmp) {
+		ssize_t r = rdns_write_output_chain (ioc, oc);
+
+		if (r == -1) {
+			if (errno == EAGAIN || errno == EINTR) {
+				/* Write even is persistent */
+				return;
+			}
+			else {
+				rdns_err ("error when trying to write request to %s: %s",
+						ioc->srv->name, strerror (errno));
+				rdns_ioc_tcp_reset (ioc);
+				return;
+			}
+		}
+		else if (ntohs(oc->next_write_size) < oc->cur_write) {
+			/* Packet has been fully written, remove it */
+			DL_DELETE(ioc->tcp->output_chain, oc);
+			free (oc); /* It also frees write buf */
+			ioc->tcp->cur_output_chains --;
+		}
+		else {
+			/* Buffer is not yet processed, stop unless we can continue */
+			break;
+		}
+	}
+
+	if (ioc->tcp->cur_output_chains == 0) {
+		/* Unregister write event */
+		ioc->resolver->async->del_write (ioc->resolver->async->data,
+				ioc->tcp->async_write);
+		ioc->tcp->async_write = NULL;
+	}
+}
+
+void
+rdns_process_write (int fd, void *arg)
+{
+	/*
+	 * We first need to dispatch *arg to understand what has caused the write
+	 * readiness event.
+	 * The one possibility is that it was a UDP retransmit request, so our
+	 * arg will be struct rdns_request *
+	 * Another possibility is that write event was triggered by some TCP related
+	 * stuff. In this case the only possibility is that our arg is struct rdns_io_channel *
+	 * To distinguish these two cases (due to flaws in the rdns architecture in the first
+	 * place) we compare the first 8 bytes with RDNS_IO_CHANNEL_TAG
+	 */
+	uint64_t tag;
+
+	memcpy (&tag, arg, sizeof(tag));
+
+	if (tag == RDNS_IO_CHANNEL_TAG) {
+		struct rdns_io_channel *ioc = (struct rdns_io_channel *) arg;
+
+		if (IS_CHANNEL_CONNECTED(ioc)) {
+			rdns_process_tcp_write(fd, ioc);
+		}
+		else {
+			rdns_process_tcp_connect(fd, ioc);
+			rdns_process_tcp_write(fd, ioc);
+		}
+	}
+	else {
+		struct rdns_request *req = (struct rdns_request *) arg;
+		rdns_process_udp_retransmit(fd, req);
 	}
 }
 
@@ -765,20 +1172,20 @@ rdns_make_request_full (
 				if (!rdns_add_rr (req, cur_name, clen, type, &comp)) {
 					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
-					rnds_compression_free (comp);
+					rdns_compression_free(comp);
 					return NULL;
 				}
 			} else {
 				if (!rdns_add_rr (req, cur_name, clen, type, NULL)) {
 					rdns_err ("cannot add rr");
 					REF_RELEASE (req);
-					rnds_compression_free (comp);
+					rdns_compression_free(comp);
 					return NULL;
 				}
 			}
 		}
 
-		rnds_compression_free (comp);
+		rdns_compression_free(comp);
 
 		/* Add EDNS RR */
 		rdns_add_edns0 (req);
@@ -882,32 +1289,46 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 	/* Now init io channels to all servers */
 	UPSTREAM_FOREACH (resolver->servers, serv) {
 		serv->io_channels = calloc (serv->io_cnt, sizeof (struct rdns_io_channel *));
-		for (i = 0; i < serv->io_cnt; i ++) {
-			ioc = calloc (1, sizeof (struct rdns_io_channel));
-			if (ioc == NULL) {
-				rdns_err ("cannot allocate memory for the resolver IO channels");
-				return false;
-			}
 
-			ioc->sock = rdns_make_client_socket (serv->name, serv->port, SOCK_DGRAM,
-					&ioc->saddr, &ioc->slen);
-
-			if (ioc->sock == -1) {
-				ioc->active = false;
-				rdns_err ("cannot open socket to %s:%d %s",
-						serv->name, serv->port, strerror (errno));
-				free (ioc);
-				return false;
-			}
-			else {
-				ioc->srv = serv;
-				ioc->resolver = resolver;
-				ioc->async_io = resolver->async->add_read (resolver->async->data,
-						ioc->sock, ioc);
-				REF_INIT_RETAIN (ioc, rdns_ioc_free);
-				serv->io_channels[i] = ioc;
-			}
+		if (serv->io_channels == NULL) {
+			rdns_err ("cannot allocate memory for the resolver IO channels");
+			return false;
 		}
+
+		for (i = 0; i < serv->io_cnt; i ++) {
+			ioc = rdns_ioc_new(serv, resolver, false);
+
+			if (ioc == NULL) {
+				rdns_err ("cannot allocate memory or init the IO channel");
+				return false;
+			}
+
+			serv->io_channels[i] = ioc;
+		}
+
+		int ntcp_channels = 0;
+
+		/*
+		 * We are more forgiving for TCP IO channels: we can have zero of them
+		 * if DNS is misconfigured and still be able to resolve stuff
+		 */
+		serv->tcp_io_channels = calloc (serv->tcp_io_cnt, sizeof (struct rdns_io_channel *));
+		if (serv->tcp_io_channels == NULL) {
+			rdns_err ("cannot allocate memory for the resolver TCP IO channels");
+			return false;
+		}
+		for (i = 0; i < serv->tcp_io_cnt; i ++) {
+			ioc = rdns_ioc_new (serv, resolver, true);
+
+			if (ioc == NULL) {
+				rdns_err ("cannot allocate memory or init the TCP IO channel");
+				continue;
+			}
+
+			serv->tcp_io_channels[ntcp_channels++] = ioc;
+		}
+
+		serv->tcp_io_cnt = ntcp_channels;
 	}
 
 	if (resolver->async->add_periodic) {
@@ -967,6 +1388,8 @@ rdns_resolver_add_server (struct rdns_resolver *resolver,
 	}
 
 	serv->io_cnt = io_cnt;
+	/* TODO: make it configurable maybe? */
+	serv->tcp_io_cnt = default_tcp_io_cnt;
 	serv->port = port;
 
 	UPSTREAM_ADD (resolver->servers, serv, priority);
@@ -1041,9 +1464,13 @@ rdns_resolver_free (struct rdns_resolver *resolver)
 				ioc = serv->io_channels[i];
 				REF_RELEASE (ioc);
 			}
-			serv->io_cnt = 0;
+			for (i = 0; i < serv->tcp_io_cnt; i ++) {
+				ioc = serv->tcp_io_channels[i];
+				REF_RELEASE (ioc);
+			}
 			UPSTREAM_DEL (resolver->servers, serv);
 			free (serv->io_channels);
+			free (serv->tcp_io_channels);
 			free (serv->name);
 			free (serv);
 		}

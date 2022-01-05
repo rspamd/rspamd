@@ -66,7 +66,7 @@ rdns_add_compressed (const char *pos, const char *end,
 }
 
 void
-rnds_compression_free (struct rdns_compression_entry *comp)
+rdns_compression_free (struct rdns_compression_entry *comp)
 {
 	struct rdns_compression_entry *cur, *tmp;
 

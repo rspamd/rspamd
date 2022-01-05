@@ -27,14 +27,16 @@
 #include "config.h"
 #include "uthash.h"
 #include "utlist.h"
+#include "khash.h"
 #include "rdns.h"
 #include "upstream.h"
 #include "ref.h"
 
 static const int dns_port = 53;
 static const int default_io_cnt = 8;
+static const int default_tcp_io_cnt = 1;
 
-#define UDP_PACKET_SIZE (4096 * 2)
+#define UDP_PACKET_SIZE (4096)
 
 #define DNS_COMPRESSION_BITS 0xC0
 
@@ -42,123 +44,6 @@ static const int default_io_cnt = 8;
 #define DNS_D_MAXNAME   255     /* + 1 '\0' */
 
 #define RESOLV_CONF "/etc/resolv.conf"
-
-/**
- * Represents DNS server
- */
-struct rdns_server {
-	char *name;
-	unsigned int port;
-	unsigned int io_cnt;
-
-	struct rdns_io_channel **io_channels;
-	void *ups_elt;
-	upstream_entry_t up;
-};
-
-enum rdns_request_state {
-	RDNS_REQUEST_NEW = 0,
-	RDNS_REQUEST_REGISTERED = 1,
-	RDNS_REQUEST_WAIT_SEND,
-	RDNS_REQUEST_WAIT_REPLY,
-	RDNS_REQUEST_REPLIED,
-	RDNS_REQUEST_FAKE,
-};
-
-struct rdns_request {
-	struct rdns_resolver *resolver;
-	struct rdns_async_context *async;
-	struct rdns_io_channel *io;
-	struct rdns_reply *reply;
-	enum rdns_request_type type;
-
-	double timeout;
-	unsigned int retransmits;
-
-	int id;
-	struct rdns_request_name *requested_names;
-	unsigned int qcount;
-	enum rdns_request_state state;
-
-	uint8_t *packet;
-	off_t pos;
-	unsigned int packet_len;
-
-	dns_callback_type func;
-	void *arg;
-
-	void *async_event;
-
-#if defined(TWEETNACL) || defined(USE_RSPAMD_CRYPTOBOX)
-	void *curve_plugin_data;
-#endif
-
-	UT_hash_handle hh;
-	ref_entry_t ref;
-};
-
-
-/**
- * IO channel for a specific DNS server
- */
-struct rdns_io_channel {
-	struct rdns_server *srv;
-	struct rdns_resolver *resolver;
-	struct sockaddr *saddr;
-	socklen_t slen;
-	int sock; /**< persistent socket                                          */
-	bool active;
-	bool connected;
-	void *async_io; /** async opaque ptr */
-	struct rdns_request *requests; /**< requests in flight                                         */
-	uint64_t uses;
-	ref_entry_t ref;
-};
-
-struct rdns_fake_reply_idx {
-	enum rdns_request_type type;
-	unsigned len;
-	char request[0];
-};
-
-struct rdns_fake_reply {
-	enum dns_rcode rcode;
-	struct rdns_reply_entry *result;
-	UT_hash_handle hh;
-	struct rdns_fake_reply_idx key;
-};
-
-
-struct rdns_resolver {
-	struct rdns_server *servers;
-	struct rdns_io_channel *io_channels; /**< hash of io chains indexed by socket        */
-	struct rdns_async_context *async; /** async callbacks */
-	void *periodic; /** periodic event for resolver */
-	struct rdns_upstream_context *ups;
-	struct rdns_plugin *curve_plugin;
-	struct rdns_fake_reply *fake_elts;
-
-#ifdef __GNUC__
-	__attribute__((format(printf, 4, 0)))
-#endif
-	rdns_log_function logger;
-	void *log_data;
-	enum rdns_log_level log_level;
-
-	uint64_t max_ioc_uses;
-	void *refresh_ioc_periodic;
-
-	bool async_binded;
-	bool initialized;
-	bool enable_dnssec;
-	int flags;
-	ref_entry_t ref;
-};
-
-struct dns_header;
-struct dns_query;
-
-/* Internal DNS structs */
 
 struct dns_header {
 	unsigned int qid :16;
@@ -194,6 +79,172 @@ struct dns_header {
 	unsigned int nscount :16;
 	unsigned int arcount :16;
 };
+
+/**
+ * Represents DNS server
+ */
+struct rdns_server {
+	char *name;
+	unsigned int port;
+	unsigned int io_cnt;
+	unsigned int tcp_io_cnt;
+
+	struct rdns_io_channel **io_channels;
+	struct rdns_io_channel **tcp_io_channels;
+	void *ups_elt;
+	upstream_entry_t up;
+};
+
+enum rdns_request_state {
+	RDNS_REQUEST_NEW = 0,
+	RDNS_REQUEST_REGISTERED = 1,
+	RDNS_REQUEST_WAIT_SEND,
+	RDNS_REQUEST_WAIT_REPLY,
+	RDNS_REQUEST_REPLIED,
+	RDNS_REQUEST_FAKE,
+	RDNS_REQUEST_ERROR,
+	RDNS_REQUEST_TCP,
+};
+
+struct rdns_request {
+	struct rdns_resolver *resolver;
+	struct rdns_async_context *async;
+	struct rdns_io_channel *io;
+	struct rdns_reply *reply;
+	enum rdns_request_type type;
+
+	double timeout;
+	unsigned int retransmits;
+
+	int id;
+	struct rdns_request_name *requested_names;
+	unsigned int qcount;
+	enum rdns_request_state state;
+
+	uint8_t *packet;
+	off_t pos;
+	unsigned int packet_len;
+
+	dns_callback_type func;
+	void *arg;
+
+	void *async_event;
+
+#if defined(TWEETNACL) || defined(USE_RSPAMD_CRYPTOBOX)
+	void *curve_plugin_data;
+#endif
+
+	ref_entry_t ref;
+};
+
+
+enum rdns_io_channel_flags {
+	RDNS_CHANNEL_CONNECTED = 1u << 0u,
+	RDNS_CHANNEL_ACTIVE = 1u << 1u,
+	RDNS_CHANNEL_TCP = 1u << 2u,
+};
+
+#define IS_CHANNEL_CONNECTED(ioc) (((ioc)->flags & RDNS_CHANNEL_CONNECTED) != 0)
+#define IS_CHANNEL_ACTIVE(ioc) (((ioc)->flags & RDNS_CHANNEL_ACTIVE) != 0)
+#define IS_CHANNEL_TCP(ioc) (((ioc)->flags & RDNS_CHANNEL_TCP) != 0)
+
+/**
+ * Used to chain output DNS requests for a TCP connection
+ */
+struct rdns_tcp_output_chain {
+	uint16_t next_write_size; /* Network byte order! */
+	uint16_t cur_write; /* Cur bytes written including `next_write_size` */
+	unsigned char *write_buf;
+	struct rdns_tcp_output_chain *prev, *next;
+};
+
+/**
+ * Specific stuff for a TCP IO chain
+ */
+struct rdns_tcp_channel {
+	uint16_t next_read_size; /* Network byte order on read, then host byte order */
+	uint16_t cur_read; /* Cur bytes read including `next_read_size` */
+	unsigned char *cur_read_buf;
+	unsigned read_buf_allocated;
+
+	/* Chained set of the planned writes */
+	struct rdns_tcp_output_chain *output_chain;
+	unsigned cur_output_chains;
+
+	void *async_read; /** async read event */
+	void *async_write; /** async write event */
+};
+
+KHASH_DECLARE(rdns_requests_hash, int, struct rdns_request *);
+#define RDNS_IO_CHANNEL_TAG UINT64_C(0xe190a5ba12f094c8)
+/**
+ * IO channel for a specific DNS server
+ */
+struct rdns_io_channel {
+	uint64_t struct_magic; /**< tag for this structure */
+	struct rdns_server *srv;
+	struct rdns_resolver *resolver;
+	struct sockaddr *saddr;
+	socklen_t slen;
+	int sock; /**< persistent socket                                          */
+	int flags; /**< see enum rdns_io_channel_flags */
+	void *async_io; /** async opaque ptr */
+	khash_t(rdns_requests_hash) *requests;
+	/*
+	 * For DNS replies parsing we use per-channel structure
+	 * which is used for two purposes:
+	 * 1) We read the next DNS header
+	 * 2) We find the corresponding request (if any)
+	 * 3) We read the remaining packet (associated with a request or dangling)
+	 * This structure is filled on each read-readiness for an IO channel
+	 */
+	struct rdns_tcp_channel *tcp;
+	uint64_t uses;
+	ref_entry_t ref;
+};
+
+struct rdns_fake_reply_idx {
+	enum rdns_request_type type;
+	unsigned len;
+	char request[0];
+};
+
+struct rdns_fake_reply {
+	enum dns_rcode rcode;
+	struct rdns_reply_entry *result;
+	UT_hash_handle hh;
+	struct rdns_fake_reply_idx key;
+};
+
+
+struct rdns_resolver {
+	struct rdns_server *servers;
+	struct rdns_async_context *async; /** async callbacks */
+	void *periodic; /** periodic event for resolver */
+	struct rdns_upstream_context *ups;
+	struct rdns_plugin *curve_plugin;
+	struct rdns_fake_reply *fake_elts;
+
+#ifdef __GNUC__
+	__attribute__((format(printf, 4, 0)))
+#endif
+	rdns_log_function logger;
+	void *log_data;
+	enum rdns_log_level log_level;
+
+	uint64_t max_ioc_uses;
+	void *refresh_ioc_periodic;
+
+	bool async_binded;
+	bool initialized;
+	bool enable_dnssec;
+	int flags;
+	ref_entry_t ref;
+};
+
+struct dns_query;
+
+/* Internal DNS structs */
 
 enum dns_section {
 	DNS_S_QD = 0x01,

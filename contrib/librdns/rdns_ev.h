@@ -88,7 +88,7 @@ rdns_libev_read_event (struct ev_loop *loop, ev_io *ev, int revents)
 static void
 rdns_libev_write_event (struct ev_loop *loop, ev_io *ev, int revents)
 {
-	rdns_process_retransmit (ev->fd, ev->data);
+	rdns_process_write(ev->fd, ev->data);
 }
 
 static void
