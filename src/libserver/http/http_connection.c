@@ -91,6 +91,8 @@ static const rspamd_ftok_t last_modified_header = {
 		.len = 13
 };
 
+static void rspamd_http_event_handler (int fd, short what, gpointer ud);
+static void rspamd_http_ssl_err_handler (gpointer ud, GError *err);
 
 
 #define HTTP_ERROR http_error_quark ()
@@ -1030,54 +1032,48 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		}
 	}
 	else if (what == EV_TIMEOUT) {
-		/* Let's try to read from the socket first */
-		r = rspamd_http_try_read (fd, conn, priv, pbuf, &d);
+		if (!priv->ssl) {
+			/* Let's try to read from the socket first */
+			r = rspamd_http_try_read(fd, conn, priv, pbuf, &d);
 
-		if (r > 0) {
-			if (http_parser_execute (&priv->parser, &priv->parser_cb,
-					d, r) != (size_t)r || priv->parser.http_errno != 0) {
-				err = g_error_new (HTTP_ERROR, 400,
-						"HTTP parser error: %s",
-						http_errno_description (priv->parser.http_errno));
+			if (r > 0) {
+				if (http_parser_execute(&priv->parser, &priv->parser_cb,
+						d, r) != (size_t) r || priv->parser.http_errno != 0) {
+					err = g_error_new(HTTP_ERROR, 400,
+							"HTTP parser error: %s",
+							http_errno_description(priv->parser.http_errno));
 
-				if (!conn->finished) {
-					conn->error_handler (conn, err);
+					if (!conn->finished) {
+						conn->error_handler(conn, err);
+					}
+					else {
+						msg_err ("got error after HTTP request is finished: %e", err);
+					}
+
+					g_error_free(err);
+
+					REF_RELEASE (pbuf);
+					rspamd_http_connection_unref(conn);
+
+					return;
 				}
-				else {
-					msg_err ("got error after HTTP request is finished: %e", err);
-				}
-
-				g_error_free (err);
-
-				REF_RELEASE (pbuf);
-				rspamd_http_connection_unref (conn);
-
-				return;
 			}
-		}
-		else if (r == 0) {
-			if (!conn->finished && !priv->ssl) {
-				err = g_error_new (HTTP_ERROR, 408,
-						"IO timeout");
-				conn->error_handler (conn, err);
-				g_error_free (err);
-
-			}
-			REF_RELEASE (pbuf);
-			rspamd_http_connection_unref (conn);
-
-			return;
-		}
-		else {
-			if (!priv->ssl) {
+			else {
 				err = g_error_new(HTTP_ERROR, 408,
 						"IO timeout");
 				conn->error_handler(conn, err);
 				g_error_free(err);
-			}
 
+				REF_RELEASE (pbuf);
+				rspamd_http_connection_unref(conn);
+
+				return;
+			}
+		}
+		else {
+			/* In case of SSL we disable this logic as we already came from SSL handler */
 			REF_RELEASE (pbuf);
-			rspamd_http_connection_unref (conn);
+			rspamd_http_connection_unref(conn);
 
 			return;
 		}
@@ -1536,9 +1532,18 @@ rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
 	priv->buf->data = rspamd_fstring_sized_new (8192);
 	priv->flags |= RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 
-	rspamd_ev_watcher_init (&priv->ev, conn->fd, EV_READ,
-			rspamd_http_event_handler, conn);
-	rspamd_ev_watcher_start (priv->ctx->event_loop, &priv->ev, priv->timeout);
+	if (!priv->ssl) {
+		rspamd_ev_watcher_init(&priv->ev, conn->fd, EV_READ,
+				rspamd_http_event_handler, conn);
+		rspamd_ev_watcher_start(priv->ctx->event_loop, &priv->ev, priv->timeout);
+	}
+	else {
+		rspamd_ssl_connection_restore_handlers (priv->ssl,
+				rspamd_http_event_handler,
+				rspamd_http_ssl_err_handler,
+				conn,
+				EV_READ);
+	}
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 }
@@ -2351,7 +2356,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				rspamd_ssl_connection_restore_handlers (priv->ssl,
 						rspamd_http_event_handler,
 						rspamd_http_ssl_err_handler,
-						conn);
+						conn,
+						EV_WRITE);
 			}
 		}
 	}

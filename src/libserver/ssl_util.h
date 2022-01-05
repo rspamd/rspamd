@@ -66,7 +66,8 @@ gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 void rspamd_ssl_connection_restore_handlers (struct rspamd_ssl_connection *conn,
 											 rspamd_ssl_handler_t handler,
 											 rspamd_ssl_error_handler_t err_handler,
-											 gpointer handler_data);
+											 gpointer handler_data,
+											 short ev_what);
 
 /**
  * Perform async read from SSL socket
