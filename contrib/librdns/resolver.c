@@ -498,6 +498,9 @@ rdns_reschedule_req_over_tcp (struct rdns_request *req, struct rdns_server *serv
 			}
 		}
 
+		req->async_event = resolver->async->add_timer (resolver->async->data,
+				req->timeout, req);
+
 		kh_value(req->io->requests, k) = req;
 		REF_RETAIN(ioc);
 		REF_RELEASE(old_ioc);
@@ -616,6 +619,16 @@ rdns_process_timer (void *arg)
 	}
 	else {
 		UPSTREAM_FAIL (req->io->srv, time (NULL));
+	}
+
+	if (req->state == RDNS_REQUEST_TCP) {
+		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
+		rdns_request_unschedule (req);
+		req->state = RDNS_REQUEST_REPLIED;
+		req->func (rep, req->arg);
+		REF_RELEASE (req);
+
+		return;
 	}
 
 	if (req->retransmits == 0) {
