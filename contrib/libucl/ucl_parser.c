@@ -441,7 +441,7 @@ ucl_expand_single_variable (struct ucl_parser *parser, const char *ptr,
 	bool strict = false;
 
 	ret = ptr + 1;
-	out_len --;
+	/* For the $ sign */
 	in_len --;
 
 	if (*p == '$') {
@@ -454,11 +454,10 @@ ucl_expand_single_variable (struct ucl_parser *parser, const char *ptr,
 		in_len --;
 		strict = true;
 		ret += 2;
-		out_len -= 2;
 	}
 
 	LL_FOREACH (parser->variables, var) {
-		if (out_len >= var->value_len && in_len >= (var->var_len + strict)) {
+		if (out_len >= var->value_len && in_len >= (var->var_len + (strict ? 1 : 0))) {
 			if (memcmp (p, var->var, var->var_len) == 0) {
 				if (!strict || p[var->var_len] == '}') {
 					memcpy (d, var->value, var->value_len);
@@ -470,21 +469,33 @@ ucl_expand_single_variable (struct ucl_parser *parser, const char *ptr,
 			}
 		}
 	}
+
 	if (!found) {
 		if (strict && parser->var_handler != NULL) {
-			if (parser->var_handler (p, out_len, &dst, &dstlen, &need_free,
+			dstlen = out_len;
+
+			if (parser->var_handler (p, in_len, &dst, &dstlen, &need_free,
 							parser->var_data)) {
-				memcpy (d, dst, dstlen);
-				ret += out_len;
-				d += dstlen;
-				found = true;
-				if (need_free) {
-					free (dst);
+				if (dstlen > out_len) {
+					/* We do not have enough space! */
+					if (need_free) {
+						free (dst);
+					}
+				}
+				else {
+					memcpy(d, dst, dstlen);
+					ret += in_len;
+					d += dstlen;
+					found = true;
+
+					if (need_free) {
+						free(dst);
+					}
 				}
 			}
 		}
 
-		/* Leave variable as is */
+		/* Leave variable as is, in this case we use dest */
 		if (!found) {
 			if (strict && out_len >= 2) {
 				/* Copy '${' */
