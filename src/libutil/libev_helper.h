@@ -37,7 +37,6 @@ struct rspamd_io_ev {
 	ev_timer tm;
 	rspamd_ev_cb cb;
 	void *ud;
-	ev_tstamp last_activity;
 	ev_tstamp timeout;
 };
 

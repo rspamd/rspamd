@@ -21,7 +21,6 @@ rspamd_ev_watcher_io_cb (EV_P_ struct ev_io *w, int revents)
 {
 	struct rspamd_io_ev *ev = (struct rspamd_io_ev *)w->data;
 
-	ev->last_activity = ev_now (EV_A);
 	ev->cb (ev->io.fd, revents, ev->ud);
 }
 
@@ -30,17 +29,11 @@ rspamd_ev_watcher_timer_cb (EV_P_ struct ev_timer *w, int revents)
 {
 	struct rspamd_io_ev *ev = (struct rspamd_io_ev *)w->data;
 
-	ev_tstamp after = ev->last_activity - ev_now (EV_A) + ev->timeout;
-
-	if (after < 0.) {
-		/* Real timeout */
-		ev->cb (ev->io.fd, EV_TIMER, ev->ud);
-	}
-	else {
-		/* Start another cycle as there was some activity */
-		w->repeat = after;
-		ev_timer_again (EV_A_ w);
-	}
+	/*
+	 * We now call timeout callback in all the cases, as we assume that all
+	 * timeouts are final
+	 */
+	ev->cb (ev->io.fd, EV_TIMER, ev->ud);
 }
 
 
@@ -66,12 +59,11 @@ rspamd_ev_watcher_start (struct ev_loop *loop,
 {
 	g_assert (ev->cb != NULL);
 
-	ev->last_activity = ev_now (EV_A);
 	ev_io_start (EV_A_ &ev->io);
 
 	if (timeout > 0) {
 		/* Update timestamp to avoid timers running early */
-		ev_now_update (loop);
+		ev_now_update_if_cheap (loop);
 
 		ev->timeout = timeout;
 		ev_timer_set (&ev->tm, timeout, 0.0);
@@ -113,13 +105,11 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 	if (ev->timeout > 0) {
 		if (!(ev_can_stop (&ev->tm))) {
 			/* Update timestamp to avoid timers running early */
-			ev_now_update (loop);
+			ev_now_update_if_cheap (loop);
 
 			ev->tm.data = ev;
 			ev_timer_init (&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
 			ev_timer_start (EV_A_ &ev->tm);
 		}
 	}
-
-	ev->last_activity = ev_now (EV_A);
 }
