@@ -1927,7 +1927,7 @@ ucl_inherit_handler (const unsigned char *data, size_t len,
 
 	/* Some sanity checks */
 	if (parent == NULL || ucl_object_type (parent) != UCL_OBJECT) {
-		ucl_create_err (&parser->err, "Unable to find inherited object %*.s",
+		ucl_create_err (&parser->err, "Unable to find inherited object %.*s",
 				(int)len, data);
 		return false;
 	}
@@ -2185,7 +2185,7 @@ ucl_strnstr (const char *s, const char *find, int len)
 		mlen = strlen (find);
 		do {
 			do {
-				if ((sc = *s++) == 0 || len-- == 0)
+				if ((sc = *s++) == 0 || len-- < mlen)
 					return (NULL);
 			} while (sc != c);
 		} while (strncmp (s, find, mlen) != 0);
@@ -3602,9 +3602,11 @@ ucl_object_copy_internal (const ucl_object_t *other, bool allow_array)
 
 		/* deep copy of values stored */
 		if (other->trash_stack[UCL_TRASH_KEY] != NULL) {
-			new->trash_stack[UCL_TRASH_KEY] =
-					strdup (other->trash_stack[UCL_TRASH_KEY]);
+			new->trash_stack[UCL_TRASH_KEY] = NULL;
 			if (other->key == (const char *)other->trash_stack[UCL_TRASH_KEY]) {
+				new->trash_stack[UCL_TRASH_KEY] = malloc(other->keylen + 1);
+				memcpy(new->trash_stack[UCL_TRASH_KEY], other->trash_stack[UCL_TRASH_KEY], other->keylen);
+				new->trash_stack[UCL_TRASH_KEY][other->keylen] = '\0';
 				new->key = new->trash_stack[UCL_TRASH_KEY];
 			}
 		}
