@@ -599,7 +599,9 @@ rdns_ioc_new (struct rdns_server *serv,
 		if (!rdns_ioc_tcp_connect(nioc)) {
 			rdns_err ("cannot connect TCP socket to %s: %s", serv->name,
 					strerror (errno));
+			close (nioc->sock);
 			free (nioc);
+
 			return NULL;
 		}
 
