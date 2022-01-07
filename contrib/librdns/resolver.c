@@ -431,6 +431,7 @@ static void
 rdns_process_tcp_connect (int fd, struct rdns_io_channel *ioc)
 {
 	ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+	ioc->flags &= ~RDNS_CHANNEL_TCP_CONNECTING;
 
 	if (ioc->tcp->async_read == NULL) {
 		ioc->tcp->async_read = ioc->resolver->async->add_read(ioc->resolver->async->data,

@@ -142,6 +142,7 @@ enum rdns_io_channel_flags {
 	RDNS_CHANNEL_CONNECTED = 1u << 0u,
 	RDNS_CHANNEL_ACTIVE = 1u << 1u,
 	RDNS_CHANNEL_TCP = 1u << 2u,
+	RDNS_CHANNEL_TCP_CONNECTING = 1u << 3u,
 };
 
 #define IS_CHANNEL_CONNECTED(ioc) (((ioc)->flags & RDNS_CHANNEL_CONNECTED) != 0)

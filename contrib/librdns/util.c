@@ -730,6 +730,12 @@ rdns_ioc_tcp_connect (struct rdns_io_channel *ioc)
 		return false;
 	}
 
+	if (ioc->flags & RDNS_CHANNEL_TCP_CONNECTING) {
+		/* Already connecting channel, ignore connect request */
+
+		return true;
+	}
+
 	if (ioc->sock == -1) {
 		ioc->sock = rdns_make_client_socket (ioc->srv->name, ioc->srv->port,
 				SOCK_STREAM, &ioc->saddr, &ioc->slen);
@@ -765,13 +771,21 @@ rdns_ioc_tcp_connect (struct rdns_io_channel *ioc)
 		}
 		else {
 			/* We need to wait for write readiness here */
-			ioc->tcp->async_write = resolver->async->add_write (resolver->async->data,
-					ioc->sock, ioc);
+			if (ioc->tcp->async_write != NULL) {
+				rdns_err("internal rdns error: write event is already registered on connect");
+			}
+			else {
+				ioc->tcp->async_write = resolver->async->add_write(resolver->async->data,
+						ioc->sock, ioc);
+			}
+			/* Prevent double connect attempts */
+			ioc->flags |= RDNS_CHANNEL_TCP_CONNECTING;
 		}
 	}
 	else {
 		/* Always be ready to read from a TCP socket */
 		ioc->flags |= RDNS_CHANNEL_CONNECTED|RDNS_CHANNEL_ACTIVE;
+		ioc->flags &= ~RDNS_CHANNEL_TCP_CONNECTING;
 		ioc->tcp->async_read = resolver->async->add_read(resolver->async->data,
 				ioc->sock, ioc);
 	}
