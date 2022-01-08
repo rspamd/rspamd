@@ -21,7 +21,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_rsa_privkey = require "rspamd_rsa_privkey"
 local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
-local auth_results = require "lua_auth_results"
+local lua_auth_results = require "lua_auth_results"
 local hash = require "rspamd_cryptobox_hash"
 local lua_mime = require "lua_mime"
 
@@ -79,30 +79,62 @@ local settings = {
 }
 
 -- To match normal AR
-local ar_settings = auth_results.default_settings
+local ar_settings = lua_auth_results.default_settings
 
-local function parse_arc_header(hdr, target)
+local function parse_arc_header(hdr, target, is_aar)
   -- Split elements by ';' and trim spaces
   local arr = fun.totable(fun.map(
     function(val)
       return fun.totable(fun.map(lua_util.rspamd_str_trim,
         fun.filter(function(v) return v and #v > 0 end,
-          lua_util.rspamd_str_split(val.decoded, ';'))))
+          lua_util.rspamd_str_split(val.decoded, ';')
+        )
+      ))
     end, hdr
   ))
 
+  -- v[1] is the key and v[2] is the value
+  local function fill_arc_header_table(v, t)
+    if v[1] and v[2] then
+      local key = lua_util.rspamd_str_trim(v[1])
+      local value = lua_util.rspamd_str_trim(v[2])
+      t[key] = value
+    end
+  end
+
   -- Now we have two tables in format:
-  -- [sigs] -> [{sig1_elts}, {sig2_elts}...]
+  -- [arc_header] -> [{arc_header1_elts}, {arc_header2_elts}...]
   for i,elts in ipairs(arr) do
     if not target[i] then target[i] = {} end
-    -- Split by kv pair, like k=v
-    fun.each(function(v)
-      if v[1] and v[2] then
-        target[i][v[1]] = v[2]
+    if not is_aar then
+      -- For normal ARC headers we split by kv pair, like k=v
+      fun.each(function(v)
+        fill_arc_header_table(v, target[i])
+      end,
+          fun.map(function(elt)
+            return lua_util.rspamd_str_split(elt, '=')
+          end, elts)
+      )
+    else
+      -- For AAR we check special case of i=%d and pass everything else to
+      -- AAR specific parser
+      for elt in ipairs(elts) do
+        if string.match(elt, "%s*i%s*=%s*%d+%s*") then
+          local pair = lua_util.rspamd_str_split(elt, '=')
+          fill_arc_header_table(pair, target[i])
+        else
+          -- Normal element
+          local ar_elt = lua_auth_results.parse_ar_element(elt)
+
+          if ar_elt then
+            if not target[i].ar then
+              target[i].ar = {}
+            end
+            table.insert(target[i].ar, ar_elt)
+          end
+        end
       end
-    end, fun.map(function(elt)
-      return lua_util.rspamd_str_split(elt, '=')
-    end, elts))
+    end
     target[i].header = hdr[i].decoded
     target[i].raw_header = hdr[i].value
   end
@@ -159,6 +191,7 @@ end
 local function arc_callback(task)
   local arc_sig_headers = task:get_header_full('ARC-Message-Signature')
   local arc_seal_headers = task:get_header_full('ARC-Seal')
+  local arc_ar_headers = task:get_header_full('ARC-Authentication-Results')
 
   if not arc_sig_headers or not arc_seal_headers then
     task:insert_result(arc_symbols['na'], 1.0)
@@ -176,14 +209,16 @@ local function arc_callback(task)
   local cbdata = {
     seals = {},
     sigs = {},
+    ars = {},
     cur_arc_id = 0,
     res = 'success',
     errors = {},
     allowed_by_trusted = false
   }
 
-  parse_arc_header(arc_seal_headers, cbdata.seals)
-  parse_arc_header(arc_sig_headers, cbdata.sigs)
+  parse_arc_header(arc_seal_headers, cbdata.seals, false)
+  parse_arc_header(arc_sig_headers, cbdata.sigs, false)
+  parse_arc_header(arc_ar_headers, cbdata.ars, true)
 
   -- Fix i type
   fun.each(function(hdr)
@@ -447,10 +482,10 @@ local function arc_sign_seal(task, params, header)
       cur_auth_results = ar_header
     else
       rspamd_logger.debugm(N, task, 'cannot reuse authentication results, header is missing')
-      cur_auth_results = auth_results.gen_auth_results(task, ar_settings) or ''
+      cur_auth_results = lua_auth_results.gen_auth_results(task, ar_settings) or ''
     end
   else
-    cur_auth_results = auth_results.gen_auth_results(task, ar_settings) or ''
+    cur_auth_results = lua_auth_results.gen_auth_results(task, ar_settings) or ''
   end
 
   local sha_ctx = hash.create_specific('sha256')
