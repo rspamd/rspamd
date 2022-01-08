@@ -275,4 +275,28 @@ end
 
 exports.gen_auth_results = gen_auth_results
 
+local aar_elt_grammar
+-- This function parses an ar element to a table of kv pairs that represents different
+-- elements
+local function parse_ar_element(elt)
+
+  if not aar_elt_grammar then
+    -- Generate grammar
+    local lpeg = require "lpeg"
+    local P = lpeg.P
+    local S = lpeg.S
+    local V = lpeg.V
+    local C = lpeg.C
+    local space = S(" ")^0
+    local doublequoted = space * P'"' * ((1 - S'"\r\n\f\\') + (P'\\' * 1))^0 * '"' * space
+    local comment = space * P{ "(" * ((1 - S"()") + V(1))^0 * ")" } * space
+    local name = C((1 - S('=(" '))^1) * space
+    local pair = lpeg.Cg(name * "=" * space * name) * space
+    aar_elt_grammar = lpeg.Cf(lpeg.Ct("") * (pair + comment + doublequoted)^1, rawset)
+  end
+
+  return aar_elt_grammar:match(elt)
+end
+exports.parse_ar_element = parse_ar_element
+
 return exports
