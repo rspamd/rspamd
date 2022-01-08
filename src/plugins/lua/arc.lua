@@ -118,7 +118,7 @@ local function parse_arc_header(hdr, target, is_aar)
     else
       -- For AAR we check special case of i=%d and pass everything else to
       -- AAR specific parser
-      for elt in ipairs(elts) do
+      for _,elt in ipairs(elts) do
         if string.match(elt, "%s*i%s*=%s*%d+%s*") then
           local pair = lua_util.rspamd_str_split(elt, '=')
           fill_arc_header_table(pair, target[i])
