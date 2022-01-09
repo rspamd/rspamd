@@ -30,6 +30,7 @@ if confighelp then
 end
 
 local N = 'arc'
+local AR_TRUSTED_CACHE_KEY = 'arc_trusted_aar'
 
 if not rspamd_plugins.dkim then
   rspamd_logger.errx(rspamd_config, "cannot enable arc plugin: dkim is disabled")
@@ -74,6 +75,7 @@ local settings = {
   key_prefix = 'arc_keys', -- default hash name
   reuse_auth_results = false, -- Reuse the existing authentication results
   whitelisted_signers_map = nil, -- Trusted signers domains
+  adjust_dmarc = true, -- Adjust DMARC rejected policy for trusted forwarders
   allowed_ids = nil, -- Allowed settings id
   forbidden_ids = nil, -- Banned settings id
 }
@@ -271,7 +273,36 @@ local function arc_callback(task)
       if settings.whitelisted_signers_map and cbdata.res == 'success' then
         if settings.whitelisted_signers_map:get_key(sig.d) then
           -- Whitelisted signer has been found in a valid chain
-          task:insert_result(arc_symbols.trusted_allow, 1.0,
+          local mult = 1.0
+          local cur_aar = cbdata.ars[cbdata.cur_arc_id]
+          if not cur_aar then
+            rspamd_logger.warnx(task, "cannot find Arc-Authentication-Results for trusted " ..
+                "forwarder %s on i=%s", domain, cbdata.cur_arc_id)
+          else
+            task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
+            local seen_dmarc
+            for _,ar in ipairs(cur_aar.ar) do
+              if ar.dmarc then
+                local dmarc_fwd = ar.dmarc
+                seen_dmarc = true
+                if dmarc_fwd == 'reject' or dmarc_fwd == 'fail' or dmarc_fwd == 'quarantine' then
+                  lua_util.debugm(N, "found rejected dmarc on forwarding")
+                  mult = 0.0
+                elseif dmarc_fwd == 'pass' then
+                  mult = 1.0
+                end
+              elseif ar.spf then
+                local spf_fwd = ar.spf
+                if spf_fwd == 'reject' or spf_fwd == 'fail' or spf_fwd == 'quarantine' then
+                  lua_util.debugm(N, "found rejected spf on forwarding")
+                  if not seen_dmarc then
+                    mult = mult * 0.5
+                  end
+                end
+              end
+            end
+          end
+          task:insert_result(arc_symbols.trusted_allow, mult,
               string.format('%s:s=%s:i=%d', domain, sig.s, cbdata.cur_arc_id))
         end
       end
