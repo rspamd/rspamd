@@ -809,7 +809,39 @@ end
 rspamd_config:register_symbol(sym_reg_tbl)
 
 -- Do not sign unless checked
-rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CALLBACK')
+rspamd_config:register_dependency(settings['sign_symbol'], 'ARC_CHECK')
 -- We need to check dmarc before signing as we have to produce valid AAR header
 -- see #3613
-rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CALLBACK')
+rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK')
+
+if settings.adjust_dmarc and settings.whitelisted_signers_map then
+  local function arc_dmarc_adjust_cb(task)
+    local trusted_arc_ar = task:get_cached(AR_TRUSTED_CACHE_KEY)
+    local sym_to_adjust
+    if task:has_symbol(ar_settings.dmarc_symbols.reject) then
+      sym_to_adjust = ar_settings.dmarc_symbols.reject
+    elseif task:has_symbol(ar_settings.dmarc_symbols.quarantine) then
+      sym_to_adjust = ar_settings.dmarc_symbols.quarantine
+    end
+    if sym_to_adjust and trusted_arc_ar and trusted_arc_ar.ar then
+      for _,ar in ipairs(trusted_arc_ar.ar) do
+        if ar.dmarc then
+          local dmarc_fwd = ar.dmarc
+          if dmarc_fwd == 'pass' then
+            rspamd_logger.infox(task, "adjust dmarc reject score as trusted forwarder "
+                .. "proved DMARC validity for %s", ar['header.from'])
+            task:adjust_result(sym_to_adjust, 0.1,
+                'ARC trusted')
+          end
+        end
+      end
+    end
+  end
+  rspamd_config:register_symbol({
+    name = 'ARC_DMARC_ADJUSTMENT',
+    callback = arc_dmarc_adjust_cb,
+    type = 'callback',
+  })
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'DMARC_CHECK')
+  rspamd_config:register_dependency('ARC_DMARC_ADJUSTMENT', 'ARC_CHECK')
+end
