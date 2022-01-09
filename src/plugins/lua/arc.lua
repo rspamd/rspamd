@@ -431,11 +431,16 @@ end
 
 
 local id = rspamd_config:register_symbol({
-  name = 'ARC_CALLBACK',
+  name = 'ARC_CHECK',
   type = 'callback',
   group = 'policies',
   groups = {'arc'},
   callback = arc_callback
+})
+rspamd_config:register_symbol({
+  name = 'ARC_CALLBACK', -- compatibility symbol
+  type = 'virtual,skip',
+  parent = id,
 })
 
 rspamd_config:register_symbol({
@@ -479,8 +484,8 @@ rspamd_config:register_symbol({
   groups = {'arc'},
 })
 
-rspamd_config:register_dependency('ARC_CALLBACK', 'SPF_CHECK')
-rspamd_config:register_dependency('ARC_CALLBACK', 'DKIM_CHECK')
+rspamd_config:register_dependency('ARC_CHECK', 'SPF_CHECK')
+rspamd_config:register_dependency('ARC_CHECK', 'DKIM_CHECK')
 
 local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
