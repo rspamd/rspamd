@@ -220,7 +220,10 @@ local function arc_callback(task)
 
   parse_arc_header(arc_seal_headers, cbdata.seals, false)
   parse_arc_header(arc_sig_headers, cbdata.sigs, false)
-  parse_arc_header(arc_ar_headers, cbdata.ars, true)
+
+  if arc_ar_headers then
+    parse_arc_header(arc_ar_headers, cbdata.ars, true)
+  end
 
   -- Fix i type
   fun.each(function(hdr)
