@@ -688,9 +688,11 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			if (std::holds_alternative<std::monostate>(tag->extra)) {
 				tag->extra = url;
 			}
+
+			return url;
 		}
 
-		return url;
+		return std::nullopt;
 	}
 
 	return std::nullopt;
@@ -1449,7 +1451,7 @@ html_process_input(rspamd_mempool_t *pool,
 		if (cur_tag->flags & FL_HREF && html_document_state == html_document_state::body) {
 			auto maybe_url = html_process_url_tag(pool, cur_tag, hc);
 
-			if (maybe_url) {
+			if (maybe_url.has_value()) {
 				url = maybe_url.value();
 
 				if (url_set != NULL) {
