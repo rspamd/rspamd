@@ -677,10 +677,17 @@ html_process_url_tag(rspamd_mempool_t *pool,
 			}
 		}
 
-		auto url = html_process_url(pool, href_value);
+		auto url = html_process_url(pool, href_value).value_or(nullptr);
 
-		if (url && std::holds_alternative<std::monostate>(tag->extra)) {
-			tag->extra = url.value();
+		if (url) {
+			if (tag->id != Tag_A) {
+				/* Mark special tags special */
+				url->flags |= RSPAMD_URL_FLAG_SPECIAL;
+			}
+
+			if (std::holds_alternative<std::monostate>(tag->extra)) {
+				tag->extra = url;
+			}
 		}
 
 		return url;
@@ -949,7 +956,10 @@ html_process_img_tag(rspamd_mempool_t *pool,
 	}
 
 	hc->images.push_back(img);
-	tag->extra = img;
+
+	if (std::holds_alternative<std::monostate>(tag->extra)) {
+		tag->extra = img;
+	}
 }
 
 static auto

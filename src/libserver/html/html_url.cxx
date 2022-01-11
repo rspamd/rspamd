@@ -276,9 +276,17 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 			 * HTML part, we assume that it is also
 			 * hint only.
 			 */
-			if (turl->flags &
-				RSPAMD_URL_FLAG_FROM_TEXT) {
-				turl->flags |= displayed_url->flags;
+			if (turl->flags & RSPAMD_URL_FLAG_FROM_TEXT) {
+
+				/*
+				 * We have the same URL for href and displayed url, so we
+				 * know that this url cannot be both target and display (as
+				 * it breaks logic in many places), so we do not
+				 * propagate html flags
+				 */
+				if (!(turl->flags & RSPAMD_URL_FLAG_DISPLAY_URL)) {
+					turl->flags |= displayed_url->flags;
+				}
 				turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
 			}
 
