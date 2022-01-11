@@ -1262,7 +1262,7 @@ lua_url_cbdata_fill_exclude_include (lua_State *L,
 	if (pos_arg_type == LUA_TTABLE) {
 		exclude_flags_mask = 0; /* Reset to no flags */
 
-		for (lua_pushnil(L); lua_next(L, pos); lua_pop (L, 1)) {
+		for (lua_pushnil(L); lua_next(L, pos + 1); lua_pop (L, 1)) {
 			int nmask = 0;
 
 			if (lua_type (L, -1) == LUA_TSTRING) {
