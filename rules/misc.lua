@@ -339,7 +339,7 @@ rspamd_config.URI_COUNT_ODD = {
     local ct = task:get_header('Content-Type')
     if (ct and ct:lower():find('^multipart/alternative')) then
       local urls = task:get_urls_filtered(nil, {'subject', 'html_displayed', 'special'}) or {}
-      local nurls = fun.foldl(function(acc, val) return acc + val:get_count() end, 0)
+      local nurls = fun.foldl(function(acc, val) return acc + val:get_count() end, 0, urls)
 
       if nurls % 2 == 1 then
         return true, 1.0, tostring(nurls)
