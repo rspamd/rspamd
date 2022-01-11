@@ -42,9 +42,10 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_TRUNCATED = 1u << 23u,
 	RSPAMD_URL_FLAG_REDIRECT_TARGET = 1u << 24u,
 	RSPAMD_URL_FLAG_INVISIBLE = 1u << 25u,
+	RSPAMD_URL_FLAG_SPECIAL = 1u << 26u,
 
 };
-#define RSPAMD_URL_MAX_FLAG_SHIFT (25u)
+#define RSPAMD_URL_MAX_FLAG_SHIFT (26u)
 
 struct rspamd_url_tag {
 	const gchar *data;
