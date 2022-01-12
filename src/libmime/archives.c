@@ -51,9 +51,10 @@ rspamd_archive_dtor (gpointer p)
 	g_ptr_array_free (arch->files, TRUE);
 }
 
-static GString *
+static bool
 rspamd_archive_file_try_utf (struct rspamd_task *task,
-		const gchar *in, gsize inlen)
+							 struct rspamd_archive_file *fentry,
+							 const gchar *in, gsize inlen)
 {
 	const gchar *charset = NULL, *p, *end;
 	GString *res;
@@ -74,8 +75,10 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 		if (conv == NULL) {
 			msg_info_task ("cannot open converter for %s: %s",
 					charset, u_errorName (uc_err));
+			fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+			fentry->fname = g_string_new_len(in, inlen);
 
-			return NULL;
+			return false;
 		}
 
 		tmp = g_malloc (sizeof (*tmp) * (inlen + 1));
@@ -85,6 +88,9 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			msg_info_task ("cannot convert data to unicode from %s: %s",
 					charset, u_errorName (uc_err));
 			g_free (tmp);
+
+			fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+			fentry->fname = g_string_new_len(in, inlen);
 
 			return NULL;
 		}
@@ -99,8 +105,24 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 					charset, u_errorName (uc_err));
 			g_free (tmp);
 			g_string_free (res, TRUE);
+			fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+			fentry->fname = g_string_new_len(in, inlen);
 
 			return NULL;
+		}
+
+		int i = 0;
+
+		while (i < r) {
+			UChar32 uc;
+
+			U16_NEXT(tmp, i, r, uc);
+
+			if (IS_ZERO_WIDTH_SPACE(uc) || u_iscntrl(uc)) {
+				msg_info_task("control character in archive name found: %d", uc);
+				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+				break;
+			}
 		}
 
 		g_free (tmp);
@@ -108,6 +130,7 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 
 		msg_debug_archive ("converted from %s to UTF-8 inlen: %z, outlen: %d",
 				charset, inlen, r);
+		fentry->fname = res;
 	}
 	else {
 		/* Convert unsafe characters to '?' */
@@ -121,13 +144,15 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			}
 			else {
 				g_string_append_c (res, '?');
+				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
 			}
 
 			p ++;
 		}
+		fentry->fname = res;
 	}
 
-	return res;
+	return true;
 }
 
 static void
@@ -239,8 +264,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 
 		f = g_malloc0 (sizeof (*f));
-		f->fname = rspamd_archive_file_try_utf (task,
-				cd + cd_basic_len, fname_len);
+		rspamd_archive_file_try_utf (task, f, cd + cd_basic_len, fname_len);
+
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
 
@@ -249,6 +274,10 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 
 		if (f->fname) {
+			if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+				arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+			}
+
 			g_ptr_array_add (arch->files, f);
 			msg_debug_archive ("found file in zip archive: %v", f->fname);
 		}
@@ -475,19 +504,19 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 				if (tmp != NULL) {
 					/* Just use ASCII version */
-					f->fname = rspamd_archive_file_try_utf (task, p, tmp - p);
+					rspamd_archive_file_try_utf (task, f, p, tmp - p);
 					msg_debug_archive ("found ascii filename in rarv4 archive: %v",
 							f->fname);
 				}
 				else {
 					/* We have UTF8 filename, use it as is */
-					f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+					rspamd_archive_file_try_utf (task, f, p, fname_len);
 					msg_debug_archive ("found utf filename in rarv4 archive: %v",
 							f->fname);
 				}
 			}
 			else {
-				f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+				rspamd_archive_file_try_utf (task, f, p, fname_len);
 				msg_debug_archive ("found ascii (old) filename in rarv4 archive: %v",
 						f->fname);
 			}
@@ -500,6 +529,9 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 			}
 
 			if (f->fname) {
+				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+				}
 				g_ptr_array_add (arch->files, f);
 			}
 			else {
@@ -685,11 +717,14 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			f = g_malloc0 (sizeof (*f));
 			f->uncompressed_size = uncomp_sz;
 			f->compressed_size = comp_sz;
-			f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+			rspamd_archive_file_try_utf (task, f, p, fname_len);
 
 			if (f->fname) {
 				msg_debug_archive ("added rarv5 file: %v", f->fname);
 				g_ptr_array_add (arch->files, f);
+				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+				}
 			}
 			else {
 				g_free (f);
@@ -1750,11 +1785,16 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 					struct rspamd_archive_file *f;
 
 					f = g_malloc0 (sizeof (*f));
-					f->fname = rspamd_archive_file_try_utf (task, fname_start,
-							p - fname_start);
+
+					rspamd_archive_file_try_utf (task, f,
+							fname_start, p - fname_start);
 
 					if (f->fname) {
 						g_ptr_array_add (arch->files, f);
+
+						if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+							arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+						}
 					}
 					else {
 						/* Invalid filename, skip */
