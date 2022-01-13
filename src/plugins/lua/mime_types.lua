@@ -35,6 +35,7 @@ local settings = {
   symbol_good = 'MIME_GOOD',
   symbol_attachment = 'MIME_BAD_ATTACHMENT',
   symbol_encrypted_archive = 'MIME_ENCRYPTED_ARCHIVE',
+  symbol_obfuscated_archive = 'MIME_OBFUSCATED_ARCHIVE',
   symbol_exe_in_gen_split_rar = 'MIME_EXE_IN_GEN_SPLIT_RAR',
   symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
@@ -429,6 +430,7 @@ local function check_mime_type(task)
           end
           local arch = p:get_archive()
 
+          -- TODO: migrate to flags once C part is ready
           if arch:is_encrypted() then
             task:insert_result(settings.symbol_encrypted_archive, 1.0, filename)
             task:insert_result('MIME_TRACE', 0.0,
@@ -436,6 +438,13 @@ local function check_mime_type(task)
           elseif arch:is_unreadable() then
             task:insert_result(settings.symbol_encrypted_archive, 0.5, {
               'compressed header',
+              filename,
+            })
+            task:insert_result('MIME_TRACE', 0.0,
+                string.format("%s:%s", p:get_id(), '-'))
+          elseif arch:is_obfuscated() then
+            task:insert_result(settings.symbol_obfuscated_archive, 1.0, {
+              'obfuscated archive',
               filename,
             })
             task:insert_result('MIME_TRACE', 0.0,
@@ -625,6 +634,12 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_encrypted_archive'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_obfuscated_archive'],
       parent = id,
       group = 'mime_types',
     })
