@@ -1356,7 +1356,9 @@ static const struct luaL_reg imagelib_m[] = {
 LUA_FUNCTION_DEF (archive, get_type);
 LUA_FUNCTION_DEF (archive, get_files);
 LUA_FUNCTION_DEF (archive, get_files_full);
+/* TODO: Export archive flags as integers to use bitops for that */
 LUA_FUNCTION_DEF (archive, is_encrypted);
+LUA_FUNCTION_DEF (archive, is_obfuscated);
 LUA_FUNCTION_DEF (archive, is_unreadable);
 LUA_FUNCTION_DEF (archive, get_filename);
 LUA_FUNCTION_DEF (archive, get_size);
@@ -1366,6 +1368,7 @@ static const struct luaL_reg archivelib_m[] = {
 	LUA_INTERFACE_DEF (archive, get_files),
 	LUA_INTERFACE_DEF (archive, get_files_full),
 	LUA_INTERFACE_DEF (archive, is_encrypted),
+	LUA_INTERFACE_DEF (archive, is_obfuscated),
 	LUA_INTERFACE_DEF (archive, is_unreadable),
 	LUA_INTERFACE_DEF (archive, get_filename),
 	LUA_INTERFACE_DEF (archive, get_size),
@@ -7122,6 +7125,23 @@ lua_archive_is_encrypted (lua_State *L)
 
 	if (arch != NULL) {
 		lua_pushboolean (L, (arch->flags & RSPAMD_ARCHIVE_ENCRYPTED) ? true : false);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_is_obfuscated (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_archive *arch = lua_check_archive (L);
+
+	if (arch != NULL) {
+		lua_pushboolean (L,
+				(arch->flags & RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES) ? true : false);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
