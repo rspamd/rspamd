@@ -53,6 +53,7 @@ rspamd_archive_dtor (gpointer p)
 
 static bool
 rspamd_archive_file_try_utf (struct rspamd_task *task,
+							 struct rspamd_archive *arch,
 							 struct rspamd_archive_file *fentry,
 							 const gchar *in, gsize inlen)
 {
@@ -119,7 +120,8 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			U16_NEXT(tmp, i, r, uc);
 
 			if (IS_ZERO_WIDTH_SPACE(uc) || u_iscntrl(uc)) {
-				msg_info_task("control character in archive name found: %d", uc);
+				msg_info_task("control character in archive file name found: 0x%02xd "
+							  "(filename=%T)", uc, arch->archive_name);
 				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
 				break;
 			}
@@ -144,6 +146,8 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			}
 			else {
 				g_string_append_c (res, '?');
+				msg_info_task("non graph character in archive file name found: 0x%02xd "
+							  "(filename=%T)", (int)*p, arch->archive_name);
 				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
 			}
 
@@ -230,6 +234,9 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_new ();
 	arch->type = RSPAMD_ARCHIVE_ZIP;
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
 	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
 			arch);
 
@@ -264,7 +271,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 
 		f = g_malloc0 (sizeof (*f));
-		rspamd_archive_file_try_utf (task, f, cd + cd_basic_len, fname_len);
+		rspamd_archive_file_try_utf (task, arch, f, cd + cd_basic_len, fname_len);
 
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
@@ -311,10 +318,6 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
-
-	if (part->cd) {
-		arch->archive_name = &part->cd->filename;
-	}
 
 	arch->size = part->parsed_data.len;
 }
@@ -424,6 +427,9 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_new ();
 	arch->type = RSPAMD_ARCHIVE_RAR;
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
 	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
 			arch);
 
@@ -504,19 +510,19 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 				if (tmp != NULL) {
 					/* Just use ASCII version */
-					rspamd_archive_file_try_utf (task, f, p, tmp - p);
+					rspamd_archive_file_try_utf (task, arch, f, p, tmp - p);
 					msg_debug_archive ("found ascii filename in rarv4 archive: %v",
 							f->fname);
 				}
 				else {
 					/* We have UTF8 filename, use it as is */
-					rspamd_archive_file_try_utf (task, f, p, fname_len);
+					rspamd_archive_file_try_utf (task, arch, f, p, fname_len);
 					msg_debug_archive ("found utf filename in rarv4 archive: %v",
 							f->fname);
 				}
 			}
 			else {
-				rspamd_archive_file_try_utf (task, f, p, fname_len);
+				rspamd_archive_file_try_utf (task, arch, f, p, fname_len);
 				msg_debug_archive ("found ascii (old) filename in rarv4 archive: %v",
 						f->fname);
 			}
@@ -546,7 +552,6 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 end:
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
-	arch->archive_name = &part->cd->filename;
 	arch->size = part->parsed_data.len;
 }
 
@@ -593,6 +598,9 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_new ();
 	arch->type = RSPAMD_ARCHIVE_RAR;
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
 	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
 			arch);
 
@@ -717,7 +725,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			f = g_malloc0 (sizeof (*f));
 			f->uncompressed_size = uncomp_sz;
 			f->compressed_size = comp_sz;
-			rspamd_archive_file_try_utf (task, f, p, fname_len);
+			rspamd_archive_file_try_utf (task, arch, f, p, fname_len);
 
 			if (f->fname) {
 				msg_debug_archive ("added rarv5 file: %v", f->fname);
@@ -773,9 +781,6 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 end:
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
-	if (part->cd != NULL) {
-		arch->archive_name = &part->cd->filename;
-	}
 	arch->size = part->parsed_data.len;
 }
 
@@ -1741,6 +1746,9 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_sized_new (1);
 	arch->type = RSPAMD_ARCHIVE_GZIP;
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
 	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
 			arch);
 
@@ -1786,7 +1794,7 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 
 					f = g_malloc0 (sizeof (*f));
 
-					rspamd_archive_file_try_utf (task, f,
+					rspamd_archive_file_try_utf (task, arch, f,
 							fname_start, p - fname_start);
 
 					if (f->fname) {
@@ -1875,11 +1883,6 @@ set:
 	/* Set archive data */
 	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
-
-	if (part->cd) {
-		arch->archive_name = &part->cd->filename;
-	}
-
 	arch->size = part->parsed_data.len;
 }
 
