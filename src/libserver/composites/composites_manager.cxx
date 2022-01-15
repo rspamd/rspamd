@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <vector>
+#include <cmath>
 #include "contrib/robin-hood/robin_hood.h"
 
 #include "composites.h"
@@ -87,44 +88,43 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 
 	const auto &composite = new_composite(composite_name, expr, composite_expression);
 
-	double score;
+	auto score = isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
 	val = ucl_object_lookup(obj, "score");
-	if (val != nullptr && ucl_object_todouble_safe(val, &score)) {
-		/* Also set score in the metric */
 
-		const auto *group = "composite";
-		val = ucl_object_lookup(obj, "group");
-		if (val != nullptr) {
-			group = ucl_object_tostring(val);
+	if (val != nullptr) {
+		ucl_object_todouble_safe(val, &score);
+	}
+
+	/* Also set score in the metric */
+	const auto *group = "composite";
+	val = ucl_object_lookup(obj, "group");
+	if (val != nullptr) {
+		group = ucl_object_tostring(val);
+	}
+
+	const auto *description = composite_expression;
+	val = ucl_object_lookup(obj, "description");
+	if (val != nullptr) {
+		description = ucl_object_tostring(val);
+	}
+
+	rspamd_config_add_symbol(cfg, composite_name.data(), score,
+			description, group,
+			0,
+			ucl_object_get_priority(obj), /* No +1 as it is default... */
+			1);
+
+	const auto *elt = ucl_object_lookup(obj, "groups");
+	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
+		const ucl_object_t *cur_gr;
+		auto *gr_it = ucl_object_iterate_new(elt);
+
+		while ((cur_gr = ucl_object_iterate_safe(gr_it, true)) != nullptr) {
+			rspamd_config_add_symbol_group(cfg, composite_name.data(),
+					ucl_object_tostring(cur_gr));
 		}
 
-		const auto *description = composite_expression;
-		val = ucl_object_lookup(obj, "description");
-		if (val != nullptr) {
-			description = ucl_object_tostring(val);
-		}
-		else {
-			description = composite_expression;
-		}
-
-		rspamd_config_add_symbol(cfg, composite_name.data(), score,
-				description, group,
-				0,
-				ucl_object_get_priority(obj), /* No +1 as it is default... */
-				1);
-
-		const auto *elt = ucl_object_lookup(obj, "groups");
-		if (elt) {
-			const ucl_object_t *cur_gr;
-			auto *gr_it = ucl_object_iterate_new(elt);
-
-			while ((cur_gr = ucl_object_iterate_safe(gr_it, true)) != nullptr) {
-				rspamd_config_add_symbol_group(cfg, composite_name.data(),
-						ucl_object_tostring(cur_gr));
-			}
-
-			ucl_object_iterate_free(gr_it);
-		}
+		ucl_object_iterate_free(gr_it);
 	}
 
 	val = ucl_object_lookup(obj, "policy");
@@ -159,6 +159,13 @@ composites_manager::add_composite(std::string_view composite_name,
 
 		return nullptr;
 	}
+
+	auto score = isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
+	rspamd_config_add_symbol(cfg, composite_name.data(), score,
+			composite_name.data(), "composite",
+			0,
+			0,
+			1);
 
 	return new_composite(composite_name, expr, composite_expression).get();
 }
