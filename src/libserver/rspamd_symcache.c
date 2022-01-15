@@ -1438,7 +1438,7 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			(SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))
 			&& g_hash_table_lookup (cfg->symbols, item->symbol) == NULL) {
 
-		if (cfg->unknown_weight != 0) {
+		if (!isnan(cfg->unknown_weight)) {
 
 			skipped = FALSE;
 			item->st->weight = cfg->unknown_weight;
@@ -1448,7 +1448,8 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			s->weight_ptr = &item->st->weight;
 			g_hash_table_insert (cfg->symbols, item->symbol, s);
 
-			msg_info_cache ("adding unknown symbol %s", item->symbol);
+			msg_info_cache ("adding unknown symbol %s with weight: %.2f",
+					item->symbol, cfg->unknown_weight);
 			ghost = FALSE;
 		}
 		else {

@@ -171,6 +171,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->dns_retransmits = 5;
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
+	cfg->unknown_weight = NAN;
 
 	/* Add all internal actions to keep compatibility */
 	for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
