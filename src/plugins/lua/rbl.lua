@@ -47,19 +47,24 @@ local known_selectors = {} -- map from selector string to selector id
 local url_flag_bits = rspamd_url.flags
 
 local function get_monitored(rbl)
+  local function is_random_monitored()
+    return (rbl.dkim
+        or rbl.urls
+        or rbl.emails
+        or rbl.no_ip
+        or rbl.rdns
+        or rbl.helo)
+  end
+
   local default_monitored = '1.0.0.127'
   local ret = {
     rcode = 'nxdomain',
     prefix = default_monitored,
-    random = false,
+    random = is_random_monitored(),
   }
 
   if rbl.monitored_address then
     ret.prefix = rbl.monitored_address
-  end
-
-  if rbl.dkim or rbl.urls or rbl.emails then
-    ret.random = true
   end
 
   lua_util.debugm(N, rspamd_config,
