@@ -88,7 +88,7 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 
 	const auto &composite = new_composite(composite_name, expr, composite_expression);
 
-	auto score = isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
+	auto score = std::isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
 	val = ucl_object_lookup(obj, "score");
 
 	if (val != nullptr) {
@@ -160,7 +160,7 @@ composites_manager::add_composite(std::string_view composite_name,
 		return nullptr;
 	}
 
-	auto score = isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
+	auto score = std::isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight;
 	rspamd_config_add_symbol(cfg, composite_name.data(), score,
 			composite_name.data(), "composite",
 			0,
