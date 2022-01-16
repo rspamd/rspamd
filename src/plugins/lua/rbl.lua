@@ -48,12 +48,18 @@ local url_flag_bits = rspamd_url.flags
 
 local function get_monitored(rbl)
   local function is_random_monitored()
-    return (rbl.dkim
-        or rbl.urls
-        or rbl.emails
-        or rbl.no_ip
-        or rbl.rdns
-        or rbl.helo)
+    -- Explicit definition
+    if type(rbl.random_monitored) == 'boolean' then
+      return rbl.random_monitored
+    end
+
+    -- We check 127.0.0.1 for merely RBLs with `from` or `received` and only if
+    -- they don't have `no_ip` attribute at the same time
+    --
+    -- Convert to a boolean variable using the common idiom
+    return (not (rbl.from or rbl.received)
+        or rbl.no_ip)
+        and true or false
   end
 
   local default_monitored = '1.0.0.127'

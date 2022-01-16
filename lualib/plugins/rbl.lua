@@ -109,6 +109,7 @@ local rule_schema_tbl = {
   monitored_address = ts.string:is_optional(),
   no_ip = ts.boolean:is_optional(),
   process_script = ts.string:is_optional(),
+  random_monitored = ts.boolean:is_optional(),
   rbl = ts.string,
   rdns = ts.boolean:is_optional(),
   received = ts.boolean:is_optional(),
