@@ -96,6 +96,21 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			return NULL;
 		}
 
+		int i = 0;
+
+		while (i < r) {
+			UChar32 uc;
+
+			U16_NEXT(tmp, i, r, uc);
+
+			if (IS_ZERO_WIDTH_SPACE(uc) || u_iscntrl(uc)) {
+				msg_info_task("control character in archive file name found: 0x%02xd "
+							  "(filename=%T)", uc, arch->archive_name);
+				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+				break;
+			}
+		}
+
 		clen = ucnv_getMaxCharSize (utf8_converter);
 		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
 		res = g_string_sized_new (dlen);
@@ -110,21 +125,6 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			fentry->fname = g_string_new_len(in, inlen);
 
 			return NULL;
-		}
-
-		int i = 0;
-
-		while (i < r) {
-			UChar32 uc;
-
-			U16_NEXT(tmp, i, r, uc);
-
-			if (IS_ZERO_WIDTH_SPACE(uc) || u_iscntrl(uc)) {
-				msg_info_task("control character in archive file name found: 0x%02xd "
-							  "(filename=%T)", uc, arch->archive_name);
-				fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
-				break;
-			}
 		}
 
 		g_free (tmp);
