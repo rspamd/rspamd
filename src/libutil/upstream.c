@@ -1241,10 +1241,6 @@ rspamd_upstreams_parse_line_len (struct upstream_list *ups,
 		ups->rot_alg = RSPAMD_UPSTREAM_HASHED;
 		p += sizeof ("hash:") - 1;
 	}
-	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "sequential:")) {
-		ups->rot_alg = RSPAMD_UPSTREAM_SEQUENTIAL;
-		p += sizeof ("sequential:") - 1;
-	}
 
 	while (p < end) {
 		span_len = rspamd_memcspn (p, separators, end - p);
