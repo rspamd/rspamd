@@ -427,6 +427,8 @@ local function gen_rbl_callback(rule)
     if rule.require_symbols then
       return fun.all(function(sym) task:has_symbol(sym) end, rule.require_symbols)
     end
+
+    return true
   end
 
   local function check_user(task, _)
