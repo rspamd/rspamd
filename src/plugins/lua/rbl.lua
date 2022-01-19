@@ -423,6 +423,12 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function check_required_symbols(task, _)
+    if rule.require_symbols then
+      return fun.all(function(sym) task:has_symbol(sym) end, rule.require_symbols)
+    end
+  end
+
   local function check_user(task, _)
     if task:get_user() then
       return false
@@ -741,7 +747,8 @@ local function gen_rbl_callback(rule)
 
   -- Create function pipeline depending on rbl settings
   local pipeline = {
-    is_alive, -- generic for all
+    is_alive, -- check monitored status
+    check_required_symbols -- if we have require_symbols then check those symbols
   }
   local description = {
     'alive',
