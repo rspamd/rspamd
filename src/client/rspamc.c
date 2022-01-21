@@ -57,6 +57,7 @@ static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean headers = FALSE;
 static gboolean raw = FALSE;
+static gboolean ucl_reply = FALSE;
 static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
 static gboolean empty_input = FALSE;
@@ -130,9 +131,9 @@ static GOptionEntry entries[] =
 	{ "compact", '\0', 0, G_OPTION_ARG_NONE, &compact, "Output compact json reply", NULL},
 	{ "headers", 0, 0, G_OPTION_ARG_NONE, &headers, "Output HTTP headers",
 	  NULL },
-	{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Output raw reply from rspamd",
+	{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Input is a raw file, not an email file",
 	  NULL },
-	{ "ucl", 0, 0, G_OPTION_ARG_NONE, &raw, "Output ucl reply from rspamd",
+	{ "ucl", 0, 0, G_OPTION_ARG_NONE, &ucl_reply, "Output ucl reply from rspamd",
 	  NULL },
 	{ "max-requests", 'n', 0, G_OPTION_ARG_INT, &max_requests,
 	  "Maximum count of parallel requests to rspamd", NULL },
@@ -406,7 +407,7 @@ read_cmd_line (gint *argc, gchar ***argv)
 	}
 
 	if (json || compact) {
-		raw = TRUE;
+		ucl_reply = TRUE;
 	}
 	/* Argc and argv are shifted after this function */
 	g_option_context_free (context);
@@ -633,6 +634,10 @@ add_options (GQueue *opts)
 
 	if (pass_all) {
 		ADD_CLIENT_FLAG (flagbuf, "pass_all");
+	}
+
+	if (raw) {
+		ADD_CLIENT_HEADER (opts, "Raw", "yes");
 	}
 
 	if (classifier) {
@@ -1404,7 +1409,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			}
 		}
 
-		if (json || raw || compact) {
+		if (json || ucl_reply || compact) {
 			/* We also append json data as a specific header */
 			if (json) {
 				json_header = ucl_object_emit (result,
@@ -1482,7 +1487,7 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 			rspamc_mime_output (out, result, input, time, err);
 		}
 		else if (result) {
-			if (raw || cmd->command_output_func == NULL) {
+			if (ucl_reply || cmd->command_output_func == NULL) {
 				if (json) {
 					ucl_out = ucl_object_emit (result,
 							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
@@ -1571,7 +1576,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 				if (headers && msg != NULL) {
 					rspamc_output_headers (out, msg);
 				}
-				if (raw || cmd->command_output_func == NULL) {
+				if (ucl_reply || cmd->command_output_func == NULL) {
 					if (cmd->need_input) {
 						ucl_object_insert_key (result,
 								ucl_object_fromstring (cbdata->filename),
@@ -1611,15 +1616,15 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 				rspamd_fprintf (out, "%s\n", err->message);
 
 				if (json && msg != NULL) {
-					const gchar *raw;
+					const gchar *raw_body;
 					gsize rawlen;
 
-					raw = rspamd_http_message_get_body (msg, &rawlen);
+					raw_body = rspamd_http_message_get_body (msg, &rawlen);
 
-					if (raw) {
+					if (raw_body) {
 						/* We can also output the resulting json */
 						rspamd_fprintf (out, "%*s\n", (gint)(rawlen - bodylen),
-								raw);
+								raw_body);
 					}
 				}
 			}
