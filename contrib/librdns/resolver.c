@@ -549,7 +549,7 @@ rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
 						req->resolver->ups->data);
 			}
 
-			rdns_request_unschedule (req);
+			rdns_request_unschedule (req, true);
 
 			if (!(rep->flags & RDNS_TRUNCATED)) {
 				req->state = RDNS_REQUEST_REPLIED;
@@ -621,7 +621,7 @@ rdns_process_timer (void *arg)
 
 	if (req->state == RDNS_REQUEST_TCP) {
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
-		rdns_request_unschedule (req);
+		rdns_request_unschedule (req, true);
 		req->state = RDNS_REQUEST_REPLIED;
 		req->func (rep, req->arg);
 		REF_RELEASE (req);
@@ -632,7 +632,7 @@ rdns_process_timer (void *arg)
 	if (req->retransmits == 0) {
 
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
-		rdns_request_unschedule (req);
+		rdns_request_unschedule (req, true);
 		req->state = RDNS_REQUEST_REPLIED;
 		req->func (rep, req->arg);
 		REF_RELEASE (req);
@@ -655,7 +655,7 @@ rdns_process_timer (void *arg)
 		if (!IS_CHANNEL_ACTIVE(req->io) || cnt > 1) {
 			/* Do not reschedule IO requests on inactive sockets */
 			rdns_debug ("reschedule request with id: %d", (int)req->id);
-			rdns_request_unschedule (req);
+			rdns_request_unschedule (req, true);
 			REF_RELEASE (req->io);
 
 			if (resolver->ups) {

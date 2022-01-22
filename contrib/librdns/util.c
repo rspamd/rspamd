@@ -633,25 +633,31 @@ rdns_request_retain (struct rdns_request *req)
 }
 
 void
-rdns_request_unschedule (struct rdns_request *req)
+rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 {
 	if (req->async_event) {
 		if (req->state == RDNS_REQUEST_WAIT_REPLY) {
 			req->async->del_timer (req->async->data,
 					req->async_event);
-			rdns_request_remove_from_hash(req);
+			if (remove_from_hash) {
+				rdns_request_remove_from_hash(req);
+			}
 			req->async_event = NULL;
 		}
 		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 			req->async->del_write (req->async->data,
 					req->async_event);
 			/* Remove from id hashes */
-			rdns_request_remove_from_hash(req);
+			if (remove_from_hash) {
+				rdns_request_remove_from_hash(req);
+			}
 			req->async_event = NULL;
 		}
 	}
 	else if (req->state == RDNS_REQUEST_TCP) {
-		rdns_request_remove_from_hash(req);
+		if (remove_from_hash) {
+			rdns_request_remove_from_hash(req);
+		}
 
 		req->async->del_timer(req->async->data,
 				req->async_event);
@@ -663,7 +669,7 @@ rdns_request_unschedule (struct rdns_request *req)
 void
 rdns_request_release (struct rdns_request *req)
 {
-	rdns_request_unschedule (req);
+	rdns_request_unschedule (req, true);
 	REF_RELEASE (req);
 }
 
@@ -701,6 +707,23 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		ioc->flags &= ~RDNS_CHANNEL_CONNECTED;
 	}
 
+	/* Remove all requests pending as we are unable to complete them */
+	struct rdns_request *req;
+	kh_foreach_value(ioc->requests, req, {
+		struct rdns_reply *rep = rdns_make_reply (req, RDNS_RC_NETERR);
+		/*
+		 * Unschedule request explicitly as we set state to RDNS_REQUEST_REPLIED
+		 * that will prevent timer from being removed on req dtor.
+		 *
+		 * We skip hash removal here, as the hash will be cleared as a single
+		 * operation afterwards.
+		 */
+		rdns_request_unschedule(req, false);
+		req->state = RDNS_REQUEST_REPLIED;
+		req->func (rep, req->arg);
+		REF_RELEASE (req);
+	});
+
 	if (ioc->sock != -1) {
 		close (ioc->sock);
 		ioc->sock = -1;
@@ -709,15 +732,6 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		free (ioc->saddr);
 		ioc->saddr = NULL;
 	}
-
-	/* Remove all requests pending as we are unable to complete them */
-	struct rdns_request *req;
-	kh_foreach_value(ioc->requests, req, {
-		struct rdns_reply *rep = rdns_make_reply (req, RDNS_RC_NETERR);
-		req->state = RDNS_REQUEST_REPLIED;
-		req->func (rep, req->arg);
-		REF_RELEASE (req);
-	});
 
 	kh_clear(rdns_requests_hash, ioc->requests);
 }

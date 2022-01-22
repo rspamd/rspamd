@@ -94,6 +94,6 @@ struct rdns_reply * rdns_make_reply (struct rdns_request *req, enum dns_rcode rc
  */
 void rdns_reply_free (struct rdns_reply *rep);
 
-void rdns_request_unschedule (struct rdns_request *req);
+void rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash);
 
 #endif /* UTIL_H_ */
