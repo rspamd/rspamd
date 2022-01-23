@@ -223,10 +223,10 @@ process_bmp_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->begin + 18;
-	memcpy (&t, p,	   sizeof (gint32));
-	img->width = abs (GINT32_FROM_LE (t));
+	memcpy (&t, p, sizeof (guint32));
+	img->width = GUINT32_FROM_LE (t);
 	memcpy (&t, p + 4, sizeof (gint32));
-	img->height = abs (GINT32_FROM_LE (t));
+	img->height = GUINT32_FROM_LE (t);
 
 	return img;
 }
