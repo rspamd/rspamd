@@ -991,7 +991,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_USER:
-		if (task->user) {
+		if (task->auth_user) {
 			ret = TRUE;
 		}
 		break;
@@ -1424,8 +1424,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_USER:
-		if (task->user) {
-			var.begin = task->user;
+		if (task->auth_user) {
+			var.begin = task->auth_user;
 			var.len = strlen (var.begin);
 		}
 		else {

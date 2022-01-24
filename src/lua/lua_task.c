@@ -4144,8 +4144,8 @@ lua_task_get_user (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
-		if (task->user != NULL) {
-			lua_pushstring (L, task->user);
+		if (task->auth_user != NULL) {
+			lua_pushstring (L, task->auth_user);
 		}
 		else {
 			lua_pushnil (L);
@@ -4170,27 +4170,27 @@ lua_task_set_user (lua_State *L)
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			new_user = lua_tostring (L, 2);
 
-			if (task->user) {
+			if (task->auth_user) {
 				/* Push old user */
-				lua_pushstring (L, task->user);
+				lua_pushstring (L, task->auth_user);
 			}
 			else {
 				lua_pushnil (L);
 			}
 
-			task->user = rspamd_mempool_strdup (task->task_pool, new_user);
+			task->auth_user = rspamd_mempool_strdup (task->task_pool, new_user);
 		}
 		else {
 			/* Reset user */
-			if (task->user) {
+			if (task->auth_user) {
 				/* Push old user */
-				lua_pushstring (L, task->user);
+				lua_pushstring (L, task->auth_user);
 			}
 			else {
 				lua_pushnil (L);
 			}
 
-			task->user = NULL;
+			task->auth_user = NULL;
 		}
 	}
 	else {

@@ -173,7 +173,7 @@ struct rspamd_task {
 	rspamd_inet_addr_t *from_addr;                    /**< from addr for a task							*/
 	rspamd_inet_addr_t *client_addr;                /**< address of connected socket					*/
 	gchar *deliver_to;                                /**< address to deliver								*/
-	gchar *user;                                    /**< user to deliver								*/
+	gchar *auth_user;                                /**< SMTP authenticated user								*/
 	const gchar *hostname;                            /**< hostname reported by MTA						*/
 	khash_t(rspamd_req_headers_hash) *request_headers; /**< HTTP headers in a request						*/
 	struct rspamd_task_data_storage msg;            /**< message buffer									*/

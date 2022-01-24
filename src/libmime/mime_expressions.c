@@ -1723,7 +1723,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 'u':
 		case 'U':
 			if (g_ascii_strcasecmp (type, "user") == 0) {
-				str = task->user;
+				str = task->auth_user;
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);

@@ -725,7 +725,7 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 					trecv.flags |= received_flags::SSL;
 				}
 
-				if (task->user) {
+				if (task->auth_user) {
 					trecv.flags |= received_flags::AUTHENTICATED;
 				}
 

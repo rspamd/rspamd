@@ -629,7 +629,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					 */
 					msg_debug_protocol ("read user header, value: %T", hv_tok);
 					if (!RSPAMD_TASK_IS_SPAMC (task)) {
-						task->user = rspamd_mempool_ftokdup (task->task_pool,
+						task->auth_user = rspamd_mempool_ftokdup (task->task_pool,
 								hv_tok);
 					}
 					else {
@@ -964,9 +964,9 @@ urls_protocol_cb (struct rspamd_url *url, struct tree_cb_data *cb)
 	ucl_array_append (cb->top, obj);
 
 	if (cb->task->cfg->log_urls) {
-		if (task->user) {
-			user_field = task->user;
-			len = strlen (task->user);
+		if (task->auth_user) {
+			user_field = task->auth_user;
+			len = strlen (task->auth_user);
 			has_user = TRUE;
 		}
 		else if (task->from_envelope) {

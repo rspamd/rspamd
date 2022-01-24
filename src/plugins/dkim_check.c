@@ -1154,7 +1154,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 	}
 
 	/* First check if plugin should be enabled */
-	if ((!dkim_module_ctx->check_authed && task->user != NULL)
+	if ((!dkim_module_ctx->check_authed && task->auth_user != NULL)
 			|| (!dkim_module_ctx->check_local &&
 			rspamd_ip_is_local_cfg (task->cfg, task->from_addr))) {
 		msg_info_task ("skip DKIM checks for local networks and authorized users");
