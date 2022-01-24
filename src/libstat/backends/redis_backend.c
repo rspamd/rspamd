@@ -208,7 +208,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 				state = just_char;
 				break;
 			case 'u':
-				elt = GET_TASK_ELT (task, user);
+				elt = GET_TASK_ELT (task, auth_user);
 				if (elt) {
 					tlen += strlen (elt);
 				}
@@ -299,7 +299,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 				state = just_char;
 				break;
 			case 'u':
-				elt = GET_TASK_ELT (task, user);
+				elt = GET_TASK_ELT (task, auth_user);
 				if (elt) {
 					d += rspamd_strlcpy (d, elt, end - d);
 				}

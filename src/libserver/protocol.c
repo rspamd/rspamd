@@ -805,7 +805,7 @@ rspamd_protocol_control_parser_init (void)
 		rspamd_rcl_add_default_handler (sub,
 				"user",
 				rspamd_rcl_parse_struct_string,
-				G_STRUCT_OFFSET (struct rspamd_task, user),
+				G_STRUCT_OFFSET (struct rspamd_task, auth_user),
 				0,
 				NULL);
 		rspamd_rcl_add_default_handler (sub,
