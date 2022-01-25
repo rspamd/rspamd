@@ -1630,8 +1630,9 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 					sym_group = rspamd_config_new_group (cfg, group);
 				}
 
-				if (!sym_def->gr) {
+				if ((!sym_def->gr) || (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)) {
 					sym_def->gr = sym_group;
+					sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNGROUPPED;
 				}
 
 				g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
