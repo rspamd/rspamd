@@ -3384,6 +3384,27 @@ rspamd_symcache_set_symbol_flags (struct rspamd_symcache *cache,
 	return FALSE;
 }
 
+void
+rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
+										   const gchar *symbol,
+										   const ucl_object_t *this_sym_ucl)
+{
+	struct rspamd_symcache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	item = rspamd_symcache_find_filter (cache, symbol, false);
+
+	if (item) {
+		ucl_object_insert_key (this_sym_ucl,
+			ucl_object_fromstring(item->type_descr),
+			"type", strlen("type"), false);
+
+		// any other data?
+	}
+}
+
 guint
 rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 										const gchar *symbol)
