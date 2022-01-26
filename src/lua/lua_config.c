@@ -426,8 +426,18 @@ LUA_FUNCTION_DEF (config, get_key);
  * @return {boolean} true if condition has been added
  * @example
 
+local condition_map = rspamd_config:add_map{
+  type = "hash",
+  urls = ['file:///path/to/file'],
+  description = 'SMTP from map that allows FUZZY_DENIED skip for the listed addresses'
+}
 rspamd_config:add_condition('FUZZY_DENIED', function(task)
-  if some_map:find_key(task:get_from()) then return false end
+  local E = {}
+  -- Check for the smtp from address adding fail safe checks
+  if condition_map:find_key(((task:get_from('smtp') or E)[1] or E).addr) then
+    return false
+  end
+  -- Allow execution otherwise
   return true
 end)
  */
