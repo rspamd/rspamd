@@ -330,6 +330,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 						ucl_object_fromdouble (s->score),
 						"score", strlen ("score"),
 						false);
+
 				ucl_object_insert_key (this_sym_ucl,
 						ucl_object_fromstring (s->description),
 						"description", strlen ("description"), false);
@@ -368,17 +369,17 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 						ucl_object_t *add_groups = ucl_object_typed_new (UCL_ARRAY);
 						guint j;
 						struct rspamd_symbols_group *add_gr;
-						bool one_extra = false;
+						bool has_extra_groups = false;
 
 						PTR_ARRAY_FOREACH (s->groups, j, add_gr) {
 							if (add_gr->name && strcmp (add_gr->name, gr_name) != 0) {
 								ucl_array_append (add_groups,
 									ucl_object_fromstring (add_gr->name));
-								one_extra = true;
+								has_extra_groups = true;
 							}
 						}
 
-						if (one_extra == true) {
+						if (has_extra_groups == true) {
 							ucl_object_insert_key (this_sym_ucl,
 								add_groups,
 								"groups", strlen ("groups"),

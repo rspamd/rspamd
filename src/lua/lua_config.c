@@ -2899,12 +2899,12 @@ lua_config_newindex (lua_State *L)
 				}
 				lua_pop (L, 1);
 				if (group) {
-					if (sym->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)
-					{
+					if (sym->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED) {
 						/* Unset the "ungrouped" group */
 						sym->gr = NULL;
 					}
-					/* Add the group */
+					/* Add the group. If the symbol was ungrouped, this will
+					* clear RSPAMD_SYMBOL_FLAG_UNGROUPPED from the flags. */
 					rspamd_config_add_symbol_group (cfg, name, group);
 				}
 			}
