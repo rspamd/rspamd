@@ -303,7 +303,7 @@ guint rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 
 void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 								 const gchar *symbol,
-								 const ucl_object_t *this_sym_ucl);
+								 ucl_object_t *this_sym_ucl);
 
 
 /**
