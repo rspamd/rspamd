@@ -28,6 +28,7 @@ static gboolean show_help = FALSE;
 static gboolean show_comments = FALSE;
 static gboolean modules_state = FALSE;
 static gboolean symbol_groups_only = FALSE;
+static gboolean symbol_full_details = FALSE;
 static gboolean skip_template = FALSE;
 static gchar *config = NULL;
 extern struct rspamd_main *rspamd_main;
@@ -52,7 +53,7 @@ static GOptionEntry entries[] = {
 		{"compact", 'C', 0, G_OPTION_ARG_NONE, &compact,
 				"Compacted json output", NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
-				"Config file to test",     NULL},
+				"Config file to test", NULL},
 		{"show-help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 				"Show help as comments for each option", NULL },
 		{"show-comments", 's', 0, G_OPTION_ARG_NONE, &show_comments,
@@ -61,6 +62,8 @@ static GOptionEntry entries[] = {
 				"Show modules state only", NULL},
 		{"groups", 'g', 0, G_OPTION_ARG_NONE, &symbol_groups_only,
 				"Show symbols groups only", NULL},
+		{"symbol-details", 'd', 0, G_OPTION_ARG_NONE, &symbol_full_details,
+				"Show full symbol details only", NULL},
 		{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
 				"Do not apply Jinja templates", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
@@ -237,7 +240,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	GOptionContext *context;
 	GError *error = NULL;
 	const gchar *confdir;
-	const ucl_object_t *obj, *cur, *doc_obj;
+	const ucl_object_t *obj = NULL, *cur, *doc_obj;
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
@@ -302,6 +305,120 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 					"plugins_stats",
 					FALSE);
 
+			exit (EXIT_SUCCESS);
+		}
+
+		if (symbol_full_details) {
+			/*
+			 * Create object from symbols groups and output it using the
+			 * specified format
+			 */
+			ucl_object_t *out = ucl_object_typed_new (UCL_OBJECT);
+			GHashTableIter it;
+			gpointer sk, sv;
+
+			g_hash_table_iter_init (&it, cfg->symbols);
+			ucl_object_t *sym_ucl = ucl_object_typed_new (UCL_OBJECT);
+			const ucl_object_t *all_symbols_ucl = ucl_object_lookup(cfg->rcl_obj, "symbols");
+
+			while (g_hash_table_iter_next (&it, &sk, &sv)) {
+				const gchar *sym_name = (const gchar *)sk;
+				struct rspamd_symbol *s = (struct rspamd_symbol *)sv;
+				ucl_object_t *this_sym_ucl = ucl_object_typed_new (UCL_OBJECT);
+
+				ucl_object_insert_key (this_sym_ucl,
+						ucl_object_fromdouble (s->score),
+						"score", strlen ("score"),
+						false);
+
+				ucl_object_insert_key (this_sym_ucl,
+						ucl_object_fromstring (s->description),
+						"description", strlen ("description"), false);
+
+				rspamd_symcache_get_symbol_details(cfg->cache, sym_name, this_sym_ucl);
+
+				ucl_object_insert_key (this_sym_ucl,
+						ucl_object_frombool (!!(s->flags & RSPAMD_SYMBOL_FLAG_DISABLED)),
+						"disabled", strlen ("disabled"),
+						false);
+
+				if (s->nshots == 1) {
+					ucl_object_insert_key (this_sym_ucl,
+							ucl_object_frombool (true),
+							"one_shot", strlen ("one_shot"),
+							false);
+				}
+				else {
+					ucl_object_insert_key (this_sym_ucl,
+							ucl_object_frombool (false),
+							"one_shot", strlen ("one_shot"),
+							false);
+				}
+
+				if (s->gr != NULL) {
+					struct rspamd_symbols_group *gr = s->gr;
+					const char *gr_name = gr->name;
+					if (strcmp(gr_name, "ungrouped") != 0) {
+						ucl_object_insert_key (this_sym_ucl,
+							ucl_object_fromstring (gr_name),
+							"group", strlen("group"),
+							false);
+					}
+
+					if (s->groups) {
+						ucl_object_t *add_groups = ucl_object_typed_new (UCL_ARRAY);
+						guint j;
+						struct rspamd_symbols_group *add_gr;
+						bool has_extra_groups = false;
+
+						PTR_ARRAY_FOREACH (s->groups, j, add_gr) {
+							if (add_gr->name && strcmp (add_gr->name, gr_name) != 0) {
+								ucl_array_append (add_groups,
+									ucl_object_fromstring (add_gr->name));
+								has_extra_groups = true;
+							}
+						}
+
+						if (has_extra_groups == true) {
+							ucl_object_insert_key (this_sym_ucl,
+								add_groups,
+								"groups", strlen ("groups"),
+								false);
+						}
+					}
+				}
+
+				const ucl_object_t *loaded_symbol_ucl = ucl_object_lookup(all_symbols_ucl, sym_name);
+				if (loaded_symbol_ucl) {
+					ucl_object_iter_t it = NULL;
+					while ((cur = ucl_iterate_object (loaded_symbol_ucl, &it, true)) != NULL)
+					{
+						const char *key = ucl_object_key(cur);
+						/* If this key isn't something we have direct in the symbol item, grab the key/value */
+						if ((strcmp(key, "score") != 0 ) &&
+							(strcmp(key, "description") != 0) &&
+							(strcmp(key, "disabled") != 0) &&
+							(strcmp(key, "condition") != 0) &&
+							(strcmp(key, "score") != 0) &&
+							(strcmp(key, "one_shot") != 0) &&
+							(strcmp(key, "any_shot") != 0) &&
+							(strcmp(key, "nshots") != 0) &&
+							(strcmp(key, "one_param") != 0) &&
+							(strcmp(key, "priority") != 0))
+						{
+							ucl_object_insert_key(this_sym_ucl, (ucl_object_t *)cur, key, strlen(key), false);
+						}
+					}
+				}
+
+				ucl_object_insert_key (sym_ucl, this_sym_ucl, sym_name,
+								strlen (sym_name), true);
+
+			}
+			ucl_object_insert_key (out, sym_ucl, "symbols",
+					strlen ("symbols"), true);
+
+			rspamadm_dump_section_obj (cfg, out, NULL);
 			exit (EXIT_SUCCESS);
 		}
 

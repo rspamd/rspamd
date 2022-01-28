@@ -2883,6 +2883,41 @@ lua_config_newindex (lua_State *L)
 					lua_pop (L, 1);
 				}
 			}
+			else
+			{
+				/* Fill in missing fields from lua defintion if they are not set */
+				if (sym->description == NULL) {
+					lua_pushstring (L, "description");
+					lua_gettable (L, -2);
+
+					if (lua_type (L, -1) == LUA_TSTRING) {
+						description = lua_tostring (L, -1);
+					}
+					lua_pop (L, 1);
+
+					if (description) {
+						sym->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
+					}
+				}
+
+				/* If ungrouped and there is a group defined in lua, change the primary group
+				 * Otherwise, add to the list of groups for this symbol. */
+				lua_pushstring (L, "group");
+				lua_gettable (L, -2);
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					group = lua_tostring (L, -1);
+				}
+				lua_pop (L, 1);
+				if (group) {
+					if (sym->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED) {
+						/* Unset the "ungrouped" group */
+						sym->gr = NULL;
+					}
+					/* Add the group. If the symbol was ungrouped, this will
+					* clear RSPAMD_SYMBOL_FLAG_UNGROUPPED from the flags. */
+					rspamd_config_add_symbol_group (cfg, name, group);
+				}
+			}
 
 			/* Remove table from stack */
 			lua_pop (L, 1);
