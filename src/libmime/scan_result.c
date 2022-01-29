@@ -99,6 +99,8 @@ rspamd_create_metric_result (struct rspamd_task *task,
 			metric_res->actions_config[i].flags = RSPAMD_ACTION_RESULT_DEFAULT;
 			if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
 				metric_res->actions_config[i].cur_limit = act->threshold;
+			}
+			else {
 				metric_res->actions_config[i].flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
 			}
 			metric_res->actions_config[i].action = act;
