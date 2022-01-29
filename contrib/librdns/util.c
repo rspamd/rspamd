@@ -694,6 +694,7 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 			ioc->tcp->read_buf_allocated = 0;
 			ioc->tcp->next_read_size = 0;
 			ioc->tcp->cur_read = 0;
+			ioc->tcp->cur_read_buf = NULL;
 		}
 
 		struct rdns_tcp_output_chain *oc, *tmp;
@@ -703,6 +704,7 @@ rdns_ioc_tcp_reset (struct rdns_io_channel *ioc)
 		}
 
 		ioc->tcp->cur_output_chains = 0;
+		ioc->tcp->output_chain = NULL;
 
 		ioc->flags &= ~RDNS_CHANNEL_CONNECTED;
 	}
