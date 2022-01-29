@@ -233,9 +233,11 @@ guint rspamd_http_message_get_flags (struct rspamd_http_message *msg);
  * Returns an HTTP hostname for a message, derived from a header if it has it
  * or from a url if it doesn't
  * @param msg
+ * @param hostlen output of the host length
  * @return
  */
-const gchar* rspamd_http_message_get_http_host (struct rspamd_http_message *msg);
+const gchar* rspamd_http_message_get_http_host (struct rspamd_http_message *msg,
+		gsize *hostlen);
 
 #ifdef  __cplusplus
 }

@@ -693,7 +693,8 @@ rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 }
 
 const gchar*
-rspamd_http_message_get_http_host (struct rspamd_http_message *msg)
+rspamd_http_message_get_http_host (struct rspamd_http_message *msg,
+								   gsize *hostlen)
 {
 	if (msg->flags & RSPAMD_HTTP_FLAG_HAS_HOST_HEADER) {
 		rspamd_ftok_t srch;
@@ -703,14 +704,17 @@ rspamd_http_message_get_http_host (struct rspamd_http_message *msg)
 		khiter_t k = kh_get (rspamd_http_headers_hash, msg->headers, &srch);
 
 		if (k != kh_end (msg->headers)) {
+			*hostlen = (kh_value (msg->headers, k)->value).len;
 			return (kh_value (msg->headers, k)->value).begin;
 		}
 		else if (msg->host) {
+			*hostlen = msg->host->len;
 			return msg->host->str;
 		}
 	}
 	else {
 		if (msg->host) {
+			*hostlen = msg->host->len;
 			return msg->host->str;
 		}
 	}
