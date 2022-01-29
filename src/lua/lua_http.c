@@ -1068,7 +1068,7 @@ lua_http_request (lua_State *L)
 	const gchar *host = rspamd_http_message_get_http_host (msg, &hostlen);
 
 	if (host) {
-		cbd->host = malloc (hostlen + 1);
+		cbd->host = g_malloc (hostlen + 1);
 		rspamd_strlcpy (cbd->host, host, hostlen + 1);
 
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
