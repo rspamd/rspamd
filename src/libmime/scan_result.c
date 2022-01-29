@@ -903,7 +903,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	/*
 	 * Select result by score
 	 */
-	for (unsigned int i = scan_result->nactions - 1; i >= 0; i--) {
+	for (size_t i = scan_result->nactions - 1; i != (size_t)-1; i--) {
 		action_lim = &scan_result->actions_config[i];
 		sc = action_lim->cur_limit;
 
