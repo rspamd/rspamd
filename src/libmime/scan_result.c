@@ -96,8 +96,10 @@ rspamd_create_metric_result (struct rspamd_task *task,
 		i = 0;
 
 		HASH_ITER (hh, task->cfg->actions, act, tmp) {
+			metric_res->actions_config[i].flags = RSPAMD_ACTION_RESULT_DEFAULT;
 			if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
 				metric_res->actions_config[i].cur_limit = act->threshold;
+				metric_res->actions_config[i].flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
 			}
 			metric_res->actions_config[i].action = act;
 
@@ -141,7 +143,7 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 	/* Find the speicific action config */
 	struct rspamd_action_config *action_config = NULL;
 
-	for (unsigned int i = 0; i < HASH_COUNT (task->cfg->actions); i ++) {
+	for (unsigned int i = 0; i < scan_result->nactions; i ++) {
 		struct rspamd_action_config *cur = &scan_result->actions_config[i];
 
 		/* We assume that all action pointers are static */
@@ -802,6 +804,21 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	return ret;
 }
 
+static struct rspamd_action_config *
+rspamd_find_action_config_for_action (struct rspamd_scan_result *scan_result,
+									  struct rspamd_action *act)
+{
+	for (unsigned int i = 0; i < scan_result->nactions; i ++) {
+		struct rspamd_action_config *cur = &scan_result->actions_config[i];
+
+		if (act == cur->action) {
+			return cur;
+		}
+	}
+
+	return NULL;
+}
+
 struct rspamd_action *
 rspamd_check_action_metric (struct rspamd_task *task,
 							struct rspamd_passthrough_result **ppr,
@@ -812,7 +829,6 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	struct rspamd_action *selected_action = NULL, *least_action = NULL;
 	struct rspamd_passthrough_result *pr, *sel_pr = NULL;
 	double max_score = -(G_MAXDOUBLE), sc;
-	int i;
 	gboolean seen_least = FALSE;
 
 	if (scan_result == NULL) {
@@ -821,6 +837,14 @@ rspamd_check_action_metric (struct rspamd_task *task,
 
 	if (scan_result->passthrough_result != NULL)  {
 		DL_FOREACH (scan_result->passthrough_result, pr) {
+			struct rspamd_action_config *act_config =
+					rspamd_find_action_config_for_action (scan_result, pr->action);
+
+			/* Skip disabled actions */
+			if (act_config && (act_config->flags & RSPAMD_ACTION_RESULT_DISABLED)) {
+				continue;
+			}
+
 			if (!seen_least || !(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
 				sc = pr->target_score;
 				selected_action = pr->action;
@@ -879,12 +903,16 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	/*
 	 * Select result by score
 	 */
-	for (i = scan_result->nactions - 1; i >= 0; i--) {
+	for (unsigned int i = scan_result->nactions - 1; i >= 0; i--) {
 		action_lim = &scan_result->actions_config[i];
 		sc = action_lim->cur_limit;
 
 		if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {
 			noaction = action_lim;
+		}
+
+		if ((action_lim->flags & (RSPAMD_ACTION_RESULT_DISABLED|RSPAMD_ACTION_RESULT_NO_THRESHOLD))) {
+			continue;
 		}
 
 		if (isnan (sc) ||
