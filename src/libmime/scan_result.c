@@ -91,15 +91,15 @@ rspamd_create_metric_result (struct rspamd_task *task,
 	if (task->cfg) {
 		struct rspamd_action *act, *tmp;
 
-		metric_res->actions_limits = rspamd_mempool_alloc0 (task->task_pool,
-			sizeof (struct rspamd_action_result) * HASH_COUNT (task->cfg->actions));
+		metric_res->actions_config = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct rspamd_action_config) * HASH_COUNT (task->cfg->actions));
 		i = 0;
 
 		HASH_ITER (hh, task->cfg->actions, act, tmp) {
 			if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
-				metric_res->actions_limits[i].cur_limit = act->threshold;
+				metric_res->actions_config[i].cur_limit = act->threshold;
 			}
-			metric_res->actions_limits[i].action = act;
+			metric_res->actions_config[i].action = act;
 
 			i ++;
 		}
@@ -122,15 +122,43 @@ rspamd_pr_sort (const struct rspamd_passthrough_result *pra,
 	return prb->priority - pra->priority;
 }
 
-void
-rspamd_add_passthrough_result (struct rspamd_task *task, struct rspamd_action *action, guint priority,
-							   double target_score, const gchar *message, const gchar *module, guint flags,
+bool
+rspamd_add_passthrough_result (struct rspamd_task *task,
+							   struct rspamd_action *action,
+							   guint priority,
+							   double target_score,
+							   const gchar *message,
+							   const gchar *module,
+							   uint flags,
 							   struct rspamd_scan_result *scan_result)
 {
 	struct rspamd_passthrough_result *pr;
 
 	if (scan_result == NULL) {
 		scan_result = task->result;
+	}
+
+	/* Find the speicific action config */
+	struct rspamd_action_config *action_config = NULL;
+
+	for (unsigned int i = 0; i < HASH_COUNT (task->cfg->actions); i ++) {
+		struct rspamd_action_config *cur = &scan_result->actions_config[i];
+
+		/* We assume that all action pointers are static */
+		if (cur->action == action) {
+			action_config = cur;
+			break;
+		}
+	}
+
+	if (action_config && (action_config->flags & RSPAMD_ACTION_RESULT_DISABLED)) {
+		msg_info_task ("<%s>: NOT set pre-result to '%s' %s(%.2f): '%s' from %s(%d); action is disabled",
+				MESSAGE_FIELD_CHECK (task, message_id), action->name,
+				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
+				target_score,
+				message, module, priority);
+
+		return false;
 	}
 
 	pr = rspamd_mempool_alloc (task->task_pool, sizeof (*pr));
@@ -160,6 +188,8 @@ rspamd_add_passthrough_result (struct rspamd_task *task, struct rspamd_action *a
 	}
 
 	scan_result->nresults ++;
+
+	return true;
 }
 
 static inline gdouble
@@ -777,7 +807,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 							struct rspamd_passthrough_result **ppr,
 							struct rspamd_scan_result *scan_result)
 {
-	struct rspamd_action_result *action_lim,
+	struct rspamd_action_config *action_lim,
 			*noaction = NULL;
 	struct rspamd_action *selected_action = NULL, *least_action = NULL;
 	struct rspamd_passthrough_result *pr, *sel_pr = NULL;
@@ -850,7 +880,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	 * Select result by score
 	 */
 	for (i = scan_result->nactions - 1; i >= 0; i--) {
-		action_lim = &scan_result->actions_limits[i];
+		action_lim = &scan_result->actions_config[i];
 		sc = action_lim->cur_limit;
 
 		if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {

@@ -66,8 +66,15 @@ struct rspamd_passthrough_result {
 	struct rspamd_passthrough_result *prev, *next;
 };
 
-struct rspamd_action_result {
+
+enum rspamd_action_config_flags {
+	RSPAMD_ACTION_RESULT_DEFAULT = 0,
+	RSPAMD_ACTION_RESULT_NO_THRESHOLD = (1u << 0u),
+	RSPAMD_ACTION_RESULT_DISABLED = (1u << 1u),
+};
+struct rspamd_action_config {
 	gdouble cur_limit;
+	int flags;
 	struct rspamd_action *action;
 };
 
@@ -83,7 +90,7 @@ struct rspamd_scan_result {
 	double negative_score;
 	struct kh_rspamd_symbols_hash_s *symbols;            /**< symbols of metric						*/
 	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
-	struct rspamd_action_result *actions_limits;
+	struct rspamd_action_config *actions_config;
 	const gchar *name;                                 /**< for named results, NULL is the default result */
 	struct rspamd_task *task;                          /**< back reference */
 	gint symbol_cbref;                                 /**< lua function that defines if a symbol can be inserted, -1 if unused */
@@ -121,7 +128,7 @@ struct rspamd_scan_result *rspamd_find_metric_result (struct rspamd_task *task,
  * @param message
  * @param module
  */
-void rspamd_add_passthrough_result (struct rspamd_task *task,
+bool rspamd_add_passthrough_result (struct rspamd_task *task,
 									struct rspamd_action *action, guint priority,
 									double target_score, const gchar *message,
 									const gchar *module, guint flags,

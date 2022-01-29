@@ -5652,40 +5652,35 @@ lua_task_set_settings (lua_State *L)
 
 			while ((cur = ucl_object_iterate (act, &it, true)) != NULL) {
 				const gchar *act_name = ucl_object_key (cur);
-				double act_score = ucl_object_type (cur) == UCL_NULL ?
-						NAN : ucl_object_todouble (cur), old_score = NAN;
+				struct rspamd_action_config *action_config = NULL;
+				double act_score;
 				int act_type;
-				gboolean found = FALSE;
 
 				if (!rspamd_action_from_str (act_name, &act_type)) {
 					act_type = -1;
 				}
 
 				for (i = 0; i < mres->nactions; i++) {
-					struct rspamd_action_result *act_res = &mres->actions_limits[i];
+					struct rspamd_action_config *cur_act = &mres->actions_config[i];
 
-					if (act_res->action->action_type == METRIC_ACTION_CUSTOM &&
+					if (cur_act->action->action_type == METRIC_ACTION_CUSTOM &&
 							act_type == -1) {
 						/* Compare by name */
-						if (g_ascii_strcasecmp (act_name, act_res->action->name) == 0) {
-							old_score = act_res->cur_limit;
-							act_res->cur_limit = act_score;
-							found = TRUE;
+						if (g_ascii_strcasecmp (act_name, cur_act->action->name) == 0) {
+							action_config = cur_act;
 							break;
 						}
 					}
 					else {
-						if (act_res->action->action_type == act_type) {
-							old_score = act_res->cur_limit;
-							act_res->cur_limit = act_score;
-							found = TRUE;
+						if (cur_act->action->action_type == act_type) {
+							action_config = cur_act;
 							break;
 						}
 					}
 				}
 
-				if (!found) {
-
+				if (!action_config) {
+					act_score = ucl_object_todouble(cur);
 					if (!isnan (act_score)) {
 						struct rspamd_action *new_act;
 
@@ -5713,28 +5708,41 @@ lua_task_set_settings (lua_State *L)
 
 						/* Insert it to the mres structure */
 						gsize new_actions_cnt = mres->nactions + 1;
-						struct rspamd_action_result *old_actions = mres->actions_limits;
+						struct rspamd_action_config *old_actions = mres->actions_config;
 
-						mres->actions_limits = rspamd_mempool_alloc (task->task_pool,
-								sizeof (struct rspamd_action_result) * new_actions_cnt);
-						memcpy (mres->actions_limits, old_actions,
-								sizeof (struct rspamd_action_result) * mres->nactions);
-						mres->actions_limits[mres->nactions].action = new_act;
-						mres->actions_limits[mres->nactions].cur_limit = act_score;
+						mres->actions_config = rspamd_mempool_alloc (task->task_pool,
+								sizeof (struct rspamd_action_config) * new_actions_cnt);
+						memcpy (mres->actions_config, old_actions,
+								sizeof (struct rspamd_action_config) * mres->nactions);
+						mres->actions_config[mres->nactions].action = new_act;
+						mres->actions_config[mres->nactions].cur_limit = act_score;
 						mres->nactions ++;
 					}
 					/* Disabled/missing action is disabled one more time, not an error */
 				}
 				else {
-					if (isnan (act_score)) {
+					/* Found the existing configured action */
+					if (ucl_object_type (cur) == UCL_NULL) {
+						/* Disable action completely */
+						action_config->flags |= RSPAMD_ACTION_RESULT_DISABLED;
 						msg_info_task ("disabled action %s due to settings",
-								act_name);
+								action_config->action->name);
 					}
 					else {
-						msg_debug_task ("adjusted action %s: %.2f -> %.2f",
-								act_name,
-								old_score,
-								act_score);
+						act_score = ucl_object_todouble(cur);
+						if (isnan (act_score)) {
+							msg_info_task ("disabled action %s threshold (was %.2f) due to settings",
+									action_config->action->name,
+									action_config->cur_limit);
+							action_config->flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
+						}
+						else {
+							action_config->cur_limit = act_score;
+							msg_debug_task ("adjusted action %s: %.2f -> %.2f",
+									act_name,
+									action_config->cur_limit,
+									act_score);
+						}
 					}
 				}
 			}
@@ -6347,14 +6355,14 @@ lua_task_disable_action (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *action_name;
-	struct rspamd_action_result *action_res;
+	struct rspamd_action_config *action_res;
 
 	action_name = luaL_checkstring (L, 2);
 
 	if (task && action_name) {
 
 		for (guint i = 0; i < task->result->nactions; i ++) {
-			action_res = &task->result->actions_limits[i];
+			action_res = &task->result->actions_config[i];
 
 			if (strcmp (action_name, action_res->action->name) == 0) {
 				if (isnan (action_res->cur_limit)) {

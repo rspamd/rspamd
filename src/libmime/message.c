@@ -862,7 +862,8 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 			rspamd_add_passthrough_result (task, action,
 					RSPAMD_PASSTHROUGH_CRITICAL,
-					score, "Gtube pattern", "GTUBE", 0, NULL);
+					score, "Gtube pattern",
+					"GTUBE", 0, NULL);
 		}
 
 		rspamd_task_insert_result (task, GTUBE_SYMBOL, 0, NULL);
