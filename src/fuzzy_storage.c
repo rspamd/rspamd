@@ -458,24 +458,24 @@ rspamd_fuzzy_updates_cb (gboolean success,
 	source = cbdata->source;
 
 	if (success) {
-		rspamd_fuzzy_backend_count (ctx->backend, fuzzy_count_callback, ctx);
+		rspamd_fuzzy_backend_count(ctx->backend, fuzzy_count_callback, ctx);
 
 		msg_info ("successfully updated fuzzy storage %s: %d updates in queue; "
 				  "%d pending currently; "
 				  "%d added; %d deleted; %d extended; %d duplicates",
 				ctx->worker->cf->bind_conf ?
-					 ctx->worker->cf->bind_conf->bind_line :
-					 "unknown",
+				ctx->worker->cf->bind_conf->bind_line :
+				"unknown",
 				cbdata->updates_pending->len,
 				ctx->updates_pending->len,
 				nadded, ndeleted, nextended, nignored);
-		rspamd_fuzzy_backend_version (ctx->backend, source,
+		rspamd_fuzzy_backend_version(ctx->backend, source,
 				fuzzy_update_version_callback, NULL);
 		ctx->updates_failed = 0;
 
 		if (cbdata->final || ctx->worker->state != rspamd_worker_state_running) {
 			/* Plan exit */
-			ev_break (ctx->event_loop, EVBREAK_ALL);
+			ev_break(ctx->event_loop, EVBREAK_ALL);
 		}
 	}
 	else {
@@ -483,36 +483,45 @@ rspamd_fuzzy_updates_cb (gboolean success,
 			msg_err ("cannot commit update transaction to fuzzy backend %s, discard "
 					 "%ud updates after %d retries",
 					ctx->worker->cf->bind_conf ?
-						ctx->worker->cf->bind_conf->bind_line :
-						"unknown",
+					ctx->worker->cf->bind_conf->bind_line :
+					"unknown",
 					cbdata->updates_pending->len,
 					ctx->updates_maxfail);
 			ctx->updates_failed = 0;
 
 			if (cbdata->final || ctx->worker->state != rspamd_worker_state_running) {
 				/* Plan exit */
-				ev_break (ctx->event_loop, EVBREAK_ALL);
+				ev_break(ctx->event_loop, EVBREAK_ALL);
 			}
 		}
 		else {
-			msg_err ("cannot commit update transaction to fuzzy backend %s; "
-					 "%ud updates are still left; %ud currently pending;"
-					 " %d updates left",
-					ctx->worker->cf->bind_conf ?
-						ctx->worker->cf->bind_conf->bind_line :
-						"unknown",
-					cbdata->updates_pending->len,
-					ctx->updates_pending->len,
-					ctx->updates_maxfail - ctx->updates_failed);
-			/* Move the remaining updates to ctx queue */
-			g_array_append_vals (ctx->updates_pending,
-					cbdata->updates_pending->data,
-					cbdata->updates_pending->len);
+			if (ctx->updates_pending) {
+				msg_err ("cannot commit update transaction to fuzzy backend %s; "
+						 "%ud updates are still left; %ud currently pending;"
+						 " %d retries remaining",
+						ctx->worker->cf->bind_conf ?
+							ctx->worker->cf->bind_conf->bind_line : "unknown",
+						cbdata->updates_pending->len,
+						ctx->updates_pending->len,
+						ctx->updates_maxfail - ctx->updates_failed);
+				/* Move the remaining updates to ctx queue */
+				g_array_append_vals(ctx->updates_pending,
+						cbdata->updates_pending->data,
+						cbdata->updates_pending->len);
 
-			if (cbdata->final) {
-				/* Try one more time */
-				rspamd_fuzzy_process_updates_queue (cbdata->ctx, cbdata->source,
-						cbdata->final);
+				if (cbdata->final) {
+					/* Try one more time */
+					rspamd_fuzzy_process_updates_queue(cbdata->ctx, cbdata->source,
+							cbdata->final);
+				}
+			}
+			else {
+				/* We have lost our ctx, so it is a race condition case */
+				msg_err ("cannot commit update transaction to fuzzy backend %s; "
+						 "%ud updates are still left; no more retries: a worker is terminated",
+						ctx->worker->cf->bind_conf ?
+							ctx->worker->cf->bind_conf->bind_line : "unknown",
+						cbdata->updates_pending->len);
 			}
 		}
 	}
@@ -2662,6 +2671,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (worker->index == 0) {
 		g_array_free (ctx->updates_pending, TRUE);
+		ctx->updates_pending = NULL;
 	}
 
 	if (ctx->keypair_cache) {
