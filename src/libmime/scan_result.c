@@ -1008,6 +1008,8 @@ struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
 	if (k != kh_end (result->symbols)) {
 		res = kh_value (result->symbols, k);
 
+		kh_del (rspamd_symbols_hash, result->symbols, k);
+
 		if (!isnan (res->score)) {
 			/* Remove score from the result */
 			result->score -= res->score;
@@ -1034,7 +1036,6 @@ struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
 			}
 		}
 
-		kh_del (rspamd_symbols_hash, result->symbols, k);
 	}
 	else {
 		return NULL;
