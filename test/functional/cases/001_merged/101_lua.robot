@@ -34,6 +34,11 @@ Option Order
   Expect Symbol With Exact Options  OPTION_ORDER  one  two  three  4  5  a
   Expect Symbol With Exact Options  TBL_OPTION_ORDER  one  two  three  4  5  a
 
+Remove Result
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [REMOVE_RESULT_EXPECTED, REMOVE_RESULT_UNEXPECTED]}
+  Expect Symbol  REMOVE_RESULT_EXPECTED
+  Do Not Expect Symbol  REMOVE_RESULT_UNEXPECTED
+
 Rule conditions
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [ANY_A]}
   Expect Symbol With Option  ANY_A  hello3
