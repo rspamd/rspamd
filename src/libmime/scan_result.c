@@ -1016,15 +1016,16 @@ struct rspamd_symbol_result* rspamd_task_remove_symbol_result (
 			if (result->sym_groups && res->sym) {
 				struct rspamd_symbol_group *gr;
 				gint i;
+				khiter_t k_groups;
 
 				PTR_ARRAY_FOREACH (res->sym->groups, i, gr) {
 					gdouble *gr_score;
 
-					k = kh_get (rspamd_symbols_group_hash,
+					k_groups = kh_get (rspamd_symbols_group_hash,
 							result->sym_groups, gr);
 
-					if (k != kh_end (result->sym_groups)) {
-						gr_score = &kh_value (result->sym_groups, k);
+					if (k_groups != kh_end (result->sym_groups)) {
+						gr_score = &kh_value (result->sym_groups, k_groups);
 
 						if (gr_score) {
 							*gr_score -= res->score;
