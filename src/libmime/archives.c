@@ -146,11 +146,14 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 			}
 			else {
 				g_string_append_c (res, '?');
-				msg_info_task("non graph character in archive file name found: 0x%02xd "
-							  "(filename=%T)", (int)*p, arch->archive_name);
 
 				if (*p < 0x7f && (g_ascii_iscntrl(*p) || *p == '\0')) {
-					fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+					if (!(fentry->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED)) {
+						msg_info_task("suspicious character in archive file name found: 0x%02xd "
+									  "(filename=%T)",
+									  (int) *p, arch->archive_name);
+						fentry->flags |= RSPAMD_ARCHIVE_FILE_OBFUSCATED;
+					}
 				}
 			}
 
