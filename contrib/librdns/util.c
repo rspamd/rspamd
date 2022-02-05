@@ -635,8 +635,12 @@ rdns_request_retain (struct rdns_request *req)
 void
 rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 {
-	if (req->async_event) {
-		if (req->state == RDNS_REQUEST_WAIT_REPLY) {
+	struct rdns_resolver *resolver = req->resolver;
+
+	switch (req->state) {
+	case RDNS_REQUEST_WAIT_REPLY:
+		/* We have a timer pending */
+		if (req->async_event) {
 			req->async->del_timer (req->async->data,
 					req->async_event);
 			if (remove_from_hash) {
@@ -644,7 +648,10 @@ rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 			}
 			req->async_event = NULL;
 		}
-		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
+		break;
+	case RDNS_REQUEST_WAIT_SEND:
+		/* We have write request pending */
+		if (req->async_event) {
 			req->async->del_write (req->async->data,
 					req->async_event);
 			/* Remove from id hashes */
@@ -653,16 +660,26 @@ rdns_request_unschedule (struct rdns_request *req, bool remove_from_hash)
 			}
 			req->async_event = NULL;
 		}
-	}
-	else if (req->state == RDNS_REQUEST_TCP) {
-		if (remove_from_hash) {
-			rdns_request_remove_from_hash(req);
+		break;
+	case RDNS_REQUEST_TCP:
+		/* We also have a timer */
+		if (req->async_event) {
+			if (remove_from_hash) {
+				rdns_request_remove_from_hash(req);
+			}
+
+			req->async->del_timer(req->async->data,
+					req->async_event);
+
+			req->async_event = NULL;
 		}
-
-		req->async->del_timer(req->async->data,
-				req->async_event);
-
-		req->async_event = NULL;
+	default:
+		/* Nothing to unschedule, so blame if we have any event pending */
+		if (req->async_event) {
+			rdns_err("internal error: have unexpected pending async state on stage %d",
+					req->state);
+		}
+		break;
 	}
 }
 
