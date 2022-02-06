@@ -457,7 +457,7 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
   send_data_in_batches(1)
 end
 
-local function prepare_report(opts, start_time, rep_key)
+local function prepare_report(opts, start_time, end_time, rep_key)
   local rua = get_rua(rep_key)
   local reporting_domain = get_domain(rep_key)
 
@@ -500,7 +500,6 @@ local function prepare_report(opts, start_time, rep_key)
   ret, results = lua_redis.request(redis_params, redis_attrs,
       {'ZRANGE', rep_key, '0', '-1', 'WITHSCORES'})
   local report_entries = {}
-  local end_time = os.time()
   table.insert(report_entries,
       report_header(reporting_domain, start_time, end_time, dmarc_record))
   for i=1,#results,2 do
@@ -568,7 +567,7 @@ local function prepare_report(opts, start_time, rep_key)
   }
 end
 
-local function process_report_date(opts, start_time, date)
+local function process_report_date(opts, start_time, end_time, date)
   local idx_key = redis_prefix(dmarc_settings.reporting.redis_keys.index_prefix, date)
   local ret, results = lua_redis.request(redis_params, redis_attrs,
       {'EXISTS', idx_key})
@@ -599,7 +598,7 @@ local function process_report_date(opts, start_time, date)
 
   local reports = {}
   for _,rep in ipairs(results) do
-    local report = prepare_report(opts, start_time, rep)
+    local report = prepare_report(opts, start_time, end_time, rep)
 
     if report then
       table.insert(reports, report)
@@ -617,10 +616,30 @@ local function process_report_date(opts, start_time, date)
   return reports
 end
 
+
+-- Returns a day before today at 00:00 as unix seconds
+local function yesterday_midnight()
+  local piecewise_time = os.date("!*t")
+  piecewise_time.day = piecewise_time.day - 1 -- Lua allows negative values here
+  piecewise_time.hour = 0
+  piecewise_time.sec = 0
+  piecewise_time.min = 0
+  return os.time(piecewise_time)
+end
+
+-- Returns today time at 00:00 as unix seconds
+local function today_midnight()
+  local piecewise_time = os.date("!*t")
+  piecewise_time.hour = 0
+  piecewise_time.sec = 0
+  piecewise_time.min = 0
+  return os.time(piecewise_time)
+end
+
 local function handler(args)
   local start_time
   -- Preserve start time as report sending might take some time
-  local start_collection = os.time()
+  local start_collection = today_midnight()
 
   local opts = parser:parse(args)
 
@@ -658,7 +677,7 @@ local function handler(args)
   })
 
   if not ret or not tonumber(results) then
-    start_time = os.time() - 86400
+    start_time = yesterday_midnight()
   else
     start_time = tonumber(results)
   end
@@ -666,13 +685,8 @@ local function handler(args)
   lua_util.debugm(N, 'previous last report date is %s', start_time)
 
   if not opts.date or #opts.date == 0 then
-    local now = start_collection
     opts.date = {}
-    -- Allow some fuzz when adding dates
-    while now >= start_time - 60 do
-      table.insert(opts.date, os.date('!%Y%m%d', now))
-      now = now - 86400
-    end
+    table.insert(opts.date, os.date('!%Y%m%d', yesterday_midnight()))
   end
 
   local ndates = 0
@@ -680,7 +694,7 @@ local function handler(args)
   local all_reports = {}
   for _,date in ipairs(opts.date) do
     lua_util.debugm(N, 'Process date %s', date)
-    local reports_for_date = process_report_date(opts, start_time, date)
+    local reports_for_date = process_report_date(opts, start_time, start_collection, date)
     if #reports_for_date > 0 then
       ndates = ndates + 1
       nreports = nreports + #reports_for_date
