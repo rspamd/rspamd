@@ -664,7 +664,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 			char dns_name[253 + 1]; /* 253 == max dns name + \0 */
 			const char *semicolon_pos = strchr(upstream->name, ':');
 
-			if (semicolon_pos != NULL) {
+			if (semicolon_pos != NULL && semicolon_pos > upstream->name) {
 				if (sizeof (dns_name) > semicolon_pos - upstream->name) {
 					rspamd_strlcpy(dns_name, upstream->name, semicolon_pos - upstream->name);
 				}
