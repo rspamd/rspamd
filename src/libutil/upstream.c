@@ -132,6 +132,10 @@ struct upstream_ctx {
         "upstream", upstream->uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_err_upstream(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "upstream", upstream->uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 INIT_LOG_MODULE(upstream)
 
@@ -653,11 +657,33 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 		if (upstream->name[0] != '/') {
 			upstream->last_resolve = now;
 
+			/*
+			 * If upstream name has a port, then we definitely need to resolve
+			 * merely host part!
+			 */
+			char dns_name[253 + 1]; /* 253 == max dns name + \0 */
+			const char *semicolon_pos = strchr(upstream->name, ':');
+
+			if (semicolon_pos != NULL) {
+				if (sizeof (dns_name) > semicolon_pos - upstream->name) {
+					rspamd_strlcpy(dns_name, upstream->name, semicolon_pos - upstream->name);
+				}
+				else {
+					/* XXX: truncated */
+					msg_err_upstream ("internal error: upstream name is larger than"
+									  "max DNS name: %s", upstream->name);
+					rspamd_strlcpy(dns_name, upstream->name, sizeof(dns_name));
+				}
+			}
+			else {
+				rspamd_strlcpy(dns_name, upstream->name, sizeof(dns_name));
+			}
+
 			if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_srv_cb, upstream,
 						ls->limits->dns_timeout, ls->limits->dns_retransmits,
-						1, upstream->name, RDNS_REQUEST_SRV) != NULL) {
+						1, dns_name, RDNS_REQUEST_SRV) != NULL) {
 					upstream->dns_requests++;
 					REF_RETAIN (upstream);
 				}
@@ -666,7 +692,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_cb, upstream,
 						ls->limits->dns_timeout, ls->limits->dns_retransmits,
-						1, upstream->name, RDNS_REQUEST_A) != NULL) {
+						1, dns_name, RDNS_REQUEST_A) != NULL) {
 					upstream->dns_requests++;
 					REF_RETAIN (upstream);
 				}
@@ -674,7 +700,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_cb, upstream,
 						ls->limits->dns_timeout, ls->limits->dns_retransmits,
-						1, upstream->name, RDNS_REQUEST_AAAA) != NULL) {
+						1, dns_name, RDNS_REQUEST_AAAA) != NULL) {
 					upstream->dns_requests++;
 					REF_RETAIN (upstream);
 				}
