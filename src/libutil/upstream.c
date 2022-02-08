@@ -666,7 +666,8 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 
 			if (semicolon_pos != NULL && semicolon_pos > upstream->name) {
 				if (sizeof (dns_name) > semicolon_pos - upstream->name) {
-					rspamd_strlcpy(dns_name, upstream->name, semicolon_pos - upstream->name);
+					rspamd_strlcpy(dns_name, upstream->name,
+							semicolon_pos - upstream->name + 1);
 				}
 				else {
 					/* XXX: truncated */
