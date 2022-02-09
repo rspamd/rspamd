@@ -399,7 +399,6 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 							(strcmp(key, "description") != 0) &&
 							(strcmp(key, "disabled") != 0) &&
 							(strcmp(key, "condition") != 0) &&
-							(strcmp(key, "score") != 0) &&
 							(strcmp(key, "one_shot") != 0) &&
 							(strcmp(key, "any_shot") != 0) &&
 							(strcmp(key, "nshots") != 0) &&
