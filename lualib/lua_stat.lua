@@ -771,6 +771,11 @@ local function get_meta_stat_tokens(task, res, i)
     i = i + 1
   end
 
+  --[[
+  -- Disabled.
+  -- 1. Depending on the source the message has a different set of Received
+  -- headers as the receiving MTA adds another Received header.
+  -- 2. The usefulness of the Received tokens is questionable.
   local rh = task:get_received_headers()
 
   if rh and #rh > 0 then
@@ -789,6 +794,7 @@ local function get_meta_stat_tokens(task, res, i)
       end
     end
   end
+  ]]--
 
   return i
 end
