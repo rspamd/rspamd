@@ -988,16 +988,16 @@ local function get_last_removal_ago()
     f:close()
   end
 
+  if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
+    return write_ts_to_file() and 0
+  end
+
   if last_ts > current_ts then
     -- Clock skew detected, overwrite last_ts with current_ts and wait for the next
     -- retention period
     rspamd_logger.errx(rspamd_config, 'Last collection time is in future: %s; overwrite it with %s in %s',
         last_ts, current_ts, ts_file)
     return write_ts_to_file() and -1
-  end
-
-  if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
-    return write_ts_to_file() and 0
   end
 
   return (last_ts + settings.retention.period) - current_ts
