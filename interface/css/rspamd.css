@@ -210,17 +210,8 @@ table#symbolsTable input[type="number"] {
 /* widget */
 .card-header,
 .modal-header {
-    background-color: #efefef;
-    background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#fdfdfd), to(#eaeaea));
-    background-image: -webkit-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
-    background-image: -moz-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
-    background-image: -ms-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
-    background-image: -o-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
-    background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
-
-    /* IE6-9 */
-    /* stylelint-disable-next-line function-name-case */
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#fdfdfd", endColorstr="#eaeaea", GradientType=0);
+    background-color: #f3f3f3;
+    background-image: linear-gradient(to bottom, #fdfdfd, #eaeaea);
 }
 .card-header > .icon > svg {
     vertical-align: middle;
@@ -230,12 +221,8 @@ table#symbolsTable input[type="number"] {
 }
 
 .stat-box {
-    background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#f9f9f9), to(#ededed));
-    background-image: -webkit-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
-    background-image: -moz-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
-    background-image: -ms-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
-    background-image: -o-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
-    background-image: linear-gradient(to bottom, #f9f9f9 0%, #ededed 100%);
+    background-color: #f3f3f3;
+    background-image: linear-gradient(to bottom, #f9f9f9, #ededed);
     line-height: 1;
 }
 .stat-box:not(.float-right) {
