@@ -71,7 +71,7 @@ define(["jquery", "d3pie"],
                 function widget(k, v, cls) {
                     var c = (typeof cls === "undefined") ? "" : cls;
                     var titleAtt = d3.format(",")(v) + " " + k;
-                    return '<div class="card stat-box d-inline-block text-center bg-light shadow-sm mr-3 px-3">' +
+                    return '<div class="card stat-box d-inline-block text-center shadow-sm mr-3 px-3">' +
                       '<div class="widget overflow-hidden p-2' + c + '" title="' + titleAtt +
                       '"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
                     d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
@@ -100,7 +100,7 @@ define(["jquery", "d3pie"],
                 $(item).appendTo("#statWidgets");
             });
             $("#statWidgets > div:not(.stat-box)")
-                .wrapAll('<div class="card stat-box text-center bg-light shadow-sm float-right">' +
+                .wrapAll('<div class="card stat-box text-center shadow-sm float-right">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
             $("#statWidgets").find("div.float-right").appendTo("#statWidgets");
             $("#statWidgets").show();
