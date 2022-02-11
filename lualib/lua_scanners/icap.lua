@@ -20,10 +20,11 @@ limitations under the License.
 This module contains icap access functions.
 Currently tested with
  - C-ICAP Squidclamav / echo
+ - Checkpoint Sandblast
  - F-Secure Internet Gatekeeper
  - Kaspersky Web Traffic Security
  - Kaspersky Scan Engine 2.0
- - McAfee Web Gateway 11
+ - McAfee Web Gateway 9/10/11
  - Sophos Savdi
  - Symantec (Rspamd <3.2, >=3.2 untested)
  - Trend Micro IWSVA 6.0
@@ -40,6 +41,9 @@ Configuration Notes:
 
 C-ICAP Squidclamav
   scheme = "squidclamav";
+
+Checkpoint Sandblast example:
+  scheme = "sandblast";
 
 ESET Gateway Security / Antivirus for Linux example:
   scheme = "scan";
@@ -58,7 +62,7 @@ Kaspersky Web Traffic Security (as configured in kavicapd.xml):
   scheme = "resp";
   x_client_header = true;
 
-McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
+McAfee Web Gateway 10/11 (Headers must be activated with personal extra Rules)
   scheme = "respmod";
   x_client_header = true;
 
@@ -389,7 +393,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           icap: X-Virus-ID: Trojaner
           icap: X-Response-Info: Blocked
 
-        McAfee Web Gateway 11 (Headers must be activated with personal extra Rules)
+        McAfee Web Gateway 10/11 (Headers must be activated with personal extra Rules)
           icap: X-Virus-ID: EICAR test file
           icap: X-Media-Type: text/plain
           icap: X-Block-Result: 80
