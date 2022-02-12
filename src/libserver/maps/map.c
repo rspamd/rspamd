@@ -2521,20 +2521,25 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 				rspamd_fstring_free (data->etag);
 			}
 
-			if (g_atomic_int_compare_and_exchange (&data->cache->available, 1, 0)) {
-				if (data->cur_cache_cbd) {
-					msg_info ("clear shared memory cache for a map in %s on backend %s closing",
-							data->cur_cache_cbd->shm->shm_name,
-							bk->uri);
-					MAP_RELEASE (data->cur_cache_cbd->shm,
-							"rspamd_http_map_cached_cbdata");
-					ev_timer_stop (data->cur_cache_cbd->event_loop,
-							&data->cur_cache_cbd->timeout);
-					g_free (data->cur_cache_cbd);
-					data->cur_cache_cbd = NULL;
+			/*
+			 * Clear cached file, but check if a worker is an active http worker
+			 * as cur_cache_cbd is meaningful merely for active worker, who actually
+			 * owns the cache
+			 */
+			if (bk->map && bk->map->active_http) {
+				if (g_atomic_int_compare_and_exchange (&data->cache->available, 1, 0)) {
+					if (data->cur_cache_cbd) {
+						msg_info ("clear shared memory cache for a map in %s as backend \"%s\" is closing",
+								data->cur_cache_cbd->shm->shm_name,
+								bk->uri);
+						MAP_RELEASE (data->cur_cache_cbd->shm,
+								"rspamd_http_map_cached_cbdata");
+						ev_timer_stop (data->cur_cache_cbd->event_loop,
+								&data->cur_cache_cbd->timeout);
+						g_free (data->cur_cache_cbd);
+						data->cur_cache_cbd = NULL;
+					}
 				}
-
-				unlink (data->cache->shmem_name);
 			}
 
 			g_free (bk->data.hd);
