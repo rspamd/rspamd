@@ -2802,6 +2802,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 
 	rspamd_map_calculate_hash (map);
 	msg_info_map ("added map %s", bk->uri);
+	bk->map = map;
 
 	cfg->maps = g_list_prepend (cfg->maps, map);
 
@@ -2842,6 +2843,8 @@ rspamd_map_add_backend (struct rspamd_map *map, struct rspamd_map_backend *bk)
 	else {
 		g_ptr_array_add (map->backends, bk);
 	}
+
+	bk->map = map;
 }
 
 struct rspamd_map*

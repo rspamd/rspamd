@@ -115,11 +115,14 @@ union rspamd_map_backend_data {
 	struct static_map_data *sd;
 };
 
+
+struct rspamd_map;
 struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
 	gboolean is_fallback;
+	struct rspamd_map *map;
 	struct ev_loop *event_loop;
 	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
