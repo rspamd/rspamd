@@ -243,8 +243,9 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 		 * Important!: we do not set cache availability to zero here, as there
 		 * might be fresh cache
 		 */
-		msg_info_map ("cached data is now expired (gen mismatch %L != %L) for %s",
-				cache_cbd->gen, cache_cbd->data->gen, map->name);
+		msg_info_map ("cached data is now expired (gen mismatch %L != %L) for %s; shm name=%s; refcount=%d",
+				cache_cbd->gen, cache_cbd->data->gen, map->name, cache_cbd->shm->shm_name,
+				cache_cbd->shm->ref.refcount);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
 		ev_timer_stop (loop, &cache_cbd->timeout);
 		g_free (cache_cbd);
@@ -264,10 +265,13 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 		}
 
 		if (w->repeat < 0) {
-			msg_info_map ("cached data for %s has skewed check time: %d last checked, %d poll timeout, %.2f diff",
+			msg_info_map ("cached data for %s has skewed check time: %d last checked, "
+						  "%d poll timeout, %.2f diff; shm name=%s; refcount=%d",
 					map->name, (int)cache_cbd->data->last_checked,
 					(int)cache_cbd->map->poll_timeout,
-					(rspamd_get_calendar_ticks () - cache_cbd->data->last_checked));
+					(rspamd_get_calendar_ticks () - cache_cbd->data->last_checked),
+					cache_cbd->shm->shm_name,
+					cache_cbd->shm->ref.refcount);
 			w->repeat = 0.0;
 		}
 
@@ -278,8 +282,11 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	else {
 		data->cur_cache_cbd = NULL;
 		g_atomic_int_set (&data->cache->available, 0);
+		msg_info_map ("cached data is now expired for %s; shm name=%s; refcount=%d",
+				map->name,
+				cache_cbd->shm->shm_name,
+				cache_cbd->shm->ref.refcount);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
-		msg_info_map ("cached data is now expired for %s", map->name);
 		ev_timer_stop (loop, &cache_cbd->timeout);
 		g_free (cache_cbd);
 	}
@@ -411,6 +418,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 		cache_cbd->last_checked = cbd->data->last_checked;
 		cache_cbd->gen = cbd->data->gen;
 		MAP_RETAIN (cache_cbd->shm, "shmem_data");
+		msg_info_map ("stored map data in a shared memory cache: %s",
+				cache_cbd->shm->shm_name);
 
 		ev_timer_init (&cache_cbd->timeout, rspamd_map_cache_cb, cached_timeout,
 				0.0);
@@ -2478,8 +2487,6 @@ rspamd_map_is_map (const gchar *map_line)
 static void
 rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 {
-	g_free (bk->uri);
-
 	switch (bk->protocol) {
 	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
@@ -2516,6 +2523,9 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 
 			if (g_atomic_int_compare_and_exchange (&data->cache->available, 1, 0)) {
 				if (data->cur_cache_cbd) {
+					msg_info ("clear shared memory cache for a map in %s on backend %s closing",
+							data->cur_cache_cbd->shm->shm_name,
+							bk->uri);
 					MAP_RELEASE (data->cur_cache_cbd->shm,
 							"rspamd_http_map_cached_cbdata");
 					ev_timer_stop (data->cur_cache_cbd->event_loop,
@@ -2536,6 +2546,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 		rspamd_pubkey_unref (bk->trusted_pubkey);
 	}
 
+	g_free (bk->uri);
 	g_free (bk);
 }
 
