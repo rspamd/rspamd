@@ -160,8 +160,14 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 struct rspamd_icu_collate_storage {
 	icu::Collator* collator = nullptr;
 	rspamd_icu_collate_storage() {
-		UErrorCode success = U_ZERO_ERROR;
-		collator = icu::Collator::createInstance(icu::Locale::getEnglish(), success);
+		UErrorCode uc_err = U_ZERO_ERROR;
+		collator = icu::Collator::createInstance(icu::Locale::getEnglish(), uc_err);
+
+		if (U_FAILURE(uc_err) || collator == nullptr) {
+			g_error ("fatal error: cannot init libicu collation engine: %s",
+					u_errorName(uc_err));
+			abort();
+		}
 		/* Ignore all difference except functional */
 		collator->setStrength(icu::Collator::PRIMARY);
 	}
