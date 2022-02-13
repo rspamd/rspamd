@@ -92,17 +92,20 @@ convert_idna_hostname_maybe(rspamd_mempool_t *pool, struct rspamd_url *url, bool
 	/* Handle IDN url's */
 	if (ret.size() > 4 &&
 		rspamd_substring_search_caseless(ret.data(), ret.size(), "xn--", 4) != -1) {
+
 		const auto buf_capacity = ret.size() * 2 + 1;
 		auto *idn_hbuf = (char *)rspamd_mempool_alloc (pool, buf_capacity);
 		icu::CheckedArrayByteSink byte_sink{idn_hbuf, (int)buf_capacity};
+
 		/* We need to convert it to the normal value first */
 		icu::IDNAInfo info;
 		auto uc_err = U_ZERO_ERROR;
 		auto *udn = get_icu_idna_instance();
-		udn->nameToASCII_UTF8(icu::StringPiece(ret.data(), ret.size()),
+		udn->nameToUnicodeUTF8(icu::StringPiece(ret.data(), ret.size()),
 				byte_sink, info, uc_err);
 
 		if (uc_err == U_ZERO_ERROR && !info.hasErrors()) {
+			/* idn_hbuf is allocated in mempool, so it is safe to use */
 			ret = std::string_view{idn_hbuf, (std::size_t)byte_sink.NumberOfBytesWritten()};
 		}
 		else {
