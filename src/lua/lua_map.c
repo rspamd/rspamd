@@ -27,6 +27,35 @@
  *
  * All maps could be obtained by function `rspamd_config:get_maps()`
  * Also see [`lua_maps` module description](lua_maps.html).
+ *
+ * **Important notice** maps cannot be queried outside of the worker context.
+ * For example, you cannot add even a file map and query some keys from it during
+ * some module initialisation, you need to add the appropriate event loop context
+ * for a worker (e.g. you cannot use `get_key` outside of the symbols callbacks or
+ * a worker `on_load` scripts).
+ *
+@example
+
+local hash_map = rspamd_config:add_map{
+  type = "hash",
+  urls = ['file:///path/to/file'],
+  description = 'sample map'
+}
+
+local function sample_symbol_cb(task)
+    -- Check whether hash map contains from address of message
+    if hash_map:get_key((task:get_from() or {})[1]) then
+      -- key found
+    end
+end
+
+rspamd_config:register_symbol{
+  name = 'SAMPLE_SYMBOL',
+  type = 'normal',
+  score = 1.0,
+  description = "A sample symbol",
+  callback = sample_symbol_cb,
+}
  */
 
 /***
