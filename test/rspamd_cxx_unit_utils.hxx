@@ -44,6 +44,7 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace")
 			{"ab(trol\\\1lo)c(foo)",   "abc"},
 			{"\\ab(trol\\\1lo)c(foo)", "abc"},
 			{"",                       ""},
+			{"<test_id@example.net> (added by postmaster@example.net)", "<test_id@example.net> "}
 	};
 
 	for (const auto &c : cases) {
