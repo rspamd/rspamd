@@ -84,6 +84,8 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		p = rh->decoded;
 		len = rspamd_strip_smtp_comments_inplace(rh->decoded, strlen(p));
 		rh->decoded[len] = '\0'; /* Zero terminate after stripping */
+		/* Strip surrounding spaces */
+		rh->decoded = g_strstrip (rh->decoded);
 		end = p + len;
 
 		if (*p == '<') {
