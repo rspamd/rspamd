@@ -23,7 +23,7 @@ requirejs.config({
         codejar: {exports: "CodeJar", deps:["linenumbers"]},
         bootstrap: {exports:"bootstrap", deps:["jquery"]},
         d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
-        d3pie: {exports:"d3pie", deps:["d3.global", "jquery"]},
+        d3pie: {exports:"D3Pie", deps:["d3.global", "jquery"]},
         fontawesome: {exports: "FontAwesome", deps:["fontawesome_solid"]},
         footable: {deps:["bootstrap", "jquery"]},
         linenumbers: {exports: "withLineNumbers", deps:["prism"]},

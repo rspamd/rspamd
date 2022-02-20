@@ -345,6 +345,9 @@ table#symbolsTable input[type="number"] {
     text-align: left;
     font-size: 12px;
 }
+#rrd-pie {
+    font-size: 10px;
+}
 
 /* Throughput graph controls */
 #graph_controls select {

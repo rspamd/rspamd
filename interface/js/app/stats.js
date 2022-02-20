@@ -25,7 +25,7 @@
 /* global d3:false */
 
 define(["jquery", "d3pie"],
-    function ($) {
+    function ($, D3Pie) {
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
@@ -200,77 +200,35 @@ define(["jquery", "d3pie"],
         }
 
         function getChart(rspamd, graphs, checked_server) {
-            if (graphs.chart) {
-                graphs.chart.destroy();
-                delete graphs.chart;
+            if (!graphs.chart) {
+                graphs.chart = new D3Pie("chart", {
+                    labels: {
+                        outer: {
+                            collideHeight: 18,
+                        }
+                    },
+                    title: "Rspamd filter stats"
+                });
             }
 
+            var data = [];
             var creds = JSON.parse(sessionStorage.getItem("Credentials"));
             // Controller doesn't return the 'actions' object until at least one message is scanned
-            if (!creds || !creds[checked_server] || !creds[checked_server].data.scanned) {
-                // Show grayed out pie as percentage is undefined
-                return rspamd.drawPie(graphs.chart,
-                    "chart",
-                    [{
-                        value: 1,
-                        color: "#ffffff",
-                        label: "undefined"
-                    }],
-                    {
-                        labels: {
-                            mainLabel: {
-                                fontSize: 14,
-                            },
-                            inner: {
-                                format: "none",
-                            },
-                            lines: {
-                                color: "#cccccc"
-                            }
-                        },
-                        tooltips: {
-                            enabled: true,
-                            string: "{label}"
-                        },
-                    }
-                );
+            if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
+                var actions = creds[checked_server].data.actions;
+
+                ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
+                    .forEach(function (action) {
+                        data.push({
+                            color: rspamd.chartLegend.find(function (item) { return item.label === action; }).color,
+                            label: action,
+                            value: actions[action]
+                        });
+                    });
             }
-
-            var data = creds[checked_server].data.actions;
-            var new_data = [{
-                color: "#66CC00",
-                label: "no action",
-                data: data["no action"],
-                value: data["no action"]
-            }, {
-                color: "#BF8040",
-                label: "soft reject",
-                data: data["soft reject"],
-                value: data["soft reject"]
-            }, {
-                color: "#FFAD00",
-                label: "add header",
-                data: data["add header"],
-                value: data["add header"]
-            }, {
-                color: "#FF6600",
-                label: "rewrite subject",
-                data: data["rewrite subject"],
-                value: data["rewrite subject"]
-            }, {
-                color: "#436EEE",
-                label: "greylist",
-                data: data.greylist,
-                value: data.greylist
-            }, {
-                color: "#FF0000",
-                label: "reject",
-                data: data.reject,
-                value: data.reject
-            }];
-
-            return rspamd.drawPie(graphs.chart, "chart", new_data);
+            graphs.chart.data(data);
         }
+
         // Public API
         var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
@@ -363,7 +321,7 @@ define(["jquery", "d3pie"],
                                 to_Credentials["All SERVERS"].data = neighbours_sum;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                                 displayStatWidgets(checked_server);
-                                graphs.chart = getChart(rspamd, graphs, checked_server);
+                                getChart(rspamd, graphs, checked_server);
                             });
                         }, promises.length ? 100 : 0);
                     },
