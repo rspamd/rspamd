@@ -1,0 +1,41 @@
+.d3pie .chart-title {
+    font-family: Arial, sans-serif;
+    font-size: 24px;
+    text-anchor: middle;
+}
+.d3pie-tooltip {
+    pointer-events: none;
+    position: absolute;
+    padding: 5px;
+    color: white;
+    background-color: rgb(0 0 0 /50%);
+    border-radius: 4px;
+    opacity: 0;
+    line-height: normal;
+}
+
+.d3pie .inner-label {
+    fill: #eeeeee;
+    pointer-events: none;
+    text-anchor: middle;
+}
+
+/* pie placeholder */
+.d3pie .slice-g:first-of-type .inner-label {
+    fill: #cccccc;
+}
+.d3pie defs radialGradient:first-of-type stop {
+    stop-opacity: 0.1;
+}
+
+/* gradient color */
+.d3pie .grad-stop-1 {
+    stop-color: black;
+}
+
+.outer-label-g {
+    opacity: 0;
+}
+.link {
+    fill: none;
+}

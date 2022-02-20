@@ -25,13 +25,21 @@
 
 /* global jQuery:false, FooTable:false, Visibility:false */
 
-define(["jquery", "d3pie", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
+define(["jquery", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload", "app/selectors"],
 // eslint-disable-next-line max-params
-function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
+function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload, tab_selectors) {
     "use strict";
     var ui = {
+        chartLegend: [
+            {label: "reject", color: "#FF0000"},
+            {label: "soft reject", color: "#BF8040"},
+            {label: "rewrite subject", color: "#FF6600"},
+            {label: "add header", color: "#FFAD00"},
+            {label: "greylist", color: "#436EEE"},
+            {label: "no action", color: "#66CC00"}
+        ],
         page_size: {
             scan: 25,
             errors: 25,
@@ -593,97 +601,6 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 });
             }
         });
-    };
-
-    ui.drawPie = function (object, id, data, conf) {
-        var obj = object;
-        if (obj) {
-            obj.updateProp("data.content",
-                data.filter(function (elt) {
-                    return elt.value > 0;
-                })
-            );
-        } else {
-            obj = new D3pie(id,
-                $.extend({}, {
-                    header: {
-                        title: {
-                            text: "Rspamd filter stats",
-                            fontSize: 24,
-                            font: "open sans"
-                        },
-                        subtitle: {
-                            color: "#999999",
-                            fontSize: 12,
-                            font: "open sans"
-                        },
-                        titleSubtitlePadding: 9
-                    },
-                    footer: {
-                        color: "#999999",
-                        fontSize: 10,
-                        font: "open sans",
-                        location: "bottom-left"
-                    },
-                    size: {
-                        canvasWidth: 600,
-                        canvasHeight: 400,
-                        pieInnerRadius: "20%",
-                        pieOuterRadius: "85%"
-                    },
-                    data: {
-                        // "sortOrder": "value-desc",
-                        content: data.filter(function (elt) {
-                            return elt.value > 0;
-                        })
-                    },
-                    labels: {
-                        outer: {
-                            hideWhenLessThanPercentage: 1,
-                            pieDistance: 30
-                        },
-                        inner: {
-                            hideWhenLessThanPercentage: 4
-                        },
-                        mainLabel: {
-                            fontSize: 14
-                        },
-                        percentage: {
-                            color: "#eeeeee",
-                            fontSize: 14,
-                            decimalPlaces: 0
-                        },
-                        lines: {
-                            enabled: true
-                        },
-                        truncation: {
-                            enabled: true
-                        }
-                    },
-                    tooltips: {
-                        enabled: true,
-                        type: "placeholder",
-                        string: "{label}: {value} ({percentage}%)"
-                    },
-                    effects: {
-                        pullOutSegmentOnClick: {
-                            effect: "back",
-                            speed: 400,
-                            size: 8
-                        },
-                        load: {
-                            effect: "none"
-                        }
-                    },
-                    misc: {
-                        gradient: {
-                            enabled: true,
-                            percentage: 100
-                        }
-                    }
-                }, conf));
-        }
-        return obj;
     };
 
     ui.getPassword = getPassword;
