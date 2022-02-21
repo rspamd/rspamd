@@ -500,7 +500,7 @@ if ( -f $cfg{cfg_file} ) {
 _log( LOG_ALERT, "Process is already started, check $cfg{pidfile}" )
   if Proc::PidUtil::is_running( $cfg{pidfile} );
 
-# Drop privilleges
+# Drop privileges
 if ( $> == 0 ) {
     my $uid = getpwnam( $cfg{user} )
       or _log( LOG_ALERT, "user $cfg{user} unknown" );
