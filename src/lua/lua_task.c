@@ -241,7 +241,7 @@ LUA_FUNCTION_DEF (task, append_message);
 /***
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
- * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
 @example
@@ -274,7 +274,7 @@ LUA_FUNCTION_DEF (task, get_urls_filtered);
 /***
  * @method task:has_urls([need_emails])
  * Returns 'true' if a task has urls listed
- * @param {boolean} need_emails if `true` then reutrn also email urls
+ * @param {boolean} need_emails if `true` then return also email urls
  * @return {boolean} true if a task has urls (urls or emails if `need_emails` is true)
  */
 LUA_FUNCTION_DEF (task, has_urls);
