@@ -2885,7 +2885,7 @@ lua_config_newindex (lua_State *L)
 			}
 			else
 			{
-				/* Fill in missing fields from lua defintion if they are not set */
+				/* Fill in missing fields from lua definition if they are not set */
 				if (sym->description == NULL) {
 					lua_pushstring (L, "description");
 					lua_gettable (L, -2);
