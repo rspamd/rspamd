@@ -5808,7 +5808,7 @@ lua_task_set_milter_reply (lua_State *L)
 			 * UCL itself cannot do it directly. So the trick is to extract the
 			 * original object, pack it into an array and then insert it back.
 			 *
-			 * I wish there was a simplier way to do it...
+			 * I wish there was a simpler way to do it...
 			 */
 			const ucl_object_t *add_hdrs = ucl_object_lookup (prev, "add_headers");
 			const ucl_object_t *nadd_hdrs = ucl_object_lookup (reply, "add_headers");
