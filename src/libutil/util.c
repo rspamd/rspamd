@@ -764,7 +764,7 @@ rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 
 	/*
 	 * Open the PID file and obtain exclusive lock.
-	 * We truncate PID file here only to remove old PID immediatelly,
+	 * We truncate PID file here only to remove old PID immediately,
 	 * PID file will be truncated again in pidfile_write(), so
 	 * pidfile_write() can be called multiple times.
 	 */
