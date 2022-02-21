@@ -583,7 +583,7 @@ received_process_from(rspamd_mempool_t *pool,
 
 		if (!seen_ip_in_data) {
 			if (rh.real_ip.size() != 0) {
-				/* Get anounced hostname (usually helo) */
+				/* Get announced hostname (usually helo) */
 				received_process_rdns(pool,
 						rpart.data.as_view(),
 						rh.from_hostname);
