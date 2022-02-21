@@ -1622,7 +1622,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			}
 
 			if (!has_group) {
-				/* Non-empty group has a priority over non-groupped one */
+				/* Non-empty group has a priority over non-grouped one */
 				sym_group = g_hash_table_lookup (cfg->groups, group);
 
 				if (sym_group == NULL) {
@@ -1755,7 +1755,7 @@ rspamd_config_add_symbol_group (struct rspamd_config *cfg,
 		}
 
 		if (!has_group) {
-			/* Non-empty group has a priority over non-groupped one */
+			/* Non-empty group has a priority over non-grouped one */
 			sym_group = g_hash_table_lookup (cfg->groups, group);
 
 			if (sym_group == NULL) {

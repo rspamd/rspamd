@@ -3571,7 +3571,7 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 		lua_settable (L, -3);
 	}
 	if (s->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED) {
-		lua_pushstring (L, "ungroupped");
+		lua_pushstring (L, "ungrouped");
 		lua_pushboolean (L, true);
 		lua_settable (L, -3);
 	}
