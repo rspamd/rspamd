@@ -86,7 +86,7 @@ local function check_ml_mailman(task)
     return false
   end
 
-  -- Mailmain 3 allows to disable all List-* headers in settings, but by default it adds them.
+  -- Mailman 3 allows to disable all List-* headers in settings, but by default it adds them.
   -- In all other cases all Mailman message should have List-Id header
   if not task:has_header('List-Id') then
     return false
