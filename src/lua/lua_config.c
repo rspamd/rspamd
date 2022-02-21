@@ -734,7 +734,7 @@ LUA_FUNCTION_DEF (config, register_monitored);
  *
  * - `default`: default option value
  * - `type`: type of an option (`string`, `number`, `object`, `array` etc)
- * - `reqired`: if an option is required
+ * - `required`: if an option is required
  *
  * @param {string} path documentation path (e.g. module name)
  * @param {string} option name of the option
