@@ -152,7 +152,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     if munging_opts.munge_map_condition then
       local accepted,trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
-        lua_util.debugm(task, 'skip munging, maps condition not satisified: (%s)',
+        lua_util.debugm(task, 'skip munging, maps condition not satisfied: (%s)',
             trace)
         -- Excepted
         return
