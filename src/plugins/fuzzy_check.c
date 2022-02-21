@@ -4081,21 +4081,21 @@ fuzzy_attach_controller (struct module_ctx *ctx, GHashTable *commands)
 	struct rspamd_custom_controller_command *cmd;
 
 	cmd = rspamd_mempool_alloc (fctx->fuzzy_pool, sizeof (*cmd));
-	cmd->privilleged = TRUE;
+	cmd->privileged = TRUE;
 	cmd->require_message = TRUE;
 	cmd->handler = fuzzy_add_handler;
 	cmd->ctx = ctx;
 	g_hash_table_insert (commands, "/fuzzyadd", cmd);
 
 	cmd = rspamd_mempool_alloc (fctx->fuzzy_pool, sizeof (*cmd));
-	cmd->privilleged = TRUE;
+	cmd->privileged = TRUE;
 	cmd->require_message = TRUE;
 	cmd->handler = fuzzy_delete_handler;
 	cmd->ctx = ctx;
 	g_hash_table_insert (commands, "/fuzzydel", cmd);
 
 	cmd = rspamd_mempool_alloc (fctx->fuzzy_pool, sizeof (*cmd));
-	cmd->privilleged = TRUE;
+	cmd->privileged = TRUE;
 	cmd->require_message = FALSE;
 	cmd->handler = fuzzy_deletehash_handler;
 	cmd->ctx = ctx;

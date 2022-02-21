@@ -308,7 +308,7 @@ struct rspamd_main {
 	rspamd_logger_t *logger;
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
-	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
+	gboolean is_privileged;                                     /**< true if run in privileged mode                 */
 	gboolean wanna_die;                                         /**< no respawn of processes						*/
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
@@ -362,7 +362,7 @@ struct rspamd_external_libs_ctx {
  */
 void register_custom_controller_command (const gchar *name,
 										 controller_func_t handler,
-										 gboolean privilleged,
+										 gboolean privileged,
 										 gboolean require_message);
 
 #ifdef  __cplusplus

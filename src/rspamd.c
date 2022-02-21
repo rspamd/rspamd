@@ -211,7 +211,7 @@ rspamd_write_pid (struct rspamd_main *main)
 		return -1;
 	}
 
-	if (main->is_privilleged) {
+	if (main->is_privileged) {
 		/* Force root user as owner of pid file */
 #ifdef HAVE_PIDFILE_FILENO
 		if (fchown (pidfile_fileno (main->pfh), 0, 0) == -1) {
@@ -226,7 +226,7 @@ rspamd_write_pid (struct rspamd_main *main)
 	return 0;
 }
 
-/* Detect privilleged mode */
+/* Detect privileged mode */
 static void
 detect_priv (struct rspamd_main *rspamd_main)
 {
@@ -239,16 +239,16 @@ detect_priv (struct rspamd_main *rspamd_main)
 	if (euid == 0) {
 		if (!rspamd_main->cfg->rspamd_user && !is_insecure) {
 			msg_err_main (
-				"cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
+				"cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivileged user or specify --insecure flag");
 			exit (EXIT_FAILURE);
 		}
 		else if (is_insecure) {
-			rspamd_main->is_privilleged = TRUE;
+			rspamd_main->is_privileged = TRUE;
 			rspamd_main->workers_uid = 0;
 			rspamd_main->workers_gid = 0;
 		}
 		else {
-			rspamd_main->is_privilleged = TRUE;
+			rspamd_main->is_privileged = TRUE;
 			pwd = getpwnam (rspamd_main->cfg->rspamd_user);
 			if (pwd == NULL) {
 				msg_err_main ("user specified does not exists (%s), aborting",
@@ -271,7 +271,7 @@ detect_priv (struct rspamd_main *rspamd_main)
 		}
 	}
 	else {
-		rspamd_main->is_privilleged = FALSE;
+		rspamd_main->is_privileged = FALSE;
 		rspamd_main->workers_uid = (uid_t)-1;
 		rspamd_main->workers_gid = (gid_t)-1;
 	}

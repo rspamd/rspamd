@@ -31,7 +31,7 @@ worker {
         count = 1;
         # Password for normal commands (use rspamadm pw)
         password = "$2$anydoddx67ggcs74owybhcwqsq3z67q4$udympbo8pfcfqkeiiuj7gegabk5jpt8edmhseujhar9ooyuzig5b";
-        # Password for privilleged commands (use rspamadm pw)
+        # Password for privileged commands (use rspamadm pw)
         enable_password = "$2$nx6sqkxtewx9c5s3hxjmabaxdcr46pk9$45qajkbyqx77abapiqugpjpsojj38zcqn7xnp3ekqyu674koux4b";
         # Path to webiu static files
         static_dir = "${WWWDIR}";
