@@ -19,7 +19,7 @@
  * Allowed options:
  * - symbol (string): symbol to insert (default: 'R_BAD_CHARSET')
  * - threshold (double): value that would be used as threshold in expression characters_changed / total_characters
- *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
+ *   (e.g. if threshold is 0.1 than charset change should occur more often than in 10 symbols), default: 0.1
  */
 
 
