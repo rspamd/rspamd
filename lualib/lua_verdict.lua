@@ -77,7 +77,7 @@ local default_possible_verdicts = {
   },
   uncertain = {
     can_learn = false,
-    description = 'not certainity in verdict'
+    description = 'not certainty in verdict'
   }
 }
 
