@@ -12,7 +12,7 @@ import requests
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Upload a file usgin HTTP PUT method',
+        description='Upload a file using HTTP PUT method',
         epilog=(
             "To use HTTP Auth set HTTP_PUT_AUTH environment variable to user:password\n"
             "Example: %(prog)s file1 file2 https://example.com/dir/"))
