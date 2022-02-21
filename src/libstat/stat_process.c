@@ -540,7 +540,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 			learn_res = cl->cache->check (task, spam, rt);
 		}
 
-		if (learn_res == RSPAMD_LEARN_INGORE) {
+		if (learn_res == RSPAMD_LEARN_IGNORE) {
 			/* Do not learn twice */
 			g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
 					"learned as %s, ignore it", MESSAGE_FIELD (task, message_id),

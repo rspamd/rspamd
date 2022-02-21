@@ -44,7 +44,7 @@
 struct spf_resolved_element {
 	GPtrArray *elts;
 	gchar *cur_domain;
-	gboolean redirected; /* Ingnore level, it's redirected */
+	gboolean redirected; /* Ignore level, it's redirected */
 };
 
 struct spf_record {
