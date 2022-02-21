@@ -752,7 +752,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 	g_ptr_array_remove_index (ls->alive, upstream->active_idx);
 	upstream->active_idx = -1;
 
-	/* We need to update all indicies */
+	/* We need to update all indices */
 	for (i = 0; i < ls->alive->len; i ++) {
 		cur = g_ptr_array_index (ls->alive, i);
 		cur->active_idx = i;

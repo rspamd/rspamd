@@ -495,7 +495,7 @@ LUA_FUNCTION_DEF (config, register_settings_id);
 
 /***
  * @method rspamd_config:__newindex(name, callback)
- * This metamethod is called if new indicies are added to the `rspamd_config` object.
+ * This metamethod is called if new indices are added to the `rspamd_config` object.
  * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
  * There is also table form invocation that allows to control more things:
  *
