@@ -533,7 +533,7 @@ local function spawn_train(params)
   else
     local inputs, outputs = {}, {}
 
-    -- Used to show sparsed vectors in a convenient format (for debugging only)
+    -- Used to show parsed vectors in a convenient format (for debugging only)
     local function debug_vec(t)
       local ret = {}
       for i,v in ipairs(t) do
