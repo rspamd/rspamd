@@ -29,7 +29,7 @@
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
 
-static const gdouble similarity_treshold = 80.0;
+static const gdouble similarity_threshold = 80.0;
 
 static void
 rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
@@ -153,7 +153,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		}
 
 
-		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_treshold) {
+		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_threshold) {
 			msg_debug_bayes ("message has two common parts (%.2f), so skip the last one",
 					*pdiff);
 			break;
