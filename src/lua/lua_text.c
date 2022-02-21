@@ -194,7 +194,7 @@ LUA_FUNCTION_DEF (text, base32);
  * @method rspamd_text:base64([line_length, [nline, [fold]]])
  * Returns a text encoded in base64 (new rspamd_text is allocated)
  *
- * @param {number} line_length return text splited with newlines up to this attribute
+ * @param {number} line_length return text split with newlines up to this attribute
  * @param {string} nline newline type: `cr`, `lf`, `crlf`
  * @param {boolean} fold use folding when splitting into lines (false by default)
  * @return {rspamd_text} new text encoded in base64
