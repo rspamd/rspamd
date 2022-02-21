@@ -174,7 +174,7 @@ LUA_FUNCTION_DEF (task, adjust_result);
 
 /***
  * @method task:remove_result(symbol[, shadow_result])
- * Removes the symbol from a named or unamed/default result
+ * Removes the symbol from a named or unnamed/default result
  * @param {string} symbol symbol to remove
  * @param {string} shadow_result name of shadow result
  * @return {boolean} true if a symbol has been removed
