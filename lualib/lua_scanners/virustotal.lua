@@ -16,7 +16,7 @@ limitations under the License.
 
 --[[[
 -- @module virustotal
--- This module contains Virustotal integaration support
+-- This module contains Virustotal integration support
 -- https://www.virustotal.com/
 --]]
 
