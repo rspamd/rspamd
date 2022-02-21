@@ -381,9 +381,9 @@ local function extract_handler(opts)
     end
 
     if opts.words then
-      local howw = opts['words_format'] or 'stem'
+      local how_words = opts['words_format'] or 'stem'
       table.insert(out_elts[fname], 'meta_words: ' ..
-          print_words(task:get_meta_words(howw), howw == 'full'))
+          print_words(task:get_meta_words(how_words), how_words == 'full'))
     end
 
     if opts.text or opts.html then
@@ -402,9 +402,9 @@ local function extract_handler(opts)
           end
 
           if opts.words then
-            local howw = opts['words_format'] or 'stem'
-            table.insert(out_elts[fname], print_words(part:get_words(howw),
-                howw == 'full'))
+            local how_words = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(how_words),
+                how_words == 'full'))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
@@ -416,9 +416,9 @@ local function extract_handler(opts)
           end
 
           if opts.words then
-            local howw = opts['words_format'] or 'stem'
-            table.insert(out_elts[fname], print_words(part:get_words(howw),
-                howw == 'full'))
+            local how_words = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(how_words),
+                how_words == 'full'))
           else
             if opts.structure then
               local hc = part:get_html()
