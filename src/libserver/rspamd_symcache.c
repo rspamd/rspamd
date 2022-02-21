@@ -3194,7 +3194,7 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 		 * one more time
 		 */
 		msg_debug_cache_task ("postpone finalisation of %s(%d) as there are %d "
-							  "async events pendning",
+							  "async events pending",
 							  item->symbol, item->id, dyn_item->async_events);
 
 		return;
