@@ -13,7 +13,7 @@ gcov(1) utility can be used to get information from *.gcda file and write text
 reports to *.gocov file (one file for each source file from which object was compiled).
 
 The script finds *.gcno files, uses gcov to generate *.gcov files, parses them
-and accomulates statistics for all source files.
+and accumulates statistics for all source files.
 
 This script was written with quite a few assumptions:
 
