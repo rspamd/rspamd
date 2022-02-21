@@ -76,7 +76,7 @@ end
 --[[[
 -- @function lua_util.str_split(text, deliminator)
 -- Splits text into a numeric table by deliminator
--- @param {string} text deliminated text
+-- @param {string} text delimited text
 -- @param {string} deliminator the deliminator
 -- @return {table} numeric table containing string parts
 --]]
