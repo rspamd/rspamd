@@ -2269,7 +2269,7 @@ lua_task_set_pre_result (lua_State * L)
 					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
 					&act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
-				gint ret = luaL_error (L, "invald arguments: %s", err->message);
+				gint ret = luaL_error (L, "invalid arguments: %s", err->message);
 				g_error_free (err);
 
 				return ret;
