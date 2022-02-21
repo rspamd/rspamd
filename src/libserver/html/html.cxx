@@ -572,7 +572,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		break;
 	case slash_in_unquoted_value:
 		if (*in == '>') {
-			/* That slash was in fact closing tag slash, wohoo */
+			/* That slash was in fact closing tag slash, woohoo */
 			tag->flags |= FL_CLOSED;
 			state = tag_end;
 			store_component_value();
