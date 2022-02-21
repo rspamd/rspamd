@@ -53,7 +53,7 @@ lua_thread_pool_free (struct lua_thread_pool *pool);
 
 /**
  * Extracts a thread from the list of available ones.
- * It immediately becames running one and should be used to run a Lua script/function straight away.
+ * It immediately becomes running one and should be used to run a Lua script/function straight away.
  * as soon as the code is finished, it should be either returned into list of available threads by
  * calling lua_thread_pool_return() or terminated by calling lua_thread_pool_terminate_entry()
  * if the code finished with error.
