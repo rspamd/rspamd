@@ -1106,7 +1106,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
  * $RUNDIR - local states directory
  * $DBDIR - databases dir
  * $LOGDIR - logs dir
- * $PLUGINSDIR - pluggins dir
+ * $PLUGINSDIR - plugins dir
  * $PREFIX - installation prefix
  * $VERSION - rspamd version
  */
