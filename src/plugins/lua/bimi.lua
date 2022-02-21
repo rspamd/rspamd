@@ -335,7 +335,7 @@ local function bimi_callback(task)
   -- We can either check BIMI via DNS or check Redis cache
   -- BIMI check is an external check, so we might prefer Redis to be checked
   -- first. On the other hand, DNS request is cheaper and counting low BIMI
-  -- adoptation we would need to have both Redis and DNS request to hit no
+  -- adaptation we would need to have both Redis and DNS request to hit no
   -- result. So, it might be better to check DNS first at this stage...
   check_bimi_dns(task, dmarc_domain_maybe)
 end
