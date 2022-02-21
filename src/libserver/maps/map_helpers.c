@@ -1308,7 +1308,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 
 #if !defined(__aarch64__) && !defined(__powerpc64__)
 	if (!(map->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
-		msg_info_map ("disable hyperscan for map %s, ssse3 instructons are not supported by CPU",
+		msg_info_map ("disable hyperscan for map %s, ssse3 instructions are not supported by CPU",
 				map->name);
 		return;
 	}
