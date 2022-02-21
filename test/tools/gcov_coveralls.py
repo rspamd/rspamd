@@ -109,7 +109,7 @@ def main():
         metavar='DIR',
         help=
         ("Don't look for .gcno/.gcda files in this directories (repeat option to skip several directories). "
-         "Path is relative to the dirictory where script was started, e. g. '.git'"))
+         "Path is relative to the directory where script was started, e. g. '.git'"))
     parser.add_argument(
         '-p',
         '--prefix',
