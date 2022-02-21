@@ -256,7 +256,7 @@ XOR (const uint8_t *input1, const uint8_t *input2, uint8_t *output)
  */
 /*
  * Sigma function that defines the diagonal connections of a DBG
- * diagonal front: flip the (g-i)th bit (Inverse Buttferly Graph)
+ * diagonal front: flip the (g-i)th bit (Inverse Butterfly Graph)
  * diagonal back: flip the i-(g-1)th bit (Regular Butterfly Graph)
  */
 static uint64_t
