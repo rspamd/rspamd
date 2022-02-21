@@ -441,7 +441,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
-		/* Numberic order */
+		/* Numeric order */
 		rspamd_cryptobox_hash_update (re_class->st, (const guchar *)&i,
 				sizeof (i));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *)&i,
