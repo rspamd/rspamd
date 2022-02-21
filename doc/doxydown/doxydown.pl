@@ -271,12 +271,12 @@ sub print_markdown {
             }
         }
 
-        if ($m->{'stucts'}) {
-            if ( scalar(@{ $m->{'stucts'} }) > 0 ) {
-                print "\n## Stucts\n\nThe module `$mname` defines the following stucts.\n\n";
+        if ($m->{'structs'}) {
+            if ( scalar(@{ $m->{'structs'} }) > 0 ) {
+                print "\n## Structs\n\nThe module `$mname` defines the following structs.\n\n";
 
-                foreach ( @{ $m->{'stucts'} } ) {
-                    print_stuct_markdown( "Stuct", $_->{'name'}, $_ );
+                foreach ( @{ $m->{'structs'} } ) {
+                    print_struct_markdown( "Struct", $_->{'name'}, $_ );
 
                     print "\nBack to [module description](#$m->{'id'}).\n\n";
 
