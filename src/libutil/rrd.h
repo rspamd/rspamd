@@ -153,7 +153,7 @@ enum rrd_cdp_param {
 	 * prediction algorithm. */
 			CDP_hw_last_intercept,
 	/* Last iteration intercept coefficient for the Holt-Winters
-	 * prediction algorihtm. */
+	 * prediction algorithm. */
 			CDP_hw_slope,
 	/* Current slope coefficient for the Holt-Winters
 	 * prediction algorithm. */
