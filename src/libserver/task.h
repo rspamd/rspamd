@@ -32,7 +32,7 @@ extern "C" {
 enum rspamd_command {
 	CMD_SKIP = 0,
 	CMD_PING,
-	CMD_CHECK_SPAMC, /* Legacy spamasassin format */
+	CMD_CHECK_SPAMC, /* Legacy spamassassin format */
 	CMD_CHECK_RSPAMC, /* Legacy rspamc format (like SA one) */
 	CMD_CHECK, /* Legacy check - metric json reply */
 	CMD_CHECK_V2, /* Modern check - symbols in json reply  */
