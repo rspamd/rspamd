@@ -135,7 +135,7 @@ local function fprot_check(task, content, digest, rule, maybe_part)
                 rule['symbol'], rule['type'])
           end
         else
-          -- returncodes: 1: infected, 2: suspicious, 3: both, 4-255: some error occured
+          -- returncodes: 1: infected, 2: suspicious, 3: both, 4-255: some error occurred
           -- see http://www.f-prot.com/support/helpfiles/unix/appendix_c.html for more detail
           local vname = string.match(data, '^[1-3] <[%w%s]-: (.-)>')
           if not vname then
