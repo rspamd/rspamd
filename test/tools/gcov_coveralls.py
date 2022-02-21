@@ -101,7 +101,7 @@ def main():
         '-v',
         '--verbose',
         action="store_true",
-        help='Display additional informaton and gcov command output.')
+        help='Display additional information and gcov command output.')
     parser.add_argument(
         '-e',
         '--exclude',
