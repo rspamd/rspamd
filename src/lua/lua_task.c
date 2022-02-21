@@ -443,7 +443,7 @@ LUA_FUNCTION_DEF (task, get_headers);
  * Order in remove starts from 1, where 0 means 'remove all', and negative value means
  * remove from the end
  * Order in addition means addition from the top: 0 means the most top header, 1 one after, etc
- * negative order means addtion to the end, e.g. -1 is appending header.
+ * negative order means addition to the end, e.g. -1 is appending header.
  * @return {bool} true if header could be modified (always true unless we don't have an unparsed message)
  */
 LUA_FUNCTION_DEF (task, modify_header);
