@@ -127,9 +127,9 @@ LUA_FUNCTION_DEF (util, tokenize_text);
 LUA_FUNCTION_DEF (util, process_message);
 /***
  * @function util.tanh(num)
- * Calculates hyperbolic tanhent of the specified floating point value
+ * Calculates hyperbolic tangent of the specified floating point value
  * @param {number} num input number
- * @return {number} hyperbolic tanhent of the variable
+ * @return {number} hyperbolic tangent of the variable
  */
 LUA_FUNCTION_DEF (util, tanh);
 
