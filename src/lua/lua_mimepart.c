@@ -1868,7 +1868,7 @@ lua_mimepart_is_attachment (lua_State * L)
 				lua_pushboolean (L, true);
 			}
 			else {
-				/* Image or an embeded object */
+				/* Image or an embedded object */
 				lua_pushboolean (L, false);
 			}
 		}
