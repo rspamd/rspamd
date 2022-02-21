@@ -384,16 +384,16 @@ local function gen_rbl_callback(rule)
         end
       else
         local to_resolve
-        local orign = req
+        local origin = req
 
         if not resolve_ip then
-          orign = maybe_make_hash(req, rule)
+          origin = maybe_make_hash(req, rule)
           to_resolve = string.format('%s.%s',
-              orign,
+              origin,
               rule.rbl)
         else
           -- First, resolve origin stuff without hashing or anything
-          to_resolve = orign
+          to_resolve = origin
         end
 
         nreq = {
