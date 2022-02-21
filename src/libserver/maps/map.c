@@ -1128,7 +1128,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 
 	/* Now, we do some sanity checks for jittered seconds */
 	if (!(how & RSPAMD_MAP_SCHEDULE_INIT)) {
-		/* Never allow too low interval between timer checks, it is epxensive */
+		/* Never allow too low interval between timer checks, it is expensive */
 		if (jittered_sec < min_timer_interval) {
 			jittered_sec = rspamd_time_jitter (min_timer_interval, 0);
 		}
