@@ -40,7 +40,7 @@ First part contains nothing interesting, just see `test/lua/tests.lua`.
 
 1. Coverage collecting is initiated and dumped in `test/functional/lua/test_coverage.lua` (there are a lot of comments inside).
    This file should be included on the very early stage of test run. Usually it's included via config.
-2. Coverage is dumped into ${TMPDIR}/%{woker_name}.luacov.stats.out
+2. Coverage is dumped into ${TMPDIR}/%{worker_name}.luacov.stats.out
 3. All worker coverage reports are merged into `lua_coverage_report.json` (see `collect_lua_coverage()`)
 4. finally, `lua_coverage_report.json` is persisted in build flow (see `functional` stage)
 
