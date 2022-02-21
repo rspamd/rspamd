@@ -60,7 +60,7 @@ void *rspamd_inet_library_get_lib_ctx (void);
 void rspamd_inet_library_destroy (void);
 
 /**
- * Create new inet address structure based on the address familiy and opaque init pointer
+ * Create new inet address structure based on the address family and opaque init pointer
  * @param af
  * @param init
  * @return new inet addr
