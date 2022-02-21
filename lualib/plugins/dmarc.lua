@@ -274,7 +274,7 @@ end
 -- Used to check dmarc record, check elements and produce dmarc policy processed
 -- result.
 -- Returns:
---     false,false - record is garbadge
+--     false,false - record is garbage
 --     false,error_message - record is invalid
 --     true,policy_table - record is valid and parsed
 ]]
@@ -349,7 +349,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
     end
     result.raw_elts = elts
   else
-    return false,false -- Ignore garbadge
+    return false,false -- Ignore garbage
   end
 
   return true, result

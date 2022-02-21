@@ -1442,7 +1442,7 @@ rspamd_controller_handle_legacy_history (
 					g_strstrip (syms[j]);
 
 					if (strlen (syms[j]) == 0) {
-						/* Empty garbadge */
+						/* Empty garbage */
 						continue;
 					}
 

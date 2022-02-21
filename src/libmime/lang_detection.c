@@ -638,7 +638,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		if (!(nelt->flags & RS_LANGUAGE_LATIN) &&
 			rspamd_language_detector_ucs_is_latin (ucs_elt->s, nsym)) {
 			ucs_elt->freq = 0;
-			/* Skip latin ngramm for non-latin language to avoid garbadge */
+			/* Skip latin ngramm for non-latin language to avoid garbage */
 			skipped ++;
 			continue;
 		}
