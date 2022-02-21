@@ -67,7 +67,7 @@ rspamd_config.BOUNCE = {
       return true, 1.0, 'DSN'
     end
 
-    -- Apply heuristics for non-standard bounecs
+    -- Apply heuristics for non-standard bounces
     local bounce_sender
     local mime_from = task:get_from('mime')
     if mime_from then
