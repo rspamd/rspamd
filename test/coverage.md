@@ -28,7 +28,7 @@ However, there are some moment to highlight:
 - To make it possible, we explicitly run `umask 0000` in "build" and "functional" stages in .circleci/config.yml
 - After run, we persist coverage data in "coverage.${CIRCLE\_JOB}.dump" during this build flow, see `capture_coverage_data`,
   to use it on the final stage.
-- we user `cpp-coverals` because it is able to save data for coveralls without actually sending it. We send on our own
+- we user `cpp-coveralls` because it is able to save data for coveralls without actually sending it. We send on our own
   along with Lua-coverage.
 
 Lua coverage
