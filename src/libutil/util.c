@@ -372,7 +372,7 @@ rspamd_prefer_v4_hack (const struct addrinfo *a1, const struct addrinfo *a2)
  * Make a universal socket
  * @param credits host, ip or path to unix socket
  * @param port port (used for network sockets)
- * @param async make this socket asynced
+ * @param async make this socket async
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */

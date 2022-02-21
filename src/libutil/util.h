@@ -70,7 +70,7 @@ gint rspamd_socket_unix (const gchar *,
  * @param credits host, ip or path to unix socket
  * @param port port (used for network sockets)
  * @param type type of socket (SO_STREAM or SO_DGRAM)
- * @param async make this socket asynced
+ * @param async make this socket async
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
