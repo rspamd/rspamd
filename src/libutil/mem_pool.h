@@ -355,7 +355,7 @@ gsize rspamd_mempool_get_wasted_size (rspamd_mempool_t *pool);
  * Set memory pool variable
  * @param pool memory pool object
  * @param name name of variable
- * @param gpointer value value of variable
+ * @param gpointer value of variable
  * @param destructor pointer to function-destructor
  */
 void rspamd_mempool_set_variable (rspamd_mempool_t *pool,
