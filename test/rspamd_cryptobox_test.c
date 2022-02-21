@@ -124,7 +124,7 @@ create_realistic_split (struct rspamd_cryptobox_segment *seg, int mseg,
 }
 
 static int
-create_constrainted_split (struct rspamd_cryptobox_segment *seg, int mseg,
+create_constrained_split (struct rspamd_cryptobox_segment *seg, int mseg,
 		int constraint,
 		guchar *begin, guchar *end)
 {
@@ -291,14 +291,14 @@ start:
 
 	msg_info ("realistic split of %d chunks encryption: %.0f", cnt, t2 - t1);
 
-	cnt = create_constrainted_split (seg, max_seg + 1, 32, begin, end);
+	cnt = create_constrained_split (seg, max_seg + 1, 32, begin, end);
 	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
 	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("constrainted split of %d chunks encryption: %.0f", cnt, t2 - t1);
+	msg_info ("constrained split of %d chunks encryption: %.0f", cnt, t2 - t1);
 
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 2) + 1;
@@ -328,7 +328,7 @@ start:
 	}
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 10) + 1;
-		cnt = create_constrainted_split (seg, ms, i, begin, end);
+		cnt = create_constrained_split (seg, ms, i, begin, end);
 		t1 = rspamd_get_ticks (TRUE);
 		rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
 		t2 = rspamd_get_ticks (TRUE);
@@ -336,7 +336,7 @@ start:
 		check_result (key, nonce, mac, begin, end);
 
 		if (i % 1000 == 0) {
-			msg_info ("constrainted fuzz iterations: %d", i);
+			msg_info ("constrained fuzz iterations: %d", i);
 		}
 	}
 
