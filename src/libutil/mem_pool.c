@@ -703,7 +703,7 @@ rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
 	qsort (sz, G_N_ELEMENTS (sz), sizeof (gint), cmp_int);
 	jitter = rspamd_random_uint64_fast () % 10;
 	/*
-	 * Take stochaistic quantiles
+	 * Take stochastic quantiles
 	 */
 	sel_pos = sz[50 + jitter];
 	sel_neg = sz[4 + jitter];
