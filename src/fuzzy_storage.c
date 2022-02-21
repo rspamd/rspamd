@@ -1376,7 +1376,7 @@ rspamd_fuzzy_extensions_from_wire (struct fuzzy_session *s, guchar *buf, gsize b
 		p = buf;
 		/*
 		 * Memory layout: n_ext of struct rspamd_fuzzy_cmd_extension
-		 *                payload for each extension in a continious data segment
+		 *                payload for each extension in a continuous data segment
 		 */
 		storage = g_malloc (n_ext * sizeof (struct rspamd_fuzzy_cmd_extension) +
 				st_len);
