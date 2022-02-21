@@ -969,7 +969,7 @@ local bad_x_mailers = {
   [[(?:Mozilla )?Thunderbird \d]],
   -- Was used by Yahoo Groups in 2000s, no one expected to use this in 2020s
   [[eGroups Message Poster]],
-  -- Regexp for genuene iOS X-Mailer is below, anything which doesn't match it,
+  -- Regexp for genuine iOS X-Mailer is below, anything which doesn't match it,
   -- but starts with 'iPhone Mail' or 'iPad Mail' is likely fake
   [[i(?:Phone|Pad) Mail]],
 }
