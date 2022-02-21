@@ -30,7 +30,7 @@ def dump_file(json_file):
         warn("{}: no source_files, not a coveralls.io payload?".format(json_file))
         return 1
 
-    print("{} ({} soource files)".format(json_file, len(data['source_files'])))
+    print("{} ({} source files)".format(json_file, len(data['source_files'])))
 
     for src_file in sorted(data['source_files'], key=itemgetter('name')):
         covered_lines = not_skipped_lines = 0
