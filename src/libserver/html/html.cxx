@@ -418,7 +418,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			 */
 			if (*in == '>') {
 				/*
-				 * Attribtute name followed by end of tag
+				 * Attribute name followed by end of tag
 				 * Should be okay (empty attribute). The rest is handled outside
 				 * this automata.
 				 */
