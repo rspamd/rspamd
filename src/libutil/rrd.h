@@ -158,7 +158,7 @@ enum rrd_cdp_param {
 	/* Current slope coefficient for the Holt-Winters
 	 * prediction algorithm. */
 			CDP_hw_last_slope,
-	/* Last iteration slope coeffient. */
+	/* Last iteration slope coefficient. */
 			CDP_null_count,
 	/* Number of sequential Unknown (DNAN) values + 1 preceding
 	 * the current prediction.
