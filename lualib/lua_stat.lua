@@ -396,7 +396,7 @@ exports.convert_sqlite_to_redis = convert_sqlite_to_redis
 --  symbol_ham = YYY
 --  db_spam = XXX.sqlite
 --  db_ham = YYY.sqlite
---  learn_cahe = ZZZ.sqlite
+--  learn_cache = ZZZ.sqlite
 --  per_user = true/false
 --  label = str
 --  }
