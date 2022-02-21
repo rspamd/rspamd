@@ -237,7 +237,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	gsize dlen;
 
 	if (visible_part.empty()) {
-		/* No dispalyed url, just some text within <a> tag */
+		/* No displayed url, just some text within <a> tag */
 		return;
 	}
 
