@@ -101,7 +101,7 @@ LUA_FUNCTION_DEF (text, save_in_file);
 LUA_FUNCTION_DEF (text, span);
 /***
  * @method rspamd_text:sub(start[, len])
- * Returns a substrin for lua_text similar to string.sub from Lua
+ * Returns a substring for lua_text similar to string.sub from Lua
  * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
  */
 LUA_FUNCTION_DEF (text, sub);
