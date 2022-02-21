@@ -289,7 +289,7 @@ rspamd_dkim_key_t *rspamd_dkim_parse_key (const gchar *txt, gsize *keylen,
 										  GError **err);
 
 /**
- * Canonocalise header using relaxed algorithm
+ * Canonicalise header using relaxed algorithm
  * @param hname
  * @param hvalue
  * @param out
