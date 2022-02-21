@@ -35,7 +35,7 @@ main (int argc, char **argv)
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
 	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	cfg->libs_ctx = rspamd_init_libs ();
-	/* More agressive GC, workaround for 'not enough memory' test failures */
+	/* More aggressive GC, workaround for 'not enough memory' test failures */
 	cfg->lua_gc_step *= 2;
 	rspamd_main->cfg = cfg;
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
