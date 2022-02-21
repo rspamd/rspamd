@@ -424,7 +424,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 
 
 	if (o1 == o2) {
-		/* Heurstic */
+		/* Heuristic */
 		if (i1->priority == i2->priority) {
 			avg_freq = ((gdouble) cache->total_hits / cache->used_items);
 			avg_weight = (cache->total_weight / cache->used_items);

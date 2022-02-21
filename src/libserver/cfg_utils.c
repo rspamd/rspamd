@@ -1274,7 +1274,7 @@ rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 		/* We have only one statfile */
 		return FALSE;
 	}
-	/* We have not detected any statfile that has different class, so turn on euristic based on symbol's name */
+	/* We have not detected any statfile that has different class, so turn on heuristic based on symbol's name */
 	has_other = FALSE;
 	cur = cf->statfiles;
 	while (cur) {
