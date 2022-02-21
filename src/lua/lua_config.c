@@ -350,7 +350,7 @@ LUA_FUNCTION_DEF (config, get_metric_symbol);
 
 /**
  * @method rspamd_config:get_action(name)
- * Gets data for a specific action in config. This function returns number reperesenting action's score
+ * Gets data for a specific action in config. This function returns number representing action's score
  *
  * @param {string} name name of action
  * @return {number} action's score or nil in case of undefined score or action
