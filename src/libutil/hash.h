@@ -22,7 +22,7 @@ typedef struct rspamd_lru_element_s rspamd_lru_element_t;
 /**
  * Create new lru hash
  * @param maxsize maximum elements in a hash
- * @param maxage maximum age of elemnt
+ * @param maxage maximum age of element
  * @param hash_func pointer to hash function
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
@@ -35,7 +35,7 @@ rspamd_lru_hash_t *rspamd_lru_hash_new (gint maxsize,
 /**
  * Create new lru hash
  * @param maxsize maximum elements in a hash
- * @param maxage maximum age of elemnt
+ * @param maxage maximum age of element
  * @param hash_func pointer to hash function
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
