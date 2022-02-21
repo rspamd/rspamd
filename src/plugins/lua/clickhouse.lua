@@ -41,7 +41,7 @@ local settings = {
     max_memory = 50 * 1024 * 1024, -- How many memory should be occupied before sending collection
     max_interval = 60, -- Maximum collection interval
   },
-  collect_garbage = false, -- Peform GC collection after sending the data
+  collect_garbage = false, -- Perform GC collection after sending the data
   check_timeout = 10.0, -- Periodic timeout
   timeout = 5.0,
   bayes_spam_symbols = {'BAYES_SPAM'},
