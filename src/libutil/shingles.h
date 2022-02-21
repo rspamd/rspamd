@@ -50,7 +50,7 @@ typedef guint64 (*rspamd_shingles_filter) (guint64 *input, gsize count,
  * if needed
  * @param input array of `rspamd_fstring_t`
  * @param key secret key used to generate shingles
- * @param pool pool to allocate shigles array
+ * @param pool pool to allocate shingles array
  * @param filter hashes filtering function
  * @param filterd opaque data for filtering function
  * @return shingles array
@@ -66,7 +66,7 @@ struct rspamd_shingle *rspamd_shingles_from_text (GArray *input,
  * Generate shingles from the DCT matrix of an image
  * @param dct discrete cosine transfor matrix (must be 64x64)
  * @param key secret key used to generate shingles
- * @param pool pool to allocate shigles array
+ * @param pool pool to allocate shingles array
  * @param filter hashes filtering function
  * @param filterd opaque data for filtering function
  * @return shingles array
