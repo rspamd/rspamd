@@ -34,7 +34,7 @@ static const struct luaL_reg xmlrpclib_m[] = {
 INIT_LOG_MODULE(xmlrpc)
 
 enum lua_xmlrpc_state {
-	read_method_responce = 0,
+	read_method_response = 0,
 	read_params = 1,
 	read_param = 2,
 	read_param_value = 3,
@@ -115,7 +115,7 @@ xmlrpc_start_element (GMarkupParseContext *context,
 	msg_debug_xmlrpc ("got start element %s on state %d", name, last_state);
 
 	switch (ud->parser_state) {
-	case read_method_responce:
+	case read_method_response:
 		/* Expect tag methodResponse */
 		if (g_ascii_strcasecmp (name, "methodResponse") == 0) {
 			ud->parser_state = read_params;
@@ -342,7 +342,7 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	msg_debug_xmlrpc ("got end element %s on state %d", name, last_state);
 
 	switch (ud->parser_state) {
-	case read_method_responce:
+	case read_method_response:
 		ud->parser_state = error_state;
 		break;
 	case read_params:
@@ -615,7 +615,7 @@ lua_xmlrpc_parse_reply (lua_State *L)
 
 	if (data != NULL) {
 		ud.L = L;
-		ud.parser_state = read_method_responce;
+		ud.parser_state = read_method_response;
 		ud.param_count = 0;
 		ud.st = g_queue_new ();
 

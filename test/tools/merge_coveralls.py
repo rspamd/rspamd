@@ -172,4 +172,4 @@ if __name__ == '__main__':
             if 'url' in response:
                 print("[coveralls] Uploaded to %s" % response['url'])
         except json.decoder.JSONDecodeError:
-            print("Bad resonse: '%s'" % r.text)
+            print("Bad response: '%s'" % r.text)
