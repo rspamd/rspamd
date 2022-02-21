@@ -838,14 +838,14 @@ reconf['CT_EXTRA_SEMI'] = {
 
 reconf['SUBJECT_ENDS_EXCLAIM'] = {
   re = 'Subject=/!\\s*$/H',
-  description = 'Subject ends with an exclaimation',
+  description = 'Subject ends with an exclamation',
   score = 0.0,
   group = 'headers'
 }
 
 reconf['SUBJECT_HAS_EXCLAIM'] = {
   re = string.format('%s & !%s', 'Subject=/!/H', 'Subject=/!\\s*$/H'),
-  description = 'Subject contains an exclaimation',
+  description = 'Subject contains an exclamation',
   score = 0.0,
   group = 'headers'
 }
