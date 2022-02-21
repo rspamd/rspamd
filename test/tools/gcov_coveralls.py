@@ -21,7 +21,7 @@ This script was written with quite a few assumptions:
       stored in object file debug sylmbols).
 
     * Current directory is writable and there is no useful *.gcov files in it
-      (becase they will be deleted).
+      (because they will be deleted).
 
     * Object file has same base name as *.gcno file (e. g. foo.c.gcno and foo.c.o).
       This is the case for cmake builds, but probably not for other build systems
