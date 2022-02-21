@@ -7025,7 +7025,7 @@ lua_image_get_filename (lua_State *L)
 	return 1;
 }
 
-/* Arvhive methods */
+/* Archive methods */
 static gint
 lua_archive_get_type (lua_State *L)
 {
