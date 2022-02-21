@@ -630,7 +630,7 @@ reconf['FAKE_REPLY'] = {
   group = 'headers'
 }
 
--- Mime-OLE is needed but absent (e.g. fake Outlook or fake Ecxchange)
+-- Mime-OLE is needed but absent (e.g. fake Outlook or fake Exchange)
 local has_msmail_pri = 'header_exists(X-MSMail-Priority)'
 local has_mimeole = 'header_exists(X-MimeOLE)'
 local has_squirrelmail_in_mailer = 'X-Mailer=/SquirrelMail\\b/H'
