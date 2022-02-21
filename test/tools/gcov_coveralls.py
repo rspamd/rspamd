@@ -18,7 +18,7 @@ and accumulates statistics for all source files.
 This script was written with quite a few assumptions:
 
     * Code was build using absolute path to source directory (and absolute path
-      stored in object file debug sylmbols).
+      stored in object file debug symbols).
 
     * Current directory is writable and there is no useful *.gcov files in it
       (because they will be deleted).
