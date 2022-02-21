@@ -169,7 +169,7 @@ def main():
                 # skip file outside given prefixes
                 # it can be e. g. library include file
                 if args.verbose:
-                    warn('file "{}" is not mathced by prefix, skipping'.format(src_file))
+                    warn('file "{}" is not matched by prefix, skipping'.format(src_file))
                 continue
 
         try:
