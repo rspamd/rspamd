@@ -456,7 +456,7 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
       if nspam <= train_opts.max_trains then
         if train_opts.spam_skip_prob then
           if coin <= train_opts.spam_skip_prob then
-            rspamd_logger.infox(task, 'skip %s sample probabilisticaly; probability %s (%s skip chance)', learn_type,
+            rspamd_logger.infox(task, 'skip %s sample probabilistically; probability %s (%s skip chance)', learn_type,
                 coin, train_opts.spam_skip_prob)
             return false
           end
@@ -471,7 +471,7 @@ local function can_push_train_vector(rule, task, learn_type, nspam, nham)
       if nham <= train_opts.max_trains then
         if train_opts.ham_skip_prob then
           if coin <= train_opts.ham_skip_prob then
-            rspamd_logger.infox(task, 'skip %s sample probabilisticaly; probability %s (%s skip chance)', learn_type,
+            rspamd_logger.infox(task, 'skip %s sample probabilistically; probability %s (%s skip chance)', learn_type,
                 coin, train_opts.ham_skip_prob)
             return false
           end
