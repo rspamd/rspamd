@@ -1744,7 +1744,7 @@ static gchar *
 rspamd_re_cache_hs_pattern_from_pcre (rspamd_regexp_t *re)
 {
 	/*
-	 * Workaroung for bug in ragel 7.0.0.11
+	 * Workaround for bug in ragel 7.0.0.11
 	 * https://github.com/intel/hyperscan/issues/133
 	 */
 	const gchar *pat = rspamd_regexp_get_pattern (re);
