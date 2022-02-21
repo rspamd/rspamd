@@ -599,8 +599,8 @@ lua_url_get_protocol (lua_State *L)
 
 /***
  * @method url:get_count()
- * Return number of occurrencies for this particular URL
- * @return {number} number of occurrencies
+ * Return number of occurrences for this particular URL
+ * @return {number} number of occurrences
  */
 static gint
 lua_url_get_count (lua_State *L)

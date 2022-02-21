@@ -86,7 +86,7 @@ struct rspamd_language_elt {
 	guint stop_words;
 	gdouble mean;
 	gdouble std;
-	guint occurencies; /* total number of parts with this language */
+	guint occurrences; /* total number of parts with this language */
 };
 
 struct rspamd_ngramm_elt {
@@ -180,7 +180,7 @@ struct rspamd_lang_detector {
 	khash_t(rspamd_stopwords_hash) *stop_words_norm;
 	UConverter *uchar_converter;
 	gsize short_text_limit;
-	gsize total_occurencies; /* number of all languages found */
+	gsize total_occurrences; /* number of all languages found */
 	ref_entry_t ref;
 };
 
@@ -1308,14 +1308,14 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 	gdouble adj;
 	gdouble proba_adjusted, probb_adjusted, freqa, freqb;
 
-	if (cbd->d->total_occurencies == 0) {
+	if (cbd->d->total_occurrences == 0) {
 		return 0;
 	}
 
-	freqa = ((gdouble)canda->elt->occurencies) /
-			(gdouble)cbd->d->total_occurencies;
-	freqb = ((gdouble)candb->elt->occurencies) /
-			(gdouble)cbd->d->total_occurencies;
+	freqa = ((gdouble)canda->elt->occurrences) /
+			(gdouble)cbd->d->total_occurrences;
+	freqb = ((gdouble)candb->elt->occurrences) /
+			(gdouble)cbd->d->total_occurrences;
 
 	proba_adjusted = canda->prob;
 	probb_adjusted = candb->prob;
@@ -1902,8 +1902,8 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 
 			if (result->len > 0 && !frequency_heuristic_applied) {
 				cand = g_ptr_array_index (result, 0);
-				cand->elt->occurencies++;
-				d->total_occurencies++;
+				cand->elt->occurrences++;
+				d->total_occurrences++;
 			}
 
 			if (part->languages != NULL) {

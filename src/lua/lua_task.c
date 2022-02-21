@@ -413,7 +413,7 @@ LUA_FUNCTION_DEF (task, get_header_full);
  *  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
  * @param {boolean} case_sensitive case sensitiveness flag to search for a header
- * @return {number} number of header's occurrencies or 0 if not found
+ * @return {number} number of header's occurrences or 0 if not found
  */
 LUA_FUNCTION_DEF (task, get_header_count);
 /***
