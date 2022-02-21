@@ -230,7 +230,7 @@ struct rspamd_url_flag_name {
 		{"schema_encoded", RSPAMD_URL_FLAG_SCHEMAENCODED, -1},
 		{"path_encoded", RSPAMD_URL_FLAG_PATHENCODED, -1},
 		{"query_encoded", RSPAMD_URL_FLAG_QUERYENCODED, -1},
-		{"missing_slahes", RSPAMD_URL_FLAG_MISSINGSLASHES, -1},
+		{"missing_slashes", RSPAMD_URL_FLAG_MISSINGSLASHES, -1},
 		{"idn", RSPAMD_URL_FLAG_IDN, -1},
 		{"has_port", RSPAMD_URL_FLAG_HAS_PORT, -1},
 		{"has_user", RSPAMD_URL_FLAG_HAS_USER, -1},
