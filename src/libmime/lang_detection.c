@@ -1841,7 +1841,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 				std = 0.0;
 				cand_len = 0;
 
-				/* Check distirbution */
+				/* Check distribution */
 				kh_foreach_value (candidates, cand, {
 					if (!isnan (cand->prob)) {
 						mean += cand->prob;
