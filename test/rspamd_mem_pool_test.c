@@ -8,8 +8,8 @@
 #include <sys/wait.h>
 #endif
 
-#define TEST_BUF "test bufffer"
-#define TEST2_BUF "test bufffertest bufffer"
+#define TEST_BUF "test buffer"
+#define TEST2_BUF "test buffertest buffer"
 
 void
 rspamd_mem_pool_test_func ()
