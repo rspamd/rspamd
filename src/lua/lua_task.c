@@ -267,7 +267,7 @@ LUA_FUNCTION_DEF (task, get_urls);
  * - If both parameters are nil then all urls are included
  * @param {table} flags_include included flags
  * @param {table} flags_exclude excluded flags
- * @param {table} protocols_mask incude only specific protocols
+ * @param {table} protocols_mask include only specific protocols
  * @return {table rspamd_url} list of urls matching conditions
  */
 LUA_FUNCTION_DEF (task, get_urls_filtered);
