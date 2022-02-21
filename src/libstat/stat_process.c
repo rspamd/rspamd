@@ -1038,7 +1038,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 				}
 			}
 			else if (ucl_object_type (obj) == UCL_STRING) {
-				/* Legacy sript */
+				/* Legacy script */
 				lua_script = ucl_object_tostring (obj);
 
 				if (luaL_dostring (L, lua_script) != 0) {
