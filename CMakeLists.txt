@@ -58,7 +58,7 @@ OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" 
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
 OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
-OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [defalut: OFF]" OFF)
+OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_DOCTEST      "Use system doctest instead of bundled one [default: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
