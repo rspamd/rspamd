@@ -239,7 +239,7 @@ local function meta_words_function(task)
     0, -- ascii characters rate
     0, -- non-ascii characters rate
     0, -- capital characters rate
-    0, -- numeric cahracters
+    0, -- numeric characters
   }
   for _,p in ipairs(tp) do
     local stats = p:get_stats()
@@ -385,7 +385,7 @@ local metafunctions = {
       'ascii_characters_rate',
       'non_ascii_characters_rate',
       'capital_characters_rate',
-      'numeric_cahracters'
+      'numeric_characters'
     },
     description = [[Functions for words data matching:
     - average length of the words
