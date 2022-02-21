@@ -256,7 +256,7 @@ LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
 /***
  * @method rspamd_config:register_dependency(id|name, depname)
  * Create a dependency on symbol identified by name for symbol identified by ID or name.
- * This affects order of checks only (a symbol is still checked if its dependencys are disabled).
+ * This affects order of checks only (a symbol is still checked if its dependencies are disabled).
  * @param {number|string} id id or name of source (numeric id is returned by all register_*_symbol)
  * @param {string} depname dependency name
  * @example
