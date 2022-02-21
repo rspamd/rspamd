@@ -38,7 +38,7 @@ local function process_filename(fname)
   return fname
 end
 
-local function output_dot(opts, nodes, adjastency)
+local function output_dot(opts, nodes, adjacency)
   rspamd_logger.messagex("digraph rspamd {")
   for k,node in pairs(nodes) do
     local attrs = {"shape=box"}
@@ -62,7 +62,7 @@ local function output_dot(opts, nodes, adjastency)
           table.concat(attrs, ','))
     end
   end
-  for _,adj in ipairs(adjastency) do
+  for _,adj in ipairs(adjacency) do
     local attrs = {}
     local skip = false
 
@@ -91,7 +91,7 @@ end
 
 local function load_config_traced(opts)
   local glob_traces = {}
-  local adjastency = {}
+  local adjacency = {}
   local nodes = {}
 
   local function maybe_match_glob(file)
@@ -105,7 +105,7 @@ local function load_config_traced(opts)
   end
 
   local function add_dep(from, node, args)
-    adjastency[#adjastency + 1] = {
+    adjacency[#adjacency + 1] = {
       from = from,
       to = node,
       args = args
@@ -157,7 +157,7 @@ local function load_config_traced(opts)
     os.exit(1)
   end
 
-  output_dot(opts, nodes, adjastency)
+  output_dot(opts, nodes, adjacency)
 end
 
 
