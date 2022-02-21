@@ -116,7 +116,7 @@ def main():
         action='append',
         help=
         ("Strip this prefix from absolute path to source file. "
-         "If this option is provided, then only files with given prefixex in absolute path "
+         "If this option is provided, then only files with given prefixes in absolute path "
          "will be added to coverage (option can be repeated)."))
     parser.add_argument(
         '--out',
