@@ -95,7 +95,7 @@ rspamd_config.BOUNCE = {
 
     -- Look for a message/rfc822(-headers) part inside
     local rfc822_part
-    parts[10] = nil -- limit numbe of parts to check
+    parts[10] = nil -- limit number of parts to check
     for _, p in ipairs(parts) do
       local mime_type, mime_subtype = p:get_type()
       if (mime_subtype == 'rfc822' or mime_subtype == 'rfc822-headers') and
