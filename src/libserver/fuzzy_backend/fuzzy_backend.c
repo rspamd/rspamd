@@ -335,7 +335,7 @@ rspamd_fuzzy_digest_hash (gconstpointer key)
 {
 	guint ret;
 
-	/* Distirbuted uniformly already */
+	/* Distributed uniformly already */
 	memcpy (&ret, key, sizeof (ret));
 
 	return ret;

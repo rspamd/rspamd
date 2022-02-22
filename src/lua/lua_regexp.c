@@ -792,7 +792,7 @@ lua_regexp_split (lua_State *L)
 
 /***
  * @method re:destroy()
- * Destroy regexp from caches if needed (the pointer is removed by garbadge collector)
+ * Destroy regexp from caches if needed (the pointer is removed by garbage collector)
  */
 static gint
 lua_regexp_destroy (lua_State *L)

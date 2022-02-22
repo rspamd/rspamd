@@ -480,7 +480,7 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 		cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
 		cd->type = RSPAMD_CT_INLINE;
 
-		/* We can also have content dispositon definitions in Content-Type */
+		/* We can also have content disposition definitions in Content-Type */
 		if (part->ct && part->ct->attrs) {
 			RSPAMD_FTOK_ASSIGN (&srch, "name");
 			found = g_hash_table_lookup (part->ct->attrs, &srch);
@@ -539,7 +539,7 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 				cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
 				cd->type = RSPAMD_CT_INLINE;
 
-				/* We can also have content dispositon definitions in Content-Type */
+				/* We can also have content disposition definitions in Content-Type */
 				if (part->ct->attrs) {
 					RSPAMD_FTOK_ASSIGN (&srch, "name");
 					found = g_hash_table_lookup (part->ct->attrs, &srch);

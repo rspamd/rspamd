@@ -142,7 +142,7 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 		scan_result = task->result;
 	}
 
-	/* Find the speicific action config */
+	/* Find the specific action config */
 	struct rspamd_action_config *action_config = NULL;
 
 	for (unsigned int i = 0; i < scan_result->nactions; i ++) {

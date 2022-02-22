@@ -101,7 +101,7 @@ LUA_FUNCTION_DEF (text, save_in_file);
 LUA_FUNCTION_DEF (text, span);
 /***
  * @method rspamd_text:sub(start[, len])
- * Returns a substrin for lua_text similar to string.sub from Lua
+ * Returns a substring for lua_text similar to string.sub from Lua
  * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
  */
 LUA_FUNCTION_DEF (text, sub);
@@ -194,7 +194,7 @@ LUA_FUNCTION_DEF (text, base32);
  * @method rspamd_text:base64([line_length, [nline, [fold]]])
  * Returns a text encoded in base64 (new rspamd_text is allocated)
  *
- * @param {number} line_length return text splited with newlines up to this attribute
+ * @param {number} line_length return text split with newlines up to this attribute
  * @param {string} nline newline type: `cr`, `lf`, `crlf`
  * @param {boolean} fold use folding when splitting into lines (false by default)
  * @return {rspamd_text} new text encoded in base64

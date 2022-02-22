@@ -29,7 +29,7 @@
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
 
-static const gdouble similarity_treshold = 80.0;
+static const gdouble similarity_threshold = 80.0;
 
 static void
 rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
@@ -153,7 +153,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		}
 
 
-		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_treshold) {
+		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_threshold) {
 			msg_debug_bayes ("message has two common parts (%.2f), so skip the last one",
 					*pdiff);
 			break;
@@ -540,7 +540,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 			learn_res = cl->cache->check (task, spam, rt);
 		}
 
-		if (learn_res == RSPAMD_LEARN_INGORE) {
+		if (learn_res == RSPAMD_LEARN_IGNORE) {
 			/* Do not learn twice */
 			g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
 					"learned as %s, ignore it", MESSAGE_FIELD (task, message_id),
@@ -1038,7 +1038,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 				}
 			}
 			else if (ucl_object_type (obj) == UCL_STRING) {
-				/* Legacy sript */
+				/* Legacy script */
 				lua_script = ucl_object_tostring (obj);
 
 				if (luaL_dostring (L, lua_script) != 0) {

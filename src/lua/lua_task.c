@@ -174,7 +174,7 @@ LUA_FUNCTION_DEF (task, adjust_result);
 
 /***
  * @method task:remove_result(symbol[, shadow_result])
- * Removes the symbol from a named or unamed/default result
+ * Removes the symbol from a named or unnamed/default result
  * @param {string} symbol symbol to remove
  * @param {string} shadow_result name of shadow result
  * @return {boolean} true if a symbol has been removed
@@ -241,7 +241,7 @@ LUA_FUNCTION_DEF (task, append_message);
 /***
  * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
- * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
 @example
@@ -267,14 +267,14 @@ LUA_FUNCTION_DEF (task, get_urls);
  * - If both parameters are nil then all urls are included
  * @param {table} flags_include included flags
  * @param {table} flags_exclude excluded flags
- * @param {table} protocols_mask incude only specific protocols
+ * @param {table} protocols_mask include only specific protocols
  * @return {table rspamd_url} list of urls matching conditions
  */
 LUA_FUNCTION_DEF (task, get_urls_filtered);
 /***
  * @method task:has_urls([need_emails])
  * Returns 'true' if a task has urls listed
- * @param {boolean} need_emails if `true` then reutrn also email urls
+ * @param {boolean} need_emails if `true` then return also email urls
  * @return {boolean} true if a task has urls (urls or emails if `need_emails` is true)
  */
 LUA_FUNCTION_DEF (task, has_urls);
@@ -413,7 +413,7 @@ LUA_FUNCTION_DEF (task, get_header_full);
  *  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
  * @param {boolean} case_sensitive case sensitiveness flag to search for a header
- * @return {number} number of header's occurrencies or 0 if not found
+ * @return {number} number of header's occurrences or 0 if not found
  */
 LUA_FUNCTION_DEF (task, get_header_count);
 /***
@@ -443,7 +443,7 @@ LUA_FUNCTION_DEF (task, get_headers);
  * Order in remove starts from 1, where 0 means 'remove all', and negative value means
  * remove from the end
  * Order in addition means addition from the top: 0 means the most top header, 1 one after, etc
- * negative order means addtion to the end, e.g. -1 is appending header.
+ * negative order means addition to the end, e.g. -1 is appending header.
  * @return {bool} true if header could be modified (always true unless we don't have an unparsed message)
  */
 LUA_FUNCTION_DEF (task, modify_header);
@@ -2269,7 +2269,7 @@ lua_task_set_pre_result (lua_State * L)
 					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"*action=S;message=S;module=S;score=D;priority=i;flags=S;result=S",
 					&act_str, &message, &module, &score, &priority, &fl_str, &res_name)) {
-				gint ret = luaL_error (L, "invald arguments: %s", err->message);
+				gint ret = luaL_error (L, "invalid arguments: %s", err->message);
 				g_error_free (err);
 
 				return ret;
@@ -5808,7 +5808,7 @@ lua_task_set_milter_reply (lua_State *L)
 			 * UCL itself cannot do it directly. So the trick is to extract the
 			 * original object, pack it into an array and then insert it back.
 			 *
-			 * I wish there was a simplier way to do it...
+			 * I wish there was a simpler way to do it...
 			 */
 			const ucl_object_t *add_hdrs = ucl_object_lookup (prev, "add_headers");
 			const ucl_object_t *nadd_hdrs = ucl_object_lookup (reply, "add_headers");
@@ -7025,7 +7025,7 @@ lua_image_get_filename (lua_State *L)
 	return 1;
 }
 
-/* Arvhive methods */
+/* Archive methods */
 static gint
 lua_archive_get_type (lua_State *L)
 {

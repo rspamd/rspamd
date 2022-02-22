@@ -441,7 +441,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
-		/* Numberic order */
+		/* Numeric order */
 		rspamd_cryptobox_hash_update (re_class->st, (const guchar *)&i,
 				sizeof (i));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *)&i,
@@ -1744,7 +1744,7 @@ static gchar *
 rspamd_re_cache_hs_pattern_from_pcre (rspamd_regexp_t *re)
 {
 	/*
-	 * Workaroung for bug in ragel 7.0.0.11
+	 * Workaround for bug in ragel 7.0.0.11
 	 * https://github.com/intel/hyperscan/issues/133
 	 */
 	const gchar *pat = rspamd_regexp_get_pattern (re);

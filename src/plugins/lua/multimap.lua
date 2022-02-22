@@ -1305,7 +1305,7 @@ if opts and type(opts) == 'table' then
     end
   end, fun.filter(function(r) return not r['prefilter'] end, rules))
 
-  -- prefilter symbils
+  -- prefilter symbols
   fun.each(function(rule)
     rspamd_config:register_symbol({
       type = 'prefilter',

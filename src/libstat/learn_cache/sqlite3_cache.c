@@ -184,7 +184,7 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 	gint64 flag;
 
 	if (task->tokens == NULL || task->tokens->len == 0) {
-		return RSPAMD_LEARN_INGORE;
+		return RSPAMD_LEARN_IGNORE;
 	}
 
 	if (ctx != NULL && ctx->db != NULL) {
@@ -223,7 +223,7 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 				/* Already learned */
 				msg_warn_task ("already seen stat hash: %*bs",
 						rspamd_cryptobox_HASHBYTES, out);
-				return RSPAMD_LEARN_INGORE;
+				return RSPAMD_LEARN_IGNORE;
 			}
 			else {
 				/* Need to relearn */
@@ -248,7 +248,7 @@ rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
 
 	if (h == NULL) {
-		return RSPAMD_LEARN_INGORE;
+		return RSPAMD_LEARN_IGNORE;
 	}
 
 	flag = !!is_spam ? 1 : 0;

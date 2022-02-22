@@ -149,7 +149,7 @@ local function sophos_check(task, content, digest, rule, maybe_part)
             rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)',
                 0.0, 'fail', maybe_part)
-            -- excplicitly set REJ1 message when SAVDIreports a protocol error
+            -- explicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
             common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)',

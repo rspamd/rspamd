@@ -1353,7 +1353,7 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg, GError **err)
 	if (msg->body_buf.len > 0) {
 
 		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
-			/* Avoid copying by just maping a shared segment */
+			/* Avoid copying by just mapping a shared segment */
 			new_msg->flags |= RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
 
 			storage = &new_msg->body_buf.c;

@@ -129,7 +129,7 @@ rspamd_http_context_parse_proxy (struct rspamd_http_context *ctx,
 	struct upstream_list *uls;
 
 	if (!ctx->ups_ctx) {
-		msg_err ("cannot parse http_proxy %s - upstreams context is udefined", name);
+		msg_err ("cannot parse http_proxy %s - upstreams context is undefined", name);
 		return;
 	}
 

@@ -247,7 +247,7 @@ local expiry_script = [[
   local tokens = {}
 
   -- Tokens occurrences distribution counters
-  local occurr = {
+  local occur = {
     ham = {},
     spam = {},
     total = {}
@@ -277,7 +277,7 @@ local expiry_script = [[
 
       for k,v in pairs({['ham']=ham, ['spam']=spam, ['total']=total}) do
         if tonumber(v) > 19 then v = 20 end
-        occurr[k][v] = occurr[k][v] and occurr[k][v] + 1 or 1
+        occur[k][v] = occur[k][v] and occur[k][v] + 1 or 1
       end
     end
   end
@@ -359,33 +359,33 @@ local expiry_script = [[
 
   local occ_distr = {}
   for _,cl in pairs({'ham', 'spam', 'total'}) do
-    local occurr_key = pattern_sha1 .. '_occurrence_' .. cl
+    local occur_key = pattern_sha1 .. '_occurrence_' .. cl
 
     if cursor ~= 0 then
       local n
-      for i,v in ipairs(redis.call('HGETALL', occurr_key)) do
+      for i,v in ipairs(redis.call('HGETALL', occur_key)) do
         if i % 2 == 1 then
           n = tonumber(v)
         else
-          occurr[cl][n] = occurr[cl][n] and occurr[cl][n] + v or v
+          occur[cl][n] = occur[cl][n] and occur[cl][n] + v or v
         end
       end
 
       local str = ''
-      if occurr[cl][0] ~= nil then
-        str = '0:' .. occurr[cl][0] .. ','
+      if occur[cl][0] ~= nil then
+        str = '0:' .. occur[cl][0] .. ','
       end
-      for k,v in ipairs(occurr[cl]) do
+      for k,v in ipairs(occur[cl]) do
         if k == 20 then k = '>19' end
         str = str .. k .. ':' .. v .. ','
       end
       table.insert(occ_distr, str)
     else
-      redis.call('DEL', occurr_key)
+      redis.call('DEL', occur_key)
     end
 
-    if next(occurr[cl]) ~= nil then
-      redis.call('HMSET', occurr_key, unpack_function(hash2list(occurr[cl])))
+    if next(occur[cl]) ~= nil then
+      redis.call('HMSET', occur_key, unpack_function(hash2list(occur[cl])))
     end
   end
 

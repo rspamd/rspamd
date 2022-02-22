@@ -165,7 +165,7 @@ local function days_list(days)
 end
 
 local function get_excluded_symbols(known_symbols, correlations, seen_total)
-  -- Walk results once to collect all symbols & count ocurrences
+  -- Walk results once to collect all symbols & count occurrences
 
   local remove = {}
   local known_symbols_list = {}

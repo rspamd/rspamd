@@ -105,7 +105,7 @@ struct rspamd_stat_ctx {
 typedef enum rspamd_learn_cache_result {
 	RSPAMD_LEARN_OK = 0,
 	RSPAMD_LEARN_UNLEARN,
-	RSPAMD_LEARN_INGORE
+	RSPAMD_LEARN_IGNORE
 } rspamd_learn_t;
 
 struct rspamd_stat_ctx *rspamd_stat_get_ctx (void);

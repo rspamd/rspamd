@@ -344,7 +344,7 @@ local check_mime_id = rspamd_config:register_symbol{
       missing_mime = true
     end
 
-    -- Check presense of MIME specific headers
+    -- Check presence of MIME specific headers
     local has_ct_header = task:has_header('Content-Type')
     local has_cte_header = task:has_header('Content-Transfer-Encoding')
 

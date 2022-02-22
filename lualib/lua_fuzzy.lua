@@ -246,7 +246,7 @@ local function mime_types_check(task, part, rule)
   local id = part:get_id()
   lua_util.debugm(N, task, 'check binary part %s: %s', id, ct)
 
-  -- For bad mime mime parts we implicitly enable fuzzy check
+  -- For bad mime parts we implicitly enable fuzzy check
   local mime_trace = (task:get_symbol('MIME_TRACE') or {})[1]
   local opts = {}
 

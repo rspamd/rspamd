@@ -249,7 +249,7 @@ gboolean rspamd_upstream_add_addr (struct upstream *up,
 const gchar *rspamd_upstream_name (struct upstream *up);
 
 /**
- * Returns the port of the current addres for the upstream
+ * Returns the port of the current address for the upstream
  * @param up
  * @return
  */

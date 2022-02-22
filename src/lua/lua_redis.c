@@ -188,7 +188,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 	struct redisAsyncContext *ac;
 
 	ud = &ctx->async;
-	msg_debug_lua_redis ("desctructing %p", ctx);
+	msg_debug_lua_redis ("destructing %p", ctx);
 
 	if (ud->ctx) {
 

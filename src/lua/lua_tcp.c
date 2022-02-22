@@ -100,7 +100,7 @@ LUA_FUNCTION_DEF (tcp, request);
  * @function rspamd_tcp.connect_sync()
  *
  * Creates pseudo-synchronous TCP connection.
- * Each method of the connection requiring IO, becames a yielding point,
+ * Each method of the connection requiring IO, becomes a yielding point,
  * i.e. current thread Lua thread is get suspended and resumes as soon as IO is done
  *
  * This class represents low-level API, using of "lua_tcp_sync" module is recommended.

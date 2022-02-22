@@ -74,10 +74,10 @@ local function rspamd_str_split(s, sep)
 end
 
 --[[[
--- @function lua_util.str_split(text, deliminator)
--- Splits text into a numeric table by deliminator
--- @param {string} text deliminated text
--- @param {string} deliminator the deliminator
+-- @function lua_util.str_split(text, delimiter)
+-- Splits text into a numeric table by delimiter
+-- @param {string} text delimited text
+-- @param {string} delimiter the delimiter
 -- @return {table} numeric table containing string parts
 --]]
 

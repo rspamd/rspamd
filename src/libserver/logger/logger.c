@@ -466,12 +466,12 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 
 			if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
 				if ((nescaped = rspamd_log_line_need_escape (logbuf, end - logbuf)) != 0) {
-					gsize unsecaped_len = end - logbuf;
-					gchar *logbuf_escaped = g_alloca (unsecaped_len + nescaped * 4);
+					gsize unescaped_len = end - logbuf;
+					gchar *logbuf_escaped = g_alloca (unescaped_len + nescaped * 4);
 					log_line = logbuf_escaped;
 
-					end = rspamd_log_line_hex_escape (logbuf, unsecaped_len,
-							logbuf_escaped, unsecaped_len + nescaped * 4);
+					end = rspamd_log_line_hex_escape (logbuf, unescaped_len,
+							logbuf_escaped, unescaped_len + nescaped * 4);
 				}
 			}
 

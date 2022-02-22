@@ -44,7 +44,7 @@ local function whitelist_cb(symbol, rule, task)
     local mult
     local how = 'wl'
 
-    -- Can be overriden
+    -- Can be overridden
     if rule.blacklist then how = 'bl' end
 
     local function parse_val(val)

@@ -630,7 +630,7 @@ reconf['FAKE_REPLY'] = {
   group = 'headers'
 }
 
--- Mime-OLE is needed but absent (e.g. fake Outlook or fake Ecxchange)
+-- Mime-OLE is needed but absent (e.g. fake Outlook or fake Exchange)
 local has_msmail_pri = 'header_exists(X-MSMail-Priority)'
 local has_mimeole = 'header_exists(X-MimeOLE)'
 local has_squirrelmail_in_mailer = 'X-Mailer=/SquirrelMail\\b/H'
@@ -838,14 +838,14 @@ reconf['CT_EXTRA_SEMI'] = {
 
 reconf['SUBJECT_ENDS_EXCLAIM'] = {
   re = 'Subject=/!\\s*$/H',
-  description = 'Subject ends with an exclaimation',
+  description = 'Subject ends with an exclamation',
   score = 0.0,
   group = 'headers'
 }
 
 reconf['SUBJECT_HAS_EXCLAIM'] = {
   re = string.format('%s & !%s', 'Subject=/!/H', 'Subject=/!\\s*$/H'),
-  description = 'Subject contains an exclaimation',
+  description = 'Subject contains an exclamation',
   score = 0.0,
   group = 'headers'
 }
@@ -969,7 +969,7 @@ local bad_x_mailers = {
   [[(?:Mozilla )?Thunderbird \d]],
   -- Was used by Yahoo Groups in 2000s, no one expected to use this in 2020s
   [[eGroups Message Poster]],
-  -- Regexp for genuene iOS X-Mailer is below, anything which doesn't match it,
+  -- Regexp for genuine iOS X-Mailer is below, anything which doesn't match it,
   -- but starts with 'iPhone Mail' or 'iPad Mail' is likely fake
   [[i(?:Phone|Pad) Mail]],
 }

@@ -152,7 +152,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     if munging_opts.munge_map_condition then
       local accepted,trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
-        lua_util.debugm(task, 'skip munging, maps condition not satisified: (%s)',
+        lua_util.debugm(task, 'skip munging, maps condition not satisfied: (%s)',
             trace)
         -- Excepted
         return
@@ -274,7 +274,7 @@ end
 -- Used to check dmarc record, check elements and produce dmarc policy processed
 -- result.
 -- Returns:
---     false,false - record is garbadge
+--     false,false - record is garbage
 --     false,error_message - record is invalid
 --     true,policy_table - record is valid and parsed
 ]]
@@ -349,7 +349,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
     end
     result.raw_elts = elts
   else
-    return false,false -- Ignore garbadge
+    return false,false -- Ignore garbage
   end
 
   return true, result

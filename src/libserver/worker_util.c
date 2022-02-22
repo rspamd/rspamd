@@ -682,7 +682,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 static void
 rspamd_worker_drop_priv (struct rspamd_main *rspamd_main)
 {
-	if (rspamd_main->is_privilleged) {
+	if (rspamd_main->is_privileged) {
 		if (setgid (rspamd_main->workers_gid) == -1) {
 			msg_err_main ("cannot setgid to %d (%s), aborting",
 					(gint) rspamd_main->workers_gid,

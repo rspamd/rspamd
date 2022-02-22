@@ -54,7 +54,7 @@ LUA_FUNCTION_DEF (util, create_event_base);
 LUA_FUNCTION_DEF (util, load_rspamd_config);
 /***
  * @function util.config_from_ucl(any, string)
- * Load rspamd config from ucl reperesented by any lua table
+ * Load rspamd config from ucl represented by any lua table
  * @return {confg} new configuration object suitable for access
  */
 LUA_FUNCTION_DEF (util, config_from_ucl);
@@ -68,7 +68,7 @@ LUA_FUNCTION_DEF (util, config_from_ucl);
 LUA_FUNCTION_DEF (util, encode_base64);
 /***
  * @function util.encode_qp(input[, str_len, [newlines_type]])
- * Encodes data in quouted printable breaking lines if needed
+ * Encodes data in quoted printable breaking lines if needed
  * @param {text or string} input input data
  * @param {number} str_len optional size of lines or 0 if split is not needed
  * @return {rspamd_text} encoded data chunk
@@ -77,7 +77,7 @@ LUA_FUNCTION_DEF (util, encode_qp);
 
 /***
  * @function util.decode_qp(input)
- * Decodes data from quouted printable
+ * Decodes data from quoted printable
  * @param {text or string} input input data
  * @return {rspamd_text} decoded data chunk
  */
@@ -127,9 +127,9 @@ LUA_FUNCTION_DEF (util, tokenize_text);
 LUA_FUNCTION_DEF (util, process_message);
 /***
  * @function util.tanh(num)
- * Calculates hyperbolic tanhent of the specified floating point value
+ * Calculates hyperbolic tangent of the specified floating point value
  * @param {number} num input number
- * @return {number} hyperbolic tanhent of the variable
+ * @return {number} hyperbolic tangent of the variable
  */
 LUA_FUNCTION_DEF (util, tanh);
 

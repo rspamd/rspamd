@@ -481,7 +481,7 @@ exports.combine_selectors = function(_, selectors, delimiter)
       return rspamd_text.fromtable(selectors, delimiter)
     end
   else
-    -- We need to do a spill on each table selector and make a cortezian product
+    -- We need to do a spill on each table selector and make a cortesian product
     -- e.g. s:tbl:s -> s:telt1:s + s:telt2:s ...
     local tbl = {}
     local res = {}

@@ -139,7 +139,7 @@ struct rspamd_controller_worker_ctx {
 	gboolean use_ssl;
 	/* Webui password */
 	gchar *password;
-	/* Privilleged password */
+	/* Privileged password */
 	gchar *enable_password;
 	/* Cached versions of the passwords */
 	rspamd_ftok_t cached_password;
@@ -1442,7 +1442,7 @@ rspamd_controller_handle_legacy_history (
 					g_strstrip (syms[j]);
 
 					if (strlen (syms[j]) == 0) {
-						/* Empty garbadge */
+						/* Empty garbage */
 						continue;
 					}
 
@@ -3242,7 +3242,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg,
-		cmd->privilleged)) {
+		cmd->privileged)) {
 		return 0;
 	}
 	if (cmd->require_message && (rspamd_http_message_get_body (msg, NULL) == NULL)) {

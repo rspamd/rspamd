@@ -140,7 +140,7 @@ void rspamd_url_deinit(void);
  * @param pool memory pool
  * @param task task object
  * @param part current text part
- * @param is_html turn on html euristic
+ * @param is_html turn on html heuristic
  */
 void rspamd_url_text_extract(rspamd_mempool_t *pool,
 							 struct rspamd_task *task,

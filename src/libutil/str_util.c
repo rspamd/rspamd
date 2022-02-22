@@ -2465,7 +2465,7 @@ decode:
 				continue;
 			}
 			else {
-				/* Hack, hack, hack, treat =<garbadge> as =<garbadge> */
+				/* Hack, hack, hack, treat =<garbage> as =<garbage> */
 				if (end - o > 1) {
 					*o++ = '=';
 					*o++ = *(p - 1);

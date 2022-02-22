@@ -396,7 +396,7 @@ return function(cfg)
 
     local actions_set = lua_util.list_to_hash(actions_defs)
 
-    -- Now check actions section for garbadge
+    -- Now check actions section for garbage
     actions_set['unknown_weight'] = true
     actions_set['grow_factor'] = true
     actions_set['subject'] = true

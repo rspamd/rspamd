@@ -318,7 +318,7 @@ LUA_FUNCTION_DEF (mimepart, get_header_full);
  *  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
  * @param {boolean} case_sensitive case sensitiveness flag to search for a header
- * @return {number} number of header's occurrencies or 0 if not found
+ * @return {number} number of header's occurrences or 0 if not found
  */
 LUA_FUNCTION_DEF (mimepart, get_header_count);
 
@@ -559,7 +559,7 @@ LUA_FUNCTION_DEF (mimepart, is_specific);
 /***
  * @method mime_part:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a mime part. Telephone urls and emails are not included unless explicitly asked in `list_protos`
- * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_emails if `true` then return also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
  * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
  */
@@ -1868,7 +1868,7 @@ lua_mimepart_is_attachment (lua_State * L)
 				lua_pushboolean (L, true);
 			}
 			else {
-				/* Image or an embeded object */
+				/* Image or an embedded object */
 				lua_pushboolean (L, false);
 			}
 		}

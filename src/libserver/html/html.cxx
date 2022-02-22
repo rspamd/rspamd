@@ -250,7 +250,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 		ignore_bad_tag,
 		tag_end,
 		slash_after_value,
-		slash_in_unqouted_value,
+		slash_in_unquoted_value,
 	} state;
 
 	state = static_cast<enum tag_parser_state>(parser_env.cur_state);
@@ -418,7 +418,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			 */
 			if (*in == '>') {
 				/*
-				 * Attribtute name followed by end of tag
+				 * Attribute name followed by end of tag
 				 * Should be okay (empty attribute). The rest is handled outside
 				 * this automata.
 				 */
@@ -514,7 +514,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 	case parse_value:
 		if (*in == '/') {
-			state = slash_in_unqouted_value;
+			state = slash_in_unquoted_value;
 		}
 		else if (g_ascii_isspace (*in) || *in == '>' || *in == '"') {
 			store_component_value();
@@ -570,9 +570,9 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 			state = parse_attr_name;
 		}
 		break;
-	case slash_in_unqouted_value:
+	case slash_in_unquoted_value:
 		if (*in == '>') {
-			/* That slash was in fact closing tag slash, wohoo */
+			/* That slash was in fact closing tag slash, woohoo */
 			tag->flags |= FL_CLOSED;
 			state = tag_end;
 			store_component_value();

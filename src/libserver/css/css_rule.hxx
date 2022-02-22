@@ -114,7 +114,7 @@ public:
 
 	/**
 	 * Compile CSS declaration to the html block
-	 * @param pool used to carry memory requred for html_block
+	 * @param pool used to carry memory required for html_block
 	 * @return html block structure
 	 */
 	auto compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *;

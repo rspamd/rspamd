@@ -13,15 +13,15 @@ gcov(1) utility can be used to get information from *.gcda file and write text
 reports to *.gocov file (one file for each source file from which object was compiled).
 
 The script finds *.gcno files, uses gcov to generate *.gcov files, parses them
-and accomulates statistics for all source files.
+and accumulates statistics for all source files.
 
 This script was written with quite a few assumptions:
 
     * Code was build using absolute path to source directory (and absolute path
-      stored in object file debug sylmbols).
+      stored in object file debug symbols).
 
     * Current directory is writable and there is no useful *.gcov files in it
-      (becase they will be deleted).
+      (because they will be deleted).
 
     * Object file has same base name as *.gcno file (e. g. foo.c.gcno and foo.c.o).
       This is the case for cmake builds, but probably not for other build systems
@@ -101,7 +101,7 @@ def main():
         '-v',
         '--verbose',
         action="store_true",
-        help='Display additional informaton and gcov command output.')
+        help='Display additional information and gcov command output.')
     parser.add_argument(
         '-e',
         '--exclude',
@@ -109,14 +109,14 @@ def main():
         metavar='DIR',
         help=
         ("Don't look for .gcno/.gcda files in this directories (repeat option to skip several directories). "
-         "Path is relative to the dirictory where script was started, e. g. '.git'"))
+         "Path is relative to the directory where script was started, e. g. '.git'"))
     parser.add_argument(
         '-p',
         '--prefix',
         action='append',
         help=
         ("Strip this prefix from absolute path to source file. "
-         "If this option is provided, then only files with given prefixex in absolute path "
+         "If this option is provided, then only files with given prefixes in absolute path "
          "will be added to coverage (option can be repeated)."))
     parser.add_argument(
         '--out',
@@ -169,7 +169,7 @@ def main():
                 # skip file outside given prefixes
                 # it can be e. g. library include file
                 if args.verbose:
-                    warn('file "{}" is not mathced by prefix, skipping'.format(src_file))
+                    warn('file "{}" is not matched by prefix, skipping'.format(src_file))
                 continue
 
         try:

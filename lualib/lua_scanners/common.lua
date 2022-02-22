@@ -405,7 +405,7 @@ local function check_parts_match(task, rule)
           lua_util.debugm(rule.name, task, '%s: extension matched: |%s|%s|', rule.log_prefix, ext, ext2)
           return true
         elseif match_filter(task, rule, fname, rule.mime_parts_filter_regex, 'regex') then
-          lua_util.debugm(rule.name, task, '%s: filname regex matched', rule.log_prefix)
+          lua_util.debugm(rule.name, task, '%s: filename regex matched', rule.log_prefix)
           return true
         end
       end

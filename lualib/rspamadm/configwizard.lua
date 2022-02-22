@@ -445,7 +445,7 @@ local function check_redis_classifier(cls, changes)
   end
 
   if not symbol_spam or not symbol_ham then
-    printf("Calssifier has no symbols defined")
+    printf("Classifier has no symbols defined")
     return
   end
 

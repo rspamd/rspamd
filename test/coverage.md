@@ -28,7 +28,7 @@ However, there are some moment to highlight:
 - To make it possible, we explicitly run `umask 0000` in "build" and "functional" stages in .circleci/config.yml
 - After run, we persist coverage data in "coverage.${CIRCLE\_JOB}.dump" during this build flow, see `capture_coverage_data`,
   to use it on the final stage.
-- we user `cpp-coverals` because it is able to save data for coveralls without actually sending it. We send on our own
+- we use `cpp-coveralls` because it is able to save data for coveralls without actually sending it. We send on our own
   along with Lua-coverage.
 
 Lua coverage
@@ -40,7 +40,7 @@ First part contains nothing interesting, just see `test/lua/tests.lua`.
 
 1. Coverage collecting is initiated and dumped in `test/functional/lua/test_coverage.lua` (there are a lot of comments inside).
    This file should be included on the very early stage of test run. Usually it's included via config.
-2. Coverage is dumped into ${TMPDIR}/%{woker_name}.luacov.stats.out
+2. Coverage is dumped into ${TMPDIR}/%{worker_name}.luacov.stats.out
 3. All worker coverage reports are merged into `lua_coverage_report.json` (see `collect_lua_coverage()`)
 4. finally, `lua_coverage_report.json` is persisted in build flow (see `functional` stage)
 

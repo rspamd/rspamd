@@ -599,8 +599,8 @@ lua_url_get_protocol (lua_State *L)
 
 /***
  * @method url:get_count()
- * Return number of occurrencies for this particular URL
- * @return {number} number of occurrencies
+ * Return number of occurrences for this particular URL
+ * @return {number} number of occurrences
  */
 static gint
 lua_url_get_count (lua_State *L)
@@ -871,7 +871,7 @@ lua_url_all (lua_State *L)
  * - `host_encoded`: URL host part is encoded
  * - `schema_encoded`: URL schema part is encoded
  * - `query_encoded`: URL query part is encoded
- * - `missing_slahes`: URL has some slashes missing
+ * - `missing_slashes`: URL has some slashes missing
  * - `idn`: URL has international characters
  * - `has_port`: URL has port
  * - `has_user`: URL has user part

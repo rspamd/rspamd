@@ -528,7 +528,7 @@ gboolean rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 										  gboolean exec_only);
 
 /**
- * Returns symbcache item flags
+ * Returns symcache item flags
  * @param item
  * @return
  */
@@ -547,7 +547,7 @@ const gchar* rspamd_symcache_item_name (struct rspamd_symcache_item *item);
 const struct rspamd_symcache_item_stat *
 		rspamd_symcache_item_stat (struct rspamd_symcache_item *item);
 /**
- * Returns if an item is enabled (for virutal it also means that parent should be enabled)
+ * Returns if an item is enabled (for virtual it also means that parent should be enabled)
  * @param item
  * @return
  */

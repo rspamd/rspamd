@@ -88,7 +88,7 @@ typedef gint (*rspamd_controller_func_t) (
 struct rspamd_custom_controller_command {
 	const gchar *command;
 	struct module_ctx *ctx;
-	gboolean privilleged;
+	gboolean privileged;
 	gboolean require_message;
 	rspamd_controller_func_t handler;
 };

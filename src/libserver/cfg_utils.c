@@ -1106,7 +1106,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
  * $RUNDIR - local states directory
  * $DBDIR - databases dir
  * $LOGDIR - logs dir
- * $PLUGINSDIR - pluggins dir
+ * $PLUGINSDIR - plugins dir
  * $PREFIX - installation prefix
  * $VERSION - rspamd version
  */
@@ -1274,7 +1274,7 @@ rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 		/* We have only one statfile */
 		return FALSE;
 	}
-	/* We have not detected any statfile that has different class, so turn on euristic based on symbol's name */
+	/* We have not detected any statfile that has different class, so turn on heuristic based on symbol's name */
 	has_other = FALSE;
 	cur = cf->statfiles;
 	while (cur) {
@@ -1567,11 +1567,11 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	/* Search for symbol group */
 	if (group == NULL) {
 		group = "ungrouped";
-		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPED;
 	}
 	else {
 		if (strcmp (group, "ungrouped") == 0) {
-			sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+			sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPED;
 		}
 	}
 
@@ -1584,7 +1584,7 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	sym_def->gr = sym_group;
 	g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
 
-	if (!(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)) {
+	if (!(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPED)) {
 		g_ptr_array_add (sym_def->groups, sym_group);
 	}
 }
@@ -1622,7 +1622,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			}
 
 			if (!has_group) {
-				/* Non-empty group has a priority over non-groupped one */
+				/* Non-empty group has a priority over non-grouped one */
 				sym_group = g_hash_table_lookup (cfg->groups, group);
 
 				if (sym_group == NULL) {
@@ -1630,13 +1630,13 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 					sym_group = rspamd_config_new_group (cfg, group);
 				}
 
-				if ((!sym_def->gr) || (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)) {
+				if ((!sym_def->gr) || (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPED)) {
 					sym_def->gr = sym_group;
-					sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+					sym_def->flags &= ~RSPAMD_SYMBOL_FLAG_UNGROUPED;
 				}
 
 				g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
-				sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+				sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPED);
 				g_ptr_array_add (sym_def->groups, sym_group);
 			}
 		}
@@ -1755,7 +1755,7 @@ rspamd_config_add_symbol_group (struct rspamd_config *cfg,
 		}
 
 		if (!has_group) {
-			/* Non-empty group has a priority over non-groupped one */
+			/* Non-empty group has a priority over non-grouped one */
 			sym_group = g_hash_table_lookup (cfg->groups, group);
 
 			if (sym_group == NULL) {
@@ -1768,7 +1768,7 @@ rspamd_config_add_symbol_group (struct rspamd_config *cfg,
 			}
 
 			g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
-			sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+			sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPED);
 			g_ptr_array_add (sym_def->groups, sym_group);
 
 			return TRUE;

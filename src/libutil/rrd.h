@@ -42,7 +42,7 @@ struct rrd_file_head {
 	gdouble float_cookie;    /* is it the correct double representation ?  */
 
 	/* Data Base Structure Definition **** */
-	gulong ds_cnt;   /* how many different ds provid input to the rrd */
+	gulong ds_cnt;   /* how many different ds provide input to the rrd */
 	gulong rra_cnt;  /* how many rras will be maintained in the rrd */
 	gulong pdp_step; /* pdp interval in seconds */
 
@@ -153,12 +153,12 @@ enum rrd_cdp_param {
 	 * prediction algorithm. */
 			CDP_hw_last_intercept,
 	/* Last iteration intercept coefficient for the Holt-Winters
-	 * prediction algorihtm. */
+	 * prediction algorithm. */
 			CDP_hw_slope,
 	/* Current slope coefficient for the Holt-Winters
 	 * prediction algorithm. */
 			CDP_hw_last_slope,
-	/* Last iteration slope coeffient. */
+	/* Last iteration slope coefficient. */
 			CDP_null_count,
 	/* Number of sequential Unknown (DNAN) values + 1 preceding
 	 * the current prediction.

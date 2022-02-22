@@ -44,7 +44,7 @@
 struct spf_resolved_element {
 	GPtrArray *elts;
 	gchar *cur_domain;
-	gboolean redirected; /* Ingnore level, it's redirected */
+	gboolean redirected; /* Ignore level, it's redirected */
 };
 
 struct spf_record {
@@ -796,7 +796,7 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 	gboolean ret = FALSE;
 
 	/*
-	 * We prefer spf version 1 as other records are mostly likely garbadge
+	 * We prefer spf version 1 as other records are mostly likely garbage
 	 * or incorrect records (e.g. spf2 records)
 	 */
 	LL_FOREACH (reply->entries, elt) {
@@ -1134,7 +1134,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 		parse_ipv4_mask,
 		parse_second_slash,
 		parse_ipv6_mask,
-		skip_garbadge
+		skip_garbage
 	} state = 0;
 	const gchar *p = addr->spf_string, *host, *c;
 	gchar *hostbuf;
@@ -1183,7 +1183,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 					state = parse_ipv4_mask;
 				}
 				else {
-					state = skip_garbadge;
+					state = skip_garbage;
 				}
 				cur_mask = 0;
 				break;
@@ -1216,7 +1216,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 				}
 				p++;
 				break;
-			case skip_garbadge:
+			case skip_garbage:
 				p++;
 				break;
 		}

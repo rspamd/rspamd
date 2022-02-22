@@ -558,7 +558,7 @@ local function process_action(task, pdf, obj)
         local extracted_js = maybe_extract_object_stream(js, pdf, task)
 
         if not extracted_js then
-          lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+          lua_util.debugm(N, task, 'invalid type for JavaScript from %s:%s: %s',
               obj.major, obj.minor, js)
         else
           js = extracted_js
@@ -571,7 +571,7 @@ local function process_action(task, pdf, obj)
         lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
             obj.major, obj.minor, obj.js.data)
       else
-        lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+        lua_util.debugm(N, task, 'invalid type for JavaScript from %s:%s: %s',
             obj.major, obj.minor, js)
       end
     elseif obj.dict.F then
@@ -654,7 +654,7 @@ process_dict = function(task, pdf, obj, dict)
 
       if obj.dict.S and obj.dict.JS then
         obj.type = 'Javascript'
-        lua_util.debugm(N, task, 'implicit type for Javascript object %s:%s',
+        lua_util.debugm(N, task, 'implicit type for JavaScript object %s:%s',
             obj.major, obj.minor)
       else
         lua_util.debugm(N, task, 'no type for %s:%s',
@@ -757,7 +757,7 @@ process_dict = function(task, pdf, obj, dict)
           local extracted_js = maybe_extract_object_stream(js, pdf, task)
 
           if not extracted_js then
-            lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+            lua_util.debugm(N, task, 'invalid type for JavaScript from %s:%s: %s',
                 obj.major, obj.minor, js)
           else
             js = extracted_js
@@ -770,7 +770,7 @@ process_dict = function(task, pdf, obj, dict)
           lua_util.debugm(N, task, 'extracted javascript from %s:%s: %s',
               obj.major, obj.minor, obj.js.data)
         else
-          lua_util.debugm(N, task, 'invalid type for javascript from %s:%s: %s',
+          lua_util.debugm(N, task, 'invalid type for JavaScript from %s:%s: %s',
               obj.major, obj.minor, js)
         end
       end
@@ -1248,7 +1248,7 @@ local function process_pdf(input, mpart, task)
                   pdf_object.openaction.object.major, pdf_object.openaction.object.minor)
               table.insert(pdf_output.fuzzy_hashes, pdf_object.openaction.bin_hash)
             else
-              lua_util.debugm(N, task, "pdf: skip fuzzy hash from Javascript: %s, too short: %s",
+              lua_util.debugm(N, task, "pdf: skip fuzzy hash from JavaScript: %s, too short: %s",
                   pdf_object.openaction.hash, #pdf_object.openaction.data)
             end
           end
@@ -1256,13 +1256,13 @@ local function process_pdf(input, mpart, task)
           -- All hashes
           for h,sc in pairs(pdf_object.scripts) do
             if config.min_js_fuzzy and #sc.data >= config.min_js_fuzzy then
-              lua_util.debugm(N, task, "pdf: add fuzzy hash from Javascript: %s; size = %s; object: %s:%s",
+              lua_util.debugm(N, task, "pdf: add fuzzy hash from JavaScript: %s; size = %s; object: %s:%s",
                   sc.hash,
                   #sc.data,
                   sc.object.major, sc.object.minor)
               table.insert(pdf_output.fuzzy_hashes, h)
             else
-              lua_util.debugm(N, task, "pdf: skip fuzzy hash from Javascript: %s, too short: %s",
+              lua_util.debugm(N, task, "pdf: skip fuzzy hash from JavaScript: %s, too short: %s",
                   sc.hash, #sc.data)
             end
           end

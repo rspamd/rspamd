@@ -174,7 +174,7 @@ This guide is forked from https://github.com/Olivine-Labs/lua-style-guide
     end
     ```
 
-  - Never name a parameter `arg`, this will take precendence over the `arg` object that is given to every function scope in older versions of Lua.
+  - Never name a parameter `arg`, this will take precedence over the `arg` object that is given to every function scope in older versions of Lua.
 
     ```lua
     -- bad
