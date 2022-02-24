@@ -8,6 +8,7 @@
     },
     "eslintIgnore": [
         "*.min.js",
+        "index.html",
         "prism.js"
     ]
 }
