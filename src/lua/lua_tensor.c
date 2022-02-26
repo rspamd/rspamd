@@ -637,7 +637,7 @@ static inline rspamd_tensor_num_t
 mean_vec (rspamd_tensor_num_t *x, int n)
 {
 	rspamd_tensor_num_t s = 0;
-	rspamd_tensor_num_t c = 0;
+	volatile rspamd_tensor_num_t c = 0;
 
 	/* https://en.wikipedia.org/wiki/Kahan_summation_algorithm */
 	for (int i = 0; i < n; i ++) {
