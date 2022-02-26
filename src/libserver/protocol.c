@@ -1814,6 +1814,21 @@ end:
 		__atomic_add_fetch (&task->worker->srv->stat->messages_scanned,
 				1, __ATOMIC_RELEASE);
 #endif
+
+		/* Set average processing time */
+		guint32 slot;
+		float processing_time = task->time_real_finish - task->task_timestamp;
+
+#ifndef HAVE_ATOMIC_BUILTINS
+		slot = task->worker->srv->stat->avg_time.cur_slot++;
+#else
+		slot = __atomic_add_fetch (&task->worker->srv->stat->avg_time.cur_slot,
+				1, __ATOMIC_RELEASE);
+#endif
+		slot = slot % MAX_AVG_TIME_SLOTS;
+		/* TODO: this should be atomic but it is not supported in C */
+		task->worker->srv->stat->avg_time.avg_time[slot] = processing_time;
+
 	}
 }
 
