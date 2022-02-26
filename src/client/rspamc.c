@@ -1124,21 +1124,23 @@ rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
 	ucl_object_iter_t iter = NULL;
 	gint64 spam, ham;
 
-	if (actions && ucl_object_type (actions) == UCL_OBJECT) {
-		while ((cur = ucl_object_iterate (actions, &iter, true)) != NULL) {
-			gint64 cnt = ucl_object_toint (cur);
-			rspamd_printf_gstring (out, "Messages with action %s: %L"
-				", %.2f%%\n", ucl_object_key (cur), cnt,
-				((gdouble)cnt / (gdouble)scanned) * 100.);
+	if (scanned > 0) {
+		if (actions && ucl_object_type(actions) == UCL_OBJECT) {
+			while ((cur = ucl_object_iterate (actions, &iter, true)) != NULL) {
+				gint64 cnt = ucl_object_toint(cur);
+				rspamd_printf_gstring(out, "Messages with action %s: %L"
+										   ", %.2f%%\n", ucl_object_key(cur), cnt,
+						((gdouble) cnt / (gdouble) scanned) * 100.);
+			}
 		}
-	}
 
-	spam = ucl_object_toint (ucl_object_lookup (obj, "spam_count"));
-	ham = ucl_object_toint (ucl_object_lookup (obj, "ham_count"));
-	rspamd_printf_gstring (out, "Messages treated as spam: %L, %.2f%%\n", spam,
-		((gdouble)spam / (gdouble)scanned) * 100.);
-	rspamd_printf_gstring (out, "Messages treated as ham: %L, %.2f%%\n", ham,
-		((gdouble)ham / (gdouble)scanned) * 100.);
+		spam = ucl_object_toint(ucl_object_lookup(obj, "spam_count"));
+		ham = ucl_object_toint(ucl_object_lookup(obj, "ham_count"));
+		rspamd_printf_gstring(out, "Messages treated as spam: %L, %.2f%%\n", spam,
+				((gdouble) spam / (gdouble) scanned) * 100.);
+		rspamd_printf_gstring(out, "Messages treated as ham: %L, %.2f%%\n", ham,
+				((gdouble) ham / (gdouble) scanned) * 100.);
+	}
 }
 
 static void
@@ -1177,8 +1179,7 @@ static void
 rspamc_stat_output (FILE *out, ucl_object_t *obj)
 {
 	GString *out_str;
-	ucl_object_iter_t iter = NULL;
-	const ucl_object_t *st, *cur;
+	const ucl_object_t *st;
 	gint64 scanned;
 
 	out_str = g_string_sized_new (BUFSIZ);
@@ -1187,9 +1188,7 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 	rspamd_printf_gstring (out_str, "Messages scanned: %L\n",
 		scanned);
 
-	if (scanned > 0) {
-		rspamc_stat_actions (obj, out_str, scanned);
-	}
+	rspamc_stat_actions (obj, out_str, scanned);
 
 	rspamd_printf_gstring (out_str, "Messages learned: %L\n",
 		ucl_object_toint (ucl_object_lookup (obj, "learned")));
@@ -1197,6 +1196,32 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 		ucl_object_toint (ucl_object_lookup (obj, "connections")));
 	rspamd_printf_gstring (out_str, "Control connections count: %L\n",
 		ucl_object_toint (ucl_object_lookup (obj, "control_connections")));
+
+	const ucl_object_t *avg_time_obj = ucl_object_lookup (obj, "scan_times");
+
+	if (avg_time_obj && ucl_object_type (avg_time_obj) == UCL_ARRAY) {
+		ucl_object_iter_t iter = NULL;
+		const ucl_object_t *cur;
+		float sum = 0.0f;
+		volatile float c = 0.0f;
+		unsigned cnt = 0;
+
+		while ((cur = ucl_object_iterate (avg_time_obj, &iter, true)) != NULL) {
+			if (ucl_object_type(cur) == UCL_FLOAT || ucl_object_type(cur) == UCL_INT) {
+				float x = ucl_object_todouble(cur);
+				float y = x - c;
+				float t = sum + y;
+				c = (t - sum) - y;
+				sum = t;
+				cnt ++;
+			}
+		}
+
+		if (cnt > 0) {
+			rspamd_printf_gstring(out_str, "Average scan time: %.3f sec\n", sum / cnt);
+		}
+	}
+
 	/* Pools */
 	rspamd_printf_gstring (out_str, "Pools allocated: %L\n",
 		ucl_object_toint (ucl_object_lookup (obj, "pools_allocated")));
@@ -1233,8 +1258,10 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 
 	st = ucl_object_lookup (obj, "fuzzy_checked");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		ucl_object_iter_t iter = NULL;
+		const ucl_object_t *cur;
+
 		rspamd_printf_gstring (out_str, "Fuzzy hashes checked: ");
-		iter = NULL;
 
 		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
@@ -1245,8 +1272,10 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 
 	st = ucl_object_lookup (obj, "fuzzy_found");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		ucl_object_iter_t iter = NULL;
+		const ucl_object_t *cur;
+
 		rspamd_printf_gstring (out_str, "Fuzzy hashes found: ");
-		iter = NULL;
 
 		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
@@ -1257,7 +1286,8 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 
 	st = ucl_object_lookup (obj, "statfiles");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
-		iter = NULL;
+		ucl_object_iter_t iter = NULL;
+		const ucl_object_t *cur;
 
 		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamc_stat_statfile (cur, out_str);
