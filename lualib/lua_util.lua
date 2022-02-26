@@ -113,7 +113,7 @@ end
 -- @return {boolean} true if text ends with the specified suffix, false otherwise
 --]]
 exports.str_endswith = function(s, suffix)
-  return s:sub(-suffix:len()) == suffix
+  return s:find(suffix, -suffix:len(), true) ~= nil
 end
 
 --[[[
