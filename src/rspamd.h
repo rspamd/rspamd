@@ -279,15 +279,21 @@ struct rspamd_dns_resolver;
 struct rspamd_task;
 struct rspamd_cryptobox_library_ctx;
 
+#define MAX_AVG_TIME_SLOTS 31
+struct RSPAMD_ALIGNED(64) rspamd_avg_time {
+	guint32 cur_slot;
+	float avg_time[MAX_AVG_TIME_SLOTS];
+};
 /**
  * Server statistics
  */
-struct rspamd_stat {
+struct RSPAMD_ALIGNED(64) rspamd_stat {
 	guint messages_scanned;                             /**< total number of messages scanned				*/
 	guint actions_stat[METRIC_ACTION_MAX];              /**< statistic for each action						*/
 	guint connections_count;                            /**< total connections count						*/
 	guint control_connections_count;                    /**< connections count to control interface			*/
 	guint messages_learned;                             /**< messages learned								*/
+	struct rspamd_avg_time avg_time;                    /**< average time stats								*/
 };
 
 /**

@@ -720,7 +720,7 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_stat *st;
+	struct rspamd_stat st;
 	int64_t uptime;
 	gulong data[5];
 	ucl_object_t *obj;
@@ -730,13 +730,13 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
-	st = session->ctx->srv->stat;
-	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
-	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] +
-		st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
-	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
-	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
-	data[4] = st->actions_stat[METRIC_ACTION_SOFT_REJECT];
+	memcpy (&st, session->ctx->srv->stat, sizeof (st));
+	data[0] = st.actions_stat[METRIC_ACTION_NOACTION];
+	data[1] = st.actions_stat[METRIC_ACTION_ADD_HEADER] +
+		st.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+	data[2] = st.actions_stat[METRIC_ACTION_GREYLIST];
+	data[3] = st.actions_stat[METRIC_ACTION_REJECT];
+	data[4] = st.actions_stat[METRIC_ACTION_SOFT_REJECT];
 
 	/* Get uptime */
 	uptime = ev_time () - session->ctx->start_time;
@@ -758,9 +758,9 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
 			data[4]),			   "soft_reject",   0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
-			st->messages_scanned), "scanned",  0, false);
+			st.messages_scanned), "scanned",  0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
-			st->messages_learned), "learned",  0, false);
+			st.messages_learned), "learned",  0, false);
 	ucl_object_insert_key (obj, ucl_object_frombool (!session->is_enable),
 			"read_only", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (session->ctx->cfg->checksum),

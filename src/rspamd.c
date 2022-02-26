@@ -1348,8 +1348,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"main", 0);
-	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
-			sizeof (struct rspamd_stat));
+	rspamd_main->stat = rspamd_mempool_alloc0_shared_ (rspamd_main->server_pool,
+			sizeof (struct rspamd_stat),
+					RSPAMD_ALIGNOF(struct rspamd_stat),
+			G_STRLOC);
 	rspamd_main->cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
 			rspamd_spair_equal, g_free, rspamd_spair_close);
