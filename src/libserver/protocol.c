@@ -1822,7 +1822,7 @@ end:
 #ifndef HAVE_ATOMIC_BUILTINS
 		slot = task->worker->srv->stat->avg_time.cur_slot++;
 #else
-		slot = __atomic_add_fetch (&task->worker->srv->stat->avg_time.cur_slot,
+		slot = __atomic_fetch_add (&task->worker->srv->stat->avg_time.cur_slot,
 				1, __ATOMIC_RELEASE);
 #endif
 		slot = slot % MAX_AVG_TIME_SLOTS;

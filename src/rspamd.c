@@ -1370,6 +1370,11 @@ main (gint argc, gchar **argv, gchar **env)
 			sizeof (struct rspamd_stat),
 					RSPAMD_ALIGNOF(struct rspamd_stat),
 			G_STRLOC);
+	/* Set all time slots to nan */
+	for (i = 0; i < MAX_AVG_TIME_SLOTS; i ++) {
+		rspamd_main->stat->avg_time.avg_time[i] = NAN;
+	}
+
 	rspamd_main->cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
 			rspamd_spair_equal, g_free, rspamd_spair_close);

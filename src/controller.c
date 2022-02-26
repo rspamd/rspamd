@@ -2703,6 +2703,12 @@ rspamd_controller_handle_stat_common (
 	}
 	ucl_object_insert_key (top, sub, "actions", 0, false);
 
+	sub = ucl_object_typed_new (UCL_ARRAY);
+	for (i = 0; i < MAX_AVG_TIME_SLOTS; i++) {
+		ucl_array_append (sub, ucl_object_fromdouble (stat->avg_time.avg_time[i]));
+	}
+	ucl_object_insert_key (top, sub, "scan_times", 0, false);
+
 	ucl_object_insert_key (top, ucl_object_fromint (
 			spam), "spam_count", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
