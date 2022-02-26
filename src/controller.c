@@ -2681,29 +2681,27 @@ rspamd_controller_handle_stat_common (
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_learned), "learned", 0, false);
 
-	if (stat->messages_scanned > 0) {
-		sub = ucl_object_typed_new (UCL_OBJECT);
-		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-			ucl_object_insert_key (sub,
+	sub = ucl_object_typed_new (UCL_OBJECT);
+	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+		ucl_object_insert_key (sub,
 				ucl_object_fromint (stat->actions_stat[i]),
 				rspamd_action_to_str (i), 0, false);
-			if (i < METRIC_ACTION_GREYLIST) {
-				spam += stat->actions_stat[i];
-			}
-			else {
-				ham += stat->actions_stat[i];
-			}
-			if (do_reset) {
-#ifndef HAVE_ATOMIC_BUILTINS
-				session->ctx->worker->srv->stat->actions_stat[i] = 0;
-#else
-				__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
-						0, __ATOMIC_RELEASE);
-#endif
-			}
+		if (i < METRIC_ACTION_GREYLIST) {
+			spam += stat->actions_stat[i];
 		}
-		ucl_object_insert_key (top, sub, "actions", 0, false);
+		else {
+			ham += stat->actions_stat[i];
+		}
+		if (do_reset) {
+#ifndef HAVE_ATOMIC_BUILTINS
+			session->ctx->worker->srv->stat->actions_stat[i] = 0;
+#else
+			__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
+					0, __ATOMIC_RELEASE);
+#endif
+		}
 	}
+	ucl_object_insert_key (top, sub, "actions", 0, false);
 
 	ucl_object_insert_key (top, ucl_object_fromint (
 			spam), "spam_count", 0, false);
