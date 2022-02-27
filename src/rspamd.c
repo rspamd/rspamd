@@ -1127,7 +1127,7 @@ rspamd_stat_update_handler (struct ev_loop *loop, ev_timer *w, int revents)
 				rate,
 				(new_spam - old_spam) / w->repeat,
 				(new_ham - old_ham) / w->repeat,
-				cnt > 0 ? sum : 0);
+				cnt > 0 ? sum / cnt : 0);
 		setproctitle (proctitle);
 	}
 
