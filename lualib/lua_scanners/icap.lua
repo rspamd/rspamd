@@ -172,6 +172,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
     local http_headers = {}
     local req_headers = {}
     local tcp_options = {}
+    local threat_table = {}
 
     -- Build extended User Agent
     if rule.user_agent == "extended" then
@@ -345,9 +346,21 @@ local function icap_check(task, content, digest, rule, maybe_part)
         return icap_headers
       end
 
-      local function icap_parse_result(headers)
+      local function threat_table_add(icap_threat, maybe_split)
 
-        local threat_string = {}
+        if maybe_split and string.find(icap_threat, ',') then
+          local threats = lua_util.str_split(string.gsub(icap_threat, "%s", ""), ',') or {}
+
+          for _,v in ipairs(threats) do
+            table.insert(threat_table, v)
+          end
+        else
+          table.insert(threat_table, icap_threat)
+        end
+        return true
+      end
+
+      local function icap_parse_result(headers)
 
         --[[
         @ToDo: handle type in response
@@ -408,25 +421,13 @@ local function icap_check(task, content, digest, rule, maybe_part)
           http: HTTP/1.0 307 Temporary Redirect
         ]] --
 
-        local function string_to_threat_table(header_string)
-          if string.find(header_string, ', ') then
-            local vnames = lua_util.str_split(string.gsub(header_string, "%s", ""), ',') or {}
-
-            for _,v in ipairs(vnames) do
-              table.insert(threat_string, v)
-            end
-          else
-            table.insert(threat_string, header_string)
-          end
-        end
-
         -- Generic ICAP Headers
         if headers['x-infection-found'] then
           local _,_,icap_type,_,icap_threat =
             headers['x-infection-found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
 
-          if icap_type == 2 then
-            -- error returned
+          -- Type=2 is typical for scan error returns
+          if icap_type and icap_type == '2' then
             lua_util.debugm(rule.name, task,
                 '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
             common.yield_result(task, rule, icap_threat, 0,
@@ -435,20 +436,22 @@ local function icap_check(task, content, digest, rule, maybe_part)
           elseif icap_threat ~= nil then
             lua_util.debugm(rule.name, task,
                 '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
-            table.insert(threat_string, icap_threat)
-          elseif not icap_threat and headers['x-virus-name']then
-            string_to_threat_table(headers['x-virus-name'])
+            threat_table_add(icap_threat, false)
+          -- stupid workaround for unuseable x-infection-found header
+          -- but also x-virus-name set (McAfee Web Gateway 9)
+          elseif not icap_threat and headers['x-virus-name'] then
+            threat_table_add(headers['x-virus-name'], true)
           else
-            table.insert(threat_string, headers['x-infection-found'])
+            threat_table_add(headers['x-infection-found'], true)
           end
         elseif headers['x-virus-name'] and headers['x-virus-name'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
               '%s: icap X-Virus-Name: %s', rule.log_prefix, headers['x-virus-name'])
-          string_to_threat_table(headers['x-virus-name'])
+          threat_table_add(headers['x-virus-name'], true)
         elseif headers['x-virus-id'] and headers['x-virus-id'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
               '%s: icap X-Virus-ID: %s', rule.log_prefix, headers['x-virus-id'])
-          string_to_threat_table(headers['x-virus-id'])
+          threat_table_add(headers['x-virus-id'], true)
         -- FSecure X-Headers
         elseif headers['x-fsecure-scan-result'] and headers['x-fsecure-scan-result'] ~= "clean" then
 
@@ -466,35 +469,25 @@ local function icap_check(task, content, digest, rule, maybe_part)
               '%s: icap X-FSecure-Infection-Name (X-FSecure-Infected-Filename): %s (%s)',
               rule.log_prefix, infection_name, infected_filename)
 
-          if string.find(infection_name, ', ') then
-            local vnames = lua_util.str_split(infection_name, ',') or {}
-
-            for _,v in ipairs(vnames) do
-              table.insert(threat_string, v)
-            end
-          else
-            table.insert(threat_string, infection_name)
-          end
+          threat_table_add(infection_name, true)
         -- McAfee Web Gateway manual extra headers
         elseif headers['x-mwg-block-reason'] and headers['x-mwg-block-reason'] ~= "" then
-          table.insert(threat_string, headers['x-mwg-block-reason'])
+          threat_table_add(headers['x-mwg-block-reason'], false)
         -- Sophos SAVDI special http headers
         elseif headers['x-blocked'] and headers['x-blocked'] ~= "" then
-          table.insert(threat_string, headers['x-blocked'])
+          threat_table_add(headers['x-blocked'], false)
         elseif headers['x-block-reason'] and headers['x-block-reason'] ~= "" then
-          table.insert(threat_string, headers['x-block-reason'])
+          threat_table_add(headers['x-block-reason'], false)
         -- last try HTTP [4]xx return
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
-          local message = string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
-          table.insert(threat_string, message)
+          threat_table_add(string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
         elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d') then
-          local message = string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', ''))
-          table.insert(threat_string, message)
+          threat_table_add(string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
         end
 
-        if #threat_string > 0 then
-          common.yield_result(task, rule, threat_string, rule.default_score, nil, maybe_part)
-          common.save_cache(task, digest, rule, threat_string, rule.default_score, maybe_part)
+        if #threat_table > 0 then
+          common.yield_result(task, rule, threat_table, rule.default_score, nil, maybe_part)
+          common.save_cache(task, digest, rule, threat_table, rule.default_score, maybe_part)
           return true
         else
           return false
