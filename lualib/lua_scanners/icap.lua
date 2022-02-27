@@ -236,7 +236,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed - error: %s', rule.log_prefix, err_m or '')
-          common.yield_result(task, rule, 'failed - error: ' .. err_m or '',
+          common.yield_result(task, rule, string.format('failed - error: %s', err_m),
               0.0, 'fail', maybe_part)
         end
       end
@@ -480,9 +480,13 @@ local function icap_check(task, content, digest, rule, maybe_part)
           threat_table_add(headers['x-block-reason'], false)
         -- last try HTTP [4]xx return
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
-          threat_table_add(string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
-        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d') then
-          threat_table_add(string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
+          threat_table_add(
+            string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
+        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d') 
+          then
+
+          threat_table_add(
+            string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
         end
 
         if #threat_table > 0 then
@@ -514,8 +518,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           else
             rspamd_logger.errx(task, '%s: unhandled response |%s|',
               rule.log_prefix, string.gsub(result, "\r\n", ", "))
-            common.yield_result(task, rule,
-                'unhandled icap response: ' .. icap_http_headers.icap or "-",
+            common.yield_result(task, rule, string.format('unhandled icap response: %s', icap_http_headers.icap),
                 0.0, 'fail', maybe_part)
           end
         end
@@ -569,8 +572,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           else
             rspamd_logger.errx(task, '%s: unhandled response |%s|',
               rule.log_prefix, string.gsub(result, "\r\n", ", "))
-            common.yield_result(task, rule,
-                'unhandled icap response: ' .. icap_headers.icap or "-",
+            common.yield_result(task, rule, string.format('unhandled icap response: %s', icap_headers.icap),
                 0.0, 'fail', maybe_part)
           end
         end
