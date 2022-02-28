@@ -28,3 +28,34 @@ context("Lua util - callback_from_string", function()
     end)
   end
 end)
+
+context("Lua util - str_endswith", function()
+  local ending = {
+    {'a', 'a'},
+    {'ab', 'b'},
+    {'ab', 'ab'},
+    {'abc', 'bc'},
+    {'any', ''},
+  }
+  local not_ending = {
+    {'a', 'b'},
+    {'', 'a'},
+    {'ab', 'a'},
+    {'ab', 'ba'},
+    {'ab', 'lab'},
+    {'abc', 'ab'},
+    {'abcd', 'bc'},
+    {'a', 'A'},
+    {'aB', 'b'},
+  }
+  for _, c in ipairs(ending) do
+    test(string.format('True case: str_endswith("%s", "%s")', c[1], c[2]), function()
+      assert_true(util.str_endswith(c[1], c[2]))
+    end)
+  end
+  for _, c in ipairs(not_ending) do
+    test(string.format('False case: str_endswith("%s", "%s")', c[1], c[2]), function()
+      assert_false(util.str_endswith(c[1], c[2]))
+    end)
+  end
+end)
