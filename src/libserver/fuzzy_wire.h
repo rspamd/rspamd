@@ -27,9 +27,6 @@ extern "C" {
  * The epoch of the fuzzy client
  */
 enum rspamd_fuzzy_epoch {
-	RSPAMD_FUZZY_EPOCH6 = 0, /**< pre 0.6.x */
-	RSPAMD_FUZZY_EPOCH8, /**< 0.8 till 0.9 */
-	RSPAMD_FUZZY_EPOCH9, /**< 0.9 + */
 	RSPAMD_FUZZY_EPOCH10, /**< 1.0+ encryption */
 	RSPAMD_FUZZY_EPOCH11, /**< 1.7+ extended reply */
 	RSPAMD_FUZZY_EPOCH_MAX

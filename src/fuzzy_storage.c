@@ -1228,20 +1228,6 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 			}
 		}
 		break;
-	case 2:
-		/*
-		 * rspamd 0.8 has slightly different tokenizer then it might be not
-		 * 100% compatible
-		 */
-		if (cmd->shingles_count > 0) {
-			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH8;
-			}
-		}
-		else {
-			ret = RSPAMD_FUZZY_EPOCH8;
-		}
-		break;
 	default:
 		break;
 	}
@@ -1890,7 +1876,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	/* Checked by epoch */
 	elt = ucl_object_typed_new (UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append (elt,
 				ucl_object_fromint (ctx->stat.fuzzy_hashes_checked[i]));
 	}
@@ -1900,7 +1886,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	/* Shingles by epoch */
 	elt = ucl_object_typed_new (UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append (elt,
 				ucl_object_fromint (ctx->stat.fuzzy_shingles_checked[i]));
 	}
@@ -1910,7 +1896,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	/* Matched by epoch */
 	elt = ucl_object_typed_new (UCL_ARRAY);
 
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+	for (i = RSPAMD_FUZZY_EPOCH10; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
 		ucl_array_append (elt,
 				ucl_object_fromint (ctx->stat.fuzzy_hashes_found[i]));
 	}
