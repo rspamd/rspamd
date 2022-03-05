@@ -634,21 +634,10 @@ lua_tensor_eigen (lua_State *L)
 }
 
 static inline rspamd_tensor_num_t
-mean_vec (rspamd_tensor_num_t *x, int n)
+mean_vec (rspamd_tensor_num_t *x, gsize n)
 {
-	rspamd_tensor_num_t s = 0;
-	volatile rspamd_tensor_num_t c = 0;
-
-	/* https://en.wikipedia.org/wiki/Kahan_summation_algorithm */
-	for (int i = 0; i < n; i ++) {
-		rspamd_tensor_num_t v = x[i];
-		rspamd_tensor_num_t y = v - c;
-		rspamd_tensor_num_t t = s + y;
-		c = (t - s) - y;
-		s = t;
-	}
-
-	return s / (rspamd_tensor_num_t)n;
+	float sum = rspamd_sum_floats (x, &n);
+	return sum / (rspamd_tensor_num_t)n;
 }
 
 static gint

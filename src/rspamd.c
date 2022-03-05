@@ -1107,20 +1107,8 @@ rspamd_stat_update_handler (struct ev_loop *loop, ev_timer *w, int revents)
 				cur_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
 		gdouble new_ham = cur_stat.actions_stat[METRIC_ACTION_NOACTION];
 
-		/* Kahan sum */
-		float sum = 0.0f;
-		volatile float c = 0.0f; /* We don't want any optimisations around c */
-		int cnt = 0;
-
-		for (int i = 0; i < MAX_AVG_TIME_SLOTS; i ++) {
-			if (!isnan(cur_stat.avg_time.avg_time[i])) {
-				cnt ++;
-				float y = cur_stat.avg_time.avg_time[i] - c;
-				float t = sum + y;
-				c = (t - sum) - y;
-				sum = t;
-			}
-		}
+		gsize cnt = MAX_AVG_TIME_SLOTS;
+		float sum = rspamd_sum_floats (cur_stat.avg_time.avg_time, &cnt);
 
 		rspamd_snprintf (proctitle, sizeof (proctitle),
 				"main process; %.1f msg/sec, %.1f msg/sec spam, %.1f msg/sec ham; %.2fs avg processing time",
