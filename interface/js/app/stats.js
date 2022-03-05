@@ -113,6 +113,10 @@ define(["jquery", "d3pie"],
                 var version = "???";
                 var uptime = "???";
                 var short_id = "???";
+                let scan_times = {
+                    data: "???",
+                    title: ""
+                };
                 if (val.status) {
                     row_class = "success";
                     glyph_status = "fas fa-check";
@@ -124,8 +128,26 @@ define(["jquery", "d3pie"],
                     }
                     if (key === "All SERVERS") {
                         short_id = "";
-                    } else if ("config_id" in val.data) {
-                        short_id = val.data.config_id.substring(0, 8);
+                        scan_times.data = "";
+                    } else {
+                        if ("config_id" in val.data) {
+                            short_id = val.data.config_id.substring(0, 8);
+                        }
+                        if ("scan_times" in val.data) {
+                            const [min, max] = d3.extent(val.data.scan_times);
+                            if (max) {
+                                const f = d3.format(".3f");
+                                scan_times = {
+                                    data: "<small>" + f(min) + "/</small>" + f(d3.mean(val.data.scan_times)) + "<small>/" + f(max) + "</small>",
+                                    title: ' title="min/avg/max"'
+                                };
+                            } else {
+                                scan_times = {
+                                    data: "-",
+                                    title: ' title="Have not scanned anything yet"'
+                                };
+                            }
+                        }
                     }
                 }
 
@@ -134,6 +156,7 @@ define(["jquery", "d3pie"],
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
                 '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                '<td class="text-center"' + scan_times.title + ">" + scan_times.data + "</td>" +
                 '<td class="text-right' +
                   ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
                       ? ' warning" title="Has been restarted within the last hour"'
