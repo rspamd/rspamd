@@ -2563,6 +2563,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 struct rspamd_stat_cbdata {
 	struct rspamd_http_connection_entry *conn_ent;
+	struct rspamd_controller_worker_ctx *ctx;
 	ucl_object_t *top;
 	ucl_object_t *stat;
 	struct rspamd_task *task;
@@ -2655,6 +2656,7 @@ rspamd_controller_handle_stat_common (
 	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
 	cbdata->conn_ent = conn_ent;
 	cbdata->task = task;
+	cbdata->ctx = ctx;
 	top = ucl_object_typed_new (UCL_OBJECT);
 	cbdata->top = top;
 
@@ -2718,6 +2720,7 @@ rspamd_controller_handle_stat_common (
 	ucl_object_insert_key (top,
 		ucl_object_fromint (stat->control_connections_count),
 		"control_connections", 0, false);
+
 
 	ucl_object_insert_key (top,
 		ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0,
@@ -2833,6 +2836,13 @@ rspamd_controller_metrics_fin_task (void *ud) {
 	rspamd_printf_fstring (&output, "# TYPE rspamd_config gauge\n");
 	rspamd_printf_fstring (&output, "rspamd_config{id=\"%s\"} 1\n",
 		ucl_object_tostring (ucl_object_lookup (top, "config_id")));
+
+	gsize cnt = MAX_AVG_TIME_SLOTS;
+	float sum = rspamd_sum_floats (cbdata->ctx->worker->srv->stat->avg_time.avg_time, &cnt);
+	rspamd_printf_fstring (&output, "# HELP rspamd_scan_time_average Average messages scan time.\n");
+	rspamd_printf_fstring (&output, "# TYPE rspamd_scan_time_average gauge\n");
+	rspamd_printf_fstring (&output, "rspamd_scan_time_average %f\n",
+			cnt > 0 ? (double)sum / cnt : 0.0);
 
 	rspamd_controller_metrics_add_integer(&output, top,
 			"process_start_time_seconds",
@@ -3085,6 +3095,7 @@ rspamd_controller_handle_metrics_common (
 	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
 	cbdata->conn_ent = conn_ent;
 	cbdata->task = task;
+	cbdata->ctx = ctx;
 	top = ucl_object_typed_new (UCL_OBJECT);
 	cbdata->top = top;
 
