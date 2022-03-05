@@ -2799,7 +2799,7 @@ rspamd_controller_metrics_add_integer (rspamd_fstring_t **output,
 {
 	rspamd_printf_fstring (output, "# HELP %s %s\n", name, description);
 	rspamd_printf_fstring (output, "# TYPE %s %s\n", name, type);
-	rspamd_printf_fstring (output, "%s %L\n",
+	rspamd_printf_fstring (output, "%s %L\n", name,
 			ucl_object_toint (ucl_object_lookup (top, ucl_key)));
 }
 
