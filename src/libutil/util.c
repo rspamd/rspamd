@@ -2456,3 +2456,26 @@ rspamd_ptr_array_shuffle (GPtrArray *ar)
 		g_ptr_array_index (ar, i) = t;
 	}
 }
+
+float
+rspamd_sum_floats (float *ar, gsize *nelts)
+{
+	float sum = 0.0f;
+	volatile float c = 0.0f; /* We don't want any optimisations around c */
+	gsize cnt = 0;
+
+	for (gsize i = 0; i < *nelts; i ++) {
+		float elt = ar[i];
+
+		if (!isnan(elt)) {
+			cnt ++;
+			float y = elt - c;
+			float t = sum + y;
+			c = (t - sum) - y;
+			sum = t;
+		}
+	}
+
+	*nelts = cnt;
+	return sum;
+}

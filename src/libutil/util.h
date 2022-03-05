@@ -518,6 +518,14 @@ struct rspamd_controller_pbkdf {
 
 extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
+/**
+ * Sum array of floats using Kahan sum algorithm
+ * @param ar
+ * @param nelts
+ * @return
+ */
+float rspamd_sum_floats (float *ar, gsize *nelts);
+
 #ifdef  __cplusplus
 }
 #endif
