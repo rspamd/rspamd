@@ -302,30 +302,53 @@ end
 
 local function url_reputation_filter(task, rule)
   local requests = gen_url_queries(task, rule)
+  local url_keys = lua_util.keys(requests)
+  local requests_left = #url_keys
   local results = {}
-  local nchecked = 0
 
   local function indexed_tokens_cb(err, index, values)
-    nchecked = nchecked + 1
+    requests_left = requests_left - 1
 
     if values then
       results[index] = values
     end
 
-    if nchecked == #requests then
+    if requests_left == 0 then
       -- Check the url with maximum hits
       local mhits = 0
+
+      local result_request_match_tbl = {}
+      -- XXX: ugly O(N^2) loop to match requests and responses
+      for result_k,_ in pairs(results) do
+        for _, request_k in ipairs(url_keys) do
+          if result_k:find(request_k) then
+            result_request_match_tbl[result_k] = request_k
+            break
+          end
+        end
+      end
+
       for k,_ in pairs(results) do
-        if requests[k][2] > mhits then
-          mhits = requests[k][2]
+        local req = result_request_match_tbl[k]
+        if req then
+          if requests[req] > mhits then
+            mhits = requests[req][2]
+          else
+            rspamd_logger.warnx(task, "cannot find the requested response for a request: %s (%s requests noticed)",
+                k, url_keys)
+          end
         end
       end
 
       if mhits > 0 then
         local score = 0
         for k,v in pairs(results) do
-          score = score + generic_reputation_calc(v, rule,
-              requests[k][2] / mhits, task)
+          local req = result_request_match_tbl[k]
+          if req then
+            score = score + generic_reputation_calc(v, rule,
+                requests[req][2] / mhits, task)
+
+          end
         end
 
         if math.abs(score) > 1e-3 then
