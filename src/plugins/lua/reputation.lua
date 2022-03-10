@@ -157,25 +157,41 @@ end
 local function dkim_reputation_filter(task, rule)
   local requests = gen_dkim_queries(task, rule)
   local results = {}
-  local nchecked = 0
+  local dkim_tlds = lua_util.keys(requests)
+  local requests_left = #dkim_tlds
   local rep_accepted = 0.0
   local rep_rejected = 0.0
 
   lua_util.debugm(N, task, 'dkim reputation tokens: %s', requests)
 
   local function tokens_cb(err, token, values)
-    nchecked = nchecked + 1
+    requests_left = requests_left - 1
 
     if values then
       results[token] = values
     end
 
-    if nchecked == #requests then
+    if requests_left == 0 then
       for k,v in pairs(results) do
-        if requests[k] == 'a' then
-          rep_accepted = rep_accepted + generic_reputation_calc(v, rule, 1.0, task)
-        elseif requests[k] == 'r' then
-          rep_rejected = rep_rejected + generic_reputation_calc(v, rule, 1.0, task)
+        -- `k` in results is a prefixed and suffixed tld, so we need to look through
+        -- all requests to find any request with the matching tld
+        local sel_tld
+        for _,tld in ipairs(dkim_tlds) do
+          if k:find(tld) then
+            sel_tld = tld
+            break
+          end
+        end
+
+        if sel_tld and requests[sel_tld] then
+          if requests[sel_tld] == 'a' then
+            rep_accepted = rep_accepted + generic_reputation_calc(v, rule, 1.0, task)
+          elseif requests[sel_tld] == 'r' then
+            rep_rejected = rep_rejected + generic_reputation_calc(v, rule, 1.0, task)
+          end
+        else
+          rspamd_logger.warnx(task, "cannot find the requested tld for a request: %s (%s tlds noticed)",
+              k, dkim_tlds)
         end
       end
 
