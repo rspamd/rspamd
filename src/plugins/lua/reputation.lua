@@ -233,9 +233,10 @@ end
 local function dkim_reputation_postfilter(task, rule)
   local sym_accepted = task:get_symbol('R_DKIM_ALLOW')
   local accept_adjustment = task:get_mempool():get_variable("dkim_reputation_accept")
+  local cfg = rule.selector.config or E
 
-  if sym_accepted and accept_adjustment then
-    local final_adjustment = rule.config.max_accept_adjustment *
+  if sym_accepted and accept_adjustment and type(cfg.max_accept_adjustment) == 'number' then
+    local final_adjustment = cfg.max_accept_adjustment *
         rspamd_util.tanh(tonumber(accept_adjustment))
     task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
   end
@@ -243,8 +244,8 @@ local function dkim_reputation_postfilter(task, rule)
   local sym_rejected = task:get_symbol('R_DKIM_REJECT')
   local reject_adjustment = task:get_mempool():get_variable("dkim_reputation_reject")
 
-  if sym_rejected and reject_adjustment then
-    local final_adjustment = rule.config.max_reject_adjustment *
+  if sym_rejected and reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
+    local final_adjustment = cfg.max_reject_adjustment *
         rspamd_util.tanh(tonumber(reject_adjustment))
     task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
   end
@@ -638,8 +639,6 @@ local spf_selector = {
     max_score = nil,
     outbound = true,
     inbound = true,
-    max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
-    max_reject_adjustment = 3.0 -- How to adjust rejected DKIM score
   },
   dependencies = {"R_SPF_ALLOW"},
   filter = spf_reputation_filter, -- used to get scores
