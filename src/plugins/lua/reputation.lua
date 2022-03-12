@@ -196,11 +196,14 @@ local function dkim_reputation_filter(task, rule)
       end
 
       -- Set local reputation symbol
-      if rep_accepted > 0 or rep_rejected > 0 then
-        if rep_accepted > rep_rejected then
-          add_symbol_score(task, rule, -(rep_accepted - rep_rejected))
+      -- `rep_accepted` and `rep_rejected` could be negative
+      local rep_accepted_abs = math.abs(rep_accepted or 0)
+      local rep_rejected_abs = math.abs(rep_rejected or 0)
+      if rep_accepted_abs > 0 or rep_rejected_abs > 0 then
+        if rep_accepted_abs > rep_rejected_abs then
+          add_symbol_score(task, rule, -(rep_accepted_abs - rep_rejected_abs))
         else
-          add_symbol_score(task, rule, (rep_rejected - rep_accepted))
+          add_symbol_score(task, rule, (rep_rejected_abs - rep_accepted_abs))
         end
 
         -- Store results for future DKIM results adjustments
@@ -237,7 +240,7 @@ local function dkim_reputation_postfilter(task, rule)
 
   if sym_accepted and accept_adjustment and type(cfg.max_accept_adjustment) == 'number' then
     local final_adjustment = cfg.max_accept_adjustment *
-        rspamd_util.tanh(tonumber(accept_adjustment))
+        rspamd_util.tanh(tonumber(accept_adjustment) or 0)
     task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
   end
 
@@ -246,7 +249,7 @@ local function dkim_reputation_postfilter(task, rule)
 
   if sym_rejected and reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
     local final_adjustment = cfg.max_reject_adjustment *
-        rspamd_util.tanh(tonumber(reject_adjustment))
+        rspamd_util.tanh(tonumber(reject_adjustment) or 0)
     task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
   end
 end
