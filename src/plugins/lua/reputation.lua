@@ -234,20 +234,22 @@ local function dkim_reputation_idempotent(task, rule)
 end
 
 local function dkim_reputation_postfilter(task, rule)
-  local sym_accepted = task:get_symbol('R_DKIM_ALLOW')
+  local sym_accepted = (task:get_symbol('R_DKIM_ALLOW') or E)[1]
   local accept_adjustment = task:get_mempool():get_variable("dkim_reputation_accept")
   local cfg = rule.selector.config or E
 
-  if sym_accepted and accept_adjustment and type(cfg.max_accept_adjustment) == 'number' then
+  if sym_accepted and sym_accepted.score and
+      accept_adjustment and type(cfg.max_accept_adjustment) == 'number' then
     local final_adjustment = cfg.max_accept_adjustment *
         rspamd_util.tanh(tonumber(accept_adjustment) or 0)
     task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
   end
 
-  local sym_rejected = task:get_symbol('R_DKIM_REJECT')
+  local sym_rejected = (task:get_symbol('R_DKIM_REJECT') or E)[1]
   local reject_adjustment = task:get_mempool():get_variable("dkim_reputation_reject")
 
-  if sym_rejected and reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
+  if sym_rejected and sym_rejected.score and
+      reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
     local final_adjustment = cfg.max_reject_adjustment *
         rspamd_util.tanh(tonumber(reject_adjustment) or 0)
     task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
