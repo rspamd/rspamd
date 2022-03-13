@@ -529,6 +529,12 @@ exports.text_part_heuristic = function(part, log_obj, _)
         return 'html', 21
       end
 
+      if msubtype:lower() == 'csv' then
+        if validate_csv(part, content, log_obj) then
+          return 'csv', 40
+        end
+      end
+
       -- Extension stuff
       local function has_extension(file, ext)
         local ext_len = ext:len()
