@@ -29,7 +29,7 @@ local function check_violation(N, task, domain)
 
   if N == 'arc' then sym_check = 'ARC_REJECT' end
   if task:has_symbol(sym_check) then
-    local sym = task:get_symbol(sym_check)
+    local sym = task:get_symbol(sym_check)[1]
     logger.infox(task, 'skip signing for %s: violation %s found: %s',
         domain, sym_check, sym.options)
     return false
