@@ -520,7 +520,7 @@ LUA_FUNCTION_DEF (task, get_dns_req);
  * @method task:has_recipients([type])
  * Return true if there are SMTP or MIME recipients for a task.
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
- * @return {bool} `true` if there are recipients of the following type
+ * @return {bool,integer} `true` if there are recipients of the following type and a number of such a recipients excluding artificial ones
  */
 LUA_FUNCTION_DEF (task, has_recipients);
 
@@ -3512,7 +3512,6 @@ lua_push_emails_address_list (lua_State *L, GPtrArray *addrs, int flags)
 	for (i = 0; i < addrs->len; i ++) {
 		addr = g_ptr_array_index (addrs, i);
 
-
 		if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
 			if (flags & RSPAMD_ADDRESS_ORIGINAL) {
 				lua_push_email_address (L, addr);
@@ -3858,6 +3857,21 @@ lua_task_has_from (lua_State *L)
 	return 1;
 }
 
+static inline int
+rspamd_check_real_recipients_array_size (GPtrArray *ar)
+{
+	gint ret = 0, i;
+	struct rspamd_email_address *addr;
+
+	PTR_ARRAY_FOREACH(ar, i, addr) {
+		if (!(addr->flags & RSPAMD_ADDRESS_ORIGINAL)) {
+			ret ++;
+		}
+	}
+
+	return ret;
+}
+
 static gint
 lua_task_has_recipients (lua_State *L)
 {
@@ -3875,18 +3889,22 @@ lua_task_has_recipients (lua_State *L)
 		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
-			CHECK_EMAIL_ADDR_LIST (task->rcpt_envelope);
+			nrcpt = rspamd_check_real_recipients_array_size(task->rcpt_envelope);
+			ret = nrcpt > 0;
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, rcpt_mime));
+			nrcpt = rspamd_check_real_recipients_array_size(MESSAGE_FIELD_CHECK (task, rcpt_mime));
+			ret = nrcpt > 0;
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
-			CHECK_EMAIL_ADDR_LIST (task->rcpt_envelope);
+			nrcpt = rspamd_check_real_recipients_array_size(task->rcpt_envelope);
+			ret = nrcpt > 0;
 
 			if (!ret) {
-				CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, rcpt_mime));
+				nrcpt = rspamd_check_real_recipients_array_size(MESSAGE_FIELD_CHECK (task, rcpt_mime));
+				ret = nrcpt > 0;
 			}
 			break;
 		}
@@ -3896,13 +3914,9 @@ lua_task_has_recipients (lua_State *L)
 	}
 
 	lua_pushboolean (L, ret);
+	lua_pushinteger (L, nrcpt);
 
-	if (ret) {
-		lua_pushinteger (L, nrcpt);
-		return 2;
-	}
-
-	return 1;
+	return 2;
 }
 
 static gint
