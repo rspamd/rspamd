@@ -177,7 +177,7 @@ local function dkim_reputation_filter(task, rule)
         -- all requests to find any request with the matching tld
         local sel_tld
         for _,tld in ipairs(dkim_tlds) do
-          if k:find(tld) then
+          if k:find(tld, 1, true) then
             sel_tld = tld
             break
           end
