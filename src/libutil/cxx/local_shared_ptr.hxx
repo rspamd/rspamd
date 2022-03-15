@@ -128,7 +128,7 @@ public:
 	// custom deleter
 	template<class Y, class D, typename std::enable_if<
 			std::is_convertible<Y*, element_type*>::value, bool>::type = true>
-	explicit local_shared_ptr(Y* p, D &&d) : px(p), cnt(new detail::ptr_and_refcnt(p, std::forward<D>(d)))
+	explicit local_shared_ptr(Y* p, D &&d) : px(p), cnt(new detail::ptr_and_refcnt<Y, D>(p, std::forward<D>(d)))
 	{
 	}
 
