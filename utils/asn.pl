@@ -210,7 +210,7 @@ if ($v4) {
         my $country = $as_info->{$asn}{'country'} || $unknown_placeholder;
         my $rir     = $as_info->{$asn}{'rir'}     || $unknown_placeholder;
 
-        # "15169|8.8.8.0/24|US|arin|" for 8.8.8.8
+        # "8.8.8.0/24 15169|8.8.8.0/24|US|arin|" for 8.8.8.8
         printf $v4_fh "%s %s|%s|%s|%s|\n", $net, $asn, $net, $country, $rir;
     }
 
