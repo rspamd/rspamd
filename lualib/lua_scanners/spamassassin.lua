@@ -100,7 +100,7 @@ local function spamassassin_check(task, content, digest, rule)
       content,
     }
 
-    local function spamassassin_callback(err, data, conn)
+    local function spamassassin_callback(err, data)
 
       local function spamassassin_requery(error)
         -- set current upstream to fail because an error occurred
@@ -147,28 +147,28 @@ local function spamassassin_check(task, content, digest, rule)
         --lua_util.debugm(rule.N, task, '%s: returned result: %s', rule.log_prefix, data)
 
         --[[
-        patterns tested against Spamassassin 3.4.2
-
-        Spam: False ; 1.1 / 5.0
+        patterns tested against Spamassassin 3.4.6
 
         X-Spam-Status: No, score=1.1 required=5.0 tests=HTML_MESSAGE,MIME_HTML_ONLY,
           TVD_RCVD_SPACE_BRACKET,UNPARSEABLE_RELAY autolearn=no
-          autolearn_force=no version=3.4.2
+          autolearn_force=no version=3.4.6
         ]] --
         local header = string.gsub(tostring(data), "[\r\n]+[\t ]", " ")
         --lua_util.debugm(rule.N, task, '%s: returned header: %s', rule.log_prefix, header)
 
-        local symbols
-        local spam_score
+        local symbols = ""
+        local spam_score = 0
         for s in header:gmatch("[^\r\n]+") do
           if string.find(s, 'X%-Spam%-Status: %S+, score') then
-            local pattern_symbols = "X%-Spam%-Status: %S+, score%=(%d+%.%d+) .* tests=(.*,)(%s*%S+).*"
+            local pattern_symbols = "X%-Spam%-Status: %S+, score%=([%-%d%.]+)%s.*tests%=(.*,?)(%s*%S+)%sautolearn.*"
             spam_score = string.gsub(s, pattern_symbols, "%1")
-            lua_util.debugm(rule.N, task, '%s: spamd Spam line: %s', rule.log_prefix, spam_score)
             symbols = string.gsub(s, pattern_symbols, "%2%3")
             symbols = string.gsub(symbols, "%s", "")
           end
         end
+
+        lua_util.debugm(rule.N, task, '%s: spam_score: %s, symbols: %s, int spam_score: |%s|, type spam_score: |%s|',
+          rule.log_prefix, spam_score, symbols, tonumber(spam_score), type(spam_score))
 
         if tonumber(spam_score) > 0 and #symbols > 0 and symbols ~= "none" then
 
@@ -176,8 +176,7 @@ local function spamassassin_check(task, content, digest, rule)
             common.yield_result(task, rule, symbols, spam_score)
             common.save_cache(task, digest, rule, symbols, spam_score)
           else
-            local symbols_table = {}
-            symbols_table = lua_util.str_split(symbols, ",")
+            local symbols_table = lua_util.str_split(symbols, ",")
             lua_util.debugm(rule.N, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
 
             common.yield_result(task, rule, symbols_table, spam_score)
