@@ -37,7 +37,7 @@ struct lua_tree_cb_data {
 	gboolean sort;
 	gsize max_urls;
 	gdouble skip_prob;
-	guint64 xoroshiro_state[4];
+	guint64 random_seed;
 };
 
 void lua_tree_url_callback (gpointer key, gpointer value, gpointer ud);
@@ -75,7 +75,7 @@ void lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd);
  * @param max_urls
  * @return
  */
-gsize lua_url_adjust_skip_prob (gdouble timestamp,
+gsize lua_url_adjust_skip_prob (float timestamp,
 								guchar *digest,
 								struct lua_tree_cb_data *cb,
 								gsize sz);

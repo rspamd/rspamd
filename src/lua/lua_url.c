@@ -963,7 +963,7 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 		}
 
 		if (cb->skip_prob > 0) {
-			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
+			gdouble coin = rspamd_random_double_fast_seed (&cb->random_seed);
 
 			if (coin < cb->skip_prob) {
 				return;
@@ -1337,7 +1337,7 @@ lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd)
 }
 
 gsize
-lua_url_adjust_skip_prob (gdouble timestamp,
+lua_url_adjust_skip_prob (float timestamp,
 						  guchar digest[16],
 						  struct lua_tree_cb_data *cb,
 						  gsize sz)
@@ -1347,11 +1347,11 @@ lua_url_adjust_skip_prob (gdouble timestamp,
 		/*
 		 * Use task dependent probabilistic seed to ensure that
 		 * consequent task:get_urls return the same list of urls
+		 * We use both digest and timestamp here to avoid attack surface
+		 * based just on digest.
 		 */
-		memset (cb->xoroshiro_state, 0, sizeof (cb->xoroshiro_state));
-		memcpy (&cb->xoroshiro_state[0], &timestamp,
-				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (timestamp)));
-		memcpy (&cb->xoroshiro_state[1], digest, 16);
+		memcpy(&cb->random_seed, digest, 4);
+		memcpy(((unsigned char *)&cb->random_seed) + 4, &timestamp, 4);
 		sz = cb->max_urls;
 	}
 
