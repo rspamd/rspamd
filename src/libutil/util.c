@@ -1757,80 +1757,76 @@ rspamd_random_double (void)
 
 
 static guint64*
-xorshifto_seed (void)
+rspamd_fast_random_seed (void)
 {
-	static guint64 xorshifto_seed[4];
-	static bool initialized = false;
+	static guint64 seed;
 
-	if (G_UNLIKELY(!initialized)) {
-		ottery_rand_bytes((void *)xorshifto_seed, sizeof (xorshifto_seed));
-		initialized = true;
+	if (G_UNLIKELY(seed == 0)) {
+		ottery_rand_bytes((void *)&seed, sizeof (seed));
 	}
 
-	return xorshifto_seed;
+	return &seed;
 }
 
-static inline guint64
-xoroshiro_rotl (const guint64 x, int k) {
-	return (x << k) | (x >> (64 - k));
+/* wyrand */
+static inline uint64_t
+rspamd_random_uint64_fast_seed (uint64_t *seed)
+{
+	*seed += UINT64_C(0xa0761d6478bd642f);
+#ifdef __SIZEOF_INT128__
+# if defined(__aarch64__)
+	uint64_t lo, hi, p = *seed ^ UINT64_C(0xe7037ed1a0b428db), v = *seed;
+	lo = v * p;
+	__asm__ ("umulh %0, %1, %2" : "=r" (hi) : "r" (v), "r" (p));
+	return lo ^ hi;
+# else
+	__uint128_t t = (__uint128_t)*seed * (*seed ^ UINT64_C(0xe7037ed1a0b428db));
+	return (t >> 64) ^ t;
+# endif
+#else
+	/* Implementation of 64x64->128-bit multiplication by four 32x32->64
+	 * bit multiplication.  */
+	uint64_t lo, hi, p = *seed ^ UINT64_C(0xe7037ed1a0b428db), v = *seed;
+	uint64_t hv = v >> 32, hp = p >> 32;
+	uint64_t lv = (uint32_t) v, lp = (uint32_t) p;
+	uint64_t rh =  hv * hp;
+	uint64_t rm_0 = hv * lp;
+	uint64_t rm_1 = hp * lv;
+	uint64_t rl =  lv * lp;
+	uint64_t t;
+
+	/* We could ignore a carry bit here if we did not care about the
+	   same hash for 32-bit and 64-bit targets.  */
+	t = rl + (rm_0 << 32);
+	lo = t + (rm_1 << 32);
+	hi = rh + (rm_0 >> 32) + (rm_1 >> 32);
+	return lo ^ hi;
+#endif
 }
 
 gdouble
 rspamd_random_double_fast (void)
 {
-	return rspamd_random_double_fast_seed (xorshifto_seed());
+	return rspamd_random_double_fast_seed (rspamd_fast_random_seed());
 }
 
 /* xoshiro256+ */
 inline gdouble
-rspamd_random_double_fast_seed (guint64 seed[4])
+rspamd_random_double_fast_seed (guint64 *seed)
 {
-	const uint64_t result = seed[0] + seed[3];
-
-	const uint64_t t = seed[1] << 17;
-
-	seed[2] ^= seed[0];
-	seed[3] ^= seed[1];
-	seed[1] ^= seed[2];
-	seed[0] ^= seed[3];
-
-	seed[2] ^= t;
-
-	seed[3] = xoroshiro_rotl (seed[3], 45);
-
-	return rspamd_double_from_int64 (result);
-}
-
-/* xoroshiro256** */
-static inline guint64
-rspamd_random_uint64_fast_seed (guint64 seed[4])
-{
-	const uint64_t result = xoroshiro_rotl (seed[1] * 5, 7) * 9;
-
-	const uint64_t t = seed[1] << 17;
-
-	seed[2] ^= seed[0];
-	seed[3] ^= seed[1];
-	seed[1] ^= seed[2];
-	seed[0] ^= seed[3];
-
-	seed[2] ^= t;
-
-	seed[3] = xoroshiro_rotl (seed[3], 45);
-
-	return result;
+	return rspamd_double_from_int64 (rspamd_random_uint64_fast_seed(seed));
 }
 
 guint64
 rspamd_random_uint64_fast (void)
 {
-	return rspamd_random_uint64_fast_seed (xorshifto_seed());
+	return rspamd_random_uint64_fast_seed (rspamd_fast_random_seed());
 }
 
 void
 rspamd_random_seed_fast (void)
 {
-	(void)xorshifto_seed();
+	(void)rspamd_fast_random_seed();
 }
 
 gdouble
