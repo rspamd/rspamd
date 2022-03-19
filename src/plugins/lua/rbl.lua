@@ -662,6 +662,12 @@ local function gen_rbl_callback(rule)
     email_tbl.domain = email_tbl.domain:lower()
     email_tbl.user = email_tbl.user:lower()
 
+    if #email_tbl.domain == 0 or #email_tbl.user == 0 then
+      rspamd_logger.infox(task, "got empty/invalid email: '%s@%s'; skip it in the checks",
+          email_tbl.user, email_tbl.domain)
+      return
+    end
+
     if rule.emails_domainonly then
       add_dns_request(task, email_tbl.domain, false, false, requests_table,
           what, whitelist)
@@ -719,8 +725,8 @@ local function gen_rbl_callback(rule)
       end
 
       local email_tbl = {
-        domain = domain,
-        user = email:get_user(),
+        domain = domain or '',
+        user = email:get_user() or '',
         addr = tostring(email),
       }
       check_email_table(task, email_tbl, requests_table, whitelist, 'email')
