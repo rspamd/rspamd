@@ -1272,7 +1272,7 @@ if opts and type(opts) == 'table' then
           type = 'virtual',
           name = s,
           parent = id,
-          score = 0, -- Default score
+          score = tonumber(rule.score or "0") or 0, -- Default score
         })
         rule['symbols_set'][s] = 1
       end, rule['symbols'])
@@ -1310,7 +1310,7 @@ if opts and type(opts) == 'table' then
     rspamd_config:register_symbol({
       type = 'prefilter',
       name = rule['symbol'],
-      score = rule.score or 0,
+      score = tonumber(rule.score or "0") or 0,
       callback = gen_multimap_callback(rule),
     })
   end, fun.filter(function(r) return r['prefilter'] end, rules))
