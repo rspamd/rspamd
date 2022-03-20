@@ -827,6 +827,7 @@ set:
 						g_set_error (err, rspamd_mime_expr_quark (), 320,
 								"re_conditions is not a table for '%s'",
 								mime_atom->str);
+						rspamd_regexp_unref (mime_atom->d.re->regexp);
 						goto err;
 					}
 
@@ -838,6 +839,7 @@ set:
 							g_set_error (err, rspamd_mime_expr_quark (), 320,
 									"condition for '%s' is invalid, must be function",
 									mime_atom->str);
+							rspamd_regexp_unref (mime_atom->d.re->regexp);
 							goto err;
 						}
 
