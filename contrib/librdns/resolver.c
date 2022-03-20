@@ -554,11 +554,12 @@ rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
 			if (!(rep->flags & RDNS_TRUNCATED)) {
 				req->state = RDNS_REQUEST_REPLIED;
 				req->func(rep, req->arg);
+				/* This will free reply as well */
 				REF_RELEASE (req);
 			}
 			else {
-				rdns_debug("truncated UDP reply for %s", req->requested_names[0].name);
 				if (req->io->srv->tcp_io_cnt > 0) {
+					rdns_debug("truncated UDP reply for %s; schedule over TCP", req->requested_names[0].name);
 					/* Reschedule via TCP */
 					if (!rdns_reschedule_req_over_tcp (req, req->io->srv)) {
 						/* Use truncated reply as we have no other options */
@@ -566,6 +567,18 @@ rdns_process_udp_read (int fd, struct rdns_io_channel *ioc)
 						req->func(rep, req->arg);
 						REF_RELEASE (req);
 					}
+					else {
+						/* Remove and free the truncated reply, as we have rescheduled the reply */
+						req->reply = NULL;
+						rdns_reply_free(rep);
+					}
+				}
+				else {
+					/* No TCP channels available */
+					req->state = RDNS_REQUEST_REPLIED;
+					req->func(rep, req->arg);
+					/* This will free reply as well */
+					REF_RELEASE (req);
 				}
 			}
 		}
