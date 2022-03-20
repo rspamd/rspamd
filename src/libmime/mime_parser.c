@@ -1153,7 +1153,6 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 		void *context)
 {
 	const gchar *end = text + len, *p = text + match_pos, *bend;
-	gchar *lc_copy;
 	gsize blen;
 	gboolean closing = FALSE;
 	struct rspamd_mime_boundary b;
@@ -1225,13 +1224,21 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 			b.boundary = p - st->start - 2;
 			b.start = bend - st->start;
 
-			if (closing) {
+			/* Small optimisation as boundaries are usually short strings */
+			gchar *lc_copy, lc_copy_buf[128];
+
+			if (blen + 2 < sizeof(lc_copy_buf)) {
+				lc_copy = lc_copy_buf;
+			}
+			else {
 				lc_copy = g_malloc (blen + 2);
+			}
+
+			if (closing) {
 				memcpy (lc_copy, p, blen + 2);
 				rspamd_str_lc (lc_copy, blen + 2);
 			}
 			else {
-				lc_copy = g_malloc (blen);
 				memcpy (lc_copy, p, blen);
 				rspamd_str_lc (lc_copy, blen);
 			}
@@ -1256,7 +1263,10 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				b.closed_hash = 0;
 			}
 
-			g_free (lc_copy);
+			/* Check if a string has been allocated on the heap */
+			if (blen + 2 >= sizeof(lc_copy_buf)) {
+				g_free(lc_copy);
+			}
 			g_array_append_val (st->boundaries, b);
 		}
 	}
