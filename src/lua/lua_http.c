@@ -1078,7 +1078,7 @@ lua_http_request (lua_State *L)
 					msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL);
 
 			if (ka_addr) {
-				cbd->addr = rspamd_inet_address_copy(ka_addr);
+				cbd->addr = rspamd_inet_address_copy(ka_addr, NULL);
 				numeric_ip = true;
 			}
 		}

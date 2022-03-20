@@ -737,7 +737,7 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 				if (mta_name) {
 					trecv.by_hostname.assign_copy(std::string_view(mta_name));
 				}
-				trecv.addr = rspamd_inet_address_copy(task->from_addr);
+				trecv.addr = rspamd_inet_address_copy(task->from_addr, NULL);
 
 				if (task->hostname) {
 					trecv.real_hostname.assign_copy(std::string_view(task->hostname));

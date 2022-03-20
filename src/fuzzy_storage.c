@@ -262,7 +262,7 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 	}
 	*/
 
-	masked = rspamd_inet_address_copy (session->addr);
+	masked = rspamd_inet_address_copy(session->addr, NULL);
 
 	if (rspamd_inet_address_get_af (masked) == AF_INET) {
 		rspamd_inet_address_apply_mask (masked,
@@ -1098,7 +1098,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 				session->addr, -1);
 
 		if (ip_stat == NULL) {
-			naddr = rspamd_inet_address_copy (session->addr);
+			naddr = rspamd_inet_address_copy(session->addr, NULL);
 			ip_stat = g_malloc0 (sizeof (*ip_stat));
 			REF_INIT_RETAIN (ip_stat, fuzzy_key_stat_dtor);
 			rspamd_lru_hash_insert (session->key_stat->last_ips,
@@ -1662,7 +1662,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 						nerrors = g_malloc (sizeof (*nerrors));
 						*nerrors = 1;
 						rspamd_lru_hash_insert (session->ctx->errors_ips,
-								rspamd_inet_address_copy (session->addr),
+								rspamd_inet_address_copy(session->addr, NULL),
 								nerrors, -1, -1);
 					}
 					else {

@@ -1804,11 +1804,11 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	task->sock = -1;
 
 	if (session->client_milter_conn) {
-		task->client_addr = rspamd_inet_address_copy (
-				session->client_milter_conn->addr);
+		task->client_addr = rspamd_inet_address_copy(
+				session->client_milter_conn->addr, NULL);
 	}
 	else {
-		task->client_addr = rspamd_inet_address_copy (session->client_addr);
+		task->client_addr = rspamd_inet_address_copy(session->client_addr, NULL);
 	}
 
 	task->fin_arg = session;

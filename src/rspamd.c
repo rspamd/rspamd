@@ -413,7 +413,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 					listen_opts, -1);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
-				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
+				ls->addr = rspamd_inet_address_copy(g_ptr_array_index (addrs, i), NULL);
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_TCP;
 				result = g_list_prepend (result, ls);
@@ -425,7 +425,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 					listen_opts | RSPAMD_INET_ADDRESS_LISTEN_REUSEPORT, -1);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
-				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
+				ls->addr = rspamd_inet_address_copy(g_ptr_array_index (addrs, i), NULL);
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_UDP;
 				result = g_list_prepend (result, ls);

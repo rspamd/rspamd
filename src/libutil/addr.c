@@ -1832,7 +1832,7 @@ rspamd_inet_address_compare_ptr (gconstpointer a1,
 }
 
 rspamd_inet_addr_t *
-rspamd_inet_address_copy (const rspamd_inet_addr_t *addr)
+rspamd_inet_address_copy(const rspamd_inet_addr_t *addr, rspamd_mempool_t *pool)
 {
 	rspamd_inet_addr_t *n;
 
@@ -1840,7 +1840,7 @@ rspamd_inet_address_copy (const rspamd_inet_addr_t *addr)
 		return NULL;
 	}
 
-	n = rspamd_inet_addr_create (addr->af, NULL);
+	n = rspamd_inet_addr_create (addr->af, pool);
 
 	if (n->af == AF_UNIX) {
 		memcpy (n->u.un, addr->u.un, sizeof (*addr->u.un));

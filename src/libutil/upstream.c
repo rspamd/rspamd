@@ -1167,7 +1167,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 		}
 		for (i = 0; i < addrs->len; i ++) {
 			addr = g_ptr_array_index (addrs, i);
-			rspamd_upstream_add_addr (upstream, rspamd_inet_address_copy (addr));
+			rspamd_upstream_add_addr (upstream, rspamd_inet_address_copy(addr, NULL));
 		}
 	}
 

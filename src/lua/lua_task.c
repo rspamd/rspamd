@@ -4272,7 +4272,7 @@ lua_task_set_from_ip (lua_State *L)
 					rspamd_inet_address_free (task->from_addr);
 				}
 
-				task->from_addr = rspamd_inet_address_copy (ip->addr);
+				task->from_addr = rspamd_inet_address_copy(ip->addr, NULL);
 			}
 			else {
 				return luaL_error (L, "invalid IP object");

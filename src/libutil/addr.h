@@ -322,7 +322,7 @@ gint rspamd_inet_address_compare_ptr (gconstpointer a1,
  * @param addr
  * @return
  */
-rspamd_inet_addr_t *rspamd_inet_address_copy (const rspamd_inet_addr_t *addr);
+rspamd_inet_addr_t *rspamd_inet_address_copy(const rspamd_inet_addr_t *addr, rspamd_mempool_t *pool);
 
 /**
  * Returns hash for inet address (ignoring port)

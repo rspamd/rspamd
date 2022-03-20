@@ -397,7 +397,7 @@ lua_udp_sendto (lua_State *L) {
 				return luaL_error (L, "invalid host class");
 			}
 
-			addr = rspamd_inet_address_copy (lip->addr);
+			addr = rspamd_inet_address_copy(lip->addr, NULL);
 
 			if (port != 0) {
 				rspamd_inet_address_set_port (addr, port);

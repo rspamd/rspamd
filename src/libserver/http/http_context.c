@@ -539,7 +539,7 @@ rspamd_http_context_prepare_keepalive(struct rspamd_http_context *ctx,
 		phk->conns = empty_init;
 		phk->host = g_strdup (host);
 		phk->is_ssl = is_ssl;
-		phk->addr = rspamd_inet_address_copy (addr);
+		phk->addr = rspamd_inet_address_copy(addr, NULL);
 		phk->port = hk.port;
 
 
