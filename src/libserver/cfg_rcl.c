@@ -1373,6 +1373,12 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 
 	composite_name = key;
 
+	const ucl_object_t *val = ucl_object_lookup(obj, "enabled");
+	if (val != NULL && !ucl_object_toboolean(val)) {
+		msg_info_config ("composite %s is disabled", composite_name);
+		return TRUE;
+	}
+
 	if ((composite = rspamd_composites_manager_add_from_ucl(cfg->composites_manager,
 			composite_name, obj)) != NULL) {
 		rspamd_symcache_add_symbol (cfg->cache, composite_name, 0,
