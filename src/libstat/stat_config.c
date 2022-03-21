@@ -439,6 +439,7 @@ rspamd_stat_close (void)
 				st_ctx->lua_stat_tokens_ref);
 	}
 
+	g_free (st_ctx->classifiers_subrs);
 	g_free (st_ctx);
 
 	/* Set global var to NULL */
