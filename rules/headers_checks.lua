@@ -581,7 +581,7 @@ rspamd_config.MULTIPLE_FROM = {
     end
     return false
   end,
-  score = 9.0,
+  score = 8.0,
   group = 'headers',
   description = 'Multiple addresses in From'
 }
