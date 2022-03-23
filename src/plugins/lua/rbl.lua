@@ -662,8 +662,8 @@ local function gen_rbl_callback(rule)
     email_tbl.domain = email_tbl.domain:lower()
     email_tbl.user = email_tbl.user:lower()
 
-    if #email_tbl.domain == 0 or #email_tbl.user == 0 then
-      rspamd_logger.infox(task, "got empty/invalid email: '%s@%s'; skip it in the checks",
+    if email_tbl.domain == '' or email_tbl.user == '' then
+      rspamd_logger.infox(task, "got an email with some empty parts: '%s@%s'; skip it in the checks",
           email_tbl.user, email_tbl.domain)
       return
     end
