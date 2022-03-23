@@ -92,10 +92,14 @@ FROM_NEQ_ENVFROM
   ...  Settings={symbols_enabled = [FROM_NEQ_ENVFROM]}
   Expect Symbol  FROM_NEQ_ENVFROM
 
-PHISH_SENDER_A
+PHISH_SENDER_A_1
   Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender.eml
-  ...  Settings={symbols_enabled = [MULTIPLE_FROM, MULTIPLE_UNIQUE_HEADERS]}
-  Expect Symbol With Score And Exact Options  MULTIPLE_FROM  9.0  <any@attack.com>  <admin@legitimate.com>
+  ...  Settings={symbols_enabled = [MULTIPLE_FROM]}
+  Expect Symbol With Score And Exact Options  MULTIPLE_FROM  8.0  <any@attack.com>  <admin@legitimate.com>
+
+PHISH_SENDER_A_2
+  Scan File  ${RSPAMD_TESTDIR}/messages/phish_sender.eml
+  ...  Settings={symbols_enabled = [MULTIPLE_UNIQUE_HEADERS]}
   Expect Symbol With Score And Exact Options  MULTIPLE_UNIQUE_HEADERS  7.0  From
 
 PHISH_SENDER_B
