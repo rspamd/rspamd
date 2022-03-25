@@ -1,7 +1,7 @@
 --[[
 Copyright (c) 2021, defkev <defkev@gmail.com>
 Copyright (c) 2018, Carsten Rosenberg <c.rosenberg@heinlein-support.de>
-Copyright (c) 2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

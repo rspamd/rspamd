@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

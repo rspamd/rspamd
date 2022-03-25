@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2020, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -267,7 +267,7 @@ local function get_roc_thresholds(ann, inputs, outputs, alpha, beta)
 
     table.sort(r, function(p, q) return cmp(x[p], x[q]) end)
 
-    for i=1,n do 
+    for i=1,n do
       a[i] = x[r[i]]
       b[i] = y[r[i]]
     end

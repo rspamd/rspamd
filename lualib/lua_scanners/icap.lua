@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 Copyright (c) 2019, Carsten Rosenberg <c.rosenberg@heinlein-support.de>
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -482,7 +482,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
           threat_table_add(
             string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
-        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d') 
+        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d')
           then
 
           threat_table_add(

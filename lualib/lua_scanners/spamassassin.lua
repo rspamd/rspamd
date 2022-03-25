@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2019, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 Copyright (c) 2019, Carsten Rosenberg <c.rosenberg@heinlein-support.de>
 
 Licensed under the Apache License, Version 2.0 (the "License");
