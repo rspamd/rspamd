@@ -1,3 +1,90 @@
+3.2: 26 Mar 2022
+  * [Conf] Score MIME_OBFUSCATED_ARCHIVE to 8 points
+  * [Conf] Set one_shot for URIBL rules by default
+  * [CritFix] Fix upstreams name resolution when there is also a port
+  * [Feature] Add ROC feature to neural network plugin
+  * [Feature] Add public suffic compilation utility
+  * [Feature] Add support of Cloudmark
+  * [Feature] Allow hyperscan for ppc64, as vectorscan now suports it.
+  * [Feature] Allow to skip DNS resolution for keep-alive connections
+  * [Feature] Aws_s3: Allow to store large parts separately
+  * [Feature] BIMI: Add preliminary version of the BIMI plugin
+  * [Feature] JSON endpoint for querying maps
+  * [Feature] Lua_magic: Add a sane CSV heuristic
+  * [Feature] Lua_mime: Add schema for message transfer
+  * [Feature] Output average scan time in /stat endpoint
+  * [Feature] Show average scan time in `rspamc stat` output
+  * [Fix] Add guards to avoid race condition on TCP connection
+  * [Fix] Allow spaces in DKIM key records
+  * [Fix] Apply the similar fix to the url_reputation
+  * [Fix] Avoid overwriting whitelisted_signers_map
+  * [Fix] Backport PR from libucl
+  * [Fix] Clear SSL errors
+  * [Fix] ClickHouse cleanup of old partitions
+  * [Fix] Do not double call error handler on ssl errors in the timeout path
+  * [Fix] Do not forget to clear pointers on IOC reset
+  * [Fix] External_relay: Remove useless check of the map value
+  * [Fix] Find suspicious url encodings that could break url extraction
+  * [Fix] Fix HTTP(s) client timeout
+  * [Fix] Fix exclude flags setting
+  * [Fix] Fix expanding of the variables
+  * [Fix] Fix host header usage in lua_http
+  * [Fix] Fix http maps shared memory cache cleanup
+  * [Fix] Fix logic in HTML processing FSM
+  * [Fix] Fix parsing of the compound mailto urls
+  * [Fix] Fix processing captures from pcre2
+  * [Fix] Fix removing from khash
+  * [Fix] Fix stuctured headers pushing
+  * [Fix] Further fix for i386 compilation
+  * [Fix] Improve duplicate settings error reporting
+  * [Fix] Lua: task:remove_result didn't work in some cases
+  * [Fix] Output service parts as well
+  * [Fix] Phishing: Deal with phishing + redirected URL
+  * [Fix] Phishing: Fix finding domains in the phishing map
+  * [Fix] Plug memory leak by using mempool for a copied address
+  * [Fix] Properly find the request and the number of requested entries
+  * [Fix] Rbl: Fix inversed logic of the url_full_hostname
+  * [Fix] Read file maps if they were not pre-read during preload
+  * [Fix] Restrict x86_64 assembly to x86_64
+  * [Fix] Return a real number of recipients when dealing with aliases
+  * [Fix] Rework unshedule DNS request function
+  * [Fix] Support definition of ungrouped symbol in conf file, use group info from lua or other conf file
+  * [Fix] Unschedule DNS request when clearing IO channel
+  * [Fix] When checking for phishing, we need to convert punicode -> UTF8, not vice versa
+  * [Fix] lua_cfg_transform - actions without score (discard)
+  * [Fix] lua_cfg_transform - silly break break actions
+  * [Fix] ratelimit - symbol per bucket
+  * [Project] BIMI: Fix helper integration issues
+  * [Project] Further DNS over TCP architecturing
+  * [Project] Rdns: Add more functions for TCP based requests
+  * [Project] Rdns: Add preliminary reading logic for TCP channels
+  * [Project] Rdns: Add reaper for inactive TCP connections
+  * [Project] Rdns: Add timeout logic for TCP requests
+  * [Project] Rdns: Do not treat TCP channels failure as fatal
+  * [Project] Rdns: Fix TCP connection mess
+  * [Project] Rdns: Fix TCP stuff cleanup
+  * [Project] Rdns: Fix various ownership issues
+  * [Project] Rdns: Implement TCP writing logic
+  * [Project] Rdns: Initial support of TCP IO channels
+  * [Project] Rdns: More fixes in TCP handling
+  * [Project] Rdns: Restore the previous EDNS0 size
+  * [Project] Rdns: Send truncated replies via TCP
+  * [Project] Rdns: Unregister TCP requests
+  * [Rework] Allow to restore SSL handlers after keepalive pooling
+  * [Rework] Allow to set a different behaviour for actions from settings
+  * [Rework] Include SSL flag into keepalive hash
+  * [Rework] Make `rspamadm dmarc_report` default behaviour more sane
+  * [Rework] Mempool: Use explicit alignment
+  * [Rework] Rdns: Use faster and more compact hash table for DNS requests
+  * [Rework] Rework SSL flag operations
+  * [Rework] Take disabled flag into account
+  * [Rework] Timeouts are now global per event and not reseted by IO activity
+  * [Rework] Use xxh3 as a default hash and fix memory/alignment issues
+  * [Rules] Fix old rules to stop global functions usage
+  * [Rules] Fix symbol for DKIM temporary failure
+  * [Rules] Remove ancient and inefficient rules
+  * [Rules] Slightly reduce MULTIPLE_FROM score
+
 3.1: 01 Nov 2021
   * [Feature] Add junk_threshold for autolearn
   * [Feature] Add neural test command
