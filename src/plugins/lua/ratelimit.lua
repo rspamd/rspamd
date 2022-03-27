@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
 Copyright (c) 2016-2017, Andrew Lewis <nerf@judo.za.org>
 
 Licensed under the Apache License, Version 2.0 (the "License");
