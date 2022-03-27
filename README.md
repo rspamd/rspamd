@@ -30,9 +30,15 @@ The full list of built-in modules could be found in the [Rspamd documentation](h
 
 If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com/doc/lua/) to write your own rules and plugins: <https://rspamd.com/doc/tutorials/writing_rules.html>
 
+## License
+
+This project is licensed under the Apache 2.0 License - see the [LICENSE.md](LICENSE.md) file for details
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on the process for submitting pull requests to us.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in `rspamd` by you, as defined in the APACHE 2.0 license, shall be licensed as above, without any additional terms or conditions.
 
 ## Authors
 
@@ -40,9 +46,6 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on the process for su
 
 See also the list of [contributors](AUTHORS.md) who participated in this project.
 
-## License
-
-This project is licensed under the Apache 2.0 License - see the [LICENSE.md](LICENSE.md) file for details
 
 ## References
 
