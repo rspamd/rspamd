@@ -136,28 +136,27 @@ local function ip_to_rbl(ip)
 end
 
 local function gen_check_rcvd_conditions(rbl, received_total)
-  local min_pos = tonumber(rbl['received_min_pos'])
-  local max_pos = tonumber(rbl['received_max_pos'])
-  local match_flags = rbl['received_flags']
-  local nmatch_flags = rbl['received_nflags']
+  local min_pos = tonumber(rbl.received_min_pos)
+  local max_pos = tonumber(rbl.received_max_pos)
+  local match_flags = rbl.received_flags
+  local nmatch_flags = rbl.received_nflags
+
   local function basic_received_check(rh)
-    if not (rh['real_ip'] and rh['real_ip']:is_valid()) then return false end
-    if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
-        (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
-        ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
-            not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
-        not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
+    if not (rh.real_ip and rh.real_ip:is_valid()) then return false end
+    if ((rh.real_ip:get_version() == 6 and rbl.ipv6) or
+        (rh.real_ip:get_version() == 4 and rbl.ipv4)) and
+        ((rbl.exclude_private_ips and not rh.real_ip:is_local()) or
+            not rbl.exclude_private_ips) and ((rbl.exclude_local_ips and
+        not is_excluded_ip(rh.real_ip)) or not rbl.exclude_local_ips) then
       return true
     else
       return false
     end
   end
-  if not (max_pos or min_pos or match_flags or nmatch_flags) then
-    return basic_received_check
-  end
-  return function(rh, pos)
-    if not basic_received_check() then return false end
-    local got_flags = rh['flags'] or E
+
+  local function positioned_received_check(rh, pos)
+    if not rh or not basic_received_check(rh) then return false end
+    local got_flags = rh.flags or E
     if min_pos then
       if min_pos < 0 then
         if min_pos == -1 then
@@ -165,7 +164,7 @@ local function gen_check_rcvd_conditions(rbl, received_total)
             return false
           end
         else
-          if pos <= (received_total - (min_pos*-1)) then
+          if pos <= (received_total - math.abs(min_pos)) then
             return false
           end
         end
@@ -175,7 +174,7 @@ local function gen_check_rcvd_conditions(rbl, received_total)
     end
     if max_pos then
       if max_pos < -1 then
-        if (received_total - (max_pos*-1)) >= pos then
+        if (received_total - math.abs(max_pos)) >= pos then
           return false
         end
       elseif max_pos > 0 then
@@ -199,6 +198,13 @@ local function gen_check_rcvd_conditions(rbl, received_total)
       end
     end
     return true
+  end
+
+
+  if not (max_pos or min_pos or match_flags or nmatch_flags) then
+    return basic_received_check
+  else
+    return positioned_received_check
   end
 end
 
