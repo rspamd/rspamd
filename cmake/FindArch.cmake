@@ -90,8 +90,6 @@ function(target_architecture output_var)
     else()
         file(WRITE "${CMAKE_BINARY_DIR}/arch.c" "${archdetect_c_code}")
 
-        enable_language(C)
-
         # Detect the architecture in a rather creative way...
         # This compiles a small C program which is a series of ifdefs that selects a
         # particular #error preprocessor directive whose message string contains the
