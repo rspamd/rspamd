@@ -685,19 +685,20 @@ end
 
 exports.process_signing_settings = function(N, settings, opts)
   local lua_maps = require "lua_maps"
+  -- Used to convert plain options to the maps
+  local maps_opts = {
+    sign_networks = {'radix', 'DKIM signing networks'},
+    path_map = {'map', 'Paths to DKIM signing keys'},
+    selector_map = {'map', 'DKIM selectors'},
+    signing_table = {'glob', 'DKIM signing table'},
+    key_table = {'glob', 'DKIM keys table'},
+    vault_domains = {'glob', 'DKIM signing domains in vault'},
+    whitelisted_signers_map = {'set', 'ARC trusted signers domains'}
+  }
   for k,v in pairs(opts) do
-    if k == 'sign_networks' then
-      settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
-    elseif k == 'path_map' then
-      settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
-    elseif k == 'selector_map' then
-      settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
-    elseif k == 'signing_table' then
-      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
-    elseif k == 'key_table' then
-      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
-    elseif k == 'vault_domains' then
-      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing domains in vault')
+    local maybe_map = maps_opts[k]
+    if maybe_map then
+      settings[k] = lua_maps.map_add_from_ucl(v, maybe_map[1], maybe_map[2])
     elseif k == 'sign_condition' then
       local ret,f = lua_util.callback_from_string(v)
       if ret then
@@ -705,8 +706,6 @@ exports.process_signing_settings = function(N, settings, opts)
       else
         logger.errx(rspamd_config, 'cannot load sign condition %s: %s', v, f)
       end
-    elseif k == 'whitelisted_signers_map' then
-      settings[k] = lua_maps.map_add(N, k, 'set', 'ARC trusted signers domains')
     else
       settings[k] = v
     end
