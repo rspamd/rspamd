@@ -1,4 +1,5 @@
-local util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 local opts = {}
 
 local argparse = require "argparse"
@@ -45,7 +46,7 @@ local function print_num(num)
   if opts['n'] or opts['number'] then
     return tostring(num)
   else
-    return util.humanize_number(num)
+    return rspamd_util.humanize_number(num)
   end
 end
 
@@ -270,11 +271,14 @@ return function(args, res)
     if st['errors_ips'] and not opts['no-ips'] and not opts['short'] then
       print('')
       print('Errors IPs statistics:')
-      table.sort(st['errors_ips'], function(a, b)
-        return a > b
+      local ip_stat = st['errors_ips']
+      local ips = lua_util.keys(ip_stat)
+      -- Reverse sort by number of errors
+      table.sort(ips, function(a, b)
+        return ip_stat[a] > ip_stat[b]
       end)
-      for i, v in pairs(st['errors_ips']) do
-        print(string.format('%s: %s', i, print_result(v)))
+      for _, ip in ipairs(ips) do
+        print(string.format('%s: %s', ip, print_result(ip_stat[ip])))
       end
       print('')
     end
