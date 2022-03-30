@@ -506,6 +506,15 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	if (!rspamd_config_is_enabled_from_ucl (pool, obj)) {
+		/* Upstream is valid but disabled */
+		msg_info_pool_check("upstream %s is disabled",
+				ucl_object_lookup (obj, "name") ?
+				ucl_object_tostring(ucl_object_lookup (obj, "name")) :
+				ucl_object_key (obj));
+		return TRUE;
+	}
+
 	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
 
 	elt = ucl_object_lookup (obj, "name");
