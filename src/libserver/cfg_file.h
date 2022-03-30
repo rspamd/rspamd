@@ -723,7 +723,7 @@ gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
  * @param obj
  * @return TRUE if there is no explicit disable in the object found
  */
-gboolean rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
+gboolean rspamd_config_is_enabled_from_ucl (rspamd_mempool_t *pool,
 		const ucl_object_t *obj);
 
 /*

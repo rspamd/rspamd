@@ -1779,7 +1779,7 @@ rspamd_config_add_symbol_group (struct rspamd_config *cfg,
 }
 
 gboolean
-rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
+rspamd_config_is_enabled_from_ucl (rspamd_mempool_t *pool,
 		const ucl_object_t *obj)
 {
 	{
@@ -1801,7 +1801,7 @@ rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
 				}
 				else if (ret == -1) {
 
-					msg_info_config ("wrong value for the `enabled` key");
+					msg_info_pool_check ("wrong value for the `enabled` key");
 					return FALSE;
 				}
 				/* Default return is TRUE here */
@@ -1828,7 +1828,7 @@ rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
 				}
 				else if (ret == -1) {
 
-					msg_info_config ("wrong value for the `disabled` key");
+					msg_info_pool_check ("wrong value for the `disabled` key");
 					return FALSE;
 				}
 
@@ -1904,7 +1904,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 	}
 	else {
-		enabled = rspamd_config_is_enabled_from_ucl (cfg, conf);
+		enabled = rspamd_config_is_enabled_from_ucl (cfg->cfg_pool, conf);
 
 		if (!enabled) {
 			rspamd_plugins_table_push_elt (L,
