@@ -1778,13 +1778,74 @@ rspamd_config_add_symbol_group (struct rspamd_config *cfg,
 	return FALSE;
 }
 
+gboolean
+rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
+		const ucl_object_t *obj)
+{
+	{
+		const ucl_object_t *enabled;
+
+		enabled = ucl_object_lookup(obj, "enabled");
+
+		if (enabled) {
+			if (ucl_object_type(enabled) == UCL_BOOLEAN) {
+				return ucl_object_toboolean(enabled);
+			}
+			else if (ucl_object_type(enabled) == UCL_STRING) {
+				gchar ret;
+
+				ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
+
+				if (ret == 0) {
+					return FALSE;
+				}
+				else if (ret == -1) {
+
+					msg_info_config ("wrong value for the `enabled` key");
+					return FALSE;
+				}
+				/* Default return is TRUE here */
+			}
+		}
+	}
+
+	{
+		const ucl_object_t *disabled;
+
+		disabled = ucl_object_lookup(obj, "disabled");
+
+		if (disabled) {
+			if (ucl_object_type(disabled) == UCL_BOOLEAN) {
+				return !ucl_object_toboolean(disabled);
+			}
+			else if (ucl_object_type(disabled) == UCL_STRING) {
+				gchar ret;
+
+				ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
+
+				if (ret == 0) {
+					return TRUE;
+				}
+				else if (ret == -1) {
+
+					msg_info_config ("wrong value for the `disabled` key");
+					return FALSE;
+				}
+
+				return FALSE;
+			}
+		}
+	}
+
+	return TRUE;
+}
 
 gboolean
 rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name)
 {
-	gboolean is_c = FALSE;
-	const ucl_object_t *conf, *enabled;
+	gboolean is_c = FALSE, enabled;
+	const ucl_object_t *conf;
 	GList *cur;
 	struct rspamd_symbols_group *gr;
 	lua_State *L = cfg->lua_state;
@@ -1843,45 +1904,16 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 	}
 	else {
-		enabled = ucl_object_lookup (conf, "enabled");
+		enabled = rspamd_config_is_enabled_from_ucl (cfg, conf);
 
-		if (enabled) {
-			if (ucl_object_type (enabled) == UCL_BOOLEAN) {
-				if (!ucl_object_toboolean (enabled)) {
-					rspamd_plugins_table_push_elt (L,
-							"disabled_explicitly", module_name);
+		if (!enabled) {
+			rspamd_plugins_table_push_elt (L,
+					"disabled_explicitly", module_name);
 
-					msg_info_config (
-							"%s module %s is disabled in the configuration",
-							is_c ? "internal" : "lua", module_name);
-					return FALSE;
-				}
-			}
-			else if (ucl_object_type (enabled) == UCL_STRING) {
-				gint ret;
-
-				ret = rspamd_config_parse_flag (ucl_object_tostring (enabled), 0);
-
-				if (ret == 0) {
-					rspamd_plugins_table_push_elt (L,
-							"disabled_explicitly", module_name);
-
-					msg_info_config (
-							"%s module %s is disabled in the configuration",
-							is_c ? "internal" : "lua", module_name);
-					return FALSE;
-				}
-				else if (ret == -1) {
-					rspamd_plugins_table_push_elt (L,
-							"disabled_failed", module_name);
-
-					msg_info_config (
-							"%s module %s has wrong enabled flag (%s) in the configuration",
-							is_c ? "internal" : "lua", module_name,
-							ucl_object_tostring (enabled));
-					return FALSE;
-				}
-			}
+			msg_info_config (
+					"%s module %s is disabled in the configuration",
+					is_c ? "internal" : "lua", module_name);
+			return FALSE;
 		}
 	}
 

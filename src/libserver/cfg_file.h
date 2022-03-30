@@ -718,6 +718,14 @@ gboolean rspamd_config_maybe_disable_action (struct rspamd_config *cfg,
 gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 										  const gchar *module_name);
 
+/**
+ * Verifies enabled/disabled combination in the specified object
+ * @param obj
+ * @return TRUE if there is no explicit disable in the object found
+ */
+gboolean rspamd_config_is_enabled_from_ucl (struct rspamd_config *cfg,
+		const ucl_object_t *obj);
+
 /*
  * Get action from a string
  */
