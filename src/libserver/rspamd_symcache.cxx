@@ -23,13 +23,17 @@
 #include "unix-std.h"
 #include "contrib/t1ha/t1ha.h"
 #include "libserver/worker_util.h"
-#include "khash.h"
-#include "utlist.h"
-#include <math.h>
 
-#if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
-# include <stdalign.h>
-#endif
+#include <cmath>
+#include <cstdint>
+#include <vector>
+#include <string>
+#include <string_view>
+#include <memory>
+#include <variant>
+#include "libutil/cxx/local_shared_ptr.hxx"
+
+#include "contrib/robin-hood/robin_hood.h"
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cache->static_pool->tag.tagname, cache->cfg->checksum, \
@@ -67,26 +71,35 @@ INIT_LOG_MODULE(symcache)
 	(dyn_item)->finished = 1
 #define CLR_FINISH_BIT(checkpoint, dyn_item) \
 	(dyn_item)->finished = 0
-static const guchar rspamd_symcache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
+
+namespace rspamd::symcache {
+
+static const std::uint8_t rspamd_symcache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0};
 
 struct rspamd_symcache_header {
-	guchar magic[8];
-	guint nitems;
-	guchar checksum[64];
-	guchar unused[128];
+	std::uint8_t magic[8];
+	unsigned int nitems;
+	std::uint8_t checksum[64];
+	std::uint8_t unused[128];
 };
 
-struct symcache_order {
-	GPtrArray *d;
-	guint id;
-	ref_entry_t ref;
+struct cache_item;
+using cache_item_ptr = rspamd::local_shared_ptr<cache_item>;
+using cache_item_weak_ptr = rspamd::local_weak_ptr<cache_item>;
+
+struct order_generation {
+	std::vector<cache_item_weak_ptr> d;
+	unsigned int generation_id;
 };
+
+using order_generation_ptr = rspamd::local_shared_ptr<order_generation>;
 
 /*
  * This structure is optimised to store ids list:
  * - If the first element is -1 then use dynamic part, else use static part
+ * There is no std::variant to save space
  */
-struct rspamd_symcache_id_list {
+struct id_list {
 	union {
 		guint32 st[4];
 		struct {
@@ -98,95 +111,133 @@ struct rspamd_symcache_id_list {
 	};
 };
 
-struct rspamd_symcache_condition {
+struct item_condition {
+private:
 	gint cb;
-	struct rspamd_symcache_condition *prev, *next;
+	lua_State *L;
+public:
+	item_condition() {
+		// TODO
+	}
+	virtual ~item_condition() {
+		// TODO
+	}
 };
 
-struct rspamd_symcache_item {
+class normal_item {
+private:
+	symbol_func_t func;
+	void *user_data;
+	std::vector<item_condition> conditions;
+public:
+	explicit normal_item() {
+		// TODO
+	}
+	auto add_condition() -> void {
+		// TODO
+	}
+	auto call() -> void {
+		// TODO
+	}
+};
+
+class virtual_item {
+private:
+	int parent_id;
+	cache_item_ptr parent;
+public:
+	explicit virtual_item() {
+		// TODO
+	}
+};
+
+struct cache_item {
 	/* This block is likely shared */
 	struct rspamd_symcache_item_stat *st;
-
-	guint64 last_count;
 	struct rspamd_counter_data *cd;
-	gchar *symbol;
-	const gchar *type_descr;
-	gint type;
+
+	std::uint64_t last_count;
+	std::string symbol;
+	std::string_view type_descr;
+	int type;
 
 	/* Callback data */
-	union {
-		struct {
-			symbol_func_t func;
-			gpointer user_data;
-			struct rspamd_symcache_condition *conditions;
-		} normal;
-		struct {
-			gint parent;
-			struct rspamd_symcache_item *parent_item;
-		} virtual;
-	} specific;
+	std::variant<normal_item, virtual_item> specific;
 
 	/* Condition of execution */
-	gboolean enabled;
-	/* Used for async stuff checks */
-	gboolean is_filter;
-	gboolean is_virtual;
+	bool enabled;
 
 	/* Priority */
-	gint priority;
+	int priority;
 	/* Topological order */
-	guint order;
-	gint id;
-	gint frequency_peaks;
+	unsigned int order;
+	/* Unique id - counter */
+	int id;
+
+	int frequency_peaks;
 	/* Settings ids */
-	struct rspamd_symcache_id_list allowed_ids;
+	id_list allowed_ids;
 	/* Allows execution but not symbols insertion */
-	struct rspamd_symcache_id_list exec_only_ids;
-	struct rspamd_symcache_id_list forbidden_ids;
+	id_list exec_only_ids;
+	id_list forbidden_ids;
 
 	/* Dependencies */
-	GPtrArray *deps;
-	GPtrArray *rdeps;
+	std::vector<cache_item_ptr> deps;
+	/* Reverse dependencies */
+	std::vector<cache_item_ptr> rdeps;
+};
 
-	/* Container */
-	GPtrArray *container;
+struct delayed_cache_dependency {
+	std::string from;
+	std::string to;
+};
+
+struct delayed_cache_condition {
+	std::string sym;
+	int cbref;
+	lua_State *L;
 };
 
 struct rspamd_symcache {
-	/* Hash table for fast access */
-	GHashTable *items_by_symbol;
-	GPtrArray *items_by_id;
-	struct symcache_order *items_by_order;
-	GPtrArray *connfilters;
-	GPtrArray *prefilters;
-	GPtrArray *filters;
-	GPtrArray *postfilters;
-	GPtrArray *composites;
-	GPtrArray *idempotent;
-	GPtrArray *virtual;
-	GList *delayed_deps;
-	GList *delayed_conditions;
+	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
+	robin_hood::unordered_flat_map<std::string_view, cache_item_ptr> items_by_symbol;
+	std::vector<cache_item_weak_ptr> items_by_id;
+
+	/* Items sorted into some order */
+	order_generation_ptr items_by_order;
+	unsigned int cur_order_gen;
+
+	std::vector<cache_item_weak_ptr> connfilters;
+	std::vector<cache_item_weak_ptr> prefilters;
+	std::vector<cache_item_weak_ptr> filters;
+	std::vector<cache_item_weak_ptr> postfilters;
+	std::vector<cache_item_weak_ptr> composites;
+	std::vector<cache_item_weak_ptr> idempotent;
+	std::vector<cache_item_weak_ptr> virtual_symbols;
+
+	std::vector<delayed_cache_dependency> delayed_deps;
+	std::vector<delayed_cache_condition> delayed_conditions;
+
 	rspamd_mempool_t *static_pool;
-	guint64 cksum;
-	gdouble total_weight;
-	guint used_items;
-	guint stats_symbols_count;
-	guint64 total_hits;
-	guint id;
+	std::uint64_t cksum;
+	double total_weight;
+	std::size_t used_items;
+	std::size_t stats_symbols_count;
+	std::uint64_t total_hits;
+
 	struct rspamd_config *cfg;
-	gdouble reload_time;
-	gdouble last_profile;
-	gint peak_cb;
+	double reload_time;
+	double last_profile;
+	int peak_cb;
 };
 
-struct rspamd_symcache_dynamic_item {
+struct cache_dynamic_item {
 	guint16 start_msec; /* Relative to task time */
-	unsigned started:1;
-	unsigned finished:1;
+	unsigned started: 1;
+	unsigned finished: 1;
 	/* unsigned pad:14; */
 	guint32 async_events;
 };
-
 
 
 struct cache_dependency {
@@ -194,17 +245,6 @@ struct cache_dependency {
 	gchar *sym; /* Symbolic dep name */
 	gint id; /* Real from */
 	gint vid; /* Virtual from */
-};
-
-struct delayed_cache_dependency {
-	gchar *from;
-	gchar *to;
-};
-
-struct delayed_cache_condition {
-	gchar *sym;
-	gint cbref;
-	lua_State *L;
 };
 
 struct cache_savepoint {
@@ -229,6 +269,7 @@ struct rspamd_cache_refresh_cbdata {
 	struct rspamd_worker *w;
 	struct ev_loop *event_loop;
 };
+} // namespace rspamd
 
 /* At least once per minute */
 #define PROFILE_MAX_TIME (60.0)

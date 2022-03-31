@@ -69,6 +69,9 @@ struct rspamd_abstract_callback_data {
 	char data[];
 };
 
+/**
+ * Shared memory block specific for each symbol
+ */
 struct rspamd_symcache_item_stat {
 	struct rspamd_counter_data time_counter;
 	gdouble avg_time;
