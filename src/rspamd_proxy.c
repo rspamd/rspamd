@@ -328,16 +328,16 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	L = ctx->lua_state;
 
 	if (ucl_object_type (obj) != UCL_OBJECT) {
+		if (ucl_object_type (obj) != UCL_NULL) {
+			msg_info_pool_check("upstream %s is disabled by setting it to NULL",
+					ucl_object_key (obj));
+			return TRUE;
+		}
+
 		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream option must be an object");
 
 		return FALSE;
-	}
-
-	if (ucl_object_type (obj) != UCL_NULL) {
-		msg_info_pool_check("upstream %s is disabled by setting it to NULL",
-				ucl_object_key (obj));
-		return TRUE;
 	}
 
 	if (!rspamd_config_is_enabled_from_ucl (pool, obj)) {
@@ -505,13 +505,13 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	ctx = pd->user_struct;
 	L = ctx->lua_state;
 
-	if (ucl_object_type (obj) != UCL_NULL) {
-		msg_info_pool_check("mirror %s is disabled by setting it to NULL",
-				ucl_object_key (obj));
-		return TRUE;
-	}
-
 	if (ucl_object_type (obj) != UCL_OBJECT) {
+		if (ucl_object_type (obj) != UCL_NULL) {
+			msg_info_pool_check("mirror %s is disabled by setting it to NULL",
+					ucl_object_key (obj));
+			return TRUE;
+		}
+
 		g_set_error (err, rspamd_proxy_quark (), 100,
 				"mirror option must be an object");
 
