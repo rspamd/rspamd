@@ -25,6 +25,7 @@
 #include "libserver/worker_util.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -84,15 +85,15 @@ struct rspamd_symcache_header {
 };
 
 struct cache_item;
-using cache_item_ptr = rspamd::local_shared_ptr<cache_item>;
-using cache_item_weak_ptr = rspamd::local_weak_ptr<cache_item>;
+using cache_item_ptr = std::shared_ptr<cache_item>;
+using cache_item_weak_ptr = std::weak_ptr<cache_item>;
 
 struct order_generation {
 	std::vector<cache_item_weak_ptr> d;
 	unsigned int generation_id;
 };
 
-using order_generation_ptr = rspamd::local_shared_ptr<order_generation>;
+using order_generation_ptr = std::shared_ptr<order_generation>;
 
 /*
  * This structure is optimised to store ids list:
@@ -101,14 +102,89 @@ using order_generation_ptr = rspamd::local_shared_ptr<order_generation>;
  */
 struct id_list {
 	union {
-		guint32 st[4];
+		std::uint32_t st[4];
 		struct {
-			guint32 e; /* First element */
-			guint16 len;
-			guint16 allocated;
-			guint *n;
+			std::uint32_t e; /* First element */
+			std::uint16_t len;
+			std::uint16_t allocated;
+			std::uint32_t *n;
 		} dyn;
-	};
+	} data;
+
+	id_list() {
+		std::memset((void *)&data, 0, sizeof(data));
+	}
+	/**
+	 * Returns ids from a compressed list, accepting a mutable reference for number of elements
+	 * @param nids output of the number of elements
+	 * @return
+	 */
+	auto get_ids(std::size_t &nids) const -> const std::uint32_t * {
+		if (data.dyn.e == -1) {
+			/* Dynamic list */
+			nids = data.dyn.len;
+
+			return data.dyn.n;
+		}
+		else {
+			auto cnt = 0;
+
+			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS(data.st)) {
+				cnt ++;
+			}
+
+			nids = cnt;
+
+			return data.st;
+		}
+	}
+
+	auto add_id(std::uint32_t id, rspamd_mempool_t *pool) -> void {
+		if (data.st[0] == -1) {
+			/* Dynamic array */
+			if (data.dyn.len < data.dyn.allocated) {
+				/* Trivial, append + sort */
+				data.dyn.n[data.dyn.len++] = id;
+			}
+			else {
+				/* Reallocate */
+				g_assert (data.dyn.allocated <= G_MAXINT16);
+				data.dyn.allocated *= 2;
+
+				auto *new_array = rspamd_mempool_alloc_array_type(pool,
+						data.dyn.allocated, std::uint32_t);
+				memcpy(new_array, data.dyn.n, data.dyn.len * sizeof(std::uint32_t));
+				data.dyn.n = new_array;
+				data.dyn.n[data.dyn.len++] = id;
+			}
+
+			std::sort(data.dyn.n, data.dyn.n + data.dyn.len);
+		}
+		else {
+			/* Static part */
+			auto cnt = 0u;
+			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS (data.st)) {
+				cnt ++;
+			}
+
+			if (cnt < G_N_ELEMENTS (data.st)) {
+				data.st[cnt] = id;
+			}
+			else {
+				/* Switch to dynamic */
+				data.dyn.allocated = G_N_ELEMENTS (data.st) * 2;
+				auto *new_array = rspamd_mempool_alloc_array_type(pool,
+						data.dyn.allocated, std::uint32_t);
+				memcpy (new_array, data.st, sizeof(data.st));
+				data.dyn.n = new_array;
+				data.dyn.e = -1; /* Marker */
+				data.dyn.len = G_N_ELEMENTS (data.st);
+
+				/* Recursively jump to dynamic branch that will handle insertion + sorting */
+				add_id(id, pool); // tail call
+			}
+		}
+	}
 };
 
 struct item_condition {
@@ -198,7 +274,7 @@ struct delayed_cache_condition {
 	lua_State *L;
 };
 
-struct rspamd_symcache {
+struct symcache {
 	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
 	robin_hood::unordered_flat_map<std::string_view, cache_item_ptr> items_by_symbol;
 	std::vector<cache_item_weak_ptr> items_by_id;
@@ -215,8 +291,9 @@ struct rspamd_symcache {
 	std::vector<cache_item_weak_ptr> idempotent;
 	std::vector<cache_item_weak_ptr> virtual_symbols;
 
-	std::vector<delayed_cache_dependency> delayed_deps;
-	std::vector<delayed_cache_condition> delayed_conditions;
+	/* These are stored within pointer to clean up after init */
+	std::unique_ptr<std::vector<delayed_cache_dependency>> delayed_deps;
+	std::unique_ptr<std::vector<delayed_cache_condition>> delayed_conditions;
 
 	rspamd_mempool_t *static_pool;
 	std::uint64_t cksum;
@@ -231,44 +308,51 @@ struct rspamd_symcache {
 	int peak_cb;
 };
 
+/*
+ * These items are saved within task structure and are used to track
+ * symbols execution
+ */
 struct cache_dynamic_item {
-	guint16 start_msec; /* Relative to task time */
+	std::uint16_t start_msec; /* Relative to task time */
 	unsigned started: 1;
 	unsigned finished: 1;
 	/* unsigned pad:14; */
-	guint32 async_events;
+	std::uint32_t async_events;
 };
 
 
 struct cache_dependency {
-	struct rspamd_symcache_item *item; /* Real dependency */
-	gchar *sym; /* Symbolic dep name */
-	gint id; /* Real from */
-	gint vid; /* Virtual from */
+	cache_item_ptr item; /* Owning pointer to the real dep */
+	std::string_view sym; /* Symbolic dep name */
+	int id; /* Real from */
+	int vid; /* Virtual from */
 };
 
 struct cache_savepoint {
-	guint version;
-	guint items_inflight;
-	gboolean profile;
-	gboolean has_slow;
-	gdouble profile_start;
+	unsigned order_gen;
+	unsigned items_inflight;
+	bool profile;
+	bool has_slow;
+
+	double profile_start;
+	double lim;
 
 	struct rspamd_scan_result *rs;
-	gdouble lim;
 
-	struct rspamd_symcache_item *cur_item;
-	struct symcache_order *order;
-	struct rspamd_symcache_dynamic_item dynamic_items[];
+	struct cache_item *cur_item;
+	order_generation_ptr order;
+	/* Dynamically expanded as needed */
+	struct cache_dynamic_item dynamic_items[];
 };
 
-struct rspamd_cache_refresh_cbdata {
-	gdouble last_resort;
+struct cache_refresh_cbdata {
+	double last_resort;
 	ev_timer resort_ev;
-	struct rspamd_symcache *cache;
+	struct symcache *cache;
 	struct rspamd_worker *w;
 	struct ev_loop *event_loop;
 };
+
 } // namespace rspamd
 
 /* At least once per minute */
