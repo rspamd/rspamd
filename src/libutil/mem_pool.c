@@ -559,6 +559,25 @@ rspamd_mempool_alloc_ (rspamd_mempool_t * pool, gsize size, gsize alignment, con
 	return memory_pool_alloc_common (pool, size, alignment, RSPAMD_MEMPOOL_NORMAL, loc);
 }
 
+/*
+ * This is sqrt(SIZE_MAX+1), as s1*s2 <= SIZE_MAX
+ * if both s1 < MUL_NO_OVERFLOW and s2 < MUL_NO_OVERFLOW
+ */
+#define MUL_NO_OVERFLOW	(1UL << (sizeof(gsize) * 4))
+
+void *
+rspamd_mempool_alloc_array_ (rspamd_mempool_t * pool,  gsize nmemb, gsize size, gsize alignment, const gchar *loc)
+{
+	if ((nmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
+		nmemb > 0 && G_MAXSIZE / nmemb < size) {
+
+		g_error("alloc_array: overflow %"G_GSIZE_FORMAT" * %"G_GSIZE_FORMAT"",
+				nmemb, size);
+		g_abort();
+	}
+	return memory_pool_alloc_common (pool, size, alignment, RSPAMD_MEMPOOL_NORMAL, loc);
+}
+
 void *
 rspamd_mempool_alloc0_ (rspamd_mempool_t * pool, gsize size, gsize alignment, const gchar *loc)
 {
