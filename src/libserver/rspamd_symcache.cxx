@@ -303,10 +303,32 @@ struct symcache {
 	std::uint64_t total_hits;
 
 	struct rspamd_config *cfg;
+	lua_State *L;
 	double reload_time;
 	double last_profile;
 	int peak_cb;
+	int id;
+
+public:
+	explicit symcache(struct rspamd_config *cfg) : cfg(cfg) {
+		/* XXX: do we need a special pool for symcache? I don't think so */
+		static_pool = cfg->cfg_pool;
+		reload_time = cfg->cache_reload_time;
+		total_hits = 1;
+		total_weight = 1.0;
+		cksum = 0xdeadbabe;
+		peak_cb = -1;
+		id = rspamd_random_uint64_fast();
+		L = (lua_State *)cfg->lua_state;
+	}
+
+	virtual ~symcache() {
+		if (peak_cb != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, peak_cb);
+		}
+	}
 };
+
 
 /*
  * These items are saved within task structure and are used to track
@@ -354,6 +376,8 @@ struct cache_refresh_cbdata {
 };
 
 } // namespace rspamd
+
+#define C_API_SYMCACHE(ptr) (reinterpret_cast<rspamd::symcache::symcache *>(ptr))
 
 /* At least once per minute */
 #define PROFILE_MAX_TIME (60.0)
@@ -1417,85 +1441,17 @@ rspamd_symcache_save (struct rspamd_symcache *cache)
 void
 rspamd_symcache_destroy (struct rspamd_symcache *cache)
 {
-	GList *cur;
-	struct delayed_cache_dependency *ddep;
-	struct delayed_cache_condition *dcond;
+	auto *real_cache = C_API_SYMCACHE(cache);
 
-	if (cache != NULL) {
-		if (cache->delayed_deps) {
-			cur = cache->delayed_deps;
-
-			while (cur) {
-				ddep = cur->data;
-				g_free (ddep->from);
-				g_free (ddep->to);
-				g_free (ddep);
-				cur = g_list_next (cur);
-			}
-
-			g_list_free (cache->delayed_deps);
-		}
-
-		if (cache->delayed_conditions) {
-			cur = cache->delayed_conditions;
-
-			while (cur) {
-				dcond = cur->data;
-				g_free (dcond->sym);
-				g_free (dcond);
-				cur = g_list_next (cur);
-			}
-
-			g_list_free (cache->delayed_conditions);
-		}
-
-		g_hash_table_destroy (cache->items_by_symbol);
-		g_ptr_array_free (cache->items_by_id, TRUE);
-		rspamd_mempool_delete (cache->static_pool);
-		g_ptr_array_free (cache->connfilters, TRUE);
-		g_ptr_array_free (cache->prefilters, TRUE);
-		g_ptr_array_free (cache->filters, TRUE);
-		g_ptr_array_free (cache->postfilters, TRUE);
-		g_ptr_array_free (cache->idempotent, TRUE);
-		g_ptr_array_free (cache->composites, TRUE);
-		g_ptr_array_free (cache->virtual, TRUE);
-		REF_RELEASE (cache->items_by_order);
-
-		if (cache->peak_cb != -1) {
-			luaL_unref (cache->cfg->lua_state, LUA_REGISTRYINDEX, cache->peak_cb);
-		}
-
-		g_free (cache);
-	}
+	delete real_cache;
 }
 
 struct rspamd_symcache*
 rspamd_symcache_new (struct rspamd_config *cfg)
 {
-	struct rspamd_symcache *cache;
+	auto *ncache = new rspamd::symcache::symcache(cfg);
 
-	cache = g_malloc0 (sizeof (struct rspamd_symcache));
-	cache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache", 0);
-	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
-			rspamd_str_equal);
-	cache->items_by_id = g_ptr_array_new ();
-	cache->connfilters = g_ptr_array_new ();
-	cache->prefilters = g_ptr_array_new ();
-	cache->filters = g_ptr_array_new ();
-	cache->postfilters = g_ptr_array_new ();
-	cache->idempotent = g_ptr_array_new ();
-	cache->composites = g_ptr_array_new ();
-	cache->virtual = g_ptr_array_new ();
-	cache->reload_time = cfg->cache_reload_time;
-	cache->total_hits = 1;
-	cache->total_weight = 1.0;
-	cache->cfg = cfg;
-	cache->cksum = 0xdeadbabe;
-	cache->peak_cb = -1;
-	cache->id = (guint)rspamd_random_uint64_fast ();
-
-	return cache;
+	return (struct rspamd_symcache*)ncache;
 }
 
 static void
