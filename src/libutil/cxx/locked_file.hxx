@@ -19,17 +19,80 @@
 
 #include "contrib/expected/expected.hpp"
 #include <string>
+#include <sys/stat.h>
 
+namespace rspamd::util {
 /**
  * A simple RAII object to contain a file descriptor with an flock wrap
  * A file is unlocked and closed when not needed
  */
 struct raii_locked_file final {
 	~raii_locked_file();
+
 	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>;
+
+	auto get_fd() const -> int
+	{
+		return fd;
+	}
+
+	auto get_stat() const -> const struct stat&
+	{
+		return st;
+	};
+
+	raii_locked_file& operator=(raii_locked_file &&other) noexcept {
+		std::swap(fd, other.fd);
+		std::swap(st, other.st);
+
+		return *this;
+	}
+
+	raii_locked_file(raii_locked_file &&other) noexcept {
+		*this = std::move(other);
+	}
+
+	/* Do not allow copy/default ctor */
+	const raii_locked_file& operator=(const raii_locked_file &other) = delete;
+	raii_locked_file() = delete;
+	raii_locked_file(const raii_locked_file &other) = delete;
 private:
 	int fd;
+	struct stat st;
+
 	explicit raii_locked_file(int _fd) : fd(_fd) {}
 };
+
+/**
+ * A mmap wrapper on top of a locked file
+ */
+struct raii_mmaped_locked_file final {
+	~raii_mmaped_locked_file();
+	static auto mmap_shared(raii_locked_file &&file, int flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
+	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
+	auto get_map() const -> void* {return map;}
+	auto get_size() const -> std::size_t { return file.get_stat().st_size; }
+
+	raii_mmaped_locked_file& operator=(raii_mmaped_locked_file &&other) noexcept {
+		std::swap(map, other.map);
+		file = std::move(other.file);
+
+		return *this;
+	}
+
+	raii_mmaped_locked_file(raii_mmaped_locked_file &&other) noexcept;
+
+	/* Do not allow copy/default ctor */
+	const raii_mmaped_locked_file& operator=(const raii_mmaped_locked_file &other) = delete;
+	raii_mmaped_locked_file() = delete;
+	raii_mmaped_locked_file(const raii_mmaped_locked_file &other) = delete;
+private:
+	/* Is intended to be used with map_shared */
+	explicit raii_mmaped_locked_file(raii_locked_file &&_file, void *_map);
+	raii_locked_file file;
+	void *map{};
+};
+
+}
 
 #endif //RSPAMD_LOCKED_FILE_HXX
