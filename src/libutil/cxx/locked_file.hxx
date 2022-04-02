@@ -30,6 +30,7 @@ struct raii_locked_file final {
 	~raii_locked_file();
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>;
+	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
 
 	auto get_fd() const -> int
 	{
@@ -91,6 +92,33 @@ private:
 	explicit raii_mmaped_locked_file(raii_locked_file &&_file, void *_map);
 	raii_locked_file file;
 	void *map{};
+};
+
+/**
+ * A helper to have a file to write that will be renamed to the
+ * target file if successful or deleted in the case of failure
+ */
+struct raii_file_sink final {
+	static auto create(const char *fname, int flags, int perms, const char *suffix = "new")
+		-> tl::expected<raii_file_sink, std::string>;
+	auto write_output() -> bool;
+	~raii_file_sink();
+	auto get_fd() const -> int
+	{
+		return file.get_fd();
+	}
+
+	raii_file_sink(raii_file_sink &&other) noexcept;
+	/* Do not allow copy/default ctor */
+	const raii_file_sink& operator=(const raii_file_sink &other) = delete;
+	raii_file_sink() = delete;
+	raii_file_sink(const raii_file_sink &other) = delete;
+private:
+	explicit raii_file_sink(raii_locked_file &&_file, const char *_output, std::string &&_tmp_fname);
+	raii_locked_file file;
+	std::string output_fname;
+	std::string tmp_fname;
+	bool success;
 };
 
 }
