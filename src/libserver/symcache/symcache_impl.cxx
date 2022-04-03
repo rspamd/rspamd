@@ -142,7 +142,7 @@ auto symcache::load_items() -> bool
 		return false;
 	}
 
-	const auto *hdr = (struct symcache_header *)cached_map->get_map();
+	const auto *hdr = (struct symcache_header *) cached_map->get_map();
 
 	if (memcmp(hdr->magic, symcache_magic,
 			sizeof(symcache_magic)) != 0) {
@@ -152,7 +152,7 @@ auto symcache::load_items() -> bool
 	}
 
 	auto *parser = ucl_parser_new(0);
-	const auto *p = (const std::uint8_t *)(hdr + 1);
+	const auto *p = (const std::uint8_t *) (hdr + 1);
 
 	if (!ucl_parser_add_chunk(parser, p, cached_map->get_size() - sizeof(*hdr))) {
 		msg_info_cache ("cannot use file %s, cannot parse: %s", cfg->cache_filename,
@@ -222,15 +222,13 @@ auto symcache::load_items() -> bool
 			}
 
 			if (item->is_virtual() && !(item->type & SYMBOL_TYPE_GHOST)) {
-				g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
-				parent = g_ptr_array_index (cache->items_by_id,
-						item->specific.virtual.parent);
-				item->specific.virtual.parent_item = parent;
+				const auto &parent = item->get_parent(*this);
 
-				if (parent->st->weight < item->st->weight) {
-					parent->st->weight = item->st->weight;
+				if (parent) {
+					if (parent->st->weight < item->st->weight) {
+						parent->st->weight = item->st->weight;
+					}
 				}
-
 				/*
 				 * We maintain avg_time for virtual symbols equal to the
 				 * parent item avg_time
@@ -238,8 +236,8 @@ auto symcache::load_items() -> bool
 				item->st->avg_time = parent->st->avg_time;
 			}
 
-			cache->total_weight += fabs(item->st->weight);
-			cache->total_hits += item->st->total_hits;
+			total_weight += fabs(item->st->weight);
+			total_hits += item->st->total_hits;
 		}
 	}
 
@@ -249,41 +247,113 @@ auto symcache::load_items() -> bool
 	return true;
 }
 
-auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_item_ptr &
+template<typename T>
+static constexpr auto round_to_hundreds(T x)
+{
+	return (::floor(x) * 100.0) / 100.0;
+}
+
+bool symcache::save_items() const
+{
+	auto file_sink = util::raii_file_sink::create(cfg->cache_filename,
+			O_WRONLY | O_TRUNC, 00644);
+
+	if (!file_sink.has_value()) {
+		if (errno == EEXIST) {
+			/* Some other process is already writing data, give up silently */
+			return false;
+		}
+
+		msg_err_cache("%s", file_sink.error().c_str());
+
+		return false;
+	}
+
+	struct symcache_header hdr;
+	memset(&hdr, 0, sizeof(hdr));
+	memcpy(hdr.magic, symcache_magic, sizeof(symcache_magic));
+
+	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
+		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename,
+				errno, strerror(errno));
+
+		return false;
+	}
+
+	auto *top = ucl_object_typed_new(UCL_OBJECT);
+
+	for (const auto &it : items_by_symbol) {
+		auto item = it.second;
+		auto elt = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(elt,
+				ucl_object_fromdouble(round_to_hundreds(item->st->weight)),
+				"weight", 0, false);
+		ucl_object_insert_key(elt,
+				ucl_object_fromdouble(round_to_hundreds(item->st->time_counter.mean)),
+				"time", 0, false);
+		ucl_object_insert_key(elt, ucl_object_fromint(item->st->total_hits),
+				"count", 0, false);
+
+		auto *freq = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(freq,
+				ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.mean)),
+				"avg", 0, false);
+		ucl_object_insert_key(freq,
+				ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.stddev)),
+				"stddev", 0, false);
+		ucl_object_insert_key(elt, freq, "frequency", 0, false);
+
+		ucl_object_insert_key(top, elt, it.first.data(), 0, true);
+	}
+
+	auto fp = fdopen(file_sink->get_fd(), "a");
+	auto *efunc = ucl_object_emit_file_funcs(fp);
+	auto ret = ucl_object_emit_full(top, UCL_EMIT_JSON_COMPACT, efunc, nullptr);
+	ucl_object_emit_funcs_free(efunc);
+	ucl_object_unref(top);
+	fclose(fp);
+
+	return ret;
+}
+
+
+auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_item *
 {
 	if (id < 0 || id >= items_by_id.size()) {
+		g_error("internal error: requested item with id %d, when we have just %d items in the cache",
+				id, (int)items_by_id.size());
 		g_abort();
 	}
 
 	auto &ret = items_by_id[id];
 
 	if (!ret) {
-		g_abort();
+		return nullptr;
 	}
 
 	if (resolve_parent && ret->is_virtual()) {
 		return ret->get_parent(*this);
 	}
 
-	return ret;
+	return ret.get();
 }
 
 
-auto cache_item::get_parent(const symcache &cache) const -> const cache_item_ptr &
+auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (is_virtual()) {
 		const auto &virtual_sp = std::get<virtual_item>(specific);
 
-		return virtual_sp.get_parent()
+		return virtual_sp.get_parent(cache);
 	}
 
-	return cache_item_ptr{nullptr};
+	return nullptr;
 }
 
-auto virtual_item::get_parent(const symcache &cache) const -> const cache_item_ptr &
+auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (parent) {
-		return parent;
+		return parent.get();
 	}
 
 	return cache.get_item_by_id(parent_id, false);

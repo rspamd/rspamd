@@ -36,24 +36,24 @@
 #include "lua/lua_common.h"
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        cache->static_pool->tag.tagname, cache->cfg->checksum, \
-        G_STRFUNC, \
+        static_pool->tag.tagname, cfg->checksum, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         static_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         static_pool->tag.tagname, cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_symcache_log_id, "symcache", cfg->checksum, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_cache_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 namespace rspamd::symcache {
@@ -214,7 +214,7 @@ public:
 		// TODO
 	}
 
-	auto get_parent(const symcache &cache) const -> const cache_item_ptr&;
+	auto get_parent(const symcache &cache) const -> const cache_item *;
 };
 
 struct cache_item {
@@ -253,7 +253,7 @@ struct cache_item {
 	std::vector<cache_item_ptr> rdeps;
 
 	auto is_virtual() const -> bool { return std::holds_alternative<virtual_item>(specific); }
-	auto get_parent(const symcache &cache) const -> const cache_item_ptr &;
+	auto get_parent(const symcache &cache) const -> const cache_item *;
 };
 
 struct delayed_cache_dependency {
@@ -306,6 +306,7 @@ private:
 private:
 	/* Internal methods */
 	auto load_items() -> bool;
+	auto save_items() const -> bool;
 
 public:
 	explicit symcache(struct rspamd_config *cfg) : cfg(cfg) {
@@ -326,7 +327,7 @@ public:
 		}
 	}
 
-	auto get_item_by_id(int id, bool resolve_parent) const -> const cache_item_ptr &;
+	auto get_item_by_id(int id, bool resolve_parent) const -> const cache_item *;
 
 	/*
 	 * Initialises the symbols cache, must be called after all symbols are added
