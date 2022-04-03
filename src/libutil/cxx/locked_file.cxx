@@ -167,4 +167,75 @@ raii_file_sink::raii_file_sink(raii_file_sink &&other) noexcept
 {
 }
 
+namespace tests {
+template<class T>
+static auto test_read_file(const T& f) {
+	auto fd = f.get_fd();
+	(void)::lseek(fd, 0, SEEK_SET);
+	std::string buf('\0', (std::size_t)f.get_size());
+	::read(fd, buf.data(), buf.size());
+	return buf;
 }
+template<class T>
+static auto test_write_file(const T& f, const std::string_view &buf) {
+	auto fd = f.get_fd();
+	(void)::lseek(fd, 0, SEEK_SET);
+	return ::write(fd, buf.data(), buf.size());
+}
+auto random_fname() {
+	const auto *tmpdir = getenv("TMPDIR");
+	if (tmpdir == nullptr) {
+		tmpdir = G_DIR_SEPARATOR_S "tmp";
+	}
+
+	std::string out_fname{tmpdir};
+	out_fname += G_DIR_SEPARATOR_S;
+
+	unsigned char hexbuf[32];
+	rspamd_random_hex(hexbuf, sizeof(hexbuf));
+	out_fname.append((const char *)hexbuf, sizeof(hexbuf));
+
+	return out_fname;
+}
+TEST_SUITE("loked files utils") {
+
+TEST_CASE("create and delete file") {
+	auto fname = random_fname();
+	{
+		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		CHECK(raii_locked_file.has_value());
+		CHECK(::access(fname.c_str(), R_OK) == 0);
+	}
+	// File must be deleted after this call
+	CHECK(::access(fname.c_str(), R_OK) == -1);
+	CHECK(errno == ENOENT);
+	// Create one more time
+	{
+		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		CHECK(raii_locked_file.has_value());
+		CHECK(::access(fname.c_str(), R_OK) == 0);
+	}
+	CHECK(::access(fname.c_str(), R_OK) == -1);
+	CHECK(errno == ENOENT);
+}
+
+TEST_CASE("check lock") {
+	auto fname = random_fname();
+	{
+		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		CHECK(raii_locked_file.has_value());
+		CHECK(::access(fname.c_str(), R_OK) == 0);
+		auto raii_locked_file2 = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		CHECK(!raii_locked_file2.has_value());
+		CHECK(::access(fname.c_str(), R_OK) == 0);
+	}
+	// File must be deleted after this call
+	CHECK(::access(fname.c_str(), R_OK) == -1);
+	CHECK(errno == ENOENT);
+}
+
+} // TEST_SUITE
+
+} // namespace tests
+
+} // namespace rspamd::util
