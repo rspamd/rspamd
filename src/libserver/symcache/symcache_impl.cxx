@@ -27,37 +27,35 @@ auto symcache::init() -> bool
 	auto res = true;
 	reload_time = cfg->cache_reload_time;
 
-	if (cfg->cache_filename != NULL) {
+	if (cfg->cache_filename != nullptr) {
 		res = load_items();
 	}
 
-	struct rspamd_symcache_item *it, *vit;
-	struct cache_dependency *dep;
-	struct delayed_cache_dependency *ddep;
-	struct delayed_cache_condition *dcond;
-	GList *cur;
-	gint i, j;
 
-	cur = cache->delayed_deps;
-	while (cur) {
-		ddep = cur->data;
+	/* Deal with the delayed dependencies */
+	for (const auto &delayed_dep : *delayed_deps) {
+		auto virt_item = get_item_by_name(delayed_dep.from, false);
+		auto real_item = get_item_by_name(delayed_dep.from, true);
 
-		vit = rspamd_symcache_find_filter(cache, ddep->from, false);
-		it = rspamd_symcache_find_filter(cache, ddep->from, true);
-
-		if (it == NULL || vit == NULL) {
-			msg_err_cache ("cannot register delayed dependency between %s and %s: "
-						   "%s is missing", ddep->from, ddep->to, ddep->from);
+		if (virt_item == nullptr || real_item == nullptr) {
+			msg_err_cache("cannot register delayed dependency between %s and %s: "
+						   "%s is missing",
+						   delayed_dep.from.data(),
+						   delayed_dep.to.data(), delayed_dep.from.data());
 		}
 		else {
-			msg_debug_cache ("delayed between %s(%d:%d) -> %s", ddep->from,
-					it->id, vit->id, ddep->to);
-			rspamd_symcache_add_dependency(cache, it->id, ddep->to, vit != it ?
-																	vit->id : -1);
+			msg_debug_cache("delayed between %s(%d:%d) -> %s",
+					delayed_dep.from.data(),
+					real_item->id, virt_item->id,
+					delayed_dep.to.data());
+			add_dependency(real_item->id, delayed_dep.to, virt_item != real_item ?
+														  virt_item->id : -1);
 		}
-
-		cur = g_list_next (cur);
 	}
+
+	/* Remove delayed dependencies, as they are no longer needed at this point */
+	delayed_deps.reset();
+
 
 	cur = cache->delayed_conditions;
 	while (cur) {
@@ -320,14 +318,16 @@ bool symcache::save_items() const
 auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_item *
 {
 	if (id < 0 || id >= items_by_id.size()) {
-		g_error("internal error: requested item with id %d, when we have just %d items in the cache",
+		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
 				id, (int)items_by_id.size());
-		g_abort();
+		return nullptr;
 	}
 
 	auto &ret = items_by_id[id];
 
 	if (!ret) {
+		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
+				id);
 		return nullptr;
 	}
 
@@ -336,6 +336,49 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 	}
 
 	return ret.get();
+}
+
+auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) const -> const cache_item *
+{
+	auto it = items_by_symbol.find(name);
+
+	if (it == items_by_symbol.end()) {
+		return nullptr;
+	}
+
+	if (resolve_parent && it->second->is_virtual()) {
+		return it->second->get_parent(*this);
+	}
+
+	return it->second.get();
+}
+
+auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from)-> void
+{
+	g_assert (id_from >= 0 && id_from < (gint)items_by_id.size());
+	const auto &source = items_by_id[id_from];
+	g_assert (source.get() != nullptr);
+
+	source->deps.emplace_back(cache_dependency{
+			.item = cache_item_ptr{nullptr},
+			.sym = std::string(to),
+			.id = id_from,
+			.vid = -1,
+	});
+
+
+	if (virtual_id_from >= 0) {
+		g_assert (virtual_id_from < (gint)virtual_symbols.size());
+		/* We need that for settings id propagation */
+		const auto &vsource = virtual_symbols[virtual_id_from];
+		g_assert (vsource.get() != nullptr);
+		vsource->deps.emplace_back(cache_dependency{
+				.item = cache_item_ptr{nullptr},
+				.sym = std::string(to),
+				.id = -1,
+				.vid = virtual_id_from,
+		});
+	}
 }
 
 

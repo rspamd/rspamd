@@ -217,6 +217,13 @@ public:
 	auto get_parent(const symcache &cache) const -> const cache_item *;
 };
 
+struct cache_dependency {
+	cache_item_ptr item; /* Real dependency */
+	std::string sym; /* Symbolic dep name */
+	int id; /* Real from */
+	int vid; /* Virtual from */
+};
+
 struct cache_item {
 	/* This block is likely shared */
 	struct rspamd_symcache_item_stat *st;
@@ -248,7 +255,7 @@ struct cache_item {
 	id_list forbidden_ids;
 
 	/* Dependencies */
-	std::vector<cache_item_ptr> deps;
+	std::vector<cache_dependency> deps;
 	/* Reverse dependencies */
 	std::vector<cache_item_ptr> rdeps;
 
@@ -319,6 +326,8 @@ public:
 		peak_cb = -1;
 		cache_id = rspamd_random_uint64_fast();
 		L = (lua_State *)cfg->lua_state;
+		delayed_conditions = std::make_unique<std::vector<delayed_cache_condition>>();
+		delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
 	}
 
 	virtual ~symcache() {
@@ -327,7 +336,29 @@ public:
 		}
 	}
 
+	/**
+	 * Get an item by ID
+	 * @param id
+	 * @param resolve_parent
+	 * @return
+	 */
 	auto get_item_by_id(int id, bool resolve_parent) const -> const cache_item *;
+	/**
+	 * Get an item by it's name
+	 * @param name
+	 * @param resolve_parent
+	 * @return
+	 */
+	auto get_item_by_name(std::string_view name, bool resolve_parent) const -> const cache_item *;
+
+	/**
+	 * Add a direct dependency
+	 * @param id_from
+	 * @param to
+	 * @param virtual_id_from
+	 * @return
+	 */
+	auto add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void;
 
 	/*
 	 * Initialises the symbols cache, must be called after all symbols are added
