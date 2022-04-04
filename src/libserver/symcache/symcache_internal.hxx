@@ -177,14 +177,14 @@ class symcache;
 
 struct item_condition {
 private:
-	gint cb;
 	lua_State *L;
+	int cb;
 public:
-	item_condition() {
-		// TODO
-	}
+	item_condition(lua_State *_L, int _cb) : L(_L), cb(_cb) {}
 	virtual ~item_condition() {
-		// TODO
+		if (cb != -1 && L != nullptr) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cb);
+		}
 	}
 };
 
@@ -197,8 +197,8 @@ public:
 	explicit normal_item() {
 		// TODO
 	}
-	auto add_condition() -> void {
-		// TODO
+	auto add_condition(lua_State *L, int cbref) -> void {
+		conditions.emplace_back(L, cbref);
 	}
 	auto call() -> void {
 		// TODO
@@ -261,6 +261,16 @@ struct cache_item {
 
 	auto is_virtual() const -> bool { return std::holds_alternative<virtual_item>(specific); }
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto add_condition(lua_State *L, int cbref) -> bool {
+		if (!is_virtual()) {
+			auto &normal = std::get<normal_item>(specific);
+			normal.add_condition(L, cbref);
+
+			return true;
+		}
+
+		return false;
+	}
 };
 
 struct delayed_cache_dependency {
@@ -350,6 +360,13 @@ public:
 	 * @return
 	 */
 	auto get_item_by_name(std::string_view name, bool resolve_parent) const -> const cache_item *;
+	/**
+	 * Get an item by it's name, mutable pointer
+	 * @param name
+	 * @param resolve_parent
+	 * @return
+	 */
+	auto get_item_by_name_mut(std::string_view name, bool resolve_parent) const -> cache_item *;
 
 	/**
 	 * Add a direct dependency

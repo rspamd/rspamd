@@ -57,27 +57,26 @@ auto symcache::init() -> bool
 	delayed_deps.reset();
 
 
-	cur = cache->delayed_conditions;
-	while (cur) {
-		dcond = cur->data;
+	/* Deal with the delayed conditions */
+	for (const auto &delayed_cond : *delayed_conditions) {
+		auto it = get_item_by_name_mut(delayed_cond.sym, true);
 
-		it = rspamd_symcache_find_filter(cache, dcond->sym, true);
-
-		if (it == NULL) {
+		if (it == nullptr) {
 			msg_err_cache (
 					"cannot register delayed condition for %s",
-					dcond->sym);
-			luaL_unref(dcond->L, LUA_REGISTRYINDEX, dcond->cbref);
+					delayed_cond.sym.c_str());
+			luaL_unref(delayed_cond.L, LUA_REGISTRYINDEX, delayed_cond.cbref);
 		}
 		else {
-			struct rspamd_symcache_condition *ncond = rspamd_mempool_alloc0 (cache->static_pool,
-					sizeof(*ncond));
-			ncond->cb = dcond->cbref;
-			DL_APPEND(it->specific.normal.conditions, ncond);
+			if (!it->add_condition(delayed_cond.L, delayed_cond.cbref)) {
+				msg_err_cache (
+						"cannot register delayed condition for %s: virtual parent; qed",
+						delayed_cond.sym.c_str());
+				g_abort();
+			}
 		}
-
-		cur = g_list_next (cur);
 	}
+	delayed_conditions.reset();
 
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, it) {
 
@@ -353,6 +352,21 @@ auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) cons
 	return it->second.get();
 }
 
+auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) const -> cache_item *
+{
+	auto it = items_by_symbol.find(name);
+
+	if (it == items_by_symbol.end()) {
+		return nullptr;
+	}
+
+	if (resolve_parent && it->second->is_virtual()) {
+		return (cache_item *) it->second->get_parent(*this);
+	}
+
+	return it->second.get();
+}
+
 auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from)-> void
 {
 	g_assert (id_from >= 0 && id_from < (gint)items_by_id.size());
@@ -380,6 +394,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 		});
 	}
 }
+
 
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
