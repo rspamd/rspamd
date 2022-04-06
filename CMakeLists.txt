@@ -60,6 +60,7 @@ OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default:
 OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_DOCTEST      "Use system doctest instead of bundled one [default: OFF]" OFF)
+OPTION(SYSTEM_XXHASH       "Use system xxhash instead of bundled one [default: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
 
@@ -111,7 +112,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 		"${CMAKE_SOURCE_DIR}/contrib/fpconv"
 		"${CMAKE_SOURCE_DIR}/contrib/libottery"
-		"${CMAKE_SOURCE_DIR}/contrib/xxhash"
 		"${CMAKE_SOURCE_DIR}/contrib/cdb"
 		"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
 		"${CMAKE_SOURCE_DIR}/contrib/librdns"
@@ -581,7 +581,13 @@ IF(GLIB_COMPAT)
 ENDIF(GLIB_COMPAT)
 
 
-ADD_SUBDIRECTORY(contrib/xxhash)
+IF(SYSTEM_XXHASH MATCHES "OFF")
+	ADD_SUBDIRECTORY(contrib/xxhash)
+	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/xxhash")
+ELSE()
+	ProcessPackage(XXHASH LIBRARY xxhash INCLUDE xxhash.h
+		ROOT ${LIBXXHASH_ROOT_DIR} MODULES xxhash libxxhash)
+ENDIF()
 ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/fpconv)
