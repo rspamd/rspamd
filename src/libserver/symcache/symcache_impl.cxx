@@ -408,6 +408,132 @@ auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 	return nullptr;
 }
 
+auto cache_item::process_deps(const symcache &cache) -> void
+{
+	/* Allow logging macros to work */
+	auto log_tag = [&](){ return cache.log_tag(); };
+
+	for (auto &dep : deps) {
+		msg_debug_cache ("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
+		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
+
+		if (dep.vid >= 0) {
+			/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
+			const auto *vdit = cache.get_item_by_name(dep.sym, false);
+
+			if (!vdit) {
+				if (dit) {
+					msg_err_cache ("cannot add dependency from %s on %s: no dependency symbol registered",
+							dep.sym.c_str(), dit->symbol.c_str());
+				}
+			}
+			else {
+				msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
+						dep.vid, vdit->symbol.c_str(), vdit->id);
+
+				std::size_t nids = 0;
+
+				msg_debug_cache ("check id propagation for dependency %s from %s",
+						symbol.c_str(), dit->symbol.c_str());
+
+				const auto *ids = dit->allowed_ids.get_ids(nids);
+
+				/* TODO: merge? */
+				if (nids > 0) {
+					msg_info_cache ("propagate allowed ids from %s to %s",
+							dit->symbol.c_str(), symbol.c_str());
+
+					rspamd_symcache_set_allowed_settings_ids (cache, it->symbol, ids,
+							nids);
+				}
+
+				ids = rspamd_symcache_get_forbidden_settings_ids (cache, dit->symbol, &nids);
+
+				if (nids > 0) {
+					msg_info_cache ("propagate forbidden ids from %s to %s",
+							dit->symbol, it->symbol);
+
+					rspamd_symcache_set_forbidden_settings_ids (cache, it->symbol, ids,
+							nids);
+				}
+			}
+		}
+
+		if (dit != nullptr) {
+			if (!dit->is_filter()) {
+				/*
+				 * Check sanity:
+				 * - filters -> prefilter dependency is OK and always satisfied
+				 * - postfilter -> (filter, prefilter) dep is ok
+				 * - idempotent -> (any) dep is OK
+				 *
+				 * Otherwise, emit error
+				 * However, even if everything is fine this dep is useless ¯\_(ツ)_/¯
+				 */
+				auto ok_dep = false;
+
+				if (is_filter()) {
+					if (dit->is_filter()) {
+						ok_dep = true;
+					}
+					else if (dit->type & SYMBOL_TYPE_PREFILTER) {
+						ok_dep = true;
+					}
+				}
+				else if (type & SYMBOL_TYPE_POSTFILTER) {
+					if (dit->type & SYMBOL_TYPE_PREFILTER) {
+						ok_dep = true;
+					}
+				}
+				else if (type & SYMBOL_TYPE_IDEMPOTENT) {
+					if (dit->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER)) {
+						ok_dep = true;
+					}
+				}
+				else if (type & SYMBOL_TYPE_PREFILTER) {
+					if (priority < dit->priority) {
+						/* Also OK */
+						ok_dep = true;
+					}
+				}
+
+				if (!ok_dep) {
+					msg_err_cache ("cannot add dependency from %s on %s: invalid symbol types",
+							dep.sym.c_str(), symbol.c_str());
+
+					continue;
+				}
+			}
+			else {
+				if (dit->id == id) {
+					msg_err_cache ("cannot add dependency on self: %s -> %s "
+								   "(resolved to %s)",
+							symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+				} else {
+					/* Create a reverse dep */
+					dit->rdeps.emplace_back(getptr(), dep.sym, id, -1);
+					dep.item = dit->getptr();
+					dep.id = dit->id;
+
+					msg_debug_cache ("add dependency from %d on %d", id,
+							dit->id);
+				}
+			}
+		}
+		else if (dep.id >= 0) {
+			msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
+					dep.sym.c_str(), symbol.c_str());
+
+			return;
+		}
+
+		if (vdit) {
+			/* Use virtual symbol to propagate deps */
+			rspamd_symcache_propagate_dep (cache, it, vdit);
+		}
+	}
+}
+
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (parent) {

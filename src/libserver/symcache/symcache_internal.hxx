@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdint>
+#include <utility>
 #include <vector>
 #include <string>
 #include <string_view>
@@ -36,19 +37,19 @@
 #include "lua/lua_common.h"
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        static_pool->tag.tagname, cfg->checksum, \
+        "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        static_pool->tag.tagname, cfg->checksum, \
+        "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        static_pool->tag.tagname, cfg->checksum, \
+        "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        rspamd_symcache_log_id, "symcache", cfg->checksum, \
+        rspamd_symcache_log_id, "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_cache_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -171,6 +172,8 @@ struct id_list {
 			}
 		}
 	}
+
+
 };
 
 class symcache;
@@ -222,14 +225,18 @@ struct cache_dependency {
 	std::string sym; /* Symbolic dep name */
 	int id; /* Real from */
 	int vid; /* Virtual from */
+public:
+	/* Default piecewise constructor */
+	cache_dependency(cache_item_ptr _item, std::string _sym, int _id, int _vid) :
+		item(std::move(_item)), sym(std::move(_sym)), id(_id), vid(_vid) {}
 };
 
-struct cache_item {
+struct cache_item : std::enable_shared_from_this<cache_item> {
 	/* This block is likely shared */
 	struct rspamd_symcache_item_stat *st;
 	struct rspamd_counter_data *cd;
 
-	std::uint64_t last_count;
+	std::uint64_t last_count = 0;
 	std::string symbol;
 	std::string_view type_descr;
 	int type;
@@ -238,16 +245,16 @@ struct cache_item {
 	std::variant<normal_item, virtual_item> specific;
 
 	/* Condition of execution */
-	bool enabled;
+	bool enabled = true;
 
 	/* Priority */
-	int priority;
+	int priority = 0;
 	/* Topological order */
-	unsigned int order;
+	unsigned int order = 0;
 	/* Unique id - counter */
-	int id;
+	int id = 0;
 
-	int frequency_peaks;
+	int frequency_peaks = 0;
 	/* Settings ids */
 	id_list allowed_ids;
 	/* Allows execution but not symbols insertion */
@@ -259,7 +266,33 @@ struct cache_item {
 	/* Reverse dependencies */
 	std::vector<cache_item_ptr> rdeps;
 
+public:
+	[[nodiscard]] static auto create() -> cache_item_ptr {
+		return std::shared_ptr<cache_item>(new cache_item());
+	}
+	/**
+	 * Share ownership on the item
+	 * @return
+	 */
+	auto getptr() -> cache_item_ptr {
+		return shared_from_this();
+	}
+	/**
+	 * Process and resolve dependencies for the item
+	 * @param cache
+	 */
+	auto process_deps(const symcache &cache) -> void;
 	auto is_virtual() const -> bool { return std::holds_alternative<virtual_item>(specific); }
+	auto is_filter() const -> bool {
+		static constexpr const auto forbidden_flags = SYMBOL_TYPE_PREFILTER|
+				SYMBOL_TYPE_COMPOSITE|
+				SYMBOL_TYPE_CONNFILTER|
+				SYMBOL_TYPE_POSTFILTER|
+				SYMBOL_TYPE_IDEMPOTENT;
+
+		return std::holds_alternative<normal_item>(specific) &&
+		        (type & forbidden_flags) == 0;
+	}
 	auto get_parent(const symcache &cache) const -> const cache_item *;
 	auto add_condition(lua_State *L, int cbref) -> bool {
 		if (!is_virtual()) {
@@ -271,6 +304,9 @@ struct cache_item {
 
 		return false;
 	}
+
+private:
+	cache_item() = default;
 };
 
 struct delayed_cache_dependency {
@@ -377,11 +413,19 @@ public:
 	 */
 	auto add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void;
 
-	/*
+	/**
 	 * Initialises the symbols cache, must be called after all symbols are added
 	 * and the config file is loaded
 	 */
 	auto init() -> bool;
+
+	/**
+	 * Log helper that returns cfg checksum
+	 * @return
+	 */
+	auto log_tag() const -> const char* {
+		return cfg->checksum;
+	}
 };
 
 /*
@@ -394,14 +438,6 @@ struct cache_dynamic_item {
 	unsigned finished: 1;
 	/* unsigned pad:14; */
 	std::uint32_t async_events;
-};
-
-
-struct cache_dependency {
-	cache_item_ptr item; /* Owning pointer to the real dep */
-	std::string_view sym; /* Symbolic dep name */
-	int id; /* Real from */
-	int vid; /* Virtual from */
 };
 
 struct cache_savepoint {
