@@ -78,12 +78,15 @@ using cache_item_ptr = std::shared_ptr<cache_item>;
 using cache_item_weak_ptr = std::weak_ptr<cache_item>;
 
 struct order_generation {
-	std::vector<cache_item_weak_ptr> d;
+	std::vector<cache_item_ptr> d;
 	unsigned int generation_id;
+
+	explicit order_generation(std::size_t nelts, unsigned id) : generation_id(id) {
+		d.reserve(nelts);
+	}
 };
 
 using order_generation_ptr = std::shared_ptr<order_generation>;
-
 
 class symcache;
 
@@ -269,6 +272,9 @@ private:
 	/* Internal methods */
 	auto load_items() -> bool;
 	auto save_items() const -> bool;
+	auto resort() -> void;
+	/* Helper for g_hash_table_foreach */
+	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
 
 public:
 	explicit symcache(struct rspamd_config *cfg) : cfg(cfg) {

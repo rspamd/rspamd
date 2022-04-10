@@ -146,7 +146,7 @@ struct rspamd_symbol {
 	struct rspamd_symbols_group *gr; /* Main group */
 	GPtrArray *groups; /* Other groups */
 	guint flags;
-	struct rspamd_symcache_item *cache_item;
+	void *cache_item;
 	gint nshots;
 };
 
