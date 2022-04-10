@@ -17,6 +17,7 @@
 #include "symcache_internal.hxx"
 #include "unix-std.h"
 #include "libutil/cxx/locked_file.hxx"
+#include "fmt/core.h"
 
 #include <cmath>
 
@@ -223,7 +224,7 @@ auto symcache::load_items() -> bool
 				}
 			}
 
-			if (item->is_virtual() && !(item->type & SYMBOL_TYPE_GHOST)) {
+			if (item->is_virtual() && !item->is_ghost()) {
 				const auto &parent = item->get_parent(*this);
 
 				if (parent) {
@@ -613,29 +614,11 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				 */
 				auto ok_dep = false;
 
-				if (is_filter()) {
-					if (dit->is_filter()) {
-						ok_dep = true;
-					}
-					else if (dit->type & SYMBOL_TYPE_PREFILTER) {
-						ok_dep = true;
-					}
+				if (dit->get_type() == type) {
+					ok_dep = true;
 				}
-				else if (type & SYMBOL_TYPE_POSTFILTER) {
-					if (dit->type & SYMBOL_TYPE_PREFILTER) {
-						ok_dep = true;
-					}
-				}
-				else if (type & SYMBOL_TYPE_IDEMPOTENT) {
-					if (dit->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER)) {
-						ok_dep = true;
-					}
-				}
-				else if (type & SYMBOL_TYPE_PREFILTER) {
-					if (priority < dit->priority) {
-						/* Also OK */
-						ok_dep = true;
-					}
+				else if (type < dit->get_type()) {
+					ok_dep = true;
 				}
 
 				if (!ok_dep) {
@@ -681,6 +664,83 @@ auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 	}
 
 	return cache.get_item_by_id(parent_id, false);
+}
+
+auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>
+{
+	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER|SYMBOL_TYPE_PREFILTER
+						   |SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_IDEMPOTENT
+						   |SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER
+						   |SYMBOL_TYPE_VIRTUAL;
+
+	constexpr auto all_but_one_ty = [&](int type, int exclude_bit) -> auto {
+		return type & (trivial_types & ~exclude_bit);
+	};
+
+	if (type & trivial_types) {
+		auto check_trivial = [&](auto flag, symcache_item_type ty) ->  tl::expected<std::pair<symcache_item_type, int>, std::string> {
+			if (all_but_one_ty(type, flag)) {
+				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", type));
+			}
+
+			return std::make_pair(ty, type & ~flag);
+		};
+		if (type & SYMBOL_TYPE_CONNFILTER) {
+			return check_trivial(SYMBOL_TYPE_CONNFILTER, symcache_item_type::CONNFILTER);
+		}
+		else if (type & SYMBOL_TYPE_PREFILTER) {
+			return check_trivial(SYMBOL_TYPE_PREFILTER, symcache_item_type::PREFILTER);
+		}
+		else if (type & SYMBOL_TYPE_POSTFILTER) {
+			return check_trivial(SYMBOL_TYPE_POSTFILTER, symcache_item_type::POSTFILTER);
+		}
+		else if (type & SYMBOL_TYPE_IDEMPOTENT) {
+			return check_trivial(SYMBOL_TYPE_IDEMPOTENT, symcache_item_type::IDEMPOTENT);
+		}
+		else if (type & SYMBOL_TYPE_COMPOSITE) {
+			return check_trivial(SYMBOL_TYPE_COMPOSITE, symcache_item_type::COMPOSITE);
+		}
+		else if (type & SYMBOL_TYPE_CLASSIFIER) {
+			return check_trivial(SYMBOL_TYPE_CLASSIFIER, symcache_item_type::CLASSIFIER);
+		}
+		else if (type & SYMBOL_TYPE_VIRTUAL) {
+			return check_trivial(SYMBOL_TYPE_VIRTUAL, symcache_item_type::VIRTUAL);
+		}
+
+		return tl::make_unexpected(fmt::format("internal error: impossible flags combination", type));
+	}
+
+	/* Maybe check other flags combination here? */
+	return std::make_pair(symcache_item_type::FILTER, type);
+}
+
+bool operator<(symcache_item_type lhs, symcache_item_type rhs)
+{
+	auto ret = false;
+	switch(lhs) {
+	case symcache_item_type::CONNFILTER:
+		break;
+	case symcache_item_type::PREFILTER:
+		if (rhs == symcache_item_type::CONNFILTER) {
+			ret = true;
+		}
+		break;
+	case symcache_item_type::FILTER:
+		if (rhs == symcache_item_type::CONNFILTER || rhs == symcache_item_type::PREFILTER) {
+			ret = true;
+		}
+		break;
+	case symcache_item_type::POSTFILTER:
+		if (rhs != symcache_item_type::IDEMPOTENT) {
+			ret = true;
+		}
+		break;
+	case symcache_item_type::IDEMPOTENT:
+	default:
+		break;
+	}
+
+	return ret;
 }
 
 }

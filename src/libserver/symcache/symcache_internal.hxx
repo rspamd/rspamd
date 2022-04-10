@@ -32,7 +32,7 @@
 #include <memory>
 #include <variant>
 #include "contrib/robin-hood/robin_hood.h"
-
+#include "contrib/expected/expected.hpp"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 
@@ -89,6 +89,29 @@ struct order_generation {
 using order_generation_ptr = std::shared_ptr<order_generation>;
 
 class symcache;
+
+enum class symcache_item_type {
+	CONNFILTER, /* Executed on connection stage */
+	PREFILTER, /* Executed before all filters */
+	FILTER, /* Normal symbol with a callback */
+	POSTFILTER, /* Executed after all filters */
+	IDEMPOTENT, /* Executed after postfilters, cannot change results */
+	CLASSIFIER, /* A virtual classifier symbol */
+	COMPOSITE, /* A virtual composite symbol */
+	VIRTUAL, /* A virtual symbol... */
+};
+
+/*
+ * Compare item types: earlier stages symbols are > than later stages symbols
+ * Order for virtual stuff is not defined.
+ */
+bool operator < (symcache_item_type lhs, symcache_item_type rhs);
+/**
+ * This is a public helper to convert a legacy C type to a more static type
+ * @param type input type as a C enum
+ * @return pair of type safe symcache_item_type + the remaining flags or an error
+ */
+auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
 
 struct item_condition {
 private:
@@ -151,7 +174,8 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	std::uint64_t last_count = 0;
 	std::string symbol;
 	std::string_view type_descr;
-	int type;
+	symcache_item_type type;
+	int flags;
 
 	/* Callback data */
 	std::variant<normal_item, virtual_item> specific;
@@ -196,16 +220,16 @@ public:
 	auto process_deps(const symcache &cache) -> void;
 	auto is_virtual() const -> bool { return std::holds_alternative<virtual_item>(specific); }
 	auto is_filter() const -> bool {
-		static constexpr const auto forbidden_flags = SYMBOL_TYPE_PREFILTER|
-				SYMBOL_TYPE_COMPOSITE|
-				SYMBOL_TYPE_CONNFILTER|
-				SYMBOL_TYPE_POSTFILTER|
-				SYMBOL_TYPE_IDEMPOTENT;
-
 		return std::holds_alternative<normal_item>(specific) &&
-		        (type & forbidden_flags) == 0;
+		        (type == symcache_item_type::FILTER);
+	}
+	auto is_ghost() const -> bool {
+		return flags & SYMBOL_TYPE_GHOST;
 	}
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto get_type() const -> auto {
+		return type;
+	}
 	auto add_condition(lua_State *L, int cbref) -> bool {
 		if (!is_virtual()) {
 			auto &normal = std::get<normal_item>(specific);
@@ -271,7 +295,6 @@ private:
 private:
 	/* Internal methods */
 	auto load_items() -> bool;
-	auto save_items() const -> bool;
 	auto resort() -> void;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
@@ -296,6 +319,12 @@ public:
 			luaL_unref(L, LUA_REGISTRYINDEX, peak_cb);
 		}
 	}
+
+	/**
+	 * Saves items on disk (if possible)
+	 * @return
+	 */
+	auto save_items() const -> bool;
 
 	/**
 	 * Get an item by ID
@@ -342,9 +371,20 @@ public:
 		return cfg->checksum;
 	}
 
+	/**
+	 * Helper to return a memory pool associated with the cache
+	 * @return
+	 */
 	auto get_pool() const {
 		return static_pool;
 	}
+
+	auto add_symbol_with_callback(std::string_view name,
+								  int priority,
+								  symbol_func_t func,
+								  void *user_data,
+								  enum rspamd_symbol_type type) -> int;
+	auto add_virtual_symbol() -> int;
 };
 
 /*

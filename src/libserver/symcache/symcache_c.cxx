@@ -46,3 +46,11 @@ rspamd_symcache_init (struct rspamd_symcache *cache)
 
 	return real_cache->init();
 }
+
+void
+rspamd_symcache_save (struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->save_items();
+}
