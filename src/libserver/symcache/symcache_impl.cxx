@@ -31,7 +31,6 @@ auto symcache::init() -> bool
 		res = load_items();
 	}
 
-
 	/* Deal with the delayed dependencies */
 	for (const auto &delayed_dep : *delayed_deps) {
 		auto virt_item = get_item_by_name(delayed_dep.from, false);
@@ -78,45 +77,49 @@ auto symcache::init() -> bool
 	}
 	delayed_conditions.reset();
 
-	PTR_ARRAY_FOREACH (cache->items_by_id, i, it) {
-
-		PTR_ARRAY_FOREACH (it->deps, j, dep) {
-			rspamd_symcache_process_dep(cache, it, dep);
-		}
-
-		if (it->deps) {
-			/* Reversed loop to make removal safe */
-			for (j = it->deps->len - 1; j >= 0; j--) {
-				dep = g_ptr_array_index (it->deps, j);
-
-				if (dep->item == NULL) {
-					/* Remove useless dep */
-					g_ptr_array_remove_index(it->deps, j);
-				}
-			}
-		}
+	for (auto &it : items_by_id) {
+		it->process_deps(*this);
 	}
 
-	/* Special case for virtual symbols */
-	PTR_ARRAY_FOREACH (cache->virtual, i, it) {
-
-		PTR_ARRAY_FOREACH (it->deps, j, dep) {
-			rspamd_symcache_process_dep(cache, it, dep);
-		}
+	for (auto &it : virtual_symbols) {
+		it->process_deps(*this);
 	}
 
-	g_ptr_array_sort_with_data(cache->connfilters, prefilters_cmp, cache);
-	g_ptr_array_sort_with_data(cache->prefilters, prefilters_cmp, cache);
-	g_ptr_array_sort_with_data(cache->postfilters, postfilters_cmp, cache);
-	g_ptr_array_sort_with_data(cache->idempotent, postfilters_cmp, cache);
+	/* Sorting stuff */
+	auto postfilters_cmp = [](const auto &it1, const auto &it2) -> int {
+		if (it1->priority > it2-> priority) {
+			return 1;
+		}
+		else if (it1->priority == it2->priority) {
+			return 0;
+		}
+
+		return -1;
+	};
+	auto prefilters_cmp = [](const auto &it1, const auto &it2) -> int {
+		if (it1->priority > it2-> priority) {
+			return -1;
+		}
+		else if (it1->priority == it2->priority) {
+			return 0;
+		}
+
+		return 1;
+	};
+
+
+	std::stable_sort(std::begin(connfilters), std::end(connfilters), prefilters_cmp);
+	std::stable_sort(std::begin(prefilters), std::end(prefilters), prefilters_cmp);
+	std::stable_sort(std::begin(postfilters), std::end(postfilters), postfilters_cmp);
+	std::stable_sort(std::begin(idempotent), std::end(idempotent), postfilters_cmp);
 
 	rspamd_symcache_resort(cache);
 
 	/* Connect metric symbols with symcache symbols */
-	if (cache->cfg->symbols) {
-		g_hash_table_foreach(cache->cfg->symbols,
+	if (cfg->symbols) {
+		g_hash_table_foreach(cfg->symbols,
 				rspamd_symcache_metric_connect_cb,
-				cache);
+				this);
 	}
 
 	return res;
@@ -134,7 +137,7 @@ auto symcache::load_items() -> bool
 
 
 	if (cached_map->get_size() < (gint) sizeof(symcache_header)) {
-		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename, ,
+		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
 				errno, strerror(errno));
 		return false;
 	}
@@ -373,12 +376,10 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 	const auto &source = items_by_id[id_from];
 	g_assert (source.get() != nullptr);
 
-	source->deps.emplace_back(cache_dependency{
-			.item = cache_item_ptr{nullptr},
-			.sym = std::string(to),
-			.id = id_from,
-			.vid = -1,
-	});
+	source->deps.emplace_back(cache_item_ptr{nullptr},
+			std::string(to),
+			id_from,
+			-1);
 
 
 	if (virtual_id_from >= 0) {
@@ -386,12 +387,10 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 		/* We need that for settings id propagation */
 		const auto &vsource = virtual_symbols[virtual_id_from];
 		g_assert (vsource.get() != nullptr);
-		vsource->deps.emplace_back(cache_dependency{
-				.item = cache_item_ptr{nullptr},
-				.sym = std::string(to),
-				.id = -1,
-				.vid = virtual_id_from,
-		});
+		vsource->deps.emplace_back(cache_item_ptr{nullptr},
+				std::string(to),
+				-1,
+				virtual_id_from);
 	}
 }
 
@@ -423,38 +422,36 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 			if (!vdit) {
 				if (dit) {
-					msg_err_cache ("cannot add dependency from %s on %s: no dependency symbol registered",
+					msg_err_cache("cannot add dependency from %s on %s: no dependency symbol registered",
 							dep.sym.c_str(), dit->symbol.c_str());
 				}
 			}
 			else {
-				msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
+				msg_debug_cache("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
 						dep.vid, vdit->symbol.c_str(), vdit->id);
 
 				std::size_t nids = 0;
 
-				msg_debug_cache ("check id propagation for dependency %s from %s",
+				/* Propagate ids */
+				msg_debug_cache("check id propagation for dependency %s from %s",
 						symbol.c_str(), dit->symbol.c_str());
 
 				const auto *ids = dit->allowed_ids.get_ids(nids);
 
-				/* TODO: merge? */
 				if (nids > 0) {
-					msg_info_cache ("propagate allowed ids from %s to %s",
+					msg_debug_cache("propagate allowed ids from %s to %s",
 							dit->symbol.c_str(), symbol.c_str());
 
-					rspamd_symcache_set_allowed_settings_ids (cache, it->symbol, ids,
-							nids);
+					allowed_ids.set_ids(ids, nids, cache.get_pool());
 				}
 
-				ids = rspamd_symcache_get_forbidden_settings_ids (cache, dit->symbol, &nids);
+				ids = dit->forbidden_ids.get_ids(nids);
 
 				if (nids > 0) {
-					msg_info_cache ("propagate forbidden ids from %s to %s",
-							dit->symbol, it->symbol);
+					msg_debug_cache("propagate forbidden ids from %s to %s",
+							dit->symbol.c_str(), symbol.c_str());
 
-					rspamd_symcache_set_forbidden_settings_ids (cache, it->symbol, ids,
-							nids);
+					forbidden_ids.set_ids(ids, nids, cache.get_pool());
 				}
 			}
 		}
@@ -524,14 +521,13 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
 					dep.sym.c_str(), symbol.c_str());
 
-			return;
-		}
-
-		if (vdit) {
-			/* Use virtual symbol to propagate deps */
-			rspamd_symcache_propagate_dep (cache, it, vdit);
+			continue;
 		}
 	}
+
+	// Remove empty deps
+	deps.erase(std::remove_if(std::begin(deps), std::end(deps),
+			[](const auto &dep){ return !dep.item; }), std::end(deps));
 }
 
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *

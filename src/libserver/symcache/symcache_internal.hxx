@@ -36,6 +36,8 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 
+#include "symcache_id_list.hxx"
+
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
@@ -82,99 +84,6 @@ struct order_generation {
 
 using order_generation_ptr = std::shared_ptr<order_generation>;
 
-/*
- * This structure is optimised to store ids list:
- * - If the first element is -1 then use dynamic part, else use static part
- * There is no std::variant to save space
- */
-struct id_list {
-	union {
-		std::uint32_t st[4];
-		struct {
-			std::uint32_t e; /* First element */
-			std::uint16_t len;
-			std::uint16_t allocated;
-			std::uint32_t *n;
-		} dyn;
-	} data;
-
-	id_list() {
-		std::memset((void *)&data, 0, sizeof(data));
-	}
-	/**
-	 * Returns ids from a compressed list, accepting a mutable reference for number of elements
-	 * @param nids output of the number of elements
-	 * @return
-	 */
-	auto get_ids(std::size_t &nids) const -> const std::uint32_t * {
-		if (data.dyn.e == -1) {
-			/* Dynamic list */
-			nids = data.dyn.len;
-
-			return data.dyn.n;
-		}
-		else {
-			auto cnt = 0;
-
-			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS(data.st)) {
-				cnt ++;
-			}
-
-			nids = cnt;
-
-			return data.st;
-		}
-	}
-
-	auto add_id(std::uint32_t id, rspamd_mempool_t *pool) -> void {
-		if (data.st[0] == -1) {
-			/* Dynamic array */
-			if (data.dyn.len < data.dyn.allocated) {
-				/* Trivial, append + sort */
-				data.dyn.n[data.dyn.len++] = id;
-			}
-			else {
-				/* Reallocate */
-				g_assert (data.dyn.allocated <= G_MAXINT16);
-				data.dyn.allocated *= 2;
-
-				auto *new_array = rspamd_mempool_alloc_array_type(pool,
-						data.dyn.allocated, std::uint32_t);
-				memcpy(new_array, data.dyn.n, data.dyn.len * sizeof(std::uint32_t));
-				data.dyn.n = new_array;
-				data.dyn.n[data.dyn.len++] = id;
-			}
-
-			std::sort(data.dyn.n, data.dyn.n + data.dyn.len);
-		}
-		else {
-			/* Static part */
-			auto cnt = 0u;
-			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS (data.st)) {
-				cnt ++;
-			}
-
-			if (cnt < G_N_ELEMENTS (data.st)) {
-				data.st[cnt] = id;
-			}
-			else {
-				/* Switch to dynamic */
-				data.dyn.allocated = G_N_ELEMENTS (data.st) * 2;
-				auto *new_array = rspamd_mempool_alloc_array_type(pool,
-						data.dyn.allocated, std::uint32_t);
-				memcpy (new_array, data.st, sizeof(data.st));
-				data.dyn.n = new_array;
-				data.dyn.e = -1; /* Marker */
-				data.dyn.len = G_N_ELEMENTS (data.st);
-
-				/* Recursively jump to dynamic branch that will handle insertion + sorting */
-				add_id(id, pool); // tail call
-			}
-		}
-	}
-
-
-};
 
 class symcache;
 
@@ -264,7 +173,7 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	/* Dependencies */
 	std::vector<cache_dependency> deps;
 	/* Reverse dependencies */
-	std::vector<cache_item_ptr> rdeps;
+	std::vector<cache_dependency> rdeps;
 
 public:
 	[[nodiscard]] static auto create() -> cache_item_ptr {
@@ -425,6 +334,10 @@ public:
 	 */
 	auto log_tag() const -> const char* {
 		return cfg->checksum;
+	}
+
+	auto get_pool() const {
+		return static_pool;
 	}
 };
 
