@@ -132,9 +132,7 @@ private:
 	void *user_data;
 	std::vector<item_condition> conditions;
 public:
-	explicit normal_item() {
-		// TODO
-	}
+	explicit normal_item(symbol_func_t _func, void *_user_data) : func(_func), user_data(_user_data) {}
 	auto add_condition(lua_State *L, int cbref) -> void {
 		conditions.emplace_back(L, cbref);
 	}
@@ -148,9 +146,7 @@ private:
 	int parent_id;
 	cache_item_ptr parent;
 public:
-	explicit virtual_item() {
-		// TODO
-	}
+	explicit virtual_item(int _parent_id) : parent_id(_parent_id) {}
 
 	auto get_parent(const symcache &cache) const -> const cache_item *;
 };
@@ -168,17 +164,13 @@ public:
 
 struct cache_item : std::enable_shared_from_this<cache_item> {
 	/* This block is likely shared */
-	struct rspamd_symcache_item_stat *st;
-	struct rspamd_counter_data *cd;
+	struct rspamd_symcache_item_stat *st = nullptr;
+	struct rspamd_counter_data *cd = nullptr;
 
 	std::uint64_t last_count = 0;
 	std::string symbol;
-	std::string_view type_descr;
 	symcache_item_type type;
 	int flags;
-
-	/* Callback data */
-	std::variant<normal_item, virtual_item> specific;
 
 	/* Condition of execution */
 	bool enabled = true;
@@ -189,13 +181,16 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	unsigned int order = 0;
 	/* Unique id - counter */
 	int id = 0;
-
 	int frequency_peaks = 0;
+
+	/* Specific data for virtual and callback symbols */
+	std::variant<normal_item, virtual_item> specific;
+
 	/* Settings ids */
-	id_list allowed_ids;
+	id_list allowed_ids{};
 	/* Allows execution but not symbols insertion */
-	id_list exec_only_ids;
-	id_list forbidden_ids;
+	id_list exec_only_ids{};
+	id_list forbidden_ids{};
 
 	/* Dependencies */
 	std::vector<cache_dependency> deps;
@@ -203,8 +198,41 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	std::vector<cache_dependency> rdeps;
 
 public:
-	[[nodiscard]] static auto create() -> cache_item_ptr {
-		return std::shared_ptr<cache_item>(new cache_item());
+	/**
+	 * Create a normal item with a callback
+	 * @param name
+	 * @param priority
+	 * @param func
+	 * @param user_data
+	 * @param type
+	 * @param flags
+	 * @return
+	 */
+	[[nodiscard]] static auto create_with_function(std::string &&name,
+												   int priority,
+												   symbol_func_t func,
+												   void *user_data,
+												   symcache_item_type type,
+												   int flags) -> cache_item_ptr {
+		return std::shared_ptr<cache_item>(new cache_item(std::move(name), priority,
+														  func, user_data,
+														  type, flags));
+	}
+	/**
+	 * Create a virtual item
+	 * @param name
+	 * @param priority
+	 * @param parent
+	 * @param type
+	 * @param flags
+	 * @return
+	 */
+	[[nodiscard]] static auto create_with_virtual(std::string &&name,
+												   int parent,
+												   symcache_item_type type,
+												   int flags) -> cache_item_ptr {
+		return std::shared_ptr<cache_item>(new cache_item(std::move(name),
+				parent, type, flags));
 	}
 	/**
 	 * Share ownership on the item
@@ -230,6 +258,9 @@ public:
 	auto get_type() const -> auto {
 		return type;
 	}
+	auto get_name() const -> const std::string & {
+		return symbol;
+	}
 	auto add_condition(lua_State *L, int cbref) -> bool {
 		if (!is_virtual()) {
 			auto &normal = std::get<normal_item>(specific);
@@ -242,7 +273,50 @@ public:
 	}
 
 private:
-	cache_item() = default;
+	/**
+	 * Constructor for a normal symbols with callback
+	 * @param name
+	 * @param _priority
+	 * @param func
+	 * @param user_data
+	 * @param _type
+	 * @param _flags
+	 */
+	cache_item(std::string &&name,
+			   int _priority,
+			   symbol_func_t func,
+			   void *user_data,
+			   symcache_item_type _type,
+			   int _flags) : symbol(std::move(name)),
+							 type(_type),
+							 flags(_flags),
+							 priority(_priority),
+							 specific(normal_item{func, user_data})
+	{
+		forbidden_ids.reset();
+		allowed_ids.reset();
+		exec_only_ids.reset();
+	}
+	/**
+	 * Constructor for a virtual symbol
+	 * @param name
+	 * @param _priority
+	 * @param parent
+	 * @param _type
+	 * @param _flags
+	 */
+	cache_item(std::string &&name,
+			   int parent,
+			   symcache_item_type _type,
+			   int _flags) : symbol(std::move(name)),
+							 type(_type),
+							 flags(_flags),
+							 specific(virtual_item{parent})
+	{
+		forbidden_ids.reset();
+		allowed_ids.reset();
+		exec_only_ids.reset();
+	}
 };
 
 struct delayed_cache_dependency {
@@ -379,12 +453,29 @@ public:
 		return static_pool;
 	}
 
+	/**
+	 * A method to add a generic symbol with a callback to couple with C API
+	 * @param name name of the symbol, unlike C API it must be "" for callback only (compat) symbols, in this case an automatic name is generated
+	 * @param priority
+	 * @param func
+	 * @param user_data
+	 * @param flags_and_type mix of flags and type in a messy C enum
+	 * @return id of a new symbol or -1 in case of failure
+	 */
 	auto add_symbol_with_callback(std::string_view name,
 								  int priority,
 								  symbol_func_t func,
 								  void *user_data,
-								  enum rspamd_symbol_type type) -> int;
-	auto add_virtual_symbol() -> int;
+								  enum rspamd_symbol_type flags_and_type) -> int;
+	/**
+	 * A method to add a generic virtual symbol with no function associated
+	 * @param name must have some value, or a fatal error will strike you
+	 * @param parent_id if this param is -1 then this symbol is associated with nothing
+	 * @param flags_and_type mix of flags and type in a messy C enum
+	 * @return id of a new symbol or -1 in case of failure
+	 */
+	auto add_virtual_symbol(std::string_view name, int parent_id,
+							enum rspamd_symbol_type flags_and_type) -> int;
 };
 
 /*

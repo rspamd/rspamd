@@ -540,6 +540,76 @@ auto symcache::resort() -> void
 	std::swap(ord, items_by_order);
 }
 
+auto symcache::add_symbol_with_callback(std::string_view name,
+										int priority,
+										symbol_func_t func,
+										void *user_data,
+										enum rspamd_symbol_type flags_and_type) -> int
+{
+	auto real_type_pair_maybe = item_type_from_c(flags_and_type);
+
+	if (!real_type_pair_maybe.has_value()) {
+		msg_err_cache("incompatible flags when adding %s: %s", name.data(),
+				real_type_pair_maybe.error().c_str());
+		return -1;
+	}
+
+	auto real_type_pair = real_type_pair_maybe.value();
+
+	std::string static_string_name;
+
+	if (name.empty()) {
+		static_string_name = fmt::format("AUTO_{}", (void *)func);
+	}
+	else {
+		static_string_name = name;
+	}
+
+	if (items_by_symbol.contains(static_string_name)) {
+		msg_err_cache("duplicate symbol name: %s", static_string_name.data());
+		return -1;
+	}
+
+	auto item = cache_item::create_with_function(std::move(static_string_name),
+			priority, func, user_data,
+			real_type_pair.first, real_type_pair.second);
+
+	items_by_symbol[item->get_name()] = item;
+	items_by_id.push_back(item);
+
+	return items_by_id.size();
+}
+
+auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rspamd_symbol_type flags_and_type) -> int
+{
+	if (name.empty()) {
+		msg_err_cache("cannot register a virtual symbol with no name; qed");
+		return -1;
+	}
+
+	auto real_type_pair_maybe = item_type_from_c(flags_and_type);
+
+	if (!real_type_pair_maybe.has_value()) {
+		msg_err_cache("incompatible flags when adding %s: %s", name.data(),
+				real_type_pair_maybe.error().c_str());
+		return -1;
+	}
+
+	auto real_type_pair = real_type_pair_maybe.value();
+
+	if (items_by_symbol.contains(name)) {
+		msg_err_cache("duplicate symbol name: %s", name.data());
+		return -1;
+	}
+
+	auto item = cache_item::create_with_virtual(std::string{name},
+			parent_id, real_type_pair.first, real_type_pair.second);
+	items_by_symbol[item->get_name()] = item;
+	virtual_symbols.push_back(item);
+
+	return virtual_symbols.size();
+}
+
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
