@@ -338,7 +338,8 @@ local function url_reputation_filter(task, rule)
 
       local result_request_match_tbl = {}
       -- XXX: ugly O(N^2) loop to match requests and responses
-      for result_k,_ in pairs(results) do
+      for _,res_pair in ipairs(results) do
+        local result_k = res_pair[1]
         for _, request_k in ipairs(url_keys) do
           if result_k:find(request_k) then
             result_request_match_tbl[result_k] = request_k
