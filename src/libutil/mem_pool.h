@@ -248,11 +248,17 @@ void *rspamd_mempool_alloc_shared_ (rspamd_mempool_t *pool, gsize size, gsize al
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc_shared(pool, size) \
 	rspamd_mempool_alloc_shared_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
+#define rspamd_mempool_alloc_shared_type(pool, type) \
+	(type *)(rspamd_mempool_alloc_shared_((pool), sizeof(type), \
+		MAX(MIN_MEM_ALIGNMENT, RSPAMD_ALIGNOF(type)), (G_STRLOC)))
 
 void *rspamd_mempool_alloc0_shared_ (rspamd_mempool_t *pool, gsize size, gsize alignment, const gchar *loc)
 	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 #define rspamd_mempool_alloc0_shared(pool, size) \
 	rspamd_mempool_alloc0_shared_((pool), (size), MIN_MEM_ALIGNMENT, (G_STRLOC))
+#define rspamd_mempool_alloc0_shared_type(pool, type) \
+	(type *)(rspamd_mempool_alloc0_shared_((pool), sizeof(type), \
+		MAX(MIN_MEM_ALIGNMENT, RSPAMD_ALIGNOF(type)), (G_STRLOC)))
 
 /**
  * Add destructor callback to pool

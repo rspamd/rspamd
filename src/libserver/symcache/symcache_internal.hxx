@@ -149,6 +149,7 @@ public:
 	explicit virtual_item(int _parent_id) : parent_id(_parent_id) {}
 
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto resolve_parent(const symcache &cache) -> bool;
 };
 
 struct cache_dependency {
@@ -167,6 +168,8 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	struct rspamd_symcache_item_stat *st = nullptr;
 	struct rspamd_counter_data *cd = nullptr;
 
+	/* Unique id - counter */
+	int id;
 	std::uint64_t last_count = 0;
 	std::string symbol;
 	symcache_item_type type;
@@ -179,8 +182,6 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	int priority = 0;
 	/* Topological order */
 	unsigned int order = 0;
-	/* Unique id - counter */
-	int id = 0;
 	int frequency_peaks = 0;
 
 	/* Specific data for virtual and callback symbols */
@@ -208,15 +209,18 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	[[nodiscard]] static auto create_with_function(std::string &&name,
+	[[nodiscard]] static auto create_with_function(rspamd_mempool_t *pool,
+												   int id,
+												   std::string &&name,
 												   int priority,
 												   symbol_func_t func,
 												   void *user_data,
 												   symcache_item_type type,
 												   int flags) -> cache_item_ptr {
-		return std::shared_ptr<cache_item>(new cache_item(std::move(name), priority,
-														  func, user_data,
-														  type, flags));
+		return std::shared_ptr<cache_item>(new cache_item(pool,
+				id, std::move(name), priority,
+				func, user_data,
+				type, flags));
 	}
 	/**
 	 * Create a virtual item
@@ -227,11 +231,13 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	[[nodiscard]] static auto create_with_virtual(std::string &&name,
-												   int parent,
-												   symcache_item_type type,
-												   int flags) -> cache_item_ptr {
-		return std::shared_ptr<cache_item>(new cache_item(std::move(name),
+	[[nodiscard]] static auto create_with_virtual(rspamd_mempool_t *pool,
+												  int id,
+												  std::string &&name,
+												  int parent,
+												  symcache_item_type type,
+												  int flags) -> cache_item_ptr {
+		return std::shared_ptr<cache_item>(new cache_item(pool, id, std::move(name),
 				parent, type, flags));
 	}
 	/**
@@ -255,6 +261,7 @@ public:
 		return flags & SYMBOL_TYPE_GHOST;
 	}
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto resolve_parent(const symcache &cache) -> bool;
 	auto get_type() const -> auto {
 		return type;
 	}
@@ -282,12 +289,15 @@ private:
 	 * @param _type
 	 * @param _flags
 	 */
-	cache_item(std::string &&name,
+	cache_item(rspamd_mempool_t *pool,
+			   int _id,
+			   std::string &&name,
 			   int _priority,
 			   symbol_func_t func,
 			   void *user_data,
 			   symcache_item_type _type,
-			   int _flags) : symbol(std::move(name)),
+			   int _flags) : id(_id),
+			   				 symbol(std::move(name)),
 							 type(_type),
 							 flags(_flags),
 							 priority(_priority),
@@ -296,6 +306,8 @@ private:
 		forbidden_ids.reset();
 		allowed_ids.reset();
 		exec_only_ids.reset();
+		st = rspamd_mempool_alloc0_shared_type(pool, std::remove_pointer_t<decltype(st)>);
+		cd = rspamd_mempool_alloc0_shared_type(pool, std::remove_pointer_t<decltype(cd)>);
 	}
 	/**
 	 * Constructor for a virtual symbol
@@ -305,10 +317,13 @@ private:
 	 * @param _type
 	 * @param _flags
 	 */
-	cache_item(std::string &&name,
+	cache_item(rspamd_mempool_t *pool,
+			   int _id,
+			   std::string &&name,
 			   int parent,
 			   symcache_item_type _type,
-			   int _flags) : symbol(std::move(name)),
+			   int _flags) : id(_id),
+							 symbol(std::move(name)),
 							 type(_type),
 							 flags(_flags),
 							 specific(virtual_item{parent})
@@ -316,6 +331,8 @@ private:
 		forbidden_ids.reset();
 		allowed_ids.reset();
 		exec_only_ids.reset();
+		st = rspamd_mempool_alloc0_shared_type(pool, std::remove_pointer_t<decltype(st)>);
+		cd = rspamd_mempool_alloc0_shared_type(pool, std::remove_pointer_t<decltype(cd)>);
 	}
 };
 
@@ -476,6 +493,12 @@ public:
 	 */
 	auto add_virtual_symbol(std::string_view name, int parent_id,
 							enum rspamd_symbol_type flags_and_type) -> int;
+
+	/**
+	 * Sets a lua callback to be called on peaks in execution time
+	 * @param cbref
+	 */
+	auto set_peak_cb(int cbref) -> void;
 };
 
 /*

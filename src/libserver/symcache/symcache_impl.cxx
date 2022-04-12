@@ -18,6 +18,7 @@
 #include "unix-std.h"
 #include "libutil/cxx/locked_file.hxx"
 #include "fmt/core.h"
+#include "contrib/t1ha/t1ha.h"
 
 #include <cmath>
 
@@ -556,6 +557,18 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 
 	auto real_type_pair = real_type_pair_maybe.value();
 
+	if (real_type_pair.first != symcache_item_type::FILTER) {
+		real_type_pair.second |= SYMBOL_TYPE_NOSTAT;
+	}
+	if (real_type_pair.second & (SYMBOL_TYPE_GHOST|SYMBOL_TYPE_CALLBACK)) {
+		real_type_pair.second |= SYMBOL_TYPE_NOSTAT;
+	}
+
+	if ((real_type_pair.second & SYMBOL_TYPE_FINE) && priority == 0) {
+		/* Adjust priority for negative weighted symbols */
+		priority = 1;
+	}
+
 	std::string static_string_name;
 
 	if (name.empty()) {
@@ -570,14 +583,23 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 		return -1;
 	}
 
-	auto item = cache_item::create_with_function(std::move(static_string_name),
+	auto id = items_by_id.size();
+
+	auto item = cache_item::create_with_function(static_pool, id,
+			std::move(static_string_name),
 			priority, func, user_data,
 			real_type_pair.first, real_type_pair.second);
 
 	items_by_symbol[item->get_name()] = item;
 	items_by_id.push_back(item);
+	used_items++;
 
-	return items_by_id.size();
+	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
+		cksum = t1ha(name.data(), name.size(), cksum);
+		stats_symbols_count ++;
+	}
+
+	return id;
 }
 
 auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rspamd_symbol_type flags_and_type) -> int
@@ -602,12 +624,26 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 		return -1;
 	}
 
-	auto item = cache_item::create_with_virtual(std::string{name},
+	auto id = virtual_symbols.size();
+
+	auto item = cache_item::create_with_virtual(static_pool,
+			id,
+			std::string{name},
 			parent_id, real_type_pair.first, real_type_pair.second);
 	items_by_symbol[item->get_name()] = item;
 	virtual_symbols.push_back(item);
 
-	return virtual_symbols.size();
+	return id;
+}
+
+auto symcache::set_peak_cb(int cbref) -> void
+{
+	if (peak_cb != -1) {
+		luaL_unref(L, LUA_REGISTRYINDEX, peak_cb);
+	}
+
+	peak_cb = cbref;
+	msg_info_cache("registered peak callback");
 }
 
 
@@ -727,6 +763,28 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			[](const auto &dep){ return !dep.item; }), std::end(deps));
 }
 
+auto cache_item::resolve_parent(const symcache &cache) -> bool
+{
+	auto log_tag = [&](){ return cache.log_tag(); };
+
+	if (is_virtual()) {
+		auto &virt = std::get<virtual_item>(specific);
+
+		if (virt.get_parent(cache)) {
+			msg_warn_cache("trying to resolve parent twice for %s", symbol.c_str());
+
+			return false;
+		}
+
+		return virt.resolve_parent(cache);
+	}
+	else {
+		msg_warn_cache("trying to resolve a parent for non-virtual symbol %s", symbol.c_str());
+	}
+
+	return false;
+}
+
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (parent) {
@@ -734,6 +792,23 @@ auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 	}
 
 	return cache.get_item_by_id(parent_id, false);
+}
+
+auto virtual_item::resolve_parent(const symcache &cache) -> bool
+{
+	if (parent) {
+		return false;
+	}
+
+	auto item_ptr = cache.get_item_by_id(parent_id, true);
+
+	if (item_ptr) {
+		parent = const_cast<cache_item*>(item_ptr)->getptr();
+
+		return true;
+	}
+
+	return false;
 }
 
 auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>

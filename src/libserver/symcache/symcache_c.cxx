@@ -54,3 +54,32 @@ rspamd_symcache_save (struct rspamd_symcache *cache)
 
 	real_cache->save_items();
 }
+
+gint
+rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
+								 const gchar *name,
+								 gint priority,
+								 symbol_func_t func,
+								 gpointer user_data,
+								 enum rspamd_symbol_type type,
+								 gint parent)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	if (func) {
+		g_assert (parent == -1);
+
+		return real_cache->add_symbol_with_callback(name, priority, func, user_data, type);
+	}
+	else {
+		return real_cache->add_virtual_symbol(name, parent, type);
+	}
+}
+
+void
+rspamd_symcache_set_peak_callback (struct rspamd_symcache *cache, gint cbref)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->set_peak_cb(cbref);
+}
