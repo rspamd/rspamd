@@ -94,3 +94,52 @@ rspamd_symcache_add_condition_delayed (struct rspamd_symcache *cache,
 
 	return TRUE;
 }
+
+gint rspamd_symcache_find_symbol (struct rspamd_symcache *cache,
+								  const gchar *name)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto sym_maybe = real_cache->get_item_by_name(name, false);
+
+	if (sym_maybe != nullptr) {
+		return sym_maybe->id;
+	}
+
+	return -1;
+}
+
+gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
+									  const gchar *name,
+									  gdouble *frequency,
+									  gdouble *freq_stddev,
+									  gdouble *tm,
+									  guint *nhits)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto sym_maybe = real_cache->get_item_by_name(name, false);
+
+	if (sym_maybe != nullptr) {
+		*frequency = sym_maybe->st->avg_frequency;
+		*freq_stddev = sqrt(sym_maybe->st->stddev_frequency);
+		*tm = sym_maybe->st->time_counter.mean;
+
+		if (nhits) {
+			*nhits = sym_maybe->st->hits;
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+
+guint
+rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	return real_cache->get_stats_symbols_count();
+}
+

@@ -377,6 +377,8 @@ private:
 	double total_weight;
 	std::size_t used_items;
 	std::size_t stats_symbols_count;
+
+private:
 	std::uint64_t total_hits;
 
 	struct rspamd_config *cfg;
@@ -509,6 +511,14 @@ public:
 	 * @param cbref
 	 */
 	auto add_delayed_condition(std::string_view sym, int cbref) -> void;
+
+	/**
+	 * Returns number of symbols that needs to be checked in statistical algorithm
+	 * @return
+	 */
+	auto get_stats_symbols_count() const {
+		return stats_symbols_count;
+	}
 };
 
 /*
