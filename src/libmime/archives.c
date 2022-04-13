@@ -694,6 +694,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		else {
 			/* We have a file header, go forward */
 			guint64 fname_len;
+			bool is_directory = false;
 
 			/* File header specific flags */
 			RAR_READ_VINT_SKIP ();
@@ -713,68 +714,75 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 				/* Crc32 */
 				RAR_SKIP_BYTES (sizeof (guint32));
 			}
-
-			/* Compression */
-			RAR_READ_VINT_SKIP ();
-			/* Host OS */
-			RAR_READ_VINT_SKIP ();
-			/* Filename length (finally!) */
-			RAR_READ_VINT_SKIP ();
-			fname_len = vint;
-
-			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
-				msg_debug_archive ("rar archive is invalid (bad filename size)");
-
-				return;
+			if (flags & 0x1) {
+				/* Ignore directories for sanity purposes */
+				is_directory = true;
+				msg_debug_archive ("skip directory record in a rar archive");
 			}
 
-			f = g_malloc0 (sizeof (*f));
-			f->uncompressed_size = uncomp_sz;
-			f->compressed_size = comp_sz;
-			rspamd_archive_file_try_utf (task, arch, f, p, fname_len);
+			if (!is_directory) {
+				/* Compression */
+				RAR_READ_VINT_SKIP ();
+				/* Host OS */
+				RAR_READ_VINT_SKIP ();
+				/* Filename length (finally!) */
+				RAR_READ_VINT_SKIP ();
+				fname_len = vint;
 
-			if (f->fname) {
-				msg_debug_archive ("added rarv5 file: %v", f->fname);
-				g_ptr_array_add (arch->files, f);
-				if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
-					arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
+				if (fname_len == 0 || fname_len > (gsize) (end - p)) {
+					msg_debug_archive ("rar archive is invalid (bad filename size)");
+
+					return;
 				}
-			}
-			else {
-				g_free (f);
-				f = NULL;
-			}
 
-			if (f && has_extra && extra_sz > 0 &&
-				p + fname_len + extra_sz < end) {
-				/* Try to find encryption record in extra field */
-				const guchar *ex = p + fname_len;
+				f = g_malloc0(sizeof(*f));
+				f->uncompressed_size = uncomp_sz;
+				f->compressed_size = comp_sz;
+				rspamd_archive_file_try_utf(task, arch, f, p, fname_len);
 
-				while (ex < p + extra_sz) {
-					const guchar *t;
-					gint64 cur_sz = 0, sec_type = 0;
-
-					r = rspamd_archive_rar_read_vint (ex, extra_sz, &cur_sz);
-					if (r == -1) {
-						msg_debug_archive ("rar archive is invalid (bad vint)");
-						return;
+				if (f->fname) {
+					msg_debug_archive ("added rarv5 file: %v", f->fname);
+					g_ptr_array_add(arch->files, f);
+					if (f->flags & RSPAMD_ARCHIVE_FILE_OBFUSCATED) {
+						arch->flags |= RSPAMD_ARCHIVE_HAS_OBFUSCATED_FILES;
 					}
+				}
+				else {
+					g_free(f);
+					f = NULL;
+				}
 
-					t = ex + r;
+				if (f && has_extra && extra_sz > 0 &&
+					p + fname_len + extra_sz < end) {
+					/* Try to find encryption record in extra field */
+					const guchar *ex = p + fname_len;
 
-					r = rspamd_archive_rar_read_vint (t, extra_sz - r, &sec_type);
-					if (r == -1) {
-						msg_debug_archive ("rar archive is invalid (bad vint)");
-						return;
+					while (ex < p + extra_sz) {
+						const guchar *t;
+						gint64 cur_sz = 0, sec_type = 0;
+
+						r = rspamd_archive_rar_read_vint(ex, extra_sz, &cur_sz);
+						if (r == -1) {
+							msg_debug_archive ("rar archive is invalid (bad vint)");
+							return;
+						}
+
+						t = ex + r;
+
+						r = rspamd_archive_rar_read_vint(t, extra_sz - r, &sec_type);
+						if (r == -1) {
+							msg_debug_archive ("rar archive is invalid (bad vint)");
+							return;
+						}
+
+						if (sec_type == 0x01) {
+							f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+							arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+							break;
+						}
+
+						ex += cur_sz;
 					}
-
-					if (sec_type == 0x01) {
-						f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
-						arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
-						break;
-					}
-
-					ex += cur_sz;
 				}
 			}
 
