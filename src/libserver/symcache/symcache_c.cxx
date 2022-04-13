@@ -83,3 +83,14 @@ rspamd_symcache_set_peak_callback (struct rspamd_symcache *cache, gint cbref)
 
 	real_cache->set_peak_cb(cbref);
 }
+
+gboolean
+rspamd_symcache_add_condition_delayed (struct rspamd_symcache *cache,
+									   const gchar *sym, lua_State *L, gint cbref)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->add_delayed_condition(sym, cbref);
+
+	return TRUE;
+}

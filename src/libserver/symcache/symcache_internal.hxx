@@ -345,6 +345,9 @@ struct delayed_cache_condition {
 	std::string sym;
 	int cbref;
 	lua_State *L;
+public:
+	delayed_cache_condition(std::string_view _sym, int _cbref, lua_State *_L) :
+		sym(_sym), cbref(_cbref), L(_L) {}
 };
 
 class symcache {
@@ -499,6 +502,13 @@ public:
 	 * @param cbref
 	 */
 	auto set_peak_cb(int cbref) -> void;
+
+	/**
+	 * Add a delayed condition for a symbol that might not be registered yet
+	 * @param sym
+	 * @param cbref
+	 */
+	auto add_delayed_condition(std::string_view sym, int cbref) -> void;
 };
 
 /*

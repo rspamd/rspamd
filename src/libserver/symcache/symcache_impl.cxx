@@ -646,6 +646,10 @@ auto symcache::set_peak_cb(int cbref) -> void
 	msg_info_cache("registered peak callback");
 }
 
+auto symcache::add_delayed_condition(std::string_view sym, int cbref) -> void
+{
+	delayed_conditions->emplace_back(sym, cbref, (lua_State *)cfg->lua_state);
+}
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
