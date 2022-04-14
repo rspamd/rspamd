@@ -199,6 +199,8 @@ local function dkim_reputation_filter(task, rule)
       -- `rep_accepted` and `rep_rejected` could be negative
       local rep_accepted_abs = math.abs(rep_accepted or 0)
       local rep_rejected_abs = math.abs(rep_rejected or 0)
+      lua_util.debugm(N, task, "dkim reputation accepted: %s, dkim reputation rejected: %s",
+          rep_accepted_abs, rep_rejected_abs)
       if rep_accepted_abs > 0 or rep_rejected_abs > 0 then
         if rep_accepted_abs > rep_rejected_abs then
           add_symbol_score(task, rule, -(rep_accepted_abs - rep_rejected_abs))
@@ -242,7 +244,12 @@ local function dkim_reputation_postfilter(task, rule)
       accept_adjustment and type(cfg.max_accept_adjustment) == 'number' then
     local final_adjustment = cfg.max_accept_adjustment *
         rspamd_util.tanh(tonumber(accept_adjustment) or 0)
-    task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
+    lua_util.debugm(N, task, "adjust DKIM_ALLOW: " ..
+        "cfg.max_accept_adjustment=%s accept_adjustment=%s final_adjustment=%s sym_accepted.score=%s",
+        cfg.max_accept_adjustment, accept_adjustment, final_adjustment,
+        sym_accepted.score)
+
+    task:adjust_result('R_DKIM_ALLOW', sym_accepted.score + final_adjustment)
   end
 
   local sym_rejected = (task:get_symbol('R_DKIM_REJECT') or E)[1]
@@ -252,7 +259,13 @@ local function dkim_reputation_postfilter(task, rule)
       reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
     local final_adjustment = cfg.max_reject_adjustment *
         rspamd_util.tanh(tonumber(reject_adjustment) or 0)
-    task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
+    lua_util.debugm(N, task, "adjust DKIM_REJECT: " ..
+        "cfg.max_reject_adjustment=%s reject_adjustment=%s final_adjustment=%s sym_rejected.score=%s",
+        cfg.max_reject_adjustment, reject_adjustment, final_adjustment,
+        sym_rejected.score)
+    if final_adjustment < 0 then
+      task:adjust_result('R_DKIM_REJECT', sym_rejected.score - final_adjustment)
+    end
   end
 end
 
@@ -325,7 +338,8 @@ local function url_reputation_filter(task, rule)
 
       local result_request_match_tbl = {}
       -- XXX: ugly O(N^2) loop to match requests and responses
-      for result_k,_ in pairs(results) do
+      for _,res_pair in ipairs(results) do
+        local result_k = res_pair[1]
         for _, request_k in ipairs(url_keys) do
           if result_k:find(request_k) then
             result_request_match_tbl[result_k] = request_k

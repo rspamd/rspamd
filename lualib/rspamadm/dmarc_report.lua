@@ -293,7 +293,7 @@ local function process_rua(dmarc_domain, rua)
   local addrs = {}
   for _,a in ipairs(parts) do
     local u = rspamd_url.create(pool, a:gsub('!%d+[kmg]?$', ''))
-    if u then
+    if u and (u:get_protocol() or '') == 'mailto' and u:get_user() then
       -- Check each address for sanity
       if dmarc_domain == u:get_tld() or dmarc_domain == u:get_host() then
         -- Same domain - always include
@@ -328,6 +328,8 @@ local function process_rua(dmarc_domain, rua)
           end
         end
       end
+    else
+      logger.errx('invalid rua url: "%s""', tostring(u or 'null'))
     end
   end
 

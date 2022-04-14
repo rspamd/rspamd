@@ -2860,7 +2860,7 @@ rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
 		return FALSE;
 	}
 	else {
-		r = ZSTD_resetDStream (ctx->in_zstream);
+		r = ZSTD_DCtx_reset (ctx->in_zstream, ZSTD_reset_session_only);
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init decompression stream: %s",
@@ -2885,7 +2885,10 @@ rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
 	}
 	else {
 		/* Dictionary will be reused automatically if specified */
-		r = ZSTD_resetCStream (ctx->out_zstream, 0);
+		r = ZSTD_CCtx_reset (ctx->out_zstream, ZSTD_reset_session_only);
+		if (!ZSTD_isError (r)) {
+			r = ZSTD_CCtx_setPledgedSrcSize (ctx->out_zstream, 0);
+		}
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init compression stream: %s",

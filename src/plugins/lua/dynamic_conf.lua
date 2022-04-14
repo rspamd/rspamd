@@ -249,8 +249,8 @@ if section then
   rspamd_config:add_on_load(function(_, ev_base, worker)
     if worker:is_scanner() then
       rspamd_config:add_periodic(ev_base, 0.0,
-          function(cfg, _ev_base)
-            check_dynamic_conf(cfg, _ev_base)
+          function(cfg, _)
+            check_dynamic_conf(cfg, ev_base)
             return settings.redis_watch_interval
           end, true)
     end

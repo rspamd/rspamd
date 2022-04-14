@@ -220,6 +220,8 @@ local function check_mime_type(task)
 
   local function check_filename(fname, ct, is_archive, part, detected_ext, nfiles)
 
+    lua_util.debugm(N, task, "check filename: %s, ct=%s, is_archive=%s, detected_ext=%s, nfiles=%s",
+        fname, ct, is_archive, detected_ext, nfiles)
     local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
     if has_bad_unicode then
       task:insert_result(settings.symbol_bad_unicode, 1.0,

@@ -285,7 +285,7 @@ local function dump_pattern(conn, pattern, opts, out, key)
     end
 
     -- Do not write the last chunk of out as it will be processed afterwards
-    if not cursor == 0 then
+    if cursor ~= 0 then
       if opts.cdb then
         dump_out(out, opts, false)
         clear_fcn(out)

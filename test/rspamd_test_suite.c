@@ -54,8 +54,6 @@ main (int argc, char **argv)
 	}
 
 	/* Setup logger */
-
-	/* Setup logger */
 	if (verbose || g_test_verbose ()) {
 		rspamd_main->logger = rspamd_log_open_emergency (rspamd_main->server_pool,
 				RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED|RSPAMD_LOG_FLAG_RSPAMADM);

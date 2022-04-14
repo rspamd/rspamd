@@ -368,10 +368,10 @@ end
 local function register_lock_extender(rule, set, ev_base, ann_key)
   rspamd_config:add_periodic(ev_base, 30.0,
       function()
-        local function redis_lock_extend_cb(_err, _)
-          if _err then
+        local function redis_lock_extend_cb(err, _)
+          if err then
             rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
-                ann_key, _err)
+                ann_key, err)
           else
             rspamd_logger.infox(rspamd_config, 'extend lock for ANN %s for 30 seconds',
                 ann_key)
