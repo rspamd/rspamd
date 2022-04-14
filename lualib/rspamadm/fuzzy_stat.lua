@@ -69,7 +69,7 @@ local function print_stat(st, tabs)
 end
 
 -- Sort by checked
-local function sort_ips(tbl, _opts)
+local function sort_ips(tbl, sort_opts)
   local res = {}
   for k,v in pairs(tbl) do
     table.insert(res, {ip = k, data = v})
@@ -79,12 +79,12 @@ local function sort_ips(tbl, _opts)
     local key = 'checked'
     local _res = 0
 
-    if _opts['sort'] then
-      if _opts['sort'] == 'matched' then
+    if sort_opts['sort'] then
+      if sort_opts['sort'] == 'matched' then
         key = 'matched'
-      elseif _opts['sort'] == 'errors' then
+      elseif sort_opts['sort'] == 'errors' then
         key = 'errors'
-      elseif _opts['sort'] == 'ip' then
+      elseif sort_opts['sort'] == 'ip' then
         return elt['ip']
       end
     end
