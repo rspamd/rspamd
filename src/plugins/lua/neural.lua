@@ -243,10 +243,10 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           local str = rspamd_util.zstd_compress(table.concat(vec, ';'))
           local target_key = set.ann.redis_key .. '_' .. learn_type .. '_set'
 
-          local function learn_vec_cb(_err)
-            if _err then
+          local function learn_vec_cb(redis_err)
+            if redis_err then
               rspamd_logger.errx(task, 'cannot store train vector for %s:%s: %s',
-                  rule.prefix, set.name, _err)
+                  rule.prefix, set.name, redis_err)
             else
               lua_util.debugm(N, task,
                   "add train data for ANN rule " ..
