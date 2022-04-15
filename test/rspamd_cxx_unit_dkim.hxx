@@ -21,7 +21,7 @@
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
-
+#include "fmt/core.h"
 #include "libserver/dkim.h"
 
 #include <vector>
@@ -142,23 +142,23 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 false, ""},
 	};
 
+	auto cur_test_idx = 0;
 	for (auto &&c : cases) {
-		SUBCASE (("process DKIM record " + c.input).c_str()) {
+		SUBCASE (fmt::format("process DKIM record {}: {}", cur_test_idx++, c.input).c_str()) {
+			GError *err = nullptr;
 			gsize klen = c.input.size();
-			auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, nullptr);
+			auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, &err);
 			if (c.is_valid) {
-				CHECK(key != nullptr);
+				REQUIRE_MESSAGE(key != nullptr, (err ? err->message : "unknown error"));
 				char hexbuf[RSPAMD_DKIM_KEY_ID_LEN * 2 + 1];
 				auto *id = rspamd_dkim_key_id(key);
-				CHECK(id != nullptr);
+				REQUIRE(id != nullptr);
 
-				if (id) {
-					auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
-							sizeof(hexbuf));
-					CHECK(hexlen > 0);
-					CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
-					rspamd_dkim_key_free(key);
-				}
+				auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
+						sizeof(hexbuf));
+				CHECK(hexlen > 0);
+				CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
+				rspamd_dkim_key_free(key);
 			}
 			else {
 				CHECK(key == nullptr);
