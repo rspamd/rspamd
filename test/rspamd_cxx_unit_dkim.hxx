@@ -150,11 +150,15 @@ TEST_CASE("rspamd_dkim_parse_key")
 				CHECK(key != nullptr);
 				char hexbuf[RSPAMD_DKIM_KEY_ID_LEN * 2 + 1];
 				auto *id = rspamd_dkim_key_id(key);
-				auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
-						sizeof(hexbuf));
-				CHECK(hexlen > 0);
-				CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
-				rspamd_dkim_key_free(key);
+				CHECK(id != nullptr);
+
+				if (id) {
+					auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
+							sizeof(hexbuf));
+					CHECK(hexlen > 0);
+					CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
+					rspamd_dkim_key_free(key);
+				}
 			}
 			else {
 				CHECK(key == nullptr);
