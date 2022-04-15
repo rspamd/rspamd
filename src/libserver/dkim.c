@@ -151,6 +151,7 @@ struct rspamd_dkim_context_s {
 
 struct rspamd_dkim_key_s {
 	guint8 *keydata;
+	guint8 *raw_key;
 	gsize keylen;
 	gsize decoded_len;
 	gchar key_id[RSPAMD_DKIM_KEY_ID_LEN];
@@ -1332,11 +1333,26 @@ rspamd_dkim_make_key (const gchar *keydata,
 	key = g_malloc0 (sizeof (rspamd_dkim_key_t));
 	REF_INIT_RETAIN (key, rspamd_dkim_key_free);
 	key->keydata = g_malloc0 (keylen + 1);
+	key->raw_key = g_malloc (keylen);
 	key->decoded_len = keylen;
-	key->keylen = keylen;
 	key->type = type;
 
-	if (!rspamd_cryptobox_base64_decode (keydata, keylen, key->keydata,
+	/* Copy key skipping all spaces and newlines */
+	const char *h = keydata;
+	guint8 *t = key->raw_key;
+
+	while (h - keydata < keylen) {
+		if (!g_ascii_isspace(*h)) {
+			*t++ = *h++;
+		}
+		else {
+			h++;
+		}
+	}
+
+	key->keylen = t - key->raw_key;
+
+	if (!rspamd_cryptobox_base64_decode (key->raw_key, key->keylen, key->keydata,
 			&key->decoded_len)) {
 		REF_RELEASE (key);
 		g_set_error (err,
@@ -1470,6 +1486,7 @@ rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 		BIO_free (key->key_bio);
 	}
 
+	g_free (key->raw_key);
 	g_free (key->keydata);
 	g_free (key);
 }
@@ -1577,13 +1594,6 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 				state = read_tag;
 				tag = '\0';
 				p++;
-			}
-			else if (g_ascii_isspace (*p)) {
-				klen = p - c;
-				key = c;
-				state = skip_spaces;
-				next_state = read_tag;
-				tag = '\0';
 			}
 			else {
 				p ++;
