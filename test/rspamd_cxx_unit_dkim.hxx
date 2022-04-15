@@ -111,6 +111,15 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 "kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB ",
 			 true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
+			// Spaces within base64
+			{"p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
+			 " QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
+			 "  5zuyXsDj1eSprOgcPT9PY9RoSUsY8i/ jnD49DHXtMfXoBk0J6epNzbZqqWU+"
+			 "  TG02HwWNy/kf1h+OlAGQKJLgakivZ3nMMnUIPHkUjwvhbkaMXCI046XoqsEQ7KW"
+			 "  VKRoF3cK1cFXLo+bgO3sEJgGtvwzPodG0CqVu+gjehrjwdLnPhqyEspfI1IbL"
+			 "  lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
+			 " kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB",
+					true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
 			 // Invalid RSA
 			{"ololo=trololo; k=rsa; t=s; "
 			 "p =   BADMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
