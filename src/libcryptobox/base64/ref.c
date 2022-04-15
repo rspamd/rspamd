@@ -217,7 +217,7 @@ repeat:
 	}
 
 	if (!ret && inlen > 0) {
-		/* Skip to the next valid character in lua_dns_resolver_resolve_commoninput */
+		/* Skip to the next valid character in input */
 		while (inlen > 0 && base64_table_dec[*c] >= 254) {
 			c ++;
 			inlen --;
