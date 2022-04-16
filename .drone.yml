@@ -230,6 +230,7 @@ steps:
   - name: eslint
     image: node:17-alpine
     pull: if-not-exists
+    failure: ignore
     commands:
       - npm install
       - ./node_modules/.bin/eslint -v
@@ -243,6 +244,7 @@ steps:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
     image: rspamd/ci-perl-tidyall
     pull: if-not-exists
+    failure: ignore
     commands:
       - tidyall --version
       - perltidy --version | head -1
