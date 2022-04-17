@@ -24,23 +24,23 @@
 #define C_API_SYMCACHE_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_item *>(ptr))
 
 void
-rspamd_symcache_destroy (struct rspamd_symcache *cache)
+rspamd_symcache_destroy(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	delete real_cache;
 }
 
-struct rspamd_symcache*
-rspamd_symcache_new (struct rspamd_config *cfg)
+struct rspamd_symcache *
+rspamd_symcache_new(struct rspamd_config *cfg)
 {
 	auto *ncache = new rspamd::symcache::symcache(cfg);
 
-	return (struct rspamd_symcache*)ncache;
+	return (struct rspamd_symcache *) ncache;
 }
 
 gboolean
-rspamd_symcache_init (struct rspamd_symcache *cache)
+rspamd_symcache_init(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -48,7 +48,7 @@ rspamd_symcache_init (struct rspamd_symcache *cache)
 }
 
 void
-rspamd_symcache_save (struct rspamd_symcache *cache)
+rspamd_symcache_save(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -56,13 +56,13 @@ rspamd_symcache_save (struct rspamd_symcache *cache)
 }
 
 gint
-rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
-								 const gchar *name,
-								 gint priority,
-								 symbol_func_t func,
-								 gpointer user_data,
-								 enum rspamd_symbol_type type,
-								 gint parent)
+rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
+						   const gchar *name,
+						   gint priority,
+						   symbol_func_t func,
+						   gpointer user_data,
+						   enum rspamd_symbol_type type,
+						   gint parent)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -77,7 +77,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 }
 
 void
-rspamd_symcache_set_peak_callback (struct rspamd_symcache *cache, gint cbref)
+rspamd_symcache_set_peak_callback(struct rspamd_symcache *cache, gint cbref)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -85,8 +85,8 @@ rspamd_symcache_set_peak_callback (struct rspamd_symcache *cache, gint cbref)
 }
 
 gboolean
-rspamd_symcache_add_condition_delayed (struct rspamd_symcache *cache,
-									   const gchar *sym, lua_State *L, gint cbref)
+rspamd_symcache_add_condition_delayed(struct rspamd_symcache *cache,
+									  const gchar *sym, lua_State *L, gint cbref)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -95,8 +95,8 @@ rspamd_symcache_add_condition_delayed (struct rspamd_symcache *cache,
 	return TRUE;
 }
 
-gint rspamd_symcache_find_symbol (struct rspamd_symcache *cache,
-								  const gchar *name)
+gint rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
+								 const gchar *name)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -109,12 +109,12 @@ gint rspamd_symcache_find_symbol (struct rspamd_symcache *cache,
 	return -1;
 }
 
-gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
-									  const gchar *name,
-									  gdouble *frequency,
-									  gdouble *freq_stddev,
-									  gdouble *tm,
-									  guint *nhits)
+gboolean rspamd_symcache_stat_symbol(struct rspamd_symcache *cache,
+									 const gchar *name,
+									 gdouble *frequency,
+									 gdouble *freq_stddev,
+									 gdouble *tm,
+									 guint *nhits)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -137,9 +137,25 @@ gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
 
 
 guint
-rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache)
+rspamd_symcache_stats_symbols_count(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	return real_cache->get_stats_symbols_count();
 }
 
+guint64
+rspamd_symcache_get_cksum(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	return real_cache->get_cksum();
+}
+
+gboolean
+rspamd_symcache_validate(struct rspamd_symcache *cache,
+						 struct rspamd_config *cfg,
+						 gboolean strict)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return real_cache->validate(strict);
+}

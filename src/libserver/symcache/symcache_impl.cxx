@@ -36,15 +36,15 @@ auto symcache::init() -> bool
 	}
 
 	/* Deal with the delayed dependencies */
-	for (const auto &delayed_dep : *delayed_deps) {
+	for (const auto &delayed_dep: *delayed_deps) {
 		auto virt_item = get_item_by_name(delayed_dep.from, false);
 		auto real_item = get_item_by_name(delayed_dep.from, true);
 
 		if (virt_item == nullptr || real_item == nullptr) {
 			msg_err_cache("cannot register delayed dependency between %s and %s: "
-						   "%s is missing",
-						   delayed_dep.from.data(),
-						   delayed_dep.to.data(), delayed_dep.from.data());
+						  "%s is missing",
+					delayed_dep.from.data(),
+					delayed_dep.to.data(), delayed_dep.from.data());
 		}
 		else {
 			msg_debug_cache("delayed between %s(%d:%d) -> %s",
@@ -61,7 +61,7 @@ auto symcache::init() -> bool
 
 
 	/* Deal with the delayed conditions */
-	for (const auto &delayed_cond : *delayed_conditions) {
+	for (const auto &delayed_cond: *delayed_conditions) {
 		auto it = get_item_by_name_mut(delayed_cond.sym, true);
 
 		if (it == nullptr) {
@@ -81,17 +81,17 @@ auto symcache::init() -> bool
 	}
 	delayed_conditions.reset();
 
-	for (auto &it : items_by_id) {
+	for (auto &it: items_by_id) {
 		it->process_deps(*this);
 	}
 
-	for (auto &it : virtual_symbols) {
+	for (auto &it: virtual_symbols) {
 		it->process_deps(*this);
 	}
 
 	/* Sorting stuff */
 	auto postfilters_cmp = [](const auto &it1, const auto &it2) -> int {
-		if (it1->priority > it2-> priority) {
+		if (it1->priority > it2->priority) {
 			return 1;
 		}
 		else if (it1->priority == it2->priority) {
@@ -101,7 +101,7 @@ auto symcache::init() -> bool
 		return -1;
 	};
 	auto prefilters_cmp = [](const auto &it1, const auto &it2) -> int {
-		if (it1->priority > it2-> priority) {
+		if (it1->priority > it2->priority) {
 			return -1;
 		}
 		else if (it1->priority == it2->priority) {
@@ -123,7 +123,7 @@ auto symcache::init() -> bool
 	if (cfg->symbols) {
 		g_hash_table_foreach(cfg->symbols,
 				symcache::metric_connect_cb,
-				(void *)this);
+				(void *) this);
 	}
 
 	return res;
@@ -286,7 +286,7 @@ bool symcache::save_items() const
 
 	auto *top = ucl_object_typed_new(UCL_OBJECT);
 
-	for (const auto &it : items_by_symbol) {
+	for (const auto &it: items_by_symbol) {
 		auto item = it.second;
 		auto elt = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(elt,
@@ -322,15 +322,15 @@ bool symcache::save_items() const
 
 auto symcache::metric_connect_cb(void *k, void *v, void *ud) -> void
 {
-	auto *cache = (symcache *)ud;
-	const auto *sym = (const char *)k;
-	auto *s = (struct rspamd_symbol *)v;
+	auto *cache = (symcache *) ud;
+	const auto *sym = (const char *) k;
+	auto *s = (struct rspamd_symbol *) v;
 	auto weight = *s->weight_ptr;
 	auto *item = cache->get_item_by_name_mut(sym, false);
 
 	if (item) {
 		item->st->weight = weight;
-		s->cache_item = (void *)item;
+		s->cache_item = (void *) item;
 	}
 }
 
@@ -339,7 +339,7 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 {
 	if (id < 0 || id >= items_by_id.size()) {
 		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
-				id, (int)items_by_id.size());
+				id, (int) items_by_id.size());
 		return nullptr;
 	}
 
@@ -388,9 +388,9 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 	return it->second.get();
 }
 
-auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from)-> void
+auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void
 {
-	g_assert (id_from >= 0 && id_from < (gint)items_by_id.size());
+	g_assert (id_from >= 0 && id_from < (gint) items_by_id.size());
 	const auto &source = items_by_id[id_from];
 	g_assert (source.get() != nullptr);
 
@@ -401,7 +401,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 
 
 	if (virtual_id_from >= 0) {
-		g_assert (virtual_id_from < (gint)virtual_symbols.size());
+		g_assert (virtual_id_from < (gint) virtual_symbols.size());
 		/* We need that for settings id propagation */
 		const auto &vsource = virtual_symbols[virtual_id_from];
 		g_assert (vsource.get() != nullptr);
@@ -416,7 +416,7 @@ auto symcache::resort() -> void
 {
 	auto ord = std::make_shared<order_generation>(filters.size(), cur_order_gen);
 
-	for (auto &it : filters) {
+	for (auto &it: filters) {
 		total_hits += it->st->total_hits;
 		it->order = 0;
 		ord->d.emplace_back(it);
@@ -471,7 +471,7 @@ auto symcache::resort() -> void
 		tsort_mark(it, tsort_mask::TEMP);
 		msg_debug_cache("visiting node: %s (%d)", it->symbol.c_str(), cur_order);
 
-		for (const auto &dep : it->deps) {
+		for (const auto &dep: it->deps) {
 			msg_debug_cache ("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
 			rec(dep.item.get(), cur_order + 1, rec);
 		}
@@ -484,7 +484,7 @@ auto symcache::resort() -> void
 	 */
 	total_hits = 0;
 
-	for (const auto &it : filters) {
+	for (const auto &it: filters) {
 		if (it->order == 0) {
 			tsort_visit(it.get(), 0, tsort_visit);
 		}
@@ -516,7 +516,8 @@ auto symcache::resort() -> void
 				auto t2 = it2->st->avg_time;
 				w1 = score_functor(weight1, f1, t1);
 				w2 = score_functor(weight2, f2, t2);
-			} else {
+			}
+			else {
 				/* Strict sorting */
 				w1 = std::abs(it1->priority);
 				w2 = std::abs(it2->priority);
@@ -560,7 +561,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	if (real_type_pair.first != symcache_item_type::FILTER) {
 		real_type_pair.second |= SYMBOL_TYPE_NOSTAT;
 	}
-	if (real_type_pair.second & (SYMBOL_TYPE_GHOST|SYMBOL_TYPE_CALLBACK)) {
+	if (real_type_pair.second & (SYMBOL_TYPE_GHOST | SYMBOL_TYPE_CALLBACK)) {
 		real_type_pair.second |= SYMBOL_TYPE_NOSTAT;
 	}
 
@@ -572,7 +573,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	std::string static_string_name;
 
 	if (name.empty()) {
-		static_string_name = fmt::format("AUTO_{}", (void *)func);
+		static_string_name = fmt::format("AUTO_{}", (void *) func);
 	}
 	else {
 		static_string_name = name;
@@ -596,7 +597,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 
 	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
 		cksum = t1ha(name.data(), name.size(), cksum);
-		stats_symbols_count ++;
+		stats_symbols_count++;
 	}
 
 	return id;
@@ -648,7 +649,116 @@ auto symcache::set_peak_cb(int cbref) -> void
 
 auto symcache::add_delayed_condition(std::string_view sym, int cbref) -> void
 {
-	delayed_conditions->emplace_back(sym, cbref, (lua_State *)cfg->lua_state);
+	delayed_conditions->emplace_back(sym, cbref, (lua_State *) cfg->lua_state);
+}
+
+auto symcache::validate(bool strict) -> bool
+{
+	total_weight = 1.0;
+
+	for (auto &pair: items_by_symbol) {
+		auto &item = pair.second;
+		auto ghost = item->st->weight == 0 ? true : false;
+		auto skipped = !ghost;
+
+		if (item->is_scoreable() && g_hash_table_lookup(cfg->symbols, item->symbol.c_str()) == nullptr) {
+			if (!isnan(cfg->unknown_weight)) {
+				item->st->weight = cfg->unknown_weight;
+				auto *s = rspamd_mempool_alloc0_type(static_pool,
+						struct rspamd_symbol);
+				/* Legit as we actually never modify this data */
+				s->name = (char *) item->symbol.c_str();
+				s->weight_ptr = &item->st->weight;
+				g_hash_table_insert(cfg->symbols, (void *) s->name, (void *) s);
+
+				msg_info_cache ("adding unknown symbol %s with weight: %.2f",
+						item->symbol.c_str(), cfg->unknown_weight);
+				ghost = false;
+				skipped = false;
+			}
+			else {
+				skipped = true;
+			}
+		}
+		else {
+			skipped = FALSE;
+		}
+
+		if (!ghost && skipped) {
+			if (!(item->flags & SYMBOL_TYPE_SKIPPED)) {
+				item->flags |= SYMBOL_TYPE_SKIPPED;
+				msg_warn_cache("symbol %s has no score registered, skip its check",
+						item->symbol.c_str());
+			}
+		}
+
+		if (ghost) {
+			msg_debug_cache ("symbol %s is registered as ghost symbol, it won't be inserted "
+							 "to any metric", item->symbol.c_str());
+		}
+
+		if (item->st->weight < 0 && item->priority == 0) {
+			item->priority++;
+		}
+
+		if (item->is_virtual()) {
+			if (!(item->flags & SYMBOL_TYPE_GHOST)) {
+				item->resolve_parent(*this);
+				auto *parent = const_cast<cache_item *>(item->get_parent(*this));
+
+				if (::fabs(parent->st->weight) < ::fabs(item->st->weight)) {
+					parent->st->weight = item->st->weight;
+				}
+
+				auto p1 = ::abs(item->priority);
+				auto p2 = ::abs(parent->priority);
+
+				if (p1 != p2) {
+					parent->priority = MAX(p1, p2);
+					item->priority = parent->priority;
+				}
+			}
+		}
+
+		total_weight += fabs(item->st->weight);
+	}
+
+	/* Now check each metric item and find corresponding symbol in a cache */
+	auto ret = true;
+	GHashTableIter it;
+	void *k, *v;
+	g_hash_table_iter_init(&it, cfg->symbols);
+
+	while (g_hash_table_iter_next(&it, &k, &v)) {
+		auto ignore_symbol = false;
+		auto sym_def = (struct rspamd_symbol *)v;
+
+		if (sym_def && (sym_def->flags &
+						(RSPAMD_SYMBOL_FLAG_IGNORE_METRIC | RSPAMD_SYMBOL_FLAG_DISABLED))) {
+			ignore_symbol = true;
+		}
+
+		if (!ignore_symbol) {
+			if (!items_by_symbol.contains((const char *)k)) {
+				msg_warn_cache (
+						"symbol '%s' has its score defined but there is no "
+						"corresponding rule registered",
+						k);
+				if (strict) {
+					ret = FALSE;
+				}
+			}
+		}
+		else if (sym_def->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
+			auto item = get_item_by_name_mut((const char *)k, false);
+
+			if (item) {
+				item->enabled = FALSE;
+			}
+		}
+	}
+
+	return ret;
 }
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
@@ -665,9 +775,9 @@ auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 auto cache_item::process_deps(const symcache &cache) -> void
 {
 	/* Allow logging macros to work */
-	auto log_tag = [&](){ return cache.log_tag(); };
+	auto log_tag = [&]() { return cache.log_tag(); };
 
-	for (auto &dep : deps) {
+	for (auto &dep: deps) {
 		msg_debug_cache ("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
 		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
 
@@ -743,7 +853,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 					msg_err_cache ("cannot add dependency on self: %s -> %s "
 								   "(resolved to %s)",
 							symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
-				} else {
+				}
+				else {
 					/* Create a reverse dep */
 					dit->rdeps.emplace_back(getptr(), dep.sym, id, -1);
 					dep.item = dit->getptr();
@@ -764,12 +875,12 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 	// Remove empty deps
 	deps.erase(std::remove_if(std::begin(deps), std::end(deps),
-			[](const auto &dep){ return !dep.item; }), std::end(deps));
+			[](const auto &dep) { return !dep.item; }), std::end(deps));
 }
 
 auto cache_item::resolve_parent(const symcache &cache) -> bool
 {
-	auto log_tag = [&](){ return cache.log_tag(); };
+	auto log_tag = [&]() { return cache.log_tag(); };
 
 	if (is_virtual()) {
 		auto &virt = std::get<virtual_item>(specific);
@@ -807,7 +918,7 @@ auto virtual_item::resolve_parent(const symcache &cache) -> bool
 	auto item_ptr = cache.get_item_by_id(parent_id, true);
 
 	if (item_ptr) {
-		parent = const_cast<cache_item*>(item_ptr)->getptr();
+		parent = const_cast<cache_item *>(item_ptr)->getptr();
 
 		return true;
 	}
@@ -817,17 +928,18 @@ auto virtual_item::resolve_parent(const symcache &cache) -> bool
 
 auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>
 {
-	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER|SYMBOL_TYPE_PREFILTER
-						   |SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_IDEMPOTENT
-						   |SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER
-						   |SYMBOL_TYPE_VIRTUAL;
+	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_PREFILTER
+										 | SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_IDEMPOTENT
+										 | SYMBOL_TYPE_COMPOSITE | SYMBOL_TYPE_CLASSIFIER
+										 | SYMBOL_TYPE_VIRTUAL;
 
 	constexpr auto all_but_one_ty = [&](int type, int exclude_bit) -> auto {
 		return type & (trivial_types & ~exclude_bit);
 	};
 
 	if (type & trivial_types) {
-		auto check_trivial = [&](auto flag, symcache_item_type ty) ->  tl::expected<std::pair<symcache_item_type, int>, std::string> {
+		auto check_trivial = [&](auto flag,
+								 symcache_item_type ty) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
 			if (all_but_one_ty(type, flag)) {
 				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", type));
 			}
@@ -866,7 +978,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 bool operator<(symcache_item_type lhs, symcache_item_type rhs)
 {
 	auto ret = false;
-	switch(lhs) {
+	switch (lhs) {
 	case symcache_item_type::CONNFILTER:
 		break;
 	case symcache_item_type::PREFILTER:

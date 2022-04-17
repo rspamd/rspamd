@@ -172,30 +172,11 @@ gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
 									  guint *nhits);
 
 /**
- * Find symbol in cache by its id
- * @param cache
- * @param id
- * @return symbol's name or NULL
- */
-const gchar *rspamd_symcache_symbol_by_id (struct rspamd_symcache *cache,
-										   gint id);
-
-/**
  * Returns number of symbols registered in symbols cache
  * @param cache
  * @return number of symbols in the cache
  */
 guint rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache);
-
-/**
- * Call function for cached symbol using saved callback
- * @param task task object
- * @param cache symbols cache
- * @param saved_item pointer to currently saved item
- */
-gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
-										  struct rspamd_symcache *cache,
-										  gint stage);
 
 /**
  * Validate cache items against theirs weights defined in metrics
@@ -206,6 +187,16 @@ gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
 gboolean rspamd_symcache_validate (struct rspamd_symcache *cache,
 								   struct rspamd_config *cfg,
 								   gboolean strict);
+
+/**
+ * Call function for cached symbol using saved callback
+ * @param task task object
+ * @param cache symbols cache
+ * @param saved_item pointer to currently saved item
+ */
+gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
+										  struct rspamd_symcache *cache,
+										  gint stage);
 
 /**
  * Return statistics about the cache as ucl object (array of objects one per item)

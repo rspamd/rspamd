@@ -257,6 +257,12 @@ public:
 		return std::holds_alternative<normal_item>(specific) &&
 		        (type == symcache_item_type::FILTER);
 	}
+	auto is_scoreable() const -> bool {
+		return (type == symcache_item_type::FILTER) ||
+				is_virtual() ||
+				(type == symcache_item_type::COMPOSITE) ||
+				(type == symcache_item_type::CLASSIFIER);
+	}
 	auto is_ghost() const -> bool {
 		return flags & SYMBOL_TYPE_GHOST;
 	}
@@ -519,6 +525,21 @@ public:
 	auto get_stats_symbols_count() const {
 		return stats_symbols_count;
 	}
+
+	/**
+	 * Returns a checksum for the cache
+	 * @return
+	 */
+	auto get_cksum() const {
+		return cksum;
+	}
+
+	/**
+	 * Validate symbols in the cache
+	 * @param strict
+	 * @return
+	 */
+	auto validate(bool strict) -> bool;
 };
 
 /*
