@@ -731,7 +731,7 @@ auto symcache::validate(bool strict) -> bool
 
 	while (g_hash_table_iter_next(&it, &k, &v)) {
 		auto ignore_symbol = false;
-		auto sym_def = (struct rspamd_symbol *)v;
+		auto sym_def = (struct rspamd_symbol *) v;
 
 		if (sym_def && (sym_def->flags &
 						(RSPAMD_SYMBOL_FLAG_IGNORE_METRIC | RSPAMD_SYMBOL_FLAG_DISABLED))) {
@@ -739,7 +739,7 @@ auto symcache::validate(bool strict) -> bool
 		}
 
 		if (!ignore_symbol) {
-			if (!items_by_symbol.contains((const char *)k)) {
+			if (!items_by_symbol.contains((const char *) k)) {
 				msg_warn_cache (
 						"symbol '%s' has its score defined but there is no "
 						"corresponding rule registered",
@@ -750,7 +750,7 @@ auto symcache::validate(bool strict) -> bool
 			}
 		}
 		else if (sym_def->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
-			auto item = get_item_by_name_mut((const char *)k, false);
+			auto item = get_item_by_name_mut((const char *) k, false);
 
 			if (item) {
 				item->enabled = FALSE;
@@ -759,6 +759,74 @@ auto symcache::validate(bool strict) -> bool
 	}
 
 	return ret;
+}
+
+auto symcache::counters() const -> ucl_object_t *
+{
+	auto *top = ucl_object_typed_new(UCL_ARRAY);
+	constexpr const auto round_float = [](const auto x, const int digits) -> auto {
+		const auto power10 = ::pow(10, digits);
+		return (::floor(x * power10) / power10);
+	};
+
+	for (auto &pair: items_by_symbol) {
+		auto &item = pair.second;
+		auto symbol = pair.first;
+
+		auto *obj = ucl_object_typed_new(UCL_OBJECT);
+		ucl_object_insert_key(obj, ucl_object_fromlstring(symbol.data(), symbol.size()),
+				"symbol", 0, false);
+
+		if (item->is_virtual()) {
+			if (!(item->flags & SYMBOL_TYPE_GHOST)) {
+				const auto *parent = item->get_parent(*this);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(round_float(item->st->weight, 3)),
+						"weight", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
+						"frequency", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromint(parent->st->total_hits),
+						"hits", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(round_float(parent->st->avg_time, 3)),
+						"time", 0, false);
+			}
+			else {
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(round_float(item->st->weight, 3)),
+						"weight", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(0.0),
+						"frequency", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(0.0),
+						"hits", 0, false);
+				ucl_object_insert_key(obj,
+						ucl_object_fromdouble(0.0),
+						"time", 0, false);
+			}
+		}
+		else {
+			ucl_object_insert_key(obj,
+					ucl_object_fromdouble(round_float(item->st->weight, 3)),
+					"weight", 0, false);
+			ucl_object_insert_key(obj,
+					ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
+					"frequency", 0, false);
+			ucl_object_insert_key(obj,
+					ucl_object_fromint(item->st->total_hits),
+					"hits", 0, false);
+			ucl_object_insert_key(obj,
+					ucl_object_fromdouble(round_float(item->st->avg_time, 3)),
+					"time", 0, false);
+		}
+
+		ucl_array_append(top, obj);
+	}
+
+	return top;
 }
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *

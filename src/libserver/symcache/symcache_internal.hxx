@@ -257,6 +257,10 @@ public:
 		return std::holds_alternative<normal_item>(specific) &&
 		        (type == symcache_item_type::FILTER);
 	}
+	/**
+	 * Returns true if a symbol should have some score defined
+	 * @return
+	 */
 	auto is_scoreable() const -> bool {
 		return (type == symcache_item_type::FILTER) ||
 				is_virtual() ||
@@ -540,6 +544,12 @@ public:
 	 * @return
 	 */
 	auto validate(bool strict) -> bool;
+
+	/**
+	 * Returns counters for the cache
+	 * @return
+	 */
+	auto counters() const -> ucl_object_t *;
 };
 
 /*
