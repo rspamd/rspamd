@@ -210,7 +210,7 @@ ucl_object_t *rspamd_symcache_counters (struct rspamd_symcache *cache);
  * @param cache
  * @param ev_base
  */
-void rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
+void* rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
 									struct ev_loop *ev_base,
 									struct rspamd_worker *w);
 

@@ -829,6 +829,79 @@ auto symcache::counters() const -> ucl_object_t *
 	return top;
 }
 
+auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double last_resort) -> void
+{
+	static const double decay_rate = 0.25;
+
+	for (const auto &item: filters) {
+		item->st->total_hits += item->st->hits;
+		g_atomic_int_set (&item->st->hits, 0);
+
+		if (item->last_count > 0) {
+			gdouble cur_err, cur_value;
+
+			cur_value = (item->st->total_hits - item->last_count) /
+						(cur_time - last_resort);
+			rspamd_set_counter_ema(&item->st->frequency_counter,
+					cur_value, decay_rate);
+			item->st->avg_frequency = item->st->frequency_counter.mean;
+			item->st->stddev_frequency = item->st->frequency_counter.stddev;
+
+			if (cur_value > 0) {
+				msg_debug_cache ("frequency for %s is %.2f, avg: %.2f",
+						item->symbol.c_str(), cur_value, item->st->avg_frequency);
+			}
+
+			cur_err = (item->st->avg_frequency - cur_value);
+			cur_err *= cur_err;
+
+			if (item->st->frequency_counter.number > 10 &&
+				cur_err > sqrt(item->st->stddev_frequency) * 3) {
+				item->frequency_peaks++;
+				msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
+								 "stddev: %.2f, error: %.2f, peaks: %d",
+						item->symbol.c_str(), cur_value,
+						item->st->avg_frequency,
+						item->st->stddev_frequency,
+						cur_err,
+						item->frequency_peaks);
+
+				if (peak_cb != -1) {
+					struct ev_loop **pbase;
+
+					lua_rawgeti(L, LUA_REGISTRYINDEX, peak_cb);
+					pbase = (struct ev_loop **) lua_newuserdata(L, sizeof(*pbase));
+					*pbase = ev_loop;
+					rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+					lua_pushlstring(L, item->symbol.c_str(), item->symbol.size());
+					lua_pushnumber(L, item->st->avg_frequency);
+					lua_pushnumber(L, ::sqrt(item->st->stddev_frequency));
+					lua_pushnumber(L, cur_value);
+					lua_pushnumber(L, cur_err);
+
+					if (lua_pcall(L, 6, 0, 0) != 0) {
+						msg_info_cache ("call to peak function for %s failed: %s",
+								item->symbol.c_str(), lua_tostring(L, -1));
+						lua_pop (L, 1);
+					}
+				}
+			}
+		}
+
+		item->last_count = item->st->total_hits;
+
+		if (item->cd->number > 0) {
+			if (!item->is_virtual()) {
+				item->st->avg_time = item->cd->mean;
+				rspamd_set_counter_ema(&item->st->time_counter,
+						item->st->avg_time, decay_rate);
+				item->st->avg_time = item->st->time_counter.mean;
+				memset(item->cd, 0, sizeof(*item->cd));
+			}
+		}
+	}
+}
+
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (is_virtual()) {

@@ -15,6 +15,7 @@
  */
 
 #include "symcache_internal.hxx"
+#include "symcache_periodic.hxx"
 
 /**
  * C API for symcache
@@ -158,4 +159,19 @@ rspamd_symcache_validate(struct rspamd_symcache *cache,
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	return real_cache->validate(strict);
+}
+
+ucl_object_t *
+rspamd_symcache_counters (struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	return real_cache->counters();
+}
+
+void *
+rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
+							   struct ev_loop *ev_base, struct rspamd_worker *w)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	return new rspamd::symcache::cache_refresh_cbdata{real_cache, ev_base, w};
 }

@@ -31,6 +31,8 @@
 #include <string_view>
 #include <memory>
 #include <variant>
+
+#include "contrib/libev/ev.h"
 #include "contrib/robin-hood/robin_hood.h"
 #include "contrib/expected/expected.hpp"
 #include "cfg_file.h"
@@ -550,6 +552,13 @@ public:
 	 * @return
 	 */
 	auto counters() const -> ucl_object_t *;
+
+	/**
+	 * Adjusts stats of the cache for the periodic counter
+	 */
+	auto periodic_resort(struct ev_loop *ev_loop, double cur_time, double last_resort) -> void;
+
+	auto get_reload_time() const { return reload_time; };
 };
 
 /*
@@ -580,15 +589,6 @@ struct cache_savepoint {
 	/* Dynamically expanded as needed */
 	struct cache_dynamic_item dynamic_items[];
 };
-
-struct cache_refresh_cbdata {
-	double last_resort;
-	ev_timer resort_ev;
-	symcache *cache;
-	struct rspamd_worker *w;
-	struct ev_loop *event_loop;
-};
-
 } // namespace rspamd
 
 #endif //RSPAMD_SYMCACHE_INTERNAL_HXX
