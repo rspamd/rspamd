@@ -409,7 +409,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         (function initSettings() {
             var selected_locale = null;
             var custom_locale = null;
-            var localeTextbox = ".popover #settings-popover #locale";
+            const localeTextbox = ".popover #settings-popover #locale";
 
             function validateLocale(saveToLocalStorage) {
                 function toggle_form_group_class(remove, add) {
@@ -472,7 +472,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                 localStorage.setItem("selected_locale", selected_locale);
                 validateLocale();
             });
-            $(document).on("input", ".popover #settings-popover #locale", function () {
+            $(document).on("input", localeTextbox, function () {
                 custom_locale = $(localeTextbox).val();
                 validateLocale(true);
             });
