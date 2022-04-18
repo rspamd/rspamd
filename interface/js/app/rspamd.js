@@ -51,6 +51,9 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         }
     };
 
+    const defaultAjaxTimeout = 20000;
+
+    const ajaxTimeoutBox = ".popover #settings-popover #ajax-timeout";
     var graphs = {};
     var tables = {};
     var neighbours = []; // list of clusters
@@ -63,6 +66,17 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         minimum: 0.01,
         showSpinner: false,
     });
+
+    function ajaxSetup(ajax_timeout, setFieldValue, saveToLocalStorage) {
+        const timeout = (ajax_timeout && ajax_timeout >= 0) ? ajax_timeout : defaultAjaxTimeout;
+        if (saveToLocalStorage) localStorage.setItem("ajax_timeout", timeout);
+        if (setFieldValue) $(ajaxTimeoutBox).val(timeout);
+
+        $.ajaxSetup({
+            timeout: timeout,
+            jsonp: false
+        });
+    }
 
     function cleanCredentials() {
         sessionStorage.clear();
@@ -295,6 +309,8 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                 if (!ui.read_only) tab_selectors.displayUI(ui);
             },
             complete: function () {
+                ajaxSetup(localStorage.getItem("ajax_timeout"));
+
                 if (ui.read_only) {
                     $(".ro-disable").attr("disabled", true);
                     $(".ro-hide").hide();
@@ -466,6 +482,8 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
                 $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
                 $(localeTextbox).val(custom_locale);
+
+                ajaxSetup(localStorage.getItem("ajax_timeout"), true);
             });
             $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
                 selected_locale = this.value;
@@ -475,6 +493,12 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
             $(document).on("input", localeTextbox, function () {
                 custom_locale = $(localeTextbox).val();
                 validateLocale(true);
+            });
+            $(document).on("input", ajaxTimeoutBox, function () {
+                ajaxSetup($(ajaxTimeoutBox).val(), false, true);
+            });
+            $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
+                ajaxSetup(null, true, true);
             });
 
             // Dismiss Bootstrap popover by clicking outside
@@ -494,10 +518,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         $("#selData").change(function () {
             selData = this.value;
             tabClick("#throughput_nav");
-        });
-        $.ajaxSetup({
-            timeout: 20000,
-            jsonp: false
         });
 
         $(document).ajaxStart(function () {
@@ -549,6 +569,11 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     };
 
     ui.connect = function () {
+        // Prevent locking out of the WebUI if timeout is too low.
+        let timeout = localStorage.getItem("ajax_timeout");
+        if (timeout < defaultAjaxTimeout) timeout = defaultAjaxTimeout;
+        ajaxSetup(timeout);
+
         // Query "/stat" to check if user is already logged in or client ip matches "secure_ip"
         $.ajax({
             type: "GET",
