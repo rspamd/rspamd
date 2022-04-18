@@ -16,6 +16,7 @@
 
 #include "symcache_internal.hxx"
 #include "symcache_periodic.hxx"
+#include "symcache_item.hxx"
 
 /**
  * C API for symcache

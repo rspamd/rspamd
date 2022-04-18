@@ -15,6 +15,7 @@
  */
 
 #include "symcache_internal.hxx"
+#include "symcache_item.hxx"
 #include "unix-std.h"
 #include "libutil/cxx/locked_file.hxx"
 #include "fmt/core.h"
