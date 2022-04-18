@@ -29,6 +29,7 @@
 #include "rspamd_symcache.h"
 #include "symcache_id_list.hxx"
 #include "contrib/expected/expected.hpp"
+#include "contrib/libev/ev.h"
 #include "lua/lua_common.h"
 
 namespace rspamd::symcache {
@@ -275,6 +276,11 @@ public:
 
 		return false;
 	}
+
+	auto update_counters_check_peak(lua_State *L,
+									struct ev_loop *ev_loop,
+									double cur_time,
+									double last_resort) -> bool;
 
 private:
 	/**

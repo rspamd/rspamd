@@ -832,72 +832,39 @@ auto symcache::counters() const -> ucl_object_t *
 
 auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double last_resort) -> void
 {
-	static const double decay_rate = 0.25;
-
 	for (const auto &item: filters) {
-		item->st->total_hits += item->st->hits;
-		g_atomic_int_set (&item->st->hits, 0);
 
-		if (item->last_count > 0) {
-			gdouble cur_err, cur_value;
-
-			cur_value = (item->st->total_hits - item->last_count) /
+		if (item->update_counters_check_peak(L, ev_loop, cur_time, last_resort)) {
+			auto cur_value = (item->st->total_hits - item->last_count) /
 						(cur_time - last_resort);
-			rspamd_set_counter_ema(&item->st->frequency_counter,
-					cur_value, decay_rate);
-			item->st->avg_frequency = item->st->frequency_counter.mean;
-			item->st->stddev_frequency = item->st->frequency_counter.stddev;
-
-			if (cur_value > 0) {
-				msg_debug_cache ("frequency for %s is %.2f, avg: %.2f",
-						item->symbol.c_str(), cur_value, item->st->avg_frequency);
-			}
-
-			cur_err = (item->st->avg_frequency - cur_value);
+			auto cur_err = (item->st->avg_frequency - cur_value);
 			cur_err *= cur_err;
+			msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
+							 "stddev: %.2f, error: %.2f, peaks: %d",
+					item->symbol.c_str(), cur_value,
+					item->st->avg_frequency,
+					item->st->stddev_frequency,
+					cur_err,
+					item->frequency_peaks);
 
-			if (item->st->frequency_counter.number > 10 &&
-				cur_err > sqrt(item->st->stddev_frequency) * 3) {
-				item->frequency_peaks++;
-				msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
-								 "stddev: %.2f, error: %.2f, peaks: %d",
-						item->symbol.c_str(), cur_value,
-						item->st->avg_frequency,
-						item->st->stddev_frequency,
-						cur_err,
-						item->frequency_peaks);
+			if (peak_cb != -1) {
+				struct ev_loop **pbase;
 
-				if (peak_cb != -1) {
-					struct ev_loop **pbase;
+				lua_rawgeti(L, LUA_REGISTRYINDEX, peak_cb);
+				pbase = (struct ev_loop **) lua_newuserdata(L, sizeof(*pbase));
+				*pbase = ev_loop;
+				rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
+				lua_pushlstring(L, item->symbol.c_str(), item->symbol.size());
+				lua_pushnumber(L, item->st->avg_frequency);
+				lua_pushnumber(L, ::sqrt(item->st->stddev_frequency));
+				lua_pushnumber(L, cur_value);
+				lua_pushnumber(L, cur_err);
 
-					lua_rawgeti(L, LUA_REGISTRYINDEX, peak_cb);
-					pbase = (struct ev_loop **) lua_newuserdata(L, sizeof(*pbase));
-					*pbase = ev_loop;
-					rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
-					lua_pushlstring(L, item->symbol.c_str(), item->symbol.size());
-					lua_pushnumber(L, item->st->avg_frequency);
-					lua_pushnumber(L, ::sqrt(item->st->stddev_frequency));
-					lua_pushnumber(L, cur_value);
-					lua_pushnumber(L, cur_err);
-
-					if (lua_pcall(L, 6, 0, 0) != 0) {
-						msg_info_cache ("call to peak function for %s failed: %s",
-								item->symbol.c_str(), lua_tostring(L, -1));
-						lua_pop (L, 1);
-					}
+				if (lua_pcall(L, 6, 0, 0) != 0) {
+					msg_info_cache ("call to peak function for %s failed: %s",
+							item->symbol.c_str(), lua_tostring(L, -1));
+					lua_pop (L, 1);
 				}
-			}
-		}
-
-		item->last_count = item->st->total_hits;
-
-		if (item->cd->number > 0) {
-			if (!item->is_virtual()) {
-				item->st->avg_time = item->cd->mean;
-				rspamd_set_counter_ema(&item->st->time_counter,
-						item->st->avg_time, decay_rate);
-				item->st->avg_time = item->st->time_counter.mean;
-				memset(item->cd, 0, sizeof(*item->cd));
 			}
 		}
 	}
@@ -1040,6 +1007,50 @@ auto cache_item::resolve_parent(const symcache &cache) -> bool
 	}
 
 	return false;
+}
+
+auto cache_item::update_counters_check_peak(lua_State *L,
+											struct ev_loop *ev_loop,
+											double cur_time,
+											double last_resort) -> bool
+{
+	auto ret = false;
+	static const double decay_rate = 0.25;
+
+	st->total_hits += st->hits;
+	g_atomic_int_set(&st->hits, 0);
+
+	if (last_count > 0) {
+		auto cur_value = (st->total_hits - last_count) /
+					(cur_time - last_resort);
+		rspamd_set_counter_ema(&st->frequency_counter,
+				cur_value, decay_rate);
+		st->avg_frequency = st->frequency_counter.mean;
+		st->stddev_frequency = st->frequency_counter.stddev;
+
+		auto cur_err = (st->avg_frequency - cur_value);
+		cur_err *= cur_err;
+
+		if (st->frequency_counter.number > 10 &&
+			cur_err > ::sqrt(st->stddev_frequency) * 3) {
+			frequency_peaks++;
+			ret = true;
+		}
+	}
+
+	last_count = st->total_hits;
+
+	if (cd->number > 0) {
+		if (!is_virtual()) {
+			st->avg_time = cd->mean;
+			rspamd_set_counter_ema(&st->time_counter,
+					st->avg_time, decay_rate);
+			st->avg_time = st->time_counter.mean;
+			memset(cd, 0, sizeof(*cd));
+		}
+	}
+
+	return ret;
 }
 
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
