@@ -56,6 +56,7 @@ local settings = {
     iso = 4,
     jar = 2,
     lnk = 4,
+    rpmsg = 4,
     scr = 4,
     -- Have you ever seen that in legit email?
     ace = 4,
