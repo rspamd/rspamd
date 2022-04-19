@@ -2975,40 +2975,13 @@ lua_config_set_peak_cb (lua_State *L)
 static gint
 lua_config_enable_symbol (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym = luaL_checkstring (L, 2);
-
-	if (cfg && sym) {
-		rspamd_symcache_enable_symbol_perm (cfg->cache, sym);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
+	return luaL_error (L, "obsoleted method");
 }
 
 static gint
 lua_config_disable_symbol (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym = luaL_checkstring (L, 2);
-	gboolean disable_parent = TRUE;
-
-	if (cfg && sym) {
-		if (lua_isboolean (L, 3)) {
-			disable_parent = lua_toboolean (L, 3);
-		}
-
-		rspamd_symcache_disable_symbol_perm (cfg->cache, sym, disable_parent);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
+	return luaL_error (L, "obsoleted method");
 }
 
 static gint

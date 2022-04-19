@@ -243,23 +243,6 @@ void rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
 											 const gchar *from, const gchar *to);
 
 /**
- * Disable specific symbol in the cache
- * @param cache
- * @param symbol
- */
-void rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
-										  const gchar *symbol,
-										  gboolean resolve_parent);
-
-/**
- * Enable specific symbol in the cache
- * @param cache
- * @param symbol
- */
-void rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
-										 const gchar *symbol);
-
-/**
  * Get abstract callback data for a symbol (or its parent symbol)
  * @param cache cache object
  * @param symbol symbol name
@@ -540,34 +523,6 @@ const gchar* rspamd_symcache_item_name (struct rspamd_symcache_item *item);
  */
 const struct rspamd_symcache_item_stat *
 		rspamd_symcache_item_stat (struct rspamd_symcache_item *item);
-/**
- * Returns if an item is enabled (for virtual it also means that parent should be enabled)
- * @param item
- * @return
- */
-gboolean rspamd_symcache_item_is_enabled (struct rspamd_symcache_item *item);
-/**
- * Returns parent for virtual symbols (or NULL)
- * @param item
- * @return
- */
-struct rspamd_symcache_item * rspamd_symcache_item_get_parent (
-		struct rspamd_symcache_item *item);
-/**
- * Returns direct deps for an element
- * @param item
- * @return array of struct rspamd_symcache_item *
- */
-const GPtrArray* rspamd_symcache_item_get_deps (
-		struct rspamd_symcache_item *item);
-/**
- * Returns direct reverse deps for an element
- * @param item
- * @return array of struct rspamd_symcache_item *
- */
-const GPtrArray* rspamd_symcache_item_get_rdeps (
-		struct rspamd_symcache_item *item);
-
 
 /**
  * Enable profiling for task (e.g. when a slow rule has been found)
