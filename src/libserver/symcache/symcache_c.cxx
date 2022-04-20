@@ -191,3 +191,36 @@ rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
 	auto *real_cache = C_API_SYMCACHE(cache);
 	real_cache->add_delayed_dependency(from, to);
 }
+
+const gchar *
+rspamd_symcache_get_parent (struct rspamd_symcache *cache,
+							const gchar *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto *sym = real_cache->get_item_by_name(symbol, false);
+
+	if (sym && sym->is_virtual()) {
+		auto *parent = sym->get_parent(*real_cache);
+
+		if (parent) {
+			return parent->get_name().c_str();
+		}
+	}
+
+	return nullptr;
+}
+
+const gchar*
+rspamd_symcache_item_name (struct rspamd_symcache_item *item)
+{
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	return real_item->get_name().c_str();
+}
+
+const struct rspamd_symcache_item_stat *
+rspamd_symcache_item_stat (struct rspamd_symcache_item *item)
+{
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	return real_item->st;
+}
