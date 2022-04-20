@@ -176,3 +176,10 @@ rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
 	auto *real_cache = C_API_SYMCACHE(cache);
 	return new rspamd::symcache::cache_refresh_cbdata{real_cache, ev_base, w};
 }
+
+void
+rspamd_symcache_inc_frequency(struct rspamd_symcache *_cache, struct rspamd_symcache_item *item)
+{
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	real_item->inc_frequency();
+}

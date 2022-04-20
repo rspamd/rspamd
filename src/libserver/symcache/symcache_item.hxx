@@ -282,6 +282,10 @@ public:
 									double cur_time,
 									double last_resort) -> bool;
 
+	auto inc_frequency() -> void {
+		g_atomic_int_inc(&st->hits);
+	}
+
 private:
 	/**
 	 * Constructor for a normal symbols with callback
