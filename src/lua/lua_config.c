@@ -2323,14 +2323,8 @@ lua_config_register_dependency (lua_State * L)
 		child_id = luaL_checknumber (L, 2);
 		parent = luaL_checkstring (L, 3);
 
-		msg_warn_config ("calling for obsolete method to register deps for symbol %d->%s",
+		return luaL_error(L,"calling for obsolete method to register deps for symbol %d->%s",
 				child_id, parent);
-
-		if (child_id > 0 && parent != NULL) {
-
-			rspamd_symcache_add_dependency (cfg->cache, child_id, parent,
-					-1);
-		}
 	}
 	else {
 		child = luaL_checkstring (L,2);

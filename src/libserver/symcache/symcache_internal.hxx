@@ -95,6 +95,8 @@ using order_generation_ptr = std::shared_ptr<order_generation>;
 struct delayed_cache_dependency {
 	std::string from;
 	std::string to;
+
+	delayed_cache_dependency(std::string_view _from, std::string_view _to) : from(_from), to(_to) {}
 };
 
 struct delayed_cache_condition {
@@ -208,6 +210,19 @@ public:
 	 * @return
 	 */
 	auto add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void;
+
+	/**
+	 * Add a delayed dependency between symbols that will be resolved on the init stage
+	 * @param from
+	 * @param to
+	 */
+	auto add_delayed_dependency(std::string_view from, std::string_view to) -> void {
+		if (!delayed_deps) {
+			delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
+		}
+
+		delayed_deps->emplace_back(from, to);
+	}
 
 	/**
 	 * Initialises the symbols cache, must be called after all symbols are added

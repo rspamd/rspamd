@@ -183,3 +183,11 @@ rspamd_symcache_inc_frequency(struct rspamd_symcache *_cache, struct rspamd_symc
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	real_item->inc_frequency();
 }
+
+void
+rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
+										const gchar *from, const gchar *to)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	real_cache->add_delayed_dependency(from, to);
+}

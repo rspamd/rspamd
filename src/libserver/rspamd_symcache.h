@@ -223,17 +223,6 @@ void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
 									struct rspamd_symcache_item *item);
 
 /**
- * Add dependency relation between two symbols identified by id (source) and
- * a symbolic name (destination). Destination could be virtual or real symbol.
- * Callback destinations are not yet supported.
- * @param id_from source symbol
- * @param to destination name
- */
-void rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
-									 gint id_from, const gchar *to,
-									 gint virtual_id_from);
-
-/**
  * Add delayed dependency that is resolved on cache post-load routine
  * @param cache
  * @param from
