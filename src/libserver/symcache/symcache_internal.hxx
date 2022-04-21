@@ -336,34 +336,7 @@ public:
 	}
 };
 
-/*
- * These items are saved within task structure and are used to track
- * symbols execution
- */
-struct cache_dynamic_item {
-	std::uint16_t start_msec; /* Relative to task time */
-	unsigned started: 1;
-	unsigned finished: 1;
-	/* unsigned pad:14; */
-	std::uint32_t async_events;
-};
 
-struct cache_savepoint {
-	unsigned order_gen;
-	unsigned items_inflight;
-	bool profile;
-	bool has_slow;
-
-	double profile_start;
-	double lim;
-
-	struct rspamd_scan_result *rs;
-
-	struct cache_item *cur_item;
-	order_generation_ptr order;
-	/* Dynamically expanded as needed */
-	struct cache_dynamic_item dynamic_items[];
-};
 } // namespace rspamd
 
 #endif //RSPAMD_SYMCACHE_INTERNAL_HXX
