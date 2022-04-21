@@ -317,7 +317,23 @@ public:
 	 */
 	auto periodic_resort(struct ev_loop *ev_loop, double cur_time, double last_resort) -> void;
 
+	/**
+	 * A simple helper to get the reload time
+	 * @return
+	 */
 	auto get_reload_time() const { return reload_time; };
+
+	/**
+	 * Iterate over all symbols using a specific functor
+	 * @tparam Functor
+	 * @param f
+	 */
+	template<typename Functor>
+	auto symbols_foreach(Functor f) -> void {
+		for (const auto &sym_it : items_by_symbol) {
+			f(sym_it.second.get());
+		}
+	}
 };
 
 /*

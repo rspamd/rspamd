@@ -265,6 +265,10 @@ public:
 		return symbol;
 	}
 
+	auto get_flags() const -> auto {
+		return flags;
+	};
+
 	auto add_condition(lua_State *L, int cbref) -> bool
 	{
 		if (!is_virtual()) {

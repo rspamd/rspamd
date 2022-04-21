@@ -218,9 +218,28 @@ rspamd_symcache_item_name (struct rspamd_symcache_item *item)
 	return real_item->get_name().c_str();
 }
 
+gint
+rspamd_symcache_item_flags (struct rspamd_symcache_item *item)
+{
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	return real_item->get_flags();
+}
+
 const struct rspamd_symcache_item_stat *
 rspamd_symcache_item_stat (struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	return real_item->st;
+}
+
+void
+rspamd_symcache_foreach(struct rspamd_symcache *cache,
+							  void (*func) (struct rspamd_symcache_item *item, gpointer /* userdata */),
+							  gpointer ud)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->symbols_foreach([&](const rspamd::symcache::cache_item* item) {
+		func((struct rspamd_symcache_item *)item, ud);
+	});
 }
