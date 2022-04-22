@@ -630,10 +630,19 @@ rspamadm_lua_run_repl (lua_State *L, bool is_batch)
 
 			if (linelen > 0) {
 				if (input[linelen - 1] == '\n') {
-					linelen--;
+					input[linelen - 1] = '\0';
+					linelen --;
 				}
 
-				rspamadm_exec_input(L, input);
+				if (linelen > 0) {
+					if (input[0] == '.') {
+						if (rspamadm_lua_try_dot_command(L, input)) {
+							continue;
+						}
+					}
+
+					rspamadm_exec_input(L, input);
+				}
 			}
 			else {
 				break;
