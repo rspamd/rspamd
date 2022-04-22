@@ -626,8 +626,6 @@ rspamadm_lua_run_repl (lua_State *L, bool is_batch)
 			size_t linecap = 0;
 			ssize_t linelen;
 
-			fprintf(stdout, "%s ", MAIN_PROMPT);
-
 			linelen = getline(&input, &linecap, stdin);
 
 			if (linelen > 0) {
