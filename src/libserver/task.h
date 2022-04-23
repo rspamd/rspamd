@@ -207,7 +207,7 @@ struct rspamd_task {
 	struct ev_timer timeout_ev;                        /**< Global task timeout							*/
 	struct ev_io guard_ev;                            /**< Event for input sanity guard 					*/
 
-	gpointer checkpoint;                            /**< Opaque checkpoint data							*/
+	gpointer symcache_runtime;                            /**< Opaque checkpoint data							*/
 	ucl_object_t *settings;                            /**< Settings applied to task						*/
 	struct rspamd_config_settings_elt *settings_elt;    /**< preprocessed settings id elt				*/
 

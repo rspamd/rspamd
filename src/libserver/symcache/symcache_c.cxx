@@ -17,12 +17,14 @@
 #include "symcache_internal.hxx"
 #include "symcache_periodic.hxx"
 #include "symcache_item.hxx"
+#include "symcache_runtime.hxx"
 
 /**
  * C API for symcache
  */
 
 #define C_API_SYMCACHE(ptr) (reinterpret_cast<rspamd::symcache::symcache *>(ptr))
+#define C_API_SYMCACHE_RUNTIME(ptr) (reinterpret_cast<rspamd::symcache::symcache_runtime *>(ptr))
 #define C_API_SYMCACHE_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_item *>(ptr))
 
 void
@@ -242,4 +244,45 @@ rspamd_symcache_foreach(struct rspamd_symcache *cache,
 	real_cache->symbols_foreach([&](const rspamd::symcache::cache_item* item) {
 		func((struct rspamd_symcache_item *)item, ud);
 	});
+}
+
+void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
+										  struct rspamd_symcache *_cache,
+										  guint skip_mask)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	cache_runtime->disable_all_symbols(skip_mask);
+}
+
+gboolean
+rspamd_symcache_disable_symbol (struct rspamd_task *task,
+								struct rspamd_symcache *cache,
+								const gchar *symbol)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return cache_runtime->disable_symbol(task, *real_cache, symbol);
+}
+
+gboolean
+rspamd_symcache_enable_symbol (struct rspamd_task *task,
+								struct rspamd_symcache *cache,
+								const gchar *symbol)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return cache_runtime->enable_symbol(task, *real_cache, symbol);
+}
+
+gboolean
+rspamd_symcache_process_settings (struct rspamd_task *task,
+								  struct rspamd_symcache *cache)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return cache_runtime->process_settings(task, *real_cache);
 }

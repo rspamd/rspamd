@@ -542,6 +542,13 @@ auto symcache::resort() -> void
 	};
 
 	std::stable_sort(std::begin(ord->d), std::end(ord->d), cache_order_cmp);
+	/* After sorting is done, we can assign all elements in the by_symbol hash */
+	for (auto i = 0; i < ord->size(); i ++) {
+		const auto &it = ord->d[i];
+		ord->by_symbol[it->get_name()] = i;
+		ord->by_cache_id[it->id] = i;
+	}
+	/* Finally set the current order */
 	std::swap(ord, items_by_order);
 }
 

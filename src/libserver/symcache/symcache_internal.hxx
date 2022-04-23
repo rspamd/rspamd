@@ -82,11 +82,19 @@ using cache_item_ptr = std::shared_ptr<cache_item>;
 
 struct order_generation {
 	std::vector<cache_item_ptr> d;
+	/* Mapping from symbol name to the position in the order array */
+	robin_hood::unordered_flat_map<std::string_view, unsigned int> by_symbol;
+	/* Mapping from symbol id to the position in the order array */
+	robin_hood::unordered_flat_map<unsigned int, unsigned int> by_cache_id;
 	unsigned int generation_id;
 
 	explicit order_generation(std::size_t nelts, unsigned id) : generation_id(id) {
 		d.reserve(nelts);
+		by_symbol.reserve(nelts);
+		by_cache_id.reserve(nelts);
 	}
+
+	auto size() const -> auto { return d.size(); }
 };
 
 using order_generation_ptr = std::shared_ptr<order_generation>;

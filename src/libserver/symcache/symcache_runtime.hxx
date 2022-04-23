@@ -44,7 +44,7 @@ struct cache_dynamic_item {
 static_assert(sizeof(cache_dynamic_item) == sizeof(std::uint64_t));
 static_assert(std::is_trivial_v<cache_dynamic_item>);
 
-class cache_savepoint {
+class symcache_runtime {
 	unsigned items_inflight;
 	bool profile;
 	bool has_slow;
@@ -59,16 +59,48 @@ class cache_savepoint {
 	/* Dynamically expanded as needed */
 	struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
-	~cache_savepoint() = delete;
+	~symcache_runtime() = delete;
 	/* Dropper for a shared ownership */
 	static auto savepoint_dtor(void *ptr) -> void {
-		auto *real_savepoint = (cache_savepoint *)ptr;
+		auto *real_savepoint = (symcache_runtime *)ptr;
 
 		/* Drop shared ownership */
 		real_savepoint->order.reset();
 	}
 public:
-	static auto create_savepoint(struct rspamd_task *task, symcache &cache) -> cache_savepoint *;
+	/**
+	 * Creates a cache runtime using task mempool
+	 * @param task
+	 * @param cache
+	 * @return
+	 */
+	static auto create_savepoint(struct rspamd_task *task, symcache &cache) -> symcache_runtime *;
+	/**
+	 * Process task settings
+	 * @param task
+	 * @return
+	 */
+	auto process_settings(struct rspamd_task *task, const symcache &cache) -> bool;
+
+	/**
+	 * Disable all symbols but not touching ones that are in the specific mask
+	 * @param skip_mask
+	 */
+	auto disable_all_symbols(int skip_mask) -> void;
+
+	/**
+	 * Disable a symbol (or it's parent)
+	 * @param name
+	 * @return
+	 */
+	auto disable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
+
+	/**
+	 * Enable a symbol (or it's parent)
+	 * @param name
+	 * @return
+	 */
+	auto enable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
 };
 
 

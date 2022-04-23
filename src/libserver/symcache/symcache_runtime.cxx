@@ -17,6 +17,7 @@
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
 #include "symcache_runtime.hxx"
+#include "libutil/cxx/util.hxx"
 
 namespace rspamd::symcache {
 
@@ -28,19 +29,20 @@ constexpr static const auto PROFILE_MESSAGE_SIZE_THRESHOLD = 1024ul * 1024 * 2;
 constexpr static const auto PROFILE_PROBABILITY = 0.01;
 
 auto
-cache_savepoint::create_savepoint(struct rspamd_task *task, symcache &cache) -> cache_savepoint *
+symcache_runtime::create_savepoint(struct rspamd_task *task, symcache &cache) -> symcache_runtime *
 {
-	struct cache_savepoint *checkpoint;
+	struct symcache_runtime *checkpoint;
 
 	cache.maybe_resort();
 
-	checkpoint = (struct cache_savepoint *) rspamd_mempool_alloc0 (task->task_pool,
+	auto &&cur_order = cache.get_cache_order();
+	checkpoint = (struct symcache_runtime *) rspamd_mempool_alloc0 (task->task_pool,
 			sizeof(*checkpoint) +
-			sizeof(struct cache_dynamic_item) * cache.get_items_count());
+			sizeof(struct cache_dynamic_item) * cur_order->size());
 
 	checkpoint->order = cache.get_cache_order();
 	rspamd_mempool_add_destructor(task->task_pool,
-			cache_savepoint::savepoint_dtor, checkpoint);
+			symcache_runtime::savepoint_dtor, checkpoint);
 
 	/* Calculate profile probability */
 	ev_now_update_if_cheap(task->event_loop);
@@ -55,9 +57,167 @@ cache_savepoint::create_savepoint(struct rspamd_task *task, symcache &cache) -> 
 		cache.set_last_profile(now);
 	}
 
-	task->checkpoint = (void *)checkpoint;
+	task->symcache_runtime = (void *) checkpoint;
 
 	return checkpoint;
+}
+
+auto
+symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cache) -> bool
+{
+	if (!task->settings) {
+		msg_err_task("`process_settings` is called with no settings");
+		return false;
+	}
+
+	const auto *wl = ucl_object_lookup(task->settings, "whitelist");
+
+	if (wl != nullptr) {
+		msg_info_task("task is whitelisted");
+		task->flags |= RSPAMD_TASK_FLAG_SKIP;
+		return true;
+	}
+
+	auto already_disabled = false;
+
+	auto process_group = [&](const ucl_object_t *gr_obj, auto functor) -> void {
+		ucl_object_iter_t it = nullptr;
+		const ucl_object_t *cur;
+
+		if (gr_obj) {
+			while ((cur = ucl_iterate_object(gr_obj, &it, true)) != nullptr) {
+				if (ucl_object_type(cur) == UCL_STRING) {
+					auto *gr = (struct rspamd_symbols_group *)
+							g_hash_table_lookup(task->cfg->groups,
+									ucl_object_tostring(cur));
+
+					if (gr) {
+						GHashTableIter gr_it;
+						void *k, *v;
+						g_hash_table_iter_init(&gr_it, gr->symbols);
+
+						while (g_hash_table_iter_next(&gr_it, &k, &v)) {
+							functor((const char*)k);
+						}
+					}
+				}
+			}
+		}
+	};
+
+	ucl_object_iter_t it = nullptr;
+	const ucl_object_t *cur;
+
+	const auto *enabled = ucl_object_lookup(task->settings, "symbols_enabled");
+
+	if (enabled) {
+		/* Disable all symbols but selected */
+		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
+		already_disabled = true;
+		it = nullptr;
+
+		while ((cur = ucl_iterate_object(enabled, &it, true)) != nullptr) {
+			enable_symbol(task, cache,ucl_object_tostring(cur));
+		}
+	}
+
+
+	/* Enable groups of symbols */
+	enabled = ucl_object_lookup(task->settings, "groups_enabled");
+	if (enabled && !already_disabled) {
+		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
+	}
+	process_group(enabled, [&](const char *sym) {
+		enable_symbol(task, cache, sym);
+	});
+
+	const auto *disabled = ucl_object_lookup(task->settings, "symbols_disabled");
+
+
+	if (disabled) {
+		it = nullptr;
+
+		while ((cur = ucl_iterate_object (disabled, &it, true)) != nullptr) {
+			disable_symbol(task, cache,ucl_object_tostring(cur));
+		}
+	}
+
+	/* Disable groups of symbols */
+	disabled = ucl_object_lookup(task->settings, "groups_disabled");
+	process_group(disabled, [&](const char *sym) {
+		disable_symbol(task, cache, sym);
+	});
+
+	return false;
+}
+
+auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
+{
+	for (auto i = 0; i < order->size(); i ++) {
+		auto *dyn_item = &dynamic_items[i];
+		const auto &item = order->d[i];
+
+		if (!(item->get_flags() & skip_mask)) {
+			dyn_item->finished = true;
+			dyn_item->started = true;
+		}
+	}
+}
+
+auto
+symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool
+{
+	const auto *item = cache.get_item_by_name(name, true);
+
+	if (item != nullptr) {
+
+		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+
+		if (our_id_maybe) {
+			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+			dyn_item->finished = true;
+			dyn_item->started = true;
+			msg_debug_cache_task("disable execution of %s", name.data());
+
+			return true;
+		}
+		else {
+			msg_debug_cache_task("cannot disable %s: id not found %d", name.data(), item->id);
+		}
+	}
+	else {
+		msg_debug_cache_task("cannot disable %s: symbol not found", name.data());
+	}
+
+	return false;
+}
+
+auto
+symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool
+{
+	const auto *item = cache.get_item_by_name(name, true);
+
+	if (item != nullptr) {
+
+		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+
+		if (our_id_maybe) {
+			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+			dyn_item->finished = false;
+			dyn_item->started = false;
+			msg_debug_cache_task("enable execution of %s", name.data());
+
+			return true;
+		}
+		else {
+			msg_debug_cache_task("cannot enable %s: id not found %d", name.data(), item->id);
+		}
+	}
+	else {
+		msg_debug_cache_task("cannot enable %s: symbol not found", name.data());
+	}
+
+	return false;
 }
 
 }
