@@ -37,7 +37,6 @@
 #include "contrib/robin-hood/robin_hood.h"
 #include "contrib/expected/expected.hpp"
 #include "cfg_file.h"
-#include "lua/lua_common.h"
 
 #include "symcache_id_list.hxx"
 
@@ -61,6 +60,8 @@
         rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+
+struct lua_State;
 
 namespace rspamd::symcache {
 
@@ -168,11 +169,7 @@ public:
 		delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
 	}
 
-	virtual ~symcache() {
-		if (peak_cb != -1) {
-			luaL_unref(L, LUA_REGISTRYINDEX, peak_cb);
-		}
-	}
+	virtual ~symcache();
 
 	/**
 	 * Saves items on disk (if possible)

@@ -59,7 +59,11 @@ struct cache_savepoint {
 	order_generation_ptr order;
 	/* Dynamically expanded as needed */
 	struct cache_dynamic_item dynamic_items[];
+
+public:
+	static auto create_savepoint(struct rspamd_task *task, const symcache &cache) -> cache_savepoint *;
 };
+
 
 }
 
