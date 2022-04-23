@@ -144,6 +144,8 @@ private:
 	lua_State *L;
 	double reload_time;
 	double last_profile;
+
+private:
 	int peak_cb;
 	int cache_id;
 
@@ -330,6 +332,45 @@ public:
 		for (const auto &sym_it : items_by_symbol) {
 			f(sym_it.second.get());
 		}
+	}
+
+	/**
+	 * Resort cache if anything has been changed since last time
+	 * @return
+	 */
+	auto maybe_resort() -> bool;
+
+	/**
+	 * Returns number of items with ids
+	 * @return
+	 */
+	auto get_items_count()  const -> auto {
+		return items_by_id.size();
+	}
+
+	/**
+	 * Returns current set of items ordered for sharing ownership
+	 * @return
+	 */
+	auto get_cache_order() const -> auto {
+		return items_by_order;
+	}
+
+	/**
+	 * Get last profile timestamp
+	 * @return
+	 */
+	auto get_last_profile() const -> auto {
+		return last_profile;
+	}
+
+	/**
+	 * Sets last profile timestamp
+	 * @param last_profile
+	 * @return
+	 */
+	auto set_last_profile(double last_profile){
+		symcache::last_profile = last_profile;
 	}
 };
 

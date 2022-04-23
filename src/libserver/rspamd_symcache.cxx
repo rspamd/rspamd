@@ -55,13 +55,6 @@ INIT_LOG_MODULE(symcache)
 
 
 
-/* At least once per minute */
-#define PROFILE_MAX_TIME (60.0)
-/* For messages larger than 2Mb enable profiling */
-#define PROFILE_MESSAGE_SIZE_THRESHOLD (1024 * 1024 * 2)
-/* Enable profile at least once per this amount of messages processed */
-#define PROFILE_PROBABILITY (0.01)
-
 /* weight, frequency, time */
 #define TIME_ALPHA (1.0)
 #define WEIGHT_ALPHA (0.1)

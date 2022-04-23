@@ -879,4 +879,21 @@ symcache::~symcache()
 	}
 }
 
+auto symcache::maybe_resort() -> bool
+{
+	if (items_by_order->generation_id != cur_order_gen) {
+		/*
+		 * Cache has been modified, need to resort it
+		 */
+		msg_info_cache("symbols cache has been modified since last check:"
+						" old id: %ud, new id: %ud",
+				items_by_order->generation_id, cur_order_gen);
+		resort();
+
+		return true;
+	}
+
+	return false;
+}
+
 }

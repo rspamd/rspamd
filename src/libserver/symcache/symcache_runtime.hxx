@@ -44,8 +44,7 @@ struct cache_dynamic_item {
 static_assert(sizeof(cache_dynamic_item) == sizeof(std::uint64_t));
 static_assert(std::is_trivial_v<cache_dynamic_item>);
 
-struct cache_savepoint {
-	unsigned order_gen;
+class cache_savepoint {
 	unsigned items_inflight;
 	bool profile;
 	bool has_slow;
@@ -59,9 +58,17 @@ struct cache_savepoint {
 	order_generation_ptr order;
 	/* Dynamically expanded as needed */
 	struct cache_dynamic_item dynamic_items[];
+	/* We allocate this structure merely in memory pool, so destructor is absent */
+	~cache_savepoint() = delete;
+	/* Dropper for a shared ownership */
+	static auto savepoint_dtor(void *ptr) -> void {
+		auto *real_savepoint = (cache_savepoint *)ptr;
 
+		/* Drop shared ownership */
+		real_savepoint->order.reset();
+	}
 public:
-	static auto create_savepoint(struct rspamd_task *task, const symcache &cache) -> cache_savepoint *;
+	static auto create_savepoint(struct rspamd_task *task, symcache &cache) -> cache_savepoint *;
 };
 
 
