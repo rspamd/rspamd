@@ -249,21 +249,6 @@ struct rspamd_abstract_callback_data *rspamd_symcache_get_cbdata (
 const gchar *rspamd_symcache_get_parent (struct rspamd_symcache *cache,
 										 const gchar *symbol);
 
-/**
- * Adds flags to a symbol
- * @param cache
- * @param symbol
- * @param flags
- * @return
- */
-gboolean rspamd_symcache_add_symbol_flags (struct rspamd_symcache *cache,
-										   const gchar *symbol,
-										   guint flags);
-
-gboolean rspamd_symcache_set_symbol_flags (struct rspamd_symcache *cache,
-										   const gchar *symbol,
-										   guint flags);
-
 guint rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 										const gchar *symbol);
 

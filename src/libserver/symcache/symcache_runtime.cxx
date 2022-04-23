@@ -220,5 +220,23 @@ symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &cache,
 	return false;
 }
 
+auto
+symcache_runtime::is_symbol_checked(const symcache &cache, std::string_view name) -> bool
+{
+	const auto *item = cache.get_item_by_name(name, true);
+
+	if (item != nullptr) {
+
+		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+
+		if (our_id_maybe) {
+			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+			return dyn_item->started;
+		}
+	}
+
+	return false;
+}
+
 }
 

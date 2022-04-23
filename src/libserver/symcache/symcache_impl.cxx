@@ -420,9 +420,11 @@ auto symcache::resort() -> void
 	auto ord = std::make_shared<order_generation>(filters.size(), cur_order_gen);
 
 	for (auto &it: filters) {
-		total_hits += it->st->total_hits;
-		it->order = 0;
-		ord->d.emplace_back(it);
+		if (it) {
+			total_hits += it->st->total_hits;
+			it->order = 0;
+			ord->d.emplace_back(it);
+		}
 	}
 
 	enum class tsort_mask {
@@ -486,8 +488,9 @@ auto symcache::resort() -> void
 	 * Topological sort
 	 */
 	total_hits = 0;
+	auto used_items = ord->d.size();
 
-	for (const auto &it: filters) {
+	for (const auto &it: ord->d) {
 		if (it->order == 0) {
 			tsort_visit(it.get(), 0, tsort_visit);
 		}
@@ -542,6 +545,36 @@ auto symcache::resort() -> void
 	};
 
 	std::stable_sort(std::begin(ord->d), std::end(ord->d), cache_order_cmp);
+	/*
+	 * Here lives some ugly legacy!
+	 * We have several filters classes, connfilters, prefilters, filters... etc
+	 *
+	 * Our order is meaningful merely for filters, but we have to add other classes
+	 * to understand if those symbols are checked or disabled.
+	 * We can disable symbols for almost everything but not for virtual symbols.
+	 * The rule of thumb is that if a symbol has explicit parent, then it is a
+	 * virtual symbol that follows it's special rules
+	 */
+
+	/*
+	 * We enrich ord with all other symbol types without any sorting,
+	 * as it is done in another place
+	 */
+	constexpr auto append_items_vec = [](const auto &vec, auto &out) {
+		for (const auto &it : vec) {
+			if (it) {
+				out.emplace_back(it);
+			}
+		}
+	};
+
+	append_items_vec(connfilters, ord->d);
+	append_items_vec(prefilters, ord->d);
+	append_items_vec(postfilters, ord->d);
+	append_items_vec(idempotent, ord->d);
+	append_items_vec(composites, ord->d);
+	append_items_vec(classifiers, ord->d);
+
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
 	for (auto i = 0; i < ord->size(); i ++) {
 		const auto &it = ord->d[i];
@@ -602,8 +635,8 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 			real_type_pair.first, real_type_pair.second);
 
 	items_by_symbol[item->get_name()] = item;
+	get_item_specific_vector(*item).push_back(item);
 	items_by_id.push_back(item);
-	used_items++;
 
 	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
 		cksum = t1ha(name.data(), name.size(), cksum);
@@ -635,14 +668,15 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 		return -1;
 	}
 
-	auto id = virtual_symbols.size();
+	auto id = items_by_id.size();
 
 	auto item = cache_item::create_with_virtual(static_pool,
 			id,
 			std::string{name},
 			parent_id, real_type_pair.first, real_type_pair.second);
 	items_by_symbol[item->get_name()] = item;
-	virtual_symbols.push_back(item);
+	get_item_specific_vector(*item).push_back(item);
+	items_by_id.push_back(item);
 
 	return id;
 }
@@ -901,6 +935,31 @@ auto symcache::maybe_resort() -> bool
 	}
 
 	return false;
+}
+
+auto
+symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_vec &
+{
+	switch (it.get_type()) {
+	case symcache_item_type::CONNFILTER:
+		return connfilters;
+	case symcache_item_type::FILTER:
+		return filters;
+	case symcache_item_type::IDEMPOTENT:
+		return idempotent;
+	case symcache_item_type::PREFILTER:
+		return prefilters;
+	case symcache_item_type::POSTFILTER:
+		return postfilters;
+	case symcache_item_type::COMPOSITE:
+		return composites;
+	case symcache_item_type::CLASSIFIER:
+		return classifiers;
+	case symcache_item_type::VIRTUAL:
+		return virtual_symbols;
+	}
+
+	RSPAMD_UNREACHABLE;
 }
 
 }

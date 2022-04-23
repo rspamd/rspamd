@@ -310,6 +310,17 @@ rspamd_symcache_enable_symbol (struct rspamd_task *task,
 }
 
 gboolean
+rspamd_symcache_is_checked (struct rspamd_task *task,
+							struct rspamd_symcache *cache,
+							const gchar *symbol)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	return cache_runtime->is_symbol_checked(*real_cache, symbol);
+}
+
+gboolean
 rspamd_symcache_process_settings (struct rspamd_task *task,
 								  struct rspamd_symcache *cache)
 {

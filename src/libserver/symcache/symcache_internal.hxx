@@ -129,21 +129,24 @@ public:
 
 class symcache {
 private:
+	using items_ptr_vec = std::vector<cache_item_ptr>;
 	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
 	robin_hood::unordered_flat_map<std::string_view, cache_item_ptr> items_by_symbol;
-	std::vector<cache_item_ptr> items_by_id;
+	items_ptr_vec items_by_id;
 
 	/* Items sorted into some order */
 	order_generation_ptr items_by_order;
 	unsigned int cur_order_gen;
 
-	std::vector<cache_item_ptr> connfilters;
-	std::vector<cache_item_ptr> prefilters;
-	std::vector<cache_item_ptr> filters;
-	std::vector<cache_item_ptr> postfilters;
-	std::vector<cache_item_ptr> composites;
-	std::vector<cache_item_ptr> idempotent;
-	std::vector<cache_item_ptr> virtual_symbols;
+	/* Specific vectors for execution/iteration */
+	items_ptr_vec connfilters;
+	items_ptr_vec prefilters;
+	items_ptr_vec filters;
+	items_ptr_vec postfilters;
+	items_ptr_vec composites;
+	items_ptr_vec idempotent;
+	items_ptr_vec classifiers;
+	items_ptr_vec virtual_symbols;
 
 	/* These are stored within pointer to clean up after init */
 	std::unique_ptr<std::vector<delayed_cache_dependency>> delayed_deps;
@@ -152,7 +155,6 @@ private:
 	rspamd_mempool_t *static_pool;
 	std::uint64_t cksum;
 	double total_weight;
-	std::size_t used_items;
 	std::size_t stats_symbols_count;
 
 private:
@@ -171,6 +173,7 @@ private:
 	/* Internal methods */
 	auto load_items() -> bool;
 	auto resort() -> void;
+	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec&;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
 

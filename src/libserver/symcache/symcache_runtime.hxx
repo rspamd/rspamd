@@ -101,6 +101,14 @@ public:
 	 * @return
 	 */
 	auto enable_symbol(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
+
+	/**
+	 * Checks if an item has been checked/disabled
+	 * @param cache
+	 * @param name
+	 * @return
+	 */
+	auto is_symbol_checked(const symcache &cache, std::string_view name) -> bool;
 };
 
 
