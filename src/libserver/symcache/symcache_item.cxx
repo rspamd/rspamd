@@ -203,6 +203,30 @@ auto cache_item::update_counters_check_peak(lua_State *L,
 	return ret;
 }
 
+auto cache_item::get_type_str() const -> const char *
+{
+	switch(type) {
+	case symcache_item_type::CONNFILTER:
+		return "connfilter";
+	case symcache_item_type::FILTER:
+		return "filter";
+	case symcache_item_type::IDEMPOTENT:
+		return "idempotent";
+	case symcache_item_type::PREFILTER:
+		return "prefilter";
+	case symcache_item_type::POSTFILTER:
+		return "postfilter";
+	case symcache_item_type::COMPOSITE:
+		return "composite";
+	case symcache_item_type::CLASSIFIER:
+		return "classifier";
+	case symcache_item_type::VIRTUAL:
+		return "virtual";
+	}
+
+	RSPAMD_UNREACHABLE;
+}
+
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (parent) {

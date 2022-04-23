@@ -221,17 +221,48 @@ rspamd_symcache_item_name (struct rspamd_symcache_item *item)
 }
 
 gint
-rspamd_symcache_item_flags (struct rspamd_symcache_item *item)
+rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	return real_item->get_flags();
 }
 
+guint
+rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
+								 const gchar *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto *sym = real_cache->get_item_by_name(symbol, false);
+
+	if (sym) {
+		return sym->get_flags();
+	}
+
+	return 0;
+}
+
 const struct rspamd_symcache_item_stat *
-rspamd_symcache_item_stat (struct rspamd_symcache_item *item)
+rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	return real_item->st;
+}
+
+void
+rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
+								   const gchar *symbol,
+								   ucl_object_t *this_sym_ucl)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto *sym = real_cache->get_item_by_name(symbol, false);
+
+	if (sym) {
+		ucl_object_insert_key (this_sym_ucl,
+				ucl_object_fromstring(sym->get_type_str()),
+				"type", strlen("type"), false);
+	}
 }
 
 void
@@ -246,9 +277,10 @@ rspamd_symcache_foreach(struct rspamd_symcache *cache,
 	});
 }
 
-void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
-										  struct rspamd_symcache *_cache,
-										  guint skip_mask)
+void
+rspamd_symcache_disable_all_symbols(struct rspamd_task *task,
+									struct rspamd_symcache *_cache,
+									guint skip_mask)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 

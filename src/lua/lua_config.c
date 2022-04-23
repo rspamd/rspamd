@@ -869,7 +869,6 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, register_settings_id),
 	LUA_INTERFACE_DEF (config, get_symbol_flags),
-	LUA_INTERFACE_DEF (config, add_symbol_flags),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF (config, set_metric_action),
@@ -1972,38 +1971,6 @@ lua_config_get_symbol_flags (lua_State *L)
 				name);
 
 		if (flags != 0) {
-			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_config_add_symbol_flags (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name = luaL_checkstring (L, 2);
-	guint flags, new_flags = 0;
-
-	if (cfg && name && lua_istable (L, 3)) {
-
-		for (lua_pushnil (L); lua_next (L, 3); lua_pop (L, 1)) {
-			new_flags |= lua_parse_symbol_flags (lua_tostring (L, -1));
-		}
-
-		flags = rspamd_symcache_get_symbol_flags (cfg->cache,
-				name);
-
-		if (flags != 0) {
-			rspamd_symcache_add_symbol_flags (cfg->cache, name, new_flags);
-			/* Push old flags */
 			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
 		}
 		else {

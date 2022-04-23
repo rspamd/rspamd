@@ -80,12 +80,23 @@ struct symcache_header {
 struct cache_item;
 using cache_item_ptr = std::shared_ptr<cache_item>;
 
+/**
+ * This structure is intended to keep the current ordering for all symbols
+ * It is designed to be shared among all tasks and keep references to the real
+ * symbols.
+ * If some symbol has been added or removed to the symbol cache, it will not affect
+ * the current order, and it will only be regenerated for the subsequent tasks.
+ * This allows safe and no copy sharing and keeping track of all symbols in the
+ * cache runtime.
+ */
 struct order_generation {
+	/* All items ordered */
 	std::vector<cache_item_ptr> d;
 	/* Mapping from symbol name to the position in the order array */
 	robin_hood::unordered_flat_map<std::string_view, unsigned int> by_symbol;
 	/* Mapping from symbol id to the position in the order array */
 	robin_hood::unordered_flat_map<unsigned int, unsigned int> by_cache_id;
+	/* It matches cache->generation_id; if not, a fresh ordering is required */
 	unsigned int generation_id;
 
 	explicit order_generation(std::size_t nelts, unsigned id) : generation_id(id) {
@@ -98,7 +109,6 @@ struct order_generation {
 };
 
 using order_generation_ptr = std::shared_ptr<order_generation>;
-
 
 
 struct delayed_cache_dependency {

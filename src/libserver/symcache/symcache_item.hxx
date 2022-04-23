@@ -260,6 +260,8 @@ public:
 		return type;
 	}
 
+	auto get_type_str() const -> const char*;
+
 	auto get_name() const -> const std::string &
 	{
 		return symbol;
