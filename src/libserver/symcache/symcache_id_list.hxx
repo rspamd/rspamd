@@ -20,7 +20,7 @@
 
 #include <cstdint>
 #include <cstring> // for memset
-#include <algorithm> // for sort
+#include <algorithm> // for sort/bsearch
 
 #include "config.h"
 #include "libutil/mem_pool.h"
@@ -43,7 +43,9 @@ struct id_list {
 	} data;
 
 	id_list() = default;
-	auto reset() {
+
+	auto reset()
+	{
 		std::memset(&data, 0, sizeof(data));
 	}
 
@@ -121,7 +123,8 @@ struct id_list {
 		}
 	}
 
-	auto set_ids(const std::uint32_t *ids, std::size_t nids, rspamd_mempool_t *pool) -> void {
+	auto set_ids(const std::uint32_t *ids, std::size_t nids, rspamd_mempool_t *pool) -> void
+	{
 		if (nids <= G_N_ELEMENTS(data.st)) {
 			/* Use static version */
 			reset();
@@ -144,6 +147,25 @@ struct id_list {
 			/* Keep sorted */
 			std::sort(data.dyn.n, data.dyn.n + data.dyn.len);
 		}
+	}
+
+	auto check_id(unsigned int id) const -> bool
+	{
+		if (data.dyn.e == -1) {
+			return std::binary_search(data.dyn.n, data.dyn.n + data.dyn.len, id);
+		}
+		else {
+			for (auto elt: data.st) {
+				if (elt == id) {
+					return true;
+				}
+				else if (elt == 0) {
+					return false;
+				}
+			}
+		}
+
+		return false;
 	}
 };
 

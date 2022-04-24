@@ -17,6 +17,8 @@
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
 #include "fmt/core.h"
+#include "libserver/task.h"
+#include "lua/lua_common.h"
 
 namespace rspamd::symcache {
 
@@ -205,7 +207,7 @@ auto cache_item::update_counters_check_peak(lua_State *L,
 
 auto cache_item::get_type_str() const -> const char *
 {
-	switch(type) {
+	switch (type) {
 	case symcache_item_type::CONNFILTER:
 		return "connfilter";
 	case symcache_item_type::FILTER:
@@ -225,6 +227,100 @@ auto cache_item::get_type_str() const -> const char *
 	}
 
 	RSPAMD_UNREACHABLE;
+}
+
+auto cache_item::is_item_allowed(struct rspamd_task *task, bool exec_only) -> bool
+{
+	const auto *what = "execution";
+
+	if (!exec_only) {
+		what = "symbol insertion";
+	}
+
+	/* Static checks */
+	if (!enabled ||
+		(RSPAMD_TASK_IS_EMPTY(task) && !(flags & SYMBOL_TYPE_EMPTY)) ||
+		(flags & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
+
+		if (!enabled) {
+			msg_debug_cache_task("skipping %s of %s as it is permanently disabled",
+					what, symbol.c_str());
+
+			return false;
+		}
+		else {
+			/*
+			 * If we check merely execution (not insertion), then we disallow
+			 * mime symbols for non mime tasks and vice versa
+			 */
+			if (exec_only) {
+				msg_debug_cache_task("skipping check of %s as it cannot be "
+									 "executed for this task type",
+						symbol.c_str());
+
+				return FALSE;
+			}
+		}
+	}
+
+	/* Settings checks */
+	if (task->settings_elt != nullptr) {
+		if (forbidden_ids.check_id(task->settings_elt->id)) {
+			msg_debug_cache_task ("deny %s of %s as it is forbidden for "
+								  "settings id %ud",
+					what,
+					symbol.c_str(),
+					task->settings_elt->id);
+
+			return false;
+		}
+
+		if (!(flags & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
+			if (allowed_ids.check_id(task->settings_elt->id)) {
+
+				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
+					msg_debug_cache_task("allow execution of %s settings id %ud "
+										 "allows implicit execution of the symbols;",
+							symbol.c_str(),
+							id);
+
+					return true;
+				}
+
+				if (exec_only) {
+					/*
+					 * Special case if any of our virtual children are enabled
+					 */
+					if (exec_only_ids.check_id(task->settings_elt->id)) {
+						return true;
+					}
+				}
+
+				msg_debug_cache_task ("deny %s of %s as it is not listed "
+									  "as allowed for settings id %ud",
+						what,
+						symbol.c_str(),
+						task->settings_elt->id);
+				return false;
+			}
+		}
+		else {
+			msg_debug_cache_task ("allow %s of %s for "
+								  "settings id %ud as it can be only disabled explicitly",
+					what,
+					symbol.c_str(),
+					task->settings_elt->id);
+		}
+	}
+	else if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+		msg_debug_cache_task ("deny %s of %s as it must be explicitly enabled",
+				what,
+				symbol.c_str());
+		return false;
+	}
+
+	/* Allow all symbols with no settings id */
+	return true;
 }
 
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
@@ -329,6 +425,43 @@ bool operator<(symcache_item_type lhs, symcache_item_type rhs)
 	}
 
 	return ret;
+}
+
+item_condition::~item_condition()
+{
+	if (cb != -1 && L != nullptr) {
+		luaL_unref(L, LUA_REGISTRYINDEX, cb);
+	}
+}
+
+auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) const -> bool
+{
+	if (cb != -1 && L != nullptr) {
+		auto ret = false;
+
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
+
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		auto err_idx = lua_gettop(L);
+
+		auto **ptask = (struct rspamd_task **) lua_newuserdata(L, sizeof(struct rspamd_task *));
+		rspamd_lua_setclass(L, "rspamd{task}", -1);
+		*ptask = task;
+
+		if (lua_pcall(L, 1, 1, err_idx) != 0) {
+			msg_info_task("call to condition for %s failed: %s",
+					sym_name.data(), lua_tostring(L, -1));
+		}
+		else {
+			ret = lua_toboolean(L, -1);
+		}
+
+		lua_settop(L, err_idx - 1);
+
+		return ret;
+	}
+
+	return true;
 }
 
 }

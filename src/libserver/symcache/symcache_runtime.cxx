@@ -18,6 +18,7 @@
 #include "symcache_item.hxx"
 #include "symcache_runtime.hxx"
 #include "libutil/cxx/util.hxx"
+#include "libserver/task.h"
 
 namespace rspamd::symcache {
 
@@ -31,13 +32,11 @@ constexpr static const auto PROFILE_PROBABILITY = 0.01;
 auto
 symcache_runtime::create_savepoint(struct rspamd_task *task, symcache &cache) -> symcache_runtime *
 {
-	struct symcache_runtime *checkpoint;
-
 	cache.maybe_resort();
 
 	auto &&cur_order = cache.get_cache_order();
-	checkpoint = (struct symcache_runtime *) rspamd_mempool_alloc0 (task->task_pool,
-			sizeof(*checkpoint) +
+	auto *checkpoint = (symcache_runtime *) rspamd_mempool_alloc0 (task->task_pool,
+			sizeof(symcache_runtime) +
 			sizeof(struct cache_dynamic_item) * cur_order->size());
 
 	checkpoint->order = cache.get_cache_order();

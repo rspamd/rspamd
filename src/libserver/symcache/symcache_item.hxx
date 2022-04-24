@@ -25,12 +25,12 @@
 #include <string_view>
 #include <memory>
 #include <variant>
+#include <algorithm>
 
 #include "rspamd_symcache.h"
 #include "symcache_id_list.hxx"
 #include "contrib/expected/expected.hpp"
 #include "contrib/libev/ev.h"
-#include "lua/lua_common.h"
 
 namespace rspamd::symcache {
 
@@ -67,16 +67,10 @@ private:
 	lua_State *L;
 	int cb;
 public:
-	item_condition(lua_State *_L, int _cb) : L(_L), cb(_cb)
-	{
-	}
+	item_condition(lua_State *_L, int _cb) : L(_L), cb(_cb) {}
+	virtual ~item_condition();
 
-	virtual ~item_condition()
-	{
-		if (cb != -1 && L != nullptr) {
-			luaL_unref(L, LUA_REGISTRYINDEX, cb);
-		}
-	}
+	auto check(std::string_view sym_name, struct rspamd_task *task) const -> bool;
 };
 
 class normal_item {
@@ -97,6 +91,11 @@ public:
 	auto call() -> void
 	{
 		// TODO
+	}
+
+	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) -> bool {
+		return std::all_of(std::begin(conditions), std::end(conditions),
+						   [&](const auto &cond) { return cond.check(sym_name, task); });
 	}
 };
 
@@ -288,9 +287,20 @@ public:
 									double cur_time,
 									double last_resort) -> bool;
 
+	/**
+	 * Increase frequency for a symbol
+	 */
 	auto inc_frequency() -> void {
 		g_atomic_int_inc(&st->hits);
 	}
+
+	/**
+	 * Check if an item is allowed to be executed not checking item conditions
+	 * @param task
+	 * @param exec_only
+	 * @return
+	 */
+	auto is_item_allowed(struct rspamd_task *task, bool exec_only) -> bool;
 
 private:
 	/**
