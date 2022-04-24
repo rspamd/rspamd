@@ -109,6 +109,15 @@ public:
 	 * @return
 	 */
 	auto is_symbol_checked(const symcache &cache, std::string_view name) -> bool;
+
+	/**
+	 * Checks if a symbol is enabled for execution, checking all pending conditions
+	 * @param task
+	 * @param cache
+	 * @param name
+	 * @return
+	 */
+	auto is_symbol_enabled(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
 };
 
 

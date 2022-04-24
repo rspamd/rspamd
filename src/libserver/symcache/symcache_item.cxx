@@ -229,7 +229,7 @@ auto cache_item::get_type_str() const -> const char *
 	RSPAMD_UNREACHABLE;
 }
 
-auto cache_item::is_item_allowed(struct rspamd_task *task, bool exec_only) -> bool
+auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> bool
 {
 	const auto *what = "execution";
 

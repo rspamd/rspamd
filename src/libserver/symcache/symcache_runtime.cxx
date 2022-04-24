@@ -96,7 +96,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 						g_hash_table_iter_init(&gr_it, gr->symbols);
 
 						while (g_hash_table_iter_next(&gr_it, &k, &v)) {
-							functor((const char*)k);
+							functor((const char *) k);
 						}
 					}
 				}
@@ -116,7 +116,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 		it = nullptr;
 
 		while ((cur = ucl_iterate_object(enabled, &it, true)) != nullptr) {
-			enable_symbol(task, cache,ucl_object_tostring(cur));
+			enable_symbol(task, cache, ucl_object_tostring(cur));
 		}
 	}
 
@@ -137,7 +137,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 		it = nullptr;
 
 		while ((cur = ucl_iterate_object (disabled, &it, true)) != nullptr) {
-			disable_symbol(task, cache,ucl_object_tostring(cur));
+			disable_symbol(task, cache, ucl_object_tostring(cur));
 		}
 	}
 
@@ -152,7 +152,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 {
-	for (auto i = 0; i < order->size(); i ++) {
+	for (auto i = 0; i < order->size(); i++) {
 		auto *dyn_item = &dynamic_items[i];
 		const auto &item = order->d[i];
 
@@ -235,6 +235,40 @@ symcache_runtime::is_symbol_checked(const symcache &cache, std::string_view name
 	}
 
 	return false;
+}
+
+auto
+symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool
+{
+
+	const auto *item = cache.get_item_by_name(name, true);
+	if (item) {
+
+		if (!item->is_allowed(task, true)) {
+			return false;
+		}
+		else {
+			auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+
+			if (our_id_maybe) {
+				auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+				if (dyn_item->started) {
+					/* Already started */
+					return false;
+				}
+
+				if (!item->is_virtual()) {
+					return std::get<normal_item>(item->specific).check_conditions(item->symbol, task);
+				}
+			}
+			else {
+				/* Unknown item */
+				msg_debug_cache_task("cannot enable %s: symbol not found", name.data());
+			}
+		}
+	}
+
+	return true;
 }
 
 }

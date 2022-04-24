@@ -93,7 +93,7 @@ public:
 		// TODO
 	}
 
-	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) -> bool {
+	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) const -> bool {
 		return std::all_of(std::begin(conditions), std::end(conditions),
 						   [&](const auto &cond) { return cond.check(sym_name, task); });
 	}
@@ -300,7 +300,7 @@ public:
 	 * @param exec_only
 	 * @return
 	 */
-	auto is_item_allowed(struct rspamd_task *task, bool exec_only) -> bool;
+	auto is_allowed(struct rspamd_task *task, bool exec_only) const -> bool;
 
 private:
 	/**
