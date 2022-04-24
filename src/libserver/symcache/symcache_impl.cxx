@@ -561,7 +561,7 @@ auto symcache::resort() -> void
 	 * as it is done in another place
 	 */
 	constexpr auto append_items_vec = [](const auto &vec, auto &out) {
-		for (const auto &it : vec) {
+		for (const auto &it: vec) {
 			if (it) {
 				out.emplace_back(it);
 			}
@@ -576,7 +576,7 @@ auto symcache::resort() -> void
 	append_items_vec(classifiers, ord->d);
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
-	for (auto i = 0; i < ord->size(); i ++) {
+	for (auto i = 0; i < ord->size(); i++) {
 		const auto &it = ord->d[i];
 		ord->by_symbol[it->get_name()] = i;
 		ord->by_cache_id[it->id] = i;
@@ -879,7 +879,7 @@ auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double 
 
 		if (item->update_counters_check_peak(L, ev_loop, cur_time, last_resort)) {
 			auto cur_value = (item->st->total_hits - item->last_count) /
-						(cur_time - last_resort);
+							 (cur_time - last_resort);
 			auto cur_err = (item->st->avg_frequency - cur_value);
 			cur_err *= cur_err;
 			msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
@@ -927,7 +927,7 @@ auto symcache::maybe_resort() -> bool
 		 * Cache has been modified, need to resort it
 		 */
 		msg_info_cache("symbols cache has been modified since last check:"
-						" old id: %ud, new id: %ud",
+					   " old id: %ud, new id: %ud",
 				items_by_order->generation_id, cur_order_gen);
 		resort();
 
@@ -960,6 +960,93 @@ symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_
 	}
 
 	RSPAMD_UNREACHABLE;
+}
+
+auto
+symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
+{
+
+	auto id = elt->id;
+
+	if (elt->symbols_disabled) {
+		/* Process denied symbols */
+		ucl_object_iter_t iter = nullptr;
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate(elt->symbols_disabled, &iter, true)) != NULL) {
+			const auto *sym = ucl_object_key(cur);
+			auto *item = get_item_by_name_mut(sym, false);
+
+			if (item != nullptr) {
+				if (item->is_virtual()) {
+					/*
+					 * Virtual symbols are special:
+					 * we ignore them in symcache but prevent them from being
+					 * inserted.
+					 */
+					item->forbidden_ids.add_id(id, static_pool);
+					msg_debug_cache("deny virtual symbol %s for settings %ud (%s); "
+									"parent can still be executed",
+							sym, id, elt->name);
+				}
+				else {
+					/* Normal symbol, disable it */
+					item->forbidden_ids.add_id(id, static_pool);
+					msg_debug_cache ("deny symbol %s for settings %ud (%s)",
+							sym, id, elt->name);
+				}
+			}
+			else {
+				msg_warn_cache ("cannot find a symbol to disable %s "
+								"when processing settings %ud (%s)",
+						sym, id, elt->name);
+			}
+		}
+	}
+
+	if (elt->symbols_enabled) {
+		ucl_object_iter_t iter = nullptr;
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate (elt->symbols_enabled, &iter, true)) != nullptr) {
+			/* Here, we resolve parent and explicitly allow it */
+			const auto *sym = ucl_object_key(cur);
+
+			auto *item = get_item_by_name_mut(sym, false);
+
+			if (item != nullptr) {
+				if (item->is_virtual()) {
+					if (!(item->flags & SYMBOL_TYPE_GHOST)) {
+						auto *parent = get_item_by_name_mut(sym, true);
+
+						if (parent) {
+							if (elt->symbols_disabled &&
+								ucl_object_lookup(elt->symbols_disabled, parent->symbol.data())) {
+								msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+											   "wanted to enable symbol %s",
+										elt->name, parent->symbol.data(), sym);
+								continue;
+							}
+
+							parent->exec_only_ids.add_id(id, static_pool);
+							msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
+									parent->symbol.data(), id, elt->name);
+						}
+					}
+					/* Ignore ghosts */
+				}
+
+				item->allowed_ids.add_id(id, static_pool);
+				msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
+						sym, id, elt->name);
+			}
+			else {
+				msg_warn_cache ("cannot find a symbol to enable %s "
+								"when processing settings %ud (%s)",
+						sym, id, elt->name);
+			}
+		}
+	}
 }
 
 }

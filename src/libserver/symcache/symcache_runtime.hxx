@@ -118,6 +118,15 @@ public:
 	 * @return
 	 */
 	auto is_symbol_enabled(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
+
+	auto get_cur_item() const -> auto {
+		return cur_item;
+	}
+
+	auto set_cur_item(cache_item *item) -> auto {
+		std::swap(item, cur_item);
+		return item;
+	}
 };
 
 

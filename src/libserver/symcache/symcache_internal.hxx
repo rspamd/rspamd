@@ -393,6 +393,12 @@ public:
 	auto set_last_profile(double last_profile){
 		symcache::last_profile = last_profile;
 	}
+
+	/**
+	 * Process settings elt identified by id
+	 * @param elt
+	 */
+	auto process_settings_elt(struct rspamd_config_settings_elt *elt) -> void;
 };
 
 

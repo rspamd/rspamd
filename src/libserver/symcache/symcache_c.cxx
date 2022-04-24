@@ -278,6 +278,15 @@ rspamd_symcache_foreach(struct rspamd_symcache *cache,
 }
 
 void
+rspamd_symcache_process_settings_elt(struct rspamd_symcache *cache,
+									 struct rspamd_config_settings_elt *elt)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->process_settings_elt(elt);
+}
+
+void
 rspamd_symcache_disable_all_symbols(struct rspamd_task *task,
 									struct rspamd_symcache *_cache,
 									guint skip_mask)
@@ -349,4 +358,21 @@ rspamd_symcache_is_symbol_enabled(struct rspamd_task *task,
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	return cache_runtime->is_symbol_enabled(task, *real_cache, symbol);
+}
+
+struct rspamd_symcache_item *
+rspamd_symcache_get_cur_item(struct rspamd_task *task)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	return (struct rspamd_symcache_item *) cache_runtime->get_cur_item();
+}
+
+struct rspamd_symcache_item *
+rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_item *item)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	return (struct rspamd_symcache_item *) cache_runtime->set_cur_item(real_item);
 }
