@@ -2174,6 +2174,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
+		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		goto end;
 	}
 
