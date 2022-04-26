@@ -412,9 +412,16 @@
 					</div>
 				</div>
 				<div class="card ro-hide" style="display: none;">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-1 d-flex">
 						<span class="icon mr-3"><i class="fas fa-graduation-cap"></i></span>
 						<span class="h6 font-weight-bolder my-2">Learn Rspamd</span>
+						<div id="learnServers" class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
+							<label for="selLearnServers">Learn servers:</label>
+							<select id="selLearnServers" class="form-control ml-1">
+								<option value="random" selected>random</option>
+								<option value="all">all</option>
+							</select>
+						</div>
 					</div>
 					<div class="card-body">
 						<div class="row">
