@@ -819,7 +819,7 @@ rspamd_config:register_dependency(settings['sign_symbol'], 'DMARC_CHECK')
 
 if settings.adjust_dmarc and settings.whitelisted_signers_map then
   local function arc_dmarc_adjust_cb(task)
-    local trusted_arc_ar = task:get_cached(AR_TRUSTED_CACHE_KEY)
+    local trusted_arc_ar = task:cache_get(AR_TRUSTED_CACHE_KEY)
     local sym_to_adjust
     if task:has_symbol(ar_settings.dmarc_symbols.reject) then
       sym_to_adjust = ar_settings.dmarc_symbols.reject
