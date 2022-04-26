@@ -548,6 +548,11 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         $("#selSrv").change(function () {
             checked_server = this.value;
             $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
+            if (checked_server === "All SERVERS") {
+                $("#learnServers").show();
+            } else {
+                $("#learnServers").hide();
+            }
             tabClick("#" + $("#navBar > ul > .nav-item > .nav-link.active").attr("id"));
         });
 

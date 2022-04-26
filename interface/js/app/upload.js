@@ -43,6 +43,16 @@ define(["jquery"],
             } else if (source === "scan") {
                 url = "checkv2";
             }
+
+            function server() {
+                if (rspamd.getSelector("selSrv") === "All SERVERS" &&
+                    rspamd.getSelector("selLearnServers") === "random") {
+                    const servers = $("#selSrv option").slice(1).map(function (_, o) { return o.value; });
+                    return servers[Math.floor(Math.random() * servers.length)];
+                }
+                return null;
+            }
+
             rspamd.query(url, {
                 data: data,
                 params: {
@@ -56,7 +66,8 @@ define(["jquery"],
                     if (jqXHR.status !== 200) {
                         rspamd.alertMessage("alert-info", jqXHR.statusText);
                     }
-                }
+                },
+                server: server()
             });
         }
 
