@@ -191,52 +191,42 @@ local function check_generic_list_headers(task)
   local score = 0
   local has_subscribe, has_unsubscribe
 
-  if task:has_header('List-Id') then
-    score = score + 0.75
-    lua_util.debugm(N, task, 'has List-Id header, score = %s', score)
-  end
+  local common_list_headers = {
+    ['List-Id'] = 0.75,
+    ['List-Archive'] = 0.125,
+    ['List-Owner'] = 0.125,
+    ['List-Help'] = 0.125,
+    ['List-Post'] = 0.125,
+    ['X-Loop'] = 0.125,
+    ['List-Subscribe'] = function()
+      has_subscribe = true
+      return 0.125
+    end,
+    ['List-Unsubscribe'] = function()
+      has_unsubscribe = true
+      return 0.125
+    end,
+    ['Precedence'] = function()
+      local header = task:get_header('Precedence')
+      if header and (header == 'list' or header == 'bulk') then
+        return 0.25
+      end
+    end,
+  }
 
-  local header = task:get_header('Precedence')
-  if header and (header == 'list' or header == 'bulk') then
-    score = score + 0.25
-    lua_util.debugm(N, task, 'has header "Precedence: %s", score = %s',
-        header, score)
-  end
-
-  if task:has_header('List-Archive') then
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header List-Archive, score = %s',
-        score)
-  end
-  if task:has_header('List-Owner') then
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header List-Owner, score = %s',
-        score)
-  end
-  if task:has_header('List-Help') then
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header List-Help, score = %s',
-        score)
-  end
-
-  -- Subscribe and unsubscribe
-  if task:has_header('List-Subscribe') then
-    has_subscribe = true
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
-        score)
-  end
-  if task:has_header('List-Unsubscribe') then
-    has_unsubscribe = true
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header List-Unsubscribe, score = %s',
-        score)
-  end
-
-  if task:has_header('X-Loop') then
-    score = score + 0.125
-    lua_util.debugm(N, task, 'has header X-Loop, score = %s',
-        score)
+  for hname,hscore in pairs(common_list_headers) do
+    if task:has_header(hname) then
+      if type(hscore) == 'number' then
+        score = score + hscore
+        lua_util.debugm(N, task, 'has %s header, score = %s', hname, score)
+      else
+        local score_change = hscore()
+        if score then
+          score = score + score_change
+          lua_util.debugm(N, task, 'has %s header, score = %s', hname, score)
+        end
+      end
+    end
   end
 
   if has_subscribe and has_unsubscribe then
