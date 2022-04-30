@@ -550,7 +550,7 @@ symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
 		if (res) {
 			auto ms = rspamd_task_get_required_score(task, res);
 
-			if (!::isnan(ms) && lim < ms) {
+			if (!std::isnan(ms) && lim < ms) {
 				rs = res;
 				lim = ms;
 			}
