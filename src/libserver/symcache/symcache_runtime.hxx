@@ -77,6 +77,9 @@ class symcache_runtime {
 	/* Specific stages of the processing */
 	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, int stage) -> bool;
 	auto process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool;
+	auto check_metric_limit(struct rspamd_task *task) -> bool;
+	auto check_item_deps(struct rspamd_task *task, symcache &cache, cache_item *item,
+						 cache_dynamic_item *dyn_item, bool check_only) -> bool;
 
 public:
 	/**
