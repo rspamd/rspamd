@@ -455,6 +455,8 @@ auto symcache::resort() -> void
 			case tsort_mask::TEMP:
 				return (it->order & (1u << 30));
 			}
+
+			return 100500u; /* Because fuck compilers, that's why */
 		};
 
 		if (tsort_is_marked(it, tsort_mask::PERM)) {
@@ -706,7 +708,7 @@ auto symcache::validate(bool strict) -> bool
 		auto skipped = !ghost;
 
 		if (item->is_scoreable() && g_hash_table_lookup(cfg->symbols, item->symbol.c_str()) == nullptr) {
-			if (!isnan(cfg->unknown_weight)) {
+			if (!std::isnan(cfg->unknown_weight)) {
 				item->st->weight = cfg->unknown_weight;
 				auto *s = rspamd_mempool_alloc0_type(static_pool,
 						struct rspamd_symbol);
