@@ -462,6 +462,8 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 				return false;
 			}
 		}
+
+		return true;
 	});
 
 	return all_done;
@@ -573,7 +575,7 @@ symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
 auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache, cache_item *item,
 									   cache_dynamic_item *dyn_item, bool check_only) -> bool
 {
-	static const guint max_recursion = 20;
+	constexpr const auto max_recursion = 20;
 
 	auto inner_functor = [&](int recursion, cache_item *item, cache_dynamic_item *dyn_item, auto rec_functor) -> bool {
 		if (recursion > max_recursion) {
