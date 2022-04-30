@@ -69,6 +69,9 @@ struct rspamd_abstract_callback_data {
 	char data[];
 };
 
+/**
+ * Shared memory block specific for each symbol
+ */
 struct rspamd_symcache_item_stat {
 	struct rspamd_counter_data time_counter;
 	gdouble avg_time;
@@ -169,30 +172,11 @@ gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
 									  guint *nhits);
 
 /**
- * Find symbol in cache by its id
- * @param cache
- * @param id
- * @return symbol's name or NULL
- */
-const gchar *rspamd_symcache_symbol_by_id (struct rspamd_symcache *cache,
-										   gint id);
-
-/**
  * Returns number of symbols registered in symbols cache
  * @param cache
  * @return number of symbols in the cache
  */
 guint rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache);
-
-/**
- * Call function for cached symbol using saved callback
- * @param task task object
- * @param cache symbols cache
- * @param saved_item pointer to currently saved item
- */
-gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
-										  struct rspamd_symcache *cache,
-										  gint stage);
 
 /**
  * Validate cache items against theirs weights defined in metrics
@@ -203,6 +187,16 @@ gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
 gboolean rspamd_symcache_validate (struct rspamd_symcache *cache,
 								   struct rspamd_config *cfg,
 								   gboolean strict);
+
+/**
+ * Call function for cached symbol using saved callback
+ * @param task task object
+ * @param cache symbols cache
+ * @param saved_item pointer to currently saved item
+ */
+gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
+										  struct rspamd_symcache *cache,
+										  gint stage);
 
 /**
  * Return statistics about the cache as ucl object (array of objects one per item)
@@ -216,7 +210,7 @@ ucl_object_t *rspamd_symcache_counters (struct rspamd_symcache *cache);
  * @param cache
  * @param ev_base
  */
-void rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
+void* rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
 									struct ev_loop *ev_base,
 									struct rspamd_worker *w);
 
@@ -229,17 +223,6 @@ void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
 									struct rspamd_symcache_item *item);
 
 /**
- * Add dependency relation between two symbols identified by id (source) and
- * a symbolic name (destination). Destination could be virtual or real symbol.
- * Callback destinations are not yet supported.
- * @param id_from source symbol
- * @param to destination name
- */
-void rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
-									 gint id_from, const gchar *to,
-									 gint virtual_id_from);
-
-/**
  * Add delayed dependency that is resolved on cache post-load routine
  * @param cache
  * @param from
@@ -247,23 +230,6 @@ void rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
  */
 void rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
 											 const gchar *from, const gchar *to);
-
-/**
- * Disable specific symbol in the cache
- * @param cache
- * @param symbol
- */
-void rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
-										  const gchar *symbol,
-										  gboolean resolve_parent);
-
-/**
- * Enable specific symbol in the cache
- * @param cache
- * @param symbol
- */
-void rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
-										 const gchar *symbol);
 
 /**
  * Get abstract callback data for a symbol (or its parent symbol)
@@ -282,21 +248,6 @@ struct rspamd_abstract_callback_data *rspamd_symcache_get_cbdata (
  */
 const gchar *rspamd_symcache_get_parent (struct rspamd_symcache *cache,
 										 const gchar *symbol);
-
-/**
- * Adds flags to a symbol
- * @param cache
- * @param symbol
- * @param flags
- * @return
- */
-gboolean rspamd_symcache_add_symbol_flags (struct rspamd_symcache *cache,
-										   const gchar *symbol,
-										   guint flags);
-
-gboolean rspamd_symcache_set_symbol_flags (struct rspamd_symcache *cache,
-										   const gchar *symbol,
-										   guint flags);
 
 guint rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 										const gchar *symbol);
@@ -546,34 +497,6 @@ const gchar* rspamd_symcache_item_name (struct rspamd_symcache_item *item);
  */
 const struct rspamd_symcache_item_stat *
 		rspamd_symcache_item_stat (struct rspamd_symcache_item *item);
-/**
- * Returns if an item is enabled (for virtual it also means that parent should be enabled)
- * @param item
- * @return
- */
-gboolean rspamd_symcache_item_is_enabled (struct rspamd_symcache_item *item);
-/**
- * Returns parent for virtual symbols (or NULL)
- * @param item
- * @return
- */
-struct rspamd_symcache_item * rspamd_symcache_item_get_parent (
-		struct rspamd_symcache_item *item);
-/**
- * Returns direct deps for an element
- * @param item
- * @return array of struct rspamd_symcache_item *
- */
-const GPtrArray* rspamd_symcache_item_get_deps (
-		struct rspamd_symcache_item *item);
-/**
- * Returns direct reverse deps for an element
- * @param item
- * @return array of struct rspamd_symcache_item *
- */
-const GPtrArray* rspamd_symcache_item_get_rdeps (
-		struct rspamd_symcache_item *item);
-
 
 /**
  * Enable profiling for task (e.g. when a slow rule has been found)
