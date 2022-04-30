@@ -131,13 +131,13 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
 #define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (6u)
 
-#define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
-#define RSPAMD_TASK_IS_SPAMC(task) (((task)->cmd == CMD_CHECK_SPAMC))
-#define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
+#define RSPAMD_TASK_IS_SKIPPED(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_SKIP))
+#define RSPAMD_TASK_IS_SPAMC(task) (G_UNLIKELY((task)->cmd == CMD_CHECK_SPAMC))
+#define RSPAMD_TASK_IS_PROCESSED(task) (G_UNLIKELY((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
-#define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
-#define RSPAMD_TASK_IS_PROFILING(task) (((task)->flags & RSPAMD_TASK_FLAG_PROFILE))
-#define RSPAMD_TASK_IS_MIME(task) (((task)->flags & RSPAMD_TASK_FLAG_MIME))
+#define RSPAMD_TASK_IS_EMPTY(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
+#define RSPAMD_TASK_IS_PROFILING(task) (G_UNLIKELY((task)->flags & RSPAMD_TASK_FLAG_PROFILE))
+#define RSPAMD_TASK_IS_MIME(task) (G_LIKELY((task)->flags & RSPAMD_TASK_FLAG_MIME))
 
 struct rspamd_email_address;
 struct rspamd_lang_detector;
