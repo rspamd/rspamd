@@ -112,6 +112,18 @@
 							<p class="mt-2 mb-0">Date: <span id="date-example"></span></p>
 						</div>
 					</div>
+
+					<div class="card mt-1">
+						<div class="card-body">
+							<h6 class="card-title font-weight-bolder">HTTP requests timeout, ms</h6>
+							<div class="input-group input-group-sm was-validated">
+								<input type="number" id="ajax-timeout" class="form-control" min="0" step="any" />
+								<div class="input-group-append">
+									<button id="ajax-timeout-restore" class="btn btn-secondary">Restore default</button>
+								</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</form>
@@ -400,9 +412,16 @@
 					</div>
 				</div>
 				<div class="card ro-hide" style="display: none;">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-1 d-flex">
 						<span class="icon mr-3"><i class="fas fa-graduation-cap"></i></span>
 						<span class="h6 font-weight-bolder my-2">Learn Rspamd</span>
+						<div id="learnServers" class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
+							<label for="selLearnServers">Learn servers:</label>
+							<select id="selLearnServers" class="form-control ml-1">
+								<option value="random" selected>random</option>
+								<option value="all">all</option>
+							</select>
+						</div>
 					</div>
 					<div class="card-body">
 						<div class="row">

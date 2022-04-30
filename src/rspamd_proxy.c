@@ -1466,7 +1466,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 			msg->method = HTTP_GET;
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
-					msg, NULL, NULL, bk_conn,
+					msg, rspamd_upstream_name(bk_conn->up), NULL, bk_conn,
 					bk_conn->timeout);
 		}
 		else {
@@ -1493,7 +1493,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			}
 
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
-					msg, NULL, NULL, bk_conn,
+					msg, rspamd_upstream_name(bk_conn->up), NULL, bk_conn,
 					bk_conn->timeout);
 		}
 
@@ -2030,7 +2030,8 @@ retry:
 
 			rspamd_http_connection_write_message_shared (
 					session->master_conn->backend_conn,
-					msg, NULL, NULL, session->master_conn,
+					msg, rspamd_upstream_name(session->master_conn->up),
+					NULL, session->master_conn,
 					session->master_conn->timeout);
 		}
 		else {
@@ -2058,7 +2059,8 @@ retry:
 
 			rspamd_http_connection_write_message (
 					session->master_conn->backend_conn,
-					msg, NULL, NULL, session->master_conn,
+					msg, rspamd_upstream_name(session->master_conn->up),
+					NULL, session->master_conn,
 					session->master_conn->timeout);
 		}
 	}
