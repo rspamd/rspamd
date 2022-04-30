@@ -335,9 +335,9 @@ rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
 }
 
 const guint32 *
-rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
-											const gchar *symbol,
-											guint *nids)
+rspamd_symcache_get_forbidden_settings_ids(struct rspamd_symcache *cache,
+										   const gchar *symbol,
+										   guint *nids)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -433,5 +433,65 @@ rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_it
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 
-	return (struct rspamd_symcache_item *) cache_runtime->set_cur_item(real_item);
+	return (struct rspamd_symcache_item *)cache_runtime->set_cur_item(real_item);
+}
+
+void
+rspamd_symcache_enable_profile(struct rspamd_task *task)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	cache_runtime->set_profile_mode(true);
+}
+
+guint
+rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
+									struct rspamd_symcache_item *item,
+									const gchar *subsystem,
+									const gchar *loc)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	auto *dyn_item = cache_runtime->get_dynamic_item(real_item->id, true);
+	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
+						 "subsystem %s (%s)",
+			real_item->symbol.c_str(), real_item->id,
+			dyn_item->async_events, subsystem, loc);
+
+	return ++dyn_item->async_events;
+}
+
+guint
+rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
+									struct rspamd_symcache_item *item,
+									const gchar *subsystem,
+									const gchar *loc)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	auto *dyn_item = cache_runtime->get_dynamic_item(real_item->id, true);
+	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
+						 "subsystem %s (%s)",
+			real_item->symbol.c_str(), real_item->id,
+			dyn_item->async_events, subsystem, loc);
+	g_assert(dyn_item->async_events > 0);
+
+	return --dyn_item->async_events;
+}
+
+gboolean
+rspamd_symcache_item_async_dec_check_full(struct rspamd_task *task,
+										  struct rspamd_symcache_item *item,
+										  const gchar *subsystem,
+										  const gchar *loc)
+{
+	if (rspamd_symcache_item_async_dec_full(task, item, subsystem, loc) == 0) {
+		rspamd_symcache_finalize_item(task, item);
+
+		return TRUE;
+	}
+
+	return FALSE;
 }

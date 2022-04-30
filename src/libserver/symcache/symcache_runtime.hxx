@@ -56,8 +56,10 @@ class symcache_runtime {
 
 	struct cache_item *cur_item;
 	order_generation_ptr order;
+	/* Cache of the last items to speed up lookups */
+	mutable std::pair<int, int> last_id_mappings[8];
 	/* Dynamically expanded as needed */
-	struct cache_dynamic_item dynamic_items[];
+	mutable struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
 	~symcache_runtime() = delete;
 	/* Dropper for a shared ownership */
@@ -119,14 +121,40 @@ public:
 	 */
 	auto is_symbol_enabled(struct rspamd_task *task, const symcache &cache, std::string_view name) -> bool;
 
+	/**
+	 * Get the current processed item
+	 * @return
+	 */
 	auto get_cur_item() const -> auto {
 		return cur_item;
 	}
 
+	/**
+	 * Set the current processed item
+	 * @param item
+	 * @return
+	 */
 	auto set_cur_item(cache_item *item) -> auto {
 		std::swap(item, cur_item);
 		return item;
 	}
+
+	/**
+	 * Set profile mode for the runtime
+	 * @param enable
+	 * @return
+	 */
+	auto set_profile_mode(bool enable) -> auto {
+		std::swap(profile, enable);
+		return enable;
+	}
+
+	/**
+	 * Returns the dynamic item by static item id
+	 * @param id
+	 * @return
+	 */
+	auto get_dynamic_item(int id, bool save_in_cache) const -> cache_dynamic_item *;
 };
 
 

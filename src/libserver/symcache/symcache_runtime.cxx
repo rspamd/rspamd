@@ -43,6 +43,11 @@ symcache_runtime::create_savepoint(struct rspamd_task *task, symcache &cache) ->
 	rspamd_mempool_add_destructor(task->task_pool,
 			symcache_runtime::savepoint_dtor, checkpoint);
 
+	for (auto &pair : checkpoint->last_id_mappings) {
+		pair.first = -1;
+		pair.second = -1;
+	}
+
 	/* Calculate profile probability */
 	ev_now_update_if_cheap(task->event_loop);
 	ev_tstamp now = ev_now(task->event_loop);
@@ -120,7 +125,6 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 		}
 	}
 
-
 	/* Enable groups of symbols */
 	enabled = ucl_object_lookup(task->settings, "groups_enabled");
 	if (enabled && !already_disabled) {
@@ -131,7 +135,6 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 	});
 
 	const auto *disabled = ucl_object_lookup(task->settings, "symbols_disabled");
-
 
 	if (disabled) {
 		it = nullptr;
@@ -170,10 +173,9 @@ symcache_runtime::disable_symbol(struct rspamd_task *task, const symcache &cache
 
 	if (item != nullptr) {
 
-		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+		auto *dyn_item = get_dynamic_item(item->id, false);
 
-		if (our_id_maybe) {
-			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+		if (dyn_item) {
 			dyn_item->finished = true;
 			dyn_item->started = true;
 			msg_debug_cache_task("disable execution of %s", name.data());
@@ -198,10 +200,9 @@ symcache_runtime::enable_symbol(struct rspamd_task *task, const symcache &cache,
 
 	if (item != nullptr) {
 
-		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+		auto *dyn_item = get_dynamic_item(item->id, false);
 
-		if (our_id_maybe) {
-			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+		if (dyn_item) {
 			dyn_item->finished = false;
 			dyn_item->started = false;
 			msg_debug_cache_task("enable execution of %s", name.data());
@@ -226,10 +227,9 @@ symcache_runtime::is_symbol_checked(const symcache &cache, std::string_view name
 
 	if (item != nullptr) {
 
-		auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+		auto *dyn_item = get_dynamic_item(item->id, true);
 
-		if (our_id_maybe) {
-			auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+		if (dyn_item) {
 			return dyn_item->started;
 		}
 	}
@@ -248,10 +248,9 @@ symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcache &ca
 			return false;
 		}
 		else {
-			auto our_id_maybe = rspamd::find_map(order->by_cache_id, item->id);
+			auto *dyn_item = get_dynamic_item(item->id, true);
 
-			if (our_id_maybe) {
-				auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+			if (dyn_item) {
 				if (dyn_item->started) {
 					/* Already started */
 					return false;
@@ -269,6 +268,60 @@ symcache_runtime::is_symbol_enabled(struct rspamd_task *task, const symcache &ca
 	}
 
 	return true;
+}
+
+auto symcache_runtime::get_dynamic_item(int id, bool save_in_cache) const -> cache_dynamic_item *
+{
+	/* Lookup in cache */
+	if (save_in_cache) {
+		for (const auto &cache_id : last_id_mappings) {
+			if (cache_id.first == -1) {
+				break;
+			}
+			if (cache_id.first == id) {
+				auto *dyn_item = &dynamic_items[cache_id.second];
+
+				return dyn_item;
+			}
+		}
+	}
+
+	/* Not found in the cache, do a hash lookup */
+	auto our_id_maybe = rspamd::find_map(order->by_cache_id, id);
+
+	if (our_id_maybe) {
+		auto *dyn_item = &dynamic_items[our_id_maybe.value()];
+
+		if (!save_in_cache) {
+			return dyn_item;
+		}
+
+		/* Insert in the cache, swapping the first item with the last empty item */
+		auto first_known = last_id_mappings[0];
+		last_id_mappings[0].first = id;
+		last_id_mappings[0].second = our_id_maybe.value();
+
+		if (first_known.first != -1) {
+			/* This loop is guaranteed to finish as we have just inserted one item */
+
+			constexpr const auto cache_size = sizeof(last_id_mappings) / sizeof(last_id_mappings[0]);
+			int i = cache_size - 1;
+			for (;; --i) {
+				if (last_id_mappings[i].first != -1) {
+					if (i < cache_size - 1) {
+						i++;
+					}
+					break;
+				}
+			}
+
+			last_id_mappings[i] = first_known;
+		}
+
+		return dyn_item;
+	}
+
+	return nullptr;
 }
 
 }
