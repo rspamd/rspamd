@@ -97,6 +97,10 @@ public:
 		return std::all_of(std::begin(conditions), std::end(conditions),
 						   [&](const auto &cond) { return cond.check(sym_name, task); });
 	}
+
+	auto get_cbdata() const -> auto {
+		return user_data;
+	}
 };
 
 class virtual_item {
@@ -302,6 +306,20 @@ public:
 	 */
 	auto is_allowed(struct rspamd_task *task, bool exec_only) const -> bool;
 
+	/**
+	 * Returns callback data
+	 * @return
+	 */
+	auto get_cbdata() const -> void * {
+		if (std::holds_alternative<normal_item>(specific)) {
+			const auto &filter_data = std::get<normal_item>(specific);
+
+			return filter_data.get_cbdata();
+		}
+
+		return nullptr;
+	}
+
 private:
 	/**
 	 * Constructor for a normal symbols with callback
@@ -326,6 +344,7 @@ private:
 							 priority(_priority),
 							 specific(normal_item{func, user_data})
 	{
+		/* These structures are kept trivial, so they need to be explicitly reset */
 		forbidden_ids.reset();
 		allowed_ids.reset();
 		exec_only_ids.reset();
@@ -352,6 +371,7 @@ private:
 							 flags(_flags),
 							 specific(virtual_item{parent})
 	{
+		/* These structures are kept trivial, so they need to be explicitly reset */
 		forbidden_ids.reset();
 		allowed_ids.reset();
 		exec_only_ids.reset();

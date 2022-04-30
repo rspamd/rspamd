@@ -356,6 +356,18 @@ public:
 	}
 
 	/**
+	 * Iterate over all composites using a specific functor
+	 * @tparam Functor
+	 * @param f
+	 */
+	template<typename Functor>
+	auto composites_foreach(Functor f) -> void {
+		for (const auto &sym_it : composites) {
+			f(sym_it.get());
+		}
+	}
+
+	/**
 	 * Resort cache if anything has been changed since last time
 	 * @return
 	 */

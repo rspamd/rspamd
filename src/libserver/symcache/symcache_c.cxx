@@ -433,7 +433,7 @@ rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_it
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 
-	return (struct rspamd_symcache_item *)cache_runtime->set_cur_item(real_item);
+	return (struct rspamd_symcache_item *) cache_runtime->set_cur_item(real_item);
 }
 
 void
@@ -494,4 +494,38 @@ rspamd_symcache_item_async_dec_check_full(struct rspamd_task *task,
 	}
 
 	return FALSE;
+}
+
+struct rspamd_abstract_callback_data *
+rspamd_symcache_get_cbdata(struct rspamd_symcache *cache,
+						   const gchar *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	auto *item = real_cache->get_item_by_name(symbol, true);
+
+	if (item) {
+		return (struct rspamd_abstract_callback_data *) item->get_cbdata();
+	}
+
+	return nullptr;
+}
+
+void
+rspamd_symcache_composites_foreach(struct rspamd_task *task,
+								   struct rspamd_symcache *cache,
+								   GHFunc func,
+								   gpointer fd)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+
+	real_cache->composites_foreach([&](const auto *item) {
+		auto *dyn_item = cache_runtime->get_dynamic_item(item->id, false);
+
+		if (dyn_item->started) {
+			func((void *)item->get_name().c_str(), item->get_cbdata(), fd);
+			dyn_item->finished = true;
+		}
+	});
 }
