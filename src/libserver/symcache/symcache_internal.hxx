@@ -44,6 +44,10 @@
         "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+#define msg_err_cache_task(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "symcache", task->task_pool->tag.uid, \
+        RSPAMD_LOG_FUNC, \
+        __VA_ARGS__)
 #define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
@@ -365,6 +369,47 @@ public:
 		for (const auto &sym_it : composites) {
 			f(sym_it.get());
 		}
+	}
+
+	/**
+	 * Iterate over all composites using a specific functor
+	 * @tparam Functor
+	 * @param f
+	 */
+	template<typename Functor>
+	auto connfilters_foreach(Functor f) -> bool {
+		return std::all_of(std::begin(connfilters), std::end(connfilters),
+						   [&](const auto &sym_it){
+			return f(sym_it.get());
+		});
+	}
+	template<typename Functor>
+	auto prefilters_foreach(Functor f) -> bool {
+		return std::all_of(std::begin(prefilters), std::end(prefilters),
+				[&](const auto &sym_it){
+					return f(sym_it.get());
+				});
+	}
+	template<typename Functor>
+	auto postfilters_foreach(Functor f) -> bool {
+		return std::all_of(std::begin(postfilters), std::end(postfilters),
+				[&](const auto &sym_it){
+					return f(sym_it.get());
+				});
+	}
+	template<typename Functor>
+	auto idempotent_foreach(Functor f) -> bool {
+		return std::all_of(std::begin(idempotent), std::end(idempotent),
+				[&](const auto &sym_it){
+					return f(sym_it.get());
+				});
+	}
+	template<typename Functor>
+	auto filters_foreach(Functor f) -> bool {
+		return std::all_of(std::begin(filters), std::end(filters),
+				[&](const auto &sym_it){
+					return f(sym_it.get());
+				});
 	}
 
 	/**

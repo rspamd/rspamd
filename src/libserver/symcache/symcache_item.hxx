@@ -88,9 +88,9 @@ public:
 		conditions.emplace_back(L, cbref);
 	}
 
-	auto call() -> void
+	auto call(struct rspamd_task *task, struct rspamd_symcache_item *item) const -> void
 	{
-		// TODO
+		func(task, item, user_data);
 	}
 
 	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) const -> bool {
@@ -318,6 +318,29 @@ public:
 		}
 
 		return nullptr;
+	}
+
+	/**
+	 * Check all conditions for an item
+	 * @param task
+	 * @return
+	 */
+	auto check_conditions(struct rspamd_task *task) const -> auto {
+		if (std::holds_alternative<normal_item>(specific)) {
+			const auto &filter_data = std::get<normal_item>(specific);
+
+			return filter_data.check_conditions(symbol, task);
+		}
+
+		return false;
+	}
+
+	auto call(struct rspamd_task *task) const -> void {
+		if (std::holds_alternative<normal_item>(specific)) {
+			const auto &filter_data = std::get<normal_item>(specific);
+
+			filter_data.call(task, (struct rspamd_symcache_item *)this);
+		}
 	}
 
 private:

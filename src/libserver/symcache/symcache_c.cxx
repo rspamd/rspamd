@@ -529,3 +529,18 @@ rspamd_symcache_composites_foreach(struct rspamd_task *task,
 		}
 	});
 }
+
+gboolean
+rspamd_symcache_process_symbols(struct rspamd_task *task,
+								struct rspamd_symcache *cache,
+								gint stage)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	if (task->symcache_runtime == nullptr) {
+		task->symcache_runtime = rspamd::symcache::symcache_runtime::create(task, *real_cache);
+	}
+
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	return cache_runtime->process_symbols(task, *real_cache, stage);
+}

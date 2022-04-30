@@ -27,6 +27,8 @@
 
 #include "symcache_internal.hxx"
 
+struct rspamd_scan_result;
+
 namespace rspamd::symcache {
 /**
  * These items are saved within task structure and are used to track
@@ -52,7 +54,7 @@ class symcache_runtime {
 	double profile_start;
 	double lim;
 
-	struct rspamd_scan_result *rs;
+	struct ::rspamd_scan_result *rs;
 
 	struct cache_item *cur_item;
 	order_generation_ptr order;
@@ -69,6 +71,13 @@ class symcache_runtime {
 		/* Drop shared ownership */
 		real_savepoint->order.reset();
 	}
+
+	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
+			cache_dynamic_item *dyn_item) -> bool;
+	/* Specific stages of the processing */
+	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, int stage) -> bool;
+	auto process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool;
+
 public:
 	/**
 	 * Creates a cache runtime using task mempool
@@ -76,7 +85,7 @@ public:
 	 * @param cache
 	 * @return
 	 */
-	static auto create_savepoint(struct rspamd_task *task, symcache &cache) -> symcache_runtime *;
+	static auto create(struct rspamd_task *task, symcache &cache) -> symcache_runtime *;
 	/**
 	 * Process task settings
 	 * @param task
@@ -155,6 +164,15 @@ public:
 	 * @return
 	 */
 	auto get_dynamic_item(int id, bool save_in_cache) const -> cache_dynamic_item *;
+
+	/**
+	 * Process symbols in the cache
+	 * @param task
+	 * @param cache
+	 * @param stage
+	 * @return
+	 */
+	auto process_symbols(struct rspamd_task *task, symcache &cache, int stage) -> bool;
 };
 
 
