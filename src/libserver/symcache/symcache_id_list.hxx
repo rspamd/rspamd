@@ -54,7 +54,7 @@ struct id_list {
 	 * @param nids output of the number of elements
 	 * @return
 	 */
-	auto get_ids(std::size_t &nids) const -> const std::uint32_t *
+	auto get_ids(unsigned &nids) const -> const std::uint32_t *
 	{
 		if (data.dyn.e == -1) {
 			/* Dynamic list */

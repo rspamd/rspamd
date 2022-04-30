@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include "lua/lua_common.h"
 #include "symcache_internal.hxx"
 #include "symcache_item.hxx"
 #include "fmt/core.h"
 #include "libserver/task.h"
-#include "lua/lua_common.h"
 
 namespace rspamd::symcache {
 
@@ -56,7 +56,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				msg_debug_cache("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
 						dep.vid, vdit->symbol.c_str(), vdit->id);
 
-				std::size_t nids = 0;
+				unsigned nids = 0;
 
 				/* Propagate ids */
 				msg_debug_cache("check id propagation for dependency %s from %s",
