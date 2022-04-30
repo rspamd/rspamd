@@ -176,6 +176,25 @@ public:
 	 * @return
 	 */
 	auto process_symbols(struct rspamd_task *task, symcache &cache, int stage) -> bool;
+
+	/**
+	 * Finalize execution of some item in the cache
+	 * @param task
+	 * @param item
+	 */
+	auto finalize_item(struct rspamd_task *task, cache_item *item) -> void;
+
+	/**
+	 * Process unblocked reverse dependencies of the specific item
+	 * @param task
+	 * @param item
+	 */
+	auto process_item_rdeps(struct rspamd_task *task, cache_item *item) -> void;
+
+	/* XXX: a helper to allow hiding internal implementation of the slow timer structure */
+	auto unset_slow() -> void {
+		has_slow = false;
+	}
 };
 
 

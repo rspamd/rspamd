@@ -544,3 +544,13 @@ rspamd_symcache_process_symbols(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	return cache_runtime->process_symbols(task, *real_cache, stage);
 }
+
+void
+rspamd_symcache_finalize_item(struct rspamd_task *task,
+							  struct rspamd_symcache_item *item)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	cache_runtime->finalize_item(task, real_item);
+}
