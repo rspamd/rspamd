@@ -1835,6 +1835,7 @@ lua_parse_symbol_type (const gchar *str)
 			for (i = 0; i < l; i ++) {
 				str = vec[i];
 
+				/* TODO: total shit, rework some day */
 				if (g_ascii_strcasecmp (str, "virtual") == 0) {
 					ret |= SYMBOL_TYPE_VIRTUAL;
 					ret &= ~SYMBOL_TYPE_NORMAL;
@@ -1861,7 +1862,7 @@ lua_parse_symbol_type (const gchar *str)
 					ret |= SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_GHOST;
 				}
 				else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
-					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST |
+					ret |=  SYMBOL_TYPE_GHOST |
 						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
 				}
 				else {
