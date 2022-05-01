@@ -357,7 +357,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 										 | SYMBOL_TYPE_VIRTUAL;
 
 	constexpr auto all_but_one_ty = [&](int type, int exclude_bit) -> auto {
-		return type & (trivial_types & ~exclude_bit);
+		return (type & trivial_types) & (trivial_types & ~exclude_bit);
 	};
 
 	if (type & trivial_types) {
