@@ -70,9 +70,7 @@ rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
-	if (func) {
-		g_assert (parent == -1);
-
+	if (parent == -1) {
 		return real_cache->add_symbol_with_callback(name, priority, func, user_data, type);
 	}
 	else {

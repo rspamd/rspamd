@@ -610,6 +610,11 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 		real_type_pair.second |= SYMBOL_TYPE_NOSTAT;
 	}
 
+	if (real_type_pair.first == symcache_item_type::VIRTUAL) {
+		msg_err_cache("trying to add virtual symbol %s as real (no parent)", name.data());
+		return -1;
+	}
+
 	if ((real_type_pair.second & SYMBOL_TYPE_FINE) && priority == 0) {
 		/* Adjust priority for negative weighted symbols */
 		priority = 1;
