@@ -249,16 +249,20 @@ TEST_CASE("create and delete file") {
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
 	// File must be deleted after this call
-	CHECK(::access(fname.c_str(), R_OK) == -1);
-	CHECK(errno == ENOENT);
+	auto ret = ::access(fname.c_str(), R_OK);
+	auto serrno = errno;
+	CHECK(ret == -1);
+	CHECK(serrno == ENOENT);
 	// Create one more time
 	{
 		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
-	CHECK(::access(fname.c_str(), R_OK) == -1);
-	CHECK(errno == ENOENT);
+	ret = ::access(fname.c_str(), R_OK);
+	serrno = errno;
+	CHECK(ret == -1);
+	CHECK(serrno == ENOENT);
 }
 
 TEST_CASE("check lock") {
@@ -272,8 +276,10 @@ TEST_CASE("check lock") {
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
 	// File must be deleted after this call
-	CHECK(::access(fname.c_str(), R_OK) == -1);
-	CHECK(errno == ENOENT);
+	auto ret = ::access(fname.c_str(), R_OK);
+	auto serrno = errno;
+	CHECK(ret == -1);
+	CHECK(serrno == ENOENT);
 }
 
 } // TEST_SUITE
