@@ -31,19 +31,20 @@ struct raii_locked_file final {
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>;
 	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
+	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
 
-	auto get_fd() const -> int
-	{
+	auto get_fd() const -> int {
 		return fd;
 	}
 
-	auto get_stat() const -> const struct stat&
-	{
+	auto get_stat() const -> const struct stat& {
 		return st;
 	};
 
 	raii_locked_file& operator=(raii_locked_file &&other) noexcept {
 		std::swap(fd, other.fd);
+		std::swap(temp, other.temp);
+		std::swap(fname, other.fname);
 		std::swap(st, other.st);
 
 		return *this;
@@ -59,9 +60,11 @@ struct raii_locked_file final {
 	raii_locked_file(const raii_locked_file &other) = delete;
 private:
 	int fd;
+	bool temp;
+	std::string fname;
 	struct stat st;
 
-	explicit raii_locked_file(int _fd) : fd(_fd) {}
+	explicit raii_locked_file(const char *_fname, int _fd, bool _temp) : fd(_fd), temp(_temp), fname(_fname) {}
 };
 
 /**

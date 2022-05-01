@@ -36,12 +36,12 @@ auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_l
 		return tl::make_unexpected(fmt::format("cannot open file {}: {}", fname, ::strerror(errno)));
 	}
 
-	if (!rspamd_file_lock(fd, FALSE)) {
+	if (!rspamd_file_lock(fd, TRUE)) {
 		close(fd);
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{fd};
+	auto ret = raii_locked_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
@@ -53,6 +53,9 @@ auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_l
 raii_locked_file::~raii_locked_file()
 {
 	if (fd != -1) {
+		if (temp) {
+			(void)unlink(fname.c_str());
+		}
 		(void) rspamd_file_unlock(fd, FALSE);
 		close(fd);
 	}
@@ -70,12 +73,38 @@ auto raii_locked_file::create(const char *fname, int flags, int perms) -> tl::ex
 		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
 	}
 
-	if (!rspamd_file_lock(fd, FALSE)) {
+	if (!rspamd_file_lock(fd, TRUE)) {
 		close(fd);
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{fd};
+	auto ret = raii_locked_file{fname, fd, false};
+
+	if (fstat(ret.fd, &ret.st) == -1) {
+		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
+	}
+
+	return ret;
+}
+
+auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>
+{
+	int oflags = flags;
+#ifdef O_CLOEXEC
+	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
+#endif
+	auto fd = ::open(fname, oflags, perms);
+
+	if (fd == -1) {
+		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
+	}
+
+	if (!rspamd_file_lock(fd, TRUE)) {
+		close(fd);
+		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
+	}
+
+	auto ret = raii_locked_file{fname, fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
@@ -213,7 +242,7 @@ TEST_SUITE("loked files utils") {
 TEST_CASE("create and delete file") {
 	auto fname = random_fname();
 	{
-		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
@@ -222,7 +251,7 @@ TEST_CASE("create and delete file") {
 	CHECK(errno == ENOENT);
 	// Create one more time
 	{
-		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
@@ -233,7 +262,7 @@ TEST_CASE("create and delete file") {
 TEST_CASE("check lock") {
 	auto fname = random_fname();
 	{
-		auto raii_locked_file = raii_locked_file::open(fname.c_str(), O_RDONLY);
+		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 		auto raii_locked_file2 = raii_locked_file::open(fname.c_str(), O_RDONLY);
