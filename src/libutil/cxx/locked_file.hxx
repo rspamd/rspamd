@@ -59,7 +59,7 @@ struct raii_locked_file final {
 	raii_locked_file() = delete;
 	raii_locked_file(const raii_locked_file &other) = delete;
 private:
-	int fd;
+	int fd = -1;
 	bool temp;
 	std::string fname;
 	struct stat st;
@@ -94,7 +94,7 @@ private:
 	/* Is intended to be used with map_shared */
 	explicit raii_mmaped_locked_file(raii_locked_file &&_file, void *_map);
 	raii_locked_file file;
-	void *map{};
+	void *map = nullptr;
 };
 
 /**

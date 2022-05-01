@@ -148,7 +148,9 @@ auto raii_mmaped_locked_file::mmap_shared(const char *fname, int open_flags,
 
 raii_mmaped_locked_file::~raii_mmaped_locked_file()
 {
-	munmap(map, file.get_stat().st_size);
+	if (map != nullptr) {
+		munmap(map, file.get_stat().st_size);
+	}
 }
 
 raii_mmaped_locked_file::raii_mmaped_locked_file(raii_mmaped_locked_file &&other) noexcept
