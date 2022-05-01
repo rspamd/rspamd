@@ -33,6 +33,17 @@ auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 	return nullptr;
 }
 
+auto cache_item::get_parent_mut(const symcache &cache) -> cache_item *
+{
+	if (is_virtual()) {
+		auto &virtual_sp = std::get<virtual_item>(specific);
+
+		return virtual_sp.get_parent_mut(cache);
+	}
+
+	return nullptr;
+}
+
 auto cache_item::process_deps(const symcache &cache) -> void
 {
 	/* Allow logging macros to work */
@@ -117,12 +128,18 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				}
 				else {
 					/* Create a reverse dep */
-					dit->rdeps.emplace_back(getptr(), dep.sym, id, -1);
-					dep.item = dit->getptr();
-					dep.id = dit->id;
+					if (is_virtual()) {
+						auto *parent = get_parent_mut(cache);
 
-					msg_debug_cache ("add dependency from %d on %d", id,
-							dit->id);
+						if (parent) {
+							dit->rdeps.emplace_back(parent->getptr(), dep.sym, parent->id, -1);
+							dep.item = dit->getptr();
+							dep.id = dit->id;
+
+							msg_debug_cache ("added reverse dependency from %d on %d", id,
+									dit->id);
+						}
+					}
 				}
 			}
 		}
@@ -330,6 +347,15 @@ auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 	}
 
 	return cache.get_item_by_id(parent_id, false);
+}
+
+auto virtual_item::get_parent_mut(const symcache &cache) -> cache_item *
+{
+	if (parent) {
+		return parent.get();
+	}
+
+	return const_cast<cache_item *>(cache.get_item_by_id(parent_id, false));
 }
 
 auto virtual_item::resolve_parent(const symcache &cache) -> bool

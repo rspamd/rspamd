@@ -113,6 +113,7 @@ public:
 	}
 
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto get_parent_mut(const symcache &cache) -> cache_item *;
 
 	auto resolve_parent(const symcache &cache) -> bool;
 };
@@ -255,6 +256,7 @@ public:
 	}
 
 	auto get_parent(const symcache &cache) const -> const cache_item *;
+	auto get_parent_mut(const symcache &cache) -> cache_item *;
 
 	auto resolve_parent(const symcache &cache) -> bool;
 

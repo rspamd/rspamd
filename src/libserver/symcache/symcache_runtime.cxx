@@ -738,6 +738,7 @@ symcache_runtime::finalize_item(struct rspamd_task *task, cache_item *item) -> v
 		cbd->event = rspamd_session_add_event (task->s,
 				rspamd_symcache_delayed_item_fin, cbd,
 				"symcache");
+		cbd->runtime = this;
 
 		/*
 		 * If no event could be added, then we are already in the destruction
