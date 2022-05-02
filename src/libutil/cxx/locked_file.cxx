@@ -30,6 +30,11 @@ auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_l
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC;
 #endif
+
+	if (fname == nullptr) {
+		return tl::make_unexpected("cannot open file; filename is nullptr");
+	}
+
 	auto fd = ::open(fname, oflags);
 
 	if (fd == -1) {
@@ -67,6 +72,11 @@ auto raii_locked_file::create(const char *fname, int flags, int perms) -> tl::ex
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
 #endif
+
+	if (fname == nullptr) {
+		return tl::make_unexpected("cannot open file; filename is nullptr");
+	}
+
 	auto fd = ::open(fname, oflags, perms);
 
 	if (fd == -1) {
@@ -93,6 +103,10 @@ auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> t
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
 #endif
+	if (fname == nullptr) {
+		return tl::make_unexpected("cannot open file; filename is nullptr");
+	}
+
 	auto fd = ::open(fname, oflags, perms);
 
 	if (fd == -1) {
