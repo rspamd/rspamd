@@ -29,6 +29,7 @@ local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
+local HOSTNAME = rspamd_util.get_hostname()
 
 local settings = {
   pusher_enabled = {},
@@ -75,6 +76,7 @@ local function get_general_metadata(task, flatten, no_content)
   r.qid = task:get_queue_id() or 'unknown'
   r.subject = task:get_subject() or 'unknown'
   r.action = task:get_metric_action('default')
+  r.rspamd_server = HOSTNAME
 
   local s = task:get_metric_score('default')[1]
   r.score = flatten and string.format('%.2f', s) or s
@@ -151,6 +153,18 @@ local function get_general_metadata(task, flatten, no_content)
       return 'unknown'
     end
   end
+
+  local scan_real = task:get_scan_time()
+  scan_real = math.floor(scan_real * 1000)
+  if scan_real < 0 then
+    rspamd_logger.messagex(task,
+        'clock skew detected for message: %s ms real sca time (reset to 0)',
+        scan_real)
+    scan_real = 0
+  end
+
+  r.scan_time = scan_real
+
   if not no_content then
     r.header_from = process_header('from')
     r.header_to = process_header('to')
