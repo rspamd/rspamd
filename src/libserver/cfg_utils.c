@@ -249,6 +249,9 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->lua_gc_step = DEFAULT_LUA_GC_STEP;
 	cfg->full_gc_iters = DEFAULT_GC_MAXITERS;
 
+	/* Default hyperscan cache */
+	cfg->hs_cache_dir = RSPAMD_DBDIR "/";
+
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
 		cfg->lua_state = rspamd_lua_init (flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
 		cfg->own_lua_state = TRUE;
