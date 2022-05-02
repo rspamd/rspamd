@@ -176,6 +176,10 @@ raii_mmaped_locked_file::raii_mmaped_locked_file(raii_mmaped_locked_file &&other
 auto raii_file_sink::create(const char *fname, int flags, int perms,
 							const char *suffix) -> tl::expected<raii_file_sink, std::string>
 {
+	if (!fname || !suffix) {
+		return tl::make_unexpected("cannot create file sink: bad input arguments");
+	}
+
 	auto tmp_fname = fmt::format("{}.{}", fname, suffix);
 	auto file = raii_locked_file::create(tmp_fname.c_str(), flags, perms);
 

@@ -258,6 +258,10 @@ static constexpr auto round_to_hundreds(T x)
 
 bool symcache::save_items() const
 {
+	if (cfg->cache_filename == nullptr) {
+		return false;
+	}
+
 	auto file_sink = util::raii_file_sink::create(cfg->cache_filename,
 			O_WRONLY | O_TRUNC, 00644);
 
