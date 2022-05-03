@@ -503,7 +503,7 @@ symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache, cach
 
 	if (check) {
 		msg_debug_cache_task("execute %s, %d; symbol type = %s", item->symbol.data(),
-				item->id);
+				item->id, item_type_to_str(item->type));
 
 		if (profile) {
 			ev_now_update_if_cheap(task->event_loop);

@@ -55,6 +55,27 @@ enum class symcache_item_type {
  */
 bool operator<(symcache_item_type lhs, symcache_item_type rhs);
 
+constexpr static auto item_type_to_str(symcache_item_type t) -> const char * {
+	switch(t) {
+	case symcache_item_type::CONNFILTER:
+		return "connfilter";
+	case symcache_item_type::PREFILTER:
+		return "prefilter";
+	case symcache_item_type::FILTER:
+		return "filter";
+	case symcache_item_type::POSTFILTER:
+		return "postfilter";
+	case symcache_item_type::IDEMPOTENT:
+		return "idempotent";
+	case symcache_item_type::CLASSIFIER:
+		return "classifier";
+	case symcache_item_type::COMPOSITE:
+		return "composite";
+	case symcache_item_type::VIRTUAL:
+		return "virtual";
+	}
+}
+
 /**
  * This is a public helper to convert a legacy C type to a more static type
  * @param type input type as a C enum
