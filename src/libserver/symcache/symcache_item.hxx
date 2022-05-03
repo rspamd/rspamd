@@ -265,10 +265,11 @@ public:
 	 */
 	auto is_scoreable() const -> bool
 	{
-		return (type == symcache_item_type::FILTER) ||
+		return !(flags & SYMBOL_TYPE_CALLBACK) &&
+			   ((type == symcache_item_type::FILTER) ||
 			   is_virtual() ||
 			   (type == symcache_item_type::COMPOSITE) ||
-			   (type == symcache_item_type::CLASSIFIER);
+			   (type == symcache_item_type::CLASSIFIER));
 	}
 
 	auto is_ghost() const -> bool

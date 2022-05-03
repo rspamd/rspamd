@@ -136,9 +136,16 @@ auto cache_item::process_deps(const symcache &cache) -> void
 							dep.item = dit->getptr();
 							dep.id = dit->id;
 
-							msg_debug_cache ("added reverse dependency from %d on %d", id,
+							msg_debug_cache ("added reverse dependency from %d on %d", parent->id,
 									dit->id);
 						}
+					}
+					else {
+						dep.item = dit->getptr();
+						dep.id = dit->id;
+						dit->rdeps.emplace_back(getptr(), dep.sym, id, -1);
+						msg_debug_cache ("added reverse dependency from %d on %d", id,
+								dit->id);
 					}
 				}
 			}

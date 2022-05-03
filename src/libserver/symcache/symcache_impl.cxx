@@ -732,7 +732,7 @@ auto symcache::validate(bool strict) -> bool
 			}
 		}
 		else {
-			skipped = FALSE;
+			skipped = false;
 		}
 
 		if (!ghost && skipped) {
