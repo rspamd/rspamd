@@ -423,31 +423,31 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 {
 	auto all_done = true;
 
-	cache.filters_foreach([&](cache_item *item) -> bool {
+	for (const auto [idx, item] : rspamd::enumerate(order->d)) {
 		if (item->type == symcache_item_type::CLASSIFIER) {
-			return true;
+			continue;
 		}
 
-		auto dyn_item = get_dynamic_item(item->id, true);
+		auto dyn_item = &dynamic_items[idx];
 
 		if (!dyn_item->started && !dyn_item->finished) {
 			all_done = false;
 
-			if (!check_item_deps(task, cache, item,
+			if (!check_item_deps(task, cache, item.get(),
 					dyn_item, false)) {
 				msg_debug_cache_task("blocked execution of %d(%s) unless deps are "
 									 "resolved", item->id, item->symbol.c_str());
 
-				return true;
+				break;
 			}
 
-			process_symbol(task, cache, item, dyn_item);
+			process_symbol(task, cache, item.get(), dyn_item);
 
 			if (has_slow) {
 				/* Delay */
 				has_slow = false;
 
-				return false;
+				break;
 			}
 		}
 
@@ -458,12 +458,10 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 							   "plan more checks",
 						rs->score);
 				all_done = true;
-				return false;
+				break;
 			}
 		}
-
-		return true;
-	});
+	}
 
 	return all_done;
 }
