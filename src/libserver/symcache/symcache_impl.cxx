@@ -1027,24 +1027,21 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 
 			if (item != nullptr) {
 				if (item->is_virtual()) {
-					if (!(item->flags & SYMBOL_TYPE_GHOST)) {
-						auto *parent = get_item_by_name_mut(sym, true);
+					auto *parent = get_item_by_name_mut(sym, true);
 
-						if (parent) {
-							if (elt->symbols_disabled &&
-								ucl_object_lookup(elt->symbols_disabled, parent->symbol.data())) {
-								msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
-											   "wanted to enable symbol %s",
-										elt->name, parent->symbol.data(), sym);
-								continue;
-							}
-
-							parent->exec_only_ids.add_id(id, static_pool);
-							msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
-									parent->symbol.data(), id, elt->name);
+					if (parent) {
+						if (elt->symbols_disabled &&
+							ucl_object_lookup(elt->symbols_disabled, parent->symbol.data())) {
+							msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+										   "wanted to enable symbol %s",
+									elt->name, parent->symbol.data(), sym);
+							continue;
 						}
+
+						parent->exec_only_ids.add_id(id, static_pool);
+						msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
+								parent->symbol.data(), id, elt->name);
 					}
-					/* Ignore ghosts */
 				}
 
 				item->allowed_ids.add_id(id, static_pool);

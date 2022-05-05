@@ -119,6 +119,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 	const auto *enabled = ucl_object_lookup(task->settings, "symbols_enabled");
 
 	if (enabled) {
+		msg_debug_cache_task("disable all symbols as `symbols_enabled` is found");
 		/* Disable all symbols but selected */
 		disable_all_symbols(SYMBOL_TYPE_EXPLICIT_DISABLE);
 		already_disabled = true;
@@ -159,9 +160,8 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 {
-	for (auto i = 0; i < order->size(); i++) {
+	for (auto [i, item] : rspamd::enumerate(order->d)) {
 		auto *dyn_item = &dynamic_items[i];
-		const auto &item = order->d[i];
 
 		if (!(item->get_flags() & skip_mask)) {
 			dyn_item->finished = true;
