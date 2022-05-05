@@ -180,8 +180,8 @@ if opts and type(opts) == 'table' then
     rspamd_config:add_on_load(function(_, ev_base, worker)
       if worker:is_primary_controller() then
         rspamd_config:add_periodic(ev_base, 0.0,
-          function(_cfg, _ev_base)
-            return collect_fuzzy_hashes(_cfg, _ev_base)
+          function(cfg, _)
+            return collect_fuzzy_hashes(cfg, ev_base)
           end)
       end
     end)

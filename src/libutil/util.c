@@ -1009,10 +1009,6 @@ rspamd_file_lock (gint fd, gboolean async)
 	}
 
 	if (flock (fd, flags) == -1) {
-		if (async && errno == EAGAIN) {
-			return FALSE;
-		}
-
 		return FALSE;
 	}
 

@@ -616,90 +616,101 @@ rspamadm_lua_run_repl (lua_State *L, bool is_batch)
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
 	gsize i;
+#else
+	/* Always set is_batch */
+	is_batch = TRUE;
 #endif
 
 	for (;;) {
-#ifndef WITH_LUA_REPL
-		size_t linecap = 0;
-		ssize_t linelen;
+		if (is_batch) {
+			size_t linecap = 0;
+			ssize_t linelen;
 
-		fprintf (stdout, "%s ", MAIN_PROMPT);
+			linelen = getline(&input, &linecap, stdin);
 
-		linelen = getline (&input, &linecap, stdin);
+			if (linelen > 0) {
+				if (input[linelen - 1] == '\n') {
+					input[linelen - 1] = '\0';
+					linelen --;
+				}
 
-		if (linelen > 0) {
-			if (input[linelen - 1] == '\n') {
-				linelen --;
-			}
-
-			rspamadm_exec_input (L, input);
-		}
-		else {
-			break;
-		}
-
-		lua_settop (L, 0);
-#else
-		if (!is_batch) {
-			replxx_set_highlighter_callback (rx_instance, lua_syntax_highlighter,
-					L);
-		}
-
-		if (!is_multiline) {
-			input = (gchar *)replxx_input (rx_instance, MAIN_PROMPT);
-
-			if (input == NULL) {
-				return;
-			}
-
-			if (input[0] == '.') {
-				if (rspamadm_lua_try_dot_command (L, input)) {
-					if (!is_batch) {
-						replxx_history_add (rx_instance, input);
+				if (linelen > 0) {
+					if (input[0] == '.') {
+						if (rspamadm_lua_try_dot_command(L, input)) {
+							continue;
+						}
 					}
-					continue;
+
+					rspamadm_exec_input(L, input);
 				}
-			}
-
-			if (strcmp (input, "{{") == 0) {
-				is_multiline = TRUE;
-				tb = g_string_sized_new (8192);
-				continue;
-			}
-
-			rspamadm_exec_input (L, input);
-			if (!is_batch) {
-				replxx_history_add (rx_instance, input);
-			}
-			lua_settop (L, 0);
-		}
-		else {
-			input = (gchar *)replxx_input (rx_instance, MULTILINE_PROMPT);
-
-			if (input == NULL) {
-				g_string_free (tb, TRUE);
-				return;
-			}
-
-			if (strcmp (input, "}}") == 0) {
-				is_multiline = FALSE;
-				rspamadm_exec_input (L, tb->str);
-
-				/* Replace \n with ' ' for sanity */
-				for (i = 0; i < tb->len; i ++) {
-					if (tb->str[i] == '\n') {
-						tb->str[i] = ' ';
-					}
-				}
-
-				if (!is_batch) {
-					replxx_history_add (rx_instance, tb->str);
-				}
-				g_string_free (tb, TRUE);
 			}
 			else {
-				g_string_append (tb, input);
-				g_string_append (tb, " \n");
+				break;
+			}
+
+			lua_settop(L, 0);
+		}
+		else {
+#ifdef WITH_LUA_REPL
+			replxx_set_highlighter_callback(rx_instance, lua_syntax_highlighter,
+					L);
+
+			if (!is_multiline) {
+				input = (gchar *) replxx_input(rx_instance, MAIN_PROMPT);
+
+				if (input == NULL) {
+					return;
+				}
+
+				if (input[0] == '.') {
+					if (rspamadm_lua_try_dot_command(L, input)) {
+						if (!is_batch) {
+							replxx_history_add(rx_instance, input);
+						}
+						continue;
+					}
+				}
+
+				if (strcmp(input, "{{") == 0) {
+					is_multiline = TRUE;
+					tb = g_string_sized_new(8192);
+					continue;
+				}
+
+				rspamadm_exec_input(L, input);
+				if (!is_batch) {
+					replxx_history_add(rx_instance, input);
+				}
+				lua_settop(L, 0);
+			}
+			else {
+				input = (gchar *) replxx_input(rx_instance, MULTILINE_PROMPT);
+
+				if (input == NULL) {
+					g_string_free(tb, TRUE);
+					return;
+				}
+
+				if (strcmp(input, "}}") == 0) {
+					is_multiline = FALSE;
+					rspamadm_exec_input(L, tb->str);
+
+					/* Replace \n with ' ' for sanity */
+					for (i = 0; i < tb->len; i++) {
+						if (tb->str[i] == '\n') {
+							tb->str[i] = ' ';
+						}
+					}
+
+					if (!is_batch) {
+						replxx_history_add(rx_instance, tb->str);
+					}
+					g_string_free(tb, TRUE);
+				}
+				else {
+					g_string_append(tb, input);
+					g_string_append(tb, " \n");
+				}
 			}
 		}
 #endif
@@ -1006,23 +1017,18 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		g_hash_table_insert (cmds_hash, (gpointer)cmds[i].name, &cmds[i]);
 	}
 
-
-#ifdef WITH_LUA_REPL
-	rx_instance = replxx_init ();
-#endif
 	if (!batch) {
 #ifdef WITH_LUA_REPL
+		rx_instance = replxx_init ();
 		replxx_set_max_history_size (rx_instance, max_history);
 		replxx_history_load (rx_instance, histfile);
 #endif
 		rspamadm_lua_run_repl (L, false);
 #ifdef WITH_LUA_REPL
 		replxx_history_save (rx_instance, histfile);
+		replxx_end (rx_instance);
 #endif
 	} else {
 		rspamadm_lua_run_repl (L, true);
 	}
-#ifdef WITH_LUA_REPL
-	replxx_end (rx_instance);
-#endif
 }

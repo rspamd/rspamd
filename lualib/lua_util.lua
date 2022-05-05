@@ -1378,7 +1378,7 @@ exports.toboolean = function(v)
       return false, string.format( 'cannot convert %q to boolean', v);
     end
   elseif type(v) == 'number' then
-    return (not (v == 0))
+    return v ~= 0
   else
     return false, string.format( 'cannot convert %q to boolean', v);
   end

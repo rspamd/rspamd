@@ -249,6 +249,9 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->lua_gc_step = DEFAULT_LUA_GC_STEP;
 	cfg->full_gc_iters = DEFAULT_GC_MAXITERS;
 
+	/* Default hyperscan cache */
+	cfg->hs_cache_dir = RSPAMD_DBDIR "/";
+
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
 		cfg->lua_state = rspamd_lua_init (flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
 		cfg->own_lua_state = TRUE;
@@ -2860,7 +2863,7 @@ rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
 		return FALSE;
 	}
 	else {
-		r = ZSTD_resetDStream (ctx->in_zstream);
+		r = ZSTD_DCtx_reset (ctx->in_zstream, ZSTD_reset_session_only);
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init decompression stream: %s",
@@ -2885,7 +2888,10 @@ rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
 	}
 	else {
 		/* Dictionary will be reused automatically if specified */
-		r = ZSTD_resetCStream (ctx->out_zstream, 0);
+		r = ZSTD_CCtx_reset (ctx->out_zstream, ZSTD_reset_session_only);
+		if (!ZSTD_isError (r)) {
+			r = ZSTD_CCtx_setPledgedSrcSize (ctx->out_zstream, 0);
+		}
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init compression stream: %s",

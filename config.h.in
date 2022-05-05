@@ -389,9 +389,9 @@ extern uint64_t ottery_rand_uint64(void);
 
 #ifdef __cplusplus
   #define RSPAMD_CONSTRUCTOR(f) \
-        static void f(void); \
-        struct f##_t_ { f##_t_(void) { f(); } }; static f##_t_ f##_; \
-        static void f(void)
+        static void f(void) noexcept; \
+        struct f##_t_ { f##_t_(void) noexcept { f(); } }; static f##_t_ f##_; \
+        static void f(void) noexcept
 #else
 #if  __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 7)
   #define RSPAMD_CONSTRUCTOR(f) \

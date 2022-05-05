@@ -21,7 +21,7 @@
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
-
+#include "fmt/core.h"
 #include "libserver/dkim.h"
 
 #include <vector>
@@ -111,6 +111,15 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 "kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB ",
 			 true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
+			// Spaces within base64
+			{"p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
+			 " QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
+			 "  5zuyXsDj1eSprOgcPT9PY9RoSUsY8i/ jnD49DHXtMfXoBk0J6epNzbZqqWU+"
+			 "  TG02HwWNy/kf1h+OlAGQKJLgakivZ3nMMnUIPHkUjwvhbkaMXCI046XoqsEQ7KW"
+			 "  VKRoF3cK1cFXLo+bgO3sEJgGtvwzPodG0CqVu+gjehrjwdLnPhqyEspfI1IbL"
+			 "  lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
+			 " kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB",
+					true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
 			 // Invalid RSA
 			{"ololo=trololo; k=rsa; t=s; "
 			 "p =   BADMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
@@ -133,14 +142,18 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 false, ""},
 	};
 
+	auto cur_test_idx = 0;
 	for (auto &&c : cases) {
-		SUBCASE (("process DKIM record " + c.input).c_str()) {
+		SUBCASE (fmt::format("process DKIM record {}: {}", cur_test_idx++, c.input).c_str()) {
+			GError *err = nullptr;
 			gsize klen = c.input.size();
-			auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, nullptr);
+			auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, &err);
 			if (c.is_valid) {
-				CHECK(key != nullptr);
+				REQUIRE_MESSAGE(key != nullptr, (err ? err->message : "unknown error"));
 				char hexbuf[RSPAMD_DKIM_KEY_ID_LEN * 2 + 1];
 				auto *id = rspamd_dkim_key_id(key);
+				REQUIRE(id != nullptr);
+
 				auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
 						sizeof(hexbuf));
 				CHECK(hexlen > 0);

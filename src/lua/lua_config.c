@@ -869,7 +869,6 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, register_settings_id),
 	LUA_INTERFACE_DEF (config, get_symbol_flags),
-	LUA_INTERFACE_DEF (config, add_symbol_flags),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF (config, set_metric_action),
@@ -1836,6 +1835,7 @@ lua_parse_symbol_type (const gchar *str)
 			for (i = 0; i < l; i ++) {
 				str = vec[i];
 
+				/* TODO: total shit, rework some day */
 				if (g_ascii_strcasecmp (str, "virtual") == 0) {
 					ret |= SYMBOL_TYPE_VIRTUAL;
 					ret &= ~SYMBOL_TYPE_NORMAL;
@@ -1862,7 +1862,7 @@ lua_parse_symbol_type (const gchar *str)
 					ret |= SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_GHOST;
 				}
 				else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
-					ret |= SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST |
+					ret |=  SYMBOL_TYPE_GHOST |
 						   SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_CALLBACK;
 				}
 				else {
@@ -1972,38 +1972,6 @@ lua_config_get_symbol_flags (lua_State *L)
 				name);
 
 		if (flags != 0) {
-			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_config_add_symbol_flags (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name = luaL_checkstring (L, 2);
-	guint flags, new_flags = 0;
-
-	if (cfg && name && lua_istable (L, 3)) {
-
-		for (lua_pushnil (L); lua_next (L, 3); lua_pop (L, 1)) {
-			new_flags |= lua_parse_symbol_flags (lua_tostring (L, -1));
-		}
-
-		flags = rspamd_symcache_get_symbol_flags (cfg->cache,
-				name);
-
-		if (flags != 0) {
-			rspamd_symcache_add_symbol_flags (cfg->cache, name, new_flags);
-			/* Push old flags */
 			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
 		}
 		else {
@@ -2323,14 +2291,8 @@ lua_config_register_dependency (lua_State * L)
 		child_id = luaL_checknumber (L, 2);
 		parent = luaL_checkstring (L, 3);
 
-		msg_warn_config ("calling for obsolete method to register deps for symbol %d->%s",
+		return luaL_error(L,"calling for obsolete method to register deps for symbol %d->%s",
 				child_id, parent);
-
-		if (child_id > 0 && parent != NULL) {
-
-			rspamd_symcache_add_dependency (cfg->cache, child_id, parent,
-					-1);
-		}
 	}
 	else {
 		child = luaL_checkstring (L,2);
@@ -2975,40 +2937,13 @@ lua_config_set_peak_cb (lua_State *L)
 static gint
 lua_config_enable_symbol (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym = luaL_checkstring (L, 2);
-
-	if (cfg && sym) {
-		rspamd_symcache_enable_symbol_perm (cfg->cache, sym);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
+	return luaL_error (L, "obsoleted method");
 }
 
 static gint
 lua_config_disable_symbol (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym = luaL_checkstring (L, 2);
-	gboolean disable_parent = TRUE;
-
-	if (cfg && sym) {
-		if (lua_isboolean (L, 3)) {
-			disable_parent = lua_toboolean (L, 3);
-		}
-
-		rspamd_symcache_disable_symbol_perm (cfg->cache, sym, disable_parent);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
+	return luaL_error (L, "obsoleted method");
 }
 
 static gint

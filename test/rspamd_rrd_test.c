@@ -18,6 +18,7 @@
 #include "rrd.h"
 #include "rspamd.h"
 #include "ottery.h"
+#include <unistd.h>
 
 const int rows_cnt = 20;
 const int pdp_per_cdp = 60;
