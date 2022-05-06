@@ -300,7 +300,7 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 		}
 
 		if (!(flags & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
-			if (allowed_ids.check_id(task->settings_elt->id)) {
+			if (!allowed_ids.check_id(task->settings_elt->id)) {
 
 				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
 					msg_debug_cache_task("allow execution of %s settings id %ud "
