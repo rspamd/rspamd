@@ -52,24 +52,24 @@
 
 #define msg_err_re_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "re_cache", cache->hash, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_re_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "re_cache", cache->hash, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_re_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "re_cache", cache->hash, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #define msg_debug_re_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_re_cache_log_id, "re_cache", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_re_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_re_cache_log_id, "re_cache", cache->hash, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(re_cache)

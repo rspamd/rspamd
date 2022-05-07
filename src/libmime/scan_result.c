@@ -27,7 +27,7 @@
 
 #define msg_debug_metric(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_metric_log_id, "metric", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(metric)

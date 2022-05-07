@@ -24,7 +24,7 @@
 
 #define msg_debug_lua_threads(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_lua_threads_log_id, "lua_threads", NULL, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(lua_threads)

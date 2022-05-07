@@ -70,7 +70,7 @@ struct rspamd_ssl_connection {
 
 #define msg_debug_ssl(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_ssl_log_id, "ssl", conn->log_tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 static void rspamd_ssl_event_handler (gint fd, short what, gpointer ud);

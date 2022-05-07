@@ -31,20 +31,20 @@
 
 #define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "composites", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "composites", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "composites", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #define msg_debug_composites(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
         rspamd_composites_log_id, "composites", task->task_pool->tag.uid, \
-        __FUNCTION__, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(composites)

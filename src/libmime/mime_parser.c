@@ -40,7 +40,7 @@ static const guint max_key_usages = 10000;
 
 #define msg_debug_mime(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
         rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(mime)

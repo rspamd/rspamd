@@ -55,20 +55,20 @@
 
 #define msg_err_session(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #define msg_debug_session(...)  rspamd_conditional_debug_fast (NULL, session->client_addr, \
         rspamd_proxy_log_id, "proxy", session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(proxy)

@@ -55,15 +55,15 @@ worker_t normal_worker = {
 
 #define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         "worker", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "worker", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "worker", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 struct rspamd_worker_session {

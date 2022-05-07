@@ -77,23 +77,23 @@ struct rspamd_monitored {
 
 #define msg_err_mon(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
 		"monitored", m->tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_mon(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
 		"monitored", m->tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_mon(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
 		"monitored", m->tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_notice_mon(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
 		"monitored", m->tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_mon(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_monitored_log_id, "monitored", m->tag, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(monitored)

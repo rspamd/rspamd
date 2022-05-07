@@ -68,23 +68,23 @@ enum rspamd_dkim_param_type {
 
 #define msg_err_dkim(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "dkim", ctx->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_dkim(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "dkim", ctx->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_dkim(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "dkim", ctx->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_dkim(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_dkim_taskless(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_dkim_log_id, "dkim", "", \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(dkim)

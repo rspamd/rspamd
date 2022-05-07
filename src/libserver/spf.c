@@ -100,23 +100,23 @@ struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
 
 #define msg_err_spf(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "spf", rec->task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_spf(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "spf", rec->task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_spf(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "spf", rec->task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_spf(...)  rspamd_conditional_debug_fast (NULL, rec->task->from_addr, \
         rspamd_spf_log_id, "spf", rec->task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_spf_flatten(...)  rspamd_conditional_debug_fast_num_id (NULL, NULL, \
         rspamd_spf_log_id, "spf", (flat)->digest, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(spf)

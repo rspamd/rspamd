@@ -84,13 +84,13 @@ struct rspamd_expr_process_data {
 
 #define msg_debug_expression(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_expression_log_id, "expression", e->log_id, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #ifdef DEBUG_EXPRESSIONS
 #define msg_debug_expression_verbose(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_expression_log_id, "expression", e->log_id, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #else
 #define msg_debug_expression_verbose(...) do {} while(0)

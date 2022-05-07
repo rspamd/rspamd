@@ -23,19 +23,15 @@
 
 #define msg_err_bayes(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "bayes", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_bayes(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "bayes", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_bayes(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "bayes", task->task_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_debug_bayes(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
-        rspamd_bayes_log_id, "bayes", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE_PUBLIC(bayes)

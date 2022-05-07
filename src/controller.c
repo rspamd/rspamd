@@ -69,32 +69,32 @@
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         "controller", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "controller", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "controller", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 #define msg_debug_session(...)  rspamd_conditional_debug_fast (NULL, session->from_addr, \
         rspamd_controller_log_id, "controller", session->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(controller)

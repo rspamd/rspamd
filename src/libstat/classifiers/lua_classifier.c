@@ -29,19 +29,19 @@ static GHashTable *lua_classifiers = NULL;
 
 #define msg_err_luacl(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "luacl", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_luacl(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "luacl", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_luacl(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "luacl", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_luacl(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
         rspamd_luacl_log_id, "luacl", task->task_pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(luacl)

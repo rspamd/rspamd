@@ -32,19 +32,19 @@
 
 #define msg_err_milter(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         "milter", priv->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_warn_milter(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         "milter", priv->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_milter(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "milter", priv->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_milter(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_milter_log_id, "milter", priv->pool->tag.uid, \
-        G_STRFUNC, \
+        RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE(milter)
