@@ -623,7 +623,9 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	std::string static_string_name;
 
 	if (name.empty()) {
-		static_string_name = fmt::format("AUTO_{}", (void *) func);
+		static_string_name = fmt::format("AUTO_{}_{}", (void *)func, user_data);
+		msg_warn_cache("trying to add an empty symbol name, convert it to %s",
+				static_string_name.c_str());
 	}
 	else {
 		static_string_name = name;

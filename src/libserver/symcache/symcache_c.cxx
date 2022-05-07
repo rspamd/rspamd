@@ -70,6 +70,11 @@ rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
+	/* Legacy stuff */
+	if (name == nullptr) {
+		name = "";
+	}
+
 	if (parent == -1) {
 		return real_cache->add_symbol_with_callback(name, priority, func, user_data, type);
 	}
@@ -97,10 +102,16 @@ rspamd_symcache_add_condition_delayed(struct rspamd_symcache *cache,
 	return TRUE;
 }
 
-gint rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
+gint
+rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
 								 const gchar *name)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
+
+	/* Legacy stuff but used */
+	if (name == nullptr) {
+		return -1;
+	}
 
 	auto sym_maybe = real_cache->get_item_by_name(name, false);
 
@@ -111,7 +122,8 @@ gint rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
 	return -1;
 }
 
-gboolean rspamd_symcache_stat_symbol(struct rspamd_symcache *cache,
+gboolean
+rspamd_symcache_stat_symbol(struct rspamd_symcache *cache,
 									 const gchar *name,
 									 gdouble *frequency,
 									 gdouble *freq_stddev,
