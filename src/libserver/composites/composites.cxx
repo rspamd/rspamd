@@ -802,6 +802,8 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 	cd->composite = comp;
 	task = cd->task;
 
+	msg_debug_composites("process composite %s", str_key);
+
 	if (!cd->checked[cd->composite->id * 2]) {
 		if (rspamd_symcache_is_checked(cd->task, cd->task->cfg->cache,
 				str_key)) {

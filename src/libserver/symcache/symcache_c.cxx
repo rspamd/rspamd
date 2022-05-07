@@ -536,7 +536,7 @@ rspamd_symcache_composites_foreach(struct rspamd_task *task,
 	real_cache->composites_foreach([&](const auto *item) {
 		auto *dyn_item = cache_runtime->get_dynamic_item(item->id, false);
 
-		if (dyn_item->started) {
+		if (!dyn_item->started) {
 			func((void *)item->get_name().c_str(), item->get_cbdata(), fd);
 			dyn_item->finished = true;
 		}
