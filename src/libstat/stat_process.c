@@ -320,7 +320,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
-		if (!rspamd_symcache_is_symbol_enabled (task, task->cfg->cache,
+		if (!is_learn && !rspamd_symcache_is_symbol_enabled (task, task->cfg->cache,
 				st->stcf->symbol)) {
 			g_ptr_array_index (task->stat_runtimes, i) = NULL;
 			msg_debug_bayes ("symbol %s is disabled, skip classification",

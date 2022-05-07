@@ -20,6 +20,7 @@
 #include "symcache_runtime.hxx"
 #include "unix-std.h"
 #include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/util.hxx"
 #include "fmt/core.h"
 #include "contrib/t1ha/t1ha.h"
 
@@ -424,7 +425,13 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 
 auto symcache::resort() -> void
 {
-	auto ord = std::make_shared<order_generation>(filters.size(), cur_order_gen);
+	auto ord = std::make_shared<order_generation>(filters.size() +
+			prefilters.size() +
+			composites.size() +
+			postfilters.size() +
+			idempotent.size() +
+			connfilters.size() +
+			classifiers.size(), cur_order_gen);
 
 	for (auto &it: filters) {
 		if (it) {
@@ -585,8 +592,7 @@ auto symcache::resort() -> void
 	append_items_vec(classifiers, ord->d);
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
-	for (auto i = 0; i < ord->size(); i++) {
-		const auto &it = ord->d[i];
+	for (const auto [i, it] : rspamd::enumerate(ord->d)) {
 		ord->by_symbol[it->get_name()] = i;
 		ord->by_cache_id[it->id] = i;
 	}

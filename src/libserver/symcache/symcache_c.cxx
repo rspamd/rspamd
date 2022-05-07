@@ -429,6 +429,11 @@ rspamd_symcache_is_symbol_enabled(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_cache = C_API_SYMCACHE(cache);
 
+	if (!cache_runtime) {
+		/* XXX: ugly hack to enable classification during learning... */
+		return TRUE;
+	}
+
 	return cache_runtime->is_symbol_enabled(task, *real_cache, symbol);
 }
 
