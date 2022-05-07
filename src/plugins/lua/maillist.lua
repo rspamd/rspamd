@@ -221,7 +221,7 @@ local function check_generic_list_headers(task)
         lua_util.debugm(N, task, 'has %s header, score = %s', hname, score)
       else
         local score_change = hscore()
-        if score then
+        if score and score_change then
           score = score + score_change
           lua_util.debugm(N, task, 'has %s header, score = %s', hname, score)
         end
