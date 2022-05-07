@@ -509,13 +509,12 @@ symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache, cach
 			dyn_item->start_msec = (ev_now(task->event_loop) -
 									profile_start) * 1e3;
 		}
-
 		dyn_item->async_events = 0;
 		cur_item = item;
 		items_inflight++;
 		/* Callback now must finalize itself */
 		item->call(task);
-		cur_item = NULL;
+		cur_item = nullptr;
 
 		if (items_inflight == 0) {
 			return true;

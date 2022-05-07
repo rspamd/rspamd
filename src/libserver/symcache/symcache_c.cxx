@@ -230,6 +230,11 @@ const gchar *
 rspamd_symcache_item_name(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	if (real_item == nullptr) {
+		return 0;
+	}
+
 	return real_item->get_name().c_str();
 }
 
@@ -237,6 +242,11 @@ gint
 rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	if (real_item == nullptr) {
+		return 0;
+	}
+
 	return real_item->get_flags();
 }
 
@@ -376,6 +386,10 @@ rspamd_symcache_disable_symbol(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_cache = C_API_SYMCACHE(cache);
 
+	if (cache_runtime == nullptr) {
+		return FALSE;
+	}
+
 	return cache_runtime->disable_symbol(task, *real_cache, symbol);
 }
 
@@ -386,6 +400,10 @@ rspamd_symcache_enable_symbol(struct rspamd_task *task,
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_cache = C_API_SYMCACHE(cache);
+
+	if (cache_runtime == nullptr) {
+		return FALSE;
+	}
 
 	return cache_runtime->enable_symbol(task, *real_cache, symbol);
 }
@@ -398,6 +416,10 @@ rspamd_symcache_is_checked(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_cache = C_API_SYMCACHE(cache);
 
+	if (cache_runtime == nullptr) {
+		return FALSE;
+	}
+
 	return cache_runtime->is_symbol_checked(*real_cache, symbol);
 }
 
@@ -408,6 +430,10 @@ rspamd_symcache_process_settings(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_cache = C_API_SYMCACHE(cache);
 
+	if (cache_runtime == nullptr) {
+		return FALSE;
+	}
+
 	return cache_runtime->process_settings(task, *real_cache);
 }
 
@@ -417,6 +443,10 @@ rspamd_symcache_is_item_allowed(struct rspamd_task *task,
 								gboolean exec_only)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
+
+	if (real_item == nullptr) {
+		return TRUE;
+	}
 
 	return real_item->is_allowed(task, exec_only);
 }
@@ -430,7 +460,6 @@ rspamd_symcache_is_symbol_enabled(struct rspamd_task *task,
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	if (!cache_runtime) {
-		/* XXX: ugly hack to enable classification during learning... */
 		return TRUE;
 	}
 
@@ -442,6 +471,10 @@ rspamd_symcache_get_cur_item(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 
+	if (!cache_runtime) {
+		return nullptr;
+	}
+
 	return (struct rspamd_symcache_item *) cache_runtime->get_cur_item();
 }
 
@@ -451,6 +484,10 @@ rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_it
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 
+	if (!cache_runtime || !real_item) {
+		return nullptr;
+	}
+
 	return (struct rspamd_symcache_item *) cache_runtime->set_cur_item(real_item);
 }
 
@@ -458,6 +495,9 @@ void
 rspamd_symcache_enable_profile(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	if (!cache_runtime) {
+		return;
+	}
 
 	cache_runtime->set_profile_mode(true);
 }
