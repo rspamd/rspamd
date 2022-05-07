@@ -424,13 +424,14 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 	auto all_done = true;
 
 	for (const auto [idx, item] : rspamd::enumerate(order->d)) {
-		if (item->type == symcache_item_type::CLASSIFIER || item->type == symcache_item_type::COMPOSITE) {
+		/* Exclude all non filters */
+		if (item->type != symcache_item_type::FILTER) {
 			continue;
 		}
 
 		auto dyn_item = &dynamic_items[idx];
 
-		if (!dyn_item->started && !dyn_item->finished) {
+		if (!dyn_item->started) {
 			all_done = false;
 
 			if (!check_item_deps(task, cache, item.get(),
