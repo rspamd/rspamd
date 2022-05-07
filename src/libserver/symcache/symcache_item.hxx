@@ -85,11 +85,21 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 
 struct item_condition {
 private:
-	lua_State *L;
-	int cb;
+	lua_State *L = nullptr;
+	int cb = -1;
 public:
-	item_condition(lua_State *_L, int _cb) : L(_L), cb(_cb) {}
-	virtual ~item_condition();
+	explicit item_condition(lua_State *L_, int cb_) noexcept : L(L_), cb(cb_) {}
+	item_condition(item_condition &&other) noexcept {
+		*this = std::move(other);
+	}
+	/* Make it move only */
+	item_condition(const item_condition &) = delete;
+	item_condition& operator=(item_condition &&other) noexcept {
+		std::swap(other.L, L);
+		std::swap(other.cb, cb);
+		return *this;
+	}
+	~item_condition();
 
 	auto check(std::string_view sym_name, struct rspamd_task *task) const -> bool;
 };

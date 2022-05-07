@@ -472,14 +472,11 @@ auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) 
 	if (cb != -1 && L != nullptr) {
 		auto ret = false;
 
-		lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
-
 		lua_pushcfunction (L, &rspamd_lua_traceback);
 		auto err_idx = lua_gettop(L);
 
-		auto **ptask = (struct rspamd_task **) lua_newuserdata(L, sizeof(struct rspamd_task *));
-		rspamd_lua_setclass(L, "rspamd{task}", -1);
-		*ptask = task;
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
+		rspamd_lua_task_push(L, task);
 
 		if (lua_pcall(L, 1, 1, err_idx) != 0) {
 			msg_info_task("call to condition for %s failed: %s",

@@ -35,10 +35,12 @@ auto symcache::init() -> bool
 	reload_time = cfg->cache_reload_time;
 
 	if (cfg->cache_filename != nullptr) {
+		msg_debug_cache("loading symcache saved data from %s", cfg->cache_filename);
 		res = load_items();
 	}
 
 	/* Deal with the delayed dependencies */
+	msg_debug_cache("resolving delayed dependencies: %d in list", (int)delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
 		auto virt_item = get_item_by_name(delayed_dep.from, false);
 		auto real_item = get_item_by_name(delayed_dep.from, true);
@@ -64,6 +66,7 @@ auto symcache::init() -> bool
 
 
 	/* Deal with the delayed conditions */
+	msg_debug_cache("resolving delayed conditions: %d in list", (int)delayed_conditions->size());
 	for (const auto &delayed_cond: *delayed_conditions) {
 		auto it = get_item_by_name_mut(delayed_cond.sym, true);
 
@@ -80,10 +83,13 @@ auto symcache::init() -> bool
 						delayed_cond.sym.c_str());
 				g_abort();
 			}
+
+			msg_debug_cache("added a condition to the symbol %s", it->symbol.c_str());
 		}
 	}
 	delayed_conditions.reset();
 
+	msg_debug_cache("process dependencies");
 	for (auto &it: items_by_id) {
 		it->process_deps(*this);
 	}
@@ -110,7 +116,7 @@ auto symcache::init() -> bool
 		return 1;
 	};
 
-
+	msg_debug_cache("sorting stuff");
 	std::stable_sort(std::begin(connfilters), std::end(connfilters), prefilters_cmp);
 	std::stable_sort(std::begin(prefilters), std::end(prefilters), prefilters_cmp);
 	std::stable_sort(std::begin(postfilters), std::end(postfilters), postfilters_cmp);
@@ -120,6 +126,7 @@ auto symcache::init() -> bool
 
 	/* Connect metric symbols with symcache symbols */
 	if (cfg->symbols) {
+		msg_debug_cache("connect metrics");
 		g_hash_table_foreach(cfg->symbols,
 				symcache::metric_connect_cb,
 				(void *) this);
