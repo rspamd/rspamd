@@ -424,7 +424,7 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 	auto all_done = true;
 
 	for (const auto [idx, item] : rspamd::enumerate(order->d)) {
-		if (item->type == symcache_item_type::CLASSIFIER) {
+		if (item->type == symcache_item_type::CLASSIFIER || item->type == symcache_item_type::COMPOSITE) {
 			continue;
 		}
 
@@ -438,7 +438,7 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 				msg_debug_cache_task("blocked execution of %d(%s) unless deps are "
 									 "resolved", item->id, item->symbol.c_str());
 
-				break;
+				continue;
 			}
 
 			process_symbol(task, cache, item.get(), dyn_item);
@@ -447,7 +447,7 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 				/* Delay */
 				has_slow = false;
 
-				break;
+				return false;
 			}
 		}
 
