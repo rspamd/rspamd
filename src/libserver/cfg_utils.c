@@ -2890,7 +2890,7 @@ rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
 		/* Dictionary will be reused automatically if specified */
 		r = ZSTD_CCtx_reset (ctx->out_zstream, ZSTD_reset_session_only);
 		if (!ZSTD_isError (r)) {
-			r = ZSTD_CCtx_setPledgedSrcSize (ctx->out_zstream, 0);
+			r = ZSTD_CCtx_setPledgedSrcSize (ctx->out_zstream, ZSTD_CONTENTSIZE_UNKNOWN);
 		}
 
 		if (ZSTD_isError (r)) {
