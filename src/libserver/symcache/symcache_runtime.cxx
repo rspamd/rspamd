@@ -426,7 +426,11 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 	for (const auto [idx, item] : rspamd::enumerate(order->d)) {
 		/* Exclude all non filters */
 		if (item->type != symcache_item_type::FILTER) {
-			continue;
+			/*
+			 * We use breaking the loop as we append non-filters to the end of the list
+			 * so, it is safe to stop processing immediately
+			 */
+			break;
 		}
 
 		auto dyn_item = &dynamic_items[idx];
