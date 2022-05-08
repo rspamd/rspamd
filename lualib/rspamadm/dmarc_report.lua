@@ -621,7 +621,7 @@ end
 
 -- Returns a day before today at 00:00 as unix seconds
 local function yesterday_midnight()
-  local piecewise_time = os.date("!*t")
+  local piecewise_time = os.date("*t")
   piecewise_time.day = piecewise_time.day - 1 -- Lua allows negative values here
   piecewise_time.hour = 0
   piecewise_time.sec = 0
@@ -631,7 +631,7 @@ end
 
 -- Returns today time at 00:00 as unix seconds
 local function today_midnight()
-  local piecewise_time = os.date("!*t")
+  local piecewise_time = os.date("*t")
   piecewise_time.hour = 0
   piecewise_time.sec = 0
   piecewise_time.min = 0
@@ -688,7 +688,7 @@ local function handler(args)
 
   if not opts.date or #opts.date == 0 then
     opts.date = {}
-    table.insert(opts.date, os.date('!%Y%m%d', yesterday_midnight()))
+    table.insert(opts.date, os.date('%Y%m%d', yesterday_midnight()))
   end
 
   local ndates = 0

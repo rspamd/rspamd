@@ -304,8 +304,8 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     end
 
     -- Prepare and send redis report element
-    local period = os.date('!%Y%m%d',
-        task:get_date({format = 'connect', gmt = true}))
+    local period = os.date('%Y%m%d',
+        task:get_date({format = 'connect', gmt = false}))
 
     -- Dmarc domain key must include dmarc domain, rua and period
     local dmarc_domain_key = table.concat(
