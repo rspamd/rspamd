@@ -58,8 +58,6 @@ class symcache_runtime {
 
 	struct cache_dynamic_item *cur_item;
 	order_generation_ptr order;
-	/* Cache of the last items to speed up lookups */
-	mutable std::pair<int, int> last_id_mappings[8];
 	/* Dynamically expanded as needed */
 	mutable struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
@@ -166,7 +164,7 @@ public:
 	 * @param id
 	 * @return
 	 */
-	auto get_dynamic_item(int id, bool save_in_cache) const -> cache_dynamic_item *;
+	auto get_dynamic_item(int id) const -> cache_dynamic_item *;
 
 	/**
 	 * Returns static cache item by dynamic cache item
@@ -188,7 +186,7 @@ public:
 	 * @param task
 	 * @param item
 	 */
-	auto finalize_item(struct rspamd_task *task, cache_item *item) -> void;
+	auto finalize_item(struct rspamd_task *task, cache_dynamic_item *item) -> void;
 
 	/**
 	 * Process unblocked reverse dependencies of the specific item

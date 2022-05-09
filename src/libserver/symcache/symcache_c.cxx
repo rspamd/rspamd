@@ -580,7 +580,7 @@ rspamd_symcache_composites_foreach(struct rspamd_task *task,
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 
 	real_cache->composites_foreach([&](const auto *item) {
-		auto *dyn_item = cache_runtime->get_dynamic_item(item->id, false);
+		auto *dyn_item = cache_runtime->get_dynamic_item(item->id);
 
 		if (!dyn_item->started) {
 			func((void *)item->get_name().c_str(), item->get_cbdata(), fd);
@@ -609,7 +609,7 @@ rspamd_symcache_finalize_item(struct rspamd_task *task,
 							  struct rspamd_symcache_dynamic_item *item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
-	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
 
-	cache_runtime->finalize_item(task, real_item);
+	cache_runtime->finalize_item(task, real_dyn_item);
 }
