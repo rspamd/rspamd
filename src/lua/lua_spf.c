@@ -55,7 +55,7 @@ static luaL_reg rspamd_spf_record_m[] = {
 struct rspamd_lua_spf_cbdata {
 	struct rspamd_task *task;
 	lua_State *L;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	gint cbref;
 	ref_entry_t ref;
 };

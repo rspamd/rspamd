@@ -56,7 +56,7 @@ class symcache_runtime {
 
 	struct ::rspamd_scan_result *rs;
 
-	struct cache_item *cur_item;
+	struct cache_dynamic_item *cur_item;
 	order_generation_ptr order;
 	/* Cache of the last items to speed up lookups */
 	mutable std::pair<int, int> last_id_mappings[8];
@@ -146,7 +146,7 @@ public:
 	 * @param item
 	 * @return
 	 */
-	auto set_cur_item(cache_item *item) -> auto {
+	auto set_cur_item(cache_dynamic_item *item) -> auto {
 		std::swap(item, cur_item);
 		return item;
 	}
@@ -167,6 +167,12 @@ public:
 	 * @return
 	 */
 	auto get_dynamic_item(int id, bool save_in_cache) const -> cache_dynamic_item *;
+
+	/**
+	 * Returns static cache item by dynamic cache item
+	 * @return
+	 */
+	auto get_item_by_dynamic_item(cache_dynamic_item *) const -> cache_item *;
 
 	/**
 	 * Process symbols in the cache

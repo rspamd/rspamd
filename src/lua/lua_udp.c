@@ -66,7 +66,7 @@ struct lua_udp_cbdata {
 	struct rspamd_task *task;
 	rspamd_mempool_t *pool;
 	rspamd_inet_addr_t *addr;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 	struct iovec *iov;
 	lua_State *L;

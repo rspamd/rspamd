@@ -26,6 +26,7 @@
 #define C_API_SYMCACHE(ptr) (reinterpret_cast<rspamd::symcache::symcache *>(ptr))
 #define C_API_SYMCACHE_RUNTIME(ptr) (reinterpret_cast<rspamd::symcache::symcache_runtime *>(ptr))
 #define C_API_SYMCACHE_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_item *>(ptr))
+#define C_API_SYMCACHE_DYN_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_dynamic_item *>(ptr))
 
 void
 rspamd_symcache_destroy(struct rspamd_symcache *cache)
@@ -466,7 +467,7 @@ rspamd_symcache_is_symbol_enabled(struct rspamd_task *task,
 	return cache_runtime->is_symbol_enabled(task, *real_cache, symbol);
 }
 
-struct rspamd_symcache_item *
+struct rspamd_symcache_dynamic_item *
 rspamd_symcache_get_cur_item(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
@@ -475,20 +476,20 @@ rspamd_symcache_get_cur_item(struct rspamd_task *task)
 		return nullptr;
 	}
 
-	return (struct rspamd_symcache_item *) cache_runtime->get_cur_item();
+	return (struct rspamd_symcache_dynamic_item *) cache_runtime->get_cur_item();
 }
 
-struct rspamd_symcache_item *
-rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_item *item)
+struct rspamd_symcache_dynamic_item *
+rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_dynamic_item *item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
-	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
 
-	if (!cache_runtime || !real_item) {
+	if (!cache_runtime || !real_dyn_item) {
 		return nullptr;
 	}
 
-	return (struct rspamd_symcache_item *) cache_runtime->set_cur_item(real_item);
+	return (struct rspamd_symcache_dynamic_item *) cache_runtime->set_cur_item(real_dyn_item);
 }
 
 void
@@ -504,44 +505,44 @@ rspamd_symcache_enable_profile(struct rspamd_task *task)
 
 guint
 rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
-									struct rspamd_symcache_item *item,
+									struct rspamd_symcache_dynamic_item *item,
 									const gchar *subsystem,
 									const gchar *loc)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
-	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
 
-	auto *dyn_item = cache_runtime->get_dynamic_item(real_item->id, true);
+	auto *static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
 	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
 						 "subsystem %s (%s)",
-			real_item->symbol.c_str(), real_item->id,
-			dyn_item->async_events, subsystem, loc);
+			static_item->symbol.c_str(), static_item->id,
+			real_dyn_item->async_events, subsystem, loc);
 
-	return ++dyn_item->async_events;
+	return ++real_dyn_item->async_events;
 }
 
 guint
 rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
-									struct rspamd_symcache_item *item,
+									struct rspamd_symcache_dynamic_item *item,
 									const gchar *subsystem,
 									const gchar *loc)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
-	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
 
-	auto *dyn_item = cache_runtime->get_dynamic_item(real_item->id, true);
+	auto *static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
 	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
 						 "subsystem %s (%s)",
-			real_item->symbol.c_str(), real_item->id,
-			dyn_item->async_events, subsystem, loc);
-	g_assert(dyn_item->async_events > 0);
+			static_item->symbol.c_str(), static_item->id,
+			real_dyn_item->async_events, subsystem, loc);
+	g_assert(real_dyn_item->async_events > 0);
 
-	return --dyn_item->async_events;
+	return --real_dyn_item->async_events;
 }
 
 gboolean
 rspamd_symcache_item_async_dec_check_full(struct rspamd_task *task,
-										  struct rspamd_symcache_item *item,
+										  struct rspamd_symcache_dynamic_item *item,
 										  const gchar *subsystem,
 										  const gchar *loc)
 {
@@ -605,7 +606,7 @@ rspamd_symcache_process_symbols(struct rspamd_task *task,
 
 void
 rspamd_symcache_finalize_item(struct rspamd_task *task,
-							  struct rspamd_symcache_item *item)
+							  struct rspamd_symcache_dynamic_item *item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_item = C_API_SYMCACHE_ITEM(item);

@@ -57,7 +57,7 @@ struct rspamd_dns_request_ud {
 	gpointer ud;
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rdns_request *req;
 	struct rdns_reply *reply;
 };

@@ -31,6 +31,7 @@
 #include "symcache_id_list.hxx"
 #include "contrib/expected/expected.hpp"
 #include "contrib/libev/ev.h"
+#include "symcache_runtime.hxx"
 
 namespace rspamd::symcache {
 
@@ -119,7 +120,7 @@ public:
 		conditions.emplace_back(L, cbref);
 	}
 
-	auto call(struct rspamd_task *task, struct rspamd_symcache_item *item) const -> void
+	auto call(struct rspamd_task *task, struct rspamd_symcache_dynamic_item *item) const -> void
 	{
 		func(task, item, user_data);
 	}
@@ -369,11 +370,11 @@ public:
 		return false;
 	}
 
-	auto call(struct rspamd_task *task) const -> void {
+	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> void {
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
-			filter_data.call(task, (struct rspamd_symcache_item *)this);
+			filter_data.call(task, (struct rspamd_symcache_dynamic_item *)dyn_item);
 		}
 	}
 

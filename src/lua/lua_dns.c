@@ -31,7 +31,7 @@ struct lua_rspamd_dns_cbdata {
 	struct thread_entry *thread;
 	struct rspamd_task *task;
 	struct rspamd_dns_resolver *resolver;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 };
 

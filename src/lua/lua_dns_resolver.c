@@ -87,7 +87,7 @@ struct lua_dns_cbdata {
 	gint cbref;
 	gchar *to_resolve;
 	gchar *user_str;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 };
 
@@ -358,7 +358,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	struct rspamd_task *task = NULL;
 	GError *err = NULL;
 	gboolean forced = FALSE;
-	struct rspamd_symcache_item *item = NULL;
+	struct rspamd_symcache_dynamic_item *item = NULL;
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, first, &err,

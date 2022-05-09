@@ -40,7 +40,7 @@ struct regexp_ctx {
 };
 
 static void process_regexp_item (struct rspamd_task *task,
-								 struct rspamd_symcache_item *item,
+								 struct rspamd_symcache_dynamic_item *item,
 								 void *user_data);
 
 
@@ -530,7 +530,7 @@ rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
 
 static void
 process_regexp_item (struct rspamd_task *task,
-		struct rspamd_symcache_item *symcache_item,
+		struct rspamd_symcache_dynamic_item *symcache_item,
 		void *user_data)
 {
 	struct regexp_module_item *item = user_data;

@@ -132,7 +132,7 @@ struct fuzzy_client_session {
 	GPtrArray *commands;
 	GPtrArray *results;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct upstream *server;
 	struct fuzzy_rule *rule;
 	struct ev_loop *event_loop;
@@ -181,7 +181,7 @@ struct fuzzy_cmd_io {
 static const char *default_headers = "Subject,Content-Type,Reply-To,X-Mailer";
 
 static void fuzzy_symbol_callback (struct rspamd_task *task,
-								   struct rspamd_symcache_item *item,
+								   struct rspamd_symcache_dynamic_item *item,
 								   void *unused);
 
 /* Initialization */
@@ -3218,7 +3218,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 /* This callback is called when we check message in fuzzy hashes storage */
 static void
 fuzzy_symbol_callback (struct rspamd_task *task,
-					   struct rspamd_symcache_item *item,
+					   struct rspamd_symcache_dynamic_item *item,
 					   void *unused)
 {
 	struct fuzzy_rule *rule;

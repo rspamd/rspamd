@@ -65,7 +65,7 @@ static const struct luaL_reg httplib_m[] = {
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
 	struct rspamd_async_session *session;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_http_message *msg;
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
@@ -484,7 +484,7 @@ static void
 lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)ud;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_task *task;
 
 	task = cbd->task;

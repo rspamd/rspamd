@@ -514,10 +514,10 @@ symcache_runtime::process_symbol(struct rspamd_task *task, symcache &cache, cach
 									profile_start) * 1e3;
 		}
 		dyn_item->async_events = 0;
-		cur_item = item;
+		cur_item = dyn_item;
 		items_inflight++;
 		/* Callback now must finalize itself */
-		item->call(task);
+		item->call(task, dyn_item);
 		cur_item = nullptr;
 
 		if (items_inflight == 0) {
@@ -827,6 +827,20 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 			}
 		}
 	}
+}
+
+auto
+symcache_runtime::get_item_by_dynamic_item(cache_dynamic_item *dyn_item) const -> cache_item *
+{
+	auto idx = dyn_item - dynamic_items;
+
+	if (idx >= 0 && idx < order->size()) {
+		return order->d[idx].get();
+	}
+
+	msg_err("internal error: invalid index to get: %d", (int)idx);
+
+	return nullptr;
 }
 
 }

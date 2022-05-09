@@ -87,10 +87,10 @@ chartable_get_context (struct rspamd_config *cfg)
 }
 
 static void chartable_symbol_callback (struct rspamd_task *task,
-									   struct rspamd_symcache_item *item,
+									   struct rspamd_symcache_dynamic_item *item,
 									   void *unused);
 static void chartable_url_symbol_callback (struct rspamd_task *task,
-										   struct rspamd_symcache_item *item,
+										   struct rspamd_symcache_dynamic_item *item,
 										   void *unused);
 
 gint
@@ -640,7 +640,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 
 static void
 chartable_symbol_callback (struct rspamd_task *task,
-		struct rspamd_symcache_item *item,
+		struct rspamd_symcache_dynamic_item *item,
 		void *unused)
 {
 	guint i;
@@ -710,7 +710,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 
 static void
 chartable_url_symbol_callback (struct rspamd_task *task,
-		struct rspamd_symcache_item *item,
+		struct rspamd_symcache_dynamic_item *item,
 		void *unused)
 {
 	/* XXX: TODO: unbreak module once URLs unicode project is over */

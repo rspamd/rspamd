@@ -96,15 +96,15 @@ struct dkim_check_result {
 	struct rspamd_dkim_check_result *res;
 	gdouble mult_allow;
 	gdouble mult_deny;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct dkim_check_result *next, *prev, *first;
 };
 
 static void dkim_symbol_callback (struct rspamd_task *task,
-								  struct rspamd_symcache_item *item,
+								  struct rspamd_symcache_dynamic_item *item,
 								  void *unused);
 static void dkim_sign_callback (struct rspamd_task *task,
-								struct rspamd_symcache_item *item,
+								struct rspamd_symcache_dynamic_item *item,
 								void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
@@ -1125,7 +1125,7 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 
 static void
 dkim_symbol_callback (struct rspamd_task *task,
-		struct rspamd_symcache_item *item,
+		struct rspamd_symcache_dynamic_item *item,
 		void *unused)
 {
 	rspamd_dkim_context_t *ctx;

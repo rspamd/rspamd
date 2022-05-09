@@ -1180,7 +1180,7 @@ struct lua_callback_data {
 	/* Dynamic data */
 	gint stack_level;
 	gint order;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 };
 
 /*
@@ -1214,7 +1214,7 @@ rspamd_compare_order_func (gconstpointer a, gconstpointer b)
 
 static void
 lua_metric_symbol_callback (struct rspamd_task *task,
-							struct rspamd_symcache_item *item,
+							struct rspamd_symcache_dynamic_item *item,
 							gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
@@ -1350,7 +1350,7 @@ static void lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
 
 static void
 lua_metric_symbol_callback_coro (struct rspamd_task *task,
-							struct rspamd_symcache_item *item,
+							struct rspamd_symcache_dynamic_item *item,
 							gpointer ud)
 {
 	struct lua_callback_data *cd = ud;

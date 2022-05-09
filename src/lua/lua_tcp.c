@@ -339,7 +339,7 @@ struct lua_tcp_cbdata {
 	struct lua_tcp_dtor *dtors;
 	ref_entry_t ref;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct thread_entry *thread;
 	struct rspamd_config *cfg;
 	struct rspamd_ssl_connection *ssl_conn;

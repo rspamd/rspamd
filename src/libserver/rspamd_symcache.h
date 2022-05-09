@@ -31,11 +31,12 @@ struct rspamd_task;
 struct rspamd_config;
 struct rspamd_symcache;
 struct rspamd_worker;
+struct rspamd_symcache_dynamic_item;
 struct rspamd_symcache_item;
 struct rspamd_config_settings_elt;
 
 typedef void (*symbol_func_t) (struct rspamd_task *task,
-							   struct rspamd_symcache_item *item,
+							   struct rspamd_symcache_dynamic_item *item,
 							   gpointer user_data);
 
 enum rspamd_symbol_type {
@@ -219,7 +220,7 @@ void* rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
  * @param cache
  * @param symbol
  */
-void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
+void rspamd_symcache_inc_frequency (struct rspamd_symcache *_cache,
 									struct rspamd_symcache_item *item);
 
 /**
@@ -333,7 +334,7 @@ void rspamd_symcache_foreach (struct rspamd_symcache *cache,
  * @param task
  * @return
  */
-struct rspamd_symcache_item *rspamd_symcache_get_cur_item (struct rspamd_task *task);
+struct rspamd_symcache_dynamic_item *rspamd_symcache_get_cur_item (struct rspamd_task *task);
 
 /**
  * Replaces the current item being processed.
@@ -342,21 +343,21 @@ struct rspamd_symcache_item *rspamd_symcache_get_cur_item (struct rspamd_task *t
  * @param item
  * @return
  */
-struct rspamd_symcache_item *rspamd_symcache_set_cur_item (struct rspamd_task *task,
-														   struct rspamd_symcache_item *item);
+struct rspamd_symcache_dynamic_item *rspamd_symcache_set_cur_item (struct rspamd_task *task,
+																   struct rspamd_symcache_dynamic_item *item);
 
 
 /**
  * Finalize the current async element potentially calling its deps
  */
 void rspamd_symcache_finalize_item (struct rspamd_task *task,
-									struct rspamd_symcache_item *item);
+									struct rspamd_symcache_dynamic_item *item);
 
 /*
  * Increase number of async events pending for an item
  */
 guint rspamd_symcache_item_async_inc_full (struct rspamd_task *task,
-										   struct rspamd_symcache_item *item,
+										   struct rspamd_symcache_dynamic_item *item,
 										   const gchar *subsystem,
 										   const gchar *loc);
 
@@ -367,7 +368,7 @@ guint rspamd_symcache_item_async_inc_full (struct rspamd_task *task,
  * Decrease number of async events pending for an item, asserts if no events pending
  */
 guint rspamd_symcache_item_async_dec_full (struct rspamd_task *task,
-										   struct rspamd_symcache_item *item,
+										   struct rspamd_symcache_dynamic_item *item,
 										   const gchar *subsystem,
 										   const gchar *loc);
 
@@ -382,7 +383,7 @@ guint rspamd_symcache_item_async_dec_full (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
-													struct rspamd_symcache_item *item,
+													struct rspamd_symcache_dynamic_item *item,
 													const gchar *subsystem,
 													const gchar *loc);
 

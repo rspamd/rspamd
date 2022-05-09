@@ -96,7 +96,7 @@ struct lua_redis_request_specific_userdata;
 struct lua_redis_userdata {
 	redisAsyncContext *ctx;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
@@ -150,7 +150,7 @@ struct lua_redis_ctx {
 struct lua_redis_result {
 	gboolean is_error;
 	gint result_ref;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *item;
 	struct rspamd_async_session *s;
 	struct rspamd_task *task;
 	struct lua_redis_request_specific_userdata *sp_ud;
