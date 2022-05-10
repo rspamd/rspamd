@@ -102,7 +102,7 @@ Expect Symbol With Exact Options
   [Arguments]  ${symbol}  @{options}
   Expect Symbol  ${symbol}
   ${have_options} =  Convert To List  ${SCAN_RESULT}[symbols][${symbol}][options]
-  Lists Should Be Equal  ${have_options}  ${options}
+  Lists Should Be Equal  ${have_options}  ${options}  ignore_order=True
   ...  msg="Symbol ${symbol} has options ${SCAN_RESULT}[symbols][${symbol}][options] but expected ${options}"
 
 Expect Symbol With Option
