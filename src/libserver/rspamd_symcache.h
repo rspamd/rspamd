@@ -484,13 +484,19 @@ gboolean rspamd_symcache_is_item_allowed (struct rspamd_task *task,
  * @param item
  * @return
  */
-gint rspamd_symcache_item_flags (struct rspamd_symcache_item *item);
+gint rspamd_symcache_dyn_item_flags (struct rspamd_task *task,
+									 struct rspamd_symcache_dynamic_item *dyn_item);
+gint rspamd_symcache_item_flags(struct rspamd_symcache_item *item);
+
 /**
  * Returns cache item name
  * @param item
  * @return
  */
-const gchar* rspamd_symcache_item_name (struct rspamd_symcache_item *item);
+const gchar* rspamd_symcache_dyn_item_name (struct rspamd_task *task,
+											struct rspamd_symcache_dynamic_item *dyn_item);
+const gchar * rspamd_symcache_item_name(struct rspamd_symcache_item *item);
+
 /**
  * Returns the current item stat
  * @param item

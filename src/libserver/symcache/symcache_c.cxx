@@ -251,6 +251,39 @@ rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
 	return real_item->get_flags();
 }
 
+
+const gchar*
+rspamd_symcache_dyn_item_name (struct rspamd_task *task,
+							   struct rspamd_symcache_dynamic_item *dyn_item)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(dyn_item);
+
+	if (cache_runtime == nullptr || real_dyn_item == nullptr) {
+		return nullptr;
+	}
+
+	auto static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
+
+	return static_item->get_name().c_str();
+}
+
+gint
+rspamd_symcache_item_flags(struct rspamd_task *task,
+						   struct rspamd_symcache_dynamic_item *dyn_item)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(dyn_item);
+
+	if (cache_runtime == nullptr || real_dyn_item == nullptr) {
+		return 0;
+	}
+
+	auto static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
+
+	return static_item->get_flags();
+}
+
 guint
 rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
 								 const gchar *symbol)

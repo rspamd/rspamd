@@ -238,7 +238,8 @@ lua_udp_maybe_register_event (struct lua_udp_cbdata *cbd)
 	if (cbd->s && !cbd->async_ev) {
 		if (cbd->item) {
 			cbd->async_ev = rspamd_session_add_event_full (cbd->s, lua_udp_cbd_fin,
-					cbd, M, rspamd_symcache_item_name (cbd->item));
+					cbd, M,
+					rspamd_symcache_dyn_item_name (cbd->task, cbd->item));
 		}
 		else {
 			cbd->async_ev = rspamd_session_add_event (cbd->s, lua_udp_cbd_fin,
