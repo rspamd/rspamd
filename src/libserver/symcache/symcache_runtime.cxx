@@ -155,7 +155,7 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 
 auto symcache_runtime::disable_all_symbols(int skip_mask) -> void
 {
-	for (auto [i, item] : rspamd::enumerate(order->d)) {
+	for (auto[i, item]: rspamd::enumerate(order->d)) {
 		auto *dyn_item = &dynamic_items[i];
 
 		if (!(item->get_flags() & skip_mask)) {
@@ -379,7 +379,7 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 {
 	auto all_done = true;
 
-	for (const auto [idx, item] : rspamd::enumerate(order->d)) {
+	for (const auto[idx, item]: rspamd::enumerate(order->d)) {
 		/* Exclude all non filters */
 		if (item->type != symcache_item_type::FILTER) {
 			/*
@@ -544,66 +544,63 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 
 		auto ret = true;
 
-		if (!item->deps.empty()) {
+		for (const auto &dep: item->deps) {
+			if (!dep.item) {
+				/* Assume invalid deps as done */
+				msg_debug_cache_task("symbol %d(%s) has invalid dependencies on %d(%s)",
+						item->id, item->symbol.c_str(), dep.id, dep.sym.c_str());
+				continue;
+			}
 
-			for (const auto &dep: item->deps) {
-				if (!dep.item) {
-					/* Assume invalid deps as done */
-					msg_debug_cache_task("symbol %d(%s) has invalid dependencies on %d(%s)",
-							item->id, item->symbol.c_str(), dep.id, dep.sym.c_str());
-					continue;
-				}
+			auto *dep_dyn_item = get_dynamic_item(dep.item->id);
 
-				auto *dep_dyn_item = get_dynamic_item(dep.item->id);
+			if (!dep_dyn_item->finished) {
+				if (!dep_dyn_item->started) {
+					/* Not started */
+					if (!check_only) {
+						if (!rec_functor(recursion + 1,
+								dep.item.get(),
+								dep_dyn_item,
+								rec_functor)) {
 
-				if (!dep_dyn_item->finished) {
-					if (!dep_dyn_item->started) {
-						/* Not started */
-						if (!check_only) {
-							if (!rec_functor(recursion + 1,
-									dep.item.get(),
-									dep_dyn_item,
-									rec_functor)) {
-
-								ret = false;
-								msg_debug_cache_task("delayed dependency %d(%s) for "
-													 "symbol %d(%s)",
-										dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
-							}
-							else if (!process_symbol(task, cache, dep.item.get(), dep_dyn_item)) {
-								/* Now started, but has events pending */
-								ret = false;
-								msg_debug_cache_task("started check of %d(%s) symbol "
-													 "as dep for "
-													 "%d(%s)",
-										dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
-							}
-							else {
-								msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
-													 "already processed",
-										dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
-							}
+							ret = false;
+							msg_debug_cache_task("delayed dependency %d(%s) for "
+												 "symbol %d(%s)",
+									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+						}
+						else if (!process_symbol(task, cache, dep.item.get(), dep_dyn_item)) {
+							/* Now started, but has events pending */
+							ret = false;
+							msg_debug_cache_task("started check of %d(%s) symbol "
+												 "as dep for "
+												 "%d(%s)",
+									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else {
-							msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) "
-												 "cannot be started now",
+							msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
+												 "already processed",
 									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
-							ret = false;
 						}
 					}
 					else {
-						/* Started but not finished */
-						msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
-											 "still executing",
+						msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) "
+											 "cannot be started now",
 								dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						ret = false;
 					}
 				}
 				else {
-					msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is already "
-										 "checked",
+					/* Started but not finished */
+					msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
+										 "still executing",
 							dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
+					ret = false;
 				}
+			}
+			else {
+				msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is already "
+									 "checked",
+						dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 			}
 		}
 
@@ -795,7 +792,7 @@ symcache_runtime::get_item_by_dynamic_item(cache_dynamic_item *dyn_item) const -
 		return order->d[idx].get();
 	}
 
-	msg_err("internal error: invalid index to get: %d", (int)idx);
+	msg_err("internal error: invalid index to get: %d", (int) idx);
 
 	return nullptr;
 }
