@@ -54,8 +54,6 @@ class symcache_runtime {
 	double profile_start;
 	double lim;
 
-	struct ::rspamd_scan_result *rs;
-
 	struct cache_dynamic_item *cur_item;
 	order_generation_ptr order;
 	/* Dynamically expanded as needed */

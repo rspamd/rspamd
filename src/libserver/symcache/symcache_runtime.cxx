@@ -51,6 +51,7 @@ symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symcache_
 	ev_now_update_if_cheap(task->event_loop);
 	ev_tstamp now = ev_now(task->event_loop);
 	checkpoint->profile_start = now;
+	checkpoint->lim = rspamd_task_get_required_score(task, task->result);
 
 	if ((cache.get_last_profile() == 0.0 || now > cache.get_last_profile() + PROFILE_MAX_TIME) ||
 		(task->msg.len >= PROFILE_MESSAGE_SIZE_THRESHOLD) ||
@@ -319,6 +320,19 @@ symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 	auto compare_functor = +[](int a, int b) { return a < b; };
 
 	auto proc_func = [&](cache_item *item) {
+
+		/*
+		 * We can safely ignore all pre/postfilters except idempotent ones and
+		 * those that are marked as ignore passthrough result
+		 */
+		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
+			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
+			if (check_metric_limit(task)) {
+				msg_info_task("task has already the result being set, ignore further checks");
+				return false;
+			}
+		}
+
 		auto dyn_item = get_dynamic_item(item->id);
 
 		if (!dyn_item->started && !dyn_item->finished) {
@@ -414,10 +428,7 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 
 		if (!(item->flags & SYMBOL_TYPE_FINE)) {
 			if (check_metric_limit(task)) {
-				msg_info_task ("task has already scored more than %.2f, so do "
-							   "not "
-							   "plan more checks",
-						rs->score);
+				msg_info_task("task has already the result being set, ignore further checks");
 				all_done = true;
 				break;
 			}
@@ -502,28 +513,11 @@ symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
 		return false;
 	}
 
-	if (lim == 0.0) {
-		auto *res = task->result;
-
-		if (res) {
-			auto ms = rspamd_task_get_required_score(task, res);
-
-			if (!std::isnan(ms) && lim < ms) {
-				rs = res;
-				lim = ms;
-			}
-		}
-	}
-
-	if (rs) {
-
-		if (rs->score > lim) {
+	/* Check score limit */
+	if (!std::isnan(lim)) {
+		if (task->result->score > lim) {
 			return true;
 		}
-	}
-	else {
-		/* No reject score define, always check all rules */
-		lim = -1;
 	}
 
 	return false;
