@@ -151,6 +151,9 @@ symcache_runtime::process_settings(struct rspamd_task *task, const symcache &cac
 		disable_symbol(task, cache, sym);
 	});
 
+	/* Update required limit */
+	lim = rspamd_task_get_required_score(task, task->result);
+
 	return false;
 }
 
@@ -317,6 +320,7 @@ symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 {
 	auto saved_priority = std::numeric_limits<int>::min();
 	auto all_done = true;
+	auto log_func = RSPAMD_LOG_FUNC;
 	auto compare_functor = +[](int a, int b) { return a < b; };
 
 	auto proc_func = [&](cache_item *item) {
@@ -328,8 +332,9 @@ symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
 			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
 			if (check_metric_limit(task)) {
-				msg_info_task("task has already the result being set, ignore further checks");
-				return false;
+				msg_info_task_lambda("task has already the result being set, ignore further checks");
+
+				return true;
 			}
 		}
 

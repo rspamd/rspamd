@@ -302,6 +302,10 @@ extern guint rspamd_task_log_id;
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+#define msg_info_task_lambda(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        log_func, \
+        __VA_ARGS__)
 #define msg_debug_task(...)  rspamd_conditional_debug_fast (NULL,  task->from_addr, \
         rspamd_task_log_id, "task", task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
