@@ -195,10 +195,13 @@ local function configure_module()
             t.priority = 10
           else
             t.type = 'normal'
+            if not sett.least then
+              t.augmentations = {'passthrough', 'important'}
+            end
           end
           t.name = 'FORCE_ACTION_' .. name
           t.callback = cb
-          t.flags = 'empty'
+          t.flags = 'empty, ignore_passthrough'
           rspamd_config:register_symbol(t)
           if t.type == 'normal' then
             for _, a in ipairs(atoms) do
