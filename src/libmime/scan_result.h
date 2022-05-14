@@ -224,6 +224,9 @@ struct rspamd_action *rspamd_check_action_metric (struct rspamd_task *task,
 												  struct rspamd_passthrough_result **ppr,
 												  struct rspamd_scan_result *scan_result);
 
+struct rspamd_action_config *rspamd_find_action_config_for_action (struct rspamd_scan_result *scan_result,
+																   struct rspamd_action *act);
+
 #ifdef  __cplusplus
 }
 #endif

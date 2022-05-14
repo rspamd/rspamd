@@ -20,6 +20,7 @@
 #include "libutil/cxx/util.hxx"
 #include "libserver/task.h"
 #include "libmime/scan_result.h"
+#include "utlist.h"
 #include "libserver/worker_util.h"
 #include <limits>
 #include <cmath>
@@ -521,6 +522,28 @@ symcache_runtime::check_metric_limit(struct rspamd_task *task) -> bool
 	/* Check score limit */
 	if (!std::isnan(lim)) {
 		if (task->result->score > lim) {
+			return true;
+		}
+	}
+
+	if (task->result->passthrough_result != nullptr) {
+		/* We also need to check passthrough results */
+		auto *pr = task->result->passthrough_result;
+		DL_FOREACH (task->result->passthrough_result, pr) {
+			struct rspamd_action_config *act_config =
+					rspamd_find_action_config_for_action(task->result, pr->action);
+
+			/* Skip least results */
+			if (pr->flags & RSPAMD_PASSTHROUGH_LEAST) {
+				continue;
+			}
+
+			/* Skip disabled actions */
+			if (act_config && (act_config->flags & RSPAMD_ACTION_RESULT_DISABLED)) {
+				continue;
+			}
+
+			/* Immediately stop on non least passthrough action */
 			return true;
 		}
 	}
