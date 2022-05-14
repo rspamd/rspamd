@@ -44,6 +44,10 @@
         "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+#define msg_err_cache_lambda(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "symcache", log_tag(), \
+        log_func, \
+        __VA_ARGS__)
 #define msg_err_cache_task(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "symcache", task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
@@ -59,6 +63,10 @@
 #define msg_debug_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
         RSPAMD_LOG_FUNC, \
+        __VA_ARGS__)
+#define msg_debug_cache_lambda(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
+        log_func, \
         __VA_ARGS__)
 #define msg_debug_cache_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         ::rspamd::symcache::rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \

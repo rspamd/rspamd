@@ -32,6 +32,7 @@
 #include "contrib/expected/expected.hpp"
 #include "contrib/libev/ev.h"
 #include "symcache_runtime.hxx"
+#include "libutil/cxx/hash_util.hxx"
 
 namespace rspamd::symcache {
 
@@ -192,6 +193,9 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	/* Allows execution but not symbols insertion */
 	id_list exec_only_ids{};
 	id_list forbidden_ids{};
+
+	/* Set of augmentations */
+	robin_hood::unordered_flat_set<std::string, rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
 
 	/* Dependencies */
 	std::vector<cache_dependency> deps;
@@ -377,6 +381,19 @@ public:
 			filter_data.call(task, (struct rspamd_symcache_dynamic_item *)dyn_item);
 		}
 	}
+
+	/**
+	 * Add an augmentation to the item, returns `true` if augmentation is known and unique, false otherwise
+	 * @param augmentation
+	 * @return
+	 */
+	auto add_augmentation(const symcache &cache, std::string_view augmentation) -> bool;
+
+	/**
+	 * Return sum weight of all known augmentations
+	 * @return
+	 */
+	auto get_augmentation_weight() const -> int;
 
 private:
 	/**

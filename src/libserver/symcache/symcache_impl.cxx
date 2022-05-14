@@ -425,6 +425,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 
 auto symcache::resort() -> void
 {
+	auto log_func = RSPAMD_LOG_FUNC;
 	auto ord = std::make_shared<order_generation>(filters.size() +
 			prefilters.size() +
 			composites.size() +
@@ -436,6 +437,7 @@ auto symcache::resort() -> void
 	for (auto &it: filters) {
 		if (it) {
 			total_hits += it->st->total_hits;
+			/* Unmask topological order */
 			it->order = 0;
 			ord->d.emplace_back(it);
 		}
@@ -484,16 +486,16 @@ auto symcache::resort() -> void
 			}
 		}
 		else if (tsort_is_marked(it, tsort_mask::TEMP)) {
-			msg_err_cache("cyclic dependencies found when checking '%s'!",
+			msg_err_cache_lambda("cyclic dependencies found when checking '%s'!",
 					it->symbol.c_str());
 			return;
 		}
 
 		tsort_mark(it, tsort_mask::TEMP);
-		msg_debug_cache("visiting node: %s (%d)", it->symbol.c_str(), cur_order);
+		msg_debug_cache_lambda("visiting node: %s (%d)", it->symbol.c_str(), cur_order);
 
 		for (const auto &dep: it->deps) {
-			msg_debug_cache ("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
+			msg_debug_cache_lambda("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
 			rec(dep.item.get(), cur_order + 1, rec);
 		}
 
@@ -528,16 +530,26 @@ auto symcache::resort() -> void
 		if (o1 == o2) {
 			/* No topological order */
 			if (it1->priority == it2->priority) {
-				auto avg_freq = ((double) total_hits / used_items);
-				auto avg_weight = (total_weight / used_items);
-				auto f1 = (double) it1->st->total_hits / avg_freq;
-				auto f2 = (double) it2->st->total_hits / avg_freq;
-				auto weight1 = std::fabs(it1->st->weight) / avg_weight;
-				auto weight2 = std::fabs(it2->st->weight) / avg_weight;
-				auto t1 = it1->st->avg_time;
-				auto t2 = it2->st->avg_time;
-				w1 = score_functor(weight1, f1, t1);
-				w2 = score_functor(weight2, f2, t2);
+
+				auto augmentations1 = it1->get_augmentation_weight();
+				auto augmentations2 = it2->get_augmentation_weight();
+
+				if (augmentations1 == augmentations2) {
+					auto avg_freq = ((double) total_hits / used_items);
+					auto avg_weight = (total_weight / used_items);
+					auto f1 = (double) it1->st->total_hits / avg_freq;
+					auto f2 = (double) it2->st->total_hits / avg_freq;
+					auto weight1 = std::fabs(it1->st->weight) / avg_weight;
+					auto weight2 = std::fabs(it2->st->weight) / avg_weight;
+					auto t1 = it1->st->avg_time;
+					auto t2 = it2->st->avg_time;
+					w1 = score_functor(weight1, f1, t1);
+					w2 = score_functor(weight2, f2, t2);
+				}
+				else {
+					w1 = augmentations1;
+					w2 = augmentations2;
+				}
 			}
 			else {
 				/* Strict sorting */

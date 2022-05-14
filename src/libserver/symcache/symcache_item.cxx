@@ -19,8 +19,21 @@
 #include "symcache_item.hxx"
 #include "fmt/core.h"
 #include "libserver/task.h"
+#include "libutil/cxx/util.hxx"
+#include <numeric>
+#include <functional>
 
 namespace rspamd::symcache {
+
+/* A list of internal augmentations that are known to Rspamd with their weight */
+static const auto known_augmentations =
+		robin_hood::unordered_flat_map<std::string, int, rspamd::smart_str_hash, rspamd::smart_str_equal>{
+				{"passthrough", 10},
+				{"single_network", 1},
+				{"no_network", 0},
+				{"many_network", 1},
+				{"important", 5},
+		};
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
@@ -346,6 +359,30 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	/* Allow all symbols with no settings id */
 	return true;
 }
+
+auto
+cache_item::add_augmentation(const symcache &cache, std::string_view augmentation) -> bool {
+	auto log_tag = [&]() { return cache.log_tag(); };
+
+	if (augmentations.contains(augmentation)) {
+		msg_warn_cache("duplicate augmentation: %s", augmentation.data());
+	}
+
+	augmentations.insert(std::string(augmentation));
+
+	return known_augmentations.contains(augmentation);
+}
+
+auto
+cache_item::get_augmentation_weight() const -> int
+{
+	return std::accumulate(std::begin(augmentations), std::end(augmentations),
+						  0, [](int acc, const std::string &augmentation) {
+		int zero = 0; /* C++ limitation of the cref */
+		return acc + rspamd::find_map(known_augmentations, augmentation).value_or(std::cref<int>(zero));
+	});
+}
+
 
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
