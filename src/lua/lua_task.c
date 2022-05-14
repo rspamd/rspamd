@@ -4990,7 +4990,7 @@ struct tokens_foreach_cbdata {
 };
 
 static void
-tokens_foreach_cb (struct rspamd_symcache_dynamic_item *item, gpointer ud)
+tokens_foreach_cb (struct rspamd_symcache_item *item, gpointer ud)
 {
 	struct tokens_foreach_cbdata *cbd = ud;
 	struct rspamd_symbol_result *s;
