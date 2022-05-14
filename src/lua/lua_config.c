@@ -2050,31 +2050,46 @@ lua_config_register_symbol (lua_State * L)
 				allowed_ids, forbidden_ids,
 				FALSE);
 
-		if (!isnan (score) || group) {
-			if (one_shot) {
-				nshots = 1;
+		if (ret != -1) {
+			if (!isnan(score) || group) {
+				if (one_shot) {
+					nshots = 1;
+				}
+
+				rspamd_config_add_symbol(cfg, name,
+						score, description, group, flags,
+						0, nshots);
+
+				lua_pushstring(L, "groups");
+				lua_gettable(L, 2);
+
+				if (lua_istable (L, -1)) {
+					for (lua_pushnil(L); lua_next(L, -2); lua_pop (L, 1)) {
+						if (lua_isstring(L, -1)) {
+							rspamd_config_add_symbol_group(cfg, name,
+									lua_tostring (L, -1));
+						}
+						else {
+							return luaL_error(L, "invalid groups element");
+						}
+					}
+				}
+
+				lua_pop (L, 1);
 			}
 
-			rspamd_config_add_symbol (cfg, name,
-					score, description, group, flags,
-					0, nshots);
-
-			lua_pushstring (L, "groups");
+			lua_pushstring (L, "augmentations");
 			lua_gettable (L, 2);
 
-			if (lua_istable (L, -1)) {
-				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-					if (lua_isstring (L, -1)) {
-						rspamd_config_add_symbol_group (cfg, name,
-								lua_tostring (L, -1));
-					}
-					else {
-						return luaL_error (L, "invalid groups element");
-					}
+			if (lua_type (L, -1) == LUA_TTABLE) {
+
+				for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+					rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
+							lua_tostring(L, -1));
 				}
 			}
 
-			lua_pop (L, 1);
+			lua_pop (L, 1); /* Table itself */
 		}
 	}
 	else {
@@ -2751,10 +2766,25 @@ lua_config_newindex (lua_State *L)
 					g_assert (name != NULL);
 					rspamd_symcache_add_condition_delayed (cfg->cache,
 							name, L, condref);
+
 				}
 				else {
 					lua_pop (L, 1);
 				}
+
+				/* Check for augmentations */
+				lua_pushstring (L, "augmentations");
+				lua_gettable (L, -2);
+
+				if (lua_type (L, -1) == LUA_TTABLE) {
+
+					for (lua_pushnil(L); lua_next(L, 2); lua_pop (L, 1)) {
+						rspamd_symcache_add_symbol_augmentation(cfg->cache, id,
+								lua_tostring(L, -1));
+					}
+				}
+
+				lua_pop (L, 1);
 			}
 
 			/*

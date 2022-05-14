@@ -223,6 +223,7 @@ public:
 	 * @return
 	 */
 	auto get_item_by_id(int id, bool resolve_parent) const -> const cache_item *;
+	auto get_item_by_id_mut(int id, bool resolve_parent) const -> cache_item *;
 	/**
 	 * Get an item by it's name
 	 * @param name

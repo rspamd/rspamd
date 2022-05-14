@@ -127,6 +127,16 @@ gint rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 								 gint parent);
 
 /**
+ * Adds augmentation to the symbol
+ * @param cache
+ * @param sym_id
+ * @param augmentation
+ * @return
+ */
+bool rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
+		int sym_id, const char *augmentation);
+
+/**
  * Add callback to be executed whenever symbol has peak value
  * @param cache
  * @param cbref

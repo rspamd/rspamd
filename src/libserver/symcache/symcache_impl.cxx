@@ -369,6 +369,29 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 	return ret.get();
 }
 
+auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_item *
+{
+	if (id < 0 || id >= items_by_id.size()) {
+		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
+				id, (int) items_by_id.size());
+		return nullptr;
+	}
+
+	auto &ret = items_by_id[id];
+
+	if (!ret) {
+		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
+				id);
+		return nullptr;
+	}
+
+	if (resolve_parent && ret->is_virtual()) {
+		return (cache_item *)ret->get_parent(*this);
+	}
+
+	return ret.get();
+}
+
 auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) const -> const cache_item *
 {
 	auto it = items_by_symbol.find(name);

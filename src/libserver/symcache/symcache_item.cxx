@@ -370,7 +370,12 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 
 	augmentations.insert(std::string(augmentation));
 
-	return known_augmentations.contains(augmentation);
+	auto ret = known_augmentations.contains(augmentation);
+
+	msg_debug_cache("added %s augmentation %s for symbol %s",
+			ret ? "known" : "unknown", augmentation.data(), symbol.data());
+
+	return ret;
 }
 
 auto

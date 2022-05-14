@@ -84,6 +84,29 @@ rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
 	}
 }
 
+bool
+rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
+											 int sym_id, const char *augmentation)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto log_tag = [&]() { return real_cache->log_tag(); };
+
+	if (augmentation == nullptr) {
+		msg_err_cache("null augmentation is not allowed for item %d", sym_id);
+		return false;
+	}
+
+
+	auto *item = real_cache->get_item_by_id_mut(sym_id, false);
+
+	if (item == nullptr) {
+		msg_err_cache("item %d is not found", sym_id);
+		return false;
+	}
+
+	return item->add_augmentation(*real_cache, augmentation);
+}
+
 void
 rspamd_symcache_set_peak_callback(struct rspamd_symcache *cache, gint cbref)
 {
