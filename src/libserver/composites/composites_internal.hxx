@@ -20,6 +20,7 @@
 
 #include <string>
 #include "libutil/expression.h"
+#include "libutil/cxx/hash_util.hxx"
 #include "libserver/cfg_file.h"
 
 namespace rspamd::composites {
@@ -78,30 +79,6 @@ private:
 		delete COMPOSITE_MANAGER_FROM_PTR(ptr);
 	}
 
-	/* Enable lookup by string view */
-	struct smart_str_equal {
-		using is_transparent = void;
-		auto operator()(const std::string &a, const std::string &b) const {
-			return a == b;
-		}
-		auto operator()(const std::string_view &a, const std::string &b) const {
-			return a == b;
-		}
-		auto operator()(const std::string &a, const std::string_view &b) const {
-			return a == b;
-		}
-	};
-
-	struct smart_str_hash {
-		using is_transparent = void;
-		auto operator()(const std::string &a) const {
-			return robin_hood::hash<std::string>()(a);
-		}
-		auto operator()(const std::string_view &a) const {
-			return robin_hood::hash<std::string_view>()(a);
-		}
-	};
-
 	auto new_composite(std::string_view composite_name, rspamd_expression *expr,
 						std::string_view composite_expression) -> auto
 	{
@@ -117,7 +94,7 @@ private:
 	}
 
 	robin_hood::unordered_flat_map<std::string,
-			std::shared_ptr<rspamd_composite>, smart_str_hash, smart_str_equal> composites;
+			std::shared_ptr<rspamd_composite>, rspamd::smart_str_hash, rspamd::smart_str_equal> composites;
 	/* Store all composites here, even if we have duplicates */
 	std::vector<std::shared_ptr<rspamd_composite>> all_composites;
 	struct rspamd_config *cfg;
