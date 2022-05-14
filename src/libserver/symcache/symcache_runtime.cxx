@@ -532,10 +532,11 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 									   cache_dynamic_item *dyn_item, bool check_only) -> bool
 {
 	constexpr const auto max_recursion = 20;
+	auto log_func = RSPAMD_LOG_FUNC;
 
 	auto inner_functor = [&](int recursion, cache_item *item, cache_dynamic_item *dyn_item, auto rec_functor) -> bool {
 		if (recursion > max_recursion) {
-			msg_err_task ("cyclic dependencies: maximum check level %ud exceed when "
+			msg_err_task_lambda("cyclic dependencies: maximum check level %ud exceed when "
 						  "checking dependencies for %s", max_recursion, item->symbol.c_str());
 
 			return true;
@@ -546,7 +547,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 		for (const auto &dep: item->deps) {
 			if (!dep.item) {
 				/* Assume invalid deps as done */
-				msg_debug_cache_task("symbol %d(%s) has invalid dependencies on %d(%s)",
+				msg_debug_cache_task_lambda("symbol %d(%s) has invalid dependencies on %d(%s)",
 						item->id, item->symbol.c_str(), dep.id, dep.sym.c_str());
 				continue;
 			}
@@ -563,26 +564,26 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 								rec_functor)) {
 
 							ret = false;
-							msg_debug_cache_task("delayed dependency %d(%s) for "
+							msg_debug_cache_task_lambda("delayed dependency %d(%s) for "
 												 "symbol %d(%s)",
 									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else if (!process_symbol(task, cache, dep.item.get(), dep_dyn_item)) {
 							/* Now started, but has events pending */
 							ret = false;
-							msg_debug_cache_task("started check of %d(%s) symbol "
+							msg_debug_cache_task_lambda("started check of %d(%s) symbol "
 												 "as dep for "
 												 "%d(%s)",
 									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 						else {
-							msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
+							msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
 												 "already processed",
 									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
 					}
 					else {
-						msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) "
+						msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) "
 											 "cannot be started now",
 								dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						ret = false;
@@ -590,14 +591,14 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 				}
 				else {
 					/* Started but not finished */
-					msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is "
+					msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is "
 										 "still executing",
 							dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 					ret = false;
 				}
 			}
 			else {
-				msg_debug_cache_task("dependency %d(%s) for symbol %d(%s) is already "
+				msg_debug_cache_task_lambda("dependency %d(%s) for symbol %d(%s) is already "
 									 "checked",
 						dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 			}

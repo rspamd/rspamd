@@ -290,6 +290,10 @@ extern guint rspamd_task_log_id;
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+#define msg_err_task_lambda(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        log_func, \
+        __VA_ARGS__)
 #define msg_warn_task(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
@@ -309,6 +313,10 @@ extern guint rspamd_task_log_id;
 #define msg_debug_task(...)  rspamd_conditional_debug_fast (NULL,  task->from_addr, \
         rspamd_task_log_id, "task", task->task_pool->tag.uid, \
         RSPAMD_LOG_FUNC, \
+        __VA_ARGS__)
+#define msg_debug_task_lambda(...)  rspamd_conditional_debug_fast (NULL,  task->from_addr, \
+        rspamd_task_log_id, "task", task->task_pool->tag.uid, \
+        log_func, \
         __VA_ARGS__)
 #define msg_err_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
