@@ -2082,8 +2082,8 @@ lua_config_register_symbol (lua_State * L)
 			lua_gettable (L, 2);
 
 			if (lua_type (L, -1) == LUA_TTABLE) {
-
-				for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+				int tbl_idx = lua_gettop(L);
+				for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop (L, 1)) {
 					rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
 							lua_tostring(L, -1));
 				}
@@ -2778,7 +2778,8 @@ lua_config_newindex (lua_State *L)
 
 				if (lua_type (L, -1) == LUA_TTABLE) {
 
-					for (lua_pushnil(L); lua_next(L, 2); lua_pop (L, 1)) {
+					int tbl_idx = lua_gettop(L);
+					for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop (L, 1)) {
 						rspamd_symcache_add_symbol_augmentation(cfg->cache, id,
 								lua_tostring(L, -1));
 					}
