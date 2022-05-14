@@ -73,7 +73,8 @@ MAP - COMBINED IP MASK FROM
   Scan File  ${MESSAGE}  IP=10.1.0.10  From=user@example.com
   ...   Settings={symbols_enabled = [COMBINED_MAP_AND, COMBINED_MAP_OR]}
   Expect Symbol With Score  COMBINED_MAP_AND  10
-  Expect Symbol  COMBINED_MAP_OR
+  Do Not Expect Symbol  COMBINED_MAP_OR
+  Expect Action  no action
 
 MAP - COMBINED IP MASK ONLY
   Scan File  ${MESSAGE}  IP=10.1.0.10
