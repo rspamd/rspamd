@@ -427,8 +427,6 @@ local function multimap_query_redis(key, task, value, callback)
 end
 
 local function multimap_callback(task, rule)
-  local pre_filter = rule['prefilter']
-
   local function match_element(r, value, callback)
     if not value then
       return false
@@ -591,7 +589,7 @@ local function multimap_callback(task, rule)
       task:insert_result(forced, symbol, score)
     end
 
-    if pre_filter then
+    if rule.action then
       local message = rule.message
       if rule.message_func then
         message = rule.message_func(task, rule.symbol, opt)
@@ -798,7 +796,7 @@ local function multimap_callback(task, rule)
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
           elseif results then
             task:insert_result(rule['symbol'], 1, rule['map'])
-            if pre_filter then
+            if rule.action then
               task:set_pre_result(rule['action'],
                   'Matched map: ' .. rule['symbol'], N)
             end
@@ -1188,17 +1186,11 @@ local function add_multimap_rule(key, newrule)
     end
   end
 
-  if newrule['action'] then
-    newrule['prefilter'] = true
-  else
-    newrule['prefilter'] = false
-  end
-
   if ret then
     if newrule['type'] == 'symbol_options' then
       rspamd_config:register_dependency(newrule['symbol'], newrule['target_symbol'])
     end
-    if newrule['require_symbols'] and not newrule['prefilter'] then
+    if newrule['require_symbols'] then
       local atoms = {}
 
       local function parse_atom(str)
@@ -1259,11 +1251,19 @@ if opts and type(opts) == 'table' then
   end
   -- add fake symbol to check all maps inside a single callback
   fun.each(function(rule)
+    local augmentations = {}
+
+    if rule.action then
+      table.insert(augmentations, 'passthrough')
+    end
+
     local id = rspamd_config:register_symbol({
       type = 'normal',
       name = rule['symbol'],
+      augmentations = augmentations,
       callback = gen_multimap_callback(rule),
     })
+
     if rule['symbols'] then
       -- Find allowed symbols by this map
       rule['symbols_set'] = {}
@@ -1303,17 +1303,7 @@ if opts and type(opts) == 'table' then
       rspamd_config:set_metric_symbol(rule)
       rule.flags = tmp_flags
     end
-  end, fun.filter(function(r) return not r['prefilter'] end, rules))
-
-  -- prefilter symbols
-  fun.each(function(rule)
-    rspamd_config:register_symbol({
-      type = 'prefilter',
-      name = rule['symbol'],
-      score = tonumber(rule.score or "0") or 0,
-      callback = gen_multimap_callback(rule),
-    })
-  end, fun.filter(function(r) return r['prefilter'] end, rules))
+  end, rules)
 
   if #rules == 0 then
     lua_util.disable_module(N, "config")
