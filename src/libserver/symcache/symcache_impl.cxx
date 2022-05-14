@@ -547,52 +547,29 @@ auto symcache::resort() -> void
 	};
 
 	auto cache_order_cmp = [&](const auto &it1, const auto &it2) -> auto {
-		auto o1 = tsort_unmask(it1.get()), o2 = tsort_unmask(it2.get());
-		double w1 = 0., w2 = 0.;
+		constexpr const auto topology_mult = 1e7,
+				priority_mult = 1e6,
+				augmentations1_mult = 1e5;
+		auto w1 = tsort_unmask(it1.get()) * topology_mult,
+			w2 = tsort_unmask(it2.get()) * topology_mult;
 
-		if (o1 == o2) {
-			/* No topological order */
-			if (it1->priority == it2->priority) {
+		w1 += it1->priority * priority_mult;
+		w2 += it2->priority * priority_mult;
+		w1 += it1->get_augmentation_weight() * augmentations1_mult;
+		w2 += it2->get_augmentation_weight() * augmentations1_mult;
 
-				auto augmentations1 = it1->get_augmentation_weight();
-				auto augmentations2 = it2->get_augmentation_weight();
+		auto avg_freq = ((double) total_hits / used_items);
+		auto avg_weight = (total_weight / used_items);
+		auto f1 = (double) it1->st->total_hits / avg_freq;
+		auto f2 = (double) it2->st->total_hits / avg_freq;
+		auto weight1 = std::fabs(it1->st->weight) / avg_weight;
+		auto weight2 = std::fabs(it2->st->weight) / avg_weight;
+		auto t1 = it1->st->avg_time;
+		auto t2 = it2->st->avg_time;
+		w1 += score_functor(weight1, f1, t1);
+		w2 += score_functor(weight2, f2, t2);
 
-				if (augmentations1 == augmentations2) {
-					auto avg_freq = ((double) total_hits / used_items);
-					auto avg_weight = (total_weight / used_items);
-					auto f1 = (double) it1->st->total_hits / avg_freq;
-					auto f2 = (double) it2->st->total_hits / avg_freq;
-					auto weight1 = std::fabs(it1->st->weight) / avg_weight;
-					auto weight2 = std::fabs(it2->st->weight) / avg_weight;
-					auto t1 = it1->st->avg_time;
-					auto t2 = it2->st->avg_time;
-					w1 = score_functor(weight1, f1, t1);
-					w2 = score_functor(weight2, f2, t2);
-				}
-				else {
-					w1 = augmentations1;
-					w2 = augmentations2;
-				}
-			}
-			else {
-				/* Strict sorting */
-				w1 = std::abs(it1->priority);
-				w2 = std::abs(it2->priority);
-			}
-		}
-		else {
-			w1 = o1;
-			w2 = o2;
-		}
-
-		if (w2 > w1) {
-			return 1;
-		}
-		else if (w2 < w1) {
-			return -1;
-		}
-
-		return 0;
+		return w1 > w2;
 	};
 
 	std::stable_sort(std::begin(ord->d), std::end(ord->d), cache_order_cmp);
