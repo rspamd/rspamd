@@ -25,14 +25,39 @@
 
 namespace rspamd::symcache {
 
+struct augmentation_info {
+	int weight = 0;
+	int implied_flags = 0;
+};
+
 /* A list of internal augmentations that are known to Rspamd with their weight */
 static const auto known_augmentations =
-		robin_hood::unordered_flat_map<std::string, int, rspamd::smart_str_hash, rspamd::smart_str_equal>{
-				{"passthrough", 10},
-				{"single_network", 1},
-				{"no_network", 0},
-				{"many_network", 1},
-				{"important", 5},
+		robin_hood::unordered_flat_map<std::string, augmentation_info, rspamd::smart_str_hash, rspamd::smart_str_equal>{
+				{"passthrough", {
+										.weight = 10,
+										.implied_flags = SYMBOL_TYPE_IGNORE_PASSTHROUGH
+								}
+				},
+				{"single_network", {
+										.weight = 1,
+										.implied_flags = 0
+								}
+				},
+				{"no_network", {
+										.weight = 0,
+										.implied_flags = 0
+							   }
+				},
+				{"many_network", {
+									   .weight = 1,
+									   .implied_flags = 0
+							   }
+				},
+				{"important", {
+									   .weight = 5,
+									   .implied_flags = SYMBOL_TYPE_FINE
+							   }
+				},
 		};
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
@@ -370,12 +395,24 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 
 	augmentations.insert(std::string(augmentation));
 
-	auto ret = known_augmentations.contains(augmentation);
+	auto ret = rspamd::find_map(known_augmentations, augmentation);
 
 	msg_debug_cache("added %s augmentation %s for symbol %s",
-			ret ? "known" : "unknown", augmentation.data(), symbol.data());
+			ret.has_value() ? "known" : "unknown", augmentation.data(), symbol.data());
 
-	return ret;
+	if (ret.has_value()) {
+		auto info = ret.value().get();
+
+		if (info.implied_flags) {
+			if ((info.implied_flags & flags) == 0) {
+				msg_info_cache("added implied flags (%bd) for symbol %s as it has %s augmentation",
+						info.implied_flags, symbol.data(), augmentation.data());
+				flags |= info.implied_flags;
+			}
+		}
+	}
+
+	return ret.has_value();
 }
 
 auto
@@ -383,8 +420,11 @@ cache_item::get_augmentation_weight() const -> int
 {
 	return std::accumulate(std::begin(augmentations), std::end(augmentations),
 						  0, [](int acc, const std::string &augmentation) {
-		int zero = 0; /* C++ limitation of the cref */
-		return acc + rspamd::find_map(known_augmentations, augmentation).value_or(std::cref<int>(zero));
+				auto default_augmentation_info = augmentation_info{};
+				return acc + rspamd::find_map(known_augmentations, augmentation)
+						.value_or(default_augmentation_info)
+						.get()
+						.weight;
 	});
 }
 
