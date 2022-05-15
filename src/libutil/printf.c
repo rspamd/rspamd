@@ -351,12 +351,12 @@ rspamd_uint64_print (guint64 in, gchar *out)
 
 static gchar *
 rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
-					  guint hexadecimal, guint width)
+					  guint hexadecimal, guint binary, guint width)
 {
-	gchar *p, temp[sizeof ("18446744073709551615")];
-	size_t len;
+	gchar *p, temp[64];
+	size_t len = 0;
 
-	if (hexadecimal == 0) {
+	if (G_LIKELY(hexadecimal == 0 && binary == 0)) {
 		p = temp;
 
 		if (ui64 < G_MAXUINT32) {
@@ -374,11 +374,21 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 
 		len = (temp + sizeof (temp)) - p;
 	}
-	else { /* hexadecimal == 2 */
+	else if (hexadecimal == 2) { /* hexadecimal == 2 */
 		p = temp + sizeof(temp);
 		do {
 			*--p = _HEX[(guint32) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
+
+		len = (temp + sizeof (temp)) - p;
+	}
+	else if (binary > 0) {
+		int first_bit = MIN(sizeof(temp), ffsll(ui64));
+
+		p = temp + sizeof(temp);
+		for (int i = 0; i <= first_bit; i ++, ui64 >>= 1) {
+			*--p = '0' + (ui64 & 0x1);
+		}
 
 		len = (temp + sizeof (temp)) - p;
 	}
@@ -1040,7 +1050,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			}
 
 			if (!humanize) {
-				p = rspamd_sprintf_num (p, last, ui64, zero, hex, width);
+				p = rspamd_sprintf_num (p, last, ui64, zero, hex, b64 + b32, width);
 			}
 			else {
 				p = rspamd_humanize_number (p, last, ui64, bytes);
