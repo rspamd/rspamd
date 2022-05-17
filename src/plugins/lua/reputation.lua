@@ -77,7 +77,9 @@ local function add_symbol_score(task, rule, mult, params)
     if mult >= 0 then
       task:insert_result(rule.symbol .. '_SPAM', mult, params)
     else
-      task:insert_result(rule.symbol .. '_HAM', mult, params)
+      -- We assume that `HAM` symbol has negative score...
+      -- It is probably good to verify on config stage (TODO)
+      task:insert_result(rule.symbol .. '_HAM', math.abs(mult), params)
     end
   else
     task:insert_result(rule.symbol, mult, params)
