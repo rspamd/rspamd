@@ -666,6 +666,20 @@ LUA_FUNCTION_DEF (config, get_symbols_counters);
 LUA_FUNCTION_DEF (config, get_symbols);
 
 /***
+ * @method rspamd_config:get_symbol(sym_name)
+ * Returns table for a specific symbol getting data from the static config:
+ * - name
+ * - score
+ * - flags (e.g. `ignore` or `oneparam`)
+ * - nshots (== maxhits)
+ * - group - main group
+ * - groups - array of all groups
+ * @available 3.3+
+ * @return {table} symbol data (or nil)
+ */
+LUA_FUNCTION_DEF (config, get_symbol);
+
+/***
  * @method rspamd_config:get_symbol_callback(name)
  * Returns callback function for the specified symbol if it is a lua registered callback
  * @return {function} callback function or nil
@@ -900,6 +914,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_counters),
 	{"get_symbols_scores", lua_config_get_symbols},
 	LUA_INTERFACE_DEF (config, get_symbols),
+	LUA_INTERFACE_DEF (config, get_symbol),
 	LUA_INTERFACE_DEF (config, get_groups),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
@@ -3638,6 +3653,33 @@ lua_config_get_symbols (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_config_get_symbol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym_name = luaL_checkstring(L, 2);
+
+	if (cfg != NULL && sym_name != NULL) {
+		struct lua_metric_symbols_cbdata cbd;
+		struct rspamd_symbol *s = g_hash_table_lookup(cfg->symbols, sym_name);
+
+		if (s) {
+			cbd.L = L;
+			cbd.cfg = cfg;
+			lua_metric_symbol_inserter((void *)sym_name, s, &cbd);
+		}
+		else {
+			/* No config for a symbol */
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
 
 static gint
 lua_config_get_symbol_callback (lua_State *L)
