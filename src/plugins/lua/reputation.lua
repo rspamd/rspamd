@@ -70,16 +70,29 @@ local function generic_reputation_calc(token, rule, mult, task)
 end
 
 local function add_symbol_score(task, rule, mult, params)
-  if not params then params = {tostring(mult)};
-
+  if not params then
+    params = {tostring(mult)}
   end
+
   if rule.selector.config.split_symbols then
+    local sym_spam = rule.symbol .. '_SPAM'
+    local sym_ham = rule.symbol .. '_HAM'
+    if not rule.static_symbols then
+      rule.static_symbols = {}
+      rule.static_symbols.ham = rspamd_config:get_symbol(sym_ham)
+      rule.static_symbols.spam = rspamd_config:get_symbol(sym_spam)
+    end
     if mult >= 0 then
-      task:insert_result(rule.symbol .. '_SPAM', mult, params)
+      task:insert_result(sym_spam, mult, params)
     else
-      -- We assume that `HAM` symbol has negative score...
-      -- It is probably good to verify on config stage (TODO)
-      task:insert_result(rule.symbol .. '_HAM', math.abs(mult), params)
+      -- Avoid multiplication of negative the `mult` by negative static score of the
+      -- ham symbol
+      if rule.static_symbols.ham and rule.static_symbols.ham.score then
+        if rule.static_symbols.ham.score < 0 then
+          mult = math.abs(mult)
+        end
+      end
+      task:insert_result(sym_ham, mult, params)
     end
   else
     task:insert_result(rule.symbol, mult, params)
