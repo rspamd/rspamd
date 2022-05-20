@@ -327,8 +327,8 @@ local function hfilter_callback(task)
   if config['url_enabled'] then
     local parts = task:get_text_parts()
     if parts then
-      local plain_text_part = nil
-      local html_text_part = nil
+      local plain_text_part, html_text_part
+
       for _,p in ipairs(parts) do
         if p:is_html() then
           html_text_part = p
@@ -336,36 +336,10 @@ local function hfilter_callback(task)
           plain_text_part = p
         end
       end
-      local hc = nil
-      if html_text_part then
-        hc = html_text_part:get_html()
-        if hc then
-          local url_len = 0
-          hc:foreach_tag('a', function(_, len)
-            url_len = url_len + len
-            return false
-          end)
 
-          local plen = html_text_part:get_length()
-
-          if url_len > 0 and plen > 0 then
-            local rel = url_len / plen
-            if rel > 0.8 then
-              local sc = (rel - 0.8) * 5.0
-              if sc > 1.0 then sc = 1.0 end
-              task:insert_result('HFILTER_URL_ONLY', sc, tostring(sc))
-              local lines =  html_text_part:get_lines_count()
-              if lines > 0 and lines < 2 then
-                task:insert_result('HFILTER_URL_ONELINE', 1.00,
-                  string.format('html:%d:%d', math.floor(sc), lines))
-              end
-            end
-          end
-        end
-      end
-      if not hc and plain_text_part then
-        local url_len = plain_text_part:get_urls_length()
-        local plen = plain_text_part:get_length()
+      local function check_text_part(part, ty)
+        local url_len = part:get_urls_length()
+        local plen = part:get_length()
 
         if plen > 0 and url_len > 0 then
           local rel = url_len / plen
@@ -373,13 +347,18 @@ local function hfilter_callback(task)
             local sc = (rel - 0.8) * 5.0
             if sc > 1.0 then sc = 1.0 end
             task:insert_result('HFILTER_URL_ONLY', sc, tostring(sc))
-            local lines = plain_text_part:get_lines_count()
+            local lines = part:get_lines_count()
             if lines > 0 and lines < 2 then
               task:insert_result('HFILTER_URL_ONELINE', 1.00,
-                string.format('plain:%d:%d', math.floor(rel), lines))
+                  string.format('%s:%d:%d', ty, math.floor(rel), lines))
             end
           end
         end
+      end
+      if html_text_part then
+        check_text_part(html_text_part, 'html')
+      elseif plain_text_part then
+        check_text_part(plain_text_part, 'plain')
       end
     end
   end
@@ -612,19 +591,13 @@ end
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
   local id = rspamd_config:register_symbol{
-    name = 'HFILTER',
+    name = 'HFILTER_CHECK',
     callback = hfilter_callback,
-    type = 'callback,mime',
-    score = 0.0,
+    type = 'callback',
   }
-  rspamd_config:set_metric_symbol({
-    name = 'HFILTER',
-    score = 0.0,
-    group = 'hfilter'
-  })
   for _,sym in ipairs(symbols_enabled) do
     rspamd_config:register_symbol{
-      type = 'virtual,mime',
+      type = 'virtual',
       score = 1.0,
       parent = id,
       name = sym,
