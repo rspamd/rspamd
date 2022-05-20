@@ -123,47 +123,6 @@ local function check_ml_mailman(task)
   return true
 end
 
--- Subscribe.ru
--- List-Id: <*.subscribe.ru>
--- List-Help: <https://subscribe.ru/catalog/*>
--- List-Subscribe: <mailto:*-sub@subscribe.ru>
--- List-Unsubscribe: <mailto:*-unsub@subscribe.ru>
--- List-Archive:  <https://subscribe.ru/archive/*>
--- List-Owner: <mailto:*@subscribe.ru>
--- List-Post: NO
-local function check_ml_subscriberu(task)
-  -- List-Id
-  local header = task:get_header('list-id')
-  if not (header and header:find('^<.*%.subscribe%.ru>$')) then
-    return false
-  end
-  -- Other headers
-  header = task:get_header('list-archive')
-  if not (header and header:find('^<https?://subscribe%.ru/archive/.+>$')) then
-    return false
-  end
-  header = task:get_header('list-owner')
-  if not (header and header:find('^<mailto:.+@subscribe%.ru>$')) then
-    return false
-  end
-  header = task:get_header('list-help')
-  if not (header and header:find('^<https?://subscribe%.ru/catalog/.+>$')) then
-    return false
-  end
-  -- Subscribe and unsubscribe
-  header = task:get_header('list-subscribe')
-  if not (header and header:find('^<mailto:.+-sub@subscribe%.ru>$')) then
-    return false
-  end
-  header = task:get_header('list-unsubscribe')
-  if not (header and header:find('^<mailto:.+-unsub@subscribe%.ru>$')) then
-    return false
-  end
-
-  return true
-
-end
-
 -- Google groups detector
 -- header exists X-Google-Loop
 -- RFC 2919 headers exist
@@ -246,8 +205,6 @@ local function check_maillist(task)
       task:insert_result(symbol, 1, 'ezmlm')
     elseif check_ml_mailman(task) then
       task:insert_result(symbol, 1, 'mailman')
-    elseif check_ml_subscriberu(task) then
-      task:insert_result(symbol, 1, 'subscribe.ru')
     elseif check_ml_googlegroup(task) then
       task:insert_result(symbol, 1, 'googlegroups')
     elseif check_ml_cgp(task) then
