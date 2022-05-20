@@ -225,7 +225,8 @@ if opts then
     symbol = opts['symbol']
     rspamd_config:register_symbol({
       name = symbol,
-      callback = check_maillist
+      callback = check_maillist,
+      flags = 'nice'
     })
   end
 end
