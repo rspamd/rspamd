@@ -159,8 +159,6 @@ local function history_save(task)
 
     if settings.expire > 0 then
       conn:add_cmd('EXPIRE', {prefix, string.format('%d', settings.expire)})
-    else
-      conn:add_cmd('SADD', {settings.key_prefix, prefix})
     end
   end
 end
