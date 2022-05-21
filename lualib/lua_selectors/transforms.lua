@@ -40,6 +40,17 @@ local transform_function = {
     end,
     ['description'] = 'Returns the lowercased string',
   },
+  -- Returns the lowercased utf8 string
+  ['lower_utf8'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, t)
+      return rspamd_util.lower_utf8(inp), t
+    end,
+    ['description'] = 'Returns the lowercased utf8 string',
+  },
   -- Returns the first element
   ['first'] = {
     ['types'] = {
