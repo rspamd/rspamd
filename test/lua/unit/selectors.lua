@@ -53,7 +53,13 @@ context("Selectors test", function()
 
     ["header Subject lower"] = {
                 selector = "header(Subject).lower",
-                expect = {"second, lower-cased header subject"}},
+                expect = {"second, lower-cased header subject"}
+    },
+
+    ["header Subject lower_utf8"] = {
+                selector = "header(Subject).lower_utf8",
+                expect = {"second, lower-cased header subject"}
+    },
 
     ["header full Subject lower"] = {
                 selector = "header(Subject, 'full').lower",
