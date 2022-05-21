@@ -218,8 +218,13 @@ local function dkim_reputation_filter(task, rule)
           rep_accepted_abs, rep_rejected_abs)
       if rep_accepted_abs > 0 or rep_rejected_abs > 0 then
         if rep_accepted_abs > rep_rejected_abs then
-          add_symbol_score(task, rule, -(rep_accepted_abs - rep_rejected_abs))
+          -- For accepted reputation we add symbol with just this reputation, either positive or negative
+          local final_rep = rep_accepted
+          if rep_accepted > 1.0 then final_rep = 1.0 end
+          if rep_accepted < -1.0 then final_rep = -1.0 end
+          add_symbol_score(task, rule, final_rep)
         else
+          -- For rejected case we use absolute values as it must always be positive
           add_symbol_score(task, rule, (rep_rejected_abs - rep_accepted_abs))
         end
 
