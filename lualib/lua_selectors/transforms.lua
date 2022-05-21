@@ -17,7 +17,6 @@ limitations under the License.
 local fun = require 'fun'
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
-local rspamd_text = require "rspamd_text"
 local ts = require("tableshape").types
 local logger = require 'rspamd_logger'
 local common = require "lua_selectors/common"
@@ -37,7 +36,7 @@ local transform_function = {
     },
     ['map_type'] = 'string',
     ['process'] = function(inp, _)
-      return rspamd_text.fromstring(inp):lower(true),'string'
+      return inp:lower(),'string'
     end,
     ['description'] = 'Returns the lowercased string',
   },
