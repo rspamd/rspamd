@@ -55,7 +55,7 @@ local redis_params
 
 local settings = {
   key_prefix = 'rs_history', -- default key name
-  expire = 0, -- default no expire
+  expire = nil, -- default no expire
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
   subject_privacy = false, -- subject privacy is off
@@ -169,7 +169,7 @@ local function history_save(task)
   if ret then
     conn:add_cmd('LTRIM', {prefix, '0', string.format('%d', settings.nrows-1)})
 
-    if settings.expire > 0 then
+    if settings.expire and settings.expire > 0 then
       conn:add_cmd('EXPIRE', {prefix, string.format('%d', settings.expire)})
     end
   end
