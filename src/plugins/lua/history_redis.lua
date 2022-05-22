@@ -40,6 +40,17 @@ redis_history {
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
+local fun = require "fun"
+local ucl = require "ucl"
+local ts = (require "tableshape").types
+local E = {}
+local N = "history_redis"
+local hostname = rspamd_util.get_hostname()
+
 local redis_params
 
 local settings = {
@@ -53,15 +64,16 @@ local settings = {
   subject_privacy_length = 16, -- cut the length of the hash
 }
 
-local rspamd_logger = require "rspamd_logger"
-local rspamd_util = require "rspamd_util"
-local lua_util = require "lua_util"
-local lua_redis = require "lua_redis"
-local fun = require "fun"
-local ucl = require("ucl")
-local E = {}
-local N = "history_redis"
-local hostname = rspamd_util.get_hostname()
+local settings_schema = ts.shape({
+  key_prefix = ts.string,
+  expire = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+  nrows = ts.number,
+  compress = ts.boolean,
+  subject_privacy = ts.boolean:is_optional(),
+  subject_privacy_alg = ts.string:is_optional(),
+  subject_privacy_prefix = ts.string:is_optional(),
+  subject_privacy_length = ts.number:is_optional(),
+}, {extra_fields = lua_redis.config_schema})
 
 local function process_addr(addr)
   if addr then
@@ -258,9 +270,15 @@ end
 
 local opts =  rspamd_config:get_all_opt('history_redis')
 if opts then
-  for k,v in pairs(opts) do
-    settings[k] = v
+  settings = lua_util.override_defaults(settings, opts)
+  local res,err = settings_schema:transform(settings)
+
+  if not res then
+    rspamd_logger.warnx(rspamd_config, '%s: plugin is misconfigured: %s', N, err)
+    lua_util.disable_module(N, "config")
+    return
   end
+  settings = res
 
   redis_params = lua_redis.parse_redis_server('history_redis')
   if not redis_params then
