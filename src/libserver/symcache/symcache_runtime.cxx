@@ -674,6 +674,7 @@ rspamd_delayed_timer_dtor(gpointer d)
 		/* Event has not been executed */
 		rspamd_session_remove_event (cbd->task->s,
 				rspamd_symcache_delayed_item_fin, cbd);
+		ev_timer_stop(cbd->task->event_loop, &cbd->tm);
 		cbd->event = nullptr;
 	}
 }
