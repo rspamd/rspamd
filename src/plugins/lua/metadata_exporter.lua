@@ -75,10 +75,10 @@ local function get_general_metadata(task, flatten, no_content)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.subject = task:get_subject() or 'unknown'
-  r.action = task:get_metric_action('default')
+  r.action = task:get_metric_action()
   r.rspamd_server = HOSTNAME
 
-  local s = task:get_metric_score('default')[1]
+  local s = task:get_metric_score()[1]
   r.score = flatten and string.format('%.2f', s) or s
 
   local fuzzy = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
@@ -238,29 +238,29 @@ local selectors = {
     return true
   end,
   is_spam = function(task)
-    local action = task:get_metric_action('default')
+    local action = task:get_metric_action()
     return is_spam(action)
   end,
   is_spam_authed = function(task)
     if not task:get_user() then
       return false
     end
-    local action = task:get_metric_action('default')
+    local action = task:get_metric_action()
     return is_spam(action)
   end,
   is_reject = function(task)
-    local action = task:get_metric_action('default')
+    local action = task:get_metric_action()
     return (action == 'reject')
   end,
   is_reject_authed = function(task)
     if not task:get_user() then
       return false
     end
-    local action = task:get_metric_action('default')
+    local action = task:get_metric_action()
     return (action == 'reject')
   end,
   is_not_soft_reject = function(task)
-    local action = task:get_metric_action('default')
+    local action = task:get_metric_action()
     return (action ~= 'soft reject')
   end,
 }

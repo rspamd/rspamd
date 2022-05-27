@@ -90,7 +90,7 @@ local function gen_cb(params)
       return extracted
     end
 
-    local cact = task:get_metric_action('default')
+    local cact = task:get_metric_action()
     if not params.message and not params.subject and params.act and cact == params.act then
       return false
     end

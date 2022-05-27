@@ -548,7 +548,7 @@ local function clickhouse_collect(task)
   local message_id = lua_util.maybe_obfuscate_string(task:get_message_id() or '',
       settings, 'mid')
 
-  local score = task:get_metric_score('default')[1];
+  local score = task:get_metric_score()[1];
   local fields = {
     bayes = 'unknown',
     fuzzy = 'unknown',
@@ -657,7 +657,7 @@ local function clickhouse_collect(task)
     gmt = true, -- The only sane way to sync stuff with different timezones
   }))
 
-  local action = task:get_metric_action('default')
+  local action = task:get_metric_action()
   local custom_action = ''
 
   if not predefined_actions[action] then

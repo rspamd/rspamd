@@ -246,10 +246,10 @@ local function milter_headers(task)
       common.symbols = task:get_symbols_all()
     end
     if not common['metric_score'] then
-      common['metric_score'] = task:get_metric_score('default')
+      common['metric_score'] = task:get_metric_score()
     end
     if not common['metric_action'] then
-      common['metric_action'] = task:get_metric_action('default')
+      common['metric_action'] = task:get_metric_action()
     end
     if local_mod.remove then
       remove[local_mod.header] = local_mod.remove
@@ -351,7 +351,7 @@ local function milter_headers(task)
     local local_mod = settings.routines['x-spamd-bar']
     if skip_wanted('x-rspamd-bar') then return end
     if not common['metric_score'] then
-      common['metric_score'] = task:get_metric_score('default')
+      common['metric_score'] = task:get_metric_score()
     end
     local score = common['metric_score'][1]
     local spambar
@@ -374,7 +374,7 @@ local function milter_headers(task)
     local local_mod = settings.routines['x-spam-level']
     if skip_wanted('x-spam-level') then return end
     if not common['metric_score'] then
-      common['metric_score'] = task:get_metric_score('default')
+      common['metric_score'] = task:get_metric_score()
     end
     local score = common['metric_score'][1]
     if score < 1 then
@@ -389,7 +389,7 @@ local function milter_headers(task)
   local function spam_header (class, name, value, remove_v)
     if skip_wanted(class) then return end
     if not common['metric_action'] then
-      common['metric_action'] = task:get_metric_action('default')
+      common['metric_action'] = task:get_metric_action()
     end
     if remove_v then
       remove[name] = remove_v
@@ -492,10 +492,10 @@ local function milter_headers(task)
   routines['x-spam-status'] = function()
     if skip_wanted('x-spam-status') then return end
     if not common['metric_score'] then
-      common['metric_score'] = task:get_metric_score('default')
+      common['metric_score'] = task:get_metric_score()
     end
     if not common['metric_action'] then
-      common['metric_action'] = task:get_metric_action('default')
+      common['metric_action'] = task:get_metric_action()
     end
     local score = common['metric_score'][1]
     local action = common['metric_action']

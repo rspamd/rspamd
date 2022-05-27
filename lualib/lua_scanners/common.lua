@@ -183,8 +183,8 @@ end
 local function dynamic_scan(task, rule)
   if rule.dynamic_scan then
     if rule.action ~= 'reject' then
-      local metric_result = task:get_metric_score('default')
-      local metric_action = task:get_metric_action('default')
+      local metric_result = task:get_metric_score()
+      local metric_action = task:get_metric_action()
       local has_pre_result = task:has_pre_result()
       -- ToDo: needed?
       -- Sometimes leads to FPs
@@ -482,8 +482,8 @@ end
 local function check_metric_results(task, rule)
 
   if rule.action ~= 'reject' then
-    local metric_result = task:get_metric_score('default')
-    local metric_action = task:get_metric_action('default')
+    local metric_result = task:get_metric_score()
+    local metric_action = task:get_metric_action()
     local has_pre_result = task:has_pre_result()
 
     if rule.symbol_type == 'postfilter' and metric_action == 'reject' then

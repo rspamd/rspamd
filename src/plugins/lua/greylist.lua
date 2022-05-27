@@ -306,7 +306,7 @@ local function greylist_check(task)
 end
 
 local function greylist_set(task)
-  local action = task:get_metric_action('default')
+  local action = task:get_metric_action()
   local ip = task:get_ip()
 
   -- Don't do anything if pre-result has been already set

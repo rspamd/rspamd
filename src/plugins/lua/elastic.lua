@@ -147,12 +147,12 @@ local function get_general_metadata(task)
   r.direction = "Inbound"
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
-  r.action = task:get_metric_action('default')
+  r.action = task:get_metric_action()
   r.rspamd_server = HOSTNAME
   if r.user ~= 'unknown' then
       r.direction = "Outbound"
   end
-  local s = task:get_metric_score('default')[1]
+  local s = task:get_metric_score()[1]
   r.score =  s
 
   local rcpt = task:get_recipients('smtp')
