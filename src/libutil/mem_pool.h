@@ -35,6 +35,12 @@
 #include <pthread.h>
 #endif
 
+#ifdef __cplusplus
+#define MEMPOOL_STR_FUNC __FUNCTION__
+#else
+#define MEMPOOL_STR_FUNC G_STRFUNC
+#endif
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -274,7 +280,7 @@ void rspamd_mempool_add_destructor_full (rspamd_mempool_t *pool,
 
 /* Macros for common usage */
 #define rspamd_mempool_add_destructor(pool, func, data) \
-    rspamd_mempool_add_destructor_full (pool, func, data, (G_STRFUNC), (G_STRLOC))
+    rspamd_mempool_add_destructor_full (pool, func, data, (MEMPOOL_STR_FUNC), (G_STRLOC))
 
 /**
  * Replace destructor callback to pool for specified pointer
