@@ -144,22 +144,29 @@ define(["jquery", "codejar", "linenumbers", "prism"],
 
         ui.setup = function (rspamd) {
             var jar = {};
-            // CodeJar requires ES6
-            var editor = window.CodeJar &&
-                // Required to restore cursor position
-                (typeof window.getSelection().setBaseAndExtent === "function")
-                ? {
+            const editor = {
+                advanced: {
                     codejar: true,
                     elt: "div",
                     class: "editor language-clike",
                     readonly_attr: {contenteditable: false},
-                }
-                // Fallback to textarea if the browser does not support ES6
-                : {
+                },
+                basic: {
                     elt: "textarea",
                     class: "form-control map-textarea",
                     readonly_attr: {readonly: true},
-                };
+                }
+            };
+            let mode = "advanced";
+
+            // CodeJar requires ES6
+            if (!window.CodeJar ||
+                // Required to restore cursor position
+                (typeof window.getSelection().setBaseAndExtent !== "function")) {
+                mode = "basic";
+                $("input[name=editorMode][value='basic']").closest(".btn").button("toggle");
+                $("input[name=editorMode][value='advanced']").closest(".btn").addClass("disabled").prop("title", "Not supported by web browser");
+            }
 
             // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
@@ -170,11 +177,14 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                         Map: item.map
                     },
                     success: function (data) {
-                        $("<" + editor.elt + ' id="editor" class="' + editor.class + '" data-id="' + item.map + '">' +
-                            rspamd.escapeHTML(data[0].data) +
-                            "</" + editor.elt + ">").appendTo("#modalBody");
+                        // Highlighting a large amount of text is unresponsive
+                        mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
 
-                        if (editor.codejar) {
+                        $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map + '">' +
+                            rspamd.escapeHTML(data[0].data) +
+                            "</" + editor[mode].elt + ">").appendTo("#modalBody");
+
+                        if (editor[mode].codejar) {
                             jar = new CodeJar(
                                 document.querySelector("#editor"),
                                 withLineNumbers(Prism.highlightElement)
@@ -183,7 +193,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
 
                         var icon = "fa-edit";
                         if (item.editable === false || rspamd.read_only) {
-                            $("#editor").attr(editor.readonly_attr);
+                            $("#editor").attr(editor[mode].readonly_attr);
                             icon = "fa-eye";
                             $("#modalSaveGroup").hide();
                         } else {
@@ -200,7 +210,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                 return false;
             });
             $("#modalDialog").on("hidden.bs.modal", function () {
-                if (editor.codejar) {
+                if (editor[mode].codejar) {
                     jar.destroy();
                     $(".codejar-wrap").remove();
                 } else {
@@ -227,7 +237,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                         Map: $("#editor").data("id"),
                     },
                     params: {
-                        data: editor.codejar ? jar.toString() : $("#editor").val(),
+                        data: editor[mode].codejar ? jar.toString() : $("#editor").val(),
                         dataType: "text",
                     },
                     server: server
