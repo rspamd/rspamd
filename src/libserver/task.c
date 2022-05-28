@@ -309,7 +309,16 @@ rspamd_task_free (struct rspamd_task *task)
 		rspamd_message_unref (task->message);
 
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
+			rspamd_mempool_destructors_enforce (task->task_pool);
+
+			if (task->symcache_runtime) {
+				rspamd_symcache_runtime_destroy (task);
+			}
+
 			rspamd_mempool_delete (task->task_pool);
+		}
+		else if (task->symcache_runtime) {
+			rspamd_symcache_runtime_destroy (task);
 		}
 	}
 }

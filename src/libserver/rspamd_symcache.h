@@ -520,6 +520,12 @@ const struct rspamd_symcache_item_stat *
  * @param task
  */
 void rspamd_symcache_enable_profile (struct rspamd_task *task);
+
+/**
+ * Destroy internal state of the symcache runtime
+ * @param task
+ */
+void rspamd_symcache_runtime_destroy (struct rspamd_task *task);
 #ifdef  __cplusplus
 }
 #endif

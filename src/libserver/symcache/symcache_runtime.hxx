@@ -60,13 +60,6 @@ class symcache_runtime {
 	mutable struct cache_dynamic_item dynamic_items[];
 	/* We allocate this structure merely in memory pool, so destructor is absent */
 	~symcache_runtime() = delete;
-	/* Dropper for a shared ownership */
-	static auto savepoint_dtor(void *ptr) -> void {
-		auto *real_savepoint = (symcache_runtime *)ptr;
-
-		/* Drop shared ownership */
-		real_savepoint->order.reset();
-	}
 
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 			cache_dynamic_item *dyn_item) -> bool;
@@ -78,6 +71,12 @@ class symcache_runtime {
 						 cache_dynamic_item *dyn_item, bool check_only) -> bool;
 
 public:
+	/* Dropper for a shared ownership */
+	auto savepoint_dtor() -> void {
+
+		/* Drop shared ownership */
+		order.reset();
+	}
 	/**
 	 * Creates a cache runtime using task mempool
 	 * @param task

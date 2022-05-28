@@ -669,3 +669,10 @@ rspamd_symcache_finalize_item(struct rspamd_task *task,
 
 	cache_runtime->finalize_item(task, real_dyn_item);
 }
+
+void
+rspamd_symcache_runtime_destroy (struct rspamd_task *task)
+{
+	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
+	cache_runtime->savepoint_dtor();
+}

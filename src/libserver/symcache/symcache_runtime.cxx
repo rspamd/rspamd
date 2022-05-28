@@ -45,8 +45,6 @@ symcache_runtime::create(struct rspamd_task *task, symcache &cache) -> symcache_
 			sizeof(struct cache_dynamic_item) * cur_order->size());
 
 	checkpoint->order = cache.get_cache_order();
-	rspamd_mempool_add_destructor(task->task_pool,
-			symcache_runtime::savepoint_dtor, checkpoint);
 
 	/* Calculate profile probability */
 	ev_now_update_if_cheap(task->event_loop);
@@ -647,6 +645,7 @@ rspamd_symcache_delayed_item_fin(gpointer ud)
 {
 	auto *cbd = (struct rspamd_symcache_delayed_cbdata *) ud;
 
+	cbd->event = nullptr;
 	cbd->runtime->unset_slow();
 	ev_timer_stop(cbd->task->event_loop, &cbd->tm);
 }
@@ -656,12 +655,15 @@ rspamd_symcache_delayed_item_cb(EV_P_ ev_timer *w, int what)
 {
 	auto *cbd = (struct rspamd_symcache_delayed_cbdata *) w->data;
 
-	cbd->event = NULL;
+	if (cbd->event) {
+		cbd->event = nullptr;
 
-	/* Timer will be stopped here */
-	rspamd_session_remove_event (cbd->task->s,
-			rspamd_symcache_delayed_item_fin, cbd);
-	cbd->runtime->process_item_rdeps(cbd->task, cbd->item);
+		/* Timer will be stopped here */
+		rspamd_session_remove_event (cbd->task->s,
+				rspamd_symcache_delayed_item_fin, cbd);
+
+		cbd->runtime->process_item_rdeps(cbd->task, cbd->item);
+	}
 
 }
 
@@ -671,7 +673,7 @@ rspamd_delayed_timer_dtor(gpointer d)
 	auto *cbd = (struct rspamd_symcache_delayed_cbdata *) d;
 
 	if (cbd->event) {
-		/* Event has not been executed */
+		/* Event has not been executed, this will also stop a timer */
 		rspamd_session_remove_event (cbd->task->s,
 				rspamd_symcache_delayed_item_fin, cbd);
 		cbd->event = nullptr;
@@ -784,6 +786,11 @@ symcache_runtime::finalize_item(struct rspamd_task *task, cache_dynamic_item *dy
 auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *item) -> void
 {
 	auto *cache_ptr = reinterpret_cast<symcache *>(task->cfg->cache);
+
+	// Avoid race condition with the runtime destruction and the delay timer
+	if (!order) {
+		return;
+	}
 
 	for (const auto &rdep: item->rdeps) {
 		if (rdep.item) {
