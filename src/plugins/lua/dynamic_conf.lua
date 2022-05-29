@@ -92,7 +92,7 @@ local function apply_dynamic_scores(_, sc)
     end
   end, fun.filter(function(k, v)
     -- Select elts with scores that are different from local ones
-    local sym = rspamd_config:get_metric_symbol(k)
+    local sym = rspamd_config:get_symbol(k)
     if (sym and alpha_cmp(sym.score, v)) or cur_settings.updates.symbols[k] then
       return false
     end
