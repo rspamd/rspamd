@@ -332,23 +332,6 @@ LUA_FUNCTION_DEF (config, set_metric_symbol);
 LUA_FUNCTION_DEF (config, set_metric_action);
 
 /**
- * @method rspamd_config:get_symbol(name)
- * Gets metric data for a specific symbol identified by `name`:
- *
- * - `score`: score for symbol (number)
- * - `description`: description of symbol (string, optional)
- * - `group`: name of group for symbol (string, optional)
- * - `one_shot`: turn off multiple hits for a symbol (boolean, optional)
- * - `flags`: comma separated string of flags:
- *   + `ignore`: do not strictly check validity of symbol and corresponding rule
- *   + `one_shot`: turn off multiple hits for a symbol
- *
- * @param {string} name name of symbol
- * @return {table} symbol's definition or nil in case of undefined symbol
- */
-LUA_FUNCTION_DEF (config, get_metric_symbol);
-
-/**
  * @method rspamd_config:get_action(name)
  * Gets data for a specific action in config. This function returns number representing action's score
  *
@@ -887,8 +870,7 @@ static const struct luaL_reg configlib_m[] = {
 	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF (config, set_metric_action),
 	{"set_action", lua_config_set_metric_action},
-	LUA_INTERFACE_DEF (config, get_metric_symbol),
-	{"get_symbol", lua_config_get_metric_symbol},
+	{"get_metric_symbol", lua_config_get_symbol},
 	LUA_INTERFACE_DEF (config, get_metric_action),
 	{"get_action", lua_config_get_metric_action},
 	LUA_INTERFACE_DEF (config, get_all_actions),
@@ -2439,58 +2421,6 @@ lua_config_set_metric_symbol (lua_State * L)
 }
 
 static gint
-lua_config_get_metric_symbol (lua_State * L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym_name = luaL_checkstring (L, 2);
-	struct rspamd_symbol *sym_def;
-	struct rspamd_symbols_group *sym_group;
-	guint i;
-
-	if (cfg && sym_name) {
-		sym_def = g_hash_table_lookup (cfg->symbols, sym_name);
-
-		if (sym_def == NULL) {
-			lua_pushnil (L);
-		}
-		else {
-			lua_createtable (L, 0, 3);
-			lua_pushstring (L, "score");
-			lua_pushnumber (L, sym_def->score);
-			lua_settable (L, -3);
-
-			if (sym_def->description) {
-				lua_pushstring (L, "description");
-				lua_pushstring (L, sym_def->description);
-				lua_settable (L, -3);
-			}
-
-			if (sym_def->gr) {
-				lua_pushstring (L, "group");
-				lua_pushstring (L, sym_def->gr->name);
-				lua_settable (L, -3);
-			}
-
-			lua_pushstring (L, "groups");
-			lua_createtable (L, sym_def->groups->len, 0);
-
-			PTR_ARRAY_FOREACH (sym_def->groups, i, sym_group) {
-				lua_pushstring (L, sym_group->name);
-				lua_rawseti (L, -2, i + 1);
-			}
-
-			lua_settable (L, -3);
-		}
-	}
-	else {
-		luaL_error (L, "Invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
 lua_config_set_metric_action (lua_State * L)
 {
 	LUA_TRACE_POINT;
@@ -3514,6 +3444,7 @@ lua_config_get_symbols_counters (lua_State *L)
 struct lua_metric_symbols_cbdata {
 	lua_State *L;
 	struct rspamd_config *cfg;
+	bool is_table;
 };
 
 static void
@@ -3528,7 +3459,9 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 
 	L = cbd->L;
 
-	lua_pushstring (L, sym); /* Symbol name */
+	if (cbd->is_table) {
+		lua_pushstring(L, sym); /* Symbol name */
+	}
 
 	lua_createtable (L, 0, 6);
 	lua_pushstring (L, "score");
@@ -3626,7 +3559,9 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 		lua_setfield (L, -2, "groups");
 	}
 
-	lua_settable (L, -3); /* Symname -> table */
+	if (cbd->is_table) {
+		lua_settable(L, -3); /* Symname -> table */
+	}
 }
 
 static gint
@@ -3640,6 +3575,7 @@ lua_config_get_symbols (lua_State *L)
 
 		cbd.L = L;
 		cbd.cfg = cfg;
+		cbd.is_table = true;
 
 		lua_createtable (L, 0, g_hash_table_size (cfg->symbols));
 		g_hash_table_foreach (cfg->symbols,
@@ -3667,6 +3603,7 @@ lua_config_get_symbol (lua_State *L)
 		if (s) {
 			cbd.L = L;
 			cbd.cfg = cfg;
+			cbd.is_table = false;
 			lua_metric_symbol_inserter((void *)sym_name, s, &cbd);
 		}
 		else {
