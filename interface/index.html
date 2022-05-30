@@ -325,9 +325,22 @@
 					</div>
 				</div>
 				<div class="card bg-light shadow my-3">
-					<div class="card-header text-secondary py-2">
+					<div class="card-header text-secondary py-2 d-flex">
 						<span class="icon mr-3"><i class="fas fa-list"></i></span>
 						<span class="h6 font-weight-bolder my-2">Lists</span>
+						<div class="form-inline card-header-form input-group-sm align-self-center ml-auto mr-1">
+							Editor:
+							<div id="btnGroupEditor" class="btn-group btn-group-toggle btn-group-xs ml-1" data-toggle="buttons">
+								<label class="btn btn-outline-secondary form-check-label">
+									<input type="radio" class="form-check-input" name="editorMode" autocomplete="off" value="basic">
+									Basic
+								</label>
+								<label class="btn btn-outline-secondary form-check-label active">
+									<input type="radio" class="form-check-input" name="editorMode" autocomplete="off" value="advanced" checked>
+									Advanced
+								</label>
+							</div>
+						</div>
 					</div>
 					<div class="card-body p-0">
 						<table class="table table-sm table-hover mb-0" id="listMaps">
