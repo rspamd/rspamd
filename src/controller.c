@@ -653,7 +653,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 				check_normal = FALSE;
 			}
 
-			if (ctx->enable_password != NULL) {
+			if (!check_normal && ctx->enable_password != NULL) {
 				check = ctx->enable_password;
 
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
@@ -670,21 +670,9 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 							password,
 							check, pbkdf, TRUE);
 				}
-
-				if (check_enable) {
-					session->is_enable = TRUE;
-				}
 			}
 			else {
 				check_enable = FALSE;
-
-				if (check_normal) {
-					/*
-					 * If no enable password is specified use normal password as
-					 * enable password
-					 */
-					session->is_enable = TRUE;
-				}
 			}
 		}
 	}
