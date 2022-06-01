@@ -175,7 +175,6 @@ local function dkim_reputation_filter(task, rule)
   local dkim_tlds = lua_util.keys(requests)
   local requests_left = #dkim_tlds
   local rep_accepted = 0.0
-  local rep_rejected = 0.0
 
   lua_util.debugm(N, task, 'dkim reputation tokens: %s', requests)
 
@@ -201,8 +200,6 @@ local function dkim_reputation_filter(task, rule)
         if sel_tld and requests[sel_tld] then
           if requests[sel_tld] == 'a' then
             rep_accepted = rep_accepted + generic_reputation_calc(v, rule, 1.0, task)
-          elseif requests[sel_tld] == 'r' then
-            rep_rejected = rep_rejected + generic_reputation_calc(v, rule, 1.0, task)
           end
         else
           rspamd_logger.warnx(task, "cannot find the requested tld for a request: %s (%s tlds noticed)",
@@ -211,26 +208,17 @@ local function dkim_reputation_filter(task, rule)
       end
 
       -- Set local reputation symbol
-      -- `rep_accepted` and `rep_rejected` could be negative
       local rep_accepted_abs = math.abs(rep_accepted or 0)
-      local rep_rejected_abs = math.abs(rep_rejected or 0)
-      lua_util.debugm(N, task, "dkim reputation accepted: %s, dkim reputation rejected: %s",
-          rep_accepted_abs, rep_rejected_abs)
-      if rep_accepted_abs > 0 or rep_rejected_abs > 0 then
-        if rep_accepted_abs > rep_rejected_abs then
-          -- For accepted reputation we add symbol with just this reputation, either positive or negative
-          local final_rep = rep_accepted
-          if rep_accepted > 1.0 then final_rep = 1.0 end
-          if rep_accepted < -1.0 then final_rep = -1.0 end
-          add_symbol_score(task, rule, final_rep)
-        else
-          -- For rejected case we use absolute values as it must always be positive
-          add_symbol_score(task, rule, (rep_rejected_abs - rep_accepted_abs))
-        end
+      lua_util.debugm(N, task, "dkim reputation accepted: %s",
+          rep_accepted_abs)
+      if rep_accepted_abs then
+        local final_rep = rep_accepted
+        if rep_accepted > 1.0 then final_rep = 1.0 end
+        if rep_accepted < -1.0 then final_rep = -1.0 end
+        add_symbol_score(task, rule, final_rep)
 
         -- Store results for future DKIM results adjustments
         task:get_mempool():set_variable("dkim_reputation_accept", tostring(rep_accepted))
-        task:get_mempool():set_variable("dkim_reputation_reject", tostring(rep_rejected))
       end
     end
   end
@@ -271,22 +259,6 @@ local function dkim_reputation_postfilter(task, rule)
 
     task:adjust_result('R_DKIM_ALLOW', sym_accepted.score + final_adjustment)
   end
-
-  local sym_rejected = (task:get_symbol('R_DKIM_REJECT') or E)[1]
-  local reject_adjustment = task:get_mempool():get_variable("dkim_reputation_reject")
-
-  if sym_rejected and sym_rejected.score and
-      reject_adjustment and type(cfg.max_reject_adjustment) == 'number' then
-    local final_adjustment = cfg.max_reject_adjustment *
-        rspamd_util.tanh(tonumber(reject_adjustment) or 0)
-    lua_util.debugm(N, task, "adjust DKIM_REJECT: " ..
-        "cfg.max_reject_adjustment=%s reject_adjustment=%s final_adjustment=%s sym_rejected.score=%s",
-        cfg.max_reject_adjustment, reject_adjustment, final_adjustment,
-        sym_rejected.score)
-    if final_adjustment < 0 then
-      task:adjust_result('R_DKIM_REJECT', sym_rejected.score - final_adjustment)
-    end
-  end
 end
 
 local dkim_selector = {
@@ -298,7 +270,6 @@ local dkim_selector = {
     outbound = true,
     inbound = true,
     max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
-    max_reject_adjustment = 3.0 -- How to adjust rejected DKIM score
   },
   dependencies = {"DKIM_TRACE"},
   filter = dkim_reputation_filter, -- used to get scores
