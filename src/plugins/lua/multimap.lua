@@ -1195,7 +1195,7 @@ local function add_multimap_rule(key, newrule)
 
       local function parse_atom(str)
         local atom = table.concat(fun.totable(fun.take_while(function(c)
-          if string.find(', \t()><+!|&\n', c) then
+          if string.find(', \t()><+!|&\n', c, 1, true) then
             return false
           end
           return true

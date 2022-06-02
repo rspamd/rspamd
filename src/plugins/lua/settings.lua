@@ -848,7 +848,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
       if not checks[safe_key] then
         checks[safe_key] = cond
-        aliases[safe_key] = true
+        aliases[full_key] = true
       end
 
       return safe_key
@@ -943,7 +943,11 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
     -- Count checks and create Rspamd expression from a set of rules
     local nchecks = 0
-    for _,_ in pairs(checks) do nchecks = nchecks + 1 end
+    for k,_ in pairs(checks) do
+      if not aliases[k] then
+        nchecks = nchecks + 1
+      end
+    end
 
     if nchecks > 0 then
       -- Now we can deal with the expression!
@@ -970,7 +974,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       -- Parse expression's sanity
       local function parse_atom(str)
         local atom = table.concat(fun.totable(fun.take_while(function(c)
-          if string.find(', \t()><+!|&\n', c) then
+          if string.find(', \t()><+!|&\n', c, 1, true) then
             return false
           end
           return true
