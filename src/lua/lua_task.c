@@ -3864,7 +3864,7 @@ rspamd_check_real_recipients_array_size (GPtrArray *ar)
 	struct rspamd_email_address *addr;
 
 	PTR_ARRAY_FOREACH(ar, i, addr) {
-		if (!(addr->flags & LUA_ADDRESS_ORIGINAL)) {
+		if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
 			ret ++;
 		}
 	}
