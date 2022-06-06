@@ -129,6 +129,27 @@ constexpr auto enumerate(T && iterable)
 	return iterable_wrapper{ std::forward<T>(iterable) };
 }
 
+/**
+ * Allocator that cleans up memory in a secure way on destruction
+ * @tparam T
+ */
+template <class T> class secure_mem_allocator : public std::allocator<T>
+{
+public:
+	using pointer = typename std::allocator<T>::pointer;
+	using size_type = typename std::allocator<T>::size_type;
+	template<class U> struct rebind { typedef secure_mem_allocator<U> other; };
+	secure_mem_allocator() noexcept = default;
+	secure_mem_allocator(const secure_mem_allocator &) noexcept {}
+	template <class U> explicit secure_mem_allocator(const secure_mem_allocator<U>&) noexcept {}
+
+	void deallocate(pointer p, size_type num) noexcept {
+		rspamd_explicit_memzero((void *)p, num);
+		std::allocator<T>::deallocate(p, num);
+	}
+};
+
+
 }
 
 #endif //RSPAMD_UTIL_HXX
