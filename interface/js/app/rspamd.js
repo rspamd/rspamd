@@ -583,7 +583,8 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         $.ajax({
             type: "GET",
             url: "stat",
-            success: function () {
+            success: function (data) {
+                sessionStorage.setItem("read_only", data.read_only);
                 displayUI();
             },
             error: function () {
