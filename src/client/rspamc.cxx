@@ -1810,7 +1810,11 @@ rspamc_process_dir(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 			auto **ex = exclude_compiled;
 			auto skip = false;
 			while (ex != nullptr && *ex != nullptr) {
+#if GLIB_MAJOR_VERSION >= 2 && GLIB_MINOR_VERSION >= 70
 				if (g_pattern_spec_match(*ex, fpath.size(), fpath.c_str(), nullptr)) {
+#else
+				if (g_pattern_match(*ex, fpath.size(), fpath.c_str(), nullptr)) {
+#endif
 					skip = true;
 					break;
 				}

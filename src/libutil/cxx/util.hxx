@@ -140,7 +140,7 @@ public:
 	using size_type = typename std::allocator<T>::size_type;
 	template<class U> struct rebind { typedef secure_mem_allocator<U> other; };
 	secure_mem_allocator() noexcept = default;
-	secure_mem_allocator(const secure_mem_allocator &) noexcept {}
+	secure_mem_allocator(const secure_mem_allocator &_) noexcept : std::allocator<T>(_) {}
 	template <class U> explicit secure_mem_allocator(const secure_mem_allocator<U>&) noexcept {}
 
 	void deallocate(pointer p, size_type num) noexcept {
