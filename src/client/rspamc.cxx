@@ -344,6 +344,15 @@ struct rspamc_callback_data {
 	std::string filename;
 };
 
+template<typename T>
+static auto emphasis_argument(const T &arg, const char *fmt_string = "{}") -> auto {
+	if (tty) {
+		return fmt::format(fmt::emphasis::bold, fmt_string, arg);
+	}
+
+	return fmt::format(fmt_string, arg);
+}
+
 static gboolean
 rspamc_password_callback(const gchar *option_name,
 						 const gchar *value,
@@ -752,7 +761,7 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		auto *elt = ucl_object_lookup(obj, ucl_name);
 		if (elt) {
 			fmt::print(out, "{}: {}\n", output_message,
-					fmt::format(fmt::emphasis::bold, "{}", ucl_object_tostring(elt)));
+					emphasis_argument(ucl_object_tostring(elt)));
 		}
 	};
 
@@ -1067,10 +1076,15 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 	dash_buf[dashes + max_len] = '\0';
 
 	fmt::print(out, "Symbols cache\n");
-	fmt::print(out, fmt::emphasis::bold, " {} \n", dash_buf);
-	fmt::print(out, fmt::emphasis::bold,
-			fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Hits");
-	fmt::print(out, fmt::emphasis::bold, " {} \n", dash_buf);
+
+	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
+	fmt::print(out,
+			emphasis_argument(fmt_buf),
+			emphasis_argument("Pri"), emphasis_argument("Symbol"),
+			emphasis_argument("Weight"),
+			emphasis_argument("Frequency"),
+			emphasis_argument("Hits"));
+	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
 	fmt::print(out, fmt_buf, "", "", "", "hits/min", "");
 	rspamd_snprintf(fmt_buf, sizeof(fmt_buf),
 			"| {:3} | {:%d} | {:7.1f} | {:^6.3f}({:^5.3f}) | {:7} |\n", max_len);
@@ -1117,7 +1131,7 @@ rspamc_stat_actions(ucl_object_t *obj, std::string &out, std::int64_t scanned)
 			while ((cur = ucl_object_iterate (actions, &iter, true)) != nullptr) {
 				auto cnt = ucl_object_toint(cur);
 				fmt::format_to(std::back_inserter(out), "Messages with action {}: {}, {:.2f}%\n",
-						ucl_object_key(cur), fmt::format(fmt::emphasis::bold, "{}", cnt),
+						ucl_object_key(cur), emphasis_argument(cnt),
 						((double) cnt / (double) scanned) * 100.);
 			}
 		}
@@ -1125,10 +1139,10 @@ rspamc_stat_actions(ucl_object_t *obj, std::string &out, std::int64_t scanned)
 		auto spam = ucl_object_toint(ucl_object_lookup(obj, "spam_count"));
 		auto ham = ucl_object_toint(ucl_object_lookup(obj, "ham_count"));
 		fmt::format_to(std::back_inserter(out), "Messages treated as spam: {}, {:.2f}%\n",
-				fmt::format(fmt::emphasis::bold, "{}", ham),
+				emphasis_argument(spam),
 				((double) spam / (double) scanned) * 100.);
 		fmt::format_to(std::back_inserter(out), "Messages treated as ham: {}, {:.2f}%\n",
-					   fmt::format(fmt::emphasis::bold, "{}", ham),
+				emphasis_argument(ham),
 				((double) ham / (double) scanned) * 100.);
 	}
 }
@@ -1171,16 +1185,16 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 
 	auto scanned = ucl_object_toint(ucl_object_lookup(obj, "scanned"));
 	fmt::format_to(std::back_inserter(out_str), "Messages scanned: {}\n",
-				   fmt::format(fmt::emphasis::bold, "{}", scanned));
+			emphasis_argument(scanned));
 
 	rspamc_stat_actions(obj, out_str, scanned);
 
 	fmt::format_to(std::back_inserter(out_str), "Messages learned: {}\n",
-			fmt::format(fmt::emphasis::bold, "{}", ucl_object_toint(ucl_object_lookup(obj, "learned"))));
+			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "learned"))));
 	fmt::format_to(std::back_inserter(out_str), "Connections count: {}\n",
-			fmt::format(fmt::emphasis::bold, "{}",ucl_object_toint(ucl_object_lookup(obj, "connections"))));
+			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "connections"))));
 	fmt::format_to(std::back_inserter(out_str), "Control connections count: {}\n",
-			fmt::format(fmt::emphasis::bold, "{}",ucl_object_toint(ucl_object_lookup(obj, "control_connections"))));
+			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "control_connections"))));
 
 	const auto *avg_time_obj = ucl_object_lookup(obj, "scan_times");
 
@@ -1200,7 +1214,8 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 		if (cnt > 0) {
 			auto sum = rspamd_sum_floats(nums.data(), &cnt);
 			fmt::format_to(std::back_inserter(out_str),
-						   "Average scan time: {} sec\n", fmt::format(fmt::emphasis::bold, "{:.3f}", sum / cnt));
+						   "Average scan time: {} sec\n",
+						   emphasis_argument(sum / cnt, "{:.3f}"));
 		}
 	}
 
@@ -1566,13 +1581,13 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 			if (cmd.need_input && !json) {
 				if (!compact) {
 					fmt::print(out, "Results for file: {} ({:.3} seconds)\n",
-							fmt::format(fmt::emphasis::bold, "{}", cbdata->filename), diff);
+							emphasis_argument(cbdata->filename), diff);
 				}
 			}
 			else {
 				if (!compact && !json) {
 					fmt::print(out, "Results for command: {} ({:.3} seconds)\n",
-							fmt::format(fmt::emphasis::bold, "{}", cmd.name), diff);
+							emphasis_argument(cmd.name), diff);
 				}
 			}
 
