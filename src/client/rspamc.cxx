@@ -703,8 +703,8 @@ add_options(GQueue *opts)
 		}
 		else {
 			add_client_header(opts,
-					hdr_view.substr(0, std::distance(delim_pos, std::begin(hdr_view))),
-					hdr_view.substr(std::distance(delim_pos, std::begin(hdr_view) + 1)));
+					hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos)),
+					hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1));
 		}
 
 		hdr++;
