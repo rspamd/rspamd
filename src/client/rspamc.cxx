@@ -879,15 +879,44 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		got_scores++;
 	}
 
-	print_protocol_string("action", "Action");
-
 	elt = ucl_object_lookup(obj, "action");
 	if (elt) {
 		auto act = rspamd_action_from_str_rspamc(ucl_object_tostring(elt));
 
 		if (act.has_value()) {
-			fmt::print(out, "Spam: {}\n", act.value() < METRIC_ACTION_GREYLIST ?
-											  "true" : "false");
+			if (!tty) {
+				print_protocol_string("action", "Action");
+			}
+			else {
+				/* Colorize action type */
+				std::string colorized_action;
+				switch (act.value()) {
+				case METRIC_ACTION_REJECT:
+					colorized_action = fmt::format(fmt::fg(fmt::color::red), "reject");
+					break;
+				case METRIC_ACTION_NOACTION:
+					colorized_action = fmt::format(fmt::fg(fmt::color::green), "no action");
+					break;
+				case METRIC_ACTION_ADD_HEADER:
+				case METRIC_ACTION_REWRITE_SUBJECT:
+					colorized_action = fmt::format(fmt::fg(fmt::color::orange), ucl_object_tostring(elt));
+					break;
+				case METRIC_ACTION_GREYLIST:
+				case METRIC_ACTION_SOFT_REJECT:
+					colorized_action = fmt::format(fmt::fg(fmt::color::gray), ucl_object_tostring(elt));
+					break;
+				default:
+					colorized_action = fmt::format(fmt::emphasis::bold, ucl_object_tostring(elt));
+					break;
+				}
+				fmt::print(out, "Action: {}\n", colorized_action);
+			}
+
+			fmt::print(out, "Spam: {}\n", emphasis_argument(act.value() < METRIC_ACTION_GREYLIST ?
+											  "true" : "false"));
+		}
+		else {
+			print_protocol_string("action", "Action");
 		}
 	}
 
@@ -895,9 +924,9 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 
 	if (got_scores == 2) {
 		fmt::print(out,
-				"Score: {:.2} / {:.2}\n",
-				score,
-				required_score);
+				"Score: {} / {}\n",
+				emphasis_argument(score, "{:.2}"),
+				emphasis_argument(required_score, "{:.2}"));
 	}
 
 	elt = ucl_object_lookup(obj, "symbols");
