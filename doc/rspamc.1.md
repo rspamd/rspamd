@@ -114,7 +114,7 @@ requires input.
 :	Add custom HTTP header for a request. You may specify header in format `name=value` or just `name` for an empty header. This option can be repeated multiple times.
 
 \--sort=*type*
-:	Sort output according to a specific field. For `counters` command the allowed values for this key are `name`, `weight`, `frequency` and `hits`. Appending `:desc` to any of these types inverts sorting order.
+:	Sort output according to a specific field. For `counters` command the allowed values for this key are `name`, `weight`, `frequency` and `hits`. Appending `:asc` to any of these types inverts sorting order.
 
 \--commands
 :	List available commands

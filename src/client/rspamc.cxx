@@ -28,6 +28,7 @@
 #include <functional>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -352,6 +353,103 @@ static auto emphasis_argument(const T &arg, const char *fmt_string = "{}") -> au
 
 	return fmt::format(fmt_string, arg);
 }
+
+using sort_lambda = std::function<int(const ucl_object_t *, const ucl_object_t *)>;
+static const auto sort_map = frozen::make_unordered_map<frozen::string, sort_lambda>({
+		{"name", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "symbol");
+			const auto *elt2 = ucl_object_lookup(o2, "symbol");
+
+			if (elt1 && elt2) {
+				return strcmp(ucl_object_tostring(elt1),
+						ucl_object_tostring(elt2));
+			}
+			else if (ucl_object_key(o1) != nullptr && ucl_object_key(o2) != nullptr) {
+				return strcmp(ucl_object_key(o1),
+						ucl_object_key(o2));
+			}
+			return 0;
+		}},
+		{"weight", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "weight");
+			const auto *elt2 = ucl_object_lookup(o2, "weight");
+
+			if (elt1 && elt2) {
+				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+			}
+			return 0;
+		}},
+		{"score", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "score");
+			const auto *elt2 = ucl_object_lookup(o2, "score");
+
+			if (elt1 && elt2) {
+				return std::fabs(ucl_object_todouble(elt2)) * 1000.0 -
+					std::fabs(ucl_object_todouble(elt1)) * 1000.0;
+			}
+			return 0;
+		}},
+		{"time", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "time");
+			const auto *elt2 = ucl_object_lookup(o2, "time");
+
+			if (elt1 && elt2) {
+				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+			}
+			return 0;
+		}},
+		{"frequency", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "frequency");
+			const auto *elt2 = ucl_object_lookup(o2, "frequency");
+
+			if (elt1 && elt2) {
+				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+			}
+			return 0;
+		}},
+		{"hits", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+			const auto *elt1 = ucl_object_lookup(o1, "hits");
+			const auto *elt2 = ucl_object_lookup(o2, "hits");
+
+			if (elt1 && elt2) {
+				return ucl_object_toint(elt2) - ucl_object_toint(elt1);
+			}
+			return 0;
+		}},
+});
+
+/* TODO: remove once migrate to C++20 standard */
+static constexpr auto
+sv_ends_with(std::string_view inp, std::string_view suffix) -> bool {
+	return inp.size() >= suffix.size() && inp.compare(inp.size() - suffix.size(), std::string_view::npos, suffix) == 0;
+}
+
+template<typename T>
+auto sort_containert_with_default(T &cont, const char *default_sort,
+								  typename std::enable_if<std::is_same_v<typename T::value_type, const ucl_object_t *>>::type* = 0) -> void
+{
+	auto real_sort = sort ? sort : default_sort;
+	if (real_sort) {
+		auto sort_view = std::string_view{real_sort};
+		auto inverse = false;
+
+		if (sv_ends_with(sort_view, ":asc")) {
+			inverse = true;
+			sort_view = std::string_view{sort, strlen(sort) - sizeof(":asc") + 1};
+		}
+
+		const auto sort_functor = sort_map.find(sort_view);
+		if (sort_functor != sort_map.end()) {
+			std::stable_sort(std::begin(cont), std::end(cont),
+					[&](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+						auto order = sort_functor->second(o1, o2);
+
+						return inverse ? order > 0 : order < 0;
+					});
+		}
+	}
+}
+
 
 static gboolean
 rspamc_password_callback(const gchar *option_name,
@@ -813,10 +911,7 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 			symbols.push_back(cur);
 		}
 
-		std::stable_sort(std::begin(symbols), std::end(symbols),
-						 [](const ucl_object_t *u1, const ucl_object_t *u2) -> int {
-							 return strcmp(ucl_object_key(u1), ucl_object_key(u2));
-						 });
+		sort_containert_with_default(symbols, "name");
 
 		for (const auto *sym_obj : symbols) {
 			rspamc_symbol_output(out, sym_obj);
@@ -966,65 +1061,9 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 	}
 }
 
-static constexpr auto
-sv_ends_with(std::string_view inp, std::string_view suffix) -> bool {
-	return inp.size() >= suffix.size() && inp.compare(inp.size() - suffix.size(), std::string_view::npos, suffix) == 0;
-}
-
 static void
 rspamc_counters_output(FILE *out, ucl_object_t *obj)
 {
-	using sort_lambda = std::function<int(const ucl_object_t *, const ucl_object_t *)>;
-	static const auto sort_map = frozen::make_unordered_map<frozen::string, sort_lambda>({
-			{"name", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-				const auto *elt1 = ucl_object_lookup(o1, "symbol");
-				const auto *elt2 = ucl_object_lookup(o2, "symbol");
-
-				if (elt1 && elt2) {
-					return strcmp(ucl_object_tostring(elt1),
-							ucl_object_tostring(elt2));
-				}
-				return 0;
-			}},
-			{"weight", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-				const auto *elt1 = ucl_object_lookup(o1, "weight");
-				const auto *elt2 = ucl_object_lookup(o2, "weight");
-
-				if (elt1 && elt2) {
-					return ucl_object_todouble(elt1) * 1000.0 - ucl_object_todouble(elt2) * 1000.0;
-				}
-				return 0;
-			}},
-			{"time", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-				const auto *elt1 = ucl_object_lookup(o1, "time");
-				const auto *elt2 = ucl_object_lookup(o2, "time");
-
-				if (elt1 && elt2) {
-					return ucl_object_todouble(elt1) * 1000.0 - ucl_object_todouble(elt2) * 1000.0;
-				}
-				return 0;
-			}},
-			{"frequency", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-				const auto *elt1 = ucl_object_lookup(o1, "frequency");
-				const auto *elt2 = ucl_object_lookup(o2, "frequency");
-
-				if (elt1 && elt2) {
-					return ucl_object_todouble(elt1) * 1000.0 - ucl_object_todouble(elt2) * 1000.0;
-				}
-				return 0;
-			}},
-			{"hits", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-				const auto *elt1 = ucl_object_lookup(o1, "hits");
-				const auto *elt2 = ucl_object_lookup(o2, "hits");
-
-				if (elt1 && elt2) {
-					return ucl_object_toint(elt1) - ucl_object_toint(elt2);
-				}
-				return 0;
-			}},
-	});
-
-
 	if (obj->type != UCL_ARRAY) {
 		fmt::print(out, "Bad output\n");
 		return;
@@ -1045,26 +1084,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 		counters_vec.push_back(cur);
 	}
 
-	/* Sort symbols by their order */
-	if (sort != nullptr) {
-		auto sort_view = std::string_view{sort};
-		auto inverse = false;
-
-		if (sv_ends_with(sort_view, ":desc")) {
-			inverse = true;
-			sort_view = std::string_view{sort, strlen(sort) - sizeof(":desc") + 1};
-		}
-
-		const auto sort_functor = sort_map.find(sort_view);
-		if (sort_functor != sort_map.end()) {
-			std::stable_sort(std::begin(counters_vec), std::end(counters_vec),
-							 [&](const ucl_object_t *o1, const ucl_object_t *o2) {
-				auto order = sort_functor->second(o1, o2);
-
-				return inverse ? -(order) : order;
-			});
-		}
-	}
+	sort_containert_with_default(counters_vec, "name");
 
 	char fmt_buf[64], dash_buf[82], sym_buf[82];
 	const int dashes = 44;
