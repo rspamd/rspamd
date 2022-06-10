@@ -214,8 +214,8 @@ struct rspamc_command {
 	void (*command_output_func)(FILE *, ucl_object_t *obj);
 };
 
-std::vector<rspamc_command> rspamc_commands = {
-		{
+static const constexpr auto rspamc_commands = rspamd::array_of<rspamc_command>(
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_SYMBOLS,
 				.name = "symbols",
 				.path = "checkv2",
@@ -225,7 +225,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = TRUE,
 				.command_output_func = rspamc_symbols_output
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_LEARN_SPAM,
 				.name = "learn_spam",
 				.path = "learnspam",
@@ -235,7 +235,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = TRUE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_LEARN_HAM,
 				.name = "learn_ham",
 				.path = "learnham",
@@ -245,7 +245,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = TRUE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_FUZZY_ADD,
 				.name = "fuzzy_add",
 				.path = "fuzzyadd",
@@ -256,7 +256,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = TRUE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_FUZZY_DEL,
 				.name = "fuzzy_del",
 				.path = "fuzzydel",
@@ -267,7 +267,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = TRUE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
 				.name = "fuzzy_delhash",
 				.path = "fuzzydelhash",
@@ -278,7 +278,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_STAT,
 				.name = "stat",
 				.path = "stat",
@@ -288,7 +288,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = rspamc_stat_output,
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_STAT_RESET,
 				.name = "stat_reset",
 				.path = "statreset",
@@ -298,7 +298,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = rspamc_stat_output
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_COUNTERS,
 				.name = "counters",
 				.path = "counters",
@@ -308,7 +308,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = rspamc_counters_output
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_UPTIME,
 				.name = "uptime",
 				.path = "auth",
@@ -318,7 +318,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = rspamc_uptime_output
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
 				.name = "add_symbol",
 				.path = "addsymbol",
@@ -328,7 +328,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = nullptr
 		},
-		{
+		rspamc_command{
 				.cmd = RSPAMC_COMMAND_ADD_ACTION,
 				.name = "add_action",
 				.path = "addaction",
@@ -338,7 +338,7 @@ std::vector<rspamc_command> rspamc_commands = {
 				.need_input = FALSE,
 				.command_output_func = nullptr
 		}
-};
+);
 
 struct rspamc_callback_data {
 	struct rspamc_command cmd;
@@ -425,8 +425,8 @@ sv_ends_with(std::string_view inp, std::string_view suffix) -> bool {
 }
 
 template<typename T>
-auto sort_containert_with_default(T &cont, const char *default_sort,
-								  typename std::enable_if<std::is_same_v<typename T::value_type, const ucl_object_t *>>::type* = 0) -> void
+auto sort_ucl_container_with_default(T &cont, const char *default_sort,
+									 typename std::enable_if<std::is_same_v<typename T::value_type, const ucl_object_t *>>::type* = 0) -> void
 {
 	auto real_sort = sort ? sort : default_sort;
 	if (real_sort) {
@@ -940,7 +940,7 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 			symbols.push_back(cur);
 		}
 
-		sort_containert_with_default(symbols, "name");
+		sort_ucl_container_with_default(symbols, "name");
 
 		for (const auto *sym_obj : symbols) {
 			rspamc_symbol_output(out, sym_obj);
@@ -1113,7 +1113,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 		counters_vec.push_back(cur);
 	}
 
-	sort_containert_with_default(counters_vec, "name");
+	sort_ucl_container_with_default(counters_vec, "name");
 
 	char fmt_buf[64], dash_buf[82], sym_buf[82];
 	const int dashes = 44;
