@@ -72,9 +72,10 @@ struct smart_ptr_hash {
 /*
  * Creates std::array from a standard C style array with automatic size calculation
  */
-template <typename V, typename... T>
-constexpr auto array_of(T&&... t) -> std::array<V, sizeof...(T)>
+template <typename... Ts>
+constexpr auto array_of(Ts&&... t) -> std::array<typename std::decay_t<typename std::common_type_t<Ts...>>, sizeof...(Ts)>
 {
+	using T = typename std::decay_t<typename std::common_type_t<Ts...>>;
 	return {{ std::forward<T>(t)... }};
 }
 

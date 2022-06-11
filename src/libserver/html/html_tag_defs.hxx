@@ -33,7 +33,7 @@ struct html_tag_def {
 
 #define TAG_DEF(id, name, flags) html_tag_def{(name), (id), (flags)}
 
-static const auto html_tag_defs_array = rspamd::array_of<html_tag_def>(
+static const auto html_tag_defs_array = rspamd::array_of(
 		/* W3C defined elements */
 		TAG_DEF(Tag_A, "a", FL_HREF),
 		TAG_DEF(Tag_ABBR, "abbr", (CM_INLINE)),

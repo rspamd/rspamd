@@ -214,7 +214,7 @@ struct rspamc_command {
 	void (*command_output_func)(FILE *, ucl_object_t *obj);
 };
 
-static const constexpr auto rspamc_commands = rspamd::array_of<rspamc_command>(
+static const constexpr auto rspamc_commands = rspamd::array_of(
 		rspamc_command{
 				.cmd = RSPAMC_COMMAND_SYMBOLS,
 				.name = "symbols",
