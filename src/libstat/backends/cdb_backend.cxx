@@ -377,9 +377,9 @@ gboolean
 rspamd_cdb_process_tokens(struct rspamd_task* task,
 								   GPtrArray* tokens,
 								   gint id,
-								   gpointer ctx)
+								   gpointer runtime)
 {
-	auto *cdbp = CDB_FROM_RAW(ctx);
+	auto *cdbp = CDB_FROM_RAW(runtime);
 	bool seen_values = false;
 
 	for (auto i = 0u; i < tokens->len; i++) {

@@ -84,13 +84,13 @@ struct rspamd_stat_backend {
                 gboolean learn, gpointer ctx); \
         gboolean rspamd_##name##_process_tokens (struct rspamd_task *task, \
                 GPtrArray *tokens, gint id, \
-                gpointer ctx); \
+                gpointer runtime); \
         gboolean rspamd_##name##_finalize_process (struct rspamd_task *task, \
                 gpointer runtime, \
                 gpointer ctx); \
         gboolean rspamd_##name##_learn_tokens (struct rspamd_task *task, \
                 GPtrArray *tokens, gint id, \
-                gpointer ctx); \
+                gpointer runtime); \
         gboolean rspamd_##name##_finalize_learn (struct rspamd_task *task, \
                 gpointer runtime, \
                 gpointer ctx, GError **err); \
@@ -116,6 +116,7 @@ RSPAMD_STAT_BACKEND_DEF(mmaped_file);
 RSPAMD_STAT_BACKEND_DEF(sqlite3);
 RSPAMD_STAT_BACKEND_DEF(cdb);
 RSPAMD_STAT_BACKEND_DEF(redis);
+RSPAMD_STAT_BACKEND_DEF(http);
 
 #ifdef  __cplusplus
 }

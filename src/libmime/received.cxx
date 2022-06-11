@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <mempool_vars_internal.h>
 #include "config.h"
 #include "libserver/url.h"
 #include "lua/lua_common.h"
 #include "libserver/cfg_file.h"
+#include "libserver/mempool_vars_internal.h"
 #include "mime_string.hxx"
 #include "smtp_parsers.h"
 #include "message.h"

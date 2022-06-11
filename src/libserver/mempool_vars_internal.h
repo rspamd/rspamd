@@ -41,5 +41,6 @@
 #define RSPAMD_MEMPOOL_SPAM_LEARNS "spam_learns"
 #define RSPAMD_MEMPOOL_HAM_LEARNS "ham_learns"
 #define RSPAMD_MEMPOOL_RE_MAPS_CACHE "re_maps_cache"
+#define RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME "stat_http_runtime"
 
 #endif

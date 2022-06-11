@@ -11,6 +11,7 @@ SET(CLASSIFIERSSRC	${CMAKE_CURRENT_SOURCE_DIR}/classifiers/bayes.c
 SET(BACKENDSSRC 	${CMAKE_CURRENT_SOURCE_DIR}/backends/mmaped_file.c
 					${CMAKE_CURRENT_SOURCE_DIR}/backends/sqlite3_backend.c
 					${CMAKE_CURRENT_SOURCE_DIR}/backends/cdb_backend.cxx
+					${CMAKE_CURRENT_SOURCE_DIR}/backends/http_backend.cxx
 					${CMAKE_CURRENT_SOURCE_DIR}/backends/redis_backend.c)
 
 SET(CACHESSRC 	${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/sqlite3_cache.c
