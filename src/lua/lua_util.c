@@ -2469,6 +2469,8 @@ lua_util_readline (lua_State *L)
 
 	if (rx_instance == NULL) {
 		rx_instance = replxx_init ();
+		/* See https://github.com/AmokHuginnsson/replxx/issues/137 */
+		replxx_history_add(rx_instance, "");
 	}
 
 	input = (gchar *)replxx_input (rx_instance, prompt);
