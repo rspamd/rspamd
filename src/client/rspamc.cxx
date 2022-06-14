@@ -826,7 +826,7 @@ rspamc_symbol_output(FILE *out, const ucl_object_t *obj)
 	const auto *val = ucl_object_lookup(obj, "score");
 
 	if (val != nullptr) {
-		fmt::print(out, "({:.2})", ucl_object_todouble(val));
+		fmt::print(out, "({:.2f})", ucl_object_todouble(val));
 	}
 	val = ucl_object_lookup(obj, "options");
 	if (val != nullptr && val->type == UCL_ARRAY) {
@@ -925,8 +925,8 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	if (got_scores == 2) {
 		fmt::print(out,
 				"Score: {} / {}\n",
-				emphasis_argument(score, "{:.2}"),
-				emphasis_argument(required_score, "{:.2}"));
+				emphasis_argument(score, "{:.2f}"),
+				emphasis_argument(required_score, "{:.2f}"));
 	}
 
 	elt = ucl_object_lookup(obj, "symbols");
