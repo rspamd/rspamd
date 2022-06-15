@@ -1120,7 +1120,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 	max_len = MIN (sizeof(dash_buf) - dashes - 1, max_len);
 	rspamd_snprintf(fmt_buf, sizeof(fmt_buf),
-			"| {:3} | {:%d} | {:^7} | {:^13} | {:^7} |\n", max_len);
+			"| {:4} | {:%d} | {:^7} | {:^13} | {:^7} |\n", max_len);
 	memset(dash_buf, '-', dashes + max_len);
 	dash_buf[dashes + max_len] = '\0';
 
@@ -1136,7 +1136,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
 	fmt::print(out, fmt_buf, "", "", "", "hits/min", "");
 	rspamd_snprintf(fmt_buf, sizeof(fmt_buf),
-			"| {:3} | {:%d} | {:7.1f} | {:^6.3f}({:^5.3f}) | {:7} |\n", max_len);
+			"| {:4} | {:%d} | {:7.1f} | {:^6.3f}({:^5.3f}) | {:7} |\n", max_len);
 
 	for (const auto [i, cur] : rspamd::enumerate(counters_vec)) {
 		fmt::print(out, " {} \n", dash_buf);
