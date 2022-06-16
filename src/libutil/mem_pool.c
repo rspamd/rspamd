@@ -621,23 +621,6 @@ rspamd_mempool_strdup_ (rspamd_mempool_t * pool, const gchar *src, const gchar *
 }
 
 gchar *
-rspamd_mempool_fstrdup_ (rspamd_mempool_t * pool, const struct f_str_s *src,
-		const gchar *loc)
-{
-	gchar *newstr;
-
-	if (src == NULL) {
-		return NULL;
-	}
-
-	newstr = rspamd_mempool_alloc_ (pool, src->len + 1, MIN_MEM_ALIGNMENT, loc);
-	memcpy (newstr, src->str, src->len);
-	newstr[src->len] = '\0';
-
-	return newstr;
-}
-
-gchar *
 rspamd_mempool_ftokdup_ (rspamd_mempool_t *pool, const rspamd_ftok_t *src,
 		const gchar *loc)
 {

@@ -217,19 +217,6 @@ gchar *rspamd_mempool_strdup_ (rspamd_mempool_t *pool, const gchar *src, const g
 #define rspamd_mempool_strdup(pool, src) \
 	rspamd_mempool_strdup_ ((pool), (src), (G_STRLOC))
 
-/**
- * Make a copy of fixed string in pool as null terminated string
- * @param pool memory pool object
- * @param src source string
- * @return pointer to newly created string that is copy of src
- */
-gchar *rspamd_mempool_fstrdup_ (rspamd_mempool_t *pool,
-								const struct f_str_s *src,
-								const gchar *loc)
-	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
-#define rspamd_mempool_fstrdup(pool, src) \
-	rspamd_mempool_fstrdup_ ((pool), (src), G_STRLOC)
-
 struct f_str_tok;
 
 /**
