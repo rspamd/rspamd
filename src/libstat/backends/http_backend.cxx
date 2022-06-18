@@ -80,9 +80,13 @@ private:
 class http_backend_runtime final {
 public:
 	static auto create(struct rspamd_task *task, bool is_learn) -> http_backend_runtime *;
+	/* Add a new statfile with a specific id to the list of statfiles */
+	auto notice_statfile(int id, const struct rspamd_statfile_config *st) -> void {
+		seen_statfiles[id] = st;
+	}
 private:
 	http_backends_collection *all_backends;
-	robin_hood::unordered_flat_map<int, struct rspamd_statfile *> seen_statfiles;
+	robin_hood::unordered_flat_map<int, const struct rspamd_statfile_config *> seen_statfiles;
 	struct upstream *selected;
 private:
 	http_backend_runtime(struct rspamd_task *task, bool is_learn) :
@@ -249,17 +253,21 @@ rspamd_http_runtime(struct rspamd_task* task,
 					struct rspamd_statfile_config* stcf,
 					gboolean learn,
 					gpointer ctx,
-					gint _id)
+					gint id)
 {
 	auto maybe_existing = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME);
 
 	if (maybe_existing != nullptr) {
+		auto real_runtime = (rspamd::stat::http::http_backend_runtime *)maybe_existing;
+		real_runtime->notice_statfile(id, stcf);
+
 		return maybe_existing;
 	}
 
 	auto runtime = rspamd::stat::http::http_backend_runtime::create(task, learn);
 
 	if (runtime) {
+		runtime->notice_statfile(id, stcf);
 		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME,
 				(void *)runtime, nullptr);
 	}
