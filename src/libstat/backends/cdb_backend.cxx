@@ -367,7 +367,8 @@ gpointer
 rspamd_cdb_runtime(struct rspamd_task* task,
 							struct rspamd_statfile_config* stcf,
 							gboolean learn,
-							gpointer ctx)
+							gpointer ctx,
+							gint _id)
 {
 	/* In CDB we don't have any dynamic stuff */
 	return ctx;

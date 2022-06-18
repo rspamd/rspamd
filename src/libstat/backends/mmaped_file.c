@@ -940,9 +940,10 @@ rspamd_mmaped_file_close (gpointer p)
 
 gpointer
 rspamd_mmaped_file_runtime (struct rspamd_task *task,
-		struct rspamd_statfile_config *stcf,
-		gboolean learn,
-		gpointer p)
+							struct rspamd_statfile_config *stcf,
+							gboolean learn,
+							gpointer p,
+							gint _id)
 {
 	rspamd_mmaped_file_t *mf = p;
 

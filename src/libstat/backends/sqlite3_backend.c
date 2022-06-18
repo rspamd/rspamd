@@ -661,7 +661,7 @@ rspamd_sqlite3_close (gpointer p)
 
 gpointer
 rspamd_sqlite3_runtime (struct rspamd_task *task,
-		struct rspamd_statfile_config *stcf, gboolean learn, gpointer p)
+		struct rspamd_statfile_config *stcf, gboolean learn, gpointer p, gint _id)
 {
 	struct rspamd_stat_sqlite3_rt *rt = NULL;
 	struct rspamd_stat_sqlite3_db *bk = p;

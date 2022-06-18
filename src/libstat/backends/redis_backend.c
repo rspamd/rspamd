@@ -1650,7 +1650,7 @@ rspamd_stat_redis_on_connect(const struct redisAsyncContext *ac, int status)
 gpointer
 rspamd_redis_runtime (struct rspamd_task *task,
 		struct rspamd_statfile_config *stcf,
-		gboolean learn, gpointer c)
+		gboolean learn, gpointer c, gint _id)
 {
 	struct redis_stat_ctx *ctx = REDIS_CTX (c);
 	struct redis_stat_runtime *rt;

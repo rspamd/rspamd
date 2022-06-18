@@ -328,7 +328,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
-		bk_run = st->backend->runtime (task, st->stcf, is_learn, st->bkcf);
+		bk_run = st->backend->runtime (task, st->stcf, is_learn, st->bkcf, i);
 
 		if (bk_run == NULL) {
 			msg_err_task ("cannot init backend %s for statfile %s",
@@ -1204,7 +1204,7 @@ rspamd_stat_statistics (struct rspamd_task *task,
 			id = g_array_index (cl->statfiles_ids, gint, j);
 			st = g_ptr_array_index (st_ctx->statfiles, id);
 			backend_runtime = st->backend->runtime (task, st->stcf, FALSE,
-					st->bkcf);
+					st->bkcf, id);
 			elt = st->backend->get_stat (backend_runtime, st->bkcf);
 
 			if (elt && ucl_object_type (elt) == UCL_OBJECT) {

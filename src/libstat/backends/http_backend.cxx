@@ -246,9 +246,10 @@ rspamd_http_init(struct rspamd_stat_ctx* ctx,
 }
 gpointer
 rspamd_http_runtime(struct rspamd_task* task,
-				   struct rspamd_statfile_config* stcf,
-				   gboolean learn,
-				   gpointer ctx)
+					struct rspamd_statfile_config* stcf,
+					gboolean learn,
+					gpointer ctx,
+					gint _id)
 {
 	auto maybe_existing = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME);
 

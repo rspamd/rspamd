@@ -42,7 +42,9 @@ struct rspamd_stat_backend {
 					  struct rspamd_statfile *st);
 
 	gpointer (*runtime) (struct rspamd_task *task,
-						 struct rspamd_statfile_config *stcf, gboolean learn, gpointer ctx);
+						 struct rspamd_statfile_config *stcf,
+						 gboolean learn, gpointer ctx,
+						 gint id);
 
 	gboolean (*process_tokens) (struct rspamd_task *task, GPtrArray *tokens,
 								gint id,
@@ -81,7 +83,7 @@ struct rspamd_stat_backend {
             struct rspamd_config *cfg, struct rspamd_statfile *st); \
         gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
                 struct rspamd_statfile_config *stcf, \
-                gboolean learn, gpointer ctx); \
+                gboolean learn, gpointer ctx, gint id); \
         gboolean rspamd_##name##_process_tokens (struct rspamd_task *task, \
                 GPtrArray *tokens, gint id, \
                 gpointer runtime); \
