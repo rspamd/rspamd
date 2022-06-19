@@ -629,7 +629,6 @@ static void
 print_commands_list()
 {
 	guint cmd_len = 0;
-	gchar fmt_str[32];
 
 	fmt::print(stdout, "Rspamc commands summary:\n");
 
@@ -641,13 +640,11 @@ print_commands_list()
 		}
 	}
 
-	rspamd_snprintf(fmt_str, sizeof(fmt_str), "  {:%d} ({:7}{:1})\t{}\n",
-			cmd_len);
-
 	for (const auto &cmd: rspamc_commands) {
 		fmt::print(stdout,
-				fmt_str,
+				"  {:>{}} ({:7}{:1})\t{}\n",
 				cmd.name,
+				cmd_len,
 				cmd.is_controller ? "control" : "normal",
 				cmd.is_privileged ? "*" : "",
 				cmd.description);
@@ -1100,27 +1097,28 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 	std::vector<const ucl_object_t *> counters_vec;
 	auto max_len = sizeof("Symbol") - 1;
-	ucl_object_iter_t iter = nullptr;
-	const ucl_object_t *cur;
 
-	while ((cur = ucl_object_iterate (obj, &iter, true)) != nullptr) {
-		const auto *sym = ucl_object_lookup(cur, "symbol");
-		if (sym != nullptr) {
-			if (sym->len > max_len) {
-				max_len = sym->len;
+	{
+		ucl_object_iter_t iter = nullptr;
+		const ucl_object_t *cur;
+
+		while ((cur = ucl_object_iterate (obj, &iter, true)) != nullptr) {
+			const auto *sym = ucl_object_lookup(cur, "symbol");
+			if (sym != nullptr) {
+				if (sym->len > max_len) {
+					max_len = sym->len;
+				}
 			}
+			counters_vec.push_back(cur);
 		}
-		counters_vec.push_back(cur);
 	}
 
 	sort_ucl_container_with_default(counters_vec, "name");
 
-	char fmt_buf[64], dash_buf[82], sym_buf[82];
+	char dash_buf[82], sym_buf[82];
 	const int dashes = 44;
 
 	max_len = MIN (sizeof(dash_buf) - dashes - 1, max_len);
-	rspamd_snprintf(fmt_buf, sizeof(fmt_buf),
-			"| {:4} | {:%d} | {:^7} | {:^13} | {:^7} |\n", max_len);
 	memset(dash_buf, '-', dashes + max_len);
 	dash_buf[dashes + max_len] = '\0';
 
@@ -1128,15 +1126,17 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
 	fmt::print(out,
-			emphasis_argument(fmt_buf),
-			emphasis_argument("Pri"), emphasis_argument("Symbol"),
-			emphasis_argument("Weight"),
-			emphasis_argument("Frequency"),
-			emphasis_argument("Hits"));
+			"| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n",
+			"Pri",
+			"Symbol",
+			max_len,
+			"Weight",
+			"Frequency",
+			"Hits");
 	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
-	fmt::print(out, fmt_buf, "", "", "", "hits/min", "");
-	rspamd_snprintf(fmt_buf, sizeof(fmt_buf),
-			"| {:4} | {:%d} | {:7.1f} | {:^6.3f}({:^5.3f}) | {:7} |\n", max_len);
+	fmt::print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
+			"", max_len,
+			"", "hits/min", "");
 
 	for (const auto [i, cur] : rspamd::enumerate(counters_vec)) {
 		fmt::print(out, " {} \n", dash_buf);
@@ -1158,8 +1158,9 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 				sym_name = ucl_object_tostring(sym);
 			}
 
-			fmt::print(out, fmt_buf, i,
+			fmt::print(out, "| {:<4} | {:<{}} | {:^7.1f} | {:^6.3f}({:^5.3f}) | {:^7} |\n", i,
 					sym_name,
+					max_len,
 					ucl_object_todouble(weight),
 					ucl_object_todouble(freq) * 60.0,
 					ucl_object_todouble(freq_dev) * 60.0,
