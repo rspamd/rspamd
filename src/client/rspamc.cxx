@@ -346,12 +346,21 @@ struct rspamc_callback_data {
 };
 
 template<typename T>
-static constexpr auto emphasis_argument(const T &arg, const char *fmt_string = "{}") -> auto {
+static constexpr auto emphasis_argument(const T &arg) -> auto {
 	if (tty) {
-		return fmt::format(fmt::emphasis::bold, fmt_string, arg);
+		return fmt::format(fmt::emphasis::bold, "{}", arg);
 	}
 
-	return fmt::format(fmt_string, arg);
+	return fmt::format("{}", arg);
+}
+
+template<typename T, typename std::enable_if_t<std::is_floating_point_v<T>, bool> = false>
+static constexpr auto emphasis_argument(const T &arg, int precision) -> auto {
+	if (tty) {
+		return fmt::format(fmt::emphasis::bold, "{:.{}f}", arg, precision);
+	}
+
+	return fmt::format("{:.{}f}", arg, precision);
 }
 
 using sort_lambda = std::function<int(const ucl_object_t *, const ucl_object_t *)>;
@@ -916,8 +925,8 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	if (got_scores == 2) {
 		fmt::print(out,
 				"Score: {} / {}\n",
-				emphasis_argument(score, "{:.2f}"),
-				emphasis_argument(required_score, "{:.2f}"));
+				emphasis_argument(score, 2),
+				emphasis_argument(required_score, 2));
 	}
 
 	elt = ucl_object_lookup(obj, "symbols");
@@ -1259,7 +1268,7 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 			auto sum = rspamd_sum_floats(nums.data(), &cnt);
 			fmt::format_to(std::back_inserter(out_str),
 						   "Average scan time: {} sec\n",
-						   emphasis_argument(sum / cnt, "{:.3f}"));
+						   emphasis_argument(sum / cnt, 3));
 		}
 	}
 
