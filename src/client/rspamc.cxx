@@ -346,7 +346,7 @@ struct rspamc_callback_data {
 };
 
 template<typename T>
-static consteval auto emphasis_argument(const T &arg, const char *fmt_string = "{}") -> auto {
+static constexpr auto emphasis_argument(const T &arg, const char *fmt_string = "{}") -> auto {
 	if (tty) {
 		return fmt::format(fmt::emphasis::bold, fmt_string, arg);
 	}
