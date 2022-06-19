@@ -313,7 +313,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 
 		if (c == '\0') {
 			/* Replace with u0FFD */
-			parser_env.buf.append(u8"\uFFFD");
+			parser_env.buf.append((const char *)u8"\uFFFD");
 		}
 		else {
 			parser_env.buf.push_back(c);
@@ -1052,7 +1052,7 @@ html_append_parsed(struct html_content *hc,
 				const auto last = input.cend();
 				for (auto it = input.cbegin(); it != last; ++it) {
 					if (*it == '\0') {
-						output.append(u8"\uFFFD");
+						output.append((const char *)u8"\uFFFD");
 					}
 					else {
 						output.push_back(*it);
