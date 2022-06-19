@@ -1511,11 +1511,11 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 
 	/* Write message */
 	/* Original headers */
-	fmt::print(out, std::string_view{input->str, (std::size_t)headers_pos});
+	fmt::print(out, "{}", std::string_view{input->str, (std::size_t)headers_pos});
 	/* Added headers */
-	fmt::print(out, added_headers);
+	fmt::print(out, "{}", added_headers);
 	/* Message body */
-	fmt::print(out, input->str + headers_pos);
+	fmt::print(out, "{}", input->str + headers_pos);
 }
 
 static void
