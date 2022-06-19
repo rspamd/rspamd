@@ -418,12 +418,6 @@ static const auto sort_map = frozen::make_unordered_map<frozen::string, sort_lam
 		}},
 });
 
-/* TODO: remove once migrate to C++20 standard */
-static constexpr auto
-sv_ends_with(std::string_view inp, std::string_view suffix) -> bool {
-	return inp.size() >= suffix.size() && inp.compare(inp.size() - suffix.size(), std::string_view::npos, suffix) == 0;
-}
-
 template<typename T>
 auto sort_ucl_container_with_default(T &cont, const char *default_sort,
 									 typename std::enable_if<std::is_same_v<typename T::value_type, const ucl_object_t *>>::type* = 0) -> void
@@ -433,7 +427,7 @@ auto sort_ucl_container_with_default(T &cont, const char *default_sort,
 		auto sort_view = std::string_view{real_sort};
 		auto inverse = false;
 
-		if (sv_ends_with(sort_view, ":asc")) {
+		if (sort_view.ends_with(":asc")) {
 			inverse = true;
 			sort_view = std::string_view{sort, strlen(sort) - sizeof(":asc") + 1};
 		}
