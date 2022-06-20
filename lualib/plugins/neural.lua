@@ -127,12 +127,16 @@ local redis_lua_script_maybe_invalidate = [[
   local lim = tonumber(KEYS[2])
   if card > lim then
     local to_delete = redis.call('ZRANGE', KEYS[1], 0, card - lim - 1)
-    for _,k in ipairs(to_delete) do
-      local tb = cjson.decode(k)
-      redis.call('DEL', tb.redis_key)
-      -- Also train vectors
-      redis.call('DEL', tb.redis_key .. '_spam')
-      redis.call('DEL', tb.redis_key .. '_ham')
+    if to_delete then
+      for _,k in ipairs(to_delete) do
+        local tb = cjson.decode(k)
+        if type(tb) == 'table' and type(tb.redis_key) == 'string' then
+          redis.call('DEL', tb.redis_key)
+          -- Also train vectors
+          redis.call('DEL', tb.redis_key .. '_spam')
+          redis.call('DEL', tb.redis_key .. '_ham')
+        end
+      end
     end
     redis.call('ZREMRANGEBYRANK', KEYS[1], 0, card - lim - 1)
     return to_delete
