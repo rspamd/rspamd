@@ -30,46 +30,6 @@
 
 namespace rspamd {
 /*
- * Transparent smart pointers hashing
- */
-template<typename T>
-struct smart_ptr_equal {
-	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a, const std::shared_ptr<T> &b) const {
-		return (*a) == (*b);
-	}
-	auto operator()(const std::shared_ptr<T> &a, const T &b) const {
-		return (*a) == b;
-	}
-	auto operator()(const T &a, const std::shared_ptr<T> &b) const {
-		return a == (*b);
-	}
-	auto operator()(const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) const {
-		return (*a) == (*b);
-	}
-	auto operator()(const std::unique_ptr<T> &a, const T &b) const {
-		return (*a) == b;
-	}
-	auto operator()(const T &a, const std::unique_ptr<T> &b) const {
-		return a == (*b);
-	}
-};
-
-template<typename T>
-struct smart_ptr_hash {
-	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a) const {
-		return std::hash<T>()(*a);
-	}
-	auto operator()(const std::unique_ptr<T> &a) const {
-		return std::hash<T>()(*a);
-	}
-	auto operator()(const T &a) const {
-		return std::hash<T>()(a);
-	}
-};
-
-/*
  * Creates std::array from a standard C style array with automatic size calculation
  */
 template <typename... Ts>

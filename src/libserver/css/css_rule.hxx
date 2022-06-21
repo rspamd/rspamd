@@ -23,6 +23,7 @@
 #include "css_parser.hxx"
 #include "contrib/robin-hood/robin_hood.h"
 #include "libutil/cxx/util.hxx"
+#include "libutil/cxx/hash_util.hxx"
 #include <vector>
 #include <memory>
 
