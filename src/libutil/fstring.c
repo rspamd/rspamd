@@ -125,7 +125,12 @@ rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
 {
 	gsize newlen, optlen = 0;
 
-	newlen = MAX (len + needed_len, 1 + allocated * 3 / 2);
+	if (allocated < 4096) {
+		newlen =  MAX (len + needed_len, allocated * 2);
+	}
+	else {
+		newlen = MAX (len + needed_len, 1 + allocated * 3 / 2);
+	}
 
 #ifdef HAVE_MALLOC_SIZE
 	optlen = sys_alloc_size (newlen + sizeof (rspamd_fstring_t));
