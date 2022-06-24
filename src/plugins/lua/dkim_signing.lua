@@ -168,6 +168,7 @@ local sym_reg_tbl = {
   name = settings['symbol'],
   callback = dkim_signing_cb,
   groups = {"policies", "dkim"},
+  flags = 'ignore_passthrough',
   score = 0.0,
 }
 

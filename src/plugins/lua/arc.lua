@@ -788,6 +788,7 @@ local sym_reg_tbl = {
   name = settings['sign_symbol'],
   callback = arc_signing_cb,
   groups = {"policies", "arc"},
+  flags = 'ignore_passthrough',
   score = 0.0,
 }
 if type(settings.allowed_ids) == 'table' then
