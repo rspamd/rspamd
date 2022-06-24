@@ -78,10 +78,13 @@ css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 	}
 
 	if (target_hash) {
+		auto found_it = target_hash->find(selector);
 
-		auto [found_it, found] = target_hash->try_emplace(std::move(selector), decls);
-
-		if (found) {
+		if (found_it == target_hash->end()) {
+			/* Easy case, new element */
+			target_hash->insert({std::move(selector), decls});
+		}
+		else {
 			/* The problem with merging is actually in how to handle selectors chains
 			 * For example, we have 2 selectors:
 			 * 1. class id tag -> meaning that we first match class, then we ensure that
