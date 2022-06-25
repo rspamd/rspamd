@@ -156,6 +156,29 @@ local function prepare_dkim_signing(N, task, settings)
     is_local = true
   end
 
+  local has_pre_result = task:has_pre_result()
+  if has_pre_result then
+    local metric_action = task:get_metric_action()
+
+    if metric_action == 'reject' or metric_action == 'drop' then
+      -- No need to sign what we are already rejecting/dropping
+      lua_util.debugm(N, task, 'task result is already %s, no need to sign', metric_action)
+      return false,{}
+    end
+
+    if metric_action == 'soft reject' then
+      -- Same here, we are going to delay an email, signing is just a waste of time
+      lua_util.debugm(N, task, 'task result is %s, skip signing', metric_action)
+      return false,{}
+    end
+
+    -- For spam actions, there is no clear distinction
+    if metric_action ~= 'no action' and type(settings.skip_spam_sign) == 'boolean' and settings.skip_spam_sign then
+      lua_util.debugm(N, task, 'task result is %s, no need to sign', metric_action)
+      return false,{}
+    end
+  end
+
   if settings.sign_authenticated and auser then
     lua_util.debugm(N, task, 'user is authenticated')
     is_authed = true
