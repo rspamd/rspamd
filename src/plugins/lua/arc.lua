@@ -212,7 +212,6 @@ local function arc_callback(task)
     seals = {},
     sigs = {},
     ars = {},
-    cur_arc_id = 0,
     res = 'success',
     errors = {},
     allowed_by_trusted = false
@@ -260,11 +259,10 @@ local function arc_callback(task)
     return
   end
 
-  local function gen_arc_seal_cb(sig)
+  local function gen_arc_seal_cb(index, sig)
     return function (_, res, err, domain)
-      cbdata.cur_arc_id = cbdata.cur_arc_id + 1
       lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
-          res, err, cbdata.cur_arc_id)
+          res, err, index)
 
       if not res then
         cbdata.res = 'fail'
@@ -277,10 +275,10 @@ local function arc_callback(task)
         if settings.whitelisted_signers_map:get_key(sig.d) then
           -- Whitelisted signer has been found in a valid chain
           local mult = 1.0
-          local cur_aar = cbdata.ars[cbdata.cur_arc_id]
+          local cur_aar = cbdata.ars[index]
           if not cur_aar then
             rspamd_logger.warnx(task, "cannot find Arc-Authentication-Results for trusted " ..
-                "forwarder %s on i=%s", domain, cbdata.cur_arc_id)
+                "forwarder %s on i=%s", domain, cbdata.index)
           else
             task:cache_set(AR_TRUSTED_CACHE_KEY, cur_aar)
             local seen_dmarc
@@ -306,14 +304,14 @@ local function arc_callback(task)
             end
           end
           task:insert_result(arc_symbols.trusted_allow, mult,
-              string.format('%s:s=%s:i=%d', domain, sig.s, cbdata.cur_arc_id))
+              string.format('%s:s=%s:i=%d', domain, sig.s, index))
         end
       end
 
-      if cbdata.cur_arc_id == #arc_sig_headers then
+      if index == #arc_sig_headers then
         if cbdata.res == 'success' then
           local arc_allow_result = string.format('%s:s=%s:i=%d',
-              domain, sig.s, cbdata.cur_arc_id)
+              domain, sig.s, index)
           task:insert_result(arc_symbols.allow, 1.0, arc_allow_result)
           task:cache_set('arc-allow', arc_allow_result)
         else
@@ -326,8 +324,8 @@ local function arc_callback(task)
   end
 
   local function arc_signature_cb(_, res, err, domain)
-    lua_util.debugm(N, task, 'checked arc signature %s: %s(%s), %s processed',
-      domain, res, err, cbdata.cur_arc_id)
+    lua_util.debugm(N, task, 'checked arc signature %s: %s(%s)',
+      domain, res, err)
 
     if not res then
       cbdata.res = 'fail'
@@ -337,19 +335,16 @@ local function arc_callback(task)
     end
     if cbdata.res == 'success' then
       -- Verify seals
-      cbdata.cur_arc_id = 0
-      fun.each(
-        function(sig)
-          local ret, lerr = dkim_verify(task, sig.header, gen_arc_seal_cb(sig), 'arc-seal')
-          if not ret then
-            cbdata.res = 'fail'
-            table.insert(cbdata.errors, string.format('seal:%s:s=%s:i=%s:%s',
-                sig.d or '', sig.s or '', sig.i or '', lerr))
-            cbdata.cur_arc_id = cbdata.cur_arc_id + 1
-            lua_util.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
-              sig.d, ret, lerr, cbdata.cur_arc_id)
-          end
-        end, cbdata.seals)
+      for i,sig in ipairs(cbdata.seals) do
+        local ret, lerr = dkim_verify(task, sig.header, gen_arc_seal_cb(i, sig), 'arc-seal')
+        if not ret then
+          cbdata.res = 'fail'
+          table.insert(cbdata.errors, string.format('seal:%s:s=%s:i=%s:%s',
+              sig.d or '', sig.s or '', sig.i or '', lerr))
+          lua_util.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
+              sig.d, ret, lerr, i)
+        end
+      end
     else
       task:insert_result(arc_symbols['reject'], 1.0,
         rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
@@ -408,8 +403,8 @@ local function arc_callback(task)
     table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
   else
     processed = processed + 1
-    lua_util.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s processed',
-      sig.d, sig.i, ret, err, cbdata.cur_arc_id)
+    lua_util.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s total',
+      sig.d, sig.i, ret, err, #cbdata.seals)
   end
 
   if processed == 0 then
