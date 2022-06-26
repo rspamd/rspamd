@@ -84,6 +84,11 @@ public:
 	auto notice_statfile(int id, const struct rspamd_statfile_config *st) -> void {
 		seen_statfiles[id] = st;
 	}
+
+	auto process_tokens(struct rspamd_task* task,
+						GPtrArray* tokens,
+						gint id,
+						bool learn) -> bool;
 private:
 	http_backends_collection *all_backends;
 	robin_hood::unordered_flat_map<int, const struct rspamd_statfile_config *> seen_statfiles;
@@ -99,6 +104,41 @@ private:
 	}
 };
 
+/*
+ * Efficient way to make a messagepack payload from stat tokens,
+ * avoiding any intermediate libraries, as we would send many tokens
+ * all together
+ */
+static auto
+stat_tokens_to_msgpack(GPtrArray *tokens) -> std::vector<std::uint8_t>
+{
+	std::vector<std::uint8_t> ret;
+	rspamd_token_t *cur;
+	int i;
+
+	/*
+	 * We define array, it's size and N elements each is uint64_t
+	 * Layout:
+	 * 0xdd - array marker
+	 * [4 bytes be] - size of the array
+	 * [ 0xcf + <8 bytes BE integer>] * N - array elements
+	 */
+	ret.resize(tokens->len * (sizeof(std::uint64_t) + 1) + 5);
+	ret.push_back('\xdd');
+	std::uint32_t ulen = GUINT32_TO_BE(tokens->len);
+	std::copy((const std::uint8_t *)&ulen,
+			((const std::uint8_t *)&ulen) + sizeof(ulen), std::back_inserter(ret));
+
+	PTR_ARRAY_FOREACH(tokens, i, cur) {
+		ret.push_back('\xcf');
+		std::uint64_t val = GUINT64_TO_BE(cur->data);
+		std::copy((const std::uint8_t *)&val,
+				((const std::uint8_t *)&val) + sizeof(val), std::back_inserter(ret));
+	}
+
+	return ret;
+}
+
 auto http_backend_runtime::create(struct rspamd_task *task, bool is_learn) -> http_backend_runtime *
 {
 	/* Alloc type provide proper size and alignment */
@@ -107,6 +147,28 @@ auto http_backend_runtime::create(struct rspamd_task *task, bool is_learn) -> ht
 	rspamd_mempool_add_destructor(task->task_pool, http_backend_runtime::dtor, allocated_runtime);
 
 	return new (allocated_runtime) http_backend_runtime{task, is_learn};
+}
+
+auto
+http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens, gint id, bool learn) -> bool
+{
+	if (!learn) {
+		if (id == seen_statfiles.size() - 1) {
+			/* Emit http request on the last statfile */
+		}
+	}
+	else {
+		/* On learn we need to learn all statfiles that we were requested to learn */
+		if (seen_statfiles.empty()) {
+			/* Request has been already set, or nothing to learn */
+			return true;
+		}
+		else {
+			seen_statfiles.clear();
+		}
+	}
+
+	return true;
 }
 
 auto
@@ -284,8 +346,7 @@ rspamd_http_process_tokens(struct rspamd_task* task,
 	auto real_runtime = (rspamd::stat::http::http_backend_runtime *)runtime;
 
 	if (real_runtime) {
-		/* TODO */
-		return true;
+		return real_runtime->process_tokens(task, tokens, id, false);
 	}
 
 
@@ -310,8 +371,7 @@ rspamd_http_learn_tokens(struct rspamd_task* task,
 	auto real_runtime = (rspamd::stat::http::http_backend_runtime *)runtime;
 
 	if (real_runtime) {
-		/* TODO */
-		return true;
+		return real_runtime->process_tokens(task, tokens, id, true);
 	}
 
 
