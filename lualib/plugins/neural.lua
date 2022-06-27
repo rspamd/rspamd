@@ -835,17 +835,17 @@ local function process_rules_settings()
           persistent = true,
           type = 'hash',
         })
-    lua_redis.register_prefix(selt.prefix .. '_\\d+_spam', N,
+    lua_redis.register_prefix(selt.prefix .. '_\\d+_spam_set', N,
         string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
             selt.prefix, selt.name), {
           persistent = true,
-          type = 'list',
+          type = 'set',
         })
-    lua_redis.register_prefix(selt.prefix .. '_\\d+_ham', N,
+    lua_redis.register_prefix(selt.prefix .. '_\\d+_ham_set', N,
         string.format('NN learning set (spam) for rule "%s"; settings id "%s"',
             rule.prefix, selt.name), {
           persistent = true,
-          type = 'list',
+          type = 'set',
         })
   end
 
