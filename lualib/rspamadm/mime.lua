@@ -930,20 +930,19 @@ local function dumpex_handler(opts)
       if part.content and #part.content > 0 then
         local name = string.format('%s-%s-%s.%s', queue_id, nonce, i, 'raw')
         local path = opts["output_dir"] .. "/" .. name
-        outFile = io.open(path, "w")
+        local outFile = io.open(path, "w")
         outFile:write(string.format("%s", part.content))
         outFile:close()
         io.write(path .. "\n")
         part.content = nil
         part.content_path = name
-        lua_util.debugm(N, task, "convert part number %s to a reference %s", i, path)
       end
     end
 
     content = ucl.to_format(message_split, output_fmt(opts))
 
     local msgpackPath = opts["output_dir"] .. "/" .. string.format('%s-%s.%s', queue_id, nonce, output_fmt(opts))
-    msgpackFile = io.open(msgpackPath, "w")
+    local msgpackFile = io.open(msgpackPath, "w")
     msgpackFile:write(string.format("%s", content))
     msgpackFile:close()
     io.write(msgpackPath .. "\n")
