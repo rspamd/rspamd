@@ -939,7 +939,7 @@ local function dumpex_handler(opts)
       end
     end
 
-    content = ucl.to_format(message_split, output_fmt(opts))
+    local content = ucl.to_format(message_split, output_fmt(opts))
 
     local msgpackPath = opts["output_dir"] .. "/" .. string.format('%s-%s.%s', queue_id, nonce, output_fmt(opts))
     local msgpackFile = io.open(msgpackPath, "w")
