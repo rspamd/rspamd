@@ -110,9 +110,9 @@ local redis_lua_script_vectors_len = [[
   local nspam = 0
   local nham = 0
 
-  local ret = redis.call('LLEN', prefix .. '_spam')
+  local ret = redis.call('SCARD', prefix .. '_spam_set')
   if ret then nspam = tonumber(ret) end
-  ret = redis.call('LLEN', prefix .. '_ham')
+  ret = redis.call('SCARD', prefix .. '_ham_set')
   if ret then nham = tonumber(ret) end
 
   return {nspam,nham}
@@ -133,8 +133,8 @@ local redis_lua_script_maybe_invalidate = [[
         if type(tb) == 'table' and type(tb.redis_key) == 'string' then
           redis.call('DEL', tb.redis_key)
           -- Also train vectors
-          redis.call('DEL', tb.redis_key .. '_spam')
-          redis.call('DEL', tb.redis_key .. '_ham')
+          redis.call('DEL', tb.redis_key .. '_spam_set')
+          redis.call('DEL', tb.redis_key .. '_ham_set')
         end
       end
     end
@@ -181,8 +181,8 @@ local redis_lua_script_save_unlock = [[
   local now = tonumber(KEYS[6])
   redis.call('ZADD', KEYS[2], now, KEYS[4])
   redis.call('HSET', KEYS[1], 'ann', KEYS[3])
-  redis.call('DEL', KEYS[1] .. '_spam')
-  redis.call('DEL', KEYS[1] .. '_ham')
+  redis.call('DEL', KEYS[1] .. '_spam_set')
+  redis.call('DEL', KEYS[1] .. '_ham_set')
   redis.call('HDEL', KEYS[1], 'lock')
   redis.call('HDEL', KEYS[7], 'lock')
   redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
