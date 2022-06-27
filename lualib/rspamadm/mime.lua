@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local ansicolors = require "ansicolors"
 local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
+local rspamd_text = require "rspamd_text"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
 local rspamd_url = require "rspamd_url"
@@ -211,6 +212,26 @@ dump:mutex(
     parser:flag "-M --messagepack"
           :description "MessagePack output"
 )
+
+local dumpex = parser:command "dumpex"
+                   :description "Dumps a message with attachments separate"
+dumpex:argument "file"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
+-- Duplicate format for convenience
+dumpex:mutex(
+    parser:flag "-j --json"
+          :description "JSON output",
+    parser:flag "-U --ucl"
+          :description "UCL output",
+    parser:flag "-M --messagepack"
+          :description "MessagePack output"
+)
+dumpex:option "-d --output-dir"
+      :description "Specify output directory"
+      :argname "<directory>"
+      :count "1"
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -891,6 +912,47 @@ local function dump_handler(opts)
   end
 end
 
+local function dumpex_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local nonce = rspamd_text.randombytes(16):base32()
+    local queue_id = task:get_queue_id()
+    if not queue_id then
+      queue_id = rspamd_text.randombytes(8):base32()
+    end
+
+    local message_split = lua_mime.message_to_ucl(task)
+
+    for i,part in ipairs(message_split.parts or {}) do
+      if part.content and #part.content > 0 then
+        local name = string.format('%s-%s-%s.%s', queue_id, nonce, i, 'raw')
+        local path = opts["output_dir"] .. "/" .. name
+        outFile = io.open(path, "w")
+        outFile:write(string.format("%s", part.content))
+        outFile:close()
+        io.write(path .. "\n")
+        part.content = nil
+        part.content_path = name
+        lua_util.debugm(N, task, "convert part number %s to a reference %s", i, path)
+      end
+    end
+
+    content = ucl.to_format(message_split, output_fmt(opts))
+
+    local msgpackPath = opts["output_dir"] .. "/" .. string.format('%s-%s.%s', queue_id, nonce, output_fmt(opts))
+    msgpackFile = io.open(msgpackPath, "w")
+    msgpackFile:write(string.format("%s", content))
+    msgpackFile:close()
+    io.write(msgpackPath .. "\n")
+    task:destroy() -- No automatic dtor
+  end
+end
+
+
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -914,6 +976,8 @@ local function handler(args)
     sign_handler(opts)
   elseif command == 'dump' then
     dump_handler(opts)
+  elseif command == 'dumpex' then
+    dumpex_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
