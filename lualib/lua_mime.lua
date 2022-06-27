@@ -579,8 +579,6 @@ end
 exports.message_to_ucl = function(task, stringify_content)
   local E = {}
 
-  local maybe_stringify_f = stringify_content and
-    tostring or function(t) return t  end
   local result = {
     size = task:get_size(),
     digest = task:get_digest(),
