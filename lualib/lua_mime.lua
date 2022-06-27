@@ -615,7 +615,7 @@ exports.message_to_ucl = function(task, stringify_content)
         type = string.format('%s/%s', part:get_type()),
         detected_type = string.format('%s/%s', part:get_detected_type()),
         filename = part:get_filename(),
-        content = maybe_stringify_f(part:get_content()),
+        content = part:get_content(),
         headers =  part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary(),
       }
