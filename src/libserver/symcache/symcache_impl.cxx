@@ -96,25 +96,11 @@ auto symcache::init() -> bool
 	}
 
 	/* Sorting stuff */
-	auto postfilters_cmp = [](const auto &it1, const auto &it2) -> int {
-		if (it1->priority > it2->priority) {
-			return 1;
-		}
-		else if (it1->priority == it2->priority) {
-			return 0;
-		}
-
-		return -1;
+	constexpr auto postfilters_cmp = [](const auto &it1, const auto &it2) -> bool {
+		return it1->priority < it2->priority;
 	};
-	auto prefilters_cmp = [](const auto &it1, const auto &it2) -> int {
-		if (it1->priority > it2->priority) {
-			return -1;
-		}
-		else if (it1->priority == it2->priority) {
-			return 0;
-		}
-
-		return 1;
+	constexpr auto prefilters_cmp = [](const auto &it1, const auto &it2) -> bool {
+		return it1->priority > it2->priority;
 	};
 
 	msg_debug_cache("sorting stuff");
