@@ -973,12 +973,8 @@ rspamd_create_dkim_context (const gchar *sig,
 					param = DKIM_PARAM_IGNORE;
 					break;
 				default:
-					g_set_error (err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_UNKNOWN,
-						"invalid dkim param: %c",
-						*tag);
-					state = DKIM_STATE_ERROR;
+					param = DKIM_PARAM_UNKNOWN;
+					msg_debug_dkim("unknown DKIM param %c, ignoring it", *tag);
 					break;
 				}
 				break;
@@ -1036,8 +1032,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			break;
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
-				if (param == DKIM_PARAM_UNKNOWN ||
-					p - c == 0) {
+				if (p - c == 0 || c > p) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
@@ -1053,10 +1048,20 @@ rspamd_create_dkim_context (const gchar *sig,
 						tmp --;
 					}
 
-					if (!parser_funcs[param](ctx, c, tlen, err)) {
-						state = DKIM_STATE_ERROR;
+					if (param != DKIM_PARAM_UNKNOWN) {
+						if (!parser_funcs[param](ctx, c, tlen, err)) {
+							state = DKIM_STATE_ERROR;
+						}
+						else {
+							state = DKIM_STATE_SKIP_SPACES;
+							next_state = DKIM_STATE_TAG;
+							p++;
+							taglen = 0;
+						}
 					}
 					else {
+						/* Unknown param has been ignored */
+						msg_debug_dkim("ignored unknown parameter value: %*s", tlen, c);
 						state = DKIM_STATE_SKIP_SPACES;
 						next_state = DKIM_STATE_TAG;
 						p++;
@@ -1065,38 +1070,40 @@ rspamd_create_dkim_context (const gchar *sig,
 				}
 			}
 			else if (p == end) {
-				if (param == DKIM_PARAM_UNKNOWN) {
-					state = DKIM_STATE_ERROR;
-				}
-				else {
-					gint tlen = p - c;
-					const gchar *tmp = p - 1;
+				/* Last parameter with no `;` character */
+				gint tlen = p - c;
+				const gchar *tmp = p - 1;
 
-					while (tlen > 0) {
-						if (!g_ascii_isspace (*tmp)) {
-							break;
-						}
-						tlen --;
-						tmp --;
+				while (tlen > 0) {
+					if (!g_ascii_isspace (*tmp)) {
+						break;
 					}
+					tlen --;
+					tmp --;
+				}
 
+				if (param != DKIM_PARAM_UNKNOWN) {
 					if (!parser_funcs[param](ctx, c, tlen, err)) {
 						state = DKIM_STATE_ERROR;
 					}
-					if (state == DKIM_STATE_ERROR) {
-						/*
-						 * We need to return from here as state machine won't
-						 * do any more steps after p == end
-						 */
-						if (err) {
-							msg_info_dkim ("dkim parse failed: %e", *err);
-						}
-
-						return NULL;
-					}
-					/* Finish processing */
-					p++;
 				}
+				else {
+					msg_debug_dkim("ignored unknown parameter value: %*s", tlen, c);
+				}
+
+				if (state == DKIM_STATE_ERROR) {
+					/*
+					 * We need to return from here as state machine won't
+					 * do any more steps after p == end
+					 */
+					if (err) {
+						msg_info_dkim ("dkim parse failed: %e", *err);
+					}
+
+					return NULL;
+				}
+				/* Finish processing */
+				p++;
 			}
 			else {
 				p++;
