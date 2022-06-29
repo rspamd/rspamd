@@ -132,7 +132,9 @@ define(["jquery", "footable"],
                 title: "Score",
                 style: {
                     "font-size": "11px",
-                    "maxWidth": 110
+                    "maxWidth": 110,
+                    "text-align": "right",
+                    "white-space": "nowrap"
                 },
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
@@ -172,6 +174,7 @@ define(["jquery", "footable"],
                 },
                 sortValue: function (val) { return Number(val); }
             }, {
+                classes: "history-col-time",
                 sorted: true,
                 direction: "DESC",
                 name: "time",
