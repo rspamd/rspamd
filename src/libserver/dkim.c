@@ -903,7 +903,7 @@ rspamd_create_dkim_context (const gchar *sig,
 				state = DKIM_STATE_ERROR;
 				break;
 			case 1:
-				/* Simple tags */
+				/* 1 character tags */
 				switch (*tag) {
 				case 'v':
 					if (type == RSPAMD_DKIM_NORMAL) {
@@ -979,6 +979,7 @@ rspamd_create_dkim_context (const gchar *sig,
 				}
 				break;
 			case 2:
+				/* Two characters tags, e.g. `bh` */
 				if (tag[0] == 'b' && tag[1] == 'h') {
 					if (type == RSPAMD_DKIM_ARC_SEAL) {
 						g_set_error (err,
@@ -986,7 +987,6 @@ rspamd_create_dkim_context (const gchar *sig,
 								DKIM_SIGERROR_UNKNOWN,
 								"ARC seal must NOT have bh= tag");
 						state = DKIM_STATE_ERROR;
-						break;
 					}
 					else {
 						param = DKIM_PARAM_BODYHASH;
@@ -999,31 +999,23 @@ rspamd_create_dkim_context (const gchar *sig,
 								DKIM_SIGERROR_UNKNOWN,
 								"cv tag is valid for ARC-Seal only");
 						state = DKIM_STATE_ERROR;
-						break;
 					}
 					else {
 						param = DKIM_PARAM_CV;
 					}
 				}
 				else {
-					g_set_error (err,
-						DKIM_ERROR,
-						DKIM_SIGERROR_UNKNOWN,
-						"invalid dkim param: %c%c",
-						tag[0],
-						tag[1]);
-					state = DKIM_STATE_ERROR;
+					param = DKIM_PARAM_UNKNOWN;
+					msg_debug_dkim("unknown DKIM param %*s, ignoring it", taglen, tag);
 				}
 				break;
 			default:
-				g_set_error (err,
-					DKIM_ERROR,
-					DKIM_SIGERROR_UNKNOWN,
-					"invalid dkim param length: %zd",
-					taglen);
-				state = DKIM_STATE_ERROR;
+				/* Long and unknown (yet) DKIM tag */
+				param = DKIM_PARAM_UNKNOWN;
+				msg_debug_dkim("unknown DKIM param %*s, ignoring it", taglen, tag);
 				break;
 			}
+
 			if (state != DKIM_STATE_ERROR) {
 				/* Skip spaces */
 				state = DKIM_STATE_SKIP_SPACES;
@@ -1061,7 +1053,8 @@ rspamd_create_dkim_context (const gchar *sig,
 					}
 					else {
 						/* Unknown param has been ignored */
-						msg_debug_dkim("ignored unknown parameter value: %*s", tlen, c);
+						msg_debug_dkim("ignored unknown tag parameter value: %*s = %*s",
+								taglen, tag, tlen, c);
 						state = DKIM_STATE_SKIP_SPACES;
 						next_state = DKIM_STATE_TAG;
 						p++;
@@ -1088,7 +1081,8 @@ rspamd_create_dkim_context (const gchar *sig,
 					}
 				}
 				else {
-					msg_debug_dkim("ignored unknown parameter value: %*s", tlen, c);
+					msg_debug_dkim("ignored unknown tag parameter value: %*s",
+							taglen, tag, tlen, c);
 				}
 
 				if (state == DKIM_STATE_ERROR) {
