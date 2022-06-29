@@ -1091,7 +1091,7 @@ rspamd_create_dkim_context (const gchar *sig,
 					}
 				}
 				else {
-					msg_debug_dkim("ignored unknown tag parameter value: %*s",
+					msg_debug_dkim("ignored unknown tag parameter value: %*s: %*s",
 							taglen, tag, tlen, c);
 				}
 
