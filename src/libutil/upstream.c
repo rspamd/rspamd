@@ -184,7 +184,7 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 		ctx->limits.max_errors = cfg->upstream_max_errors;
 	}
 	if (cfg->upstream_revive_time) {
-		ctx->limits.revive_time = cfg->upstream_max_errors;
+		ctx->limits.revive_time = cfg->upstream_revive_time;
 	}
 	if (cfg->upstream_lazy_resolve_time) {
 		ctx->limits.lazy_resolve_time = cfg->upstream_lazy_resolve_time;
