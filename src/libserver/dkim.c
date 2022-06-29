@@ -806,7 +806,7 @@ rspamd_create_dkim_context (const gchar *sig,
 							GError **err)
 {
 	const gchar *p, *c, *tag = NULL, *end;
-	gsize taglen;
+	gint taglen;
 	gint param = DKIM_PARAM_UNKNOWN;
 	const EVP_MD *md_alg;
 	time_t now;
@@ -860,7 +860,7 @@ rspamd_create_dkim_context (const gchar *sig,
 		switch (state) {
 		case DKIM_STATE_TAG:
 			if (g_ascii_isspace (*p)) {
-				taglen = p - c;
+				taglen = (int)(p - c);
 				while (*p && g_ascii_isspace (*p)) {
 					/* Skip spaces before '=' sign */
 					p++;
@@ -889,7 +889,17 @@ rspamd_create_dkim_context (const gchar *sig,
 			}
 			else {
 				taglen++;
-				p++;
+
+				if (taglen > G_MAXINT8) {
+					g_set_error (err,
+							DKIM_ERROR,
+							DKIM_SIGERROR_UNKNOWN,
+							"too long dkim tag");
+					state = DKIM_STATE_ERROR;
+				}
+				else {
+					p++;
+				}
 			}
 			break;
 		case DKIM_STATE_AFTER_TAG:
@@ -1256,11 +1266,11 @@ rspamd_create_dkim_context (const gchar *sig,
 	}
 
 	/* Now create dns key to request further */
-	taglen = strlen (ctx->domain) + strlen (ctx->selector) +
+	gsize dnslen = strlen (ctx->domain) + strlen (ctx->selector) +
 		sizeof (DKIM_DNSKEYNAME) + 2;
-	ctx->dns_key = rspamd_mempool_alloc (ctx->pool, taglen);
+	ctx->dns_key = rspamd_mempool_alloc (ctx->pool, dnslen);
 	rspamd_snprintf (ctx->dns_key,
-		taglen,
+			dnslen,
 		"%s.%s.%s",
 		ctx->selector,
 		DKIM_DNSKEYNAME,
