@@ -575,7 +575,7 @@ rspamd_mempool_alloc_array_ (rspamd_mempool_t * pool,  gsize nmemb, gsize size, 
 				nmemb, size);
 		g_abort();
 	}
-	return memory_pool_alloc_common (pool, size, alignment, RSPAMD_MEMPOOL_NORMAL, loc);
+	return memory_pool_alloc_common (pool, size * nmemb, alignment, RSPAMD_MEMPOOL_NORMAL, loc);
 }
 
 void *
