@@ -371,6 +371,12 @@ table#symbolsTable input[type="number"] {
 #historyTable_history > thead > tr > th {
     padding-right: 20px;
 }
+@media (min-width: 576px) and (max-width: 1199px) {
+    .history-col-time {
+        /* Avoid taking multiple lines in every row when one of rows has long ID */
+        white-space: nowrap;
+    }
+}
 
 #history_page_size {
     width: 6em !important;
