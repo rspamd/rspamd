@@ -6,6 +6,6 @@
     compress
     sharedscripts
     postrotate
-        [ ! -f /var/run/rspamd/rspamd.pid ] || kill -USR1 `cat /var/run/rspamd/rspamd.pid`
+        systemctl --signal=USR1 --kill-who=main kill rspamd.service 2>/dev/null || :
     endscript
 }
