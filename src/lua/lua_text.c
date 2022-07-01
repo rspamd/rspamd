@@ -348,6 +348,23 @@ lua_new_text (lua_State *L, const gchar *start, gsize len, gboolean own)
 	return t;
 }
 
+bool
+lua_is_text_binary(struct rspamd_lua_text *t)
+{
+	if (t == NULL || t->len == 0) {
+		return false;
+	}
+
+	if (rspamd_str_has_8bit(t->start, t->len)) {
+		if (rspamd_fast_utf8_validate(t->start, t->len) == 0) {
+			return true;
+		}
+		return false;
+	}
+
+	return true;
+}
+
 
 static gint
 lua_text_fromstring (lua_State *L)

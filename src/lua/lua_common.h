@@ -112,6 +112,7 @@ struct rspamd_lua_ip {
 #define RSPAMD_TEXT_FLAG_WIPE (1u << 2u)
 #define RSPAMD_TEXT_FLAG_SYSMALLOC (1u << 3u)
 #define RSPAMD_TEXT_FLAG_FAKE (1u << 4u)
+#define RSPAMD_TEXT_FLAG_BINARY (1u << 5u)
 struct rspamd_lua_text {
 	const gchar *start;
 	guint len;
@@ -276,6 +277,12 @@ struct rspamd_lua_text *lua_check_text_or_string (lua_State *L, gint pos);
 /* Creates and *pushes* new rspamd text, data is copied if  RSPAMD_TEXT_FLAG_OWN is in flags*/
 struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
 									  gsize len, gboolean own);
+/**
+ * Checks if a text has binary characters (non ascii and non-utf8 characters)
+ * @param t
+ * @return
+ */
+bool lua_is_text_binary(struct rspamd_lua_text *t);
 
 struct rspamd_lua_regexp *lua_check_regexp (lua_State *L, gint pos);
 
