@@ -1,0 +1,19 @@
+Received: (qmail 99419 invoked from network); 30 Jun 2022 22:27:07 -0000
+DKIM-Signature: v=1; a=rsa-sha256; c=simple; d=taugh.com; h=date:message-id:from:to:content-type:content-transfer-encoding:mime-version:subject:references:in-reply-to; s=18457.62be233b.k2206; olt=johnl-iecc.com@submit.iecc.com; bh=Pb6s/Xlf4u1eDlYyO0NCaMRMrCg6xDNkK5byz8RDY1s=; b=XpuXx66miTUH5iEhGqjLUHKozhLjgs2wfGX2msE/3A7L7/IsnSIM7VAjzWS3tYJL6qgmoVqmGcAwtzy0WfXGGaF/n5h46mLxU1f9aLiXvVPAaN5m0w39B+bG6EE6X2Tp267cq+DQJSufUwvoaZX8gLPQ0VbTIMBJ/vV1QQ2JjphaAyggKYR6rcVTMs0A1gFO9S55ksERzW32WlmjOEmcvuzDzrmLAfhvA+jHekrC6yWLo7pmmYyt9/vJVfXsiq8xOacCxkSKWOkzm138OK+1G3Z+FrCZ8OtgWIgHCT6GevgFvZKdeCFkdxvbtMadGT/okOYBIe70tEFO/cUs2tj8tg==
+Date: 30 Jun 2022 18:27:04 -0400
+Message-Id: <9128D54C-D180-4133-A4DE-A98EDA971B73@taugh.com>
+From: "John Levine" <johnl@taugh.com>
+To: "Vsevolod Stakhov" <vsevolod@rspamd.com>
+Content-Type: text/plain;
+	charset=us-ascii
+Content-Transfer-Encoding: 7bit
+Mime-Version: 1.0 (Mac OS X Mail 16.0 \(3696.100.31\))
+Subject: DKIM tags test
+References: <20220630000404.4460844A5EFD@ary.qy>
+ <a02a67c8-5336-e3c9-97ca-71e56c3566c1@rspamd.com>
+ <E4088547-0AD0-499C-8E48-B94482524484@taugh.com>
+ <35781b14-a61c-6e56-2265-6a5161a2b2cd@rspamd.com>
+In-Reply-To: <35781b14-a61c-6e56-2265-6a5161a2b2cd@rspamd.com>
+
+test message
+

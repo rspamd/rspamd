@@ -31,6 +31,10 @@ DKIM NA NOSIG
   ...  IP=37.48.67.26
   Expect Symbol  R_DKIM_NA
 
+DKIM Ignore Unknown Tags
+  Scan File  ${RSPAMD_TESTDIR}/messages/dmarc/dkim_unknown_tags.eml
+  Expect Symbol  R_DKIM_ALLOW
+
 DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  0
   ${result} =  Scan Message With Rspamc  ${RSPAMD_TESTDIR}/messages/spam_message.eml  --mime  --header=dodkim=1
