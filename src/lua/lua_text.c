@@ -357,12 +357,12 @@ lua_is_text_binary(struct rspamd_lua_text *t)
 
 	if (rspamd_str_has_8bit(t->start, t->len)) {
 		if (rspamd_fast_utf8_validate(t->start, t->len) == 0) {
-			return true;
+			return false;
 		}
-		return false;
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 
