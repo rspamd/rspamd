@@ -512,6 +512,11 @@ ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_flags_t flags)
 
 			if (t) {
 				obj = ucl_object_fromstring_common(t->start, t->len, 0);
+
+				/* Binary text */
+				if (t->flags & (1u << 5u)) {
+					obj->flags |= UCL_OBJECT_BINARY;
+				}
 			}
 		}
 		break;
@@ -569,10 +574,10 @@ ucl_object_lua_import (lua_State *L, int idx)
 	t = lua_type (L, idx);
 	switch (t) {
 	case LUA_TTABLE:
-		obj = ucl_object_lua_fromtable (L, idx, 0);
+		obj = ucl_object_lua_fromtable (L, idx, UCL_STRING_RAW);
 		break;
 	default:
-		obj = ucl_object_lua_fromelt (L, idx, 0);
+		obj = ucl_object_lua_fromelt (L, idx, UCL_STRING_RAW);
 		break;
 	}
 
@@ -597,10 +602,10 @@ ucl_object_lua_import_escape (lua_State *L, int idx)
 	t = lua_type (L, idx);
 	switch (t) {
 	case LUA_TTABLE:
-		obj = ucl_object_lua_fromtable (L, idx, UCL_STRING_RAW);
+		obj = ucl_object_lua_fromtable (L, idx, UCL_STRING_ESCAPE);
 		break;
 	default:
-		obj = ucl_object_lua_fromelt (L, idx, UCL_STRING_RAW);
+		obj = ucl_object_lua_fromelt (L, idx, UCL_STRING_ESCAPE);
 		break;
 	}
 
