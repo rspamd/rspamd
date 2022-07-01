@@ -2662,6 +2662,10 @@ lua_task_get_content (lua_State * L)
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
 		t->flags = 0;
+
+		if (lua_is_text_binary(t)) {
+			t->flags |= RSPAMD_TEXT_FLAG_BINARY;
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

@@ -1420,6 +1420,10 @@ lua_mimepart_get_content (lua_State * L)
 	t->len = part->parsed_data.len;
 	t->flags = 0;
 
+	if (lua_is_text_binary(t)) {
+		t->flags |= RSPAMD_TEXT_FLAG_BINARY;
+	}
+
 	return 1;
 }
 
