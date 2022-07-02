@@ -260,6 +260,10 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	}
 	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
 
+	if (cbd->up) {
+		rspamd_upstream_ok(cbd->up);
+	}
+
 	L = lcbd.L;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
