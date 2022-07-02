@@ -207,9 +207,6 @@ local function icap_check(task, content, digest, rule, maybe_part)
     local function icap_callback(err, conn)
 
       local function icap_requery(err_m, info)
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -230,6 +227,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
           tcp_options.port = addr:get_port()
           tcp_options.callback = icap_callback
           tcp_options.data = options_request
+          tcp_options.upstream = upstream
 
           tcp.request(tcp_options)
 
@@ -649,8 +647,6 @@ local function icap_check(task, content, digest, rule, maybe_part)
       if err or conn == nil then
         icap_requery(err, "options_request")
       else
-        -- set upstream ok
-        if upstream then upstream:ok() end
         conn:add_read(icap_r_options_cb, '\r\n\r\n')
       end
     end
@@ -671,6 +667,7 @@ local function icap_check(task, content, digest, rule, maybe_part)
 
     tcp_options.host = addr:to_string()
     tcp_options.port = addr:get_port()
+    tcp_options.upstream = upstream
 
     tcp.request(tcp_options)
   end

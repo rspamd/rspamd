@@ -90,9 +90,6 @@ local function sophos_check(task, content, digest, rule, maybe_part)
     local function sophos_callback(err, data, conn)
 
       if err then
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -109,6 +106,7 @@ local function sophos_check(task, content, digest, rule, maybe_part)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             callback = sophos_callback,
             data = { protocol, streamsize, content, bye }
@@ -119,7 +117,6 @@ local function sophos_check(task, content, digest, rule, maybe_part)
               0.0, 'fail', maybe_part)
         end
       else
-        upstream:ok()
         data = tostring(data)
         lua_util.debugm(rule.name, task,
             '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
@@ -170,6 +167,7 @@ local function sophos_check(task, content, digest, rule, maybe_part)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule['timeout'],
       callback = sophos_callback,
       data = { protocol, streamsize, content, bye }

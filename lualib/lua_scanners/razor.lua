@@ -90,9 +90,6 @@ local function razor_check(task, content, digest, rule)
     local function razor_callback(err, data, conn)
 
       local function razor_requery()
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -112,6 +109,7 @@ local function razor_check(task, content, digest, rule)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule.timeout or 2.0,
             shutdown = true,
             data = content,
@@ -129,9 +127,6 @@ local function razor_check(task, content, digest, rule)
         razor_requery()
 
       else
-        -- Parse the response
-        if upstream then upstream:ok() end
-
         --[[
         @todo: Razorsocket currently only returns ham or spam. When the wrapper is fixed we should add dynamic scores here.
         Maybe check spamassassin implementation.
@@ -163,6 +158,7 @@ local function razor_check(task, content, digest, rule)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule.timeout or 2.0,
       shutdown = true,
       data = content,

@@ -91,9 +91,6 @@ local function clamav_check(task, content, digest, rule, maybe_part)
     local function clamav_callback(err, data)
       if err then
 
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -110,6 +107,7 @@ local function clamav_check(task, content, digest, rule, maybe_part)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             callback = clamav_callback,
             data = { header, content, footer },
@@ -123,7 +121,6 @@ local function clamav_check(task, content, digest, rule, maybe_part)
         end
 
       else
-        upstream:ok()
         data = tostring(data)
         local cached
         lua_util.debugm(rule.name, task, '%s: got reply: %s',
@@ -172,6 +169,7 @@ local function clamav_check(task, content, digest, rule, maybe_part)
       port = addr:get_port(),
       timeout = rule['timeout'],
       callback = clamav_callback,
+      upstream = upstream,
       data = { header, content, footer },
       stop_pattern = '\0'
     })

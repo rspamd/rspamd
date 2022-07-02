@@ -85,9 +85,6 @@ local function pyzor_check(task, content, digest, rule)
 
       if err then
 
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -104,6 +101,7 @@ local function pyzor_check(task, content, digest, rule)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             shutdown = true,
             data = content,
@@ -116,8 +114,6 @@ local function pyzor_check(task, content, digest, rule)
               'failed to scan and retransmits exceed')
         end
       else
-        -- Parse the response
-        if upstream then upstream:ok() end
         -- pyzor output is unicode (\x09 -> tab, \0a -> newline)
         --   public.pyzor.org:24441  (200, 'OK')     21285091   206759
         --   server:port             Code  Diag      Count      WL-Count
@@ -187,6 +183,7 @@ local function pyzor_check(task, content, digest, rule)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule.timeout,
       shutdown = true,
       data = content,

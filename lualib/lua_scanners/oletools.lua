@@ -98,8 +98,6 @@ local function oletools_check(task, content, digest, rule, maybe_part)
     local function oletools_callback(err, data, conn)
 
       local function oletools_requery(error)
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
 
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
@@ -117,6 +115,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule.timeout,
             shutdown = true,
             data = { protocol, content },
@@ -136,9 +135,6 @@ local function oletools_check(task, content, digest, rule, maybe_part)
         oletools_requery(err)
 
       else
-        -- Parse the response
-        if upstream then upstream:ok() end
-
         json_response = json_response .. tostring(data)
 
 	      if not string.find(json_response, '\t\n\n\t') and #data == 8192 then
@@ -346,6 +342,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule.timeout,
       shutdown = true,
       data = { protocol, content },

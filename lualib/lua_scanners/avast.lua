@@ -93,6 +93,7 @@ local function avast_check(task, content, digest, rule, maybe_part)
       stop_pattern = CRLF,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule.timeout,
       task = task
     }
@@ -155,6 +156,7 @@ local function avast_check(task, content, digest, rule, maybe_part)
 
       upstream = rule.upstreams:get_upstream_round_robin()
       addr = upstream:get_addr()
+      tcp_opts.upstream = upstream
       tcp_opts.callback = avast_helo_cb
 
       local is_succ, err = tcp.request(tcp_opts)
@@ -224,7 +226,6 @@ local function avast_check(task, content, digest, rule, maybe_part)
             end
           elseif beg == '200' then
             -- Final line
-            upstream:ok()
             if tcp_conn then
               tcp_conn:close()
               tcp_conn = nil

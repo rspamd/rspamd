@@ -198,9 +198,6 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_callback_init(err, data, conn)
       if err then
 
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -217,6 +214,7 @@ local function savapi_check(task, content, digest, rule)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             callback = savapi_callback_init,
             stop_pattern = {'\n'},
@@ -226,7 +224,6 @@ local function savapi_check(task, content, digest, rule)
           common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
-        upstream:ok()
         local result = tostring(data)
 
         -- 100 SAVAPI:4.0 greeting
@@ -240,6 +237,7 @@ local function savapi_check(task, content, digest, rule)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule['timeout'],
       callback = savapi_callback_init,
       stop_pattern = {'\n'},

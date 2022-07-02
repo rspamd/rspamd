@@ -138,9 +138,6 @@ local function dcc_check(task, content, digest, rule)
     local function dcc_callback(err, data, conn)
 
       local function dcc_requery()
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -158,6 +155,7 @@ local function dcc_check(task, content, digest, rule)
             host = addr:to_string(),
             port = addr:get_port(),
             timeout = rule.timeout or 2.0,
+            upstream = upstream,
             shutdown = true,
             data = request_data,
             callback = dcc_callback,
@@ -178,7 +176,6 @@ local function dcc_check(task, content, digest, rule)
 
       else
         -- Parse the response
-        if upstream then upstream:ok() end
         local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)$")
         lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
@@ -287,6 +284,7 @@ local function dcc_check(task, content, digest, rule)
       port = addr:get_port(),
       timeout = rule.timeout or 2.0,
       shutdown = true,
+      upstream = upstream,
       data = request_data,
       callback = dcc_callback,
       body_max = 999999,

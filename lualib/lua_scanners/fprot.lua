@@ -91,9 +91,6 @@ local function fprot_check(task, content, digest, rule, maybe_part)
 
     local function fprot_callback(err, data)
       if err then
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
-
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
 
@@ -110,6 +107,7 @@ local function fprot_check(task, content, digest, rule, maybe_part)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             callback = fprot_callback,
             data = { header, content, footer },
@@ -155,6 +153,7 @@ local function fprot_check(task, content, digest, rule, maybe_part)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule['timeout'],
       callback = fprot_callback,
       data = { header, content, footer },

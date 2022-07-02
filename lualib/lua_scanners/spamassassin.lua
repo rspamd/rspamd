@@ -103,8 +103,6 @@ local function spamassassin_check(task, content, digest, rule)
     local function spamassassin_callback(err, data)
 
       local function spamassassin_requery(error)
-        -- set current upstream to fail because an error occurred
-        upstream:fail()
 
         -- retry with another upstream until retransmits exceeds
         if retransmits > 0 then
@@ -125,6 +123,7 @@ local function spamassassin_check(task, content, digest, rule)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
+            upstream = upstream,
             timeout = rule['timeout'],
             data = request_data,
             callback = spamassassin_callback,
@@ -141,9 +140,6 @@ local function spamassassin_check(task, content, digest, rule)
         spamassassin_requery(err)
 
       else
-        -- Parse the response
-        if upstream then upstream:ok() end
-
         --lua_util.debugm(rule.N, task, '%s: returned result: %s', rule.log_prefix, data)
 
         --[[
@@ -193,6 +189,7 @@ local function spamassassin_check(task, content, digest, rule)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
+      upstream = upstream,
       timeout = rule['timeout'],
       data = request_data,
       callback = spamassassin_callback,
