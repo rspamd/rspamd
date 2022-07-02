@@ -1062,7 +1062,10 @@ lua_http_request (lua_State *L)
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
-	cbd->up = rspamd_upstream_ref(up);
+
+	if (up) {
+		cbd->up = rspamd_upstream_ref(up);
+	}
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
