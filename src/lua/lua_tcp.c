@@ -1487,7 +1487,7 @@ lua_tcp_request (lua_State *L)
 	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct iovec *iov = NULL;
-	struct upstream *up;
+	struct upstream *up = NULL;
 	guint niov = 0, total_out;
 	guint64 h;
 	gdouble timeout = default_tcp_timeout;
