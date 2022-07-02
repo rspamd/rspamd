@@ -128,6 +128,10 @@ lua_http_fin (gpointer arg)
 		rspamd_inet_address_free (cbd->addr);
 	}
 
+	if (cbd->up) {
+		rspamd_upstream_unref(cbd->up);
+	}
+
 	if (cbd->mime_type) {
 		g_free (cbd->mime_type);
 	}
@@ -1058,7 +1062,7 @@ lua_http_request (lua_State *L)
 	cbd->url = url;
 	cbd->auth = auth;
 	cbd->task = task;
-	cbd->up = up;
+	cbd->up = rspamd_upstream_ref(up);
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
