@@ -95,15 +95,10 @@ static const struct luaL_reg upstream_m[] = {
 
 /* Upstream class */
 
-struct rspamd_lua_upstream {
-	struct upstream *up;
-	gint upref;
-};
-
-static struct rspamd_lua_upstream *
-lua_check_upstream (lua_State * L)
+struct rspamd_lua_upstream *
+lua_check_upstream(lua_State *L, int pos)
 {
-	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{upstream}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{upstream}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'upstream' expected");
 	return ud ? (struct rspamd_lua_upstream *)ud : NULL;
@@ -118,7 +113,7 @@ static gint
 lua_upstream_get_addr (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
 		rspamd_lua_ip_push (L, rspamd_upstream_addr_next (up->up));
@@ -139,7 +134,7 @@ static gint
 lua_upstream_get_name (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
 		lua_pushstring (L, rspamd_upstream_name (up->up));
@@ -160,7 +155,7 @@ static gint
 lua_upstream_get_port (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
 		lua_pushinteger (L, rspamd_upstream_port (up->up));
@@ -180,7 +175,7 @@ static gint
 lua_upstream_fail (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 	gboolean fail_addr = FALSE;
 	const gchar *reason = "unknown";
 
@@ -211,7 +206,7 @@ static gint
 lua_upstream_ok (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
 		rspamd_upstream_ok (up->up);
@@ -224,7 +219,7 @@ static gint
 lua_upstream_destroy (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_upstream *up = lua_check_upstream (L);
+	struct rspamd_lua_upstream *up = lua_check_upstream(L, 1);
 
 	if (up) {
 		/* Remove reference to the parent */

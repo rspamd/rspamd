@@ -165,6 +165,11 @@ struct rspamd_lua_cached_entry {
 	guint id;
 };
 
+struct rspamd_lua_upstream {
+	struct upstream *up;
+	gint upref;
+};
+
 /* Common utility functions */
 
 /**
@@ -284,7 +289,9 @@ struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
  */
 bool lua_is_text_binary(struct rspamd_lua_text *t);
 
-struct rspamd_lua_regexp *lua_check_regexp (lua_State *L, gint pos);
+struct rspamd_lua_regexp* lua_check_regexp (lua_State *L, gint pos);
+
+struct rspamd_lua_upstream* lua_check_upstream(lua_State *L, int pos);
 
 enum rspamd_lua_task_header_type {
 	RSPAMD_TASK_HEADER_PUSH_SIMPLE = 0,
