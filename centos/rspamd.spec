@@ -54,6 +54,9 @@ lua.
         -DCMAKE_BUILD_TYPE="Release" \
         -DCMAKE_C_FLAGS_RELEASE="%{optflags}" \
         -DCMAKE_CXX_FLAGS_RELEASE="%{optflags}" \
+%if 0%{?fedora} >= 36
+        -DLINKER_NAME=/usr/bin/ld.bfd \
+%endif
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
         -DMANDIR=%{_mandir} \
