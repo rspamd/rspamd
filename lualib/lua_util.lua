@@ -1488,4 +1488,37 @@ end
 --]]]
 exports.unhex = function(str) return str:gsub('(..)', hex_table) end
 
+local http_upstream_lists = {}
+local function http_upstreams_by_url(pool, url)
+  local rspamd_url = require "rspamd_url"
+
+  local cached = http_upstream_lists[url]
+  if cached then return cached end
+
+  local real_url = rspamd_url.create(pool, url)
+
+  if not real_url then return nil end
+
+  local host = real_url:get_host()
+  local proto = real_url:get_protocol() or 'http'
+  local port = real_url:get_port() or (proto == 'https' and 443 or 80)
+  local upstream_list = require "rspamd_upstream_list"
+  local upstreams = upstream_list.create(host, port)
+
+  if upstreams then
+    http_upstream_lists[url] = upstreams
+    return upstreams
+  end
+
+  return nil
+end
+---[[[
+-- @function lua_util.http_upstreams_by_url(pool, url)
+-- Returns a cached or new upstreams list that corresponds to the specific url
+-- @param {mempool} pool memory pool to use (typically static pool from rspamd_config)
+-- @param {string} url full url
+-- @return {upstreams_list} object to get upstream from an url
+--]]]
+exports.http_upstreams_by_url = http_upstreams_by_url
+
 return exports
