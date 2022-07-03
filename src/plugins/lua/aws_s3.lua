@@ -197,6 +197,7 @@ local function s3_aws_callback(task)
       body = content,
       callback = gen_s3_http_callback(path, 'structured message'),
       headers = hdrs,
+      upstream = settings.upstreams:get_upstream_round_robin(),
       timeout = settings.s3_timeout,
     })
 
@@ -215,6 +216,7 @@ local function s3_aws_callback(task)
       rspamd_http.request({
         url = uri .. ref,
         task = task,
+        upstream = settings.upstreams:get_upstream_round_robin(),
         method = 'PUT',
         body = part_content,
         callback = gen_s3_http_callback(ref, 'part content'),
@@ -244,6 +246,17 @@ end
 rspamd_logger.infox(rspamd_config, 'enabled AWS s3 dump to %s', res.s3_bucket)
 
 settings = res
+
+settings.upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(),
+    string.format('https://%s.%s', settings.s3_bucket, settings.s3_host))
+
+if not settings.upstreams then
+  rspamd_logger.warnx(rspamd_config, 'cannot parse hostname: %s',
+      string.format('https://%s.%s', settings.s3_bucket, settings.s3_host))
+  lua_util.disable_module(N, "config")
+  return
+end
+
 rspamd_config:register_symbol({
   name = 'EXPORT_AWS_S3',
   type = settings.fail_action and 'postfilter' or 'idempotent',
