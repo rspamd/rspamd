@@ -1920,7 +1920,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 	rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
 			G_DIR_SEPARATOR, re_class->hash);
 
-	if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE, TRUE)) {
+	if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE, TRUE, NULL)) {
 
 		fd = open (path, O_RDONLY, 00600);
 
@@ -2260,7 +2260,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 gboolean
 rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
-		const char *path, gboolean silent, gboolean try_load)
+		const char *path, gboolean silent, gboolean try_load, GError **err)
 {
 	g_assert (cache != NULL);
 	g_assert (path != NULL);
@@ -2289,6 +2289,9 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 			msg_err_re_cache ("cannot open hyperscan cache file %s: too short filename",
 					path);
 		}
+		g_set_error(err, rspamd_re_cache_quark(), 0,
+				"too short filename");
+
 		return FALSE;
 	}
 
@@ -2297,6 +2300,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 			msg_err_re_cache ("cannot open hyperscan cache file %s: not ending with .hs",
 					path);
 		}
+		g_set_error(err, rspamd_re_cache_quark(), 0,
+				"not ending with .hs");
 		return FALSE;
 	}
 
@@ -2317,6 +2322,9 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 					msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
 							path, strerror (errno));
 				}
+				g_set_error(err, rspamd_re_cache_quark(), 0,
+						"%s",
+						strerror (errno));
 				return FALSE;
 			}
 
@@ -2325,12 +2333,19 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 					msg_err_re_cache ("cannot read magic from hyperscan "
 									  "cache file %s: %s",
 							path, strerror (errno));
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"cannot read magic: %s",
+							strerror (errno));
 				}
 				else {
 					msg_err_re_cache ("truncated read magic from hyperscan "
 									  "cache file %s: %z, %z wanted",
 							path, r, (gsize)sizeof (magicbuf));
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"truncated read magic %zd, %zd wanted",
+							r, (gsize)sizeof (magicbuf));
 				}
+
 				close (fd);
 				return FALSE;
 			}
@@ -2349,6 +2364,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 						(int) RSPAMD_HS_MAGIC_LEN, mb);
 
 				close (fd);
+				g_set_error(err, rspamd_re_cache_quark(), 0, "invalid magic");
 				return FALSE;
 			}
 
@@ -2364,6 +2380,9 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 							path, r, (gsize)sizeof (magicbuf));
 				}
 
+				g_set_error(err, rspamd_re_cache_quark(), 0,
+						"cannot read platform data: %s", strerror (errno));
+
 				close (fd);
 				return FALSE;
 			}
@@ -2372,6 +2391,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"compiled for a different platform",
 						path);
+				g_set_error(err, rspamd_re_cache_quark(), 0,
+						"compiled for a different platform");
 
 				close (fd);
 				return FALSE;
@@ -2386,6 +2407,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 					msg_err_re_cache ("cannot mmap hyperscan cache file %s: "
 							"%s",
 							path, strerror (errno));
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"mmap error: %s", strerror(errno));
 					return FALSE;
 				}
 
@@ -2401,6 +2424,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 					/* Some wrong amount of regexps */
 					msg_err_re_cache ("bad number of expressions in %s: %d",
 							path, n);
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"bad number of expressions: %d", n);
 					munmap (map, len);
 					return FALSE;
 				}
@@ -2430,6 +2455,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				if (crc != valid_crc) {
 					msg_warn_re_cache ("outdated or invalid hs database in %s: "
 							"crc read %xL, crc expected %xL", path, crc, valid_crc);
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"outdated or invalid hs database, crc check failure");
 					munmap (map, len);
 
 					return FALSE;
@@ -2438,6 +2465,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				if ((ret = hs_deserialize_database (p, end - p, &test_db))
 						!= HS_SUCCESS) {
 					msg_err_re_cache ("bad hs database in %s: %d", path, ret);
+					g_set_error(err, rspamd_re_cache_quark(), 0,
+							"deserialize error: %d", ret);
 					munmap (map, len);
 
 					return FALSE;
@@ -2454,6 +2483,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 	if (!silent) {
 		msg_warn_re_cache ("unknown hyperscan cache file %s", path);
+		g_set_error(err, rspamd_re_cache_quark(), 0,
+				"unknown hyperscan file");
 	}
 
 	return FALSE;
@@ -2488,7 +2519,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, try_load, FALSE)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, try_load, FALSE, NULL)) {
 			msg_debug_re_cache ("load hyperscan database from '%s'",
 					re_class->hash);
 

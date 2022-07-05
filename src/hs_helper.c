@@ -143,17 +143,19 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 
 	if ((rc = glob (pattern, 0, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
+			GError *err = NULL;
 			if (forced ||
 					!rspamd_re_cache_is_valid_hyperscan_file (ctx->cfg->re_cache,
-						globbuf.gl_pathv[i], TRUE, TRUE)) {
+						globbuf.gl_pathv[i], TRUE, TRUE, &err)) {
 				if (unlink (globbuf.gl_pathv[i]) == -1) {
 					msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
 							strerror (errno));
 					ret = FALSE;
 				}
 				else {
-					msg_notice ("successfully removed outdated hyperscan file: %s",
-							globbuf.gl_pathv[i]);
+					msg_notice ("successfully removed outdated hyperscan file: %s; %e",
+							globbuf.gl_pathv[i], err);
+					g_error_free(err);
 				}
 			}
 		}
