@@ -110,6 +110,7 @@ class normal_item {
 private:
 	symbol_func_t func;
 	void *user_data;
+	std::vector<cache_item_ptr> virtual_children;
 	std::vector<item_condition> conditions;
 public:
 	explicit normal_item(symbol_func_t _func, void *_user_data) : func(_func), user_data(_user_data)
@@ -133,6 +134,10 @@ public:
 
 	auto get_cbdata() const -> auto {
 		return user_data;
+	}
+
+	auto add_child(const cache_item_ptr &ptr) -> void {
+		virtual_children.push_back(ptr);
 	}
 };
 
@@ -394,6 +399,21 @@ public:
 	 * @return
 	 */
 	auto get_augmentation_weight() const -> int;
+
+	/**
+	 * Add a virtual symbol as a child of some normal symbol
+	 * @param ptr
+	 */
+	auto add_child(const cache_item_ptr &ptr) -> void {
+		if (std::holds_alternative<normal_item>(specific)) {
+			auto &filter_data = std::get<normal_item>(specific);
+
+			filter_data.add_child(ptr);
+		}
+		else {
+			g_assert("add child is called for a virtual symbol!");
+		}
+	}
 
 private:
 	/**

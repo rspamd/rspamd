@@ -63,7 +63,6 @@ public:
 
 	static void resort_cb(EV_P_ ev_timer *w, int _revents) {
 		auto *cbdata = (struct cache_refresh_cbdata *)w->data;
-		static const double decay_rate = 0.25;
 
 		auto log_tag = [&]() { return cbdata->cache->log_tag(); };
 

@@ -688,12 +688,19 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 		return -1;
 	}
 
+	if (items_by_id.size() < parent_id) {
+		msg_err_cache("parent id %d is out of bounds for virtual symbol %s", parent_id, name.data());
+		return -1;
+	}
+
 	auto id = items_by_id.size();
 
 	auto item = cache_item::create_with_virtual(static_pool,
 			id,
 			std::string{name},
 			parent_id, real_type_pair.first, real_type_pair.second);
+	auto &parent = items_by_id[parent_id];
+	parent->add_child(item);
 	items_by_symbol[item->get_name()] = item;
 	get_item_specific_vector(*item).push_back(item);
 	items_by_id.push_back(item);
