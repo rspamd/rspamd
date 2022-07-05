@@ -619,6 +619,7 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
 
   local full_url = string.format('%s/v1/%s/%s',
       settings.vault_url, settings.vault_path or 'dkim', selectors.domain)
+  local upstream_list = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), settings.vault_url)
 
   local function vault_callback(err, code, body, _)
     if code ~= 200 then
@@ -683,6 +684,7 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
     timeout = settings.http_timeout or 5.0,
     no_ssl_verify = settings.no_ssl_verify,
     keepalive = true,
+    upstream = upstream_list and upstream_list:get_upstream_round_robin() or nil,
     headers = {
       ['X-Vault-Token'] = settings.vault_token,
     },
