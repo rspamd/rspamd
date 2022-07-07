@@ -2108,7 +2108,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 				NULL);
 		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
-		msg_info_pool ("loaded keypair %*xs", 8, pk);
+		msg_debug_pool_check("loaded keypair %*xs", 8, pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
 		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
