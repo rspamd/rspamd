@@ -2387,7 +2387,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			if (memcmp (&test_plt, &cache->plt, sizeof (test_plt)) != 0) {
+			if (test_plt.cpu_features != cache->plt.cpu_features) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"compiled for a different platform",
 						path);
@@ -2483,9 +2483,10 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 	if (!silent) {
 		msg_warn_re_cache ("unknown hyperscan cache file %s", path);
-		g_set_error(err, rspamd_re_cache_quark(), 0,
-				"unknown hyperscan file");
 	}
+
+	g_set_error(err, rspamd_re_cache_quark(), 0,
+			"unknown hyperscan file");
 
 	return FALSE;
 #endif
