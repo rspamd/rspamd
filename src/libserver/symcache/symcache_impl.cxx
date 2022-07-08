@@ -815,13 +815,10 @@ auto symcache::validate(bool strict) -> bool
 
 		if (!ignore_symbol) {
 			if (!items_by_symbol.contains((const char *) k)) {
-				msg_warn_cache (
+				msg_debug_cache (
 						"symbol '%s' has its score defined but there is no "
 						"corresponding rule registered",
 						k);
-				if (strict) {
-					ret = FALSE;
-				}
 			}
 		}
 		else if (sym_def->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
