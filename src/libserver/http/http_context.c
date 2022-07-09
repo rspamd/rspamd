@@ -444,22 +444,22 @@ rspamd_http_context_check_keepalive(struct rspamd_http_context *ctx,
 			if (err != 0) {
 				rspamd_http_connection_unref (conn);
 
-				msg_debug_http_context ("invalid reused keepalive element %s (%s, ssl=%b); "
+				msg_debug_http_context ("invalid reused keepalive element %s (%s, ssl=%d); "
 							"%s error; "
 							"%d connections queued",
 						rspamd_inet_address_to_string_pretty (phk->addr),
 						phk->host,
-						phk->is_ssl,
+						(int)phk->is_ssl,
 						g_strerror (err),
 						conns->length);
 
 				return NULL;
 			}
 
-			msg_debug_http_context ("reused keepalive element %s (%s, ssl=%b), %d connections queued",
+			msg_debug_http_context ("reused keepalive element %s (%s, ssl=%d), %d connections queued",
 					rspamd_inet_address_to_string_pretty (phk->addr),
 					phk->host,
-					phk->is_ssl,
+					(int)phk->is_ssl,
 					conns->length);
 
 			/* We transfer refcount here! */
@@ -597,7 +597,7 @@ rspamd_http_parse_keepalive_timeout (const rspamd_ftok_t *tok)
 		if (ndigits > 0) {
 			if (rspamd_strtoul(tok->begin + pos,ndigits, &real_timeout)) {
 				timeout = real_timeout;
-				msg_debug_http_context ("got timeout attr %.2f", timeout);
+				msg_debug_http_context ("got timeout attr %l", timeout);
 			}
 		}
 	}
