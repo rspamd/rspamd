@@ -572,6 +572,40 @@ rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 	g_free (cbdata);
 }
 
+/* Non-static for unit testing */
+long
+rspamd_http_parse_keepalive_timeout (const rspamd_ftok_t *tok)
+{
+	long timeout = -1;
+	goffset pos = rspamd_substring_search (tok->begin,
+			tok->len, "timeout=", sizeof ("timeout=") - 1);
+
+	if (pos != -1) {
+		pos += sizeof ("timeout=") - 1;
+
+		gchar *end_pos = memchr (tok->begin + pos, ',', tok->len - pos);
+		glong real_timeout;
+
+		if (end_pos) {
+			if (rspamd_strtol (tok->begin + pos + 1,
+					(end_pos - tok->begin) - pos - 1, &real_timeout) &&
+				real_timeout > 0) {
+				timeout = real_timeout;
+				msg_debug_http_context ("got timeout attr %.2f", timeout);
+			}
+		}
+		else {
+			if (rspamd_strtol (tok->begin + pos + 1,
+					tok->len - pos, &real_timeout) && real_timeout > 0) {
+				timeout = real_timeout;
+				msg_debug_http_context ("got timeout attr %.2f", timeout);
+			}
+		}
+	}
+
+	return timeout;
+}
+
 void
 rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 									struct rspamd_http_connection *conn,
@@ -609,31 +643,10 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 		tok = rspamd_http_message_find_header (msg, "Keep-Alive");
 
 		if (tok) {
-			goffset pos = rspamd_substring_search_caseless (tok->begin,
-					tok->len, "timeout=", sizeof ("timeout=") - 1);
+			long maybe_timeout = rspamd_http_parse_keepalive_timeout(tok);
 
-			if (pos != -1) {
-				pos += sizeof ("timeout=");
-
-				gchar *end_pos = memchr (tok->begin + pos, ',', tok->len - pos);
-				glong real_timeout;
-
-				if (end_pos) {
-					if (rspamd_strtol (tok->begin + pos + 1,
-							(end_pos - tok->begin) - pos - 1, &real_timeout) &&
-						real_timeout > 0) {
-						timeout = real_timeout;
-						msg_debug_http_context ("got timeout attr %.2f", timeout);
-					}
-				}
-				else {
-					if (rspamd_strtol (tok->begin + pos + 1,
-							tok->len - pos - 1, &real_timeout) &&
-						real_timeout > 0) {
-						timeout = real_timeout;
-						msg_debug_http_context ("got timeout attr %.2f", timeout);
-					}
-				}
+			if (maybe_timeout > 0) {
+				timeout = maybe_timeout;
 			}
 		}
 	}
