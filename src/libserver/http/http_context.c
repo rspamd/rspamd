@@ -578,25 +578,24 @@ rspamd_http_parse_keepalive_timeout (const rspamd_ftok_t *tok)
 {
 	long timeout = -1;
 	goffset pos = rspamd_substring_search (tok->begin,
-			tok->len, "timeout=", sizeof ("timeout=") - 1);
+			tok->len, "timeout", sizeof ("timeout") - 1);
 
 	if (pos != -1) {
-		pos += sizeof ("timeout=") - 1;
+		pos += sizeof ("timeout") - 1;
 
-		gchar *end_pos = memchr (tok->begin + pos, ',', tok->len - pos);
+		/* Skip spaces and equal sign */
+		while (pos < tok->len) {
+			if (tok->begin[pos] != '=' && !g_ascii_isspace(tok->begin[pos])) {
+				break;
+			}
+			pos ++;
+		}
+
+		gsize ndigits = rspamd_memspn(tok->begin + pos, "0123456789", tok->len - pos);
 		glong real_timeout;
 
-		if (end_pos) {
-			if (rspamd_strtol (tok->begin + pos + 1,
-					(end_pos - tok->begin) - pos - 1, &real_timeout) &&
-				real_timeout > 0) {
-				timeout = real_timeout;
-				msg_debug_http_context ("got timeout attr %.2f", timeout);
-			}
-		}
-		else {
-			if (rspamd_strtol (tok->begin + pos + 1,
-					tok->len - pos, &real_timeout) && real_timeout > 0) {
+		if (ndigits > 0) {
+			if (rspamd_strtoul(tok->begin + pos,ndigits, &real_timeout)) {
 				timeout = real_timeout;
 				msg_debug_http_context ("got timeout attr %.2f", timeout);
 			}
