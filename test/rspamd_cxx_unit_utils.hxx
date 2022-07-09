@@ -28,6 +28,8 @@
 #include <utility>
 #include <string>
 
+extern "C" long rspamd_http_parse_keepalive_timeout (const rspamd_ftok_t *tok);
+
 TEST_SUITE("rspamd_utils") {
 
 TEST_CASE("rspamd_strip_smtp_comments_inplace")
@@ -54,6 +56,30 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace")
 			auto nlen = rspamd_strip_smtp_comments_inplace(cpy, c.first.size());
 			CHECK(std::string{cpy, nlen} == c.second);
 			delete[] cpy;
+		}
+	}
+}
+
+TEST_CASE("rspamd_http_parse_keepalive_timeout")
+{
+	std::vector<std::pair<std::string, long>> cases {
+			{"timeout=5, max=1000", 5},
+			{"max=1000, timeout=5", 5},
+			{"max=1000, timeout=", -1},
+			{"max=1000, timeout=0", 0},
+			{"max=1000, timeout=-5", -1},
+			{"timeout=5", 5},
+			{"    timeout=5;    ", 5},
+			{"timeout  =   5", 5},
+	};
+
+	for (const auto &c : cases) {
+		SUBCASE (("parse http keepalive header " + c.first).c_str()) {
+			rspamd_ftok_t t;
+			t.begin = c.first.data();
+			t.len = c.first.size();
+			auto res = rspamd_http_parse_keepalive_timeout(&t);
+			CHECK(res == c.second);
 		}
 	}
 }
