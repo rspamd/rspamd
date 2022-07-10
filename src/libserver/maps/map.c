@@ -1319,13 +1319,13 @@ static gboolean
 rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 		struct map_periodic_cbdata *periodic, const gchar *host)
 {
-	gsize len;
+	gsize mmap_len, len;
 	gpointer in;
 	struct http_map_data *data;
 
 	data = bk->data.hd;
 
-	in = rspamd_shmem_xmap (data->cache->shmem_name, PROT_READ, &len);
+	in = rspamd_shmem_xmap (data->cache->shmem_name, PROT_READ, &mmap_len);
 
 	if (in == NULL) {
 		msg_err ("cannot map cache from %s: %s", data->cache->shmem_name,
@@ -1333,14 +1333,23 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 		return FALSE;
 	}
 
-	if (len < data->cache->len) {
-		msg_err ("cannot map cache from %s: bad length %z, %z expected",
+	if (mmap_len < data->cache->len) {
+		msg_err ("cannot map cache from %s: truncated length %z, %z expected",
 				data->cache->shmem_name,
-				len, data->cache->len);
-		munmap (in, len);
+				mmap_len, data->cache->len);
+		munmap (in, mmap_len);
 
 		return FALSE;
 	}
+
+	/*
+	 * Len is taken from the shmem file size that can be larger than the
+	 * actual data length, as we use shared memory as a growing buffer for the
+	 * HTTP input.
+	 * Hence, we need to use len from the saved cache data, counting that it is
+	 * at least not more than the cached file length (this is checked above).
+	 */
+	len = data->cache->len;
 
 	if (bk->is_compressed) {
 		ZSTD_DStream *zstream;
@@ -1375,7 +1384,7 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 						ZSTD_getErrorName (r));
 				ZSTD_freeDStream (zstream);
 				g_free (out);
-				munmap (in, len);
+				munmap (in, mmap_len);
 				return FALSE;
 			}
 
@@ -1395,12 +1404,11 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 		g_free (out);
 	}
 	else {
-		msg_info_map ("%s: read map data cached %z bytes", bk->uri,
-				len);
+		msg_info_map ("%s: read map data cached %z bytes", bk->uri, len);
 		map->read_callback (in, len, &periodic->cbdata, TRUE);
 	}
 
-	munmap (in, len);
+	munmap (in, mmap_len);
 
 	return TRUE;
 }
