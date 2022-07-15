@@ -1030,8 +1030,16 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 		const ucl_object_t *cmesg;
 
 		while ((cmesg = ucl_object_iterate (elt, &mit, true)) != nullptr) {
-			fmt::print(out, "Message - {}: {}\n",
-					ucl_object_key(cmesg), ucl_object_tostring(cmesg));
+			if (ucl_object_type(cmesg) == UCL_STRING) {
+				fmt::print(out, "Message - {}: {}\n",
+						ucl_object_key(cmesg), ucl_object_tostring(cmesg));
+			} else {
+				unsigned char *rendered_message;
+				rendered_message = ucl_object_emit(cmesg, UCL_EMIT_JSON_COMPACT);
+				fmt::print(out, "Message - {}: {:.60}\n",
+						ucl_object_key(cmesg), rendered_message);
+				free(rendered_message);
+			}
 		}
 	}
 
