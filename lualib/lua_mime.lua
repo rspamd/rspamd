@@ -21,6 +21,7 @@ limitations under the License.
 
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
+local ucl = require "ucl"
 
 local exports = {}
 
