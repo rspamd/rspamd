@@ -21,6 +21,7 @@ limitations under the License.
 
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
+local ucl = require "ucl"
 
 local exports = {}
 
@@ -596,7 +597,8 @@ exports.message_to_ucl = function(task, stringify_content)
 
     return nil
   end
-  -- Envelope (smtp) information form email
+
+  -- Envelope (smtp) information from email (nil if empty)
   result.envelope = {
     from_smtp = (task:get_from('smtp') or E)[1],
     recipients_smtp = task:get_recipients('smtp'),
@@ -605,6 +607,9 @@ exports.message_to_ucl = function(task, stringify_content)
     client_ip = maybe_stringify_ip(task:get_client_ip()),
     from_ip = maybe_stringify_ip(task:get_from_ip()),
   }
+  if not next(result.envelope) then
+    result.envelope = ucl.null
+  end
 
   local parts = task:get_parts() or E
   result.parts = {}
