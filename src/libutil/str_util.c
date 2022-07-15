@@ -1008,7 +1008,7 @@ rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outle
 			}
 		}
 
-		if (processed_bits > 0 && o < end) {
+		if (processed_bits > 0 && o < end && acc != 0) {
 			*o++ = (acc & 0xFF);
 		}
 		else if (o > end) {
