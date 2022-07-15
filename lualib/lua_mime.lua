@@ -607,7 +607,7 @@ exports.message_to_ucl = function(task, stringify_content)
     from_ip = maybe_stringify_ip(task:get_from_ip()),
   }
   if not next(result.envelope) then
-    result.envelope = nil
+    result.envelope = ucl.null
   end
 
   local parts = task:get_parts() or E
