@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "libutil/mem_pool.h"
+#include "contrib/ankerl/svector.h"
 
 namespace rspamd::symcache {
 /*
@@ -31,22 +32,17 @@ namespace rspamd::symcache {
  * - If the first element is -1 then use dynamic part, else use static part
  * There is no std::variant to save space
  */
+
+constexpr const auto id_capacity = 4;
+constexpr const auto id_sort_threshold = 32;
+
 struct id_list {
-	union {
-		std::uint32_t st[4];
-		struct {
-			std::uint32_t e; /* First element */
-			std::uint16_t len;
-			std::uint16_t allocated;
-			std::uint32_t *n;
-		} dyn;
-	} data;
+	ankerl::svector<std::uint32_t, id_capacity> data;
 
 	id_list() = default;
 
-	auto reset()
-	{
-		std::memset(&data, 0, sizeof(data));
+	auto reset(){
+		data.clear();
 	}
 
 	/**
@@ -56,120 +52,41 @@ struct id_list {
 	 */
 	auto get_ids(unsigned &nids) const -> const std::uint32_t *
 	{
-		if (data.dyn.e == -1) {
-			/* Dynamic list */
-			nids = data.dyn.len;
+		nids = data.size();
 
-			return data.dyn.n;
-		}
-		else {
-			auto cnt = 0;
+		return data.data();
+	}
 
-			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS(data.st)) {
-				cnt++;
-			}
+	auto add_id(std::uint32_t id) -> void
+	{
+		data.push_back(id);
 
-			nids = cnt;
-
-			return data.st;
+		/* Check sort threshold */
+		if (data.size() > id_sort_threshold) {
+			std::sort(data.begin(), data.end());
 		}
 	}
 
-	auto add_id(std::uint32_t id, rspamd_mempool_t *pool) -> void
-	{
-		if (data.st[0] == -1) {
-			/* Dynamic array */
-			if (data.dyn.len < data.dyn.allocated) {
-				/* Trivial, append + sort */
-				data.dyn.n[data.dyn.len++] = id;
-			}
-			else {
-				/* Reallocate */
-				g_assert(data.dyn.allocated <= G_MAXINT16);
-				data.dyn.allocated *= 2;
+	auto set_ids(const std::uint32_t *ids, std::size_t nids) -> void {
+		data.resize(nids);
 
-				auto *new_array = rspamd_mempool_alloc_array_type(pool,
-						data.dyn.allocated, std::uint32_t);
-				memcpy(new_array, data.dyn.n, data.dyn.len * sizeof(std::uint32_t));
-				data.dyn.n = new_array;
-				data.dyn.n[data.dyn.len++] = id;
-			}
-
-			std::sort(data.dyn.n, data.dyn.n + data.dyn.len);
+		for (auto &id : data) {
+			id = *ids++;
 		}
-		else {
-			/* Static part */
-			auto cnt = 0u;
-			while (data.st[cnt] != 0 && cnt < G_N_ELEMENTS(data.st)) {
-				cnt++;
-			}
 
-			if (cnt < G_N_ELEMENTS(data.st)) {
-				data.st[cnt] = id;
-			}
-			else {
-				/* Switch to dynamic */
-				data.dyn.allocated = G_N_ELEMENTS(data.st) * 2;
-				auto *new_array = rspamd_mempool_alloc_array_type(pool,
-						data.dyn.allocated, std::uint32_t);
-				memcpy(new_array, data.st, sizeof(data.st));
-				data.dyn.n = new_array;
-				data.dyn.e = -1; /* Marker */
-				data.dyn.len = G_N_ELEMENTS(data.st);
-
-				/* Recursively jump to dynamic branch that will handle insertion + sorting */
-				add_id(id, pool); // tail call
-			}
-		}
-	}
-
-	auto set_ids(const std::uint32_t *ids, std::size_t nids, rspamd_mempool_t *pool) -> void
-	{
-		if (nids <= G_N_ELEMENTS(data.st)) {
-			/* Use static version */
-			reset();
-
-			for (auto i = 0; i < nids; i++) {
-				data.st[i] = ids[i];
-			}
-		}
-		else {
-			/* Need to use a separate list */
-			data.dyn.e = -1; /* Flag */
-			data.dyn.n = rspamd_mempool_alloc_array_type(pool, nids, std::uint32_t);
-			data.dyn.len = nids;
-			data.dyn.allocated = nids;
-
-			for (auto i = 0; i < nids; i++) {
-				data.dyn.n[i] = ids[i];
-			}
-
-			/* Keep sorted */
-			std::sort(data.dyn.n, data.dyn.n + data.dyn.len);
+		if (data.size() > id_sort_threshold) {
+			std::sort(data.begin(), data.end());
 		}
 	}
 
 	auto check_id(unsigned int id) const -> bool
 	{
-		if (data.dyn.e == -1) {
-			return std::binary_search(data.dyn.n, data.dyn.n + data.dyn.len, id);
+		if (data.size() > id_sort_threshold) {
+			return std::binary_search(data.begin(), data.end(), id);
 		}
-		else {
-			for (auto elt: data.st) {
-				if (elt == id) {
-					return true;
-				}
-				else if (elt == 0) {
-					return false;
-				}
-			}
-		}
-
-		return false;
+		return std::find(data.begin(), data.end(), id) != data.end();
 	}
 };
-
-static_assert(std::is_trivial_v<id_list>);
 
 }
 

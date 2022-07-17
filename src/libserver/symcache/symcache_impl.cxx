@@ -1103,14 +1103,14 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 					 * we ignore them in symcache but prevent them from being
 					 * inserted.
 					 */
-					item->forbidden_ids.add_id(id, static_pool);
+					item->forbidden_ids.add_id(id);
 					msg_debug_cache("deny virtual symbol %s for settings %ud (%s); "
 									"parent can still be executed",
 							sym, id, elt->name);
 				}
 				else {
 					/* Normal symbol, disable it */
-					item->forbidden_ids.add_id(id, static_pool);
+					item->forbidden_ids.add_id(id);
 					msg_debug_cache ("deny symbol %s for settings %ud (%s)",
 							sym, id, elt->name);
 				}
@@ -1146,13 +1146,13 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 							continue;
 						}
 
-						parent->exec_only_ids.add_id(id, static_pool);
+						parent->exec_only_ids.add_id(id);
 						msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
 								parent->symbol.data(), id, elt->name);
 					}
 				}
 
-				item->allowed_ids.add_id(id, static_pool);
+				item->allowed_ids.add_id(id);
 				msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
 						sym, id, elt->name);
 			}

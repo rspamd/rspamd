@@ -380,7 +380,7 @@ rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
 		return false;
 	}
 
-	item->allowed_ids.set_ids(ids, nids, real_cache->get_pool());
+	item->allowed_ids.set_ids(ids, nids);
 	return true;
 }
 
@@ -398,7 +398,7 @@ rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
 		return false;
 	}
 
-	item->forbidden_ids.set_ids(ids, nids, real_cache->get_pool());
+	item->forbidden_ids.set_ids(ids, nids);
 	return true;
 }
 

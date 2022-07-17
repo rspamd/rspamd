@@ -117,7 +117,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 					msg_debug_cache("propagate allowed ids from %s to %s",
 							dit->symbol.c_str(), symbol.c_str());
 
-					allowed_ids.set_ids(ids, nids, cache.get_pool());
+					allowed_ids.set_ids(ids, nids);
 				}
 
 				ids = dit->forbidden_ids.get_ids(nids);
@@ -126,7 +126,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 					msg_debug_cache("propagate forbidden ids from %s to %s",
 							dit->symbol.c_str(), symbol.c_str());
 
-					forbidden_ids.set_ids(ids, nids, cache.get_pool());
+					forbidden_ids.set_ids(ids, nids);
 				}
 			}
 		}

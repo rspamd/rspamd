@@ -199,10 +199,10 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	std::variant<normal_item, virtual_item> specific;
 
 	/* Settings ids */
-	id_list allowed_ids{};
+	id_list allowed_ids;
 	/* Allows execution but not symbols insertion */
-	id_list exec_only_ids{};
-	id_list forbidden_ids{};
+	id_list exec_only_ids;
+	id_list forbidden_ids;
 
 	/* Set of augmentations */
 	ankerl::unordered_dense::set<std::string, rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
