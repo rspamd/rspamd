@@ -21,7 +21,7 @@
 #include "css_value.hxx"
 #include "css_property.hxx"
 #include "css_parser.hxx"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "libutil/cxx/util.hxx"
 #include "libutil/cxx/hash_util.hxx"
 #include <vector>
@@ -121,7 +121,7 @@ public:
 	auto compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *;
 
 private:
-	robin_hood::unordered_flat_set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
+	ankerl::unordered_dense::set<rule_shared_ptr, rule_shared_hash, rule_shared_eq> rules;
 };
 
 using css_declarations_block_ptr = std::shared_ptr<css_declarations_block>;

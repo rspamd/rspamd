@@ -27,7 +27,7 @@
 #include <string>
 #include <optional>
 #include "contrib/expected/expected.hpp"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "fmt/core.h"
 
 namespace rspamd::stat::cdb {
@@ -87,7 +87,7 @@ private:
 	 * We store weak pointers here to allow owning cdb statfiles to free
 	 * expensive cdb before this cache is terminated (e.g. on dynamic cdb reload)
 	 */
-	robin_hood::unordered_flat_map<std::string, std::weak_ptr<struct cdb>> elts;
+	ankerl::unordered_dense::map<std::string, std::weak_ptr<struct cdb>> elts;
 
 	struct cdb_deleter {
 		void operator()(struct cdb *c) const {

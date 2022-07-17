@@ -24,7 +24,7 @@
 #include "mime_string.hxx"
 #include "libmime/email_addr.h"
 #include "libserver/task.h"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include <vector>
 #include <string_view>
 #include <utility>
@@ -179,7 +179,7 @@ struct received_header {
 	}
 
 	/* Unit tests helper */
-	static auto from_map(const robin_hood::unordered_flat_map<std::string_view, std::string_view> &map) -> received_header {
+	static auto from_map(const ankerl::unordered_dense::map<std::string_view, std::string_view> &map) -> received_header {
 		using namespace std::string_view_literals;
 		received_header rh;
 
@@ -202,9 +202,9 @@ struct received_header {
 		return rh;
 	}
 
-	auto as_map() const -> robin_hood::unordered_flat_map<std::string_view, std::string_view>
+	auto as_map() const -> ankerl::unordered_dense::map<std::string_view, std::string_view>
 	{
-		robin_hood::unordered_flat_map<std::string_view, std::string_view> map;
+		ankerl::unordered_dense::map<std::string_view, std::string_view> map;
 
 		if (!from_hostname.empty()) {
 			map["from_hostname"] = from_hostname.as_view();

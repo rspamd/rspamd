@@ -25,7 +25,7 @@
 #include <vector>
 #include <variant>
 #include "libutil/cxx/util.hxx"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 #include "composites_internal.hxx"
 
@@ -82,7 +82,7 @@ struct composites_data {
 	struct rspamd_task *task;
 	struct rspamd_composite *composite;
 	struct rspamd_scan_result *metric_res;
-	robin_hood::unordered_flat_map<std::string_view,
+	ankerl::unordered_dense::map<std::string_view,
 			std::vector<symbol_remove_data>> symbols_to_remove;
 	std::vector<bool> checked;
 

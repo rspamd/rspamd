@@ -20,7 +20,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <contrib/robin-hood/robin_hood.h>
+#include "contrib/ankerl/unordered_dense.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include "libutil/cxx/util.hxx"
@@ -2168,9 +2168,9 @@ static const html_entity_def html_entities_array[] = {
 };
 
 class html_entities_storage {
-	robin_hood::unordered_flat_map<std::string_view, html_entity_def> entity_by_name;
-	robin_hood::unordered_flat_map<std::string_view, html_entity_def> entity_by_name_heur;
-	robin_hood::unordered_flat_map<unsigned, html_entity_def> entity_by_id;
+	ankerl::unordered_dense::map<std::string_view, html_entity_def> entity_by_name;
+	ankerl::unordered_dense::map<std::string_view, html_entity_def> entity_by_name_heur;
+	ankerl::unordered_dense::map<unsigned, html_entity_def> entity_by_id;
 public:
 	html_entities_storage() {
 		auto nelts = G_N_ELEMENTS(html_entities_array);

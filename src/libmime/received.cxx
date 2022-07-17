@@ -879,7 +879,7 @@ TEST_SUITE("received") {
 TEST_CASE("parse received")
 {
 	using namespace std::string_view_literals;
-	using map_type = robin_hood::unordered_flat_map<std::string_view, std::string_view>;
+	using map_type = ankerl::unordered_dense::map<std::string_view, std::string_view>;
 	std::vector<std::pair<std::string_view, map_type>> cases{
 			// Simple received
 			{"from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])"sv,

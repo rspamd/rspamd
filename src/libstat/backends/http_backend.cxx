@@ -19,7 +19,7 @@
 #include "libserver/http/http_connection.h"
 #include "libserver/mempool_vars_internal.h"
 #include "upstream.h"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include <vector>
 
 namespace rspamd::stat::http {
@@ -91,7 +91,7 @@ public:
 						bool learn) -> bool;
 private:
 	http_backends_collection *all_backends;
-	robin_hood::unordered_flat_map<int, const struct rspamd_statfile_config *> seen_statfiles;
+	ankerl::unordered_dense::map<int, const struct rspamd_statfile_config *> seen_statfiles;
 	struct upstream *selected;
 private:
 	http_backend_runtime(struct rspamd_task *task, bool is_learn) :

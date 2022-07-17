@@ -15,7 +15,7 @@
  */
 
 #include "css.hxx"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "css_parser.hxx"
 #include "libserver/html/html_tag.hxx"
 #include "libserver/html/html_block.hxx"
@@ -34,7 +34,7 @@ public:
 	using sel_shared_hash = smart_ptr_hash<css_selector>;
 	using sel_shared_eq = smart_ptr_equal<css_selector>;
 	using selector_ptr = std::unique_ptr<css_selector>;
-	using selectors_hash = robin_hood::unordered_flat_map<selector_ptr, css_declarations_block_ptr,
+	using selectors_hash = ankerl::unordered_dense::map<selector_ptr, css_declarations_block_ptr,
 			sel_shared_hash, sel_shared_eq>;
 	using universal_selector_t = std::pair<selector_ptr, css_declarations_block_ptr>;
 	selectors_hash tags_selector;

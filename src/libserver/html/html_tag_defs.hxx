@@ -21,7 +21,7 @@
 #include "libutil/cxx/util.hxx"
 
 #include <string>
-#include <contrib/robin-hood/robin_hood.h>
+#include "contrib/ankerl/unordered_dense.h"
 
 namespace rspamd::html {
 
@@ -139,8 +139,8 @@ static const auto html_tag_defs_array = rspamd::array_of(
 );
 
 class html_tags_storage {
-	robin_hood::unordered_flat_map<std::string_view, html_tag_def> tag_by_name;
-	robin_hood::unordered_flat_map<tag_id_t, html_tag_def> tag_by_id;
+	ankerl::unordered_dense::map<std::string_view, html_tag_def> tag_by_name;
+	ankerl::unordered_dense::map<tag_id_t, html_tag_def> tag_by_id;
 public:
 	html_tags_storage() {
 		tag_by_name.reserve(html_tag_defs_array.size());

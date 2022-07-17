@@ -17,7 +17,7 @@
 #include <memory>
 #include <vector>
 #include <cmath>
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 #include "composites.h"
 #include "composites_internal.hxx"
@@ -29,7 +29,7 @@ namespace rspamd::composites {
 static auto
 composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy
 {
-	const static robin_hood::unordered_flat_map<std::string_view,
+	const static ankerl::unordered_dense::map<std::string_view,
 			enum rspamd_composite_policy> names{
 			{"remove",        rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
 			{"remove_all",    rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},

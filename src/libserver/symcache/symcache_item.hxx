@@ -200,7 +200,7 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	id_list forbidden_ids{};
 
 	/* Set of augmentations */
-	robin_hood::unordered_flat_set<std::string, rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
+	ankerl::unordered_dense::set<std::string, rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
 
 	/* Dependencies */
 	std::vector<cache_dependency> deps;

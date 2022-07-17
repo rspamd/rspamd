@@ -34,7 +34,7 @@
 
 #include "rspamd_symcache.h"
 #include "contrib/libev/ev.h"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "contrib/expected/expected.hpp"
 #include "cfg_file.h"
 
@@ -109,9 +109,9 @@ struct order_generation {
 	/* All items ordered */
 	std::vector<cache_item_ptr> d;
 	/* Mapping from symbol name to the position in the order array */
-	robin_hood::unordered_flat_map<std::string_view, unsigned int> by_symbol;
+	ankerl::unordered_dense::map<std::string_view, unsigned int> by_symbol;
 	/* Mapping from symbol id to the position in the order array */
-	robin_hood::unordered_flat_map<unsigned int, unsigned int> by_cache_id;
+	ankerl::unordered_dense::map<unsigned int, unsigned int> by_cache_id;
 	/* It matches cache->generation_id; if not, a fresh ordering is required */
 	unsigned int generation_id;
 
@@ -147,7 +147,7 @@ class symcache {
 private:
 	using items_ptr_vec = std::vector<cache_item_ptr>;
 	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
-	robin_hood::unordered_flat_map<std::string_view, cache_item_ptr> items_by_symbol;
+	ankerl::unordered_dense::map<std::string_view, cache_item_ptr> items_by_symbol;
 	items_ptr_vec items_by_id;
 
 	/* Items sorted into some order */

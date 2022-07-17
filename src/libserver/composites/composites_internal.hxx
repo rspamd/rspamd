@@ -93,7 +93,7 @@ private:
 		return composite;
 	}
 
-	robin_hood::unordered_flat_map<std::string,
+	ankerl::unordered_dense::map<std::string,
 			std::shared_ptr<rspamd_composite>, rspamd::smart_str_hash, rspamd::smart_str_equal> composites;
 	/* Store all composites here, even if we have duplicates */
 	std::vector<std::shared_ptr<rspamd_composite>> all_composites;

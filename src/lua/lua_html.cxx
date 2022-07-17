@@ -21,7 +21,7 @@
 #include "libserver/html/html_block.hxx"
 #include "images.h"
 
-#include <contrib/robin-hood/robin_hood.h>
+#include "contrib/ankerl/unordered_dense.h"
 #include <frozen/string.h>
 #include <frozen/unordered_map.h>
 
@@ -406,7 +406,7 @@ lua_html_foreach_tag (lua_State *L)
 	const gchar *tagname;
 	gint id;
 	auto any = false;
-	robin_hood::unordered_flat_set<int> tags;
+	ankerl::unordered_dense::set<int> tags;
 
 
 	if (lua_type (L, 2) == LUA_TSTRING) {

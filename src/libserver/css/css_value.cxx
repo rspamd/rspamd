@@ -19,7 +19,7 @@
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
 #include "libutil/util.h"
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "fmt/core.h"
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL

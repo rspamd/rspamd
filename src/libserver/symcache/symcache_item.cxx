@@ -32,7 +32,7 @@ struct augmentation_info {
 
 /* A list of internal augmentations that are known to Rspamd with their weight */
 static const auto known_augmentations =
-		robin_hood::unordered_flat_map<std::string, augmentation_info, rspamd::smart_str_hash, rspamd::smart_str_equal>{
+		ankerl::unordered_dense::map<std::string, augmentation_info, rspamd::smart_str_hash, rspamd::smart_str_equal>{
 				{"passthrough", {
 										.weight = 10,
 										.implied_flags = SYMBOL_TYPE_IGNORE_PASSTHROUGH

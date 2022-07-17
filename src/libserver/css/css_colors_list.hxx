@@ -20,7 +20,7 @@
 #pragma once
 
 #include <string_view>
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 #include "css_value.hxx"
 
 namespace rspamd::css {
@@ -30,7 +30,7 @@ namespace rspamd::css {
  * TODO: think about frozen structs when we can deal with 700 values without
  * compiler limits...
  */
-static const robin_hood::unordered_flat_map<std::string_view, css_color> css_colors_map{
+static const ankerl::unordered_dense::map<std::string_view, css_color> css_colors_map{
 		{"aliceblue",            {240, 248, 255}},
 		{"antiquewhite",         {250, 235, 215}},
 		{"antiquewhite1",        {255, 239, 219}},

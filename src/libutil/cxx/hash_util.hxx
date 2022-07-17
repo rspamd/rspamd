@@ -20,7 +20,7 @@
 
 #include <string_view>
 #include <string>
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 
 namespace rspamd {
@@ -81,10 +81,10 @@ struct smart_str_equal {
 struct smart_str_hash {
 	using is_transparent = void;
 	auto operator()(const std::string &a) const {
-		return robin_hood::hash<std::string>()(a);
+		return ankerl::unordered_dense::hash<std::string>()(a);
 	}
 	auto operator()(const std::string_view &a) const {
-		return robin_hood::hash<std::string_view>()(a);
+		return ankerl::unordered_dense::hash<std::string_view>()(a);
 	}
 };
 

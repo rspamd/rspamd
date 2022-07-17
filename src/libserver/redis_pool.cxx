@@ -23,9 +23,8 @@
 #include "contrib/hiredis/adapters/libev.h"
 #include "cryptobox.h"
 #include "logger.h"
-
 #include <list>
-#include "contrib/robin-hood/robin_hood.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 namespace rspamd {
 class redis_pool_elt;
@@ -91,6 +90,12 @@ class redis_pool_elt {
 	redis_pool_key_t key;
 	bool is_unix;
 public:
+	/* Disable copy */
+	redis_pool_elt() = delete;
+	redis_pool_elt(const redis_pool_elt &) = delete;
+	/* Enable move */
+	redis_pool_elt(redis_pool_elt &&other) = default;
+
 	explicit redis_pool_elt(redis_pool *_pool,
 							const gchar *_db, const gchar *_password,
 							const char *_ip, int _port)
@@ -194,9 +199,9 @@ class redis_pool final {
 	static constexpr const unsigned default_max_conns = 100;
 
 	/* We want to have references integrity */
-	robin_hood::unordered_flat_map<redisAsyncContext *,
+	ankerl::unordered_dense::map<redisAsyncContext *,
 			redis_pool_connection *> conns_by_ctx;
-	robin_hood::unordered_node_map<redis_pool_key_t, redis_pool_elt> elts_by_key;
+	ankerl::unordered_dense::map<redis_pool_key_t, redis_pool_elt> elts_by_key;
 	bool wanna_die = false; /* Hiredis is 'clever' so we can call ourselves from destructor */
 public:
 	double timeout = default_timeout;
@@ -490,9 +495,9 @@ redis_pool::new_connection(const gchar *db, const gchar *password,
 		}
 		else {
 			/* Need to create a pool */
-			auto nelt = elts_by_key.emplace(std::piecewise_construct,
-					std::forward_as_tuple(key),
-					std::forward_as_tuple(this, db, password, ip, port));
+			auto nconn = redis_pool_elt{this, db, password, ip, port};
+			auto nelt = elts_by_key.try_emplace(key,
+					std::move(nconn));
 
 			return nelt.first->second.new_connection();
 		}
