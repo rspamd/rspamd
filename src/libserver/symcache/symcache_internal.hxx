@@ -239,7 +239,7 @@ private:
 	using items_ptr_vec = std::vector<cache_item_ptr>;
 	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
 	ankerl::unordered_dense::map<std::string_view, cache_item_ptr> items_by_symbol;
-	items_ptr_vec items_by_id;
+	ankerl::unordered_dense::map<int, cache_item_ptr> items_by_id;
 
 	/* Items sorted into some order */
 	order_generation_ptr items_by_order;
@@ -564,14 +564,6 @@ public:
 	 * @return
 	 */
 	auto maybe_resort() -> bool;
-
-	/**
-	 * Returns number of items with ids
-	 * @return
-	 */
-	auto get_items_count()  const -> auto {
-		return items_by_id.size();
-	}
 
 	/**
 	 * Returns current set of items ordered for sharing ownership

@@ -42,7 +42,7 @@ auto symcache::init() -> bool
 
 	ankerl::unordered_dense::set<int> disabled_ids;
 	/* Process enabled/disabled symbols */
-	for (const auto &it: items_by_id) {
+	for (const auto &[id, it]: items_by_id) {
 		if (disabled_symbols) {
 			/*
 			 * Due to the ability to add patterns, this is now O(N^2), but it is done
@@ -141,7 +141,7 @@ auto symcache::init() -> bool
 
 		/* Preserve refcount here */
 		auto deleted_element_refcount = items_by_id[id_to_disable];
-		items_by_id.erase(std::begin(items_by_id) + id_to_disable);
+		items_by_id.erase(id_to_disable);
 		items_by_symbol.erase(deleted_element_refcount->get_name());
 
 		auto &additional_vec = get_item_specific_vector(*deleted_element_refcount);
@@ -182,7 +182,7 @@ auto symcache::init() -> bool
 	delayed_conditions.reset();
 
 	msg_debug_cache("process dependencies");
-	for (auto &it: items_by_id) {
+	for (const auto &[_id, it]: items_by_id) {
 		it->process_deps(*this);
 	}
 
@@ -431,19 +431,21 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 		return nullptr;
 	}
 
-	auto &ret = items_by_id[id];
+	const auto &maybe_item = rspamd::find_map(items_by_id, id);
 
-	if (!ret) {
+	if (!maybe_item.has_value()) {
 		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
 				id);
 		return nullptr;
 	}
 
-	if (resolve_parent && ret->is_virtual()) {
-		return ret->get_parent(*this);
+	const auto &item = maybe_item.value().get();
+
+	if (resolve_parent && item->is_virtual()) {
+		return item->get_parent(*this);
 	}
 
-	return ret.get();
+	return item.get();
 }
 
 auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_item *
@@ -454,19 +456,21 @@ auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_it
 		return nullptr;
 	}
 
-	auto &ret = items_by_id[id];
+	const auto &maybe_item = rspamd::find_map(items_by_id, id);
 
-	if (!ret) {
+	if (!maybe_item.has_value()) {
 		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
 				id);
 		return nullptr;
 	}
 
-	if (resolve_parent && ret->is_virtual()) {
-		return (cache_item *)ret->get_parent(*this);
+	const auto &item = maybe_item.value().get();
+
+	if (resolve_parent && item->is_virtual()) {
+		return const_cast<cache_item *>(item->get_parent(*this));
 	}
 
-	return ret.get();
+	return item.get();
 }
 
 auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) const -> const cache_item *
@@ -747,7 +751,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 
 	items_by_symbol[item->get_name()] = item;
 	get_item_specific_vector(*item).push_back(item);
-	items_by_id.push_back(item);
+	items_by_id.emplace(id, item);
 
 	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
 		cksum = t1ha(name.data(), name.size(), cksum);
@@ -790,11 +794,11 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 			id,
 			std::string{name},
 			parent_id, real_type_pair.first, real_type_pair.second);
-	auto &parent = items_by_id[parent_id];
+	const auto &parent = items_by_id[parent_id];
 	parent->add_child(item);
 	items_by_symbol[item->get_name()] = item;
 	get_item_specific_vector(*item).push_back(item);
-	items_by_id.push_back(item);
+	items_by_id.emplace(id, item);
 
 	return id;
 }
