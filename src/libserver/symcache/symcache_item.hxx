@@ -26,6 +26,7 @@
 #include <memory>
 #include <variant>
 #include <algorithm>
+#include <optional>
 
 #include "rspamd_symcache.h"
 #include "symcache_id_list.hxx"
@@ -138,6 +139,10 @@ public:
 
 	auto add_child(const cache_item_ptr &ptr) -> void {
 		virtual_children.push_back(ptr);
+	}
+
+	auto get_childen() const -> const std::vector<cache_item_ptr>& {
+		return virtual_children;
 	}
 };
 
@@ -413,6 +418,21 @@ public:
 		else {
 			g_assert("add child is called for a virtual symbol!");
 		}
+	}
+
+	/**
+	 * Returns virtual children for a normal item
+	 * @param ptr
+	 * @return
+	 */
+	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item_ptr>>> {
+		if (std::holds_alternative<normal_item>(specific)) {
+			const auto &filter_data = std::get<normal_item>(specific);
+
+			return std::cref(filter_data.get_childen());
+		}
+
+		return std::nullopt;
 	}
 
 private:
