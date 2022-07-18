@@ -73,6 +73,7 @@ namespace std {
 template<>
 class hash<rspamd::css::css_rule> {
 public:
+	using is_avalanching = void;
 	constexpr auto operator()(const rspamd::css::css_rule &rule) const -> auto {
 		return hash<rspamd::css::css_property>()(rule.get_prop());
 	}

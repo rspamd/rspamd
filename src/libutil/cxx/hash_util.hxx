@@ -80,6 +80,7 @@ struct smart_str_equal {
 
 struct smart_str_hash {
 	using is_transparent = void;
+	using is_avalanching = typename ankerl::unordered_dense::hash<std::string_view>::is_avalanching;
 	auto operator()(const std::string &a) const {
 		return ankerl::unordered_dense::hash<std::string>()(a);
 	}

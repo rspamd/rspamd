@@ -141,6 +141,7 @@ namespace std {
 template<>
 class hash<rspamd::css::css_property> {
 public:
+	using is_avalanching = void;
 	/* Mix bits to provide slightly better distribution but being constexpr */
 	constexpr size_t operator() (const rspamd::css::css_property &prop) const {
 		std::size_t key = 0xdeadbeef ^static_cast<std::size_t>(prop.type);

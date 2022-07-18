@@ -106,6 +106,7 @@ namespace std {
 template<>
 class hash<rspamd::css::css_selector> {
 public:
+	using is_avalanching = void;
 	auto operator() (const rspamd::css::css_selector &sel) const -> std::size_t {
 		if (sel.type == rspamd::css::css_selector::selector_type::SELECTOR_TAG) {
 			return static_cast<std::size_t>(std::get<tag_id_t>(sel.value));
