@@ -23,8 +23,10 @@
 #include "contrib/hiredis/adapters/libev.h"
 #include "cryptobox.h"
 #include "logger.h"
-#include <list>
 #include "contrib/ankerl/unordered_dense.h"
+
+#include <list>
+#include <unordered_map>
 
 namespace rspamd {
 class redis_pool_elt;
@@ -201,7 +203,11 @@ class redis_pool final {
 	/* We want to have references integrity */
 	ankerl::unordered_dense::map<redisAsyncContext *,
 			redis_pool_connection *> conns_by_ctx;
-	ankerl::unordered_dense::map<redis_pool_key_t, redis_pool_elt> elts_by_key;
+	/*
+	 * We store a pointer to the element in each connection, so this has to be
+	 * a buckets map with pointers/references stability guarantees.
+	 */
+	std::unordered_map<redis_pool_key_t, redis_pool_elt> elts_by_key;
 	bool wanna_die = false; /* Hiredis is 'clever' so we can call ourselves from destructor */
 public:
 	double timeout = default_timeout;
@@ -495,9 +501,8 @@ redis_pool::new_connection(const gchar *db, const gchar *password,
 		}
 		else {
 			/* Need to create a pool */
-			auto nconn = redis_pool_elt{this, db, password, ip, port};
 			auto nelt = elts_by_key.try_emplace(key,
-					std::move(nconn));
+					this, db, password, ip, port);
 
 			return nelt.first->second.new_connection();
 		}
