@@ -39,7 +39,7 @@ namespace rspamd::stat::cdb {
 class cdb_shared_storage {
 public:
 	using cdb_element_t = std::shared_ptr<struct cdb>;
-	cdb_shared_storage() noexcept = default;
+	cdb_shared_storage() = default;
 
 	auto get_cdb(const char *path) const -> std::optional<cdb_element_t> {
 		auto found = elts.find(path);
