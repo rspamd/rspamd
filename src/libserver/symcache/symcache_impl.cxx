@@ -24,6 +24,7 @@
 #include "fmt/core.h"
 #include "contrib/t1ha/t1ha.h"
 
+#include <version>
 #include <cmath>
 
 namespace rspamd::symcache {
@@ -145,9 +146,17 @@ auto symcache::init() -> bool
 		items_by_symbol.erase(deleted_element_refcount->get_name());
 
 		auto &additional_vec = get_item_specific_vector(*deleted_element_refcount);
+#if __cplusplus >= 202002L || defined(__cpp_lib_erase_if)
 		std::erase_if(additional_vec, [id_to_disable](const cache_item_ptr &elt) {
 			return elt->id == id_to_disable;
 		});
+#else
+		auto it = std::remove_if(additional_vec.begin(),
+		additional_vec.end(), [id_to_disable](const cache_item_ptr &elt) {
+			return elt->id == id_to_disable;
+		});
+		additional_vec.erase(it, additional_vec.end());
+#endif
 
 		/* Refcount is dropped, so the symbol should be freed, ensure that nothing else owns this symbol */
 		g_assert(deleted_element_refcount.use_count() == 1);
