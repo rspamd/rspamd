@@ -24,7 +24,11 @@
 #include "fmt/core.h"
 #include "contrib/t1ha/t1ha.h"
 
-#include <version>
+#ifdef __has_include
+# if __has_include(<version>)
+#   include <version>
+# endif
+#endif
 #include <cmath>
 
 namespace rspamd::symcache {
