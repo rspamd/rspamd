@@ -1,5 +1,5 @@
 // ┌─┐┬  ┬┌─┐┌─┐┌┬┐┌─┐┬─┐   Compact SVO optimized vector C++17 or higher
-// └─┐└┐┌┘├┤ │   │ │ │├┬┘   Version 1.0.0
+// └─┐└┐┌┘├┤ │   │ │ │├┬┘   Version 1.0.1
 // └─┘ └┘ └─┘└─┘ ┴ └─┘┴└─   https://github.com/martinus/svector
 //
 // Licensed under the MIT License <http://opensource.org/licenses/MIT>.
@@ -30,7 +30,7 @@
 // see https://semver.org/spec/v2.0.0.html
 #define ANKERL_SVECTOR_VERSION_MAJOR 1 // incompatible API changes
 #define ANKERL_SVECTOR_VERSION_MINOR 0 // add functionality in a backwards compatible manner
-#define ANKERL_SVECTOR_VERSION_PATCH 0 // backwards compatible bug fixes
+#define ANKERL_SVECTOR_VERSION_PATCH 1 // backwards compatible bug fixes
 
 // API versioning with inline namespace, see https://www.foonathan.net/2018/11/inline-namespaces/
 #define ANKERL_SVECTOR_VERSION_CONCAT1(major, minor, patch) v##major##_##minor##_##patch
@@ -272,7 +272,8 @@ class svector {
             auto* storage = indirect();
             uninitialized_move_and_destroy(storage->data(), direct_data(), storage->size());
             set_direct_and_size(storage->size());
-            delete storage;
+            std::destroy_at(storage);
+            ::operator delete(storage);
         } else {
             // put everything into indirect storage
             auto* storage = detail::storage<T>::alloc(new_capacity);
@@ -284,7 +285,9 @@ class svector {
                 // indirect -> indirect
                 uninitialized_move_and_destroy(data<direction::indirect>(), storage->data(), size<direction::indirect>());
                 storage->size(size<direction::indirect>());
-                delete indirect();
+                auto* storage = indirect();
+                std::destroy_at(storage);
+                ::operator delete(storage);
             }
             set_indirect(storage);
         }
@@ -522,7 +525,9 @@ class svector {
             std::destroy_n(ptr, s);
         }
         if (!is_dir) {
-            delete indirect();
+            auto* storage = indirect();
+            std::destroy_at(storage);
+            ::operator delete(storage);
         }
     }
 

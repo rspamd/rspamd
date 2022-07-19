@@ -35,5 +35,5 @@
 | fmt                    | 8.1.1   | MIT                 | NO      |                    |
 | doctest                | 2.4.6   | MIT                 | NO      |                    |
 | function2              | 4.1.0   | Boost               | NO      |                    |
-| ankerl/svector         | 1.0.0   | MIT                 | NO      |                    |
+| ankerl/svector         | 1.0.1   | MIT                 | NO      |                    |
 | ankerl/unordered_dense | 1.0.2   | MIT                 | NO      |                    |
