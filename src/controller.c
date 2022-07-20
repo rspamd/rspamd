@@ -689,7 +689,7 @@ end:
 	}
 
 	if (!ret) {
-		rspamd_controller_send_error (entry, 403, "Unauthorized");
+		rspamd_controller_send_error (entry, 401, "Unauthorized");
 	}
 
 	return ret;
