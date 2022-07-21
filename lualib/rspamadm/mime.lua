@@ -878,13 +878,44 @@ local function sign_handler(opts)
   end
 end
 
---Strips directories and .extensions from a filename/path
-local function filename_only(filename)
-  stripped_filename = filename:match(".*%/([^%.]*)")
-  if not stripped_filename then
-    stripped_filename = filename:match("(.*)%.")
+--Strips directories and .extensions (if present) from a filepath
+local function filename_only(filepath)
+  filename = filepath:match(".*%/([^%.]*)")
+  if not filename then
+    filename = filepath:match("(.*)%.")
   end
-  return stripped_filename
+  return filename
+end
+
+local function get_dump_content(task, opts)
+  if opts.ucl or opts.json or opts.messagepack then
+    local ucl_object = lua_mime.message_to_ucl(task)
+    local extension = output_fmt(opts)
+    return ucl.to_format(ucl_object, out_extension), extension
+  end
+  return tostring(task:get_content()), "mime"
+end
+
+--Write the dump content to file or standard out
+local function write_dump_content(data, fname, extension, outdir)
+  if outdir then
+    if outdir:sub(-1) ~= "/" then
+      outdir = outdir .. "/"
+    end
+
+    local outpath = string.format("%s%s.%s", outdir, filename_only(fname), extension)
+    local outfile = io.open(outpath, "w")
+
+    if outfile then
+      outfile:write(data)
+      outfile:close()
+      io.write(outpath.."\n")
+    else
+      io.stderr:write(string.format("Unable to open: %s\n", outpath))
+    end
+  else
+      io.write(data)
+  end
 end
 
 local function dump_handler(opts)
@@ -892,38 +923,10 @@ local function dump_handler(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _,fname in ipairs(opts.file) do
-
     local task = load_task(opts, fname)
-
-    local data_to_write = nil
-    local out_extension = nil
-    if opts.ucl or opts.json or opts.messagepack then
-      local ucl_object = lua_mime.message_to_ucl(task)
-      out_extension = output_fmt(opts)
-      data_to_write = ucl.to_format(ucl_object, out_extension)
-    else
-      out_extension = "mime"
-      data_to_write = tostring(task:get_content())
-    end
-
-    if opts.outdir then
-      if opts.outdir:sub(-1) ~= "/" then
-        opts.outdir = opts.outdir .. "/"
-      end
-
-      local outpath = string.format("%s%s.%s", opts.outdir, filename_only(fname), out_extension)
-      local outfile = io.open(outpath, "w")
-      
-      if outfile then
-        outfile:write(data_to_write)
-        outfile:close()
-        io.write(outpath.."\n")
-      else
-        io.stderr:write(string.format("Unable to open: %s\n", outpath))
-      end
-    else
-        io.write(data_to_write)
-    end
+    
+    local data, extension = get_dump_content(task, opts)
+    write_dump_content(data, fname, extension, opts.outdir)
 
     task:destroy() -- No automatic dtor
   end
