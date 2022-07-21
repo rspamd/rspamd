@@ -728,5 +728,5 @@ rspamd_config:register_symbol({
   type = 'idempotent',
   callback = milter_headers,
   priority = 10,
-  flags = 'empty',
+  flags = 'empty,explicit_disable,ignore_passthrough',
 })
