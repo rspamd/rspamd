@@ -1,5 +1,5 @@
 // ┌─┐┬  ┬┌─┐┌─┐┌┬┐┌─┐┬─┐   Compact SVO optimized vector C++17 or higher
-// └─┐└┐┌┘├┤ │   │ │ │├┬┘   Version 1.0.1
+// └─┐└┐┌┘├┤ │   │ │ │├┬┘   Version 1.0.2
 // └─┘ └┘ └─┘└─┘ ┴ └─┘┴└─   https://github.com/martinus/svector
 //
 // Licensed under the MIT License <http://opensource.org/licenses/MIT>.
@@ -30,7 +30,7 @@
 // see https://semver.org/spec/v2.0.0.html
 #define ANKERL_SVECTOR_VERSION_MAJOR 1 // incompatible API changes
 #define ANKERL_SVECTOR_VERSION_MINOR 0 // add functionality in a backwards compatible manner
-#define ANKERL_SVECTOR_VERSION_PATCH 1 // backwards compatible bug fixes
+#define ANKERL_SVECTOR_VERSION_PATCH 2 // backwards compatible bug fixes
 
 // API versioning with inline namespace, see https://www.foonathan.net/2018/11/inline-namespaces/
 #define ANKERL_SVECTOR_VERSION_CONCAT1(major, minor, patch) v##major##_##minor##_##patch
@@ -98,7 +98,7 @@ constexpr auto size_of_svector(size_t min_inline_capacity) -> size_t {
  */
 template <typename T>
 constexpr auto automatic_capacity(size_t min_inline_capacity) -> size_t {
-    return cx_min((size_of_svector<T>(min_inline_capacity) - 1U) / sizeof(T), size_t(127));
+    return cx_min((size_of_svector<T>(min_inline_capacity) - 1U) / sizeof(T), size_t{127});
 }
 
 /**
@@ -462,7 +462,7 @@ class svector {
      *
      * Destroys then empty elements in [source_begin, source_end(
      */
-    static auto shift_right(T* source_begin, T* source_end, T* target_begin) {
+    static void shift_right(T* source_begin, T* source_end, T* target_begin) {
         // 1. uninitialized moves
         auto const num_moves = std::distance(source_begin, source_end);
         auto const target_end = target_begin + num_moves;
@@ -529,6 +529,7 @@ class svector {
             std::destroy_at(storage);
             ::operator delete(storage);
         }
+        set_direct_and_size(0);
     }
 
     // performs a const_cast so we don't need this implementation twice
@@ -659,7 +660,7 @@ public:
         }
     }
 
-    auto reserve(size_t s) {
+    void reserve(size_t s) {
         auto old_capacity = capacity();
         auto new_capacity = calculate_new_capacity(s, old_capacity);
         if (new_capacity > old_capacity) {
@@ -912,7 +913,7 @@ public:
     }
 
     template <typename It>
-    auto insert(const_iterator pos, It first, It last, std::forward_iterator_tag /*unused*/) {
+    auto insert(const_iterator pos, It first, It last, std::forward_iterator_tag /*unused*/) -> iterator {
         auto* p = make_uninitialized_space(pos, std::distance(first, last));
         std::uninitialized_copy(first, last, p);
         return p;
