@@ -303,7 +303,8 @@ if opts then
       type = 'idempotent',
       callback = replies_set,
       priority = 5,
-      group = "replies",
+      group = 'replies',
+      flags = 'explicit_disable,ignore_passthrough',
     })
     local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',

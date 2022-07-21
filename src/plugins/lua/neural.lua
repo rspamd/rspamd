@@ -961,7 +961,7 @@ end
 rspamd_config:register_symbol({
   name = 'NEURAL_LEARN',
   type = 'idempotent,callback',
-  flags = 'nostat,explicit_disable',
+  flags = 'nostat,explicit_disable,ignore_passthrough',
   priority = 5,
   callback = ann_push_vector
 })

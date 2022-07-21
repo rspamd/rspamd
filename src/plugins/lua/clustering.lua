@@ -299,6 +299,7 @@ if opts['rules'] then
       rspamd_config:register_symbol{
         name = rule.symbol .. '_STORE',
         type = 'idempotent',
+        flags = 'empty,explicit_disable,ignore_passthrough',
         callback = callback_gen(clusterting_idempotent_cb, rule),
       }
     end

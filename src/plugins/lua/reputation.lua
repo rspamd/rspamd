@@ -1328,7 +1328,7 @@ local function parse_rule(name, tbl)
     rspamd_config:register_symbol{
       name = rule.symbol .. '_POST',
       type = 'postfilter',
-      flags = 'nostat',
+      flags = 'nostat,explicit_disable,ignore_passthrough',
       callback = callback_gen(reputation_postfilter_cb, rule),
     }
   end
@@ -1338,6 +1338,7 @@ local function parse_rule(name, tbl)
     rspamd_config:register_symbol{
       name = rule.symbol .. '_IDEMPOTENT',
       type = 'idempotent',
+      flags = 'explicit_disable,ignore_passthrough',
       callback = callback_gen(reputation_idempotent_cb, rule),
     }
   end

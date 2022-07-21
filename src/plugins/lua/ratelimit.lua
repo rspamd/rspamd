@@ -912,6 +912,7 @@ if opts then
     rspamd_config:register_symbol {
       type = 'idempotent',
       name = 'RATELIMIT_UPDATE',
+      flags = 'explicit_disable,ignore_passthrough',
       callback = ratelimit_update_cb,
     }
   end
