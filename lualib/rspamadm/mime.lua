@@ -209,8 +209,13 @@ dump:mutex(
     parser:flag "-U --ucl"
           :description "UCL output",
     parser:flag "-M --messagepack"
-          :description "MessagePack output"
+          :description "MessagePack output",
+    parser:flag "-E --extract"
+          :description "Always extract content to disk"
 )
+dump:option "-o --outdir"
+      :description "Output directory"
+      :argname("<directory>")
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -873,18 +878,51 @@ local function sign_handler(opts)
   end
 end
 
+--Strips directories and .extensions from a filename/path
+local function filename_only(filename)
+  stripped_filename = filename:match(".*%/([^%.]*)")
+  if not stripped_filename then
+    stripped_filename = filename:match("(.*)%.")
+  end
+  return stripped_filename
+end
+
 local function dump_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _,fname in ipairs(opts.file) do
+
     local task = load_task(opts, fname)
 
+    local data_to_write = nil
+    local out_extension = nil
     if opts.ucl or opts.json or opts.messagepack then
       local ucl_object = lua_mime.message_to_ucl(task)
-      io.write(ucl.to_format(ucl_object, output_fmt(opts)))
+      out_extension = output_fmt(opts)
+      data_to_write = ucl.to_format(ucl_object, out_extension)
     else
-      task:get_content():save_in_file(1)
+      out_extension = "mime"
+      data_to_write = tostring(task:get_content())
+    end
+
+    if opts.outdir then
+      if opts.outdir:sub(-1) ~= "/" then
+        opts.outdir = opts.outdir .. "/"
+      end
+
+      local outpath = string.format("%s%s.%s", opts.outdir, filename_only(fname), out_extension)
+      local outfile = io.open(outpath, "w")
+      
+      if outfile then
+        outfile:write(data_to_write)
+        outfile:close()
+        io.write(outpath.."\n")
+      else
+        io.stderr:write(string.format("Unable to open: %s\n", outpath))
+      end
+    else
+        io.write(data_to_write)
     end
 
     task:destroy() -- No automatic dtor
