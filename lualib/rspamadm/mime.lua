@@ -209,10 +209,11 @@ dump:mutex(
     parser:flag "-U --ucl"
           :description "UCL output",
     parser:flag "-M --messagepack"
-          :description "MessagePack output",
-    parser:flag "-E --extract"
-          :description "Always extract content to disk"
+          :description "MessagePack output"
 )
+dump:flag "-s --split"
+      :description "Split the output file contents such that no content is embedded"
+
 dump:option "-o --outdir"
       :description "Output directory"
       :argname("<directory>")
@@ -878,26 +879,28 @@ local function sign_handler(opts)
   end
 end
 
---Strips directories and .extensions (if present) from a filepath
+-- Strips directories and .extensions (if present) from a filepath
+  -- very_simple
+  -- /home/very_simple.eml
+  -- very_simple.eml
+  -- very_simple.example.eml
+  -- /home/very_simple
+  -- home/very_simple
+  -- ./home/very_simple
+  -- ../home/very_simple.eml
+--All the above end up as very_simple
 local function filename_only(filepath)
-  filename = filepath:match(".*%/([^%.]*)")
+  filename = filepath:match(".*%/([^%.]+)")
   if not filename then
-    filename = filepath:match("(.*)%.")
+    filename = filepath:match("([^%.]+)")
   end
   return filename
 end
 
-local function get_dump_content(task, opts)
-  if opts.ucl or opts.json or opts.messagepack then
-    local ucl_object = lua_mime.message_to_ucl(task)
-    local extension = output_fmt(opts)
-    return ucl.to_format(ucl_object, out_extension), extension
-  end
-  return tostring(task:get_content()), "mime"
-end
-
 --Write the dump content to file or standard out
-local function write_dump_content(data, fname, extension, outdir)
+local function write_dump_content(dump_content, fname, extension, outdir)
+  
+  wrote_filepath = nil
   if outdir then
     if outdir:sub(-1) ~= "/" then
       outdir = outdir .. "/"
@@ -907,15 +910,43 @@ local function write_dump_content(data, fname, extension, outdir)
     local outfile = io.open(outpath, "w")
 
     if outfile then
-      outfile:write(data)
+      outfile:write(dump_content)
       outfile:close()
       io.write(outpath.."\n")
+      wrote_filepath = outpath
     else
       io.stderr:write(string.format("Unable to open: %s\n", outpath))
     end
   else
-      io.write(data)
+      io.write(dump_content)
   end
+
+  return wrote_filepath
+end
+
+-- Get the formatted ucl (split or unsplit) or the raw task content
+local function get_dump_content(task, opts, fname)
+  if opts.ucl or opts.json or opts.messagepack then
+    local ucl_object = lua_mime.message_to_ucl(task)
+    
+    --Split out the content field into separate raws and update the ucl
+    if opts.split then
+      for i, part in ipairs(ucl_object.parts) do
+        if part.content then
+          local part_filename = string.format("%s-part%d", filename_only(fname), i)
+          local part_path = write_dump_content(tostring(part.content), part_filename, "raw", opts.outdir)
+          if part_path then
+            part.content = ucl.null
+            part.content_path = part_path
+          end
+        end
+      end
+    end
+
+    local extension = output_fmt(opts)
+    return ucl.to_format(ucl_object, extension), extension
+  end
+  return tostring(task:get_content()), "mime"
 end
 
 local function dump_handler(opts)
@@ -925,7 +956,7 @@ local function dump_handler(opts)
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     
-    local data, extension = get_dump_content(task, opts)
+    local data, extension = get_dump_content(task, opts, fname)
     write_dump_content(data, fname, extension, opts.outdir)
 
     task:destroy() -- No automatic dtor
