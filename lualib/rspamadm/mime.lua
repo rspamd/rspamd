@@ -919,7 +919,6 @@ local function write_dump_content(dump_content, fname, extension, outdir)
   else
       io.write(dump_content)
   end
-luacheck
   return wrote_filepath
 end
 
