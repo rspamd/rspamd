@@ -345,7 +345,7 @@ end
 local function validate_reporting_domain(reporting_domain)
   -- Now check the domain policy
   -- DMARC domain is a esld for the reporting domain
-  local dmarc_domain = rspamd_util.get_tld(reporting_domain)
+  local dmarc_domain = reporting_domain
   local is_ok, results = rspamd_dns.request({
     config = rspamd_config,
     session = rspamadm_session,
