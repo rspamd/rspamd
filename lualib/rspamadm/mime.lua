@@ -890,7 +890,7 @@ end
   -- ../home/very_simple.eml
 --All the above end up as very_simple
 local function filename_only(filepath)
-  filename = filepath:match(".*%/([^%.]+)")
+  local filename = filepath:match(".*%/([^%.]+)")
   if not filename then
     filename = filepath:match("([^%.]+)")
   end
@@ -899,8 +899,7 @@ end
 
 --Write the dump content to file or standard out
 local function write_dump_content(dump_content, fname, extension, outdir)
-  
-  wrote_filepath = nil
+  local wrote_filepath = nil
   if outdir then
     if outdir:sub(-1) ~= "/" then
       outdir = outdir .. "/"
@@ -920,7 +919,7 @@ local function write_dump_content(dump_content, fname, extension, outdir)
   else
       io.write(dump_content)
   end
-
+luacheck
   return wrote_filepath
 end
 
@@ -928,8 +927,7 @@ end
 local function get_dump_content(task, opts, fname)
   if opts.ucl or opts.json or opts.messagepack then
     local ucl_object = lua_mime.message_to_ucl(task)
-    
-    --Split out the content field into separate raws and update the ucl
+    -- Split out the content field into separate raws and update the ucl
     if opts.split then
       for i, part in ipairs(ucl_object.parts) do
         if part.content then
@@ -955,7 +953,6 @@ local function dump_handler(opts)
 
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
-    
     local data, extension = get_dump_content(task, opts, fname)
     write_dump_content(data, fname, extension, opts.outdir)
 
