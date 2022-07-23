@@ -1012,7 +1012,7 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 	}
 
 	gchar log_tag[RSPAMD_LOG_ID_LEN + 1];
-	rspamd_strlcpy(log_tag, session->pool->tag.uid, sizeof (session->pool->tag.uid));
+	rspamd_strlcpy(log_tag, session->pool->tag.uid, sizeof(log_tag));
 	lua_pushstring(L, log_tag);
 
 	if (lua_pcall (L, 2, 0, err_idx) != 0) {
