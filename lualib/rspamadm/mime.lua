@@ -880,15 +880,6 @@ local function sign_handler(opts)
 end
 
 -- Strips directories and .extensions (if present) from a filepath
-  -- very_simple
-  -- /home/very_simple.eml
-  -- very_simple.eml
-  -- very_simple.example.eml
-  -- /home/very_simple
-  -- home/very_simple
-  -- ./home/very_simple
-  -- ../home/very_simple.eml
---All the above end up as very_simple
 local function filename_only(filepath)
   local filename = filepath:match(".*%/([^%.]+)")
   if not filename then
@@ -896,6 +887,16 @@ local function filename_only(filepath)
   end
   return filename
 end
+
+assert(filename_only("very_simple") == "very_simple")
+assert(filename_only("/home/very_simple.eml") == "very_simple")
+assert(filename_only("very_simple.eml") == "very_simple")
+assert(filename_only("very_simple.example.eml") == "very_simple")
+assert(filename_only("/home/very_simple") == "very_simple")
+assert(filename_only("home/very_simple") == "very_simple")
+assert(filename_only("./home/very_simple") == "very_simple")
+assert(filename_only("../home/very_simple.eml") == "very_simple")
+assert(filename_only("/home/dir.with.dots/very_simple.eml") == "very_simple")
 
 --Write the dump content to file or standard out
 local function write_dump_content(dump_content, fname, extension, outdir)
@@ -931,7 +932,12 @@ local function get_dump_content(task, opts, fname)
       for i, part in ipairs(ucl_object.parts) do
         if part.content then
           local part_filename = string.format("%s-part%d", filename_only(fname), i)
-          local part_path = write_dump_content(tostring(part.content), part_filename, "raw", opts.outdir)
+          local part_path = nil
+          if type(part.content) == "string" then
+            part_path = write_dump_content(part.content, part_filename, "raw", opts.outdir)
+          else
+            part_path = write_dump_content(tostring(part.content), part_filename, "raw", opts.outdir)
+          end
           if part_path then
             part.content = ucl.null
             part.content_path = part_path
@@ -943,7 +949,14 @@ local function get_dump_content(task, opts, fname)
     local extension = output_fmt(opts)
     return ucl.to_format(ucl_object, extension), extension
   end
-  return tostring(task:get_content()), "mime"
+  
+  local content = task:get_content()
+  if type(content) == "string" then
+    return content, "mime"
+  else
+    return tostring(content), "mime"
+  end
+  
 end
 
 local function dump_handler(opts)
