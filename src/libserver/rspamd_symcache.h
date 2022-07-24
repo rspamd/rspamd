@@ -330,6 +330,24 @@ gboolean rspamd_symcache_disable_symbol (struct rspamd_task *task,
 										 const gchar *symbol);
 
 /**
+ * Disable execution of a symbol or a pattern (a string enclosed in `//`) permanently
+ * @param task
+ * @param cache
+ * @param symbol
+ * @return
+ */
+void rspamd_symcache_disable_symbol_static (struct rspamd_symcache *cache,
+												const gchar *symbol);
+/**
+ * Add a symbol or a pattern to the list of explicitly and statically enabled symbols
+ * @param cache
+ * @param symbol
+ * @return
+ */
+void rspamd_symcache_enable_symbol_static (struct rspamd_symcache *cache,
+												const gchar *symbol);
+
+/**
  * Process specific function for each cache element (in order they are added)
  * @param cache
  * @param func

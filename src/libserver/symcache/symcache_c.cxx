@@ -465,6 +465,23 @@ rspamd_symcache_enable_symbol(struct rspamd_task *task,
 	return cache_runtime->enable_symbol(task, *real_cache, symbol);
 }
 
+void
+rspamd_symcache_disable_symbol_static (struct rspamd_symcache *cache,
+									   const gchar *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->disable_symbol_delayed(symbol);
+}
+
+void rspamd_symcache_enable_symbol_static (struct rspamd_symcache *cache,
+										   const gchar *symbol)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+
+	real_cache->enable_symbol_delayed(symbol);
+}
+
 gboolean
 rspamd_symcache_is_checked(struct rspamd_task *task,
 						   struct rspamd_symcache *cache,
