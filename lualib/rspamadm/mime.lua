@@ -949,14 +949,12 @@ local function get_dump_content(task, opts, fname)
     local extension = output_fmt(opts)
     return ucl.to_format(ucl_object, extension), extension
   end
-  
   local content = task:get_content()
   if type(content) == "string" then
     return content, "mime"
   else
     return tostring(content), "mime"
   end
-  
 end
 
 local function dump_handler(opts)
