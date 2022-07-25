@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local ansicolors = require "ansicolors"
 local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
+local rspamd_text = require "rspamd_text"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
 local rspamd_url = require "rspamd_url"
@@ -211,6 +212,12 @@ dump:mutex(
     parser:flag "-M --messagepack"
           :description "MessagePack output"
 )
+dump:flag "-s --split"
+      :description "Split the output file contents such that no content is embedded"
+
+dump:option "-o --outdir"
+      :description "Output directory"
+      :argname("<directory>")
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -873,19 +880,84 @@ local function sign_handler(opts)
   end
 end
 
+-- Strips directories and .extensions (if present) from a filepath
+local function filename_only(filepath)
+  local filename = filepath:match(".*%/([^%.]+)")
+  if not filename then
+    filename = filepath:match("([^%.]+)")
+  end
+  return filename
+end
+
+assert(filename_only("very_simple") == "very_simple")
+assert(filename_only("/home/very_simple.eml") == "very_simple")
+assert(filename_only("very_simple.eml") == "very_simple")
+assert(filename_only("very_simple.example.eml") == "very_simple")
+assert(filename_only("/home/very_simple") == "very_simple")
+assert(filename_only("home/very_simple") == "very_simple")
+assert(filename_only("./home/very_simple") == "very_simple")
+assert(filename_only("../home/very_simple.eml") == "very_simple")
+assert(filename_only("/home/dir.with.dots/very_simple.eml") == "very_simple")
+
+--Write the dump content to file or standard out
+local function write_dump_content(dump_content, fname, extension, outdir)
+  if type(dump_content) == "string" then
+    dump_content = rspamd_text.fromstring(dump_content)
+  end
+
+  local wrote_filepath = nil
+  if outdir then
+    if outdir:sub(-1) ~= "/" then
+      outdir = outdir .. "/"
+    end
+
+    local outpath = string.format("%s%s.%s", outdir, filename_only(fname), extension)
+    if rspamd_util.file_exists(outpath) then
+      os.remove(outpath)
+    end
+    if dump_content:save_in_file(outpath) then
+      wrote_filepath = outpath
+      io.write(wrote_filepath.."\n")
+    else
+      io.stderr:write(string.format("Unable to save dump content to file: %s\n", outpath))
+    end
+  else
+    dump_content:save_in_file(1)
+  end
+  return wrote_filepath
+end
+
+-- Get the formatted ucl (split or unsplit) or the raw task content
+local function get_dump_content(task, opts, fname)
+  if opts.ucl or opts.json or opts.messagepack then
+    local ucl_object = lua_mime.message_to_ucl(task)
+    -- Split out the content field into separate raws and update the ucl
+    if opts.split then
+      for i, part in ipairs(ucl_object.parts) do
+        if part.content then
+          local part_filename = string.format("%s-part%d", filename_only(fname), i)
+          local part_path = write_dump_content(part.content, part_filename, "raw", opts.outdir)
+          if part_path then
+            part.content = ucl.null
+            part.content_path = part_path
+          end
+        end
+      end
+    end
+    local extension = output_fmt(opts)
+    return ucl.to_format(ucl_object, extension), extension
+  end
+  return task:get_content(), "mime"
+end
+
 local function dump_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
-
-    if opts.ucl or opts.json or opts.messagepack then
-      local ucl_object = lua_mime.message_to_ucl(task)
-      io.write(ucl.to_format(ucl_object, output_fmt(opts)))
-    else
-      task:get_content():save_in_file(1)
-    end
+    local data, extension = get_dump_content(task, opts, fname)
+    write_dump_content(data, fname, extension, opts.outdir)
 
     task:destroy() -- No automatic dtor
   end
