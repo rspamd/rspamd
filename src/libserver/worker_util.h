@@ -106,7 +106,7 @@ struct rspamd_controller_session {
 	struct rspamd_config *cfg;
 	struct rspamd_lang_detector *lang_det;
 	gboolean is_spam;
-	gboolean is_enable;
+	gboolean is_read_only;
 };
 
 /**

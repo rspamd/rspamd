@@ -515,19 +515,22 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		use_enable = FALSE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
+	/* Fail-safety */
+	session->is_read_only = TRUE;
+
 	/* Access list logic */
 	if (rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
 		ret = rspamd_controller_check_forwarded (session, msg, ctx);
 
 		if (ret == 1) {
-			session->is_enable = TRUE;
+			session->is_read_only = FALSE;
 
 			return TRUE;
 		}
 		else if (ret == 0) {
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a unix socket");
-			session->is_enable = TRUE;
+			session->is_read_only = FALSE;
 
 			return TRUE;
 		}
@@ -538,7 +541,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		ret = rspamd_controller_check_forwarded (session, msg, ctx);
 
 		if (ret == 1) {
-			session->is_enable = TRUE;
+			session->is_read_only = FALSE;
 
 			return TRUE;
 		}
@@ -546,7 +549,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a trusted IP %s",
 							rspamd_inet_address_to_string (session->from_addr));
-			session->is_enable = TRUE;
+			session->is_read_only = FALSE;
 
 			return TRUE;
 		}
@@ -572,7 +575,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 			else if (is_enable && (ctx->password == NULL &&
 					ctx->enable_password == NULL)) {
-				session->is_enable = TRUE;
+				session->is_read_only = FALSE;
 				return TRUE;
 			}
 		}
@@ -625,7 +628,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 
 			if (ret) {
-				session->is_enable = TRUE;
+				session->is_read_only = FALSE;
 			}
 		}
 		else {
@@ -646,6 +649,13 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 					check_normal = rspamd_check_encrypted_password (ctx,
 							password,
 							check, pbkdf, FALSE);
+				}
+
+				if (check_normal) {
+					if (ctx->enable_password == NULL) {
+						/* We have passed password check and no enable password is specified (*/
+						session->is_read_only = FALSE;
+					}
 				}
 
 			}
@@ -673,6 +683,11 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 			else {
 				check_enable = FALSE;
+			}
+
+			if (check_enable) {
+				/* We have passed enable password check, not a read-only mode */
+				session->is_read_only = FALSE;
 			}
 		}
 	}
@@ -749,7 +764,7 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 			st.messages_scanned), "scanned",  0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
 			st.messages_learned), "learned",  0, false);
-	ucl_object_insert_key (obj, ucl_object_frombool (!session->is_enable),
+	ucl_object_insert_key (obj, ucl_object_frombool (session->is_read_only),
 			"read_only", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (session->ctx->cfg->checksum),
 			"config_id", 0, false);
@@ -2665,7 +2680,7 @@ rspamd_controller_handle_stat_common (
 	uptime = ev_time () - session->ctx->start_time;
 	ucl_object_insert_key (top, ucl_object_fromint (
 			uptime), "uptime", 0, false);
-	ucl_object_insert_key (top, ucl_object_frombool (!session->is_enable),
+	ucl_object_insert_key (top, ucl_object_frombool (session->is_read_only),
 			"read_only", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
@@ -3106,7 +3121,7 @@ rspamd_controller_handle_metrics_common (
 			uptime), "uptime", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
 			session->ctx->start_time), "start_time", 0, false);
-	ucl_object_insert_key (top, ucl_object_frombool (!session->is_enable),
+	ucl_object_insert_key (top, ucl_object_frombool (session->is_read_only),
 			"read_only", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
