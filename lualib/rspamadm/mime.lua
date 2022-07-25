@@ -915,7 +915,6 @@ local function write_dump_content(dump_content, fname, extension, outdir)
     if rspamd_util.file_exists(outpath) then
       os.remove(outpath)
     end
-    
     if dump_content:save_in_file(outpath) then
       wrote_filepath = outpath
       io.write(wrote_filepath.."\n")
