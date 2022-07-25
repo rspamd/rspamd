@@ -18,6 +18,7 @@ local argparse = require "argparse"
 local ansicolors = require "ansicolors"
 local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
+local rspamd_text = require "rspamd_text"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
 local rspamd_url = require "rspamd_url"
@@ -900,6 +901,10 @@ assert(filename_only("/home/dir.with.dots/very_simple.eml") == "very_simple")
 
 --Write the dump content to file or standard out
 local function write_dump_content(dump_content, fname, extension, outdir)
+  if type(dump_content) == "string" then
+    dump_content = rspamd_text.fromstring(dump_content)
+  end
+
   local wrote_filepath = nil
   if outdir then
     if outdir:sub(-1) ~= "/" then
@@ -907,18 +912,18 @@ local function write_dump_content(dump_content, fname, extension, outdir)
     end
 
     local outpath = string.format("%s%s.%s", outdir, filename_only(fname), extension)
-    local outfile = io.open(outpath, "w")
-
-    if outfile then
-      outfile:write(dump_content)
-      outfile:close()
-      io.write(outpath.."\n")
+    if rspamd_util.file_exists(outpath) then
+      os.remove(outpath)
+    end
+    
+    if dump_content:save_in_file(outpath) then
       wrote_filepath = outpath
+      io.write(wrote_filepath.."\n")
     else
-      io.stderr:write(string.format("Unable to open: %s\n", outpath))
+      io.stderr:write(string.format("Unable to save dump content to file: %s\n", outpath))
     end
   else
-      io.write(dump_content)
+    dump_content:save_in_file(1)
   end
   return wrote_filepath
 end
@@ -932,12 +937,7 @@ local function get_dump_content(task, opts, fname)
       for i, part in ipairs(ucl_object.parts) do
         if part.content then
           local part_filename = string.format("%s-part%d", filename_only(fname), i)
-          local part_path = nil
-          if type(part.content) == "string" then
-            part_path = write_dump_content(part.content, part_filename, "raw", opts.outdir)
-          else
-            part_path = write_dump_content(tostring(part.content), part_filename, "raw", opts.outdir)
-          end
+          local part_path = write_dump_content(part.content, part_filename, "raw", opts.outdir)
           if part_path then
             part.content = ucl.null
             part.content_path = part_path
@@ -945,16 +945,10 @@ local function get_dump_content(task, opts, fname)
         end
       end
     end
-
     local extension = output_fmt(opts)
     return ucl.to_format(ucl_object, extension), extension
   end
-  local content = task:get_content()
-  if type(content) == "string" then
-    return content, "mime"
-  else
-    return tostring(content), "mime"
-  end
+  return task:get_content(), "mime"
 end
 
 local function dump_handler(opts)
