@@ -331,7 +331,7 @@ symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 		if (stage != RSPAMD_TASK_STAGE_IDEMPOTENT &&
 			!(item->flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH)) {
 			if (check_metric_limit(task)) {
-				msg_info_task_lambda("task has already the result being set, ignore further checks");
+				msg_debug_cache_task_lambda("task has already the result being set, ignore further checks");
 
 				return true;
 			}
@@ -361,8 +361,7 @@ symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 				}
 			}
 
-			process_symbol(task, cache, item, dyn_item);
-			all_done = false;
+			return process_symbol(task, cache, item, dyn_item);
 		}
 
 		/* Continue processing */
@@ -396,6 +395,8 @@ auto
 symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool
 {
 	auto all_done = true;
+	auto log_func = RSPAMD_LOG_FUNC;
+	auto has_passtrough = false;
 
 	for (const auto[idx, item]: rspamd::enumerate(order->d)) {
 		/* Exclude all non filters */
@@ -405,6 +406,15 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 			 * so, it is safe to stop processing immediately
 			 */
 			break;
+		}
+
+		if (!(item->flags & (SYMBOL_TYPE_FINE|SYMBOL_TYPE_IGNORE_PASSTHROUGH))) {
+			if (has_passtrough || check_metric_limit(task)) {
+				msg_debug_cache_task_lambda("task has already the result being set, ignore further checks");
+				has_passtrough = true;
+				/* Skip this item */
+				continue;
+			}
 		}
 
 		auto dyn_item = &dynamic_items[idx];
@@ -427,14 +437,6 @@ symcache_runtime::process_filters(struct rspamd_task *task, symcache &cache, int
 				has_slow = false;
 
 				return false;
-			}
-		}
-
-		if (!(item->flags & SYMBOL_TYPE_FINE)) {
-			if (check_metric_limit(task)) {
-				msg_info_task("task has already the result being set, ignore further checks");
-				all_done = true;
-				break;
 			}
 		}
 	}
