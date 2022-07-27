@@ -209,7 +209,7 @@ auto cache_item::resolve_parent(const symcache &cache) -> bool
 		auto &virt = std::get<virtual_item>(specific);
 
 		if (virt.get_parent(cache)) {
-			msg_warn_cache("trying to resolve parent twice for %s", symbol.c_str());
+			msg_debug_cache("trying to resolve parent twice for %s", symbol.c_str());
 
 			return false;
 		}
