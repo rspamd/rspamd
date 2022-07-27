@@ -495,6 +495,7 @@ auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) cons
 	}
 
 	if (resolve_parent && it->second->is_virtual()) {
+		it->second->resolve_parent(*this);
 		return it->second->get_parent(*this);
 	}
 
