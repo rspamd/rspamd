@@ -150,7 +150,7 @@ auto symcache::init() -> bool
 		items_by_symbol.erase(deleted_element_refcount->get_name());
 
 		auto &additional_vec = get_item_specific_vector(*deleted_element_refcount);
-#if __cplusplus >= 202002L || defined(__cpp_lib_erase_if)
+#if defined(__cpp_lib_erase_if)
 		std::erase_if(additional_vec, [id_to_disable](const cache_item_ptr &elt) {
 			return elt->id == id_to_disable;
 		});
