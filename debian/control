@@ -15,7 +15,7 @@ Build-Depends: cmake,
                libsodium-dev,
                libsqlite3-dev,
                libssl-dev (>= 1.0),
-               libunwind-dev,
+               libunwind-dev | libunwind-13-dev,
                perl,
                ragel,
                zlib1g-dev
