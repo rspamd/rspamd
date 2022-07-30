@@ -336,7 +336,7 @@ rspamd_regexp_new_len (const gchar *pattern, gsize len, const gchar *flags,
 		if (*start == '/') {
 			sep = '/';
 		}
-		else if (*start == 'm' && !g_ascii_isalnum(start[1])) {
+		else if (*start == 'm' && start[1] != '\\' && g_ascii_ispunct(start[1])) {
 			start ++;
 			sep = *start;
 
