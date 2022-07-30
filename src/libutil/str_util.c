@@ -3203,7 +3203,6 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		switch (t) {
 		case '[':
 		case ']':
-		case '-':
 		case '\\':
 		case '{':
 		case '}':
@@ -3219,6 +3218,36 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 				*d++ = '\\';
 			}
 			break;
+		case '-':
+			if (flags & RSPAMD_REGEXP_ESCAPE_GLOB) {
+				/*
+				 * For glob patterns, we need to ensure that a previous character is alphanumeric
+				 * and there is `[` symbol somewhere before
+				 */
+				bool seen_brace = false;
+				const char *search = p;
+
+				while (search > pattern) {
+					if (!g_ascii_isalnum(*search) && *search != '-') {
+						break;
+					}
+					if (*search == '[' ) {
+						seen_brace = true;
+						break;
+					}
+
+					search --;
+				}
+
+				if (!seen_brace) {
+					/* Escape `-` symbol */
+					*d++ = '\\';
+				}
+			}
+			else if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+				*d++ = '\\';
+			}
+			break;
 		case '*':
 		case '?':
 		case '+':
@@ -3226,10 +3255,8 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 				/* Treat * as .* and ? as .? */
 				*d++ = '.';
 			}
-			else {
-				if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
-					*d++ = '\\';
-				}
+			else if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+				*d++ = '\\';
 			}
 			break;
 		default:
