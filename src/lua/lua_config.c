@@ -1995,6 +1995,7 @@ lua_config_register_symbol (lua_State * L)
 	gint ret = -1, cbref = -1, type, flags = 0;
 	gint64 parent = 0, priority = 0, nshots = 0;
 	GError *err = NULL;
+	int prev_top = lua_gettop(L);
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
@@ -2008,6 +2009,7 @@ lua_config_register_symbol (lua_State * L)
 				&allowed_ids, &forbidden_ids)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
+			lua_settop(L, prev_top);
 
 			return luaL_error (L, "invalid arguments");
 		}
@@ -2019,9 +2021,11 @@ lua_config_register_symbol (lua_State * L)
 		type = lua_parse_symbol_type (type_str);
 
 		if (!name && !(type & SYMBOL_TYPE_CALLBACK)) {
+			lua_settop(L, prev_top);
 			return luaL_error (L, "no symbol name but type is not callback");
 		}
 		else if (!(type & SYMBOL_TYPE_VIRTUAL) && cbref == -1) {
+			lua_settop(L, prev_top);
 			return luaL_error (L, "no callback for symbol %s", name);
 		}
 
@@ -2067,6 +2071,7 @@ lua_config_register_symbol (lua_State * L)
 									lua_tostring (L, -1));
 						}
 						else {
+							lua_settop(L, prev_top);
 							return luaL_error(L, "invalid groups element");
 						}
 					}
@@ -2081,18 +2086,26 @@ lua_config_register_symbol (lua_State * L)
 			if (lua_type (L, -1) == LUA_TTABLE) {
 				int tbl_idx = lua_gettop(L);
 				for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop (L, 1)) {
-					rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
-							lua_tostring(L, -1));
+					const char *augmentation = lua_tostring(L, -1);
+
+					if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
+							augmentation)) {
+						lua_settop(L, prev_top);
+
+						return luaL_error (L, "unknown augmentation %s in symbol %s",
+								augmentation, name);
+					}
 				}
 			}
-
-			lua_pop (L, 1); /* Table itself */
 		}
 	}
 	else {
+		lua_settop(L, prev_top);
+
 		return luaL_error (L, "invalid arguments");
 	}
 
+	lua_settop (L, prev_top);
 	lua_pushinteger (L, ret);
 
 	return 1;
