@@ -126,7 +126,11 @@ local function check_length(task, part, rule)
     local adjusted_bytes = bytes
 
     if part:is_text() then
-      bytes = part:get_text():get_length()
+      -- Fuzzy plugin uses stripped utf content to get an exact hash, that
+      -- corresponds to `get_content_oneline()`
+      -- However, in the case of empty parts this method returns `nil`, so extra
+      -- sanity check is required.
+      bytes = #(part:get_text():get_content_oneline() or '')
       if rule.text_multiplier then
         adjusted_bytes = bytes * rule.text_multiplier
       end

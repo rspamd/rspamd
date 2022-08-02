@@ -803,11 +803,7 @@ lua_textpart_get_content_oneline (lua_State * L)
 		return 1;
 	}
 
-	t = lua_newuserdata (L, sizeof (*t));
-	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	t->start = part->utf_stripped_content->data;
-	t->len = part->utf_stripped_content->len;
-	t->flags = 0;
+	lua_new_text(L, part->utf_stripped_content->data, part->utf_stripped_content->len, FALSE);
 
 	return 1;
 }
