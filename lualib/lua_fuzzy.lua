@@ -131,6 +131,13 @@ local function check_length(task, part, rule)
       -- However, in the case of empty parts this method returns `nil`, so extra
       -- sanity check is required.
       bytes = #(part:get_text():get_content_oneline() or '')
+
+      -- Short hashing algorithm also use subject unless explicitly denied
+      if not rule.no_subject then
+        local subject = task:get_subject() or ''
+        bytes = bytes + #subject
+      end
+
       if rule.text_multiplier then
         adjusted_bytes = bytes * rule.text_multiplier
       end
