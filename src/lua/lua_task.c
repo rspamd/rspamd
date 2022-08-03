@@ -2296,7 +2296,7 @@ lua_task_set_pre_result (lua_State * L)
 			}
 
 			if (lua_type (L, 6) == LUA_TNUMBER) {
-				priority = lua_tonumber (L, 6);
+				priority = lua_tointeger(L, 6);
 			}
 
 			if (lua_type (L, 7) == LUA_TSTRING) {
@@ -2338,6 +2338,10 @@ lua_task_set_pre_result (lua_State * L)
 		}
 
 		if (fl_str != NULL) {
+			/*
+			 * TODO: convert to a set of string and split by `,` + add table support
+			 * once this legacy code is migrated to C++
+			 */
 			if (strstr (fl_str, "least") != NULL) {
 				flags |= RSPAMD_PASSTHROUGH_LEAST;
 			}
