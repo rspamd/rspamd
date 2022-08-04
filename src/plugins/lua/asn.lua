@@ -75,7 +75,7 @@ local function asn_check(task)
         return
       end
       if not results or not results[1] then
-        rspamd_logger.infox(task, 'cannot query ip %s on %s: no results',
+        rspamd_logger.infox(task, 'no ASN information is available for the IP address "%s" on %s',
             req_name, serv)
         return
       end
