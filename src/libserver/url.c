@@ -2489,23 +2489,30 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 
 		if (uri->tldlen == 0) {
-			if (!(parse_flags & RSPAMD_URL_PARSE_HREF)) {
-				/* Ignore URL's without TLD if it is not a numeric URL */
-				if (!rspamd_url_is_ip (uri, pool)) {
-					return URI_ERRNO_TLD_MISSING;
+			if (uri->protocol != PROTOCOL_MAILTO) {
+				if (!(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+					/* Ignore URL's without TLD if it is not a numeric URL */
+					if (!rspamd_url_is_ip(uri, pool)) {
+						return URI_ERRNO_TLD_MISSING;
+					}
 				}
-			} else {
-				if (!rspamd_url_is_ip (uri, pool)) {
-					/* Assume tld equal to host */
-					uri->tldshift = uri->hostshift;
-					uri->tldlen = uri->hostlen;
-				}
-				else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
-					/* Ignore urls with both no schema and no tld */
-					return URI_ERRNO_TLD_MISSING;
-				}
+				else {
+					if (!rspamd_url_is_ip(uri, pool)) {
+						/* Assume tld equal to host */
+						uri->tldshift = uri->hostshift;
+						uri->tldlen = uri->hostlen;
+					}
+					else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
+						/* Ignore urls with both no schema and no tld */
+						return URI_ERRNO_TLD_MISSING;
+					}
 
-				uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+					uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+				}
+			}
+			else {
+				/* Ignore IP like domains for mailto, as it is really never supported */
+				return URI_ERRNO_TLD_MISSING;
 			}
 		}
 
@@ -2980,9 +2987,11 @@ url_email_end (struct url_callback_data *cb,
 			return FALSE;
 		}
 
+		/* Check the next character after `@` */
 		if (!g_ascii_isalnum (pos[1]) || !g_ascii_isalnum (*(pos - 1))) {
 			return FALSE;
 		}
+
 
 		c = pos - 1;
 		while (c > cb->begin) {
