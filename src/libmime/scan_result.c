@@ -231,7 +231,7 @@ insert_metric_result (struct rspamd_task *task,
 					  enum rspamd_symbol_insert_flags flags,
 					  bool *new_sym)
 {
-	struct rspamd_symbol_result *s = NULL;
+	struct rspamd_symbol_result *symbol_result = NULL;
 	gdouble final_score, *gr_score = NULL, next_gf = 1.0, diff;
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
@@ -313,7 +313,7 @@ insert_metric_result (struct rspamd_task *task,
 	k = kh_get (rspamd_symbols_hash, metric_res->symbols, symbol);
 	if (k != kh_end (metric_res->symbols)) {
 		/* Existing metric score */
-		s = kh_value (metric_res->symbols, k);
+		symbol_result = kh_value (metric_res->symbols, k);
 		if (single) {
 			max_shots = 1;
 		}
@@ -328,14 +328,14 @@ insert_metric_result (struct rspamd_task *task,
 
 		msg_debug_metric ("nshots: %d for symbol %s", max_shots, symbol);
 
-		if (!single && (max_shots > 0 && (s->nshots >= max_shots))) {
+		if (!single && (max_shots > 0 && (symbol_result->nshots >= max_shots))) {
 			single = TRUE;
 		}
 
-		s->nshots ++;
+		symbol_result->nshots ++;
 
 		if (opt) {
-			rspamd_task_add_result_option (task, s, opt, strlen (opt));
+			rspamd_task_add_result_option (task, symbol_result, opt, strlen (opt));
 		}
 
 		/* Adjust diff */
@@ -345,13 +345,13 @@ insert_metric_result (struct rspamd_task *task,
 					symbol, diff);
 		}
 		else {
-			if (fabs (s->score) < fabs (final_score) &&
-				signbit (s->score) == signbit (final_score)) {
+			if (fabs (symbol_result->score) < fabs (final_score) &&
+				signbit (symbol_result->score) == signbit (final_score)) {
 				/* Replace less significant weight with a more significant one */
-				diff = final_score - s->score;
+				diff = final_score - symbol_result->score;
 				msg_debug_metric ("symbol %s can be inserted single time;"
 					  " weight adjusted %.2f + %.2f",
-						symbol, s->score, diff);
+						symbol, symbol_result->score, diff);
 			}
 			else {
 				diff = 0;
@@ -414,11 +414,11 @@ insert_metric_result (struct rspamd_task *task,
 				if (single) {
 					msg_debug_metric ("final score for single symbol %s = %.2f; %.2f diff",
 							symbol, final_score, diff);
-					s->score = final_score;
+					symbol_result->score = final_score;
 				} else {
 					msg_debug_metric ("increase final score for multiple symbol %s += %.2f = %.2f",
-							symbol, s->score, diff);
-					s->score += diff;
+							symbol, symbol_result->score, diff);
+					symbol_result->score += diff;
 				}
 			}
 		}
@@ -433,8 +433,8 @@ insert_metric_result (struct rspamd_task *task,
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
 				sym_cpy, &ret);
 		g_assert (ret > 0);
-		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (*s));
-		kh_value (metric_res->symbols, k) = s;
+		symbol_result = rspamd_mempool_alloc0 (task->task_pool, sizeof (*symbol_result));
+		kh_value (metric_res->symbols, k) = symbol_result;
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && final_score > 0) {
@@ -448,9 +448,9 @@ insert_metric_result (struct rspamd_task *task,
 		msg_debug_metric ("adjust grow factor to %.2f for symbol %s (%.2f final)",
 				next_gf, symbol, final_score);
 
-		s->name = sym_cpy;
-		s->sym = sdef;
-		s->nshots = 1;
+		symbol_result->name = sym_cpy;
+		symbol_result->sym = sdef;
+		symbol_result->nshots = 1;
 
 		if (sdef) {
 			/* Check group limits */
@@ -491,7 +491,7 @@ insert_metric_result (struct rspamd_task *task,
 
 			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
-			s->score = final_score;
+			symbol_result->score = final_score;
 
 			if (final_score > epsilon) {
 				metric_res->npositive ++;
@@ -503,21 +503,21 @@ insert_metric_result (struct rspamd_task *task,
 			}
 		}
 		else {
-			s->score = 0;
+			symbol_result->score = 0;
 		}
 
 		if (opt) {
-			rspamd_task_add_result_option (task, s, opt, strlen (opt));
+			rspamd_task_add_result_option (task, symbol_result, opt, strlen (opt));
 		}
 	}
 
 	msg_debug_metric ("final insertion for symbol %s, score %.2f, factor: %f",
 			symbol,
-			s->score,
+			symbol_result->score,
 			final_score);
 	metric_res->nresults ++;
 
-	return s;
+	return symbol_result;
 }
 
 struct rspamd_symbol_result *
@@ -528,7 +528,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 								enum rspamd_symbol_insert_flags flags,
 								struct rspamd_scan_result *result)
 {
-	struct rspamd_symbol_result *s = NULL, *ret = NULL;
+	struct rspamd_symbol_result *symbol_result = NULL, *ret = NULL;
 	struct rspamd_scan_result *mres;
 
 	if (task->processed_stages & (RSPAMD_TASK_STAGE_IDEMPOTENT >> 1)) {
@@ -571,7 +571,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 
 			bool new_symbol = false;
 
-			s = insert_metric_result (task,
+			symbol_result = insert_metric_result (task,
 					symbol,
 					weight,
 					opt,
@@ -581,36 +581,36 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 
 			if (mres->name == NULL) {
 				/* Default result */
-				ret = s;
+				ret = symbol_result;
 
 				/* Process cache item */
-				if (s && task->cfg->cache && s->sym) {
+				if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 					rspamd_symcache_inc_frequency (task->cfg->cache,
-							s->sym->cache_item);
+							symbol_result->sym->cache_item);
 				}
 			}
 			else if (new_symbol) {
 				/* O(N) but we normally don't have any shadow results */
-				LL_APPEND (ret, s);
+				LL_APPEND (ret, symbol_result);
 			}
 		}
 	}
 	else {
 		/* Specific insertion */
-		s = insert_metric_result (task,
+		symbol_result = insert_metric_result (task,
 				symbol,
 				weight,
 				opt,
 				result,
 				flags,
 				NULL);
-		ret = s;
+		ret = symbol_result;
 
 		if (result->name == NULL) {
 			/* Process cache item */
-			if (s && task->cfg->cache && s->sym) {
+			if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 				rspamd_symcache_inc_frequency (task->cfg->cache,
-						s->sym->cache_item);
+						symbol_result->sym->cache_item);
 			}
 		}
 	}
