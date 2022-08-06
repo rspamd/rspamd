@@ -231,7 +231,8 @@ void* rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
  * @param symbol
  */
 void rspamd_symcache_inc_frequency (struct rspamd_symcache *_cache,
-									struct rspamd_symcache_item *item);
+									struct rspamd_symcache_item *item,
+									const gchar *sym_name);
 
 /**
  * Add delayed dependency that is resolved on cache post-load routine

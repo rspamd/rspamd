@@ -586,7 +586,8 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 				/* Process cache item */
 				if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 					rspamd_symcache_inc_frequency (task->cfg->cache,
-							symbol_result->sym->cache_item);
+							symbol_result->sym->cache_item,
+							symbol_result->sym->name);
 				}
 			}
 			else if (new_symbol) {
@@ -610,7 +611,8 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 			/* Process cache item */
 			if (symbol_result && task->cfg->cache && symbol_result->sym && symbol_result->nshots == 1) {
 				rspamd_symcache_inc_frequency (task->cfg->cache,
-						symbol_result->sym->cache_item);
+						symbol_result->sym->cache_item,
+						symbol_result->sym->name);
 			}
 		}
 	}

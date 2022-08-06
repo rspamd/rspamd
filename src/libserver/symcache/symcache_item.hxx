@@ -343,8 +343,17 @@ public:
 	/**
 	 * Increase frequency for a symbol
 	 */
-	auto inc_frequency() -> void {
+	auto inc_frequency(const char *sym_name) -> void {
 		g_atomic_int_inc(&st->hits);
+
+		if (sym_name && symbol != sym_name && !is_virtual()) {
+			/* Likely a callback symbol with some virtual symbol that needs to be adjusted */
+			for (const auto &cld : get_children().value().get()) {
+				if (cld->get_name() == sym_name) {
+					cld->inc_frequency(sym_name);
+				}
+			}
+		}
 	}
 
 	/**
