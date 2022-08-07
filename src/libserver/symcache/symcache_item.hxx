@@ -343,16 +343,27 @@ public:
 	/**
 	 * Increase frequency for a symbol
 	 */
-	auto inc_frequency(const char *sym_name) -> void {
-		g_atomic_int_inc(&st->hits);
-
-		if (sym_name && symbol != sym_name && !is_virtual()) {
-			/* Likely a callback symbol with some virtual symbol that needs to be adjusted */
-			for (const auto &cld : get_children().value().get()) {
-				if (cld->get_name() == sym_name) {
-					cld->inc_frequency(sym_name);
+	auto inc_frequency(const char *sym_name, symcache &cache) -> void {
+		if (sym_name && symbol != sym_name) {
+			if (is_filter()) {
+				/* Likely a callback symbol with some virtual symbol that needs to be adjusted */
+				for (const auto &cld: get_children().value().get()) {
+					if (cld->get_name() == sym_name) {
+						cld->inc_frequency(sym_name);
+					}
 				}
 			}
+			else {
+				/* Name not equal to symbol name, so we need to find the proper name */
+				auto *another_item = cache.get_item_by_name_mut(sym_name, false);
+				if (another_item != nullptr) {
+					another_item->inc_frequency(sym_name, cache);
+				}
+			}
+		}
+		else {
+			/* Symbol and sym name are the same */
+			g_atomic_int_inc(&st->hits);
 		}
 	}
 

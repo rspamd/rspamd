@@ -214,13 +214,14 @@ rspamd_symcache_start_refresh(struct rspamd_symcache *cache,
 }
 
 void
-rspamd_symcache_inc_frequency(struct rspamd_symcache *_cache, struct rspamd_symcache_item *item,
+rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_symcache_item *item,
 		const char *sym_name)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
+	auto *real_cache = C_API_SYMCACHE(cache);
 
 	if (real_item) {
-		real_item->inc_frequency(sym_name);
+		real_item->inc_frequency(sym_name, *real_cache);
 	}
 }
 
