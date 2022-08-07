@@ -349,7 +349,7 @@ public:
 				/* Likely a callback symbol with some virtual symbol that needs to be adjusted */
 				for (const auto &cld: get_children().value().get()) {
 					if (cld->get_name() == sym_name) {
-						cld->inc_frequency(sym_name);
+						cld->inc_frequency(sym_name, cache);
 					}
 				}
 			}
