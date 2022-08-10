@@ -1260,6 +1260,7 @@ rspamd_re_map_cache_cleanup_old (struct rspamd_regexp_map_helper *old_re_map)
 {
 	gchar fp[PATH_MAX];
 	struct rspamd_map *map;
+	gboolean ret = TRUE;
 
 	map = old_re_map->map;
 
@@ -1276,7 +1277,7 @@ rspamd_re_map_cache_cleanup_old (struct rspamd_regexp_map_helper *old_re_map)
 	if (unlink (fp) == -1) {
 		msg_warn_map ("cannot unlink stale cache file for %s (%s): %s",
 				map->name, fp, strerror (errno));
-		return FALSE;
+		ret = FALSE;
 	}
 
 	GHashTable *valid_re_hashes;
@@ -1288,7 +1289,7 @@ rspamd_re_map_cache_cleanup_old (struct rspamd_regexp_map_helper *old_re_map)
 		g_hash_table_remove (valid_re_hashes, fp);
 	}
 
-	return TRUE;
+	return ret;
 }
 
 #endif
