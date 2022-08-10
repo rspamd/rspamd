@@ -457,6 +457,9 @@ rdns_reply_free (struct rdns_reply *rep)
 				free (entry->content.soa.mname);
 				free (entry->content.soa.admin);
 				break;
+			case RDNS_REQUEST_CNAME:
+				free(entry->content.cname.name);
+				break;
 			default:
 				break;
 			}

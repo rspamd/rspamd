@@ -438,9 +438,12 @@ rdns_parse_rr (struct rdns_resolver *resolver,
 		parsed = true;
 		break;
 	case DNS_T_CNAME:
-		/* Skip cname records */
-		p += datalen;
-		*remain -= datalen;
+		if (! rdns_parse_labels (resolver, in, &elt->content.cname.name, &p,
+				rep, remain, true)) {
+			rdns_info ("invalid labels in CNAME record; domain %s", rep->requested_name);
+			return -1;
+		}
+		parsed = true;
 		break;
 	default:
 		rdns_info ("unexpected RR type: %d; domain %s", type, rep->requested_name);
