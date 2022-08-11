@@ -109,28 +109,7 @@ lua_dns_get_type (lua_State *L, int argno)
 	}
 	else {
 		strtype = lua_tostring (L, argno);
-
-		if (g_ascii_strcasecmp (strtype, "a") == 0) {
-			type = RDNS_REQUEST_A;
-		}
-		else if (g_ascii_strcasecmp (strtype, "aaaa") == 0) {
-			type = RDNS_REQUEST_AAAA;
-		}
-		else if (g_ascii_strcasecmp (strtype, "mx") == 0) {
-			type = RDNS_REQUEST_MX;
-		}
-		else if (g_ascii_strcasecmp (strtype, "txt") == 0) {
-			type = RDNS_REQUEST_TXT;
-		}
-		else if (g_ascii_strcasecmp (strtype, "ptr") == 0) {
-			type = RDNS_REQUEST_PTR;
-		}
-		else if (g_ascii_strcasecmp (strtype, "soa") == 0) {
-			type = RDNS_REQUEST_SOA;
-		}
-		else {
-			msg_err ("bad DNS type: %s", strtype);
-		}
+		type = rdns_type_fromstr (strtype);
 	}
 
 	return type;
