@@ -237,6 +237,11 @@ lua_push_dns_reply (lua_State *L, const struct rdns_reply *reply)
 
 		LL_FOREACH (reply->entries, elt)
 		{
+			if (!rdns_request_has_type(reply->request, elt->type)) {
+				/* Unrequested type has been returned, ignore it */
+				continue;
+			}
+
 			switch (elt->type) {
 			case RDNS_REQUEST_A:
 				addr = rspamd_inet_address_new (AF_INET, &elt->content.a.addr);
