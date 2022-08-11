@@ -71,7 +71,7 @@ local function mx_check(task)
   if exclude_domains then
     if exclude_domains:get_key(mx_domain) then
       rspamd_logger.infox(task, 'skip mx check for %s, excluded', mx_domain)
-	  task:insert_result(settings.symbol_white_mx, 1.0, mx_domain)
+      task:insert_result(settings.symbol_white_mx, 1.0, mx_domain)
       return
     end
   end
@@ -92,6 +92,7 @@ local function mx_check(task)
         -- Greylist message
         if settings.greylist_invalid then
           task:get_mempool():set_variable("grey_greylisted_required", "1")
+          lua_util.debugm(N, task, "advice to greylist a message")
           task:insert_result(settings.symbol_bad_mx, 1.0, "greylisted")
         else
           task:insert_result(settings.symbol_bad_mx, 1.0)
@@ -104,6 +105,7 @@ local function mx_check(task)
           'SETEX', -- command
           {key, tostring(settings.expire_novalid), '0'} -- arguments
         )
+        lua_util.debugm(N, task, "set redis cache key: %s; invalid MX", key)
         if not ret then
           rspamd_logger.errx(task, 'got error connecting to redis')
         end
@@ -121,6 +123,7 @@ local function mx_check(task)
           'SETEX', -- command
           {key, tostring(settings.expire), table.concat(valid_mx, ';')} -- arguments
         )
+        lua_util.debugm(N, task, "set redis cache key: %s; valid MX", key)
         if not ret then
           rspamd_logger.errx(task, 'error connecting to redis')
         end
@@ -172,9 +175,11 @@ local function mx_check(task)
         -- Try to open TCP connection to port 25 for a random IP address
         -- see #3839 on GitHub
         lua_util.shuffle(results)
+        local str_ip = results[1]:to_string()
+        lua_util.debugm(N, task, "trying to connect to IP %s", str_ip)
         local t_ret = rspamd_tcp.new({
           task = task,
-          host = results[1]:to_string(),
+          host = str_ip,
           callback = io_cb,
           stop_pattern = CRLF,
           on_connect = on_connect_cb,
@@ -196,6 +201,12 @@ local function mx_check(task)
       local r = task:get_resolver()
       -- XXX: maybe add ipv6?
       -- fallback to implicit mx
+      if not err and not results then
+        err = 'no MX records found'
+      end
+
+      lua_util.debugm(N, task, "cannot find MX record for %s: %s, use implicit fallback",
+          mx_domain, err)
       mxes[mx_domain] = {checked = false, working = false, ips = {}}
       r:resolve('a', {
         name = mx_domain,
