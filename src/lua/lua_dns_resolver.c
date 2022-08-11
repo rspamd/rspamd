@@ -280,6 +280,10 @@ lua_push_dns_reply (lua_State *L, const struct rdns_reply *reply)
 
 				lua_rawseti (L, -2, ++i);
 				break;
+			case RDNS_REQUEST_CNAME:
+				lua_pushstring (L, elt->content.cname.name);
+				lua_rawseti (L, -2, ++i);
+				break;
 			default:
 				continue;
 			}
@@ -743,6 +747,7 @@ luaopen_dns_resolver (lua_State * L)
 		LUA_ENUM (L, DNS_SPF, RDNS_REQUEST_SPF);
 		LUA_ENUM (L, DNS_AAAA, RDNS_REQUEST_AAAA);
 		LUA_ENUM (L, DNS_SOA, RDNS_REQUEST_SOA);
+		LUA_ENUM (L, DNS_CNAME, RDNS_REQUEST_CNAME);
 	}
 
 	lua_pop (L, 1);

@@ -306,6 +306,9 @@ rdns_type_fromstr (const char *str)
 		else if (strcmp (str, "tlsa") == 0) {
 			return RDNS_REQUEST_TLSA;
 		}
+		else if (strcmp (str, "cname") == 0) {
+			return RDNS_REQUEST_CNAME;
+		}
 		else if (strcmp (str, "any") == 0) {
 			return RDNS_REQUEST_ANY;
 		}
@@ -318,32 +321,34 @@ const char *
 rdns_str_from_type (enum rdns_request_type rcode)
 {
 	switch (rcode) {
-		case RDNS_REQUEST_INVALID:
-			return "(invalid)";
-		case RDNS_REQUEST_A:
-			return "a";
-		case RDNS_REQUEST_NS:
-			return "ns";
-		case RDNS_REQUEST_SOA:
-			return "soa";
-		case RDNS_REQUEST_PTR:
-			return "ptr";
-		case RDNS_REQUEST_MX:
-			return "mx";
-		case RDNS_REQUEST_TXT:
-			return "txt";
-		case RDNS_REQUEST_SRV:
-			return "srv";
-		case RDNS_REQUEST_SPF:
-			return "spf";
-		case RDNS_REQUEST_AAAA:
-			return "aaaa";
-		case RDNS_REQUEST_TLSA:
-			return "tlsa";
-		case RDNS_REQUEST_ANY:
-			return "any";
-		default:
-			return "(unknown)";
+	case RDNS_REQUEST_INVALID:
+		return "(invalid)";
+	case RDNS_REQUEST_A:
+		return "a";
+	case RDNS_REQUEST_NS:
+		return "ns";
+	case RDNS_REQUEST_SOA:
+		return "soa";
+	case RDNS_REQUEST_PTR:
+		return "ptr";
+	case RDNS_REQUEST_MX:
+		return "mx";
+	case RDNS_REQUEST_TXT:
+		return "txt";
+	case RDNS_REQUEST_SRV:
+		return "srv";
+	case RDNS_REQUEST_SPF:
+		return "spf";
+	case RDNS_REQUEST_AAAA:
+		return "aaaa";
+	case RDNS_REQUEST_TLSA:
+		return "tlsa";
+	case RDNS_REQUEST_CNAME:
+		return "cname";
+	case RDNS_REQUEST_ANY:
+		return "any";
+	default:
+		return "(unknown)";
 	}
 
 }
