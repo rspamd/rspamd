@@ -174,8 +174,20 @@ public:
 	}
 };
 
+/*
+ * Used to store augmentation values
+ */
+struct item_augmentation {
+	std::variant<std::monostate, std::string, double> value;
+	int weight;
+
+	explicit item_augmentation(int weight) : value(std::monostate{}), weight(weight) {}
+	explicit item_augmentation(std::string str_value, int weight) : value(str_value), weight(weight) {}
+	explicit item_augmentation(double double_value, int weight) : value(double_value), weight(weight) {}
+};
+
 struct cache_item : std::enable_shared_from_this<cache_item> {
-	/* This block is likely shared */
+	/* The following fields will live in shared memory */
 	struct rspamd_symcache_item_stat *st = nullptr;
 	struct rspamd_counter_data *cd = nullptr;
 
@@ -205,7 +217,8 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 	id_list forbidden_ids;
 
 	/* Set of augmentations */
-	ankerl::unordered_dense::set<std::string, rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
+	ankerl::unordered_dense::map<std::string, item_augmentation,
+		rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
 
 	/* Dependencies */
 	std::vector<cache_dependency> deps;
@@ -395,7 +408,8 @@ public:
 	 * @param augmentation
 	 * @return
 	 */
-	auto add_augmentation(const symcache &cache, std::string_view augmentation) -> bool;
+	auto add_augmentation(const symcache &cache, std::string_view augmentation,
+						  std::optional<std::string_view> value) -> bool;
 
 	/**
 	 * Return sum weight of all known augmentations

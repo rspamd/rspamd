@@ -25,9 +25,16 @@
 
 namespace rspamd::symcache {
 
+enum class augmentation_value_type {
+	NO_VALUE,
+	STRING_VALUE,
+	NUMBER_VALUE,
+};
+
 struct augmentation_info {
 	int weight = 0;
 	int implied_flags = 0;
+	augmentation_value_type value_type = augmentation_value_type::NO_VALUE;
 };
 
 /* A list of internal augmentations that are known to Rspamd with their weight */
@@ -411,45 +418,85 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 }
 
 auto
-cache_item::add_augmentation(const symcache &cache, std::string_view augmentation) -> bool {
+cache_item::add_augmentation(const symcache &cache, std::string_view augmentation,
+							 std::optional<std::string_view> value) -> bool {
 	auto log_tag = [&]() { return cache.log_tag(); };
 
 	if (augmentations.contains(augmentation)) {
 		msg_warn_cache("duplicate augmentation: %s", augmentation.data());
+
+		return false;
 	}
 
-	augmentations.insert(std::string(augmentation));
+	auto maybe_known = rspamd::find_map(known_augmentations, augmentation);
 
-	auto ret = rspamd::find_map(known_augmentations, augmentation);
+	if (maybe_known.has_value()) {
+		auto &known_info = maybe_known.value().get();
 
-	msg_debug_cache("added %s augmentation %s for symbol %s",
-			ret.has_value() ? "known" : "unknown", augmentation.data(), symbol.data());
-
-	if (ret.has_value()) {
-		auto info = ret.value().get();
-
-		if (info.implied_flags) {
-			if ((info.implied_flags & flags) == 0) {
+		if (known_info.implied_flags) {
+			if ((known_info.implied_flags & flags) == 0) {
 				msg_info_cache("added implied flags (%bd) for symbol %s as it has %s augmentation",
-						info.implied_flags, symbol.data(), augmentation.data());
-				flags |= info.implied_flags;
+						known_info.implied_flags, symbol.data(), augmentation.data());
+				flags |= known_info.implied_flags;
+			}
+		}
+
+		if (known_info.value_type == augmentation_value_type::NO_VALUE) {
+			if (value.has_value()) {
+				msg_err_cache("value specified for augmentation %s, that has no value",
+						augmentation.data());
+
+				return false;
+			}
+			return augmentations.try_emplace(std::string{augmentation}, known_info.weight).second;
+		}
+		else {
+			if (!value.has_value()) {
+				msg_err_cache("value is not specified for augmentation %s, that requires explicit value",
+						augmentation.data());
+
+				return false;
+			}
+
+			if (known_info.value_type == augmentation_value_type::STRING_VALUE) {
+				return augmentations.try_emplace(std::string{augmentation}, std::string{value.value()},
+						known_info.weight).second;
+			}
+			else if (known_info.value_type == augmentation_value_type::NUMBER_VALUE) {
+				/* I wish it was supported properly */
+				//auto conv_res = std::from_chars(value->data(), value->size(), num);
+				char numbuf[128], *endptr = nullptr;
+				rspamd_strlcpy(numbuf, value->data(), MIN(value->size(), sizeof(numbuf)));
+				auto num = g_ascii_strtod(numbuf, &endptr);
+
+				if (fabs (num) >= G_MAXFLOAT || std::isnan(num)) {
+					msg_err_cache("value for augmentation %s is not numeric: %*s",
+							augmentation.data(),
+							(int)value->size(), value->data());
+					return false;
+				}
+
+				return augmentations.try_emplace(std::string{augmentation}, num,
+						known_info.weight).second;
 			}
 		}
 	}
+	else {
+		msg_debug_cache("added unknown augmentation %s for symbol %s",
+				"unknown", augmentation.data(), symbol.data());
+		return augmentations.try_emplace(std::string{augmentation}, 0).second;
+	}
 
-	return ret.has_value();
+	// Should not be reached
+	return false;
 }
 
 auto
 cache_item::get_augmentation_weight() const -> int
 {
 	return std::accumulate(std::begin(augmentations), std::end(augmentations),
-						  0, [](int acc, const std::string &augmentation) {
-				auto default_augmentation_info = augmentation_info{};
-				return acc + rspamd::find_map(known_augmentations, augmentation)
-						.value_or(default_augmentation_info)
-						.get()
-						.weight;
+						  0, [](int acc, const auto &map_pair) {
+				return acc + map_pair.second.weight;
 	});
 }
 

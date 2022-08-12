@@ -86,7 +86,9 @@ rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
 
 bool
 rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
-											 int sym_id, const char *augmentation)
+										int sym_id,
+										const char *augmentation,
+										const char *value)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	auto log_tag = [&]() { return real_cache->log_tag(); };
@@ -104,7 +106,7 @@ rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 		return false;
 	}
 
-	return item->add_augmentation(*real_cache, augmentation);
+	return item->add_augmentation(*real_cache, augmentation, value);
 }
 
 void

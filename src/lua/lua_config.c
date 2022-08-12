@@ -2089,7 +2089,7 @@ lua_config_register_symbol (lua_State * L)
 					const char *augmentation = lua_tostring(L, -1);
 
 					if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
-							augmentation)) {
+							augmentation, NULL)) {
 						lua_settop(L, prev_top);
 
 						return luaL_error (L, "unknown augmentation %s in symbol %s",
@@ -2739,7 +2739,7 @@ lua_config_newindex (lua_State *L)
 					int tbl_idx = lua_gettop(L);
 					for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop (L, 1)) {
 						rspamd_symcache_add_symbol_augmentation(cfg->cache, id,
-								lua_tostring(L, -1));
+								lua_tostring(L, -1), NULL);
 					}
 				}
 
