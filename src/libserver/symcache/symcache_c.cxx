@@ -106,6 +106,11 @@ rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 		return false;
 	}
 
+	/* Handle empty or absent strings equally */
+	if (value == nullptr || value[0] == '\0') {
+		return item->add_augmentation(*real_cache, augmentation, std::nullopt);
+	}
+
 	return item->add_augmentation(*real_cache, augmentation, value);
 }
 
