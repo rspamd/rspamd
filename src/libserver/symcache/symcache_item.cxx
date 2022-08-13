@@ -500,6 +500,21 @@ cache_item::get_augmentation_weight() const -> int
 	});
 }
 
+auto cache_item::get_numeric_augmentation(std::string_view name) const -> std::optional<double>
+{
+	const auto augmentation_value_maybe = rspamd::find_map(this->augmentations, name);
+
+	if (augmentation_value_maybe.has_value()) {
+		const auto &augmentation = augmentation_value_maybe.value().get();
+
+		if (std::holds_alternative<double>(augmentation.value)) {
+			return std::get<double>(augmentation.value);
+		}
+	}
+
+	return std::nullopt;
+}
+
 
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {

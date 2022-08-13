@@ -418,6 +418,20 @@ public:
 	auto get_augmentation_weight() const -> int;
 
 	/**
+	 * Returns numeric augmentation value
+	 * @param name
+	 * @return
+	 */
+	auto get_numeric_augmentation(std::string_view name) const -> std::optional<double>;
+
+	/**
+	 * Returns string augmentation value
+	 * @param name
+	 * @return
+	 */
+	auto get_string_augmentation(std::string_view name) const -> std::optional<std::string_view>;
+
+	/**
 	 * Add a virtual symbol as a child of some normal symbol
 	 * @param ptr
 	 */
