@@ -2086,14 +2086,45 @@ lua_config_register_symbol (lua_State * L)
 			if (lua_type (L, -1) == LUA_TTABLE) {
 				int tbl_idx = lua_gettop(L);
 				for (lua_pushnil(L); lua_next(L, tbl_idx); lua_pop (L, 1)) {
-					const char *augmentation = lua_tostring(L, -1);
+					size_t len;
+					const char *augmentation = lua_tolstring(L, -1, &len), *eqsign_pos;
 
-					if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
-							augmentation, NULL)) {
-						lua_settop(L, prev_top);
+					/* Find `=` symbol and use it as a separator */
+					eqsign_pos = memchr(augmentation, '=', len);
+					if (eqsign_pos != NULL && eqsign_pos + 1 < augmentation + len) {
+						rspamd_ftok_t tok;
 
-						return luaL_error (L, "unknown augmentation %s in symbol %s",
-								augmentation, name);
+						tok.begin = augmentation;
+						tok.len = eqsign_pos - augmentation;
+						char *augentation_name = rspamd_ftokdup(&tok);
+
+						tok.begin = eqsign_pos + 1;
+						tok.len = (augmentation + len) - tok.begin;
+
+						char *augmentation_value = rspamd_ftokdup(&tok);
+
+						if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
+								augentation_name, augmentation_value)) {
+							lua_settop(L, prev_top);
+							g_free(augmentation_value);
+							g_free(augentation_name);
+
+							return luaL_error(L, "unknown or invalid augmentation %s in symbol %s",
+									augmentation, name);
+						}
+
+						g_free(augmentation_value);
+						g_free(augentation_name);
+					}
+					else {
+						/* Just a value */
+						if (!rspamd_symcache_add_symbol_augmentation(cfg->cache, ret,
+								augmentation, NULL)) {
+							lua_settop(L, prev_top);
+
+							return luaL_error(L, "unknown augmentation %s in symbol %s",
+									augmentation, name);
+						}
 					}
 				}
 			}
