@@ -16,6 +16,7 @@
 #include "fstring.h"
 #include "str_util.h"
 #include "contrib/fastutf8/fastutf8.h"
+#include "contrib/mumhash/mum.h"
 
 
 #ifdef WITH_JEMALLOC
@@ -230,32 +231,10 @@ rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
 }
 
 /* Compat code */
-static guint32
-fstrhash_c (gchar c, guint32 hval)
+static guint64
+fstrhash_c (guint64 c, guint64 hval)
 {
-	guint32 tmp;
-	/*
-	 * xor in the current byte against each byte of hval
-	 * (which alone guarantees that every bit of input will have
-	 * an effect on the output)
-	 */
-	tmp = c & 0xFF;
-	tmp = tmp | (tmp << 8) | (tmp << 16) | (tmp << 24);
-	hval ^= tmp;
-
-	/* add some bits out of the middle as low order bits */
-	hval = hval + ((hval >> 12) & 0x0000ffff);
-
-	/* swap most and min significative bytes */
-	tmp = (hval << 24) | ((hval >> 24) & 0xff);
-	/* zero most and min significative bytes of hval */
-	hval &= 0x00ffff00;
-	hval |= tmp;
-	/*
-	 * rotate hval 3 bits to the left (thereby making the
-	 * 3rd msb of the above mess the hsb of the output hash)
-	 */
-	return (hval << 3) + (hval >> 29);
+	return mum_hash_step(hval, c);
 }
 
 
@@ -266,9 +245,8 @@ guint32
 rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 {
 	gsize i;
-	guint32 j, hval;
+	guint64 hval;
 	const gchar *p, *end = NULL;
-	gchar t;
 	gunichar uc;
 
 	if (str == NULL) {
@@ -285,18 +263,27 @@ rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 		}
 		while (p < end) {
 			uc = g_unichar_tolower (g_utf8_get_char (p));
-			for (j = 0; j < sizeof (gunichar); j++) {
-				t = (uc >> (j * 8)) & 0xff;
-				if (t != 0) {
-					hval = fstrhash_c (t, hval);
-				}
-			}
+			hval = fstrhash_c (uc, hval);
 			p = g_utf8_next_char (p);
 		}
 	}
 	else {
-		for (i = 0; i < str->len; i++, p++) {
-			hval = fstrhash_c (g_ascii_tolower (*p), hval);
+		gsize large_steps = str->len / sizeof (guint64);
+		for (i = 0; i < large_steps; i++, p += sizeof (guint64)) {
+			/* Copy to the uint64 lowercasing each byte */
+			union {
+				char c[sizeof(guint64)];
+				guint64 iu64;
+			} t;
+			for (int j = 0; j < sizeof(guint64); j ++) {
+				t.c[j] = g_ascii_tolower(p[j]);
+			}
+			hval = fstrhash_c (t.iu64, hval);
+		}
+
+		gsize remain = str->len % sizeof(guint64);
+		for (i = 0; i < remain; i ++, p ++) {
+			hval = fstrhash_c (g_ascii_tolower(*p), hval);
 		}
 	}
 
