@@ -725,7 +725,11 @@ local function handler(args)
 
     pool:destroy()
   end
-  send_reports_by_smtp(opts, all_reports, finish_cb)
+  if not opts.no_opt then
+    send_reports_by_smtp(opts, all_reports, finish_cb)
+  else
+    logger.messagex('Skip sending mails due to -n / --no-opt option')
+  end
 end
 
 return {
