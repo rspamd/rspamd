@@ -65,6 +65,12 @@ static const auto known_augmentations =
 									   .implied_flags = SYMBOL_TYPE_FINE
 							   }
 				},
+				{"timeout", {
+									   .weight = 0,
+									   .implied_flags = 0,
+									   .value_type = augmentation_value_type::NUMBER_VALUE,
+					}
+				}
 		};
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
