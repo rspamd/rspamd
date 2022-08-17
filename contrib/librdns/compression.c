@@ -23,15 +23,29 @@
 
 #include "compression.h"
 #include "logger.h"
+#include "contrib/mumhash/mum.h"
 
-static struct rdns_compression_entry *
-rdns_can_compress (const char *pos, struct rdns_compression_entry *comp)
+#define rdns_compression_hash(n) (mum_hash(n.suffix, n.suffix_len, 0xdeadbeef))
+#define rdns_compression_equal(n1, n2) ((n1).suffix_len == (n2).suffix_len && \
+	(memcmp((n1).suffix, (n2).suffix, (n1).suffix_len) == 0))
+__KHASH_IMPL(rdns_compression_hash, kh_inline, struct rdns_compression_name, char, 0, rdns_compression_hash,
+		rdns_compression_equal);
+
+static struct rdns_compression_name *
+rdns_can_compress (const char *pos, unsigned int len, khash_t(rdns_compression_hash) *comp)
 {
-	struct rdns_compression_entry *res;
+	struct rdns_compression_name check;
+	khiter_t k;
 
-	HASH_FIND_STR (comp, pos, res);
+	check.suffix_len = len;
+	check.suffix = pos;
+	k = kh_get(rdns_compression_hash, comp, check);
 
-	return res;
+	if (k != kh_end(comp)) {
+		return &kh_key(comp, k);
+	}
+
+	return NULL;
 }
 
 static unsigned int
@@ -52,67 +66,61 @@ rdns_calculate_label_len (const char *pos, const char *end)
 
 static void
 rdns_add_compressed (const char *pos, const char *end,
-		struct rdns_compression_entry **comp, int offset)
+					 khash_t(rdns_compression_hash) *comp,
+					 int offset)
 {
-	struct rdns_compression_entry *new;
+	struct rdns_compression_name new_name;
+	int r;
 
 	assert (offset >= 0);
-	new = malloc (sizeof (*new));
-	if (new != NULL) {
-		new->label = pos;
-		new->offset = offset;
-		HASH_ADD_KEYPTR (hh, *comp, pos, (end - pos), new);
-	}
+	new_name.suffix_len = end - pos;
+	new_name.suffix = pos;
+	new_name.offset = offset;
+
+	kh_put(rdns_compression_hash, comp, new_name, &r);
 }
 
 void
-rdns_compression_free (struct rdns_compression_entry *comp)
+rdns_compression_free (khash_t(rdns_compression_hash) *comp)
 {
-	struct rdns_compression_entry *cur, *tmp;
-
 	if (comp) {
-		free (comp->hh.tbl->buckets);
-		free (comp->hh.tbl);
-
-		HASH_ITER (hh, comp, cur, tmp) {
-			free (cur);
-		}
+		kh_destroy(rdns_compression_hash, comp);
 	}
 }
 
 bool
 rdns_write_name_compressed (struct rdns_request *req,
-		const char *name, unsigned int namelen,
-		struct rdns_compression_entry **comp)
+							const char *name, unsigned int namelen,
+							khash_t(rdns_compression_hash) **comp)
 {
 	uint8_t *target = req->packet + req->pos;
 	const char *pos = name, *end = name + namelen;
 	unsigned int remain = req->packet_len - req->pos - 5, label_len;
-	struct rdns_compression_entry *head = NULL, *test;
 	struct rdns_resolver *resolver = req->resolver;
 	uint16_t pointer;
 
-	if (comp != NULL) {
-		head = *comp;
+	if (comp != NULL && *comp == NULL) {
+		*comp = kh_init(rdns_compression_hash);
+	}
+	else if (comp == NULL) {
+		return false;
 	}
 
 	while (pos < end && remain > 0) {
-		if (head != NULL) {
-			test = rdns_can_compress (pos, head);
-			if (test != NULL) {
-				if (remain < 2) {
-					rdns_info ("no buffer remain for constructing query");
-					return false;
-				}
-
-				pointer = htons ((uint16_t)test->offset) | DNS_COMPRESSION_BITS;
-				memcpy (target, &pointer, sizeof (pointer));
-				req->pos += 2;
-
-				return true;
+		struct rdns_compression_name *test = rdns_can_compress (pos, end - pos, *comp);
+		if (test != NULL) {
+			/* Can compress name */
+			if (remain < 2) {
+				rdns_info ("no buffer remain for constructing query");
+				return false;
 			}
-		}
 
+			pointer = htons ((uint16_t)test->offset) | DNS_COMPRESSION_BITS;
+			memcpy (target, &pointer, sizeof (pointer));
+			req->pos += 2;
+
+			return true;
+		}
 
 		label_len = rdns_calculate_label_len (pos, end);
 		if (label_len == 0) {
@@ -136,9 +144,7 @@ rdns_write_name_compressed (struct rdns_request *req,
 			label_len = remain - 1;
 		}
 
-		if (comp != NULL) {
-			rdns_add_compressed (pos, end, comp, target - req->packet);
-		}
+		rdns_add_compressed (pos, end, *comp, target - req->packet);
 		/* Write label as is */
 		*target++ = (uint8_t)label_len;
 		memcpy (target, pos, label_len);

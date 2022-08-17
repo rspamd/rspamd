@@ -1039,7 +1039,7 @@ rdns_make_request_full (
 	unsigned int i, tlen = 0, clen = 0, cur;
 	size_t olen;
 	const char *cur_name, *last_name = NULL;
-	struct rdns_compression_entry *comp = NULL;
+	khash_t(rdns_compression_hash) *comp = NULL;
 	struct rdns_fake_reply *fake_rep = NULL;
 	char fake_buf[MAX_FAKE_NAME + sizeof (struct rdns_fake_reply_idx) + 16];
 	struct rdns_fake_reply_idx *idx;

@@ -23,14 +23,17 @@
 #ifndef COMPRESSION_H_
 #define COMPRESSION_H_
 
-#include "uthash.h"
 #include "dns_private.h"
+#include "khash.h"
 
-struct rdns_compression_entry {
-	const char *label;	 /**< label packed */
+struct rdns_compression_name {
+	const char *suffix;	 /**< suffix packed */
+	unsigned int suffix_len; /**< length of the suffix */
 	unsigned int offset; /**< offset in the packet */
-	UT_hash_handle hh; /**< hash handle */
 };
+
+
+KHASH_DECLARE(rdns_compression_hash, struct rdns_compression_name, char);
 
 /**
  * Try to compress name passed or write it 'as is'
@@ -38,8 +41,8 @@ struct rdns_compression_entry {
  */
 bool rdns_write_name_compressed (struct rdns_request *req,
 		const char *name, unsigned int namelen,
-		struct rdns_compression_entry **comp);
+		khash_t(rdns_compression_hash) **comp);
 
-void rdns_compression_free (struct rdns_compression_entry *comp);
+void rdns_compression_free (khash_t(rdns_compression_hash) *comp);
 
 #endif /* COMPRESSION_H_ */
