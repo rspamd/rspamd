@@ -37,6 +37,10 @@ rdns_can_compress (const char *pos, unsigned int len, khash_t(rdns_compression_h
 	struct rdns_compression_name check;
 	khiter_t k;
 
+	if (comp == NULL) {
+		return NULL;
+	}
+
 	check.suffix_len = len;
 	check.suffix = pos;
 	k = kh_get(rdns_compression_hash, comp, check);
@@ -72,18 +76,21 @@ rdns_add_compressed (const char *pos, const char *end,
 	struct rdns_compression_name new_name;
 	int r;
 
-	assert (offset >= 0);
-	new_name.suffix_len = end - pos;
-	new_name.suffix = pos;
-	new_name.offset = offset;
+	if (comp != NULL) {
 
-	kh_put(rdns_compression_hash, comp, new_name, &r);
+		assert (offset >= 0);
+		new_name.suffix_len = end - pos;
+		new_name.suffix = pos;
+		new_name.offset = offset;
+
+		kh_put(rdns_compression_hash, comp, new_name, &r);
+	}
 }
 
 void
 rdns_compression_free (khash_t(rdns_compression_hash) *comp)
 {
-	if (comp) {
+	if (comp != NULL) {
 		kh_destroy(rdns_compression_hash, comp);
 	}
 }
@@ -102,24 +109,23 @@ rdns_write_name_compressed (struct rdns_request *req,
 	if (comp != NULL && *comp == NULL) {
 		*comp = kh_init(rdns_compression_hash);
 	}
-	else if (comp == NULL) {
-		return false;
-	}
 
 	while (pos < end && remain > 0) {
-		struct rdns_compression_name *test = rdns_can_compress (pos, end - pos, *comp);
-		if (test != NULL) {
-			/* Can compress name */
-			if (remain < 2) {
-				rdns_info ("no buffer remain for constructing query");
-				return false;
+		if (comp) {
+			struct rdns_compression_name *test = rdns_can_compress(pos, end - pos, *comp);
+			if (test != NULL) {
+				/* Can compress name */
+				if (remain < 2) {
+					rdns_info ("no buffer remain for constructing query");
+					return false;
+				}
+
+				pointer = htons ((uint16_t) test->offset) | DNS_COMPRESSION_BITS;
+				memcpy(target, &pointer, sizeof(pointer));
+				req->pos += 2;
+
+				return true;
 			}
-
-			pointer = htons ((uint16_t)test->offset) | DNS_COMPRESSION_BITS;
-			memcpy (target, &pointer, sizeof (pointer));
-			req->pos += 2;
-
-			return true;
 		}
 
 		label_len = rdns_calculate_label_len (pos, end);
@@ -144,7 +150,9 @@ rdns_write_name_compressed (struct rdns_request *req,
 			label_len = remain - 1;
 		}
 
-		rdns_add_compressed (pos, end, *comp, target - req->packet);
+		if (comp) {
+			rdns_add_compressed(pos, end, *comp, target - req->packet);
+		}
 		/* Write label as is */
 		*target++ = (uint8_t)label_len;
 		memcpy (target, pos, label_len);

@@ -245,7 +245,7 @@ err:
 
 bool
 rdns_add_rr (struct rdns_request *req, const char *name, unsigned int len,
-		enum dns_type type, struct rdns_compression_entry **comp)
+		enum dns_type type, struct kh_rdns_compression_hash_s **comp)
 {
 	uint8_t *p8;
 
