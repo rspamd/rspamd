@@ -1183,4 +1183,69 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 	}
 }
 
+auto symcache::get_max_timeout() const -> double
+{
+	double accumulated_timeout = 0;
+
+	auto get_item_timeout = [](const cache_item_ptr &it) {
+		return it->get_numeric_augmentation("timeout").value_or(0.0);
+	};
+
+	/* This function returns the timeout for an item and all it's dependencies */
+	auto get_filter_timeout = [&](const cache_item_ptr &it, auto self) -> double {
+		auto own_timeout = get_item_timeout(it);
+		double max_child_timeout = 0;
+
+		for (const auto &dep : it->deps) {
+			auto cld_timeout = self(dep.item, self);
+
+			if (cld_timeout > max_child_timeout) {
+				max_child_timeout = cld_timeout;
+			}
+		}
+
+		return own_timeout + max_child_timeout;
+	};
+
+	/* For prefilters and postfilters, we just care about priorities */
+	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) {
+		auto saved_priority = -1;
+		double max_timeout = 0;
+		for (const auto &it : vec) {
+			if (it->priority != saved_priority) {
+				accumulated_timeout += max_timeout;
+				max_timeout = 0;
+				saved_priority = it->priority;
+			}
+
+			auto timeout = get_item_timeout(it);
+
+			if (timeout > max_timeout) {
+				max_timeout = timeout;
+			}
+		}
+	};
+
+	pre_postfilter_iter(this->prefilters);
+	pre_postfilter_iter(this->postfilters);
+	pre_postfilter_iter(this->idempotent);
+
+	/* For normal filters, we check the maximum chain of the dependencies
+	 * This function might have O(N^2) complexity if all symbols are in a single
+	 * dependencies chain. But it is not the case in practice
+	 */
+	double max_filters_timeout = 0;
+	for (const auto &it : this->filters) {
+		auto timeout = get_filter_timeout(it, get_filter_timeout);
+
+		if (timeout > max_filters_timeout) {
+			max_filters_timeout = timeout;
+		}
+	}
+
+	accumulated_timeout += max_filters_timeout;
+
+	return accumulated_timeout;
+}
+
 }

@@ -595,6 +595,12 @@ public:
 	 * @param elt
 	 */
 	auto process_settings_elt(struct rspamd_config_settings_elt *elt) -> void;
+
+	/**
+	 * Returns maximum timeout that is requested by all rules
+	 * @return
+	 */
+	auto get_max_timeout() const -> double;
 };
 
 
