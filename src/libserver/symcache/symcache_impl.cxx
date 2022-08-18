@@ -1185,7 +1185,8 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 
 auto symcache::get_max_timeout() const -> double
 {
-	double accumulated_timeout = 0;
+	auto accumulated_timeout = 0.0;
+	auto log_func = RSPAMD_LOG_FUNC;
 
 	auto get_item_timeout = [](const cache_item_ptr &it) {
 		return it->get_numeric_augmentation("timeout").value_or(0.0);
@@ -1194,7 +1195,7 @@ auto symcache::get_max_timeout() const -> double
 	/* This function returns the timeout for an item and all it's dependencies */
 	auto get_filter_timeout = [&](const cache_item_ptr &it, auto self) -> double {
 		auto own_timeout = get_item_timeout(it);
-		double max_child_timeout = 0;
+		auto max_child_timeout = 0.0;
 
 		for (const auto &dep : it->deps) {
 			auto cld_timeout = self(dep.item, self);
@@ -1208,12 +1209,15 @@ auto symcache::get_max_timeout() const -> double
 	};
 
 	/* For prefilters and postfilters, we just care about priorities */
-	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) {
+	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) -> double {
 		auto saved_priority = -1;
-		double max_timeout = 0;
+		auto max_timeout = 0.0, added_timeout = 0.0;
 		for (const auto &it : vec) {
 			if (it->priority != saved_priority) {
 				accumulated_timeout += max_timeout;
+				added_timeout += max_timeout;
+				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d)",
+						max_timeout, accumulated_timeout, saved_priority, it->priority);
 				max_timeout = 0;
 				saved_priority = it->priority;
 			}
@@ -1224,11 +1228,13 @@ auto symcache::get_max_timeout() const -> double
 				max_timeout = timeout;
 			}
 		}
+
+		return added_timeout;
 	};
 
-	pre_postfilter_iter(this->prefilters);
-	pre_postfilter_iter(this->postfilters);
-	pre_postfilter_iter(this->idempotent);
+	auto prefilters_timeout = pre_postfilter_iter(this->prefilters);
+	auto postfilters_timeout = pre_postfilter_iter(this->postfilters);
+	auto idempotent_timeout = pre_postfilter_iter(this->idempotent);
 
 	/* For normal filters, we check the maximum chain of the dependencies
 	 * This function might have O(N^2) complexity if all symbols are in a single
@@ -1244,6 +1250,12 @@ auto symcache::get_max_timeout() const -> double
 	}
 
 	accumulated_timeout += max_filters_timeout;
+
+	msg_debug_cache("overall cache timeout: %.2f, %.2f from prefilters,"
+					" %.2f from postfilters, %.2f from idempotent filters,"
+					" %.2f from normal filters",
+					accumulated_timeout, prefilters_timeout, postfilters_timeout,
+					idempotent_timeout, max_filters_timeout);
 
 	return accumulated_timeout;
 }
