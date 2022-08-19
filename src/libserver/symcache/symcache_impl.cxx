@@ -1183,10 +1183,11 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 	}
 }
 
-auto symcache::get_max_timeout() const -> double
+auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double
 {
 	auto accumulated_timeout = 0.0;
 	auto log_func = RSPAMD_LOG_FUNC;
+	ankerl::unordered_dense::set<const cache_item *> seen_items;
 
 	auto get_item_timeout = [](const cache_item_ptr &it) {
 		return it->get_numeric_augmentation("timeout").value_or(0.0);
@@ -1212,20 +1213,36 @@ auto symcache::get_max_timeout() const -> double
 	auto pre_postfilter_iter = [&](const items_ptr_vec &vec) -> double {
 		auto saved_priority = -1;
 		auto max_timeout = 0.0, added_timeout = 0.0;
+		const cache_item *max_elt = nullptr;
 		for (const auto &it : vec) {
 			if (it->priority != saved_priority) {
 				accumulated_timeout += max_timeout;
 				added_timeout += max_timeout;
 				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d)",
 						max_timeout, accumulated_timeout, saved_priority, it->priority);
+				if (!seen_items.contains(max_elt)) {
+					elts.emplace_back(max_timeout, max_elt);
+					seen_items.insert(max_elt);
+				}
 				max_timeout = 0;
 				saved_priority = it->priority;
+				max_elt = nullptr;
 			}
 
 			auto timeout = get_item_timeout(it);
 
 			if (timeout > max_timeout) {
 				max_timeout = timeout;
+				max_elt = it.get();
+			}
+		}
+
+		if (max_elt != nullptr && max_timeout > 0) {
+			accumulated_timeout += max_timeout;
+			added_timeout += max_timeout;
+			if (!seen_items.contains(max_elt)) {
+				elts.emplace_back(max_timeout, max_elt);
+				seen_items.insert(max_elt);
 			}
 		}
 
@@ -1246,10 +1263,19 @@ auto symcache::get_max_timeout() const -> double
 
 		if (timeout > max_filters_timeout) {
 			max_filters_timeout = timeout;
+			if (!seen_items.contains(it.get())) {
+				elts.emplace_back(timeout, it.get());
+				seen_items.insert(it.get());
+			}
 		}
 	}
 
 	accumulated_timeout += max_filters_timeout;
+	/* Sort in decreasing order by timeout */
+	std::stable_sort(std::begin(elts), std::end(elts),
+					 [](const auto &p1, const auto &p2) {
+						 return p2.first > p1.first;
+					 });
 
 	msg_debug_cache("overall cache timeout: %.2f, %.2f from prefilters,"
 					" %.2f from postfilters, %.2f from idempotent filters,"

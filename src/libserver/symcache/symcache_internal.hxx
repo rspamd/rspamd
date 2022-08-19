@@ -600,7 +600,7 @@ public:
 	 * Returns maximum timeout that is requested by all rules
 	 * @return
 	 */
-	auto get_max_timeout() const -> double;
+	auto get_max_timeout(std::vector<std::pair<double, const cache_item *>> &elts) const -> double;
 };
 
 
