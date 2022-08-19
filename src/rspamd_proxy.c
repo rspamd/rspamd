@@ -157,6 +157,7 @@ struct rspamd_proxy_ctx {
 	struct rspamd_milter_context milter_ctx;
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
+	gdouble task_timeout;
 };
 
 enum rspamd_backend_flags {
@@ -1886,7 +1887,7 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 
 	}
 	else if (session->ctx->has_self_scan) {
-		if (session->ctx->cfg->task_timeout > 0) {
+		if (!isnan(session->ctx->task_timeout) && session->ctx->task_timeout > 0) {
 			task->timeout_ev.data = task;
 			ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
 					session->ctx->cfg->task_timeout,
@@ -2374,6 +2375,8 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 		/* Additional initialisation needed */
 		rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 				&ctx->lang_det);
+		/* Always yse cfg->task_timeout */
+		ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, NAN);
 
 		if (worker->index == 0) {
 			/*

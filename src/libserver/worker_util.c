@@ -57,6 +57,8 @@
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
+#include <math.h>
+
 #endif
 
 #include "contrib/libev/ev.h"
@@ -2220,4 +2222,31 @@ rspamd_worker_init_controller (struct rspamd_worker *worker,
 		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
 				ctx->resolver, worker, RSPAMD_MAP_WATCH_SCANNER);
 	}
+}
+
+gdouble
+rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg, gdouble timeout)
+{
+	if (isnan (timeout)) {
+		/* Use implicit timeout from cfg->task_timeout */
+		timeout = cfg->task_timeout;
+	}
+
+	if (isnan (timeout)) {
+		return timeout;
+	}
+
+	struct rspamd_symcache_timeout_result *tres = rspamd_symcache_get_max_timeout (cfg->cache);
+	g_assert (tres != 0);
+
+	if (tres->max_timeout > timeout) {
+		msg_info_config("configured task_timeout %.2f is less than maximum symbols cache timeout %.2f, so"
+						"some symbols could be terminated early", timeout, tres->max_timeout);
+		/* TODO: list timeouts for top symbols */
+	}
+
+	rspamd_symcache_timeout_result_free (tres);
+
+	/* TODO: maybe adjust timeout */
+	return timeout;
 }

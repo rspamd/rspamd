@@ -186,7 +186,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	}
 
 	/* Set global timeout for the task */
-	if (ctx->task_timeout > 0.0) {
+	if (!isnan(ctx->task_timeout) && ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
 				ctx->task_timeout,
@@ -493,14 +493,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->event_loop,
 			worker);
 
-	if (isnan (ctx->task_timeout)) {
-		if (isnan (ctx->cfg->task_timeout)) {
-			ctx->task_timeout = 0;
-		}
-		else {
-			ctx->task_timeout = ctx->cfg->task_timeout;
-		}
-	}
+	ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, ctx->task_timeout);
 
 	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->event_loop,

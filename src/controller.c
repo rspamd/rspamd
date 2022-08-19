@@ -2189,7 +2189,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		goto end;
 	}
 
-	if (ctx->task_timeout > 0.0) {
+	if (!isnan(ctx->task_timeout) && ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
 				ctx->task_timeout, ctx->task_timeout);
@@ -4080,14 +4080,7 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
 			rspamd_plugin_cbdata_dtor);
 
-	if (isnan (ctx->task_timeout)) {
-		if (isnan (ctx->cfg->task_timeout)) {
-			ctx->task_timeout = 0;
-		}
-		else {
-			ctx->task_timeout = ctx->cfg->task_timeout;
-		}
-	}
+	ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, ctx->task_timeout);
 
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl (ctx->cfg, ctx->secure_ip,

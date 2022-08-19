@@ -174,6 +174,15 @@ void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
 gboolean rspamd_worker_is_scanner (struct rspamd_worker *w);
 
 /**
+ * Checks
+ * @param cfg
+ * @param timeout
+ * @return
+ */
+gdouble rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg,
+		gdouble timeout);
+
+/**
  * Returns TRUE if a specific worker is a primary controller
  * @param w
  * @return
