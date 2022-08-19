@@ -491,6 +491,32 @@ void rspamd_symcache_enable_symbol_static (struct rspamd_symcache *cache,
 	real_cache->enable_symbol_delayed(symbol);
 }
 
+/* A real structure to match C results without extra copying */
+struct rspamd_symcache_real_timeout_result {
+	struct rspamd_symcache_timeout_result c_api_result;
+	std::vector<std::pair<double, const rspamd::symcache::cache_item *>> elts;
+};
+
+struct rspamd_symcache_timeout_result*
+rspamd_symcache_get_max_timeout(struct rspamd_symcache *cache)
+{
+	auto *real_cache = C_API_SYMCACHE(cache);
+	auto *res = new rspamd_symcache_real_timeout_result;
+
+	res->c_api_result.max_timeout = real_cache->get_max_timeout(res->elts);
+	res->c_api_result.items = reinterpret_cast<struct rspamd_symcache_timeout_item *>(res->elts.data());
+	res->c_api_result.nitems = res->elts.size();
+
+	return &res->c_api_result;
+}
+
+void
+rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *res)
+{
+	auto *real_result = reinterpret_cast<rspamd_symcache_real_timeout_result *>(res);
+	delete real_result;
+}
+
 gboolean
 rspamd_symcache_is_checked(struct rspamd_task *task,
 						   struct rspamd_symcache *cache,

@@ -542,6 +542,30 @@ const struct rspamd_symcache_item_stat *
  */
 void rspamd_symcache_enable_profile (struct rspamd_task *task);
 
+struct rspamd_symcache_timeout_item {
+	double timeout;
+	const struct rspamd_symcache_item *item;
+};
+
+struct rspamd_symcache_timeout_result {
+	double max_timeout;
+	struct rspamd_symcache_timeout_item *items;
+	size_t nitems;
+};
+/**
+ * Gets maximum timeout announced by symbols cache
+ * @param cache
+ * @return new symcache timeout_result structure, that should be freed by call
+ * `rspamd_symcache_timeout_result_free`
+ */
+struct rspamd_symcache_timeout_result* rspamd_symcache_get_max_timeout(struct rspamd_symcache *cache);
+
+/**
+ * Frees results obtained from the previous function
+ * @param res
+ */
+void rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *res);
+
 /**
  * Destroy internal state of the symcache runtime
  * @param task
