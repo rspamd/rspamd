@@ -844,6 +844,13 @@ LUA_FUNCTION_DEF (config, get_tld_path);
  */
 LUA_FUNCTION_DEF (config, get_dns_max_requests);
 
+/***
+ * @method rspamd_config:get_dns_timeout()
+ * Returns timeout for a DNS request
+ * @return {number} DNS timeout in second or 0 if not defined
+ */
+LUA_FUNCTION_DEF (config, get_dns_timeout);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -917,6 +924,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, init_subsystem),
 	LUA_INTERFACE_DEF (config, get_tld_path),
 	LUA_INTERFACE_DEF (config, get_dns_max_requests),
+	LUA_INTERFACE_DEF (config, get_dns_timeout),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -4603,6 +4611,22 @@ lua_config_get_dns_max_requests (lua_State *L)
 
 	if (cfg != NULL) {
 		lua_pushinteger (L, cfg->dns_max_requests);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_get_dns_timeout (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		lua_pushnumber (L, cfg->dns_timeout);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
