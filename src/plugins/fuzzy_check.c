@@ -607,11 +607,20 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		g_ptr_array_add (fuzzy_module_ctx->fuzzy_rules, rule);
 
 		if (rule->symbol != fuzzy_module_ctx->default_symbol) {
-			rspamd_symcache_add_symbol (cfg->cache, rule->symbol,
+			int vid = rspamd_symcache_add_symbol (cfg->cache, rule->symbol,
 					0,
 					NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
 					cb_id);
+
+			if (rule->io_timeout > 0) {
+				char timeout_buf[32];
+				rspamd_snprintf(timeout_buf, sizeof(timeout_buf), "%f",
+						rule->io_timeout);
+				rspamd_symcache_add_symbol_augmentation(cfg->cache,
+						vid, "timeout",
+						timeout_buf);
+			}
 		}
 
 		msg_info_config ("added fuzzy rule %s, key: %*xs, "
