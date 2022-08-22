@@ -1178,6 +1178,12 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		break;
 	case RSPAMD_RE_MIMEHEADER:
 		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, mime_part) {
+			if (mime_part->parent_part == NULL ||
+				!IS_PART_MULTIPART(mime_part->parent_part) ||
+				IS_PART_MESSAGE(mime_part)) {
+				/* We filter parts that have no multipart parent or are a messages here */
+				continue;
+			}
 			rh = rspamd_message_get_header_from_hash(mime_part->raw_headers,
 					re_class->type_data, FALSE);
 
