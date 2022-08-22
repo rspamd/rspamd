@@ -1781,13 +1781,13 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 			it = NULL;
 
 			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
-				ucl_object_iter_t *elt_it;
+				const char *key;
 
-				elt_it = ucl_object_iterate_new (cur);
+				key = ucl_object_key (cur);
 
-				while ((cur_elt = ucl_object_iterate_safe (elt_it, true)) != NULL) {
+				if (key != NULL && (cur_elt = ucl_object_lookup(elt, key)) != NULL) {
 					if (ucl_object_type (cur_elt) == UCL_STRING) {
-						hname = g_string_new (ucl_object_key (cur));
+						hname = g_string_new (key);
 						hvalue = g_string_new (ucl_object_tostring (cur_elt));
 
 						rspamd_milter_send_action (session,
@@ -1798,7 +1798,7 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 					}
 					else if (ucl_object_type (cur_elt) == UCL_OBJECT) {
 						rspamd_milter_extract_single_header (session,
-								ucl_object_key (cur), cur_elt);
+								key, cur_elt);
 					}
 					else if (ucl_object_type (cur_elt) == UCL_ARRAY) {
 						/* Multiple values for the same key */
@@ -1810,14 +1810,12 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 						while ((array_elt = ucl_object_iterate_safe (array_it,
 								true)) != NULL) {
 							rspamd_milter_extract_single_header (session,
-									ucl_object_key (cur), array_elt);
+									key, array_elt);
 						}
 
 						ucl_object_iterate_free (array_it);
 					}
 				}
-
-				ucl_object_iterate_free (elt_it);
 			}
 		}
 
