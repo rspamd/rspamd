@@ -1747,7 +1747,7 @@ static gboolean
 rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 		const ucl_object_t *obj, struct rspamd_action *action)
 {
-	const ucl_object_t *elt, *cur, *cur_elt;
+	const ucl_object_t *elt, *cur;
 	ucl_object_iter_t it;
 	struct rspamd_milter_private *priv = session->priv;
 	GString *hname, *hvalue;
@@ -1781,32 +1781,47 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 			it = NULL;
 
 			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
-				ucl_object_iter_t *elt_it;
 
-				elt_it = ucl_object_iterate_new (cur);
 				const char *key_name = ucl_object_key (cur);
 
-				while ((cur_elt = ucl_object_iterate_safe (elt_it, false)) != NULL) {
-					if (ucl_object_type (cur_elt) == UCL_STRING) {
-						hname = g_string_new (key_name);
-						hvalue = g_string_new (ucl_object_tostring (cur_elt));
+				if (ucl_object_type (cur) == UCL_STRING) {
+					/*
+					 * Legacy support of {"name": "value", ... } with
+					 * multiple names under the same name
+					 */
+					ucl_object_iter_t *elt_it;
+					const ucl_object_t *cur_elt;
 
-						rspamd_milter_send_action (session,
-								RSPAMD_MILTER_ADDHEADER,
-								hname, hvalue);
-						g_string_free (hname, TRUE);
-						g_string_free (hvalue, TRUE);
+					elt_it = ucl_object_iterate_new (cur);
+					while ((cur_elt = ucl_object_iterate_safe (elt_it, false)) != NULL) {
+						if (ucl_object_type (cur_elt) == UCL_STRING) {
+							hname = g_string_new (key_name);
+							hvalue = g_string_new (ucl_object_tostring (cur_elt));
+
+							rspamd_milter_send_action (session,
+									RSPAMD_MILTER_ADDHEADER,
+									hname, hvalue);
+							g_string_free (hname, TRUE);
+							g_string_free (hvalue, TRUE);
+						}
+						else {
+							msg_warn_milter("legacy header with name %s, that has not a string value: %s",
+									key_name, ucl_object_type_to_string(cur_elt->type));
+						}
 					}
-					else if (ucl_object_type (cur_elt) == UCL_OBJECT) {
+					ucl_object_iterate_free (elt_it);
+				}
+				else {
+					if (ucl_object_type (cur) == UCL_OBJECT) {
 						rspamd_milter_extract_single_header (session,
-								key_name, cur_elt);
+								key_name, cur);
 					}
-					else if (ucl_object_type (cur_elt) == UCL_ARRAY) {
+					else if (ucl_object_type (cur) == UCL_ARRAY) {
 						/* Multiple values for the same key */
 						ucl_object_iter_t *array_it;
 						const ucl_object_t *array_elt;
 
-						array_it = ucl_object_iterate_new (cur_elt);
+						array_it = ucl_object_iterate_new (cur);
 
 						while ((array_elt = ucl_object_iterate_safe (array_it,
 								true)) != NULL) {
@@ -1816,9 +1831,11 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 
 						ucl_object_iterate_free (array_it);
 					}
+					else {
+						msg_warn_milter("non-legacy header with name %s, that has unsupported value type: %s",
+								key_name, ucl_object_type_to_string(cur->type));
+					}
 				}
-
-				ucl_object_iterate_free (elt_it);
 			}
 		}
 
