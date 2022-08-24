@@ -64,13 +64,13 @@ Explain the problem and include additional details to help maintainers reproduce
 * **Provide specific examples to demonstrate the steps**. Include links to files or GitHub projects, or copy/pasteable snippets, which you use in those examples. If you're providing snippets in the issue, use [Markdown code blocks](https://help.github.com/articles/markdown-basics/#multiple-lines).
 * **Describe the behavior you observed after following the steps** and point out what exactly is the problem with that behavior.
 * **Explain which behavior you expected to see instead and why.**
-* **If you're reporting that rspamd crashed**, include a crash report with a stack trace from the operating system: https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed
+* **If you're reporting that Rspamd crashed**, include a crash report with a stack trace from the operating system: https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed
 * **If the problem wasn't triggered by a specific action**, describe what you were doing before the problem happened and share more information using the guidelines below.
 
 Provide more context by answering these questions:
 
-* **Did the problem start happening recently** (e.g. after updating to a new version of rspamd) or was this always a problem?
-* If the problem started happening recently, **can you reproduce the problem in an older version of rspamd?** What's the most recent version in which the problem doesn't happen? You can download older versions of rspamd from [the releases page](https://github.com/rspamd/rspamd/releases).
+* **Did the problem start happening recently** (e.g. after updating to a new version of Rspamd) or was this always a problem?
+* If the problem started happening recently, **can you reproduce the problem in an older version of Rspamd?** What's the most recent version in which the problem doesn't happen? You can download older versions of Rspamd from [the releases page](https://github.com/rspamd/rspamd/releases).
 * **Can you reliably reproduce the issue?** If not, provide details about how often the problem happens and under which conditions it normally happens.
 * If the problem is related to scanning messages, **does the problem happen for all messages  or only some?**
 
