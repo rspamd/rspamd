@@ -882,6 +882,11 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				rec->ttl = elt_data->ttl;
 			}
 
+			if (elt_data->type == RDNS_REQUEST_CNAME) {
+				/* Skip cname aliases - it must be handled by a recursor */
+				continue;
+			}
+
 			switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
 					if (elt_data->type == RDNS_REQUEST_MX) {
@@ -983,6 +988,10 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							msg_debug_spf ("got include record for %s: '%s'",
 									req_name->name,
 									selected->content.txt.data);
+						}
+						else {
+							msg_debug_spf ("no include record for %s",
+									req_name->name);
 						}
 					}
 					goto end;
