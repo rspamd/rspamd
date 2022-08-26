@@ -975,14 +975,15 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						if (reply->entries) {
-							msg_debug_spf ("got include record for %s: '%s'",
-									req_name->name,
-									reply->entries[0].content.txt.data);
-						}
+						struct rdns_reply_entry *selected = NULL;
 
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
-						spf_process_txt_record (rec, cb->resolved, reply, NULL);
+						spf_process_txt_record (rec, cb->resolved, reply, &selected);
+						if (selected) {
+							msg_debug_spf ("got include record for %s: '%s'",
+									req_name->name,
+									selected->content.txt.data);
+						}
 					}
 					goto end;
 
