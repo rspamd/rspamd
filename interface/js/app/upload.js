@@ -100,15 +100,17 @@ define(["jquery"],
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "symbols",
-                title: "Symbols<br /><br />" +
-                        '<span style="font-weight:normal;">Sort by:</span><br />' +
-                        '<div class="btn-group btn-group-toggle btn-group-xs btn-sym-order-scan" data-toggle="buttons">' +
-                            '<label type="button" class="btn btn-outline-secondary btn-sym-scan-magnitude">' +
-                                '<input type="radio" value="magnitude">Magnitude</label>' +
-                            '<label type="button" class="btn btn-outline-secondary btn-sym-scan-score">' +
-                                '<input type="radio" value="score">Value</label>' +
-                            '<label type="button" class="btn btn-outline-secondary btn-sym-scan-name">' +
-                                '<input type="radio" value="name">Name</label>' +
+                title: "Symbols" +
+                        '<div class="sym-order-toggle">' +
+                            '<br><span style="font-weight:normal;">Sort by:</span><br>' +
+                            '<div class="btn-group btn-group-toggle btn-group-xs btn-sym-order-scan" data-toggle="buttons">' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-magnitude">' +
+                                    '<input type="radio" value="magnitude">Magnitude</label>' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-score">' +
+                                    '<input type="radio" value="score">Value</label>' +
+                                '<label type="button" class="btn btn-outline-secondary btn-sym-scan-name">' +
+                                    '<input type="radio" value="name">Name</label>' +
+                            "</div>" +
                         "</div>",
                 breakpoints: "all",
                 style: {
