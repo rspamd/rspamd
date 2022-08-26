@@ -97,6 +97,7 @@ define(["jquery", "footable"],
                 name: "rcpt_mime_short",
                 title: "[Envelope To] To/Cc/Bcc",
                 breakpoints: "xs sm md",
+                filterable: false,
                 style: {
                     "font-size": "11px",
                     "minWidth": 100,
