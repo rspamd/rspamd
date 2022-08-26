@@ -377,6 +377,9 @@ table#symbolsTable input[type="number"] {
         white-space: nowrap;
     }
 }
+.footable-filtering-search .dropdown-menu .sym-order-toggle {
+    display: none;
+}
 
 #history_page_size {
     width: 6em !important;
