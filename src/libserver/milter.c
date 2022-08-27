@@ -1697,7 +1697,7 @@ rspamd_milter_extract_single_header (struct rspamd_milter_session *session,
 		idx_obj = ucl_object_lookup_any (obj, "order",
 				"index", NULL);
 
-		if (idx_obj) {
+		if (idx_obj && (ucl_object_type (idx_obj) == UCL_INT || ucl_object_type (idx_obj) == UCL_FLOAT)) {
 			idx = ucl_object_toint (idx_obj);
 			has_idx = TRUE;
 		}
