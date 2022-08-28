@@ -1652,17 +1652,21 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 		hname = g_string_new (key);
 		hvalue = g_string_new ("");
 
-		if (nhdr >= 1) {
-			rspamd_milter_send_action (session,
-					RSPAMD_MILTER_CHGHEADER,
-					nhdr, hname, hvalue);
+		if (nhdr > 0) {
+			if (ar->len >= nhdr) {
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_CHGHEADER,
+						nhdr, hname, hvalue);
+				priv->cur_hdr --;
+			}
 		}
-		else if (nhdr == 0 && ar->len > 0) {
+		else if (nhdr == 0) {
 			/* We need to clear all headers */
 			for (i = ar->len; i > 0; i --) {
 				rspamd_milter_send_action (session,
 						RSPAMD_MILTER_CHGHEADER,
 						i, hname, hvalue);
+				priv->cur_hdr --;
 			}
 		}
 		else {
@@ -1671,11 +1675,17 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 				rspamd_milter_send_action (session,
 						RSPAMD_MILTER_CHGHEADER,
 						ar->len + nhdr + 1, hname, hvalue);
+				priv->cur_hdr --;
 			}
 		}
 
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);
+
+		if (priv->cur_hdr < 0) {
+			msg_err_milter("negative header count after removing %s", key);
+			priv->cur_hdr = 0;
+		}
 	}
 }
 
@@ -1715,10 +1725,19 @@ rspamd_milter_extract_single_header (struct rspamd_milter_session *session,
 			else {
 				/* Calculate negative offset */
 
-				if (-idx <= priv->cur_hdr) {
+				if (idx == -1) {
+					rspamd_milter_send_action (session,
+							RSPAMD_MILTER_ADDHEADER,
+							hname, hvalue);
+				}
+				else if (-idx <= priv->cur_hdr) {
+					/*
+					 * Note: We should account MTA's own "Received:" field
+					 * which wasn't passed by Milter's header command.
+					 */
 					rspamd_milter_send_action (session,
 							RSPAMD_MILTER_INSHEADER,
-							priv->cur_hdr + idx + 1,
+							priv->cur_hdr + idx + 2,
 							hname, hvalue);
 				}
 				else {
@@ -1734,6 +1753,8 @@ rspamd_milter_extract_single_header (struct rspamd_milter_session *session,
 					RSPAMD_MILTER_ADDHEADER,
 					hname, hvalue);
 		}
+
+		priv->cur_hdr ++;
 
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);

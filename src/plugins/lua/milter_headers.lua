@@ -195,48 +195,13 @@ local function milter_headers(task)
 
   local function add_header(name, value, stop_chars, order)
     local hname = settings.routines[name].header
-    if order then
-      if not add[hname] then
-        add[hname] = {
-          order = order,
-          value = lua_util.fold_header(task, hname, value, stop_chars)
-        }
-      else
-        if not add[hname][1] then
-          -- Convert to a table
-          add[hname] = {
-            [1] = add[hname]
-          }
-        end
-
-        table.insert(add[hname], {
-          order = order,
-          value = lua_util.fold_header(task, hname, value, stop_chars)
-        })
-      end
-    else
-      if not add[hname] then
-        add[hname] = lua_util.fold_header(task, hname, value, stop_chars)
-      else
-        if not add[hname][1] then
-          -- Convert to a table
-          add[hname] = {
-            [1] = add[hname]
-          }
-        end
-
-        if settings.default_headers_order then
-          table.insert(add[hname], {
-            order = settings.default_headers_order,
-            value = lua_util.fold_header(task, hname, value, stop_chars)
-          })
-        else
-          table.insert(add[hname],
-              lua_util.fold_header(task, hname, value, stop_chars))
-        end
-
-      end
+    if not add[hname] then
+      add[hname] = {}
     end
+    table.insert(add[hname], {
+      order = (order or settings.default_headers_order or -1),
+      value = lua_util.fold_header(task, hname, value, stop_chars)
+    })
   end
 
   routines['x-spamd-result'] = function()
