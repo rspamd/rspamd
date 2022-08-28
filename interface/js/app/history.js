@@ -98,6 +98,7 @@ define(["jquery", "footable"],
                 title: "[Envelope To] To/Cc/Bcc",
                 breakpoints: "xs sm md",
                 filterable: false,
+                classes: "d-none d-xl-table-cell",
                 style: {
                     "font-size": "11px",
                     "minWidth": 100,

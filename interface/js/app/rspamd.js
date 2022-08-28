@@ -751,6 +751,15 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
 
     ui.initHistoryTable = function (rspamd, data, items, table, columns, expandFirst) {
+        /* eslint-disable no-underscore-dangle */
+        FooTable.Cell.extend("collapse", function () {
+            // call the original method
+            this._super();
+            // Copy cell classes to detail row tr element
+            this._setClasses(this.$detail);
+        });
+        /* eslint-enable no-underscore-dangle */
+
         /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
         FooTable.actionFilter = FooTable.Filtering.extend({
             construct: function (instance) {
