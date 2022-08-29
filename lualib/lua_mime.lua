@@ -527,7 +527,7 @@ exports.modify_headers = function(task, hdr_alterations)
     end
     local add_tbl = hdr_flattened[hname].add
     if hdr.value then
-      table.insert(add_tbl, {hdr.order or -1, hdr.value})
+      table.insert(add_tbl, {tonumber(hdr.order) or -1, hdr.value})
     elseif type(hdr) == 'table' then
       for _,v in ipairs(hdr) do
         table.insert(add_tbl, {-1, v})
