@@ -532,6 +532,8 @@ exports.modify_headers = function(task, hdr_alterations)
       for _,v in ipairs(hdr) do
         table.insert(add_tbl, {-1, v})
       end
+    elseif type(hdr) == 'string' then
+      table.insert(add_tbl, {-1, hdr})
     end
   end
   if hdr_alterations.order then
