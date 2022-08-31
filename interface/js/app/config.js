@@ -187,7 +187,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                         if (editor[mode].codejar) {
                             jar = new CodeJar(
                                 document.querySelector("#editor"),
-                                withLineNumbers(Prism.highlightElement)
+                                withLineNumbers((el) => Prism.highlightElement(el))
                             );
                         }
 
