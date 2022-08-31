@@ -1422,21 +1422,36 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
 
   local ret,conn = rspamd_redis.connect_sync(options)
   if not ret then
-    logger.errx('cannot execute redis request: %s', conn)
+    logger.errx('cannot create redis connection: %s', conn)
     addr:fail()
 
     return false,nil,addr
   end
 
   if conn then
+    local need_exec = false
     if redis_params['password'] then
       conn:add_cmd('AUTH', {redis_params['password']})
+      need_exec = true
     end
 
     if redis_params['db'] then
       conn:add_cmd('SELECT', {tostring(redis_params['db'])})
+      need_exec = true
     elseif redis_params['dbname'] then
       conn:add_cmd('SELECT', {tostring(redis_params['dbname'])})
+      need_exec = true
+    end
+
+    if need_exec then
+      local exec_ret, res = conn:exec()
+
+      if not exec_ret then
+        logger.errx('cannot prepare redis connection (authentication or db selection failure): %s',
+            res)
+        addr:fail()
+        return false,nil,addr
+      end
     end
   end
 
