@@ -1590,24 +1590,17 @@ lua_redis_exec (lua_State *L)
 		return 0;
 	}
 	else {
-		if (false /* !ctx->d.sync */) {
-			lua_pushstring (L, "cannot exec commands when not connected");
+		if (ctx->cmds_pending == 0 && g_queue_get_length (ctx->replies) == 0) {
+			lua_pushstring (L, "No pending commands to execute");
 			lua_error (L);
-			return 0;
+		}
+		if (ctx->cmds_pending == 0 && g_queue_get_length (ctx->replies) > 0) {
+			gint results = lua_redis_push_results (ctx, L);
+			return results;
 		}
 		else {
-			if (ctx->cmds_pending == 0 && g_queue_get_length (ctx->replies) == 0) {
-				lua_pushstring (L, "No pending commands to execute");
-				lua_error (L);
-			}
-			if (ctx->cmds_pending == 0 && g_queue_get_length (ctx->replies) > 0) {
-				gint results = lua_redis_push_results (ctx, L);
-				return results;
-			}
-			else {
-				ctx->thread = lua_thread_pool_get_running_entry (ctx->async.cfg->lua_thread_pool);
-				return lua_thread_yield (ctx->thread, 0);
-			}
+			ctx->thread = lua_thread_pool_get_running_entry (ctx->async.cfg->lua_thread_pool);
+			return lua_thread_yield (ctx->thread, 0);
 		}
 	}
 }
