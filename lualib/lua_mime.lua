@@ -19,6 +19,7 @@ limitations under the License.
 -- This module contains helper functions to modify mime parts
 --]]
 
+local logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local rspamd_text = require "rspamd_text"
 local ucl = require "ucl"
@@ -519,21 +520,35 @@ exports.modify_headers = function(task, hdr_alterations)
   local add = hdr_alterations.add or {}
   local remove = hdr_alterations.remove or {}
 
+  local add_headers = {} -- For Milter reply
   local hdr_flattened = {} -- For C API
 
   local function flatten_add_header(hname, hdr)
+    if not add_headers[hname] then
+      add_headers[hname] = {}
+    end
     if not hdr_flattened[hname] then
       hdr_flattened[hname] = {add = {}}
     end
     local add_tbl = hdr_flattened[hname].add
     if hdr.value then
+      table.insert(add_headers[hname], {
+        order = (tonumber(hdr.order) or -1),
+        value = hdr.value,
+      })
       table.insert(add_tbl, {tonumber(hdr.order) or -1, hdr.value})
     elseif type(hdr) == 'table' then
       for _,v in ipairs(hdr) do
-        table.insert(add_tbl, {-1, v})
+        flatten_add_header(hname, v)
       end
     elseif type(hdr) == 'string' then
+      table.insert(add_headers[hname], {
+        order = -1,
+        value = hdr,
+      })
       table.insert(add_tbl, {-1, hdr})
+    else
+      logger.errx(task, 'invalid modification of header: %s', hdr)
     end
   end
   if hdr_alterations.order then
@@ -566,7 +581,7 @@ exports.modify_headers = function(task, hdr_alterations)
   end
 
   task:set_milter_reply({
-    add_headers = hdr_alterations.add,
+    add_headers = add_headers,
     remove_headers = hdr_alterations.remove
   })
 
