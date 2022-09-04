@@ -112,6 +112,7 @@ struct fuzzy_key_stat {
 	guint64 added;
 	guint64 deleted;
 	guint64 errors;
+	struct rspamd_cryptobox_keypair *keypair;
 	rspamd_lru_hash_t *last_ips;
 	ref_entry_t ref;
 };
@@ -144,11 +145,13 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble sync_timeout;
 	gdouble delay;
 	struct rspamd_radix_map_helper *update_ips;
+	struct rspamd_hash_map_helper *update_keys;
 	struct rspamd_radix_map_helper *blocked_ips;
 	struct rspamd_radix_map_helper *ratelimit_whitelist;
 	struct rspamd_radix_map_helper *delay_whitelist;
 
 	const ucl_object_t *update_map;
+	const ucl_object_t *update_keys_map;
 	const ucl_object_t *delay_whitelist_map;
 	const ucl_object_t *blocked_map;
 	const ucl_object_t *ratelimit_whitelist_map;
@@ -365,6 +368,20 @@ rspamd_fuzzy_check_write (struct fuzzy_session *session)
 		}
 	}
 
+	if (session->ctx->update_keys != NULL && session->key_stat && session->key_stat->keypair) {
+		static gchar base32_buf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		guint raw_len;
+		const guchar *pk_raw = rspamd_keypair_component(session->key_stat->keypair,
+				RSPAMD_KEYPAIR_COMPONENT_ID, &raw_len);
+		gint encoded_len = rspamd_encode_base32_buf(pk_raw, raw_len,
+				base32_buf,sizeof(base32_buf),
+				RSPAMD_BASE32_DEFAULT);
+
+		if (rspamd_match_hash_map (session->ctx->update_keys, base32_buf, encoded_len)) {
+			return TRUE;
+		}
+	}
+
 	return FALSE;
 }
 
@@ -375,6 +392,10 @@ fuzzy_key_stat_dtor (gpointer p)
 
 	if (st->last_ips) {
 		rspamd_lru_hash_destroy (st->last_ips);
+	}
+
+	if (st->keypair) {
+		rspamd_keypair_unref(st->keypair);
 	}
 
 	g_free (st);
@@ -2106,6 +2127,8 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		key->stat = keystat;
 		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
 				NULL);
+		keystat->keypair = rspamd_keypair_ref(kp);
+		/* We map entries by pubkey in binary form for speed lookup */
 		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
 		msg_debug_pool_check("loaded keypair %*xs", 8, pk);
@@ -2209,6 +2232,15 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map),
 			0,
 			"Allow modifications from the following IP addresses");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"allow_update_keys",
+			rspamd_rcl_parse_struct_ucl,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_keys_map),
+			0,
+			"Allow modifications for those using specific public keys");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2528,11 +2560,28 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_SYNC,
 			rspamd_fuzzy_storage_sync, ctx);
 
-	/* Create radix trees */
+
 	if (ctx->update_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->update_map,
 				"Allow fuzzy updates from specified addresses",
 				&ctx->update_ips, NULL, worker, "fuzzy update");
+	}
+
+	if (ctx->update_keys_map != NULL) {
+		struct rspamd_map *m;
+
+		if ((m = rspamd_map_add_from_ucl (worker->srv->cfg, ctx->update_keys_map,
+				"Allow fuzzy updates from specified public keys",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
+				(void **)&ctx->update_keys, worker, RSPAMD_MAP_DEFAULT)) == NULL) {
+			msg_warn_config ("cannot load allow keys map from %s",
+					ucl_object_tostring (ctx->update_keys_map));
+		}
+		else {
+			m->active_http = TRUE;
+		}
 	}
 
 	if (ctx->skip_map != NULL) {
