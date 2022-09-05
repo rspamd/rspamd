@@ -2580,7 +2580,6 @@ rspamd_controller_stat_fin_task (void *ud)
 	struct rspamd_stat_cbdata *cbdata = ud;
 	struct rspamd_http_connection_entry *conn_ent;
 	ucl_object_t *top, *ar;
-	GList *fuzzy_elts, *cur;
 	struct rspamd_fuzzy_stat_entry *entry;
 
 	conn_ent = cbdata->conn_ent;
@@ -2593,12 +2592,12 @@ rspamd_controller_stat_fin_task (void *ud)
 		ucl_object_insert_key (top, cbdata->stat, "statfiles", 0, false);
 	}
 
-	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
+	GList *fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
 
 	if (fuzzy_elts) {
 		ar = ucl_object_typed_new (UCL_OBJECT);
 
-		for (cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
+		for (GList *cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
 			entry = cur->data;
 
 			if (entry->name) {
@@ -2821,7 +2820,6 @@ rspamd_controller_metrics_fin_task (void *ud) {
 	struct rspamd_stat_cbdata *cbdata = ud;
 	struct rspamd_http_connection_entry *conn_ent;
 	ucl_object_t *top;
-	GList *fuzzy_elts, *cur;
 	struct rspamd_fuzzy_stat_entry *entry;
 	rspamd_fstring_t *output;
 	gint i;
@@ -3048,12 +3046,12 @@ rspamd_controller_metrics_fin_task (void *ud) {
 		rspamd_fstring_free (users);
 	}
 
-	fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
+	GList *fuzzy_elts = rspamd_mempool_get_variable (cbdata->task->task_pool, "fuzzy_stat");
 
 	if (fuzzy_elts) {
 		rspamd_printf_fstring (&output, "# HELP rspamd_fuzzy_stat Fuzzy stat labelled by storage.\n");
 		rspamd_printf_fstring (&output, "# TYPE rspamd_fuzzy_stat gauge\n");
-		for (cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
+		for (GList *cur = fuzzy_elts; cur != NULL; cur = g_list_next (cur)) {
 			entry = cur->data;
 
 			if (entry->name) {
