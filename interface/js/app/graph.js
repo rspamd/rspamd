@@ -34,6 +34,7 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
             size: {
                 canvasWidth: 400,
                 canvasHeight: 180,
+                pieInnerRadius: "50%",
                 pieOuterRadius: "80%"
             },
             labels: {
@@ -41,14 +42,18 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
                     format: "none"
                 },
                 inner: {
-                    hideWhenLessThanPercentage: 8
+                    hideWhenLessThanPercentage: 8,
+                    offset: 0
                 },
             },
             padAngle: 0.02,
             pieCenterOffset: {
                 x: -120,
                 y: 10,
-            }
+            },
+            total: {
+                enabled: true
+            },
         };
 
         var ui = {};
