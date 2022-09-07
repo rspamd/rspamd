@@ -226,11 +226,21 @@ define(["jquery", "d3pie"],
             if (!graphs.chart) {
                 graphs.chart = new D3Pie("chart", {
                     labels: {
+                        inner: {
+                            offset: 0
+                        },
                         outer: {
                             collideHeight: 18,
                         }
                     },
-                    title: "Rspamd filter stats"
+                    size: {
+                        pieInnerRadius: "50%"
+                    },
+                    title: "Rspamd filter stats",
+                    total: {
+                        enabled: true,
+                        label: "Scanned"
+                    }
                 });
             }
 
