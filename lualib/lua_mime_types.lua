@@ -183,7 +183,7 @@ exports.full_extensions_map = {
     {"group", "text/x-ms-group"},
     {"gsm", "audio/x-gsm"},
     {"gtar", "application/x-gtar"},
-    {"gz", {"application/gzip", "application/x-gzip"}},
+    {"gz", {"application/gzip", "application/x-gzip", "application/tlsrpt+gzip"}},
     {"h", "text/plain"},
     {"hdf", "application/x-hdf"},
     {"hdml", "text/x-hdml"},
