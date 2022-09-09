@@ -227,6 +227,14 @@ if opts and type(opts) == 'table' then
           t.type = 'normal'
         end
 
+        t.augmentations = {}
+
+        if type(m.timeout) == 'number' then
+          -- Here, we ignore possible DNS timeout and timeout from multiple retries
+          -- as these situations are not usual nor likely for the external_services module
+          table.insert(t.augmentations, string.format("timeout=%f", m.timeout))
+        end
+
         local id = rspamd_config:register_symbol(t)
 
         if m.symbol_fail then
