@@ -484,6 +484,7 @@ if type(settings.rules) ~= 'table' then
       r.defer = settings.defer
       r.selector = settings.pusher_select.redis_pubsub
       r.formatter = settings.pusher_format.redis_pubsub
+      r.timeout = redis_params.timeout
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -499,6 +500,7 @@ if type(settings.rules) ~= 'table' then
       r.defer = settings.defer
       r.selector = settings.pusher_select.http
       r.formatter = settings.pusher_format.http
+      r.timeout = settings.timeout or 0.0
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -516,6 +518,7 @@ if type(settings.rules) ~= 'table' then
       r.smtp_port = settings.smtp_port
       r.email_template = settings.email_template
       r.defer = settings.defer
+      r.timeout = settings.timeout or 0.0
       r.selector = settings.pusher_select.send_mail
       r.formatter = settings.pusher_format.send_mail
       settings.rules[r.backend:upper()] = r
@@ -593,6 +596,7 @@ backend_check.redis_pubsub = function(k, rule)
     settings.rules[k] = nil
   else
     backend_check.default(k, rule)
+    rule.timeout = redis_params.timeout
   end
 end
 setmetatable(backend_check, {
@@ -650,5 +654,6 @@ for k, r in pairs(settings.rules) do
     callback = gen_exporter(r),
     priority = 10,
     flags = 'empty,explicit_disable,ignore_passthrough',
+    augmentations = {string.format("timeout=%f", r.timeout or 0.0)}
   })
 end

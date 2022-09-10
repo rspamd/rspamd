@@ -89,7 +89,9 @@ if rule then
     callback = check_p0f,
     priority = 8,
     flags = 'empty,nostat',
-    group = N
+    group = N,
+    augmentations = {string.format("timeout=%f", rule.timeout or 0.0)},
+
   })
 
   if rule.symbol then

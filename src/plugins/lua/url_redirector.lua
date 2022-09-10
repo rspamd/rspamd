@@ -357,6 +357,8 @@ if opts then
         name = 'URL_REDIRECTOR_CHECK',
         type = 'callback,prefilter',
         callback = url_redirector_handler,
+        -- In fact, the real timeout is nested_limit * timeout...
+        augmentations = {string.format("timeout=%f", settings.timeout)}
       }
 
       if settings.redirector_symbol then

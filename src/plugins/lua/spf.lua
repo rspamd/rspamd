@@ -209,7 +209,11 @@ local sym_id = rspamd_config:register_symbol{
   flags = 'fine,empty',
   groups = {'policies','spf'},
   score = 0.0,
-  callback = spf_check_callback
+  callback = spf_check_callback,
+  -- We can merely estimate timeout here, as it is possible to construct an SPF record that would cause
+  -- many DNS requests. But we won't like to set the maximum value for that all the time, as
+  -- the majority of requests will typically have 1-4 subrequests
+  augmentations = {string.format("timeout=%f", rspamd_config:get_dns_timeout() * 4 or 0.0)},
 }
 
 if local_config.whitelist then

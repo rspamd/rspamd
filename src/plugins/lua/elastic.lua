@@ -519,6 +519,7 @@ if redis_params and opts then
       callback = elastic_collect,
       priority = 10,
       flags = 'empty,explicit_disable,ignore_passthrough',
+      augmentations = {string.format("timeout=%f", settings.timeout)},
     })
 
     rspamd_config:add_on_load(function(cfg, ev_base,worker)

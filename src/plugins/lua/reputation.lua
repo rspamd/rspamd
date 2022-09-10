@@ -1302,6 +1302,7 @@ local function parse_rule(name, tbl)
     name = rule.symbol,
     type = rule_type,
     callback = callback_gen(reputation_filter_cb, rule),
+    augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
   }
 
   if rule.selector.config.split_symbols then
@@ -1330,6 +1331,7 @@ local function parse_rule(name, tbl)
       type = 'postfilter',
       flags = 'nostat,explicit_disable,ignore_passthrough',
       callback = callback_gen(reputation_postfilter_cb, rule),
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     }
   end
 
@@ -1340,6 +1342,7 @@ local function parse_rule(name, tbl)
       type = 'idempotent',
       flags = 'explicit_disable,ignore_passthrough',
       callback = callback_gen(reputation_idempotent_cb, rule),
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     }
   end
 

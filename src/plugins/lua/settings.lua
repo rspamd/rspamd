@@ -1230,6 +1230,7 @@ if redis_section then
       callback = gen_redis_callback(h, id),
       priority = 10,
       flags = 'empty,nostat',
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     })
   end, redis_key_handlers)
 end

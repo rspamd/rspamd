@@ -315,6 +315,7 @@ if opts then
     type = 'normal',
     callback = mx_check,
     flags = 'empty',
+    augmentations = {string.format("timeout=%f", settings.timeout + rspamd_config:get_dns_timeout() or 0.0)},
   })
   rspamd_config:register_symbol({
     name = settings.symbol_no_mx,

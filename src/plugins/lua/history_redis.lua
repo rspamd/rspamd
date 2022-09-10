@@ -290,7 +290,8 @@ if opts then
       type = 'idempotent',
       callback = history_save,
       flags = 'empty,explicit_disable,ignore_passthrough',
-      priority = 150
+      priority = 150,
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)}
     })
     lua_redis.register_prefix(settings.key_prefix .. hostname, N,
         "Redis history", {

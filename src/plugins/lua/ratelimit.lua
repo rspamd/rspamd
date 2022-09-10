@@ -871,6 +871,7 @@ if opts then
       priority = 7,
       callback = ratelimit_cb,
       flags = 'empty,nostat',
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     }
 
     local id = rspamd_config:register_symbol(s)
@@ -914,6 +915,7 @@ if opts then
       name = 'RATELIMIT_UPDATE',
       flags = 'explicit_disable,ignore_passthrough',
       callback = ratelimit_update_cb,
+      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     }
   end
 end

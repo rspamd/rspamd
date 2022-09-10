@@ -301,6 +301,7 @@ if opts['rules'] then
         type = 'idempotent',
         flags = 'empty,explicit_disable,ignore_passthrough',
         callback = callback_gen(clusterting_idempotent_cb, rule),
+        augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)}
       }
     end
   else

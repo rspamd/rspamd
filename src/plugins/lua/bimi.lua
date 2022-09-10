@@ -365,6 +365,8 @@ if redis_params then
     name = 'BIMI_CHECK',
     type = 'normal',
     callback = bimi_callback,
+    augmentations = {string.format("timeout=%f", settings.helper_timeout or
+        redis_params.timeout or 0.0)}
   })
   rspamd_config:register_symbol{
     name = 'BIMI_VALID',
