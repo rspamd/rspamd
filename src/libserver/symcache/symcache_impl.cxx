@@ -1215,7 +1215,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		auto max_timeout = 0.0, added_timeout = 0.0;
 		const cache_item *max_elt = nullptr;
 		for (const auto &it : vec) {
-			if (it->priority != saved_priority) {
+			if (it->priority != saved_priority && max_elt != nullptr && max_timeout > 0) {
 				accumulated_timeout += max_timeout;
 				added_timeout += max_timeout;
 				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d);"
@@ -1276,7 +1276,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	/* Sort in decreasing order by timeout */
 	std::stable_sort(std::begin(elts), std::end(elts),
 					 [](const auto &p1, const auto &p2) {
-						 return p2.first > p1.first;
+						 return p1.first > p2.first;
 					 });
 
 	msg_debug_cache("overall cache timeout: %.2f, %.2f from prefilters,"

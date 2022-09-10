@@ -265,7 +265,7 @@ rspamd_symcache_item_name(struct rspamd_symcache_item *item)
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 
 	if (real_item == nullptr) {
-		return 0;
+		return nullptr;
 	}
 
 	return real_item->get_name().c_str();

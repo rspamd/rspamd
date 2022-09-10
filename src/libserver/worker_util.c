@@ -960,8 +960,6 @@ rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_lo
 static bool
 rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 {
-	gint nfd = -1;
-
 	if (ls->is_systemd) {
 		/* No need to reuseport */
 		return true;
@@ -978,6 +976,7 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 	}
 
 #if defined(SO_REUSEPORT) && defined(SO_REUSEADDR) && defined(LINUX)
+	gint nfd = -1;
 
 	if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
 		nfd = rspamd_inet_address_listen (ls->addr,
@@ -1005,8 +1004,6 @@ rspamd_maybe_reuseport_socket (struct rspamd_worker_listen_socket *ls)
 		 */
 		nfd = ls->fd;
 	}
-#else
-	nfd = ls->fd;
 #endif
 
 #if 0
@@ -2240,9 +2237,28 @@ rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg, gdouble timeo
 	g_assert (tres != 0);
 
 	if (tres->max_timeout > timeout) {
-		msg_info_config("configured task_timeout %.2f is less than maximum symbols cache timeout %.2f, so"
-						"some symbols could be terminated early", timeout, tres->max_timeout);
-		/* TODO: list timeouts for top symbols */
+		msg_info_config("configured task_timeout %.2f is less than maximum symbols cache timeout %.2f; "
+						"some symbols can be terminated before checks", timeout, tres->max_timeout);
+		GString *buf = g_string_sized_new(512);
+		static const int max_displayed_items = 12;
+
+		for (int i = 0; i < MIN(tres->nitems, max_displayed_items); i++) {
+			if (i == 0) {
+				rspamd_printf_gstring(buf, "%s(%.2f)",
+						rspamd_symcache_item_name((struct rspamd_symcache_item *)tres->items[i].item),
+						tres->items[i].timeout);
+			}
+			else {
+				rspamd_printf_gstring(buf, "; %s(%.2f)",
+						rspamd_symcache_item_name((struct rspamd_symcache_item *)tres->items[i].item),
+						tres->items[i].timeout);
+			}
+		}
+		msg_info_config("list of top %d symbols by execution time: %v",
+				MIN(tres->nitems, max_displayed_items),
+				buf);
+
+		g_string_free(buf, TRUE);
 	}
 
 	rspamd_symcache_timeout_result_free (tres);
