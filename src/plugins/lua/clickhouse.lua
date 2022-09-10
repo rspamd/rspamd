@@ -1467,7 +1467,6 @@ if opts then
       name = 'CLICKHOUSE_COLLECT',
       type = 'idempotent',
       callback = clickhouse_collect,
-      priority = 10,
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = {string.format("timeout=%f", settings.timeout)},
     })

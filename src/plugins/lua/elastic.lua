@@ -517,7 +517,6 @@ if redis_params and opts then
       name = 'ELASTIC_COLLECT',
       type = 'idempotent',
       callback = elastic_collect,
-      priority = 10,
       flags = 'empty,explicit_disable,ignore_passthrough',
       augmentations = {string.format("timeout=%f", settings.timeout)},
     })

@@ -652,7 +652,6 @@ for k, r in pairs(settings.rules) do
     name = 'EXPORT_METADATA_' .. k,
     type = 'idempotent',
     callback = gen_exporter(r),
-    priority = 10,
     flags = 'empty,explicit_disable,ignore_passthrough',
     augmentations = {string.format("timeout=%f", r.timeout or 0.0)}
   })

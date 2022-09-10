@@ -692,6 +692,5 @@ rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
   type = 'idempotent',
   callback = milter_headers,
-  priority = 10,
   flags = 'empty,explicit_disable,ignore_passthrough',
 })

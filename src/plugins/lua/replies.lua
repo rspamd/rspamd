@@ -302,7 +302,6 @@ if opts then
       name = 'REPLIES_SET',
       type = 'idempotent',
       callback = replies_set,
-      priority = 5,
       group = 'replies',
       flags = 'explicit_disable,ignore_passthrough',
     })

@@ -2255,7 +2255,7 @@ rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg, gdouble timeo
 			}
 		}
 		msg_info_config("list of top %d symbols by execution time: %v",
-				MIN(tres->nitems, max_displayed_items),
+				(int)MIN(tres->nitems, max_displayed_items),
 				buf);
 
 		g_string_free(buf, TRUE);
