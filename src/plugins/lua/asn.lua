@@ -143,7 +143,7 @@ if configure_asn_module() then
     name = 'ASN_CHECK',
     type = 'prefilter',
     callback = asn_check,
-    priority = 8,
+    priority = lua_util.symbols_priorities.high,
     flags = 'empty,nostat',
     augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
   })

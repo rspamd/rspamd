@@ -1532,4 +1532,12 @@ end
 
 exports.dns_timeout_augmentation = dns_timeout_augmentation
 
+-- Defines symbols priorities for common usage in prefilters/postfilters
+exports.symbols_priorities = {
+  top = 10, -- Symbols must be executed first (or last), such as settings
+  high = 9, -- Example: asn
+  medium = 5, -- Everything should use this as default
+  low = 0,
+}
+
 return exports

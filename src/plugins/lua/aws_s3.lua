@@ -261,6 +261,6 @@ rspamd_config:register_symbol({
   name = 'EXPORT_AWS_S3',
   type = settings.fail_action and 'postfilter' or 'idempotent',
   callback = s3_aws_callback,
-  priority = settings.fail_action and 10 or nil,
+  priority = settings.fail_action and lua_util.symbols_priorities.high or nil,
   flags = 'empty,explicit_disable,ignore_passthrough,nostat',
 })

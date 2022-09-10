@@ -192,7 +192,7 @@ local function configure_module()
           local t = {}
           if (raction or honor) then
             t.type = 'postfilter'
-            t.priority = 10
+            t.priority = lua_util.symbols_priorities.high
           else
             t.type = 'normal'
             if not sett.least then

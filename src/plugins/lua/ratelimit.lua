@@ -868,7 +868,7 @@ if opts then
     local s = {
       type = settings.prefilter and 'prefilter' or 'callback',
       name = 'RATELIMIT_CHECK',
-      priority = 7,
+      priority = lua_util.symbols_priorities.medium,
       callback = ratelimit_cb,
       flags = 'empty,nostat',
       augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},

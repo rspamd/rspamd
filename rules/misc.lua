@@ -18,10 +18,10 @@ limitations under the License.
 
 local E = {}
 local fun = require "fun"
-local util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
 local rspamd_parsers = require "rspamd_parsers"
 local rspamd_regexp = require "rspamd_regexp"
-local rspamd_lua_utils = require "lua_util"
+local lua_util = require "lua_util"
 local bit = require "bit"
 local rspamd_url = require "rspamd_url"
 local url_flags_tab = rspamd_url.flags
@@ -409,7 +409,7 @@ rspamd_config.OMOGRAPH_URL = {
           end
           if h1 and h2 then
             local selt = string.format('%s->%s', h1, h2)
-            if not seen[selt] and util.is_utf_spoofed(h1, h2) then
+            if not seen[selt] and rspamd_util.is_utf_spoofed(h1, h2) then
               bad_urls[#bad_urls + 1] = selt
               bad_omographs = bad_omographs + 1
             end
@@ -420,7 +420,7 @@ rspamd_config.OMOGRAPH_URL = {
           local h = u:get_tld()
 
           if h then
-            if not seen[h] and util.is_utf_spoofed(h) then
+            if not seen[h] and rspamd_util.is_utf_spoofed(h) then
               bad_urls[#bad_urls + 1] = h
               single_bad_omograps = single_bad_omograps + 1
             end
@@ -482,7 +482,7 @@ local aliases_id = rspamd_config:register_symbol{
     local function check_from(type)
       if task:has_from(type) then
         local addr = task:get_from(type)[1]
-        local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
+        local na,tags = lua_util.remove_email_aliases(addr)
         if na then
           task:set_from(type, addr, 'alias')
           task:insert_result('TAGGED_FROM', 1.0, fun.totable(
@@ -501,7 +501,7 @@ local aliases_id = rspamd_config:register_symbol{
         local addrs = task:get_recipients(type)
 
         for _, addr in ipairs(addrs) do
-          local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
+          local na,tags = lua_util.remove_email_aliases(addr)
           if na then
             modified = true
             fun.each(function(t) table.insert(all_tags, t) end,
@@ -519,7 +519,7 @@ local aliases_id = rspamd_config:register_symbol{
     check_rcpt('smtp')
     check_rcpt('mime')
   end,
-  priority = 150,
+  priority = lua_util.symbols_priorities.top + 1,
   description = 'Removes plus aliases from the email',
   group = 'headers',
 }
@@ -554,13 +554,13 @@ local check_from_display_name = rspamd_config:register_symbol{
     -- Make sure we did not mistake e.g. <something>@<name> for an email address
     if not parsed[1]['domain'] or not parsed[1]['domain']:find('%.') then return false end
     -- See if the parsed domains differ
-    if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
+    if not rspamd_util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
       -- See if the destination domain is the same as the spoof
       local mto = task:get_recipients(2)
       local sto = task:get_recipients(1)
       if mto then
         for _, to in ipairs(mto) do
-          if to['domain'] ~= '' and util.strequal_caseless(to['domain'], parsed[1]['domain']) then
+          if to['domain'] ~= '' and rspamd_util.strequal_caseless(to['domain'], parsed[1]['domain']) then
             task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
             return false
           end
@@ -568,7 +568,7 @@ local check_from_display_name = rspamd_config:register_symbol{
       end
       if sto then
         for _, to in ipairs(sto) do
-          if to['domain'] ~= '' and util.strequal_caseless(to['domain'], parsed[1]['domain']) then
+          if to['domain'] ~= '' and rspamd_util.strequal_caseless(to['domain'], parsed[1]['domain']) then
             task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
             return false
           end
@@ -611,7 +611,7 @@ rspamd_config.SPOOF_REPLYTO = {
     if not (from and from[1] and from[1].addr) then return false end
     if (to and to[1] and to[1].addr) then
       -- Handle common case for Web Contact forms of From = To
-      if util.strequal_caseless(from[1].addr, to[1].addr) then
+      if rspamd_util.strequal_caseless(from[1].addr, to[1].addr) then
         return false
       end
     end
@@ -619,10 +619,10 @@ rspamd_config.SPOOF_REPLYTO = {
     to = task:get_recipients(1)
     if not to then return false end
     -- Try mitigate some possible FPs on mailing list posts
-    if #to == 1 and util.strequal_caseless(to[1].addr, from[1].addr) then return false end
+    if #to == 1 and rspamd_util.strequal_caseless(to[1].addr, from[1].addr) then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
-      if util.strequal_caseless(t.domain, from[1].domain) then
+      if rspamd_util.strequal_caseless(t.domain, from[1].domain) then
         found_fromdom = true
         break
       end
@@ -632,7 +632,7 @@ rspamd_config.SPOOF_REPLYTO = {
     local parsed = ((rspamd_parsers.parse_mail_address(rt, task:get_mempool()) or E)[1] or E).domain
     if not parsed then return false end
     -- Reply-To domain must be different to From domain
-    if not util.strequal_caseless(parsed, from[1].domain) then
+    if not rspamd_util.strequal_caseless(parsed, from[1].domain) then
       return true, from[1].domain, parsed
     end
     return false
@@ -649,14 +649,14 @@ rspamd_config.INFO_TO_INFO_LU = {
       return false
     end
     local from = task:get_from('mime')
-    if not (from and from[1] and util.strequal_caseless(from[1].user, 'info')) then
+    if not (from and from[1] and rspamd_util.strequal_caseless(from[1].user, 'info')) then
       return false
     end
     local to = task:get_recipients('smtp')
     if not to then return false end
     local found = false
     for _,r in ipairs(to) do
-      if util.strequal_caseless(r['user'], 'info') then
+      if rspamd_util.strequal_caseless(r['user'], 'info') then
         found = true
       end
     end

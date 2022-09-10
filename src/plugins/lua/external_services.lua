@@ -222,7 +222,7 @@ if opts and type(opts) == 'table' then
 
         if m.symbol_type == 'postfilter' then
           t.type = 'postfilter'
-          t.priority = 3
+          t.priority = lua_util.symbols_priorities.medium
         else
           t.type = 'normal'
         end

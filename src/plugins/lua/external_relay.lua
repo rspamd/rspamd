@@ -229,7 +229,7 @@ if opts then
       rspamd_config:register_symbol({
         name = rule.symbol,
         type = 'prefilter',
-        priority = rule.priority or 20,
+        priority = rule.priority or lua_util.symbols_priorities.top + 1,
         group = N,
         callback = cb,
       })

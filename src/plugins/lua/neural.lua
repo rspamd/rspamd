@@ -894,7 +894,7 @@ local id = rspamd_config:register_symbol({
   name = 'NEURAL_CHECK',
   type = 'postfilter,callback',
   flags = 'nostat',
-  priority = 6,
+  priority = lua_util.symbols_priorities.medium,
   callback = ann_scores_filter
 })
 

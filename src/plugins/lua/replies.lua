@@ -286,7 +286,7 @@ if opts then
         type = 'prefilter',
         callback = replies_check_cookie,
         flags = 'nostat',
-        priority = 10,
+        priority = lua_util.symbols_priorities.medium,
         group = "replies"
       })
       rspamd_config:register_symbol({
@@ -310,7 +310,7 @@ if opts then
       type = 'prefilter',
       flags = 'nostat',
       callback = replies_check,
-      priority = 9,
+      priority = lua_util.symbols_priorities.medium,
       group = "replies"
     })
     rspamd_config:register_symbol({

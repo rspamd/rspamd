@@ -514,14 +514,14 @@ if opts then
       name = 'GREYLIST_SAVE',
       type = 'postfilter',
       callback = greylist_set,
-      priority = 6,
+      priority = lua_util.symbols_priorities.medium,
       augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     })
     local id = rspamd_config:register_symbol({
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
-      priority = 6,
+      priority = lua_util.symbols_priorities.medium,
       augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)}
     })
     rspamd_config:register_symbol({

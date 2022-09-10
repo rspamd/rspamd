@@ -87,7 +87,7 @@ if rule then
     name = 'P0F_CHECK',
     type = 'prefilter',
     callback = check_p0f,
-    priority = 8,
+    priority = lua_util.symbols_priorities.medium,
     flags = 'empty,nostat',
     group = N,
     augmentations = {string.format("timeout=%f", rule.timeout or 0.0)},

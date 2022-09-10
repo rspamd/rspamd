@@ -1228,7 +1228,7 @@ if redis_section then
       name = 'REDIS_SETTINGS' .. tostring(id),
       type = 'prefilter',
       callback = gen_redis_callback(h, id),
-      priority = 10,
+      priority = lua_util.symbols_priorities.top,
       flags = 'empty,nostat',
       augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
     })
@@ -1239,7 +1239,7 @@ module_sym_id = rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
   type = 'prefilter',
   callback = check_settings,
-  priority = 10,
+  priority = lua_util.symbols_priorities.top,
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
 
