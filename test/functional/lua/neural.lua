@@ -58,6 +58,7 @@ rspamd_config.SAVE_NN_ROW_IDEMPOTENT = {
   end,
   type = 'idempotent',
   flags = 'explicit_disable',
+  priority = 100,
 }
 
 dofile(rspamd_env.INSTALLROOT .. "/share/rspamd/rules/controller/init.lua")
