@@ -1221,13 +1221,14 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		const cache_item *max_elt = nullptr;
 		for (const auto &it : vec) {
 			if (it->priority != saved_priority && max_elt != nullptr && max_timeout > 0) {
-				accumulated_timeout += max_timeout;
-				added_timeout += max_timeout;
-				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d);"
-									   "symbol: %s",
-						max_timeout, accumulated_timeout, saved_priority, it->priority,
-						it->symbol.c_str());
 				if (!seen_items.contains(max_elt)) {
+					accumulated_timeout += max_timeout;
+					added_timeout += max_timeout;
+
+					msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d); "
+										   "symbol: %s",
+							max_timeout, accumulated_timeout, saved_priority, it->priority,
+							max_elt->symbol.c_str());
 					elts.emplace_back(max_timeout, max_elt);
 					seen_items.insert(max_elt);
 				}
@@ -1245,9 +1246,14 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		}
 
 		if (max_elt != nullptr && max_timeout > 0) {
-			accumulated_timeout += max_timeout;
-			added_timeout += max_timeout;
 			if (!seen_items.contains(max_elt)) {
+				accumulated_timeout += max_timeout;
+				added_timeout += max_timeout;
+
+				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) end of processing; "
+									   "symbol: %s",
+						max_timeout, accumulated_timeout,
+						max_elt->symbol.c_str());
 				elts.emplace_back(max_timeout, max_elt);
 				seen_items.insert(max_elt);
 			}
@@ -1257,8 +1263,6 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	};
 
 	auto prefilters_timeout = pre_postfilter_iter(this->prefilters);
-	auto postfilters_timeout = pre_postfilter_iter(this->postfilters);
-	auto idempotent_timeout = pre_postfilter_iter(this->idempotent);
 
 	/* For normal filters, we check the maximum chain of the dependencies
 	 * This function might have O(N^2) complexity if all symbols are in a single
@@ -1278,6 +1282,10 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	}
 
 	accumulated_timeout += max_filters_timeout;
+
+	auto postfilters_timeout = pre_postfilter_iter(this->postfilters);
+	auto idempotent_timeout = pre_postfilter_iter(this->idempotent);
+
 	/* Sort in decreasing order by timeout */
 	std::stable_sort(std::begin(elts), std::end(elts),
 					 [](const auto &p1, const auto &p2) {

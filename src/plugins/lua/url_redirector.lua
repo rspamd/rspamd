@@ -356,6 +356,7 @@ if opts then
       local id = rspamd_config:register_symbol{
         name = 'URL_REDIRECTOR_CHECK',
         type = 'callback,prefilter',
+        priority = lua_util.symbols_priorities.medium,
         callback = url_redirector_handler,
         -- In fact, the real timeout is nested_limit * timeout...
         augmentations = {string.format("timeout=%f", settings.timeout)}
