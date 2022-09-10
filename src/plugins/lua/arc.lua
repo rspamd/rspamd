@@ -433,7 +433,8 @@ local id = rspamd_config:register_symbol({
   type = 'callback',
   group = 'policies',
   groups = {'arc'},
-  callback = arc_callback
+  callback = arc_callback,
+  augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
 })
 rspamd_config:register_symbol({
   name = 'ARC_CALLBACK', -- compatibility symbol
@@ -802,7 +803,6 @@ if settings.whitelisted_signers_map then
     score = -2.0,
     group = 'policies',
     groups = {'arc'},
-    augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
   })
 end
 
