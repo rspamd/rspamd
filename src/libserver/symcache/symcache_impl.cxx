@@ -1218,8 +1218,10 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 			if (it->priority != saved_priority) {
 				accumulated_timeout += max_timeout;
 				added_timeout += max_timeout;
-				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d)",
-						max_timeout, accumulated_timeout, saved_priority, it->priority);
+				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d);"
+									   "symbol: %s",
+						max_timeout, accumulated_timeout, saved_priority, it->priority,
+						it->symbol.c_str());
 				if (!seen_items.contains(max_elt)) {
 					elts.emplace_back(max_timeout, max_elt);
 					seen_items.insert(max_elt);
