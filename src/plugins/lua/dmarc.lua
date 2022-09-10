@@ -657,7 +657,8 @@ if settings.munging then
     score = 0,
     group = 'policies',
     groups = {'dmarc'},
-    callback = dmarc_common.gen_munging_callback(munging_opts, settings)
+    callback = dmarc_common.gen_munging_callback(munging_opts, settings),
+    augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
   })
 
   rspamd_config:register_dependency('DMARC_MUNGED', 'DMARC_CHECK')

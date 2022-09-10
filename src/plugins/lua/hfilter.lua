@@ -551,6 +551,7 @@ local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config,
     false, false)
 check_local = auth_and_local_conf[1]
 check_authed = auth_and_local_conf[2]
+local timeout = 0.0
 
 local opts = rspamd_config:get_all_opt('hfilter')
 if opts then
@@ -568,15 +569,18 @@ if config['helo_enabled'] then
   checks_hellohost_map = add_static_map(checks_hellohost)
   checks_hello_map = add_static_map(checks_hello)
   append_t(symbols_enabled, symbols_helo)
+  timeout = math.max(timeout, rspamd_config:get_dns_timeout() * 3)
 end
 if config['hostname_enabled'] then
   if not checks_hellohost_map then
     checks_hellohost_map = add_static_map(checks_hellohost)
   end
   append_t(symbols_enabled, symbols_hostname)
+  timeout = math.max(timeout, rspamd_config:get_dns_timeout())
 end
 if config['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
+  timeout = math.max(timeout, rspamd_config:get_dns_timeout())
 end
 if config['rcpt_enabled'] then
   append_t(symbols_enabled, symbols_rcpt)
@@ -594,6 +598,7 @@ if #symbols_enabled > 0 then
     name = 'HFILTER_CHECK',
     callback = hfilter_callback,
     type = 'callback',
+    augmentations = {string.format("timeout=%f", timeout)},
   }
   for _,sym in ipairs(symbols_enabled) do
     rspamd_config:register_symbol{

@@ -1469,6 +1469,7 @@ if opts then
       callback = clickhouse_collect,
       priority = 10,
       flags = 'empty,explicit_disable,ignore_passthrough',
+      augmentations = {string.format("timeout=%f", settings.timeout)},
     })
     rspamd_config:register_finish_script(function(task)
       if nrows > 0 then

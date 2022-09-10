@@ -1521,4 +1521,15 @@ end
 --]]]
 exports.http_upstreams_by_url = http_upstreams_by_url
 
+---[[[
+-- @function lua_util.dns_timeout_augmentation(cfg)
+-- Returns an augmentation suitable to define DNS timeout for a module
+-- @return {string} a string in format 'timeout=x' where `x` is a number of seconds for DNS timeout
+--]]]
+local function dns_timeout_augmentation(cfg)
+  return string.format('timeout=%f', cfg:get_dns_timeout() or 0.0)
+end
+
+exports.dns_timeout_augmentation = dns_timeout_augmentation
+
 return exports

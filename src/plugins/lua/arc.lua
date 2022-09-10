@@ -802,6 +802,7 @@ if settings.whitelisted_signers_map then
     score = -2.0,
     group = 'policies',
     groups = {'arc'},
+    augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
   })
 end
 

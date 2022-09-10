@@ -145,6 +145,7 @@ if configure_asn_module() then
     callback = asn_check,
     priority = 8,
     flags = 'empty,nostat',
+    augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
   })
   if options['symbol'] then
     rspamd_config:register_symbol({
