@@ -257,10 +257,13 @@ if not settings.upstreams then
   return
 end
 
+local is_postfilter = settings.fail_action ~= nil
+
 rspamd_config:register_symbol({
   name = 'EXPORT_AWS_S3',
-  type = settings.fail_action and 'postfilter' or 'idempotent',
+  type = is_postfilter and 'postfilter' or 'idempotent',
   callback = s3_aws_callback,
-  priority = settings.fail_action and lua_util.symbols_priorities.high or nil,
+  augmentations = {string.format("timeout=%f", settings.s3_timeout)},
+  priority = is_postfilter and lua_util.symbols_priorities.high or nil,
   flags = 'empty,explicit_disable,ignore_passthrough,nostat',
 })
