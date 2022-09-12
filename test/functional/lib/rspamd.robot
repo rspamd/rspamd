@@ -241,7 +241,7 @@ Run Rspamd
 
   # Run Rspamd
   ${result} =  Run Process  ${RSPAMD}  ${SET_LOCAL_CONFDIR}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${CONFIG}  env:TMPDIR=${RSPAMD_TMPDIR}  env:RSPAMD_DBDIR=${RSPAMD_TMPDIR}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${CONFIG}  env:TMPDIR=${RSPAMD_TMPDIR}  env:RSPAMD_DBDIR=${RSPAMD_TMPDIR}  env:DBDIR=${RSPAMD_TMPDIR}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
