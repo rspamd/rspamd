@@ -90,6 +90,10 @@
           "webmail": {
             "type": "boolean"
           },
+          "sender_ip": {
+            "ignore_above": 1024,
+            "type": "keyword"
+          },
           "geoip": {
             "properties": {
               "city_name": {
