@@ -121,27 +121,24 @@ local function get_general_metadata(task)
   local r = {}
   local ip_addr = task:get_ip()
 
-  r.webmail = false
-
   if ip_addr  and ip_addr:is_valid() then
     r.is_local = ip_addr:is_local()
-    local origin = task:get_header('X-Originating-IP')
-    if origin then
-      origin = string.sub(origin, 2, -2)
-      local rspamd_ip = require "rspamd_ip"
-      local test = rspamd_ip.from_string(origin)
-
-      if test and test:is_valid() then
-        r.webmail = true
-        r.ip = origin
-      else
-        r.ip = tostring(ip_addr)
-      end
-    else
-      r.ip = tostring(ip_addr)
-    end
+    r.ip = tostring(ip_addr)
   else
     r.ip = '127.0.0.1'
+  end
+
+  r.webmail = false
+  r.sender_ip = 'unknown'
+  local origin = task:get_header('X-Originating-IP')
+  if origin then
+    origin = origin:gsub('%[', ''):gsub('%]', '')
+    local rspamd_ip = require "rspamd_ip"
+    local origin_ip = rspamd_ip.from_string(origin)
+    if origin_ip and origin_ip:is_valid() then
+      r.webmail = true
+      r.sender_ip = origin -- use string here
+    end
   end
 
   r.direction = "Inbound"
