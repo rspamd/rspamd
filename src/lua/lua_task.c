@@ -2599,18 +2599,32 @@ lua_task_has_urls (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	bool need_urls = false;
 	gboolean ret = FALSE;
 	gsize sz = 0;
 
 	if (task) {
 		if (task->message) {
 			if (lua_gettop (L) >= 2) {
-				lua_toboolean (L, 2);
+				need_urls = lua_toboolean (L, 2);
 			}
 
-			if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
-				sz += kh_size (MESSAGE_FIELD (task, urls));
-				ret = TRUE;
+			if (!need_urls) {
+				/* Simplified check */
+				if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
+					sz += kh_size (MESSAGE_FIELD (task, urls));
+					ret = TRUE;
+				}
+			}
+			else {
+				/* Linear scan */
+				struct rspamd_url *u;
+				kh_foreach_key(MESSAGE_FIELD (task, urls), u, {
+					if (u->protocol != PROTOCOL_MAILTO) {
+						sz ++;
+						ret = TRUE;
+					}
+				});
 			}
 		}
 	}
