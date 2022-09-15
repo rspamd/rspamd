@@ -2641,7 +2641,7 @@ rspamd_init_libs (void)
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
 		ottery_config_disable_entropy_sources (ottery_cfg,
 				OTTERY_ENTROPY_SRC_RDRAND);
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
 		RAND_set_rand_engine (NULL);
 #endif
 	}

@@ -1071,7 +1071,7 @@ rspamd_openssl_maybe_init (void)
 		OpenSSL_add_all_digests ();
 		OpenSSL_add_all_ciphers ();
 
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
 		ENGINE_load_builtin_engines ();
 #endif
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)

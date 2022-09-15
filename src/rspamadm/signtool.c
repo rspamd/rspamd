@@ -221,7 +221,11 @@ rspamadm_edit_file (const gchar *fname)
 	}
 
 #if GLIB_MAJOR_VERSION >= 2 && GLIB_MINOR_VERSION >= 34
+#  if GLIB_MINOR_VERSION >= 70
+	if (!g_spawn_check_wait_status (retcode, &err)) {
+#  else
 	if (!g_spawn_check_exit_status (retcode, &err)) {
+#  endif
 		unlink (tmppath);
 		rspamd_fprintf (stderr, "%s returned error code: %d - %e\n", editor,
 				retcode, err);
