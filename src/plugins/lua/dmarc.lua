@@ -266,9 +266,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   end
 
   if policy.rua and redis_params and settings.reporting.enabled then
-    if settings.no_reporting_domains then
-      if settings.no_reporting_domains:get_key(policy.domain) or
-          settings.no_reporting_domains:get_key(rspamd_util.get_tld(policy.domain)) then
+    if settings.reporting.exclude_domains then
+      if settings.reporting.exclude_domains:get_key(policy.domain) or
+          settings.reporting.exclude_domains:get_key(rspamd_util.get_tld(policy.domain)) then
         rspamd_logger.infox(task, 'DMARC reporting suppressed for %s', policy.domain)
         return
       end
@@ -499,6 +499,11 @@ settings = lua_util.override_defaults(settings, opts)
 settings.auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
     false, false)
 
+-- Legacy...
+if settings.reporting and not settings.reporting.exclude_domains and settings.no_reporting_domains then
+  settings.reporting.exclude_domains = settings.no_reporting_domains
+end
+
 local lua_maps = require "lua_maps"
 lua_maps.fill_config_maps(N, settings, {
   no_sampling_domains = {
@@ -506,12 +511,17 @@ lua_maps.fill_config_maps(N, settings, {
     type = 'map',
     description = 'Domains not to apply DMARC sampling to'
   },
-  no_reporting_domains = {
-    optional = true,
-    type = 'map',
-    description = 'Domains not to apply DMARC reporting to'
-  },
 })
+
+if type(settings.reporting) == 'table' then
+  lua_maps.fill_config_maps(N, settings.reporting, {
+    exclude_domains = {
+      optional = true,
+      type = 'map',
+      description = 'Domains not to store DMARC reports about'
+    },
+  })
+end
 
 
 if settings.reporting == true then
