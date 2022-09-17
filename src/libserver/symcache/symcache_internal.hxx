@@ -236,9 +236,9 @@ struct delayed_symbol_elt_hash {
 
 class symcache {
 private:
-	using items_ptr_vec = std::vector<cache_item_ptr>;
+	using items_ptr_vec = std::vector<cache_item *>;
 	/* Map indexed by symbol name: all symbols must have unique names, so this map holds ownership */
-	ankerl::unordered_dense::map<std::string_view, cache_item_ptr> items_by_symbol;
+	ankerl::unordered_dense::map<std::string_view, cache_item *> items_by_symbol;
 	ankerl::unordered_dense::map<int, cache_item_ptr> items_by_id;
 
 	/* Items sorted into some order */
@@ -502,7 +502,7 @@ public:
 	template<typename Functor>
 	auto symbols_foreach(Functor f) -> void {
 		for (const auto &sym_it : items_by_symbol) {
-			f(sym_it.second.get());
+			f(sym_it.second);
 		}
 	}
 
@@ -514,7 +514,7 @@ public:
 	template<typename Functor>
 	auto composites_foreach(Functor f) -> void {
 		for (const auto &sym_it : composites) {
-			f(sym_it.get());
+			f(sym_it);
 		}
 	}
 
@@ -527,35 +527,35 @@ public:
 	auto connfilters_foreach(Functor f) -> bool {
 		return std::all_of(std::begin(connfilters), std::end(connfilters),
 						   [&](const auto &sym_it){
-			return f(sym_it.get());
+			return f(sym_it);
 		});
 	}
 	template<typename Functor>
 	auto prefilters_foreach(Functor f) -> bool {
 		return std::all_of(std::begin(prefilters), std::end(prefilters),
 				[&](const auto &sym_it){
-					return f(sym_it.get());
+					return f(sym_it);
 				});
 	}
 	template<typename Functor>
 	auto postfilters_foreach(Functor f) -> bool {
 		return std::all_of(std::begin(postfilters), std::end(postfilters),
 				[&](const auto &sym_it){
-					return f(sym_it.get());
+					return f(sym_it);
 				});
 	}
 	template<typename Functor>
 	auto idempotent_foreach(Functor f) -> bool {
 		return std::all_of(std::begin(idempotent), std::end(idempotent),
 				[&](const auto &sym_it){
-					return f(sym_it.get());
+					return f(sym_it);
 				});
 	}
 	template<typename Functor>
 	auto filters_foreach(Functor f) -> bool {
 		return std::all_of(std::begin(filters), std::end(filters),
 				[&](const auto &sym_it){
-					return f(sym_it.get());
+					return f(sym_it);
 				});
 	}
 

@@ -582,7 +582,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 					/* Not started */
 					if (!check_only) {
 						if (!rec_functor(recursion + 1,
-								dep.item.get(),
+								dep.item,
 								dep_dyn_item,
 								rec_functor)) {
 
@@ -591,7 +591,7 @@ auto symcache_runtime::check_item_deps(struct rspamd_task *task, symcache &cache
 												 "symbol %d(%s)",
 									dep.id, dep.sym.c_str(), item->id, item->symbol.c_str());
 						}
-						else if (!process_symbol(task, cache, dep.item.get(), dep_dyn_item)) {
+						else if (!process_symbol(task, cache, dep.item, dep_dyn_item)) {
 							/* Now started, but has events pending */
 							ret = false;
 							msg_debug_cache_task_lambda("started check of %d(%s) symbol "
@@ -801,13 +801,13 @@ auto symcache_runtime::process_item_rdeps(struct rspamd_task *task, cache_item *
 				msg_debug_cache_task ("check item %d(%s) rdep of %s ",
 						rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
 
-				if (!check_item_deps(task, *cache_ptr, rdep.item.get(), dyn_item, false)) {
+				if (!check_item_deps(task, *cache_ptr, rdep.item, dyn_item, false)) {
 					msg_debug_cache_task ("blocked execution of %d(%s) rdep of %s "
 										  "unless deps are resolved",
 							rdep.item->id, rdep.item->symbol.c_str(), item->symbol.c_str());
 				}
 				else {
-					process_symbol(task, *cache_ptr, rdep.item.get(),
+					process_symbol(task, *cache_ptr, rdep.item,
 							dyn_item);
 				}
 			}

@@ -183,8 +183,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 						auto *parent = get_parent_mut(cache);
 
 						if (parent) {
-							dit->rdeps.emplace_back(parent->getptr(), dep.sym, parent->id, -1);
-							dep.item = dit->getptr();
+							dit->rdeps.emplace_back(parent, parent->symbol, parent->id, -1);
+							dep.item = dit;
 							dep.id = dit->id;
 
 							msg_debug_cache ("added reverse dependency from %d on %d", parent->id,
@@ -192,9 +192,9 @@ auto cache_item::process_deps(const symcache &cache) -> void
 						}
 					}
 					else {
-						dep.item = dit->getptr();
+						dep.item = dit;
 						dep.id = dit->id;
-						dit->rdeps.emplace_back(getptr(), dep.sym, id, -1);
+						dit->rdeps.emplace_back(this, symbol, id, -1);
 						msg_debug_cache ("added reverse dependency from %d on %d", id,
 								dit->id);
 					}
@@ -525,7 +525,7 @@ auto cache_item::get_numeric_augmentation(std::string_view name) const -> std::o
 auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 {
 	if (parent) {
-		return parent.get();
+		return parent;
 	}
 
 	return cache.get_item_by_id(parent_id, false);
@@ -534,7 +534,7 @@ auto virtual_item::get_parent(const symcache &cache) const -> const cache_item *
 auto virtual_item::get_parent_mut(const symcache &cache) -> cache_item *
 {
 	if (parent) {
-		return parent.get();
+		return parent;
 	}
 
 	return const_cast<cache_item *>(cache.get_item_by_id(parent_id, false));
@@ -549,7 +549,7 @@ auto virtual_item::resolve_parent(const symcache &cache) -> bool
 	auto item_ptr = cache.get_item_by_id(parent_id, true);
 
 	if (item_ptr) {
-		parent = const_cast<cache_item *>(item_ptr)->getptr();
+		parent = const_cast<cache_item *>(item_ptr);
 
 		return true;
 	}

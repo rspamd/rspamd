@@ -151,12 +151,12 @@ auto symcache::init() -> bool
 
 		auto &additional_vec = get_item_specific_vector(*deleted_element_refcount);
 #if defined(__cpp_lib_erase_if)
-		std::erase_if(additional_vec, [id_to_disable](const cache_item_ptr &elt) {
+		std::erase_if(additional_vec, [id_to_disable](cache_item *elt) {
 			return elt->id == id_to_disable;
 		});
 #else
 		auto it = std::remove_if(additional_vec.begin(),
-		additional_vec.end(), [id_to_disable](const cache_item_ptr &elt) {
+		additional_vec.end(), [id_to_disable](cache_item *elt) {
 			return elt->id == id_to_disable;
 		});
 		additional_vec.erase(it, additional_vec.end());
@@ -499,7 +499,7 @@ auto symcache::get_item_by_name(std::string_view name, bool resolve_parent) cons
 		return it->second->get_parent(*this);
 	}
 
-	return it->second.get();
+	return it->second;
 }
 
 auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) const -> cache_item *
@@ -514,7 +514,7 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 		return (cache_item *) it->second->get_parent(*this);
 	}
 
-	return it->second.get();
+	return it->second;
 }
 
 auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void
@@ -523,7 +523,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 	const auto &source = items_by_id[id_from];
 	g_assert (source.get() != nullptr);
 
-	source->deps.emplace_back(cache_item_ptr{nullptr},
+	source->deps.emplace_back(nullptr,
 			std::string(to),
 			id_from,
 			-1);
@@ -534,7 +534,7 @@ auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_f
 		/* We need that for settings id propagation */
 		const auto &vsource = items_by_id[virtual_id_from];
 		g_assert (vsource.get() != nullptr);
-		vsource->deps.emplace_back(cache_item_ptr{nullptr},
+		vsource->deps.emplace_back(nullptr,
 				std::string(to),
 				-1,
 				virtual_id_from);
@@ -557,7 +557,7 @@ auto symcache::resort() -> void
 			total_hits += it->st->total_hits;
 			/* Unmask topological order */
 			it->order = 0;
-			ord->d.emplace_back(it);
+			ord->d.emplace_back(it->getptr());
 		}
 	}
 
@@ -614,7 +614,7 @@ auto symcache::resort() -> void
 
 		for (const auto &dep: it->deps) {
 			msg_debug_cache_lambda("visiting dep: %s (%d)", dep.item->symbol.c_str(), cur_order + 1);
-			rec(dep.item.get(), cur_order + 1, rec);
+			rec(dep.item, cur_order + 1, rec);
 		}
 
 		it->order = cur_order;
@@ -686,7 +686,7 @@ auto symcache::resort() -> void
 	constexpr auto append_items_vec = [](const auto &vec, auto &out) {
 		for (const auto &it: vec) {
 			if (it) {
-				out.emplace_back(it);
+				out.emplace_back(it->getptr());
 			}
 		}
 	};
@@ -700,7 +700,7 @@ auto symcache::resort() -> void
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
 	for (const auto [i, it] : rspamd::enumerate(ord->d)) {
-		ord->by_symbol[it->get_name()] = i;
+		ord->by_symbol.emplace(it->get_name(), i);
 		ord->by_cache_id[it->id] = i;
 	}
 	/* Finally set the current order */
@@ -768,9 +768,9 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 			priority, func, user_data,
 			real_type_pair.first, real_type_pair.second);
 
-	items_by_symbol[item->get_name()] = item;
-	get_item_specific_vector(*item).push_back(item);
-	items_by_id.emplace(id, item);
+	items_by_symbol.emplace(item->get_name(), item.get());
+	get_item_specific_vector(*item).push_back(item.get());
+	items_by_id.emplace(id, std::move(item)); // Takes ownership
 
 	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
 		cksum = t1ha(name.data(), name.size(), cksum);
@@ -813,11 +813,11 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 			id,
 			std::string{name},
 			parent_id, real_type_pair.first, real_type_pair.second);
-	const auto &parent = items_by_id[parent_id];
-	parent->add_child(item);
-	items_by_symbol[item->get_name()] = item;
-	get_item_specific_vector(*item).push_back(item);
-	items_by_id.emplace(id, item);
+	const auto &parent = items_by_id[parent_id].get();
+	parent->add_child(item.get());
+	items_by_symbol.emplace(item->get_name(), item.get());
+	get_item_specific_vector(*item).push_back(item.get());
+	items_by_id.emplace(id, std::move(item)); // Takes ownership
 
 	return id;
 }
@@ -1194,12 +1194,12 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	auto log_func = RSPAMD_LOG_FUNC;
 	ankerl::unordered_dense::set<const cache_item *> seen_items;
 
-	auto get_item_timeout = [](const cache_item_ptr &it) {
+	auto get_item_timeout = [](cache_item *it) {
 		return it->get_numeric_augmentation("timeout").value_or(0.0);
 	};
 
 	/* This function returns the timeout for an item and all it's dependencies */
-	auto get_filter_timeout = [&](const cache_item_ptr &it, auto self) -> double {
+	auto get_filter_timeout = [&](cache_item *it, auto self) -> double {
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
@@ -1241,7 +1241,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 
 			if (timeout > max_timeout) {
 				max_timeout = timeout;
-				max_elt = it.get();
+				max_elt = it;
 			}
 		}
 
@@ -1274,9 +1274,9 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 
 		if (timeout > max_filters_timeout) {
 			max_filters_timeout = timeout;
-			if (!seen_items.contains(it.get())) {
-				elts.emplace_back(timeout, it.get());
-				seen_items.insert(it.get());
+			if (!seen_items.contains(it)) {
+				elts.emplace_back(timeout, it);
+				seen_items.insert(it);
 			}
 		}
 	}

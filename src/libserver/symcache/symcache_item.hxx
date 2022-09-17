@@ -109,9 +109,9 @@ public:
 
 class normal_item {
 private:
-	symbol_func_t func;
-	void *user_data;
-	std::vector<cache_item_ptr> virtual_children;
+	symbol_func_t func = nullptr;
+	void *user_data = nullptr;
+	std::vector<cache_item *> virtual_children;
 	std::vector<item_condition> conditions;
 public:
 	explicit normal_item(symbol_func_t _func, void *_user_data) : func(_func), user_data(_user_data)
@@ -137,19 +137,19 @@ public:
 		return user_data;
 	}
 
-	auto add_child(const cache_item_ptr &ptr) -> void {
+	auto add_child(cache_item *ptr) -> void {
 		virtual_children.push_back(ptr);
 	}
 
-	auto get_childen() const -> const std::vector<cache_item_ptr>& {
+	auto get_childen() const -> const std::vector<cache_item *>& {
 		return virtual_children;
 	}
 };
 
 class virtual_item {
 private:
-	int parent_id;
-	cache_item_ptr parent;
+	int parent_id = -1;
+	cache_item *parent = nullptr;
 public:
 	explicit virtual_item(int _parent_id) : parent_id(_parent_id)
 	{
@@ -162,14 +162,14 @@ public:
 };
 
 struct cache_dependency {
-	cache_item_ptr item; /* Real dependency */
+	cache_item *item; /* Real dependency */
 	std::string sym; /* Symbolic dep name */
 	int id; /* Real from */
 	int vid; /* Virtual from */
 public:
 	/* Default piecewise constructor */
-	cache_dependency(cache_item_ptr _item, std::string _sym, int _id, int _vid) :
-			item(std::move(_item)), sym(std::move(_sym)), id(_id), vid(_vid)
+	explicit cache_dependency(cache_item *_item, std::string _sym, int _id, int _vid) :
+			item(_item), sym(std::move(_sym)), id(_id), vid(_vid)
 	{
 	}
 };
@@ -236,9 +236,10 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	[[nodiscard]] static auto create_with_function(rspamd_mempool_t *pool,
+	 template <typename T>
+	 static auto create_with_function(rspamd_mempool_t *pool,
 												   int id,
-												   std::string &&name,
+												   T &&name,
 												   int priority,
 												   symbol_func_t func,
 												   void *user_data,
@@ -246,7 +247,7 @@ public:
 												   int flags) -> cache_item_ptr
 	{
 		return std::shared_ptr<cache_item>(new cache_item(pool,
-				id, std::move(name), priority,
+				id, std::forward<T>(name), priority,
 				func, user_data,
 				type, flags));
 	}
@@ -260,21 +261,22 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	[[nodiscard]] static auto create_with_virtual(rspamd_mempool_t *pool,
+	template <typename T>
+	static auto create_with_virtual(rspamd_mempool_t *pool,
 												  int id,
-												  std::string &&name,
+												  T &&name,
 												  int parent,
 												  symcache_item_type type,
 												  int flags) -> cache_item_ptr
 	{
-		return std::shared_ptr<cache_item>(new cache_item(pool, id, std::move(name),
+		return std::shared_ptr<cache_item>(new cache_item(pool, id, std::forward<T>(name),
 				parent, type, flags));
 	}
 
 	/**
 	 * Share ownership on the item
-	 * @return
-	 */
+ 	 * @return
+ 	 */
 	auto getptr() -> cache_item_ptr
 	{
 		return shared_from_this();
@@ -435,7 +437,7 @@ public:
 	 * Add a virtual symbol as a child of some normal symbol
 	 * @param ptr
 	 */
-	auto add_child(const cache_item_ptr &ptr) -> void {
+	auto add_child(cache_item *ptr) -> void {
 		if (std::holds_alternative<normal_item>(specific)) {
 			auto &filter_data = std::get<normal_item>(specific);
 
@@ -451,7 +453,7 @@ public:
 	 * @param ptr
 	 * @return
 	 */
-	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item_ptr>>> {
+	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item *>>> {
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
