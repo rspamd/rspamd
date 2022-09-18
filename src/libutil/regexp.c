@@ -116,28 +116,33 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 	if (re) {
 		if (re->raw_re && re->raw_re != re->re) {
 #ifndef WITH_PCRE2
-#ifdef HAVE_PCRE_JIT
+			/* PCRE1 version */
+# ifdef HAVE_PCRE_JIT
 			if (re->raw_extra) {
 				pcre_free_study (re->raw_extra);
 			}
-#endif
+# endif
 #else
-			if (re->mcontext) {
-				pcre2_match_context_free (re->mcontext);
+			/* PCRE 2 version */
+			if (re->raw_mcontext) {
+				pcre2_match_context_free (re->raw_mcontext);
 			}
 #endif
 			PCRE_FREE (re->raw_re);
 		}
+
 		if (re->re) {
 #ifndef WITH_PCRE2
-#ifdef HAVE_PCRE_JIT
+			/* PCRE1 version */
+# ifdef HAVE_PCRE_JIT
 			if (re->extra) {
 				pcre_free_study (re->extra);
 			}
-#endif
+# endif
 #else
-			if (re->raw_mcontext) {
-				pcre2_match_context_free (re->raw_mcontext);
+			/* PCRE 2 version */
+			if (re->mcontext) {
+				pcre2_match_context_free (re->mcontext);
 			}
 #endif
 			PCRE_FREE (re->re);
@@ -169,14 +174,17 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	pcre2_set_recursion_limit (r->mcontext, max_recursion_depth);
 	pcre2_set_match_limit (r->mcontext, max_backtrack);
 
-	if (r->re != r->raw_re) {
+	if (r->raw_re && r->re != r->raw_re) {
 		r->raw_mcontext = pcre2_match_context_create (NULL);
 		g_assert (r->raw_mcontext != NULL);
 		pcre2_set_recursion_limit (r->raw_mcontext, max_recursion_depth);
 		pcre2_set_match_limit (r->raw_mcontext, max_backtrack);
 	}
-	else {
+	else if (r->raw_re) {
 		r->raw_mcontext = r->mcontext;
+	}
+	else {
+		r->raw_mcontext = NULL;
 	}
 
 #ifdef HAVE_PCRE_JIT
