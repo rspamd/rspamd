@@ -599,7 +599,6 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			}
 
 			lua_settop (L, top);
-
 			TCP_RELEASE (cbd);
 
 			callback_called = TRUE;
@@ -624,7 +623,6 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	}
 
 	va_end (ap);
-
 	lua_thread_pool_restore_callback (&cbs);
 }
 
@@ -1368,6 +1366,7 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 	const struct rdns_request_name *rn;
 
 	if (reply->code != RDNS_RC_NOERROR) {
+		TCP_RETAIN (cbd);
 		rn = rdns_request_get_name (reply->request, NULL);
 		lua_tcp_push_error (cbd, TRUE, "unable to resolve host: %s",
 				rn->name);
@@ -1392,6 +1391,7 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 		rspamd_inet_address_set_port (cbd->addr, cbd->port);
 
 		if (!lua_tcp_make_connection (cbd)) {
+			TCP_RETAIN (cbd);
 			lua_tcp_push_error (cbd, TRUE, "unable to make connection to the host %s",
 					rspamd_inet_address_to_string (cbd->addr));
 			TCP_RELEASE (cbd);
@@ -2069,6 +2069,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 			if (!rspamd_dns_resolver_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
+				cbd->item = NULL; /* We have not registered watcher */
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
 				TCP_RELEASE (cbd);
