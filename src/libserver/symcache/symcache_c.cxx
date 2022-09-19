@@ -639,11 +639,19 @@ rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
 
 	auto *static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
-	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
+	msg_debug_cache_task("decrease async events counter for %s(%d) = %d - 1; "
 						 "subsystem %s (%s)",
 			static_item->symbol.c_str(), static_item->id,
 			real_dyn_item->async_events, subsystem, loc);
-	g_assert(real_dyn_item->async_events > 0);
+
+	if (G_UNLIKELY(real_dyn_item->async_events == 0)) {
+		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero; "
+							 "subsystem %s (%s)",
+				static_item->symbol.c_str(), static_item->id,
+				real_dyn_item->async_events, subsystem, loc);
+		g_abort();
+		g_assert_not_reached();
+	}
 
 	return --real_dyn_item->async_events;
 }
