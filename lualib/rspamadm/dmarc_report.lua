@@ -291,8 +291,8 @@ local function process_rua(dmarc_domain, rua)
 
   -- Remove size limitation, as we don't care about them
   local addrs = {}
-  for _,a in ipairs(parts) do
-    local u = rspamd_url.create(pool, a:gsub('!%d+[kmg]?$', ''))
+  for _, rua_part in ipairs(parts) do
+    local u = rspamd_url.create(pool, rua_part:gsub('!%d+[kmg]?$', ''))
     if u and (u:get_protocol() or '') == 'mailto' and u:get_user() then
       -- Check each address for sanity
       if dmarc_domain == u:get_tld() or dmarc_domain == u:get_host() then
@@ -310,7 +310,7 @@ local function process_rua(dmarc_domain, rua)
         })
 
         if not is_ok then
-          logger.errx('cannot resolve %s: %s; exclude %s', resolve_str, results, a)
+          logger.errx('cannot resolve %s: %s; exclude %s', resolve_str, results, rua_part)
         else
           local found = false
           for _,t in ipairs(results) do
@@ -440,7 +440,7 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
     }
     for i=cur_batch,next_start-1 do
       local report = reports[i]
-      lua_smtp.sendmail({
+      local send_opts = {
         ev_base = rspamadm_ev_base,
         session = rspamadm_session,
         config = rspamd_config,
@@ -450,7 +450,9 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
         from = report_settings.email,
         recipients = report.rcpts,
         helo = report_settings.helo or 'rspamd.localhost',
-      },
+      }
+
+      lua_smtp.sendmail(send_opts,
           report.message,
           gen_sendmail_cb(report, gen_args))
     end
