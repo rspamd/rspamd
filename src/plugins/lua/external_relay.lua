@@ -159,6 +159,11 @@ strategies.hostname_map = function(rule)
       return
     end
 
+    if not hostname_map:get_key(from_hn) then
+      lua_util.debugm(N, task, 'sender\'s hostname (%s) is not a relay', from_hn)
+      return
+    end
+
     local rcvd_hdrs = task:get_received_headers()
     -- Try find sending hostname in Received headers
     for _, rcvd in ipairs(rcvd_hdrs) do
