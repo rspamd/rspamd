@@ -236,6 +236,9 @@ local function avast_rest_check(task, content, digest, rule, maybe_part)
       else
         -- Parse the response
         if upstream then upstream:ok() end
+
+        local cached = {}
+
         if code ~= 200 then
           rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
           common.yield_result(task, rule, string.format('Bad HTTP code: %s', code), 1.0, 'fail', maybe_part)
@@ -304,7 +307,7 @@ local function avast_rest_check(task, content, digest, rule, maybe_part)
             end
           end
         else
-          table.insert(threat_tbl, 'OK')
+          table.insert(cached, 'OK')
           if rule.log_clean then
             rspamd_logger.infox(task, '%s: message or mime_part is clean',
                 rule.log_prefix)
@@ -316,13 +319,14 @@ local function avast_rest_check(task, content, digest, rule, maybe_part)
 
         if lua_util.nkeys(threat_tbl) > 0 then
           for v,c in pairs(threat_tbl) do
+            table.insert(cached, v)
             if type(c) == 'string' then
               common.yield_result(task, rule, v, 1.0, c, maybe_part)
             else
               common.yield_result(task, rule, v, 1.0, nil, maybe_part)
             end
           end
-          common.save_cache(task, digest, rule, threat_tbl, 1.0, maybe_part)
+          common.save_cache(task, digest, rule, cached, 1.0, maybe_part)
         end
       end
     end
