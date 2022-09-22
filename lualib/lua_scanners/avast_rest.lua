@@ -60,7 +60,6 @@ local function avast_rest_config(opts)
       --heuristics = 40,
       --detections = false,
     },
-
   }
 
   default_conf = lua_util.override_defaults(default_conf, opts)
@@ -268,27 +267,38 @@ local function avast_rest_check(task, content, digest, rule, maybe_part)
                 end
               end
             end
+
             if r.warning_id then
-              -- 42110 - msg: The file is a decompression bomb
               -- 42056 - msg: Archive is password protected
+              -- 42110 - msg: The file is a decompression bomb
               -- 42125 - msg: ZIP archive is corrupted
-              if tostring(r.warning_id) == '42125' then
+              -- 42140 - msg: ISO archive is corrupted
+              -- 42144 - msg: OLE archive is corrupted
+
+              if tostring(r.warning_id) == '42056' then
+                rspamd_logger.warnx(task, '%s: PASSWORD warning: id: %s - msg: %s',
+                rule.log_prefix, r.warning_id, r.warning_str)
+                  threat_tbl['ENCRYPTED'] = 'encrypted'
+              elseif tostring(r.warning_id) == '42110' then
+                rspamd_logger.warnx(task, '%s: ZIP BOMB warning: id: %s - msg: %s',
+                rule.log_prefix, r.warning_id, r.warning_str)
+                if rule.warnings_as_threat then
+                  threat_tbl['WARN:'..r.warning_str] = true
+                end
+              elseif tostring(r.warning_id) == '42125'
+                or tostring(r.warning_id) == '42140'
+                or tostring(r.warning_id) == '42144'
+                then
                 rspamd_logger.warnx(task, '%s: CORRUPT warning: id: %s - msg: %s',
                   rule.log_prefix, r.warning_id, r.warning_str)
                 if rule.warnings_as_threat then
-                  threat_tbl[r.warning_str] = 'fail'
-                end
-              elseif tostring(r.warning_id) == '42056' then
-                rspamd_logger.warnx(task, '%s: PASSWORD warning: id: %s - msg: %s',
-                rule.log_prefix, r.warning_id, r.warning_str)
-                if rule.warnings_as_threat then
-                  threat_tbl['ENCRYPTED'] = 'encrypted'
+                  threat_tbl['WARN:'..r.warning_str] = 'fail'
                 end
               else
                 rspamd_logger.warnx(task, '%s: generic warning: id: %s - msg: %s',
                 rule.log_prefix, r.warning_id, r.warning_str)
                 if rule.warnings_as_threat then
-                  threat_tbl[r.warning_str] = true
+                  threat_tbl['WARN:'..r.warning_str] = 'fail'
                 end
               end
             end
