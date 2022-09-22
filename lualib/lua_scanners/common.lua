@@ -291,6 +291,11 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
     if err then
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
           rule.detection_category, to_save, key, err)
+    elseif tostring(to_save) ~= 'OK' then
+      rspamd_logger.infox(task, 'Found AV threat: %s - %s - %s - %s',
+        rule.name, rule.detection_category, to_save, digest)
+      lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
+        rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
     else
       lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
         rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
@@ -503,6 +508,7 @@ end
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
+exports.gen_extension = gen_extension
 exports.condition_check_and_continue = need_check
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
