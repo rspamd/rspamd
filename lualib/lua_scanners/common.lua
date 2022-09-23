@@ -291,11 +291,6 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
     if err then
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
           rule.detection_category, to_save, key, err)
-    elseif tostring(to_save) ~= 'OK' then
-      rspamd_logger.infox(task, 'Found AV threat: %s - %s - %s - %s',
-        rule.name, rule.detection_category, to_save, digest)
-      lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
-        rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
     else
       lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
         rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
@@ -386,7 +381,8 @@ local function gen_extension(fname)
 
   local ext = {}
   for n = 1, 2 do
-      ext[n] = #filename_parts > n and string.lower(filename_parts[#filename_parts + 1 - n]) or nil
+      ext[n] = #filename_parts > n 
+        and string.lower(string.gsub(filename_parts[#filename_parts + 1 - n],'[%c%s%p]','')) or nil
   end
   return ext[1],ext[2],filename_parts
 end
