@@ -632,16 +632,19 @@ exports.message_to_ucl = function(task, stringify_content)
   result.parts = {}
   for _,part in ipairs(parts) do
     if not part:is_multipart() and not part:is_message() then
-      local p = {
-        size = part:get_length(),
-        type = string.format('%s/%s', part:get_type()),
-        detected_type = string.format('%s/%s', part:get_detected_type()),
-        filename = part:get_filename(),
-        content = maybe_stringify_f(part:get_content()),
-        headers =  part:get_headers(true) or E,
-        boundary = part:get_enclosing_boundary(),
-      }
-      table.insert(result.parts, p)
+      local l = part:get_length()
+      if l > 0 then
+        local p = {
+          size = l,
+          type = string.format('%s/%s', part:get_type()),
+          detected_type = string.format('%s/%s', part:get_detected_type()),
+          filename = part:get_filename(),
+          content = maybe_stringify_f(part:get_content()),
+          headers =  part:get_headers(true) or E,
+          boundary = part:get_enclosing_boundary(),
+        }
+        table.insert(result.parts, p)
+      end
     else
       -- Service part: multipart container or message/rfc822
       local p = {
