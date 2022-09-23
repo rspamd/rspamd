@@ -484,7 +484,16 @@ ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_flags_t flags)
 		str = lua_tolstring (L, idx, &sz);
 
 		if (str) {
-			obj = ucl_object_fromstring_common (str, sz, flags);
+			/*
+			 * ucl_object_fromstring_common has a `logic` to use strlen if sz is zero
+			 * which is totally broken...
+			 */
+			if (sz > 0) {
+				obj = ucl_object_fromstring_common(str, sz, flags);
+			}
+			else {
+				obj = ucl_object_fromstring_common("", sz, flags);
+			}
 		}
 		else {
 			obj = ucl_object_typed_new (UCL_NULL);
@@ -511,7 +520,12 @@ ucl_object_lua_fromelt (lua_State *L, int idx, ucl_string_flags_t flags)
 			struct _rspamd_lua_text *t = lua_touserdata (L, idx);
 
 			if (t) {
-				obj = ucl_object_fromstring_common(t->start, t->len, 0);
+				if (t->len >0) {
+					obj = ucl_object_fromstring_common(t->start, t->len, 0);
+				}
+				else {
+					obj = ucl_object_fromstring_common("", 0, 0);
+				}
 
 				/* Binary text */
 				if (t->flags & (1u << 5u)) {
