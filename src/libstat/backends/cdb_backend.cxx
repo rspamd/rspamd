@@ -78,7 +78,7 @@ public:
 		}
 		else {
 			/* Not existing, make a weak ptr and return the original */
-			elts.emplace(path,std::weak_ptr<struct cdb>(cdbp));
+			elts.emplace(path, std::weak_ptr<struct cdb>(cdbp));
 			return cdbp;
 		}
 	}
@@ -92,6 +92,7 @@ private:
 	struct cdb_deleter {
 		void operator()(struct cdb *c) const {
 			cdb_free(c);
+			delete c;
 		}
 	};
 };
@@ -101,7 +102,7 @@ static cdb_shared_storage cdb_shared_storage;
 class ro_backend final {
 public:
 	explicit ro_backend(struct rspamd_statfile *_st, cdb_shared_storage::cdb_element_t _db)
-			: st(_st), db(_db) {}
+			: st(_st), db(std::move(_db)) {}
 	ro_backend() = delete;
 	ro_backend(const ro_backend &) = delete;
 	ro_backend(ro_backend &&other) noexcept {
@@ -328,7 +329,7 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 				path));
 	}
 
-	ro_backend bk{st, cdbp};
+	ro_backend bk{st, std::move(cdbp)};
 
 	auto res = bk.load_cdb();
 
