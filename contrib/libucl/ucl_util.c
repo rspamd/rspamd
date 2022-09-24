@@ -2604,6 +2604,7 @@ ucl_object_merge (ucl_object_t *top, ucl_object_t *elt, bool copy)
 						if (!ucl_object_merge (found, cp, copy)) {
 							return false;
 						}
+						ucl_object_unref (cp);
 					}
 					else {
 						ucl_hash_replace (top->value.ov, found, cp);
@@ -2635,6 +2636,7 @@ ucl_object_merge (ucl_object_t *top, ucl_object_t *elt, bool copy)
 					if (!ucl_object_merge (found, cp, copy)) {
 						return false;
 					}
+					ucl_object_unref (cp);
 				}
 				else {
 					ucl_hash_replace (top->value.ov, found, cp);
