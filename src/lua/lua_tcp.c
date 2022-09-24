@@ -2096,7 +2096,30 @@ lua_tcp_close (lua_State *L)
 	}
 
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
-	TCP_RELEASE (cbd);
+
+	if (cbd->ssl_conn) {
+		/* TODO: postpone close in case ssl is used ! */
+		rspamd_ssl_connection_free (cbd->ssl_conn);
+		cbd->ssl_conn = NULL;
+	}
+
+	if (cbd->fd != -1) {
+		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
+		close (cbd->fd);
+		cbd->fd = -1;
+	}
+
+	if (cbd->addr) {
+		rspamd_inet_address_free (cbd->addr);
+		cbd->addr = NULL;
+	}
+
+	if (cbd->up) {
+		rspamd_upstream_unref(cbd->up);
+		cbd->up = NULL;
+	}
+	/* Do not release refcount as it will be handled elsewhere */
+	/* TCP_RELEASE (cbd); */
 
 	return 0;
 }
