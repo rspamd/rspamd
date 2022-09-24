@@ -5864,19 +5864,25 @@ lua_task_set_milter_reply (lua_State *L)
 						ucl_object_t *ar = ucl_object_typed_new (UCL_ARRAY);
 
 						ucl_array_append (ar, ucl_object_ref (existing));
-						ucl_object_replace_key ((ucl_object_t *)add_hdrs,
+						/* Avoid double refcount */
+						key = ucl_object_keyl (existing, &klen);
+						ucl_object_delete_keyl ((ucl_object_t *)add_hdrs, key, klen);
+						ucl_object_insert_key ((ucl_object_t *)add_hdrs,
 								ar, key, klen, false);
 					}
 				}
 			}
 
-			ucl_object_merge (prev, reply, false);
-			ucl_object_unref (reply);
+			if (!ucl_object_merge (prev, reply, false)) {
+				msg_err_task ("internal error: cannot merge two objects when setting milter reply!");
+			}
+			ucl_object_unref(reply);
 		}
 		else {
 			rspamd_mempool_set_variable (task->task_pool,
 					RSPAMD_MEMPOOL_MILTER_REPLY,
-					reply, (rspamd_mempool_destruct_t) ucl_object_unref);
+					reply,
+					(rspamd_mempool_destruct_t) ucl_object_unref);
 		}
 	}
 	else {
