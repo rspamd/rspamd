@@ -2069,6 +2069,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 			if (!rspamd_dns_resolver_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
+				cbd->item = NULL; /* We have not registered watcher */
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
 				TCP_RELEASE (cbd);
