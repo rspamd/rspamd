@@ -1060,13 +1060,6 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 
 	if (addr->af == AF_UNIX) {
 		sa = (const struct sockaddr *)&addr->u.un->addr;
-
-		struct sockaddr_un ssun;
-		strcpy(ssun.sun_path, tmpnam(NULL));
-		ssun.sun_len = SUN_LEN(&ssun);
-		ssun.sun_family = AF_UNIX;
-		/* Also bind unix client sockets to allow unconnected reply from that side */
-		r = bind (fd, &ssun, ssun.sun_len);
 	}
 	else {
 		sa = &addr->u.in.addr.sa;
