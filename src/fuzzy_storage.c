@@ -252,6 +252,10 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 	struct rspamd_leaky_bucket_elt *elt;
 	ev_tstamp now;
 
+	if (!session->addr) {
+		return TRUE;
+	}
+
 	if (session->ctx->ratelimit_whitelist != NULL) {
 		if (rspamd_match_radix_map_addr (session->ctx->ratelimit_whitelist,
 				session->addr) != NULL) {
@@ -358,7 +362,7 @@ rspamd_fuzzy_check_write (struct fuzzy_session *session)
 		return FALSE;
 	}
 
-	if (session->ctx->update_ips != NULL) {
+	if (session->ctx->update_ips != NULL && session->addr) {
 		if (rspamd_match_radix_map_addr (session->ctx->update_ips,
 				session->addr) == NULL) {
 			return FALSE;
@@ -870,7 +874,12 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		/* function */
 		lua_rawgeti (L, LUA_REGISTRYINDEX, session->ctx->lua_post_handler_cbref);
 		/* client IP */
-		rspamd_lua_ip_push (L, session->addr);
+		if (session->addr) {
+			rspamd_lua_ip_push(L, session->addr);
+		}
+		else {
+			lua_pushnil (L);
+		}
 		/* client command */
 		lua_pushinteger (L, cmd->cmd);
 		/* command value (push as rspamd_text) */
@@ -1114,7 +1123,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		return;
 	}
 
-	if (session->key_stat) {
+	if (session->key_stat && session->addr) {
 		ip_stat = rspamd_lru_hash_lookup (session->key_stat->last_ips,
 				session->addr, -1);
 
@@ -1575,6 +1584,13 @@ fuzzy_session_destroy (gpointer d)
 #define MSGVEC_LEN 1
 #endif
 
+union sa_union {
+	struct sockaddr sa;
+	struct sockaddr_in s4;
+	struct sockaddr_in6 s6;
+	struct sockaddr_un su;
+	struct sockaddr_storage ss;
+};
 /*
  * Accept new connection and construct task
  */
@@ -1587,7 +1603,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 	guint64 *nerrors;
 	struct iovec iovs[MSGVEC_LEN];
 	guint8 bufs[MSGVEC_LEN][FUZZY_INPUT_BUFLEN];
-	struct sockaddr_storage peer_sa[MSGVEC_LEN];
+	union sa_union peer_sa[MSGVEC_LEN];
 	socklen_t salen = sizeof (peer_sa[0]);
 #ifdef HAVE_RECVMMSG
 #define MSG_FIELD(msg, field) msg.msg_hdr.field
@@ -1643,13 +1659,17 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 			for (int i = 0; i < r; i ++) {
 				rspamd_inet_addr_t *client_addr;
 
-				client_addr = rspamd_inet_address_from_sa (MSG_FIELD(msg[i], msg_name),
-						MSG_FIELD(msg[i], msg_namelen));
-
-				if (!rspamd_fuzzy_check_client (worker->ctx, client_addr)) {
-					/* Disallow forbidden clients silently */
-					rspamd_inet_address_free (client_addr);
-					continue;
+				if (MSG_FIELD(msg[i], msg_namelen) >= sizeof(struct sockaddr)) {
+					client_addr = rspamd_inet_address_from_sa(MSG_FIELD(msg[i], msg_name),
+							MSG_FIELD(msg[i], msg_namelen));
+					if (!rspamd_fuzzy_check_client (worker->ctx, client_addr)) {
+						/* Disallow forbidden clients silently */
+						rspamd_inet_address_free (client_addr);
+						continue;
+					}
+				}
+				else {
+					client_addr = NULL;
 				}
 
 				session = g_malloc0 (sizeof (*session));
@@ -1676,18 +1696,20 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 					session->ctx->stat.invalid_requests ++;
 					msg_debug ("invalid fuzzy command of size %z received", r);
 
-					nerrors = rspamd_lru_hash_lookup (session->ctx->errors_ips,
-							session->addr, -1);
+					if (session->addr) {
+						nerrors = rspamd_lru_hash_lookup(session->ctx->errors_ips,
+								session->addr, -1);
 
-					if (nerrors == NULL) {
-						nerrors = g_malloc (sizeof (*nerrors));
-						*nerrors = 1;
-						rspamd_lru_hash_insert (session->ctx->errors_ips,
-								rspamd_inet_address_copy(session->addr, NULL),
-								nerrors, -1, -1);
-					}
-					else {
-						*nerrors = *nerrors + 1;
+						if (nerrors == NULL) {
+							nerrors = g_malloc(sizeof(*nerrors));
+							*nerrors = 1;
+							rspamd_lru_hash_insert(session->ctx->errors_ips,
+									rspamd_inet_address_copy(session->addr, NULL),
+									nerrors, -1, -1);
+						}
+						else {
+							*nerrors = *nerrors + 1;
+						}
 					}
 				}
 

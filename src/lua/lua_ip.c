@@ -588,11 +588,16 @@ rspamd_lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr)
 {
 	struct rspamd_lua_ip *ip, **pip;
 
-	ip = g_malloc0 (sizeof (struct rspamd_lua_ip));
-	ip->addr = rspamd_inet_address_copy(addr, NULL);
-	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-	rspamd_lua_setclass (L, "rspamd{ip}", -1);
-	*pip = ip;
+	if (addr) {
+		ip = g_malloc0(sizeof(struct rspamd_lua_ip));
+		ip->addr = rspamd_inet_address_copy(addr, NULL);
+		pip = lua_newuserdata(L, sizeof(struct rspamd_lua_ip *));
+		rspamd_lua_setclass(L, "rspamd{ip}", -1);
+		*pip = ip;
+	}
+	else {
+		lua_pushnil (L);
+	}
 }
 
 void
