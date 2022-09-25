@@ -20,6 +20,7 @@
 #include "ref.h"
 #include "unix-std.h"
 #include "zlib.h"
+#include "utlist.h"
 
 /***
  * @module rspamd_http
@@ -511,28 +512,40 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 		REF_RELEASE (cbd);
 	}
 	else {
-		if (reply->entries->type == RDNS_REQUEST_A) {
-			cbd->addr = rspamd_inet_address_new (AF_INET,
-					&reply->entries->content.a.addr);
-		}
-		else if (reply->entries->type == RDNS_REQUEST_AAAA) {
-			cbd->addr = rspamd_inet_address_new (AF_INET6,
-					&reply->entries->content.aaa.addr);
-		}
+		struct rdns_reply_entry *entry;
 
-		REF_RETAIN (cbd);
-		if (!lua_http_make_connection (cbd)) {
-			lua_http_push_error (cbd, "unable to make connection to the host");
-
-			if (cbd->ref.refcount > 1) {
-				REF_RELEASE (cbd);
+		DL_FOREACH(reply->entries, entry) {
+			if (entry->type == RDNS_REQUEST_A) {
+				cbd->addr = rspamd_inet_address_new(AF_INET,
+						&entry->content.a.addr);
+				break;
 			}
-
-			REF_RELEASE (cbd);
-
-			return;
+			else if (entry->type == RDNS_REQUEST_AAAA) {
+				cbd->addr = rspamd_inet_address_new(AF_INET6,
+						&entry->content.aaa.addr);
+				break;
+			}
 		}
-		REF_RELEASE (cbd);
+
+		if (cbd->addr == NULL) {
+			lua_http_push_error (cbd, "unable to resolve host: no records with such name");
+			REF_RELEASE (cbd);
+		}
+		else {
+			REF_RETAIN (cbd);
+			if (!lua_http_make_connection(cbd)) {
+				lua_http_push_error(cbd, "unable to make connection to the host");
+
+				if (cbd->ref.refcount > 1) {
+					REF_RELEASE (cbd);
+				}
+
+				REF_RELEASE (cbd);
+
+				return;
+			}
+			REF_RELEASE (cbd);
+		}
 	}
 
 	if (item) {
