@@ -1378,17 +1378,30 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 		 * We set this flag as it means that we have already registered the watcher
 		 * when started DNS query
 		 */
+		struct rdns_reply_entry *entry;
+
+		DL_FOREACH(reply->entries, entry) {
+			if (entry->type == RDNS_REQUEST_A) {
+				cbd->addr = rspamd_inet_address_new(AF_INET,
+						&entry->content.a.addr);
+				break;
+			}
+			else if (entry->type == RDNS_REQUEST_AAAA) {
+				cbd->addr = rspamd_inet_address_new(AF_INET6,
+						&entry->content.aaa.addr);
+				break;
+			}
+		}
+
+		if (cbd->addr == NULL){
+			rn = rdns_request_get_name (reply->request, NULL);
+			lua_tcp_push_error (cbd, TRUE, "unable to resolve host: %s; no records with this name",
+					rn->name);
+			TCP_RELEASE (cbd);
+			return;
+		}
+
 		cbd->flags |= LUA_TCP_FLAG_RESOLVED;
-
-		if (reply->entries->type == RDNS_REQUEST_A) {
-			cbd->addr = rspamd_inet_address_new (AF_INET,
-					&reply->entries->content.a.addr);
-		}
-		else if (reply->entries->type == RDNS_REQUEST_AAAA) {
-			cbd->addr = rspamd_inet_address_new (AF_INET6,
-					&reply->entries->content.aaa.addr);
-		}
-
 		rspamd_inet_address_set_port (cbd->addr, cbd->port);
 
 		if (!lua_tcp_make_connection (cbd)) {
