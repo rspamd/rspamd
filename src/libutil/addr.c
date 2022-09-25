@@ -1060,6 +1060,19 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 
 	if (addr->af == AF_UNIX) {
 		sa = (const struct sockaddr *)&addr->u.un->addr;
+
+		if (type == (int)SOCK_DGRAM) {
+			struct sockaddr ca;
+
+			memset (&ca, 0, sizeof(ca));
+			ca.sa_family = AF_UNIX;
+
+			r = bind (fd, &ca, sizeof (sa_family_t));
+			if (r == -1) {
+				msg_info ("unix socket client autobind failed: %s, '%s'",
+						addr->u.un->addr.sun_path, strerror (errno));
+			}
+		}
 	}
 	else {
 		sa = &addr->u.in.addr.sa;
