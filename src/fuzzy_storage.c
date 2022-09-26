@@ -363,6 +363,9 @@ rspamd_fuzzy_check_write (struct fuzzy_session *session)
 	}
 
 	if (session->ctx->update_ips != NULL && session->addr) {
+		if (rspamd_inet_address_get_af (session->addr) == AF_UNIX) {
+			return TRUE;
+		}
 		if (rspamd_match_radix_map_addr (session->ctx->update_ips,
 				session->addr) == NULL) {
 			return FALSE;

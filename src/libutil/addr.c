@@ -1060,6 +1060,19 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 
 	if (addr->af == AF_UNIX) {
 		sa = (const struct sockaddr *)&addr->u.un->addr;
+
+		if (type == (int)SOCK_DGRAM) {
+			struct sockaddr ca;
+
+			memset (&ca, 0, sizeof(ca));
+			ca.sa_family = AF_UNIX;
+
+			r = bind (fd, &ca, sizeof (sa_family_t));
+			if (r == -1) {
+				msg_info ("unix socket client autobind failed: %s, '%s'",
+						addr->u.un->addr.sun_path, strerror (errno));
+			}
+		}
 	}
 	else {
 		sa = &addr->u.in.addr.sa;
@@ -1667,7 +1680,8 @@ rspamd_inet_address_from_sa (const struct sockaddr *sa, socklen_t slen)
 	rspamd_inet_addr_t *addr;
 
 	g_assert (sa != NULL);
-	g_assert (slen >= sizeof (struct sockaddr));
+	/* Address of an AF_UNIX socket can be tiny */
+	g_assert (slen >= sizeof (sa_family_t) + 1);
 
 	addr = rspamd_inet_addr_create (sa->sa_family, NULL);
 
@@ -1676,12 +1690,13 @@ rspamd_inet_address_from_sa (const struct sockaddr *sa, socklen_t slen)
 		const struct sockaddr_un *un = (const struct sockaddr_un *)sa;
 
 		g_assert (slen >= SUN_LEN (un));
+		g_assert (slen <= sizeof (addr->u.un->addr));
 
-		rspamd_strlcpy (addr->u.un->addr.sun_path, un->sun_path,
-				sizeof (addr->u.un->addr.sun_path));
-#if defined(FREEBSD) || defined(__APPLE__)
-		addr->u.un->addr.sun_len = un->sun_len;
-#endif
+		/* sun_path can legally contain intermittent NULL bytes */
+		memcpy (&addr->u.un->addr, un, slen);
+
+		/* length of AF_UNIX addresses is variable */
+		addr->slen = slen;
 	}
 	else if (sa->sa_family == AF_INET) {
 		g_assert (slen >= sizeof (struct sockaddr_in));
