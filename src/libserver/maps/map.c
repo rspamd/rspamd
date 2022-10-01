@@ -1217,7 +1217,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	if (reply->code == RDNS_RC_NOERROR) {
 		DL_FOREACH (reply->entries, cur_rep) {
 			rspamd_inet_addr_t *addr;
-			addr = rspamd_inet_address_from_rnds (reply->entries);
+			addr = rspamd_inet_address_from_rnds (cur_rep);
 
 			if (addr != NULL) {
 				rspamd_inet_address_set_port (addr, cbd->data->port);
