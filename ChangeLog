@@ -1,3 +1,126 @@
+3.3: 01 Oct 2022
+  * [Conf] Add missing groups for whitelist module symbols
+  * [CritFix] Neural: Fix keys regression after #3968
+  * [Feature] Accept upstream in lua_tcp
+  * [Feature] Add ability to statically maintain disabled/enabled patterns
+  * [Feature] Add function to store upstreams for HTTP urls
+  * [Feature] Allow augmentations set in Lua API
+  * [Feature] Allow lua_http module to accept upstreams
+  * [Feature] Allow to limit write access to fuzzy storage by key
+  * [Feature] Allow to sort symbols output
+  * [Feature] Check content for binary stuff before dumping it to Lua
+  * [Feature] Implement symbols augmentations
+  * [Fix] Add missing flags
+  * [Fix] Add more sanity checks for rua in dmarc_report
+  * [Fix] Adjust length of the fuzzy checks for short text parts
+  * [Fix] Another try to fix add headers compatibility logic
+  * [Fix] Another try to fix race condition in the runtime destruction
+  * [Fix] Avoid cyclic references in symcache and fix memory leaks
+  * [Fix] Avoid overriding IP with Sender IP
+  * [Fix] BAD_REP_POLICIES did not trigger when message was classified as spam by Bayes
+  * [Fix] Bind AF_UNIX DGRAM client connection to annonymous address
+  * [Fix] Disable IPv6 lookups for Blocklist.de RBL
+  * [Fix] Distinguish dynamic and static items
+  * [Fix] Dkim: Ignore unknown DKIM kv pairs as stated in RFC
+  * [Fix] Dmarc report: Use local timezone instead of GMT
+  * [Fix] Do not exclude authenticated users from URIBL lookups
+  * [Fix] Empty envelopes should not be emitted as arrays (json+messagepack) when populated envelopes are objects. This greatly complicates decoding in strictly typed languages.
+  * [Fix] External_relay: Restore the originating hostname check
+  * [Fix] Fix DKIM keys with spaces still allowing errors on invalid base64
+  * [Fix] Fix copying of sockaddr_un addresses
+  * [Fix] Fix crash with cname replies
+  * [Fix] Fix dependencies propagation
+  * [Fix] Fix iteration over milter headers
+  * [Fix] Fix ordering when sorting symcache
+  * [Fix] Fix reading of the cached maps
+  * [Fix] Fix several issues with the HTTP keepalive parsing
+  * [Fix] Fix stack smashing
+  * [Fix] Fix synchronous auth/select in lua_redis
+  * [Fix] Fix various symcache issues
+  * [Fix] Ignore all (I hope) unknown DKIM signature KV pairs
+  * [Fix] Ignore directories in RarV5 archives
+  * [Fix] Libucl: avoid memory leak on objects merging
+  * [Fix] Lua_tcp: Another try to fix closing logic
+  * [Fix] Mempool: Fix alloc_array function to actually multiply nmembers by size
+  * [Fix] Only check allowed fuzzy worker update ips for non-unix sockets
+  * [Fix] Plug memory leak in regexp destruction with pcre2
+  * [Fix] Properly check the original email flag
+  * [Fix] Properly deal with `get_symbol/get_metric_symbol` ambiguity
+  * [Fix] Properly parse expressions atoms
+  * [Fix] Properly set `Host` in rspamd_proxy
+  * [Fix] Rbl: Fix received positioned checks
+  * [Fix] Remove check for a score with no symbol being registered
+  * [Fix] Same fix for lua_tcp
+  * [Fix] Skip cname records when processing SPF records
+  * [Fix] Skip sending dmarc reports in no-opt mode fixes https://github.com/rspamd/rspamd/issues/4241
+  * [Fix] Stop slow timer on task destruction
+  * [Fix] Symcache: Do not use C style comparators in C++ sorts
+  * [Fix] Try to avoid a corner case for `@` pattern
+  * [Fix] Try to fix dkim reputation adjustements
+  * [Fix] Try to fix passthrough results processing logic
+  * [Fix] Try to fix the mess with read only flag
+  * [Fix] Upstreams: Don't ignore revive_time config option
+  * [Fix] Use proper format string, sigh...
+  * [Fix] Use space category in ragel automata to resolve space characters
+  * [Fix] Zstd: Fix compression with the new Zstd API
+  * [Fix] milter_headers: Header fields may be inserted at wrong position.
+  * [Project] Add experimental HTTP statistics backend
+  * [Project] Add more methods for symbols addition
+  * [Project] Add raii_sink file helper
+  * [Project] Add some more methods
+  * [Project] Add symbols processing methods
+  * [Project] Allow `=` separated augmentations to be treated as kv pairs
+  * [Project] Allow to extract augmentation values
+  * [Project] Few more methods
+  * [Project] Fix on conditions
+  * [Project] Further efforts to make a more consistent architecture
+  * [Project] Further rework
+  * [Project] Further rework tracking
+  * [Project] Further split of the code
+  * [Project] Get rid of C style ctors/dtors
+  * [Project] Http_stat: Notice statfiles when creating runtime
+  * [Project] Implement dynamic items lookup and processing
+  * [Project] Implement item finalization
+  * [Project] Implement more methods
+  * [Project] Implement runtime creation
+  * [Project] Implement settings processing + some neats
+  * [Project] Implement some conditions checks
+  * [Project] Implement validation logic
+  * [Project] More methods
+  * [Project] Move runtime cache part to a separate unit
+  * [Project] Move some more methods
+  * [Project] Re-implement counters method
+  * [Project] Reimplement dependencies processing
+  * [Project] Remove obsoleted methods
+  * [Project] Remove old code (finally)
+  * [Project] Rework symbols execution
+  * [Project] Some more adjustments in symbols registration
+  * [Project] Start rewrite symcache in c++
+  * [Project] Support augmentations with values
+  * [Project] Symcache: Use ordered filters to avoid extra lookups
+  * [Rework] Another movement
+  * [Rework] Augmentations can now imply flags
+  * [Rework] Further steps
+  * [Rework] Further work on deps processing
+  * [Rework] Implement cache resorting
+  * [Rework] Isolate disable/enable logic for the configuration ucl objects
+  * [Rework] Move item implementation to a separate header
+  * [Rework] Multimap: Avoid prefilters usage where augmentations can be used
+  * [Rework] Pass upstream when sending TCP requests
+  * [Rework] Re-implement cache sorting
+  * [Rework] Reimplement saving/loading the cache items
+  * [Rework] Reiterate on priorities
+  * [Rework] Rework files structure
+  * [Rework] Rewrite rspamc in C++
+  * [Rework] Simplify scores check and extend it to pre/post filters
+  * [Rework] Switch minimum C++ standard version to C++20
+  * [Rework] Try to fix the mess with types & flags
+  * [Rework] Use another version of hash table from the same author
+  * [Rework] Use dynamic items for calling callbacks
+  * [Rework] Use dynamic items in the callbacks
+  * [Rework] Use hash map for id->symbol mappings
+  * [Rework] Use khash instead of uthash in rdns compression logic
+
 3.2: 26 Mar 2022
   * [Conf] Score MIME_OBFUSCATED_ARCHIVE to 8 points
   * [Conf] Set one_shot for URIBL rules by default
