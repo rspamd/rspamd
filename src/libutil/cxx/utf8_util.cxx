@@ -85,8 +85,10 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 	if (!zw_spaces.isFrozen()) {
 		/* Add zw spaces to the set */
 		zw_spaces.add(0x200B);
+		/* TODO: ZW non joiner, it might be used for ligatures, so it should possibly be excluded as well */
 		zw_spaces.add(0x200C);
-		zw_spaces.add(0x200D);
+		/* See github issue #4290 for explanation. It seems that the ZWJ has many legit use cases */
+		//zw_spaces.add(0x200D);
 		zw_spaces.add(0xFEF);
 		zw_spaces.add(0x00AD);
 		zw_spaces.freeze();
