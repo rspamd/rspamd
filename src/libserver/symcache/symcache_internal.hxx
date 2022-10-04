@@ -139,8 +139,8 @@ struct delayed_cache_condition {
 	int cbref;
 	lua_State *L;
 public:
-	delayed_cache_condition(std::string_view _sym, int _cbref, lua_State *_L) :
-		sym(_sym), cbref(_cbref), L(_L) {}
+	delayed_cache_condition(std::string_view sym, int cbref, lua_State *L) :
+		sym(sym), cbref(cbref), L(L) {}
 };
 
 class delayed_symbol_elt {
