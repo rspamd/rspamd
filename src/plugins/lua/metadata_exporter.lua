@@ -191,7 +191,7 @@ local formatters = {
     else
       for _, e in ipairs(mail_rcpt) do
         table.insert(display_emails, string.format('<%s>', e))
-        table.insert(mail_targets, mail_rcpt)
+        table.insert(mail_targets, e)
       end
     end
     if rule.email_alert_sender then
