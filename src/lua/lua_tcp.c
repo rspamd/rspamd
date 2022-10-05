@@ -602,6 +602,12 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 			TCP_RELEASE (cbd);
 
+			if ((cbd->flags & (LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) ==
+				(LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) {
+				/* A callback has called `close` method, so we need to release a refcount */
+				TCP_RELEASE (cbd);
+			}
+
 			callback_called = TRUE;
 		}
 
@@ -694,6 +700,12 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 
 		lua_settop (L, top);
 		TCP_RELEASE (cbd);
+
+		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) ==
+			(LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) {
+			/* A callback has called `close` method, so we need to release a refcount */
+			TCP_RELEASE (cbd);
+		}
 	}
 
 	lua_thread_pool_restore_callback (&cbs);
@@ -1134,6 +1146,12 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 					lua_settop (L, top);
 					TCP_RELEASE (cbd);
 					lua_thread_pool_restore_callback (&cbs);
+
+					if ((cbd->flags & (LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) ==
+						(LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) {
+						/* A callback has called `close` method, so we need to release a refcount */
+						TCP_RELEASE (cbd);
+					}
 				}
 			}
 		}
