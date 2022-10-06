@@ -25,6 +25,7 @@
 #cmakedefine HAVE_FCNTL_H        1
 #cmakedefine HAVE_FETCH_H        1
 #cmakedefine HAVE_FIPS_MODE      1
+#cmakedefine HAVE_FFSLL          1
 #cmakedefine HAVE_FLOCK          1
 #cmakedefine HAVE_FPATHCONF      1
 #cmakedefine HAVE_GETPAGESIZE    1

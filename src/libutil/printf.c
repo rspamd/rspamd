@@ -349,6 +349,36 @@ rspamd_uint64_print (guint64 in, gchar *out)
 	return ndigits;
 }
 
+static inline int
+rspamd_ffsll(long long n)
+{
+#ifdef __has_builtin
+# if __has_builtin(__builtin_ffsll)
+	return __builtin_ffsll(n);
+# elif __has_builtin(__builtin_ctzll)
+	if (n == 0) {
+		return 0;
+	}
+
+	return __builtin_ctzll(n) + 1;
+# endif
+#endif /* __has_builtin */
+
+#ifdef HAVE_FFSL
+	return ffsl(n);
+#else
+	if (n == 0) {
+		return 0;
+	}
+
+	int bit;
+	for (bit = 1; !(n & 1); bit++) {
+		n = ((unsigned long long) n) >> 1;
+	}
+	return bit;
+#endif
+}
+
 static gchar *
 rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 					  guint hexadecimal, guint binary, guint width)
@@ -383,7 +413,7 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 		len = (temp + sizeof (temp)) - p;
 	}
 	else if (binary > 0) {
-		int first_bit = MIN(sizeof(temp), ffsll(ui64));
+		int first_bit = MIN(sizeof(temp), rspamd_ffsll(ui64));
 
 		p = temp + sizeof(temp);
 		for (int i = 0; i <= first_bit; i ++, ui64 >>= 1) {
