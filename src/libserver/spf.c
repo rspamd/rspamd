@@ -207,12 +207,6 @@ spf_library_config (const ucl_object_t *obj)
 		}
 	}
 
-	if ((value = ucl_object_find_key (obj, "disable_ipv6")) != NULL) {
-		if (ucl_object_toboolean_safe (value, &bval)) {
-			spf_lib_ctx->disable_ipv6 = bval;
-		}
-	}
-
 	if (spf_lib_ctx->spf_hash) {
 		rspamd_lru_hash_destroy (spf_lib_ctx->spf_hash);
 		spf_lib_ctx->spf_hash = NULL;
