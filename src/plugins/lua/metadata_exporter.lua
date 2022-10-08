@@ -323,6 +323,8 @@ local pushers = {
     rspamd_http.request({
       task=task,
       url=rule.url,
+      user=rule.user,
+      password=rule.password,
       body=formatted,
       callback=http_callback,
       mime_type=rule.mime_type or settings.mime_type,
