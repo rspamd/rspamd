@@ -127,6 +127,40 @@ auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> t
 	return ret;
 }
 
+auto raii_locked_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string>
+{
+	int oflags = flags;
+#ifdef O_CLOEXEC
+	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
+#endif
+	if (pattern == nullptr) {
+		return tl::make_unexpected("cannot open file; pattern is nullptr");
+	}
+
+	std::string mutable_pattern = pattern;
+
+	auto fd = g_mkstemp_full(mutable_pattern.data(), oflags, perms);
+
+	if (fd == -1) {
+		return tl::make_unexpected(fmt::format("cannot create file {}: {}", pattern, ::strerror(errno)));
+	}
+
+	if (!rspamd_file_lock(fd, TRUE)) {
+		close(fd);
+		(void)unlink(mutable_pattern.c_str());
+		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", pattern, ::strerror(errno)));
+	}
+
+	auto ret = raii_locked_file{mutable_pattern.c_str(), fd, true};
+
+	if (fstat(ret.fd, &ret.st) == -1) {
+		return tl::make_unexpected(fmt::format("cannot stat file {}: {}",
+				mutable_pattern.c_str(), ::strerror(errno)));
+	}
+
+	return ret;
+}
+
 raii_mmaped_locked_file::raii_mmaped_locked_file(raii_locked_file &&_file, void *_map)
 		: file(std::move(_file)), map(_map)
 {
@@ -242,7 +276,7 @@ static auto test_write_file(const T& f, const std::string_view &buf) {
 	(void)::lseek(fd, 0, SEEK_SET);
 	return ::write(fd, buf.data(), buf.size());
 }
-auto random_fname() {
+auto random_fname(std::string_view extension) {
 	const auto *tmpdir = getenv("TMPDIR");
 	if (tmpdir == nullptr) {
 		tmpdir = G_DIR_SEPARATOR_S "tmp";
@@ -254,16 +288,21 @@ auto random_fname() {
 	unsigned char hexbuf[32];
 	rspamd_random_hex(hexbuf, sizeof(hexbuf));
 	out_fname.append((const char *)hexbuf, sizeof(hexbuf));
+	if (!extension.empty()) {
+		out_fname.append(".");
+		out_fname.append(extension);
+	}
 
 	return out_fname;
 }
 TEST_SUITE("loked files utils") {
 
 TEST_CASE("create and delete file") {
-	auto fname = random_fname();
+	auto fname = random_fname("tmp");
 	{
 		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
+		CHECK(raii_locked_file.value().get_extension() == "tmp");
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 	}
 	// File must be deleted after this call
@@ -284,10 +323,11 @@ TEST_CASE("create and delete file") {
 }
 
 TEST_CASE("check lock") {
-	auto fname = random_fname();
+	auto fname = random_fname("");
 	{
 		auto raii_locked_file = raii_locked_file::create_temp(fname.c_str(), O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
+		CHECK(raii_locked_file.value().get_extension() == "");
 		CHECK(::access(fname.c_str(), R_OK) == 0);
 		auto raii_locked_file2 = raii_locked_file::open(fname.c_str(), O_RDONLY);
 		CHECK(!raii_locked_file2.has_value());
@@ -295,6 +335,26 @@ TEST_CASE("check lock") {
 	}
 	// File must be deleted after this call
 	auto ret = ::access(fname.c_str(), R_OK);
+	auto serrno = errno;
+	CHECK(ret == -1);
+	CHECK(serrno == ENOENT);
+}
+
+TEST_CASE("tempfile") {
+	std::string tmpname;
+	{
+		auto raii_locked_file = raii_locked_file::mkstemp("/tmp//doctest-XXXXXXXX",
+				O_RDONLY, 00600);
+		CHECK(raii_locked_file.has_value());
+		CHECK(raii_locked_file.value().get_dir() == "/tmp");
+		CHECK(access(raii_locked_file.value().get_name().data(), R_OK) == 0);
+		auto raii_locked_file2 = raii_locked_file::open(raii_locked_file.value().get_name().data(), O_RDONLY);
+		CHECK(!raii_locked_file2.has_value());
+		CHECK(access(raii_locked_file.value().get_name().data(), R_OK) == 0);
+		tmpname = raii_locked_file.value().get_name();
+	}
+	// File must be deleted after this call
+	auto ret = ::access(tmpname.c_str(), R_OK);
 	auto serrno = errno;
 	CHECK(ret == -1);
 	CHECK(serrno == ENOENT);

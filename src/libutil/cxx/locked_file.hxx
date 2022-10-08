@@ -17,6 +17,7 @@
 #define RSPAMD_LOCKED_FILE_HXX
 #pragma once
 
+#include "config.h"
 #include "contrib/expected/expected.hpp"
 #include <string>
 #include <sys/stat.h>
@@ -32,6 +33,7 @@ struct raii_locked_file final {
 	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>;
 	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
 	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
+	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
 
 	auto get_fd() const -> int {
 		return fd;
@@ -40,6 +42,42 @@ struct raii_locked_file final {
 	auto get_stat() const -> const struct stat& {
 		return st;
 	};
+
+	auto get_name() const -> std::string_view {
+		return std::string_view{fname};
+	}
+
+	auto get_dir() const -> std::string_view {
+		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
+
+		if (sep_pos == std::string::npos) {
+			return std::string_view{fname};
+		}
+
+		while (sep_pos >= 1 && fname[sep_pos - 1] == G_DIR_SEPARATOR) {
+			sep_pos --;
+		}
+
+		return std::string_view{fname.c_str(), sep_pos};
+	}
+
+	auto get_extension() const -> std::string_view {
+		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
+
+		if (sep_pos == std::string::npos) {
+			sep_pos = 0;
+		}
+
+		auto filename = std::string_view{fname.c_str() + sep_pos};
+		auto dot_pos = filename.find('.');
+
+		if (dot_pos == std::string::npos) {
+			return std::string_view{};
+		}
+		else {
+			return std::string_view{filename.data() + dot_pos + 1, filename.size() - dot_pos - 1};
+		}
+	}
 
 	raii_locked_file& operator=(raii_locked_file &&other) noexcept {
 		std::swap(fd, other.fd);
