@@ -112,7 +112,15 @@ struct raii_mmaped_locked_file final {
 	~raii_mmaped_locked_file();
 	static auto mmap_shared(raii_locked_file &&file, int flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
 	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
+	// Returns a constant pointer to the underlying map
 	auto get_map() const -> void* {return map;}
+	// Passes the ownership of the mmaped memory to the callee
+	auto steal_map() -> std::tuple<void *, std::size_t> {
+		auto ret = std::make_tuple(this->map, file.get_stat().st_size);
+		this->map = nullptr;
+		return ret;
+	}
+
 	auto get_size() const -> std::size_t { return file.get_stat().st_size; }
 
 	raii_mmaped_locked_file& operator=(raii_mmaped_locked_file &&other) noexcept {
