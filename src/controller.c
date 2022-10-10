@@ -511,7 +511,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 	rspamd_ftok_t lookup;
 	GHashTable *query_args = NULL;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
-	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE,
+	gboolean check_normal = FALSE, check_enable = FALSE, ret = TRUE,
 		use_enable = FALSE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
@@ -653,17 +653,36 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 
 				if (check_normal) {
 					if (ctx->enable_password == NULL) {
-						/* We have passed password check and no enable password is specified (*/
+						/* We have passed password check and no enable password is specified */
 						session->is_read_only = FALSE;
 					}
+					else {
+						/*
+						 * Even if we have passed normal password check, we don't really
+						 * know if password == enable_password, so we need to check it
+						 * as well, to decide if we are in read-only mode or not
+						 */
+						check = ctx->enable_password;
+
+						if (!rspamd_is_encrypted_password (check, &pbkdf)) {
+							check_enable = FALSE;
+
+							if (strlen (check) == password->len) {
+								check_enable = rspamd_constant_memcmp (password->begin,
+										check,
+										password->len);
+							}
+						}
+						else {
+							check_enable = rspamd_check_encrypted_password (ctx,
+									password,
+									check, pbkdf, TRUE);
+						}
+					}
 				}
-
-			}
-			else {
-				check_normal = FALSE;
 			}
 
-			if (!check_normal && ctx->enable_password != NULL) {
+			if ((!check_normal && !check_enable) && ctx->enable_password != NULL) {
 				check = ctx->enable_password;
 
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
@@ -680,9 +699,6 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 							password,
 							check, pbkdf, TRUE);
 				}
-			}
-			else {
-				check_enable = FALSE;
 			}
 
 			if (check_enable) {
