@@ -619,6 +619,10 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 					ret = rspamd_check_encrypted_password (ctx, password, check,
 							pbkdf, use_enable);
 				}
+
+				if (ret) {
+					check_enable = TRUE;
+				}
 			}
 			else {
 				msg_warn_session (
