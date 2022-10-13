@@ -1165,6 +1165,12 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 		else {
 			g_assert_not_reached ();
 		}
+
+		if ((cbd->flags & (LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) ==
+			(LUA_TCP_FLAG_FINISHED|LUA_TCP_FLAG_CONNECTED)) {
+			/* A callback has called `close` method, so we need to release a refcount */
+			TCP_RELEASE (cbd);
+		}
 	}
 	else {
 		lua_tcp_push_error (cbd, TRUE, "IO timeout");
