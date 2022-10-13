@@ -133,9 +133,11 @@ local function mx_check(task)
 
   local function gen_mx_a_callback(name, mxes)
     return function(_, _, results, err)
+      lua_util.debugm(N, task, "got DNS results for %s: %s", name, results)
       mxes[name].ips = results
 
       local function io_cb(io_err, _, conn)
+        lua_util.debugm(N, task, "TCP IO callback for %s, error: %s", name, io_err)
         if io_err then
           mxes[name].checked = true
           conn:close()
@@ -152,6 +154,7 @@ local function mx_check(task)
         check_results(mxes)
       end
       local function on_connect_cb(conn)
+        lua_util.debugm(N, task, "TCP connect callback for %s, error: %s", name, err)
         if err then
           mxes[name].checked = true
           conn:close()
