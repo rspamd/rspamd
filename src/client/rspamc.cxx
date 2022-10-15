@@ -474,7 +474,7 @@ rspamc_password_callback(const gchar *option_name,
 		std::string_view value_view{value};
 		if (value_view[0] == '/' || value_view[0] == '.') {
 			/* Try to open file */
-			auto locked_mmap = rspamd::util::raii_mmaped_locked_file::mmap_shared(value, O_RDONLY, PROT_READ);
+			auto locked_mmap = rspamd::util::raii_mmaped_file::mmap_shared(value, O_RDONLY, PROT_READ);
 
 			if (!locked_mmap.has_value() || locked_mmap.value().get_size() == 0) {
 				/* Just use it as a string */

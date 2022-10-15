@@ -228,7 +228,7 @@ auto symcache::init() -> bool
 
 auto symcache::load_items() -> bool
 {
-	auto cached_map = util::raii_mmaped_locked_file::mmap_shared(cfg->cache_filename,
+	auto cached_map = util::raii_mmaped_file::mmap_shared(cfg->cache_filename,
 			O_RDONLY, PROT_READ);
 
 	if (!cached_map.has_value()) {
