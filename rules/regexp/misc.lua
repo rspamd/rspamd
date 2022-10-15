@@ -100,3 +100,18 @@ reconf['LEAKED_PASSWORD_SCAM_RE'] = {
 }
 
 rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'BITCOIN_ADDR')
+
+-- Heurististic for detecting InterPlanetary File System (IPFS) gateway URLs:
+-- These contain "ipfs" somewhere (either in the FQDN or the URL path) and a
+-- content identifier (CID), comprising of either "qm", followed by 46 alphanumerical
+-- characters (CIDv0), or a CIDv1 of an alphanumerical string of unspecified length,
+-- depending on the hash algorithm used.
+local ipfs_cid = '/(qm[a-z0-9]{44}|[a-z0-9]{45,256})/{url}i'
+local ipfs_string = '/ipfs(\\.|-|_|\\/|\\?)/{url}i'
+reconf['HAS_IPFS_URL'] = {
+  description = 'Message contains InterPlanetary File System (IPFS) URL, likely malicious',
+  re = string.format('(%s & %s)', ipfs_cid, ipfs_string),
+  score = 6.0,
+  one_shot = true,
+  group = 'url',
+}
