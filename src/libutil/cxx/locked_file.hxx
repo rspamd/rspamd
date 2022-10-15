@@ -28,6 +28,7 @@ namespace rspamd::util {
  * A file is unlocked and closed when not needed
  */
 struct raii_file {
+public:
 	virtual ~raii_file() noexcept;
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_file, std::string>;
@@ -92,6 +93,10 @@ struct raii_file {
 		*this = std::move(other);
 	}
 
+	auto make_immortal() noexcept {
+		temp = false;
+	}
+
 	/* Do not allow copy/default ctor */
 	const raii_file& operator=(const raii_file &other) = delete;
 	raii_file() = delete;
@@ -109,6 +114,7 @@ protected:
  * A file is unlocked and closed when not needed
  */
 struct raii_locked_file final : public raii_file {
+public:
 	~raii_locked_file() noexcept override;
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string> {
@@ -148,6 +154,12 @@ struct raii_locked_file final : public raii_file {
 
 		return *this;
 	}
+
+	/**
+	 * Unlock a locked file and return back unlocked file transferring ownership.
+	 * A locked file cannot be used after this method.
+	 */
+	auto unlock() -> raii_file;
 
 	raii_locked_file(raii_locked_file &&other) noexcept : raii_file(static_cast<raii_file &&>(std::move(other))) {}
 	/* Do not allow copy/default ctor */

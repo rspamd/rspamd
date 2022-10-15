@@ -59,7 +59,7 @@ auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
-	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
+	oflags |= O_CLOEXEC;
 #endif
 
 	if (fname == nullptr) {
@@ -177,6 +177,14 @@ auto raii_locked_file::lock_raii_file(raii_file &&unlocked) -> tl::expected<raii
 	}
 
 	return raii_locked_file{std::move(unlocked)};
+}
+
+auto raii_locked_file::unlock() -> raii_file {
+	if (fd != -1) {
+		(void) rspamd_file_unlock(fd, FALSE);
+	}
+
+	return raii_file{static_cast<raii_file&&>(std::move(*this))};
 }
 
 raii_mmaped_file::raii_mmaped_file(raii_file &&_file, void *_map)
