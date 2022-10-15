@@ -24,7 +24,7 @@
 
 namespace rspamd::util {
 
-auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>
+auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, std::string>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -46,7 +46,7 @@ auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_l
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{fname, fd, false};
+	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
@@ -55,18 +55,7 @@ auto raii_locked_file::open(const char *fname, int flags) -> tl::expected<raii_l
 	return ret;
 }
 
-raii_locked_file::~raii_locked_file()
-{
-	if (fd != -1) {
-		if (temp) {
-			(void)unlink(fname.c_str());
-		}
-		(void) rspamd_file_unlock(fd, FALSE);
-		close(fd);
-	}
-}
-
-auto raii_locked_file::create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>
+auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -88,7 +77,7 @@ auto raii_locked_file::create(const char *fname, int flags, int perms) -> tl::ex
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{fname, fd, false};
+	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
@@ -97,7 +86,7 @@ auto raii_locked_file::create(const char *fname, int flags, int perms) -> tl::ex
 	return ret;
 }
 
-auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>
+auto raii_file::create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -114,11 +103,12 @@ auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> t
 	}
 
 	if (!rspamd_file_lock(fd, TRUE)) {
+		unlink(fname);
 		close(fd);
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{fname, fd, true};
+	auto ret = raii_file{fname, fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
@@ -127,7 +117,7 @@ auto raii_locked_file::create_temp(const char *fname, int flags, int perms) -> t
 	return ret;
 }
 
-auto raii_locked_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string>
+auto raii_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, std::string>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -151,7 +141,7 @@ auto raii_locked_file::mkstemp(const char *pattern, int flags, int perms) -> tl:
 		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", pattern, ::strerror(errno)));
 	}
 
-	auto ret = raii_locked_file{mutable_pattern.c_str(), fd, true};
+	auto ret = raii_file{mutable_pattern.c_str(), fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
 		return tl::make_unexpected(fmt::format("cannot stat file {}: {}",
@@ -161,13 +151,41 @@ auto raii_locked_file::mkstemp(const char *pattern, int flags, int perms) -> tl:
 	return ret;
 }
 
-raii_mmaped_locked_file::raii_mmaped_locked_file(raii_locked_file &&_file, void *_map)
+raii_file::~raii_file() noexcept
+{
+	if (fd != -1) {
+		if (temp) {
+			(void)unlink(fname.c_str());
+		}
+		(void) rspamd_file_unlock(fd, FALSE);
+		close(fd);
+	}
+}
+
+
+raii_locked_file::~raii_locked_file() noexcept
+{
+	if (fd != -1) {
+		(void) rspamd_file_unlock(fd, FALSE);
+	}
+}
+
+auto raii_locked_file::lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, std::string>
+{
+	if (!rspamd_file_lock(unlocked.get_fd(), TRUE)) {
+		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", unlocked.get_name(), ::strerror(errno)));
+	}
+
+	return raii_locked_file{std::move(unlocked)};
+}
+
+raii_mmaped_file::raii_mmaped_file(raii_file &&_file, void *_map)
 		: file(std::move(_file)), map(_map)
 {
 }
 
-auto raii_mmaped_locked_file::mmap_shared(raii_locked_file &&file,
-										  int flags) -> tl::expected<raii_mmaped_locked_file, std::string>
+auto raii_mmaped_file::mmap_shared(raii_file &&file,
+								   int flags) -> tl::expected<raii_mmaped_file, std::string>
 {
 	void *map;
 
@@ -179,29 +197,29 @@ auto raii_mmaped_locked_file::mmap_shared(raii_locked_file &&file,
 
 	}
 
-	return raii_mmaped_locked_file{std::move(file), map};
+	return raii_mmaped_file{std::move(file), map};
 }
 
-auto raii_mmaped_locked_file::mmap_shared(const char *fname, int open_flags,
-										  int mmap_flags) -> tl::expected<raii_mmaped_locked_file, std::string>
+auto raii_mmaped_file::mmap_shared(const char *fname, int open_flags,
+								   int mmap_flags) -> tl::expected<raii_mmaped_file, std::string>
 {
-	auto file = raii_locked_file::open(fname, open_flags);
+	auto file = raii_file::open(fname, open_flags);
 
 	if (!file.has_value()) {
 		return tl::make_unexpected(file.error());
 	}
 
-	return raii_mmaped_locked_file::mmap_shared(std::move(file.value()), mmap_flags);
+	return raii_mmaped_file::mmap_shared(std::move(file.value()), mmap_flags);
 }
 
-raii_mmaped_locked_file::~raii_mmaped_locked_file()
+raii_mmaped_file::~raii_mmaped_file()
 {
 	if (map != nullptr) {
 		munmap(map, file.get_stat().st_size);
 	}
 }
 
-raii_mmaped_locked_file::raii_mmaped_locked_file(raii_mmaped_locked_file &&other) noexcept
+raii_mmaped_file::raii_mmaped_file(raii_mmaped_file &&other) noexcept
 		: file(std::move(other.file))
 {
 	std::swap(map, other.map);

@@ -24,16 +24,16 @@
 
 namespace rspamd::util {
 /**
- * A simple RAII object to contain a file descriptor with an flock wrap
+ * A simple RAII object to contain a move only file descriptor
  * A file is unlocked and closed when not needed
  */
-struct raii_locked_file final {
-	~raii_locked_file();
+struct raii_file {
+	virtual ~raii_file() noexcept;
 
-	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string>;
-	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
-	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
-	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string>;
+	static auto open(const char *fname, int flags) -> tl::expected<raii_file, std::string>;
+	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>;
+	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>;
+	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, std::string>;
 
 	auto get_fd() const -> int {
 		return fd;
@@ -79,6 +79,67 @@ struct raii_locked_file final {
 		}
 	}
 
+	raii_file& operator=(raii_file &&other) noexcept {
+		std::swap(fd, other.fd);
+		std::swap(temp, other.temp);
+		std::swap(fname, other.fname);
+		std::swap(st, other.st);
+
+		return *this;
+	}
+
+	raii_file(raii_file &&other) noexcept {
+		*this = std::move(other);
+	}
+
+	/* Do not allow copy/default ctor */
+	const raii_file& operator=(const raii_file &other) = delete;
+	raii_file() = delete;
+	raii_file(const raii_file &other) = delete;
+protected:
+	int fd = -1;
+	bool temp;
+	std::string fname;
+	struct stat st;
+
+	explicit raii_file(const char *fname, int fd, bool temp) : fd(fd), temp(temp), fname(fname) {}
+};
+/**
+ * A simple RAII object to contain a file descriptor with an flock wrap
+ * A file is unlocked and closed when not needed
+ */
+struct raii_locked_file final : public raii_file {
+	~raii_locked_file() noexcept override;
+
+	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string> {
+		auto locked = raii_file::open(fname, flags).and_then([]<class T>(T &&file) {
+			return lock_raii_file(std::forward<T>(file));
+		});
+
+		return locked;
+	}
+	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+		auto locked = raii_file::create(fname, flags, perms).and_then([]<class T>(T &&file) {
+			return lock_raii_file(std::forward<T>(file));
+		});
+
+		return locked;
+	}
+	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+		auto locked = raii_file::create_temp(fname, flags, perms).and_then([]<class T>(T &&file) {
+			return lock_raii_file(std::forward<T>(file));
+		});
+
+		return locked;
+	}
+	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+		auto locked = raii_file::mkstemp(pattern, flags, perms).and_then([]<class T>(T &&file) {
+			return lock_raii_file(std::forward<T>(file));
+		});
+
+		return locked;
+	}
+
 	raii_locked_file& operator=(raii_locked_file &&other) noexcept {
 		std::swap(fd, other.fd);
 		std::swap(temp, other.temp);
@@ -88,30 +149,24 @@ struct raii_locked_file final {
 		return *this;
 	}
 
-	raii_locked_file(raii_locked_file &&other) noexcept {
-		*this = std::move(other);
-	}
-
+	raii_locked_file(raii_locked_file &&other) noexcept : raii_file(static_cast<raii_file &&>(std::move(other))) {}
 	/* Do not allow copy/default ctor */
 	const raii_locked_file& operator=(const raii_locked_file &other) = delete;
 	raii_locked_file() = delete;
 	raii_locked_file(const raii_locked_file &other) = delete;
 private:
-	int fd = -1;
-	bool temp;
-	std::string fname;
-	struct stat st;
-
-	explicit raii_locked_file(const char *_fname, int _fd, bool _temp) : fd(_fd), temp(_temp), fname(_fname) {}
+	static auto lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, std::string>;
+	raii_locked_file(raii_file &&other) noexcept : raii_file(std::move(other)) {}
+	explicit raii_locked_file(const char *fname, int fd, bool temp) : raii_file(fname, fd, temp) {}
 };
 
 /**
  * A mmap wrapper on top of a locked file
  */
-struct raii_mmaped_locked_file final {
-	~raii_mmaped_locked_file();
-	static auto mmap_shared(raii_locked_file &&file, int flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
-	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_locked_file, std::string>;
+struct raii_mmaped_file final {
+	~raii_mmaped_file();
+	static auto mmap_shared(raii_file &&file, int flags) -> tl::expected<raii_mmaped_file, std::string>;
+	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_file, std::string>;
 	// Returns a constant pointer to the underlying map
 	auto get_map() const -> void* {return map;}
 	// Passes the ownership of the mmaped memory to the callee
@@ -123,23 +178,23 @@ struct raii_mmaped_locked_file final {
 
 	auto get_size() const -> std::size_t { return file.get_stat().st_size; }
 
-	raii_mmaped_locked_file& operator=(raii_mmaped_locked_file &&other) noexcept {
+	raii_mmaped_file& operator=(raii_mmaped_file &&other) noexcept {
 		std::swap(map, other.map);
 		file = std::move(other.file);
 
 		return *this;
 	}
 
-	raii_mmaped_locked_file(raii_mmaped_locked_file &&other) noexcept;
+	raii_mmaped_file(raii_mmaped_file &&other) noexcept;
 
 	/* Do not allow copy/default ctor */
-	const raii_mmaped_locked_file& operator=(const raii_mmaped_locked_file &other) = delete;
-	raii_mmaped_locked_file() = delete;
-	raii_mmaped_locked_file(const raii_mmaped_locked_file &other) = delete;
+	const raii_mmaped_file& operator=(const raii_mmaped_file &other) = delete;
+	raii_mmaped_file() = delete;
+	raii_mmaped_file(const raii_mmaped_file &other) = delete;
 private:
 	/* Is intended to be used with map_shared */
-	explicit raii_mmaped_locked_file(raii_locked_file &&_file, void *_map);
-	raii_locked_file file;
+	explicit raii_mmaped_file(raii_file &&_file, void *_map);
+	raii_file file;
 	void *map = nullptr;
 };
 
