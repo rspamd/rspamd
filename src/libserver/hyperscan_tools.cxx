@@ -20,10 +20,9 @@
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/ankerl/svector.h"
 #include "fmt/core.h"
-#include "locked_file.hxx"
+#include "libutil/cxx/locked_file.hxx"
 #include "hs.h"
 #include "logger.h"
-#include "locked_file.hxx"
 
 #include <glob.h> /* for glob */
 #include <unistd.h> /* for unlink */

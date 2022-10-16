@@ -18,7 +18,6 @@ SET(LIBRSPAMDUTILSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/heap.c
 				${CMAKE_CURRENT_SOURCE_DIR}/multipattern.c
 				${CMAKE_CURRENT_SOURCE_DIR}/cxx/utf8_util.cxx
-				${CMAKE_CURRENT_SOURCE_DIR}/cxx/locked_file.cxx
-				${CMAKE_CURRENT_SOURCE_DIR}/cxx/hyperscan_tools.cxx)
+				${CMAKE_CURRENT_SOURCE_DIR}/cxx/locked_file.cxx)
 # Rspamdutil
 SET(RSPAMD_UTIL ${LIBRSPAMDUTILSRC} PARENT_SCOPE)
