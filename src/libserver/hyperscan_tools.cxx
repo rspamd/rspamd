@@ -23,6 +23,7 @@
 #include "libutil/cxx/locked_file.hxx"
 #include "hs.h"
 #include "logger.h"
+#include "worker_util.h"
 
 #include <glob.h> /* for glob */
 #include <unistd.h> /* for unlink */
@@ -49,13 +50,12 @@ private:
 	ankerl::svector<std::string, 4> cache_dirs;
 	ankerl::svector<std::string, 8> cache_extensions;
 	ankerl::unordered_dense::set<std::string> known_cached_files;
-	bool need_cleanup = false;
 private:
 	hs_known_files_cache() = default;
 
 	virtual ~hs_known_files_cache() {
 		// Cleanup cache dir
-		if (need_cleanup) {
+		if (rspamd_current_worker != nullptr && rspamd_worker_is_primary_controller(rspamd_current_worker)) {
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext : cache_extensions) {
 					glob_t globbuf;
@@ -101,12 +101,11 @@ public:
 	hs_known_files_cache(const hs_known_files_cache &) = delete;
 	hs_known_files_cache(hs_known_files_cache &&) = delete;
 
-	static auto get(bool need_cleanup) -> hs_known_files_cache& {
+	static auto get() -> hs_known_files_cache& {
 		static hs_known_files_cache *singleton = nullptr;
 
 		if (singleton == nullptr) {
 			singleton = new hs_known_files_cache;
-			singleton->need_cleanup = need_cleanup;
 		}
 
 		return *singleton;
@@ -169,9 +168,9 @@ hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_data
 	return tl::expected<hs_shared_database, std::string>{tl::in_place, target};
 }
 
-auto load_cached_hs_file(const char *fname, bool need_cleanup) -> tl::expected<hs_shared_database, std::string>
+auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, std::string>
 {
-	auto &hs_cache = hs_known_files_cache::get(need_cleanup);
+	auto &hs_cache = hs_known_files_cache::get();
 
 	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ)
 		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, std::string> {

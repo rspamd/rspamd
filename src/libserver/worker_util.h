@@ -36,6 +36,8 @@ typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
 struct rspamd_worker;
 struct rspamd_worker_signal_handler;
 
+extern struct rspamd_worker *rspamd_current_worker;
+
 /**
  * Init basic signals for a worker
  * @param worker

@@ -64,6 +64,8 @@
 #include "contrib/libev/ev.h"
 #include "libstat/stat_api.h"
 
+struct rspamd_worker *rspamd_current_worker = NULL;
+
 /* Forward declaration */
 static void rspamd_worker_heartbeat_start (struct rspamd_worker *,
 		struct ev_loop *);
@@ -1276,6 +1278,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	switch (wrk->pid) {
 	case 0:
+		rspamd_current_worker = wrk;
 		rspamd_handle_child_fork (wrk, rspamd_main, cf, listen_sockets);
 		break;
 	case -1:
