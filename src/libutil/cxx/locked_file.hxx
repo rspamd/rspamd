@@ -44,6 +44,10 @@ public:
 		return st;
 	};
 
+	auto get_size() const -> std::size_t {
+		return st.st_size;
+	};
+
 	auto get_name() const -> std::string_view {
 		return std::string_view{fname};
 	}
@@ -93,8 +97,22 @@ public:
 		*this = std::move(other);
 	}
 
+	/**
+	 * Prevent file from being deleted
+	 * @return
+	 */
 	auto make_immortal() noexcept {
 		temp = false;
+	}
+
+	/**
+	 * Performs fstat on an opened file to refresh internal stat
+	 * @return
+	 */
+	auto update_stat() noexcept -> bool;
+
+	auto is_valid() noexcept -> bool {
+		return fd != -1;
 	}
 
 	/* Do not allow copy/default ctor */
@@ -181,6 +199,7 @@ struct raii_mmaped_file final {
 	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_file, std::string>;
 	// Returns a constant pointer to the underlying map
 	auto get_map() const -> void* {return map;}
+	auto get_file() const -> const raii_file& { return file; }
 	// Passes the ownership of the mmaped memory to the callee
 	auto steal_map() -> std::tuple<void *, std::size_t> {
 		auto ret = std::make_tuple(this->map, file.get_stat().st_size);

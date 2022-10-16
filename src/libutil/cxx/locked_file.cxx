@@ -41,11 +41,6 @@ auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, st
 		return tl::make_unexpected(fmt::format("cannot open file {}: {}", fname, ::strerror(errno)));
 	}
 
-	if (!rspamd_file_lock(fd, TRUE)) {
-		close(fd);
-		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
-	}
-
 	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
@@ -72,11 +67,6 @@ auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<
 		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
 	}
 
-	if (!rspamd_file_lock(fd, TRUE)) {
-		close(fd);
-		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
-	}
-
 	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
@@ -100,12 +90,6 @@ auto raii_file::create_temp(const char *fname, int flags, int perms) -> tl::expe
 
 	if (fd == -1) {
 		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
-	}
-
-	if (!rspamd_file_lock(fd, TRUE)) {
-		unlink(fname);
-		close(fd);
-		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", fname, ::strerror(errno)));
 	}
 
 	auto ret = raii_file{fname, fd, true};
@@ -135,12 +119,6 @@ auto raii_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expect
 		return tl::make_unexpected(fmt::format("cannot create file {}: {}", pattern, ::strerror(errno)));
 	}
 
-	if (!rspamd_file_lock(fd, TRUE)) {
-		close(fd);
-		(void)unlink(mutable_pattern.c_str());
-		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", pattern, ::strerror(errno)));
-	}
-
 	auto ret = raii_file{mutable_pattern.c_str(), fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
@@ -157,9 +135,13 @@ raii_file::~raii_file() noexcept
 		if (temp) {
 			(void)unlink(fname.c_str());
 		}
-		(void) rspamd_file_unlock(fd, FALSE);
 		close(fd);
 	}
+}
+
+auto raii_file::update_stat() noexcept -> bool
+{
+	return fstat(fd, &st) != -1;
 }
 
 
@@ -197,6 +179,8 @@ auto raii_mmaped_file::mmap_shared(raii_file &&file,
 {
 	void *map;
 
+	/* Update stat on file to ensure it is up-to-date */
+	file.update_stat();
 	map = mmap(NULL, file.get_stat().st_size, flags, MAP_SHARED, file.get_fd(), 0);
 
 	if (map == MAP_FAILED) {
@@ -378,6 +362,36 @@ TEST_CASE("tempfile") {
 		CHECK(!raii_locked_file2.has_value());
 		CHECK(access(raii_locked_file.value().get_name().data(), R_OK) == 0);
 		tmpname = raii_locked_file.value().get_name();
+	}
+	// File must be deleted after this call
+	auto ret = ::access(tmpname.c_str(), R_OK);
+	auto serrno = errno;
+	CHECK(ret == -1);
+	CHECK(serrno == ENOENT);
+}
+
+TEST_CASE("mmap") {
+	std::string tmpname;
+	{
+		auto raii_file = raii_file::mkstemp("/tmp//doctest-XXXXXXXX",
+		O_RDWR|O_CREAT|O_EXCL, 00600);
+		CHECK(raii_file.has_value());
+		CHECK(raii_file->get_dir() == "/tmp");
+		CHECK(access(raii_file->get_name().data(), R_OK) == 0);
+		tmpname = std::string{raii_file->get_name()};
+		char payload[] = {'1', '2', '3'};
+		CHECK(write(raii_file->get_fd(), payload, sizeof(payload)) == sizeof(payload));
+		auto mmapped_file1 = raii_mmaped_file::mmap_shared(std::move(raii_file.value()), PROT_READ|PROT_WRITE);
+		CHECK(mmapped_file1.has_value());
+		CHECK(!raii_file->is_valid());
+		CHECK(mmapped_file1->get_size() == sizeof(payload));
+		CHECK(memcmp(mmapped_file1->get_map(), payload, sizeof(payload)) == 0);
+		*(char *)mmapped_file1->get_map() = '2';
+		auto mmapped_file2 = raii_mmaped_file::mmap_shared(tmpname.c_str(), O_RDONLY, PROT_READ);
+		CHECK(mmapped_file2.has_value());
+		CHECK(mmapped_file2->get_size() == sizeof(payload));
+		CHECK(memcmp(mmapped_file2->get_map(), payload, sizeof(payload)) != 0);
+		CHECK(memcmp(mmapped_file2->get_map(), mmapped_file1->get_map(), sizeof(payload)) == 0);
 	}
 	// File must be deleted after this call
 	auto ret = ::access(tmpname.c_str(), R_OK);
