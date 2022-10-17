@@ -232,7 +232,12 @@ auto symcache::load_items() -> bool
 			O_RDONLY, PROT_READ);
 
 	if (!cached_map.has_value()) {
-		msg_info_cache("%s", cached_map.error().c_str());
+		if (cached_map.error().category == util::error_category::CRITICAL) {
+			msg_err_cache("%s", cached_map.error().error_message.data());
+		}
+		else {
+			msg_info_cache("%s", cached_map.error().error_message.data());
+		}
 		return false;
 	}
 
@@ -369,7 +374,7 @@ bool symcache::save_items() const
 			return false;
 		}
 
-		msg_err_cache("%s", file_sink.error().c_str());
+		msg_err_cache("%s", file_sink.error().error_message.data());
 
 		return false;
 	}

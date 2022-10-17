@@ -21,6 +21,7 @@
 #include "contrib/ankerl/svector.h"
 #include "fmt/core.h"
 #include "libutil/cxx/file_util.hxx"
+#include "libutil/cxx/error.hxx"
 #include "hs.h"
 #include "logger.h"
 #include "worker_util.h"
@@ -150,35 +151,35 @@ struct hs_shared_database {
 };
 
 static auto
-hs_shared_from_unserialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, std::string>
+hs_shared_from_unserialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, error>
 {
 	auto ptr = map.get_map();
-	return tl::expected<hs_shared_database, std::string>{tl::in_place, std::move(map), (hs_database_t *)ptr};
+	return tl::expected<hs_shared_database, error>{tl::in_place, std::move(map), (hs_database_t *)ptr};
 }
 
 static auto
-hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, std::string>
+hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, error>
 {
 	hs_database_t *target = nullptr;
 
 	if (auto ret = hs_deserialize_database((const char *)map.get_map(), map.get_size(), &target); ret != HS_SUCCESS) {
-		return tl::make_unexpected("cannot deserialize database");
+		return tl::make_unexpected(error {"cannot deserialize database", ret});
 	}
 
-	return tl::expected<hs_shared_database, std::string>{tl::in_place, target};
+	return tl::expected<hs_shared_database, error>{tl::in_place, target};
 }
 
-auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, std::string>
+auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, error>
 {
 	auto &hs_cache = hs_known_files_cache::get();
 
 	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ)
-		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, std::string> {
+		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, error> {
 #if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto unserialized_fname = fmt::format("{}.unser", fname);
 			auto unserialized_file = raii_locked_file::create(unserialized_fname.c_str(), O_CREAT | O_RDWR | O_EXCL,
 				00644)
-				.and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, std::string> {
+				.and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, error> {
 					auto tmpfile_pattern = fmt::format("{}{}hsmp-XXXXXXXXXXXXXXXXXX",
 						cached_serialized.get_file().get_dir(), G_DIR_SEPARATOR);
 					auto tmpfile = raii_locked_file::mkstemp(tmpfile_pattern.data(), O_CREAT | O_RDWR | O_EXCL,
@@ -199,7 +200,7 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 						void *buf;
 						posix_memalign(&buf, 16, unserialized_size);
 						if (buf == NULL) {
-							return tl::make_unexpected("Cannot allocate memory");
+							return tl::make_unexpected(error {"Cannot allocate memory", errno, error_category::CRITICAL });
 						}
 
 						// Store owned string
@@ -207,14 +208,14 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 
 						if (auto ret = hs_deserialize_database_at((const char *)cached_serialized.get_map(),
 								cached_serialized.get_size(), (hs_database_t *) buf); ret != HS_SUCCESS) {
-							return tl::make_unexpected(
-								fmt::format("cannot deserialize hyperscan database: {}", ret));
+							return tl::make_unexpected(error {
+								fmt::format("cannot deserialize hyperscan database: {}", ret), ret });
 						}
 						else {
 							if (write(tmpfile_checked.get_fd(), buf, unserialized_size) == -1) {
 								free(buf);
-								return tl::make_unexpected(fmt::format("cannot write to {}: {}",
-									tmpfile_name, ::strerror(errno)));
+								return tl::make_unexpected(error { fmt::format("cannot write to {}: {}",
+									tmpfile_name, ::strerror(errno)), errno, error_category::CRITICAL });
 							}
 							else {
 								free(buf);
@@ -247,7 +248,7 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 						return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
 					};
 				})
-				.or_else([&](auto unused) -> tl::expected<raii_file, std::string> {
+				.or_else([&](auto unused) -> tl::expected<raii_file, error> {
 					// Cannot create file, so try to open it in RO mode
 					return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
 				});

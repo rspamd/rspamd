@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "contrib/expected/expected.hpp"
+#include "libutil/cxx/error.hxx"
 #include <string>
 #include <sys/stat.h>
 
@@ -31,10 +32,10 @@ struct raii_file {
 public:
 	virtual ~raii_file() noexcept;
 
-	static auto open(const char *fname, int flags) -> tl::expected<raii_file, std::string>;
-	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>;
-	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>;
-	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, std::string>;
+	static auto open(const char *fname, int flags) -> tl::expected<raii_file, error>;
+	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>;
+	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>;
+	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, error>;
 
 	auto get_fd() const -> int {
 		return fd;
@@ -135,28 +136,28 @@ struct raii_locked_file final : public raii_file {
 public:
 	~raii_locked_file() noexcept override;
 
-	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, std::string> {
+	static auto open(const char *fname, int flags) -> tl::expected<raii_locked_file, error> {
 		auto locked = raii_file::open(fname, flags).and_then([]<class T>(T &&file) {
 			return lock_raii_file(std::forward<T>(file));
 		});
 
 		return locked;
 	}
-	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, error> {
 		auto locked = raii_file::create(fname, flags, perms).and_then([]<class T>(T &&file) {
 			return lock_raii_file(std::forward<T>(file));
 		});
 
 		return locked;
 	}
-	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_locked_file, error> {
 		auto locked = raii_file::create_temp(fname, flags, perms).and_then([]<class T>(T &&file) {
 			return lock_raii_file(std::forward<T>(file));
 		});
 
 		return locked;
 	}
-	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, std::string> {
+	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_locked_file, error> {
 		auto locked = raii_file::mkstemp(pattern, flags, perms).and_then([]<class T>(T &&file) {
 			return lock_raii_file(std::forward<T>(file));
 		});
@@ -185,7 +186,7 @@ public:
 	raii_locked_file() = delete;
 	raii_locked_file(const raii_locked_file &other) = delete;
 private:
-	static auto lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, std::string>;
+	static auto lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, error>;
 	raii_locked_file(raii_file &&other) noexcept : raii_file(std::move(other)) {}
 	explicit raii_locked_file(const char *fname, int fd, bool temp) : raii_file(fname, fd, temp) {}
 };
@@ -195,8 +196,8 @@ private:
  */
 struct raii_mmaped_file final {
 	~raii_mmaped_file();
-	static auto mmap_shared(raii_file &&file, int flags) -> tl::expected<raii_mmaped_file, std::string>;
-	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_file, std::string>;
+	static auto mmap_shared(raii_file &&file, int flags) -> tl::expected<raii_mmaped_file, error>;
+	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_file, error>;
 	// Returns a constant pointer to the underlying map
 	auto get_map() const -> void* {return map;}
 	auto get_file() const -> const raii_file& { return file; }
@@ -235,7 +236,7 @@ private:
  */
 struct raii_file_sink final {
 	static auto create(const char *fname, int flags, int perms, const char *suffix = "new")
-		-> tl::expected<raii_file_sink, std::string>;
+		-> tl::expected<raii_file_sink, error>;
 	auto write_output() -> bool;
 	~raii_file_sink();
 	auto get_fd() const -> int

@@ -24,7 +24,7 @@
 
 namespace rspamd::util {
 
-auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, std::string>
+auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, error>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -32,25 +32,25 @@ auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, st
 #endif
 
 	if (fname == nullptr) {
-		return tl::make_unexpected("cannot open file; filename is nullptr");
+		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto fd = ::open(fname, oflags);
 
 	if (fd == -1) {
-		return tl::make_unexpected(fmt::format("cannot open file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error{fmt::format("cannot open file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
-		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error {fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	return ret;
 }
 
-auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>
+auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
@@ -58,57 +58,58 @@ auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<
 #endif
 
 	if (fname == nullptr) {
-		return tl::make_unexpected("cannot open file; filename is nullptr");
+		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto fd = ::open(fname, oflags, perms);
 
 	if (fd == -1) {
-		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error{fmt::format("cannot create file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	auto ret = raii_file{fname, fd, false};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
-		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error{fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	return ret;
 }
 
-auto raii_file::create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, std::string>
+auto raii_file::create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
 #endif
 	if (fname == nullptr) {
-		return tl::make_unexpected("cannot open file; filename is nullptr");
+		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto fd = ::open(fname, oflags, perms);
 
 	if (fd == -1) {
-		return tl::make_unexpected(fmt::format("cannot create file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error {fmt::format("cannot create file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	auto ret = raii_file{fname, fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
-		return tl::make_unexpected(fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)));
+		return tl::make_unexpected(error {fmt::format("cannot stat file {}: {}", fname, ::strerror(errno)), errno});
 	}
 
 	return ret;
 }
 
-auto raii_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, std::string>
+auto raii_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, error>
 {
 	int oflags = flags;
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC | O_CREAT | O_EXCL;
 #endif
 	if (pattern == nullptr) {
-		return tl::make_unexpected("cannot open file; pattern is nullptr");
+		return tl::make_unexpected(error {"cannot open file; pattern is nullptr", EINVAL, error_category::CRITICAL});
+
 	}
 
 	std::string mutable_pattern = pattern;
@@ -116,14 +117,14 @@ auto raii_file::mkstemp(const char *pattern, int flags, int perms) -> tl::expect
 	auto fd = g_mkstemp_full(mutable_pattern.data(), oflags, perms);
 
 	if (fd == -1) {
-		return tl::make_unexpected(fmt::format("cannot create file {}: {}", pattern, ::strerror(errno)));
+		return tl::make_unexpected(error {fmt::format("cannot create file {}: {}", pattern, ::strerror(errno)), errno});
 	}
 
 	auto ret = raii_file{mutable_pattern.c_str(), fd, true};
 
 	if (fstat(ret.fd, &ret.st) == -1) {
-		return tl::make_unexpected(fmt::format("cannot stat file {}: {}",
-				mutable_pattern.c_str(), ::strerror(errno)));
+		return tl::make_unexpected(error { fmt::format("cannot stat file {}: {}",
+				mutable_pattern, ::strerror(errno)), errno} );
 	}
 
 	return ret;
@@ -152,10 +153,11 @@ raii_locked_file::~raii_locked_file() noexcept
 	}
 }
 
-auto raii_locked_file::lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, std::string>
+auto raii_locked_file::lock_raii_file(raii_file &&unlocked) -> tl::expected<raii_locked_file, error>
 {
 	if (!rspamd_file_lock(unlocked.get_fd(), TRUE)) {
-		return tl::make_unexpected(fmt::format("cannot lock file {}: {}", unlocked.get_name(), ::strerror(errno)));
+		return tl::make_unexpected(
+			error { fmt::format("cannot lock file {}: {}", unlocked.get_name(), ::strerror(errno)), errno});
 	}
 
 	return raii_locked_file{std::move(unlocked)};
@@ -175,7 +177,7 @@ raii_mmaped_file::raii_mmaped_file(raii_file &&_file, void *_map)
 }
 
 auto raii_mmaped_file::mmap_shared(raii_file &&file,
-								   int flags) -> tl::expected<raii_mmaped_file, std::string>
+								   int flags) -> tl::expected<raii_mmaped_file, error>
 {
 	void *map;
 
@@ -184,8 +186,8 @@ auto raii_mmaped_file::mmap_shared(raii_file &&file,
 	map = mmap(NULL, file.get_stat().st_size, flags, MAP_SHARED, file.get_fd(), 0);
 
 	if (map == MAP_FAILED) {
-		return tl::make_unexpected(fmt::format("cannot mmap file at fd: {}: {}",
-				file.get_fd(), ::strerror(errno)));
+		return tl::make_unexpected(error { fmt::format("cannot mmap file at fd: {}: {}",
+				file.get_fd(), ::strerror(errno)), errno });
 
 	}
 
@@ -193,7 +195,7 @@ auto raii_mmaped_file::mmap_shared(raii_file &&file,
 }
 
 auto raii_mmaped_file::mmap_shared(const char *fname, int open_flags,
-								   int mmap_flags) -> tl::expected<raii_mmaped_file, std::string>
+								   int mmap_flags) -> tl::expected<raii_mmaped_file, error>
 {
 	auto file = raii_file::open(fname, open_flags);
 
@@ -218,10 +220,10 @@ raii_mmaped_file::raii_mmaped_file(raii_mmaped_file &&other) noexcept
 }
 
 auto raii_file_sink::create(const char *fname, int flags, int perms,
-							const char *suffix) -> tl::expected<raii_file_sink, std::string>
+							const char *suffix) -> tl::expected<raii_file_sink, error>
 {
 	if (!fname || !suffix) {
-		return tl::make_unexpected("cannot create file sink: bad input arguments");
+		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto tmp_fname = fmt::format("{}.{}", fname, suffix);
