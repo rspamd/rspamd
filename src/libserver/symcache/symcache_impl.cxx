@@ -19,7 +19,7 @@
 #include "symcache_item.hxx"
 #include "symcache_runtime.hxx"
 #include "unix-std.h"
-#include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
 #include "fmt/core.h"
 #include "contrib/t1ha/t1ha.h"

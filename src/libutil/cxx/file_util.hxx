@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef RSPAMD_LOCKED_FILE_HXX
-#define RSPAMD_LOCKED_FILE_HXX
+#ifndef RSPAMD_FILE_UTIL_HXX
+#define RSPAMD_FILE_UTIL_HXX
 #pragma once
 
 #include "config.h"
@@ -258,4 +258,4 @@ private:
 
 }
 
-#endif //RSPAMD_LOCKED_FILE_HXX
+#endif //RSPAMD_FILE_UTIL_HXX

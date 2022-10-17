@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "locked_file.hxx"
+#include "file_util.hxx"
 #include <fmt/core.h>
 #include "libutil/util.h"
 #include "libutil/unix-std.h"

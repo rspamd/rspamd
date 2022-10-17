@@ -20,7 +20,7 @@
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/ankerl/svector.h"
 #include "fmt/core.h"
-#include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/file_util.hxx"
 #include "hs.h"
 #include "logger.h"
 #include "worker_util.h"

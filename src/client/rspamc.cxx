@@ -34,7 +34,7 @@
 #include "frozen/unordered_map.h"
 #include "fmt/format.h"
 #include "fmt/color.h"
-#include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
 
 #ifdef HAVE_SYS_WAIT_H
