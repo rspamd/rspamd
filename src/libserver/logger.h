@@ -252,7 +252,7 @@ struct rspamd_logger_funcs* rspamd_logger_set_log_function (rspamd_logger_t *log
 
 extern guint rspamd_task_log_id;
 #ifdef __cplusplus
-#define RSPAMD_LOG_FUNC __FUNCTION__
+#define RSPAMD_LOG_FUNC __func__
 #else
 #define RSPAMD_LOG_FUNC G_STRFUNC
 #endif
