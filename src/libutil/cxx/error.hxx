@@ -69,6 +69,34 @@ public:
 		error_message = static_storage.value();
 	}
 
+	error(const error &other) : error_code(other.error_code), category(other.category) {
+		if (other.static_storage) {
+			static_storage = other.static_storage;
+			error_message = static_storage.value();
+		}
+		else {
+			error_message = other.error_message;
+		}
+	}
+
+	error(error &&other) noexcept {
+		*this = std::move(other);
+	}
+
+	error& operator = (error &&other) noexcept {
+		if (other.static_storage.has_value()) {
+			std::swap(static_storage, other.static_storage);
+			error_message = static_storage.value();
+		}
+		else {
+			std::swap(error_message, other.error_message);
+		}
+		std::swap(other.error_code, error_code);
+		std::swap(other.category, category);
+
+		return *this;
+	}
+
 	/**
 	 * Convert into GError
 	 * @return
