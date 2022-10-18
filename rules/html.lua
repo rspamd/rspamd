@@ -396,7 +396,7 @@ rspamd_config.HTTP_TO_HTTPS = {
     return false
   end,
   description = 'Anchor text contains different scheme to target URL',
-  score = 2.0,
+  score = 0.5,
   group = 'html'
 }
 
