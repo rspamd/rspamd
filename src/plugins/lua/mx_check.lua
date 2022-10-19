@@ -45,6 +45,7 @@ local exclude_domains
 
 local E = {}
 local CRLF = '\r\n'
+local mx_miss_cache_prefix = 'mx_miss:'
 
 local function mx_check(task)
   local ip_addr = task:get_ip()
@@ -115,15 +116,19 @@ local function mx_check(task)
           table.insert(valid_mx, k)
         end, fun.filter(function (_, elt) return elt.working end, mxes))
         task:insert_result(settings.symbol_good_mx, 1.0, valid_mx)
+        local value =  table.concat(valid_mx, ';')
+        if mxes[mx_domain] and type(mxes[mx_domain]) == 'table' and mxes[mx_domain].mx_missing then
+          value = mx_miss_cache_prefix .. value
+        end
         local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           true, -- is write
           redis_cache_cb, --callback
           'SETEX', -- command
-          {key, tostring(settings.expire), table.concat(valid_mx, ';')} -- arguments
+          {key, tostring(settings.expire), value} -- arguments
         )
-        lua_util.debugm(N, task, "set redis cache key: %s; valid MX", key)
+        lua_util.debugm(N, task, "set redis cache key: %s; %s", key, value)
         if not ret then
           rspamd_logger.errx(task, 'error connecting to redis')
         end
@@ -210,7 +215,7 @@ local function mx_check(task)
 
       lua_util.debugm(N, task, "cannot find MX record for %s: %s, use implicit fallback",
           mx_domain, err)
-      mxes[mx_domain] = {checked = false, working = false, ips = {}}
+      mxes[mx_domain] = { checked = false, working = false, ips = {}, mx_missing = true }
       r:resolve('a', {
         name = mx_domain,
         callback = gen_mx_a_callback(mx_domain, mxes),
@@ -265,7 +270,11 @@ local function mx_check(task)
         if data == '0' then
           task:insert_result(settings.symbol_bad_mx, 1.0, 'cached')
         else
-          local mxes = rspamd_str_split(data, ';')
+          if lua_util.str_startswith(data, mx_miss_cache_prefix) then
+            task:insert_result(settings.symbol_no_mx, 1.0, 'cached')
+            data = string.sub(data, #mx_miss_cache_prefix + 1)
+          end
+          local mxes = lua_util.str_split(data, ';')
           task:insert_result(settings.symbol_good_mx, 1.0, 'cached: ' .. mxes[1])
         end
       end
