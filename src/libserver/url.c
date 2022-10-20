@@ -4281,7 +4281,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 	int r;
 
 	if (u1->protocol != u2->protocol) {
-		return u1->protocol < u2->protocol;
+		return u1->protocol - u2->protocol;
 	}
 
 	if (u1->protocol & PROTOCOL_MAILTO) {
@@ -4301,7 +4301,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 				}
 			}
 			else {
-				r = u1->hostlen < u2->hostlen;
+				r = u1->hostlen - u2->hostlen;
 			}
 		}
 	}
@@ -4311,7 +4311,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 			r = memcmp (u1->string, u2->string, min_len);
 
 			if (r == 0) {
-				r = u1->urllen < u2->urllen;
+				r = u1->urllen - u2->urllen;
 			}
 		}
 		else {
