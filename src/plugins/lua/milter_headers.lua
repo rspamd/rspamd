@@ -71,6 +71,10 @@ local settings = {
       header = 'X-Rspamd-Pre-Result',
       remove = 0,
     },
+    ['x-rspamd-action'] = {
+      header = 'X-Rspamd-Action',
+      remove = 0,
+    },
     ['remove-spam-flag'] = {
       header = 'X-Spam',
     },
@@ -352,6 +356,19 @@ local function milter_headers(task)
     add[local_mod.header] = string.rep(local_mod.char, math.floor(score))
   end
 
+  routines['x-rspamd-action'] = function()
+    local local_mod = settings.routines['x-rspamd-action']
+    if skip_wanted('x-rspamd-action') then return end
+    if not common['metric_action'] then
+      common['metric_action'] = task:get_metric_score()
+    end
+    local action = common['metric_action']
+    if local_mod.remove then
+      remove[local_mod.header] = local_mod.remove
+    end
+    add[local_mod.header] = action
+  end
+
   local function spam_header (class, name, value, remove_v)
     if skip_wanted(class) then return end
     if not common['metric_action'] then
@@ -631,6 +648,7 @@ if opts.extended_spam_headers then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
+  activate_routine('x-rspamd-action')
 end
 
 if opts.local_headers then
