@@ -108,6 +108,38 @@ private:
 			}
 		}
 	}
+	/* Have to duplicate raii_file methods to use raw filenames */
+	static auto get_dir(std::string_view fname) -> std::string_view {
+		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
+
+		if (sep_pos == std::string::npos) {
+			return std::string_view{fname};
+		}
+
+		while (sep_pos >= 1 && fname[sep_pos - 1] == G_DIR_SEPARATOR) {
+			sep_pos --;
+		}
+
+		return std::string_view{fname.data(), sep_pos};
+	}
+
+	static auto get_extension(std::string_view fname) -> std::string_view {
+		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
+
+		if (sep_pos == std::string::npos) {
+			sep_pos = 0;
+		}
+
+		auto filename = std::string_view{fname.data() + sep_pos};
+		auto dot_pos = filename.find('.');
+
+		if (dot_pos == std::string::npos) {
+			return std::string_view{};
+		}
+		else {
+			return std::string_view{filename.data() + dot_pos + 1, filename.size() - dot_pos - 1};
+		}
+	}
 public:
 	hs_known_files_cache(const hs_known_files_cache &) = delete;
 	hs_known_files_cache(hs_known_files_cache &&) = delete;
@@ -135,9 +167,30 @@ public:
 			cache_extensions.emplace_back(std::string{ext});
 		}
 
-		known_cached_files.insert(file.get_name());
-		msg_debug_hyperscan("added new known hyperscan file: %*s", (int)file.get_name().size(),
+		auto is_known = known_cached_files.insert(file.get_name());
+		msg_debug_hyperscan("added %s known hyperscan file: %*s",
+			is_known.second ? "new" : "already",
+			(int)file.get_name().size(),
 			file.get_name().data());
+	}
+
+	void add_cached_file(const char *fname) {
+		auto dir = hs_known_files_cache::get_dir(fname);
+		auto ext =  hs_known_files_cache::get_extension(fname);
+
+		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
+			[&](const auto& item){ return item == dir; }) == std::end(cache_dirs)) {
+			cache_dirs.emplace_back(std::string{dir});
+		}
+		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
+			[&](const auto& item){ return item == ext; }) == std::end(cache_extensions)) {
+			cache_extensions.emplace_back(std::string{ext});
+		}
+
+		auto is_known = known_cached_files.insert(fname);
+		msg_debug_hyperscan("added %s known hyperscan file: %s",
+			is_known.second ? "new" : "already",
+			fname);
 	}
 };
 
@@ -312,7 +365,7 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 #define C_DB_FROM_CXX(obj) (reinterpret_cast<rspamd_hyperscan_t *>(obj))
 
 rspamd_hyperscan_t *
-rspamd_maybe_load_hyperscan(const char *filename)
+rspamd_hyperscan_maybe_load(const char *filename)
 {
 	auto maybe_db = rspamd::util::load_cached_hs_file(filename);
 
@@ -350,12 +403,26 @@ rspamd_hyperscan_get_database(rspamd_hyperscan_t *db)
 	return real_db->db;
 }
 
+rspamd_hyperscan_t *
+rspamd_hyperscan_from_raw_db(hs_database_t *db)
+{
+	auto *ndb = new rspamd::util::hs_shared_database{db};
+
+	return C_DB_FROM_CXX(ndb);
+}
+
 void
 rspamd_hyperscan_free(rspamd_hyperscan_t *db)
 {
 	auto *real_db = CXX_DB_FROM_C(db);
 
 	delete real_db;
+}
+
+void
+rspamd_hyperscan_notice_known(const char *fname)
+{
+	rspamd::util::hs_known_files_cache::get().add_cached_file(fname);
 }
 
 #endif // WITH_HYPERSCAN

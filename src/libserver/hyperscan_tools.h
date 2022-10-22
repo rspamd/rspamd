@@ -35,6 +35,13 @@ typedef struct rspamd_hyperscan_s rspamd_hyperscan_t;
  * @return cached database if available
  */
 rspamd_hyperscan_t *rspamd_hyperscan_maybe_load(const char *filename);
+
+/**
+ * Creates a wrapper for a raw hs db. Ownership is transferred to the enclosing object returned
+ * @param filename
+ * @return
+ */
+rspamd_hyperscan_t *rspamd_hyperscan_from_raw_db(hs_database_t *db);
 /**
  * Get the internal database
  * @param db
@@ -46,6 +53,12 @@ hs_database_t* rspamd_hyperscan_get_database(rspamd_hyperscan_t *db);
  * @param db
  */
 void rspamd_hyperscan_free(rspamd_hyperscan_t *db);
+
+/**
+ * Notice a known hyperscan file (e.g. externally serialized)
+ * @param fname
+ */
+void rspamd_hyperscan_notice_known(const char *fname);
 
 G_END_DECLS
 
