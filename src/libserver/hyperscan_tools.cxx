@@ -25,6 +25,7 @@
 #include "hs.h"
 #include "logger.h"
 #include "worker_util.h"
+#include "hyperscan_tools.h"
 
 #include <glob.h> /* for glob */
 #include <unistd.h> /* for unlink */
@@ -35,7 +36,10 @@
         "hyperscan", "", \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
-
+#define msg_err_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "hyperscan", "", \
+        RSPAMD_LOG_FUNC, \
+        __VA_ARGS__)
 #define msg_debug_hyperscan(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_hyperscan_log_id, "hyperscan", "", \
         RSPAMD_LOG_FUNC, \
@@ -45,6 +49,12 @@ INIT_LOG_MODULE_PUBLIC(hyperscan)
 
 namespace rspamd::util {
 
+/*
+ * A singleton class that is responsible for deletion of the outdated hyperscan files
+ * One issue is that it must know about HS files in all workers, which is a problem
+ * TODO: we need to export hyperscan caches from all workers to a single place where
+ * we can clean them up (probably, to the main process)
+ */
 class hs_known_files_cache {
 private:
 	// These fields are filled when we add new known cache files
@@ -136,7 +146,7 @@ public:
  * This is a higher level representation of the cached hyperscan file
  */
 struct hs_shared_database {
-	hs_database_t *db; /**< internal database (might be in a shared memory) */
+	hs_database_t *db = nullptr; /**< internal database (might be in a shared memory) */
 	std::optional<raii_mmaped_file> maybe_map;
 
 	~hs_shared_database() {
@@ -148,6 +158,16 @@ struct hs_shared_database {
 
 	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db) : db(db), maybe_map(std::move(map)) {}
 	explicit hs_shared_database(hs_database_t *db) : db(db), maybe_map(std::nullopt) {}
+	hs_shared_database(const hs_shared_database &other) = delete;
+	hs_shared_database() = default;
+	hs_shared_database(hs_shared_database &&other) noexcept {
+		*this = std::move(other);
+	}
+	hs_shared_database& operator=(hs_shared_database &&other) noexcept {
+		std::swap(db, other.db);
+		std::swap(maybe_map, other.maybe_map);
+		return *this;
+	}
 };
 
 static auto
@@ -286,5 +306,56 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 }
 } // namespace rspamd::util
 
+/* C API */
+
+#define CXX_DB_FROM_C(obj) (reinterpret_cast<rspamd::util::hs_shared_database *>(obj))
+#define C_DB_FROM_CXX(obj) (reinterpret_cast<rspamd_hyperscan_t *>(obj))
+
+rspamd_hyperscan_t *
+rspamd_maybe_load_hyperscan(const char *filename)
+{
+	auto maybe_db = rspamd::util::load_cached_hs_file(filename);
+
+	if (maybe_db.has_value()) {
+		auto *ndb = new rspamd::util::hs_shared_database;
+		*ndb = std::move(maybe_db.value());
+		return C_DB_FROM_CXX(ndb);
+	}
+	else {
+		auto error = maybe_db.error();
+
+		switch(error.category) {
+		case rspamd::util::error_category::CRITICAL:
+			msg_err_hyperscan("critical error when trying to load cached hyperscan: %s",
+				error.error_message.data());
+			break;
+		case rspamd::util::error_category::IMPORTANT:
+			msg_info_hyperscan("error when trying to load cached hyperscan: %s",
+				error.error_message.data());
+			break;
+		default:
+			msg_debug_hyperscan("error when trying to load cached hyperscan: %s",
+				error.error_message.data());
+			break;
+		}
+	}
+
+	return nullptr;
+}
+
+hs_database_t*
+rspamd_hyperscan_get_database(rspamd_hyperscan_t *db)
+{
+	auto *real_db = CXX_DB_FROM_C(db);
+	return real_db->db;
+}
+
+void
+rspamd_hyperscan_free(rspamd_hyperscan_t *db)
+{
+	auto *real_db = CXX_DB_FROM_C(db);
+
+	delete real_db;
+}
 
 #endif // WITH_HYPERSCAN
