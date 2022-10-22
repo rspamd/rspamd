@@ -515,8 +515,11 @@ end
 --[[[
 -- @function lua_mime.modify_headers(task, {add = {hname = {value = 'value', order = 1}}, remove = {hname = {1,2}}})
 -- Adds/removes headers both internal and in the milter reply
+-- Mode defines to be compatible with Rspamd <=3.2 and is the default (equal to 'compat')
 --]]
-exports.modify_headers = function(task, hdr_alterations)
+exports.modify_headers = function(task, hdr_alterations, mode)
+  -- Assume default mode compatibility
+  if not mode then mode = 'compat' end
   local add = hdr_alterations.add or {}
   local remove = hdr_alterations.remove or {}
 
@@ -550,6 +553,11 @@ exports.modify_headers = function(task, hdr_alterations)
     else
       logger.errx(task, 'invalid modification of header: %s', hdr)
     end
+
+    if mode == 'compat' and #add_headers[hname] == 1 then
+      -- Switch to the compatibility mode
+      add_headers[hname] = add_headers[hname][1]
+    end
   end
   if hdr_alterations.order then
     -- Get headers alterations ordered
@@ -580,6 +588,11 @@ exports.modify_headers = function(task, hdr_alterations)
     end
   end
 
+  if mode == 'compat' then
+    -- Clear empty alterations in the compat mode
+    if not next(add_headers) then add_headers = nil end
+    if not next(hdr_alterations.remove) then hdr_alterations.remove = nil end
+  end
   task:set_milter_reply({
     add_headers = add_headers,
     remove_headers = hdr_alterations.remove

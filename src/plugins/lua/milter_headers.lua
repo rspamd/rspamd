@@ -39,6 +39,7 @@ local settings = {
   skip_all = false,
   local_headers = {},
   authenticated_headers = {},
+  headers_modify_mode = 'compat', -- To avoid compatibility issues on upgrade
   default_headers_order = nil, -- Insert at the end (set 1 to insert just after the first received)
   routines = {
     ['remove-headers'] = {
@@ -572,7 +573,7 @@ local function milter_headers(task)
     lua_mime.modify_headers(task, {
       add = add,
       remove = remove
-    })
+    }, settings.headers_modify_mode)
   end
 end
 
