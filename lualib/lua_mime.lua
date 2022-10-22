@@ -590,8 +590,8 @@ exports.modify_headers = function(task, hdr_alterations, mode)
 
   if mode == 'compat' then
     -- Clear empty alterations in the compat mode
-    if not next(add_headers) then add_headers = nil end
-    if not next(hdr_alterations.remove) then hdr_alterations.remove = nil end
+    if add_headers and not next(add_headers) then add_headers = nil end
+    if hdr_alterations.remove and not next(hdr_alterations.remove) then hdr_alterations.remove = nil end
   end
   task:set_milter_reply({
     add_headers = add_headers,
