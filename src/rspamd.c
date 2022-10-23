@@ -53,6 +53,10 @@
 #include "sqlite3.h"
 #include "contrib/libev/ev.h"
 
+#ifdef WITH_HYPERSCAN
+#include "libserver/hyperscan_tools.h"
+#endif
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
@@ -1643,6 +1647,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info_main ("terminating...");
 
+#ifdef WITH_HYPERSCAN
+	rspamd_hyperscan_cleanup_maybe();
+#endif
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger);
 	g_hash_table_unref (rspamd_main->spairs);

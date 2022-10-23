@@ -26,6 +26,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
+#include "hyperscan_tools.h"
 #endif
 #ifndef WITH_PCRE2
 #include <pcre.h>
@@ -82,7 +83,7 @@ struct rspamd_regexp_map_helper {
 	khash_t(rspamd_map_hash) *htb;
 	enum rspamd_regexp_map_flags map_flags;
 #ifdef WITH_HYPERSCAN
-	hs_database_t *hs_db;
+	rspamd_hyperscan_t *hs_db;
 	hs_scratch_t *hs_scratch;
 	gchar **patterns;
 	gint *flags;
@@ -883,7 +884,7 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 		hs_free_scratch (re_map->hs_scratch);
 	}
 	if (re_map->hs_db) {
-		hs_free_database (re_map->hs_db);
+		rspamd_hyperscan_free(re_map->hs_db);
 	}
 	if (re_map->patterns) {
 		for (i = 0; i < re_map->regexps->len; i ++) {
@@ -1055,112 +1056,11 @@ rspamd_radix_dtor (struct map_cb_data *data)
 }
 
 #ifdef WITH_HYPERSCAN
-struct rspamd_re_maps_cache_dtor_cbdata {
-	struct rspamd_config *cfg;
-	GHashTable *valid_re_hashes;
-	gchar *dirname;
-};
-
-static void
-rspamd_re_maps_cache_cleanup_dtor (gpointer ud)
-{
-	struct rspamd_re_maps_cache_dtor_cbdata *cbd =
-			(struct rspamd_re_maps_cache_dtor_cbdata *)ud;
-	GPtrArray *cache_files;
-	GError *err = NULL;
-	struct rspamd_config *cfg;
-
-	cfg = cbd->cfg;
-
-	if (cfg->cur_worker != NULL) {
-		/* Skip dtor, limit it to main process only */
-		return;
-	}
-
-	cache_files = rspamd_glob_path (cbd->dirname, "*.hsmc", FALSE, &err);
-
-	if (!cache_files) {
-		msg_err_config ("cannot glob files in %s: %e", cbd->dirname, err);
-		g_error_free (err);
-	}
-	else {
-		const gchar *fname;
-		guint i;
-
-		PTR_ARRAY_FOREACH (cache_files, i, fname) {
-			gchar *basename = g_path_get_basename (fname);
-
-			if (g_hash_table_lookup (cbd->valid_re_hashes, basename) == NULL) {
-				gchar *dir;
-
-				dir = g_path_get_dirname (fname);
-
-				/* Sanity check to avoid removal of something bad */
-				if (strcmp (dir, cbd->dirname) != 0) {
-					msg_err_config ("bogus file found: %s in %s, skip deleting",
-							fname, dir);
-				}
-				else {
-					if (unlink (fname) == -1) {
-						msg_err_config ("cannot delete obsolete file %s in %s: %s",
-								fname, dir, strerror (errno));
-					}
-					else {
-						msg_info_config ("deleted obsolete file %s in %s",
-								fname, dir);
-					}
-				}
-
-				g_free (dir);
-			}
-			else {
-				msg_debug_config ("valid re cache file %s", fname);
-			}
-
-			g_free (basename);
-		}
-
-		g_ptr_array_free (cache_files, TRUE);
-	}
-
-	g_hash_table_unref (cbd->valid_re_hashes);
-	g_free (cbd->dirname);
-}
-
-static void
-rspamd_re_map_cache_update (const gchar *fname, struct rspamd_config *cfg)
-{
-	GHashTable *valid_re_hashes;
-
-	valid_re_hashes = rspamd_mempool_get_variable (cfg->cfg_pool,
-			RSPAMD_MEMPOOL_RE_MAPS_CACHE);
-
-	if (!valid_re_hashes) {
-		valid_re_hashes = g_hash_table_new_full (g_str_hash, g_str_equal,
-				g_free, NULL);
-		rspamd_mempool_set_variable (cfg->cfg_pool,
-				RSPAMD_MEMPOOL_RE_MAPS_CACHE,
-				valid_re_hashes, (rspamd_mempool_destruct_t)g_hash_table_unref);
-
-		/* We also add a cleanup dtor for all hashes */
-		static struct rspamd_re_maps_cache_dtor_cbdata cbd;
-
-		cbd.valid_re_hashes = g_hash_table_ref (valid_re_hashes);
-		cbd.cfg = cfg;
-		cbd.dirname = g_path_get_dirname (fname);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-				rspamd_re_maps_cache_cleanup_dtor, &cbd);
-	}
-
-	g_hash_table_insert (valid_re_hashes, g_path_get_basename (fname), "1");
-}
 
 static gboolean
 rspamd_try_load_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 {
 	gchar fp[PATH_MAX];
-	gpointer data;
-	gsize len;
 	struct rspamd_map *map;
 
 	map = re_map->map;
@@ -1173,25 +1073,9 @@ rspamd_try_load_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 			map->cfg->hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
-	if ((data = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
-		if (hs_deserialize_database (data, len, &re_map->hs_db) == HS_SUCCESS) {
-			rspamd_re_map_cache_update (fp, map->cfg);
-			munmap (data, len);
+	re_map->hs_db = rspamd_hyperscan_maybe_load(fp);
 
-			msg_info_map ("loaded hypersan cache from %s (%Hz length) for %s",
-					fp, len, map->name);
-
-			return TRUE;
-		}
-
-		msg_info_map ("invalid hypersan cache in %s (%Hz length) for %s, removing file",
-				fp, len, map->name);
-		munmap (data, len);
-		/* Remove stale file */
-		(void)unlink (fp);
-	}
-
-	return FALSE;
+	return re_map->hs_db != NULL;
 }
 
 static gboolean
@@ -1214,7 +1098,7 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
 	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
-		if (hs_serialize_database (re_map->hs_db, &bytes, &len) == HS_SUCCESS) {
+		if (hs_serialize_database (rspamd_hyperscan_get_database(re_map->hs_db), &bytes, &len) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
 				msg_warn_map ("cannot write hyperscan cache to %s: %s",
 						fp, strerror (errno));
@@ -1237,8 +1121,7 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 				else {
 					msg_info_map ("written cached hyperscan data for %s to %s (%Hz length)",
 							map->name, np, len);
-
-					rspamd_re_map_cache_update (np, map->cfg);
+					rspamd_hyperscan_notice_known(np);
 				}
 			}
 		}
@@ -1253,43 +1136,6 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 	}
 
 	return FALSE;
-}
-
-static gboolean
-rspamd_re_map_cache_cleanup_old (struct rspamd_regexp_map_helper *old_re_map)
-{
-	gchar fp[PATH_MAX];
-	struct rspamd_map *map;
-	gboolean ret = TRUE;
-
-	map = old_re_map->map;
-
-	if (!map->cfg->hs_cache_dir) {
-		return FALSE;
-	}
-
-	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc",
-			map->cfg->hs_cache_dir,
-			(gint)rspamd_cryptobox_HASHBYTES / 2, old_re_map->re_digest);
-
-	msg_info_map ("unlink stale cache file for %s: %s", map->name, fp);
-
-	if (unlink (fp) == -1) {
-		msg_warn_map ("cannot unlink stale cache file for %s (%s): %s",
-				map->name, fp, strerror (errno));
-		ret = FALSE;
-	}
-
-	GHashTable *valid_re_hashes;
-
-	valid_re_hashes = rspamd_mempool_get_variable (map->cfg->cfg_pool,
-			RSPAMD_MEMPOOL_RE_MAPS_CACHE);
-
-	if (valid_re_hashes) {
-		g_hash_table_remove (valid_re_hashes, fp);
-	}
-
-	return ret;
 }
 
 #endif
@@ -1376,6 +1222,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 
 		if (!rspamd_try_load_re_map_cache (re_map)) {
 			gdouble ts1 = rspamd_get_ticks (FALSE);
+			hs_database_t *hs_db = NULL;
 
 			if (hs_compile_multi ((const gchar **) re_map->patterns,
 					re_map->flags,
@@ -1383,7 +1230,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 					re_map->regexps->len,
 					HS_MODE_BLOCK,
 					&plt,
-					&re_map->hs_db,
+					&hs_db,
 					&err) != HS_SUCCESS) {
 
 				msg_err_map ("cannot create tree of regexp when processing '%s': %s",
@@ -1396,6 +1243,8 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 				return;
 			}
 
+			re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db);
+
 			ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
 			msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
 					re_map->regexps->len, re_map->map->name, ts1);
@@ -1406,9 +1255,9 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 					re_map->regexps->len, re_map->map->name);
 		}
 
-		if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
+		if (hs_alloc_scratch (rspamd_hyperscan_get_database(re_map->hs_db), &re_map->hs_scratch) != HS_SUCCESS) {
 			msg_err_map ("cannot allocate scratch space for hyperscan");
-			hs_free_database (re_map->hs_db);
+			rspamd_hyperscan_free(re_map->hs_db);
 			re_map->hs_db = NULL;
 		}
 	}
@@ -1547,15 +1396,6 @@ rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 
 		if (data->prev_data) {
 			old_re_map = data->prev_data;
-
-#ifdef WITH_HYPERSCAN
-			if (re_map && memcmp(re_map->re_digest, old_re_map->re_digest,
-					sizeof(re_map->re_digest)) != 0) {
-				/* Cleanup old stuff */
-				rspamd_re_map_cache_cleanup_old(old_re_map);
-			}
-#endif
-
 			rspamd_map_helper_destroy_regexp(old_re_map);
 		}
 	}
@@ -1614,8 +1454,9 @@ rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *map,
 
 		if (validated) {
 
-			res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
-					rspamd_match_hs_single_handler, (void *)&i);
+			res = hs_scan (rspamd_hyperscan_get_database(map->hs_db), in, len, 0,
+				map->hs_scratch,
+				rspamd_match_hs_single_handler, (void *)&i);
 
 			if (res == HS_SCAN_TERMINATED) {
 				res = 1;
@@ -1711,7 +1552,8 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 			cbd.ar = ret;
 			cbd.map = map;
 
-			if (hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
+			if (hs_scan (rspamd_hyperscan_get_database(map->hs_db), in, len,
+					0, map->hs_scratch,
 					rspamd_match_hs_multiple_handler, &cbd) == HS_SUCCESS) {
 				res = 1;
 			}

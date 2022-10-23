@@ -67,49 +67,9 @@ private:
 
 	virtual ~hs_known_files_cache() {
 		// Cleanup cache dir
-		/* We clean dir merely if we are running from the main process */
-		if (rspamd_current_worker == nullptr) {
-			auto cleanup_dir = [&](std::string_view dir) -> void {
-				for (const auto &ext : cache_extensions) {
-					glob_t globbuf;
-
-					auto glob_pattern = fmt::format("{}{}*.{}",
-						dir, G_DIR_SEPARATOR_S, ext);
-					memset(&globbuf, 0, sizeof(globbuf));
-
-					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
-						for (auto i = 0; i < globbuf.gl_pathc; i++) {
-							const auto *path = globbuf.gl_pathv[i];
-							struct stat st;
-
-							if (stat(path, &st) == -1) {
-								msg_debug_hyperscan("cannot stat file %s: %s",
-									path, strerror(errno));
-								continue;
-							}
-
-							if (S_ISREG(st.st_mode)) {
-								if (!known_cached_files.contains(path)) {
-									msg_info_hyperscan("remove stale hyperscan file %s", path);
-									unlink(path);
-								}
-								else {
-									msg_debug_hyperscan("found known hyperscan file %s, size: %Hz",
-										path, st.st_size);
-								}
-							}
-						}
-					}
-
-					globfree(&globbuf);
-				}
-			};
-
-			for (const auto &dir: cache_dirs) {
-				cleanup_dir(dir);
-			}
-		}
+		cleanup_maybe();
 	}
+
 	/* Have to duplicate raii_file methods to use raw filenames */
 	static auto get_dir(std::string_view fname) -> std::string_view {
 		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
@@ -177,8 +137,13 @@ public:
 	}
 
 	void add_cached_file(const char *fname) {
-		auto dir = hs_known_files_cache::get_dir(fname);
-		auto ext =  hs_known_files_cache::get_extension(fname);
+
+		auto mut_fname = std::string{fname};
+		std::size_t sz;
+		rspamd_http_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
+		mut_fname.resize(sz);
+		auto dir = hs_known_files_cache::get_dir(mut_fname);
+		auto ext =  hs_known_files_cache::get_extension(mut_fname);
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
 			[&](const auto& item){ return item == dir; }) == std::end(cache_dirs)) {
@@ -189,10 +154,60 @@ public:
 			cache_extensions.emplace_back(std::string{ext});
 		}
 
-		auto is_known = known_cached_files.insert(fname);
+		auto is_known = known_cached_files.insert(mut_fname);
 		msg_debug_hyperscan("added %s known hyperscan file: %s",
 			is_known.second ? "new" : "already",
-			fname);
+			mut_fname.c_str());
+	}
+
+	auto cleanup_maybe() -> void {
+		/* We clean dir merely if we are running from the main process */
+		if (rspamd_current_worker == nullptr) {
+			auto cleanup_dir = [&](std::string_view dir) -> void {
+				for (const auto &ext : cache_extensions) {
+					glob_t globbuf;
+
+					auto glob_pattern = fmt::format("{}{}*.{}",
+						dir, G_DIR_SEPARATOR_S, ext);
+					memset(&globbuf, 0, sizeof(globbuf));
+
+					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
+						for (auto i = 0; i < globbuf.gl_pathc; i++) {
+							const auto *path = globbuf.gl_pathv[i];
+							struct stat st;
+
+							if (stat(path, &st) == -1) {
+								msg_debug_hyperscan("cannot stat file %s: %s",
+									path, strerror(errno));
+								continue;
+							}
+
+							if (S_ISREG(st.st_mode)) {
+								if (!known_cached_files.contains(path)) {
+									msg_info_hyperscan("remove stale hyperscan file %s", path);
+									unlink(path);
+								}
+								else {
+									msg_debug_hyperscan("found known hyperscan file %s, size: %Hz",
+										path, st.st_size);
+								}
+							}
+						}
+					}
+
+					globfree(&globbuf);
+				}
+			};
+
+			for (const auto &dir: cache_dirs) {
+				msg_debug_hyperscan("cleaning up directory %s", dir.c_str());
+				cleanup_dir(dir);
+			}
+
+			cache_dirs.clear();
+			cache_extensions.clear();
+			known_cached_files.clear();
+		}
 	}
 };
 
@@ -333,7 +348,6 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 			if (unserialized_file.has_value()) {
 
 				auto &unserialized_checked = unserialized_file.value();
-				hs_cache.add_cached_file(unserialized_checked);
 
 				if (unserialized_checked.get_size() == 0) {
 					/*
@@ -344,6 +358,7 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 					return hs_shared_from_serialized(std::forward<T>(cached_serialized));
 				}
 				else {
+					hs_cache.add_cached_file(unserialized_checked);
 					return raii_mmaped_file::mmap_shared(std::move(unserialized_checked), PROT_READ)
 						.and_then([&]<class U>(U &&mmapped_unserialized) -> auto {
 							return hs_shared_from_unserialized(std::forward<U>(mmapped_unserialized));
@@ -442,6 +457,12 @@ rspamd_hyperscan_notice_known(const char *fname)
 				nullptr);
 		}
 	}
+}
+
+void
+rspamd_hyperscan_cleanup_maybe(void)
+{
+	rspamd::util::hs_known_files_cache::get().cleanup_maybe();
 }
 
 #endif // WITH_HYPERSCAN

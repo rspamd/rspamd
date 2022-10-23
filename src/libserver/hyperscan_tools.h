@@ -60,6 +60,11 @@ void rspamd_hyperscan_free(rspamd_hyperscan_t *db);
  */
 void rspamd_hyperscan_notice_known(const char *fname);
 
+/**
+ * Cleans up old files. This method should be called on config free (in the main process)
+ */
+void rspamd_hyperscan_cleanup_maybe(void);
+
 G_END_DECLS
 
 #endif
