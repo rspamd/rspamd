@@ -1175,8 +1175,14 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	/* Close parent part of socketpair */
 	close (wrk->control_pipe[0]);
 	close (wrk->srv_pipe[0]);
+	/*
+	 * Read comments in `rspamd_handle_main_fork` for details why these channel
+	 * is blocking.
+	 */
+#if 0
 	rspamd_socket_nonblocking (wrk->control_pipe[1]);
 	rspamd_socket_nonblocking (wrk->srv_pipe[1]);
+#endif
 	rspamd_main->cfg->cur_worker = wrk;
 	/* Execute worker (this function should not return normally!) */
 	cf->worker->worker_start_func (wrk);
@@ -1194,8 +1200,21 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 	close (wrk->control_pipe[1]);
 	close (wrk->srv_pipe[1]);
 
+	/*
+	 * There are no reasons why control pipes are blocking: the messages
+	 * there are rare and are strictly bounded by command sizes, so if we block
+	 * on some pipe, it is ok, as we still poll that for all operations.
+	 * It is also impossible to block on writing in normal conditions.
+	 * And if the conditions are not normal, e.g. a worker is unresponsive, then
+	 * we can safely think that the non-blocking behaviour as it is implemented
+	 * currently will not make things better, as it would lead to incomplete
+	 * reads/writes that are not handled anyhow and are totally broken from the
+	 * beginning.
+	 */
+#if 0
 	rspamd_socket_nonblocking (wrk->control_pipe[0]);
 	rspamd_socket_nonblocking (wrk->srv_pipe[0]);
+#endif
 	rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
 	/* Child event */
 	wrk->cld_ev.data = wrk;
