@@ -145,6 +145,16 @@ auto raii_file::update_stat() noexcept -> bool
 	return fstat(fd, &st) != -1;
 }
 
+raii_file::raii_file(const char *fname, int fd, bool temp) : fd(fd), temp(temp)
+{
+	std::size_t nsz;
+
+	/* Normalize path */
+	this->fname = fname;
+	rspamd_normalize_path_inplace(this->fname.data(), this->fname.size(), &nsz);
+	this->fname.resize(nsz);
+}
+
 
 raii_locked_file::~raii_locked_file() noexcept
 {

@@ -126,7 +126,7 @@ protected:
 	std::string fname;
 	struct stat st;
 
-	explicit raii_file(const char *fname, int fd, bool temp) : fd(fd), temp(temp), fname(fname) {}
+	explicit raii_file(const char *fname, int fd, bool temp);
 };
 /**
  * A simple RAII object to contain a file descriptor with an flock wrap
