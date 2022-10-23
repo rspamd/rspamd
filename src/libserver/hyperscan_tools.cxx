@@ -37,13 +37,21 @@
         "hyperscan", "", \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
+#define msg_info_hyperscan_lambda(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "hyperscan", "", \
+        log_func, \
+        __VA_ARGS__)
 #define msg_err_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "hyperscan", "", \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
-#define msg_debug_hyperscan(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+#define msg_debug_hyperscan(...)  rspamd_conditional_debug_fast (nullptr, nullptr, \
         rspamd_hyperscan_log_id, "hyperscan", "", \
         RSPAMD_LOG_FUNC, \
+        __VA_ARGS__)
+#define msg_debug_hyperscan_lambda(...) rspamd_conditional_debug_fast (nullptr, nullptr, \
+        rspamd_hyperscan_log_id, "hyperscan", "", \
+        log_func, \
         __VA_ARGS__)
 
 INIT_LOG_MODULE_PUBLIC(hyperscan)
@@ -163,6 +171,7 @@ public:
 	auto cleanup_maybe() -> void {
 		/* We clean dir merely if we are running from the main process */
 		if (rspamd_current_worker == nullptr) {
+			const auto *log_func = RSPAMD_LOG_FUNC;
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext : cache_extensions) {
 					glob_t globbuf;
@@ -177,18 +186,18 @@ public:
 							struct stat st;
 
 							if (stat(path, &st) == -1) {
-								msg_debug_hyperscan("cannot stat file %s: %s",
+								msg_debug_hyperscan_lambda("cannot stat file %s: %s",
 									path, strerror(errno));
 								continue;
 							}
 
 							if (S_ISREG(st.st_mode)) {
 								if (!known_cached_files.contains(path)) {
-									msg_info_hyperscan("remove stale hyperscan file %s", path);
+									msg_info_hyperscan_lambda("remove stale hyperscan file %s", path);
 									unlink(path);
 								}
 								else {
-									msg_debug_hyperscan("found known hyperscan file %s, size: %Hz",
+									msg_debug_hyperscan_lambda("found known hyperscan file %s, size: %Hz",
 										path, st.st_size);
 								}
 							}
@@ -262,6 +271,7 @@ hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_data
 auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, error>
 {
 	auto &hs_cache = hs_known_files_cache::get();
+	const auto *log_func = RSPAMD_LOG_FUNC;
 
 	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ)
 		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, error> {
@@ -285,11 +295,11 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 						hs_serialized_database_size((const char *)cached_serialized.get_map(),
 							cached_serialized.get_size(), &unserialized_size);
 
-						msg_debug("multipattern: create new database in %s; %Hz size",
+						msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
 							tmpfile_pattern.data(), unserialized_size);
 						void *buf;
 						posix_memalign(&buf, 16, unserialized_size);
-						if (buf == NULL) {
+						if (buf == nullptr) {
 							return tl::make_unexpected(error {"Cannot allocate memory", errno, error_category::CRITICAL });
 						}
 
@@ -321,7 +331,7 @@ auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, 
 								if (rename(tmpfile_name.c_str(),
 									unserialized_fname.c_str()) == -1) {
 									if (errno != EEXIST) {
-										msg_err("cannot rename %s -> %s: %s",
+										msg_info_hyperscan_lambda("cannot rename %s -> %s: %s",
 											tmpfile_name.c_str(),
 											unserialized_fname.c_str(),
 											strerror(errno));
