@@ -47,12 +47,13 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_ON_FORK,
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
+	RSPAMD_NOTICE_HYPERSCAN_CACHE,
 };
 
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2)
+#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64))
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -174,6 +175,10 @@ struct rspamd_srv_command {
 		struct {
 			guint status;
 		} health;
+		/* Used when a worker loads a valid hyperscan file */
+		struct {
+			char path[CONTROL_PATHLEN];
+		} hyperscan_cache_file;
 	} cmd;
 };
 
@@ -205,6 +210,9 @@ struct rspamd_srv_reply {
 			guint scanners_count;
 			guint workers_hb_lost;
 		} health;
+		struct {
+			int unused;
+		} hyperscan_cache_file;
 	} reply;
 };
 

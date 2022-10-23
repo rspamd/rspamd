@@ -31,6 +31,7 @@
 #include <unistd.h> /* for unlink */
 #include <optional>
 #include "unix-std.h"
+#include "rspamd_control.h"
 
 #define msg_info_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         "hyperscan", "", \
@@ -66,7 +67,8 @@ private:
 
 	virtual ~hs_known_files_cache() {
 		// Cleanup cache dir
-		if (rspamd_current_worker != nullptr && rspamd_worker_is_primary_controller(rspamd_current_worker)) {
+		/* We clean dir merely if we are running from the main process */
+		if (rspamd_current_worker == nullptr) {
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext : cache_extensions) {
 					glob_t globbuf;
@@ -423,6 +425,23 @@ void
 rspamd_hyperscan_notice_known(const char *fname)
 {
 	rspamd::util::hs_known_files_cache::get().add_cached_file(fname);
+
+	if (rspamd_current_worker != nullptr) {
+		/* Also notify main process */
+		struct rspamd_srv_command notice_cmd;
+
+		if (strlen(fname) >= sizeof(notice_cmd.cmd.hyperscan_cache_file.path)) {
+			msg_err("internal error: length of the filename %d ('%s') is larger than control buffer path: %d",
+				(int)strlen(fname), fname, (int)sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
+		}
+		else {
+			notice_cmd.type = RSPAMD_NOTICE_HYPERSCAN_CACHE;
+			rspamd_srv_send_command(rspamd_current_worker,
+				rspamd_current_worker->srv->event_loop, &notice_cmd, -1,
+				nullptr,
+				nullptr);
+		}
+	}
 }
 
 #endif // WITH_HYPERSCAN

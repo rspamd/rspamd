@@ -27,6 +27,10 @@
 #include <sys/resource.h>
 #endif
 
+#ifdef WITH_HYPERSCAN
+#include "hyperscan_tools.h"
+#endif
+
 static ev_tstamp io_timeout = 30.0;
 static ev_tstamp worker_io_timeout = 0.5;
 
@@ -1013,6 +1017,12 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				break;
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply (srv, &rdata->rep);
+				break;
+			case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+#ifdef WITH_HYPERSCAN
+				rspamd_hyperscan_notice_known(cmd.cmd.hyperscan_cache_file.path);
+#endif
+				rdata->rep.reply.hyperscan_cache_file.unused = 0;
 				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
