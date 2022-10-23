@@ -908,8 +908,13 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 		r = recvmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot read from worker's srv pipe: %s",
-					strerror (errno));
+			if (errno != EAGAIN) {
+				msg_err ("cannot read from worker's srv pipe: %s",
+					strerror(errno));
+			}
+			else {
+				return;
+			}
 		}
 		else if (r == 0) {
 			/*

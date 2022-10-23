@@ -1228,6 +1228,9 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 #endif
 }
 
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET SOCK_DGRAM
+#endif
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 					struct rspamd_worker_conf *cf,
@@ -1241,12 +1244,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
-	if (!rspamd_socketpair (wrk->control_pipe, SOCK_DGRAM)) {
+	if (!rspamd_socketpair (wrk->control_pipe, SOCK_SEQPACKET)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
 
-	if (!rspamd_socketpair (wrk->srv_pipe, SOCK_DGRAM)) {
+	if (!rspamd_socketpair (wrk->srv_pipe, SOCK_SEQPACKET)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}

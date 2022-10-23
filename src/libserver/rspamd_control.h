@@ -20,9 +20,7 @@
 #include "mem_pool.h"
 #include "contrib/libev/ev.h"
 
-#ifdef  __cplusplus
-extern "C" {
-#endif
+G_BEGIN_DECLS
 
 struct rspamd_main;
 struct rspamd_worker;
@@ -290,8 +288,6 @@ const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
  */
 void rspamd_pending_control_free (gpointer p);
 
-#ifdef  __cplusplus
-}
-#endif
+G_END_DECLS
 
 #endif
