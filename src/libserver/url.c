@@ -2439,8 +2439,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 		/* We now normalize path */
-		rspamd_http_normalize_path_inplace (rspamd_url_data_unsafe (uri),
-				uri->datalen, &unquoted_len);
+		rspamd_normalize_path_inplace(rspamd_url_data_unsafe (uri),
+			uri->datalen, &unquoted_len);
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 	}
 

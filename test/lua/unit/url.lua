@@ -10,7 +10,7 @@ context("URL check functions", function()
   local ffi = require("ffi")
 
   ffi.cdef[[
-  void rspamd_http_normalize_path_inplace(char *path, size_t len, size_t *nlen);
+  void rspamd_normalize_path_inplace(char *path, size_t len, size_t *nlen);
   ]]
 
   test_helper.init_url_parser()

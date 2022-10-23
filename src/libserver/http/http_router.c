@@ -302,9 +302,9 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				lookup.begin = pathbuf;
 				lookup.len = u.field_data[UF_PATH].len;
 
-				rspamd_http_normalize_path_inplace (pathbuf,
-						lookup.len,
-						&unnorm_len);
+				rspamd_normalize_path_inplace(pathbuf,
+					lookup.len,
+					&unnorm_len);
 				lookup.len = unnorm_len;
 			}
 			else {

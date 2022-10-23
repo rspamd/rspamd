@@ -140,7 +140,7 @@ public:
 
 		auto mut_fname = std::string{fname};
 		std::size_t sz;
-		rspamd_http_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
+		rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
 		mut_fname.resize(sz);
 		auto dir = hs_known_files_cache::get_dir(mut_fname);
 		auto ext =  hs_known_files_cache::get_extension(mut_fname);

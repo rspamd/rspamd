@@ -3287,9 +3287,9 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 
-		rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
-				lookup.len,
-				&unnorm_len);
+		rspamd_normalize_path_inplace((gchar *) lookup.begin,
+			lookup.len,
+			&unnorm_len);
 		lookup.len = unnorm_len;
 	}
 	else {
@@ -3494,9 +3494,9 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 		lookup.len = u.field_data[UF_PATH].len;
 
-		rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
-				lookup.len,
-				&unnorm_len);
+		rspamd_normalize_path_inplace((gchar *) lookup.begin,
+			lookup.len,
+			&unnorm_len);
 		lookup.len = unnorm_len;
 	}
 	else {

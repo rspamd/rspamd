@@ -526,6 +526,15 @@ extern const struct rspamd_controller_pbkdf pbkdf_list[];
  */
 float rspamd_sum_floats (float *ar, gsize *nelts);
 
+/**
+ * Normalize file path removing dot sequences and repeating '/' symbols as
+ * per rfc3986#section-5.2
+ * @param path
+ * @param len
+ * @param nlen
+ */
+void rspamd_normalize_path_inplace (gchar *path, guint len, gsize *nlen);
+
 #ifdef  __cplusplus
 }
 #endif
