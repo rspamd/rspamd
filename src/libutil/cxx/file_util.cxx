@@ -181,31 +181,36 @@ auto raii_locked_file::unlock() -> raii_file {
 	return raii_file{static_cast<raii_file&&>(std::move(*this))};
 }
 
-raii_mmaped_file::raii_mmaped_file(raii_file &&_file, void *_map)
-		: file(std::move(_file)), map(_map)
+raii_mmaped_file::raii_mmaped_file(raii_file &&file, void *map, std::size_t sz)
+		: file(std::move(file)), map(map), map_size(sz)
 {
 }
 
 auto raii_mmaped_file::mmap_shared(raii_file &&file,
-								   int flags) -> tl::expected<raii_mmaped_file, error>
+								   int flags, std::int64_t offset) -> tl::expected<raii_mmaped_file, error>
 {
 	void *map;
 
+	if (file.get_stat().st_size < offset || offset < 0) {
+		return tl::make_unexpected(error {
+			fmt::format("cannot mmap file {} due to incorrect offset; offset={}, size={}",
+				file.get_name(), offset, file.get_size()), EINVAL});
+	}
 	/* Update stat on file to ensure it is up-to-date */
 	file.update_stat();
-	map = mmap(NULL, file.get_stat().st_size, flags, MAP_SHARED, file.get_fd(), 0);
+	map = mmap(nullptr, file.get_size() - offset, flags, MAP_SHARED, file.get_fd(), offset);
 
 	if (map == MAP_FAILED) {
-		return tl::make_unexpected(error { fmt::format("cannot mmap file at fd: {}: {}",
-				file.get_fd(), ::strerror(errno)), errno });
+		return tl::make_unexpected(error { fmt::format("cannot mmap file {}: {}",
+				file.get_name(), ::strerror(errno)), errno });
 
 	}
 
-	return raii_mmaped_file{std::move(file), map};
+	return raii_mmaped_file{std::move(file), map,  file.get_size() - offset};
 }
 
 auto raii_mmaped_file::mmap_shared(const char *fname, int open_flags,
-								   int mmap_flags) -> tl::expected<raii_mmaped_file, error>
+								   int mmap_flags, std::int64_t offset) -> tl::expected<raii_mmaped_file, error>
 {
 	auto file = raii_file::open(fname, open_flags);
 
@@ -213,13 +218,13 @@ auto raii_mmaped_file::mmap_shared(const char *fname, int open_flags,
 		return tl::make_unexpected(file.error());
 	}
 
-	return raii_mmaped_file::mmap_shared(std::move(file.value()), mmap_flags);
+	return raii_mmaped_file::mmap_shared(std::move(file.value()), mmap_flags, offset);
 }
 
 raii_mmaped_file::~raii_mmaped_file()
 {
 	if (map != nullptr) {
-		munmap(map, file.get_stat().st_size);
+		munmap(map, map_size);
 	}
 }
 
@@ -227,6 +232,7 @@ raii_mmaped_file::raii_mmaped_file(raii_mmaped_file &&other) noexcept
 		: file(std::move(other.file))
 {
 	std::swap(map, other.map);
+	std::swap(map_size, other.map_size);
 }
 
 auto raii_file_sink::create(const char *fname, int flags, int perms,

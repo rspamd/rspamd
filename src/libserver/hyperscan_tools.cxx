@@ -268,7 +268,7 @@ hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_data
 	return tl::expected<hs_shared_database, error>{tl::in_place, target};
 }
 
-auto load_cached_hs_file(const char *fname) -> tl::expected<hs_shared_database, error>
+auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expected<hs_shared_database, error>
 {
 	auto &hs_cache = hs_known_files_cache::get();
 	const auto *log_func = RSPAMD_LOG_FUNC;

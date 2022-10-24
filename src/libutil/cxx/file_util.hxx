@@ -196,14 +196,14 @@ private:
  */
 struct raii_mmaped_file final {
 	~raii_mmaped_file();
-	static auto mmap_shared(raii_file &&file, int flags) -> tl::expected<raii_mmaped_file, error>;
-	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags) -> tl::expected<raii_mmaped_file, error>;
+	static auto mmap_shared(raii_file &&file, int flags, std::int64_t offset = 0) -> tl::expected<raii_mmaped_file, error>;
+	static auto mmap_shared(const char *fname, int open_flags, int mmap_flags, std::int64_t offset = 0) -> tl::expected<raii_mmaped_file, error>;
 	// Returns a constant pointer to the underlying map
 	auto get_map() const -> void* {return map;}
 	auto get_file() const -> const raii_file& { return file; }
 	// Passes the ownership of the mmaped memory to the callee
 	auto steal_map() -> std::tuple<void *, std::size_t> {
-		auto ret = std::make_tuple(this->map, file.get_stat().st_size);
+		auto ret = std::make_tuple(this->map, map_size);
 		this->map = nullptr;
 		return ret;
 	}
@@ -212,6 +212,7 @@ struct raii_mmaped_file final {
 
 	raii_mmaped_file& operator=(raii_mmaped_file &&other) noexcept {
 		std::swap(map, other.map);
+		std::swap(map_size, other.map_size);
 		file = std::move(other.file);
 
 		return *this;
@@ -225,9 +226,10 @@ struct raii_mmaped_file final {
 	raii_mmaped_file(const raii_mmaped_file &other) = delete;
 private:
 	/* Is intended to be used with map_shared */
-	explicit raii_mmaped_file(raii_file &&_file, void *_map);
+	explicit raii_mmaped_file(raii_file &&_file, void *_map, std::size_t sz);
 	raii_file file;
 	void *map = nullptr;
+	std::size_t map_size;
 };
 
 /**
