@@ -408,7 +408,7 @@ rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
 
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
-	mp->hs_db = rspamd_hyperscan_maybe_load(fp);
+	mp->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
 	return mp->hs_db != NULL;
 }

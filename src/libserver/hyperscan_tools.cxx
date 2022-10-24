@@ -273,7 +273,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 	auto &hs_cache = hs_known_files_cache::get();
 	const auto *log_func = RSPAMD_LOG_FUNC;
 
-	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ)
+	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ, offset)
 		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, error> {
 #if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto unserialized_fname = fmt::format("{}.unser", fname);
@@ -392,9 +392,9 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 #define C_DB_FROM_CXX(obj) (reinterpret_cast<rspamd_hyperscan_t *>(obj))
 
 rspamd_hyperscan_t *
-rspamd_hyperscan_maybe_load(const char *filename)
+rspamd_hyperscan_maybe_load(const char *filename, goffset offset)
 {
-	auto maybe_db = rspamd::util::load_cached_hs_file(filename);
+	auto maybe_db = rspamd::util::load_cached_hs_file(filename, offset);
 
 	if (maybe_db.has_value()) {
 		auto *ndb = new rspamd::util::hs_shared_database;

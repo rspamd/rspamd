@@ -34,7 +34,7 @@ typedef struct rspamd_hyperscan_s rspamd_hyperscan_t;
  * @param filename
  * @return cached database if available
  */
-rspamd_hyperscan_t *rspamd_hyperscan_maybe_load(const char *filename);
+rspamd_hyperscan_t *rspamd_hyperscan_maybe_load(const char *filename, goffset offset);
 
 /**
  * Creates a wrapper for a raw hs db. Ownership is transferred to the enclosing object returned

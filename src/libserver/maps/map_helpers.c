@@ -1073,7 +1073,7 @@ rspamd_try_load_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 			map->cfg->hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
 
-	re_map->hs_db = rspamd_hyperscan_maybe_load(fp);
+	re_map->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
 	return re_map->hs_db != NULL;
 }
