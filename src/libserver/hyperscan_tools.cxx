@@ -178,6 +178,8 @@ public:
 
 					auto glob_pattern = fmt::format("{}{}*.{}",
 						dir, G_DIR_SEPARATOR_S, ext);
+					msg_debug_hyperscan_lambda("perform glob for pattern: %s",
+						glob_pattern.c_str());
 					memset(&globbuf, 0, sizeof(globbuf));
 
 					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
