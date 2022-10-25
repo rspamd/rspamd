@@ -2894,7 +2894,12 @@ url_web_end (struct url_callback_data *cb,
 	if (last < cb->end && (*last == '>' && last != match->newline_pos)) {
 		/* We need to ensure that url also starts with '>' */
 		if (match->st != '<') {
-			if (last + 1 < cb->end && g_ascii_isspace(last[1])) {
+			if (last + 1 < cb->end) {
+				if (g_ascii_isspace(last[1])) {
+					return FALSE;
+				}
+			}
+			else {
 				return FALSE;
 			}
 		}
