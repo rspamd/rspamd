@@ -257,11 +257,12 @@ hs_shared_from_unserialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_da
 }
 
 static auto
-hs_shared_from_serialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, error>
+hs_shared_from_serialized(raii_mmaped_file &&map, std::int64_t offset) -> tl::expected<hs_shared_database, error>
 {
 	hs_database_t *target = nullptr;
 
-	if (auto ret = hs_deserialize_database((const char *)map.get_map(), map.get_size(), &target); ret != HS_SUCCESS) {
+	if (auto ret = hs_deserialize_database((const char *)map.get_map() + offset,
+		map.get_size() - offset, &target); ret != HS_SUCCESS) {
 		return tl::make_unexpected(error {"cannot deserialize database", ret});
 	}
 
@@ -273,8 +274,11 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 	auto &hs_cache = hs_known_files_cache::get();
 	const auto *log_func = RSPAMD_LOG_FUNC;
 
-	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ, offset)
+	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ, 0)
 		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, error> {
+			if (cached_serialized.get_size() <= offset) {
+				return tl::make_unexpected(error {"Invalid offset", EINVAL, error_category::CRITICAL });
+			}
 #if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto unserialized_fname = fmt::format("{}.unser", fname);
 			auto unserialized_file = raii_locked_file::create(unserialized_fname.c_str(), O_CREAT | O_RDWR | O_EXCL,
@@ -292,8 +296,8 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 						auto &tmpfile_checked = tmpfile.value();
 						std::size_t unserialized_size;
 
-						hs_serialized_database_size((const char *)cached_serialized.get_map(),
-							cached_serialized.get_size(), &unserialized_size);
+						hs_serialized_database_size(((const char *)cached_serialized.get_map()) + offset,
+							cached_serialized.get_size() - offset, &unserialized_size);
 
 						msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
 							tmpfile_pattern.data(), unserialized_size);
@@ -306,8 +310,8 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 						// Store owned string
 						auto tmpfile_name = std::string{tmpfile_checked.get_name()};
 
-						if (auto ret = hs_deserialize_database_at((const char *)cached_serialized.get_map(),
-								cached_serialized.get_size(), (hs_database_t *) buf); ret != HS_SUCCESS) {
+						if (auto ret = hs_deserialize_database_at(((const char *)cached_serialized.get_map()) + offset,
+								cached_serialized.get_size() - offset, (hs_database_t *) buf); ret != HS_SUCCESS) {
 							return tl::make_unexpected(error {
 								fmt::format("cannot deserialize hyperscan database: {}", ret), ret });
 						}
@@ -365,7 +369,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 					 * being created by another process.
 					 * We cannot use it!
 					 */
-					return hs_shared_from_serialized(std::forward<T>(cached_serialized));
+					return hs_shared_from_serialized(std::forward<T>(cached_serialized), offset);
 				}
 				else {
 					hs_cache.add_cached_file(unserialized_checked);
@@ -376,11 +380,11 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 				}
 			}
 			else {
-				return hs_shared_from_serialized(std::forward<T>(cached_serialized));
+				return hs_shared_from_serialized(std::forward<T>(cached_serialized), offset);
 			}
 #else // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			hs_cache.add_cached_file(cached_serialized.get_file());
-			return hs_shared_from_serialized(std::forward<T>(cached_serialized));
+			return hs_shared_from_serialized(std::forward<T>(cached_serialized), offset);
 #endif // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 		});
 }
