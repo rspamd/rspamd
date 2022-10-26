@@ -42,13 +42,13 @@ local config_schema =
   ts.shape({
     read_servers = ts.string + ts.array_of(ts.string),
     write_servers = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema}) +
+  }, {extra_fields = common_schema}) +
   ts.shape({
     servers = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema}) +
+  }, {extra_fields = common_schema}) +
   ts.shape({
     server = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema})
+  }, {extra_fields = common_schema})
 
 exports.config_schema = config_schema
 
