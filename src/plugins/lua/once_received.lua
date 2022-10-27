@@ -41,7 +41,7 @@ local check_authed = false
 local function check_quantity_received (task)
   local recvh = task:get_received_headers()
 
-  local nreceived = fun.reduce(function(acc, rcvd)
+  local nreceived = fun.reduce(function(acc, _)
     return acc + 1
   end, 0, fun.filter(function(h)
     return not h['artificial']
