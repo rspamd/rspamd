@@ -56,7 +56,10 @@ local function check_quantity_received (task)
     if not results then
       if nreceived <= 1 then
         task:insert_result(symbol, 1)
-        task:insert_result(symbol_strict, 1)
+        -- Avoid strict symbol inserting as the remaining symbols have already
+        -- quote a significant weight, so a message could be rejected by just
+        -- this property.
+        --task:insert_result(symbol_strict, 1)
         -- Check for MUAs
         local ua = task:get_header('User-Agent')
         local xm = task:get_header('X-Mailer')
