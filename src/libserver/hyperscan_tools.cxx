@@ -33,24 +33,26 @@
 #include "unix-std.h"
 #include "rspamd_control.h"
 
+#define HYPERSCAN_LOG_TAG "hsxxxx"
+
 #define msg_info_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "hyperscan", "", \
+        "hyperscan", HYPERSCAN_LOG_TAG, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_info_hyperscan_lambda(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "hyperscan", "", \
+        "hyperscan", HYPERSCAN_LOG_TAG, \
         log_func, \
         __VA_ARGS__)
 #define msg_err_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "hyperscan", "", \
+        "hyperscan", HYPERSCAN_LOG_TAG, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_hyperscan(...)  rspamd_conditional_debug_fast (nullptr, nullptr, \
-        rspamd_hyperscan_log_id, "hyperscan", "", \
+        rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
         RSPAMD_LOG_FUNC, \
         __VA_ARGS__)
 #define msg_debug_hyperscan_lambda(...) rspamd_conditional_debug_fast (nullptr, nullptr, \
-        rspamd_hyperscan_log_id, "hyperscan", "", \
+        rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
         log_func, \
         __VA_ARGS__)
 
