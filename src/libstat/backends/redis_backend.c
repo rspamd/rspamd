@@ -1076,6 +1076,14 @@ rspamd_redis_async_stat_fin (struct rspamd_stat_async_elt *elt, gpointer d)
 		rspamd_redis_async_cbdata_cleanup (redis_elt->cbdata);
 		redis_elt->cbdata = NULL;
 	}
+
+	/* Clear the static elements */
+	if (redis_elt->stat) {
+		ucl_object_unref(redis_elt->stat);
+		redis_elt->stat = NULL;
+	}
+
+	g_free (redis_elt);
 }
 
 /* Called on connection termination */
