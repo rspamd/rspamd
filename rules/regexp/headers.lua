@@ -865,7 +865,7 @@ reconf['SUBJECT_HAS_QUESTION'] = {
 }
 
 reconf['SUBJECT_HAS_CURRENCY'] = {
-  re = 'Subject=/[$€$¢¥₽]/Hu',
+  re = 'Subject=/[$€$¢¥₽£]/Hu',
   description = 'Subject contains currency',
   score = 1.0,
   group = 'headers'
