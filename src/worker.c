@@ -559,6 +559,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_stat_close ();
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger);
+	rspamd_unset_crash_handler (worker->srv);
 
 	exit (EXIT_SUCCESS);
 }

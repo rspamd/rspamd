@@ -1660,6 +1660,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_pidfile_close (rspamd_main->pfh);
 	}
 
+	rspamd_unset_crash_handler (rspamd_main);
 	g_free (rspamd_main);
 	ev_unref (event_loop);
 	sqlite3_shutdown ();

@@ -415,6 +415,7 @@ start_hs_helper (struct rspamd_worker *worker)
 
 	rspamd_log_close (worker->srv->logger);
 	REF_RELEASE (ctx->cfg);
+	rspamd_unset_crash_handler (worker->srv);
 
 	exit (EXIT_SUCCESS);
 }

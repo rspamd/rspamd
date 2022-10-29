@@ -1664,12 +1664,6 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	stack_t ss;
 	memset (&ss, 0, sizeof ss);
 
-	/*
-	 * Allocate special stack, NOT freed at the end so far
-	 * It also cannot be on stack as this memory is used when
-	 * stack corruption is detected. Leak sanitizer blames about it but
-	 * I don't know any good ways to stop this behaviour.
-	 */
 	ss.ss_size = MAX (SIGSTKSZ, 8192 * 4);
 	stack_mem = g_malloc0 (ss.ss_size);
 	ss.ss_sp = stack_mem;
@@ -1684,6 +1678,28 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	sigaction (SIGABRT, &sa, NULL);
 	sigaction (SIGFPE, &sa, NULL);
 	sigaction (SIGSYS, &sa, NULL);
+#endif
+}
+
+RSPAMD_NO_SANITIZE void rspamd_unset_crash_handler (struct rspamd_main *unused_)
+{
+#ifdef HAVE_SIGALTSTACK
+	int ret;
+	stack_t ss;
+	ret = sigaltstack (NULL, &ss);
+
+	if (ret != -1) {
+		if (ss.ss_size > 0 && ss.ss_sp) {
+			g_free(ss.ss_sp);
+		}
+
+		ss.ss_size = 0;
+		ss.ss_sp = NULL;
+#ifdef SS_DISABLE
+		ss.ss_flags |= SS_DISABLE;
+#endif
+		sigaltstack(&ss, NULL);
+	}
 #endif
 }
 

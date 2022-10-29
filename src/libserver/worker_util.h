@@ -231,6 +231,11 @@ struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
 RSPAMD_NO_SANITIZE void rspamd_set_crash_handler (struct rspamd_main *);
 
 /**
+ * Restore memory for crash signals
+ */
+RSPAMD_NO_SANITIZE void rspamd_unset_crash_handler (struct rspamd_main *);
+
+/**
  * Initialise the main monitoring worker
  * @param worker
  * @param ev_base

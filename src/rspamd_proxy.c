@@ -2461,6 +2461,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger);
+	rspamd_unset_crash_handler (worker->srv);
 
 	exit (EXIT_SUCCESS);
 }
