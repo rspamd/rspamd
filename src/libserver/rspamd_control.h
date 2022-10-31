@@ -53,7 +53,7 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64))
+#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64) * 2)
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -149,8 +149,8 @@ struct rspamd_srv_command {
 			guint pair_num;
 		} spair;
 		struct {
-			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
+			gchar cache_dir[CONTROL_PATHLEN];
 		} hs_loaded;
 		struct {
 			gchar tag[32];
