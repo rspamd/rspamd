@@ -1179,8 +1179,8 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	 * Read comments in `rspamd_handle_main_fork` for details why these channel
 	 * is blocking.
 	 */
-#if 0
 	rspamd_socket_nonblocking (wrk->control_pipe[1]);
+#if 0
 	rspamd_socket_nonblocking (wrk->srv_pipe[1]);
 #endif
 	rspamd_main->cfg->cur_worker = wrk;
@@ -1212,9 +1212,10 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 	 * beginning.
 	 */
 #if 0
-	rspamd_socket_nonblocking (wrk->control_pipe[0]);
 	rspamd_socket_nonblocking (wrk->srv_pipe[0]);
 #endif
+	rspamd_socket_nonblocking (wrk->control_pipe[0]);
+
 	rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
 	/* Child event */
 	wrk->cld_ev.data = wrk;
