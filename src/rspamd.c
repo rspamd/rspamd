@@ -1503,9 +1503,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
 
-	if (!valgrind_mode) {
-		rspamd_set_crash_handler (rspamd_main);
-	}
+	rspamd_set_crash_handler (rspamd_main);
 
 	/* Ignore SIGPIPE as we handle write errors manually */
 	sigemptyset (&sigpipe_act.sa_mask);
