@@ -319,9 +319,6 @@ insert_metric_result (struct rspamd_task *task,
 		}
 		else {
 			if (sdef) {
-				max_shots = sdef->nshots;
-			}
-			else {
 				if (sdef->groups) {
 					PTR_ARRAY_FOREACH(sdef->groups, i, gr) {
 						if (gr->flags & RSPAMD_SYMBOL_GROUP_ONE_SHOT) {
@@ -329,9 +326,11 @@ insert_metric_result (struct rspamd_task *task,
 						}
 					}
 				}
-				else {
-					max_shots = task->cfg->default_max_shots;
-				}
+
+				max_shots = MIN(max_shots, sdef->nshots);
+			}
+			else {
+				max_shots = task->cfg->default_max_shots;
 			}
 		}
 
