@@ -164,6 +164,8 @@ local function get_general_metadata(task, flatten, no_content)
   end
 
   r.scan_time = scan_real
+  local content = task:get_content()
+  r.size = content and content:len() or 0
 
   if not no_content then
     r.header_from = process_header('from')
