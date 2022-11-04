@@ -796,7 +796,6 @@ lua_textpart_get_content_oneline (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
-	struct rspamd_lua_text *t;
 
 	if (part == NULL || IS_TEXT_PART_EMPTY (part)) {
 		lua_pushnil (L);

@@ -742,7 +742,6 @@ lua_url_create (lua_State *L)
 	LUA_TRACE_POINT;
 	rspamd_mempool_t *pool;
 	struct rspamd_lua_text *t;
-	gboolean own_pool = FALSE;
 	struct rspamd_lua_url *u;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
@@ -750,7 +749,6 @@ lua_url_create (lua_State *L)
 		t = lua_check_text_or_string (L, 2);
 	}
 	else {
-		own_pool = TRUE;
 		pool = static_lua_url_pool;
 		t = lua_check_text_or_string (L, 2);
 	}

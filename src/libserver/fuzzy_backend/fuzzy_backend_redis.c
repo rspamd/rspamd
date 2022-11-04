@@ -1426,7 +1426,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	GString *key;
 	struct fuzzy_peer_cmd *io_cmd;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	guint nargs, ncommands, cur_shift;
+	guint nargs, cur_shift;
 
 	g_assert (backend != NULL);
 
@@ -1463,7 +1463,6 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	 * DECR <prefix||fuzzy_count>
 	 */
 
-	ncommands = 3; /* For MULTI + EXEC + INCR <src> */
 	nargs = 4;
 
 	for (i = 0; i < updates->len; i ++) {
@@ -1477,33 +1476,27 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		}
 
 		if (cmd->cmd == FUZZY_WRITE) {
-			ncommands += 5;
 			nargs += 17;
 			session->nadded ++;
 
 			if (io_cmd->is_shingle) {
-				ncommands += RSPAMD_SHINGLE_SIZE;
 				nargs += RSPAMD_SHINGLE_SIZE * 4;
 			}
 
 		}
 		else if (cmd->cmd == FUZZY_DEL) {
-			ncommands += 2;
 			nargs += 4;
 			session->ndeleted ++;
 
 			if (io_cmd->is_shingle) {
-				ncommands += RSPAMD_SHINGLE_SIZE;
 				nargs += RSPAMD_SHINGLE_SIZE * 2;
 			}
 		}
 		else if (cmd->cmd == FUZZY_REFRESH) {
-			ncommands += 1;
 			nargs += 3;
 			session->nextended ++;
 
 			if (io_cmd->is_shingle) {
-				ncommands += RSPAMD_SHINGLE_SIZE;
 				nargs += RSPAMD_SHINGLE_SIZE * 3;
 			}
 		}
