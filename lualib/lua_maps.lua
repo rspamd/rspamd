@@ -93,14 +93,21 @@ end
 -- @param {string or table} opt data for map (or URL)
 -- @param {string} mtype type of map (`set`, `map`, `radix`, `regexp`)
 -- @param {string} description human-readable description of map
+-- @param {function} callback optional callback that will be called on map match (required for external maps)
 -- @return {bool} true on success, or `nil`
 --]]
 
-local function rspamd_map_add_from_ucl(opt, mtype, description)
+local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
     get_key = function(t, k)
       if t.__data then
-        return t.__data:get_key(k)
+        local result = t.__data:get_key(k)
+
+        if callback then
+          callback(result)
+        else
+          return result
+        end
       end
 
       return nil
@@ -123,7 +130,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
   if type(opt) == 'string' then
     opt,mtype = maybe_adjust_type(opt, mtype)
     local cache_key = map_hash_key(opt, mtype)
-    if maps_cache[cache_key] then
+    if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
           opt, mtype)
 
@@ -145,7 +152,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
     end
   elseif type(opt) == 'table' then
     local cache_key = lua_util.table_digest(opt)
-    if maps_cache[cache_key] then
+    if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
           cache_key:sub(1,8), description)
 
@@ -307,13 +314,14 @@ end
 -- @param {string} optname option name to use
 -- @param {string} mtype type of map ('set', 'hash', 'radix', 'regexp', 'glob')
 -- @param {string} description human-readable description of map
+-- @param {function} callback optional callback that will be called on map match (required for external maps)
 -- @return {bool} true on success, or `nil`
 --]]
 
-local function rspamd_map_add(mname, optname, mtype, description)
+local function rspamd_map_add(mname, optname, mtype, description, callback)
   local opt = rspamd_config:get_module_opt(mname, optname)
 
-  return rspamd_map_add_from_ucl(opt, mtype, description)
+  return rspamd_map_add_from_ucl(opt, mtype, description, callback)
 end
 
 exports.rspamd_map_add = rspamd_map_add
