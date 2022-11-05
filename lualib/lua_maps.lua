@@ -99,12 +99,14 @@ end
 
 local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
-    get_key = function(t, k)
+    get_key = function(t, k, key_callback)
       if t.__data then
         local result = t.__data:get_key(k)
 
         if callback then
           callback(result)
+        elseif key_callback then
+          key_callback(result)
         else
           return result
         end
@@ -114,9 +116,9 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     end
   }
   local ret_mt = {
-    __index = function(t, k)
+    __index = function(t, k, key_callback)
       if t.__data then
-        return t.get_key(k)
+        return t.get_key(k, key_callback)
       end
 
       return nil
