@@ -307,14 +307,20 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     else
       if opt.external then
         -- External map definition, missing fields are handled by schema
-        local parse_err
-        ret.__data,parse_err = external_map_schema(opt)
+        local parse_res,parse_err = external_map_schema(opt)
 
-        if ret then
-          ret.__external = true
-          setmetatable(ret, ret_mt)
+        if parse_res then
+          ret.__upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), opt.backend)
+          if ret.__upstreams then
+            ret.__data = opt
+            ret.__external = true
+            setmetatable(ret, ret_mt)
 
-          return ret
+            return ret
+          else
+            rspamd_logger.errx(rspamd_config, 'cannot parse external map upstreams: %s',
+                opt.backend)
+          end
         else
           rspamd_logger.errx(rspamd_config, 'cannot parse external map: %s',
               parse_err)
