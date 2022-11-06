@@ -106,7 +106,7 @@ rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'BITCOIN_ADDR')
 -- content identifier (CID), comprising of either "qm", followed by 46 alphanumerical
 -- characters (CIDv0), or a CIDv1 of an alphanumerical string of unspecified length,
 -- depending on the hash algorithm used, but starting with a multibase prefix.
-local ipfs_cid = '/(qm[a-z0-9]{44}|[079fFvVtTbBcChkKzZmMuUP][a-z0-9]{45,256})/{url}i'
+local ipfs_cid = '/(qm[a-z0-9]{44}|[079fFvVtTbBcChkKzZmMuUP][a-z0-9]{44,128})/{url}i'
 local ipfs_string = '/ipfs(\\.|-|_|\\/|\\?)/{url}i'
 reconf['HAS_IPFS_GATEWAY_URL'] = {
   description = 'Message contains InterPlanetary File System (IPFS) gateway URL, likely malicious',
