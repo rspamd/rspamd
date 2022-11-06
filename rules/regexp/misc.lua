@@ -108,8 +108,8 @@ rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'BITCOIN_ADDR')
 -- depending on the hash algorithm used.
 local ipfs_cid = '/(qm[a-z0-9]{44}|[a-z0-9]{45,256})/{url}i'
 local ipfs_string = '/ipfs(\\.|-|_|\\/|\\?)/{url}i'
-reconf['HAS_IPFS_URL'] = {
-  description = 'Message contains InterPlanetary File System (IPFS) URL, likely malicious',
+reconf['HAS_IPFS_GATEWAY_URL'] = {
+  description = 'Message contains InterPlanetary File System (IPFS) gateway URL, likely malicious',
   re = string.format('(%s & %s)', ipfs_cid, ipfs_string),
   score = 6.0,
   one_shot = true,
