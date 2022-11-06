@@ -86,6 +86,13 @@ local function maybe_adjust_type(data,mtype)
   return data,mtype
 end
 
+
+local external_map_schema = ts.shape{
+  external = ts.equivalent(true), -- must be true
+  backend = ts.string, -- where to get data, required
+  method = ts.one_of{"body", "header", "query", "form"}, -- how to pass input
+  encode = ts.one_of{"json", "messagepack"}:is_optional(), -- how to encode input (if relevant)
+}
 --[[[
 -- @function lua_maps.map_add_from_ucl(opt, mtype, description)
 -- Creates a map from static data
@@ -96,19 +103,27 @@ end
 -- @param {function} callback optional callback that will be called on map match (required for external maps)
 -- @return {bool} true on success, or `nil`
 --]]
-
 local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
     get_key = function(t, k, key_callback)
       if t.__data then
-        local result = t.__data:get_key(k)
-
-        if callback then
-          callback(result)
-        elseif key_callback then
-          key_callback(result)
+        if t.__external then
+          if not key_callback and not callback then
+            local caller = debug.getinfo(2) or {}
+            rspamd_logger.errx(rspamd_config, "requested external map key without callback; caller: %s",
+                caller.short_src, caller.currentline)
+            return nil
+          end
         else
-          return result
+          local result = t.__data:get_key(k)
+
+          if callback then
+            callback(result)
+          elseif key_callback then
+            key_callback(result)
+          else
+            return result
+          end
         end
       end
 
@@ -290,17 +305,33 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
         end
       end
     else
-      -- We have some non-trivial object so let C code to deal with it somehow...
-      local map = rspamd_config:add_map{
-        type = mtype,
-        description = description,
-        url = opt,
-      }
-      if map then
-        ret.__data = map
-        setmetatable(ret, ret_mt)
-        maps_cache[cache_key] = ret
-        return ret
+      if opt.external then
+        -- External map definition, missing fields are handled by schema
+        local parse_err
+        ret.__data,parse_err = external_map_schema(opt)
+
+        if ret then
+          ret.__external = true
+          setmetatable(ret, ret_mt)
+
+          return ret
+        else
+          rspamd_logger.errx(rspamd_config, 'cannot parse external map: %s',
+              parse_err)
+        end
+      else
+        -- We have some non-trivial object so let C code to deal with it somehow...
+        local map = rspamd_config:add_map{
+          type = mtype,
+          description = description,
+          url = opt,
+        }
+        if map then
+          ret.__data = map
+          setmetatable(ret, ret_mt)
+          maps_cache[cache_key] = ret
+          return ret
+        end
       end
     end -- opt[1]
   end
@@ -396,12 +427,6 @@ exports.fill_config_maps = function(mname, opts, map_defs)
   return true
 end
 
-local external_map_schema = ts.shape{
-  external = ts.equivalent(true), -- must be true
-  backend = ts.string, -- where to get data, required
-  method = ts.one_of{"body", "header", "query", "form"}, -- how to pass input
-  encode = ts.one_of{"json", "messagepack"}:is_optional(), -- how to encode input (if relevant)
-}
 local direct_map_schema = ts.shape{ -- complex object
   name = ts.string:is_optional(),
   description = ts.string:is_optional(),
