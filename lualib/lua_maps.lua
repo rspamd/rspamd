@@ -110,7 +110,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
         if t.__external then
           if not key_callback and not callback then
             local caller = debug.getinfo(2) or {}
-            rspamd_logger.errx(rspamd_config, "requested external map key without callback; caller: %s",
+            rspamd_logger.errx(rspamd_config, "requested external map key without callback; caller: %s:%s",
                 caller.short_src, caller.currentline)
             return nil
           end
