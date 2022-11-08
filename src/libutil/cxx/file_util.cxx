@@ -368,13 +368,22 @@ TEST_CASE("check lock") {
 	CHECK(serrno == ENOENT);
 }
 
+auto get_tmpdir() -> const char * {
+	const auto *tmpdir = getenv("TMPDIR");
+	if (tmpdir == nullptr) {
+		tmpdir = G_DIR_SEPARATOR_S "tmp";
+	}
+	return tmpdir;
+}
+
 TEST_CASE("tempfile") {
 	std::string tmpname;
+	const std::string tmpdir{get_tmpdir()};
 	{
-		auto raii_locked_file = raii_locked_file::mkstemp("/tmp//doctest-XXXXXXXX",
+		auto raii_locked_file = raii_locked_file::mkstemp(std::string(tmpdir + G_DIR_SEPARATOR_S + "doctest-XXXXXXXX").c_str(),
 				O_RDONLY, 00600);
 		CHECK(raii_locked_file.has_value());
-		CHECK(raii_locked_file.value().get_dir() == "/tmp");
+		CHECK(raii_locked_file.value().get_dir() == tmpdir);
 		CHECK(access(raii_locked_file.value().get_name().data(), R_OK) == 0);
 		auto raii_locked_file2 = raii_locked_file::open(raii_locked_file.value().get_name().data(), O_RDONLY);
 		CHECK(!raii_locked_file2.has_value());
@@ -390,11 +399,12 @@ TEST_CASE("tempfile") {
 
 TEST_CASE("mmap") {
 	std::string tmpname;
+	const std::string tmpdir{get_tmpdir()};
 	{
-		auto raii_file = raii_file::mkstemp("/tmp//doctest-XXXXXXXX",
+		auto raii_file = raii_file::mkstemp(std::string(tmpdir + G_DIR_SEPARATOR_S + "doctest-XXXXXXXX").c_str(),
 		O_RDWR|O_CREAT|O_EXCL, 00600);
 		CHECK(raii_file.has_value());
-		CHECK(raii_file->get_dir() == "/tmp");
+		CHECK(raii_file->get_dir() == tmpdir);
 		CHECK(access(raii_file->get_name().data(), R_OK) == 0);
 		tmpname = std::string{raii_file->get_name()};
 		char payload[] = {'1', '2', '3'};
