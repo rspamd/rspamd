@@ -148,7 +148,7 @@ local function add_antivirus_rule(sym, opts)
   rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
 
   rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
-  
+ 
   if opts.whitelist then
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
