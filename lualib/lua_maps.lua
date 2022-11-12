@@ -141,7 +141,13 @@ local function query_external_map(map_config, upstreams, key, callback, task)
     else
       -- query/header and no encode
       if map_config.method == 'query' then
-        -- TODO: encode key/value pairs into query params
+        local params_table = {}
+        for k,v in pairs(key) do
+          if type(v) == 'string' then
+            table.insert(params_table, string.format('%s=%s', url_encode_string(k), url_encode_string(v)))
+          end
+        end
+        url = string.format('%s?%s', url, table.concat(params_table, '&'))
       elseif map_config.method == 'header' then
         http_headers = key
       else
@@ -150,7 +156,6 @@ local function query_external_map(map_config, upstreams, key, callback, task)
             "requested external map key with a wrong combination of encode and input; caller: %s:%s",
             caller.short_src, caller.currentline)
         callback(false, 'invalid map usage', 500, task)
-
         return
       end
     end
