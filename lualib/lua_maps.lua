@@ -131,7 +131,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         rspamd_logger.errx(task,
             "requested external map key with a wrong combination body method and missing encode; caller: %s:%s",
             caller.short_src, caller.currentline)
-        callback(false, 'invalid map usage', 500)
+        callback(false, 'invalid map usage', 500, task)
       end
     else
       -- query/header and no encode
@@ -144,7 +144,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         rspamd_logger.errx(task,
             "requested external map key with a wrong combination of encode and input; caller: %s:%s",
             caller.short_src, caller.currentline)
-        callback(false, 'invalid map usage', 500)
+        callback(false, 'invalid map usage', 500, task)
 
         return
       end
@@ -153,9 +153,9 @@ local function query_external_map(map_config, upstreams, key, callback, task)
 
   local function map_callback(err, code, body, _)
     if err then
-      callback(false, err, code)
+      callback(false, err, code, task)
     else
-      callback(true, body)
+      callback(true, body, 200, task)
     end
   end
 
@@ -172,7 +172,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
   }
 
   if not ret then
-    callback(false, 'http request error')
+    callback(false, 'http request error', 500, task)
   end
 end
 
@@ -190,22 +190,23 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
     get_key = function(t, k, key_callback, task)
       if t.__data then
+        local cb = key_callback or callback
         if t.__external then
-          if (not key_callback and not callback) or not task then
+          if cb or not task then
             local caller = debug.getinfo(2) or {}
             rspamd_logger.errx(rspamd_config, "requested external map key without callback; caller: %s:%s",
                 caller.short_src, caller.currentline)
             return nil
           end
-          local cb = key_callback or callback
           query_external_map(t.__data, t.__upstreams, k, cb, task)
         else
           local result = t.__data:get_key(k)
-
-          if callback then
-            callback(result)
-          elseif key_callback then
-            key_callback(result)
+          if cb then
+            if result then
+              cb(true, result, 200, task)
+            else
+              cb(false, 'not found', 404, task)
+            end
           else
             return result
           end
@@ -216,9 +217,9 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     end
   }
   local ret_mt = {
-    __index = function(t, k, key_callback)
+    __index = function(t, k, key_callback, task)
       if t.__data then
-        return t.get_key(k, key_callback)
+        return t.get_key(k, key_callback, task)
       end
 
       return nil
