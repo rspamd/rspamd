@@ -3627,6 +3627,15 @@ rspamd_url_find_single (rspamd_mempool_t *pool,
 		inlen = strlen (in);
 	}
 
+	/*
+	 * We might have a situation when we need to parse URLs on config file
+	 * parsing, but there is no valid url_scanner loaded. Hence, we just load
+	 * some defaults and it should be fine...
+	 */
+	if (url_scanner == NULL) {
+		rspamd_url_init (NULL);
+	}
+
 	memset (&cb, 0, sizeof (cb));
 	cb.begin = in;
 	cb.end = in + inlen;
