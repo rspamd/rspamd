@@ -1,5 +1,6 @@
 local rspamd_ip = require 'rspamd_ip'
 local rspamd_logger = require 'rspamd_logger'
+local lua_maps = require "lua_maps"
 
 local radix_map = rspamd_config:add_map ({
   url = rspamd_env.RADIX_MAP,
@@ -66,5 +67,28 @@ rspamd_config:register_symbol({
       end
     end
     return true, 'no worry'
+  end,
+})
+
+local simple_ext_map = lua_maps.map_add_from_ucl({
+  external = true,
+  backend = "http://localhost:18080/map-simple",
+  method = "body",
+  encode = "json",
+}, '', 'external map')
+rspamd_config:register_symbol({
+  name = 'EXTERNAL_MAP',
+  score = 1.0,
+  callback = function(task)
+    local function cb(res, data, code)
+      if res then
+        task:insert_result('EXTERNAL_MAP', string.format('+%s', data))
+      else
+        task:insert_result('EXTERNAL_MAP', string.format('-%s:%s', code, data))
+      end
+    end
+    simple_ext_map:get_key({
+      key = "value",
+    }, cb, task)
   end,
 })

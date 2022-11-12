@@ -89,6 +89,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/content-length":
             self.send_header("Content-Length", str(len(response)))
 
+        if self.path == "/map-simple":
+            response = "hello"
+
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(response)
