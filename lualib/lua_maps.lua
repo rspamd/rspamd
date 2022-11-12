@@ -99,9 +99,14 @@ local rspamd_http = require "rspamd_http"
 local ucl = require "ucl"
 
 local function url_encode_string(str)
-  -- TODO: implement encoding
+  str = string.gsub(str, "([^%w _%%%-%.~])",
+      function(c) return string.format("%%%02X", string.byte(c)) end)
+  str = string.gsub(str, " ", "+")
   return str
 end
+
+assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
+assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')
 
 local function query_external_map(map_config, upstreams, key, callback, task)
   local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
