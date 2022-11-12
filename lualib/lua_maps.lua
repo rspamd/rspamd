@@ -90,9 +90,92 @@ end
 local external_map_schema = ts.shape{
   external = ts.equivalent(true), -- must be true
   backend = ts.string, -- where to get data, required
-  method = ts.one_of{"body", "header", "query", "form"}, -- how to pass input
+  method = ts.one_of{"body", "header", "query"}, -- how to pass input
   encode = ts.one_of{"json", "messagepack"}:is_optional(), -- how to encode input (if relevant)
+  timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
 }
+
+local rspamd_http = require "rspamd_http"
+local ucl = require "ucl"
+
+local function url_encode_string(str)
+  -- TODO: implement encoding
+  return str
+end
+
+local function query_external_map(map_config, upstreams, key, callback, task)
+  local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
+  local upstream = upstreams:get_upstream_round_robin()
+  local http_headers = {}
+  local http_body = nil
+  local url = map_config.backend
+
+  if type(key) == 'string' or type(key) == 'userdata' then
+    if map_config.method == 'body' then
+      http_body = key
+    elseif map_config.method == 'header' then
+      http_headers = {
+        key = key
+      }
+    elseif map_config.method == 'query' then
+      url = string.format('%s?%s', url, url_encode_string(key))
+    end
+  elseif type(key) == 'table' then
+    if map_config.method == 'body' then
+      if map_config.encode == 'json' then
+        http_body = ucl.to_format(key, 'json-compact', true)
+      elseif map_config.encode == 'messagepack' then
+        http_body = ucl.to_format(key, 'messagepack', true)
+      else
+        local caller = debug.getinfo(2) or {}
+        rspamd_logger.errx(task,
+            "requested external map key with a wrong combination body method and missing encode; caller: %s:%s",
+            caller.short_src, caller.currentline)
+        callback(false, 'invalid map usage', 500)
+      end
+    else
+      -- query/header and no encode
+      if map_config.method == 'query' then
+        -- TODO: encode key/value pairs into query params
+      elseif map_config.method == 'header' then
+        http_headers = key
+      else
+        local caller = debug.getinfo(2) or {}
+        rspamd_logger.errx(task,
+            "requested external map key with a wrong combination of encode and input; caller: %s:%s",
+            caller.short_src, caller.currentline)
+        callback(false, 'invalid map usage', 500)
+
+        return
+      end
+    end
+  end
+
+  local function map_callback(err, code, body, _)
+    if err then
+      callback(false, err, code)
+    else
+      callback(true, body)
+    end
+  end
+
+  local ret = rspamd_http.request{
+    task = task,
+    url = map_config.backend,
+    callback = map_callback,
+    timeout = map_config.timeout or 1.0,
+    keepalive = true,
+    upstream = upstream,
+    method = http_method,
+    headers = http_headers,
+    body = http_body,
+  }
+
+  if not ret then
+    callback(false, 'http request error')
+  end
+end
+
 --[[[
 -- @function lua_maps.map_add_from_ucl(opt, mtype, description)
 -- Creates a map from static data
@@ -105,15 +188,17 @@ local external_map_schema = ts.shape{
 --]]
 local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
-    get_key = function(t, k, key_callback)
+    get_key = function(t, k, key_callback, task)
       if t.__data then
         if t.__external then
-          if not key_callback and not callback then
+          if (not key_callback and not callback) or not task then
             local caller = debug.getinfo(2) or {}
             rspamd_logger.errx(rspamd_config, "requested external map key without callback; caller: %s:%s",
                 caller.short_src, caller.currentline)
             return nil
           end
+          local cb = key_callback or callback
+          query_external_map(t.__data, t.__upstreams, k, cb, task)
         else
           local result = t.__data:get_key(k)
 
