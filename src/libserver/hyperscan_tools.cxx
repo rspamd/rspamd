@@ -147,11 +147,23 @@ public:
 	}
 
 	void add_cached_file(const char *fname) {
-
 		auto mut_fname = std::string{fname};
 		std::size_t sz;
+
 		rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
 		mut_fname.resize(sz);
+
+		if (mut_fname.empty()) {
+			msg_err_hyperscan("attempt to add an empty hyperscan file!");
+			return;
+		}
+
+		if (access(mut_fname.c_str(), R_OK) == -1) {
+			msg_err_hyperscan("attempt to add non existing hyperscan file: %s, %s", mut_fname.c_str(),
+				strerror(errno));
+			return;
+		}
+
 		auto dir = hs_known_files_cache::get_dir(mut_fname);
 		auto ext =  hs_known_files_cache::get_extension(mut_fname);
 
