@@ -306,7 +306,7 @@ local pushers = {
         rspamd_logger.errx(task, 'got error %s in http callback', err)
         return maybe_defer(task, rule)
       end
-      for i, v in ipairs(valid_status) do
+      for _, v in ipairs(valid_status) do
         if v == code then
           return true
         end
