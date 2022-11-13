@@ -300,15 +300,19 @@ local pushers = {
   end,
   http = function(task, formatted, rule)
     local function http_callback(err, code)
+      local valid_status = {200, 201, 202, 204}
+
       if err then
         rspamd_logger.errx(task, 'got error %s in http callback', err)
         return maybe_defer(task, rule)
       end
-      if code ~= 200 then
-        rspamd_logger.errx(task, 'got unexpected http status: %s', code)
-        return maybe_defer(task, rule)
+      for _, v in ipairs(valid_status) do
+        if v == code then
+          return true
+        end
       end
-      return true
+      rspamd_logger.errx(task, 'got unexpected http status: %s', code)
+      return maybe_defer(task, rule)
     end
     local hdrs = {}
     if rule.meta_headers then
