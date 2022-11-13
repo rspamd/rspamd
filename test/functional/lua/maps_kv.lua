@@ -82,9 +82,9 @@ rspamd_config:register_symbol({
   callback = function(task)
     local function cb(res, data, code)
       if res then
-        task:insert_result('EXTERNAL_MAP', string.format('+%s', data))
+        task:insert_result('EXTERNAL_MAP', 1.0, string.format('+%s', data))
       else
-        task:insert_result('EXTERNAL_MAP', string.format('-%s:%s', code, data))
+        task:insert_result('EXTERNAL_MAP', 1.0, string.format('-%s:%s', code, data))
       end
     end
     simple_ext_map:get_key({
