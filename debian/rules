@@ -6,7 +6,7 @@ export ASAN_OPTIONS=detect_leaks=0
 
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
-ifneq ($(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
 	ENABLE_LUAJIT := ON
 else
 	ENABLE_LUAJIT := OFF
