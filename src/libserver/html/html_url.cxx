@@ -391,10 +391,7 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	 * including essential ones
 	 */
 	for (auto i = 0; i < sz; i++) {
-		if (G_UNLIKELY (g_ascii_isspace(s[i]))) {
-			continue;
-		}
-		else if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+		if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
 			/* URL encode */
 			*d++ = '%';
 			*d++ = hexdigests[(s[i] >> 4) & 0xf];
