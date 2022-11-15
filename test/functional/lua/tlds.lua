@@ -39,6 +39,7 @@ rspamd_config:register_symbol({
             return
           end
           local u = rspamd_url.create(pool, p .. d)
+          assert(u, "cannot parse string: " .. p .. d)
           test = u:get_tld()
           if (test ~= d) then
             local opt = string.format('url.create:p=%s;d=%s;got=%s', p, d, test)
