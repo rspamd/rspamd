@@ -52,7 +52,7 @@ auto raii_file::open(const char *fname, int flags) -> tl::expected<raii_file, er
 
 auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>
 {
-	int oflags = flags;
+	int oflags = flags|O_CREAT;
 #ifdef O_CLOEXEC
 	oflags |= O_CLOEXEC;
 #endif
