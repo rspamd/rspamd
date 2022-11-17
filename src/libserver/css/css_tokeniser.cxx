@@ -441,6 +441,11 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		auto i = offset;
 		auto nested = 0;
 
+		if (input.empty()) {
+			/* Nothing to consume */
+			return;
+		}
+
 		/* We handle nested comments just because they can exist... */
 		while (i < input.size() - 1) {
 			auto c = input[i];
