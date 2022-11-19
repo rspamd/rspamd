@@ -111,7 +111,9 @@ assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')
 local function query_external_map(map_config, upstreams, key, callback, task)
   local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
   local upstream = upstreams:get_upstream_round_robin()
-  local http_headers = {}
+  local http_headers = {
+    ['Accept'] = '*/*'
+  }
   local http_body = nil
   local url = map_config.backend
 
