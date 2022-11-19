@@ -70,8 +70,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         """Respond to a POST request."""
         response = b"hello post"
-        content_length = int(self.headers['Content-Length'])
-        body = self.rfile.read(content_length)
+        content_length = int(self.headers.get('Content-Length', "0")) or 0
+        if content_length > 0:
+            _ = self.rfile.read(content_length)
         if self.path == "/empty":
             self.finish()
             return
