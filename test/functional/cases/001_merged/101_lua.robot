@@ -47,4 +47,4 @@ Rule conditions
 
 External Maps Simple
   Scan File  ${MESSAGE}  Settings={symbols_enabled = [EXTERNAL_MAP]}
-  Expect Symbol With Exact Options  EXTERNAL_MAP  +hello
+  Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map
