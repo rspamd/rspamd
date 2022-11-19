@@ -72,7 +72,7 @@ rspamd_config:register_symbol({
 
 local simple_ext_map = lua_maps.map_add_from_ucl({
   external = true,
-  backend = "http://localhost:18080/map-simple",
+  backend = "http://127.0.0.1:18080/map-simple",
   method = "body",
   encode = "json",
 }, '', 'external map')
