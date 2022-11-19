@@ -284,6 +284,7 @@ struct url_match_scanner {
 	GArray *matchers_strict;
 	struct rspamd_multipattern *search_trie_full;
 	struct rspamd_multipattern *search_trie_strict;
+	bool has_tld_file;
 };
 
 struct url_match_scanner *url_scanner = NULL;
@@ -602,10 +603,12 @@ rspamd_url_init (const gchar *tld_file)
 				sizeof (struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized (13000,
 				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+		url_scanner->has_tld_file = true;
 	}
 	else {
 		url_scanner->matchers_full = NULL;
 		url_scanner->search_trie_full = NULL;
+		url_scanner->has_tld_file = false;
 	}
 
 	rspamd_url_add_static_matchers (url_scanner);
@@ -2490,7 +2493,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 		if (uri->tldlen == 0) {
 			if (uri->protocol != PROTOCOL_MAILTO) {
-				if (!(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+				if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
 					/* Ignore URL's without TLD if it is not a numeric URL */
 					if (!rspamd_url_is_ip(uri, pool)) {
 						return URI_ERRNO_TLD_MISSING;

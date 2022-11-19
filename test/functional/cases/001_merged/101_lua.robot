@@ -44,3 +44,7 @@ Rule conditions
   Expect Symbol With Option  ANY_A  hello3
   Expect Symbol With Option  ANY_A  hello1
   Expect Symbol With Option  ANY_A  hello2
+
+External Maps Simple
+  Scan File  ${MESSAGE}  Settings={symbols_enabled = [EXTERNAL_MAP]}
+  Expect Symbol With Exact Options  EXTERNAL_MAP  +hello map

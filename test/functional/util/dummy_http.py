@@ -16,10 +16,7 @@ PID = "/tmp/dummy_http.pid"
 
 
 class MyHandler(http.server.BaseHTTPRequestHandler):
-
-    def setup(self):
-        http.server.BaseHTTPRequestHandler.setup(self)
-        self.protocol_version = "HTTP/1.1" # allow connection: keep-alive
+    protocol_version = 'HTTP/1.1'
 
     def do_HEAD(self):
         if self.path == "/redirect1":
@@ -41,9 +38,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         self.log_message("to be closed: " + repr(self.close_connection))
 
     def do_GET(self):
-        response = b"hello world"
-
         """Respond to a GET request."""
+        response = b"hello world"
         if self.path == "/empty":
             self.finish()
             return
@@ -72,8 +68,11 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
 
     def do_POST(self):
+        """Respond to a POST request."""
         response = b"hello post"
-        """Respond to a GET request."""
+        content_length = int(self.headers.get('Content-Length', "0")) or 0
+        if content_length > 0:
+            _ = self.rfile.read(content_length)
         if self.path == "/empty":
             self.finish()
             return
@@ -85,13 +84,21 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(403)
         else:
             self.send_response(200)
+        if self.path == "/map-simple":
+            response = b"hello map"
 
-        if self.path == "/content-length":
-            self.send_header("Content-Length", str(len(response)))
+        self.send_header("Content-Length", str(len(response)))
+        conntype = self.headers.get('Connection', "").lower()
+        if conntype != 'keep-alive':
+            self.close_connection = True
+        else:
+            self.send_header("Connection", "keep-alive")
 
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(response)
+        self.log_message("to be closed: %d, headers: %s, conn:'%s'" % (self.close_connection, str(self.headers), self.headers.get('Connection', "").lower()))
+        self.log_message("ka:'%s', pv:%s[%s]" % (str(conntype == 'keep-alive'), str(self.protocol_version >= "HTTP/1.1"), self.protocol_version))
 
 
 class ThreadingSimpleServer(socketserver.ThreadingMixIn,

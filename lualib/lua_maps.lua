@@ -86,6 +86,111 @@ local function maybe_adjust_type(data,mtype)
   return data,mtype
 end
 
+
+local external_map_schema = ts.shape{
+  external = ts.equivalent(true), -- must be true
+  backend = ts.string, -- where to get data, required
+  method = ts.one_of{"body", "header", "query"}, -- how to pass input
+  encode = ts.one_of{"json", "messagepack"}:is_optional(), -- how to encode input (if relevant)
+  timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
+}
+
+local rspamd_http = require "rspamd_http"
+local ucl = require "ucl"
+
+local function url_encode_string(str)
+  str = string.gsub(str, "([^%w _%%%-%.~])",
+      function(c) return string.format("%%%02X", string.byte(c)) end)
+  str = string.gsub(str, " ", "+")
+  return str
+end
+
+assert(url_encode_string('上海+中國') == '%E4%B8%8A%E6%B5%B7%2B%E4%B8%AD%E5%9C%8B')
+assert(url_encode_string('? and the Mysterians') == '%3F+and+the+Mysterians')
+
+local function query_external_map(map_config, upstreams, key, callback, task)
+  local http_method = (map_config.method == 'body' or map_config.method == 'form') and 'POST' or 'GET'
+  local upstream = upstreams:get_upstream_round_robin()
+  local http_headers = {
+    ['Accept'] = '*/*'
+  }
+  local http_body = nil
+  local url = map_config.backend
+
+  if type(key) == 'string' or type(key) == 'userdata' then
+    if map_config.method == 'body' then
+      http_body = key
+      http_headers['Content-Type'] = 'text/plain'
+    elseif map_config.method == 'header' then
+      http_headers = {
+        key = key
+      }
+    elseif map_config.method == 'query' then
+      url = string.format('%s?%s', url, url_encode_string(key))
+    end
+  elseif type(key) == 'table' then
+    if map_config.method == 'body' then
+      if map_config.encode == 'json' then
+        http_body = ucl.to_format(key, 'json-compact', true)
+        http_headers['Content-Type'] = 'application/json'
+      elseif map_config.encode == 'messagepack' then
+        http_body = ucl.to_format(key, 'messagepack', true)
+        http_headers['Content-Type'] = 'application/msgpack'
+      else
+        local caller = debug.getinfo(2) or {}
+        rspamd_logger.errx(task,
+            "requested external map key with a wrong combination body method and missing encode; caller: %s:%s",
+            caller.short_src, caller.currentline)
+        callback(false, 'invalid map usage', 500, task)
+      end
+    else
+      -- query/header and no encode
+      if map_config.method == 'query' then
+        local params_table = {}
+        for k,v in pairs(key) do
+          if type(v) == 'string' then
+            table.insert(params_table, string.format('%s=%s', url_encode_string(k), url_encode_string(v)))
+          end
+        end
+        url = string.format('%s?%s', url, table.concat(params_table, '&'))
+      elseif map_config.method == 'header' then
+        http_headers = key
+      else
+        local caller = debug.getinfo(2) or {}
+        rspamd_logger.errx(task,
+            "requested external map key with a wrong combination of encode and input; caller: %s:%s",
+            caller.short_src, caller.currentline)
+        callback(false, 'invalid map usage', 500, task)
+        return
+      end
+    end
+  end
+
+  local function map_callback(err, code, body, _)
+    if err then
+      callback(false, err, code, task)
+    else
+      callback(true, body, 200, task)
+    end
+  end
+
+  local ret = rspamd_http.request{
+    task = task,
+    url = map_config.backend,
+    callback = map_callback,
+    timeout = map_config.timeout or 1.0,
+    keepalive = true,
+    upstream = upstream,
+    method = http_method,
+    headers = http_headers,
+    body = http_body,
+  }
+
+  if not ret then
+    callback(false, 'http request error', 500, task)
+  end
+end
+
 --[[[
 -- @function lua_maps.map_add_from_ucl(opt, mtype, description)
 -- Creates a map from static data
@@ -93,23 +198,43 @@ end
 -- @param {string or table} opt data for map (or URL)
 -- @param {string} mtype type of map (`set`, `map`, `radix`, `regexp`)
 -- @param {string} description human-readable description of map
+-- @param {function} callback optional callback that will be called on map match (required for external maps)
 -- @return {bool} true on success, or `nil`
 --]]
-
-local function rspamd_map_add_from_ucl(opt, mtype, description)
+local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   local ret = {
-    get_key = function(t, k)
+    get_key = function(t, k, key_callback, task)
       if t.__data then
-        return t.__data:get_key(k)
+        local cb = key_callback or callback
+        if t.__external then
+          if not cb or not task then
+            local caller = debug.getinfo(2) or {}
+            rspamd_logger.errx(rspamd_config, "requested external map key without callback or task; caller: %s:%s",
+                caller.short_src, caller.currentline)
+            return nil
+          end
+          query_external_map(t.__data, t.__upstreams, k, cb, task)
+        else
+          local result = t.__data:get_key(k)
+          if cb then
+            if result then
+              cb(true, result, 200, task)
+            else
+              cb(false, 'not found', 404, task)
+            end
+          else
+            return result
+          end
+        end
       end
 
       return nil
     end
   }
   local ret_mt = {
-    __index = function(t, k)
+    __index = function(t, k, key_callback, task)
       if t.__data then
-        return t.get_key(k)
+        return t.get_key(k, key_callback, task)
       end
 
       return nil
@@ -123,7 +248,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
   if type(opt) == 'string' then
     opt,mtype = maybe_adjust_type(opt, mtype)
     local cache_key = map_hash_key(opt, mtype)
-    if maps_cache[cache_key] then
+    if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
           opt, mtype)
 
@@ -145,7 +270,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
     end
   elseif type(opt) == 'table' then
     local cache_key = lua_util.table_digest(opt)
-    if maps_cache[cache_key] then
+    if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
           cache_key:sub(1,8), description)
 
@@ -281,17 +406,39 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
         end
       end
     else
-      -- We have some non-trivial object so let C code to deal with it somehow...
-      local map = rspamd_config:add_map{
-        type = mtype,
-        description = description,
-        url = opt,
-      }
-      if map then
-        ret.__data = map
-        setmetatable(ret, ret_mt)
-        maps_cache[cache_key] = ret
-        return ret
+      if opt.external then
+        -- External map definition, missing fields are handled by schema
+        local parse_res,parse_err = external_map_schema(opt)
+
+        if parse_res then
+          ret.__upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), opt.backend)
+          if ret.__upstreams then
+            ret.__data = opt
+            ret.__external = true
+            setmetatable(ret, ret_mt)
+
+            return ret
+          else
+            rspamd_logger.errx(rspamd_config, 'cannot parse external map upstreams: %s',
+                opt.backend)
+          end
+        else
+          rspamd_logger.errx(rspamd_config, 'cannot parse external map: %s',
+              parse_err)
+        end
+      else
+        -- We have some non-trivial object so let C code to deal with it somehow...
+        local map = rspamd_config:add_map{
+          type = mtype,
+          description = description,
+          url = opt,
+        }
+        if map then
+          ret.__data = map
+          setmetatable(ret, ret_mt)
+          maps_cache[cache_key] = ret
+          return ret
+        end
       end
     end -- opt[1]
   end
@@ -307,13 +454,14 @@ end
 -- @param {string} optname option name to use
 -- @param {string} mtype type of map ('set', 'hash', 'radix', 'regexp', 'glob')
 -- @param {string} description human-readable description of map
+-- @param {function} callback optional callback that will be called on map match (required for external maps)
 -- @return {bool} true on success, or `nil`
 --]]
 
-local function rspamd_map_add(mname, optname, mtype, description)
+local function rspamd_map_add(mname, optname, mtype, description, callback)
   local opt = rspamd_config:get_module_opt(mname, optname)
 
-  return rspamd_map_add_from_ucl(opt, mtype, description)
+  return rspamd_map_add_from_ucl(opt, mtype, description, callback)
 end
 
 exports.rspamd_map_add = rspamd_map_add
@@ -386,24 +534,26 @@ exports.fill_config_maps = function(mname, opts, map_defs)
   return true
 end
 
+local direct_map_schema = ts.shape{ -- complex object
+  name = ts.string:is_optional(),
+  description = ts.string:is_optional(),
+  timeout = ts.number,
+  data = ts.array_of(ts.string):is_optional(),
+  -- Tableshape has no options support for something like key1 or key2?
+  upstreams = ts.one_of{
+    ts.string,
+    ts.array_of(ts.string),
+  }:is_optional(),
+  url = ts.one_of{
+    ts.string,
+    ts.array_of(ts.string),
+  }:is_optional(),
+}
+
 exports.map_schema = ts.one_of{
   ts.string, -- 'http://some_map'
   ts.array_of(ts.string), -- ['foo', 'bar']
-  ts.shape{ -- complex object
-    name = ts.string:is_optional(),
-    description = ts.string:is_optional(),
-    timeout = ts.number,
-    data = ts.array_of(ts.string):is_optional(),
-    -- Tableshape has no options support for something like key1 or key2?
-    upstreams = ts.one_of{
-      ts.string,
-      ts.array_of(ts.string),
-    }:is_optional(),
-    url = ts.one_of{
-      ts.string,
-      ts.array_of(ts.string),
-    }:is_optional(),
-  }
+  ts.one_of{direct_map_schema, external_map_schema}
 }
 
 return exports
