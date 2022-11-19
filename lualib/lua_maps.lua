@@ -118,6 +118,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
   if type(key) == 'string' or type(key) == 'userdata' then
     if map_config.method == 'body' then
       http_body = key
+      http_headers['Content-Type'] = 'text/plain'
     elseif map_config.method == 'header' then
       http_headers = {
         key = key
@@ -129,8 +130,10 @@ local function query_external_map(map_config, upstreams, key, callback, task)
     if map_config.method == 'body' then
       if map_config.encode == 'json' then
         http_body = ucl.to_format(key, 'json-compact', true)
+        http_headers['Content-Type'] = 'application/json'
       elseif map_config.encode == 'messagepack' then
         http_body = ucl.to_format(key, 'messagepack', true)
+        http_headers['Content-Type'] = 'application/msgpack'
       else
         local caller = debug.getinfo(2) or {}
         rspamd_logger.errx(task,
