@@ -290,6 +290,8 @@ enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
  */
 const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
 
+const gchar *rspamd_srv_command_to_string (enum rspamd_srv_type cmd);
+
 /**
  * Used to cleanup pending events
  * @param p

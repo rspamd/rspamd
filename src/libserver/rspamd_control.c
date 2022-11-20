@@ -928,8 +928,8 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 			ev_io_stop (EV_A_ w);
 		}
 		else if (r != sizeof (cmd)) {
-			msg_err ("cannot read from worker's srv pipe incomplete command: %d",
-					(gint) r);
+			msg_err ("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
+					(gint)r, sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
 		}
 		else {
 			rdata = g_malloc0 (sizeof (*rdata));
@@ -1069,8 +1069,13 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 		r = sendmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot write to worker's srv pipe: %s",
-					strerror (errno));
+			msg_err ("cannot write to worker's srv pipe when writing reply: %s; command = %s",
+				strerror (errno), rspamd_srv_command_to_string(rdata->rep.type));
+		}
+		else if (r != sizeof (rdata->rep)) {
+			msg_err ("cannot write to worker's srv pipe: %d != %d; command = %s",
+				(int)r, (int)sizeof (rdata->rep),
+				rspamd_srv_command_to_string(rdata->rep.type));
 		}
 
 		g_free (rdata);
@@ -1139,7 +1144,13 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 		r = sendmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot write to server pipe: %s", strerror (errno));
+			msg_err ("cannot write to server pipe: %s; command = %s", strerror (errno),
+				rspamd_srv_command_to_string(rd->cmd.type));
+			goto cleanup;
+		}
+		else if (r != sizeof (rd->cmd)) {
+			msg_err("incomplete write to the server pipe: %d != %d, command = %s",
+				(int)r, (int)sizeof(rd->cmd), rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
@@ -1159,13 +1170,14 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 		r = recvmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot read from server pipe: %s", strerror (errno));
+			msg_err ("cannot read from server pipe: %s; command = %s", strerror (errno),
+				rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
-		if (r < (gint)sizeof (rd->rep)) {
-			msg_err ("cannot read from server pipe, invalid length: %d",
-					(gint)r);
+		if (r != (gint)sizeof (rd->rep)) {
+			msg_err ("cannot read from server pipe, invalid length: %d != %d; command = %s",
+					(gint)r, (int)sizeof (rd->rep), rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
@@ -1297,6 +1309,40 @@ rspamd_control_command_to_string (enum rspamd_control_type cmd)
 		reply = "child_change";
 		break;
 	default:
+		break;
+	}
+
+	return reply;
+}
+
+const gchar *rspamd_srv_command_to_string (enum rspamd_srv_type cmd)
+{
+	const gchar *reply = "unknown";
+
+	switch (cmd) {
+	case RSPAMD_SRV_SOCKETPAIR:
+		reply = "socketpair";
+		break;
+	case RSPAMD_SRV_HYPERSCAN_LOADED:
+		reply = "hyperscan_loaded";
+		break;
+	case RSPAMD_SRV_MONITORED_CHANGE:
+		reply = "monitored_change";
+		break;
+	case RSPAMD_SRV_LOG_PIPE:
+		reply = "log_pipe";
+		break;
+	case RSPAMD_SRV_ON_FORK:
+		reply = "on_fork";
+		break;
+	case RSPAMD_SRV_HEARTBEAT:
+		reply = "heartbeat";
+		break;
+	case RSPAMD_SRV_HEALTH:
+		reply = "health";
+		break;
+	case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+		reply = "notice_hyperscan_cache";
 		break;
 	}
 
