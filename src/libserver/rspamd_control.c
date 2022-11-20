@@ -929,7 +929,7 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 		}
 		else if (r != sizeof (cmd)) {
 			msg_err ("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
-					(gint)r, sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
+					(gint)r, (gint)sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
 		}
 		else {
 			rdata = g_malloc0 (sizeof (*rdata));
