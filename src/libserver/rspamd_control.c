@@ -925,6 +925,8 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 			 * Usually this means that a worker is dead, so do not try to read
 			 * anything
 			 */
+			msg_err ("cannot read from worker's srv pipe connection closed; command = %s",
+				rspamd_srv_command_to_string(cmd.type));
 			ev_io_stop (EV_A_ w);
 		}
 		else if (r != sizeof (cmd)) {
@@ -1144,6 +1146,16 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 		r = sendmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
+			if (r == ENOBUFS) {
+				/* On BSD derived systems we can have this error when trying to send
+				 * requests too fast.
+				 * It might be good to retry...
+				 */
+				msg_info ("cannot write to server pipe: %s; command = %s; retrying sending",
+					strerror (errno),
+					rspamd_srv_command_to_string(rd->cmd.type));
+				return;
+			}
 			msg_err ("cannot write to server pipe: %s; command = %s", strerror (errno),
 				rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
@@ -1185,17 +1197,18 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 		}
 
+		/* Reply has been received */
+		if (rd->handler) {
+			rd->handler (rd->worker, &rd->rep, rfd, rd->ud);
+		}
+
 		goto cleanup;
 	}
 
 	return;
 
+
 cleanup:
-
-	if (rd->handler) {
-		rd->handler (rd->worker, &rd->rep, rfd, rd->ud);
-	}
-
 	ev_io_stop (EV_A_ w);
 	g_free (rd);
 }
