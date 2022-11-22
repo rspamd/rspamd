@@ -35,8 +35,9 @@ context("Selectors test", function()
   end)
 
   local function check_selector(selector_string)
-    local sels = lua_selectors.parse_selector(cfg, selector_string)
-    local elts = lua_selectors.process_selectors(task, sels)
+    local sels = lua_selectors.create_selector_closure_fn(nil, cfg, selector_string, nil,
+        function(_, res, _) return res end)
+    local elts = sels(task)
     return elts
   end
 

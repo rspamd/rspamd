@@ -580,7 +580,7 @@ exports.create_selector_closure_fn = function(log_obj, cfg, selector_str, delimi
     local res = exports.process_selectors(task, selector)
 
     if res then
-      fn(log_obj, res, delimiter)
+      return fn(log_obj, res, delimiter)
     end
 
     return nil
