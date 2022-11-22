@@ -459,7 +459,7 @@ end
 --[[[
 -- @function lua_selectors.combine_selectors(task, selectors, delimiter)
 --]]
-exports.combine_selectors = function(_, selectors, delimiter)
+exports.combine_selectors = function(selectors, delimiter)
   if not delimiter then delimiter = '' end
 
   if not selectors then return nil end
@@ -509,7 +509,7 @@ end
 -- @function lua_selectors.flatten_selectors(selectors)
 -- Convert selectors to a flat table of elements
 --]]
-exports.flatten_selectors = function(selectors)
+exports.flatten_selectors = function(_, selectors, _)
   local res = {}
 
   local function fill(tbl)
@@ -530,9 +530,46 @@ exports.flatten_selectors = function(selectors)
 end
 
 --[[[
--- @function lua_selectors.create_closure(cfg, selector_str, delimiter='', flatten=false)
+-- @function lua_selectors.kv_table_from_pairs(selectors)
+-- Convert selectors to a table where the odd elements are keys and even are elements
+-- Similarly to make a map from (k, v) pairs list
+-- To specify the concrete constant keys, one can use the `id` extractor
 --]]
-exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten)
+exports.kv_table_from_pairs = function(log_obj, selectors, _)
+  local res = {}
+  local rspamd_logger = require "rspamd_logger"
+
+  local function fill(tbl)
+    local tbl_len = #tbl
+    if tbl_len % 2 ~= 0 or tbl_len == 0 then
+      rspamd_logger.errx(log_obj, "invalid invocation of the `kv_table_from_pairs`: table length is invalid %s",
+          tbl_len)
+      return
+    end
+    for i=1,#tbl_len,2 do
+      local k = tostring(tbl[i])
+      local v = tbl[i + 1]
+      if type(v) == 'string' then
+        res[k] = v
+      elseif type(v) == 'userdata' then
+        res[k] = tostring(v)
+      else
+        res[k] = fun.totable(fun.map(function(elt) return tostring(elt) end, v))
+      end
+    end
+  end
+
+  fill(selectors)
+
+  return res
+end
+
+
+--[[[
+-- @function lua_selectors.create_closure(log_obj, cfg, selector_str, delimiter, fn)
+-- Creates a closure from a string selector, using the specific combinator function
+--]]
+exports.create_selector_closure_fn = function(log_obj, cfg, selector_str, delimiter, fn)
   local selector = exports.parse_selector(cfg, selector_str)
 
   if not selector then
@@ -543,15 +580,21 @@ exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten
     local res = exports.process_selectors(task, selector)
 
     if res then
-      if flatten then
-        return exports.flatten_selectors(res)
-      else
-        return exports.combine_selectors(nil, res, delimiter)
-      end
+      fn(log_obj, res, delimiter)
     end
 
     return nil
   end
+end
+
+--[[[
+-- @function lua_selectors.create_closure(cfg, selector_str, delimiter='', flatten=false)
+-- Creates a closure from a string selector
+--]]
+exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten)
+  local combinator_fn = flatten and exports.flatten_selectors or exports.combine_selectors
+
+  return exports.create_selector_closure_fn(nil, cfg, selector_str, delimiter, combinator_fn)
 end
 
 local function display_selectors(tbl)
