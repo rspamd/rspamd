@@ -546,7 +546,7 @@ exports.kv_table_from_pairs = function(log_obj, selectors, _)
           tbl_len)
       return
     end
-    for i=1,#tbl_len,2 do
+    for i=1,tbl_len,2 do
       local k = tostring(tbl[i])
       local v = tbl[i + 1]
       if type(v) == 'string' then
