@@ -459,7 +459,7 @@ end
 --[[[
 -- @function lua_selectors.combine_selectors(task, selectors, delimiter)
 --]]
-exports.combine_selectors = function(selectors, delimiter)
+exports.combine_selectors = function(_, selectors, delimiter)
   if not delimiter then delimiter = '' end
 
   if not selectors then return nil end
