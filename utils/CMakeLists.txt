@@ -24,10 +24,3 @@ IF (ENABLE_UTILS MATCHES "ON")
 	ADD_UTIL(rspamd-base64 ${BASE64SRC})
 	ADD_UTIL(rspamd-mime-tool ${MIMESRC})
 ENDIF()
-
-# Redirector
-IF (ENABLE_REDIRECTOR MATCHES "ON")
-    CONFIGURE_FILE(redirector.pl.in redirector.pl @ONLY)
-    INSTALL(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/redirector.pl"
-            DESTINATION bin RENAME rspamd-redirector)
-ENDIF (ENABLE_REDIRECTOR MATCHES "ON")
