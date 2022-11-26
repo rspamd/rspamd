@@ -71,6 +71,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         """Respond to a POST request."""
         response = b"hello post"
         content_length = int(self.headers.get('Content-Length', "0")) or 0
+        content_type = "text/plain"
         if content_length > 0:
             _ = self.rfile.read(content_length)
         if self.path == "/empty":
@@ -86,6 +87,9 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
         if self.path == "/map-simple":
             response = b"hello map"
+        if self.path == "/settings":
+            response = b"{\"actions\": { \"reject\": 1.0}}"
+            content_type = "application/json"
 
         self.send_header("Content-Length", str(len(response)))
         conntype = self.headers.get('Connection', "").lower()
@@ -94,7 +98,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_header("Connection", "keep-alive")
 
-        self.send_header("Content-type", "text/plain")
+        self.send_header("Content-type", content_type)
         self.end_headers()
         self.wfile.write(response)
         self.log_message("to be closed: %d, headers: %s, conn:'%s'" % (self.close_connection, str(self.headers), self.headers.get('Connection', "").lower()))
