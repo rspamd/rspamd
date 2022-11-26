@@ -360,7 +360,7 @@ local function check_settings(task)
     local selector_result = external_map.selector(task)
 
     if selector_result then
-      external_map.map:get_key(selector_result)
+      external_map.map:get_key(selector_result, nil, task)
       -- No more selection logic
       return
     else
@@ -1338,6 +1338,9 @@ elseif set_section and type(set_section) == "table" then
     if maybe_external_map.map and maybe_external_map.selector then
       rspamd_logger.infox(rspamd_config, "added external map for user's settings")
       external_map = maybe_external_map
+      set_section.external_map = nil -- to avoid internal processing
+    else
+      rspamd_logger.warnx(rspamd_config, "cannot add external map for user's settings")
     end
   end
   rspamd_config:add_post_init(function ()
