@@ -2492,30 +2492,40 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 
 		if (uri->tldlen == 0) {
-			if (uri->protocol != PROTOCOL_MAILTO) {
-				if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
-					/* Ignore URL's without TLD if it is not a numeric URL */
-					if (!rspamd_url_is_ip(uri, pool)) {
-						return URI_ERRNO_TLD_MISSING;
+			/*
+			 * If we have not detected eSLD, but there are no dots in the hostname,
+			 * then we should treat the whole hostname as eSLD - a rule of thumb
+			 */
+			if (uri->hostlen > 0 && memchr(rspamd_url_host_unsafe(uri), '.', uri->hostlen) == NULL) {
+				uri->tldlen = uri->hostlen;
+				uri->tldshift = uri->hostshift;
+			}
+			else {
+				if (uri->protocol != PROTOCOL_MAILTO) {
+					if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+						/* Ignore URL's without TLD if it is not a numeric URL */
+						if (!rspamd_url_is_ip(uri, pool)) {
+							return URI_ERRNO_TLD_MISSING;
+						}
+					}
+					else {
+						if (!rspamd_url_is_ip(uri, pool)) {
+							/* Assume tld equal to host */
+							uri->tldshift = uri->hostshift;
+							uri->tldlen = uri->hostlen;
+						}
+						else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
+							/* Ignore urls with both no schema and no tld */
+							return URI_ERRNO_TLD_MISSING;
+						}
+
+						uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
 					}
 				}
 				else {
-					if (!rspamd_url_is_ip(uri, pool)) {
-						/* Assume tld equal to host */
-						uri->tldshift = uri->hostshift;
-						uri->tldlen = uri->hostlen;
-					}
-					else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
-						/* Ignore urls with both no schema and no tld */
-						return URI_ERRNO_TLD_MISSING;
-					}
-
-					uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+					/* Ignore IP like domains for mailto, as it is really never supported */
+					return URI_ERRNO_TLD_MISSING;
 				}
-			}
-			else {
-				/* Ignore IP like domains for mailto, as it is really never supported */
-				return URI_ERRNO_TLD_MISSING;
 			}
 		}
 
