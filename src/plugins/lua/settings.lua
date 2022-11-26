@@ -1035,7 +1035,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
             name, nchecks)
       end
     else
-      if not elt.disabled then
+      if not elt.disabled and elt.external_map then
         lua_util.debugm(N, rspamd_config, 'registered settings %s with no checks, assume it as implicit',
             name)
         out.implicit = 1
