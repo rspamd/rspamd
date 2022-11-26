@@ -509,34 +509,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 			&ctx->lang_det);
 
-	if (worker->index == 0) {
-		/* If there are no controllers, then pretend that we are a controller */
-		gboolean controller_seen = FALSE;
-		GList *cur;
-
-		cur = worker->srv->cfg->workers;
-
-		while (cur) {
-			struct rspamd_worker_conf *cf;
-
-			cf = (struct rspamd_worker_conf *)cur->data;
-			if (cf->type == g_quark_from_static_string ("controller")) {
-				if (cf->enabled && cf->count >= 0) {
-					controller_seen = TRUE;
-					break;
-				}
-			}
-
-			cur = g_list_next (cur);
-		}
-
-		if (!controller_seen) {
-			msg_info_ctx ("no controller workers defined, execute "
-				 "controller periodics in this worker");
-			worker->flags |= RSPAMD_WORKER_CONTROLLER;
-			is_controller = TRUE;
-		}
-	}
+	is_controller = rspamd_worker_check_controller_presence (worker);
 
 	if (is_controller) {
 		rspamd_worker_init_controller (worker, NULL);

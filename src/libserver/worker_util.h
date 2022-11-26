@@ -192,6 +192,11 @@ gdouble rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg,
 gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
 
 /**
+ * Returns TRUE if a specific worker should take a role of a controller
+ */
+gboolean rspamd_worker_check_controller_presence (struct rspamd_worker *w);
+
+/**
  * Creates new session cache
  * @param w
  * @return

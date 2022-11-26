@@ -1406,6 +1406,70 @@ rspamd_worker_is_primary_controller (struct rspamd_worker *w)
 	return FALSE;
 }
 
+gboolean
+rspamd_worker_check_controller_presence (struct rspamd_worker *w)
+{
+	if (w->index == 0) {
+		GQuark our_type = w->type;
+		gboolean controller_seen = FALSE;
+		GList *cur;
+
+		enum {
+			low_priority_worker,
+			high_priority_worker
+		} our_priority;
+
+		if (our_type == g_quark_from_static_string("rspamd_proxy")) {
+			our_priority = low_priority_worker;
+		}
+		else if (our_type == g_quark_from_static_string("normal")) {
+			our_priority = high_priority_worker;
+		}
+		else {
+			msg_err ("function is called for a wrong worker type: %s", g_quark_to_string(our_type));
+			return FALSE;
+		}
+
+		cur = w->srv->cfg->workers;
+
+		while (cur) {
+			struct rspamd_worker_conf *cf;
+
+			cf = (struct rspamd_worker_conf *)cur->data;
+
+			if (our_priority == low_priority_worker) {
+				if ((cf->type == g_quark_from_static_string("controller")) ||
+					(cf->type == g_quark_from_static_string("normal"))) {
+
+					if (cf->enabled && cf->count >= 0) {
+						controller_seen = TRUE;
+						break;
+					}
+				}
+			}
+			else {
+				if (cf->type == g_quark_from_static_string("controller")) {
+					if (cf->enabled && cf->count >= 0) {
+						controller_seen = TRUE;
+						break;
+					}
+				}
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		if (!controller_seen) {
+			msg_info ("no controller or normal workers defined, execute "
+					  "controller periodics in this worker");
+			w->flags |= RSPAMD_WORKER_CONTROLLER;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 struct rspamd_worker_session_elt {
 	void *ptr;
 	guint *pref;
