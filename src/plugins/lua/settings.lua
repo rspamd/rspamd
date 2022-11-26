@@ -34,6 +34,7 @@ local fun = require "fun"
 local rspamd_mempool = require "rspamd_mempool"
 
 local redis_params
+local external_map -- used when settings are queried from an external resource
 
 local settings = {}
 local N = "settings"
@@ -355,6 +356,17 @@ local function check_settings(task)
     return
   end
 
+  if external_map then
+    local selector_result = external_map.selector(task)
+
+    if selector_result then
+      external_map.map:get_key(selector_result)
+      -- No more selection logic
+      return
+    else
+      rspamd_logger.infox("cannot query selector to make external map request")
+    end
+  end
   -- Match rules according their order
   local applied = false
 
@@ -1112,6 +1124,7 @@ end
 
 -- Parse settings map from the ucl line
 local settings_map_pool
+
 local function process_settings_map(map_text)
   local parser = ucl.parser()
   local res,err
@@ -1194,6 +1207,26 @@ local function gen_redis_callback(handler, id)
     if not ret then
       rspamd_logger.errx(task, 'Redis MGET failed: %s', ret)
     end
+  end
+end
+
+local function settings_external_cb(result, err_or_data, code, task)
+  if result then
+    local parser = ucl.parser()
+
+    local res,ucl_err = parser:parse_string(err_or_data)
+    if not res then
+      rspamd_logger.warnx(task, 'cannot parse settings from the external map: %s',
+          ucl_err)
+    else
+      local obj = parser:get_object()
+      rspamd_logger.infox(task, "<%s> apply settings according to the external map",
+          task:get_message_id())
+      apply_settings(task, obj, nil, 'external_map')
+    end
+  else
+    rspamd_logger.infox(task, "<%s> no settings returned from the external map: %s (code = %s)",
+        task:get_message_id(), err_or_data, code)
   end
 end
 
@@ -1287,6 +1320,26 @@ elseif set_section and type(set_section) == "table" then
             return false
           end, set_section)
   )
+
+  --[[
+  external_map = {
+    map = { ... };
+    selector = "...";
+  }
+  --]]
+  if type(set_section.external_map) == 'table'
+      and set_section.external_map.map and set_section.external_map.selector then
+    local maybe_external_map = {}
+    maybe_external_map.map = lua_maps.map_add_from_ucl(set_section.external_map.map, "", "External map for settings",
+        settings_external_cb)
+    maybe_external_map.selector = lua_selectors.create_selector_closure_fn(rspamd_config,
+        rspamd_config, set_section.external_map.selector, ";", lua_selectors.kv_table_from_pairs)
+
+    if maybe_external_map.map and maybe_external_map.selector then
+      rspamd_logger.infox(rspamd_config, "added external map for user's settings")
+      external_map = maybe_external_map
+    end
+  end
   rspamd_config:add_post_init(function ()
     process_settings_table(set_section, true, settings_map_pool, true)
   end, 100)
