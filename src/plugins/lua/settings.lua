@@ -1323,6 +1323,26 @@ elseif set_section and type(set_section) == "table" then
   -- Postponed settings init is needed to ensure that all symbols have been
   -- registered BEFORE settings plugin. Otherwise, we can have inconsistent settings expressions
   fun.each(function(_, elt)
+    if elt.register_symbols then
+      for k,v in pairs(elt.register_symbols) do
+        local rtb = {
+          type = 'virtual',
+          parent = module_sym_id,
+        }
+        if type(k) == 'number' and type(v) == 'string' then
+          rtb.name = v
+        elseif type(k) == 'string' then
+          rtb.name = k
+          if type(v) == 'table' then
+            for kk,vv in pairs(v) do
+              -- Enrich table wih extra values
+              rtb[kk] = vv
+            end
+          end
+        end
+        rspamd_config:register_symbol(rtb)
+      end
+    end
     if elt.apply and elt.apply.symbols then
       -- Register virtual symbols
       for k,v in pairs(elt.apply.symbols) do
