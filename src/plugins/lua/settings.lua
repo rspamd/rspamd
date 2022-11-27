@@ -169,6 +169,7 @@ local function check_query_settings(task)
 
   if settings_id and settings_initialized then
     local cached = lua_settings.settings_by_id(settings_id)
+    lua_util.debugm(N, task, "check settings id for %s", settings_id)
 
     if cached then
       local elt = cached.settings
@@ -180,8 +181,8 @@ local function check_query_settings(task)
         if nset then
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
-        return elt.apply, cached, cached.priority or 1
       end
+      return elt.apply, cached, cached.priority or 1
     else
       rspamd_logger.warnx(task, 'no settings id "%s" has been found', settings_id)
       if nset then
@@ -333,6 +334,7 @@ local function check_settings(task)
   end
 
   local min_pri = 1
+  lua_util.debugm(N, task, "hui: %s", id_elt)
   if query_apply then
     if priority >= min_pri then
       -- Do not check lower or equal priorities
@@ -344,6 +346,17 @@ local function check_settings(task)
       maybe_apply_query_settings()
 
       return
+    end
+  elseif id_elt and type(id_elt.settings) == 'table' and id_elt.settings.external_map then
+    local external_map = id_elt.settings.external_map
+    local selector_result = external_map.selector(task)
+
+    if selector_result then
+      external_map.map:get_key(selector_result, nil, task)
+      -- No more selection logic
+      return
+    else
+      rspamd_logger.infox("cannot query selector to make external map request")
     end
   end
 
