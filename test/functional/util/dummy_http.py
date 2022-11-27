@@ -88,7 +88,7 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/map-simple":
             response = b"hello map"
         if self.path == "/settings":
-            response = b"{\"actions\": { \"reject\": 1.0}}"
+            response = b"{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}"
             content_type = "application/json"
 
         self.send_header("Content-Length", str(len(response)))
