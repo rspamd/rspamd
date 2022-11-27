@@ -120,7 +120,7 @@ local function check_query_settings(task)
   if query_set then
 
     local parser = ucl.parser()
-    local res,err = parser:parse_string(tostring(query_set))
+    local res,err = parser:parse_text(query_set)
     if res then
       if settings_id then
         rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
@@ -432,7 +432,7 @@ local function gen_settings_external_cb(name)
     if result then
       local parser = ucl.parser()
 
-      local res,ucl_err = parser:parse_string(err_or_data)
+      local res,ucl_err = parser:parse_text(err_or_data)
       if not res then
         rspamd_logger.warnx(task, 'cannot parse settings from the external map %s: %s',
             name, ucl_err)
@@ -1181,13 +1181,7 @@ local settings_map_pool
 
 local function process_settings_map(map_text)
   local parser = ucl.parser()
-  local res,err
-
-  if type(map_text) == 'string' then
-    res,err = parser:parse_string(map_text)
-  else
-    res,err = parser:parse_text(map_text)
-  end
+  local res,err = parser:parse_text(map_text)
 
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
@@ -1219,7 +1213,7 @@ local function gen_redis_callback(handler, id)
         for _, d in ipairs(data) do
           if type(d) == 'string' then
             local parser = ucl.parser()
-            local res,ucl_err = parser:parse_string(d)
+            local res,ucl_err = parser:parse_text(d)
             if not res then
               rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
                 ucl_err)
