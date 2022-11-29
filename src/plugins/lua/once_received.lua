@@ -196,7 +196,8 @@ if opts then
           good_hosts = v
         end
       elseif n == 'whitelist' then
-        whitelist = rspamd_map_add('once_received', 'whitelist', 'radix',
+        local lua_maps = require "lua_maps"
+        whitelist = lua_maps.map_add('once_received', 'whitelist', 'radix',
           'once received whitelist')
       elseif n == 'symbol_mx' then
         symbol_mx = v

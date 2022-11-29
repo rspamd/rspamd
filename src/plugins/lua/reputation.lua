@@ -410,7 +410,7 @@ local function ip_reputation_init(rule)
   local cfg = rule.selector.config
 
   if cfg.asn_cc_whitelist then
-    cfg.asn_cc_whitelist = rspamd_map_add('reputation',
+    cfg.asn_cc_whitelist = lua_maps.map_add('reputation',
       'asn_cc_whitelist',
       'map',
       'IP score whitelisted ASNs/countries')
