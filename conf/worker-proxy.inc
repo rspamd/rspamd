@@ -20,7 +20,7 @@ milter = yes; # Enable milter mode
 # true for self-scan mode).
 # If this behaviour is not desired, then it is recommended to reduce and adjust this
 # value accordingly
-timeout = 120s;
+timeout = 60s;
 
 upstream "local" {
   default = yes;
