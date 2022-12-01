@@ -30,6 +30,7 @@
 #include <glob.h> /* for glob */
 #include <unistd.h> /* for unlink */
 #include <optional>
+#include <cstdlib> /* for std::getenv */
 #include "unix-std.h"
 #include "rspamd_control.h"
 
@@ -184,7 +185,7 @@ public:
 
 	auto cleanup_maybe() -> void {
 		/* We clean dir merely if we are running from the main process */
-		if (rspamd_current_worker == nullptr) {
+		if (rspamd_current_worker == nullptr && std::getenv("RSPAMD_NO_CLEANUP") == nullptr) {
 			const auto *log_func = RSPAMD_LOG_FUNC;
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext : cache_extensions) {
