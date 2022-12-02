@@ -142,7 +142,7 @@ set(CMAKE_CXX_FLAGS_COVERAGE           "${CMAKE_CXX_FLAGS} -O1 --coverage -fno-i
 if (COMPILER_GCC)
     # GCC flags
     set (COMPILER_DEBUG_FLAGS "-g -ggdb -g3 -ggdb3")
-    set (CXX_COMMON_FLAGS "-Weffc++")
+    set (CXX_COMMON_FLAGS "")
     set (CMAKE_C_FLAGS_RELWITHDEBINFO      "${CMAKE_C_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO    "${CMAKE_CXX_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS} ${CXX_COMMON_FLAGS}")
 
@@ -167,7 +167,7 @@ if (COMPILER_GCC)
 elseif (COMPILER_CLANG)
     # Clang flags
     set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
-    set (CXX_COMMON_FLAGS "-Weffc++")
+    set (CXX_COMMON_FLAGS "")
     set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
     set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH} ${CXX_COMMON_FLAGS}")
 
