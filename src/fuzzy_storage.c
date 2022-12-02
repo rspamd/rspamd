@@ -51,31 +51,6 @@
 
 static const gchar *local_db_name = "local";
 
-#define msg_err_fuzzy_update(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        session->name, session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_warn_fuzzy_update(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        session->name, session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_fuzzy_update(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        session->name, session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_err_fuzzy_collection(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "fuzzy_collection", session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_warn_fuzzy_collection(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-       "fuzzy_collection", session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_fuzzy_collection(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-       "fuzzy_collection", session->uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
@@ -190,6 +165,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_hash_map_helper *skip_hashes;
 	gint lua_pre_handler_cbref;
 	gint lua_post_handler_cbref;
+	gint lua_blacklist_cbref;
 };
 
 enum fuzzy_cmd_type {
@@ -239,9 +215,13 @@ struct rspamd_updates_cbdata {
 
 
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
-static gboolean rspamd_fuzzy_process_updates_queue (
-		struct rspamd_fuzzy_storage_ctx *ctx,
-		const gchar *source, gboolean final);
+static gboolean rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
+													const gchar *source, gboolean final);
+static gboolean rspamd_fuzzy_check_client (struct rspamd_fuzzy_storage_ctx *ctx,
+										   rspamd_inet_addr_t *addr);
+static void rspamd_fuzzy_maybe_call_blacklisted (struct rspamd_fuzzy_storage_ctx *ctx,
+												 rspamd_inet_addr_t *addr,
+												 const gchar *reason);
 
 static gboolean
 rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
@@ -320,6 +300,10 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 
 		rspamd_inet_address_free (masked);
 
+		if (ratelimited) {
+			rspamd_fuzzy_maybe_call_blacklisted(session->ctx, session->addr, "ratelimit");
+		}
+
 		return !ratelimited;
 	}
 	else {
@@ -339,6 +323,32 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 	return TRUE;
 }
 
+static void
+rspamd_fuzzy_maybe_call_blacklisted (struct rspamd_fuzzy_storage_ctx *ctx,
+									 rspamd_inet_addr_t *addr,
+									 const gchar *reason)
+{
+	if (ctx->lua_blacklist_cbref != -1) {
+		lua_State *L = ctx->cfg->lua_state;
+		gint err_idx, ret;
+
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+		lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
+		/* client IP */
+		rspamd_lua_ip_push (L, addr);
+		/* block reason */
+		lua_pushstring (L, reason);
+
+		if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
+			msg_err ("call to lua_blacklist_cbref "
+					 "script failed (%d): %s", ret, lua_tostring (L, -1));
+		}
+
+		lua_settop (L, 0);
+	}
+}
+
 static gboolean
 rspamd_fuzzy_check_client (struct rspamd_fuzzy_storage_ctx *ctx,
 		rspamd_inet_addr_t *addr)
@@ -346,6 +356,8 @@ rspamd_fuzzy_check_client (struct rspamd_fuzzy_storage_ctx *ctx,
 	if (ctx->blocked_ips != NULL) {
 		if (rspamd_match_radix_map_addr (ctx->blocked_ips,
 				addr) != NULL) {
+
+			rspamd_fuzzy_maybe_call_blacklisted (ctx, addr, "blacklisted");
 			return FALSE;
 		}
 	}
@@ -2013,6 +2025,37 @@ lua_fuzzy_add_post_handler (lua_State *L)
 	return 0;
 }
 
+static int
+lua_fuzzy_add_blacklist_handler (lua_State *L)
+{
+	struct rspamd_worker *wrk, **pwrk = (struct rspamd_worker **)
+		rspamd_lua_check_udata (L, 1, "rspamd{worker}");
+	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	if (!pwrk) {
+		return luaL_error (L, "invalid arguments, worker + function are expected");
+	}
+
+	wrk = *pwrk;
+
+	if (wrk && lua_isfunction (L, 2)) {
+		ctx = (struct rspamd_fuzzy_storage_ctx *)wrk->ctx;
+
+		if (ctx->lua_blacklist_cbref != -1) {
+			/* Should not happen */
+			luaL_unref (L, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
+		}
+
+		lua_pushvalue (L, 2);
+		ctx->lua_blacklist_cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	}
+	else {
+		return luaL_error (L, "invalid arguments, worker + function are expected");
+	}
+
+	return 0;
+}
+
 static gboolean
 rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
@@ -2197,6 +2240,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->lua_pre_handler_cbref = -1;
 	ctx->lua_post_handler_cbref = -1;
+	ctx->lua_blacklist_cbref = -1;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
 			NULL, fuzzy_key_dtor);
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -2688,6 +2732,9 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_srv_send_command (worker, ctx->event_loop, &srv_cmd, -1,
 			fuzzy_peer_rep, ctx);
 
+	/*
+	 * Extra fields available for this particular worker
+	 */
 	luaL_Reg fuzzy_lua_reg = {
 			.name = "add_fuzzy_pre_handler",
 			.func = lua_fuzzy_add_pre_handler,
@@ -2696,6 +2743,11 @@ start_fuzzy (struct rspamd_worker *worker)
 	fuzzy_lua_reg = (luaL_Reg){
 			.name = "add_fuzzy_post_handler",
 			.func = lua_fuzzy_add_post_handler,
+	};
+	rspamd_lua_add_metamethod (ctx->cfg->lua_state, "rspamd{worker}", &fuzzy_lua_reg);
+	fuzzy_lua_reg = (luaL_Reg){
+		.name = "add_fuzzy_blacklist_handler",
+		.func = lua_fuzzy_add_blacklist_handler,
 	};
 	rspamd_lua_add_metamethod (ctx->cfg->lua_state, "rspamd{worker}", &fuzzy_lua_reg);
 
@@ -2746,6 +2798,10 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (ctx->lua_post_handler_cbref != -1) {
 		luaL_unref (ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_post_handler_cbref);
+	}
+
+	if (ctx->lua_blacklist_cbref != -1) {
+		luaL_unref (ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
 	}
 
 	REF_RELEASE (ctx->cfg);
