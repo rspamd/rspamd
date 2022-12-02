@@ -45,7 +45,6 @@
 #define DEFAULT_KEYPAIR_CACHE_SIZE 512
 #define DEFAULT_MASTER_TIMEOUT 10.0
 #define DEFAULT_UPDATES_MAXFAIL 3
-#define COOKIE_SIZE 128
 #define DEFAULT_MAX_BUCKETS 2000
 #define DEFAULT_BUCKET_TTL 3600
 #define DEFAULT_BUCKET_MASK 24
@@ -191,7 +190,6 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_hash_map_helper *skip_hashes;
 	gint lua_pre_handler_cbref;
 	gint lua_post_handler_cbref;
-	guchar cookie[COOKIE_SIZE];
 };
 
 enum fuzzy_cmd_type {
