@@ -12,7 +12,7 @@ steps:
 
     # any image with a root shell can be used here, but Ubuntu used as base
     # image for build and test images and we need to download it anyway
-    image: ubuntu:20.04
+    image: ubuntu:22.04
     pull: if-not-exists
     volumes:
       - name: rspamd
@@ -278,6 +278,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 9e142da57023b8a8a23e6c34e6de62552ab32cd5323e9b47a09ae20089992b67
+hmac: aa5c8d19b8f55e3ca2c2628f340f147444a4a3b7f3bd35ac2859b557defd65f7
 
 ...
