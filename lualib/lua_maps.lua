@@ -126,7 +126,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
         key = key
       }
     elseif map_config.method == 'query' then
-      url = string.format('%s?%s', url, url_encode_string(key))
+      url = string.format('%s?key=%s', url, url_encode_string(tostring(key)))
     end
   elseif type(key) == 'table' then
     if map_config.method == 'body' then
@@ -169,14 +169,16 @@ local function query_external_map(map_config, upstreams, key, callback, task)
   local function map_callback(err, code, body, _)
     if err then
       callback(false, err, code, task)
-    else
+    elseif code == 200 then
       callback(true, body, 200, task)
+    else
+      callback(false, err, code, task)
     end
   end
 
   local ret = rspamd_http.request{
     task = task,
-    url = map_config.backend,
+    url = url,
     callback = map_callback,
     timeout = map_config.timeout or 1.0,
     keepalive = true,
