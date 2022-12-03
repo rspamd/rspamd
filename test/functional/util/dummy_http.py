@@ -6,6 +6,7 @@ import socket
 import socketserver
 import sys
 import time
+from urllib.parse import urlparse, parse_qs
 
 import dummy_killer
 
@@ -40,21 +41,30 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         """Respond to a GET request."""
         response = b"hello world"
+        url = urlparse(self.path)
+        self.path = url.path
+
         if self.path == "/empty":
             self.finish()
             return
 
         if self.path == "/timeout":
             time.sleep(2)
-
-        if self.path == "/error_403":
+        elif self.path == "/error_403":
             self.send_response(403)
+        elif self.path == "/map-query":
+            query = parse_qs(url.query)
+            self.log_message('query=%s', query)
+            if query['key'][0] == 'au':
+                response = b"1.0"
+                self.send_response(200)
+            else:
+                response = b""
+                self.send_response(404)
         else:
             self.send_response(200)
 
-        if self.path == "/content-length":
-            self.send_header("Content-Length", str(len(response)))
-
+        self.send_header("Content-Length", str(len(response)))
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(response)
@@ -72,6 +82,8 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
         response = b"hello post"
         content_length = int(self.headers.get('Content-Length', "0")) or 0
         content_type = "text/plain"
+        url = urlparse(self.path)
+        self.path = url.path
         if content_length > 0:
             _ = self.rfile.read(content_length)
         if self.path == "/empty":
@@ -87,6 +99,12 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
         if self.path == "/map-simple":
             response = b"hello map"
+        if self.path == "/map-query":
+            query = parse_qs(url.query)
+            if query['key'] == 'au':
+                response = b"hit"
+            else:
+                self.send_response(404)
         if self.path == "/settings":
             response = b"{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}"
             content_type = "application/json"
