@@ -10,6 +10,7 @@ import sys
 import time
 
 import dummy_killer
+from urllib.parse import urlparse, parse_qs
 
 PORT = 18081
 HOST_NAME = '127.0.0.1'
@@ -62,14 +63,13 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Respond to a POST request."""
-
-        content_length = int(self.headers['Content-Length'])
-        response = b'hello post'
-
+        response = b"hello post"
+        content_length = int(self.headers.get('Content-Length', "0")) or 0
+        content_type = "text/plain"
+        url = urlparse(self.path)
+        self.path = url.path
         if content_length > 0:
-            body = self.rfile.read(content_length)
-            response = b"hello post: " + bytes(len(body))
-
+            _ = self.rfile.read(content_length)
         if self.path == "/empty":
             self.finish()
             return
@@ -81,14 +81,30 @@ class MyHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(403)
         else:
             self.send_response(200)
+        if self.path == "/map-simple":
+            response = b"hello map"
+        if self.path == "/map-query":
+            query = parse_qs(url.query)
+            if query['key'] == 'au':
+                response = b"hit"
+            else:
+                self.send_response(404)
+        if self.path == "/settings":
+            response = b"{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}"
+            content_type = "application/json"
 
-        if self.path == "/content-length":
-            self.send_header("Content-Length", str(len(response)))
+        self.send_header("Content-Length", str(len(response)))
+        conntype = self.headers.get('Connection', "").lower()
+        if conntype != 'keep-alive':
+            self.close_connection = True
+        else:
+            self.send_header("Connection", "keep-alive")
 
-        self.send_header("Content-type", "text/plain")
+        self.send_header("Content-type", content_type)
         self.end_headers()
         self.wfile.write(response)
-
+        self.log_message("to be closed: %d, headers: %s, conn:'%s'" % (self.close_connection, str(self.headers), self.headers.get('Connection', "").lower()))
+        self.log_message("ka:'%s', pv:%s[%s]" % (str(conntype == 'keep-alive'), str(self.protocol_version >= "HTTP/1.1"), self.protocol_version))
 
 class ThreadingSimpleServer(socketserver.ThreadingMixIn,
                    http.server.HTTPServer):

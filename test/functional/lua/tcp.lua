@@ -55,7 +55,7 @@ local function http_simple_tcp_ssl_symbol(task)
     read = true,
     ssl = true,
     ssl_noverify = true,
-    port = 14433,
+    port = 18081,
   })
 end
 
@@ -96,7 +96,7 @@ local function http_large_tcp_ssl_symbol(task)
       ssl = true,
       stop_pattern = '\n',
       ssl_noverify = true,
-      port = 14433,
+      port = 18081,
       timeout = 20,
     })
   else
