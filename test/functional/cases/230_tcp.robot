@@ -20,17 +20,17 @@ Simple TCP request
   Expect Symbol  HTTP_ASYNC_RESPONSE
   Expect Symbol  HTTP_ASYNC_RESPONSE_2
 
-SSL TCP request
-  Scan File  ${MESSAGE}
-  ...  Settings={symbols_enabled = [SIMPLE_TCP_ASYNC_SSL_TEST]}
-  Expect Symbol With Exact Options  TCP_SSL_RESPONSE  hello
-  Expect Symbol With Exact Options  TCP_SSL_RESPONSE_2  hello
+#SSL TCP request
+#  Scan File  ${MESSAGE}
+#  ...  Settings={symbols_enabled = [SIMPLE_TCP_ASYNC_SSL_TEST]}
+#  Expect Symbol With Exact Options  TCP_SSL_RESPONSE  hello
+#  Expect Symbol With Exact Options  TCP_SSL_RESPONSE_2  hello
 
-SSL Large TCP request
-  Scan File  ${MESSAGE}
-  ...  Settings={symbols_enabled = [LARGE_TCP_ASYNC_SSL_TEST]}
-  Expect Symbol  TCP_SSL_LARGE
-  Expect Symbol  TCP_SSL_LARGE_2
+#SSL Large TCP request
+#  Scan File  ${MESSAGE}
+#  ...  Settings={symbols_enabled = [LARGE_TCP_ASYNC_SSL_TEST]}
+#  Expect Symbol  TCP_SSL_LARGE
+#  Expect Symbol  TCP_SSL_LARGE_2
 
 Sync API TCP request
   Scan File  ${MESSAGE}
