@@ -98,7 +98,7 @@ SET(RSPAMDSRC	controller.c
 				rspamd_proxy.c)
 
 SET(PLUGINSSRC  plugins/regexp.c
-				plugins/chartable.c
+		plugins/chartable.cxx
 				plugins/fuzzy_check.c
 				plugins/dkim_check.c
 				libserver/rspamd_control.c)

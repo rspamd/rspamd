@@ -31,25 +31,13 @@
 
 #include "unicode/utf8.h"
 #include "unicode/uchar.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 #define DEFAULT_SYMBOL "R_MIXED_CHARSET"
 #define DEFAULT_URL_SYMBOL "R_MIXED_CHARSET_URL"
 #define DEFAULT_THRESHOLD 0.1
 
-#define msg_err_chartable(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "chartable", task->task_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_warn_chartable(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        "chartable", task->task_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_info_chartable(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "chartable", task->task_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-
-#define msg_debug_chartable(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+#define msg_debug_chartable(...)  rspamd_conditional_debug_fast (nullptr, task->from_addr, \
         rspamd_chartable_log_id, "chartable", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
@@ -66,7 +54,7 @@ module_t chartable_module = {
 		chartable_module_init,
 		chartable_module_config,
 		chartable_module_reconfig,
-		NULL,
+		nullptr,
 		RSPAMD_MODULE_VER,
 		(guint)-1,
 };
@@ -98,8 +86,8 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	struct chartable_ctx *chartable_module_ctx;
 
-	chartable_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
-			sizeof (*chartable_module_ctx));
+	chartable_module_ctx = rspamd_mempool_alloc0_type(cfg->cfg_pool,
+		struct chartable_ctx);
 	chartable_module_ctx->max_word_len = 10;
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
@@ -120,21 +108,21 @@ chartable_module_config (struct rspamd_config *cfg, bool validate)
 	}
 
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != NULL) {
+		rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != nullptr) {
 		chartable_module_ctx->symbol = ucl_obj_tostring (value);
 	}
 	else {
 		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
 	}
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "chartable", "url_symbol")) != NULL) {
+		rspamd_config_get_module_opt (cfg, "chartable", "url_symbol")) != nullptr) {
 		chartable_module_ctx->url_symbol = ucl_obj_tostring (value);
 	}
 	else {
 		chartable_module_ctx->url_symbol = DEFAULT_URL_SYMBOL;
 	}
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != NULL) {
+		rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != nullptr) {
 		if (!ucl_obj_todouble_safe (value, &chartable_module_ctx->threshold)) {
 			msg_warn_config ("invalid numeric value");
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
@@ -144,7 +132,7 @@ chartable_module_config (struct rspamd_config *cfg, bool validate)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 	if ((value =
-			rspamd_config_get_module_opt (cfg, "chartable", "max_word_len")) != NULL) {
+			rspamd_config_get_module_opt (cfg, "chartable", "max_word_len")) != nullptr) {
 		chartable_module_ctx->max_word_len = ucl_object_toint (value);
 	}
 	else {
@@ -155,14 +143,14 @@ chartable_module_config (struct rspamd_config *cfg, bool validate)
 			chartable_module_ctx->symbol,
 			0,
 			chartable_symbol_callback,
-			NULL,
+			nullptr,
 			SYMBOL_TYPE_NORMAL,
 			-1);
 	rspamd_symcache_add_symbol (cfg->cache,
 			chartable_module_ctx->url_symbol,
 			0,
 			chartable_url_symbol_callback,
-			NULL,
+			nullptr,
 			SYMBOL_TYPE_NORMAL,
 			-1);
 
@@ -177,7 +165,7 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 	return chartable_module_config (cfg, false);
 }
 
-static gint latin_confusable[] = {
+static const auto latin_confusable = ankerl::unordered_dense::set<int>{
 	0x02028, 0x02029, 0x01680, 0x02000, 0x02001, 0x02002, 0x02003, 0x02004, 0x02005, 0x02006,
 	0x02008, 0x02009, 0x0200a, 0x0205f, 0x000a0, 0x02007, 0x0202f, 0x007fa, 0x0fe4d, 0x0fe4e,
 	0x0fe4f, 0x02010, 0x02011, 0x02012, 0x02013, 0x0fe58, 0x006d4, 0x02043, 0x002d7, 0x02212,
@@ -332,24 +320,10 @@ static gint latin_confusable[] = {
 	0x1d689, 0x00396, 0x1d6ad, 0x1d6e7, 0x1d721, 0x1d75b, 0x1d795, 0x013c3, 0x0a4dc, 0x118a9,
 };
 
-GHashTable *latin_confusable_ht = NULL;
-
 static gboolean
 rspamd_can_alias_latin (gint ch)
 {
-	if (latin_confusable_ht == NULL) {
-		guint i;
-
-		/* Build hash table */
-		latin_confusable_ht = g_hash_table_new (g_int_hash, g_int_equal);
-
-		for (i = 0; i < G_N_ELEMENTS (latin_confusable); i ++) {
-			g_hash_table_insert(latin_confusable_ht, &latin_confusable[i],
-					GINT_TO_POINTER (-1));
-		}
-	}
-
-	return g_hash_table_lookup (latin_confusable_ht, &ch) != NULL;
+	return latin_confusable.contains(ch);
 }
 
 static gdouble
@@ -505,7 +479,6 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 									 gboolean is_url,
 									 struct chartable_ctx *chartable_module_ctx)
 {
-	const guchar *p, *end;
 	gdouble badness = 0.0;
 	enum {
 		ascii = 1,
@@ -519,9 +492,9 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		got_unknown,
 	} state = start_process;
 
-	p = w->normalized.begin;
-	end = p + w->normalized.len;
-	last_sc = 0;
+	const auto *p = w->normalized.begin;
+	const auto *end = p + w->normalized.len;
+	last_sc = non_ascii;
 
 	if (w->normalized.len > chartable_module_ctx->max_word_len) {
 		return 0.0;
@@ -595,7 +568,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	guint i, ncap = 0;
 	gdouble cur_score = 0.0;
 
-	if (part == NULL || part->utf_words == NULL ||
+	if (part == nullptr || part->utf_words == nullptr ||
 			part->utf_words->len == 0 || part->nwords == 0) {
 		return FALSE;
 	}
@@ -631,7 +604,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 
 	if (cur_score > chartable_module_ctx->threshold) {
 		rspamd_task_insert_result (task, chartable_module_ctx->symbol,
-				cur_score, NULL);
+				cur_score, nullptr);
 		return TRUE;
 	}
 
@@ -646,7 +619,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 	guint i;
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
-	const gchar *language = NULL;
+	const gchar *language = nullptr;
 	gboolean ignore_diacritics = FALSE, seen_violated_part = FALSE;
 
 	/* Check if we have parts with diacritic symbols language */
@@ -674,7 +647,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		ignore_diacritics = TRUE;
 	}
 
-	if (task->meta_words != NULL && task->meta_words->len > 0) {
+	if (task->meta_words != nullptr && task->meta_words->len > 0) {
 		rspamd_stat_token_t *w;
 		gdouble cur_score = 0;
 		gsize arlen = task->meta_words->len;
@@ -682,7 +655,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		for (i = 0; i < arlen; i++) {
 			w = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
 			cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-					NULL, chartable_module_ctx, language, ignore_diacritics);
+					nullptr, chartable_module_ctx, language, ignore_diacritics);
 		}
 
 		cur_score /= (gdouble)arlen;
@@ -736,9 +709,9 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 			w.stemmed.begin = u->host;
 			w.stemmed.len = u->hostlen;
 
-			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, NULL)) {
+			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, nullptr)) {
 				cur_score += rspamd_chartable_process_word_utf (task, &w,
-						TRUE, NULL, chartable_module_ctx);
+						TRUE, nullptr, chartable_module_ctx);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, &w,
@@ -761,9 +734,9 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 			w.stemmed.begin = u->host;
 			w.stemmed.len = u->hostlen;
 
-			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, NULL)) {
+			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, nullptr)) {
 				cur_score += rspamd_chartable_process_word_utf (task, &w,
-						TRUE, NULL, chartable_module_ctx);
+						TRUE, nullptr, chartable_module_ctx);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, &w,
@@ -774,7 +747,7 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 
 	if (cur_score > chartable_module_ctx->threshold) {
 		rspamd_task_insert_result (task, chartable_module_ctx->symbol,
-				cur_score, NULL);
+				cur_score, nullptr);
 
 	}
 #endif
