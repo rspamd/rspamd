@@ -463,7 +463,8 @@ local function gen_rbl_callback(rule)
     local helo = task:get_helo()
 
     if not helo then
-      return false
+      -- Avoid pipeline breaking
+      return true
     end
 
     add_dns_request(task, helo, true, false, requests_table,
