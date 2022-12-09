@@ -637,7 +637,7 @@ local function gen_rbl_callback(rule)
   local function check_rdns(task, requests_table, whitelist)
     local hostname = task:get_hostname()
     if hostname == nil or hostname == 'unknown' then
-      return false
+      return true
     end
 
     add_dns_request(task, hostname, true, false,
