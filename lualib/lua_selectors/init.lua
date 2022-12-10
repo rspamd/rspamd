@@ -97,7 +97,8 @@ local function process_selector(task, sel)
   local pipe = sel.processor_pipe or E
   local first_elt = pipe[1]
 
-  if first_elt and first_elt.method then
+  if first_elt and (first_elt.method or
+      fun.any(function(t) return t == 'userdata' or t == 'table' end, first_elt.types)) then
     -- Explicit conversion
     local meth = first_elt
 
@@ -114,7 +115,7 @@ local function process_selector(task, sel)
         -- Map method to a list of inputs, excluding empty elements
         input = fun.filter(function(map_elt) return map_elt end,
             fun.map(function(list_elt)
-              local ret, _ = meth.process(list_elt, pt)
+              local ret, _ = meth.process(list_elt, pt, meth.args)
               return ret
             end, input))
         etype = 'string_list'
@@ -124,7 +125,6 @@ local function process_selector(task, sel)
     pipe = fun.drop_n(1, pipe)
   elseif etype:match('^userdata') or etype:match('^table') then
     -- Implicit conversion
-
     local pt = pure_type(etype)
 
     if not pt then
@@ -140,6 +140,8 @@ local function process_selector(task, sel)
           end, input))
       etype = 'string_list'
     end
+  else
+    lua_util.debugm(M, task, 'avoid implicit conversion as the transformer accepts complex input')
   end
 
   -- Now we fold elements using left fold
@@ -189,11 +191,11 @@ local function process_selector(task, sel)
   if not res or not res[1] then return nil end -- Pipeline failed
 
   if not allowed_type(res[2]) then
-
     -- Search for implicit conversion
     local pt = pure_type(res[2])
 
     if pt then
+
       lua_util.debugm(M, task, 'apply implicit map %s->string_list', pt)
       res[1] = fun.map(function(e) return implicit_tostring(pt, e) end, res[1])
       res[2] = 'string_list'
@@ -382,6 +384,7 @@ exports.parse_selector = function(cfg, str)
         local processor = lua_util.shallowcopy(transform_function[proc_name])
         processor.name = proc_name
         processor.args = proc_tbl[2] or E
+        logger.errx('hui: %s -> %s', proc_name, processor.args)
 
         if not check_args(processor.name, processor.args_schema, processor.args) then
           pipeline_error = 'args schema for ' .. proc_name

@@ -113,6 +113,37 @@ local transform_function = {
     ['description'] = 'Joins strings into a single string using separator in the argument',
     ['args_schema'] = {ts.string:is_optional()}
   },
+  -- Joins strings into a set of strings using N elements and a separator in the argument
+  ['join_nth'] = {
+    ['types'] = {
+      ['string_list'] = true
+    },
+    ['process'] = function(inp, _, args)
+      local step = args[1]
+      local sep = args[2] or ''
+      local inp_t = fun.totable(inp)
+      local res = {}
+
+      for i=1, #inp_t, step do
+        table.insert(res, table.concat(inp_t, sep, i, i + step))
+      end
+      return res,'string_list'
+    end,
+    ['description'] = 'Joins strings into a set of strings using N elements and a separator in the argument',
+    ['args_schema'] = {ts.number + ts.string / tonumber, ts.string:is_optional()}
+  },
+  -- Joins tables into a table of strings
+  ['join_tables'] = {
+    ['types'] = {
+      ['string_list'] = true
+    },
+    ['process'] = function(inp, _, args)
+      local sep = args[1] or ''
+      return fun.map(function(t) return table.concat(t, sep) end, inp), 'string_list'
+    end,
+    ['description'] = 'Joins tables into a table of strings',
+    ['args_schema'] = {ts.string:is_optional()}
+  },
   -- Sort strings
   ['sort'] = {
     ['types'] = {
@@ -480,6 +511,23 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['description'] = 'Removes all nils from a list of strings (when converted implicitly)',
     ['args_schema'] = {}
   },
+  -- Call a set of methods on a userdata object
+  ['apply_methods'] = {
+    ['types'] = {
+      ['userdata'] = true,
+    },
+    ['process'] = function(inp, _, args)
+      local res = {}
+      for _,arg in ipairs(args) do
+        local meth = inp[arg]
+        local ret = meth(inp)
+        if not ret then return nil end
+        table.insert(res, tostring(ret))
+      end
+      return res,'string_list'
+    end,
+    ['description'] = 'Apply a list of method calls to the userdata object',
+  }
 }
 
 transform_function.match = transform_function.regexp
