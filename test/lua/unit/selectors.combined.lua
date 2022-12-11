@@ -104,7 +104,7 @@ Hello world
 Content-Type: text/html; charset="utf-8"
 
 <html><body>
-<a href="http://example.net/path?query">http://example.net</a>
+<a href="http://example.net/path?query">http://example.net/path?query</a>
 <a href="mailto:test@example.net">mail me</a>
 </html>
 
