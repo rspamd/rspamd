@@ -110,6 +110,9 @@ steps:
         if [ $EXIT_CODE -gt 128 ]; then
         gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
         exit $EXIT_CODE;
+        fi;
+        if [ $EXIT_CODE -ne 0 ]; then
+        exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
@@ -279,6 +282,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 15dc479c49116a6282da0a6cdf1f6a38855c95622992ca173369532a6e3b7e53
+hmac: 5bd249274f2c2185fa3c572e9d64b62456d78e3140a9afa245bd6e65c9b9ba1e
 
 ...
