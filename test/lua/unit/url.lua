@@ -103,9 +103,9 @@ context("URL check functions", function()
     {"http://0.0xFFFFFF", true, {
       host = '0.255.255.255'
     }},
-    {"http:/\\030052000001", true, {
-      host = '192.168.0.1'
-    }},
+    --{"http:/\\030052000001", true, {
+    --  host = '192.168.0.1'
+    --}},
     {"http:\\/0xc0.052000001", true, {
       host = '192.168.0.1'
     }},
