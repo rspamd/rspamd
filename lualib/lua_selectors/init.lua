@@ -616,4 +616,12 @@ exports.list_transforms = function()
   return display_selectors(transform_function)
 end
 
+exports.add_map = function(name, map)
+  if not exports.maps[name] then
+    exports.maps[name] = map
+  else
+    logger.errx(rspamd_config, "duplicate map redefinition for the selectors: %s", name)
+  end
+end
+
 return exports

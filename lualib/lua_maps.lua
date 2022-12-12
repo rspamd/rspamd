@@ -247,6 +247,13 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     return nil
   end
 
+  local function maybe_register_selector()
+    if opt.selector_alias then
+      local lua_selectors = require "lua_selectors"
+      lua_selectors.add_map(opt.selector_alias, ret)
+    end
+  end
+
   if type(opt) == 'string' then
     opt,mtype = maybe_adjust_type(opt, mtype)
     local cache_key = map_hash_key(opt, mtype)
@@ -303,6 +310,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = map
             setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           end
         else
@@ -316,6 +325,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = map
             setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           end
         end
@@ -331,6 +342,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = map
             setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           end
         else
@@ -346,6 +359,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = map
             setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           end
         end
@@ -361,6 +376,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = map
             setmetatable(ret, ret_mt)
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           end
         else
@@ -399,6 +416,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             end
 
             maps_cache[cache_key] = ret
+            maybe_register_selector()
+
             return ret
           else
             -- Empty map, huh?
@@ -418,6 +437,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             ret.__data = opt
             ret.__external = true
             setmetatable(ret, ret_mt)
+            maybe_register_selector()
 
             return ret
           else
@@ -439,6 +459,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           ret.__data = map
           setmetatable(ret, ret_mt)
           maps_cache[cache_key] = ret
+          maybe_register_selector()
+
           return ret
         end
       end
@@ -539,6 +561,7 @@ end
 local direct_map_schema = ts.shape{ -- complex object
   name = ts.string:is_optional(),
   description = ts.string:is_optional(),
+  selector_alias = ts.string:is_optional(), -- an optional alias for the selectos framework
   timeout = ts.number,
   data = ts.array_of(ts.string):is_optional(),
   -- Tableshape has no options support for something like key1 or key2?
