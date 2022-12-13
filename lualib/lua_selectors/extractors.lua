@@ -20,7 +20,9 @@ local lua_util = require "lua_util"
 local rspamd_url = require "rspamd_url"
 local common = require "lua_selectors/common"
 local ts = require("tableshape").types
+local maps = require "lua_selectors/maps"
 local E = {}
+local M = (require "lua_selectors").M
 
 local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
 
@@ -312,6 +314,38 @@ e.g. `get_tld`]],
       need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
       ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
     }}
+  },
+  ['specific_urls_filter_map'] = {
+    ['get_value'] = function(task, args)
+      local map = maps[args[1]]
+      if not map then
+        lua_util.debugm(M, "invalid/unknown map: %s", args[1])
+      end
+      local params = args[2] or {}
+      params.task = task
+      params.no_cache = true
+      if params.exclude_flags then
+        params.filter = gen_exclude_flags_filter(params.exclude_flags)
+      end
+      local urls = lua_util.extract_specific_urls(params)
+      if not urls[1] then
+        return nil
+      end
+      return fun.filter(function(u) return map:get_key(tostring(u)) end, urls),'userdata_list'
+    end,
+    ['description'] = [[Get most specific urls, filtered by some map. Arguments are equal to the Lua API function]],
+    ['args_schema'] = {ts.array_of{ts.string, ts.shape{
+      limit = ts.number + ts.string / tonumber,
+      esld_limit = (ts.number + ts.string / tonumber):is_optional(),
+      exclude_flags = url_flags_ts,
+      flags = url_flags_ts,
+      flags_mode = ts.one_of{'explicit'}:is_optional(),
+      prefix = ts.string:is_optional(),
+      need_content = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+    }}}
   },
   -- URLs filtered by flags
   ['urls_filtered'] = {

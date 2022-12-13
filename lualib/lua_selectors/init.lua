@@ -623,4 +623,7 @@ exports.add_map = function(name, map)
   end
 end
 
+-- Publish log target
+exports.M = M
+
 return exports
