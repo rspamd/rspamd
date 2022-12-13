@@ -22,7 +22,7 @@ local common = require "lua_selectors/common"
 local ts = require("tableshape").types
 local maps = require "lua_selectors/maps"
 local E = {}
-local M = (require "lua_selectors").M
+local M = "selectors"
 
 local url_flags_ts = ts.array_of(ts.one_of(lua_util.keys(rspamd_url.flags))):is_optional()
 
