@@ -384,7 +384,6 @@ exports.parse_selector = function(cfg, str)
         local processor = lua_util.shallowcopy(transform_function[proc_name])
         processor.name = proc_name
         processor.args = proc_tbl[2] or E
-        logger.errx('hui: %s -> %s', proc_name, processor.args)
 
         if not check_args(processor.name, processor.args_schema, processor.args) then
           pipeline_error = 'args schema for ' .. proc_name
