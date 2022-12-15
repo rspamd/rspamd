@@ -1201,7 +1201,19 @@ if(opts['local_exclude_ip_map'] ~= nil) then
     'RBL exclusions map')
 end
 
-for key,rbl in pairs(opts.rbls ) do
+-- TODO: this code should be universal for all modules that use selectors to allows
+-- maps attachment to a specific module
+if type(opts.attached_maps) == 'table' then
+  opts.attached_maps_processed = {}
+  for i,map in ipairs(opts.attached_maps) do
+    opts.attached_maps_processed[i] = lua_maps.map_add_from_ucl(map)
+    if opts.attached_maps_processed[i] == nil then
+      rspamd_logger.warnx(rspamd_config, "cannot parse attached map: %s", map)
+    end
+  end
+end
+
+for key,rbl in pairs(opts.rbls) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
