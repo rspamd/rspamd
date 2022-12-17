@@ -449,6 +449,14 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
               parse_err)
         end
       else
+        -- Adjust lua specific augmentations in a trivial case
+        if type(opt.url) == 'string' then
+          local nsrc,ntype = maybe_adjust_type(opt.url, mtype)
+          if nsrc and ntype then
+            opt.url = nsrc
+            mtype = ntype
+          end
+        end
         -- We have some non-trivial object so let C code to deal with it somehow...
         local map = rspamd_config:add_map{
           type = mtype,
