@@ -302,7 +302,7 @@ e.g. `get_tld`]],
       return urls,'userdata_list'
     end,
     ['description'] = [[Get most specific urls. Arguments are equal to the Lua API function]],
-    ['args_schema'] = ts.shape{
+    ['args_schema'] = {ts.shape{
       limit = ts.number + ts.string / tonumber,
       esld_limit = (ts.number + ts.string / tonumber):is_optional(),
       exclude_flags = url_flags_ts,
@@ -313,7 +313,7 @@ e.g. `get_tld`]],
       need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
       need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
       ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
-    }
+    }}
   },
   ['specific_urls_filter_map'] = {
     ['get_value'] = function(task, args)
