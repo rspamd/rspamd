@@ -280,7 +280,7 @@ exports.parse_selector = function(cfg, str)
           local res,err = selt:transform(args[i])
 
           if err then
-            logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
+            logger.errx(rspamd_config, 'invalid arguments for %s: argument number: %s, error: %s', name, i, err)
             return false
           else
             args[i] = res
