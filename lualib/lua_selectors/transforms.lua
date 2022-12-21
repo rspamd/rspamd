@@ -135,7 +135,7 @@ local transform_function = {
   -- Joins tables into a table of strings
   ['join_tables'] = {
     ['types'] = {
-      ['string_list'] = true
+      ['list'] = true
     },
     ['process'] = function(inp, _, args)
       local sep = args[1] or ''
@@ -521,8 +521,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
       for _,arg in ipairs(args) do
         local meth = inp[arg]
         local ret = meth(inp)
-        if not ret then return nil end
-        table.insert(res, tostring(ret))
+        if ret then table.insert(res, tostring(ret)) end
       end
       return res,'string_list'
     end,

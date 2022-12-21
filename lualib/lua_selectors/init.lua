@@ -113,12 +113,18 @@ local function process_selector(task, sel)
         lua_util.debugm(M, task, 'map method `%s` to list of %s',
             meth.name, pt)
         -- Map method to a list of inputs, excluding empty elements
-        input = fun.filter(function(map_elt) return map_elt end,
+        -- We need to fold it down here to get a proper type resolution
+        input = fun.totable(fun.filter(function(map_elt, _) return map_elt end,
             fun.map(function(list_elt)
-              local ret, _ = meth.process(list_elt, pt, meth.args)
+              local ret, ty = meth.process(list_elt, pt, meth.args)
+              etype = ty
               return ret
-            end, input))
-        etype = 'string_list'
+            end, input)))
+        if input and etype then
+          etype = etype .. "_list"
+        else
+          input = nil
+        end
       end
     end
     -- Remove method from the pipeline
@@ -195,7 +201,6 @@ local function process_selector(task, sel)
     local pt = pure_type(res[2])
 
     if pt then
-
       lua_util.debugm(M, task, 'apply implicit map %s->string_list', pt)
       res[1] = fun.map(function(e) return implicit_tostring(pt, e) end, res[1])
       res[2] = 'string_list'
