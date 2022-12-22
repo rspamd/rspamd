@@ -2605,17 +2605,17 @@ lua_task_has_urls (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	bool need_urls = false;
+	bool need_emails = false;
 	gboolean ret = FALSE;
 	gsize sz = 0;
 
 	if (task) {
 		if (task->message) {
 			if (lua_gettop (L) >= 2) {
-				need_urls = lua_toboolean (L, 2);
+				need_emails = lua_toboolean (L, 2);
 			}
 
-			if (!need_urls) {
+			if (need_emails) {
 				/* Simplified check */
 				if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
 					sz += kh_size (MESSAGE_FIELD (task, urls));
