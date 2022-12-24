@@ -81,7 +81,7 @@ local bucket_check_script = [[
   end
 
   last = tonumber(last)
-  local burst,pending = redis.call('HMGET', KEYS[1], 'b', 'p')
+  local burst,pending = unpack(redis.call('HMGET', KEYS[1], 'b', 'p'))
   burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
   -- Sanity to avoid races
   if burst < 0 then burst = 0 end
