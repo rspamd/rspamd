@@ -192,12 +192,12 @@ local bucket_update_script = [[
     end
   end
 
-  local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
-  if burst < 0 then burst = 0 end
+  local burst,pending = unpack(redis.call('HMGET', KEYS[1], 'b', 'p'))
+  burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
+  if burst < 0 then burst = nrcpt else burst = burst + nrcpt end
+  if pending < nrcpt then pending = 0 else pending = pending - nrcpt end
 
-  redis.call('HINCRBYFLOAT', KEYS[1], 'b', nrcpt)
-  redis.call('HINCRBY', KEYS[1], 'p', -(nrcpt))
-  redis.call('HSET', KEYS[1], 'l', KEYS[2])
+  redis.call('HMSET', KEYS[1], 'b', tostring(burst), 'p', tostring(pending), 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
   return {tostring(burst), tostring(dr), tostring(db)}
