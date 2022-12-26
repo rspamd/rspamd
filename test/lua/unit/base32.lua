@@ -33,21 +33,23 @@ context("Base32 encodning", function()
     end
   end)
 
-  test("Base32 fuzz test: zbase32", function()
-    for i = 1,1000 do
-      local b, l = random_buf(4096)
-      local how = math.floor(math.random(3) - 1)
-      local ben = ffi.C.rspamd_encode_base32(b, l, how)
-      local bs = ffi.string(ben)
-      local nl = ffi.new("size_t [1]")
-      local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl, how)
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    test("Base32 fuzz test: zbase32", function()
+      for i = 1,1000 do
+        local b, l = random_buf(4096)
+        local how = math.floor(math.random(3) - 1)
+        local ben = ffi.C.rspamd_encode_base32(b, l, how)
+        local bs = ffi.string(ben)
+        local nl = ffi.new("size_t [1]")
+        local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl, how)
 
-      assert_equal(tonumber(nl[0]), l,
-          string.format("invalid size reported: %d reported vs %d expected", tonumber(nl[0]), l))
-      local cmp = ffi.C.memcmp(b, nb, l)
-      ffi.C.g_free(ben)
-      ffi.C.g_free(nb)
-      assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
-    end
-  end)
+        assert_equal(tonumber(nl[0]), l,
+            string.format("invalid size reported: %d reported vs %d expected", tonumber(nl[0]), l))
+        local cmp = ffi.C.memcmp(b, nb, l)
+        ffi.C.g_free(ben)
+        ffi.C.g_free(nb)
+        assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
+      end
+    end)
+  end
 end)

@@ -89,104 +89,106 @@ vehemence of any carnal pleasure.]]
     assert_equal(cmp, 0)
   end)
 
-  test("Base64 fuzz test", function()
-    for i = 1,1000 do
-      local b, l = random_safe_buf(4096)
-      local lim = ffi.C.ottery_rand_unsigned() % 64 + 10
-      local orig = ffi.string(b)
-      local ben = util.encode_base64(orig, lim)
-      local dec = util.decode_base64(ben)
-      assert_equal(orig, tostring(dec), "fuzz test failed for length: " .. #orig)
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    test("Base64 fuzz test", function()
+      for i = 1,1000 do
+        local b, l = random_safe_buf(4096)
+        local lim = ffi.C.ottery_rand_unsigned() % 64 + 10
+        local orig = ffi.string(b)
+        local ben = util.encode_base64(orig, lim)
+        local dec = util.decode_base64(ben)
+        assert_equal(orig, tostring(dec), "fuzz test failed for length: " .. #orig)
+      end
+    end)
+    test("Base64 fuzz test (ffi)", function()
+      for i = 1,1000 do
+        local b, l = random_buf(4096)
+        local nl = ffi.new("size_t [1]")
+        local lim = ffi.C.ottery_rand_unsigned() % 64 + 10
+        local ben = ffi.C.rspamd_encode_base64(b, l, lim, nl)
+        local bs = ffi.string(ben)
+        local ol = ffi.new("size_t [1]")
+        local nb = ffi.C.g_base64_decode(ben, ol)
+
+        local cmp = ffi.C.memcmp(b, nb, l)
+        ffi.C.g_free(ben)
+        ffi.C.g_free(nb)
+        assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
+      end
+    end)
+
+    local speed_iters = 10000
+
+    local function perform_base64_speed_test(chunk, is_reference, line_len)
+      local ticks = ffi.C.base64_test(is_reference, speed_iters, chunk, line_len)
+      local what = 'Optimized'
+      if is_reference then
+        what = 'Reference'
+      end
+      logger.messagex("%s base64 %s chunk (%s line len): %s ticks per iter, %s ticks per byte",
+          what, chunk, line_len,
+          ticks / speed_iters, ticks / speed_iters / chunk)
+
+      return 1
     end
-  end)
-  test("Base64 fuzz test (ffi)", function()
-    for i = 1,1000 do
-      local b, l = random_buf(4096)
-      local nl = ffi.new("size_t [1]")
-      local lim = ffi.C.ottery_rand_unsigned() % 64 + 10
-      local ben = ffi.C.rspamd_encode_base64(b, l, lim, nl)
-      local bs = ffi.string(ben)
-      local ol = ffi.new("size_t [1]")
-      local nb = ffi.C.g_base64_decode(ben, ol)
+    test("Base64 test reference vectors 78", function()
+      local res = perform_base64_speed_test(78, true, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 78", function()
+      local res = perform_base64_speed_test(78, false, 0)
+      assert_not_equal(res, 0)
+    end)
 
-      local cmp = ffi.C.memcmp(b, nb, l)
-      ffi.C.g_free(ben)
-      ffi.C.g_free(nb)
-      assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
-    end
-  end)
+    test("Base64 test reference vectors 512", function()
+      local res = perform_base64_speed_test(512, true, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 512", function()
+      local res = perform_base64_speed_test(512, false, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test reference vectors 512 (78 line len)", function()
+      local res = perform_base64_speed_test(512, true, 78)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 512 (78 line len)", function()
+      local res = perform_base64_speed_test(512, false, 78)
+      assert_not_equal(res, 0)
+    end)
 
-  local speed_iters = 10000
+    test("Base64 test reference vectors 1K", function()
+      local res = perform_base64_speed_test(1024, true, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 1K", function()
+      local res = perform_base64_speed_test(1024, false, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test reference vectors 1K (78 line len)", function()
+      local res = perform_base64_speed_test(1024, true, 78)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 1K (78 line len)", function()
+      local res = perform_base64_speed_test(1024, false, 78)
+      assert_not_equal(res, 0)
+    end)
 
-  local function perform_base64_speed_test(chunk, is_reference, line_len)
-    local ticks = ffi.C.base64_test(is_reference, speed_iters, chunk, line_len)
-    local what = 'Optimized'
-    if is_reference then
-      what = 'Reference'
-    end
-    logger.messagex("%s base64 %s chunk (%s line len): %s ticks per iter, %s ticks per byte",
-        what, chunk, line_len,
-        ticks / speed_iters, ticks / speed_iters / chunk)
-
-    return 1
+    test("Base64 test reference vectors 10K", function()
+      local res = perform_base64_speed_test(10 * 1024, true, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 10K", function()
+      local res = perform_base64_speed_test(10 * 1024, false, 0)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test reference vectors 10K (78 line len)", function()
+      local res = perform_base64_speed_test(10 * 1024, true, 78)
+      assert_not_equal(res, 0)
+    end)
+    test("Base64 test optimized vectors 10K (78 line len)", function()
+      local res = perform_base64_speed_test(10 * 1024, false, 78)
+      assert_not_equal(res, 0)
+    end)
   end
-  test("Base64 test reference vectors 78", function()
-    local res = perform_base64_speed_test(78, true, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 78", function()
-    local res = perform_base64_speed_test(78, false, 0)
-    assert_not_equal(res, 0)
-  end)
-
-  test("Base64 test reference vectors 512", function()
-    local res = perform_base64_speed_test(512, true, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 512", function()
-    local res = perform_base64_speed_test(512, false, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test reference vectors 512 (78 line len)", function()
-    local res = perform_base64_speed_test(512, true, 78)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 512 (78 line len)", function()
-    local res = perform_base64_speed_test(512, false, 78)
-    assert_not_equal(res, 0)
-  end)
-
-  test("Base64 test reference vectors 1K", function()
-    local res = perform_base64_speed_test(1024, true, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 1K", function()
-    local res = perform_base64_speed_test(1024, false, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test reference vectors 1K (78 line len)", function()
-    local res = perform_base64_speed_test(1024, true, 78)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 1K (78 line len)", function()
-    local res = perform_base64_speed_test(1024, false, 78)
-    assert_not_equal(res, 0)
-  end)
-
-  test("Base64 test reference vectors 10K", function()
-    local res = perform_base64_speed_test(10 * 1024, true, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 10K", function()
-    local res = perform_base64_speed_test(10 * 1024, false, 0)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test reference vectors 10K (78 line len)", function()
-    local res = perform_base64_speed_test(10 * 1024, true, 78)
-    assert_not_equal(res, 0)
-  end)
-  test("Base64 test optimized vectors 10K (78 line len)", function()
-    local res = perform_base64_speed_test(10 * 1024, false, 78)
-    assert_not_equal(res, 0)
-  end)
 end)

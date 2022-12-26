@@ -122,83 +122,85 @@ context("UTF8 check functions", function()
     end)
   end
 
-  local speed_iters = 10000
-  local function test_size(buflen, is_valid, impl)
-    local logger = require "rspamd_logger"
-    local test_str
-    if is_valid then
-      test_str = table.concat(valid_cases)
-    else
-      test_str = table.concat(valid_cases) .. table.concat(invalid_cases)
-    end
-
-    local buf = ffi.new("char[?]", buflen)
-    if #test_str < buflen then
-      local t = {}
-      local len = #test_str
-      while len < buflen do
-        t[#t + 1] = test_str
-        len = len + #test_str
-      end
-      test_str = table.concat(t)
-    end
-    ffi.copy(buf, test_str:sub(1, buflen))
-
-    local tm = 0
-
-    for _=1,speed_iters do
-      if impl == 'ref' then
-        local t1 = ffi.C.rspamd_get_ticks(1)
-        ffi.C.rspamd_fast_utf8_validate_ref(buf, buflen)
-        local t2 = ffi.C.rspamd_get_ticks(1)
-        tm = tm + (t2 - t1)
-      elseif impl == 'sse' then
-        local t1 = ffi.C.rspamd_get_ticks(1)
-        ffi.C.rspamd_fast_utf8_validate_sse41(buf, buflen)
-        local t2 = ffi.C.rspamd_get_ticks(1)
-        tm = tm + (t2 - t1)
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    local speed_iters = 10000
+    local function test_size(buflen, is_valid, impl)
+      local logger = require "rspamd_logger"
+      local test_str
+      if is_valid then
+        test_str = table.concat(valid_cases)
       else
-        local t1 = ffi.C.rspamd_get_ticks(1)
-        ffi.C.rspamd_fast_utf8_validate_avx2(buf, buflen)
-        local t2 = ffi.C.rspamd_get_ticks(1)
-        tm = tm + (t2 - t1)
+        test_str = table.concat(valid_cases) .. table.concat(invalid_cases)
       end
+
+      local buf = ffi.new("char[?]", buflen)
+      if #test_str < buflen then
+        local t = {}
+        local len = #test_str
+        while len < buflen do
+          t[#t + 1] = test_str
+          len = len + #test_str
+        end
+        test_str = table.concat(t)
+      end
+      ffi.copy(buf, test_str:sub(1, buflen))
+
+      local tm = 0
+
+      for _=1,speed_iters do
+        if impl == 'ref' then
+          local t1 = ffi.C.rspamd_get_ticks(1)
+          ffi.C.rspamd_fast_utf8_validate_ref(buf, buflen)
+          local t2 = ffi.C.rspamd_get_ticks(1)
+          tm = tm + (t2 - t1)
+        elseif impl == 'sse' then
+          local t1 = ffi.C.rspamd_get_ticks(1)
+          ffi.C.rspamd_fast_utf8_validate_sse41(buf, buflen)
+          local t2 = ffi.C.rspamd_get_ticks(1)
+          tm = tm + (t2 - t1)
+        else
+          local t1 = ffi.C.rspamd_get_ticks(1)
+          ffi.C.rspamd_fast_utf8_validate_avx2(buf, buflen)
+          local t2 = ffi.C.rspamd_get_ticks(1)
+          tm = tm + (t2 - t1)
+        end
+      end
+
+      logger.messagex("%s utf8 %s check (valid = %s): %s ticks per iter, %s ticks per byte",
+          impl, buflen, is_valid,
+          tm / speed_iters, tm / speed_iters / buflen)
+
+      return 0
     end
 
-    logger.messagex("%s utf8 %s check (valid = %s): %s ticks per iter, %s ticks per byte",
-        impl, buflen, is_valid,
-        tm / speed_iters, tm / speed_iters / buflen)
+    for _,sz in ipairs({78, 512, 65535}) do
+      test(string.format("Utf8 test %s %d buffer, %s", 'ref', sz, 'valid'), function()
+        local res = test_size(sz, true, 'ref')
+        assert_equal(res, 0)
+      end)
+      test(string.format("Utf8 test %s %d buffer, %s", 'ref', sz, 'invalid'), function()
+        local res = test_size(sz, false, 'ref')
+        assert_equal(res, 0)
+      end)
 
-    return 0
-  end
-
-  for _,sz in ipairs({78, 512, 65535}) do
-    test(string.format("Utf8 test %s %d buffer, %s", 'ref', sz, 'valid'), function()
-      local res = test_size(sz, true, 'ref')
-      assert_equal(res, 0)
-    end)
-    test(string.format("Utf8 test %s %d buffer, %s", 'ref', sz, 'invalid'), function()
-      local res = test_size(sz, false, 'ref')
-      assert_equal(res, 0)
-    end)
-
-    if jit.arch == 'x64' then
-      test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'valid'), function()
-        local res = test_size(sz, true, 'sse')
-        assert_equal(res, 0)
-      end)
-      test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'invalid'), function()
-        local res = test_size(sz, false, 'sse')
-        assert_equal(res, 0)
-      end)
-      test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'valid'), function()
-        local res = test_size(sz, true, 'avx2')
-        assert_equal(res, 0)
-      end)
-      test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'invalid'), function()
-        local res = test_size(sz, false, 'avx2')
-        assert_equal(res, 0)
-      end)
+      if jit.arch == 'x64' then
+        test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'valid'), function()
+          local res = test_size(sz, true, 'sse')
+          assert_equal(res, 0)
+        end)
+        test(string.format("Utf8 test %s %d buffer, %s", 'sse', sz, 'invalid'), function()
+          local res = test_size(sz, false, 'sse')
+          assert_equal(res, 0)
+        end)
+        test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'valid'), function()
+          local res = test_size(sz, true, 'avx2')
+          assert_equal(res, 0)
+        end)
+        test(string.format("Utf8 test %s %d buffer, %s", 'avx2', sz, 'invalid'), function()
+          local res = test_size(sz, false, 'avx2')
+          assert_equal(res, 0)
+        end)
+      end
     end
   end
 

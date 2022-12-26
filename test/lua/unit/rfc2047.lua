@@ -60,31 +60,33 @@ context("RFC2047 decoding", function()
 
     ffi.C.rspamd_mempool_delete(pool)
   end)
-  test("Fuzz test for rfc2047 tokens", function()
-    local util = require("rspamd_util")
-    local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:63")
-    local str = "Тест Тест Тест Тест Тест"
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    test("Fuzz test for rfc2047 tokens", function()
+      local util = require("rspamd_util")
+      local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:63")
+      local str = "Тест Тест Тест Тест Тест"
 
-    for i = 0,1000 do
-      local r1 = math.random()
-      local r2 = math.random()
-      local sl1 = #str / 2.0 * r1
-      local sl2 = #str / 2.0 * r2
+      for _ = 0,1000 do
+        local r1 = math.random()
+        local r2 = math.random()
+        local sl1 = #str / 2.0 * r1
+        local sl2 = #str / 2.0 * r2
 
-      local s1 = tostring(util.encode_base64(string.sub(str, 1, sl1)))
-      local s2 = tostring(util.encode_base64(string.sub(str, sl1 + 1, sl2)))
-      local s3 = tostring(util.encode_base64(string.sub(str, sl2 + 1)))
+        local s1 = tostring(util.encode_base64(string.sub(str, 1, sl1)))
+        local s2 = tostring(util.encode_base64(string.sub(str, sl1 + 1, sl2)))
+        local s3 = tostring(util.encode_base64(string.sub(str, sl2 + 1)))
 
-      if #s1 > 0 and #s2 > 0 and #s3 > 0 then
-        local s = string.format('=?UTF-8?B?%s?= =?UTF-8?B?%s?= =?UTF-8?B?%s?=',
-          s1, s2, s3)
-        local res = ffi.C.rspamd_mime_header_decode(pool, s, #s)
-        res = ffi.string(res)
-        assert_not_nil(res, "cannot decode " .. s)
-        assert_rspamd_eq({actual = res, expect = str})
+        if #s1 > 0 and #s2 > 0 and #s3 > 0 then
+          local s = string.format('=?UTF-8?B?%s?= =?UTF-8?B?%s?= =?UTF-8?B?%s?=',
+              s1, s2, s3)
+          local res = ffi.C.rspamd_mime_header_decode(pool, s, #s)
+          res = ffi.string(res)
+          assert_not_nil(res, "cannot decode " .. s)
+          assert_rspamd_eq({actual = res, expect = str})
+        end
       end
-    end
 
-    ffi.C.rspamd_mempool_delete(pool)
-  end)
+      ffi.C.rspamd_mempool_delete(pool)
+    end)
+  end
 end)

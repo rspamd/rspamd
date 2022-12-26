@@ -2,7 +2,6 @@
 
 context("Fpconv printf functions", function()
   local ffi = require("ffi")
-  local u = require "rspamd_util"
   local niter_fuzz = 100000
   local function small_double()
     return math.random()
@@ -72,25 +71,27 @@ long rspamd_printf(const char *format, ...);
       assert_equal(sbuf, c[3], c[3] .. " but test returned " .. sbuf)
     end)
   end
-  for i,c in ipairs(benchmarks) do
-    test("Fuzz fp test " .. c[1], function()
-      for _=1,niter_fuzz do
-        local sign = 1
-        if math.random() > 0.5 then
-          sign = -1
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    for _,c in ipairs(benchmarks) do
+      test("Fuzz fp test " .. c[1], function()
+        for _=1,niter_fuzz do
+          local sign = 1
+          if math.random() > 0.5 then
+            sign = -1
+          end
+          local d = c[2]() * sign
+          ffi.C.snprintf(buf, 64, c[3], d)
+          ffi.C.rspamd_snprintf(buf2, 64, c[3], d)
+
+          local sbuf = ffi.string(buf)
+          local sbuf2 = ffi.string(buf2)
+
+          assert_less_than(math.abs(d -  tonumber(sbuf2))/math.abs(d),
+              0.00001,
+              string.format('rspamd emitted: %s, libc emitted: %s, original number: %g',
+                  sbuf2, sbuf, d))
         end
-        local d = c[2]() * sign
-        ffi.C.snprintf(buf, 64, c[3], d)
-        ffi.C.rspamd_snprintf(buf2, 64, c[3], d)
-
-        local sbuf = ffi.string(buf)
-        local sbuf2 = ffi.string(buf2)
-
-        assert_less_than(math.abs(d -  tonumber(sbuf2))/math.abs(d),
-            0.00001,
-            string.format('rspamd emitted: %s, libc emitted: %s, original number: %g',
-              sbuf2, sbuf, d))
-      end
-    end)
+      end)
+    end
   end
 end)
