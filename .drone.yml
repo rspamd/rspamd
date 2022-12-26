@@ -102,7 +102,7 @@ steps:
       # different directories (if started in parallel)
       - cd /rspamd/build/test
       - set +e
-      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
       # shell sets exit status of a process terminated by a signal to '128 + signal-number'
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
@@ -147,7 +147,7 @@ steps:
       - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
       - cd /rspamd/fedora/build/test
       - set +e
-      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
       # shell sets exit status of a process terminated by a signal to '128 + signal-number'
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
@@ -282,6 +282,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 5bd249274f2c2185fa3c572e9d64b62456d78e3140a9afa245bd6e65c9b9ba1e
+hmac: c09067fc9552e2f761066dc409e386f950c52f9c1740157c427252a806c40871
 
 ...
