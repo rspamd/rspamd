@@ -245,42 +245,6 @@ struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl (const ucl_object_t *ob
 ucl_object_t *rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 									 gboolean is_hex);
 
-/**
- * Signs memory using the specified keypair
- * @param kp keypair
- * @param data data to sign
- * @param data to sign
- * @param sig output signature (allocated by function, must be freed by a callee)
- * @param outlen length of output data
- * @param err filled if function returns `FALSE`
- * @return TRUE if signature operation succeeded
- */
-gboolean rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
-							  const void *data, gsize len, guchar **sig, gsize *outlen,
-							  GError **err);
-
-/***
- * Verifies data using public key
- * @param pk public key
- * @param data data to sign
- * @param len data to sign
- * @param sig signature to verify
- * @param siglen length of signature
- * @param err filled if function returns `FALSE`
- * @return TRUE if signature is valid
- */
-gboolean rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
-								const void *data, gsize len, const guchar *sig, gsize siglen,
-								GError **err);
-
-/**
- * Compares two public keys
- * @param k1 key to compare
- * @param k2 key to compare
- * @return TRUE if two keys are equal
- */
-gboolean rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
-							  const struct rspamd_cryptobox_pubkey *k2);
 
 /**
  * Decrypts data using keypair and a pubkey stored in in, in must start from
