@@ -103,7 +103,6 @@ context("Rspamd expressions", function()
           {parse_func, process_func}, pool)
 
       assert_not_nil(expr, "Cannot parse " .. c[1] .. '; error: ' .. (err or 'wut??'))
-      --print(expr)
       res = expr:process(atoms)
       assert_equal(res, c[2], string.format("Processed expr '%s'{%s} returned '%d', expected: '%d'",
           expr:to_string(), c[1], res, c[2]))
