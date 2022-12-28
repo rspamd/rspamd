@@ -6,7 +6,6 @@
 #cmakedefine CURL_FOUND          1
 #cmakedefine DEBUG_MODE          1
 #cmakedefine GIT_VERSION         1
-#cmakedefine GLIB_COMPAT         1
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine GLIB_RE_COMPAT		 1
 #cmakedefine GLIB_UNISCRIPT_COMPAT		 1
@@ -264,20 +263,6 @@
 
 #include <glib.h>
 #include <gmodule.h>
-
-#ifdef GLIB_RE_COMPAT
-#include "gregex.h"
-#endif
-#ifdef GLIB_UNISCRIPT_COMPAT
-#include "guniscript.h"
-#endif
-#ifdef GLIB_COMPAT
-#include "gchecksum.h"
-#endif
-
-#if (GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14)
-typedef off_t goffset;
-#endif
 
 #ifndef PARAM_H_HAS_BITSET
 /* Bit map related macros. */
