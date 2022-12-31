@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -107,7 +108,7 @@ def make_app():
         (r"(/[^/]+)", MainHandler),
     ])
 
-if __name__ == "__main__":
+async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bind", "-b", default="localhost", help="bind address")
     parser.add_argument("--port", "-p", type=int, default=18080, help="bind port")
@@ -128,13 +129,16 @@ if __name__ == "__main__":
     else:
         server = tornado.httpserver.HTTPServer(app)
 
-    # Start the server
-    server.bind(args.port, args.bind)
-    server.start(1)
-
     # Write the PID to the specified PID file, if provided
     if args.pidfile:
         with open(args.pidfile, "w") as f:
             f.write(str(os.getpid()))
 
-    tornado.ioloop.IOLoop.current().start()
+    # Start the server
+    server.bind(args.port, args.bind)
+    server.start(1)
+
+    await asyncio.Event().wait()
+
+if __name__ == "__main__":
+    asyncio.run(main())
