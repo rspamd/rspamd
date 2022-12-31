@@ -58,11 +58,16 @@ Servers Teardown
   Dummy Http Teardown
   Dummy Https Teardown
   Rspamd Teardown
+  Teardown Dummy Ssl
 
 Run Dummy Ssl
   [Arguments]
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_ssl.py  ${RSPAMD_TESTDIR}/util/server.pem
   Wait Until Created  /tmp/dummy_ssl.pid  timeout=2 second
+
+Teardown Dummy Ssl
+  ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
+  Shutdown Process With Children  ${ssl_pid}
 
 Check url
   [Arguments]  ${url}  ${method}  ${expect_symbol}  @{expect_options}
