@@ -20,7 +20,6 @@ RESOLVE URLS
   Expect Extended URL  http://127.0.0.1:18080/hello
 
 RESOLVE URLS CACHED
-  Stop Dummy Http
   Scan File  ${MESSAGE}  Flags=ext_urls  Settings=${SETTINGS}
   Expect Extended URL  http://127.0.0.1:18080/hello
 
