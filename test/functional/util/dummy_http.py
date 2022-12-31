@@ -1,154 +1,132 @@
 #!/usr/bin/env python3
 
-import http.server
+import tornado.ioloop
+import tornado.web
+import tornado.httpserver
+import ssl
+import argparse
 import os
-import socket
-import socketserver
-import sys
-import time
-from urllib.parse import urlparse, parse_qs
 
-import dummy_killer
+class MainHandler(tornado.web.RequestHandler):
+    @tornado.gen.coroutine
+    def get(self, path):
+        if path == '/empty':
+            # Return an empty reply
+            self.set_header("Content-Type", "text/plain")
+            self.write("")
+        elif path == '/error_403':
+            # Return a 403 HTTP error
+            raise tornado.web.HTTPError(403)
+        elif path == '/timeout':
+            # Wait for 4 seconds before returning an empty reply
+            yield tornado.gen.sleep(4)
+            self.set_header("Content-Type", "text/plain")
+            self.write("")
+        elif path == '/map-simple':
+            # Return a string 'hello map'
+            self.set_header("Content-Type", "text/plain")
+            self.write("hello map")
+        elif path == '/map-query':
+            # Parse the 'key' argument from the HTTP request
+            key = self.get_query_argument("key", default=None)
+            if key == 'au':
+                # Return a string 'hit' if 'key' is equal to 'au'
+                self.set_header("Content-Type", "text/plain")
+                self.write("hit")
+            else:
+                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                raise tornado.web.HTTPError(404)
+        elif path == '/settings':
+            self.set_header("Content-Type", "application/json")
+            self.write("{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}")
+        else:
+            raise tornado.web.HTTPError(404)
 
-PORT = 18080
-HOST_NAME = '0.0.0.0'
+    @tornado.gen.coroutine
+    def post(self, path):
+        if path == '/empty':
+            # Return an empty reply
+            self.set_header("Content-Type", "text/plain")
+            self.write("")
+        elif path == '/error_403':
+            # Return a 403 HTTP error
+            raise tornado.web.HTTPError(403)
+        elif path == '/timeout':
+            # Wait for 4 seconds before returning an empty reply
+            yield tornado.gen.sleep(4)
+            self.set_header("Content-Type", "text/plain")
+            self.write("")
+        elif path == '/map-simple':
+            # Return a string 'hello map'
+            self.set_header("Content-Type", "text/plain")
+            self.write("hello map")
+        elif path == '/map-query':
+            # Parse the 'key' argument from the HTTP request
+            key = self.get_query_argument("key", default="")
+            if key == 'au':
+                # Return a string 'hit' if 'key' is equal to 'au'
+                self.set_header("Content-Type", "text/plain")
+                self.write("hit")
+            else:
+                # Return a 404 HTTP error if 'key' is not equal to 'au'
+                raise tornado.web.HTTPError(404)
+        elif path == '/settings':
+            self.set_header("Content-Type", "application/json")
+            self.write("{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}")
+        else:
+            raise tornado.web.HTTPError(404)
 
-PID = "/tmp/dummy_http.pid"
-
-
-class MyHandler(http.server.BaseHTTPRequestHandler):
-    protocol_version = 'HTTP/1.1'
-
-    def do_HEAD(self):
-        if self.path == "/redirect1":
-            self.send_response(301)
-            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/hello")
-        elif self.path == "/redirect2":
-            self.send_response(301)
-            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect1")
+    def head(self, path):
+        self.set_header("Content-Type", "text/plain")
+        if path == "/redirect1":
+            # Send an HTTP redirect to the bind address of the server
+            self.redirect(f"http://{self.request.host}:{self.request.port}/hello")
+        elif path == "/redirect2":
+            # Send an HTTP redirect to the bind address of the server
+            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect1")
         elif self.path == "/redirect3":
-            self.send_response(301)
-            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect4")
+            # Send an HTTP redirect to the bind address of the server
+            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect4")
         elif self.path == "/redirect4":
-            self.send_response(301)
-            self.send_header("Location", "http://127.0.0.1:"+str(PORT)+"/redirect3")
+            # Send an HTTP redirect to the bind address of the server
+            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect3")
         else:
             self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        self.log_message("to be closed: " + repr(self.close_connection))
+        self.set_header("Content-Type", "text/plain")
 
-    def do_GET(self):
-        """Respond to a GET request."""
-        response = b"hello world"
-        url = urlparse(self.path)
-        self.path = url.path
+def make_app():
+    return tornado.web.Application([
+        (r"(/[^/]+)", MainHandler),
+    ])
 
-        if self.path == "/empty":
-            self.finish()
-            return
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--bind", "-b", default="localhost", help="bind address")
+    parser.add_argument("--port", "-p", type=int, default=18080, help="bind port")
+    parser.add_argument("--keyfile", "-k", help="server private key file")
+    parser.add_argument("--certfile", "-c", help="server certificate file")
+    parser.add_argument("--pidfile", "-pf", help="path to the PID file")
+    args = parser.parse_args()
 
-        if self.path == "/timeout":
-            time.sleep(2)
-        elif self.path == "/error_403":
-            self.send_response(403)
-        elif self.path == "/map-query":
-            query = parse_qs(url.query)
-            self.log_message('query=%s', query)
-            if query['key'][0] == 'au':
-                response = b"1.0"
-                self.send_response(200)
-            else:
-                response = b""
-                self.send_response(404)
-        else:
-            self.send_response(200)
+    # Create the Tornado application
+    app = make_app()
 
-        self.send_header("Content-Length", str(len(response)))
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(response)
-        self.log_message("to be closed: %d, headers: %s, conn:'%s'" % (self.close_connection, str(self.headers), self.headers.get('Connection', "").lower()))
+    # If keyfile and certfile are provided, create an HTTPS server.
+    # Otherwise, create an HTTP server.
+    if args.keyfile and args.certfile:
+        ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_ctx.load_cert_chain(args.certfile, args.keyfile)
+        server = tornado.httpserver.HTTPServer(app, ssl_options=ssl_ctx)
+    else:
+        server = tornado.httpserver.HTTPServer(app)
 
-        conntype = self.headers.get('Connection', "").lower()
-        if conntype != 'keep-alive':
-            self.close_connection = True
+    # Start the server
+    server.bind(args.port, args.bind)
+    server.start(1)
 
-        self.log_message("ka:'%s', pv:%s[%s]" % (str(conntype == 'keep-alive'), str(self.protocol_version >= "HTTP/1.1"), self.protocol_version))
+    # Write the PID to the specified PID file, if provided
+    if args.pidfile:
+        with open(args.pidfile, "w") as f:
+            f.write(str(os.getpid()))
 
-
-    def do_POST(self):
-        """Respond to a POST request."""
-        response = b"hello post"
-        content_length = int(self.headers.get('Content-Length', "0")) or 0
-        content_type = "text/plain"
-        url = urlparse(self.path)
-        self.path = url.path
-        if content_length > 0:
-            _ = self.rfile.read(content_length)
-        if self.path == "/empty":
-            self.finish()
-            return
-
-        if self.path == "/timeout":
-            time.sleep(2)
-
-        if self.path == "/error_403":
-            self.send_response(403)
-        else:
-            self.send_response(200)
-        if self.path == "/map-simple":
-            response = b"hello map"
-        if self.path == "/map-query":
-            query = parse_qs(url.query)
-            if query['key'] == 'au':
-                response = b"hit"
-            else:
-                self.send_response(404)
-        if self.path == "/settings":
-            response = b"{\"actions\": { \"reject\": 1.0}, \"symbols\": { \"EXTERNAL_SETTINGS\": 1.0 }}"
-            content_type = "application/json"
-
-        self.send_header("Content-Length", str(len(response)))
-        conntype = self.headers.get('Connection', "").lower()
-        if conntype != 'keep-alive':
-            self.close_connection = True
-        else:
-            self.send_header("Connection", "keep-alive")
-
-        self.send_header("Content-type", content_type)
-        self.end_headers()
-        self.wfile.write(response)
-        self.log_message("to be closed: %d, headers: %s, conn:'%s'" % (self.close_connection, str(self.headers), self.headers.get('Connection', "").lower()))
-        self.log_message("ka:'%s', pv:%s[%s]" % (str(conntype == 'keep-alive'), str(self.protocol_version >= "HTTP/1.1"), self.protocol_version))
-
-
-class ThreadingSimpleServer(socketserver.ThreadingMixIn,
-                   http.server.HTTPServer):
-    def __init__(self):
-        self.allow_reuse_address = True
-        self.timeout = 1
-        http.server.HTTPServer.__init__(self, (HOST_NAME, PORT), MyHandler)
-
-    def run(self):
-        dummy_killer.write_pid(PID)
-        try:
-            while 1:
-                sys.stdout.flush()
-                server.handle_request()
-        except KeyboardInterrupt:
-            print("Interrupt")
-        except socket.error:
-            print("Socket closed")
-
-    def stop(self):
-        self.keep_running = False
-        self.server_close()
-
-
-if __name__ == '__main__':
-    server = ThreadingSimpleServer()
-
-    dummy_killer.setup_killer(server, server.stop)
-
-    server.run()
+    tornado.ioloop.IOLoop.current().start()
