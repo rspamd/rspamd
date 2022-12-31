@@ -12,11 +12,11 @@ ${REDIS_SCOPE}     Test
 ${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-Tcp client
-  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_tcp_client.lua
-  Should Match Regexp  ${result.stderr}  ^$
-  Should Be Equal As Integers  ${result.rc}  0
-  Should Be Equal  ${result.stdout}  hello post
+#Tcp client
+#  ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_tcp_client.lua
+#  Should Match Regexp  ${result.stderr}  ^$
+#  Should Be Equal As Integers  ${result.rc}  0
+#  Should Be Equal  ${result.stdout}  hello post
 
 Redis client
   ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_redis_client.lua
