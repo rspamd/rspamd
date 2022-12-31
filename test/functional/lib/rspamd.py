@@ -240,13 +240,14 @@ def shutdown_process_with_children(pid):
         process = psutil.Process(pid=pid)
     except psutil.NoSuchProcess:
         return
-    children = process.children(recursive=False)
+    children = process.children(recursive=True)
     shutdown_process(process)
     for child in children:
         try:
-            shutdown_process(child)
-        except:
+            child.kill()
+        except psutil.NoSuchProcess:
             pass
+    psutil.wait_procs(children, timeout=KILL_WAIT)
 
 def write_to_stdin(process_handle, text):
     if not isinstance(text, bytes):
