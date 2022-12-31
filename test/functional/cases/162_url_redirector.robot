@@ -11,7 +11,7 @@ ${CONFIG}          ${RSPAMD_TESTDIR}/configs/url_redirector.conf
 ${MESSAGE}         ${RSPAMD_TESTDIR}/messages/redir.eml
 ${REDIS_SCOPE}     Suite
 ${RSPAMD_SCOPE}    Suite
-${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+${RSPAMD_URL_TLD}  ${RSPAMD_TESTDIR}/../lua/unit/test_tld.dat
 ${SETTINGS}        {symbols_enabled=[URL_REDIRECTOR_CHECK]}
 
 *** Test Cases ***

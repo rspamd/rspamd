@@ -122,7 +122,7 @@ local function http_simple_tcp_symbol(task)
 
   logger.errx(task, 'connect_sync %1, %2', is_ok, tostring(connection))
 
-  is_ok, err = connection:write('GET /request_sync HTTP/1.1\r\nConnection: keep-alive\r\n\r\n')
+  is_ok, err = connection:write('GET /request HTTP/1.1\r\nConnection: keep-alive\r\n\r\n')
 
   logger.errx(task, 'write %1, %2', is_ok, err)
   if not is_ok then
@@ -149,7 +149,7 @@ local function http_simple_tcp_symbol(task)
 
   task:insert_result('HTTP_SYNC_RESPONSE', 1.0, got_content)
 
-  is_ok, err = connection:write("POST /request2 HTTP/1.1\r\n\r\n")
+  is_ok, err = connection:write("POST /request HTTP/1.1\r\n\r\n")
   logger.errx(task, 'write[2] %1, %2', is_ok, err)
 
   got_content = ''
@@ -163,7 +163,6 @@ local function http_simple_tcp_symbol(task)
       got_content = got_content .. data
     end
     if got_content:find('hello') then
-      -- dummy_http.py responds with either hello world or hello post
       break
     end
   until false
