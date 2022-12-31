@@ -31,13 +31,5 @@ Urlredirector Setup
 
 Urlredirector Teardown
   Rspamd Redis Teardown
-  #Stop Dummy Http
+  Dummy Http Teardown
   Terminate All Processes    kill=True
-
-Stop Dummy Http
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
-
-Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
-  Wait Until Created  /tmp/dummy_http.pid

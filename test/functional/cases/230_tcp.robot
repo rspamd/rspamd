@@ -55,16 +55,9 @@ Servers Setup
   Rspamd Setup
 
 Servers Teardown
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
-  ${ssl_pid} =  Get File  /tmp/dummy_ssl.pid
-  Shutdown Process With Children  ${ssl_pid}
+  Dummy Http Teardown
+  Dummy Https Teardown
   Rspamd Teardown
-
-Run Dummy Http
-  [Arguments]
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
-  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
 
 Run Dummy Ssl
   [Arguments]

@@ -42,15 +42,8 @@ Rspamadm test Setup
   Run Redis
 
 Rspamadm test Teardown
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
-  Remove file  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${REDIS_PID}
+  Dummy Http Teardown
 
-Run Dummy Http
-  [Arguments]
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
-  Wait Until Created  /tmp/dummy_http.pid
 
 Prepare temp directory
   [Arguments]  ${CONFIG}

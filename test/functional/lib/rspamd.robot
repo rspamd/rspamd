@@ -323,3 +323,27 @@ Sync Fuzzy Storage
   ...  fuzzy_sync
   Log  ${result.stdout}
   Sleep  0.1s  Try give fuzzy storage time to sync
+
+Run Dummy Http
+  ${fileExists} =  File Exists  /tmp/dummy_http.pid
+  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_http.pid
+  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
+  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+
+Run Dummy Https
+  ${fileExists} =  File Exists  /tmp/dummy_https.pid
+  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_https.pid
+  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
+  ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
+  ...  -pf  /tmp/dummy_https.pid  -p  18081
+  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+
+Dummy Http Teardown
+  ${http_pid} =  Get File  /tmp/dummy_http.pid
+  Shutdown Process With Children  ${http_pid}
+
+Dummy Https Teardown
+  ${https_pid} =  Get File  /tmp/dummy_https.pid
+  Shutdown Process With Children  ${https_pid}

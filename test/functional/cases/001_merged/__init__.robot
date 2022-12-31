@@ -23,16 +23,6 @@ Multi Setup
 
 Multi Teardown
   Rspamd Teardown
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
-  ${https_pid} =  Get File  /tmp/dummy_https.pid
-  Shutdown Process With Children  ${https_pid}
+  Dummy Http Teardown
+  Dummy Https Teardown
   Redis Teardown
-
-Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
-  Wait Until Created  /tmp/dummy_http.pid
-
-Run Dummy Https
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_https.py  ${RSPAMD_TESTDIR}/util/server.pem
-  Wait Until Created  /tmp/dummy_https.pid

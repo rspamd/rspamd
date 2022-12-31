@@ -22,6 +22,10 @@ class MainHandler(tornado.web.RequestHandler):
             yield tornado.gen.sleep(4)
             self.set_header("Content-Type", "text/plain")
             self.write("")
+        elif path == '/request':
+            # Return a string 'hello world'
+            self.set_header("Content-Type", "text/plain")
+            self.write("hello world")
         elif path == '/map-simple':
             # Return a string 'hello map'
             self.set_header("Content-Type", "text/plain")
@@ -51,6 +55,10 @@ class MainHandler(tornado.web.RequestHandler):
         elif path == '/error_403':
             # Return a 403 HTTP error
             raise tornado.web.HTTPError(403)
+        elif path == '/request':
+            # Return a string 'hello post'
+            self.set_header("Content-Type", "text/plain")
+            self.write("hello post")
         elif path == '/timeout':
             # Wait for 4 seconds before returning an empty reply
             yield tornado.gen.sleep(4)

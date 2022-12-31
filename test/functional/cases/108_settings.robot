@@ -264,10 +264,5 @@ Settings Setup
 
 Settings Teardown
   Rspamd Teardown
-  ${http_pid} =  Get File  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${http_pid}
+  Dummy Http Teardown
   Remove Files  /tmp/bayes.spam.sqlite3  /tmp/bayes.ham.sqlite3
-
-Run Dummy Http
-  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
-  Wait Until Created  /tmp/dummy_http.pid
