@@ -36,7 +36,7 @@ class MainHandler(tornado.web.RequestHandler):
             if key == 'au':
                 # Return a string 'hit' if 'key' is equal to 'au'
                 self.set_header("Content-Type", "text/plain")
-                self.write("hit")
+                self.write("1.0")
             else:
                 # Return a 404 HTTP error if 'key' is not equal to 'au'
                 raise tornado.web.HTTPError(404)
@@ -88,16 +88,16 @@ class MainHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "text/plain")
         if path == "/redirect1":
             # Send an HTTP redirect to the bind address of the server
-            self.redirect(f"http://{self.request.host}:{self.request.port}/hello")
+            self.redirect(f"{self.request.protocol}://{self.request.host}/hello")
         elif path == "/redirect2":
             # Send an HTTP redirect to the bind address of the server
-            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect1")
+            self.redirect(f"{self.request.protocol}://{self.request.host}/redirect1")
         elif self.path == "/redirect3":
             # Send an HTTP redirect to the bind address of the server
-            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect4")
+            self.redirect(f"{self.request.protocol}://{self.request.host}/redirect4")
         elif self.path == "/redirect4":
             # Send an HTTP redirect to the bind address of the server
-            self.redirect(f"http://{self.request.host}:{self.request.port}/redirect3")
+            self.redirect(f"{self.request.protocol}://{self.request.host}/redirect3")
         else:
             self.send_response(200)
         self.set_header("Content-Type", "text/plain")
