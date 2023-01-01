@@ -172,15 +172,6 @@ rspamd_task_fin (void *arg)
 }
 
 /*
- * Called if session was restored inside fin callback
- */
-void
-rspamd_task_restore (void *arg)
-{
-	/* XXX: not needed now ? */
-}
-
-/*
  * Free all structures of worker_task
  */
 void
