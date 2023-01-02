@@ -89,7 +89,7 @@ local function normalise_results(tbl, task)
   -- Convert stupid metric object
   if metric then
     tbl.symbols = {}
-    local symbols, others = fun.partition(function(k, v)
+    local symbols, others = fun.partition(function(_, v)
       return type(v) == 'table' and v.score
     end, metric)
 

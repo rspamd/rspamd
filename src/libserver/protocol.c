@@ -1211,14 +1211,20 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 		obj = top;
 	}
 
-	if (pr && pr->message && !(pr->flags & RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE)) {
-		/* Add smtp message if it does not exists: see #3269 for details */
-		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
-			ucl_object_insert_key (task->messages,
-					ucl_object_fromstring_common (pr->message, 0, UCL_STRING_RAW),
+	if (pr) {
+		if (pr->message && !(pr->flags & RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE)) {
+			/* Add smtp message if it does not exists: see #3269 for details */
+			if (ucl_object_lookup(task->messages, "smtp_message") == NULL) {
+				ucl_object_insert_key(task->messages,
+					ucl_object_fromstring_common(pr->message, 0, UCL_STRING_RAW),
 					"smtp_message", 0,
 					false);
+			}
 		}
+
+		ucl_object_insert_key (obj,
+			ucl_object_fromstring (pr->module),
+			"passthrough_module", 0, false);
 	}
 
 	ucl_object_insert_key (obj,
