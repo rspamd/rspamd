@@ -212,6 +212,11 @@ rspamd_cryptobox_keypair_dtor (struct rspamd_cryptobox_keypair *kp)
 	sk = rspamd_cryptobox_keypair_sk (kp, &len);
 	g_assert (sk != NULL && len > 0);
 	rspamd_explicit_memzero (sk, len);
+
+	if (kp->extensions) {
+		ucl_object_unref (kp->extensions);
+	}
+
 	/* Not g_free as kp is aligned using posix_memalign */
 	free (kp);
 }
@@ -763,6 +768,12 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 
 	rspamd_cryptobox_hash (kp->id, target, len, NULL, 0);
 
+	elt = ucl_object_lookup (obj, "extensions");
+	if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+		/* Use copy to avoid issues with the refcounts */
+		kp->extensions = ucl_object_copy (elt);
+	}
+
 	return kp;
 }
 
@@ -828,6 +839,11 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 					kp->type == RSPAMD_KEYPAIR_KEX ?
 							"kex" : "sign"),
 					"type", 0, false);
+
+	if (kp->extensions) {
+		ucl_object_insert_key (elt, ucl_object_copy (kp->extensions),
+			"extensions", 0, false);
+	}
 
 	return ucl_out;
 }
