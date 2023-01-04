@@ -164,6 +164,13 @@ const guchar *rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
 const guchar *rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp);
 
 /**
+ * Returns keypair extensions if any
+ * @param kp
+ * @return
+ */
+const ucl_object_t *rspamd_keypair_get_extensions (struct rspamd_cryptobox_keypair *kp);
+
+/**
  * Get raw public key id for a specified key (rspamd_cryptobox_HASHBYTES)
  * @param kp
  * @return

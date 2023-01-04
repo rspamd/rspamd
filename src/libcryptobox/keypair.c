@@ -512,6 +512,14 @@ rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp)
 	return kp->id;
 }
 
+const ucl_object_t *
+rspamd_keypair_get_extensions (struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp != NULL);
+
+	return kp->extensions;
+}
+
 const guchar *
 rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk)
 {
