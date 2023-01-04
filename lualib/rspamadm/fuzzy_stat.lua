@@ -25,18 +25,24 @@ parser:option "-s --sort"
 
 local function add_data(target, src)
   for k,v in pairs(src) do
-    if k ~= 'ips' then
+    if type(v) == 'number' then
       if target[k] then
         target[k] = target[k] + v
       else
         target[k] = v
       end
-    else
+    elseif k == 'ips' then
       if not target['ips'] then target['ips'] = {} end
       -- Iterate over IPs
       for ip,st in pairs(v) do
         if not target['ips'][ip] then target['ips'][ip] = {} end
         add_data(target['ips'][ip], st)
+      end
+    elseif k == 'keypair' then
+      if type(v.extensions) == 'table' then
+        if type(v.extensions.name) == 'string' then
+          target.name = v.extensions.name
+        end
       end
     end
   end
@@ -249,14 +255,19 @@ return function(args, res)
     local res_keys = st['keys']
     if res_keys and not opts['no-keys'] and not opts['short'] then
       print('Keys statistics:')
-      for k,_st in pairs(res_keys) do
-        print(string.format('Key id: %s', k))
-        print_stat(_st, '\t')
+      for k, key_stat in pairs(res_keys) do
+        if key_stat.name then
+          print(string.format('Key id: %s, name: %s', k, key_stat.name))
+        else
+          print(string.format('Key id: %s', k))
+        end
 
-        if _st['ips'] and not opts['no-ips'] then
+        print_stat(key_stat, '\t')
+
+        if key_stat['ips'] and not opts['no-ips'] then
           print('')
           print('\tIPs stat:')
-          local sorted_ips = sort_ips(_st['ips'], opts)
+          local sorted_ips = sort_ips(key_stat['ips'], opts)
 
           for _,v in ipairs(sorted_ips) do
             print(string.format('\t%s', v['ip']))
