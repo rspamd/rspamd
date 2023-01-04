@@ -1848,7 +1848,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 {
 	struct fuzzy_key_stat *key_stat;
 	GHashTableIter it;
-	struct fuzzy_key *key;
+	struct fuzzy_key *fuzzy_key;
 	ucl_object_t *obj, *keys_obj, *elt, *ip_elt, *ip_cur;
 	gpointer k, v;
 	gint i;
@@ -1860,8 +1860,8 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	g_hash_table_iter_init (&it, ctx->keys);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
-		key = v;
-		key_stat = key->stat;
+		fuzzy_key = v;
+		key_stat = fuzzy_key->stat;
 
 		if (key_stat) {
 			rspamd_snprintf (keyname, sizeof (keyname), "%8bs", k);
@@ -1879,10 +1879,11 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 					ucl_object_insert_key (ip_elt, ip_cur,
 							rspamd_inet_address_to_string (k), 0, true);
 				}
-
 				ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
 			}
 
+			ucl_object_insert_key (elt, rspamd_keypair_to_ucl (fuzzy_key->key, FALSE),
+				"keypair", 0, false);
 			ucl_object_insert_key (keys_obj, elt, keyname, 0, true);
 		}
 	}
