@@ -805,9 +805,16 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 		encoding = "base32";
 	}
 
-	ucl_out = ucl_object_typed_new (UCL_OBJECT);
-	elt = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+	if (flags & RSPAMD_KEYPAIR_DUMP_FLATTENED) {
+		ucl_out = ucl_object_typed_new (UCL_OBJECT);
+		elt = ucl_out;
+	}
+	else {
+		ucl_out = ucl_object_typed_new (UCL_OBJECT);
+		elt = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+	}
+
 
 	/* pubkey part */
 	keypair_out = rspamd_keypair_print (kp,

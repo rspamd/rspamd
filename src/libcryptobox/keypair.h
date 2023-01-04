@@ -249,6 +249,7 @@ enum rspamd_keypair_dump_flags {
 	RSPAMD_KEYPAIR_DUMP_DEFAULT = 0,
 	RSPAMD_KEYPAIR_DUMP_HEX = 1u << 0u,
 	RSPAMD_KEYPAIR_DUMP_NO_SECRET = 1u << 1u,
+	RSPAMD_KEYPAIR_DUMP_FLATTENED = 1u << 2u,
 };
 
 /**
