@@ -1882,7 +1882,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 				ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
 			}
 
-			ucl_object_insert_key (elt, rspamd_keypair_to_ucl (fuzzy_key->key, FALSE),
+			ucl_object_insert_key (elt, rspamd_keypair_to_ucl (fuzzy_key->key, RSPAMD_KEYPAIR_DUMP_NO_SECRET),
 				"keypair", 0, false);
 			ucl_object_insert_key (keys_obj, elt, keyname, 0, true);
 		}

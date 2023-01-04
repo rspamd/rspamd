@@ -787,7 +787,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 
 ucl_object_t *
 rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
-		gboolean is_hex)
+					   enum rspamd_keypair_dump_flags flags)
 {
 	ucl_object_t *ucl_out, *elt;
 	gint how = 0;
@@ -796,7 +796,7 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 
 	g_assert (kp != NULL);
 
-	if (is_hex) {
+	if (flags & RSPAMD_KEYPAIR_DUMP_HEX) {
 		how |= RSPAMD_KEYPAIR_HEX;
 		encoding = "hex";
 	}
@@ -817,13 +817,15 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 			"pubkey", 0, false);
 	g_string_free (keypair_out, TRUE);
 
-	/* privkey part */
-	keypair_out = rspamd_keypair_print (kp,
-			RSPAMD_KEYPAIR_PRIVKEY|how);
-	ucl_object_insert_key (elt,
-			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+	if (!(flags & RSPAMD_KEYPAIR_DUMP_NO_SECRET)) {
+		/* privkey part */
+		keypair_out = rspamd_keypair_print(kp,
+			RSPAMD_KEYPAIR_PRIVKEY | how);
+		ucl_object_insert_key(elt,
+			ucl_object_fromlstring(keypair_out->str, keypair_out->len),
 			"privkey", 0, false);
-	g_string_free (keypair_out, TRUE);
+		g_string_free(keypair_out, TRUE);
+	}
 
 	keypair_out = rspamd_keypair_print (kp,
 			RSPAMD_KEYPAIR_ID|how);

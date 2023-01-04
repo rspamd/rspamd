@@ -244,13 +244,20 @@ const guchar *rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
  */
 struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl (const ucl_object_t *obj);
 
+
+enum rspamd_keypair_dump_flags {
+	RSPAMD_KEYPAIR_DUMP_DEFAULT = 0,
+	RSPAMD_KEYPAIR_DUMP_HEX = 1u << 0u,
+	RSPAMD_KEYPAIR_DUMP_NO_SECRET = 1u << 1u,
+};
+
 /**
  * Converts keypair to ucl object
  * @param kp
  * @return
  */
 ucl_object_t *rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
-									 gboolean is_hex);
+									 enum rspamd_keypair_dump_flags flags);
 
 
 /**
