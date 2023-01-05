@@ -494,7 +494,7 @@ rspamd_chartable_process_word_ascii(struct rspamd_task *task,
 		got_unknown,
 	} state = start_process;
 
-	const auto *p = w->normalized.begin;
+	const auto *p = (const unsigned char *)w->normalized.begin;
 	const auto *end = p + w->normalized.len;
 	last_sc = non_ascii;
 
