@@ -254,7 +254,7 @@ return function(args, res)
     print('')
 
     local res_keys = st['keys']
-    if res_keys and not opts['no-keys'] and not opts['short'] then
+    if res_keys and not opts['no_keys'] and not opts['short'] then
       print('Keys statistics:')
       -- Convert into an array to allow sorting
       local sorted_keys = sort_hash_table(res_keys, opts, 'key')
@@ -269,7 +269,7 @@ return function(args, res)
 
         print_stat(key_stat, '\t')
 
-        if key_stat['ips'] and not opts['no-ips'] then
+        if key_stat['ips'] and not opts['no_ips'] then
           print('')
           print('\tIPs stat:')
           local sorted_ips = sort_hash_table(key_stat['ips'], opts, 'ip')
@@ -284,7 +284,7 @@ return function(args, res)
         print('')
       end
     end
-    if st['errors_ips'] and not opts['no-ips'] and not opts['short'] then
+    if st['errors_ips'] and not opts['no_ips'] and not opts['short'] then
       print('')
       print('Errors IPs statistics:')
       local ip_stat = st['errors_ips']
@@ -300,7 +300,7 @@ return function(args, res)
     end
   end
 
-  if not opts['no-ips'] and not opts['short'] then
+  if not opts['no_ips'] and not opts['short'] then
     print('')
     print('IPs statistics:')
 
