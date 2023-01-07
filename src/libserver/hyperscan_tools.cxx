@@ -184,8 +184,9 @@ public:
 	}
 
 	auto cleanup_maybe() -> void {
+		auto env_cleanup_disable = std::getenv("RSPAMD_NO_CLEANUP");
 		/* We clean dir merely if we are running from the main process */
-		if (rspamd_current_worker == nullptr && std::getenv("RSPAMD_NO_CLEANUP") == nullptr) {
+		if (rspamd_current_worker == nullptr && env_cleanup_disable == nullptr) {
 			const auto *log_func = RSPAMD_LOG_FUNC;
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext : cache_extensions) {
@@ -233,6 +234,9 @@ public:
 			cache_dirs.clear();
 			cache_extensions.clear();
 			known_cached_files.clear();
+		}
+		else if (rspamd_current_worker == nullptr && env_cleanup_disable != nullptr) {
+			msg_debug_hyperscan("disable hyperscan cleanup: env variable RSPAMD_NO_CLEANUP is set");
 		}
 	}
 };
