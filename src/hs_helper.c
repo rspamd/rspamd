@@ -125,6 +125,11 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 	gboolean ret = TRUE;
 	pid_t our_pid = getpid ();
 
+	if (getenv("RSPAMD_NO_CLEANUP")) {
+		/* Skip all cleanup */
+		return TRUE;
+	}
+
 	if (stat (ctx->hs_dir, &st) == -1) {
 		msg_err ("cannot stat path %s, %s",
 				ctx->hs_dir,
@@ -137,7 +142,7 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 	 * We reuse this buffer for .new patterns as well, so allocate with some
 	 * margin
 	 */
-	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs.new") + 2;
+	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs") + sizeof (G_DIR_SEPARATOR);
 	pattern = g_malloc (len);
 	rspamd_snprintf (pattern, len, "%s%c%s", ctx->hs_dir, G_DIR_SEPARATOR, "*.hs");
 
