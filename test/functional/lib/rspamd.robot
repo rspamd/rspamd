@@ -258,6 +258,7 @@ Run Rspamd
   ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
   ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
   ...  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ...  env:RSPAMD_NO_CLEANUP=1
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 

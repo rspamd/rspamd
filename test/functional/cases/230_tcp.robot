@@ -56,7 +56,6 @@ Servers Setup
 
 Servers Teardown
   Dummy Http Teardown
-  Dummy Https Teardown
   Rspamd Teardown
   Teardown Dummy Ssl
 
