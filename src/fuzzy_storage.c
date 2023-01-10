@@ -194,10 +194,13 @@ struct fuzzy_peer_request {
 	struct fuzzy_peer_cmd cmd;
 };
 
+KHASH_SET_INIT_INT(fuzzy_key_forbidden_ids);
+
 struct fuzzy_key {
 	struct rspamd_cryptobox_keypair *key;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct fuzzy_key_stat *stat;
+	khash_t(fuzzy_key_forbidden_ids) *forbidden_ids;
 };
 
 struct rspamd_updates_cbdata {
@@ -428,6 +431,10 @@ fuzzy_key_dtor (gpointer p)
 	if (key) {
 		if (key->stat) {
 			REF_RELEASE (key->stat);
+		}
+
+		if (key->forbidden_ids) {
+			kh_destroy(fuzzy_key_forbidden_ids, key->forbidden_ids);
 		}
 
 		g_free (key);
@@ -2193,6 +2200,25 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		/* We map entries by pubkey in binary form for speed lookup */
 		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
+
+		const ucl_object_t *extensions = rspamd_keypair_get_extensions(kp);
+
+		if (extensions) {
+			const ucl_object_t *forbidden_ids = ucl_object_lookup (extensions, "forbidden_ids");
+
+			if (forbidden_ids && ucl_object_type (forbidden_ids) == UCL_ARRAY) {
+				key->forbidden_ids = kh_init(fuzzy_key_forbidden_ids);
+				while ((cur = ucl_object_iterate (forbidden_ids, &it, true)) != NULL) {
+					if (ucl_object_type(cur) == UCL_INT || ucl_object_type(cur) == UCL_FLOAT) {
+						int id = ucl_object_toint(cur);
+						int r;
+
+						kh_put(fuzzy_key_forbidden_ids, key->forbidden_ids, id, &r);
+					}
+				}
+			}
+		}
+
 		msg_debug_pool_check("loaded keypair %*xs", 8, pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
