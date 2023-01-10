@@ -91,12 +91,6 @@ struct fuzzy_key_stat {
 	ref_entry_t ref;
 };
 
-struct rspamd_fuzzy_mirror {
-	gchar *name;
-	struct upstream_list *u;
-	struct rspamd_cryptobox_pubkey *key;
-};
-
 struct rspamd_leaky_bucket_elt {
 	rspamd_inet_addr_t *addr;
 	gdouble last;
