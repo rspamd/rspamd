@@ -184,7 +184,7 @@ struct fuzzy_session {
 	guint64 time;
 	struct ev_io io;
 	ref_entry_t ref;
-	struct fuzzy_key_stat *key_stat;
+	struct fuzzy_key *key;
 	struct rspamd_fuzzy_cmd_extension *extensions;
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 };
@@ -382,10 +382,10 @@ rspamd_fuzzy_check_write (struct fuzzy_session *session)
 		}
 	}
 
-	if (session->ctx->update_keys != NULL && session->key_stat && session->key_stat->keypair) {
+	if (session->ctx->update_keys != NULL && session->key->stat && session->key->key) {
 		static gchar base32_buf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 		guint raw_len;
-		const guchar *pk_raw = rspamd_keypair_component(session->key_stat->keypair,
+		const guchar *pk_raw = rspamd_keypair_component(session->key->key,
 				RSPAMD_KEYPAIR_COMPONENT_ID, &raw_len);
 		gint encoded_len = rspamd_encode_base32_buf(pk_raw, raw_len,
 				base32_buf,sizeof(base32_buf),
@@ -745,7 +745,7 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				result->v1.prob > 0.5,
 				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
 				flags & RSPAMD_FUZZY_REPLY_DELAY,
-				session->key_stat,
+				session->key->stat,
 				session->ip_stat,
 				cmd->cmd,
 				result->v1.value);
@@ -758,6 +758,21 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		}
 
 		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
+
+			if (session->reply.rep.v1.prob > 0 && session->key && session->key->forbidden_ids) {
+				khiter_t k;
+
+				k = kh_get(fuzzy_key_forbidden_ids, session->key->forbidden_ids, session->reply.rep.v1.flag);
+
+				if (k != kh_end (session->key->forbidden_ids)) {
+					/* Hash is from a forbidden flag for this key */
+					session->reply.rep.ts = 0;
+					session->reply.rep.v1.prob = 0.0;
+					session->reply.rep.v1.value = 0;
+					session->reply.rep.v1.flag = 0;
+				}
+			}
+
 			/* We need also to encrypt reply */
 			ottery_rand_bytes (session->reply.hdr.nonce,
 					sizeof (session->reply.hdr.nonce));
@@ -1137,15 +1152,15 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		return;
 	}
 
-	if (session->key_stat && session->addr) {
-		ip_stat = rspamd_lru_hash_lookup (session->key_stat->last_ips,
+	if (session->key && session->addr) {
+		ip_stat = rspamd_lru_hash_lookup (session->key->stat->last_ips,
 				session->addr, -1);
 
 		if (ip_stat == NULL) {
 			naddr = rspamd_inet_address_copy(session->addr, NULL);
 			ip_stat = g_malloc0 (sizeof (*ip_stat));
 			REF_INIT_RETAIN (ip_stat, fuzzy_key_stat_dtor);
-			rspamd_lru_hash_insert (session->key_stat->last_ips,
+			rspamd_lru_hash_insert (session->key->stat->last_ips,
 					naddr, ip_stat, -1, 0);
 		}
 
@@ -1308,7 +1323,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s, guchar *buf, gsize buflen
 		key = s->ctx->default_key;
 	}
 
-	s->key_stat = key->stat;
+	s->key = key;
 
 	/* Now process keypair */
 	rk = rspamd_pubkey_from_bin (hdr.pubkey, sizeof (hdr.pubkey),
