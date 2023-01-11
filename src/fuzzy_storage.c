@@ -745,7 +745,7 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				result->v1.prob > 0.5,
 				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
 				flags & RSPAMD_FUZZY_REPLY_DELAY,
-				session->key->stat,
+				session->key ? session->key->stat : NULL,
 				session->ip_stat,
 				cmd->cmd,
 				result->v1.value);
