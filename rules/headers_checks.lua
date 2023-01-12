@@ -42,7 +42,7 @@ local rcvd_cb_id = rspamd_config:register_symbol{
     local nreceived = fun.reduce(function(acc, rcvd)
         return acc + 1
       end, 0, fun.filter(function(h)
-        return not h['artificial']
+        return not h['flags']['artificial']
       end, received))
 
     for k,v in pairs(cnts) do

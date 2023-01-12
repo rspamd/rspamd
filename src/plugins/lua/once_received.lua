@@ -44,7 +44,7 @@ local function check_quantity_received (task)
   local nreceived = fun.reduce(function(acc, _)
     return acc + 1
   end, 0, fun.filter(function(h)
-    return not h['artificial']
+    return not h['flags']['artificial']
   end, recvh))
 
   local function recv_dns_cb(_, to_resolve, results, err)
