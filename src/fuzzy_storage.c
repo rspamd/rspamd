@@ -48,6 +48,8 @@
 #define DEFAULT_MAX_BUCKETS 2000
 #define DEFAULT_BUCKET_TTL 3600
 #define DEFAULT_BUCKET_MASK 24
+/* Update stats on keys each 1 hour */
+#define KEY_STAT_INTERVAL 3600.0
 
 static const gchar *local_db_name = "local";
 
@@ -86,6 +88,12 @@ struct fuzzy_key_stat {
 	guint64 added;
 	guint64 deleted;
 	guint64 errors;
+	/* Store averages for checked/matched per minute */
+	struct rspamd_counter_data checked_ctr;
+	struct rspamd_counter_data matched_ctr;
+	gdouble last_checked_time;
+	guint64 last_checked_count;
+	guint64 last_matched_count;
 	struct rspamd_cryptobox_keypair *keypair;
 	rspamd_lru_hash_t *last_ips;
 	ref_entry_t ref;
@@ -663,7 +671,9 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 		gboolean is_delayed,
 		struct fuzzy_key_stat *key_stat,
 		struct fuzzy_key_stat *ip_stat,
-		guint cmd, guint reply)
+		guint cmd,
+		guint reply,
+		ev_tstamp timestamp)
 {
 	ctx->stat.fuzzy_hashes_checked[epoch] ++;
 
@@ -687,6 +697,22 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 
 				if (matched) {
 					key_stat->matched ++;
+				}
+
+				if (G_UNLIKELY(key_stat->last_checked_time == 0.0)) {
+					key_stat->last_checked_time = timestamp;
+					key_stat->last_checked_count = key_stat->checked;
+					key_stat->last_matched_count = key_stat->matched;
+				}
+				else if (G_UNLIKELY(timestamp > key_stat->last_checked_time + KEY_STAT_INTERVAL)) {
+					guint64 nchecked = key_stat->checked - key_stat->last_checked_count;
+					guint64 nmatched = key_stat->matched - key_stat->last_matched_count;
+
+					rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5);
+					rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5);
+					key_stat->last_checked_time = timestamp;
+					key_stat->last_checked_count = key_stat->checked;
+					key_stat->last_matched_count = key_stat->matched;
 				}
 			}
 			else if (cmd == FUZZY_WRITE) {
@@ -746,7 +772,8 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				session->key ? session->key->stat : NULL,
 				session->ip_stat,
 				cmd->cmd,
-				result->v1.value);
+				result->v1.value,
+				session->timestamp);
 
 		if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
 			/* Hash is too fresh, need to delay it */
