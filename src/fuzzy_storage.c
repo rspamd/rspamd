@@ -181,7 +181,7 @@ struct fuzzy_session {
 	enum rspamd_fuzzy_epoch epoch;
 	enum fuzzy_cmd_type cmd_type;
 	gint fd;
-	guint64 time;
+	ev_tstamp timestamp;
 	struct ev_io io;
 	ref_entry_t ref;
 	struct fuzzy_key *key;
@@ -225,7 +225,6 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 {
 	rspamd_inet_addr_t *masked;
 	struct rspamd_leaky_bucket_elt *elt;
-	ev_tstamp now;
 
 	if (!session->addr) {
 		return TRUE;
@@ -256,9 +255,8 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 				MIN (MAX (session->ctx->leaky_bucket_mask * 4, 64), 128));
 	}
 
-	now = ev_now (session->ctx->event_loop);
 	elt = rspamd_lru_hash_lookup (session->ctx->ratelimit_buckets, masked,
-			now);
+		(time_t)session->timestamp);
 
 	if (elt) {
 		gboolean ratelimited = FALSE;
@@ -269,16 +267,16 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 		}
 		else {
 			/* Update bucket */
-			if (elt->last < now) {
-				elt->cur -= session->ctx->leaky_bucket_rate * (now - elt->last);
-				elt->last = now;
+			if (elt->last < session->timestamp) {
+				elt->cur -= session->ctx->leaky_bucket_rate * (session->timestamp - elt->last);
+				elt->last = session->timestamp;
 
 				if (elt->cur < 0) {
 					elt->cur = 0;
 				}
 			}
 			else {
-				elt->last = now;
+				elt->last = session->timestamp;
 			}
 
 			/* Check bucket */
@@ -308,12 +306,12 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 		elt = g_malloc (sizeof (*elt));
 		elt->addr = masked; /* transfer ownership */
 		elt->cur = 1;
-		elt->last = now;
+		elt->last = session->timestamp;
 
 		rspamd_lru_hash_insert (session->ctx->ratelimit_buckets,
 				masked,
 				elt,
-				now,
+			session->timestamp,
 				session->ctx->leaky_bucket_ttl);
 	}
 
@@ -1627,6 +1625,7 @@ static void
 accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
+	struct rspamd_fuzzy_storage_ctx *ctx;
 	struct fuzzy_session *session;
 	gssize r, msg_len;
 	guint64 *nerrors;
@@ -1643,6 +1642,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 #endif
 
 	memset (msg, 0, sizeof (*msg) * MSGVEC_LEN);
+	ctx = (struct rspamd_fuzzy_storage_ctx *)worker->ctx;
 
 	/* Prepare messages to receive */
 	for (int i = 0; i < MSGVEC_LEN; i ++) {
@@ -1657,7 +1657,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 
 	/* Got some data */
 	if (revents == EV_READ) {
-
+		ev_now_update_if_cheap (ctx->event_loop);
 		for (;;) {
 #ifdef HAVE_RECVMMSG
 			r = recvmmsg (w->fd, msg, MSGVEC_LEN, 0, NULL);
@@ -1705,8 +1705,8 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 				REF_INIT_RETAIN (session, fuzzy_session_destroy);
 				session->worker = worker;
 				session->fd = w->fd;
-				session->ctx = worker->ctx;
-				session->time = (guint64) time (NULL);
+				session->ctx = ctx;
+				session->timestamp = ev_now (ctx->event_loop);
 				session->addr = client_addr;
 				worker->nconns++;
 
