@@ -1873,15 +1873,19 @@ rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
 	res = ucl_object_typed_new (UCL_OBJECT);
 
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->checked),
-			"checked", 0, false);
+		"checked", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromdouble(key_stat->checked_ctr.mean),
+		"checked_per_hour", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->matched),
-			"matched", 0, false);
+		"matched", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromdouble(key_stat->checked_ctr.mean),
+		"matched_per_hour", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->added),
-			"added", 0, false);
+		"added", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->deleted),
-			"deleted", 0, false);
+		"deleted", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->errors),
-			"errors", 0, false);
+		"errors", 0, false);
 
 	return res;
 }
