@@ -59,10 +59,20 @@ end
 
 local function print_stat(st, tabs)
   if st['checked'] then
-    print(string.format('%sChecked: %s', tabs, print_num(st['checked'])))
+    if st.checked_per_hour then
+      print(string.format('%sChecked: %s (%s per hour in average)', tabs,
+          print_num(st['checked']), print_num(st['checked_per_hour'])))
+    else
+      print(string.format('%sChecked: %s', tabs, print_num(st['checked'])))
+    end
   end
   if st['matched'] then
-    print(string.format('%sMatched: %s', tabs, print_num(st['matched'])))
+    if st.matched_per_hour then
+      print(string.format('%sMatched: %s (%s per hour in average)', tabs,
+          print_num(st['matched']), print_num(st['matched_per_hour'])))
+    else
+      print(string.format('%sMatched: %s', tabs, print_num(st['matched'])))
+    end
   end
   if st['errors'] then
     print(string.format('%sErrors: %s', tabs, print_num(st['errors'])))
