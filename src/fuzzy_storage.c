@@ -1878,7 +1878,7 @@ rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
 		"checked_per_hour", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->matched),
 		"matched", 0, false);
-	ucl_object_insert_key (res, ucl_object_fromdouble(key_stat->checked_ctr.mean),
+	ucl_object_insert_key (res, ucl_object_fromdouble(key_stat->matched_ctr.mean),
 		"matched_per_hour", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (key_stat->added),
 		"added", 0, false);
