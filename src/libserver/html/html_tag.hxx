@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 #include "html_tags.h"
 
