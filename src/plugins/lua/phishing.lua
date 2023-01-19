@@ -33,8 +33,8 @@ local openphish_symbol = 'PHISHED_OPENPHISH'
 local phishtank_symbol = 'PHISHED_PHISHTANK'
 local generic_service_name = 'generic service'
 local domains = nil
-local strict_domains = {}
-local exceptions_maps = {}
+local phishing_exceptions_maps = {}
+local anchor_exceptions_maps = {}
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
@@ -306,15 +306,15 @@ local function phishing_cb(task)
             for _,rule in ipairs(map) do
               local found,dn = is_url_in_map(rule.map, furl)
               if found then
-                task:insert_result(rule.symbol, sweight, ptld .. '->' .. dn)
+                task:insert_result(rule.symbol, sweight, ptld .. '->' .. tld)
                 return true
               end
             end
           end
         end
 
-        if not found_in_map(exceptions_maps) then
-          if not found_in_map(strict_domains, purl, 1.0) then
+        if not found_in_map(anchor_exceptions_maps) then
+          if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
             if domains then
               if is_url_in_map(domains, purl) then
                 task:insert_result(symbol, weight, ptld .. '->' .. tld)
@@ -564,6 +564,6 @@ if opts then
     domains = lua_maps.map_add_from_ucl(opts['domains'], 'set',
             'Phishing domains')
   end
-  phishing_map('strict_domains', strict_domains, id)
-  phishing_map('exceptions', exceptions_maps, id)
+  phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
+  phishing_map('exceptions', anchor_exceptions_maps, id)
 end
