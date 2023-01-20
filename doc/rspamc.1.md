@@ -86,6 +86,9 @@ requires input.
 -b *host:port*, \--bind=*host:port*
 :	Bind to specified ip address
 
+-R, \--human
+:	Output human readable report
+
 -j, \--json
 :	Output formatted JSON
 

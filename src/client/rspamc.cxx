@@ -71,6 +71,7 @@ static gboolean pass_all;
 static gboolean tty = FALSE;
 static gboolean verbose = FALSE;
 static gboolean print_commands = FALSE;
+static gboolean humanreport = FALSE;
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean headers = FALSE;
@@ -134,6 +135,7 @@ static GOptionEntry entries[] =
 																																	  "Bind to specified ip address",                                             nullptr},
 				{"commands",         0,    0,                          G_OPTION_ARG_NONE,         &print_commands,
 																																	  "List available commands",                                                  nullptr},
+				{"human",            'R',  0,                          G_OPTION_ARG_NONE,         &humanreport,                       "Output human readable report",                                             nullptr},
 				{"json",             'j',  0,                          G_OPTION_ARG_NONE,         &json,                              "Output json reply",                                                        nullptr},
 				{"compact",          '\0', 0,                          G_OPTION_ARG_NONE,         &compact,                           "Output compact json reply",                                                nullptr},
 				{"headers",          0,    0,                          G_OPTION_ARG_NONE,         &headers,                           "Output HTTP headers",
@@ -824,6 +826,59 @@ add_options(GQueue *opts)
 }
 
 static void
+print_indented_line(FILE *out, std::string line, size_t maxlen, size_t indent)
+{
+	if (maxlen < 1) return;
+
+	std::string s;
+	for (size_t pos = 0; pos < line.length(); pos += s.length()) {
+		s = line.substr(pos, pos ? (maxlen-indent) : maxlen);
+		if (indent && pos) fmt::print(out, "{:>{}}", " ", indent);
+		fmt::print(out, "{}\n", s);
+	}
+}
+
+static void
+rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
+{
+	auto first = true;
+	double score = 0;
+	const char *key = nullptr, *desc = nullptr;
+
+	const auto *val = ucl_object_lookup(obj, "score");
+	if (val != nullptr) score = ucl_object_todouble(val);
+
+	key = ucl_object_key(obj);
+	val = ucl_object_lookup(obj, "description");
+	if (val != nullptr) desc = ucl_object_tostring(val);
+
+	std::string line = fmt::format("{:>4.1f} {:<22} ", score, key);
+	if (desc != nullptr) line += desc;
+
+	val = ucl_object_lookup(obj, "options");
+	if (val != nullptr && val->type == UCL_ARRAY) {
+		ucl_object_iter_t it = nullptr;
+		const ucl_object_t *cur;
+
+		line += fmt::format("{}[", desc == nullptr ? "" : " ");
+
+		while ((cur = ucl_object_iterate (val, &it, true)) != nullptr) {
+			if (first) {
+				line += fmt::format("{}", ucl_object_tostring(cur));
+				first = false;
+			}
+			else {
+				line += fmt::format(",{}", ucl_object_tostring(cur));
+			}
+		}
+		line += ']';
+	}
+	else if (desc == nullptr) line += '\n';
+
+	print_indented_line(out, line, 78, 28);
+}
+
+static void
 rspamc_symbol_output(FILE *out, const ucl_object_t *obj)
 {
 	auto first = true;
@@ -864,12 +919,12 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	auto print_protocol_string = [&](const char *ucl_name, const char *output_message) {
 		auto *elt = ucl_object_lookup(obj, ucl_name);
 		if (elt) {
-			fmt::print(out, "{}: {}\n", output_message,
+			fmt::print(out, fmt::runtime(humanreport ? ",{}={}" : "{}: {}\n"), output_message,
 					emphasis_argument(ucl_object_tostring(elt)));
 		}
 	};
 
-	fmt::print(out, "[Metric: default]\n");
+	if (!humanreport) fmt::print(out, "[Metric: default]\n");
 
 	const auto *elt = ucl_object_lookup(obj, "required_score");
 
@@ -883,6 +938,13 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	if (elt) {
 		score = ucl_object_todouble(elt);
 		got_scores++;
+	}
+
+	if (humanreport) {
+		fmt::print(out,
+				"{}/{}",
+				emphasis_argument(score, 2),
+				emphasis_argument(required_score, 2));
 	}
 
 	elt = ucl_object_lookup(obj, "action");
@@ -915,24 +977,34 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 					colorized_action = fmt::format(fmt::emphasis::bold, ucl_object_tostring(elt));
 					break;
 				}
-				fmt::print(out, "Action: {}\n", colorized_action);
+				fmt::print(out, fmt::runtime(humanreport ? ",Action={}" : "Action: {}\n"), colorized_action);
 			}
 
-			fmt::print(out, "Spam: {}\n", emphasis_argument(act.value() < METRIC_ACTION_GREYLIST ?
-											  "true" : "false"));
+			fmt::print(out, fmt::runtime(humanreport ? ",Spam={}" : "Spam: {}\n"),
+								emphasis_argument(act.value() < METRIC_ACTION_GREYLIST ?
+												"true" : "false"));
 		}
 		else {
 			print_protocol_string("action", "Action");
 		}
 	}
 
-	print_protocol_string("subject", "Subject");
+	if (!humanreport) print_protocol_string("subject", "Subject");
 
-	if (got_scores == 2) {
+	if (humanreport) fmt::print(out, "\n");
+	else if (got_scores == 2) {
 		fmt::print(out,
 				"Score: {} / {}\n",
 				emphasis_argument(score, 2),
 				emphasis_argument(required_score, 2));
+	}
+
+	if (humanreport) {
+		fmt::print(out, "Content analysis details:   ({} points, {} required)\n\n",
+				emphasis_argument(score, 2),
+				emphasis_argument(required_score, 2));
+		fmt::print(out, " pts rule name              description\n");
+		fmt::print(out, "---- ---------------------- --------------------------------------------------\n");
 	}
 
 	elt = ucl_object_lookup(obj, "symbols");
@@ -949,9 +1021,11 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		sort_ucl_container_with_default(symbols, "name");
 
 		for (const auto *sym_obj : symbols) {
-			rspamc_symbol_output(out, sym_obj);
+			if (humanreport) rspamc_symbol_human_output(out, sym_obj);
+			else rspamc_symbol_output(out, sym_obj);
 		}
 	}
+	if (humanreport) fmt::print(out, "\n");
 }
 
 static void
@@ -988,8 +1062,10 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 		}
 	};
 
-	print_protocol_string("message-id", "Message-ID");
-	print_protocol_string("queue-id", "Queue-ID");
+	if (!humanreport) {
+		print_protocol_string("message-id", "Message-ID");
+		print_protocol_string("queue-id", "Queue-ID");
+	}
 
 	const auto *elt = ucl_object_lookup(obj, "urls");
 
@@ -1003,7 +1079,7 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 			emitted = (char *)ucl_object_emit(elt, UCL_EMIT_JSON);
 		}
 
-		fmt::print(out, "Urls: {}\n", emitted);
+		if (emitted && strcmp(emitted, "[]")) fmt::print(out, "Urls: {}\n", emitted);
 		free(emitted);
 	}
 
@@ -1018,11 +1094,12 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 			emitted = (char *)ucl_object_emit(elt, UCL_EMIT_JSON);
 		}
 
-		fmt::print(out, "Emails: {}\n", emitted);
+		if (emitted && strcmp(emitted, "[]")) fmt::print(out, "Emails: {}\n", emitted);
 		free(emitted);
 	}
 
 	print_protocol_string("error", "Scan error");
+	if (humanreport) return;
 
 	elt = ucl_object_lookup(obj, "messages");
 	if (elt && elt->type == UCL_OBJECT) {
@@ -1646,13 +1723,13 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 		}
 		else {
 			if (cmd.need_input && !json) {
-				if (!compact) {
+				if (!compact && !humanreport) {
 					fmt::print(out, "Results for file: {} ({:.3} seconds)\n",
 							emphasis_argument(cbdata->filename), diff);
 				}
 			}
 			else {
-				if (!compact && !json) {
+				if (!compact && !json && !humanreport) {
 					fmt::print(out, "Results for command: {} ({:.3} seconds)\n",
 							emphasis_argument(cmd.name), diff);
 				}
