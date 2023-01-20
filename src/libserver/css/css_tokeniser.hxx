@@ -24,6 +24,7 @@
 #include <variant>
 #include <list>
 #include <functional>
+#include <cstdint>
 #include "mem_pool.h"
 
 namespace rspamd::css {
