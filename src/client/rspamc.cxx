@@ -875,7 +875,29 @@ rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
 			return;
 		}
 		for (size_t pos = 0; pos < line.size(); ) {
-			auto s = line.substr(pos, pos ? (maxlen-indent) : maxlen);
+			/*
+			 * First, find the longest sequence of words, delimited by space of punctuation,
+			 * and adjust `maxlen` if needed
+			 */
+			auto split_len = pos ? (maxlen-indent) : maxlen;
+			auto word_len = 0;
+			auto suffix = std::string_view(line).substr(pos);
+			for (;;) {
+				auto delim_pos = suffix.find_first_of(" \t,;[]():");
+				if (word_len + delim_pos + 1 < split_len && delim_pos != std::string_view::npos && delim_pos < suffix.size()) {
+					word_len += delim_pos + 1;
+					suffix = suffix.substr(delim_pos + 1);
+				}
+				else {
+					break;
+				}
+			}
+
+			if (word_len > 0 && word_len < split_len && line.size() + pos > split_len) {
+				split_len = word_len;
+			}
+
+			auto s = std::string_view(line).substr(pos, split_len);
 			if (indent && pos) {
 				fmt::print(out, "{:>{}}", " ", indent);
 			}
