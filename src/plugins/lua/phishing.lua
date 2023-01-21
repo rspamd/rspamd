@@ -304,7 +304,7 @@ local function phishing_cb(task)
           if not sweight then sweight = weight end
           if #map > 0 then
             for _,rule in ipairs(map) do
-              local found,dn = is_url_in_map(rule.map, furl)
+              local found,_ = is_url_in_map(rule.map, furl)
               if found then
                 task:insert_result(rule.symbol, sweight, ptld .. '->' .. tld)
                 return true
