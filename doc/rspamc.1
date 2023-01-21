@@ -150,7 +150,15 @@ Bind to specified ip address
 .RE
 .TP
 .B \-R, \-\-human
-Output human readable report
+Output human readable report.
+The first line of the output contains the message score and three 
+threshold scores, in this format:
+.IP
+.nf
+\f[C]
+    score/greylist/addheader/reject,action=N:ACTION,spam=0|1,skipped=0|1
+\f[]
+.fi
 .RS
 .RE
 .TP

@@ -87,7 +87,8 @@ requires input.
 :	Bind to specified ip address
 
 -R, \--human
-:	Output human readable report
+:	Output human readable report. The first line of the output contains the message score and three threshold scores, in this format:
+:           score/greylist/addheader/reject,action=N:ACTION,spam=0|1,skipped=0|1
 
 -j, \--json
 :	Output formatted JSON
