@@ -35,6 +35,7 @@ local generic_service_name = 'generic service'
 local domains = nil
 local phishing_exceptions_maps = {}
 local anchor_exceptions_maps = {}
+local strict_domains_maps = {}
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
@@ -304,15 +305,16 @@ local function phishing_cb(task)
           if not sweight then sweight = weight end
           if #map > 0 then
             for _,rule in ipairs(map) do
-              local found,_ = is_url_in_map(rule.map, furl)
+              local found,dn = is_url_in_map(rule.map, furl)
               if found then
-                task:insert_result(rule.symbol, sweight, ptld .. '->' .. tld)
+                task:insert_result(rule.symbol, sweight, string.format("%s->%s:%s", ptld, tld, dn))
                 return true
               end
             end
           end
         end
 
+        found_in_map(strict_domains_maps, purl, 1.0)
         if not found_in_map(anchor_exceptions_maps) then
           if not found_in_map(phishing_exceptions_maps, purl, 1.0) then
             if domains then
@@ -566,4 +568,5 @@ if opts then
   end
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
   phishing_map('exceptions', anchor_exceptions_maps, id)
+  phishing_map('strict_domains', strict_domains_maps, id)
 end
