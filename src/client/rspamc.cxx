@@ -834,7 +834,7 @@ rspamc_print_indented_line(FILE *out, std::string_view line) -> void
 	using namespace std::literals;
 
 	constexpr const auto whitespace = " \f\n\r\t\v"sv;
-	constexpr const auto break_begin = " \f\n\r\t\v?.,;\"'<({[~!@#$%^&*+:-_=/\\|"sv;
+	constexpr const auto break_begin = " \f\n\r\t\v?,;\"'<({[~!@#$%^&*+:-=/\\|"sv;
 	constexpr const auto break_end = " \f\n\r\t\v?.,;\"']})>~!@#$%^&*+:-_=/\\|"sv;
 
 	for (size_t pos = 0; pos < line.size(); ) {
