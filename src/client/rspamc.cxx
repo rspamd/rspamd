@@ -847,6 +847,10 @@ rspamc_print_indented_line(FILE *out, std::string_view line) -> void
 				suffix = suffix.substr(delim_pos + 1);
 			}
 			else {
+				/* Check if we can include one last word */
+				if (delim_pos == std::string_view::npos && word_len + suffix.size() < split_len) {
+					word_len += suffix.size();
+				}
 				break;
 			}
 		}
