@@ -831,41 +831,29 @@ rspamc_print_indented_line(FILE *out, std::string_view line) -> void
 {
 	static_assert(maxlen > 0, "maxlen must be > 0");
 	static_assert(maxlen > indent, "maxlen must be more than indent");
+	using namespace std::literals;
+
+	constexpr const auto whitespace = " \f\n\r\t\v"sv;
+	constexpr const auto break_begin = " \f\n\r\t\v?.,;\"'<({[~!@#$%^&*+:-_=/\\|"sv;
+	constexpr const auto break_end = " \f\n\r\t\v?.,;\"']})>~!@#$%^&*+:-_=/\\|"sv;
 
 	for (size_t pos = 0; pos < line.size(); ) {
-		/*
-		 * First, find the longest sequence of words, delimited by space of punctuation,
-		 * and adjust `maxlen` if needed
-		 */
-		auto split_len = pos ? (maxlen-indent) : maxlen;
-		auto word_len = 0ul;
-		auto suffix = line.substr(pos);
-		for (;;) {
-			auto delim_pos = suffix.find_first_of(" \t,;[]():");
-			if (word_len + delim_pos + 1 < split_len && delim_pos != std::string_view::npos && delim_pos < suffix.size()) {
-				word_len += delim_pos + 1;
-				suffix = suffix.substr(delim_pos + 1);
-			}
-			else {
-				/* Check if we can include one last word */
-				if (delim_pos == std::string_view::npos && word_len + suffix.size() < split_len) {
-					word_len += suffix.size();
-				}
-				break;
+		auto len = pos ? (maxlen-indent) : maxlen;
+		auto s = line.substr(pos, len);
+		if (s.size() == len && // is string long enough?
+			(pos + s.size()) < line.size() && // reached EOL?
+			line.find_first_of(break_begin, pos + s.size()) != 0 // new word next?
+			) {
+			auto wrap_at = s.find_last_of(break_end);
+			if (wrap_at != std::string_view::npos) {
+				s = line.substr(pos, wrap_at + 1);
 			}
 		}
-
-		if (word_len > 0 && word_len < split_len && line.size() + pos > split_len) {
-			split_len = word_len;
-		}
-
-		auto s = line.substr(pos, split_len);
 		if (indent && pos) {
 			fmt::print(out, "{:>{}}", " ", indent);
 		}
-
 		fmt::print(out, "{}\n", s);
-		pos += s.size();
+		pos = line.find_first_not_of(whitespace, pos + s.size()); //skip leading whitespace
 	}
 }
 
