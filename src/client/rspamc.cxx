@@ -825,6 +825,46 @@ add_options(GQueue *opts)
 	}
 }
 
+template<std::size_t maxlen, std::size_t indent>
+static auto
+rspamc_print_indented_line(FILE *out, std::string_view line) -> void
+{
+	static_assert(maxlen > 0, "maxlen must be > 0");
+	static_assert(maxlen > indent, "maxlen must be more than indent");
+
+	for (size_t pos = 0; pos < line.size(); ) {
+		/*
+		 * First, find the longest sequence of words, delimited by space of punctuation,
+		 * and adjust `maxlen` if needed
+		 */
+		auto split_len = pos ? (maxlen-indent) : maxlen;
+		auto word_len = 0ul;
+		auto suffix = line.substr(pos);
+		for (;;) {
+			auto delim_pos = suffix.find_first_of(" \t,;[]():");
+			if (word_len + delim_pos + 1 < split_len && delim_pos != std::string_view::npos && delim_pos < suffix.size()) {
+				word_len += delim_pos + 1;
+				suffix = suffix.substr(delim_pos + 1);
+			}
+			else {
+				break;
+			}
+		}
+
+		if (word_len > 0 && word_len < split_len && line.size() + pos > split_len) {
+			split_len = word_len;
+		}
+
+		auto s = line.substr(pos, split_len);
+		if (indent && pos) {
+			fmt::print(out, "{:>{}}", " ", indent);
+		}
+
+		fmt::print(out, "{}\n", s);
+		pos += s.size();
+	}
+}
+
 static void
 rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
 {
@@ -870,43 +910,7 @@ rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
 		line += '\n';
 	}
 
-	auto print_indented_line = [&](size_t maxlen, size_t indent) {
-		if (maxlen < 1 || maxlen < indent) {
-			return;
-		}
-		for (size_t pos = 0; pos < line.size(); ) {
-			/*
-			 * First, find the longest sequence of words, delimited by space of punctuation,
-			 * and adjust `maxlen` if needed
-			 */
-			auto split_len = pos ? (maxlen-indent) : maxlen;
-			auto word_len = 0;
-			auto suffix = std::string_view(line).substr(pos);
-			for (;;) {
-				auto delim_pos = suffix.find_first_of(" \t,;[]():");
-				if (word_len + delim_pos + 1 < split_len && delim_pos != std::string_view::npos && delim_pos < suffix.size()) {
-					word_len += delim_pos + 1;
-					suffix = suffix.substr(delim_pos + 1);
-				}
-				else {
-					break;
-				}
-			}
-
-			if (word_len > 0 && word_len < split_len && line.size() + pos > split_len) {
-				split_len = word_len;
-			}
-
-			auto s = std::string_view(line).substr(pos, split_len);
-			if (indent && pos) {
-				fmt::print(out, "{:>{}}", " ", indent);
-			}
-			fmt::print(out, "{}\n", s);
-			pos += s.size();
-		}
-	};
-
-	print_indented_line(78, 28);
+	rspamc_print_indented_line<78, 28>(out, line);
 }
 
 static void
@@ -1164,11 +1168,7 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 
 		if (humanreport) {
 			if (emitted && strcmp(emitted, "[]") != 0) {
-				auto folded_line = rspamd_header_value_fold("Domains found: ", sizeof("Domains found: ") - 1,
-					emitted, strlen(emitted), 78,
-					RSPAMD_TASK_NEWLINES_LF, nullptr);
-				fmt::print("Domains found: {}\n", folded_line->str);
-				g_string_free(folded_line, true);
+				rspamc_print_indented_line<78, 4>(out, fmt::format("Domains found: {}", emitted));
 			}
 		}
 		else {
@@ -1190,11 +1190,7 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 
 		if (humanreport) {
 			if (emitted && strcmp(emitted, "[]") != 0) {
-				auto folded_line = rspamd_header_value_fold("Emails found: ", sizeof("Emails found: ") - 1,
-					emitted, strlen(emitted), 78,
-					RSPAMD_TASK_NEWLINES_LF, nullptr);
-				fmt::print("Emails found: {}\n", folded_line->str);
-				g_string_free(folded_line, true);
+				rspamc_print_indented_line<78, 4>(out, fmt::format("Emails found: {}", emitted));
 			}
 		}
 		else {
