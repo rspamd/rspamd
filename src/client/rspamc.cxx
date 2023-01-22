@@ -834,15 +834,15 @@ rspamc_print_indented_line(FILE *out, std::string_view line) -> void
 	using namespace std::literals;
 
 	constexpr const auto whitespace = " \f\n\r\t\v"sv;
-	constexpr const auto break_begin = " \f\n\r\t\v?,;\"'<({[~!@#$%^&*+:-=/\\|"sv;
-	constexpr const auto break_end = " \f\n\r\t\v?.,;\"']})>~!@#$%^&*+:-_=/\\|"sv;
+	constexpr const auto break_begin = " \f\n\r\t\v?,;<({[~!#$%^&*+:=/\\|"sv;
+	constexpr const auto break_end = " \f\n\r\t\v?,;]})>~!#$%^&*+:_=/\\|"sv;
 
 	for (size_t pos = 0; pos < line.size(); ) {
 		auto len = pos ? (maxlen-indent) : maxlen;
 		auto s = line.substr(pos, len);
 		if (s.size() == len && // is string long enough?
 			(pos + s.size()) < line.size() && // reached EOL?
-			line.find_first_of(break_begin, pos + s.size()) != 0 // new word next?
+			break_begin.find_first_of( line.at(pos + s.size())) == std::string_view::npos // new word next?
 			) {
 			auto wrap_at = s.find_last_of(break_end);
 			if (wrap_at != std::string_view::npos) {
@@ -897,9 +897,6 @@ rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
 			}
 		}
 		line += ']';
-	}
-	else if (desc == nullptr) {
-		line += '\n';
 	}
 
 	rspamc_print_indented_line<78, 28>(out, line);
