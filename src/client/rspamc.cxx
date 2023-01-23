@@ -938,7 +938,7 @@ static void
 rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 {
 	int got_scores = 0;
-	bool is_spam = false, is_skipped = false;
+	bool is_spam = false;
 	double score = 0, required_score = 0, greylist_score =0, addheader_score = 0;
 
 	auto print_protocol_string = [&](const char *ucl_name, const char *output_message) {
@@ -1054,18 +1054,14 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	}
 
 	if (humanreport) {
-		/* XXX: why checkv2 does not provide "is_spam"? */
-		elt = ucl_object_lookup(obj, "is_spam");
-		if (elt) {
-			is_spam = ucl_object_toboolean(elt);
-		}
+		auto is_skipped = 0;
 
 		elt = ucl_object_lookup(obj, "is_skipped");
-		if (elt) {
-			is_skipped = ucl_object_toboolean(elt);
+		if (elt && ucl_object_toboolean(elt)) {
+			is_skipped = 1;
 		}
 
-		fmt::print(out, ",spam={},skipped={}\n", is_spam ? 1 : 0, is_skipped ? 1 : 0);
+		fmt::print(out, ",spam={},skipped={}\n", is_spam ? 1 : 0, is_skipped);
 	}
 	else if (got_scores == 2) {
 		fmt::print(out,
