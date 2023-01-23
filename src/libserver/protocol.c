@@ -1239,6 +1239,16 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 			ucl_object_fromdouble (0.0), "score", 0, false);
 	}
 
+	struct rspamd_action *taction = rspamd_config_get_action_by_type (task->cfg, METRIC_ACTION_GREYLIST);
+	ucl_object_insert_key (obj,
+			ucl_object_fromdouble ((!taction || isnan(taction->threshold)) ? 0.0 : taction->threshold),
+			"greylist_score", 0, false);
+
+	taction = rspamd_config_get_action_by_type (task->cfg, METRIC_ACTION_ADD_HEADER);
+	ucl_object_insert_key (obj,
+			ucl_object_fromdouble ((!taction || isnan(taction->threshold)) ? 0.0 : taction->threshold),
+			"addheader_score", 0, false);
+
 	ucl_object_insert_key (obj,
 			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
 			"required_score", 0, false);

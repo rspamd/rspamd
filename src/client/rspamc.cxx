@@ -969,13 +969,11 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		got_scores++;
 	}
 
-	/* XXX: greylist_score is not yet in checkv2 */
 	elt = ucl_object_lookup(obj, "greylist_score");
 	if (elt) {
 		greylist_score = ucl_object_todouble(elt);
 	}
 
-	/* XXX: addheader_score is not yet in checkv2 */
 	elt = ucl_object_lookup(obj, "addheader_score");
 	if (elt) {
 		addheader_score = ucl_object_todouble(elt);
@@ -1054,12 +1052,6 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	}
 
 	if (humanreport) {
-		/* XXX: why checkv2 does not provide "is_spam"? */
-		elt = ucl_object_lookup(obj, "is_spam");
-		if (elt) {
-			is_spam = ucl_object_toboolean(elt);
-		}
-
 		elt = ucl_object_lookup(obj, "is_skipped");
 		if (elt) {
 			is_skipped = ucl_object_toboolean(elt);
