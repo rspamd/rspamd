@@ -969,17 +969,20 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		got_scores++;
 	}
 
-	/* XXX: greylist_score is not yet in checkv2 */
-	elt = ucl_object_lookup(obj, "greylist_score");
-	if (elt) {
-		greylist_score = ucl_object_todouble(elt);
+	const auto *thresholds_obj = ucl_object_lookup(obj, "thresholds");
+
+	if (thresholds_obj && ucl_object_type(thresholds_obj) == UCL_OBJECT) {
+		const auto *greylist_obj = ucl_object_lookup(thresholds_obj, "greylist");
+		if (greylist_obj) {
+			greylist_score = ucl_object_todouble(greylist_obj);
+		}
+
+		const auto *add_header_obj = ucl_object_lookup(thresholds_obj, "add header");
+		if (add_header_obj) {
+			addheader_score = ucl_object_todouble(add_header_obj);
+		}
 	}
 
-	/* XXX: addheader_score is not yet in checkv2 */
-	elt = ucl_object_lookup(obj, "addheader_score");
-	if (elt) {
-		addheader_score = ucl_object_todouble(elt);
-	}
 
 	if (humanreport) {
 		fmt::print(out,
