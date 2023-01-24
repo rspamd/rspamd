@@ -840,8 +840,7 @@ rspamc_print_indented_line(FILE *out, std::string_view line) -> void
 	for (size_t pos = 0; pos < line.size(); ) {
 		auto len = pos ? (maxlen-indent) : maxlen;
 		auto s = line.substr(pos, len);
-		if (s.size() == len && // is string long enough?
-			(pos + s.size()) < line.size() && // reached EOL?
+		if ((pos + s.size()) < line.size() && // reached EOL?
 			break_begin.find_first_of( line.at(pos + s.size())) == std::string_view::npos // new word next?
 			) {
 			auto wrap_at = s.find_last_of(break_end);
