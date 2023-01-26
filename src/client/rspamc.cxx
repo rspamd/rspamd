@@ -971,14 +971,19 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	const auto *thresholds_obj = ucl_object_lookup(obj, "thresholds");
 
 	if (thresholds_obj && ucl_object_type(thresholds_obj) == UCL_OBJECT) {
-		const auto *greylist_obj = ucl_object_lookup(thresholds_obj, "greylist");
-		if (greylist_obj) {
-			greylist_score = ucl_object_todouble(greylist_obj);
+		const auto *action_obj = ucl_object_lookup(thresholds_obj, "greylist");
+		if (action_obj) {
+			greylist_score = ucl_object_todouble(action_obj);
 		}
 
-		const auto *add_header_obj = ucl_object_lookup(thresholds_obj, "add header");
-		if (add_header_obj) {
-			addheader_score = ucl_object_todouble(add_header_obj);
+		action_obj = ucl_object_lookup(thresholds_obj, "add header");
+		if (action_obj) {
+			addheader_score = ucl_object_todouble(action_obj);
+		}
+
+		action_obj = ucl_object_lookup(thresholds_obj, "reject");
+		if (action_obj) {
+			required_score = ucl_object_todouble(action_obj);
 		}
 	}
 
@@ -1075,7 +1080,7 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 	if (humanreport) {
 		fmt::print(out, "Content analysis details:   ({} points, {} required)\n\n",
 			emphasis_argument(score, 2),
-			emphasis_argument(required_score, 2));
+			emphasis_argument(addheader_score, 2));
 		fmt::print(out, " pts rule name              description\n");
 		fmt::print(out, "---- ---------------------- --------------------------------------------------\n");
 	}
