@@ -43,7 +43,7 @@ typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
 
 typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
 
-typedef gboolean (*rspamd_fuzzy_periodic_cb) (void *ud);
+typedef bool (*rspamd_fuzzy_periodic_cb) (void *ud);
 
 /**
  * Open fuzzy backend
