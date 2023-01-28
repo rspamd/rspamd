@@ -92,13 +92,13 @@ ADD_SUBDIRECTORY(client)
 ADD_SUBDIRECTORY(rspamadm)
 
 SET(RSPAMDSRC	controller.c
-				fuzzy_storage.c
+				fuzzy_storage.cxx
 				rspamd.c
 				worker.c
 				rspamd_proxy.c)
 
 SET(PLUGINSSRC  plugins/regexp.c
-		plugins/chartable.cxx
+				plugins/chartable.cxx
 				plugins/fuzzy_check.c
 				plugins/dkim_check.c
 				libserver/rspamd_control.c)
