@@ -631,7 +631,8 @@ rspamd_fuzzy_process_updates_queue(struct rspamd_fuzzy_storage_ctx *ctx,
 		auto cbdata = new rspamd_updates_cbdata{std::max(ctx->updates_pending->size(), std::size_t{1024}), ctx, source, final};
 		std::swap(ctx->updates_pending, cbdata->updates_pending);
 		rspamd_fuzzy_backend_process_updates(ctx->backend,
-			cbdata->updates_pending,
+			cbdata->updates_pending->data(),
+			cbdata->updates_pending->size(),
 			source, rspamd_fuzzy_updates_cb, (void *)cbdata);
 		return true;
 	}
