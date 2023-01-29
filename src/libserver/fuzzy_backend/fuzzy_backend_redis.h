@@ -38,7 +38,8 @@ void rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 									   void *subr_ud);
 
 void rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
-										GArray *updates, const gchar *src,
+										struct fuzzy_peer_cmd *peer_cmd, gsize ar_len,
+										const gchar *src,
 										rspamd_fuzzy_update_cb cb, void *ud,
 										void *subr_ud);
 

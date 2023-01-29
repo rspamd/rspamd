@@ -35,7 +35,7 @@ static void rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_check_cb cb, void *ud,
 		void *subr_ud);
 static void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
-		GArray *updates, const gchar *src,
+		struct fuzzy_peer_cmd *peer_cmd, gsize ar_len, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud);
 static void rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
@@ -54,23 +54,24 @@ static void rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 
 struct rspamd_fuzzy_backend_subr {
 	void* (*init) (struct rspamd_fuzzy_backend *bk, const ucl_object_t *obj,
-			struct rspamd_config *cfg,
-			GError **err);
+				   struct rspamd_config *cfg,
+				   GError **err);
 	void (*check) (struct rspamd_fuzzy_backend *bk,
-			const struct rspamd_fuzzy_cmd *cmd,
-			rspamd_fuzzy_check_cb cb, void *ud,
-			void *subr_ud);
+				   const struct rspamd_fuzzy_cmd *cmd,
+				   rspamd_fuzzy_check_cb cb, void *ud,
+				   void *subr_ud);
 	void (*update) (struct rspamd_fuzzy_backend *bk,
-			GArray *updates, const gchar *src,
-			rspamd_fuzzy_update_cb cb, void *ud,
-			void *subr_ud);
+					struct fuzzy_peer_cmd *peer_cmd, gsize ar_len,
+					const gchar *src,
+					rspamd_fuzzy_update_cb cb, void *ud,
+					void *subr_ud);
 	void (*count) (struct rspamd_fuzzy_backend *bk,
-			rspamd_fuzzy_count_cb cb, void *ud,
-			void *subr_ud);
+				   rspamd_fuzzy_count_cb cb, void *ud,
+				   void *subr_ud);
 	void (*version) (struct rspamd_fuzzy_backend *bk,
-			const gchar *src,
-			rspamd_fuzzy_version_cb cb, void *ud,
-			void *subr_ud);
+					 const gchar *src,
+					 rspamd_fuzzy_version_cb cb, void *ud,
+					 void *subr_ud);
 	const gchar* (*id) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*periodic) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
 	void (*close) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
@@ -154,9 +155,10 @@ rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 
 static void
 rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
-		GArray *updates, const gchar *src,
-		rspamd_fuzzy_update_cb cb, void *ud,
-		void *subr_ud)
+									struct fuzzy_peer_cmd *peer_cmd, gsize ar_len,
+									const gchar *src,
+									rspamd_fuzzy_update_cb cb, void *ud,
+									void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
 	gboolean success = FALSE;
@@ -167,8 +169,8 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 	guint nupdates = 0, nadded = 0, ndeleted = 0, nextended = 0, nignored = 0;
 
 	if (rspamd_fuzzy_backend_sqlite_prepare_update (sq, src)) {
-		for (i = 0; i < updates->len; i ++) {
-			io_cmd = &g_array_index (updates, struct fuzzy_peer_cmd, i);
+		for (i = 0; i < ar_len; i ++) {
+			io_cmd = &peer_cmd[i];
 
 			if (io_cmd->is_shingle) {
 				cmd = &io_cmd->cmd.shingle.basic;
@@ -347,18 +349,19 @@ rspamd_fuzzy_digest_equal (gconstpointer v, gconstpointer v2)
 	return memcmp (v, v2, rspamd_cryptobox_HASHBYTES) == 0;
 }
 
+KHASH_INIT(fuzzy_dedup, guchar *, struct fuzzy_peer_cmd *, 1, rspamd_fuzzy_digest_hash, rspamd_fuzzy_digest_equal);
+
 static void
-rspamd_fuzzy_backend_deduplicate_queue (GArray *updates)
+rspamd_fuzzy_backend_deduplicate_queue (struct fuzzy_peer_cmd *peer_cmd, gsize ar_len)
 {
-	GHashTable *seen = g_hash_table_new (rspamd_fuzzy_digest_hash,
-			rspamd_fuzzy_digest_equal);
+	khash_t(fuzzy_dedup) *seen = kh_init(fuzzy_dedup);
 	struct fuzzy_peer_cmd *io_cmd, *found;
 	struct rspamd_fuzzy_cmd *cmd;
 	guchar *digest;
 	guint i;
 
-	for (i = 0; i < updates->len; i ++) {
-		io_cmd = &g_array_index (updates, struct fuzzy_peer_cmd, i);
+	for (i = 0; i < ar_len; i ++) {
+		io_cmd = &peer_cmd[i];
 
 		if (io_cmd->is_shingle) {
 			cmd = &io_cmd->cmd.shingle.basic;
@@ -369,15 +372,21 @@ rspamd_fuzzy_backend_deduplicate_queue (GArray *updates)
 
 		digest = cmd->digest;
 
-		found = g_hash_table_lookup (seen, digest);
+		khiter_t k;
 
-		if (found == NULL) {
+		k = kh_get(fuzzy_dedup, seen, digest);
+
+		if (k == kh_end(seen)) {
 			/* Add to the seen list, if not a duplicate (huh?) */
 			if (cmd->cmd != FUZZY_DUP) {
-				g_hash_table_insert (seen, digest, io_cmd);
+				int _ret;
+				k = kh_put(fuzzy_dedup, seen, digest, &_ret);
+				kh_value(seen, k) = io_cmd;
 			}
 		}
 		else {
+			found = kh_value(seen, k);
+
 			if (found->cmd.normal.flag != cmd->flag) {
 				/* TODO: deal with flags better at some point */
 				continue;
@@ -393,7 +402,7 @@ rspamd_fuzzy_backend_deduplicate_queue (GArray *updates)
 				}
 				else if (found->cmd.normal.cmd == FUZZY_REFRESH) {
 					/* Seen refresh command, remove it as write has higher priority */
-					g_hash_table_replace (seen, digest, io_cmd);
+					kh_value(seen, k) = io_cmd;
 					found->cmd.normal.cmd = FUZZY_DUP;
 				}
 				else if (found->cmd.normal.cmd == FUZZY_DEL) {
@@ -417,7 +426,7 @@ rspamd_fuzzy_backend_deduplicate_queue (GArray *updates)
 				break;
 			case FUZZY_DEL:
 				/* Delete has priority over all other commands */
-				g_hash_table_replace (seen, digest, io_cmd);
+				kh_value(seen, k) = io_cmd;
 				found->cmd.normal.cmd = FUZZY_DUP;
 				break;
 			default:
@@ -426,20 +435,20 @@ rspamd_fuzzy_backend_deduplicate_queue (GArray *updates)
 		}
 	}
 
-	g_hash_table_unref (seen);
+	kh_destroy(fuzzy_dedup, seen);
 }
 
 void
 rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
-		GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+									  struct fuzzy_peer_cmd *peer_cmd, gsize ar_len,
+									  const gchar *src, rspamd_fuzzy_update_cb cb,
 		void *ud)
 {
 	g_assert (bk != NULL);
-	g_assert (updates != NULL);
 
-	if (updates) {
-		rspamd_fuzzy_backend_deduplicate_queue (updates);
-		bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
+	if (peer_cmd) {
+		rspamd_fuzzy_backend_deduplicate_queue (peer_cmd, ar_len);
+		bk->subr->update (bk, peer_cmd, ar_len, src, cb, ud, bk->subr_ud);
 	}
 	else if (cb) {
 		cb (TRUE, 0, 0, 0, 0, ud);

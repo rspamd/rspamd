@@ -1413,9 +1413,9 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 
 void
 rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
-		GArray *updates, const gchar *src,
-		rspamd_fuzzy_update_cb cb, void *ud,
-		void *subr_ud)
+								   struct fuzzy_peer_cmd *peer_cmd, gsize ar_len, const gchar *src,
+								   rspamd_fuzzy_update_cb cb, void *ud,
+								   void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_redis *backend = subr_ud;
 	struct rspamd_fuzzy_redis_session *session;
@@ -1465,8 +1465,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 	nargs = 4;
 
-	for (i = 0; i < updates->len; i ++) {
-		io_cmd = &g_array_index (updates, struct fuzzy_peer_cmd, i);
+	for (i = 0; i < ar_len; i ++) {
+		io_cmd = &peer_cmd[i];
 
 		if (io_cmd->is_shingle) {
 			cmd = &io_cmd->cmd.shingle.basic;
@@ -1560,8 +1560,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		/* Now split the rest of commands in packs and emit them command by command */
 		cur_shift = 1;
 
-		for (i = 0; i < updates->len; i ++) {
-			io_cmd = &g_array_index (updates, struct fuzzy_peer_cmd, i);
+		for (i = 0; i < ar_len; i ++) {
+			io_cmd = &peer_cmd[i];
 
 			if (!rspamd_fuzzy_update_append_command (bk, session, io_cmd,
 					&cur_shift)) {
