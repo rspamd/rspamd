@@ -344,7 +344,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	if (cfg->lua_state && cfg->own_lua_state) {
 		lua_thread_pool_free (cfg->lua_thread_pool);
-		lua_close (cfg->lua_state);
+		rspamd_lua_close (cfg->lua_state);
 	}
 
 	if (cfg->redis_pool) {

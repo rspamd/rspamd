@@ -93,13 +93,6 @@ static inline void lua_rawsetp (lua_State *L, int i, const void *p) {
 extern const luaL_reg null_reg[];
 
 #define RSPAMD_LUA_API_VERSION 12
-
-/* Locked lua state with mutex */
-struct lua_locked_state {
-	lua_State *L;
-	rspamd_mutex_t *m;
-};
-
 /**
 * Lua IP address structure
 */
@@ -225,6 +218,12 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
 */
 lua_State *rspamd_lua_init (bool wipe_mem);
 
+/**
+ * Close lua_state and free remainders
+ * @param L
+ */
+void rspamd_lua_close (lua_State *L);
+
 void rspamd_lua_start_gc (struct rspamd_config *cfg);
 
 /**
@@ -244,15 +243,6 @@ rspamd_plugins_table_push_elt (lua_State *L, const gchar *field_name,
 gboolean
 rspamd_init_lua_filters (struct rspamd_config *cfg, bool force_load, bool strict);
 
-/**
-* Initialize new locked lua_State structure
-*/
-struct lua_locked_state *rspamd_init_lua_locked (struct rspamd_config *cfg);
-
-/**
-* Free locked state structure
-*/
-void rspamd_free_lua_locked (struct lua_locked_state *st);
 
 /**
 * Push lua ip address
