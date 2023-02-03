@@ -69,20 +69,6 @@ static inline int lua_absindex (lua_State *L, int i) {
 }
 #endif
 
-static inline int lua_rawgetp (lua_State *L, int i, const void *p) {
-	int abs_i = lua_absindex(L, i);
-	lua_pushlightuserdata(L, (void*)p);
-	lua_rawget(L, abs_i);
-	return lua_type(L, -1);
-}
-
-static inline void lua_rawsetp (lua_State *L, int i, const void *p) {
-	int abs_i = lua_absindex(L, i);
-	luaL_checkstack(L, 1, "not enough stack slots");
-	lua_pushlightuserdata(L, (void*)p);
-	lua_insert(L, -2);
-	lua_rawset(L, abs_i);
-}
 #endif
 
 /* Interface definitions */
