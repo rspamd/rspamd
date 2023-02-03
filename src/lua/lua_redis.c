@@ -679,6 +679,11 @@ lua_redis_callback_sync (redisAsyncContext *ac, gpointer r, gpointer priv)
 				ctx->thread = NULL;
 
 				results = lua_redis_push_results(ctx, thread->lua_state);
+
+				if (ud->item) {
+					rspamd_symcache_set_cur_item (ud->task, ud->item);
+				}
+
 				lua_thread_resume (thread, results);
 				lua_redis_cleanup_events(ctx);
 			}
