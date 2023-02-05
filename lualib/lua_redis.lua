@@ -39,6 +39,13 @@ local common_schema = ts.shape {
 }
 
 local config_schema =
+  -- Allow separate read/write servers to allow usage in the `extra_fields`
+  ts.shape({
+    read_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_fields = common_schema}) +
+  ts.shape({
+    write_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_fields = common_schema}) +
   ts.shape({
     read_servers = ts.string + ts.array_of(ts.string),
     write_servers = ts.string + ts.array_of(ts.string),
