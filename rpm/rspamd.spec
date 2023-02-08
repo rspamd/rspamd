@@ -58,9 +58,10 @@ lua.
 %else
 %{__cmake} \
 %endif
-        -DCMAKE_BUILD_TYPE="Release" \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_C_FLAGS_RELEASE="%{optflags}" \
         -DCMAKE_CXX_FLAGS_RELEASE="%{optflags}" \
+        -DENABLE_LTO=ON \
 %if 0%{?fedora} >= 36
         -DLINKER_NAME=/usr/bin/ld.bfd \
 %endif
@@ -90,7 +91,7 @@ lua.
 %endif
         -DENABLE_BLAS=ON
 
-%{__make} %{?jobs:-j%jobs}
+%{__make} %{?_smp_mflags}
 
 %install
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
