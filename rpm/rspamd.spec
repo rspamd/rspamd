@@ -26,7 +26,9 @@ BuildRequires:    libunwind-devel
 %ifarch x86_64 amd64
 BuildRequires:    hyperscan-devel
 BuildRequires:    jemalloc-devel
-BuildRequires:    luajit-devel
+%endif
+%if 0%{getenv:LUAJIT}
+BuildRequires:    git
 %else
 BuildRequires:    lua-devel
 %endif
@@ -51,13 +53,23 @@ lua.
 
 %prep
 %setup -q -n rspamd-%{version}
+%if 0%{getenv:LUAJIT}
+rm -fr %{_builddir}/luajit-src || true
+rm -fr %{_builddir}/luajit-build || true
+git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
+%endif
 
 %build
-%if 0%{?el7}
-%{__cmake3} \
-%else
-%{__cmake} \
+%if 0%{getenv:LUAJIT}
+pushd %{_builddir}/luajit-src && make clean && make %{?_smp_mflags} CC="gcc -fPIC" PREFIX=%{_builddir}/luajit-build && make install PREFIX=%{_builddir}/luajit-build ; popd
+rm -f %{_builddir}/luajit-build/lib/*.so || true
 %endif
+%if 0%{?el7}
+%{cmake3} \
+%else
+%{cmake} \
+%endif
+	-B . \
         -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_C_FLAGS_RELEASE="%{optflags}" \
         -DCMAKE_CXX_FLAGS_RELEASE="%{optflags}" \
@@ -87,14 +99,16 @@ lua.
 %endif
 %ifarch x86_64 amd64
         -DENABLE_JEMALLOC=ON \
+%endif
+%if 0%{getenv:LUAJIT}
         -DENABLE_LUAJIT=ON \
+	-DLUA_ROOT=%{_builddir}/luajit-build \
 %endif
         -DENABLE_BLAS=ON
-
-%{__make} %{?_smp_mflags}
+make %{?_smp_mflags}
 
 %install
-%{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
+%make_install
 %{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_presetdir}/80-rspamd.preset
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/log/rspamd
