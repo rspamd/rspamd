@@ -18,14 +18,21 @@ BuildRequires:    gcc-c++
 %endif
 BuildRequires:    file-devel
 BuildRequires:    glib2-devel
-BuildRequires:    hyperscan-devel
-BuildRequires:    jemalloc-devel
 BuildRequires:    lapack-devel
 BuildRequires:    libevent-devel
 BuildRequires:    libicu-devel
 BuildRequires:    libsodium-devel
 BuildRequires:    libunwind-devel
+%ifarch x86_64 amd64
+BuildRequires:    hyperscan-devel
+BuildRequires:    jemalloc-devel
 BuildRequires:    luajit-devel
+%else
+BuildRequires:    lua-devel
+%endif
+%ifarch arm64 aarch64
+BuildRequires:    vectorscan-devel
+%endif
 BuildRequires:    openblas-devel
 BuildRequires:    openssl-devel
 BuildRequires:    pcre2-devel
@@ -43,7 +50,7 @@ with big amount of mail and can be easily extended with own filters written in
 lua.
 
 %prep
-%setup -q
+%setup -q -n rspamd-%{version}
 
 %build
 %if 0%{?el7}
@@ -74,9 +81,13 @@ lua.
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
         -DENABLE_LIBUNWIND=ON \
+%ifarch x86_64 amd64 arm64 aarch64
         -DENABLE_HYPERSCAN=ON \
+%endif
+%ifarch x86_64 amd64
         -DENABLE_JEMALLOC=ON \
         -DENABLE_LUAJIT=ON \
+%endif
         -DENABLE_BLAS=ON
 
 %{__make} %{?jobs:-j%jobs}
