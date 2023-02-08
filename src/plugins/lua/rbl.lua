@@ -1298,6 +1298,7 @@ rspamd_config:register_symbol{
   callback = rbl_callback_white,
   name = 'RBL_CALLBACK_WHITE',
   flags = 'nice,empty,no_squeeze',
+  groups = {'rbl'},
   augmentations = {string.format("timeout=%f", rspamd_config:get_dns_timeout() or 0.0)},
 }
 
@@ -1306,6 +1307,7 @@ rspamd_config:register_symbol{
   callback = rbl_callback_fin,
   name = 'RBL_CALLBACK',
   flags = 'empty,no_squeeze',
+  groups = {'rbl'},
   augmentations = {string.format("timeout=%f", rspamd_config:get_dns_timeout() or 0.0)},
 }
 
