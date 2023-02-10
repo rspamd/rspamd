@@ -5,7 +5,6 @@ name: default
 
 platform:
   os: linux
-  arch: amd64
 
 steps:
   - name: prepare
@@ -278,10 +277,10 @@ volumes:
     temp: {}
 
 trigger:
-  event: [push, tag, pull_request]
+  event: [push, tag, pull_request, custom]
 
 ---
 kind: signature
-hmac: c09067fc9552e2f761066dc409e386f950c52f9c1740157c427252a806c40871
+hmac: 4ff026a59ee31c1afc6e85690034d2ead4cc8274baf7099f4bd8d69e4045db97
 
 ...
