@@ -385,10 +385,10 @@ rspamd_config_get_module_opt (struct rspamd_config *cfg,
 	return res;
 }
 
-gchar
+gint
 rspamd_config_parse_flag (const gchar *str, guint len)
 {
-	gchar c;
+	gint c;
 
 	if (!str || !*str) {
 		return -1;
@@ -1795,9 +1795,7 @@ rspamd_config_is_enabled_from_ucl (rspamd_mempool_t *pool,
 				return ucl_object_toboolean(enabled);
 			}
 			else if (ucl_object_type(enabled) == UCL_STRING) {
-				gchar ret;
-
-				ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
+				gint ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
 
 				if (ret == 0) {
 					return FALSE;
@@ -1822,9 +1820,7 @@ rspamd_config_is_enabled_from_ucl (rspamd_mempool_t *pool,
 				return !ucl_object_toboolean(disabled);
 			}
 			else if (ucl_object_type(disabled) == UCL_STRING) {
-				gchar ret;
-
-				ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
+				gint ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
 
 				if (ret == 0) {
 					return TRUE;

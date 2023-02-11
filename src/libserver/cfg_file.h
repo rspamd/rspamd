@@ -557,7 +557,7 @@ const ucl_object_t *rspamd_config_get_module_opt (struct rspamd_config *cfg,
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
-gchar rspamd_config_parse_flag (const gchar *str, guint len);
+gint rspamd_config_parse_flag (const gchar *str, guint len);
 
 enum rspamd_post_load_options {
 	RSPAMD_CONFIG_INIT_URL = 1 << 0,

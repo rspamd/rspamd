@@ -331,8 +331,8 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 						if (page_size == -1) {
 							page_size = 4096;
 						}
-						posix_memalign(&buf, page_size, unserialized_size);
-						if (buf == nullptr) {
+						auto errcode = posix_memalign(&buf, page_size, unserialized_size);
+						if (errcode != 0 || buf == nullptr) {
 							return tl::make_unexpected(error {"Cannot allocate memory", errno, error_category::CRITICAL });
 						}
 
