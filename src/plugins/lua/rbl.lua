@@ -1041,6 +1041,7 @@ local function add_rbl(key, rbl, global_opts)
       id = rspamd_config:register_symbol{
         type = 'callback',
         callback = callback,
+        groups = {'rbl'},
         name = rbl.symbol .. '_CHECK',
         flags = table.concat(flags_tbl, ',')
       }
@@ -1067,6 +1068,7 @@ local function add_rbl(key, rbl, global_opts)
         type = 'callback',
         callback = callback,
         name = rbl.symbol,
+        groups = {'rbl'},
         group = 'rbl',
         score = 0,
         flags = table.concat(flags_tbl, ',')
