@@ -255,10 +255,10 @@ local function check_ip_setting(expected, ip)
   else
     if expected[2] ~= 0 then
       local nip = ip:apply_mask(expected[2])
-      if nip and nip:to_string() == expected[1]:to_string() then
+      if nip and nip:to_string() == expected[1] then
         return true
       end
-    elseif ip:to_string() == expected[1]:to_string() then
+    elseif ip:to_string() == expected[1] then
       return true
     end
   end
@@ -478,18 +478,18 @@ local function process_ip_condition(ip)
       local res = rspamd_ip.from_string(ip)
 
       if res:is_valid() then
-        out[1] = res
+        out[1] = res:to_string()
         out[2] = 0
       else
         -- It can still be a map
-        out[1] = res
+        out[1] = ip
       end
     else
       local res = rspamd_ip.from_string(string.sub(ip, 1, slash - 1))
       local mask = tonumber(string.sub(ip, slash + 1))
 
       if res:is_valid() then
-        out[1] = res
+        out[1] = res:to_string()
         out[2] = mask
       else
         rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
