@@ -510,21 +510,18 @@ local function rspamd_maybe_check_map(key, what)
   end
   if type(rspamd_maps) == "table" then
     local mn
-    if starts(what, "map:") then
-      mn = string.sub(what, 4)
-    elseif starts(what, "map://") then
-      mn = string.sub(what, 6)
+    if starts(key, "map:") then
+      mn = string.sub(key, 5)
+    elseif starts(key, "map://") then
+      mn = string.sub(key, 7)
     end
 
     if mn and rspamd_maps[mn] then
-      return rspamd_maps[mn]:get_key(key)
-    else
-      return what:lower() == key
+      return rspamd_maps[mn]:get_key(what)
     end
-  else
-    return what:lower() == key
   end
 
+  return what:lower() == key
 end
 
 exports.rspamd_maybe_check_map = rspamd_maybe_check_map
