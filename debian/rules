@@ -88,3 +88,5 @@ override_dh_fixperms:
 	dh_fixperms
 	chmod 750 $(CURDIR)/debian/rspamd/var/lib/rspamd
 	chmod 750 $(CURDIR)/debian/rspamd/var/log/rspamd
+	chmod 750 $(CURDIR)/debian/rspamd-asan/var/lib/rspamd
+	chmod 750 $(CURDIR)/debian/rspamd-asan/var/log/rspamd
