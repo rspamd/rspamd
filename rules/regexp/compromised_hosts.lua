@@ -211,4 +211,3 @@ reconf['WWW_DOT_DOMAIN'] = {
   score = 0.5,
   group = "compromised_hosts"
 }
-
