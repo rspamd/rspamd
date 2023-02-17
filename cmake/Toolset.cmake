@@ -10,6 +10,8 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
     SET (COMPILER_CLANG 1)
 endif()
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 SET (COMPILER_FAST_MATH "")
 if (ENABLE_FAST_MATH MATCHES "ON")
     # We need to keep nans and infinities, so cannot keep all fast math there
@@ -41,7 +43,11 @@ elseif (COMPILER_CLANG)
     if (CMAKE_C_COMPILER_VERSION VERSION_LESS ${CLANG_MINIMUM_VERSION})
         message (FATAL_ERROR "Clang version must be at least ${CLANG_MINIMUM_VERSION}.")
     endif ()
-    ADD_COMPILE_OPTIONS(-Wno-unused-command-line-argument)
+    # Hack to fix try_compile
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-command-line-argument")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-ignored-optimization-argument")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-ignored-optimization-argument")
     if (ENABLE_LIBCXX MATCHES "ON")
         # Use libc++ as libstdc++ is buggy in many cases
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
