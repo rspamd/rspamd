@@ -908,16 +908,16 @@ reconf['HAS_LIST_UNSUB'] = {
 
 reconf['HAS_GUC_PROXY_URI'] = {
   re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
-  description = 'Has googleusercontent.com proxy URI',
-  score = 0.01,
-  group = 'experimental'
+  description = 'Has googleusercontent.com proxy URL',
+  score = 1.0,
+  group = 'url'
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
   re = '/\\.google\\.com\\/url\\?/{url}i',
   description = 'Has google.com/url redirection',
-  score = 0.01,
-  group = 'experimental'
+  score = 1.0,
+  group = 'url'
 }
 
 reconf['XM_UA_NO_VERSION'] = {
