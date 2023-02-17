@@ -233,8 +233,8 @@ email.account.2gis.com
 email.mail.ostrovok.ru
 email.news.ostrovok.ru
 e.mail.ru
-em.digium.com
 emap.ws
+em.digium.com
 etdurl.com
 eweri.com
 exa.im

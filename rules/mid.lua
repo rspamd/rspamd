@@ -125,4 +125,3 @@ rspamd_config:register_symbol {
     end
   end
 }
-

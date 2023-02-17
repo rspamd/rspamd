@@ -153,4 +153,3 @@ rspamd_config.FORWARDED = {
   description = "Message was forwarded",
   group = "forwarding"
 }
-
