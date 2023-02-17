@@ -920,6 +920,13 @@ reconf['HAS_GOOGLE_REDIR'] = {
   group = 'experimental'
 }
 
+reconf['HAS_GOOGLE_FIREBASE_URL'] = {
+  re = '/\\.firebasestorage\\.googleapis\\.com\\//{url}i',
+  description = 'Contains firebasestorage.googleapis.com URL',
+  score = 0.01,
+  group = 'experimental'
+}
+
 reconf['XM_UA_NO_VERSION'] = {
   re = string.format('(!%s && !%s) && (%s || %s)',
       'X-Mailer=/https?:/H',
