@@ -6,10 +6,7 @@ Build-Depends: cmake,
                debhelper (>= 10),
                libcurl4-openssl-dev,
                libglib2.0-dev,
-               libhyperscan-dev [amd64 i386],
                libicu-dev,
-               libjemalloc-dev,
-               libluajit-5.1-dev [amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el] | liblua5.1-dev,
                libmagic-dev,
                libpcre2-dev,
                libsodium-dev,
@@ -26,11 +23,24 @@ Vcs-Browser: https://github.com/vstakhov/rspamd
 
 Package: rspamd
 Architecture: any
+Conflicts: rspamd-asan
+Provides: rspamd
 Depends: adduser, lsb-base, ca-certificates, ${misc:Depends}, ${shlibs:Depends}
 Description: Rapid spam filtering system
  Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
  with big amount of mail and can be easily extended with own filters written in
  Lua.
+
+Package: rspamd-asan
+Architecture: any
+Conflicts: rspamd
+Provides: rspamd
+Depends: adduser, lsb-base, ca-certificates, ${misc:Depends}, ${shlibs:Depends}
+Description: Rapid spam filtering system
+ Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
+ with big amount of mail and can be easily extended with own filters written in
+ Lua. This package is build with no compile optimisations and with ASAN library
+ to be used when there is a need to debug Rspamd.
 
 Package: rspamd-dbg
 Architecture: any
@@ -38,3 +48,10 @@ Section: debug
 Depends: rspamd (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: debugging symbols for rspamd
  This package contains the debugging symbols for rspamd.
+
+Package: rspamd-dbg-asan
+Architecture: any
+Section: debug
+Depends: rspamd-asan (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
+Description: debugging symbols for rspamd-asan
+ This package contains the debugging symbols for rspamd-asan.
