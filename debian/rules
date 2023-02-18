@@ -68,9 +68,9 @@ build_%:
 override_dh_strip: $(patsubst %,strip_%,$(FLAVORS))
 strip_%:
 	if [ "$*" = "asan" ]; then \
-		dh_strip --dbg-package=rspamd-dbg-asan ; \
+		dh_strip -prspamd-asan --dbg-package=rspamd-dbg-asan ; \
 	else \
-		dh_strip --dbg-package=rspamd-dbg ; \
+		dh_strip -prspamd --dbg-package=rspamd-dbg ; \
 	fi
 
 override_dh_makeshlibs:
@@ -80,8 +80,16 @@ override_dh_auto_install: $(patsubst %,install_%,$(FLAVORS))
 install_%:
 	if [ "$*" = "asan" ]; then \
 		cd $(builddir)$* && make install DESTDIR=../../../debian/rspamd-asan ; \
+		cd ../../../debian/rspamd-asan &&  mkdir -p var/lib/rspamd \
+																								 var/log/rspamd \
+																								 etc/rspamd/local.d \
+																								 etc/rspamd/override.d  ; \
 	else \
 		cd $(builddir)$* && make install DESTDIR=../../../debian/rspamd ; \
+		cd ../../../debian/rspamd &&  mkdir -p var/lib/rspamd \
+																								 var/log/rspamd \
+																								 etc/rspamd/local.d \
+																								 etc/rspamd/override.d  ; \
 	fi
 
 override_dh_fixperms:
