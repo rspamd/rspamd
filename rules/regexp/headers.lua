@@ -439,7 +439,7 @@ reconf['FORGED_MUA_OPERA_MSGID'] = {
 -- Detect forged Mozilla Mail/Thunderbird/Seamonkey/Postbox headers
 -- Mozilla based X-Mailer
 local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/H'
-local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Icedove)\\/)/H'
+local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Betterbird|Icedove)\\/)/H'
 local user_agent_seamonkey	= 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/H'
 local user_agent_postbox	= [[User-Agent=/^\s*Mozilla\/5\.0\s\([^)]+\)\sGecko\/\d+\sPostboxApp\/\d+(?:\.\d+){2,3}$/H]]
 local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey, user_agent_postbox)
