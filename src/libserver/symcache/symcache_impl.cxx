@@ -19,7 +19,7 @@
 #include "symcache_item.hxx"
 #include "symcache_runtime.hxx"
 #include "unix-std.h"
-#include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
 #include "fmt/core.h"
 #include "contrib/t1ha/t1ha.h"
@@ -228,11 +228,16 @@ auto symcache::init() -> bool
 
 auto symcache::load_items() -> bool
 {
-	auto cached_map = util::raii_mmaped_locked_file::mmap_shared(cfg->cache_filename,
+	auto cached_map = util::raii_mmaped_file::mmap_shared(cfg->cache_filename,
 			O_RDONLY, PROT_READ);
 
 	if (!cached_map.has_value()) {
-		msg_info_cache("%s", cached_map.error().c_str());
+		if (cached_map.error().category == util::error_category::CRITICAL) {
+			msg_err_cache("%s", cached_map.error().error_message.data());
+		}
+		else {
+			msg_info_cache("%s", cached_map.error().error_message.data());
+		}
 		return false;
 	}
 
@@ -369,7 +374,7 @@ bool symcache::save_items() const
 			return false;
 		}
 
-		msg_err_cache("%s", file_sink.error().c_str());
+		msg_err_cache("%s", file_sink.error().error_message.data());
 
 		return false;
 	}

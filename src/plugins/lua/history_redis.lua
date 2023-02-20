@@ -47,6 +47,7 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local ucl = require "ucl"
 local ts = (require "tableshape").types
+local lua_verdict = require "lua_verdict"
 local E = {}
 local N = "history_redis"
 local hostname = rspamd_util.get_hostname()
@@ -89,7 +90,7 @@ local function normalise_results(tbl, task)
   -- Convert stupid metric object
   if metric then
     tbl.symbols = {}
-    local symbols, others = fun.partition(function(k, v)
+    local symbols, others = fun.partition(function(_, v)
       return type(v) == 'table' and v.score
     end, metric)
 
@@ -109,6 +110,7 @@ local function normalise_results(tbl, task)
   tbl.rmilter = nil
   tbl.messages = nil
   tbl.urls = nil
+  tbl.action = lua_verdict.adjust_passthrough_action(task)
 
   local seconds = task:get_timeval()['tv_sec']
   tbl.unix_time = seconds
@@ -148,8 +150,8 @@ local function history_save(task)
     rspamd_logger.errx('cannot get protocol reply, skip saving in history')
     return
   end
-  -- 1 is 'json-compact' but faster
-  local json = ucl.to_format(data, 1)
+
+  local json = ucl.to_format(data, 'json-compact')
 
   if settings.compress then
     json = rspamd_util.zstd_compress(json)

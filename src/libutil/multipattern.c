@@ -23,6 +23,7 @@
 #include "logger.h"
 #include "unix-std.h"
 #include "hs.h"
+#include "libserver/hyperscan_tools.h"
 #endif
 #include "acism.h"
 #include "libutil/regexp.h"
@@ -43,15 +44,12 @@ static enum rspamd_hs_check_state hs_suitable_cpu = RSPAMD_HS_UNCHECKED;
 struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 #ifdef WITH_HYPERSCAN
 	rspamd_cryptobox_hash_state_t hash_state;
-	hs_database_t *db;
+	rspamd_hyperscan_t *hs_db;
 	hs_scratch_t *scratch[MAX_SCRATCH];
 	GArray *hs_pats;
 	GArray *hs_ids;
 	GArray *hs_flags;
 	guint scratch_used;
-	/* If serialized into shared memory */
-	gboolean unser_fd;
-	gsize unser_size;
 #endif
 	ac_trie_t *t;
 	GArray *pats;
@@ -403,8 +401,6 @@ rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
 		const guchar *hash)
 {
 	gchar fp[PATH_MAX];
-	gpointer map;
-	gsize len;
 
 	if (hs_cache_dir == NULL) {
 		return FALSE;
@@ -412,119 +408,9 @@ rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
 
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+	mp->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
-	if ((map = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
-
-		mp->unser_fd = -1;
-#if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
-		/* Here is a logic to use a shared memory for hyperscan database */
-		rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp.unser", hs_cache_dir,
-				(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
-		/* Try to create a new file and lock it */
-		mp->unser_fd = rspamd_file_xopen (fp, O_CREAT|O_RDWR|O_EXCL, 00644, false);
-		if (mp->unser_fd == -1) {
-			/* A file can be already existing */
-			mp->unser_fd = rspamd_file_xopen (fp, O_RDONLY, 00644, false);
-		}
-		else {
-			/* Allocate new file, write database and reopen it in RO mode afterwards */
-			gchar tmpfp[PATH_MAX];
-			rspamd_snprintf (tmpfp, sizeof (tmpfp), "%s/hsmp-XXXXXXXXXXXXXXXXXX", hs_cache_dir);
-			int tmp_fd = g_mkstemp_full(tmpfp, O_CREAT|O_RDWR|O_EXCL, 00600);
-			g_assert(tmp_fd != -1);
-			hs_serialized_database_size (map, len, &mp->unser_size);
-			msg_debug("multipattern: create new database in %s; %Hz size", tmpfp, mp->unser_size);
-			void *buf;
-			posix_memalign(&buf, 16, mp->unser_size);
-			if (buf == NULL) {
-				g_abort();
-			}
-
-			int ret;
-
-			if ((ret = hs_deserialize_database_at (map, len, (hs_database_t *)buf)) != HS_SUCCESS) {
-				msg_err ("cannot deserialize hyperscan database: %d", ret);
-				(void)unlink(tmpfp);
-				close (tmp_fd);
-				mp->unser_fd = -1;
-				free (buf);
-			}
-			else {
-				if (write(tmp_fd, buf, mp->unser_size) == -1) {
-					msg_err ("cannot write to %s: %s", fp, strerror(errno));
-					close(tmp_fd);
-					(void)unlink(tmpfp);
-					mp->unser_fd = -1;
-					free(buf);
-				}
-				else {
-					free(buf);
-					if (rename(tmpfp, fp) == -1) {
-						if (errno != EEXIST) {
-							msg_err("cannot rename %s -> %s: %s", tmpfp, fp,
-									strerror(errno));
-						}
-						(void)unlink(tmpfp);
-						close(tmp_fd);
-					}
-					else {
-						(void) unlink(tmpfp);
-						close(tmp_fd);
-					}
-					/* Reopen in RO mode */
-					mp->unser_fd = rspamd_file_xopen (fp, O_RDONLY, 00644, false);
-				}
-			}
-
-		}
-#endif
-		if (mp->unser_fd != -1) {
-			/* We have a prepared database, so we can just use it */
-			struct stat st;
-
-			g_assert(fstat(mp->unser_fd, &st) != -1);
-			mp->unser_size = st.st_size;
-			mp->db = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, mp->unser_fd, 0);
-
-			if (mp->db == MAP_FAILED) {
-				mp->db = NULL;
-				msg_err ("cannot open cached hyperscan database: %s", strerror(errno));
-				close(mp->unser_fd);
-				mp->unser_fd = -1;
-				mp->unser_size = 0;
-				(void)unlink(fp);
-			}
-			else {
-				close(mp->unser_fd);
-				mp->unser_fd = -1;
-				msg_debug("multipattern: loaded hyperscan db from: %s, size = %Hz", fp, mp->unser_size);
-
-				return TRUE;
-			}
-			munmap(map, len);
-
-		}
-		else {
-			int ret;
-			if ((ret = hs_deserialize_database(map, len, &mp->db)) == HS_SUCCESS) {
-				munmap(map, len);
-				return TRUE;
-			}
-			else {
-				msg_err ("cannot deserialize hyperscan database: %d", ret);
-			}
-		}
-
-		munmap (map, len);
-		if (mp->unser_fd != -1) {
-			close (mp->unser_fd);
-			munmap (mp->db, mp->unser_size);
-		}
-		/* Remove stale file */
-		(void)unlink (fp);
-	}
-
-	return FALSE;
+	return mp->hs_db != NULL;
 }
 
 static void
@@ -544,7 +430,7 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
 
 	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
-		if (hs_serialize_database (mp->db, &bytes, &len) == HS_SUCCESS) {
+		if (hs_serialize_database (rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
 				msg_warn ("cannot write hyperscan cache to %s: %s",
 						fp, strerror (errno));
@@ -562,6 +448,9 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 					msg_warn ("cannot rename hyperscan cache from %s to %s: %s",
 							fp, np, strerror (errno));
 					unlink (fp);
+				}
+				else {
+					rspamd_hyperscan_notice_known(np);
 				}
 			}
 		}
@@ -596,13 +485,15 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 			rspamd_cryptobox_hash_final (&mp->hash_state, hash);
 
 			if (!rspamd_multipattern_try_load_hs (mp, hash)) {
+				hs_database_t *db = NULL;
+
 				if (hs_compile_multi ((const char *const *)mp->hs_pats->data,
 						(const unsigned int *)mp->hs_flags->data,
 						(const unsigned int *)mp->hs_ids->data,
 						mp->cnt,
 						HS_MODE_BLOCK,
 						&plt,
-						&mp->db,
+						&db,
 						&hs_errors) != HS_SUCCESS) {
 
 					g_set_error (err, rspamd_multipattern_quark (), EINVAL,
@@ -613,12 +504,17 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 
 					return FALSE;
 				}
+				mp->hs_db = rspamd_hyperscan_from_raw_db(db);
 			}
 
 			rspamd_multipattern_try_save_hs (mp, hash);
 
 			for (i = 0; i < MAX_SCRATCH; i ++) {
-				g_assert (hs_alloc_scratch (mp->db, &mp->scratch[i]) == HS_SUCCESS);
+				int ret;
+				if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(mp->hs_db), &mp->scratch[i])) != HS_SUCCESS) {
+					msg_err("fatal error: cannot allocate scratch space for hyperscan: %d", ret);
+					g_abort();
+				}
 			}
 		}
 
@@ -755,7 +651,7 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 
 		g_assert (scr != NULL);
 
-		ret = hs_scan (mp->db, in, len, 0, scr,
+		ret = hs_scan (rspamd_hyperscan_get_database(mp->hs_db), in, len, 0, scr,
 				rspamd_multipattern_hs_cb, &cbd);
 
 		mp->scratch_used &= ~(1 << i);
@@ -831,15 +727,8 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 					hs_free_scratch (mp->scratch[i]);
 				}
 
-				if (mp->db) {
-					if (mp->unser_size) {
-						/* Mmapped database */
-						munmap(mp->db, mp->unser_size);
-					}
-					else {
-						/* Allocated database */
-						hs_free_database (mp->db);
-					}
+				if (mp->hs_db) {
+					rspamd_hyperscan_free(mp->hs_db);
 				}
 			}
 

@@ -183,6 +183,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
               rule.log_prefix, addr, addr:get_port())
           request_data.url = url
+          request_data.upstream = upstream
 
           http.request(request_data)
         else

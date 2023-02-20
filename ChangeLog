@@ -1,3 +1,31 @@
+3.4: 01 Nov 2022
+  * [CritFix] Restore compatibility with the integrations and headers alterations
+  * [Feature] Milter_headers: Add `x-rspamd-action` routine
+  * [Feature] Share hyperscan database among processes
+  * [Fix] Another corner case in url parsing
+  * [Fix] Another fix for the enable password
+  * [Fix] Another try to fix close method in lua_tcp
+  * [Fix] Fix additional fields in the Redis schema
+  * [Fix] Fix emoji joiner FP
+  * [Fix] Fix favicon.ico Content-Type header
+  * [Fix] Fix hang when close is used
+  * [Fix] Lua_tcp: Sigh, another try to fix `close` invocation
+  * [Fix] Mx_check: Cache the fact of a missing MX record
+  * [Fix] Try to fix parsing of the unencoded `>` characters in html attributes
+  * [Fix] Try to fix the case where password == enable_password
+  * [Project] (Re)implement hyperscan caching
+  * [Project] Rework cleanup
+  * [Project] Synchronize hyperscan caches via the main process
+  * [Rework] Convert multipattern to use hyperscan tools
+  * [Rework] Make http normalize path function a generic function
+  * [Rework] Split locked and unlocked files, as mmap does not need flock normally
+  * [Rework] Start movement of the hyperscan related routines into a single unit
+  * [Rework] Store the current worker, so other libraries could use this information
+  * [Rework] Use blocking socket for IPC between main and workers
+  * [Rework] Use more predictable size for commands buffers
+  * [Rules] Do not insert ONCE_RECEIVED_STRICT on RDNS missing
+  * [Rules] Reduce score of HTTP_TO_HTTPS - subject to remove completely
+
 3.3: 01 Oct 2022
   * [Conf] Add missing groups for whitelist module symbols
   * [CritFix] Neural: Fix keys regression after #3968

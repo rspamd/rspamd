@@ -284,6 +284,7 @@ struct url_match_scanner {
 	GArray *matchers_strict;
 	struct rspamd_multipattern *search_trie_full;
 	struct rspamd_multipattern *search_trie_strict;
+	bool has_tld_file;
 };
 
 struct url_match_scanner *url_scanner = NULL;
@@ -602,10 +603,12 @@ rspamd_url_init (const gchar *tld_file)
 				sizeof (struct url_matcher), 13000);
 		url_scanner->search_trie_full = rspamd_multipattern_create_sized (13000,
 				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+		url_scanner->has_tld_file = true;
 	}
 	else {
 		url_scanner->matchers_full = NULL;
 		url_scanner->search_trie_full = NULL;
+		url_scanner->has_tld_file = false;
 	}
 
 	rspamd_url_add_static_matchers (url_scanner);
@@ -2439,8 +2442,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 		/* We now normalize path */
-		rspamd_http_normalize_path_inplace (rspamd_url_data_unsafe (uri),
-				uri->datalen, &unquoted_len);
+		rspamd_normalize_path_inplace(rspamd_url_data_unsafe (uri),
+			uri->datalen, &unquoted_len);
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 	}
 
@@ -2489,30 +2492,40 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 
 		if (uri->tldlen == 0) {
-			if (uri->protocol != PROTOCOL_MAILTO) {
-				if (!(parse_flags & RSPAMD_URL_PARSE_HREF)) {
-					/* Ignore URL's without TLD if it is not a numeric URL */
-					if (!rspamd_url_is_ip(uri, pool)) {
-						return URI_ERRNO_TLD_MISSING;
+			/*
+			 * If we have not detected eSLD, but there are no dots in the hostname,
+			 * then we should treat the whole hostname as eSLD - a rule of thumb
+			 */
+			if (uri->hostlen > 0 && memchr(rspamd_url_host_unsafe(uri), '.', uri->hostlen) == NULL) {
+				uri->tldlen = uri->hostlen;
+				uri->tldshift = uri->hostshift;
+			}
+			else {
+				if (uri->protocol != PROTOCOL_MAILTO) {
+					if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+						/* Ignore URL's without TLD if it is not a numeric URL */
+						if (!rspamd_url_is_ip(uri, pool)) {
+							return URI_ERRNO_TLD_MISSING;
+						}
+					}
+					else {
+						if (!rspamd_url_is_ip(uri, pool)) {
+							/* Assume tld equal to host */
+							uri->tldshift = uri->hostshift;
+							uri->tldlen = uri->hostlen;
+						}
+						else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
+							/* Ignore urls with both no schema and no tld */
+							return URI_ERRNO_TLD_MISSING;
+						}
+
+						uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
 					}
 				}
 				else {
-					if (!rspamd_url_is_ip(uri, pool)) {
-						/* Assume tld equal to host */
-						uri->tldshift = uri->hostshift;
-						uri->tldlen = uri->hostlen;
-					}
-					else if (uri->flags & RSPAMD_URL_FLAG_SCHEMALESS) {
-						/* Ignore urls with both no schema and no tld */
-						return URI_ERRNO_TLD_MISSING;
-					}
-
-					uri->flags |= RSPAMD_URL_FLAG_NO_TLD;
+					/* Ignore IP like domains for mailto, as it is really never supported */
+					return URI_ERRNO_TLD_MISSING;
 				}
-			}
-			else {
-				/* Ignore IP like domains for mailto, as it is really never supported */
-				return URI_ERRNO_TLD_MISSING;
 			}
 		}
 
@@ -2894,7 +2907,14 @@ url_web_end (struct url_callback_data *cb,
 	if (last < cb->end && (*last == '>' && last != match->newline_pos)) {
 		/* We need to ensure that url also starts with '>' */
 		if (match->st != '<') {
-			return FALSE;
+			if (last + 1 < cb->end) {
+				if (g_ascii_isspace(last[1])) {
+					return FALSE;
+				}
+			}
+			else {
+				return FALSE;
+			}
 		}
 	}
 
@@ -3553,7 +3573,6 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
 			part->utf_stripped_content->len, how, part->newlines,
 			rspamd_url_text_part_callback, &mcbd);
-	g_ptr_array_sort (part->mime_part->urls, rspamd_url_cmp_qsort);
 }
 
 void
@@ -3619,6 +3638,15 @@ rspamd_url_find_single (rspamd_mempool_t *pool,
 
 	if (inlen == 0) {
 		inlen = strlen (in);
+	}
+
+	/*
+	 * We might have a situation when we need to parse URLs on config file
+	 * parsing, but there is no valid url_scanner loaded. Hence, we just load
+	 * some defaults and it should be fine...
+	 */
+	if (url_scanner == NULL) {
+		rspamd_url_init (NULL);
 	}
 
 	memset (&cb, 0, sizeof (cb));
@@ -4281,7 +4309,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 	int r;
 
 	if (u1->protocol != u2->protocol) {
-		return u1->protocol < u2->protocol;
+		return u1->protocol - u2->protocol;
 	}
 
 	if (u1->protocol & PROTOCOL_MAILTO) {
@@ -4301,7 +4329,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 				}
 			}
 			else {
-				r = u1->hostlen < u2->hostlen;
+				r = u1->hostlen - u2->hostlen;
 			}
 		}
 	}
@@ -4311,7 +4339,7 @@ rspamd_url_cmp (const struct rspamd_url *u1, const struct rspamd_url *u2)
 			r = memcmp (u1->string, u2->string, min_len);
 
 			if (r == 0) {
-				r = u1->urllen < u2->urllen;
+				r = u1->urllen - u2->urllen;
 			}
 		}
 		else {

@@ -232,11 +232,6 @@ struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
 void rspamd_task_free (struct rspamd_task *task);
 
 /**
- * Called if session was restored inside fin callback
- */
-void rspamd_task_restore (void *arg);
-
-/**
  * Called if all filters are processed
  * @return TRUE if session should be terminated
  */

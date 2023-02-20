@@ -212,6 +212,11 @@ rspamd_cryptobox_keypair_dtor (struct rspamd_cryptobox_keypair *kp)
 	sk = rspamd_cryptobox_keypair_sk (kp, &len);
 	g_assert (sk != NULL && len > 0);
 	rspamd_explicit_memzero (sk, len);
+
+	if (kp->extensions) {
+		ucl_object_unref (kp->extensions);
+	}
+
 	/* Not g_free as kp is aligned using posix_memalign */
 	free (kp);
 }
@@ -507,6 +512,14 @@ rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp)
 	return kp->id;
 }
 
+const ucl_object_t *
+rspamd_keypair_get_extensions (struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp != NULL);
+
+	return kp->extensions;
+}
+
 const guchar *
 rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk)
 {
@@ -763,12 +776,18 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 
 	rspamd_cryptobox_hash (kp->id, target, len, NULL, 0);
 
+	elt = ucl_object_lookup (obj, "extensions");
+	if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+		/* Use copy to avoid issues with the refcounts */
+		kp->extensions = ucl_object_copy (elt);
+	}
+
 	return kp;
 }
 
 ucl_object_t *
 rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
-		gboolean is_hex)
+					   enum rspamd_keypair_dump_flags flags)
 {
 	ucl_object_t *ucl_out, *elt;
 	gint how = 0;
@@ -777,7 +796,7 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 
 	g_assert (kp != NULL);
 
-	if (is_hex) {
+	if (flags & RSPAMD_KEYPAIR_DUMP_HEX) {
 		how |= RSPAMD_KEYPAIR_HEX;
 		encoding = "hex";
 	}
@@ -786,9 +805,16 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 		encoding = "base32";
 	}
 
-	ucl_out = ucl_object_typed_new (UCL_OBJECT);
-	elt = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+	if (flags & RSPAMD_KEYPAIR_DUMP_FLATTENED) {
+		ucl_out = ucl_object_typed_new (UCL_OBJECT);
+		elt = ucl_out;
+	}
+	else {
+		ucl_out = ucl_object_typed_new (UCL_OBJECT);
+		elt = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+	}
+
 
 	/* pubkey part */
 	keypair_out = rspamd_keypair_print (kp,
@@ -798,13 +824,15 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 			"pubkey", 0, false);
 	g_string_free (keypair_out, TRUE);
 
-	/* privkey part */
-	keypair_out = rspamd_keypair_print (kp,
-			RSPAMD_KEYPAIR_PRIVKEY|how);
-	ucl_object_insert_key (elt,
-			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+	if (!(flags & RSPAMD_KEYPAIR_DUMP_NO_SECRET)) {
+		/* privkey part */
+		keypair_out = rspamd_keypair_print(kp,
+			RSPAMD_KEYPAIR_PRIVKEY | how);
+		ucl_object_insert_key(elt,
+			ucl_object_fromlstring(keypair_out->str, keypair_out->len),
 			"privkey", 0, false);
-	g_string_free (keypair_out, TRUE);
+		g_string_free(keypair_out, TRUE);
+	}
 
 	keypair_out = rspamd_keypair_print (kp,
 			RSPAMD_KEYPAIR_ID|how);
@@ -829,95 +857,12 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 							"kex" : "sign"),
 					"type", 0, false);
 
+	if (kp->extensions) {
+		ucl_object_insert_key (elt, ucl_object_copy (kp->extensions),
+			"extensions", 0, false);
+	}
+
 	return ucl_out;
-}
-
-gboolean
-rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
-		const void *data, gsize len, guchar **sig, gsize *outlen,
-		GError **err)
-{
-	unsigned long long siglen;
-	guint sklen;
-
-	g_assert (kp != NULL);
-	g_assert (data != NULL);
-	g_assert (sig != NULL);
-
-	if (kp->type != RSPAMD_KEYPAIR_SIGN) {
-		g_set_error (err, rspamd_keypair_quark (), EINVAL,
-				"invalid keypair: expected signature pair");
-
-		return FALSE;
-	}
-
-	siglen = rspamd_cryptobox_signature_bytes (kp->alg);
-	*sig = g_malloc (siglen);
-	rspamd_cryptobox_sign (*sig, &siglen, data, len,
-			rspamd_cryptobox_keypair_sk (kp, &sklen), kp->alg);
-
-	if (outlen != NULL) {
-		*outlen = siglen;
-	}
-
-	return TRUE;
-}
-
-gboolean
-rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
-		const void *data, gsize len, const guchar *sig, gsize siglen,
-		GError **err)
-{
-	guint pklen;
-
-	g_assert (pk != NULL);
-	g_assert (data != NULL);
-	g_assert (sig != NULL);
-
-	if (pk->type != RSPAMD_KEYPAIR_SIGN) {
-		g_set_error (err, rspamd_keypair_quark (), EINVAL,
-				"invalid keypair: expected signature pair");
-
-		return FALSE;
-	}
-
-	if (siglen != rspamd_cryptobox_signature_bytes (pk->alg)) {
-		g_set_error (err, rspamd_keypair_quark (), E2BIG,
-				"invalid signature length: %d; expected %d",
-				(int)siglen, (int) rspamd_cryptobox_signature_bytes (pk->alg));
-
-		return FALSE;
-	}
-
-	if (!rspamd_cryptobox_verify (sig, siglen, data, len,
-			rspamd_cryptobox_pubkey_pk (pk, &pklen), pk->alg)) {
-		g_set_error (err, rspamd_keypair_quark (), EPERM,
-				"signature verification failed");
-
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-gboolean
-rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
-		const struct rspamd_cryptobox_pubkey *k2)
-{
-	guchar *p1 = NULL, *p2 = NULL;
-	guint len1, len2;
-
-
-	if (k1->alg == k2->alg && k1->type == k2->type) {
-		p1 = rspamd_cryptobox_pubkey_pk (k1, &len1);
-		p2 = rspamd_cryptobox_pubkey_pk (k2, &len2);
-
-		if (len1 == len2) {
-			return (memcmp (p1, p2, len1) == 0);
-		}
-	}
-
-	return FALSE;
 }
 
 gboolean

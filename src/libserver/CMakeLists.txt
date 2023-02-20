@@ -42,6 +42,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/html/html_url.cxx
 				${CMAKE_CURRENT_SOURCE_DIR}/html/html.cxx
 				${CMAKE_CURRENT_SOURCE_DIR}/html/html_tests.cxx
+				${CMAKE_CURRENT_SOURCE_DIR}/hyperscan_tools.cxx
 				${LIBCSSSRC})
 
 # Librspamd-server

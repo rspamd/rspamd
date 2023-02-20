@@ -810,14 +810,12 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_config *cfg = ud;
 	const gchar *lua_src = rspamd_mempool_strdup (pool,
 			ucl_object_tostring (obj));
-	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
+	gchar *cur_dir, *lua_dir, *lua_file;
 	lua_State *L = cfg->lua_state;
 	gint err_idx;
 
-	tmp1 = g_strdup (lua_src);
-	tmp2 = g_strdup (lua_src);
-	lua_dir = dirname (tmp1);
-	lua_file = basename (tmp2);
+	lua_dir = g_path_get_dirname(lua_src);
+	lua_file = g_path_get_basename(lua_src);
 
 	if (lua_dir && lua_file) {
 		cur_dir = g_malloc (PATH_MAX);
@@ -839,8 +837,8 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 						strerror (errno));
 				}
 				g_free (cur_dir);
-				g_free (tmp1);
-				g_free (tmp2);
+				g_free (lua_dir);
+				g_free (lua_file);
 				return FALSE;
 			}
 
@@ -860,8 +858,8 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				}
 
 				g_free (cur_dir);
-				g_free (tmp1);
-				g_free (tmp2);
+				g_free (lua_file);
+				g_free (lua_dir);
 
 				return FALSE;
 			}
@@ -875,8 +873,8 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				msg_err_config ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 			}
 			g_free (cur_dir);
-			g_free (tmp1);
-			g_free (tmp2);
+			g_free (lua_dir);
+			g_free (lua_file);
 			return FALSE;
 
 		}
@@ -884,12 +882,12 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			msg_err_config ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 		}
 		g_free (cur_dir);
-		g_free (tmp1);
-		g_free (tmp2);
+		g_free (lua_dir);
+		g_free (lua_file);
 	}
 	else {
-		g_free (tmp1);
-		g_free (tmp2);
+		g_free (lua_dir);
+		g_free (lua_file);
 		g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot find to %s: %s",
 			lua_src, strerror (errno));
 		return FALSE;
@@ -1962,7 +1960,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				rspamd_rcl_parse_struct_boolean,
 				G_STRUCT_OFFSET (struct rspamd_config, vectorized_hyperscan),
 				0,
-				"Use hyperscan in vectorized mode (experimental)");
+				"Use hyperscan in vectorized mode (obsoleted, do not use)");
 		rspamd_rcl_add_default_handler (sub,
 				"cores_dir",
 				rspamd_rcl_parse_struct_string,

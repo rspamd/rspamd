@@ -19,17 +19,19 @@ context("Rspamd compression", function()
                       expect = rspamd_text.fromstring(str .. str)})
   end)
 
-  local sizes = {10, 100, 1000, 10000}
-  for _,sz in ipairs(sizes) do
-    test("Compressed fuzz size: " .. tostring(sz), function()
-      for _=1,1000 do
-        local rnd = rspamd_text.randombytes(sz)
-        local cctx = rspamd_zstd.compress_ctx()
-        local dctx = rspamd_zstd.decompress_ctx()
-        assert_rspamd_eq({actual = dctx:stream(cctx:stream(rnd, 'end')),
-                          expect = rnd})
-      end
-    end)
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    local sizes = {10, 100, 1000, 10000}
+    for _,sz in ipairs(sizes) do
+      test("Compressed fuzz size: " .. tostring(sz), function()
+        for _=1,1000 do
+          local rnd = rspamd_text.randombytes(sz)
+          local cctx = rspamd_zstd.compress_ctx()
+          local dctx = rspamd_zstd.decompress_ctx()
+          assert_rspamd_eq({actual = dctx:stream(cctx:stream(rnd, 'end')),
+                            expect = rnd})
+        end
+      end)
+    end
   end
 
   test("Compressed chunks", function()

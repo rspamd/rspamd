@@ -716,9 +716,11 @@ LUA_FUNCTION_DEF (task, get_dkim_results);
 /***
  * @method task:get_symbol(name, [shadow_result_name])
  * Searches for a symbol `name` in all metrics results and returns a list of tables
- * one per metric that describes the symbol inserted. Please note that this function
- * is intended to return values for **inserted** symbols, so if this symbol was not
- * inserted it won't be in the function's output. This method is useful for post-filters mainly.
+ * one per metric that describes the symbol inserted.
+ * Please note, that for using this function you need to ensure that the symbol
+ * being queried is already checked. This is guaranteed if there is a dependency
+ * between the caller symbol and the checked symbol (either virtual or real).
+ * Please check `rspamd_config:register_dependency` method for details.
  * The symbols are returned as the list of the following tables:
  *
  * - `metric` - name of metric
@@ -777,7 +779,11 @@ LUA_FUNCTION_DEF (task, process_ann_tokens);
 
 /***
  * @method task:has_symbol(name, [shadow_result_name])
- * Fast path to check if a specified symbol is in the task's results
+ * Fast path to check if a specified symbol is in the task's results.
+ * Please note, that for using this function you need to ensure that the symbol
+ * being queried is already checked. This is guaranteed if there is a dependency
+ * between the caller symbol and the checked symbol (either virtual or real).
+ * Please check `rspamd_config:register_dependency` method for details.
  * @param {string} name symbol's name
  * @return {boolean} `true` if symbol has been found
  */
@@ -2599,17 +2605,17 @@ lua_task_has_urls (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	bool need_urls = false;
+	bool need_emails = false;
 	gboolean ret = FALSE;
 	gsize sz = 0;
 
 	if (task) {
 		if (task->message) {
 			if (lua_gettop (L) >= 2) {
-				need_urls = lua_toboolean (L, 2);
+				need_emails = lua_toboolean (L, 2);
 			}
 
-			if (!need_urls) {
+			if (need_emails) {
 				/* Simplified check */
 				if (kh_size (MESSAGE_FIELD (task, urls)) > 0) {
 					sz += kh_size (MESSAGE_FIELD (task, urls));

@@ -164,6 +164,13 @@ const guchar *rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
 const guchar *rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp);
 
 /**
+ * Returns keypair extensions if any
+ * @param kp
+ * @return
+ */
+const ucl_object_t *rspamd_keypair_get_extensions (struct rspamd_cryptobox_keypair *kp);
+
+/**
  * Get raw public key id for a specified key (rspamd_cryptobox_HASHBYTES)
  * @param kp
  * @return
@@ -237,50 +244,22 @@ const guchar *rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
  */
 struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl (const ucl_object_t *obj);
 
+
+enum rspamd_keypair_dump_flags {
+	RSPAMD_KEYPAIR_DUMP_DEFAULT = 0,
+	RSPAMD_KEYPAIR_DUMP_HEX = 1u << 0u,
+	RSPAMD_KEYPAIR_DUMP_NO_SECRET = 1u << 1u,
+	RSPAMD_KEYPAIR_DUMP_FLATTENED = 1u << 2u,
+};
+
 /**
  * Converts keypair to ucl object
  * @param kp
  * @return
  */
 ucl_object_t *rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
-									 gboolean is_hex);
+									 enum rspamd_keypair_dump_flags flags);
 
-/**
- * Signs memory using the specified keypair
- * @param kp keypair
- * @param data data to sign
- * @param data to sign
- * @param sig output signature (allocated by function, must be freed by a callee)
- * @param outlen length of output data
- * @param err filled if function returns `FALSE`
- * @return TRUE if signature operation succeeded
- */
-gboolean rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
-							  const void *data, gsize len, guchar **sig, gsize *outlen,
-							  GError **err);
-
-/***
- * Verifies data using public key
- * @param pk public key
- * @param data data to sign
- * @param len data to sign
- * @param sig signature to verify
- * @param siglen length of signature
- * @param err filled if function returns `FALSE`
- * @return TRUE if signature is valid
- */
-gboolean rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
-								const void *data, gsize len, const guchar *sig, gsize siglen,
-								GError **err);
-
-/**
- * Compares two public keys
- * @param k1 key to compare
- * @param k2 key to compare
- * @return TRUE if two keys are equal
- */
-gboolean rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
-							  const struct rspamd_cryptobox_pubkey *k2);
 
 /**
  * Decrypts data using keypair and a pubkey stored in in, in must start from

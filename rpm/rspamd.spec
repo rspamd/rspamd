@@ -1,31 +1,54 @@
+%if 0%{getenv:ASAN}
+Name:             rspamd-asan
+Conflicts:        rspamd
+%else
 Name:             rspamd
+Conflicts:        rspamd-asan
+%endif
+Provides:         rspamd
 Version:          3.2
 Release:          1
 Summary:          Rapid spam filtering system
 Group:            System Environment/Daemons
 License:          Apache-2.0
 URL:              https://rspamd.com
-Source0:          https://github.com/rspamd/rspamd/archive/%{version}/%{name}-%{version}.tar.gz
-Source1:          %{name}.logrotate
+Source0:          https://github.com/rspamd/rspamd/archive/%{version}/rspamd-%{version}.tar.gz
+Source1:          rspamd.logrotate
 Source2:          80-rspamd.preset
 BuildRoot:        %{_tmppath}/%{name}-%{version}-%{release}
 %if 0%{?el7}
 BuildRequires:    cmake3
-BuildRequires:    devtoolset-8-gcc-c++
+BuildRequires:    devtoolset-10-gcc-c++
 %else
 BuildRequires:    cmake
-BuildRequires:    gcc-c++
+BuildRequires:    gcc-toolset-10-gcc-c++
 %endif
 BuildRequires:    file-devel
 BuildRequires:    glib2-devel
-BuildRequires:    hyperscan-devel
-BuildRequires:    jemalloc-devel
 BuildRequires:    lapack-devel
-BuildRequires:    libevent-devel
 BuildRequires:    libicu-devel
 BuildRequires:    libsodium-devel
 BuildRequires:    libunwind-devel
-BuildRequires:    luajit-devel
+%if 0%{getenv:ASAN}
+%if 0%{?el7}
+BuildRequires:    devtoolset-10-libasan-devel
+%else
+BuildRequires:    gcc-toolset-10-libasan-devel
+%endif
+%endif
+
+%ifarch x86_64 amd64
+%if 0%{?el8}
+BuildRequires:    hyperscan-devel
+%endif
+BuildRequires:    jemalloc-devel
+%endif
+
+%if 0%{getenv:LUAJIT}
+BuildRequires:    git
+%else
+BuildRequires:    lua-devel
+%endif
 BuildRequires:    openblas-devel
 BuildRequires:    openssl-devel
 BuildRequires:    pcre2-devel
@@ -43,19 +66,43 @@ with big amount of mail and can be easily extended with own filters written in
 lua.
 
 %prep
-%setup -q
+%setup -q -n %{name}-%{version}
+%if 0%{getenv:LUAJIT}
+rm -fr %{_builddir}/luajit-src || true
+rm -fr %{_builddir}/luajit-build || true
+git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
+%endif
 
 %build
 %if 0%{?el7}
-%{__cmake3} \
+source /opt/rh/devtoolset-10/enable
 %else
-%{__cmake} \
+source /opt/rh/gcc-toolset-10/enable
 %endif
-        -DCMAKE_BUILD_TYPE="Release" \
+%if 0%{getenv:LUAJIT}
+pushd %{_builddir}/luajit-src && make clean && make %{?_smp_mflags} CC="gcc -fPIC" PREFIX=%{_builddir}/luajit-build && make install PREFIX=%{_builddir}/luajit-build ; popd
+rm -f %{_builddir}/luajit-build/lib/*.so || true
+%endif
+%if 0%{?el7}
+%{cmake3} \
+%else
+%{cmake} \
+%endif
+	-B . \
+%if 0%{getenv:ASAN}
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DSANITIZE=address \
+%else
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DENABLE_LTO=ON \
+%endif
         -DCMAKE_C_FLAGS_RELEASE="%{optflags}" \
         -DCMAKE_CXX_FLAGS_RELEASE="%{optflags}" \
 %if 0%{?fedora} >= 36
         -DLINKER_NAME=/usr/bin/ld.bfd \
+%endif
+%if 0%{?el8}
+        -DLINKER_NAME=ld.bfd \
 %endif
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
@@ -74,21 +121,37 @@ lua.
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
         -DENABLE_LIBUNWIND=ON \
+%ifarch x86_64 amd64 arm64 aarch64
         -DENABLE_HYPERSCAN=ON \
+%endif
+%ifarch arm64 aarch64
+        -DHYPERSCAN_ROOT_DIR=/vectorscan \
+%endif
+%ifarch x86_64 amd64
+%if 0%{?el7}
+        -DHYPERSCAN_ROOT_DIR=/vectorscan \
+%endif
+%endif
+%ifarch x86_64 amd64
         -DENABLE_JEMALLOC=ON \
+%endif
+%if 0%{getenv:LUAJIT}
         -DENABLE_LUAJIT=ON \
+	      -DLUA_ROOT=%{_builddir}/luajit-build \
+%else
+        -DENABLE_LUAJIT=OFF \
+%endif
         -DENABLE_BLAS=ON
-
-%{__make} %{?jobs:-j%jobs}
+make %{?_smp_mflags}
 
 %install
-%{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
-%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
+%make_install
+%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/logrotate.d/rspamd
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_presetdir}/80-rspamd.preset
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/log/rspamd
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/lib/rspamd
-%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/local.d/
-%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/override.d/
+%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/rspamd/local.d/
+%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/rspamd/override.d/
 
 %clean
 rm -rf %{buildroot}
@@ -100,13 +163,13 @@ rm -rf %{buildroot}
 %post
 %{__chown} -R _rspamd:_rspamd %{_localstatedir}/lib/rspamd
 %{__chown} _rspamd:_rspamd %{_localstatedir}/log/rspamd
-systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
+systemctl --no-reload preset rspamd.service >/dev/null 2>&1 || :
 
 %preun
-%systemd_preun %{name}.service
+%systemd_preun rspamd.service
 
 %postun
-%systemd_postun_with_restart %{name}.service
+%systemd_postun_with_restart rspamd.service
 
 %files
 %defattr(-,root,root,-)
@@ -119,20 +182,20 @@ systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
 %{_bindir}/rspamc
 %{_bindir}/rspamadm
 
-%{_unitdir}/%{name}.service
+%{_unitdir}/rspamd.service
 %{_presetdir}/80-rspamd.preset
 
 %dir %{_libdir}/rspamd
 %{_libdir}/rspamd/*
 
-%{_mandir}/man8/%{name}.*
+%{_mandir}/man8/rspamd.*
 %{_mandir}/man1/rspamc.*
 %{_mandir}/man1/rspamadm.*
 
 %dir %{_datadir}/rspamd
 %{_datadir}/rspamd/*
 
-%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
+%config(noreplace) %{_sysconfdir}/logrotate.d/rspamd
 
 %attr(-, _rspamd, _rspamd) %dir %{_localstatedir}/lib/rspamd
 %dir %{_localstatedir}/log/rspamd

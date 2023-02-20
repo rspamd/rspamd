@@ -134,6 +134,21 @@ local function add_antivirus_rule(sym, opts)
         type = 'string',
       })
 
+  -- if any mime_part filter defined, do not scan all attachments
+  if opts.mime_parts_filter_regex ~= nil
+      or opts.mime_parts_filter_ext ~= nil then
+    rule.scan_all_mime_parts = false
+  else
+    rule.scan_all_mime_parts = true
+  end
+
+  rule.patterns = common.create_regex_table(opts.patterns or {})
+  rule.patterns_fail = common.create_regex_table(opts.patterns_fail or {})
+
+  rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
+
+  rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
+
   if opts.whitelist then
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end

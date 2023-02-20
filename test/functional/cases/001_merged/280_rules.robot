@@ -133,3 +133,7 @@ REPLYTO_ADDR_EQ_FROM
   ...  Settings={symbols_enabled = [REPLYTO_ADDR_EQ_FROM]}
   Expect Symbol  REPLYTO_ADDR_EQ_FROM
 
+SUBJECT_HAS_CURRENCY
+  Scan File  ${RSPAMD_TESTDIR}/messages/currency.eml
+  ...  Settings={symbols_enabled = [SUBJECT_HAS_CURRENCY]}
+  Expect Symbol  SUBJECT_HAS_CURRENCY

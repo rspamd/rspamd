@@ -463,7 +463,8 @@ local function gen_rbl_callback(rule)
     local helo = task:get_helo()
 
     if not helo then
-      return false
+      -- Avoid pipeline breaking
+      return true
     end
 
     add_dns_request(task, helo, true, false, requests_table,
@@ -636,7 +637,7 @@ local function gen_rbl_callback(rule)
   local function check_rdns(task, requests_table, whitelist)
     local hostname = task:get_hostname()
     if hostname == nil or hostname == 'unknown' then
-      return false
+      return true
     end
 
     add_dns_request(task, hostname, true, false,
@@ -1040,6 +1041,7 @@ local function add_rbl(key, rbl, global_opts)
       id = rspamd_config:register_symbol{
         type = 'callback',
         callback = callback,
+        groups = {'rbl'},
         name = rbl.symbol .. '_CHECK',
         flags = table.concat(flags_tbl, ',')
       }
@@ -1066,6 +1068,7 @@ local function add_rbl(key, rbl, global_opts)
         type = 'callback',
         callback = callback,
         name = rbl.symbol,
+        groups = {'rbl'},
         group = 'rbl',
         score = 0,
         flags = table.concat(flags_tbl, ',')
@@ -1200,7 +1203,20 @@ if(opts['local_exclude_ip_map'] ~= nil) then
     'RBL exclusions map')
 end
 
-for key,rbl in pairs(opts.rbls ) do
+-- TODO: this code should be universal for all modules that use selectors to allow
+-- maps usage from selectors registered for a specific module
+if type(opts.attached_maps) == 'table' then
+  opts.attached_maps_processed = {}
+  for i,map in ipairs(opts.attached_maps) do
+    -- Store maps in the configuration table to keep lifetime track
+    opts.attached_maps_processed[i] = lua_maps.map_add_from_ucl(map)
+    if opts.attached_maps_processed[i] == nil then
+      rspamd_logger.warnx(rspamd_config, "cannot parse attached map: %s", map)
+    end
+  end
+end
+
+for key,rbl in pairs(opts.rbls) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
@@ -1284,6 +1300,7 @@ rspamd_config:register_symbol{
   callback = rbl_callback_white,
   name = 'RBL_CALLBACK_WHITE',
   flags = 'nice,empty,no_squeeze',
+  groups = {'rbl'},
   augmentations = {string.format("timeout=%f", rspamd_config:get_dns_timeout() or 0.0)},
 }
 
@@ -1292,6 +1309,7 @@ rspamd_config:register_symbol{
   callback = rbl_callback_fin,
   name = 'RBL_CALLBACK',
   flags = 'empty,no_squeeze',
+  groups = {'rbl'},
   augmentations = {string.format("timeout=%f", rspamd_config:get_dns_timeout() or 0.0)},
 }
 

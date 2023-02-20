@@ -108,7 +108,6 @@ context("Lua util - extract_specific_urls plain", function()
   local cases = {
     {expect = url_list, filter = nil, limit = 9999, need_emails = true, prefix = 'p'},
     {expect = {}, filter = (function() return false end), limit = 9999, need_emails = true, prefix = 'p'},
-    {expect = {"domain4.co.net", "test.com"}, filter = nil, limit = 2, need_emails = true, prefix = 'p'},
     {expect = {"domain4.co.net", "test.com", "domain3.org"}, filter = nil, limit = 3, need_emails = true, prefix = 'p'},
     {
       expect = {"gov.co.net", "tesco.co.net", "domain1.co.net", "domain2.co.net", "domain3.co.net", "domain4.co.net"},

@@ -212,14 +212,34 @@ html_component_from_string(const std::string_view &st) -> std::optional<html_com
 	}
 }
 
+enum tag_parser_state {
+	parse_start = 0,
+	parse_name,
+	parse_attr_name,
+	parse_equal,
+	parse_start_dquote,
+	parse_dqvalue,
+	parse_end_dquote,
+	parse_start_squote,
+	parse_sqvalue,
+	parse_end_squote,
+	parse_value,
+	spaces_before_eq,
+	spaces_after_eq,
+	spaces_after_param,
+	ignore_bad_tag,
+	tag_end,
+	slash_after_value,
+	slash_in_unquoted_value,
+};
 struct tag_content_parser_state {
-	int cur_state = 0;
+	tag_parser_state cur_state = parse_start;
 	std::string buf;
 	std::optional<html_component_type> cur_component;
 
 	void reset()
 	{
-		cur_state = 0;
+		cur_state = parse_start;
 		buf.clear();
 		cur_component = std::nullopt;
 	}
@@ -232,28 +252,7 @@ html_parse_tag_content(rspamd_mempool_t *pool,
 					   const char *in,
 					   struct tag_content_parser_state &parser_env)
 {
-	enum tag_parser_state {
-		parse_start = 0,
-		parse_name,
-		parse_attr_name,
-		parse_equal,
-		parse_start_dquote,
-		parse_dqvalue,
-		parse_end_dquote,
-		parse_start_squote,
-		parse_sqvalue,
-		parse_end_squote,
-		parse_value,
-		spaces_before_eq,
-		spaces_after_eq,
-		spaces_after_param,
-		ignore_bad_tag,
-		tag_end,
-		slash_after_value,
-		slash_in_unquoted_value,
-	} state;
-
-	state = static_cast<enum tag_parser_state>(parser_env.cur_state);
+	auto state = parser_env.cur_state;
 
 	/*
 	 * Stores tag component if it doesn't exist, performing copy of the
@@ -1855,19 +1854,54 @@ html_process_input(rspamd_mempool_t *pool,
 			html_parse_tag_content(pool, hc, cur_tag, p, content_parser_env);
 
 			if (t == '>') {
-				if (closing) {
-					cur_tag->closing.start = c - start;
-					cur_tag->closing.end = p - start + 1;
+				if (content_parser_env.cur_state != parse_dqvalue && content_parser_env.cur_state != parse_sqvalue) {
+					/* We have a closing element */
+					if (closing) {
+						cur_tag->closing.start = c - start;
+						cur_tag->closing.end = p - start + 1;
 
-					closing = FALSE;
-					state = tag_end_closing;
+						closing = FALSE;
+						state = tag_end_closing;
+					}
+					else {
+						cur_tag->content_offset = p - start + 1;
+						state = tag_end_opening;
+					}
 				}
 				else {
-					cur_tag->content_offset = p - start + 1;
-					state = tag_end_opening;
+					/*
+					 * We are in the parse_quoted value state but got
+					 * an unescaped `>` character.
+					 * HTML is written for monkeys, so there are two possibilities:
+					 * 1) We have missing ending quote
+					 * 2) We have unescaped `>` character
+					 * How to distinguish between those possibilities?
+					 * Well, the idea is to do some lookahead and try to find a
+					 * quote. If we can find a quote, we just pretend as we have
+					 * not seen `>` character. Otherwise, we pretend that it is an
+					 * unquoted stuff. This logic is quite fragile but I really
+					 * don't know any better options...
+					 */
+					auto end_quote = content_parser_env.cur_state == parse_sqvalue ? '\'' : '"';
+					if (memchr(p, end_quote, end - p) != nullptr) {
+						/* Unencoded `>` */
+						p++;
+						continue;
+					}
+					else {
+						if (closing) {
+							cur_tag->closing.start = c - start;
+							cur_tag->closing.end = p - start + 1;
+
+							closing = FALSE;
+							state = tag_end_closing;
+						}
+						else {
+							cur_tag->content_offset = p - start + 1;
+							state = tag_end_opening;
+						}
+					}
 				}
-
-
 				continue;
 			}
 			p++;

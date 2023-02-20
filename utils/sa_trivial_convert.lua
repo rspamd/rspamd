@@ -99,7 +99,7 @@ local function handle_header_def(hline, cur_rule)
         end
     end
 
-    cur_rule['ordinary'] = ordinary and (not (#hdr_params > 1))
+    cur_rule['ordinary'] = ordinary and #hdr_params <= 1
     cur_rule['header'] = hdr_params
   end
 end
@@ -435,7 +435,7 @@ mmap_conf:close()
 rspamd_logger.messagex('stored multimap conf in %s', 'auto_multimap.conf')
 
 local sa_remain = io.open('auto_sa.conf', 'w')
-fun.each(function(l) 
+fun.each(function(l)
   sa_remain:write(l)
   sa_remain:write('\n')
 end, fun.filter(function(l) return not string.match(l, '^%s+$') end, complicated))

@@ -89,20 +89,22 @@ context("SMTP address check functions", function()
     end)
   end, cases_invalid)
 
-  test("Speed test", function()
-    local case = '<@domain1,@domain2,@domain3:abc%d@example.com>'
-    local niter = 100000
-    local total = 0
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    test("Speed test", function()
+      local case = '<@domain1,@domain2,@domain3:abc%d@example.com>'
+      local niter = 100000
+      local total = 0
 
-    for i = 1,niter do
-      local ncase = string.format(case, i)
-      local t1 = util.get_ticks()
-      local st = ffi.C.rspamd_email_address_from_smtp(ncase, #ncase)
-      local t2 = util.get_ticks()
-      ffi.C.rspamd_email_address_free(st)
-      total = total + t2 - t1
-    end
+      for i = 1,niter do
+        local ncase = string.format(case, i)
+        local t1 = util.get_ticks()
+        local st = ffi.C.rspamd_email_address_from_smtp(ncase, #ncase)
+        local t2 = util.get_ticks()
+        ffi.C.rspamd_email_address_free(st)
+        total = total + t2 - t1
+      end
 
-    print(string.format('Spend %f seconds in processing addrs', total))
-  end)
+      print(string.format('Spend %f seconds in processing addrs', total))
+    end)
+  end
 end)

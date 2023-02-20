@@ -1211,14 +1211,20 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 		obj = top;
 	}
 
-	if (pr && pr->message && !(pr->flags & RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE)) {
-		/* Add smtp message if it does not exists: see #3269 for details */
-		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
-			ucl_object_insert_key (task->messages,
-					ucl_object_fromstring_common (pr->message, 0, UCL_STRING_RAW),
+	if (pr) {
+		if (pr->message && !(pr->flags & RSPAMD_PASSTHROUGH_NO_SMTP_MESSAGE)) {
+			/* Add smtp message if it does not exist: see #3269 for details */
+			if (ucl_object_lookup(task->messages, "smtp_message") == NULL) {
+				ucl_object_insert_key(task->messages,
+					ucl_object_fromstring_common(pr->message, 0, UCL_STRING_RAW),
 					"smtp_message", 0,
 					false);
+			}
 		}
+
+		ucl_object_insert_key (obj,
+			ucl_object_fromstring (pr->module),
+			"passthrough_module", 0, false);
 	}
 
 	ucl_object_insert_key (obj,
@@ -1262,6 +1268,21 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 
 	/* Now handle symbols */
 	if (task->cmd != CMD_CHECK) {
+		/* Insert actions thresholds */
+		ucl_object_t *actions_obj = ucl_object_typed_new (UCL_OBJECT);
+
+		for (int i = task->result->nactions - 1; i >= 0; i --) {
+			struct rspamd_action_config *action_lim = &task->result->actions_config[i];
+
+			if (!isnan (action_lim->cur_limit) &&
+				!(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
+				ucl_object_insert_key(actions_obj, ucl_object_fromdouble(action_lim->cur_limit),
+					action_lim->action->name, 0, true);
+			}
+		}
+
+		ucl_object_insert_key(obj, actions_obj, "thresholds", 0, false);
+
 		/* For checkv2 we insert symbols as a separate object */
 		obj = ucl_object_typed_new (UCL_OBJECT);
 	}

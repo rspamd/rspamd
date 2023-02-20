@@ -65,27 +65,31 @@ local settings = {
 -- Redis keys used:
 --   l - last hit
 --   b - current burst
+--   p - pending messages (those that are currently processing)
 --   dr - current dynamic rate multiplier (*10000)
 --   db - current dynamic burst multiplier (*10000)
 local bucket_check_script = [[
   local last = redis.call('HGET', KEYS[1], 'l')
   local now = tonumber(KEYS[2])
+  local nrcpt = tonumber(KEYS[6])
   local dynr, dynb, leaked = 0, 0, 0
   if not last then
     -- New bucket
-    redis.call('HSET', KEYS[1], 'l', KEYS[2])
-    redis.call('HSET', KEYS[1], 'b', '0')
-    redis.call('HSET', KEYS[1], 'dr', '10000')
-    redis.call('HSET', KEYS[1], 'db', '10000')
+    redis.call('HMSET', KEYS[1], 'l', KEYS[2], 'b', '0', 'dr', '10000', 'db', '10000', 'p', tostring(nrcpt))
     redis.call('EXPIRE', KEYS[1], KEYS[5])
     return {0, '0', '1', '1', '0'}
   end
 
   last = tonumber(last)
-  local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
+  local burst,pending = unpack(redis.call('HMGET', KEYS[1], 'b', 'p'))
+  burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
+  -- Sanity to avoid races
+  if burst < 0 then burst = 0 end
+  if pending < 0 then pending = 0 end
+  pending = pending + nrcpt -- this message
   -- Perform leak
-  if burst > 0 then
-   if last < tonumber(KEYS[2]) then
+  if burst + pending > 0 then
+   if burst > 0 and last < tonumber(KEYS[2]) then
     local rate = tonumber(KEYS[3])
     dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
     if dynr == 0 then dynr = 0.0001 end
@@ -100,12 +104,15 @@ local bucket_check_script = [[
    dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
    if dynb == 0 then dynb = 0.0001 end
 
+   burst = burst + pending
    if burst > 0 and (burst + tonumber(KEYS[6])) > tonumber(KEYS[4]) * dynb then
-     return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
+     return {1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked)}
    end
+   -- Increase pending if we allow ratelimit
+   redis.call('HINCRBY', KEYS[1], 'p', nrcpt)
   else
    burst = 0
-   redis.call('HSET', KEYS[1], 'b', '0')
+   redis.call('HMSET', KEYS[1], 'b', '0', 'p', tostring(nrcpt))
   end
 
   return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
@@ -125,17 +132,16 @@ local bucket_check_id
 -- Redis keys used:
 --   l - last hit
 --   b - current burst
+--   p - messages pending (must be decreased by 1)
 --   dr - current dynamic rate multiplier
 --   db - current dynamic burst multiplier
 local bucket_update_script = [[
   local last = redis.call('HGET', KEYS[1], 'l')
   local now = tonumber(KEYS[2])
+  local nrcpt = tonumber(KEYS[8])
   if not last then
-    -- New bucket
-    redis.call('HSET', KEYS[1], 'l', KEYS[2])
-    redis.call('HSET', KEYS[1], 'b', '1')
-    redis.call('HSET', KEYS[1], 'dr', '10000')
-    redis.call('HSET', KEYS[1], 'db', '10000')
+    -- New bucket (why??)
+    redis.call('HMSET', KEYS[1], 'l', KEYS[2], 'b', tostring(nrcpt), 'dr', '10000', 'db', '10000', 'p', '0')
     redis.call('EXPIRE', KEYS[1], KEYS[7])
     return {1, 1, 1}
   end
@@ -186,11 +192,12 @@ local bucket_update_script = [[
     end
   end
 
-  local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
-  if burst < 0 then burst = 0 end
+  local burst,pending = unpack(redis.call('HMGET', KEYS[1], 'b', 'p'))
+  burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
+  if burst < 0 then burst = nrcpt else burst = burst + nrcpt end
+  if pending < nrcpt then pending = 0 else pending = pending - nrcpt end
 
-  redis.call('HINCRBYFLOAT', KEYS[1], 'b', tonumber(KEYS[8]))
-  redis.call('HSET', KEYS[1], 'l', KEYS[2])
+  redis.call('HMSET', KEYS[1], 'b', tostring(burst), 'p', tostring(pending), 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
   return {tostring(burst), tostring(dr), tostring(db)}

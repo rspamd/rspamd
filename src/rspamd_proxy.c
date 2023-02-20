@@ -2375,42 +2375,9 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 		/* Additional initialisation needed */
 		rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 				&ctx->lang_det);
-		/* Always yse cfg->task_timeout */
 		ctx->task_timeout = rspamd_worker_check_and_adjust_timeout(ctx->cfg, NAN);
 
-		if (worker->index == 0) {
-			/*
-			 * If there are no controllers and no normal workers,
-			 * then pretend that we are a controller
-			 */
-			gboolean controller_seen = FALSE;
-			GList *cur;
-
-			cur = worker->srv->cfg->workers;
-
-			while (cur) {
-				struct rspamd_worker_conf *cf;
-
-				cf = (struct rspamd_worker_conf *)cur->data;
-				if ((cf->type == g_quark_from_static_string ("controller")) ||
-						(cf->type == g_quark_from_static_string ("normal"))) {
-
-					if (cf->enabled && cf->count >= 0) {
-						controller_seen = TRUE;
-						break;
-					}
-				}
-
-				cur = g_list_next (cur);
-			}
-
-			if (!controller_seen) {
-				msg_info ("no controller or normal workers defined, execute "
-							  "controller periodics in this worker");
-				worker->flags |= RSPAMD_WORKER_CONTROLLER;
-				is_controller = TRUE;
-			}
-		}
+		is_controller = rspamd_worker_check_controller_presence (worker);
 	}
 	else {
 		worker->flags &= ~RSPAMD_WORKER_SCANNER;
@@ -2461,6 +2428,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger);
+	rspamd_unset_crash_handler (worker->srv);
 
 	exit (EXIT_SUCCESS);
 }

@@ -236,7 +236,7 @@ insert_metric_result (struct rspamd_task *task,
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
-	gint max_shots, ret;
+	gint max_shots = G_MAXINT, ret;
 	guint i;
 	khiter_t k;
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
@@ -319,7 +319,15 @@ insert_metric_result (struct rspamd_task *task,
 		}
 		else {
 			if (sdef) {
-				max_shots = sdef->nshots;
+				if (sdef->groups) {
+					PTR_ARRAY_FOREACH(sdef->groups, i, gr) {
+						if (gr->flags & RSPAMD_SYMBOL_GROUP_ONE_SHOT) {
+							max_shots = 1;
+						}
+					}
+				}
+
+				max_shots = MIN(max_shots, sdef->nshots);
 			}
 			else {
 				max_shots = task->cfg->default_max_shots;

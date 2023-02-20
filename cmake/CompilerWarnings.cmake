@@ -17,6 +17,11 @@ CHECK_C_COMPILER_FLAG(-Wnull-dereference SUPPORT_WNULL_DEREFERENCE)
 CHECK_C_COMPILER_FLAG(-Wduplicated-cond SUPPORT_WDUPLICATED_COND)
 # GCC 7 specific
 CHECK_C_COMPILER_FLAG(-Wimplicit-fallthrough SUPPORT_WIMPLICIT_FALLTHROUGH)
+# Special check for deprecated declarations, as since OpenSSL 3.0 they
+# just poison output for no good reason
+CHECK_C_COMPILER_FLAG(-Wdeprecated-declarations SUPPORT_WDEPRECATED_DECLARATIONS)
+# Disable -Wsuggest-attribute=format: it is too noisy with FPs around fmt C++ library
+CHECK_C_COMPILER_FLAG(-Wsuggest-attribute SUPPORT_WSUGGEST_ATTRIBUTE)
 
 IF(SUPPORT_WEXTRA)
     ADD_COMPILE_OPTIONS("-Wextra")
@@ -75,8 +80,10 @@ ENDIF(SUPPORT_WMISSING_NORETURN)
 IF(SUPPORT_WMISSING_FORMAT_ATTRIBUTE)
     ADD_COMPILE_OPTIONS("-Wmissing-format-attribute")
 ENDIF(SUPPORT_WMISSING_FORMAT_ATTRIBUTE)
+IF(SUPPORT_WSUGGEST_ATTRIBUTE)
+    ADD_COMPILE_OPTIONS("-Wno-suggest-attribute=format")
+ENDIF()
 
-CHECK_C_COMPILER_FLAG(-fPIC SUPPORT_FPIC)
-IF(SUPPORT_FPIC)
-    ADD_COMPILE_OPTIONS("-fPIC")
-ENDIF(SUPPORT_FPIC)
+IF(SUPPORT_WDEPRECATED_DECLARATIONS)
+    ADD_COMPILE_OPTIONS("-Wno-deprecated-declarations")
+ENDIF()

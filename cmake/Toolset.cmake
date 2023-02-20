@@ -10,6 +10,8 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
     SET (COMPILER_CLANG 1)
 endif()
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 SET (COMPILER_FAST_MATH "")
 if (ENABLE_FAST_MATH MATCHES "ON")
     # We need to keep nans and infinities, so cannot keep all fast math there
@@ -41,10 +43,29 @@ elseif (COMPILER_CLANG)
     if (CMAKE_C_COMPILER_VERSION VERSION_LESS ${CLANG_MINIMUM_VERSION})
         message (FATAL_ERROR "Clang version must be at least ${CLANG_MINIMUM_VERSION}.")
     endif ()
-    ADD_COMPILE_OPTIONS(-Wno-unused-command-line-argument)
+    # Hack to fix try_compile
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-command-line-argument")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-command-line-argument")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-ignored-optimization-argument")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-ignored-optimization-argument")
+    if (ENABLE_LIBCXX MATCHES "AUTO")
+        include(CheckCXXSourceCompiles)
+        set(OLD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+        check_cxx_source_compiles("
+#include <version>
+int main() { return 0; }
+        " HAVE_LIBCXX )
+        if (HAVE_LIBCXX)
+            SET(ENABLE_LIBCXX "ON")
+        else()
+            SET(ENABLE_LIBCXX "OFF")
+        endif()
+        set(CMAKE_CXX_FLAGS "${OLD_CMAKE_CXX_FLAGS}")
+    endif()
     if (ENABLE_LIBCXX MATCHES "ON")
-        # Use libc++ as libstdc++ is buggy in many cases
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+        set(CLANG_DEFAULT_CXX_STDLIB "libc++")
     endif ()
 else ()
     message (WARNING "You are using an unsupported compiler ${CMAKE_C_COMPILER_ID}. Compilation has only been tested with Clang 4+ and GCC 4+.")
@@ -142,7 +163,7 @@ set(CMAKE_CXX_FLAGS_COVERAGE           "${CMAKE_CXX_FLAGS} -O1 --coverage -fno-i
 if (COMPILER_GCC)
     # GCC flags
     set (COMPILER_DEBUG_FLAGS "-g -ggdb -g3 -ggdb3")
-    set (CXX_COMMON_FLAGS "-Weffc++")
+    set (CXX_COMMON_FLAGS "")
     set (CMAKE_C_FLAGS_RELWITHDEBINFO      "${CMAKE_C_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO    "${CMAKE_CXX_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS} ${CXX_COMMON_FLAGS}")
 
@@ -167,7 +188,7 @@ if (COMPILER_GCC)
 elseif (COMPILER_CLANG)
     # Clang flags
     set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
-    set (CXX_COMMON_FLAGS "-Weffc++")
+    set (CXX_COMMON_FLAGS "")
     set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
     set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH} ${CXX_COMMON_FLAGS}")
 

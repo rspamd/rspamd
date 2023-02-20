@@ -24,7 +24,6 @@ globals = {
   'rspamd_redis_make_request',
   'rspamd_str_split',
   'rspamd_version',
-  'rspamd_map_add',
   'rspamd_maps',
   'rspamd_plugins_state',
   'rspamadm',

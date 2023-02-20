@@ -721,3 +721,13 @@ rspamd_http_message_get_http_host (struct rspamd_http_message *msg,
 
 	return NULL;
 }
+
+bool
+rspamd_http_message_is_standard_port(struct rspamd_http_message *msg)
+{
+	if (msg->flags & RSPAMD_HTTP_FLAG_WANT_SSL) {
+		return msg->port == 443;
+	}
+
+	return msg->port == 80;
+}

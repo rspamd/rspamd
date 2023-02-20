@@ -46,33 +46,30 @@ lua_error_quark (void)
 	return g_quark_from_static_string ("lua-routines");
 }
 
-/* idea from daurnimator */
-#if defined(WITH_LUAJIT) && (defined(_LP64) || defined(_LLP64) || defined(__arch64__) || defined (__arm64__) || defined (__aarch64__) || defined(_WIN64))
-#define RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK 1
-#else
-#define RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK 0
-#endif
-
-#if RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK
-#define RSPAMD_LIGHTUSERDATA_MASK(p) ((void *)((uintptr_t)(p) & ((1UL<<47)-1)))
-#else
-#define RSPAMD_LIGHTUSERDATA_MASK(p) ((void *)(p))
-#endif
-
 /*
  * Used to map string to a pointer
  */
-KHASH_INIT (lua_class_set, const gchar *, bool, 0, rspamd_str_hash, rspamd_str_equal);
-khash_t (lua_class_set) *lua_classes = NULL;
-
-RSPAMD_CONSTRUCTOR (lua_classes_ctor)
+KHASH_INIT (lua_class_set, const char*, int, 1, rspamd_str_hash, rspamd_str_equal);
+struct rspamd_lua_context {
+	lua_State *L;
+	khash_t(lua_class_set) *classes;
+	struct rspamd_lua_context *prev, *next; /* Expensive but we usually have exactly one lua state */
+};
+struct rspamd_lua_context *rspamd_lua_global_ctx = NULL;
+#define RSPAMD_LUA_NCLASSES 64
+static inline struct rspamd_lua_context*
+rspamd_lua_ctx_by_state (lua_State *L)
 {
-	lua_classes = kh_init (lua_class_set);
-}
+	struct rspamd_lua_context *cur;
 
-RSPAMD_DESTRUCTOR (lua_classes_dtor)
-{
-	kh_destroy (lua_class_set, lua_classes);
+	DL_FOREACH(rspamd_lua_global_ctx, cur) {
+		if (cur->L == L) {
+			return cur;
+		}
+	}
+
+	/* When we are using thread pool, this is the case... */
+	return rspamd_lua_global_ctx;
 }
 
 /* Util functions */
@@ -87,13 +84,10 @@ rspamd_lua_new_class (lua_State * L,
 	const gchar *classname,
 	const struct luaL_reg *methods)
 {
-	void *class_ptr;
 	khiter_t k;
 	gint r, nmethods = 0;
 	gboolean seen_index = false;
-
-	k = kh_put (lua_class_set, lua_classes, classname, &r);
-	class_ptr = RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k));
+	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
 	if (methods) {
 		for (;;) {
@@ -121,16 +115,14 @@ rspamd_lua_new_class (lua_State * L,
 	lua_pushstring (L, classname);
 	lua_rawset (L, -3);
 
-	lua_pushstring (L, "class_ptr");
-	lua_pushlightuserdata (L, class_ptr);
-	lua_rawset (L, -3);
-
 	if (methods) {
 		luaL_register (L, NULL, methods); /* pushes all methods as MT fields */
 	}
 
 	lua_pushvalue (L, -1); /* Preserves metatable */
-	lua_rawsetp (L, LUA_REGISTRYINDEX, class_ptr);
+	int offset = luaL_ref (L, LUA_REGISTRYINDEX);
+	k = kh_put (lua_class_set, ctx->classes, classname, &r);
+	kh_value(ctx->classes, k) = offset;
 	/* MT is left on stack ! */
 }
 
@@ -192,12 +184,12 @@ void
 rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 {
 	khiter_t k;
+	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get (lua_class_set, lua_classes, classname);
+	k = kh_get (lua_class_set, ctx->classes, classname);
 
-	g_assert (k != kh_end (lua_classes));
-	lua_rawgetp (L, LUA_REGISTRYINDEX,
-			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+	g_assert (k != kh_end (ctx->classes));
+	lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 
 	if (objidx < 0) {
 		objidx--;
@@ -209,12 +201,12 @@ void
 rspamd_lua_class_metatable (lua_State *L, const gchar *classname)
 {
 	khiter_t k;
+	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get (lua_class_set, lua_classes, classname);
+	k = kh_get (lua_class_set, ctx->classes, classname);
 
-	g_assert (k != kh_end (lua_classes));
-	lua_rawgetp (L, LUA_REGISTRYINDEX,
-			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+	g_assert (k != kh_end (ctx->classes));
+	lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 }
 
 void
@@ -222,13 +214,12 @@ rspamd_lua_add_metamethod (lua_State *L, const gchar *classname,
 								luaL_Reg *meth)
 {
 	khiter_t k;
+	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-	k = kh_get (lua_class_set, lua_classes, classname);
+	k = kh_get (lua_class_set, ctx->classes, classname);
 
-	g_assert (k != kh_end (lua_classes));
-	/* get metatable identified by pointer */
-	lua_rawgetp (L, LUA_REGISTRYINDEX,
-			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+	g_assert (k != kh_end (ctx->classes));
+	lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 
 	lua_pushcfunction (L, meth->func);
 	lua_setfield (L, -2, meth->name);
@@ -944,6 +935,14 @@ rspamd_lua_init (bool wipe_mem)
 		L = luaL_newstate ();
 	}
 
+	struct rspamd_lua_context *ctx;
+
+	ctx = (struct rspamd_lua_context *)g_malloc0 (sizeof (*ctx));
+	ctx->L = L;
+	ctx->classes = kh_init(lua_class_set);
+	kh_resize(lua_class_set, ctx->classes, RSPAMD_LUA_NCLASSES);
+	DL_APPEND(rspamd_lua_global_ctx, ctx);
+
 	lua_gc (L, LUA_GCSTOP, 0);
 	luaL_openlibs (L);
 	luaopen_logger (L);
@@ -1044,6 +1043,29 @@ rspamd_lua_init (bool wipe_mem)
 }
 
 void
+rspamd_lua_close (lua_State *L)
+{
+	struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
+
+	/* TODO: we will leak this memory, but I don't know how to resolve
+	 * the chicked-egg problem when lua_close calls GC for many
+	 * userdata that requires classes metatables to be represented
+	 * For now, it is safe to leave it as is, I'm afraid
+	 */
+#if 0
+	int ref;
+	kh_foreach_value(ctx->classes, ref, {
+		luaL_unref(L, LUA_REGISTRYINDEX, ref);
+	});
+#endif
+
+	lua_close(L);
+	DL_DELETE(rspamd_lua_global_ctx, ctx);
+	kh_destroy(lua_class_set, ctx->classes);
+	g_free(ctx);
+}
+
+void
 rspamd_lua_start_gc (struct rspamd_config *cfg)
 {
 	lua_State *L = (lua_State *)cfg->lua_state;
@@ -1054,36 +1076,6 @@ rspamd_lua_start_gc (struct rspamd_config *cfg)
 	lua_gc (L, LUA_GCSETSTEPMUL, cfg->lua_gc_step);
 	lua_gc (L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
 	lua_gc (L, LUA_GCRESTART, 0);
-}
-
-/**
- * Initialize new locked lua_State structure
- */
-struct lua_locked_state *
-rspamd_init_lua_locked (struct rspamd_config *cfg)
-{
-	struct lua_locked_state *new;
-
-	new = g_malloc0 (sizeof (struct lua_locked_state));
-	new->L = rspamd_lua_init (false);
-	new->m = rspamd_mutex_new ();
-
-	return new;
-}
-
-/**
- * Free locked state structure
- */
-void
-rspamd_free_lua_locked (struct lua_locked_state *st)
-{
-	g_assert (st != NULL);
-
-	lua_close (st->L);
-
-	rspamd_mutex_free (st->m);
-
-	g_free (st);
 }
 
 
@@ -1287,16 +1279,17 @@ rspamd_lua_check_class (lua_State *L, gint index, const gchar *name)
 		p = lua_touserdata (L, index);
 		if (p) {
 			if (lua_getmetatable (L, index)) {
-				k = kh_get (lua_class_set, lua_classes, name);
+				struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-				if (k == kh_end (lua_classes)) {
+				k = kh_get (lua_class_set, ctx->classes, name);
+
+				if (k == kh_end (ctx->classes)) {
 					lua_pop (L, 1);
 
 					return NULL;
 				}
 
-				lua_rawgetp (L, LUA_REGISTRYINDEX,
-						RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+				lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 
 				if (lua_rawequal (L, -1, -2)) {  /* does it have the correct mt? */
 					lua_pop (L, 2);  /* remove both metatables */
@@ -1996,14 +1989,15 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 	else {
 		/* Match class */
 		if (lua_getmetatable (L, pos)) {
-			k = kh_get (lua_class_set, lua_classes, (gchar *)classname);
+			struct rspamd_lua_context *ctx = rspamd_lua_ctx_by_state(L);
 
-			if (k == kh_end (lua_classes)) {
+			k = kh_get (lua_class_set, ctx->classes, classname);
+
+			if (k == kh_end (ctx->classes)) {
 				goto err;
 			}
 
-			lua_rawgetp (L, LUA_REGISTRYINDEX,
-					RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+			lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(ctx->classes, k));
 
 			if (!lua_rawequal (L, -1, -2)) {
 				goto err;

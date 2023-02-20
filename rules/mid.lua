@@ -105,3 +105,23 @@ rspamd_config:set_metric_symbol('MID_CONTAINS_TO', 1.0, 'Message-ID contains To 
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_TO', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_RHS_MATCH_TO', 1.0, 'Message-ID RHS matches To domain', 'default', 'Message ID')
 
+-- Another check from https://github.com/rspamd/rspamd/issues/4299
+rspamd_config:register_symbol {
+  type = 'normal,mime',
+  group = 'mid',
+  name = 'MID_END_EQ_FROM_USER_PART',
+  description = 'Message-ID RHS (after @) and MIME from local part are the same',
+  score = 4.0,
+
+  callback = function(task)
+    local mid = task:get_header('Message-ID')
+    if not mid then return end
+    local mime_from = task:get_from('mime')
+    local _,_,mid_realm = mid:find("@([a-z]+)>?$")
+    if mid_realm and mime_from and mime_from[1] and mime_from[1].user then
+      if (mid_realm == mime_from[1].user) then
+        return true
+      end
+    end
+  end
+}

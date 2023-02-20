@@ -1389,7 +1389,8 @@ if opts then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     lua_util.disable_module(N, "config")
   else
-    settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
+    local lua_maps = require "lua_maps"
+    settings['from_map'] = lua_maps.map_add('clickhouse', 'from_tables',
         'regexp', 'clickhouse specific domains')
 
     settings.upstream = upstream_list.create(rspamd_config,

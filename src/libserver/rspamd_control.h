@@ -20,9 +20,7 @@
 #include "mem_pool.h"
 #include "contrib/libev/ev.h"
 
-#ifdef  __cplusplus
-extern "C" {
-#endif
+G_BEGIN_DECLS
 
 struct rspamd_main;
 struct rspamd_worker;
@@ -49,12 +47,13 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_ON_FORK,
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
+	RSPAMD_NOTICE_HYPERSCAN_CACHE,
 };
 
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-#define CONTROL_PATHLEN 400
+#define CONTROL_PATHLEN MIN(PATH_MAX, PIPE_BUF - sizeof(int) * 2 - sizeof(gint64) * 2)
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -71,8 +70,8 @@ struct rspamd_control_command {
 			guint unused;
 		} recompile;
 		struct {
-			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
+			gchar cache_dir[CONTROL_PATHLEN];
 		} hs_loaded;
 		struct {
 			gchar tag[32];
@@ -150,8 +149,8 @@ struct rspamd_srv_command {
 			guint pair_num;
 		} spair;
 		struct {
-			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
+			gchar cache_dir[CONTROL_PATHLEN];
 		} hs_loaded;
 		struct {
 			gchar tag[32];
@@ -176,6 +175,10 @@ struct rspamd_srv_command {
 		struct {
 			guint status;
 		} health;
+		/* Used when a worker loads a valid hyperscan file */
+		struct {
+			char path[CONTROL_PATHLEN];
+		} hyperscan_cache_file;
 	} cmd;
 };
 
@@ -207,6 +210,9 @@ struct rspamd_srv_reply {
 			guint scanners_count;
 			guint workers_hb_lost;
 		} health;
+		struct {
+			int unused;
+		} hyperscan_cache_file;
 	} reply;
 };
 
@@ -284,14 +290,14 @@ enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
  */
 const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
 
+const gchar *rspamd_srv_command_to_string (enum rspamd_srv_type cmd);
+
 /**
  * Used to cleanup pending events
  * @param p
  */
 void rspamd_pending_control_free (gpointer p);
 
-#ifdef  __cplusplus
-}
-#endif
+G_END_DECLS
 
 #endif

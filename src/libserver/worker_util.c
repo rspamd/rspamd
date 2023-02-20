@@ -64,6 +64,8 @@
 #include "contrib/libev/ev.h"
 #include "libstat/stat_api.h"
 
+struct rspamd_worker *rspamd_current_worker = NULL;
+
 /* Forward declaration */
 static void rspamd_worker_heartbeat_start (struct rspamd_worker *,
 		struct ev_loop *);
@@ -1173,8 +1175,14 @@ rspamd_handle_child_fork (struct rspamd_worker *wrk,
 	/* Close parent part of socketpair */
 	close (wrk->control_pipe[0]);
 	close (wrk->srv_pipe[0]);
+	/*
+	 * Read comments in `rspamd_handle_main_fork` for details why these channel
+	 * is blocking.
+	 */
 	rspamd_socket_nonblocking (wrk->control_pipe[1]);
+#if 0
 	rspamd_socket_nonblocking (wrk->srv_pipe[1]);
+#endif
 	rspamd_main->cfg->cur_worker = wrk;
 	/* Execute worker (this function should not return normally!) */
 	cf->worker->worker_start_func (wrk);
@@ -1192,8 +1200,22 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 	close (wrk->control_pipe[1]);
 	close (wrk->srv_pipe[1]);
 
-	rspamd_socket_nonblocking (wrk->control_pipe[0]);
+	/*
+	 * There are no reasons why control pipes are blocking: the messages
+	 * there are rare and are strictly bounded by command sizes, so if we block
+	 * on some pipe, it is ok, as we still poll that for all operations.
+	 * It is also impossible to block on writing in normal conditions.
+	 * And if the conditions are not normal, e.g. a worker is unresponsive, then
+	 * we can safely think that the non-blocking behaviour as it is implemented
+	 * currently will not make things better, as it would lead to incomplete
+	 * reads/writes that are not handled anyhow and are totally broken from the
+	 * beginning.
+	 */
+#if 0
 	rspamd_socket_nonblocking (wrk->srv_pipe[0]);
+#endif
+	rspamd_socket_nonblocking (wrk->control_pipe[0]);
+
 	rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
 	/* Child event */
 	wrk->cld_ev.data = wrk;
@@ -1226,6 +1248,9 @@ rspamd_handle_main_fork (struct rspamd_worker *wrk,
 #endif
 }
 
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET SOCK_DGRAM
+#endif
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 					struct rspamd_worker_conf *cf,
@@ -1239,12 +1264,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
-	if (!rspamd_socketpair (wrk->control_pipe, SOCK_DGRAM)) {
+	if (!rspamd_socketpair (wrk->control_pipe, SOCK_SEQPACKET)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
 
-	if (!rspamd_socketpair (wrk->srv_pipe, SOCK_DGRAM)) {
+	if (!rspamd_socketpair (wrk->srv_pipe, SOCK_SEQPACKET)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
@@ -1276,6 +1301,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	switch (wrk->pid) {
 	case 0:
+		rspamd_current_worker = wrk;
 		rspamd_handle_child_fork (wrk, rspamd_main, cf, listen_sockets);
 		break;
 	case -1:
@@ -1375,6 +1401,70 @@ rspamd_worker_is_primary_controller (struct rspamd_worker *w)
 
 	if (w) {
 		return !!(w->flags & RSPAMD_WORKER_CONTROLLER) && w->index == 0;
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_worker_check_controller_presence (struct rspamd_worker *w)
+{
+	if (w->index == 0) {
+		GQuark our_type = w->type;
+		gboolean controller_seen = FALSE;
+		GList *cur;
+
+		enum {
+			low_priority_worker,
+			high_priority_worker
+		} our_priority;
+
+		if (our_type == g_quark_from_static_string("rspamd_proxy")) {
+			our_priority = low_priority_worker;
+		}
+		else if (our_type == g_quark_from_static_string("normal")) {
+			our_priority = high_priority_worker;
+		}
+		else {
+			msg_err ("function is called for a wrong worker type: %s", g_quark_to_string(our_type));
+			return FALSE;
+		}
+
+		cur = w->srv->cfg->workers;
+
+		while (cur) {
+			struct rspamd_worker_conf *cf;
+
+			cf = (struct rspamd_worker_conf *)cur->data;
+
+			if (our_priority == low_priority_worker) {
+				if ((cf->type == g_quark_from_static_string("controller")) ||
+					(cf->type == g_quark_from_static_string("normal"))) {
+
+					if (cf->enabled && cf->count >= 0) {
+						controller_seen = TRUE;
+						break;
+					}
+				}
+			}
+			else {
+				if (cf->type == g_quark_from_static_string("controller")) {
+					if (cf->enabled && cf->count >= 0) {
+						controller_seen = TRUE;
+						break;
+					}
+				}
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		if (!controller_seen) {
+			msg_info ("no controller or normal workers defined, execute "
+					  "controller periodics in this worker");
+			w->flags |= RSPAMD_WORKER_CONTROLLER;
+			return TRUE;
+		}
 	}
 
 	return FALSE;
@@ -1639,12 +1729,6 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	stack_t ss;
 	memset (&ss, 0, sizeof ss);
 
-	/*
-	 * Allocate special stack, NOT freed at the end so far
-	 * It also cannot be on stack as this memory is used when
-	 * stack corruption is detected. Leak sanitizer blames about it but
-	 * I don't know any good ways to stop this behaviour.
-	 */
 	ss.ss_size = MAX (SIGSTKSZ, 8192 * 4);
 	stack_mem = g_malloc0 (ss.ss_size);
 	ss.ss_sp = stack_mem;
@@ -1659,6 +1743,28 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	sigaction (SIGABRT, &sa, NULL);
 	sigaction (SIGFPE, &sa, NULL);
 	sigaction (SIGSYS, &sa, NULL);
+#endif
+}
+
+RSPAMD_NO_SANITIZE void rspamd_unset_crash_handler (struct rspamd_main *unused_)
+{
+#ifdef HAVE_SIGALTSTACK
+	int ret;
+	stack_t ss;
+	ret = sigaltstack (NULL, &ss);
+
+	if (ret != -1) {
+		if (ss.ss_size > 0 && ss.ss_sp) {
+			g_free(ss.ss_sp);
+		}
+
+		ss.ss_size = 0;
+		ss.ss_sp = NULL;
+#ifdef SS_DISABLE
+		ss.ss_flags |= SS_DISABLE;
+#endif
+		sigaltstack(&ss, NULL);
+	}
 #endif
 }
 

@@ -27,6 +27,10 @@
 #include <sys/resource.h>
 #endif
 
+#ifdef WITH_HYPERSCAN
+#include "hyperscan_tools.h"
+#endif
+
 static ev_tstamp io_timeout = 30.0;
 static ev_tstamp worker_io_timeout = 0.5;
 
@@ -908,19 +912,26 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 		r = recvmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot read from worker's srv pipe: %s",
-					strerror (errno));
+			if (errno != EAGAIN) {
+				msg_err ("cannot read from worker's srv pipe: %s",
+					strerror(errno));
+			}
+			else {
+				return;
+			}
 		}
 		else if (r == 0) {
 			/*
 			 * Usually this means that a worker is dead, so do not try to read
 			 * anything
 			 */
+			msg_err ("cannot read from worker's srv pipe connection closed; command = %s",
+				rspamd_srv_command_to_string(cmd.type));
 			ev_io_stop (EV_A_ w);
 		}
 		else if (r != sizeof (cmd)) {
-			msg_err ("cannot read from worker's srv pipe incomplete command: %d",
-					(gint) r);
+			msg_err ("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
+					(gint)r, (gint)sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
 		}
 		else {
 			rdata = g_malloc0 (sizeof (*rdata));
@@ -1009,6 +1020,12 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply (srv, &rdata->rep);
 				break;
+			case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+#ifdef WITH_HYPERSCAN
+				rspamd_hyperscan_notice_known(cmd.cmd.hyperscan_cache_file.path);
+#endif
+				rdata->rep.reply.hyperscan_cache_file.unused = 0;
+				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
 				break;
@@ -1054,8 +1071,13 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 		r = sendmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot write to worker's srv pipe: %s",
-					strerror (errno));
+			msg_err ("cannot write to worker's srv pipe when writing reply: %s; command = %s",
+				strerror (errno), rspamd_srv_command_to_string(rdata->rep.type));
+		}
+		else if (r != sizeof (rdata->rep)) {
+			msg_err ("cannot write to worker's srv pipe: %d != %d; command = %s",
+				(int)r, (int)sizeof (rdata->rep),
+				rspamd_srv_command_to_string(rdata->rep.type));
 		}
 
 		g_free (rdata);
@@ -1124,7 +1146,23 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 		r = sendmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot write to server pipe: %s", strerror (errno));
+			if (r == ENOBUFS) {
+				/* On BSD derived systems we can have this error when trying to send
+				 * requests too fast.
+				 * It might be good to retry...
+				 */
+				msg_info ("cannot write to server pipe: %s; command = %s; retrying sending",
+					strerror (errno),
+					rspamd_srv_command_to_string(rd->cmd.type));
+				return;
+			}
+			msg_err ("cannot write to server pipe: %s; command = %s", strerror (errno),
+				rspamd_srv_command_to_string(rd->cmd.type));
+			goto cleanup;
+		}
+		else if (r != sizeof (rd->cmd)) {
+			msg_err("incomplete write to the server pipe: %d != %d, command = %s",
+				(int)r, (int)sizeof(rd->cmd), rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
@@ -1144,13 +1182,14 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 		r = recvmsg (w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err ("cannot read from server pipe: %s", strerror (errno));
+			msg_err ("cannot read from server pipe: %s; command = %s", strerror (errno),
+				rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
-		if (r < (gint)sizeof (rd->rep)) {
-			msg_err ("cannot read from server pipe, invalid length: %d",
-					(gint)r);
+		if (r != (gint)sizeof (rd->rep)) {
+			msg_err ("cannot read from server pipe, invalid length: %d != %d; command = %s",
+					(gint)r, (int)sizeof (rd->rep), rspamd_srv_command_to_string(rd->cmd.type));
 			goto cleanup;
 		}
 
@@ -1158,17 +1197,18 @@ rspamd_srv_request_handler (EV_P_ ev_io *w, int revents)
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 		}
 
+		/* Reply has been received */
+		if (rd->handler) {
+			rd->handler (rd->worker, &rd->rep, rfd, rd->ud);
+		}
+
 		goto cleanup;
 	}
 
 	return;
 
+
 cleanup:
-
-	if (rd->handler) {
-		rd->handler (rd->worker, &rd->rep, rfd, rd->ud);
-	}
-
 	ev_io_stop (EV_A_ w);
 	g_free (rd);
 }
@@ -1282,6 +1322,40 @@ rspamd_control_command_to_string (enum rspamd_control_type cmd)
 		reply = "child_change";
 		break;
 	default:
+		break;
+	}
+
+	return reply;
+}
+
+const gchar *rspamd_srv_command_to_string (enum rspamd_srv_type cmd)
+{
+	const gchar *reply = "unknown";
+
+	switch (cmd) {
+	case RSPAMD_SRV_SOCKETPAIR:
+		reply = "socketpair";
+		break;
+	case RSPAMD_SRV_HYPERSCAN_LOADED:
+		reply = "hyperscan_loaded";
+		break;
+	case RSPAMD_SRV_MONITORED_CHANGE:
+		reply = "monitored_change";
+		break;
+	case RSPAMD_SRV_LOG_PIPE:
+		reply = "log_pipe";
+		break;
+	case RSPAMD_SRV_ON_FORK:
+		reply = "on_fork";
+		break;
+	case RSPAMD_SRV_HEARTBEAT:
+		reply = "heartbeat";
+		break;
+	case RSPAMD_SRV_HEALTH:
+		reply = "health";
+		break;
+	case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+		reply = "notice_hyperscan_cache";
 		break;
 	}
 

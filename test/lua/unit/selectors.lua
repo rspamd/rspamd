@@ -34,13 +34,21 @@ context("Selectors test", function()
     end
   end)
 
-  local function check_selector(selector_string)
-    local sels = lua_selectors.parse_selector(cfg, selector_string)
-    local elts = lua_selectors.process_selectors(task, sels)
+  local function check_selector_plain(selector_string)
+    local sels = lua_selectors.create_selector_closure_fn(nil, cfg, selector_string, nil,
+        function(_, res, _) return res end)
+    local elts = sels(task)
     return elts
   end
 
-  local cases = {
+  local function check_selector_kv(selector_string)
+    local sels = lua_selectors.create_selector_closure_fn(nil, cfg, selector_string, nil,
+        lua_selectors.kv_table_from_pairs)
+    local elts = sels(task)
+    return elts
+  end
+
+  local cases_plain = {
     ["ip"] = {
                 selector = "ip",
                 expect = {"198.172.22.91"}
@@ -378,9 +386,27 @@ context("Selectors test", function()
     },
   }
 
-  for case_name, case in lua_util.spairs(cases) do
-    test("case " .. case_name, function()
-      local elts = check_selector(case.selector)
+  for case_name, case in lua_util.spairs(cases_plain) do
+    test("plain case " .. case_name, function()
+      local elts = check_selector_plain(case.selector)
+      assert_not_nil(elts)
+      assert_rspamd_table_eq_sorted({actual = elts, expect = case.expect})
+    end)
+  end
+
+  local cases_kv = {
+    ["ip"] = {
+      selector = "id('ip');ip",
+      expect = { ip = "198.172.22.91" }
+    },
+    ["ip+words"] = {
+      selector = "id('ip');ip;id('words');words('full'):2",
+      expect = { ip = "198.172.22.91", words = {'hello', 'world', '', 'mail', 'me'} }
+    },
+  }
+  for case_name, case in lua_util.spairs(cases_kv) do
+    test("kv case " .. case_name, function()
+      local elts = check_selector_kv(case.selector)
       assert_not_nil(elts)
       assert_rspamd_table_eq_sorted({actual = elts, expect = case.expect})
     end)

@@ -40,15 +40,6 @@ time_t rspamd_http_parse_date (const gchar *header, gsize len);
  */
 glong rspamd_http_date_format (gchar *buf, gsize len, time_t time);
 
-/**
- * Normalize HTTP path removing dot sequences and repeating '/' symbols as
- * per rfc3986#section-5.2
- * @param path
- * @param len
- * @param nlen
- */
-void rspamd_http_normalize_path_inplace (gchar *path, guint len, gsize *nlen);
-
 #ifdef  __cplusplus
 }
 #endif

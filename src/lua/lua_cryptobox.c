@@ -567,7 +567,7 @@ lua_cryptobox_keypair_totable (lua_State *L)
 			hex = lua_toboolean (L, 2);
 		}
 
-		obj = rspamd_keypair_to_ucl (kp, hex);
+		obj = rspamd_keypair_to_ucl (kp, hex ? RSPAMD_KEYPAIR_DUMP_HEX : RSPAMD_KEYPAIR_DUMP_DEFAULT);
 
 		ret = ucl_object_push_lua (L, obj, true);
 		ucl_object_unref (obj);

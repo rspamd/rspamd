@@ -36,6 +36,8 @@ typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
 struct rspamd_worker;
 struct rspamd_worker_signal_handler;
 
+extern struct rspamd_worker *rspamd_current_worker;
+
 /**
  * Init basic signals for a worker
  * @param worker
@@ -190,6 +192,11 @@ gdouble rspamd_worker_check_and_adjust_timeout (struct rspamd_config *cfg,
 gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
 
 /**
+ * Returns TRUE if a specific worker should take a role of a controller
+ */
+gboolean rspamd_worker_check_controller_presence (struct rspamd_worker *w);
+
+/**
  * Creates new session cache
  * @param w
  * @return
@@ -227,6 +234,11 @@ struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
  * Sets crash signals handlers if compiled with libunwind
  */
 RSPAMD_NO_SANITIZE void rspamd_set_crash_handler (struct rspamd_main *);
+
+/**
+ * Restore memory for crash signals
+ */
+RSPAMD_NO_SANITIZE void rspamd_unset_crash_handler (struct rspamd_main *);
 
 /**
  * Initialise the main monitoring worker

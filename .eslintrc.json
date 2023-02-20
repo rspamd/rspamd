@@ -26,6 +26,7 @@
         //     "singleLine": { "afterColon": false }
         // }],
         "line-comment-position": "off",
+        "logical-assignment-operators": ["error", "never"],
         "max-params": ["warn", 6],
         "max-statements": ["warn", 44],
         "max-statements-per-line": ["error", { "max": 2 }],

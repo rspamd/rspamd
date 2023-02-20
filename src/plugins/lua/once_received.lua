@@ -41,10 +41,10 @@ local check_authed = false
 local function check_quantity_received (task)
   local recvh = task:get_received_headers()
 
-  local nreceived = fun.reduce(function(acc, rcvd)
+  local nreceived = fun.reduce(function(acc, _)
     return acc + 1
   end, 0, fun.filter(function(h)
-    return not h['artificial']
+    return not h['flags']['artificial']
   end, recvh))
 
   local function recv_dns_cb(_, to_resolve, results, err)
@@ -56,7 +56,10 @@ local function check_quantity_received (task)
     if not results then
       if nreceived <= 1 then
         task:insert_result(symbol, 1)
-        task:insert_result(symbol_strict, 1)
+        -- Avoid strict symbol inserting as the remaining symbols have already
+        -- quote a significant weight, so a message could be rejected by just
+        -- this property.
+        --task:insert_result(symbol_strict, 1)
         -- Check for MUAs
         local ua = task:get_header('User-Agent')
         local xm = task:get_header('X-Mailer')
@@ -193,7 +196,8 @@ if opts then
           good_hosts = v
         end
       elseif n == 'whitelist' then
-        whitelist = rspamd_map_add('once_received', 'whitelist', 'radix',
+        local lua_maps = require "lua_maps"
+        whitelist = lua_maps.map_add('once_received', 'whitelist', 'radix',
           'once received whitelist')
       elseif n == 'symbol_mx' then
         symbol_mx = v

@@ -885,7 +885,7 @@ lua_ucl_parser_parse_text (lua_State *L)
 	if (lua_type (L, 2) == LUA_TUSERDATA) {
 		t = lua_touserdata (L, 2);
 	}
-	else {
+	else if (lua_type (L, 2) == LUA_TSTRING) {
 		const gchar *s;
 		gsize len;
 		static struct _rspamd_lua_text st_t;
@@ -895,6 +895,9 @@ lua_ucl_parser_parse_text (lua_State *L)
 		st_t.len = len;
 
 		t = &st_t;
+	}
+	else {
+		return luaL_error(L, "invalid argument as input, expected userdata or a string");
 	}
 
 	if (lua_type (L, 3) == LUA_TSTRING) {

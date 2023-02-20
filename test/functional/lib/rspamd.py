@@ -31,22 +31,23 @@ def save_run_results(directory, filenames):
     current_directory = os.getcwd()
     suite_name = BuiltIn().get_variable_value("${SUITE_NAME}")
     test_name = BuiltIn().get_variable_value("${TEST NAME}")
-    onlyfiles = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    logger.debug('%s content before cleanup: %s' % (directory, onlyfiles))
-    if test_name is None:
-        # this is suite-level tear down
-        destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
-    else:
-        destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
-    if not os.path.isdir(destination_directory):
-        os.makedirs(destination_directory)
-    for file in filenames.split(' '):
-        source_file = "%s/%s" % (directory, file)
-        logger.debug('check if we can save %s' % source_file)
-        if os.path.isfile(source_file):
-            logger.debug('found %s, save it' % file)
-            shutil.copy(source_file, "%s/%s" % (destination_directory, file))
-            shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
+    if os.path.exists(directory):
+        onlyfiles = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+        logger.debug('%s content before cleanup: %s' % (directory, onlyfiles))
+        if test_name is None:
+            # this is suite-level tear down
+            destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
+        else:
+            destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
+        if not os.path.isdir(destination_directory):
+            os.makedirs(destination_directory)
+        for file in filenames.split(' '):
+            source_file = "%s/%s" % (directory, file)
+            logger.debug('check if we can save %s' % source_file)
+            if os.path.isfile(source_file):
+                logger.debug('found %s, save it' % file)
+                shutil.copy(source_file, "%s/%s" % (destination_directory, file))
+                shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
 
 def encode_filename(filename):
     return "".join(['%%%0X' % ord(b) for b in filename])
@@ -239,13 +240,14 @@ def shutdown_process_with_children(pid):
         process = psutil.Process(pid=pid)
     except psutil.NoSuchProcess:
         return
-    children = process.children(recursive=False)
+    children = process.children(recursive=True)
     shutdown_process(process)
     for child in children:
         try:
-            shutdown_process(child)
-        except:
+            child.kill()
+        except psutil.NoSuchProcess:
             pass
+    psutil.wait_procs(children, timeout=KILL_WAIT)
 
 def write_to_stdin(process_handle, text):
     if not isinstance(text, bytes):
@@ -340,3 +342,7 @@ def collect_lua_coverage():
         logger.info("%s merged into %s" % (", ".join(input_files), LUA_STATSFILE))
     else:
         logger.info("no *.luacov.stats.out files found in %s" % tmp_dir)
+
+
+def file_exists(file):
+    return os.path.isfile(file)

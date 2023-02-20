@@ -9,6 +9,10 @@ local is_ok, connection = tcp_sync.connect {
   timeout = 20,
   port = 18080,
 }
+if not is_ok then
+  logger.errx(rspamd_config, 'connect error: %1', connection)
+  return
+end
 local err
 is_ok, err = connection:write(string.format('POST /request HTTP/1.1\r\nConnection: close\r\n\r\n'))
 
@@ -34,7 +38,7 @@ while true do
   end
 
   local value
-  local header = header_line:gsub("([%w-]+): (.*)", 
+  local header = header_line:gsub("([%w-]+): (.*)",
       function (h, v) value = v; return h:lower() end)
 
   logger.info('parsed header: %1 -> "%2"', header, value)

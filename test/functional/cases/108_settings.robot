@@ -246,6 +246,10 @@ SETTINGS ID - VIRTUAL DEP
   Do Not Expect Symbol  SIMPLE_POST
   Do Not Expect Symbol  SIMPLE_PRE
 
+SETTINGS ID - EXTERNAL MAP
+  Scan File  ${MESSAGE}  Settings-Id=external
+  Expect Symbol  EXTERNAL_SETTINGS
+
 PRIORITY
   Scan File  ${MESSAGE_PRIORITY}  Settings-Id=id_virtual_group  From=user@test.com
   Expect Symbol  PRIORITY_2
@@ -255,8 +259,10 @@ PRIORITY
 Settings Setup
   Copy File  ${RSPAMD_TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
   Copy File  ${RSPAMD_TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
+  Run Dummy Http
   Rspamd Setup
 
 Settings Teardown
   Rspamd Teardown
+  Dummy Http Teardown
   Remove Files  /tmp/bayes.spam.sqlite3  /tmp/bayes.ham.sqlite3

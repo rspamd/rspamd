@@ -5,14 +5,13 @@ name: default
 
 platform:
   os: linux
-  arch: amd64
 
 steps:
   - name: prepare
 
     # any image with a root shell can be used here, but Ubuntu used as base
     # image for build and test images and we need to download it anyway
-    image: ubuntu:20.04
+    image: ubuntu:22.04
     pull: if-not-exists
     volumes:
       - name: rspamd
@@ -40,11 +39,12 @@ steps:
         -DCMAKE_VERBOSE_MAKEFILE=ON
         -DENABLE_COVERAGE=ON
         -DENABLE_LIBUNWIND=ON
+        -GNinja
         $CI_WORKSPACE
       - ncpu=$(getconf _NPROCESSORS_ONLN)
-      - make -j $ncpu install
-      - make -j $ncpu rspamd-test
-      - make -j $ncpu rspamd-test-cxx
+      - ninja -j $ncpu install
+      - ninja -j $ncpu rspamd-test
+      - ninja -j $ncpu rspamd-test-cxx
 
   - name: build-clang
     # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
@@ -101,13 +101,16 @@ steps:
       # different directories (if started in parallel)
       - cd /rspamd/build/test
       - set +e
-      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
       # shell sets exit status of a process terminated by a signal to '128 + signal-number'
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
       - >
         if [ $EXIT_CODE -gt 128 ]; then
         gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
+        exit $EXIT_CODE;
+        fi;
+        if [ $EXIT_CODE -ne 0 ]; then
         exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
@@ -143,7 +146,7 @@ steps:
       - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
       - cd /rspamd/fedora/build/test
       - set +e
-      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
       # shell sets exit status of a process terminated by a signal to '128 + signal-number'
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
@@ -274,10 +277,10 @@ volumes:
     temp: {}
 
 trigger:
-  event: [push, tag, pull_request]
+  event: [push, tag, pull_request, custom]
 
 ---
 kind: signature
-hmac: 9e142da57023b8a8a23e6c34e6de62552ab32cd5323e9b47a09ae20089992b67
+hmac: 4ff026a59ee31c1afc6e85690034d2ead4cc8274baf7099f4bd8d69e4045db97
 
 ...

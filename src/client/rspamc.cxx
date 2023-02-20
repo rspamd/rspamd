@@ -34,7 +34,7 @@
 #include "frozen/unordered_map.h"
 #include "fmt/format.h"
 #include "fmt/color.h"
-#include "libutil/cxx/locked_file.hxx"
+#include "libutil/cxx/file_util.hxx"
 #include "libutil/cxx/util.hxx"
 
 #ifdef HAVE_SYS_WAIT_H
@@ -71,6 +71,7 @@ static gboolean pass_all;
 static gboolean tty = FALSE;
 static gboolean verbose = FALSE;
 static gboolean print_commands = FALSE;
+static gboolean humanreport = FALSE;
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean headers = FALSE;
@@ -83,7 +84,7 @@ static gboolean compressed = FALSE;
 static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
-static const char *key = nullptr;
+static const char *pubkey = nullptr;
 static const char *user_agent = "rspamc";
 
 std::vector<GPid> children;
@@ -98,84 +99,85 @@ static gboolean rspamc_password_callback(const gchar *option_name,
 										 GError **error);
 
 static GOptionEntry entries[] =
-		{
-				{"connect",          'h',  0,                          G_OPTION_ARG_STRING,       &connect_str,
-																																	  "Specify host and port",                                                    nullptr},
-				{"password",         'P',  G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK,
-																								  (void *) &rspamc_password_callback, "Specify control password",                                                 nullptr},
-				{"classifier",       'c',  0,                          G_OPTION_ARG_STRING,       &classifier,
-																																	  "Classifier to learn spam or ham",                                          nullptr},
-				{"weight",           'w',  0,                          G_OPTION_ARG_INT,          &weight,
-																																	  "Weight for fuzzy operations",                                              nullptr},
-				{"flag",             'f',  0,                          G_OPTION_ARG_INT,          &flag,                              "Flag for fuzzy operations",
-																																																				  nullptr},
-				{"pass-all",         'p',  0,                          G_OPTION_ARG_NONE,         &pass_all,                          "Pass all filters",
-																																																				  nullptr},
-				{"verbose",          'v',  0,                          G_OPTION_ARG_NONE,         &verbose,                           "More verbose output",
-																																																				  nullptr},
-				{"ip",               'i',  0,                          G_OPTION_ARG_STRING,       &ip,
-																																	  "Emulate that message was received from specified ip address",
-																																																				  nullptr},
-				{"user",             'u',  0,                          G_OPTION_ARG_STRING,       &user,
-																																	  "Emulate that message was received from specified authenticated user",      nullptr},
-				{"deliver",          'd',  0,                          G_OPTION_ARG_STRING,       &deliver_to,
-																																	  "Emulate that message is delivered to specified user (for LDA/statistics)", nullptr},
-				{"from",             'F',  0,                          G_OPTION_ARG_STRING,       &from,
-																																	  "Emulate that message has specified SMTP FROM address",                     nullptr},
-				{"rcpt",             'r',  0,                          G_OPTION_ARG_STRING_ARRAY, &rcpts,
-																																	  "Emulate that message has specified SMTP RCPT address",                     nullptr},
-				{"helo",             0,    0,                          G_OPTION_ARG_STRING,       &helo,
-																																	  "Imitate SMTP HELO passing from MTA",                                       nullptr},
-				{"hostname",         0,    0,                          G_OPTION_ARG_STRING,       &hostname,
-																																	  "Imitate hostname passing from MTA",                                        nullptr},
-				{"timeout",          't',  0,                          G_OPTION_ARG_DOUBLE,       &timeout,
-																																	  "Time in seconds to wait for a reply",                                      nullptr},
-				{"bind",             'b',  0,                          G_OPTION_ARG_STRING,       &local_addr,
-																																	  "Bind to specified ip address",                                             nullptr},
-				{"commands",         0,    0,                          G_OPTION_ARG_NONE,         &print_commands,
-																																	  "List available commands",                                                  nullptr},
-				{"json",             'j',  0,                          G_OPTION_ARG_NONE,         &json,                              "Output json reply",                                                        nullptr},
-				{"compact",          '\0', 0,                          G_OPTION_ARG_NONE,         &compact,                           "Output compact json reply",                                                nullptr},
-				{"headers",          0,    0,                          G_OPTION_ARG_NONE,         &headers,                           "Output HTTP headers",
-																																																				  nullptr},
-				{"raw",              0,    0,                          G_OPTION_ARG_NONE,         &raw,                               "Input is a raw file, not an email file",
-																																																				  nullptr},
-				{"ucl",              0,    0,                          G_OPTION_ARG_NONE,         &ucl_reply,                         "Output ucl reply from rspamd",
-																																																				  nullptr},
-				{"max-requests",     'n',  0,                          G_OPTION_ARG_INT,          &max_requests,
-																																	  "Maximum count of parallel requests to rspamd",                             nullptr},
-				{"extended-urls",    0,    0,                          G_OPTION_ARG_NONE,         &extended_urls,
-																																	  "Output urls in extended format",                                           nullptr},
-				{"key",              0,    0,                          G_OPTION_ARG_STRING,       &key,
-																																	  "Use specified pubkey to encrypt request",                                  nullptr},
-				{"exec",             'e',  0,                          G_OPTION_ARG_STRING,       &execute,
-																																	  "Execute the specified command and pass output to it",                      nullptr},
-				{"mime",             'm',  0,                          G_OPTION_ARG_NONE,         &mime_output,
-																																	  "Write mime body of message with headers instead of just a scan's result",  nullptr},
-				{"header",           0,    0,                          G_OPTION_ARG_STRING_ARRAY, &http_headers,
-																																	  "Add custom HTTP header to query (can be repeated)",                        nullptr},
-				{"exclude",          0,    0,                          G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
-																																	  "Exclude specific glob patterns in file names (can be repeated)",           nullptr},
-				{"sort",             0,    0,                          G_OPTION_ARG_STRING,       &sort,
-																																	  "Sort output in a specific order (name, weight, frequency, hits)",          nullptr},
-				{"empty",            'E',  0,                          G_OPTION_ARG_NONE,         &empty_input,
-																																	  "Allow empty input instead of reading from stdin",                          nullptr},
-				{"fuzzy-symbol",     'S',  0,                          G_OPTION_ARG_STRING,       &fuzzy_symbol,
-																																	  "Learn the specified fuzzy symbol",                                         nullptr},
-				{"compressed",       'z',  0,                          G_OPTION_ARG_NONE,         &compressed,
-																																	  "Enable zstd compression",                                                  nullptr},
-				{"profile",          '\0', 0,                          G_OPTION_ARG_NONE,         &profile,
-																																	  "Profile symbols execution time",                                           nullptr},
-				{"dictionary",       'D',  0,                          G_OPTION_ARG_FILENAME,     &dictionary,
-																																	  "Use dictionary to compress data",                                          nullptr},
-				{"skip-images",      '\0', 0,                          G_OPTION_ARG_NONE,         &skip_images,
-																																	  "Skip images when learning/unlearning fuzzy",                               nullptr},
-				{"skip-attachments", '\0', 0,                          G_OPTION_ARG_NONE,         &skip_attachments,
-																																	  "Skip attachments when learning/unlearning fuzzy",                          nullptr},
-				{"user-agent",       'U',  0,                          G_OPTION_ARG_STRING,       &user_agent,
-																																	  "Use specific User-Agent instead of \"rspamc\"",                            nullptr},
-				{nullptr,            0,    0,                          G_OPTION_ARG_NONE,         nullptr,                            nullptr,                                                                    nullptr}
-		};
+	{
+		{"connect",          'h',  0,                          G_OPTION_ARG_STRING,       &connect_str,
+																															  "Specify host and port",                                                    nullptr},
+		{"password",         'P',  G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK,
+																						  (void *) &rspamc_password_callback, "Specify control password",                                                 nullptr},
+		{"classifier",       'c',  0,                          G_OPTION_ARG_STRING,       &classifier,
+																															  "Classifier to learn spam or ham",                                          nullptr},
+		{"weight",           'w',  0,                          G_OPTION_ARG_INT,          &weight,
+																															  "Weight for fuzzy operations",                                              nullptr},
+		{"flag",             'f',  0,                          G_OPTION_ARG_INT,          &flag,                              "Flag for fuzzy operations",
+																																																		  nullptr},
+		{"pass-all",         'p',  0,                          G_OPTION_ARG_NONE,         &pass_all,                          "Pass all filters",
+																																																		  nullptr},
+		{"verbose",          'v',  0,                          G_OPTION_ARG_NONE,         &verbose,                           "More verbose output",
+																																																		  nullptr},
+		{"ip",               'i',  0,                          G_OPTION_ARG_STRING,       &ip,
+																															  "Emulate that message was received from specified ip address",
+																																																		  nullptr},
+		{"user",             'u',  0,                          G_OPTION_ARG_STRING,       &user,
+																															  "Emulate that message was received from specified authenticated user",      nullptr},
+		{"deliver",          'd',  0,                          G_OPTION_ARG_STRING,       &deliver_to,
+																															  "Emulate that message is delivered to specified user (for LDA/statistics)", nullptr},
+		{"from",             'F',  0,                          G_OPTION_ARG_STRING,       &from,
+																															  "Emulate that message has specified SMTP FROM address",                     nullptr},
+		{"rcpt",             'r',  0,                          G_OPTION_ARG_STRING_ARRAY, &rcpts,
+																															  "Emulate that message has specified SMTP RCPT address",                     nullptr},
+		{"helo",             0,    0,                          G_OPTION_ARG_STRING,       &helo,
+																															  "Imitate SMTP HELO passing from MTA",                                       nullptr},
+		{"hostname",         0,    0,                          G_OPTION_ARG_STRING,       &hostname,
+																															  "Imitate hostname passing from MTA",                                        nullptr},
+		{"timeout",          't',  0,                          G_OPTION_ARG_DOUBLE,       &timeout,
+																															  "Time in seconds to wait for a reply",                                      nullptr},
+		{"bind",             'b',  0,                          G_OPTION_ARG_STRING,       &local_addr,
+																															  "Bind to specified ip address",                                             nullptr},
+		{"commands",         0,    0,                          G_OPTION_ARG_NONE,         &print_commands,
+																															  "List available commands",                                                  nullptr},
+		{"human",            'R',  0,                          G_OPTION_ARG_NONE,         &humanreport,                       "Output human readable report",                                             nullptr},
+		{"json",             'j',  0,                          G_OPTION_ARG_NONE,         &json,                              "Output json reply",                                                        nullptr},
+		{"compact",          '\0', 0,                          G_OPTION_ARG_NONE,         &compact,                           "Output compact json reply",                                                nullptr},
+		{"headers",          0,    0,                          G_OPTION_ARG_NONE,         &headers,                           "Output HTTP headers",
+																																																		  nullptr},
+		{"raw",              0,    0,                          G_OPTION_ARG_NONE,         &raw,                               "Input is a raw file, not an email file",
+																																																		  nullptr},
+		{"ucl",              0,    0,                          G_OPTION_ARG_NONE,         &ucl_reply,                         "Output ucl reply from rspamd",
+																																																		  nullptr},
+		{"max-requests",     'n',  0,                          G_OPTION_ARG_INT,          &max_requests,
+																															  "Maximum count of parallel requests to rspamd",                             nullptr},
+		{"extended-urls",    0,    0,                          G_OPTION_ARG_NONE,         &extended_urls,
+																															  "Output urls in extended format",                                           nullptr},
+		{"key",              0,    0,                          G_OPTION_ARG_STRING,       &pubkey,
+																															  "Use specified pubkey to encrypt request",                                  nullptr},
+		{"exec",             'e',  0,                          G_OPTION_ARG_STRING,       &execute,
+																															  "Execute the specified command and pass output to it",                      nullptr},
+		{"mime",             'm',  0,                          G_OPTION_ARG_NONE,         &mime_output,
+																															  "Write mime body of message with headers instead of just a scan's result",  nullptr},
+		{"header",           0,    0,                          G_OPTION_ARG_STRING_ARRAY, &http_headers,
+																															  "Add custom HTTP header to query (can be repeated)",                        nullptr},
+		{"exclude",          0,    0,                          G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
+																															  "Exclude specific glob patterns in file names (can be repeated)",           nullptr},
+		{"sort",             0,    0,                          G_OPTION_ARG_STRING,       &sort,
+																															  "Sort output in a specific order (name, weight, frequency, hits)",          nullptr},
+		{"empty",            'E',  0,                          G_OPTION_ARG_NONE,         &empty_input,
+																															  "Allow empty input instead of reading from stdin",                          nullptr},
+		{"fuzzy-symbol",     'S',  0,                          G_OPTION_ARG_STRING,       &fuzzy_symbol,
+																															  "Learn the specified fuzzy symbol",                                         nullptr},
+		{"compressed",       'z',  0,                          G_OPTION_ARG_NONE,         &compressed,
+																															  "Enable zstd compression",                                                  nullptr},
+		{"profile",          '\0', 0,                          G_OPTION_ARG_NONE,         &profile,
+																															  "Profile symbols execution time",                                           nullptr},
+		{"dictionary",       'D',  0,                          G_OPTION_ARG_FILENAME,     &dictionary,
+																															  "Use dictionary to compress data",                                          nullptr},
+		{"skip-images",      '\0', 0,                          G_OPTION_ARG_NONE,         &skip_images,
+																															  "Skip images when learning/unlearning fuzzy",                               nullptr},
+		{"skip-attachments", '\0', 0,                          G_OPTION_ARG_NONE,         &skip_attachments,
+																															  "Skip attachments when learning/unlearning fuzzy",                          nullptr},
+		{"user-agent",       'U',  0,                          G_OPTION_ARG_STRING,       &user_agent,
+																															  "Use specific User-Agent instead of \"rspamc\"",                            nullptr},
+		{nullptr,            0,    0,                          G_OPTION_ARG_NONE,         nullptr,                            nullptr,                                                                    nullptr}
+	};
 
 static void rspamc_symbols_output(FILE *out, ucl_object_t *obj);
 
@@ -215,129 +217,129 @@ struct rspamc_command {
 };
 
 static const constexpr auto rspamc_commands = rspamd::array_of(
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_SYMBOLS,
-				.name = "symbols",
-				.path = "checkv2",
-				.description = "scan message and show symbols (default command)",
-				.is_controller = FALSE,
-				.is_privileged = FALSE,
-				.need_input = TRUE,
-				.command_output_func = rspamc_symbols_output
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_LEARN_SPAM,
-				.name = "learn_spam",
-				.path = "learnspam",
-				.description = "learn message as spam",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = TRUE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_LEARN_HAM,
-				.name = "learn_ham",
-				.path = "learnham",
-				.description = "learn message as ham",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = TRUE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_FUZZY_ADD,
-				.name = "fuzzy_add",
-				.path = "fuzzyadd",
-				.description =
-				"add hashes from a message to the fuzzy storage (check -f and -w options for this command)",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = TRUE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_FUZZY_DEL,
-				.name = "fuzzy_del",
-				.path = "fuzzydel",
-				.description =
-				"delete hashes from a message from the fuzzy storage (check -f option for this command)",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = TRUE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
-				.name = "fuzzy_delhash",
-				.path = "fuzzydelhash",
-				.description =
-				"delete a hash from fuzzy storage (check -f option for this command)",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = FALSE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_STAT,
-				.name = "stat",
-				.path = "stat",
-				.description = "show rspamd statistics",
-				.is_controller = TRUE,
-				.is_privileged = FALSE,
-				.need_input = FALSE,
-				.command_output_func = rspamc_stat_output,
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_STAT_RESET,
-				.name = "stat_reset",
-				.path = "statreset",
-				.description = "show and reset rspamd statistics (useful for graphs)",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = FALSE,
-				.command_output_func = rspamc_stat_output
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_COUNTERS,
-				.name = "counters",
-				.path = "counters",
-				.description = "display rspamd symbols statistics",
-				.is_controller = TRUE,
-				.is_privileged = FALSE,
-				.need_input = FALSE,
-				.command_output_func = rspamc_counters_output
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_UPTIME,
-				.name = "uptime",
-				.path = "auth",
-				.description = "show rspamd uptime",
-				.is_controller = TRUE,
-				.is_privileged = FALSE,
-				.need_input = FALSE,
-				.command_output_func = rspamc_uptime_output
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
-				.name = "add_symbol",
-				.path = "addsymbol",
-				.description = "add or modify symbol settings in rspamd",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = FALSE,
-				.command_output_func = nullptr
-		},
-		rspamc_command{
-				.cmd = RSPAMC_COMMAND_ADD_ACTION,
-				.name = "add_action",
-				.path = "addaction",
-				.description = "add or modify action settings",
-				.is_controller = TRUE,
-				.is_privileged = TRUE,
-				.need_input = FALSE,
-				.command_output_func = nullptr
-		}
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_SYMBOLS,
+		.name = "symbols",
+		.path = "checkv2",
+		.description = "scan message and show symbols (default command)",
+		.is_controller = FALSE,
+		.is_privileged = FALSE,
+		.need_input = TRUE,
+		.command_output_func = rspamc_symbols_output
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_LEARN_SPAM,
+		.name = "learn_spam",
+		.path = "learnspam",
+		.description = "learn message as spam",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_LEARN_HAM,
+		.name = "learn_ham",
+		.path = "learnham",
+		.description = "learn message as ham",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_FUZZY_ADD,
+		.name = "fuzzy_add",
+		.path = "fuzzyadd",
+		.description =
+		"add hashes from a message to the fuzzy storage (check -f and -w options for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_FUZZY_DEL,
+		.name = "fuzzy_del",
+		.path = "fuzzydel",
+		.description =
+		"delete hashes from a message from the fuzzy storage (check -f option for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = TRUE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
+		.name = "fuzzy_delhash",
+		.path = "fuzzydelhash",
+		.description =
+		"delete a hash from fuzzy storage (check -f option for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = FALSE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_STAT,
+		.name = "stat",
+		.path = "stat",
+		.description = "show rspamd statistics",
+		.is_controller = TRUE,
+		.is_privileged = FALSE,
+		.need_input = FALSE,
+		.command_output_func = rspamc_stat_output,
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_STAT_RESET,
+		.name = "stat_reset",
+		.path = "statreset",
+		.description = "show and reset rspamd statistics (useful for graphs)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = FALSE,
+		.command_output_func = rspamc_stat_output
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_COUNTERS,
+		.name = "counters",
+		.path = "counters",
+		.description = "display rspamd symbols statistics",
+		.is_controller = TRUE,
+		.is_privileged = FALSE,
+		.need_input = FALSE,
+		.command_output_func = rspamc_counters_output
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_UPTIME,
+		.name = "uptime",
+		.path = "auth",
+		.description = "show rspamd uptime",
+		.is_controller = TRUE,
+		.is_privileged = FALSE,
+		.need_input = FALSE,
+		.command_output_func = rspamc_uptime_output
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_ADD_SYMBOL,
+		.name = "add_symbol",
+		.path = "addsymbol",
+		.description = "add or modify symbol settings in rspamd",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = FALSE,
+		.command_output_func = nullptr
+	},
+	rspamc_command{
+		.cmd = RSPAMC_COMMAND_ADD_ACTION,
+		.name = "add_action",
+		.path = "addaction",
+		.description = "add or modify action settings",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = FALSE,
+		.command_output_func = nullptr
+	}
 );
 
 struct rspamc_callback_data {
@@ -365,66 +367,66 @@ static constexpr auto emphasis_argument(const T &arg, int precision) -> auto {
 
 using sort_lambda = std::function<int(const ucl_object_t *, const ucl_object_t *)>;
 static const auto sort_map = frozen::make_unordered_map<frozen::string, sort_lambda>({
-		{"name", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "symbol");
-			const auto *elt2 = ucl_object_lookup(o2, "symbol");
+	{"name", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "symbol");
+		const auto *elt2 = ucl_object_lookup(o2, "symbol");
 
-			if (elt1 && elt2) {
-				return strcmp(ucl_object_tostring(elt1),
-						ucl_object_tostring(elt2));
-			}
-			else if (ucl_object_key(o1) != nullptr && ucl_object_key(o2) != nullptr) {
-				return strcmp(ucl_object_key(o1),
-						ucl_object_key(o2));
-			}
-			return 0;
-		}},
-		{"weight", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "weight");
-			const auto *elt2 = ucl_object_lookup(o2, "weight");
+		if (elt1 && elt2) {
+			return strcmp(ucl_object_tostring(elt1),
+				ucl_object_tostring(elt2));
+		}
+		else if (ucl_object_key(o1) != nullptr && ucl_object_key(o2) != nullptr) {
+			return strcmp(ucl_object_key(o1),
+				ucl_object_key(o2));
+		}
+		return 0;
+	}},
+	{"weight", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "weight");
+		const auto *elt2 = ucl_object_lookup(o2, "weight");
 
-			if (elt1 && elt2) {
-				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
-			}
-			return 0;
-		}},
-		{"score", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "score");
-			const auto *elt2 = ucl_object_lookup(o2, "score");
+		if (elt1 && elt2) {
+			return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+		}
+		return 0;
+	}},
+	{"score", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "score");
+		const auto *elt2 = ucl_object_lookup(o2, "score");
 
-			if (elt1 && elt2) {
-				return std::fabs(ucl_object_todouble(elt2)) * 1000.0 -
-					std::fabs(ucl_object_todouble(elt1)) * 1000.0;
-			}
-			return 0;
-		}},
-		{"time", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "time");
-			const auto *elt2 = ucl_object_lookup(o2, "time");
+		if (elt1 && elt2) {
+			return std::fabs(ucl_object_todouble(elt2)) * 1000.0 -
+				   std::fabs(ucl_object_todouble(elt1)) * 1000.0;
+		}
+		return 0;
+	}},
+	{"time", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "time");
+		const auto *elt2 = ucl_object_lookup(o2, "time");
 
-			if (elt1 && elt2) {
-				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
-			}
-			return 0;
-		}},
-		{"frequency", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "frequency");
-			const auto *elt2 = ucl_object_lookup(o2, "frequency");
+		if (elt1 && elt2) {
+			return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+		}
+		return 0;
+	}},
+	{"frequency", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "frequency");
+		const auto *elt2 = ucl_object_lookup(o2, "frequency");
 
-			if (elt1 && elt2) {
-				return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
-			}
-			return 0;
-		}},
-		{"hits", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-			const auto *elt1 = ucl_object_lookup(o1, "hits");
-			const auto *elt2 = ucl_object_lookup(o2, "hits");
+		if (elt1 && elt2) {
+			return ucl_object_todouble(elt2) * 1000.0 - ucl_object_todouble(elt1) * 1000.0;
+		}
+		return 0;
+	}},
+	{"hits", [](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+		const auto *elt1 = ucl_object_lookup(o1, "hits");
+		const auto *elt2 = ucl_object_lookup(o2, "hits");
 
-			if (elt1 && elt2) {
-				return ucl_object_toint(elt2) - ucl_object_toint(elt1);
-			}
-			return 0;
-		}},
+		if (elt1 && elt2) {
+			return ucl_object_toint(elt2) - ucl_object_toint(elt1);
+		}
+		return 0;
+	}},
 });
 
 /* TODO: remove once migrate to C++20 standard */
@@ -450,11 +452,11 @@ auto sort_ucl_container_with_default(T &cont, const char *default_sort,
 		const auto sort_functor = sort_map.find(sort_view);
 		if (sort_functor != sort_map.end()) {
 			std::stable_sort(std::begin(cont), std::end(cont),
-					[&](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
-						auto order = sort_functor->second(o1, o2);
+				[&](const ucl_object_t *o1, const ucl_object_t *o2) -> int {
+					auto order = sort_functor->second(o1, o2);
 
-						return inverse ? order > 0 : order < 0;
-					});
+					return inverse ? order > 0 : order < 0;
+				});
 		}
 	}
 }
@@ -474,7 +476,7 @@ rspamc_password_callback(const gchar *option_name,
 		std::string_view value_view{value};
 		if (value_view[0] == '/' || value_view[0] == '.') {
 			/* Try to open file */
-			auto locked_mmap = rspamd::util::raii_mmaped_locked_file::mmap_shared(value, O_RDONLY, PROT_READ);
+			auto locked_mmap = rspamd::util::raii_mmaped_file::mmap_shared(value, O_RDONLY, PROT_READ);
 
 			if (!locked_mmap.has_value() || locked_mmap.value().get_size() == 0) {
 				/* Just use it as a string */
@@ -531,7 +533,7 @@ read_cmd_line(gint *argc, gchar ***argv)
 	/* Prepare parser */
 	context = g_option_context_new("- run rspamc client");
 	g_option_context_set_summary(context,
-			"Summary:\n  Rspamd client version " RVERSION "\n  Release id: " RID);
+		"Summary:\n  Rspamd client version " RVERSION "\n  Release id: " RID);
 	g_option_context_add_main_entries(context, entries, nullptr);
 
 	/* Parse options */
@@ -575,7 +577,7 @@ rspamd_string_tolower(const char *inp) -> std::string
 {
 	std::string s{inp};
 	std::transform(std::begin(s), std::end(s), std::begin(s),
-			[](unsigned char c) { return std::tolower(c); });
+		[](unsigned char c) { return std::tolower(c); });
 	return s;
 }
 
@@ -583,16 +585,16 @@ static auto
 rspamd_action_from_str_rspamc(const char *data) -> std::optional<int>
 {
 	static constexpr const auto str_map = frozen::make_unordered_map<frozen::string, int>({
-			{"reject",          METRIC_ACTION_REJECT},
-			{"greylist",        METRIC_ACTION_GREYLIST},
-			{"add_header",      METRIC_ACTION_ADD_HEADER},
-			{"add header",      METRIC_ACTION_ADD_HEADER},
-			{"rewrite_subject", METRIC_ACTION_REWRITE_SUBJECT},
-			{"rewrite subject", METRIC_ACTION_REWRITE_SUBJECT},
-			{"soft_reject",     METRIC_ACTION_SOFT_REJECT},
-			{"soft reject",     METRIC_ACTION_SOFT_REJECT},
-			{"no_action",       METRIC_ACTION_NOACTION},
-			{"no action",       METRIC_ACTION_NOACTION},
+		{"reject",          METRIC_ACTION_REJECT},
+		{"greylist",        METRIC_ACTION_GREYLIST},
+		{"add_header",      METRIC_ACTION_ADD_HEADER},
+		{"add header",      METRIC_ACTION_ADD_HEADER},
+		{"rewrite_subject", METRIC_ACTION_REWRITE_SUBJECT},
+		{"rewrite subject", METRIC_ACTION_REWRITE_SUBJECT},
+		{"soft_reject",     METRIC_ACTION_SOFT_REJECT},
+		{"soft reject",     METRIC_ACTION_SOFT_REJECT},
+		{"no_action",       METRIC_ACTION_NOACTION},
+		{"no action",       METRIC_ACTION_NOACTION},
 	});
 
 	auto st_lower = rspamd_string_tolower(data);
@@ -606,18 +608,18 @@ static auto
 check_rspamc_command(const char *cmd) -> std::optional<rspamc_command>
 {
 	static constexpr const auto str_map = frozen::make_unordered_map<frozen::string, int>({
-			{"symbols",       RSPAMC_COMMAND_SYMBOLS},
-			{"check",         RSPAMC_COMMAND_SYMBOLS},
-			{"report",        RSPAMC_COMMAND_SYMBOLS},
-			{"learn_spam",    RSPAMC_COMMAND_LEARN_SPAM},
-			{"learn_ham",     RSPAMC_COMMAND_LEARN_HAM},
-			{"fuzzy_add",     RSPAMC_COMMAND_FUZZY_ADD},
-			{"fuzzy_del",     RSPAMC_COMMAND_FUZZY_DEL},
-			{"fuzzy_delhash", RSPAMC_COMMAND_FUZZY_DELHASH},
-			{"stat",          RSPAMC_COMMAND_STAT},
-			{"stat_reset",    RSPAMC_COMMAND_STAT_RESET},
-			{"counters",      RSPAMC_COMMAND_COUNTERS},
-			{"uptime",        RSPAMC_COMMAND_UPTIME},
+		{"symbols",       RSPAMC_COMMAND_SYMBOLS},
+		{"check",         RSPAMC_COMMAND_SYMBOLS},
+		{"report",        RSPAMC_COMMAND_SYMBOLS},
+		{"learn_spam",    RSPAMC_COMMAND_LEARN_SPAM},
+		{"learn_ham",     RSPAMC_COMMAND_LEARN_HAM},
+		{"fuzzy_add",     RSPAMC_COMMAND_FUZZY_ADD},
+		{"fuzzy_del",     RSPAMC_COMMAND_FUZZY_DEL},
+		{"fuzzy_delhash", RSPAMC_COMMAND_FUZZY_DELHASH},
+		{"stat",          RSPAMC_COMMAND_STAT},
+		{"stat_reset",    RSPAMC_COMMAND_STAT_RESET},
+		{"counters",      RSPAMC_COMMAND_COUNTERS},
+		{"uptime",        RSPAMC_COMMAND_UPTIME},
 	});
 
 	std::string cmd_lc = rspamd_string_tolower(cmd);
@@ -651,18 +653,18 @@ print_commands_list()
 
 	for (const auto &cmd: rspamc_commands) {
 		fmt::print(stdout,
-				"  {:>{}} ({:7}{:1})\t{}\n",
-				cmd.name,
-				cmd_len,
-				cmd.is_controller ? "control" : "normal",
-				cmd.is_privileged ? "*" : "",
-				cmd.description);
+			"  {:>{}} ({:7}{:1})\t{}\n",
+			cmd.name,
+			cmd_len,
+			cmd.is_controller ? "control" : "normal",
+			cmd.is_privileged ? "*" : "",
+			cmd.description);
 	}
 
 	fmt::print(stdout,
-			"\n* is for privileged commands that may need password (see -P option)\n");
+		"\n* is for privileged commands that may need password (see -P option)\n");
 	fmt::print(stdout,
-			"control commands use port 11334 while normal use 11333 by default (see -h option)\n");
+		"control commands use port 11334 while normal use 11333 by default (see -h option)\n");
 }
 
 static void
@@ -674,7 +676,7 @@ add_options(GQueue *opts)
 		rspamd_inet_addr_t *addr = nullptr;
 
 		if (!rspamd_parse_inet_address(&addr, ip, strlen(ip),
-				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+			RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			/* Try to resolve */
 			struct addrinfo hints, *res, *cur;
 			int r;
@@ -693,7 +695,7 @@ add_options(GQueue *opts)
 				cur = res;
 				while (cur) {
 					addr = rspamd_inet_address_from_sa(cur->ai_addr,
-							cur->ai_addrlen);
+						cur->ai_addrlen);
 
 					if (addr != nullptr) {
 						ip = g_strdup(rspamd_inet_address_to_string(addr));
@@ -708,8 +710,8 @@ add_options(GQueue *opts)
 			}
 			else {
 				fmt::print(stderr, "address resolution for {} failed: {}\n",
-						ip,
-						gai_strerror(r));
+					ip,
+					gai_strerror(r));
 			}
 		}
 		else {
@@ -807,8 +809,8 @@ add_options(GQueue *opts)
 		}
 		else {
 			add_client_header(opts,
-					hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos)),
-					hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1));
+				hdr_view.substr(0, std::distance(std::begin(hdr_view), delim_pos)),
+				hdr_view.substr(std::distance(std::begin(hdr_view), delim_pos) + 1));
 		}
 
 		hdr++;
@@ -823,6 +825,82 @@ add_options(GQueue *opts)
 	}
 }
 
+template<std::size_t maxlen, std::size_t indent>
+static auto
+rspamc_print_indented_line(FILE *out, std::string_view line) -> void
+{
+	static_assert(maxlen > 0, "maxlen must be > 0");
+	static_assert(maxlen > indent, "maxlen must be more than indent");
+	using namespace std::literals;
+
+	constexpr const auto whitespace = " \f\n\r\t\v"sv;
+	constexpr const auto break_begin = " \f\n\r\t\v?,;<({[~!#$%^&*+:=/\\|"sv;
+	constexpr const auto break_end = " \f\n\r\t\v?,;]})>~!#$%^&*+:_=/\\|"sv;
+
+	for (size_t pos = 0; pos < line.size(); ) {
+		auto len = pos ? (maxlen-indent) : maxlen;
+		auto s = line.substr(pos, len);
+		if ((pos + s.size()) < line.size() && // reached EOL?
+			break_begin.find_first_of( line.at(pos + s.size())) == std::string_view::npos // new word next?
+			) {
+			auto wrap_at = s.find_last_of(break_end);
+			if (wrap_at != std::string_view::npos) {
+				s = line.substr(pos, wrap_at + 1);
+			}
+		}
+		if (indent && pos) {
+			fmt::print(out, "{:>{}}", " ", indent);
+		}
+		fmt::print(out, "{}\n", s);
+		pos = line.find_first_not_of(whitespace, pos + s.size()); //skip leading whitespace
+	}
+}
+
+static void
+rspamc_symbol_human_output(FILE *out, const ucl_object_t *obj)
+{
+	auto first = true;
+	auto score = 0.0;
+	const char *desc = nullptr;
+
+	const auto *key = ucl_object_key(obj);
+	const auto *val = ucl_object_lookup(obj, "score");
+	if (val != nullptr) {
+		score = ucl_object_todouble(val);
+	}
+
+	val = ucl_object_lookup(obj, "description");
+	if (val != nullptr) {
+		desc = ucl_object_tostring(val);
+	}
+
+	auto line = fmt::format("{:>4.1f} {:<22} ", score, key);
+	if (desc != nullptr) {
+		line += desc;
+	}
+
+	val = ucl_object_lookup(obj, "options");
+	if (val != nullptr && ucl_object_type(val) == UCL_ARRAY) {
+		ucl_object_iter_t it = nullptr;
+		const ucl_object_t *cur;
+
+		line += fmt::format("{}[", desc == nullptr ? "" : " ");
+
+		while ((cur = ucl_object_iterate (val, &it, true)) != nullptr) {
+			if (first) {
+				line += fmt::format("{}", ucl_object_tostring(cur));
+				first = false;
+			}
+			else {
+				line += fmt::format(",{}", ucl_object_tostring(cur));
+			}
+		}
+		line += ']';
+	}
+
+	rspamc_print_indented_line<78, 28>(out, line);
+}
+
 static void
 rspamc_symbol_output(FILE *out, const ucl_object_t *obj)
 {
@@ -835,7 +913,7 @@ rspamc_symbol_output(FILE *out, const ucl_object_t *obj)
 		fmt::print(out, "({:.2f})", ucl_object_todouble(val));
 	}
 	val = ucl_object_lookup(obj, "options");
-	if (val != nullptr && val->type == UCL_ARRAY) {
+	if (val != nullptr && ucl_object_type(val) == UCL_ARRAY) {
 		ucl_object_iter_t it = nullptr;
 		const ucl_object_t *cur;
 
@@ -858,31 +936,65 @@ rspamc_symbol_output(FILE *out, const ucl_object_t *obj)
 static void
 rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 {
-	double score = 0, required_score = 0;
 	int got_scores = 0;
+	bool is_spam = false;
+	double score = 0, required_score = 0, greylist_score =0, addheader_score = 0;
 
 	auto print_protocol_string = [&](const char *ucl_name, const char *output_message) {
 		auto *elt = ucl_object_lookup(obj, ucl_name);
 		if (elt) {
-			fmt::print(out, "{}: {}\n", output_message,
-					emphasis_argument(ucl_object_tostring(elt)));
+			if (humanreport) {
+				fmt::print(out, ",{}={}", output_message, emphasis_argument(ucl_object_tostring(elt)));
+			}
+			else {
+				fmt::print(out, "{}: {}\n", output_message, emphasis_argument(ucl_object_tostring(elt)));
+			}
 		}
 	};
 
-	fmt::print(out, "[Metric: default]\n");
+	if (!humanreport) {
+		fmt::print(out, "[Metric: default]\n");
+	}
 
 	const auto *elt = ucl_object_lookup(obj, "required_score");
-
 	if (elt) {
 		required_score = ucl_object_todouble(elt);
 		got_scores++;
 	}
 
 	elt = ucl_object_lookup(obj, "score");
-
 	if (elt) {
 		score = ucl_object_todouble(elt);
 		got_scores++;
+	}
+
+	const auto *thresholds_obj = ucl_object_lookup(obj, "thresholds");
+
+	if (thresholds_obj && ucl_object_type(thresholds_obj) == UCL_OBJECT) {
+		const auto *action_obj = ucl_object_lookup(thresholds_obj, "greylist");
+		if (action_obj) {
+			greylist_score = ucl_object_todouble(action_obj);
+		}
+
+		action_obj = ucl_object_lookup(thresholds_obj, "add header");
+		if (action_obj) {
+			addheader_score = ucl_object_todouble(action_obj);
+		}
+
+		action_obj = ucl_object_lookup(thresholds_obj, "reject");
+		if (action_obj) {
+			required_score = ucl_object_todouble(action_obj);
+		}
+	}
+
+
+	if (humanreport) {
+		fmt::print(out,
+			"{}/{}/{}/{}",
+			emphasis_argument(score, 2),
+			emphasis_argument(greylist_score, 2),
+			emphasis_argument(addheader_score, 2),
+			emphasis_argument(required_score, 2));
 	}
 
 	elt = ucl_object_lookup(obj, "action");
@@ -891,7 +1003,12 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 
 		if (act.has_value()) {
 			if (!tty) {
-				print_protocol_string("action", "Action");
+				if (humanreport) {
+					fmt::print(out, ",action={}:{}", act.value(), ucl_object_tostring(elt));
+				}
+				else {
+					print_protocol_string("action", "Action");
+				}
 			}
 			else {
 				/* Colorize action type */
@@ -915,24 +1032,57 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 					colorized_action = fmt::format(fmt::emphasis::bold, ucl_object_tostring(elt));
 					break;
 				}
-				fmt::print(out, "Action: {}\n", colorized_action);
+
+				if (humanreport) {
+					fmt::print(out, ",action={}:{}", act.value(), colorized_action);
+				}
+				else {
+					fmt::print(out, "Action: {}\n", colorized_action);
+				}
 			}
 
-			fmt::print(out, "Spam: {}\n", emphasis_argument(act.value() < METRIC_ACTION_GREYLIST ?
-											  "true" : "false"));
+			is_spam = act.value() < METRIC_ACTION_GREYLIST ? true : false;
+			if (!humanreport) {
+				fmt::print(out, "Spam: {}\n", is_spam ?	"true" : "false");
+			}
 		}
 		else {
-			print_protocol_string("action", "Action");
+			if (humanreport) {
+				fmt::print(out, ",action={}:{}", METRIC_ACTION_NOACTION, ucl_object_tostring(elt));
+			}
+			else {
+				print_protocol_string("action", "Action");
+			}
 		}
 	}
 
-	print_protocol_string("subject", "Subject");
+	if (!humanreport) {
+		print_protocol_string("subject", "Subject");
+	}
 
-	if (got_scores == 2) {
+	if (humanreport) {
+		auto is_skipped = 0;
+
+		elt = ucl_object_lookup(obj, "is_skipped");
+		if (elt && ucl_object_toboolean(elt)) {
+			is_skipped = 1;
+		}
+
+		fmt::print(out, ",spam={},skipped={}\n", is_spam ? 1 : 0, is_skipped);
+	}
+	else if (got_scores == 2) {
 		fmt::print(out,
-				"Score: {} / {}\n",
-				emphasis_argument(score, 2),
-				emphasis_argument(required_score, 2));
+			"Score: {} / {}\n",
+			emphasis_argument(score, 2),
+			emphasis_argument(required_score, 2));
+	}
+
+	if (humanreport) {
+		fmt::print(out, "Content analysis details:   ({} points, {} required)\n\n",
+			emphasis_argument(score, 2),
+			emphasis_argument(addheader_score, 2));
+		fmt::print(out, " pts rule name              description\n");
+		fmt::print(out, "---- ---------------------- --------------------------------------------------\n");
 	}
 
 	elt = ucl_object_lookup(obj, "symbols");
@@ -949,8 +1099,11 @@ rspamc_metric_output(FILE *out, const ucl_object_t *obj)
 		sort_ucl_container_with_default(symbols, "name");
 
 		for (const auto *sym_obj : symbols) {
-			rspamc_symbol_output(out, sym_obj);
+			humanreport ? rspamc_symbol_human_output(out, sym_obj) : rspamc_symbol_output(out, sym_obj);
 		}
+	}
+	if (humanreport) {
+		fmt::print(out, "\n");
 	}
 }
 
@@ -966,13 +1119,13 @@ rspamc_profile_output(FILE *out, const ucl_object_t *obj)
 		ar.push_back(cur);
 	}
 	std::stable_sort(std::begin(ar), std::end(ar),
-			[](const ucl_object_t *u1, const ucl_object_t *u2) -> int {
-				return ucl_object_compare(u1, u2);
-			});
+		[](const ucl_object_t *u1, const ucl_object_t *u2) -> int {
+			return ucl_object_compare(u1, u2);
+		});
 
 	for (const auto *cur_elt : ar) {
 		fmt::print(out, "\t{}: {:3} usec\n",
-				ucl_object_key(cur_elt), ucl_object_todouble(cur_elt));
+			ucl_object_key(cur_elt), ucl_object_todouble(cur_elt));
 	}
 }
 
@@ -988,8 +1141,10 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 		}
 	};
 
-	print_protocol_string("message-id", "Message-ID");
-	print_protocol_string("queue-id", "Queue-ID");
+	if (!humanreport) {
+		print_protocol_string("message-id", "Message-ID");
+		print_protocol_string("queue-id", "Queue-ID");
+	}
 
 	const auto *elt = ucl_object_lookup(obj, "urls");
 
@@ -1003,7 +1158,14 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 			emitted = (char *)ucl_object_emit(elt, UCL_EMIT_JSON);
 		}
 
-		fmt::print(out, "Urls: {}\n", emitted);
+		if (humanreport) {
+			if (emitted && strcmp(emitted, "[]") != 0) {
+				rspamc_print_indented_line<78, 4>(out, fmt::format("Domains found: {}", emitted));
+			}
+		}
+		else {
+			fmt::print(out, "Urls: {}\n", emitted);
+		}
 		free(emitted);
 	}
 
@@ -1018,11 +1180,21 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 			emitted = (char *)ucl_object_emit(elt, UCL_EMIT_JSON);
 		}
 
-		fmt::print(out, "Emails: {}\n", emitted);
+		if (humanreport) {
+			if (emitted && strcmp(emitted, "[]") != 0) {
+				rspamc_print_indented_line<78, 4>(out, fmt::format("Emails found: {}", emitted));
+			}
+		}
+		else {
+			fmt::print(out, "Emails: {}\n", emitted);
+		}
 		free(emitted);
 	}
 
 	print_protocol_string("error", "Scan error");
+	if (humanreport) {
+		return;
+	}
 
 	elt = ucl_object_lookup(obj, "messages");
 	if (elt && elt->type == UCL_OBJECT) {
@@ -1032,12 +1204,12 @@ rspamc_symbols_output(FILE *out, ucl_object_t *obj)
 		while ((cmesg = ucl_object_iterate (elt, &mit, true)) != nullptr) {
 			if (ucl_object_type(cmesg) == UCL_STRING) {
 				fmt::print(out, "Message - {}: {}\n",
-						ucl_object_key(cmesg), ucl_object_tostring(cmesg));
+					ucl_object_key(cmesg), ucl_object_tostring(cmesg));
 			} else {
 				char *rendered_message;
 				rendered_message = (char *)ucl_object_emit(cmesg, UCL_EMIT_JSON_COMPACT);
 				fmt::print(out, "Message - {}: {:.60}\n",
-						ucl_object_key(cmesg), rendered_message);
+					ucl_object_key(cmesg), rendered_message);
 				free(rendered_message);
 			}
 		}
@@ -1072,7 +1244,7 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 	const auto *elt = ucl_object_lookup(obj, "version");
 	if (elt != nullptr) {
 		fmt::print(out, "Rspamd version: %s\n", ucl_object_tostring(
-				elt));
+			elt));
 	}
 
 	elt = ucl_object_lookup(obj, "uptime");
@@ -1084,13 +1256,13 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 			hours = seconds / 3600 - days * 24;
 			minutes = seconds / 60 - hours * 60 - days * 1440;
 			fmt::print("{} day{} {} hour{} {} minute{}\n", days,
-					days > 1 ? "s" : "", hours, hours > 1 ? "s" : "",
-					minutes, minutes > 1 ? "s" : "");
+				days > 1 ? "s" : "", hours, hours > 1 ? "s" : "",
+				minutes, minutes > 1 ? "s" : "");
 		}
 			/* If uptime is less than 1 minute print only seconds */
 		else if (seconds / 60 == 0) {
 			fmt::print("{} second%s\n", seconds,
-					(gint) seconds > 1 ? "s" : "");
+				(gint) seconds > 1 ? "s" : "");
 		}
 			/* Else print the minutes and seconds. */
 		else {
@@ -1098,8 +1270,8 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 			minutes = seconds / 60 - hours * 60;
 			seconds -= hours * 3600 + minutes * 60;
 			fmt::print("{} hour {} minute{} {} second{}\n", hours,
-					minutes, minutes > 1 ? "s" : "",
-					seconds, seconds > 1 ? "s" : "");
+				minutes, minutes > 1 ? "s" : "",
+				seconds, seconds > 1 ? "s" : "");
 		}
 	}
 }
@@ -1143,17 +1315,17 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
 	fmt::print(out,
-			"| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n",
-			"Pri",
-			"Symbol",
-			max_len,
-			"Weight",
-			"Frequency",
-			"Hits");
+		"| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n",
+		"Pri",
+		"Symbol",
+		max_len,
+		"Weight",
+		"Frequency",
+		"Hits");
 	fmt::print(out, " {} \n", emphasis_argument(dash_buf));
 	fmt::print(out, "| {:<4} | {:<{}} | {:^7} | {:^13} | {:^7} |\n", "",
-			"", max_len,
-			"", "hits/min", "");
+		"", max_len,
+		"", "hits/min", "");
 
 	for (const auto [i, cur] : rspamd::enumerate(counters_vec)) {
 		fmt::print(out, " {} \n", dash_buf);
@@ -1168,7 +1340,7 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 
 			if (sym->len > max_len) {
 				rspamd_snprintf(sym_buf, sizeof(sym_buf), "%*s...",
-						(max_len - 3), ucl_object_tostring(sym));
+					(max_len - 3), ucl_object_tostring(sym));
 				sym_name = sym_buf;
 			}
 			else {
@@ -1176,12 +1348,12 @@ rspamc_counters_output(FILE *out, ucl_object_t *obj)
 			}
 
 			fmt::print(out, "| {:<4} | {:<{}} | {:^7.1f} | {:^6.3f}({:^5.3f}) | {:^7} |\n", i,
-					sym_name,
-					max_len,
-					ucl_object_todouble(weight),
-					ucl_object_todouble(freq) * 60.0,
-					ucl_object_todouble(freq_dev) * 60.0,
-					(std::uintmax_t)ucl_object_toint(nhits));
+				sym_name,
+				max_len,
+				ucl_object_todouble(weight),
+				ucl_object_todouble(freq) * 60.0,
+				ucl_object_todouble(freq_dev) * 60.0,
+				(std::uintmax_t)ucl_object_toint(nhits));
 		}
 	}
 	fmt::print(out, " {} \n", dash_buf);
@@ -1198,19 +1370,19 @@ rspamc_stat_actions(ucl_object_t *obj, std::string &out, std::int64_t scanned)
 			while ((cur = ucl_object_iterate (actions, &iter, true)) != nullptr) {
 				auto cnt = ucl_object_toint(cur);
 				fmt::format_to(std::back_inserter(out), "Messages with action {}: {}, {:.2f}%\n",
-						ucl_object_key(cur), emphasis_argument(cnt),
-						((double) cnt / (double) scanned) * 100.);
+					ucl_object_key(cur), emphasis_argument(cnt),
+					((double) cnt / (double) scanned) * 100.);
 			}
 		}
 
 		auto spam = ucl_object_toint(ucl_object_lookup(obj, "spam_count"));
 		auto ham = ucl_object_toint(ucl_object_lookup(obj, "ham_count"));
 		fmt::format_to(std::back_inserter(out), "Messages treated as spam: {}, {:.2f}%\n",
-				emphasis_argument(spam),
-				((double) spam / (double) scanned) * 100.);
+			emphasis_argument(spam),
+			((double) spam / (double) scanned) * 100.);
 		fmt::format_to(std::back_inserter(out), "Messages treated as ham: {}, {:.2f}%\n",
-				emphasis_argument(ham),
-				((double) ham / (double) scanned) * 100.);
+			emphasis_argument(ham),
+			((double) ham / (double) scanned) * 100.);
 	}
 }
 
@@ -1229,18 +1401,18 @@ rspamc_stat_statfile(const ucl_object_t *obj, std::string &out)
 
 	if (label) {
 		fmt::format_to(std::back_inserter(out), "Statfile: {} <{}> type: {}; ", symbol,
-				label, type);
+			label, type);
 	}
 	else {
 		fmt::format_to(std::back_inserter(out), "Statfile: {} type: {}; ", symbol, type);
 	}
 	fmt::format_to(std::back_inserter(out), "length: {}; free blocks: {}; total blocks: {}; "
-							   "free: {:.2f}%; learned: {}; users: {}; languages: {}\n",
-			size,
-			blocks - used_blocks, blocks,
-			blocks > 0 ? (blocks - used_blocks) * 100.0 / (double) blocks : 0,
-			version,
-			nusers, nlanguages);
+											"free: {:.2f}%; learned: {}; users: {}; languages: {}\n",
+		size,
+		blocks - used_blocks, blocks,
+		blocks > 0 ? (blocks - used_blocks) * 100.0 / (double) blocks : 0,
+		version,
+		nusers, nlanguages);
 }
 
 static void
@@ -1252,16 +1424,16 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 
 	auto scanned = ucl_object_toint(ucl_object_lookup(obj, "scanned"));
 	fmt::format_to(std::back_inserter(out_str), "Messages scanned: {}\n",
-			emphasis_argument(scanned));
+		emphasis_argument(scanned));
 
 	rspamc_stat_actions(obj, out_str, scanned);
 
 	fmt::format_to(std::back_inserter(out_str), "Messages learned: {}\n",
-			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "learned"))));
+		emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "learned"))));
 	fmt::format_to(std::back_inserter(out_str), "Connections count: {}\n",
-			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "connections"))));
+		emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "connections"))));
 	fmt::format_to(std::back_inserter(out_str), "Control connections count: {}\n",
-			emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "control_connections"))));
+		emphasis_argument(ucl_object_toint(ucl_object_lookup(obj, "control_connections"))));
 
 	const auto *avg_time_obj = ucl_object_lookup(obj, "scan_times");
 
@@ -1281,26 +1453,26 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 		if (cnt > 0) {
 			auto sum = rspamd_sum_floats(nums.data(), &cnt);
 			fmt::format_to(std::back_inserter(out_str),
-						   "Average scan time: {} sec\n",
-						   emphasis_argument(sum / cnt, 3));
+				"Average scan time: {} sec\n",
+				emphasis_argument(sum / cnt, 3));
 		}
 	}
 
 	/* Pools */
 	fmt::format_to(std::back_inserter(out_str),  "Pools allocated: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "pools_allocated")));
+		ucl_object_toint(ucl_object_lookup(obj, "pools_allocated")));
 	fmt::format_to(std::back_inserter(out_str),  "Pools freed: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "pools_freed")));
+		ucl_object_toint(ucl_object_lookup(obj, "pools_freed")));
 	fmt::format_to(std::back_inserter(out_str),  "Bytes allocated: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "bytes_allocated")));
+		ucl_object_toint(ucl_object_lookup(obj, "bytes_allocated")));
 	fmt::format_to(std::back_inserter(out_str),  "Memory chunks allocated: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "chunks_allocated")));
+		ucl_object_toint(ucl_object_lookup(obj, "chunks_allocated")));
 	fmt::format_to(std::back_inserter(out_str),  "Shared chunks allocated: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "shared_chunks_allocated")));
+		ucl_object_toint(ucl_object_lookup(obj, "shared_chunks_allocated")));
 	fmt::format_to(std::back_inserter(out_str),  "Chunks freed: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "chunks_freed")));
+		ucl_object_toint(ucl_object_lookup(obj, "chunks_freed")));
 	fmt::format_to(std::back_inserter(out_str),  "Oversized chunks: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "chunks_oversized")));
+		ucl_object_toint(ucl_object_lookup(obj, "chunks_oversized")));
 	/* Fuzzy */
 
 	const auto *st = ucl_object_lookup(obj, "fuzzy_hashes");
@@ -1312,13 +1484,13 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 		while ((cur = ucl_iterate_object (st, &it, true)) != nullptr) {
 			auto num = ucl_object_toint(cur);
 			fmt::format_to(std::back_inserter(out_str), "Fuzzy hashes in storage \"{}\": {}\n",
-					ucl_object_key(cur),
-					num);
+				ucl_object_key(cur),
+				num);
 			stored += num;
 		}
 
 		fmt::format_to(std::back_inserter(out_str), "Fuzzy hashes stored: {}\n",
-				stored);
+			stored);
 	}
 
 	st = ucl_object_lookup(obj, "fuzzy_checked");
@@ -1359,7 +1531,7 @@ rspamc_stat_output(FILE *out, ucl_object_t *obj)
 		}
 	}
 	fmt::format_to(std::back_inserter(out_str), "Total learns: {}\n",
-			ucl_object_toint(ucl_object_lookup(obj, "total_learns")));
+		ucl_object_toint(ucl_object_lookup(obj, "total_learns")));
 
 	fmt::print(out, "{}", out_str.c_str());
 }
@@ -1371,7 +1543,7 @@ rspamc_output_headers(FILE *out, struct rspamd_http_message *msg)
 
 	kh_foreach_value (msg->headers, h, {
 		fmt::print(out, "{}: {}\n", std::string_view{h->name.begin, h->name.len},
-				std::string_view{h->value.begin, h->value.len});
+			std::string_view{h->value.begin, h->value.len});
 	});
 
 	fmt::print(out, "\n");
@@ -1436,9 +1608,9 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scanner: {}{}",
-				"rspamc " RVERSION, line_end);
+			"rspamc " RVERSION, line_end);
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scan-Time: {:.3}{}",
-				time, line_end);
+			time, line_end);
 
 		/*
 		 * TODO: add milter_headers support here
@@ -1448,9 +1620,9 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		fmt::format_to(std::back_inserter(added_headers),"X-Spam-Action: {}{}",
-				action, line_end);
+			action, line_end);
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Score: {:.2f} / {:.2f}{}",
-				score, required_score, line_end);
+			score, required_score, line_end);
 
 		/* SA style stars header */
 		std::string scorebuf;
@@ -1461,7 +1633,7 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Level: {}{}",
-				scorebuf, line_end);
+			scorebuf, line_end);
 
 		/* Short description of all symbols */
 		std::string symbuf;
@@ -1480,23 +1652,23 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		auto *folded_symbuf = rspamd_header_value_fold("X-Spam-Symbols", strlen("X-Spam-Symbols"),
-				symbuf.data(), symbuf.size(),
-				0, nl_type, ",");
+			symbuf.data(), symbuf.size(),
+			0, nl_type, ",");
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Symbols: {}{}",
-				folded_symbuf->str, line_end);
+			folded_symbuf->str, line_end);
 
 		g_string_free(folded_symbuf, TRUE);
 
 		res = ucl_object_lookup(result, "dkim-signature");
 		if (res && res->type == UCL_STRING) {
 			fmt::format_to(std::back_inserter(added_headers), "DKIM-Signature: {}{}",
-					ucl_object_tostring(res), line_end);
+				ucl_object_tostring(res), line_end);
 		}
 		else if (res && res->type == UCL_ARRAY) {
 			it = nullptr;
 			while ((cur = ucl_object_iterate (res, &it, true)) != nullptr) {
 				fmt::format_to(std::back_inserter(added_headers), "DKIM-Signature: {}{}",
-						ucl_object_tostring(cur), line_end);
+					ucl_object_tostring(cur), line_end);
 			}
 		}
 
@@ -1505,19 +1677,19 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 			/* We also append json data as a specific header */
 			if (json) {
 				json_header = ucl_object_emit(result,
-						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
+					compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 			}
 			else {
 				json_header = ucl_object_emit(result,
-						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
+					compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 			}
 
 			auto *json_header_encoded = rspamd_encode_base64_fold(json_header,
-					strlen((char *)json_header), 60, nullptr, nl_type);
+				strlen((char *)json_header), 60, nullptr, nl_type);
 			free(json_header);
 			fmt::format_to(std::back_inserter(added_headers),
-					"X-Spam-Result: {}{}",
-					json_header_encoded, line_end);
+				"X-Spam-Result: {}{}",
+				json_header_encoded, line_end);
 			g_free(json_header_encoded);
 		}
 
@@ -1525,11 +1697,11 @@ rspamc_mime_output(FILE *out, ucl_object_t *result, GString *input,
 	}
 	else {
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scanner: {}{}",
-				"rspamc " RVERSION, line_end);
+			"rspamc " RVERSION, line_end);
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Scan-Time: {:.3f}{}",
-				time, line_end);
+			time, line_end);
 		fmt::format_to(std::back_inserter(added_headers), "X-Spam-Error: {}{}",
-				err->message, line_end);
+			err->message, line_end);
 	}
 
 	/* Write message */
@@ -1558,8 +1730,8 @@ rspamc_client_execute_cmd(const struct rspamc_command &cmd, ucl_object_t *result
 	}
 
 	if (!g_spawn_async_with_pipes(nullptr, eargv, nullptr,
-			static_cast<GSpawnFlags>(G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD), nullptr, nullptr, &cld,
-			&infd, &outfd, &errfd, &exec_err)) {
+		static_cast<GSpawnFlags>(G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD), nullptr, nullptr, &cld,
+		&infd, &outfd, &errfd, &exec_err)) {
 
 		fmt::print(stderr, "Cannot execute {}: {}", execute, exec_err->message);
 		g_error_free(exec_err);
@@ -1579,11 +1751,11 @@ rspamc_client_execute_cmd(const struct rspamc_command &cmd, ucl_object_t *result
 
 				if (json) {
 					ucl_out = (char *)ucl_object_emit(result,
-							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
+						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 				}
 				else {
 					ucl_out = (char *)ucl_object_emit(result,
-							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
+						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 				}
 				fmt::print(out, "{}", ucl_out);
 				free(ucl_out);
@@ -1646,15 +1818,15 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 		}
 		else {
 			if (cmd.need_input && !json) {
-				if (!compact) {
+				if (!compact && !humanreport) {
 					fmt::print(out, "Results for file: {} ({:.3} seconds)\n",
-							emphasis_argument(cbdata->filename), diff);
+						emphasis_argument(cbdata->filename), diff);
 				}
 			}
 			else {
-				if (!compact && !json) {
+				if (!compact && !json && !humanreport) {
 					fmt::print(out, "Results for command: {} ({:.3} seconds)\n",
-							emphasis_argument(cmd.name), diff);
+						emphasis_argument(cmd.name), diff);
 				}
 			}
 
@@ -1665,25 +1837,25 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 				if (ucl_reply || cmd.command_output_func == nullptr) {
 					if (cmd.need_input) {
 						ucl_object_insert_key(result,
-								ucl_object_fromstring(cbdata->filename.c_str()),
-								"filename", 0,
-								false);
+							ucl_object_fromstring(cbdata->filename.c_str()),
+							"filename", 0,
+							false);
 					}
 
 					ucl_object_insert_key(result,
-							ucl_object_fromdouble(diff),
-							"scan_time", 0,
-							false);
+						ucl_object_fromdouble(diff),
+						"scan_time", 0,
+						false);
 
 					char *ucl_out;
 
 					if (json) {
 						ucl_out = (char *)ucl_object_emit(result,
-								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
+							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 					}
 					else {
 						ucl_out = (char *)ucl_object_emit(result,
-								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
+							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 					}
 
 					fmt::print(out, "{}", ucl_out);
@@ -1695,7 +1867,7 @@ rspamc_client_cb(struct rspamd_client_connection *conn,
 
 				if (body) {
 					fmt::print(out, "\nNew body:\n{}\n",
-							std::string_view{body, bodylen});
+						std::string_view{body, bodylen});
 				}
 
 				ucl_object_unref(result);
@@ -1785,7 +1957,7 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 	}
 
-	conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, key);
+	conn = rspamd_client_init(http_ctx, ev_base, hostbuf.c_str(), port, timeout, pubkey);
 
 	if (conn != nullptr) {
 		auto *cbdata = new rspamc_callback_data;
@@ -1794,24 +1966,24 @@ rspamc_process_input(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 		if (cmd.need_input) {
 			rspamd_client_command(conn, cmd.path, attrs, in, rspamc_client_cb,
-					cbdata, compressed, dictionary, cbdata->filename.c_str(), &err);
+				cbdata, compressed, dictionary, cbdata->filename.c_str(), &err);
 		}
 		else {
 			rspamd_client_command(conn,
-					cmd.path,
-					attrs,
-					nullptr,
-					rspamc_client_cb,
-					cbdata,
-					compressed,
-					dictionary,
-					cbdata->filename.c_str(),
-					&err);
+				cmd.path,
+				attrs,
+				nullptr,
+				rspamc_client_cb,
+				cbdata,
+				compressed,
+				dictionary,
+				cbdata->filename.c_str(),
+				&err);
 		}
 	}
 	else {
 		fmt::print(stderr, "cannot connect to {}: {}\n", connect_str,
-				strerror(errno));
+			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 }
@@ -1837,7 +2009,7 @@ rspamd_dirent_size(DIR *dirp)
 	}
 # endif
 #else
-# if defined(NAME_MAX)
+	# if defined(NAME_MAX)
 	name_max = (NAME_MAX > 255) ? NAME_MAX : 255;
 # else
 #   error "buffer size for readdir_r cannot be determined"
@@ -1870,8 +2042,8 @@ rspamc_process_dir(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 
 			fpath.clear();
 			fmt::format_to(std::back_inserter(fpath), "{}{}{}",
-					name, G_DIR_SEPARATOR,
-					pentry->d_name);
+				name, G_DIR_SEPARATOR,
+				pentry->d_name);
 
 			/* Check exclude */
 			auto **ex = exclude_compiled;
@@ -1880,7 +2052,7 @@ rspamc_process_dir(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 #if GLIB_MAJOR_VERSION >= 2 && GLIB_MINOR_VERSION >= 70
 				if (g_pattern_spec_match(*ex, fpath.size(), fpath.c_str(), nullptr)) {
 #else
-				if (g_pattern_match(*ex, fpath.size(), fpath.c_str(), nullptr)) {
+					if (g_pattern_match(*ex, fpath.size(), fpath.c_str(), nullptr)) {
 #endif
 					skip = true;
 					break;
@@ -1902,7 +2074,7 @@ rspamc_process_dir(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 				/* Fallback to lstat */
 				if (lstat(fpath.c_str(), &st) == -1) {
 					fmt::print(stderr, "cannot stat file {}: {}\n",
-							fpath, strerror(errno));
+						fpath, strerror(errno));
 					continue;
 				}
 
@@ -1935,7 +2107,7 @@ rspamc_process_dir(struct ev_loop *ev_base, const struct rspamc_command &cmd,
 				auto *in = fopen(fpath.c_str(), "r");
 				if (in == nullptr) {
 					fmt::print(stderr, "cannot open file {}: {}\n",
-							fpath, strerror(errno));
+						fpath, strerror(errno));
 					continue;
 				}
 
@@ -2001,7 +2173,7 @@ main(int argc, char **argv, char **env)
 
 			if (exclude_compiled[i] == nullptr) {
 				fmt::print(stderr, "Invalid glob pattern: {}\n",
-						exclude_patterns[i]);
+					exclude_patterns[i]);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -2016,7 +2188,7 @@ main(int argc, char **argv, char **env)
 	http_config.kp_cache_size_server = 0;
 	http_config.user_agent = user_agent;
 	http_ctx = rspamd_http_context_create_config(&http_config,
-			event_loop, nullptr);
+		event_loop, nullptr);
 
 	/* Ignore sigpipe */
 	struct sigaction sigpipe_act;
@@ -2150,7 +2322,7 @@ main(int argc, char **argv, char **env)
 		auto res = 0;
 		if (waitpid(cld, &res, 0) == -1) {
 			fmt::print(stderr, "Cannot wait for {}: {}", cld,
-					strerror(errno));
+				strerror(errno));
 
 			ret = errno;
 		}

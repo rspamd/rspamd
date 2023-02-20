@@ -1044,6 +1044,11 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 		}
 		else {
 			lua_tcp_push_error (cbd, TRUE, "IO read error: connection terminated");
+
+			if ((cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+				/* A callback has called `close` method, so we need to release a refcount */
+				TCP_RELEASE (cbd);
+			}
 		}
 
 		lua_tcp_plan_handler_event (cbd, FALSE, FALSE);
@@ -1067,6 +1072,11 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 			lua_tcp_push_error (cbd, TRUE,
 					"IO read error while trying to read data: %s",
 					strerror (errno));
+
+			if ((cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+				/* A callback has called `close` method, so we need to release a refcount */
+				TCP_RELEASE (cbd);
+			}
 		}
 
 		lua_tcp_plan_handler_event (cbd, FALSE, FALSE);
@@ -1193,8 +1203,8 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 		if (!(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
 			/* We are finished with a connection */
 			msg_debug_tcp ("no handlers left, finish session");
-			TCP_RELEASE (cbd);
 			cbd->flags |= LUA_TCP_FLAG_FINISHED;
+			TCP_RELEASE (cbd);
 		}
 	}
 	else {

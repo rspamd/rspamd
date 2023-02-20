@@ -1362,6 +1362,7 @@ lua_metric_symbol_callback_coro (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
+	cd->item = item;
 	rspamd_symcache_item_async_inc (task, item, "lua coro symbol");
 	thread_entry = lua_thread_pool_get_for_task (task);
 
@@ -1370,7 +1371,6 @@ lua_metric_symbol_callback_coro (struct rspamd_task *task,
 
 	lua_State *thread = thread_entry->lua_state;
 	cd->stack_level = lua_gettop (thread);
-	cd->item = item;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (thread, LUA_REGISTRYINDEX, cd->callback.ref);

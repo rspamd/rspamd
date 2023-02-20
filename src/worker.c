@@ -167,7 +167,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	/* Set up async session */
 	task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
-			rspamd_task_restore, (event_finalizer_t )rspamd_task_free, task);
+			NULL, (event_finalizer_t )rspamd_task_free, task);
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
 		msg_err_task ("cannot handle request: %e", task->err);
@@ -509,34 +509,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 			&ctx->lang_det);
 
-	if (worker->index == 0) {
-		/* If there are no controllers, then pretend that we are a controller */
-		gboolean controller_seen = FALSE;
-		GList *cur;
-
-		cur = worker->srv->cfg->workers;
-
-		while (cur) {
-			struct rspamd_worker_conf *cf;
-
-			cf = (struct rspamd_worker_conf *)cur->data;
-			if (cf->type == g_quark_from_static_string ("controller")) {
-				if (cf->enabled && cf->count >= 0) {
-					controller_seen = TRUE;
-					break;
-				}
-			}
-
-			cur = g_list_next (cur);
-		}
-
-		if (!controller_seen) {
-			msg_info_ctx ("no controller workers defined, execute "
-				 "controller periodics in this worker");
-			worker->flags |= RSPAMD_WORKER_CONTROLLER;
-			is_controller = TRUE;
-		}
-	}
+	is_controller = rspamd_worker_check_controller_presence (worker);
 
 	if (is_controller) {
 		rspamd_worker_init_controller (worker, NULL);
@@ -559,6 +532,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_stat_close ();
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger);
+	rspamd_unset_crash_handler (worker->srv);
 
 	exit (EXIT_SUCCESS);
 }

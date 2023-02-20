@@ -33,35 +33,40 @@ context("Selectors test", function()
 
   local cases = {
     ["rcpts + weekend"] = {
-                selector = "rcpts:addr.take_n(5).lower;time('message', '!%w').in(6, 7).id('weekends')",
-                expect = {
-                  "nobody@example.com:weekends",
-                  "no-one@example.com:weekends"}},
+      selector = "rcpts:addr.take_n(5).lower;time('message', '!%w').in(6, 7).id('weekends')",
+      expect = {
+        "nobody@example.com:weekends",
+        "no-one@example.com:weekends"}},
 
     ["weekend + rcpts"] = {
-                selector = "time('message', '!%w').in(6, 7).id('weekends');rcpts:addr.take_n(5).lower",
-                expect = {
-                  "weekends:nobody@example.com",
-                  "weekends:no-one@example.com"}},
+      selector = "time('message', '!%w').in(6, 7).id('weekends');rcpts:addr.take_n(5).lower",
+      expect = {
+        "weekends:nobody@example.com",
+        "weekends:no-one@example.com"}},
 
     ["id(rcpt) + rcpts + weekend"] = {
-                selector = "id('rcpt');rcpts:addr.take_n(5).lower;time('message', '!%w').in(6, 7).id('weekends')",
-                expect = {
-                  "rcpt:nobody@example.com:weekends",
-                  "rcpt:no-one@example.com:weekends"}},
+      selector = "id('rcpt');rcpts:addr.take_n(5).lower;time('message', '!%w').in(6, 7).id('weekends')",
+      expect = {
+        "rcpt:nobody@example.com:weekends",
+        "rcpt:no-one@example.com:weekends"}},
 
     ["id(rcpt) + id(2) rcpts + weekend"] = {
-                selector = "id('rcpt'); id(2); rcpts:addr.take_n(5).lower; time('message', '!%w').in(6, 7).id('weekends')",
-                expect = {
-                  "rcpt:2:nobody@example.com:weekends",
-                  "rcpt:2:no-one@example.com:weekends"}},
+      selector = "id('rcpt'); id(2); rcpts:addr.take_n(5).lower; time('message', '!%w').in(6, 7).id('weekends')",
+      expect = {
+        "rcpt:2:nobody@example.com:weekends",
+        "rcpt:2:no-one@example.com:weekends"}
+    },
 
     -- There are two rcpts but only one url in the message
     -- resulting table size is the size of the smallest table
     ["id(rcpt) + id(2) + rcpts and urls + weekend"] = {
-                selector = "id('rcpt'); id(2); rcpts:addr.take_n(5).lower; id('urls'); urls:get_host; time('message', '!%w').in(6, 7).id('weekends')",
-                expect = {
-                  "rcpt:2:nobody@example.com:urls:example.net:weekends"}},
+      selector = "id('rcpt'); id(2); rcpts:addr.take_n(5).lower; id('urls'); urls:get_host; time('message', '!%w').in(6, 7).id('weekends')",
+      expect = { "rcpt:2:nobody@example.com:urls:example.net:weekends"}
+    },
+    ["url + apply_methods"] = {
+      selector = "urls.apply_methods('get_host', 'get_path').join_tables('/')",
+      expect = {"example.net/path"}
+    },
   }
 
   for case_name, case in pairs(cases) do
@@ -99,7 +104,7 @@ Hello world
 Content-Type: text/html; charset="utf-8"
 
 <html><body>
-<a href="http://example.net">http://example.net</a>
+<a href="http://example.net/path?query">http://example.net/path?query</a>
 <a href="mailto:test@example.net">mail me</a>
 </html>
 

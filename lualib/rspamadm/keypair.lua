@@ -48,6 +48,9 @@ generate:mutex(
             :description "Output UCL"
             :default(true)
 )
+generate:option "--name"
+        :description "Adds name extension"
+        :argname "<name>"
 
 -- Sign subcommand
 
@@ -190,6 +193,12 @@ local function generate_handler(opts)
   end
   -- TODO: probably, do it in a more safe way
   local kp = rspamd_keypair.create(mode, alg):totable()
+
+  if opts.name then
+    kp.keypair.extensions = {
+      name = opts.name
+    }
+  end
 
   local format = 'ucl'
 

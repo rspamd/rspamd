@@ -1339,7 +1339,7 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 	float t1, t2;
 	gdouble val;
 	gboolean calc_ticks = FALSE;
-	const gchar *op_name = NULL;
+	__attribute__((unused)) const gchar *op_name = NULL;
 
 	elt = node->data;
 
@@ -1382,7 +1382,9 @@ rspamd_ast_process_node (struct rspamd_expression *e, GNode *node,
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
+#ifdef DEBUG_EXPRESSIONS
 		op_name = rspamd_expr_op_to_str (elt->p.op.op);
+#endif
 
 		if (elt->p.op.op_flags & RSPAMD_EXPRESSION_NARY) {
 			msg_debug_expression_verbose ("proceed nary operation %s", op_name);

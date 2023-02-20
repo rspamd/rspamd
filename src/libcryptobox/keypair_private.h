@@ -39,6 +39,7 @@ struct rspamd_cryptobox_keypair {
 	guchar id[rspamd_cryptobox_HASHBYTES];
 	enum rspamd_cryptobox_keypair_type type;
 	enum rspamd_cryptobox_mode alg;
+	ucl_object_t *extensions;
 	ref_entry_t ref;
 };
 

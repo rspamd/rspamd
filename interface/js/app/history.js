@@ -349,9 +349,11 @@ define(["jquery", "footable"],
                                     return e.rows;
                                 }));
                             data.version = version;
+                            $("#legacy-history-badge").hide();
                         } else {
                             // Legacy version
                             data = [].concat.apply([], neighbours_data);
+                            $("#legacy-history-badge").show();
                         }
                         var o = process_history_data(rspamd, data);
                         var items = o.items;

@@ -239,6 +239,13 @@ guint rspamd_http_message_get_flags (struct rspamd_http_message *msg);
 const gchar* rspamd_http_message_get_http_host (struct rspamd_http_message *msg,
 		gsize *hostlen);
 
+/**
+ * Returns true if a message has standard port (80 or 443 for https)
+ * @param msg
+ * @return
+ */
+bool rspamd_http_message_is_standard_port(struct rspamd_http_message *msg);
+
 #ifdef  __cplusplus
 }
 #endif

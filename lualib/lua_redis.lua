@@ -39,16 +39,23 @@ local common_schema = ts.shape {
 }
 
 local config_schema =
+  -- Allow separate read/write servers to allow usage in the `extra_fields`
+  ts.shape({
+    read_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_fields = common_schema}) +
+  ts.shape({
+    write_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_fields = common_schema}) +
   ts.shape({
     read_servers = ts.string + ts.array_of(ts.string),
     write_servers = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema}) +
+  }, {extra_fields = common_schema}) +
   ts.shape({
     servers = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema}) +
+  }, {extra_fields = common_schema}) +
   ts.shape({
     server = ts.string + ts.array_of(ts.string),
-  }, {extra_opts = common_schema})
+  }, {extra_fields = common_schema})
 
 exports.config_schema = config_schema
 
@@ -1145,12 +1152,13 @@ local function prepare_redis_call(script)
   return options
 end
 
-local function load_script_task(script, task)
+local function load_script_task(script, task, is_write)
   local rspamd_redis = require "rspamd_redis"
   local opts = prepare_redis_call(script)
 
   for _,opt in ipairs(opts) do
     opt.task = task
+    opt.is_write = is_write
     opt.callback = function(err, data)
       if err then
         logger.errx(task, 'cannot upload script to %s: %s; registered from: %s:%s',
@@ -1188,13 +1196,14 @@ local function load_script_task(script, task)
   end
 end
 
-local function load_script_taskless(script, cfg, ev_base)
+local function load_script_taskless(script, cfg, ev_base, is_write)
   local rspamd_redis = require "rspamd_redis"
   local opts = prepare_redis_call(script)
 
   for _,opt in ipairs(opts) do
     opt.config = cfg
     opt.ev_base = ev_base
+    opt.is_write = is_write
     opt.callback = function(err, data)
       if err then
         logger.errx(cfg, 'cannot upload script to %s: %s; registered from: %s:%s',
@@ -1358,7 +1367,7 @@ local function exec_redis_script(id, params, callback, keys, args)
           callback('NOSCRIPT', nil)
         end
       end)
-      load_script_task(script, params.task)
+      load_script_task(script, params.task, params.is_write)
     end
   end
 

@@ -454,7 +454,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 
 				return false;
 			}
-			return augmentations.try_emplace(std::string{augmentation}, known_info.weight).second;
+			return augmentations.try_emplace(augmentation, known_info.weight).second;
 		}
 		else {
 			if (!value.has_value()) {
@@ -465,7 +465,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 			}
 
 			if (known_info.value_type == augmentation_value_type::STRING_VALUE) {
-				return augmentations.try_emplace(std::string{augmentation}, std::string{value.value()},
+				return augmentations.try_emplace(augmentation, std::string{value.value()},
 						known_info.weight).second;
 			}
 			else if (known_info.value_type == augmentation_value_type::NUMBER_VALUE) {
@@ -482,7 +482,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 					return false;
 				}
 
-				return augmentations.try_emplace(std::string{augmentation}, num,
+				return augmentations.try_emplace(augmentation, num,
 						known_info.weight).second;
 			}
 		}
@@ -490,7 +490,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 	else {
 		msg_debug_cache("added unknown augmentation %s for symbol %s",
 				"unknown", augmentation.data(), symbol.data());
-		return augmentations.try_emplace(std::string{augmentation}, 0).second;
+		return augmentations.try_emplace(augmentation, 0).second;
 	}
 
 	// Should not be reached

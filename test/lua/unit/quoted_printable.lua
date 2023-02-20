@@ -134,29 +134,31 @@ context("Quoted-Printable encoding", function()
     end)
   end
 
-  -- Fuzz testing
-  local charset = {}
-  for i = 0, 255 do table.insert(charset, string.char(i)) end
 
-  local function random_string(length)
+  if os.getenv("RSPAMD_LUA_EXPENSIVE_TESTS") then
+    -- Fuzz testing
+    local charset = {}
+    for i = 0, 255 do table.insert(charset, string.char(i)) end
 
-    if length > 0 then
-      return random_string(length - 1) .. charset[math.random(1, #charset)]
-    else
-      return ""
-    end
-  end
+    local function random_string(length)
 
-  for _,l in ipairs({10, 100, 1000, 10000}) do
-    test("QP fuzz test max length " .. tostring(l), function()
-      for _=1,100 do
-        local inp = random_string(math.random() * l + 1)
-        local res = {
-          expect = inp,
-          actual = tostring(rspamd_util.decode_qp((rspamd_util.encode_qp(inp, 0))))
-        }
-        assert_rspamd_eq(res)
+      if length > 0 then
+        return random_string(length - 1) .. charset[math.random(1, #charset)]
+      else
+        return ""
       end
-    end)
+    end
+    for _,l in ipairs({10, 100, 1000, 10000}) do
+      test("QP fuzz test max length " .. tostring(l), function()
+        for _=1,100 do
+          local inp = random_string(math.random() * l + 1)
+          local res = {
+            expect = inp,
+            actual = tostring(rspamd_util.decode_qp((rspamd_util.encode_qp(inp, 0))))
+          }
+          assert_rspamd_eq(res)
+        end
+      end)
+    end
   end
 end)

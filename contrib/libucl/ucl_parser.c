@@ -179,7 +179,7 @@ start:
 				if (!quoted) {
 					if (*p == '*') {
 						ucl_chunk_skipc (chunk, p);
-						if (*p == '/') {
+						if (chunk->remain > 0 && *p == '/') {
 							comments_nested --;
 							if (comments_nested == 0) {
 								if (parser->flags & UCL_PARSER_SAVE_COMMENTS) {
@@ -746,13 +746,13 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 	const char *p = start, *c = start;
 	char *endptr;
 	bool got_dot = false, got_exp = false, need_double = false,
-			is_time = false, valid_start = false, is_hex = false,
-			is_neg = false;
+			is_time = false, valid_start = false, is_hex = false;
+	int is_neg = 0;
 	double dv = 0;
 	int64_t lv = 0;
 
 	if (*p == '-') {
-		is_neg = true;
+		is_neg = 1;
 		c ++;
 		p ++;
 	}
@@ -768,6 +768,7 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 			is_hex = true;
 			allow_double = false;
 			c = p + 1;
+			p ++;
 		}
 		else if (allow_double) {
 			if (p == c) {
@@ -816,26 +817,46 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 				break;
 			}
 		}
+		else if (!allow_double && *p == '.') {
+			/* Unexpected dot */
+			*pos = start;
+			return EINVAL;
+		}
 		else {
 			break;
 		}
 	}
 
-	if (!valid_start) {
+	if (!valid_start || p == c) {
 		*pos = start;
 		return EINVAL;
 	}
 
+	char numbuf[128];
+
+	if ((size_t)(p - c + 1) >= sizeof(numbuf)) {
+		*pos = start;
+		return EINVAL;
+	}
+
+	if (is_neg) {
+		numbuf[0] = '-';
+		ucl_strlcpy (&numbuf[1], c, p - c + 1);
+	}
+	else {
+		ucl_strlcpy (numbuf, c, p - c + 1);
+	}
+
 	errno = 0;
 	if (need_double) {
-		dv = strtod (c, &endptr);
+		dv = strtod (numbuf, &endptr);
 	}
 	else {
 		if (is_hex) {
-			lv = strtoimax (c, &endptr, 16);
+			lv = strtoimax (numbuf, &endptr, 16);
 		}
 		else {
-			lv = strtoimax (c, &endptr, 10);
+			lv = strtoimax (numbuf, &endptr, 10);
 		}
 	}
 	if (errno == ERANGE) {
@@ -843,14 +864,21 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 		return ERANGE;
 	}
 
-	/* Now check endptr */
+	/* Now check endptr and move it from numbuf to the real ending */
+	if (endptr != NULL) {
+		long shift = endptr - numbuf - is_neg;
+		endptr = (char *)c + shift;
+	}
+	if (endptr >= end) {
+		p = end;
+		goto set_obj;
+	}
 	if (endptr == NULL || ucl_lex_is_atom_end (*endptr) || *endptr == '\0') {
 		p = endptr;
 		goto set_obj;
 	}
 
 	if (endptr < end && endptr != start) {
-		p = endptr;
 		switch (*p) {
 		case 'm':
 		case 'M':
@@ -983,7 +1011,7 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 	}
 	else if (endptr == end) {
 		/* Just a number at the end of chunk */
-		p = endptr;
+		p = end;
 		goto set_obj;
 	}
 
@@ -999,11 +1027,11 @@ set_obj:
 			else {
 				obj->type = UCL_TIME;
 			}
-			obj->value.dv = is_neg ? (-dv) : dv;
+			obj->value.dv = dv;
 		}
 		else {
 			obj->type = UCL_INT;
-			obj->value.iv = is_neg ? (-lv) : lv;
+			obj->value.iv = lv;
 		}
 	}
 	*pos = p;

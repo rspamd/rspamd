@@ -439,7 +439,7 @@ reconf['FORGED_MUA_OPERA_MSGID'] = {
 -- Detect forged Mozilla Mail/Thunderbird/Seamonkey/Postbox headers
 -- Mozilla based X-Mailer
 local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/H'
-local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Icedove)\\/)/H'
+local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Betterbird|Icedove)\\/)/H'
 local user_agent_seamonkey	= 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/H'
 local user_agent_postbox	= [[User-Agent=/^\s*Mozilla\/5\.0\s\([^)]+\)\sGecko\/\d+\sPostboxApp\/\d+(?:\.\d+){2,3}$/H]]
 local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey, user_agent_postbox)
@@ -865,7 +865,7 @@ reconf['SUBJECT_HAS_QUESTION'] = {
 }
 
 reconf['SUBJECT_HAS_CURRENCY'] = {
-  re = 'Subject=/[$€$¢¥₽]/Hu',
+  re = 'Subject=/\\p{Sc}/Hu',
   description = 'Subject contains currency',
   score = 1.0,
   group = 'headers'
@@ -908,14 +908,21 @@ reconf['HAS_LIST_UNSUB'] = {
 
 reconf['HAS_GUC_PROXY_URI'] = {
   re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
-  description = 'Has googleusercontent.com proxy URI',
-  score = 0.01,
-  group = 'experimental'
+  description = 'Has googleusercontent.com proxy URL',
+  score = 1.0,
+  group = 'url'
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
   re = '/\\.google\\.com\\/url\\?/{url}i',
   description = 'Has google.com/url redirection',
+  score = 1.0,
+  group = 'url'
+}
+
+reconf['HAS_GOOGLE_FIREBASE_URL'] = {
+  re = '/\\.firebasestorage\\.googleapis\\.com\\//{url}i',
+  description = 'Contains firebasestorage.googleapis.com URL',
   score = 0.01,
   group = 'experimental'
 }

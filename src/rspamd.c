@@ -53,6 +53,10 @@
 #include "sqlite3.h"
 #include "contrib/libev/ev.h"
 
+#ifdef WITH_HYPERSCAN
+#include "libserver/hyperscan_tools.h"
+#endif
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
@@ -1118,7 +1122,7 @@ rspamd_stat_update_handler (struct ev_loop *loop, ev_timer *w, int revents)
 				(new_spam - old_spam) / w->repeat,
 				(new_ham - old_ham) / w->repeat,
 				cnt > 0 ? sum / cnt : 0);
-		setproctitle (proctitle);
+		setproctitle ("%s", proctitle);
 	}
 
 	memcpy (&old_stat, &cur_stat, sizeof (cur_stat));
@@ -1499,9 +1503,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
 
-	if (!valgrind_mode) {
-		rspamd_set_crash_handler (rspamd_main);
-	}
+	rspamd_set_crash_handler (rspamd_main);
 
 	/* Ignore SIGPIPE as we handle write errors manually */
 	sigemptyset (&sigpipe_act.sa_mask);
@@ -1643,6 +1645,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info_main ("terminating...");
 
+#ifdef WITH_HYPERSCAN
+	rspamd_hyperscan_cleanup_maybe();
+#endif
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger);
 	g_hash_table_unref (rspamd_main->spairs);
@@ -1653,6 +1658,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_pidfile_close (rspamd_main->pfh);
 	}
 
+	rspamd_unset_crash_handler (rspamd_main);
 	g_free (rspamd_main);
 	ev_unref (event_loop);
 	sqlite3_shutdown ();

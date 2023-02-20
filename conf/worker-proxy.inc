@@ -13,7 +13,14 @@
 # Module documentation: https://rspamd.com/doc/workers/rspamd_proxy.html
 
 milter = yes; # Enable milter mode
-timeout = 120s; # Needed for Milter usually
+
+# This timeout is mostly specific to the milter mode.
+# Please also bear in mind that if this timeout is longer than `task_timeout`,
+# your messages might be processed for much longer due to this timeout (this is
+# true for self-scan mode).
+# If this behaviour is not desired, then it is recommended to reduce and adjust this
+# value accordingly
+timeout = 60s;
 
 upstream "local" {
   default = yes;

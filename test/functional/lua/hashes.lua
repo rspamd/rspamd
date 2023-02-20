@@ -59,7 +59,7 @@ rspamd_config:register_symbol({
         h:reset()
       end
       h:update(t['str'])
-      if not (h:hex() == t['hex']) then
+      if h:hex() ~= t['hex'] then
         t['error'] = 'sum mismatch: ' .. h:hex()
         table.insert(worry, logger.slog('%1', t))
       end

@@ -24,6 +24,7 @@
 #include <variant>
 #include <list>
 #include <functional>
+#include <cstdint>
 #include "mem_pool.h"
 
 namespace rspamd::css {
@@ -185,7 +186,6 @@ public:
 			input(sv), offset(0), pool(pool) {}
 
 	auto next_token(void) -> struct css_parser_token;
-	auto get_offset(void) const { return offset; }
 	auto pushback_token(const struct css_parser_token &t) const -> void {
 		backlog.push_back(t);
 	}

@@ -432,6 +432,26 @@ local function multimap_callback(task, rule)
       return false
     end
 
+    local function get_key_callback(ret, err_or_data, err_code)
+      lua_util.debugm(N, task, 'got return "%s" (err code = %s) for multimap %s',
+          err_or_data,
+          err_code,
+          rule.symbol)
+
+      if ret then
+        if type(err_or_data) == 'table' then
+          for _,elt in ipairs(err_or_data) do
+            callback(elt)
+          end
+        else
+          callback(err_or_data)
+        end
+      elseif err_code ~= 404 then
+        rspamd_logger.infox(task, "map %s: get key returned error %s: %s",
+          rule.symbol, err_code, err_or_data)
+      end
+    end
+
     lua_util.debugm(N, task, 'check value %s for multimap %s', value,
         rule.symbol)
 
@@ -461,32 +481,15 @@ local function multimap_callback(task, rule)
 
       return ret
     elseif r.radix then
-      ret = r.radix:get_key(value)
-    elseif r.hash then
+      r.radix:get_key(value, get_key_callback, task)
+    elseif r.kv_map then
       if type(value) == 'userdata' then
         if value.class == 'rspamd{ip}' then
           value = value:tostring()
         end
       end
-      ret = r.hash:get_key(value)
+      r.kv_map:get_key(value, get_key_callback, task)
     end
-
-    lua_util.debugm(N, task, 'found return "%s" for multimap %s', ret,
-    rule.symbol)
-
-    if ret then
-      if type(ret) == 'table' then
-        for _,elt in ipairs(ret) do
-          callback(elt)
-        end
-
-        ret = true
-      else
-        callback(ret)
-      end
-    end
-
-    return ret
   end
 
   -- Parse result in form: <symbol>:<score>|<symbol>|<score>
@@ -1001,25 +1004,25 @@ end
 local function add_multimap_rule(key, newrule)
   local ret = false
 
-  local function multimap_load_hash(rule)
+  local function multimap_load_kv_map(rule)
     if rule['regexp'] then
       if rule['multi'] then
-        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
+        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
             rule.description)
       else
-        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'regexp',
+        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'regexp',
             rule.description)
       end
     elseif rule['glob'] then
       if rule['multi'] then
-        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
+        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
             rule.description)
       else
-        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'glob',
+        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'glob',
             rule.description)
       end
     else
-      rule.hash = lua_maps.map_add_from_ucl(rule.map, 'hash',
+      rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'hash',
           rule.description)
     end
   end
@@ -1157,9 +1160,9 @@ local function add_multimap_rule(key, newrule)
           ret = true
         end
       else
-        multimap_load_hash(newrule)
+        multimap_load_kv_map(newrule)
 
-        if newrule['hash'] then
+        if newrule.kv_map then
           ret = true
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
@@ -1172,10 +1175,10 @@ local function add_multimap_rule(key, newrule)
         newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
             newrule.description)
       elseif not newrule.combined then
-        multimap_load_hash(newrule)
+        multimap_load_kv_map(newrule)
       end
 
-      if newrule.hash or newrule.radix then
+      if newrule.kv_map or newrule.radix then
         ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',

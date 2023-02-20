@@ -103,9 +103,6 @@ struct dkim_check_result {
 static void dkim_symbol_callback (struct rspamd_task *task,
 								  struct rspamd_symcache_dynamic_item *item,
 								  void *unused);
-static void dkim_sign_callback (struct rspamd_task *task,
-								struct rspamd_symcache_dynamic_item *item,
-								void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
 static gint lua_dkim_verify_handler (lua_State *L);

@@ -5,26 +5,39 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 export ASAN_OPTIONS=detect_leaks=0
 
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+builddir = debian/build/flavor-
+FLAVORS = release asan
+CONFIG_asan = -DCMAKE_BUILD_TYPE=Debug -DSANITIZE=address -DENABLE_LTO=OFF
+CONFIG_release = -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_LTO=ON
 
-ifneq ($(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
-	ENABLE_LUAJIT := ON
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 armel armhf i386 mips mips64el mipsel ppc64 ppc64el),)
+	ENABLE_LUAJIT := -DENABLE_LUAJIT=ON -DLUA_ROOT=/luajit-build
 else
-	ENABLE_LUAJIT := OFF
+	ENABLE_LUAJIT := -DENABLE_LUAJIT=OFF
 endif
 
 # Can be filled by a build system
 EXTRA_ARGS :=
+ENABLE_JEMALLOC := -DENABLE_JEMALLOC=OFF
 
-ifneq ($(filter $(DEB_HOST_ARCH),amd64 i386),)
-	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
+ifneq ($(filter $(DEB_HOST_ARCH),amd64 i386 arm64),)
+ifeq ($(filter $(DEB_HOST_ARCH),arm64),)
+	ENABLE_JEMALLOC := -DENABLE_JEMALLOC=ON
+	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON -DHYPERSCAN_ROOT_DIR=/vectorscan
 else
-	ENABLE_HYPERSCAN :=
+	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=ON
 endif
+else
+	ENABLE_HYPERSCAN := -DENABLE_HYPERSCAN=OFF
+endif
+
 %:
 	dh $@ --with systemd --parallel
 
-override_dh_auto_configure:
-	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
+override_dh_auto_configure: $(patsubst %,configure_%,$(FLAVORS))
+configure_%:
+	mkdir -p $(builddir)$*
+	cd $(builddir)$* && cmake ../../../  -DCONFDIR=/etc/rspamd -DCMAKE_C_COMPILER=clang-16 -DCMAKE_CXX_COMPILER=clang++-16 \
 		-DMANDIR=/usr/share/man \
 		-DRUNDIR=/run/rspamd \
 		-DDBDIR=/var/lib/rspamd \
@@ -33,34 +46,55 @@ override_dh_auto_configure:
 		-DLIBDIR=/usr/lib/rspamd \
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
-		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_INSTALL_PREFIX:PATH=/usr \
 		-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-		-DENABLE_LTO=ON \
 		-DDEBIAN_BUILD=1 \
-		-DENABLE_JEMALLOC=ON \
 		-DENABLE_PCRE2=ON \
 		-DENABLE_LUAJIT=$(ENABLE_LUAJIT) \
 		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON \
 		-DENABLE_STATIC_LIBCXX=OFF \
-		-DENABLE_LIBCXX=OFF \
+		-DENABLE_LIBCXX=AUTO \
 		$(ENABLE_HYPERSCAN) \
+		$(ENABLE_LUAJIT) \
+		$(ENABLE_JEMALLOC) \
+		$(CONFIG_$*) \
 		$(EXTRA_ARGS)
 
-override_dh_strip:
-	dh_strip --dbg-package=rspamd-dbg
+override_dh_auto_build: $(patsubst %,build_%,$(FLAVORS))
+build_%:
+	dh_auto_build --sourcedirectory=$(builddir)$*
+
+override_dh_strip: $(patsubst %,strip_%,$(FLAVORS))
+strip_%:
+	if [ "$*" = "asan" ]; then \
+		dh_strip -prspamd-asan --dbg-package=rspamd-dbg-asan ; \
+	else \
+		dh_strip -prspamd --dbg-package=rspamd-dbg ; \
+	fi
 
 override_dh_makeshlibs:
 	dh_makeshlibs -Xrspamd-actrie
 
-override_dh_auto_install:
-	dh_auto_install --destdir=debian/rspamd
-
-override_dh_auto_clean:
-	dh_auto_clean
-	rm -f src/modules.c
+override_dh_auto_install: $(patsubst %,install_%,$(FLAVORS))
+install_%:
+	if [ "$*" = "asan" ]; then \
+		cd $(builddir)$* && make install DESTDIR=../../../debian/rspamd-asan ; \
+		cd ../../../debian/rspamd-asan &&  mkdir -p var/lib/rspamd \
+																								 var/log/rspamd \
+																								 etc/rspamd/local.d \
+																								 etc/rspamd/override.d  ; \
+	else \
+		cd $(builddir)$* && make install DESTDIR=../../../debian/rspamd ; \
+		cd ../../../debian/rspamd &&  mkdir -p var/lib/rspamd \
+																								 var/log/rspamd \
+																								 etc/rspamd/local.d \
+																								 etc/rspamd/override.d  ; \
+	fi
 
 override_dh_fixperms:
 	dh_fixperms
 	chmod 750 $(CURDIR)/debian/rspamd/var/lib/rspamd
 	chmod 750 $(CURDIR)/debian/rspamd/var/log/rspamd
+	chmod 750 $(CURDIR)/debian/rspamd-asan/var/lib/rspamd
+	chmod 750 $(CURDIR)/debian/rspamd-asan/var/log/rspamd

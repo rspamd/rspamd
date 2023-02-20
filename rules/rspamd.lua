@@ -57,7 +57,7 @@ local rmaps =  rspamd_config:get_all_opt("lua_maps")
 if rmaps and type(rmaps) == 'table' then
   local rspamd_logger = require "rspamd_logger"
   for k,v in pairs(rmaps) do
-    local status,map_or_err = pcall(rspamd_config:add_map(v))
+    local status,map_or_err = pcall(function () return rspamd_config:add_map(v) end)
 
     if not status then
       rspamd_logger.errx(rspamd_config, "cannot add map %s: %s", k, map_or_err)

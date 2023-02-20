@@ -193,7 +193,7 @@ rspamd_tokenize_check_limit (gboolean decay,
 				*prob = G_MAXUINT64;
 			}
 			else {
-				*prob = decay_prob * G_MAXUINT64;
+				*prob = (guint64)(decay_prob * (double)G_MAXUINT64);
 			}
 
 			return TRUE;

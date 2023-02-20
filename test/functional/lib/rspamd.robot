@@ -3,9 +3,6 @@ Library         Collections
 Library         OperatingSystem
 Library         Process
 
-*** Variables ***
-${SET_LOCAL_CONFDIR}  --var=LOCAL_CONFDIR=/no/no/no/
-
 *** Keywords ***
 Check Controller Errors
   @{result} =  HTTP  GET  ${RSPAMD_LOCAL_ADDR}  ${RSPAMD_PORT_CONTROLLER}  /errors
@@ -229,7 +226,18 @@ Run Rspamd
   Export Rspamd Variables To Environment
 
   # Dump templated config or errors to log
-  ${result} =  Run Process  ${RSPAMADM}  ${SET_LOCAL_CONFDIR}  configdump  -c  ${CONFIG}
+  ${result} =  Run Process  ${RSPAMADM}
+  ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=LOCAL_CONFDIR\=/non-existent
+  ...  --var\=CONFDIR\=${RSPAMD_TESTDIR}/../../conf/
+  ...  configdump  -c  ${CONFIG}
+  ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
+  ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
+  ...  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ...  env:RSPAMD_NO_CLEANUP=1
+  ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
   ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout
@@ -240,9 +248,18 @@ Run Rspamd
   Set Directory Ownership  ${RSPAMD_TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   # Run Rspamd
-  ${result} =  Run Process  ${RSPAMD}  ${SET_LOCAL_CONFDIR}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${CONFIG}  env:TMPDIR=${RSPAMD_TMPDIR}  env:RSPAMD_DBDIR=${RSPAMD_TMPDIR}  env:DBDIR=${RSPAMD_TMPDIR}  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
-  # We need to send output to files (or discard output) to avoid hanging Robot
+  ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
+  ...  -c  ${CONFIG}
+  ...  --var\=TMPDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=DBDIR\=${RSPAMD_TMPDIR}
+  ...  --var\=LOCAL_CONFDIR\=/non-existent
+  ...  --var\=CONFDIR\=${RSPAMD_TESTDIR}/../../conf/
+  ...  env:RSPAMD_LOCAL_CONFDIR=/non-existent
+  ...  env:RSPAMD_TMPDIR=${RSPAMD_TMPDIR}
+  ...  env:RSPAMD_CONFDIR=${RSPAMD_TESTDIR}/../../conf/
+  ...  env:LD_LIBRARY_PATH=${RSPAMD_TESTDIR}/../../contrib/aho-corasick
+  ...  env:RSPAMD_NO_CLEANUP=1
+  ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
   # Log stdout/stderr
@@ -307,3 +324,27 @@ Sync Fuzzy Storage
   ...  fuzzy_sync
   Log  ${result.stdout}
   Sleep  0.1s  Try give fuzzy storage time to sync
+
+Run Dummy Http
+  ${fileExists} =  File Exists  /tmp/dummy_http.pid
+  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_http.pid
+  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
+  Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
+
+Run Dummy Https
+  ${fileExists} =  File Exists  /tmp/dummy_https.pid
+  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_https.pid
+  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
+  ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
+  ...  -pf  /tmp/dummy_https.pid  -p  18081
+  Wait Until Created  /tmp/dummy_https.pid  timeout=2 second
+
+Dummy Http Teardown
+  ${http_pid} =  Get File  /tmp/dummy_http.pid
+  Shutdown Process With Children  ${http_pid}
+
+Dummy Https Teardown
+  ${https_pid} =  Get File  /tmp/dummy_https.pid
+  Shutdown Process With Children  ${https_pid}

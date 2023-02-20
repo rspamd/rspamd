@@ -401,3 +401,13 @@ MAP - MULTISYMBOL DISABLED
   Scan File  ${MESSAGE}  Rcpt=user3@example.com
   ...   Settings={symbols_enabled = [RCPT_MAP_NOMULTISYM, SYM1]}
   Expect Symbol With Exact Options  RCPT_MAP_NOMULTISYM  user3@example.com  SYM1
+
+MAP - EXTERNAL
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.au
+  ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP]}
+  Expect Symbol  EXTERNAL_MULTIMAP
+
+MAP - EXTERNAL MISS
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.bg
+  ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP]}
+  Do Not Expect Symbol  EXTERNAL_MULTIMAP

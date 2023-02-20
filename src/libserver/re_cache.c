@@ -30,6 +30,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
+#include "hyperscan_tools.h"
 #endif
 
 #include "unix-std.h"
@@ -93,7 +94,7 @@ struct rspamd_re_class {
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 
 #ifdef WITH_HYPERSCAN
-	hs_database_t *hs_db;
+	rspamd_hyperscan_t *hs_db;
 	hs_scratch_t *hs_scratch;
 	gint *hs_ids;
 	guint nhs;
@@ -127,7 +128,6 @@ struct rspamd_re_cache {
 #ifdef WITH_HYPERSCAN
 	enum rspamd_hyperscan_status hyperscan_loaded;
 	gboolean disable_hyperscan;
-	gboolean vectorized_hyperscan;
 	hs_platform_info_t plt;
 #endif
 };
@@ -196,7 +196,7 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 
 #ifdef WITH_HYPERSCAN
 		if (re_class->hs_db) {
-			hs_free_database (re_class->hs_db);
+			rspamd_hyperscan_free(re_class->hs_db);
 		}
 		if (re_class->hs_scratch) {
 			hs_free_scratch (re_class->hs_scratch);
@@ -482,7 +482,6 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 	rspamd_fstring_t *features = rspamd_fstring_new ();
 
 	cache->disable_hyperscan = cfg->disable_hyperscan;
-	cache->vectorized_hyperscan = cfg->vectorized_hyperscan;
 
 	g_assert (hs_populate_platform (&cache->plt) == HS_SUCCESS);
 
@@ -803,37 +802,18 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		g_assert (re_class->hs_db != NULL);
 
 		/* Go through hyperscan API */
-		if (!rt->cache->vectorized_hyperscan) {
-			for (i = 0; i < count; i++) {
-				cbdata.ins = &in[i];
-				cbdata.re = re;
-				cbdata.rt = rt;
-				cbdata.lens = &lens[i];
-				cbdata.count = 1;
-				cbdata.task = task;
-
-				if ((hs_scan (re_class->hs_db, in[i], lens[i], 0,
-						re_class->hs_scratch,
-						rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
-					ret = 0;
-				}
-				else {
-					ret = rt->results[re_id];
-					*processed_hyperscan = TRUE;
-				}
-			}
-		}
-		else {
-			cbdata.ins = in;
+		for (i = 0; i < count; i++) {
+			cbdata.ins = &in[i];
 			cbdata.re = re;
 			cbdata.rt = rt;
-			cbdata.lens = lens;
+			cbdata.lens = &lens[i];
 			cbdata.count = 1;
 			cbdata.task = task;
 
-			if ((hs_scan_vector (re_class->hs_db, (const char **)in, lens, count, 0,
-					re_class->hs_scratch,
-					rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
+			if ((hs_scan (rspamd_hyperscan_get_database(re_class->hs_db),
+				in[i], lens[i], 0,
+				re_class->hs_scratch,
+				rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
 				ret = 0;
 			}
 			else {
@@ -1793,7 +1773,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 
 		if (hs_compile (pat,
 				flags | HS_FLAG_PREFILTER,
-				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
+				HS_MODE_BLOCK,
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
@@ -2027,7 +2007,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 
 		if (hs_compile (pat,
 				hs_flags[i],
-				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
+				HS_MODE_BLOCK,
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
@@ -2082,7 +2062,7 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				hs_ids,
 				hs_exts,
 				n,
-				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
+				HS_MODE_BLOCK,
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
@@ -2130,13 +2110,8 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 				hs_serialized, serialized_len);
 		crc = rspamd_cryptobox_fast_hash_final (&crc_st);
 
-		if (cache->vectorized_hyperscan) {
-			iov[0].iov_base = (void *) rspamd_hs_magic_vector;
-		}
-		else {
-			iov[0].iov_base = (void *) rspamd_hs_magic;
-		}
 
+		iov[0].iov_base = (void *) rspamd_hs_magic;
 		iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
 		iov[1].iov_base = &cache->plt;
 		iov[1].iov_len = sizeof (cache->plt);
@@ -2356,12 +2331,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			if (cache->vectorized_hyperscan) {
-				mb = rspamd_hs_magic_vector;
-			}
-			else {
-				mb = rspamd_hs_magic;
-			}
+			mb = rspamd_hs_magic;
 
 			if (memcmp (magicbuf, mb, sizeof (magicbuf)) != 0) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
@@ -2513,7 +2483,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	gint fd, i, n, *hs_ids = NULL, *hs_flags = NULL, total = 0, ret;
 	GHashTableIter it;
 	gpointer k, v;
-	guint8 *map, *p, *end;
+	guint8 *map, *p;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache_elt *elt;
 	struct stat st;
@@ -2552,7 +2522,6 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			close (fd);
-			end = map + st.st_size;
 			p = map + RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt);
 			n = *(gint *)p;
 
@@ -2592,7 +2561,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			if (re_class->hs_db != NULL) {
-				hs_free_database (re_class->hs_db);
+				rspamd_hyperscan_free (re_class->hs_db);
 			}
 
 			if (re_class->hs_ids) {
@@ -2602,16 +2571,16 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			re_class->hs_ids = NULL;
 			re_class->hs_scratch = NULL;
 			re_class->hs_db = NULL;
+			munmap (map, st.st_size);
 
-			if ((ret = hs_deserialize_database (p, end - p, &re_class->hs_db))
-					!= HS_SUCCESS) {
+			re_class->hs_db = rspamd_hyperscan_maybe_load(path, p - map);
+			if (re_class->hs_db == NULL) {
 				if (!try_load) {
-					msg_err_re_cache ("bad hs database in %s: %d", path, ret);
+					msg_err_re_cache ("bad hs database in %s", path);
 				}
 				else {
-					msg_debug_re_cache ("bad hs database in %s: %d", path, ret);
+					msg_debug_re_cache ("bad hs database in %s", path);
 				}
-				munmap (map, st.st_size);
 				g_free (hs_ids);
 				g_free (hs_flags);
 
@@ -2623,10 +2592,11 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				continue;
 			}
 
-			munmap (map, st.st_size);
-
-			g_assert (hs_alloc_scratch (re_class->hs_db,
-					&re_class->hs_scratch) == HS_SUCCESS);
+			if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(re_class->hs_db),
+					&re_class->hs_scratch)) != HS_SUCCESS) {
+				msg_err_re_cache ("fatal error: cannot allocate scratch for %s: %d", path, ret);
+				g_abort();
+			}
 
 			/*
 			 * Now find hyperscan elts that are successfully compiled and
