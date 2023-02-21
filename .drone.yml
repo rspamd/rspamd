@@ -21,7 +21,7 @@ steps:
 
   - name: build
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
-    image: rspamd/ci-ubuntu-build
+    image: rspamd/ci:ubuntu-build
     pull: always
     volumes:
       - name: rspamd
@@ -48,7 +48,7 @@ steps:
 
   - name: build-clang
     # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
-    image: rspamd/ci-fedora-build
+    image: rspamd/ci:fedora-build
     pull: always
     volumes:
       - name: rspamd
@@ -88,7 +88,7 @@ steps:
 
   - name: rspamd-test
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
-    image: rspamd/ci-ubuntu-test
+    image: rspamd/ci:ubuntu-test
     pull: always
     volumes:
       - name: rspamd
@@ -130,7 +130,7 @@ steps:
 
   - name: test-fedora-clang
     # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-test/Dockerfile
-    image: rspamd/ci-fedora-test
+    image: rspamd/ci:fedora-test
     pull: always
     volumes:
       - name: rspamd
@@ -169,7 +169,7 @@ steps:
 
   - name: functional
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
-    image: rspamd/ci-ubuntu-test-func
+    image: rspamd/ci:ubuntu-test-func
     pull: always
     volumes:
       - name: rspamd
@@ -205,7 +205,7 @@ steps:
       HTTP_PUT_AUTH: { from_secret: http_put_auth }
 
   - name: send-coverage
-    image: rspamd/ci-ubuntu-test
+    image: rspamd/ci:ubuntu-test
     pull: if-not-exists
     volumes:
       - name: rspamd
@@ -245,7 +245,7 @@ steps:
 
   - name: perl-tidyall
     # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
-    image: rspamd/ci-perl-tidyall
+    image: rspamd/ci:perl-tidyall
     pull: if-not-exists
     failure: ignore
     commands:
@@ -281,6 +281,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 4ff026a59ee31c1afc6e85690034d2ead4cc8274baf7099f4bd8d69e4045db97
+hmac: 577234b81e1f00d04b84687ed18dba05838233d3ca9cb1328d02937f52be6b0d
 
 ...
