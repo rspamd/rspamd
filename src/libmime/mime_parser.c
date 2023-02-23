@@ -1162,7 +1162,6 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 	task = st->task;
 
 	if (G_LIKELY (p < end)) {
-		gboolean seen_non_dash = FALSE;
 
 		blen = 0;
 
@@ -1170,15 +1169,12 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 			if (*p == '\r' || *p == '\n') {
 				break;
 			}
-			else if (*p != '-') {
-				seen_non_dash = TRUE;
-			}
 
 			blen ++;
 			p ++;
 		}
 
-		if (blen > 0 && seen_non_dash) {
+		if (blen > 0) {
 			/* We have found something like boundary */
 			p = text + match_pos;
 			bend = p + blen - 1;
@@ -1191,7 +1187,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 					blen -= 2;
 				}
 				else {
-					/* Not a closing boundary somehow */
+					/* Not a closing boundary somehow, e.g. if a boundary=='-' */
 					bend ++;
 				}
 			}
