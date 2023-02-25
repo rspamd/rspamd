@@ -170,6 +170,14 @@ local function resolve_cached(task, orig_url, url, key, ntries)
       return
     end
 
+    local redirection_codes = {
+      [301] = true, -- moved permanently
+      [302] = true, -- found
+      [303] = true, -- see other
+      [307] = true, -- temporary redirect
+      [308] = true, -- permanent redirect
+    }
+
     local function http_callback(err, code, _, headers)
       if err then
         rspamd_logger.infox(task, 'found redirect error from %s to %s, err message: %s',
@@ -187,7 +195,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
 
           cache_url(task, orig_url, url, key)
 
-        elseif code == 301 or code == 302 then
+        elseif redirection_codes[code] then
           local loc = headers['location']
           local redir_url
           if loc then
