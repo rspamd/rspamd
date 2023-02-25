@@ -112,11 +112,12 @@ reconf['R_UNDISC_RCPT'] = {
   -- To: Undisclosed recipients:;
   -- To: undisclosed-recipients: ;
   -- To: <Undisclosed-Recipient:;>
+  -- To: <"Undisclosed-Recipient:;">
   -- To: "undisclosed-recipients (utajeni adresati)": ;
   -- To: Undisclosed recipients:
   -- but do not match:
   -- Undisclosed Recipient <user@example.org>
-  re = [[To=/^[<"]?undisclosed[- ]recipients?\b.*:/i{header}]],
+  re = [[To=/^<?"?undisclosed[- ]recipients?\b.*:/i{header}]],
   score = 3.0,
   description = 'Recipients are absent or undisclosed',
   group = 'headers',
