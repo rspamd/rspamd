@@ -504,16 +504,44 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 
 					return FALSE;
 				}
-				mp->hs_db = rspamd_hyperscan_from_raw_db(db);
+
+				if (hs_cache_dir != NULL) {
+					char fpath[PATH_MAX];
+					rspamd_snprintf (fpath, sizeof (fpath), "%s/%*xs.hsmp", hs_cache_dir,
+						(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+					mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
+				}
+				else {
+					/* Should not happen in the real life */
+					mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
+				}
 			}
 
 			rspamd_multipattern_try_save_hs (mp, hash);
 
 			for (i = 0; i < MAX_SCRATCH; i ++) {
+				mp->scratch[i] = NULL;
+			}
+
+			for (i = 0; i < MAX_SCRATCH; i ++) {
 				int ret;
+
 				if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(mp->hs_db), &mp->scratch[i])) != HS_SUCCESS) {
-					msg_err("fatal error: cannot allocate scratch space for hyperscan: %d", ret);
-					g_abort();
+					msg_err("cannot allocate scratch space for hyperscan: error code %d", ret);
+
+					/* Clean all scratches that are non-NULL */
+					for (int ii = 0; ii < MAX_SCRATCH; ii ++) {
+						if (mp->scratch[ii] != NULL) {
+							hs_free_scratch(mp->scratch[ii]);
+						}
+					}
+					g_set_error (err, rspamd_multipattern_quark (), EINVAL,
+						"cannot allocate scratch space for hyperscan: error code %d", ret);
+
+					rspamd_hyperscan_free(mp->hs_db, true);
+					mp->hs_db = NULL;
+
+					return FALSE;
 				}
 			}
 		}
@@ -728,7 +756,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 				}
 
 				if (mp->hs_db) {
-					rspamd_hyperscan_free(mp->hs_db);
+					rspamd_hyperscan_free(mp->hs_db, false);
 				}
 			}
 

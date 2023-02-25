@@ -183,6 +183,35 @@ public:
 			mut_fname.c_str());
 	}
 
+	void delete_cached_file(const char *fname) {
+		auto mut_fname = std::string{fname};
+		std::size_t sz;
+
+		rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
+		mut_fname.resize(sz);
+
+		if (mut_fname.empty()) {
+			msg_err_hyperscan("attempt to remove an empty hyperscan file!");
+			return;
+		}
+
+		if (access(mut_fname.c_str(), R_OK) != -1) {
+			if (unlink(mut_fname.c_str()) == -1) {
+				msg_err_hyperscan("cannot remove hyperscan file %s: %s",
+					mut_fname.c_str(), strerror(errno));
+			}
+			else {
+				msg_debug_hyperscan("removed hyperscan file %s", mut_fname.c_str());
+			}
+		}
+		else {
+			msg_err_hyperscan("attempt to remove non-existent hyperscan file %s: %s",
+				mut_fname.c_str(), strerror(errno));
+		}
+
+		known_cached_files.erase(mut_fname);
+	}
+
 	auto cleanup_maybe() -> void {
 		auto env_cleanup_disable = std::getenv("RSPAMD_NO_CLEANUP");
 		/* We clean dir merely if we are running from the main process */
@@ -248,6 +277,7 @@ public:
 struct hs_shared_database {
 	hs_database_t *db = nullptr; /**< internal database (might be in a shared memory) */
 	std::optional<raii_mmaped_file> maybe_map;
+	std::string cached_path;
 
 	~hs_shared_database() {
 		if (!maybe_map) {
@@ -256,8 +286,10 @@ struct hs_shared_database {
 		// Otherwise, handled by maybe_map dtor
 	}
 
-	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db) : db(db), maybe_map(std::move(map)) {}
-	explicit hs_shared_database(hs_database_t *db) : db(db), maybe_map(std::nullopt) {}
+	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db) : db(db), maybe_map(std::move(map)) {
+		cached_path = maybe_map.value().get_file().get_name();
+	}
+	explicit hs_shared_database(hs_database_t *db, const char *fname) : db(db), maybe_map(std::nullopt), cached_path{fname} {}
 	hs_shared_database(const hs_shared_database &other) = delete;
 	hs_shared_database() = default;
 	hs_shared_database(hs_shared_database &&other) noexcept {
@@ -287,7 +319,7 @@ hs_shared_from_serialized(raii_mmaped_file &&map, std::int64_t offset) -> tl::ex
 		return tl::make_unexpected(error {"cannot deserialize database", ret});
 	}
 
-	return tl::expected<hs_shared_database, error>{tl::in_place, target};
+	return tl::expected<hs_shared_database, error>{tl::in_place, target, map.get_file().get_name().data()};
 }
 
 auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expected<hs_shared_database, error>
@@ -464,18 +496,21 @@ rspamd_hyperscan_get_database(rspamd_hyperscan_t *db)
 }
 
 rspamd_hyperscan_t *
-rspamd_hyperscan_from_raw_db(hs_database_t *db)
+rspamd_hyperscan_from_raw_db(hs_database_t *db, const char *fname)
 {
-	auto *ndb = new rspamd::util::hs_shared_database{db};
+	auto *ndb = new rspamd::util::hs_shared_database{db, fname};
 
 	return C_DB_FROM_CXX(ndb);
 }
 
 void
-rspamd_hyperscan_free(rspamd_hyperscan_t *db)
+rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid)
 {
 	auto *real_db = CXX_DB_FROM_C(db);
 
+	if (invalid) {
+		rspamd::util::hs_known_files_cache::get().delete_cached_file(real_db->cached_path.c_str());
+	}
 	delete real_db;
 }
 

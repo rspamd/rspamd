@@ -41,7 +41,7 @@ rspamd_hyperscan_t *rspamd_hyperscan_maybe_load(const char *filename, goffset of
  * @param filename
  * @return
  */
-rspamd_hyperscan_t *rspamd_hyperscan_from_raw_db(hs_database_t *db);
+rspamd_hyperscan_t *rspamd_hyperscan_from_raw_db(hs_database_t *db, const char *fname);
 /**
  * Get the internal database
  * @param db
@@ -52,7 +52,7 @@ hs_database_t* rspamd_hyperscan_get_database(rspamd_hyperscan_t *db);
  * Free the database
  * @param db
  */
-void rspamd_hyperscan_free(rspamd_hyperscan_t *db);
+void rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid);
 
 /**
  * Notice a known hyperscan file (e.g. externally serialized)

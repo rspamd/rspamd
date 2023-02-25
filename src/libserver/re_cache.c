@@ -196,7 +196,7 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 
 #ifdef WITH_HYPERSCAN
 		if (re_class->hs_db) {
-			rspamd_hyperscan_free(re_class->hs_db);
+			rspamd_hyperscan_free(re_class->hs_db, false);
 		}
 		if (re_class->hs_scratch) {
 			hs_free_scratch (re_class->hs_scratch);
@@ -2561,7 +2561,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			if (re_class->hs_db != NULL) {
-				rspamd_hyperscan_free (re_class->hs_db);
+				rspamd_hyperscan_free (re_class->hs_db, false);
 			}
 
 			if (re_class->hs_ids) {
@@ -2594,7 +2594,6 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 
 			if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(re_class->hs_db),
 					&re_class->hs_scratch)) != HS_SUCCESS) {
-				rspamd_hyperscan_free (re_class->hs_db);
 				if (!try_load) {
 					msg_err_re_cache ("bad hs database in %s; error code: %d", path, ret);
 				}
@@ -2604,6 +2603,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				g_free (hs_ids);
 				g_free (hs_flags);
 
+				rspamd_hyperscan_free (re_class->hs_db, true);
 				re_class->hs_ids = NULL;
 				re_class->hs_scratch = NULL;
 				re_class->hs_db = NULL;

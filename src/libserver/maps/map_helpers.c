@@ -884,7 +884,7 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 		hs_free_scratch (re_map->hs_scratch);
 	}
 	if (re_map->hs_db) {
-		rspamd_hyperscan_free(re_map->hs_db);
+		rspamd_hyperscan_free(re_map->hs_db, false);
 	}
 	if (re_map->patterns) {
 		for (i = 0; i < re_map->regexps->len; i ++) {
@@ -1243,7 +1243,16 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 				return;
 			}
 
-			re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db);
+			if (re_map->map->cfg->hs_cache_dir) {
+				char fpath[PATH_MAX];
+				rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmc",
+					re_map->map->cfg->hs_cache_dir,
+					(gint) rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+				re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db, fpath);
+			}
+			else {
+				re_map->hs_db = rspamd_hyperscan_from_raw_db(hs_db, NULL);
+			}
 
 			ts1 = (rspamd_get_ticks (FALSE) - ts1) * 1000.0;
 			msg_info_map ("hyperscan compiled %d regular expressions from %s in %.1f ms",
@@ -1257,7 +1266,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 
 		if (hs_alloc_scratch (rspamd_hyperscan_get_database(re_map->hs_db), &re_map->hs_scratch) != HS_SUCCESS) {
 			msg_err_map ("cannot allocate scratch space for hyperscan");
-			rspamd_hyperscan_free(re_map->hs_db);
+			rspamd_hyperscan_free(re_map->hs_db, true);
 			re_map->hs_db = NULL;
 		}
 	}
