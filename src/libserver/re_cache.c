@@ -2594,8 +2594,22 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 
 			if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(re_class->hs_db),
 					&re_class->hs_scratch)) != HS_SUCCESS) {
-				msg_err_re_cache ("fatal error: cannot allocate scratch for %s: %d", path, ret);
-				g_abort();
+				rspamd_hyperscan_free (re_class->hs_db);
+				if (!try_load) {
+					msg_err_re_cache ("bad hs database in %s; error code: %d", path, ret);
+				}
+				else {
+					msg_debug_re_cache ("bad hs database in %s; error code: %d", path, ret);
+				}
+				g_free (hs_ids);
+				g_free (hs_flags);
+
+				re_class->hs_ids = NULL;
+				re_class->hs_scratch = NULL;
+				re_class->hs_db = NULL;
+				all_valid = FALSE;
+
+				continue;
 			}
 
 			/*
