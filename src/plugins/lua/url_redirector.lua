@@ -324,6 +324,7 @@ local function url_redirector_handler(task)
       end
     end,
     no_cache = true,
+    need_content = true,
   })
 
   if sp_urls then
