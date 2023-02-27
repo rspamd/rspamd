@@ -1872,20 +1872,22 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 	struct stat sb;
 	int fd, flags = oflags;
 
-	if (lstat (fname, &sb) == -1) {
+	if (!(oflags & O_CREAT)) {
+		if (lstat(fname, &sb) == -1) {
 
-		if (errno != ENOENT) {
-			return (-1);
-		}
-	}
-	else if (!S_ISREG (sb.st_mode)) {
-		if (S_ISLNK (sb.st_mode)) {
-			if (!allow_symlink) {
-				return -1;
+			if (errno != ENOENT) {
+				return (-1);
 			}
 		}
-		else {
-			return -1;
+		else if (!S_ISREG (sb.st_mode)) {
+			if (S_ISLNK (sb.st_mode)) {
+				if (!allow_symlink) {
+					return -1;
+				}
+			}
+			else {
+				return -1;
+			}
 		}
 	}
 
