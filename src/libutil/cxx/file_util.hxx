@@ -64,7 +64,7 @@ public:
 			sep_pos --;
 		}
 
-		return std::string_view{fname.c_str(), sep_pos};
+		return std::string_view{fname.c_str(), sep_pos + 1};
 	}
 
 	auto get_extension() const -> std::string_view {

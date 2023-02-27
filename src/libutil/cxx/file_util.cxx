@@ -368,12 +368,22 @@ TEST_CASE("check lock") {
 	CHECK(serrno == ENOENT);
 }
 
-auto get_tmpdir() -> const char * {
+auto get_tmpdir() -> std::string {
 	const auto *tmpdir = getenv("TMPDIR");
 	if (tmpdir == nullptr) {
 		tmpdir = G_DIR_SEPARATOR_S "tmp";
 	}
-	return tmpdir;
+
+	std::size_t sz;
+	std::string mut_fname = tmpdir;
+	rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
+	mut_fname.resize(sz);
+
+	if (!mut_fname.ends_with(G_DIR_SEPARATOR)) {
+		mut_fname += G_DIR_SEPARATOR;
+	}
+
+	return mut_fname;
 }
 
 TEST_CASE("tempfile") {
