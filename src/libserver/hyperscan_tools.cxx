@@ -306,7 +306,28 @@ static auto
 hs_shared_from_unserialized(raii_mmaped_file &&map) -> tl::expected<hs_shared_database, error>
 {
 	auto ptr = map.get_map();
-	return tl::expected<hs_shared_database, error>{tl::in_place, std::move(map), (hs_database_t *)ptr};
+	auto db = (hs_database_t *)ptr;
+
+	char *info = nullptr;
+	// Check HS database sanity (see #4409 for details)
+	auto ret = hs_database_info(db, &info);
+
+	if (ret != HS_SUCCESS) {
+		if (info) {
+			g_free (info);
+		}
+		return tl::make_unexpected(
+			error{fmt::format("cannot use database {}: error code: {}", map.get_file().get_name(), ret),
+										 ret, error_category::IMPORTANT});
+	}
+
+	msg_debug_hyperscan("database: %s, info: %s", map.get_file().get_name(), info);
+
+	if (info) {
+		g_free (info);
+	}
+
+	return tl::expected<hs_shared_database, error>{tl::in_place, std::move(map), db};
 }
 
 static auto

@@ -429,8 +429,9 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp.tmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
 
-	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
-		if (hs_serialize_database (rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len) == HS_SUCCESS) {
+	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 1)) != -1) {
+		int ret;
+		if ((ret = hs_serialize_database (rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len)) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
 				msg_warn ("cannot write hyperscan cache to %s: %s",
 						fp, strerror (errno));
@@ -455,13 +456,16 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 			}
 		}
 		else {
-			msg_warn ("cannot serialize hyperscan cache to %s: %s",
-					fp, strerror (errno));
+			msg_warn ("cannot serialize hyperscan cache to %s: error code %d",
+					fp, ret);
 			unlink (fp);
 		}
 
 
 		close (fd);
+	}
+	else {
+		msg_warn ("cannot open a temp file %s to write hyperscan cache: %s", fp, strerror(errno));
 	}
 }
 #endif
@@ -515,9 +519,9 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 					/* Should not happen in the real life */
 					mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
 				}
-			}
 
-			rspamd_multipattern_try_save_hs (mp, hash);
+				rspamd_multipattern_try_save_hs (mp, hash);
+			}
 
 			for (i = 0; i < MAX_SCRATCH; i ++) {
 				mp->scratch[i] = NULL;
