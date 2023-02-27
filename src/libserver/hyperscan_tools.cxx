@@ -289,7 +289,15 @@ struct hs_shared_database {
 	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db) : db(db), maybe_map(std::move(map)) {
 		cached_path = maybe_map.value().get_file().get_name();
 	}
-	explicit hs_shared_database(hs_database_t *db, const char *fname) : db(db), maybe_map(std::nullopt), cached_path{fname} {}
+	explicit hs_shared_database(hs_database_t *db, const char *fname) : db(db), maybe_map(std::nullopt) {
+		if (fname) {
+			cached_path = fname;
+		}
+		else {
+			/* Likely a test case */
+			cached_path = "";
+		}
+	}
 	hs_shared_database(const hs_shared_database &other) = delete;
 	hs_shared_database() = default;
 	hs_shared_database(hs_shared_database &&other) noexcept {
@@ -529,7 +537,7 @@ rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid)
 {
 	auto *real_db = CXX_DB_FROM_C(db);
 
-	if (invalid) {
+	if (invalid && !real_db->cached_path.empty()) {
 		rspamd::util::hs_known_files_cache::get().delete_cached_file(real_db->cached_path.c_str());
 	}
 	delete real_db;
