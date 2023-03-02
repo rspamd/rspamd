@@ -229,23 +229,27 @@ public:
 
 					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
 						for (auto i = 0; i < globbuf.gl_pathc; i++) {
-							const auto *path = globbuf.gl_pathv[i];
+							auto path = std::string{globbuf.gl_pathv[i]};
+							std::size_t nsz;
 							struct stat st;
 
-							if (stat(path, &st) == -1) {
+							rspamd_normalize_path_inplace(path.data(), path.size(), &nsz);
+							path.resize(nsz);
+
+							if (stat(path.c_str(), &st) == -1) {
 								msg_debug_hyperscan_lambda("cannot stat file %s: %s",
-									path, strerror(errno));
+									path.c_str(), strerror(errno));
 								continue;
 							}
 
 							if (S_ISREG(st.st_mode)) {
 								if (!known_cached_files.contains(path)) {
-									msg_info_hyperscan_lambda("remove stale hyperscan file %s", path);
-									unlink(path);
+									msg_info_hyperscan_lambda("remove stale hyperscan file %s", path.c_str());
+									unlink(path.c_str());
 								}
 								else {
 									msg_debug_hyperscan_lambda("found known hyperscan file %s, size: %Hz",
-										path, st.st_size);
+										path.c_str(), st.st_size);
 								}
 							}
 						}
