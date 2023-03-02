@@ -360,7 +360,7 @@ local function milter_headers(task)
     local local_mod = settings.routines['x-rspamd-action']
     if skip_wanted('x-rspamd-action') then return end
     if not common['metric_action'] then
-      common['metric_action'] = task:get_metric_score()
+      common['metric_action'] = task:get_metric_action()
     end
     local action = common['metric_action']
     if local_mod.remove then
