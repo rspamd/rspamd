@@ -21,7 +21,9 @@ BuildRequires:    cmake3
 BuildRequires:    devtoolset-10-gcc-c++
 %else
 BuildRequires:    cmake
+%if 0%{?el8}
 BuildRequires:    gcc-toolset-10-gcc-c++
+%endif
 %endif
 BuildRequires:    file-devel
 BuildRequires:    glib2-devel
@@ -33,12 +35,14 @@ BuildRequires:    libunwind-devel
 %if 0%{?el7}
 BuildRequires:    devtoolset-10-libasan-devel
 %else
+%if 0%{?el8}
 BuildRequires:    gcc-toolset-10-libasan-devel
+%endif
 %endif
 %endif
 
 %ifarch x86_64 amd64
-%if 0%{?el8}
+%if 0%{?el8} || 0%{?fedora} > 10
 BuildRequires:    hyperscan-devel
 %endif
 BuildRequires:    jemalloc-devel
@@ -76,9 +80,10 @@ git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
 %build
 %if 0%{?el7}
 source /opt/rh/devtoolset-10/enable
-%else
+%elif 0%{?el8}
 source /opt/rh/gcc-toolset-10/enable
 %endif
+
 %if 0%{getenv:LUAJIT}
 pushd %{_builddir}/luajit-src && make clean && make %{?_smp_mflags} CC="gcc -fPIC" PREFIX=%{_builddir}/luajit-build && make install PREFIX=%{_builddir}/luajit-build ; popd
 rm -f %{_builddir}/luajit-build/lib/*.so || true
