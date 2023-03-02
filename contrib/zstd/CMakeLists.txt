@@ -9,7 +9,6 @@ SET(ZSTDSRC
 		huf_compress.c
 		huf_decompress.c
 		pool.c
-		threading.c
 		zstd_common.c
 		zstd_compress.c
 		zstd_compress_literals.c
@@ -25,4 +24,4 @@ SET(ZSTDSRC
 		zstd_opt.c)
 
 ADD_LIBRARY(rspamd-zstd STATIC ${ZSTDSRC})
-ADD_DEFINITIONS(-DZSTD_STATIC_LINKING_ONLY)
+ADD_DEFINITIONS(-DZSTD_DISABLE_ASM)

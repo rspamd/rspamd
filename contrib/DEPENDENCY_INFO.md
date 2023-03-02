@@ -25,7 +25,7 @@
 | t1ha                   | ?       | Zlib                | NO      |                    |
 | uthash                 | 1.9.8   | BSD                 | YES     |                    |
 | xxhash                 | 0.8.1   | BSD                 | NO      |                    |
-| zstd                   | 1.4.5   | BSD                 | NO      |                    |
+| zstd                   | 1.5.4   | BSD                 | YES     | build fixes only   |
 | google-ced             | 37529e6 | Apache 2            | YES     | build fixes        |
 | kann                   | ?       | MIT                 | YES     | blas/lapack changes|
 | fpconv                 | ?       | Boost               | YES     | many changes       |
