@@ -40,11 +40,10 @@ local default_prefix = 'RR:' -- Rspamd Reputation
 
 local tanh = math.tanh or rspamd_util.tanh
 
-local reject_threshold = rspamd_config:get_action('reject') or 10.0
-
 -- Get reputation from ham/spam/probable hits
 local function generic_reputation_calc(token, rule, mult, task)
   local cfg = rule.selector.config or E
+  local reject_threshold = task:get_metric_score()[2] or 10.0
 
   if cfg.score_calc_func then
     return cfg.score_calc_func(rule, token, mult)
@@ -64,8 +63,8 @@ local function generic_reputation_calc(token, rule, mult, task)
   -- Apply function tanh(x / reject_score * atanh(0.95) - atanh(0.5))
   --                                        1.83178       0.5493
   local score = tanh(avg_score / reject_threshold * 1.83178 - 0.5493) * mult
-  lua_util.debugm(N, task, "got generic average score %s -> %s for rule %s",
-      avg_score, score, rule.symbol)
+  lua_util.debugm(N, task, "got generic average score %s (reject threshold=%s, mult=%s) -> %s for rule %s",
+      avg_score, reject_threshold, mult, score, rule.symbol)
   return score
 end
 
@@ -327,38 +326,28 @@ local function url_reputation_filter(task, rule)
       -- Check the url with maximum hits
       local mhits = 0
 
-      local result_request_match_tbl = {}
-      -- XXX: ugly O(N^2) loop to match requests and responses
-      for _,res_pair in ipairs(results) do
-        local result_k = res_pair[1]
-        for _, request_k in ipairs(url_keys) do
-          if result_k:find(request_k) then
-            result_request_match_tbl[result_k] = request_k
-            break
-          end
-        end
-      end
-
-      for k,_ in pairs(results) do
-        local req = result_request_match_tbl[k]
+      for i,res in ipairs(results) do
+        local req = requests[i]
         if req then
-          if requests[req] > mhits then
-            mhits = requests[req][2]
-          else
-            rspamd_logger.warnx(task, "cannot find the requested response for a request: %s (%s requests noticed)",
-                k, url_keys)
+          local hits = tonumber(res[1])
+          if hits > mhits then
+            mhits = hits
           end
+        else
+          rspamd_logger.warnx(task, "cannot find the requested response for a request: %s (%s requests noticed)",
+              i, #requests)
         end
       end
 
       if mhits > 0 then
         local score = 0
-        for k,v in pairs(results) do
-          local req = result_request_match_tbl[k]
+        for i,res in pairs(results) do
+          local req = requests[i]
           if req then
-            score = score + generic_reputation_calc(v, rule,
-                requests[req][2] / mhits, task)
-
+            local url_score = generic_reputation_calc(res, rule,
+                req[2] / mhits, task)
+            lua_util.debugm(N, task, "score for url %s is %s, score=%s", req[1], url_score, score)
+            score = score + url_score
           end
         end
 
