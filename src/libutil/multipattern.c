@@ -426,10 +426,10 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp.tmp", hs_cache_dir,
-			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+	rspamd_snprintf (fp, sizeof (fp), "%s%shsmp-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
+		hs_cache_dir);
 
-	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 1)) != -1) {
+	if ((fd = g_mkstemp_full(fp, O_CREAT|O_EXCL|O_WRONLY, 00644)) != -1) {
 		int ret;
 		if ((ret = hs_serialize_database (rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len)) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
