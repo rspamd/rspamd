@@ -1093,11 +1093,10 @@ rspamd_try_save_re_map_cache (struct rspamd_regexp_map_helper *re_map)
 		return FALSE;
 	}
 
-	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmc.tmp",
-			re_map->map->cfg->hs_cache_dir,
-			(gint)rspamd_cryptobox_HASHBYTES / 2, re_map->re_digest);
+	rspamd_snprintf (fp, sizeof (fp), "%s/hsmc-XXXXXXXXXXXXX",
+			re_map->map->cfg->hs_cache_dir);
 
-	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
+	if ((fd = g_mkstemp_full(fp, O_WRONLY | O_CREAT | O_EXCL, 00644)) != -1) {
 		if (hs_serialize_database (rspamd_hyperscan_get_database(re_map->hs_db), &bytes, &len) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
 				msg_warn_map ("cannot write hyperscan cache to %s: %s",

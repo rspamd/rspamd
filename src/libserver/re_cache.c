@@ -1954,10 +1954,10 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 
 	g_hash_table_iter_init (&cit, re_class->re);
 	n = g_hash_table_size (re_class->re);
-	hs_flags = g_malloc0 (sizeof (*hs_flags) * n);
-	hs_ids = g_malloc (sizeof (*hs_ids) * n);
-	hs_pats = g_malloc (sizeof (*hs_pats) * n);
-	hs_exts = g_malloc0 (sizeof (*hs_exts) * n);
+	hs_flags = g_new0(guint, n);
+	hs_ids = g_new0(guint, n);
+	hs_pats = g_new0(char *, n);
+	hs_exts = g_new0(const hs_expr_ext_t *, n);
 	i = 0;
 
 	while (g_hash_table_iter_next (&cit, &k, &v)) {
