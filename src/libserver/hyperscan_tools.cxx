@@ -41,10 +41,13 @@
 // failing at `hs_alloc_scratch` phase or even `hs_scan` which is **way too late**
 // Hence, we have to check hyperscan internal guts to prevent that situation...
 
+#ifdef HS_MAJOR
 #ifndef HS_VERSION_32BIT
 #define HS_VERSION_32BIT ((HS_MAJOR << 24) | (HS_MINOR << 16) | (HS_PATCH << 8) | 0)
 #endif
-#ifndef HS_DB_VERSION
+#endif // defined(HS_MAJOR)
+
+#if !defined(HS_DB_VERSION) && defined(HS_VERSION_32BIT)
 #define HS_DB_VERSION HS_VERSION_32BIT
 #endif
 
@@ -353,10 +356,12 @@ hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::
 			fname, test.magic, HS_DB_MAGIC));
 	}
 
+#ifdef HS_DB_VERSION
 	if (test.version != HS_DB_VERSION) {
 		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: invalid version: {} ({} expected)",
 			fname, test.version, HS_DB_VERSION));
 	}
+#endif
 
 	return true;
 }
