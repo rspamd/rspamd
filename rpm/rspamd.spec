@@ -80,8 +80,10 @@ git clone -b v2.1 https://luajit.org/git/luajit-2.0.git %{_builddir}/luajit-src
 %build
 %if 0%{?el7}
 source /opt/rh/devtoolset-10/enable
-%elif 0%{?el8}
+%else
+%if 0%{?el8}
 source /opt/rh/gcc-toolset-10/enable
+%endif
 %endif
 
 %if 0%{getenv:LUAJIT}
