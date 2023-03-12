@@ -25,6 +25,8 @@ Package: rspamd
 Architecture: any
 Conflicts: rspamd-asan
 Provides: rspamd
+Section: mail
+Priority: extra
 Depends: adduser, lsb-base, ca-certificates, ${misc:Depends}, ${shlibs:Depends}
 Description: Rapid spam filtering system
  Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -35,6 +37,8 @@ Package: rspamd-asan
 Architecture: any
 Conflicts: rspamd
 Provides: rspamd
+Section: mail
+Priority: extra
 Depends: adduser, lsb-base, ca-certificates, ${misc:Depends}, ${shlibs:Depends}
 Description: Rapid spam filtering system
  Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -45,13 +49,15 @@ Description: Rapid spam filtering system
 Package: rspamd-dbg
 Architecture: any
 Section: debug
+Priority: extra
 Depends: rspamd (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: debugging symbols for rspamd
  This package contains the debugging symbols for rspamd.
 
-Package: rspamd-dbg-asan
+Package: rspamd-asan-dbg
 Architecture: any
 Section: debug
+Priority: extra
 Depends: rspamd-asan (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: debugging symbols for rspamd-asan
  This package contains the debugging symbols for rspamd-asan.
