@@ -63,7 +63,7 @@ build_%:
 override_dh_strip: $(patsubst %,strip_%,$(FLAVORS))
 strip_%:
 	if [ "$*" = "asan" ]; then \
-		dh_strip -prspamd-asan --dbg-package=rspamd-dbg-asan ; \
+		dh_strip -prspamd-asan --dbg-package=rspamd-asan-dbg ; \
 	else \
 		dh_strip -prspamd --dbg-package=rspamd-dbg ; \
 	fi
