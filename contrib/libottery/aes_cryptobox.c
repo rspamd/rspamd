@@ -28,8 +28,10 @@
 #include "cryptobox.h"
 
 #if defined(__x86_64__) && defined(RSPAMD_HAS_TARGET_ATTR)
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC push_options
 #pragma GCC target("aes")
+#endif
 #ifndef __SSE2__
 #define __SSE2__
 #endif

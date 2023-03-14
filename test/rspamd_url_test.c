@@ -55,7 +55,7 @@ const char *test_html = "<some_tag>This is test file with <a href=\"http://micro
 
 /* Function for using in glib test suite */
 void
-rspamd_url_test_func ()
+rspamd_url_test_func (void)
 {
 	/* XXX: maybe write test for this */
 }

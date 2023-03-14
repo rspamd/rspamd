@@ -56,7 +56,7 @@ traceback (lua_State *L)
 	return 1;
 }
 
-void
+_Noreturn void
 rspamd_lua_test_func (void)
 {
 	lua_State *L = (lua_State *)rspamd_main->cfg->lua_state;

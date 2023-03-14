@@ -61,7 +61,7 @@ test_dns_cb (struct rdns_reply *reply, gpointer arg)
 }
 
 void
-rspamd_dns_test_func ()
+rspamd_dns_test_func (void)
 {
 
 	struct rspamd_config *cfg;

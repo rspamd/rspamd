@@ -24,7 +24,7 @@ const int rows_cnt = 20;
 const int pdp_per_cdp = 60;
 
 void
-rspamd_rrd_test_func ()
+rspamd_rrd_test_func (void)
 {
 	gchar  tmpfile[PATH_MAX];
 	struct rrd_rra_def rra[4];

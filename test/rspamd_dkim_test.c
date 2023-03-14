@@ -50,7 +50,7 @@ session_fin (gpointer unused)
 }
 #endif
 void
-rspamd_dkim_test_func ()
+rspamd_dkim_test_func (void)
 {
 #if 0
 	rspamd_dkim_context_t *ctx;

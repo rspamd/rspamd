@@ -49,8 +49,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern const uint8_t base64_table_dec[256];
 
 #ifdef RSPAMD_HAS_TARGET_ATTR
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC push_options
 #pragma GCC target("avx2")
+#endif
 #ifndef __SSE2__
 #define __SSE2__
 #endif
@@ -281,5 +283,7 @@ repeat:
 	return ret;
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC pop_options
+#endif
 #endif
