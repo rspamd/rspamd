@@ -63,6 +63,7 @@ IF(ENABLE_STATIC MATCHES "ON")
 ELSE()
 	ADD_LIBRARY(rspamd-ev SHARED ${LIBEVSRC})
 ENDIF()
+target_link_libraries(rspamd-ev "${RSPAMD_REQUIRED_LIBRARIES}")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 ADD_DEFINITIONS("-DEV_CONFIG_H=\"libev-config.h\""
 		-DEV_MULTIPLICITY=1
