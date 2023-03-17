@@ -1,9 +1,9 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rspamd
-Source: https://github.com/vstakhov/rspamd
+Source: https://github.com/rspamd/rspamd
 
 Files: *
-Copyright: 2008-2016 Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright: 2008-2023 Vsevolod Stakhov <vsevolod@rspamd.com>
 License: Apache-2.0
 
 Files: contrib/lgpl/*
@@ -68,26 +68,26 @@ License: BSD-3-Clause-Redis
 
 Files: src/libutil/printf.c
 Copyright: 2002-2015 Igor Sysoev
-           2010-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+           2010-2015 Vsevolod Stakhov <vsevolod@rspamd.com>
 License: BSD-2-Clause
 
 Files: src/libserver/url.c
 Copyright: 2002-2015 Igor Sysoev
-           2010-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+           2010-2015 Vsevolod Stakhov <vsevolod@rspamd.com>
 License: BSD-2-Clause
 
 Files: src/plugins/lua/rbl.lua
-Copyright: 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright: 2011-2015, Vsevolod Stakhov <vsevolod@rspamd.com>
            2013-2015, Andrew Lewis <nerf@judo.za.org>
 License: Apache-2.0
 
 Files: doc/doxydown/*
-Copyright: 2014, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright: 2014, Vsevolod Stakhov <vsevolod@rspamd.com>
 License: MIT
 
-Files: interface/* 
+Files: interface/*
 Copyright:  2012-2013 Anton Simonov <untone@gmail.com>
-            2014-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+            2014-2015 Vsevolod Stakhov <vsevolod@rspamd.com>
 License: MIT
 
 Files: contrib/cdb*
@@ -118,7 +118,7 @@ Copyright: 2015, Andrew Moon
 License: MIT
 
 Files: debian/*
-Copyright: 2011-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright: 2011-2015 Vsevolod Stakhov <vsevolod@rspamd.com>
  2014-2015 Mikhail Gusarov <dottedmag@dottedmag.net>
 License: BSD-2-Clause
 

@@ -11,7 +11,7 @@ RUN	apt-get update && apt-get install -y --no-install-recommends \
 
 SHELL ["/bin/bash", "-c"]
 RUN	set -x \
-# gpg: key FFA232EDBF21E25E: public key "Rspamd Nightly Builds (Rspamd Nightly Builds) <vsevolod@highsecure.ru>" imported
+# gpg: key FFA232EDBF21E25E: public key "Rspamd Nightly Builds (Rspamd Nightly Builds) <vsevolod@rspamd.com>" imported
 	&& key='3FA347D5E599BE4595CA2576FFA232EDBF21E25E' \
 	&& export GNUPGHOME="$(mktemp -d)" \
 	&& gpg --import <<<$'\

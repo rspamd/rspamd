@@ -1,7 +1,7 @@
 Source: rspamd
 Section: mail
 Priority: extra
-Maintainer: Vsevolod Stakhov <vsevolod@highsecure.ru>
+Maintainer: Vsevolod Stakhov <vsevolod@rspamd.com>
 Build-Depends: cmake,
                debhelper (>= 10),
                libcurl4-openssl-dev,

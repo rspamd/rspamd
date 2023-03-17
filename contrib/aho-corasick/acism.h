@@ -1,6 +1,6 @@
 /*
 ** Copyright (C) 2009-2014 Mischa Sandberg <mischasan@gmail.com>
-** Copyright (C) 2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+** Copyright (C) 2015 Vsevolod Stakhov <vsevolod@rspamd.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU Lesser General Public License as
