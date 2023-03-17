@@ -7,7 +7,7 @@
 #define HASHES_NUM 256
 
 void 
-rspamd_statfile_test_func ()
+rspamd_statfile_test_func (void)
 {
 	/*
 	 * XXX: broken, old, need to be rewritten

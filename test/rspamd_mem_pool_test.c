@@ -12,7 +12,7 @@
 #define TEST2_BUF "test buffertest buffer"
 
 void
-rspamd_mem_pool_test_func ()
+rspamd_mem_pool_test_func (void)
 {
 	rspamd_mempool_t *pool;
 	rspamd_mempool_stat_t st;
