@@ -1,5 +1,5 @@
 /*-
- * Copyright 2016 Vsevolod Stakhov
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1243,7 +1243,7 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 
 	const auto *elt = ucl_object_lookup(obj, "version");
 	if (elt != nullptr) {
-		fmt::print(out, "Rspamd version: %s\n", ucl_object_tostring(
+		fmt::print(out, "Rspamd version: {}\n", ucl_object_tostring(
 			elt));
 	}
 
@@ -1261,8 +1261,8 @@ rspamc_uptime_output(FILE *out, ucl_object_t *obj)
 		}
 			/* If uptime is less than 1 minute print only seconds */
 		else if (seconds / 60 == 0) {
-			fmt::print("{} second%s\n", seconds,
-				(gint) seconds > 1 ? "s" : "");
+			fmt::print("{} second{}\n", seconds,
+				seconds > 1 ? "s" : "");
 		}
 			/* Else print the minutes and seconds. */
 		else {
