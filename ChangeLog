@@ -1,3 +1,50 @@
+3.5: 17 Mar 2023
+  * [Conf] Clarify `timeout` in rspamd_proxy
+  * [Conf] Fix hashbl
+  * [Conf] Add SURBL hashbl support (WIP)
+  * [Conf] RBL: Fix selector
+  * [Conf] Reduce the default timeout
+  * [CritFix] Deserialise hyperscan to the page-aligned space to prevent alignment issues
+  * [CritFix] Fill path field in hyperscan notice command
+  * [Feature] Add `thresholds` field to the scan result
+  * [Feature] Add possibility to execute lua scripts for blocked fuzzy clients
+  * [Feature] Add preliminary support of the external maps in the multimap plugin
+  * [Feature] Allow to build a map by combining tuples of selectors
+  * [Feature] Allow to query external maps for settings
+  * [Feature] Allow to specify `selector_alias` in the maps definition
+  * [Feature] Enable Mime part filters on antivirus module
+  * [Feature] Improve ratelimit redis scripts
+  * [Feature] Selectors: Add specific_urls_filter_map extractor
+  * [Feature] Some rework of the selectors framework
+  * [Fix] Add O_CREAT flag when creating a file
+  * [Fix] Add a database check function unless we have anything from Hyperscan
+  * [Fix] Add hyperscan databases sanity check
+  * [Fix] Add workaround for ENOBUFS error on sending
+  * [Fix] Do not do `lstat` when we are creating file
+  * [Fix] Finally get rid of RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK
+  * [Fix] Fix boundaries that contain only dashes
+  * [Fix] Fix off-by-one error in css tokenizer
+  * [Fix] Fix url reputation plugin
+  * [Fix] Fix usage of the Redis config schema as `extra_fields`
+  * [Fix] Further checks for the hs_scratch_alloc
+  * [Fix] Honor group flag for one shot
+  * [Fix] Normalize glob paths to avoid hash table misses
+  * [Fix] Ratelimit: Use unpack for `HMGET` return value
+  * [Fix] Rbl: Fix helo check pipeline
+  * [Fix] Replace broken strict_domains with phishing_exceptions
+  * [Fix] Restore `strict_domains` support
+  * [Fix] Return true from has_urls(true) if only emails are present
+  * [Fix] Rework lists applications
+  * [Fix] Set symcache item in coroutine calls
+  * [Fix] Treat `hs_allocate_scratch` errors as non-fatal
+  * [Fix] Treat hostnames with no dots as eSLD of their own
+  * [Fix] received: filtering of artificial header
+  * [Project] Add external maps support
+  * [Rework] Breaking: Do not report soft reject in history
+  * [Rework] Convert chartable plugin to c++ for convenience
+  * [Rework] Use a different approach for customization of the settings
+  * [Rules] Mid: Add MID_END_EQ_FROM_USER_PART rule
+
 3.4: 01 Nov 2022
   * [CritFix] Restore compatibility with the integrations and headers alterations
   * [Feature] Milter_headers: Add `x-rspamd-action` routine
