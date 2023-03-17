@@ -210,17 +210,6 @@ rspamd_regexp_t *rspamd_regexp_cache_query (struct rspamd_regexp_cache *cache,
 											const gchar *flags);
 
 /**
- * Insert item to the cache using custom pattern and flags
- * @param cache
- * @param pattern
- * @param flags
- * @param re
- */
-void rspamd_regexp_cache_insert (struct rspamd_regexp_cache *cache,
-								 const gchar *pattern,
-								 const gchar *flags, rspamd_regexp_t *re);
-
-/**
  * Create or get cached regexp from the specified cache
  * @param cache regexp cache. if NULL, the superglobal cache is used (*not* thread-safe)
  * @param pattern regexp pattern

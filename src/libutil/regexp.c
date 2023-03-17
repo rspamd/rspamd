@@ -83,6 +83,7 @@ struct rspamd_regexp_cache {
 static struct rspamd_regexp_cache *global_re_cache = NULL;
 static gboolean can_jit = FALSE;
 static gboolean check_jit = TRUE;
+static const int max_re_cache_size = 8192;
 
 #ifdef WITH_PCRE2
 static pcre2_compile_context *pcre2_ctx = NULL;
@@ -1086,30 +1087,17 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 
 	if (res) {
 		/* REF_RETAIN (res); */
-		g_hash_table_insert (cache->tbl, res->id, res);
+		if (g_hash_table_size (cache->tbl) < max_re_cache_size) {
+			g_hash_table_insert(cache->tbl, res->id, res);
+		}
+		else {
+			msg_warn("cannot insert regexp to the cache: maximum size is reached (%d expressions); "
+					 "it might be cached regexp misuse; regexp pattern: %s",
+				max_re_cache_size, pattern);
+		}
 	}
 
 	return res;
-}
-
-void rspamd_regexp_cache_insert (struct rspamd_regexp_cache* cache,
-		const gchar *pattern,
-		const gchar *flags, rspamd_regexp_t *re)
-{
-	g_assert (re != NULL);
-	g_assert (pattern != NULL);
-
-	if (cache == NULL) {
-		rspamd_regexp_library_init (NULL);
-		cache = global_re_cache;
-	}
-
-	g_assert (cache != NULL);
-	/* Generate custom id */
-	rspamd_regexp_generate_id (pattern, flags, re->id);
-
-	REF_RETAIN (re);
-	g_hash_table_insert (cache->tbl, re->id, re);
 }
 
 gboolean
