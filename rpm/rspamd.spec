@@ -170,6 +170,10 @@ rm -rf %{buildroot}
 %post
 %{__chown} -R _rspamd:_rspamd %{_localstatedir}/lib/rspamd
 %{__chown} _rspamd:_rspamd %{_localstatedir}/log/rspamd
+%if 0%{?el7}
+# We need to clean old hyperscan files on upgrade: see https://github.com/rspamd/rspamd/issues/4441
+rm -f %{_localstatedir}/lib/rspamd/*.hs*
+%endif
 systemctl --no-reload preset rspamd.service >/dev/null 2>&1 || :
 
 %preun
