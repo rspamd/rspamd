@@ -28,7 +28,7 @@ endif
 override_dh_auto_configure: $(patsubst %,configure_%,$(FLAVORS))
 configure_%:
 	mkdir -p $(builddir)$*
-	cd $(builddir)$* && cmake ../../../  -DCONFDIR=/etc/rspamd -DCMAKE_C_COMPILER=clang-16 -DCMAKE_CXX_COMPILER=clang++-16 \
+	cd $(builddir)$* && cmake ../../../  -DCONFDIR=/etc/rspamd \
 		-DMANDIR=/usr/share/man \
 		-DRUNDIR=/run/rspamd \
 		-DDBDIR=/var/lib/rspamd \
