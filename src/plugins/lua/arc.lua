@@ -253,6 +253,7 @@ local function arc_callback(task)
 
   task:cache_set('arc-sigs', cbdata.sigs)
   task:cache_set('arc-seals', cbdata.seals)
+  task:cache_set('arc-authres', cbdata.ars)
 
   if validation_error then
     -- ARC rejection but no strong failure for signing
@@ -489,7 +490,7 @@ rspamd_config:register_dependency('ARC_CHECK', 'DKIM_CHECK')
 local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
-  local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
+  local arc_auth_results = task:cache_get('arc-authres')
   local cur_auth_results
   local privkey
 
@@ -532,7 +533,7 @@ local function arc_sign_seal(task, params, header)
     for i = (cur_idx - 1), 1, (-1) do
       if arc_auth_results[i] then
         local s = dkim_canonicalize('ARC-Authentication-Results',
-          arc_auth_results[i].value)
+          arc_auth_results[i].raw_header)
         sha_ctx:update(s)
         lua_util.debugm(N, task, 'update signature with header: %s', s)
       end
