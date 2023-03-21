@@ -229,12 +229,24 @@ TEST_CASE("utf8 normalise") {
 			{"\xE2\x80\x8B""те""\xE2\x80\x8B""ст", "тест", RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			/* Special case of diacritic */
 			{"13_\u0020\u0308\u0301\u038e\u03ab", "13_ ̈́ΎΫ", RSPAMD_UNICODE_NORM_UNNORMAL},
+			// String containing a non-joiner character
+			{ "س\u200Cت", "ست", RSPAMD_UNICODE_NORM_ZERO_SPACES },
+			// String containing a soft hyphen
+			{ "in\u00ADter\u00ADest\u00ADing", "interesting", RSPAMD_UNICODE_NORM_ZERO_SPACES },
+			// String with ligature
+			{ "ﬁsh", "fish", RSPAMD_UNICODE_NORM_UNNORMAL },
+			// String with accented characters and zero-width spaces
+			{ "café\u200Blatté\u200C", "cafélatté", RSPAMD_UNICODE_NORM_ZERO_SPACES },
 			/* Same with zw spaces */
 			{"13\u200C_\u0020\u0308\u0301\u038e\u03ab", "13_ ̈́ΎΫ",
 					RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ZERO_SPACES},
 			/* Buffer overflow case */
 			{"u\xC2\xC2\xC2\xC2\xC2\xC2""abcdef""abcdef", "u\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD",
 					RSPAMD_UNICODE_NORM_UNNORMAL|RSPAMD_UNICODE_NORM_ERROR},
+			// String with a mix of special characters, ligatures, and zero-width spaces
+			{ "ﬁsh\u200Bcafé\u200C\u200Dlatté\u200D\u00AD", "fishcafé\u200Dlatté\u200D", RSPAMD_UNICODE_NORM_UNNORMAL | RSPAMD_UNICODE_NORM_ZERO_SPACES },
+			// Empty string
+			{ "", "", RSPAMD_UNICODE_NORM_NORMAL},
 	};
 
 	for (const auto &c : cases) {
