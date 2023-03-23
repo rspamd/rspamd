@@ -1532,6 +1532,30 @@ end
 
 exports.dns_timeout_augmentation = dns_timeout_augmentation
 
+---[[[
+--- @function lua_util.strip_lua_comments(lua_code)
+-- Strips single-line and multi-line comments from a given Lua code string and removes
+-- any extra spaces or newlines.
+--
+-- @param lua_code The Lua code string to strip comments from.
+-- @return The resulting Lua code string with comments and extra spaces removed.
+--
+---]]]
+local function strip_lua_comments(lua_code)
+  -- Remove single-line comments
+  lua_code = lua_code:gsub("%-%-[^\r\n]*", "")
+
+  -- Remove multi-line comments
+  lua_code = lua_code:gsub("%-%-%[%[.-%]%]", "")
+
+  -- Remove extra spaces and newlines
+  lua_code = lua_code:gsub("%s+", " ")
+
+  return lua_code
+end
+
+exports.strip_lua_comments = strip_lua_comments
+
 -- Defines symbols priorities for common usage in prefilters/postfilters
 exports.symbols_priorities = {
   top = 10, -- Symbols must be executed first (or last), such as settings
