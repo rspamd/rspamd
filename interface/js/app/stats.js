@@ -71,21 +71,21 @@ define(["jquery", "d3pie"],
                 function widget(k, v, cls) {
                     var c = (typeof cls === "undefined") ? "" : cls;
                     var titleAtt = d3.format(",")(v) + " " + k;
-                    return '<div class="card stat-box d-inline-block text-center shadow-sm mr-3 px-3">' +
+                    return '<div class="card stat-box d-inline-block text-center shadow-sm me-3 px-3">' +
                       '<div class="widget overflow-hidden p-2' + c + '" title="' + titleAtt +
-                      '"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
+                      '"><strong class="d-block mt-2 mb-1 fw-bold">' +
                     d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
                 }
 
                 if (i === "auth" || i === "error") return; // Skip to the next iteration
                 if (i === "uptime" || i === "version") {
-                    var cls = "border-right ";
+                    var cls = "border-end ";
                     var val = item;
                     if (i === "uptime") {
                         cls = "";
                         val = msToTime(item);
                     }
-                    $('<div class="' + cls + 'float-left px-3"><strong class="d-block mt-2 mb-1 font-weight-bold">' +
+                    $('<div class="' + cls + 'float-start px-3"><strong class="d-block mt-2 mb-1 fw-bold">' +
                       val + "</strong>" + i + "</div>")
                         .appendTo("#statWidgets");
                 } else if (i === "actions") {
@@ -100,9 +100,9 @@ define(["jquery", "d3pie"],
                 $(item).appendTo("#statWidgets");
             });
             $("#statWidgets > div:not(.stat-box)")
-                .wrapAll('<div class="card stat-box text-center shadow-sm float-right">' +
+                .wrapAll('<div class="card stat-box text-center shadow-sm float-end">' +
                   '<div class="widget overflow-hidden p-2 text-capitalize"></div></div>');
-            $("#statWidgets").find("div.float-right").appendTo("#statWidgets");
+            $("#statWidgets").find("div.float-end").appendTo("#statWidgets");
             $("#statWidgets").show();
 
             $("#clusterTable tbody").empty();
@@ -157,7 +157,7 @@ define(["jquery", "d3pie"],
                 "<td>" + val.host + "</td>" +
                 '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
                 '<td class="text-center"' + scan_times.title + ">" + scan_times.data + "</td>" +
-                '<td class="text-right' +
+                '<td class="text-end' +
                   ((Number.isFinite(val.data.uptime) && val.data.uptime < 3600)
                       ? ' warning" title="Has been restarted within the last hour"'
                       : "") +
@@ -192,8 +192,8 @@ define(["jquery", "d3pie"],
                       (i === 0 ? '<td rowspan="' + statfiles.length + '">' + server + "</td>" : "") +
                       '<td class="' + cls + '">' + statfile.symbol + "</td>" +
                       '<td class="' + cls + '">' + statfile.type + "</td>" +
-                      '<td class="text-right ' + cls + '">' + statfile.revision + "</td>" +
-                      '<td class="text-right ' + cls + '">' + statfile.users + "</td></tr>");
+                      '<td class="text-end ' + cls + '">' + statfile.revision + "</td>" +
+                      '<td class="text-end ' + cls + '">' + statfile.users + "</td></tr>");
                 });
             }
 
@@ -203,7 +203,7 @@ define(["jquery", "d3pie"],
                     $("#fuzzyTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
                       "<td>" + storage + "</td>" +
-                      '<td class="text-right">' + hashes + "</td></tr>");
+                      '<td class="text-end">' + hashes + "</td></tr>");
                     i++;
                 });
             }

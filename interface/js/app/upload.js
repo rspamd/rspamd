@@ -103,13 +103,13 @@ define(["jquery"],
                 title: "Symbols" +
                         '<div class="sym-order-toggle">' +
                             '<br><span style="font-weight:normal;">Sort by:</span><br>' +
-                            '<div class="btn-group btn-group-toggle btn-group-xs btn-sym-order-scan" data-toggle="buttons">' +
+                            '<div class="btn-group btn-group-xs btn-sym-order-scan">' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-scan-magnitude">' +
-                                    '<input type="radio" value="magnitude">Magnitude</label>' +
+                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-scan-score">' +
-                                    '<input type="radio" value="score">Value</label>' +
+                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-scan-name">' +
-                                    '<input type="radio" value="name">Name</label>' +
+                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
                             "</div>" +
                         "</div>",
                 breakpoints: "all",

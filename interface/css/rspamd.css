@@ -81,6 +81,7 @@ td.warning {
 .btn.disabled,
 .btn[disabled],
 fieldset[disabled] .btn {
+    pointer-events: auto;
     cursor: not-allowed;
 }
 .w-1 {
@@ -101,6 +102,12 @@ fieldset[disabled] .btn {
 }
 .footable .input-sm {
     height: 30px;
+}
+
+/* Tweak FooTable for Bootstrap 5 */
+.footable .btn,
+.footable .form-control {
+    border-radius: 0.375rem;
 }
 
 .footable-header .fooicon {
@@ -126,7 +133,8 @@ textarea {
 
 input.form-control[type="number"] {
     width: 4em;
-    padding: 2px 0;
+    padding-left: 0;
+    padding-right: 0;
     text-align: center;
 }
 input.action-scores {
@@ -188,13 +196,6 @@ table#symbolsTable input[type="number"] {
 .alert-info h4 {
     color: #3a87ad;
 }
-.alert-block .close {
-    right: -1px;
-}
-.alert-block > p,
-.alert-block > ul {
-    margin-bottom: 0;
-}
 
 .pager li > a,
 .pager li > span {
@@ -225,7 +226,7 @@ table#symbolsTable input[type="number"] {
     background-image: linear-gradient(to bottom, #f9f9f9, #ededed);
     line-height: 1;
 }
-.stat-box:not(.float-right) {
+.stat-box:not(.float-end) {
     min-width: 90px;
 }
 .stat-box .widget {
@@ -336,6 +337,7 @@ table#symbolsTable input[type="number"] {
     z-index: 100;
 }
 #rrd-table td {
+    color: inherit;
     padding-top: 2px;
     padding-bottom: 2px;
 }
@@ -397,17 +399,17 @@ table#symbolsTable input[type="number"] {
     color: #468847;
 }
 
+#learnServers {
+    display: flex;
+}
+
 #nprogress .bar {
     height: 1px;
 }
 
-#row-main {
-    margin-left: -17.5px;
-    margin-right: -17.5px;
-}
 @media (min-width: 992px) {
     #selectors > .card {
-        height: calc(100vh - 91px);
+        height: calc(100vh - 96px);
     }
     #row-main {
         /* necessary to hide collapsed sidebar */
@@ -445,6 +447,10 @@ table#symbolsTable input[type="number"] {
     }
 }
 
+#selectors > .card > .card-body {
+    min-height: 0;
+}
+
 .sidebar-nav {
     width: 20px;
 }
@@ -472,8 +478,7 @@ table#symbolsTable input[type="number"] {
         border-bottom-right-radius: 3.5px;
     }
     .sidebar-nav {
-        margin-left: -1px;
-        margin-right: -1px;
+        padding-right: 0;
         display: block;
     }
     #content {
@@ -493,10 +498,6 @@ table#symbolsTable input[type="number"] {
     #sidebar-right {
         border-bottom-left-radius: 3.5px;
         border-bottom-right-radius: 3.5px;
-    }
-    .sidebar-nav {
-        margin-top: -1px;
-        margin-bottom: -1px;
     }
     #content {
         border-top: 1px solid #ddd;

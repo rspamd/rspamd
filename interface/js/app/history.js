@@ -144,13 +144,13 @@ define(["jquery", "footable"],
                 title: "Symbols" +
                         '<div class="sym-order-toggle">' +
                             '<br><span style="font-weight:normal;">Sort by:</span><br>' +
-                            '<div class="btn-group btn-group-toggle btn-group-xs btn-sym-order-history" data-toggle="buttons">' +
+                            '<div class="btn-group btn-group-xs btn-sym-order-history">' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-history-magnitude">' +
-                                    '<input type="radio" value="magnitude">Magnitude</label>' +
+                                    '<input type="radio" class="btn-check" value="magnitude">Magnitude</label>' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-history-score">' +
-                                    '<input type="radio" value="score">Value</label>' +
+                                    '<input type="radio" class="btn-check" value="score">Value</label>' +
                                 '<label type="button" class="btn btn-outline-secondary btn-sym-history-name">' +
-                                    '<input type="radio" value="name">Name</label>' +
+                                    '<input type="radio" class="btn-check" value="name">Name</label>' +
                             "</div>" +
                         "</div>",
                 breakpoints: "all",

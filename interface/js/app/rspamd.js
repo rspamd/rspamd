@@ -330,7 +330,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
     function alertMessage(alertClass, alertText) {
         var a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
-                "<button type=\"button\" class=\"close\" data-dismiss=\"alert\" title=\"Dismiss\">&times;</button>" +
+                "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
                 "<strong>" + alertText + "</strong>");
         $(".notification-area").append(a);
 
@@ -510,7 +510,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                         // Button (or icon within a button) that triggers the popover.
                         $(e.target).closest("button").attr("aria-describedby") === this.id
                     ) return;
-                    $(this).popover("hide");
+                    $("#settings").popover("hide");
                 });
             });
         }());
@@ -529,7 +529,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
             }, 1000);
         });
 
-        $('a[data-toggle="tab"]').on("shown.bs.tab", function () {
+        $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
             tabClick("#" + $(this).attr("id"));
         });
         $("#refresh, #disconnect").on("click", function (e) {
@@ -553,7 +553,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
             } else {
                 $("#learnServers").hide();
             }
-            tabClick("#" + $("#navBar > ul > .nav-item > .nav-link.active").attr("id"));
+            tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
         });
 
         // Radio buttons
@@ -779,7 +779,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                 })).prependTo(self.$form);
 
                 self.$action = $("<select/>", {
-                    class: "form-control"
+                    class: "form-select"
                 }).on("change", {
                     self: self
                 }, self._onStatusDropdownChanged).append(
@@ -906,13 +906,13 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         }
 
         if (item.action === "clean" || item.action === "no action") {
-            item.action = "<div style='font-size:11px' class='badge badge-success'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge bg-success'>" + item.action + "</div>";
         } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
-            item.action = "<div style='font-size:11px' class='badge badge-warning'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge bg-warning'>" + item.action + "</div>";
         } else if (item.action === "spam" || item.action === "reject") {
-            item.action = "<div style='font-size:11px' class='badge badge-danger'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge bg-danger'>" + item.action + "</div>";
         } else {
-            item.action = "<div style='font-size:11px' class='badge badge-info'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge bg-info'>" + item.action + "</div>";
         }
 
         var score_content = (item.score < item.required_score)
