@@ -1246,8 +1246,9 @@ local function load_redis_script(script, cfg, ev_base, _)
   end
 end
 
-local function add_redis_script(script, redis_params)
-  local caller = debug.getinfo(2)
+local function add_redis_script(script, redis_params, caller_level)
+  if not caller_level then caller_level = 2 end
+  local caller = debug.getinfo(caller_level)
 
   local new_script = {
     caller = caller,
@@ -1277,6 +1278,35 @@ local function add_redis_script(script, redis_params)
   return #redis_scripts
 end
 exports.add_redis_script = add_redis_script
+
+-- Loads a Redis script from a file, strips comments, and passes the content to
+-- `add_redis_script` function.
+--
+-- @param filename The name of the file containing the Redis script.
+-- @param redis_params The Redis parameters to use for this script.
+-- @return The ID of the newly added Redis script.
+--
+local function load_redis_script_from_file(filename, redis_params)
+  local lua_util = require "lua_util"
+  local rspamd_logger = require "rspamd_logger"
+  -- Read file contents
+  local file = io.open(filename, "r")
+  if not file then
+    rspamd_logger.errx("failed to open Redis script file: %s", filename)
+    return nil
+  end
+  local script = file:read("*all")
+  if not script then
+    rspamd_logger.errx("failed to load Redis script file: %s", filename)
+    return nil
+  end
+  file:close()
+  script = lua_util.strip_lua_comments(script)
+
+  return add_redis_script(script, redis_params, 3)
+end
+
+exports.load_redis_script_from_file = load_redis_script_from_file
 
 local function exec_redis_script(id, params, callback, keys, args)
   local redis_args = {}
