@@ -1556,6 +1556,24 @@ end
 
 exports.strip_lua_comments = strip_lua_comments
 
+---[[[
+-- @function lua_util.join_path(...)
+-- Joins path components into a single path string using the appropriate separator
+-- for the current operating system.
+--
+-- @param ... Any number of path components to join together.
+-- @return A single path string, with components separated by the appropriate separator.
+--
+---]]]
+local path_sep = package.config:sub(1,1) or '/'
+local function join_path(...)
+  local components = {...}
+
+  -- Join components using separator
+  return table.concat(components, path_sep)
+end
+exports.join_path = join_path
+
 -- Defines symbols priorities for common usage in prefilters/postfilters
 exports.symbols_priorities = {
   top = 10, -- Symbols must be executed first (or last), such as settings
