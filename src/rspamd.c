@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "blas-config.h"
 #include "rspamd.h"
 #include "libserver/maps/map.h"
 #include "lua/lua_common.h"
@@ -1270,9 +1271,40 @@ static void
 version (void)
 {
 #if defined(GIT_VERSION) && GIT_VERSION == 1
-	rspamd_printf ("Rspamd daemon version " RVERSION "-git." RID "\n");
+	rspamd_printf ("Rspamd daemon version " RVERSION "-git." RID "\n\n");
 #else
-	rspamd_printf ("Rspamd daemon version " RVERSION "\n");
+	rspamd_printf ("Rspamd daemon version " RVERSION "\n\n");
+#endif
+#ifdef WITH_HYPERSCAN
+	rspamd_printf ("Hyperscan enabled: TRUE\n");
+#else
+	rspamd_printf ("Hyperscan enabled: FALSE\n");
+#endif
+
+#ifdef WITH_JEMALLOC
+	rspamd_printf ("Jemalloc enabled: TRUE\n");
+#else
+	rspamd_printf ("Jemalloc enabled: FALSE\n");
+#endif
+#ifdef WITH_LUAJIT
+	rspamd_printf ("LuaJIT enabled: TRUE\n");
+#else
+	rspamd_printf ("LuaJIT enabled: FALSE\n");
+#endif
+#ifdef WITH_LUAJIT
+	rspamd_printf ("LuaJIT enabled: TRUE\n");
+#else
+	rspamd_printf ("LuaJIT enabled: FALSE\n");
+#endif
+#if __has_feature(address_sanitizer)
+	rspamd_printf ("ASAN enabled: TRUE\n");
+#else
+	rspamd_printf ("ASAN enabled: FALSE\n");
+#endif
+#ifdef HAVE_CBLAS
+	rspamd_printf ("BLAS enabled: TRUE\n");
+#else
+	rspamd_printf ("BLAS enabled: FALSE\n");
 #endif
 }
 
