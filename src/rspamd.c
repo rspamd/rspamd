@@ -1291,11 +1291,6 @@ version (void)
 #else
 	rspamd_printf ("LuaJIT enabled: FALSE\n");
 #endif
-#ifdef WITH_LUAJIT
-	rspamd_printf ("LuaJIT enabled: TRUE\n");
-#else
-	rspamd_printf ("LuaJIT enabled: FALSE\n");
-#endif
 #if (defined(__has_feature) && __has_feature(address_sanitizer)) || defined(ADDRESS_SANITIZER)
 	rspamd_printf ("ASAN enabled: TRUE\n");
 #else
