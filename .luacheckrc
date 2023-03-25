@@ -63,6 +63,7 @@ files['/**/lualib/lua_redis.lua'].globals = {
 files['/**/lualib/redis_scripts/**'].globals = {
   'redis',
   'KEYS',
+  'cjson',
 }
 
 files['/**/src/rspamadm/*'].globals = {
