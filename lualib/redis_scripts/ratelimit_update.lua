@@ -1,29 +1,28 @@
--- Updates a bucket
--- KEYS[1] - prefix to update, e.g. RL_<triplet>_<seconds>
--- KEYS[2] - current time in milliseconds
--- KEYS[3] - dynamic rate multiplier
--- KEYS[4] - dynamic burst multiplier
--- KEYS[5] - max dyn rate (min: 1/x)
--- KEYS[6] - max burst rate (min: 1/x)
--- KEYS[7] - expire for a bucket
--- KEYS[8] - number of recipients (or increase rate)
--- Redis keys used:
---   l - last hit
---   b - current burst
---   p - messages pending (must be decreased by 1)
---   dr - current dynamic rate multiplier
---   db - current dynamic burst multiplier
+-- This script updates a token bucket rate limiter with dynamic rate and burst multipliers in Redis.
+
+-- KEYS: Input parameters
+-- KEYS[1] - prefix: The Redis key prefix used to store the bucket information.
+-- KEYS[2] - now: The current time in milliseconds.
+-- KEYS[3] - dynamic_rate_multiplier: A multiplier to adjust the rate limit dynamically.
+-- KEYS[4] - dynamic_burst_multiplier: A multiplier to adjust the burst limit dynamically.
+-- KEYS[5] - max_dyn_rate: The maximum allowed value for the dynamic rate multiplier.
+-- KEYS[6] - max_burst_rate: The maximum allowed value for the dynamic burst multiplier.
+-- KEYS[7] - expire: The expiration time for the Redis key storing the bucket information, in seconds.
+-- KEYS[8] - number_of_recipients: The number of requests to be allowed (or the increase rate).
+
+-- 1. Retrieve the last hit time and initialize variables
 local prefix = KEYS[1]
 local last = redis.call('HGET', prefix, 'l')
 local now = tonumber(KEYS[2])
 local nrcpt = tonumber(KEYS[8])
 if not last then
-  -- New bucket (why??)
+  -- 2. Initialize a new bucket if the last hit time is not found (must not happen)
   redis.call('HMSET', prefix, 'l', tostring(now), 'b', tostring(nrcpt), 'dr', '10000', 'db', '10000', 'p', '0')
   redis.call('EXPIRE', prefix, KEYS[7])
   return {1, 1, 1}
 end
 
+-- 3. Update the dynamic rate multiplier based on input parameters
 local dr, db = 1.0, 1.0
 
 local max_dr = tonumber(KEYS[5])
@@ -49,6 +48,7 @@ if max_dr > 1 then
   end
 end
 
+-- 4. Update the dynamic burst multiplier based on input parameters
 local max_db = tonumber(KEYS[6])
 if max_db > 1 then
   local rate_mult = tonumber(KEYS[4])
@@ -71,12 +71,15 @@ if max_db > 1 then
   end
 end
 
+-- 5. Update the burst and pending values based on the number of recipients (requests)
 local burst,pending = unpack(redis.call('HMGET', prefix, 'b', 'p'))
 burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
 if burst < 0 then burst = nrcpt else burst = burst + nrcpt end
 if pending < nrcpt then pending = 0 else pending = pending - nrcpt end
 
+-- 6. Set the updated values back to Redis and update the expiration time for the bucket
 redis.call('HMSET', prefix, 'b', tostring(burst), 'p', tostring(pending), 'l', KEYS[2])
 redis.call('EXPIRE', prefix, KEYS[7])
 
+-- 7. Return the updated burst value, dynamic rate multiplier, and dynamic burst multiplier
 return {tostring(burst), tostring(dr), tostring(db)}
