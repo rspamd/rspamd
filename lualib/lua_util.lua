@@ -1574,6 +1574,13 @@ local function join_path(...)
 end
 exports.join_path = join_path
 
+-- Short unit test for sanity
+if path_sep == '/' then
+  assert(join_path('/path', 'to', 'file') == '/path/to/file')
+else
+  assert(join_path('C:', 'path', 'to', 'file') == 'C:\\path\\to\\file')
+end
+
 -- Defines symbols priorities for common usage in prefilters/postfilters
 exports.symbols_priorities = {
   top = 10, -- Symbols must be executed first (or last), such as settings

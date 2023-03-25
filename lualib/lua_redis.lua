@@ -1286,9 +1286,15 @@ exports.add_redis_script = add_redis_script
 -- @param redis_params The Redis parameters to use for this script.
 -- @return The ID of the newly added Redis script.
 --
-local function load_redis_script_from_file(filename, redis_params)
+local function load_redis_script_from_file(filename, redis_params, dir)
   local lua_util = require "lua_util"
   local rspamd_logger = require "rspamd_logger"
+
+  if not dir then dir = rspamd_paths.LUALIBDIR end
+  if filename:sub(1, 1) ~= package.config:sub(1,1) then
+    -- Relative path
+    filename = lua_util.join_path(dir, filename)
+  end
   -- Read file contents
   local file = io.open(filename, "r")
   if not file then
