@@ -60,6 +60,11 @@ files['/**/lualib/lua_redis.lua'].globals = {
   'rspamadm_ev_base',
 }
 
+files['/**/lualib/redis_scripts/**'].globals = {
+  'redis',
+  'KEYS',
+}
+
 files['/**/src/rspamadm/*'].globals = {
   'ansicolors',
   'getopt',

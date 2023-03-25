@@ -1293,7 +1293,7 @@ local function load_redis_script_from_file(filename, redis_params, dir)
   if not dir then dir = rspamd_paths.LUALIBDIR end
   if filename:sub(1, 1) ~= package.config:sub(1,1) then
     -- Relative path
-    filename = lua_util.join_path(dir, filename)
+    filename = lua_util.join_path(dir, "redis_scripts", filename)
   end
   -- Read file contents
   local file = io.open(filename, "r")
