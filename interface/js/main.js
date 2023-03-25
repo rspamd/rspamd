@@ -20,8 +20,9 @@ requirejs.config({
         stickytabs: "jquery.stickytabs.min"
     },
     shim: {
+        app: {deps:["jquery"]},
         codejar: {exports: "CodeJar", deps:["linenumbers"]},
-        bootstrap: {exports:"bootstrap", deps:["jquery"]},
+        bootstrap: {exports:"bootstrap"},
         d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
         d3pie: {exports:"D3Pie", deps:["d3.global", "jquery"]},
         fontawesome: {exports: "FontAwesome", deps:["fontawesome_solid"]},
@@ -50,7 +51,7 @@ requirejs.onError = function (e) {
     document.getElementsByClassName("notification-area")[0].innerHTML =
         "<div class=\"alert alert-error\">" +
             "<strong>Module loading error: " + e.requireType + ", module: " + e.requireModules + "</strong>" +
-            "<button type=\"button\" class=\"btn btn-info btn-xs float-right\" " +
+            "<button type=\"button\" class=\"btn btn-info btn-xs float-end\" " +
                 "onClick=\"window.location.reload(); this.parentNode.parentNode.removeChild(this.parentNode);\" " +
                 "title=\"Reload current page\">" +
                 "<i class=\"glyphicon glyphicon-repeat\"></i> Reload" +

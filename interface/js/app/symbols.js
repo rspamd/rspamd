@@ -162,7 +162,7 @@ define(["jquery", "footable"],
                             })).prependTo(self.$form);
 
                             self.$group = $("<select/>", {
-                                class: "form-control"
+                                class: "form-select"
                             }).on("change", {
                                 self: self
                             }, self._onStatusDropdownChanged).append(

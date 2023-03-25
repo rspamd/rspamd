@@ -40,7 +40,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                                 idx: idx,
                                 html:
                                 '<div class="form-group">' +
-                                    '<label class="col-form-label col-md-2 float-left">' + item.action + "</label>" +
+                                    '<label class="col-form-label col-md-2 float-start">' + item.action + "</label>" +
                                     '<div class="controls slider-controls col-md-10">' +
                                         '<input class="action-scores form-control" data-id="action" type="number" value="' +
                                           item.value + '">' +
@@ -124,13 +124,13 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var $td = '<td><span class="badge badge-secondary">Read</span></td>';
+                        var $td = '<td><span class="badge bg-secondary">Read</span></td>';
                         if (!(item.editable === false || rspamd.read_only)) {
-                            $td = $($td).append('&nbsp;<span class="badge badge-success">Write</span>');
+                            $td = $($td).append('&nbsp;<span class="badge bg-success">Write</span>');
                         }
                         var $tr = $("<tr>").append($td);
 
-                        var $span = $('<span class="map-link" data-toggle="modal" data-target="#modalDialog">' + item.uri + "</span>").data("item", item);
+                        var $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
@@ -169,7 +169,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             }
 
             // Modal form for maps
-            $(document).on("click", "[data-toggle=\"modal\"]", function () {
+            $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
                 var checked_server = rspamd.getSelector("selSrv");
                 var item = $(this).data("item");
                 rspamd.query("getmap", {
