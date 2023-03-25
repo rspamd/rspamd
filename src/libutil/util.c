@@ -2241,61 +2241,63 @@ gboolean
 rspamd_fstring_gzip (rspamd_fstring_t **in)
 {
 	z_stream strm;
-	gint rc;
-	rspamd_fstring_t *comp, *buf = *in;
-	gchar *p;
-	gsize remain;
+	rspamd_fstring_t *buf = *in;
+	int ret;
+	unsigned tmp_remain;
+	unsigned char temp[BUFSIZ];
 
 	memset (&strm, 0, sizeof (strm));
-	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+	ret = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
 
-	if (rc != Z_OK) {
+	if (ret != Z_OK) {
 		return FALSE;
 	}
 
-	comp = rspamd_fstring_sized_new (deflateBound (&strm, buf->len));
-
+	strm.next_in = buf->str;
 	strm.avail_in = buf->len;
-	strm.next_in = (guchar *)buf->str;
-	p = comp->str;
-	remain = comp->allocated;
 
-	while (strm.avail_in != 0) {
-		strm.avail_out = remain;
-		strm.next_out = p;
+	strm.next_out = temp;
+	strm.avail_out = sizeof(temp) > buf->allocated ? buf->allocated : sizeof(temp);
+	ret = deflate(&strm, Z_FINISH);
+	if (ret == Z_STREAM_ERROR) {
+		return FALSE;
+	}
 
-		rc = deflate (&strm, Z_FINISH);
-
-		if (rc != Z_OK && rc != Z_BUF_ERROR) {
-			if (rc == Z_STREAM_END) {
-				break;
-			}
-			else {
-				rspamd_fstring_free (comp);
-				deflateEnd (&strm);
-
-				return FALSE;
-			}
+	/* Try to compress in-place */
+	tmp_remain = strm.next_out - temp;
+	if (tmp_remain <= (strm.avail_in ? buf->len - strm.avail_in : buf->allocated)) {
+		memcpy(buf, temp, tmp_remain);
+		strm.next_out = (unsigned char *)buf->str + tmp_remain;
+		tmp_remain = 0;
+		while (ret == Z_OK) {
+			strm.avail_out = strm.avail_in ? strm.next_in - strm.next_out :
+							  ((unsigned char *)buf->str + buf->allocated) - strm.next_out;
+			ret = deflate(&strm, Z_FINISH);
 		}
-
-		comp->len = strm.total_out;
-
-		if (strm.avail_out == 0 && strm.avail_in != 0) {
-			/* Need to allocate more */
-			remain = comp->len;
-			comp = rspamd_fstring_grow (comp, strm.avail_in);
-			p = comp->str + remain;
-			remain = comp->allocated - remain;
+		if (ret != Z_BUF_ERROR || strm.avail_in == 0) {
+			buf->len = strm.next_out - (unsigned char *)buf->str;
+			return ret == Z_STREAM_END;
 		}
 	}
 
-	deflateEnd (&strm);
-	comp->len = strm.total_out;
-	rspamd_fstring_free (buf); /* We replace buf with its compressed version */
-	*in = comp;
+	/*
+	 * The case when input and output has caught each other, hold the remaining
+	 * in a temporary buffer and compress it separately
+	 */
+	unsigned char *hold = g_malloc (strm.avail_in);
+	memcpy(hold, strm.next_in, strm.avail_in);
+	strm.next_in = hold;
+	if (tmp_remain) {
+		memcpy(buf, temp, tmp_remain);
+		strm.next_out = (unsigned char *)buf->str + tmp_remain;
+	}
+	strm.avail_out = ((unsigned char *)buf->str + buf->allocated) - strm.next_out;
+	ret = deflate(&strm, Z_FINISH);
+	g_free (hold);
+	buf->len = strm.next_out - (unsigned char *)buf->str;
 
-	return TRUE;
+	return ret == Z_STREAM_END;
 }
 
 static gboolean
