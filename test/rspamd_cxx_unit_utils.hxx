@@ -23,6 +23,8 @@
 #include "doctest/doctest.h"
 
 #include "libmime/mime_headers.h"
+#include "contrib/libottery/ottery.h"
+#include "libcryptobox/cryptobox.h"
 
 #include <vector>
 #include <utility>
@@ -35,21 +37,21 @@ TEST_SUITE("rspamd_utils") {
 TEST_CASE("rspamd_strip_smtp_comments_inplace")
 {
 	std::vector<std::pair<std::string, std::string>> cases{
-			{"abc",                    "abc"},
-			{"abc(foo)",               "abc"},
-			{"abc(foo()",              "abc"},
-			{"abc(foo))",              "abc)"},
-			{"abc(foo(bar))",          "abc"},
-			{"(bar)abc(foo)",          "abc"},
-			{"ab(ololo)c(foo)",        "abc"},
-			{"ab(olo\\)lo)c(foo)",     "abc"},
-			{"ab(trol\\\1lo)c(foo)",   "abc"},
-			{"\\ab(trol\\\1lo)c(foo)", "abc"},
-			{"",                       ""},
-			{"<test_id@example.net> (added by postmaster@example.net)", "<test_id@example.net> "}
+		{"abc",                                                     "abc"},
+		{"abc(foo)",                                                "abc"},
+		{"abc(foo()",                                               "abc"},
+		{"abc(foo))",                                               "abc)"},
+		{"abc(foo(bar))",                                           "abc"},
+		{"(bar)abc(foo)",                                           "abc"},
+		{"ab(ololo)c(foo)",                                         "abc"},
+		{"ab(olo\\)lo)c(foo)",                                      "abc"},
+		{"ab(trol\\\1lo)c(foo)",                                    "abc"},
+		{"\\ab(trol\\\1lo)c(foo)",                                  "abc"},
+		{"",                                                        ""},
+		{"<test_id@example.net> (added by postmaster@example.net)", "<test_id@example.net> "}
 	};
 
-	for (const auto &c : cases) {
+	for (const auto &c: cases) {
 		SUBCASE (("strip comments in " + c.first).c_str()) {
 			auto *cpy = new char[c.first.size()];
 			memcpy(cpy, c.first.data(), c.first.size());
@@ -62,18 +64,18 @@ TEST_CASE("rspamd_strip_smtp_comments_inplace")
 
 TEST_CASE("rspamd_http_parse_keepalive_timeout")
 {
-	std::vector<std::pair<std::string, long>> cases {
-			{"timeout=5, max=1000", 5},
-			{"max=1000, timeout=5", 5},
-			{"max=1000, timeout=", -1},
-			{"max=1000, timeout=0", 0},
-			{"max=1000, timeout=-5", -1},
-			{"timeout=5", 5},
-			{"    timeout=5;    ", 5},
-			{"timeout  =   5", 5},
+	std::vector<std::pair<std::string, long>> cases{
+		{"timeout=5, max=1000",  5},
+		{"max=1000, timeout=5",  5},
+		{"max=1000, timeout=",   -1},
+		{"max=1000, timeout=0",  0},
+		{"max=1000, timeout=-5", -1},
+		{"timeout=5",            5},
+		{"    timeout=5;    ",   5},
+		{"timeout  =   5",       5},
 	};
 
-	for (const auto &c : cases) {
+	for (const auto &c: cases) {
 		SUBCASE (("parse http keepalive header " + c.first).c_str()) {
 			rspamd_ftok_t t;
 			t.begin = c.first.data();
@@ -83,6 +85,76 @@ TEST_CASE("rspamd_http_parse_keepalive_timeout")
 		}
 	}
 }
+
+TEST_CASE("rspamd_fstring_gzip tests")
+{
+	rspamd_fstring_t *fstr;
+
+	// Test empty data compression
+	SUBCASE("Empty data") {
+		fstr = rspamd_fstring_new_init("", 0);
+		gboolean result = rspamd_fstring_gzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(fstr->len == 20);
+		result = rspamd_fstring_gunzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(fstr->len == 0);
+		rspamd_fstring_free(fstr);
+	}
+
+	SUBCASE("Non empty data") {
+		fstr = RSPAMD_FSTRING_LIT("helohelo");
+		gboolean result = rspamd_fstring_gzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(fstr->len == 26);
+		result = rspamd_fstring_gunzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(memcmp(fstr->str, "helohelo", fstr->len) == 0);
+		CHECK(fstr->len == sizeof("helohelo") - 1);
+		rspamd_fstring_free(fstr);
+	}
+
+	SUBCASE("Some real compression") {
+		fstr = rspamd_fstring_sized_new(sizeof("helohelo") * 1024);
+		for (int i = 0; i < 1024; i ++) {
+			fstr = rspamd_fstring_append(fstr, "helohelo", sizeof("helohelo") - 1);
+		}
+		gboolean result = rspamd_fstring_gzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(fstr->len == 49);
+		result = rspamd_fstring_gunzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(memcmp(fstr->str, "helohelo", sizeof("helohelo") - 1) == 0);
+		CHECK(fstr->len == (sizeof("helohelo") - 1) * 1024);
+		rspamd_fstring_free(fstr);
+	}
+
+	SUBCASE("Random data compression") {
+		rspamd_cryptobox_fast_hash_state_t hst;
+		rspamd_cryptobox_fast_hash_init(&hst, 0);
+		fstr = rspamd_fstring_sized_new(30 * 1024 * 1024);
+		for (int i = 0; i < 30 * 1024; i ++) {
+			char tmp[1024];
+			ottery_rand_bytes(tmp, sizeof(tmp));
+			fstr = rspamd_fstring_append(fstr, tmp, sizeof(tmp));
+			rspamd_cryptobox_fast_hash_update(&hst, tmp, sizeof(tmp));
+		}
+		auto crc = rspamd_cryptobox_fast_hash(fstr->str, fstr->len, 0);
+		CHECK(crc == rspamd_cryptobox_fast_hash_final(&hst));
+		gboolean result = rspamd_fstring_gzip(&fstr);
+		CHECK(result == TRUE);
+		// Assuming there are no miracles
+		CHECK(fstr->len >= 30 * 1024 * 1024);
+		result = rspamd_fstring_gunzip(&fstr);
+		CHECK(result == TRUE);
+		CHECK(fstr->len == 30 * 1024 * 1024);
+		auto final_crc = rspamd_cryptobox_fast_hash(fstr->str, fstr->len, 0);
+		CHECK(crc == final_crc);
+		rspamd_fstring_free(fstr);
+	}
+
+}
+
 
 }
 
