@@ -2248,10 +2248,15 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 
 	memset (&strm, 0, sizeof (strm));
 	ret = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
+		MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
 
 	if (ret != Z_OK) {
 		return FALSE;
+	}
+
+	if (buf->allocated < deflateBound (&strm, buf->len)) {
+		buf = rspamd_fstring_grow (buf, deflateBound (&strm, buf->len));
+		*in = buf;
 	}
 
 	strm.next_in = buf->str;
@@ -2267,16 +2272,17 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 	/* Try to compress in-place */
 	tmp_remain = strm.next_out - temp;
 	if (tmp_remain <= (strm.avail_in ? buf->len - strm.avail_in : buf->allocated)) {
-		memcpy(buf, temp, tmp_remain);
+		memcpy(buf->str, temp, tmp_remain);
 		strm.next_out = (unsigned char *)buf->str + tmp_remain;
 		tmp_remain = 0;
 		while (ret == Z_OK) {
 			strm.avail_out = strm.avail_in ? strm.next_in - strm.next_out :
-							  ((unsigned char *)buf->str + buf->allocated) - strm.next_out;
+							 ((unsigned char *)buf->str + buf->allocated) - strm.next_out;
 			ret = deflate(&strm, Z_FINISH);
 		}
 		if (ret != Z_BUF_ERROR || strm.avail_in == 0) {
 			buf->len = strm.next_out - (unsigned char *)buf->str;
+			*in = buf;
 			return ret == Z_STREAM_END;
 		}
 	}
@@ -2289,13 +2295,67 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 	memcpy(hold, strm.next_in, strm.avail_in);
 	strm.next_in = hold;
 	if (tmp_remain) {
-		memcpy(buf, temp, tmp_remain);
+		memcpy(buf->str, temp, tmp_remain);
 		strm.next_out = (unsigned char *)buf->str + tmp_remain;
 	}
 	strm.avail_out = ((unsigned char *)buf->str + buf->allocated) - strm.next_out;
 	ret = deflate(&strm, Z_FINISH);
 	g_free (hold);
 	buf->len = strm.next_out - (unsigned char *)buf->str;
+	*in = buf;
+
+	return ret == Z_STREAM_END;
+}
+
+gboolean
+rspamd_fstring_gunzip(rspamd_fstring_t **in)
+{
+	z_stream strm;
+	rspamd_fstring_t *buf = *in, *out = rspamd_fstring_sized_new ((*in)->len);
+	int ret;
+
+	memset(&strm, 0, sizeof(strm));
+	ret = inflateInit2(&strm, MAX_WBITS + 16);
+
+	if (ret != Z_OK) {
+		return FALSE;
+	}
+
+	strm.next_in = buf->str;
+	strm.avail_in = buf->len;
+
+	gsize total_out = 0;
+
+	do {
+		strm.next_out = out->str;
+		strm.avail_out = out->allocated;
+
+		ret = inflate(&strm, Z_NO_FLUSH);
+		if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR) {
+			break;
+		}
+
+		gsize out_size = out->allocated - strm.avail_out;
+		if (total_out + out_size > out->allocated) {
+			out = rspamd_fstring_grow (out, total_out + out_size);
+		}
+
+		total_out += out_size;
+
+	} while (ret != Z_STREAM_END);
+
+	if (ret == Z_STREAM_END) {
+		*in = out;
+		out->len = total_out;
+		rspamd_fstring_free (buf);
+	}
+	else {
+		/* Revert */
+		*in = buf;
+		rspamd_fstring_free (out);
+	}
+
+	inflateEnd(&strm);
 
 	return ret == Z_STREAM_END;
 }

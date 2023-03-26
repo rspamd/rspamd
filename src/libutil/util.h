@@ -448,11 +448,19 @@ void rspamd_localtime (gint64 ts, struct tm *dest);
 
 /**
  * Compresses the input string using gzip+zlib. Old string is replaced and freed
- * if compressed. If not compressed it is untouched.
+ * if compressed.
  * @param in
  * @return TRUE if a string has been compressed
  */
 gboolean rspamd_fstring_gzip (rspamd_fstring_t **in);
+
+/**
+ * Compresses the input string using gzip+zlib. Old string is replaced and freed
+ * if compressed. If not compressed it is untouched.
+ * @param in
+ * @return TRUE if a string has been compressed
+ */
+gboolean rspamd_fstring_gunzip (rspamd_fstring_t **in);
 
 /**
  * Perform globbing searching for the specified path. Allow recursion,
