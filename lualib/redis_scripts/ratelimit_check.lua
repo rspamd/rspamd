@@ -62,7 +62,7 @@ if burst + pending > 0 then
   if dynb == 0 then dynb = 0.0001 end
 
   burst = burst + pending
-  if burst > 0 and (burst + nrcpt) > max_burst * dynb then
+  if burst > 0 and burst > max_burst * dynb then
     return {1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked)}
   end
   -- Increase pending if we allow ratelimit
