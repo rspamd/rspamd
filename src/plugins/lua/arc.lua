@@ -530,7 +530,7 @@ local function arc_sign_seal(task, params, header)
   local cur_idx = 1
   if arc_seals then
     cur_idx = #arc_seals + 1
-    for i = (cur_idx - 1), 1, (-1) do
+    for i = 1, #arc_seals, 1 do
       if arc_auth_results[i] then
         local s = dkim_canonicalize('ARC-Authentication-Results',
           arc_auth_results[i].raw_header)
