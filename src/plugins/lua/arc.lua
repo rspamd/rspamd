@@ -530,6 +530,8 @@ local function arc_sign_seal(task, params, header)
   local cur_idx = 1
   if arc_seals then
     cur_idx = #arc_seals + 1
+    -- We use the cached version per each ARC-* header field individually, already sorted by instance
+    -- value in ascending order
     for i = 1, #arc_seals, 1 do
       if arc_auth_results[i] then
         local s = dkim_canonicalize('ARC-Authentication-Results',
