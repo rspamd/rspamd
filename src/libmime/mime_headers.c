@@ -237,7 +237,10 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* Not header but some garbage */
-				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				if (target == MESSAGE_FIELD (task, raw_headers)) {
+					/* Do not propagate flag from the attachments */
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
 				state = 100;
 				next_state = 0;
 			}
