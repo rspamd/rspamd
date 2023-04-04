@@ -766,8 +766,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 				cur->opts_len = -1;
 			}
 
-			if (!(cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
-				kh_size (cur->options) < task->cfg->default_max_shots) {
+			if (!(cur->sym && (cur->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
 
 				srch.option = (gchar *) val;
 				srch.optlen = vlen;
