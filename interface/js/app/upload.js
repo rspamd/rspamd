@@ -152,6 +152,7 @@ define(["jquery"],
                     function scrollTop(rows_total) {
                         // Is there a way to get an event when all rows are loaded?
                         rspamd.waitForRowsDisplayed("scan", rows_total, function () {
+                            $("#cleanScanHistory").removeAttr("disabled", true);
                             $("html, body").animate({
                                 scrollTop: $("#scanResult").offset().top
                             }, 1000);
@@ -210,10 +211,11 @@ define(["jquery"],
                 }
                 rspamd.destroyTable("scan");
                 rspamd.symbols.scan.length = 0;
+                $("#cleanScanHistory").attr("disabled", true);
             });
 
             function enable_disable_scan_btn() {
-                $("#scan button:not(#scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
+                $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
             }
             enable_disable_scan_btn();
             $("textarea").on("input", function () {
@@ -221,7 +223,7 @@ define(["jquery"],
             });
 
             $("#scanClean").on("click", function () {
-                $("#scan button:not(#scanOptionsToggle)").attr("disabled", true);
+                $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
                 $("#scanForm")[0].reset();
                 $("#scanResult").hide();
                 $("#scanOutput tbody").remove();

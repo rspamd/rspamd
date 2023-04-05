@@ -4,15 +4,11 @@
         {
             "files": ["**/*.html"],
             "customSyntax": "postcss-html"
-        },
-        {
-            "files": ["**/*.js"],
-            "customSyntax": "@stylelint/postcss-css-in-js"
         }
     ],
     "ignoreFiles": [
         "**/*.min.css",
-        "**/*.min.js",
+        "**/*.js",
         "interface/css/d3evolution.css",
         "interface/css/nprogress.css",
         "interface/css/prism.css"
@@ -22,7 +18,7 @@
         "at-rule-empty-line-before": null,
         "color-hex-length": null,
         "comment-empty-line-before": null,
-        "indentation": 4,
+        "media-feature-range-notation": "prefix",
         "number-leading-zero": null,
         "property-no-vendor-prefix": null,
         "rule-empty-line-before": null,

@@ -231,7 +231,7 @@ steps:
       event: [push, tag]
 
   - name: eslint
-    image: node:17-alpine
+    image: node:18-alpine
     pull: if-not-exists
     failure: ignore
     commands:
