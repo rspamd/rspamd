@@ -3,8 +3,7 @@
         "eslint": "*",
         "stylelint": ">=13.6.0",
         "stylelint-config-standard": "*",
-        "postcss-html": "*",
-        "@stylelint/postcss-css-in-js": "*"
+        "postcss-html": "*"
     },
     "eslintIgnore": [
         "*.min.js",
