@@ -678,20 +678,20 @@ sub JsonObjectElt() {
 
 sub GetLogfilesList {
     my ($dir) = @_;
-    opendir( DIR, $dir ) or die $!;
+    opendir( my $fh, $dir ) or die $!;
 
     my $pattern = join( '|', keys %decompressor );
     my $re      = qr/\.[0-9]+(?:\.(?:$pattern))?/;
 
     # Add unnumbered logs first
     my @logs =
-      grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
+      grep { -f "$dir/$_" && !/$re/ } readdir($fh);
 
     # Add numbered logs
-    rewinddir(DIR);
-    push( @logs, ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
+    rewinddir($fh);
+    push( @logs, ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir($fh) ) ) );
 
-    closedir(DIR);
+    closedir($fh);
 
     # Select required logs and revers their order
     @logs =
