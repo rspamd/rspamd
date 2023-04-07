@@ -52,10 +52,11 @@ parser:option '-t --type'
       }
       :default 'rsa'
 parser:option '-o --output'
-      :description 'Output public key in the following format: dns or plain'
+      :description 'Output public key in the following format: dns, dnskey or plain'
       :convert {
         ['dns'] = 'dns',
         ['plain'] = 'plain',
+        ['dnskey'] = 'dnskey',
       }
       :default 'dns'
 parser:option '--priv-output'
@@ -109,6 +110,8 @@ local function print_public_key(opts, pk)
     io.write("\n")
   elseif opts.output == 'dns' then
     print_public_key_dns(opts, base64_pk)
+  elseif opts.output == 'dnskey' then
+    io.write(string.format('v=DKIM1; k=rsa; p=%s\n', base64_pk))
   end
 end
 
