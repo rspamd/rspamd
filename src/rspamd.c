@@ -1267,14 +1267,38 @@ rspamd_spair_close (gpointer p)
 	g_free (p);
 }
 
+const char*
+get_cpu_architecture(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+	return "x86_64";
+#elif defined(__i386) || defined(_M_IX86)
+	return "x86";
+#elif defined(__aarch64__)
+    return "ARM64";
+#elif defined(__arm__) || defined(_M_ARM)
+    return "ARM";
+#elif defined(__mips__)
+    return "MIPS";
+#elif defined(__powerpc__) || defined(_M_PPC)
+    return "PowerPC";
+#elif defined(__sparc__)
+    return "SPARC";
+#else
+    return "Unknown";
+#endif
+}
+
 static void
-version (void)
+version (struct rspamd_main *rspamd_main)
 {
 #if defined(GIT_VERSION) && GIT_VERSION == 1
 	rspamd_printf ("Rspamd daemon version " RVERSION "-git." RID "\n\n");
 #else
 	rspamd_printf ("Rspamd daemon version " RVERSION "\n\n");
 #endif
+	rspamd_printf("CPU architecture %s; features: %s\n",
+		get_cpu_architecture(),
+		rspamd_main->cfg->libs_ctx->crypto_ctx->cpu_extensions);
 #ifdef WITH_HYPERSCAN
 	rspamd_printf ("Hyperscan enabled: TRUE\n");
 #else
@@ -1287,9 +1311,9 @@ version (void)
 	rspamd_printf ("Jemalloc enabled: FALSE\n");
 #endif
 #ifdef WITH_LUAJIT
-	rspamd_printf ("LuaJIT enabled: TRUE\n");
+	rspamd_printf ("LuaJIT enabled: TRUE (LuaJIT version: %s)\n", LUAJIT_VERSION);
 #else
-	rspamd_printf ("LuaJIT enabled: FALSE\n");
+	rspamd_printf ("LuaJIT enabled: FALSE (Lua version: %s)\n", LUA_VERSION);
 #endif
 #ifndef __has_feature
 #  define __has_feature(x) 0
@@ -1418,7 +1442,7 @@ main (gint argc, gchar **argv, gchar **env)
 	read_cmd_line (&argc, &argv, rspamd_main->cfg);
 
 	if (show_version) {
-		version ();
+		version (rspamd_main);
 		exit (EXIT_SUCCESS);
 	}
 
