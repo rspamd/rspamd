@@ -2700,6 +2700,39 @@ lua_cryptobox_gen_dkim_keypair (lua_State *L)
 		rspamd_explicit_memzero (pk, sizeof (pk));
 		rspamd_explicit_memzero (sk, sizeof (sk));
 	}
+	else if (strcmp (alg_str, "ed25519-seed") == 0) {
+		rspamd_sig_pk_t pk;
+		rspamd_sig_sk_t sk;
+		gchar *b64_data;
+		gsize b64_len;
+
+		rspamd_cryptobox_keypair_sig (pk, sk, RSPAMD_CRYPTOBOX_MODE_25519);
+
+		/* Process private key */
+		b64_data = rspamd_encode_base64 (sk,
+			32,
+			-1, &b64_len);
+
+		priv_out = lua_newuserdata (L, sizeof (*priv_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		priv_out->start = b64_data;
+		priv_out->len = b64_len;
+		priv_out->flags = RSPAMD_TEXT_FLAG_OWN|RSPAMD_TEXT_FLAG_WIPE;
+
+		/* Process public key */
+		b64_data = rspamd_encode_base64 (pk,
+			rspamd_cryptobox_pk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+			-1, &b64_len);
+
+		pub_out = lua_newuserdata (L, sizeof (*pub_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		pub_out->start = b64_data;
+		pub_out->len = b64_len;
+		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
+
+		rspamd_explicit_memzero (pk, sizeof (pk));
+		rspamd_explicit_memzero (sk, sizeof (sk));
+	}
 	else {
 		return luaL_error (L, "invalid algorithm %s", alg_str);
 	}

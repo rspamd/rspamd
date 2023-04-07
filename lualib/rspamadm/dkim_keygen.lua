@@ -16,6 +16,7 @@ limitations under the License.
 
 local argparse = require "argparse"
 local rspamd_util = require "rspamd_util"
+local rspamd_cryptobox = require "rspamd_cryptobox"
 
 local parser = argparse()
     :name 'rspamadm dkim_keygen'
@@ -64,6 +65,8 @@ parser:option '--priv-output'
         ['der'] = 'der',
       }
       :default 'pem'
+parser:flag '-f --force'
+      :description 'Force overwrite of existing files'
 
 local function split_string(input, max_length)
   max_length = max_length or 253
@@ -114,9 +117,31 @@ local function gen_rsa_key(opts)
 
   local sk,pk = rsa.keypair(opts.bits or 1024)
   if opts.privkey then
+    if opts.force then
+      os.remove(opts.privkey)
+    end
     sk:save(opts.privkey, opts.priv_output)
   else
     sk:save("-", opts.priv_output)
+  end
+
+  print_public_key(opts, tostring(pk))
+end
+
+local function gen_eddsa_key(opts)
+  local sk,pk = rspamd_cryptobox.gen_dkim_keypair(opts.type)
+
+  if opts.privkey and opts.force then
+    os.remove(opts.privkey)
+  end
+  if not sk:save_in_file(opts.privkey, tonumber('0600', 8)) then
+    io.stderr:write('cannot save private key to ' .. (opts.privkey or 'stdout') .. '\n')
+    os.exit(1)
+  end
+
+  if not opts.privkey then
+    io.write("\n")
+    io.flush()
   end
 
   print_public_key(opts, tostring(pk))

@@ -1118,12 +1118,12 @@ lua_text_save_in_file (lua_State *L)
 			fname = luaL_checkstring (L, 2);
 
 			if (lua_type (L, 3) == LUA_TNUMBER) {
-				mode = lua_tonumber (L, 3);
+				mode = lua_tointeger(L, 3);
 			}
 		}
 		else if (lua_type (L, 2) == LUA_TNUMBER) {
 			/* Created fd */
-			fd = lua_tonumber (L, 2);
+			fd = lua_tointeger (L, 2);
 		}
 
 		if (fd == -1) {
