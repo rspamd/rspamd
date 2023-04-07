@@ -29,23 +29,30 @@
 LUA_FUNCTION_DEF (rsa_pubkey,	 load);
 LUA_FUNCTION_DEF (rsa_pubkey,	 create);
 LUA_FUNCTION_DEF (rsa_pubkey,	 gc);
+LUA_FUNCTION_DEF (rsa_pubkey,	 tostring);
+
 LUA_FUNCTION_DEF (rsa_privkey,	 load_file);
 LUA_FUNCTION_DEF (rsa_privkey,	 load_pem);
 LUA_FUNCTION_DEF (rsa_privkey,	 load_raw);
 LUA_FUNCTION_DEF (rsa_privkey,	 load_base64);
 LUA_FUNCTION_DEF (rsa_privkey,	 create);
 LUA_FUNCTION_DEF (rsa_privkey,	 gc);
+LUA_FUNCTION_DEF (rsa_privkey,	 save);
+
 LUA_FUNCTION_DEF (rsa_signature, create);
 LUA_FUNCTION_DEF (rsa_signature, load);
 LUA_FUNCTION_DEF (rsa_signature, save);
 LUA_FUNCTION_DEF (rsa_signature, base64);
 LUA_FUNCTION_DEF (rsa_signature, gc);
+
 LUA_FUNCTION_DEF (rsa,			 verify_memory);
 LUA_FUNCTION_DEF (rsa,			 sign_memory);
+LUA_FUNCTION_DEF (rsa,			 keypair);
 
 static const struct luaL_reg rsalib_f[] = {
 	LUA_INTERFACE_DEF (rsa, verify_memory),
 	LUA_INTERFACE_DEF (rsa, sign_memory),
+	LUA_INTERFACE_DEF (rsa, keypair),
 	{NULL, NULL}
 };
 
@@ -56,7 +63,7 @@ static const struct luaL_reg rsapubkeylib_f[] = {
 };
 
 static const struct luaL_reg rsapubkeylib_m[] = {
-	{"__tostring", rspamd_lua_class_tostring},
+	{"__tostring", lua_rsa_pubkey_tostring},
 	{"__gc", lua_rsa_pubkey_gc},
 	{NULL, NULL}
 };
@@ -73,6 +80,7 @@ static const struct luaL_reg rsaprivkeylib_f[] = {
 static const struct luaL_reg rsaprivkeylib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_rsa_privkey_gc},
+	LUA_INTERFACE_DEF (rsa_privkey, save),
 	{NULL, NULL}
 };
 
@@ -154,6 +162,59 @@ lua_rsa_pubkey_load (lua_State *L)
 }
 
 static gint
+lua_rsa_privkey_save (lua_State *L)
+{
+	const gchar *filename;
+	const gchar *type = "pem";
+	FILE *f;
+	int ret;
+
+	RSA *rsa = lua_check_rsa_privkey (L, 1);
+
+	filename = luaL_checkstring (L, 2);
+	if (lua_gettop (L) > 2) {
+		type = luaL_checkstring (L, 3);
+	}
+
+	if (rsa != NULL && filename != NULL) {
+		f = fopen (filename, "wb");
+		if (f == NULL) {
+			msg_err ("cannot save privkey to file: %s, %s",
+				filename,
+				strerror (errno));
+			lua_pushboolean (L, FALSE);
+		}
+		else {
+			/* Set secure permissions for the private key file */
+			chmod (filename, S_IRUSR | S_IWUSR);
+
+			if (strcmp (type, "der") == 0) {
+				ret = i2d_RSAPrivateKey_fp (f, rsa);
+			}
+			else {
+				ret = PEM_write_RSAPrivateKey (f, rsa, NULL, NULL, 0, NULL, NULL);
+			}
+
+			if (!ret) {
+				msg_err ("cannot save privkey to file: %s, %s", filename,
+					ERR_error_string (ERR_get_error (), NULL));
+				lua_pushboolean (L, FALSE);
+			}
+			else {
+				lua_pushboolean (L, TRUE);
+			}
+			fclose (f);
+		}
+	}
+	else {
+		lua_pushboolean (L, FALSE);
+	}
+
+	return 1;
+}
+
+
+static gint
 lua_rsa_pubkey_create (lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
@@ -192,6 +253,34 @@ lua_rsa_pubkey_gc (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_rsa_pubkey_tostring (lua_State *L)
+{
+	RSA *rsa = lua_check_rsa_pubkey (L, 1);
+
+	if (rsa != NULL) {
+		BIO *pubout = BIO_new (BIO_s_mem ());
+		const gchar *pubdata;
+		gsize publen;
+		int rc = i2d_RSA_PUBKEY_bio (pubout, rsa);
+
+		if (rc != 1) {
+			BIO_free(pubout);
+
+			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
+		}
+
+		publen = BIO_get_mem_ptr (pubout, &pubdata);
+		lua_pushlstring(L, pubdata, publen);
+		BIO_free(pubout);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
@@ -683,6 +772,38 @@ lua_rsa_sign_memory (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_rsa_keypair (lua_State *L)
+{
+	BIGNUM *e;
+	RSA *rsa, *pub_rsa, *priv_rsa, **prsa;
+	gint bits = lua_gettop(L) > 0 ? lua_tointeger(L, 1) : 1024;
+
+	if (bits > 4096 || bits < 512) {
+		return luaL_error(L, "invalid bits count");
+	}
+
+	e = BN_new ();
+	rsa = RSA_new ();
+	g_assert (BN_set_word (e, RSA_F4) == 1);
+	g_assert (RSA_generate_key_ex (rsa, bits, e, NULL) == 1);
+
+	priv_rsa = RSAPrivateKey_dup(rsa);
+	prsa = lua_newuserdata (L, sizeof (RSA *));
+	rspamd_lua_setclass (L, "rspamd{rsa_privkey}", -1);
+	*prsa = priv_rsa;
+
+	pub_rsa = RSAPublicKey_dup(rsa);
+	prsa = lua_newuserdata (L, sizeof (RSA *));
+	rspamd_lua_setclass (L, "rspamd{rsa_pubkey}", -1);
+	*prsa = pub_rsa;
+
+	RSA_free (rsa);
+	BN_free (e);
+
+	return 2;
 }
 
 static gint
