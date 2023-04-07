@@ -177,7 +177,12 @@ lua_rsa_privkey_save (lua_State *L)
 	}
 
 	if (rsa != NULL && filename != NULL) {
-		f = fopen (filename, "wb");
+		if (strcmp (filename, "-") == 0) {
+			f = stdout;
+		}
+		else {
+			f = fopen(filename, "wb");
+		}
 		if (f == NULL) {
 			msg_err ("cannot save privkey to file: %s, %s",
 				filename,
@@ -185,8 +190,10 @@ lua_rsa_privkey_save (lua_State *L)
 			lua_pushboolean (L, FALSE);
 		}
 		else {
-			/* Set secure permissions for the private key file */
-			chmod (filename, S_IRUSR | S_IWUSR);
+			if (f != stdout) {
+				/* Set secure permissions for the private key file */
+				chmod(filename, S_IRUSR | S_IWUSR);
+			}
 
 			if (strcmp (type, "der") == 0) {
 				ret = i2d_RSAPrivateKey_fp (f, rsa);
