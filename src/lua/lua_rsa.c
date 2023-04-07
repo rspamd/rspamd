@@ -210,7 +210,13 @@ lua_rsa_privkey_save (lua_State *L)
 			else {
 				lua_pushboolean (L, TRUE);
 			}
-			fclose (f);
+
+			if (f != stdout) {
+				fclose (f);
+			}
+			else {
+				fflush (f);
+			}
 		}
 	}
 	else {
