@@ -85,12 +85,13 @@ end
 
 
 local function print_public_key_dns(opts, base64_pk)
+  local key_type = opts.type == 'rsa' and 'rsa' or 'ed25519'
   if #base64_pk < 255 - 2 then
-    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=rsa;" \n\t"p=%s" ) ;\n', opts.selector, base64_pk))
+    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=%s;" \n\t"p=%s" ) ;\n', opts.selector, key_type, base64_pk))
   else
     -- Split it  by parts
     local parts = split_string(base64_pk)
-    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=rsa; "\n', opts.selector))
+    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=%s; "\n', opts.selector, key_type))
     for i,part in ipairs(parts) do
       if i == 1 then
         io.write(string.format('\t"p=%s"\n', part))
@@ -104,6 +105,7 @@ local function print_public_key_dns(opts, base64_pk)
 end
 
 local function print_public_key(opts, pk)
+  local key_type = opts.type == 'rsa' and 'rsa' or 'ed25519'
   local base64_pk = tostring(rspamd_util.encode_base64(pk))
   if opts.output == 'plain' then
     io.write(base64_pk)
@@ -111,7 +113,7 @@ local function print_public_key(opts, pk)
   elseif opts.output == 'dns' then
     print_public_key_dns(opts, base64_pk)
   elseif opts.output == 'dnskey' then
-    io.write(string.format('v=DKIM1; k=rsa; p=%s\n', base64_pk))
+    io.write(string.format('v=DKIM1; k=%s; p=%s\n', key_type, base64_pk))
   end
 end
 
