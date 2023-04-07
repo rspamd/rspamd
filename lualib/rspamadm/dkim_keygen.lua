@@ -87,7 +87,8 @@ end
 local function print_public_key_dns(opts, base64_pk)
   local key_type = opts.type == 'rsa' and 'rsa' or 'ed25519'
   if #base64_pk < 255 - 2 then
-    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=%s;" \n\t"p=%s" ) ;\n', opts.selector, key_type, base64_pk))
+    io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=%s;" \n\t"p=%s" ) ;\n',
+        opts.selector, key_type, base64_pk))
   else
     -- Split it  by parts
     local parts = split_string(base64_pk)
