@@ -378,7 +378,10 @@ local function setup_dkim_signing(cfg, changes)
       if ask_yes_no("Do you want to create privkey " .. highlight(privkey_file),
         true) then
         local pubkey_file = privkey_file .. ".pub"
-        rspamadm.dkim_keygen(domain, selector, privkey_file, pubkey_file, 2048)
+        local rspamd_cryptobox = require "rspamd_cryptobox"
+        local sk, pk = rspamd_cryptobox.generate_keypair("rsa", 2048)
+        pk:save_to_file(pubkey_file)
+        sk:save_to_file(privkey_file, tonumber('0600', 8))
 
         local f = io.open(pubkey_file)
         if not f then
