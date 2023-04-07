@@ -272,7 +272,7 @@ lua_rsa_pubkey_tostring (lua_State *L)
 			return luaL_error(L, "i2d_RSA_PUBKEY_bio failed");
 		}
 
-		publen = BIO_get_mem_ptr (pubout, &pubdata);
+		publen = BIO_get_mem_data(pubout, &pubdata);
 		lua_pushlstring(L, pubdata, publen);
 		BIO_free(pubout);
 	}
