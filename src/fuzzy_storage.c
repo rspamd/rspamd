@@ -783,6 +783,8 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.value = 0;
 		}
 
+		bool default_disabled = false;
+
 		{
 			khiter_t k;
 
@@ -790,10 +792,7 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 
 			if (k != kh_end(session->ctx->default_forbidden_ids)) {
 				/* Hash is from a forbidden flag by default */
-				session->reply.rep.ts = 0;
-				session->reply.rep.v1.prob = 0.0f;
-				session->reply.rep.v1.value = 0;
-				session->reply.rep.v1.flag = 0;
+				default_disabled = true;
 			}
 		}
 
@@ -811,6 +810,13 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 					session->reply.rep.v1.value = 0;
 					session->reply.rep.v1.flag = 0;
 				}
+			}
+			else if (default_disabled) {
+				/* Hash is from a forbidden flag by default */
+				session->reply.rep.ts = 0;
+				session->reply.rep.v1.prob = 0.0f;
+				session->reply.rep.v1.value = 0;
+				session->reply.rep.v1.flag = 0;
 			}
 
 			/* We need also to encrypt reply */
@@ -835,6 +841,13 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 					session->nm,
 					session->reply.hdr.mac,
 					RSPAMD_CRYPTOBOX_MODE_25519);
+		}
+		else if (default_disabled) {
+			/* Hash is from a forbidden flag by default, and there is no encryption override */
+			session->reply.rep.ts = 0;
+			session->reply.rep.v1.prob = 0.0f;
+			session->reply.rep.v1.value = 0;
+			session->reply.rep.v1.flag = 0;
 		}
 	}
 
