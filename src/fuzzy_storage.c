@@ -106,6 +106,8 @@ struct rspamd_leaky_bucket_elt {
 };
 
 static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
+KHASH_SET_INIT_INT(fuzzy_key_forbidden_ids);
+
 
 struct rspamd_fuzzy_storage_ctx {
 	guint64 magic;
@@ -168,6 +170,7 @@ struct rspamd_fuzzy_storage_ctx {
 	gint lua_pre_handler_cbref;
 	gint lua_post_handler_cbref;
 	gint lua_blacklist_cbref;
+	khash_t(fuzzy_key_forbidden_ids) *default_forbidden_ids;
 };
 
 enum fuzzy_cmd_type {
@@ -201,8 +204,6 @@ struct fuzzy_peer_request {
 	ev_io io_ev;
 	struct fuzzy_peer_cmd cmd;
 };
-
-KHASH_SET_INIT_INT(fuzzy_key_forbidden_ids);
 
 struct fuzzy_key {
 	struct rspamd_cryptobox_keypair *key;
@@ -782,6 +783,20 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.value = 0;
 		}
 
+		{
+			khiter_t k;
+
+			k = kh_get(fuzzy_key_forbidden_ids, session->ctx->default_forbidden_ids, session->reply.rep.v1.flag);
+
+			if (k != kh_end(session->ctx->default_forbidden_ids)) {
+				/* Hash is from a forbidden flag by default */
+				session->reply.rep.ts = 0;
+				session->reply.rep.v1.prob = 0.0f;
+				session->reply.rep.v1.value = 0;
+				session->reply.rep.v1.flag = 0;
+			}
+		}
+
 		if (flags & RSPAMD_FUZZY_REPLY_ENCRYPTED) {
 
 			if (session->reply.rep.v1.prob > 0 && session->key && session->key->forbidden_ids) {
@@ -792,7 +807,7 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				if (k != kh_end (session->key->forbidden_ids)) {
 					/* Hash is from a forbidden flag for this key */
 					session->reply.rep.ts = 0;
-					session->reply.rep.v1.prob = 0.0;
+					session->reply.rep.v1.prob = 0.0f;
 					session->reply.rep.v1.value = 0;
 					session->reply.rep.v1.flag = 0;
 				}
@@ -2188,6 +2203,46 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 }
 
 static gboolean
+	fuzzy_parse_forbidden_ids (rspamd_mempool_t *pool,
+		const ucl_object_t *obj,
+		gpointer ud,
+		struct rspamd_rcl_section *section,
+		GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = (struct rspamd_rcl_struct_parser *)ud;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	ctx = (struct rspamd_fuzzy_storage_ctx *)pd->user_struct;
+
+	if (ucl_object_type (obj) == UCL_ARRAY) {
+		const ucl_object_t *cur;
+		ucl_object_iter_t it = NULL;
+		guint64 id;
+
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+			if (ucl_object_toint_safe (cur, &id)) {
+				int r;
+
+				kh_put(fuzzy_key_forbidden_ids, ctx->default_forbidden_ids, id, &r);
+			}
+			else {
+				return FALSE;
+			}
+		}
+
+		return TRUE;
+	}
+	else if (ucl_object_type (obj) == UCL_INT) {
+		int r;
+		kh_put(fuzzy_key_forbidden_ids, ctx->default_forbidden_ids, ucl_object_toint (obj), &r);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
 fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		const ucl_object_t *obj,
 		gpointer ud,
@@ -2326,6 +2381,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->leaky_bucket_burst = NAN;
 	ctx->leaky_bucket_rate = NAN;
 	ctx->delay = NAN;
+	ctx->default_forbidden_ids = kh_init(fuzzy_key_forbidden_ids);
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2394,6 +2450,15 @@ init_fuzzy (struct rspamd_config *cfg)
 			0,
 			RSPAMD_CL_FLAG_MULTIPLE,
 			"Encryption keypair (can be repeated for different keys)");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"forbidden_ids",
+			fuzzy_parse_forbidden_ids,
+			ctx,
+			0,
+			0,
+			"Deny specific flags by default");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2870,6 +2935,10 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (ctx->lua_blacklist_cbref != -1) {
 		luaL_unref (ctx->cfg->lua_state, LUA_REGISTRYINDEX, ctx->lua_blacklist_cbref);
+	}
+
+	if (ctx->default_forbidden_ids) {
+		kh_destroy(fuzzy_key_forbidden_ids, ctx->default_forbidden_ids);
 	}
 
 	REF_RELEASE (ctx->cfg);
