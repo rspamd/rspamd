@@ -32,7 +32,7 @@ struct rspamd_config;
  */
 typedef void (*rspamd_fuzzy_check_cb) (struct rspamd_fuzzy_reply *rep, void *ud);
 
-typedef void (*rspamd_fuzzy_update_cb) (gboolean success,
+typedef void (*rspamd_fuzzy_update_cb) (bool success,
 										guint nadded,
 										guint ndeleted,
 										guint nextended,
@@ -43,7 +43,7 @@ typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
 
 typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
 
-typedef gboolean (*rspamd_fuzzy_periodic_cb) (void *ud);
+typedef bool (*rspamd_fuzzy_periodic_cb) (void *ud);
 
 /**
  * Open fuzzy backend
@@ -75,7 +75,8 @@ void rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
  * @param src
  */
 void rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
-										   GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+										   struct fuzzy_peer_cmd *peer_cmd, gsize ar_len,
+										   const gchar *src, rspamd_fuzzy_update_cb cb,
 										   void *ud);
 
 /**

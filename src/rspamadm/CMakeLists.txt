@@ -12,7 +12,7 @@ SET(RSPAMADMSRC rspamadm.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         #${CMAKE_BINARY_DIR}/src/modules.c - defined in rspamdserver
         ${CMAKE_SOURCE_DIR}/src/controller.c
-        ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.c
+        ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.cxx
         ${CMAKE_SOURCE_DIR}/src/worker.c
         ${CMAKE_SOURCE_DIR}/src/rspamd_proxy.c)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
