@@ -17,7 +17,7 @@
 | lua-lpeg               | 1.0     | MIT                 | YES     | rspamd text + alloc|
 | lua-moses              | ?       | MIT                 | NO      |                    |
 | lua-lupa               | ?       | MIT                 | NO      |                    |
-| lua-tableshape         | ae67256 | MIT                 | NO      |                    |
+| lua-tableshape         | 2.6.0   | MIT                 | NO      |                    |
 | mumhash                | ?       | MIT                 | NO      |                    |
 | ngx-http-parser        | 2.2.0   | MIT                 | YES     | spamc support      |
 | Mozilla-PublicSuffix   | ?       | MIT                 | NO      |                    |
