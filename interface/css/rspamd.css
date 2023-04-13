@@ -94,6 +94,14 @@ fieldset[disabled] .btn {
     width: 1%;
 }
 
+a {
+    outline: none;
+}
+textarea {
+    font-family: "Courier New", Courier, monospace;
+    resize: vertical;
+}
+
 /* Tweak FooTable for Bootstrap 4 */
 .footable .dropdown-toggle::after {
     content: none;
@@ -113,13 +121,9 @@ fieldset[disabled] .btn {
 .footable-header .fooicon {
     font-size: 12px;
 }
-
-a {
-    outline: none;
-}
-textarea {
-    font-family: "Courier New", Courier, monospace;
-    resize: vertical;
+.footable .pagination > li:last-child > a {
+    border-top-right-radius:4px;
+    border-bottom-right-radius:4px
 }
 
 /* local overrides */
