@@ -201,17 +201,6 @@ table#symbolsTable input[type="number"] {
     color: #3a87ad;
 }
 
-.pager li > a,
-.pager li > span {
-    display: inline-block;
-    padding: 5px 14px;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    -webkit-border-radius: 0;
-    -moz-border-radius: 0;
-    border-radius: 0;
-}
-
 /* widget */
 .card-header,
 .modal-header {
