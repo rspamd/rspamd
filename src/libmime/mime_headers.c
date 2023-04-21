@@ -194,7 +194,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 	const gchar *p, *c, *end;
 	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
-	gboolean valid_folding = FALSE;
+	gboolean valid_folding = FALSE, shift_by_one = FALSE;
 	guint nlines_count[RSPAMD_TASK_NEWLINES_MAX];
 	guint norder = 0;
 
@@ -410,9 +410,12 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			break;
 		case 5:
 			/* Header has only name, no value */
-			nh->value = rspamd_mempool_strdup (task->task_pool, "");;
-			nh->decoded = rspamd_mempool_strdup (task->task_pool, "");;
+			nh->value = rspamd_mempool_strdup (task->task_pool, "");
+			nh->decoded = rspamd_mempool_strdup (task->task_pool, "");
 			nh->raw_len = p - nh->raw_value;
+			if (shift_by_one) {
+				nh->raw_len ++;
+			}
 			nh->order = norder ++;
 			rspamd_mime_header_add (task, &target->htb, order_ptr, nh, check_newlines);
 			nh = NULL;
@@ -422,6 +425,8 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			/* Folding state */
 			if (p + 1 == end) {
 				state = err_state;
+				/* Include the last character into the next header */
+				shift_by_one = TRUE;
 			}
 			else {
 				if (*p == '\r' || *p == '\n') {
