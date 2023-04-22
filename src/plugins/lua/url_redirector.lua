@@ -51,6 +51,7 @@ local settings = {
   max_size = 10 * 1024, -- maximum body to process
   user_agent = default_ua,
   redirector_symbol = nil, -- insert symbol if redirected url has been found
+  redirector_symbol_nested = "URL_REDIRECTOR_NESTED", -- insert symbol if nested limit has been reached
   redirectors_only = true, -- follow merely redirectors
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
@@ -74,7 +75,7 @@ local function adjust_url(task, orig_url, redir_url)
   end
 end
 
-local function cache_url(task, orig_url, url, key, param)
+local function cache_url(task, orig_url, url, key, prefix)
   -- String representation
   local str_orig_url = tostring(orig_url)
   local str_url = tostring(url)
@@ -140,6 +141,10 @@ local function cache_url(task, orig_url, url, key, param)
     end
   end
 
+  if prefix then
+    -- Save url with prefix
+    str_url = string.format('^%s:%s', prefix, str_url)
+  end
   local ret,conn,_ = lua_redis.redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
@@ -165,7 +170,8 @@ local function resolve_cached(task, orig_url, url, key, ntries)
       -- We cannot resolve more, stop
       rspamd_logger.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
         orig_url, url, ntries)
-      cache_url(task, orig_url, url, key)
+      cache_url(task, orig_url, url, key, 'nested')
+      task:insert_result(settings.redirector_symbol_nested, 1.0, tostring(ntries))
 
       return
     end
@@ -258,6 +264,14 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           -- Got cached result
           rspamd_logger.debugm(N, task, 'found cached redirect from %s to %s',
             url, data)
+          if data.sub(1, 1) == '^' then
+            -- Prefixed url stored
+            local prefix, new_url = data:match('^%^(%a+):(.+)$')
+            if prefix == 'nested' then
+              task:insert_result(settings.redirector_symbol_nested, 1.0, 'cached')
+            end
+            data = new_url
+          end
           if data ~= tostring(orig_url) then
             adjust_url(task, orig_url, data)
           end
@@ -369,6 +383,13 @@ if opts then
         callback = url_redirector_handler,
         -- In fact, the real timeout is nested_limit * timeout...
         augmentations = {string.format("timeout=%f", settings.timeout)}
+      }
+
+      rspamd_config:register_symbol{
+        name = settings.redirector_symbol_nested,
+        type = 'virtual',
+        parent = id,
+        score = 0,
       }
 
       if settings.redirector_symbol then
