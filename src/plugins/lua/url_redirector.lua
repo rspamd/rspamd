@@ -161,6 +161,16 @@ local function cache_url(task, orig_url, url, key, prefix)
   end
 end
 
+-- Reduce length of a string to a given length (16 by default)
+local function maybe_trim_url(url, limit)
+  if not limit then limit = 16 end
+  if #url > limit then
+    return string.sub(url, 1, limit) .. '...'
+  else
+    return url
+  end
+end
+
 -- Resolve maybe cached url
 -- Orig url is the original url object
 -- url should be a new url object...
@@ -171,7 +181,8 @@ local function resolve_cached(task, orig_url, url, key, ntries)
       rspamd_logger.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
         orig_url, url, ntries)
       cache_url(task, orig_url, url, key, 'nested')
-      task:insert_result(settings.redirector_symbol_nested, 1.0, tostring(ntries))
+      task:insert_result(settings.redirector_symbol_nested, 1.0,
+          string.format('%s->%s:%d', maybe_trim_url(orig_url), maybe_trim_url(url), ntries))
 
       return
     end
@@ -268,7 +279,8 @@ local function resolve_cached(task, orig_url, url, key, ntries)
             -- Prefixed url stored
             local prefix, new_url = data:match('^%^(%a+):(.+)$')
             if prefix == 'nested' then
-              task:insert_result(settings.redirector_symbol_nested, 1.0, 'cached')
+              task:insert_result(settings.redirector_symbol_nested, 1.0,
+                  string.format('%s->%s:cached', maybe_trim_url(url), maybe_trim_url(new_url)))
             end
             data = new_url
           end
