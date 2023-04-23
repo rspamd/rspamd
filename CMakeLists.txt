@@ -57,6 +57,7 @@ OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
+OPTION(ENABLE_FASTTEXT     "Link with FastText library [default: OFF]"                  OFF)
 OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [default: OFF]" OFF)
 OPTION(SYSTEM_DOCTEST      "Use system doctest instead of bundled one [default: OFF]" OFF)
@@ -241,6 +242,12 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
 		INCLUDE_SUFFIXES include/libsodium include/sodium
 		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
+
+if(ENABLE_FASTTEXT MATCHES "ON")
+	ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext.h
+			INCLUDE_SUFFIXES include/fasttext
+			ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
+endif()
 
 include (CompilerWarnings)
 include (Hyperscan)
