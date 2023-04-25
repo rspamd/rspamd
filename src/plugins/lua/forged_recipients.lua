@@ -30,6 +30,7 @@ end
 
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
+local rspamd_util = require "rspamd_util"
 
 local E = {}
 
@@ -141,7 +142,7 @@ local function check_forged_headers(task)
   if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
     local mime_from = task:get_from(2)
     if not mime_from or not mime_from[1] or
-        (string.lower(mime_from[1]['addr']) ~= string.lower(smtp_from[1]['addr'])) then
+        not rspamd_util.strequal_caseless_utf8(mime_from[1]['addr'], smtp_from[1]['addr']) then
       task:insert_result(symbol_sender, 1, ((mime_from or E)[1] or E).addr or '', smtp_from[1].addr)
     end
   end
