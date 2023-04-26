@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "html.hxx"
+#include "libserver/task.h"
 
 #include <vector>
 #include <fmt/core.h>
@@ -49,12 +50,15 @@ TEST_CASE("html parsing")
 	rspamd_url_init(NULL);
 	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
 			"html", 0);
+	struct rspamd_task fake_task;
+	memset(&fake_task, 0, sizeof(fake_task));
+	fake_task.task_pool = pool;
 
 	for (const auto &c : cases) {
 		SUBCASE((std::string("extract tags from: ") + c.first).c_str()) {
 			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
 			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
-			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true);
 			CHECK(hc != nullptr);
 			auto dump = html_debug_structure(*hc);
 			CHECK(c.second == dump);
@@ -194,6 +198,9 @@ TEST_CASE("html text extraction")
 	rspamd_url_init(NULL);
 	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
 			"html", 0);
+	struct rspamd_task fake_task;
+	memset(&fake_task, 0, sizeof(fake_task));
+	fake_task.task_pool = pool;
 
 	auto replace_newlines = [](std::string &str) {
 		auto start_pos = 0;
@@ -208,7 +215,7 @@ TEST_CASE("html text extraction")
 		SUBCASE((fmt::format("html extraction case {}", i)).c_str()) {
 			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
 			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
-			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, nullptr, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true);
 			CHECK(hc != nullptr);
 			replace_newlines(hc->parsed);
 			auto expected = c.second;
@@ -241,6 +248,10 @@ TEST_CASE("html urls extraction")
 	rspamd_url_init(NULL);
 	auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
 			"html", 0);
+	struct rspamd_task fake_task;
+	memset(&fake_task, 0, sizeof(fake_task));
+	fake_task.task_pool = pool;
+
 	auto i = 1;
 	for (const auto &c : cases) {
 		SUBCASE((fmt::format("html url extraction case {}", i)).c_str()) {
@@ -248,7 +259,7 @@ TEST_CASE("html urls extraction")
 			auto input = std::get<0>(c);
 			GByteArray *tmp = g_byte_array_sized_new(input.size());
 			g_byte_array_append(tmp, (const guint8 *)input.data(), input.size());
-			auto *hc = html_process_input(pool, tmp, nullptr, nullptr, purls, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, purls, true);
 			CHECK(hc != nullptr);
 			auto &expected_text = std::get<2>(c);
 			if (expected_text.has_value()) {

@@ -127,7 +127,7 @@ private:
 
 
 auto html_tag_by_name(const std::string_view &name) -> std::optional<tag_id_t>;
-auto html_process_input(rspamd_mempool_t *pool,
+auto html_process_input(struct rspamd_task *task,
 				   GByteArray *in,
 				   GList **exceptions,
 				   khash_t (rspamd_url_hash) *url_set,
