@@ -766,7 +766,7 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 
 
 	text_part->html = rspamd_html_process_part_full (
-			task->task_pool,
+			task,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
 			MESSAGE_FIELD (task, urls),

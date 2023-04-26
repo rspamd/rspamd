@@ -478,6 +478,7 @@ struct rspamd_config {
 	gint max_recipients;                           /**< maximum number of recipients to be processed	*/
 	guint max_blas_threads;                         /**< maximum threads for openblas when learning ANN		*/
 	guint max_opts_len;                             /**< maximum length for all options for a symbol		*/
+	gsize max_html_len;                             /**< maximum length of HTML document					*/
 
 	struct module_s **compiled_modules;                /**< list of compiled C modules							*/
 	struct worker_s **compiled_workers;                /**< list of compiled C modules							*/

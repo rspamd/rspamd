@@ -75,6 +75,7 @@
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
 #define DEFAULT_MAX_WORKERS 4
+#define DEFAULT_MAX_HTML_SIZE DEFAULT_MAX_MESSAGE / 5 /* 10 Mb */
 /* Timeout for task processing */
 #define DEFAULT_TASK_TIMEOUT 8.0
 #define DEFAULT_LUA_GC_STEP 200
@@ -243,6 +244,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->words_decay = DEFAULT_WORDS_DECAY;
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->max_word_len = DEFAULT_MAX_WORD;
+	cfg->max_html_len = DEFAULT_MAX_HTML_SIZE;
 
 	/* GC limits */
 	cfg->lua_gc_pause = DEFAULT_LUA_GC_PAUSE;

@@ -1920,6 +1920,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_UINT,
 				"Maximum length of the word to be considered in statistics/fuzzy");
 		rspamd_rcl_add_default_handler (sub,
+			"max_html_len",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_word_len),
+			RSPAMD_CL_FLAG_INT_SIZE,
+			"Maximum length of the html part to be parsed");
+		rspamd_rcl_add_default_handler (sub,
 				"words_decay",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_config, words_decay),

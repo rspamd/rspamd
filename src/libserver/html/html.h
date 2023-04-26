@@ -70,7 +70,7 @@ guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len);
 void* rspamd_html_process_part(rspamd_mempool_t *pool,
 							   GByteArray *in);
 
-void *rspamd_html_process_part_full(rspamd_mempool_t *pool,
+void *rspamd_html_process_part_full(struct rspamd_task *task,
 									GByteArray *in, GList **exceptions,
 									khash_t (rspamd_url_hash) *url_set,
 									GPtrArray *part_urls,

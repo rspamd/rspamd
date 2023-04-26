@@ -22,6 +22,8 @@
 #include "html.hxx"
 #include "libserver/css/css_value.hxx"
 #include "libserver/css/css.hxx"
+#include "libserver/task.h"
+#include "libserver/cfg_file.h"
 
 #include "url.h"
 #include "contrib/libucl/khash.h"
@@ -1321,7 +1323,7 @@ html_append_tag_content(rspamd_mempool_t *pool,
 }
 
 auto
-html_process_input(rspamd_mempool_t *pool,
+html_process_input(struct rspamd_task *task,
 				   GByteArray *in,
 				   GList **exceptions,
 				   khash_t (rspamd_url_hash) *url_set,
@@ -1334,8 +1336,11 @@ html_process_input(rspamd_mempool_t *pool,
 	guint obrace = 0, ebrace = 0;
 	struct rspamd_url *url = nullptr;
 	gint href_offset = -1;
+	auto overflow_input = false;
 	struct html_tag *cur_tag = nullptr, *parent_tag = nullptr, cur_closing_tag;
 	struct tag_content_parser_state content_parser_env;
+	auto process_size = in->len;
+
 
 	enum {
 		parse_start = 0,
@@ -1364,10 +1369,20 @@ html_process_input(rspamd_mempool_t *pool,
 	} html_document_state = html_document_state::doctype;
 
 	g_assert (in != NULL);
-	g_assert (pool != NULL);
+	g_assert (task != NULL);
 
-	struct html_content *hc = new html_content;
-	rspamd_mempool_add_destructor(pool, html_content::html_content_dtor, hc);
+	auto *pool = task->task_pool;
+
+	auto *hc = new html_content;
+	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
+
+	if (task->cfg && in->len > task->cfg->max_html_len) {
+		msg_notice_task("html input is too big: %z, limit is %z",
+				in->len,
+				task->cfg->max_html_len);
+		process_size = task->cfg->max_html_len;
+		overflow_input = true;
+	}
 
 	auto new_tag = [&](int flags = 0) -> struct html_tag * {
 
@@ -1525,7 +1540,7 @@ html_process_input(rspamd_mempool_t *pool,
 
 	p = (const char *) in->data;
 	c = p;
-	end = p + in->len;
+	end = p + process_size;
 	start = c;
 
 	while (p < end) {
@@ -2140,8 +2155,17 @@ html_process_input(rspamd_mempool_t *pool,
 		break;
 	}
 
+	if (overflow_input) {
+		/*
+		 * Append the rest of the input as raw html, this might work as
+		 * further algorithms can skip words when auto *pool = task->task_pool;there are too many.
+		 * It is still unclear about urls though...
+		 */
+		hc->parsed.append(end, in->len - process_size);
+	}
+
 	if (!hc->parsed.empty()) {
-		/* Trim extra spaces at the at the end if needed */
+		/* Trim extra spaces at the end if needed */
 		if (g_ascii_isspace(hc->parsed.back())) {
 			auto last_it = std::end(hc->parsed);
 
@@ -2244,13 +2268,13 @@ html_tag::get_content(const struct html_content *hc) const -> std::string_view
 }
 
 void *
-rspamd_html_process_part_full(rspamd_mempool_t *pool,
+rspamd_html_process_part_full(struct rspamd_task *task,
 							  GByteArray *in, GList **exceptions,
 							  khash_t (rspamd_url_hash) *url_set,
 							  GPtrArray *part_urls,
 							  bool allow_css)
 {
-	return rspamd::html::html_process_input(pool, in, exceptions, url_set,
+	return rspamd::html::html_process_input(task, in, exceptions, url_set,
 			part_urls, allow_css);
 }
 
@@ -2258,7 +2282,11 @@ void *
 rspamd_html_process_part(rspamd_mempool_t *pool,
 						 GByteArray *in)
 {
-	return rspamd_html_process_part_full (pool, in, NULL,
+	struct rspamd_task fake_task;
+	memset(&fake_task, 0, sizeof(fake_task));
+	fake_task.task_pool = pool;
+
+	return rspamd_html_process_part_full (&fake_task, in, NULL,
 			NULL, NULL, FALSE);
 }
 
