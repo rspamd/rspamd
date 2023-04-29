@@ -45,10 +45,10 @@ private:
 public:
 	explicit fasttext_langdet(struct rspamd_config *cfg) {
 		const auto *ucl_obj = cfg->rcl_obj;
-		const auto *opts_section = ucl_object_find_key(ucl_obj, "options");
+		const auto *opts_section = ucl_object_find_key(ucl_obj, "lang_detection");
 
 		if (opts_section) {
-			const auto *model = ucl_object_find_key(opts_section, "fasttext_langdet_model");
+			const auto *model = ucl_object_find_key(opts_section, "fasttext_model");
 
 			if (model) {
 				try {
