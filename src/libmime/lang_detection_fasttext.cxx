@@ -33,6 +33,7 @@ namespace rspamd::langdet {
 class fasttext_langdet {
 private:
 	fasttext::FastText ft;
+	std::string model_fname;
 	bool loaded;
 
 	struct one_shot_buf : public std::streambuf {
@@ -53,6 +54,7 @@ public:
 				try {
 					ft.loadModel(ucl_object_tostring(model));
 					loaded = true;
+					model_fname = std::string{ucl_object_tostring(model)};
 				}
 				catch (std::exception &e) {
 					auto err_message = fmt::format("cannot load fasttext model: {}", e.what());
@@ -93,6 +95,16 @@ public:
 
 		return nullptr;
 	}
+
+	auto model_info(void) const -> std::string {
+		if (!loaded) {
+			return "fasttext model is not loaded";
+		}
+		else {
+			return fmt::format("fasttext model {}: {} languages, {} tokens", model_fname,
+				ft.getDictionary()->nlabels(), ft.getDictionary()->ntokens());
+		}
+	}
 };
 }
 #endif
@@ -109,6 +121,17 @@ void* rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg)
 	return nullptr;
 #else
 	return (void *)new rspamd::langdet::fasttext_langdet(cfg);
+#endif
+}
+
+char *rspamd_lang_detection_fasttext_show_info(void *ud)
+{
+#ifndef WITH_FASTTEXT
+	return g_strdup("fasttext is not compiled in");
+#else
+	auto model_info = FASTTEXT_MODEL_TO_C_API(ud)->model_info();
+
+	return g_strdup(model_info.c_str());
 #endif
 }
 

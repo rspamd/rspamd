@@ -27,6 +27,13 @@ struct rspamd_config;
  */
 void* rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg);
 
+/**
+ * Show info about fasttext language detector
+ * @param ud
+ * @return
+ */
+char *rspamd_lang_detection_fasttext_show_info(void *ud);
+
 
 typedef  void * rspamd_fasttext_predict_result_t;
 /**

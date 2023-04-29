@@ -15,6 +15,7 @@
  */
 
 #include "lang_detection.h"
+#include "lang_detection_fasttext.h"
 #include "libserver/logger.h"
 #include "libcryptobox/cryptobox.h"
 #include "libutil/multipattern.h"
@@ -181,6 +182,7 @@ struct rspamd_lang_detector {
 	UConverter *uchar_converter;
 	gsize short_text_limit;
 	gsize total_occurrences; /* number of all languages found */
+	gpointer fasttext_detector;
 	ref_entry_t ref;
 };
 
@@ -766,6 +768,7 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 		}
 
 		kh_destroy (rspamd_stopwords_hash, d->stop_words_norm);
+		rspamd_lang_detection_fasttext_destroy(d->fasttext_detector);
 	}
 }
 
@@ -886,10 +889,14 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		total += kh_size (ret->trigrams[i]);
 	}
 
+	ret->fasttext_detector = rspamd_lang_detection_fasttext_init(cfg);
+	char *fasttext_status = rspamd_lang_detection_fasttext_show_info(ret->fasttext_detector);
+
 	msg_info_config ("loaded %d languages, "
-			"%d trigrams",
+			"%d trigrams; %s",
 			(gint)ret->languages->len,
-			(gint)total);
+			(gint)total, fasttext_status);
+	g_free (fasttext_status);
 
 	if (stop_words) {
 		ucl_object_unref (stop_words);
