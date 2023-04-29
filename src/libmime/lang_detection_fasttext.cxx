@@ -23,6 +23,7 @@
 #include "fmt/core.h"
 #include <exception>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <sstream>
 #include <streambuf>
@@ -154,8 +155,10 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 #ifndef WITH_FASTTEXT
 	return nullptr;
 #else
+	/* Avoid too long inputs */
+	static const size_t max_fasttext_input_len = 1024 * 1024 * 1;
 	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
-	auto *res = real_model->detect_language(in, len, k);
+	auto *res = real_model->detect_language(in, std::min(max_fasttext_input_len, len), k);
 
 	return (rspamd_fasttext_predict_result_t)res;
 #endif
@@ -188,8 +191,13 @@ rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res, un
 #ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
-	if (real_res && real_res->size() < idx) {
-		return real_res->at(idx).second.c_str();
+	if (real_res && real_res->size() > idx) {
+		/* Fasttext returns result in form __label__<lang>, so we need to remove __label__ prefix */
+		auto lang = std::string_view{real_res->at(idx).second};
+		if (lang.size() > sizeof("__label__") && lang.substr(0, sizeof("__label__") - 1) == "__label__") {
+			lang.remove_prefix(sizeof("__label__") - 1);
+		}
+		return lang.data();
 	}
 #endif
 	return nullptr;
@@ -201,7 +209,7 @@ rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res, un
 #ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
-	if (real_res && real_res->size() < idx) {
+	if (real_res && real_res->size() > idx) {
 		return real_res->at(idx).first;
 	}
 #endif
