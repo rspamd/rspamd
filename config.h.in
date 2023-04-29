@@ -116,6 +116,7 @@
 #cmakedefine WITH_LIBUNWIND      1
 #cmakedefine WITH_LUA_TRACE      1
 #cmakedefine WITH_LUA_REPL       1
+#cmakedefine WITH_FASTTEXT       1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 

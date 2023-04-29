@@ -12,6 +12,7 @@ SET(LIBRSPAMDMIMESRC
 				${CMAKE_CURRENT_SOURCE_DIR}/mime_parser.c
 				${CMAKE_CURRENT_SOURCE_DIR}/mime_encoding.c
 				${CMAKE_CURRENT_SOURCE_DIR}/lang_detection.c
+		${CMAKE_CURRENT_SOURCE_DIR}/lang_detection_fasttext.cxx
 		${CMAKE_CURRENT_SOURCE_DIR}/mime_string.cxx
 		)
 
