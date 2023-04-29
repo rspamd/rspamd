@@ -1583,7 +1583,10 @@ rspamd_langelt_equal_func (gconstpointer v, gconstpointer v2)
 	return strcmp (elt1->name, elt2->name) == 0;
 }
 
-KHASH_INIT (rspamd_sw_hash, struct rspamd_language_elt *, int, 1,
+/* This hash set stores a word index in the language to avoid duplicate stop words */
+KHASH_INIT (rspamd_sw_res_set, int, char, 0, kh_int_hash_func, kh_int_hash_equal);
+
+KHASH_INIT (rspamd_sw_hash, struct rspamd_language_elt *, khash_t(rspamd_sw_res_set) *, 1,
 		rspamd_langelt_hash_func, rspamd_langelt_equal_func);
 
 struct rspamd_sw_cbdata {
@@ -1652,9 +1655,20 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	gint nwords = 1;
 
 	if (k != kh_end (cbdata->res)) {
-		nwords = ++ kh_value (cbdata->res, k);
+		khiter_t set_k;
+		int tt;
 
-		if (kh_value (cbdata->res, k) > max_stop_words) {
+		set_k = kh_get(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum);
+		nwords = kh_size(kh_value(cbdata->res, k));
+
+		if (set_k == kh_end(kh_value(cbdata->res, k))) {
+			/* New word */
+			set_k = kh_put(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum, &tt);
+			msg_debug_lang_det ("found new word %*s from %s language (%d stop words found so far)",
+				(int)(next - prev - 1), prev + 1, r->elt->name, nwords);
+		}
+
+		if (nwords > max_stop_words) {
 			return 1;
 		}
 	}
@@ -1662,11 +1676,12 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 		gint tt;
 
 		k = kh_put (rspamd_sw_hash, cbdata->res, r->elt, &tt);
-		kh_value (cbdata->res, k) = 1;
-	}
+		kh_value(cbdata->res, k) = kh_init(rspamd_sw_res_set);
+		kh_put(rspamd_sw_res_set, kh_value(cbdata->res, k), strnum, &tt);
 
-	msg_debug_lang_det ("found word %*s from %s language (%d stop words found so far)",
+		msg_debug_lang_det ("found new word %*s from %s language (%d stop words found so far)",
 			(int)(next - prev - 1), prev + 1, r->elt->name, nwords);
+	}
 
 	return 0;
 }
@@ -1693,13 +1708,15 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 			&cbdata, NULL);
 
 	if (kh_size (cbdata.res) > 0) {
-		gint cur_matches;
+		khash_t(rspamd_sw_res_set) *cur_res;
 		double max_rate = G_MINDOUBLE;
 		struct rspamd_language_elt *cur_lang, *sel = NULL;
 		gboolean ignore_ascii = FALSE, ignore_latin = FALSE;
 
 		again:
-		kh_foreach (cbdata.res, cur_lang, cur_matches, {
+		kh_foreach (cbdata.res, cur_lang, cur_res, {
+			int cur_matches = kh_size(cur_res);
+
 			if (!ignore_ascii && (cur_lang->flags & RS_LANGUAGE_DIACRITICS)) {
 				/* Restart matches */
 				ignore_ascii = TRUE;
@@ -1744,6 +1761,11 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 
 			msg_debug_lang_det ("found %d stop words from %s: %3f rate",
 					cur_matches, cur_lang->name, rate);
+		});
+
+		/* Cleanup */
+		kh_foreach (cbdata.res, cur_lang, cur_res, {
+			kh_destroy (rspamd_sw_res_set, cur_res);
 		});
 
 		if (max_rate > 0 && sel) {
