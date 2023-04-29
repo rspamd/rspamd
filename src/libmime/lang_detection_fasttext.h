@@ -28,6 +28,13 @@ struct rspamd_config;
 void* rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg);
 
 /**
+ * Check if fasttext language detector is enabled
+ * @param ud
+ * @return
+ */
+bool rspamd_lang_detection_fasttext_is_enabled(void *ud);
+
+/**
  * Show info about fasttext language detector
  * @param ud
  * @return
@@ -48,18 +55,24 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 		const char *in, size_t len, int k);
 
 /**
+ * Get number of languages detected
+ * @param ud
+ * @return
+ */
+guint rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t ud);
+/**
  * Get language from fasttext result
  * @param res
  * @return
  */
-const char *rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res);
+const char *rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res, unsigned int idx);
 
 /**
  * Get probability from fasttext result
  * @param res
  * @return
  */
-float rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res);
+float rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res, unsigned int idx);
 
 /**
  * Destroy fasttext result

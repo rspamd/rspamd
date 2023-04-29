@@ -72,8 +72,8 @@ public:
 
 	~fasttext_langdet() = default;
 
-
-	auto detect_language(const char *in, size_t len, int k) -> std::vector<std::pair<fasttext::real, std::string>> *
+	auto is_enabled() const -> bool { return loaded; }
+	auto detect_language(const char *in, size_t len, int k) const -> std::vector<std::pair<fasttext::real, std::string>> *
 	{
 		if (!loaded) {
 			return nullptr;
@@ -135,6 +135,19 @@ char *rspamd_lang_detection_fasttext_show_info(void *ud)
 #endif
 }
 
+bool rspamd_lang_detection_fasttext_is_enabled(void *ud)
+{
+#ifdef WITH_FASTTEXT
+	auto *real_model = FASTTEXT_MODEL_TO_C_API(ud);
+
+	if (real_model) {
+		return real_model->is_enabled();
+	}
+#endif
+
+	return false;
+}
+
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 											   const char *in, size_t len, int k)
 {
@@ -155,27 +168,41 @@ void rspamd_lang_detection_fasttext_destroy(void *ud)
 #endif
 }
 
-const char *
-rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res)
+
+guint
+rspamd_lang_detection_fasttext_get_nlangs(rspamd_fasttext_predict_result_t res)
 {
 #ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
-	if (real_res && !real_res->empty()) {
-		return real_res->front().second.c_str();
+	if (real_res) {
+		return real_res->size();
+	}
+#endif
+	return 0;
+}
+
+const char *
+rspamd_lang_detection_fasttext_get_lang(rspamd_fasttext_predict_result_t res, unsigned int idx)
+{
+#ifdef WITH_FASTTEXT
+	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
+
+	if (real_res && real_res->size() < idx) {
+		return real_res->at(idx).second.c_str();
 	}
 #endif
 	return nullptr;
 }
 
 float
-rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res)
+rspamd_lang_detection_fasttext_get_prob(rspamd_fasttext_predict_result_t res, unsigned int idx)
 {
 #ifdef WITH_FASTTEXT
 	auto *real_res = FASTTEXT_RESULT_TO_C_API(res);
 
-	if (real_res && !real_res->empty()) {
-		return real_res->front().first;
+	if (real_res && real_res->size() < idx) {
+		return real_res->at(idx).first;
 	}
 #endif
 	return 0.0f;
