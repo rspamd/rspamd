@@ -247,6 +247,7 @@ if(ENABLE_FASTTEXT MATCHES "ON")
 	ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext.h
 			INCLUDE_SUFFIXES include/fasttext
 			ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
+	SET(WITH_FASTTEXT "1")
 endif()
 
 include (CompilerWarnings)
