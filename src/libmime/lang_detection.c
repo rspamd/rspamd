@@ -183,6 +183,7 @@ struct rspamd_lang_detector {
 	khash_t(rspamd_stopwords_hash) *stop_words_norm;
 	UConverter *uchar_converter;
 	gsize short_text_limit;
+	bool prefer_fasttext;
 	gsize total_occurrences; /* number of all languages found */
 	gpointer fasttext_detector;
 	ref_entry_t ref;
@@ -792,6 +793,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	struct rspamd_lang_detector *ret = NULL;
 	struct ucl_parser *parser;
 	ucl_object_t *stop_words;
+	bool prefer_fasttext = true;
 
 	section = ucl_object_lookup (cfg->rcl_obj, "lang_detection");
 
@@ -810,6 +812,11 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 
 		languages_enable = ucl_object_lookup (section, "languages_enable");
 		languages_disable = ucl_object_lookup (section, "languages_disable");
+
+		elt = ucl_object_lookup(section, "prefer_fasttext");
+		if (elt) {
+			prefer_fasttext = ucl_object_toboolean (elt);
+		}
 	}
 
 	languages_pattern = g_string_sized_new (PATH_MAX);
@@ -843,6 +850,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	ret->uchar_converter = rspamd_get_utf8_converter ();
 	ret->short_text_limit = short_text_limit;
 	ret->stop_words_norm = kh_init (rspamd_stopwords_hash);
+	ret->prefer_fasttext = prefer_fasttext;
 
 	/* Map from ngramm in ucs32 to GPtrArray of rspamd_language_elt */
 	for (i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
@@ -1818,7 +1826,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	rspamd_language_detector_unicode_scripts (task, part, &nchinese, &nspecial);
 
 	/* Disable internal language detection heuristics if we have fasttext */
-	if (!rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector)) {
+	if (!rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector) || !d->prefer_fasttext) {
 		/* Apply unicode scripts heuristic */
 		if (rspamd_language_detector_try_uniscript(task, part, nchinese, nspecial)) {
 			ret = TRUE;

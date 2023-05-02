@@ -23,3 +23,6 @@
 # Use the following fasttext model for language detection (if Fasttext support is compiled in)
 # fasttext_model = "${RSPAMD_SHAREDIR}/languages/fasttext_model.ftz"
 
+# Prefer fasttext over all other methods
+# prefer_fasttext = true;
+
