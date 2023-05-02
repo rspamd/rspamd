@@ -1836,8 +1836,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		if (rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector)) {
 			rspamd_fasttext_predict_result_t fasttext_predict_result =
 				rspamd_lang_detection_fasttext_detect(d->fasttext_detector,
-					part->utf_stripped_content->data,
-					part->utf_stripped_content->len, 4);
+					part->utf_words, 4);
 
 			ndetected = rspamd_lang_detection_fasttext_get_nlangs(fasttext_predict_result);
 

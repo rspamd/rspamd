@@ -52,7 +52,7 @@ typedef  void * rspamd_fasttext_predict_result_t;
  * @return TRUE if language is detected
  */
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
-		const char *in, size_t len, int k);
+		GArray *utf_words, int k);
 
 /**
  * Get number of languages detected
