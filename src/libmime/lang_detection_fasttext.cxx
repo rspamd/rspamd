@@ -23,12 +23,18 @@
 #include "fmt/core.h"
 #include "stat_api.h"
 #include <exception>
-#include <string>
 #include <string_view>
 #include <vector>
 #endif
 
 #ifdef WITH_FASTTEXT
+
+EXTERN_LOG_MODULE_DEF(langdet);
+#define msg_debug_lang_det(...)  rspamd_conditional_debug_fast (nullptr, nullptr, \
+        rspamd_langdet_log_id, "langdet", task->task_pool->tag.uid, \
+        __FUNCTION__, \
+        __VA_ARGS__)
+
 namespace rspamd::langdet {
 class fasttext_langdet {
 private:
@@ -167,6 +173,7 @@ bool rspamd_lang_detection_fasttext_is_enabled(void *ud)
 }
 
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
+																	   struct rspamd_task *task,
 																	   GArray *utf_words,
 																	   int k)
 {
@@ -185,6 +192,8 @@ rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
 			real_model->word2vec(w->original.begin, w->original.len, words_vec);
 		}
 	}
+
+	msg_debug_lang_det("fasttext: got %z word tokens from %ud words", words_vec.size(), utf_words->len);
 
 	auto *res = real_model->detect_language(words_vec, k);
 

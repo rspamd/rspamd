@@ -168,6 +168,9 @@ gint rspamd_logger_add_debug_module (const gchar *mod);
         rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
 }
 
+#define EXTERN_LOG_MODULE_DEF(mname) \
+	extern gint rspamd_##mname##_log_id
+
 void rspamd_logger_configure_modules (GHashTable *mods_enabled);
 
 /**

@@ -20,6 +20,7 @@
 
 G_BEGIN_DECLS
 struct rspamd_config;
+struct rspamd_task; /* for logging */
 /**
  * Initialize fasttext language detector
  * @param cfg
@@ -52,7 +53,7 @@ typedef  void * rspamd_fasttext_predict_result_t;
  * @return TRUE if language is detected
  */
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
-		GArray *utf_words, int k);
+		struct rspamd_task *task, GArray *utf_words, int k);
 
 /**
  * Get number of languages detected

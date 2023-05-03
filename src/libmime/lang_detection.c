@@ -122,7 +122,7 @@ struct rspamd_stop_word_elt {
         G_STRFUNC, \
         __VA_ARGS__)
 
-INIT_LOG_MODULE(langdet)
+INIT_LOG_MODULE_PUBLIC(langdet)
 
 static const struct rspamd_language_unicode_match *
 rspamd_language_search_unicode_match (const gchar *key,
@@ -1843,7 +1843,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		unsigned ndetected = 0;
 		if (rspamd_lang_detection_fasttext_is_enabled(d->fasttext_detector)) {
 			rspamd_fasttext_predict_result_t fasttext_predict_result =
-				rspamd_lang_detection_fasttext_detect(d->fasttext_detector,
+				rspamd_lang_detection_fasttext_detect(d->fasttext_detector, task,
 					part->utf_words, 4);
 
 			ndetected = rspamd_lang_detection_fasttext_get_nlangs(fasttext_predict_result);
