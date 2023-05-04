@@ -1870,7 +1870,7 @@ static EV_ATOMIC_T have_realtime; /* did clock_gettime (CLOCK_REALTIME) work? */
 
 #if EV_USE_MONOTONIC
 static EV_ATOMIC_T have_monotonic; /* did clock_gettime (CLOCK_MONOTONIC) work? */
-static EV_ATOMIC_T monotinic_clock_id;
+static EV_ATOMIC_T monotonic_clock_id;
 #endif
 static EV_ATOMIC_T have_cheap_timer = 0;
 
@@ -2201,7 +2201,7 @@ get_clock (void)
   if (ecb_expect_true (have_monotonic))
     {
       struct timespec ts;
-      clock_gettime (monotinic_clock_id, &ts);
+      clock_gettime (monotonic_clock_id, &ts);
       return ((ev_tstamp)ts.tv_sec) + ts.tv_nsec * 1e-9;
     }
 #endif
@@ -3279,12 +3279,12 @@ loop_init (EV_P_ unsigned int flags) EV_NOEXCEPT
 
           if (!clock_gettime (CLOCK_MONOTONIC, &ts)) {
             have_monotonic = 1;
-            monotinic_clock_id = CLOCK_MONOTONIC;
+			  monotonic_clock_id = CLOCK_MONOTONIC;
 #define CHECK_CLOCK_SOURCE(id) do { \
   if (!clock_gettime ((id), &ts) && \
     !clock_getres ((id), &ts)) { \
     if (ts.tv_sec == 0 && ts.tv_nsec < 10ULL * 1000000) { \
-      monotinic_clock_id = (id); \
+      monotonic_clock_id = (id); \
       have_cheap_timer = 1; \
     } \
   } \
