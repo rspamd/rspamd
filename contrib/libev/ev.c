@@ -4130,6 +4130,7 @@ ev_run (EV_P_ int flags)
         if (ecb_expect_true (!(flags & EVRUN_NOWAIT || idleall || !activecnt || pipe_write_skipped)))
           {
             waittime = EV_TS_CONST (MAX_BLOCKTIME);
+#if EV_USE_MONOTONIC
             if (ecb_expect_true (have_monotonic)) {
 #if EV_USE_TIMERFD
             /* sleep a lot longer when we can reliably detect timejumps */
@@ -4143,7 +4144,7 @@ ev_run (EV_P_ int flags)
               waittime = EV_TS_CONST (MAX_BLOCKTIME2);
 #endif
             }
-
+#endif /* EV_USE_MONOTONIC */
             if (timercnt)
               {
                 ev_tstamp to = ANHE_at (timers [HEAP0]) - mn_now;
