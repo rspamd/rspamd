@@ -34,7 +34,7 @@ extern "C" {
  */
 const char* rspamd_string_unicode_trim_inplace (const char *str, size_t *len);
 
-enum rspamd_normalise_result {
+enum rspamd_utf8_normalise_result {
 	RSPAMD_UNICODE_NORM_NORMAL = 0,
 	RSPAMD_UNICODE_NORM_UNNORMAL = (1 << 0),
 	RSPAMD_UNICODE_NORM_ZERO_SPACES = (1 << 1),
@@ -49,7 +49,7 @@ enum rspamd_normalise_result {
  * @param len
  * @return TRUE if a string has been normalised
  */
-enum rspamd_normalise_result rspamd_normalise_unicode_inplace(gchar *start, gsize *len);
+enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(gchar *start, gsize *len);
 
 /**
  * Compare two strings using libicu collator

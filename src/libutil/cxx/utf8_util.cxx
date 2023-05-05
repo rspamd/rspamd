@@ -75,7 +75,7 @@ rspamd_string_unicode_trim_inplace (const char *str, size_t *len)
 	return ret;
 }
 
-enum rspamd_normalise_result
+enum rspamd_utf8_normalise_result
 rspamd_normalise_unicode_inplace(char *start, size_t *len)
 {
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -156,7 +156,7 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 		*len = filter_zw_spaces_and_push_back(uc_string);
 	}
 
-	return static_cast<enum rspamd_normalise_result>(ret);
+	return static_cast<enum rspamd_utf8_normalise_result>(ret);
 }
 
 struct rspamd_icu_collate_storage {

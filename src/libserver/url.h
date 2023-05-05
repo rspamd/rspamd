@@ -359,7 +359,7 @@ int rspamd_url_cmp_qsort(const void *u1, const void *u2);
  */
 #define rspamd_url_normalise_propagate_flags(pool, input, len_out, url_flags_out) \
   do {                                                                            \
-     enum rspamd_normalise_result norm_res;                                       \
+     enum rspamd_utf8_normalise_result norm_res;                                       \
      norm_res = rspamd_normalise_unicode_inplace((input), (len_out));     \
      if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                               \
        url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                             \

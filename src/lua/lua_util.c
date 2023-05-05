@@ -240,6 +240,19 @@ LUA_FUNCTION_DEF (util, strlen_utf8);
 LUA_FUNCTION_DEF (util, lower_utf8);
 
 /***
+ * @function util.normalize_utf8(str)
+ *  Gets a string in UTF8 and normalises it to NFKC_Casefold form
+ * @param {string} str utf8 encoded string
+ * @return {string,integer} lowercased utf8 string + result of the normalisation (use bit.band to check):
+ * RSPAMD_UNICODE_NORM_NORMAL = 0,
+ * RSPAMD_UNICODE_NORM_UNNORMAL = (1 << 0),
+ * RSPAMD_UNICODE_NORM_ZERO_SPACES = (1 << 1),
+ * RSPAMD_UNICODE_NORM_ERROR = (1 << 2),
+ * RSPAMD_UNICODE_NORM_OVERFLOW = (1 << 3)
+ */
+LUA_FUNCTION_DEF (util, normalize_utf8);
+
+/***
  * @function util.strequal_caseless(str1, str2)
  * Compares two strings regardless of their case using ascii comparison.
  * Returns `true` if `str1` is equal to `str2`
@@ -672,6 +685,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
 	LUA_INTERFACE_DEF (util, lower_utf8),
+	LUA_INTERFACE_DEF (util, normalize_utf8),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -1603,6 +1617,39 @@ lua_util_lower_utf8 (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_util_normalize_utf8 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	bool is_text = lua_type (L, 1) == LUA_TUSERDATA;
+
+	t = lua_check_text_or_string (L, 1);
+
+	if (!t) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	char *cpy = g_malloc (t->len + 1);
+	memcpy (cpy, t->start, t->len);
+	cpy[t->len] = '\0';
+	gsize len = t->len;
+	enum rspamd_utf8_normalise_result res = rspamd_normalise_unicode_inplace(cpy, &len);
+
+	if (is_text) {
+		struct rspamd_lua_text *out = lua_new_text (L, cpy, len, FALSE);
+		out->flags |= RSPAMD_TEXT_FLAG_OWN;
+	}
+	else {
+		lua_pushlstring(L, cpy, len);
+		g_free(cpy);
+	}
+
+	lua_pushinteger(L, res);
+
+	return 2;
 }
 
 static gint
