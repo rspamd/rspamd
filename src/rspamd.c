@@ -1328,6 +1328,11 @@ version (struct rspamd_main *rspamd_main)
 #else
 	rspamd_printf ("BLAS enabled: FALSE\n");
 #endif
+#ifdef WITH_FASTTEXT
+	rspamd_printf ("Fasttext enabled: TRUE\n");
+#else
+	rspamd_printf ("Fasttext enabled: FALSE\n");
+#endif
 }
 
 static gboolean
