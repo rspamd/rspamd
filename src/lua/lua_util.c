@@ -1296,28 +1296,13 @@ lua_util_decode_url (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
-	gsize inlen;
 
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		s = luaL_checklstring (L, 1, &inlen);
-	}
-	else if (lua_type (L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text (L, 1);
+	t = lua_check_text_or_string (L, 1);
 
-		if (t != NULL) {
-			s = t->start;
-			inlen = t->len;
-		}
-	}
+	if (t != NULL) {
+		struct rspamd_lua_text *out = lua_new_text(L, NULL, t->len, TRUE);
 
-	if (s != NULL) {
-		t = lua_newuserdata (L, sizeof (*t));
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = g_malloc (inlen);
-		memcpy ((char *)t->start, s, inlen);
-		t->len = rspamd_url_decode ((char *)t->start, s, inlen);
-		t->flags = RSPAMD_TEXT_FLAG_OWN;
+		out->len = rspamd_url_decode ((char *)out->start, t->start, t->len);
 	}
 	else {
 		lua_pushnil (L);
@@ -1354,21 +1339,22 @@ static gint
 lua_util_levenshtein_distance (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *s1, *s2;
-	gsize s1len, s2len;
+	struct rspamd_lua_text *t1, *t2;
 	gint dist = 0;
 	guint replace_cost = 1;
 
-	s1 = luaL_checklstring (L, 1, &s1len);
-	s2 = luaL_checklstring (L, 2, &s2len);
-
+	t1 = lua_check_text_or_string(L, 1);
+	t2 = lua_check_text_or_string(L, 2);
 	if (lua_isnumber (L, 3)) {
-		replace_cost = lua_tonumber (L, 3);
+		replace_cost = lua_tointeger(L, 3);
 	}
 
-	if (s1 && s2) {
-		dist = rspamd_strings_levenshtein_distance (s1, s1len, s2, s2len,
+	if (t1 && t2) {
+		dist = rspamd_strings_levenshtein_distance (t1->start, t1->len, t2->start, t2->len,
 				replace_cost);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
 	}
 
 	lua_pushinteger (L, dist);
@@ -1436,17 +1422,14 @@ static gint
 lua_util_is_uppercase (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str;
-	gsize sz;
 	gint32 i = 0;
 	UChar32 uc;
 	guint nlc = 0, nuc = 0;
 
-	str = luaL_checklstring (L, 1, &sz);
-
-	if (str && sz > 0) {
-		while (i >= 0 && i < sz) {
-			U8_NEXT (str, i, sz, uc);
+	struct rspamd_lua_text *t = lua_check_text_or_string(L, 1);
+	if (t) {
+		while (i >= 0 && i < t->len) {
+			U8_NEXT (t->start, i, t->len, uc);
 
 			if (uc < 0) {
 				break;
@@ -1475,11 +1458,11 @@ static gint
 lua_util_humanize_number (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble number = luaL_checknumber (L, 1);
+	gint64 number = luaL_checkinteger(L, 1);
 	gchar numbuf[32];
 
 
-	rspamd_snprintf (numbuf, sizeof (numbuf), "%hL", (gint64)number);
+	rspamd_snprintf (numbuf, sizeof (numbuf), "%hL", number);
 	lua_pushstring (L, numbuf);
 
 	return 1;
