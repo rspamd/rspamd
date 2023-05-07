@@ -1843,7 +1843,7 @@ lua_util_lock_file (lua_State *L)
 
 	if (fpath) {
 		if (lua_isnumber (L, 2)) {
-			fd = lua_tonumber (L, 2);
+			fd = lua_tointeger (L, 2);
 		}
 		else {
 			fd = open (fpath, O_RDONLY);
@@ -2064,23 +2064,15 @@ lua_util_caseless_hash (lua_State *L)
 	guint64 seed = 0xdeadbabe, h;
 	struct rspamd_lua_text *t = NULL;
 	gint64 *r;
-	gsize sz;
 
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		t = g_alloca (sizeof (*t));
-		t->start = lua_tolstring (L, 1, &sz);
-		t->len = sz;
-	}
-	else {
-		t = lua_check_text (L, 1);
-	}
+	t = lua_check_text_or_string (L, 1);
 
 	if (t == NULL || t->start == NULL) {
 		return luaL_error (L, "invalid arguments");
 	}
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
-		seed = lua_tonumber (L, 2);
+		seed = lua_tointeger (L, 2);
 	}
 	else if (lua_type (L, 2) == LUA_TUSERDATA) {
 		seed = lua_check_int64 (L, 2);
@@ -2100,27 +2092,19 @@ lua_util_caseless_hash_fast (lua_State *L)
 	LUA_TRACE_POINT;
 	guint64 seed = 0xdeadbabe, h;
 	struct rspamd_lua_text *t = NULL;
-	gsize sz;
 	union {
 		guint64 i;
 		double d;
 	} u;
 
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		t = g_alloca (sizeof (*t));
-		t->start = lua_tolstring (L, 1, &sz);
-		t->len = sz;
-	}
-	else {
-		t = lua_check_text (L, 1);
-	}
+	t = lua_check_text_or_string (L, 1);
 
 	if (t == NULL || t->start == NULL) {
 		return luaL_error (L, "invalid arguments");
 	}
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
-		seed = lua_tonumber (L, 2);
+		seed = lua_tointeger (L, 2);
 	}
 	else if (lua_type (L, 2) == LUA_TUSERDATA) {
 		seed = lua_check_int64 (L, 2);
@@ -2274,19 +2258,21 @@ static gint
 lua_util_get_string_stats (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gsize len_of_string;
 	gint num_of_digits = 0, num_of_letters = 0;
-	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	struct rspamd_lua_text *t;
 
-	if (string_to_check) {
-		while (*string_to_check != '\0') {
-			if (g_ascii_isdigit(*string_to_check)) {
+	t = lua_check_text_or_string (L, 1);
+
+	if (t) {
+		const gchar *p = t->start, *end = t->start + t->len;
+		while (p < end) {
+			if (g_ascii_isdigit(*p)) {
 				num_of_digits++;
 			}
-			else if (g_ascii_isalpha(*string_to_check)) {
+			else if (g_ascii_isalpha(*p)) {
 				num_of_letters++;
 			}
-			string_to_check++;
+			p++;
 		}
 	}
 	else {
@@ -2309,9 +2295,8 @@ static gint
 lua_util_is_utf_outside_range (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gsize len_of_string;
 	gint ret;
-	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	struct rspamd_lua_text *t = lua_check_text_or_string (L, 1);
 	guint32 range_start = lua_tointeger (L, 2);
 	guint32 range_end = lua_tointeger (L, 3);
 
@@ -2321,7 +2306,7 @@ lua_util_is_utf_outside_range (lua_State *L)
 		validators = rspamd_lru_hash_new_full (16, g_free, (GDestroyNotify) uspoof_close, g_int64_hash, g_int64_equal);
 	}
 
-	if (string_to_check) {
+	if (t) {
 		guint64 hash_key = (guint64) range_end << 32 || range_start;
 
 		USpoofChecker *validator = rspamd_lru_hash_lookup (validators, &hash_key, 0);
@@ -2364,7 +2349,7 @@ lua_util_is_utf_outside_range (lua_State *L)
 		}
 
 		gint32 pos = 0;
-		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, &pos,
+		ret = uspoof_checkUTF8 (validator, t->start, t->len, &pos,
 				&uc_err);
 	}
 	else {
@@ -2432,33 +2417,17 @@ static gint
 lua_util_is_valid_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str;
-	gsize len;
+	struct rspamd_lua_text *t = lua_check_text_or_string (L, 1);
 
-	if (lua_isstring (L, 1)) {
-		str = lua_tolstring (L, 1, &len);
-	}
-	else {
-		struct rspamd_lua_text *t = lua_check_text (L, 1);
-
-		if (t) {
-			str = t->start;
-			len = t->len;
-		}
-		else {
-			return luaL_error (L, "invalid arguments (text expected)");
-		}
-	}
-
-	if (str) {
-		goffset error_offset = rspamd_fast_utf8_validate (str, len);
+	if (t) {
+		goffset error_offset = rspamd_fast_utf8_validate (t->start, t->len);
 
 		if (error_offset == 0) {
 			lua_pushboolean (L, true);
 		}
 		else {
 			lua_pushboolean (L, false);
-			lua_pushnumber (L, error_offset);
+			lua_pushinteger (L, error_offset);
 
 			return 2;
 		}
@@ -2474,22 +2443,20 @@ static gint
 lua_util_has_obscured_unicode (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str;
-	gsize len;
 	gint32 i = 0, prev_i;
 	UChar32 uc;
 
-	str = lua_tolstring (L, 1, &len);
+	struct rspamd_lua_text *t = lua_check_text_or_string (L, 1);
 
-	while (i < len) {
+	while (i < t->len) {
 		prev_i = i;
-		U8_NEXT (str, i, len, uc);
+		U8_NEXT (t->start, i, t->len, uc);
 
 		if (uc > 0) {
 			if (IS_OBSCURED_CHAR (uc)) {
 				lua_pushboolean (L, true);
-				lua_pushnumber (L, uc); /* Character */
-				lua_pushnumber (L, prev_i); /* Offset */
+				lua_pushinteger (L, uc); /* Character */
+				lua_pushinteger (L, prev_i); /* Offset */
 
 				return 3;
 			}
@@ -2682,7 +2649,7 @@ lua_util_umask (lua_State *L)
 		}
 	}
 	else if (lua_type (L, 1) == LUA_TNUMBER) {
-		mask = lua_tonumber (L, 1);
+		mask = lua_tointeger(L, 1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
