@@ -1927,7 +1927,7 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 }
 
 static ucl_object_t *
-rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
+rspamd_fuzzy_storage_stat_key (const struct fuzzy_key_stat *key_stat)
 {
 	ucl_object_t *res;
 
@@ -1989,6 +1989,19 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 				}
 				ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
 			}
+
+			int flag;
+			struct fuzzy_key_stat *flag_stat;
+			ucl_object_t *flags_ucl = ucl_object_typed_new(UCL_OBJECT);
+
+			kh_foreach_key_value_ptr(fuzzy_key->flags_stat, flag, flag_stat, {
+				char intbuf[16];
+				rspamd_snprintf(intbuf, sizeof(intbuf), "%d", flag);
+				ucl_object_insert_key (flags_ucl, rspamd_fuzzy_storage_stat_key (flag_stat),
+					intbuf, 0, true);
+			});
+
+			ucl_object_insert_key (elt, flags_ucl, "flags", 0, false);
 
 			ucl_object_insert_key (elt,
 				rspamd_keypair_to_ucl (fuzzy_key->key, RSPAMD_KEYPAIR_DUMP_NO_SECRET|RSPAMD_KEYPAIR_DUMP_FLATTENED),
