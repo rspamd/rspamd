@@ -96,6 +96,7 @@ struct fuzzy_key_stat {
 	guint64 last_matched_count;
 	struct rspamd_cryptobox_keypair *keypair;
 	rspamd_lru_hash_t *last_ips;
+
 	ref_entry_t ref;
 };
 
@@ -205,10 +206,13 @@ struct fuzzy_peer_request {
 	struct fuzzy_peer_cmd cmd;
 };
 
+KHASH_INIT(fuzzy_key_flag_stat, int, struct fuzzy_key_stat, 1, kh_int_hash_func,
+	kh_int_hash_equal);
 struct fuzzy_key {
 	struct rspamd_cryptobox_keypair *key;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct fuzzy_key_stat *stat;
+	khash_t(fuzzy_key_flag_stat) *flags_stat;
 	khash_t(fuzzy_key_forbidden_ids) *forbidden_ids;
 };
 
@@ -440,6 +444,10 @@ fuzzy_key_dtor (gpointer p)
 			REF_RELEASE (key->stat);
 		}
 
+		if (key->flags_stat) {
+			kh_destroy(fuzzy_key_flag_stat, key->flags_stat);
+		}
+
 		if (key->forbidden_ids) {
 			kh_destroy(fuzzy_key_forbidden_ids, key->forbidden_ids);
 		}
@@ -665,15 +673,58 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session)
 }
 
 static void
+rspamd_fuzzy_update_key_stat(gboolean matched,
+							 struct fuzzy_key_stat *key_stat,
+							 guint cmd,
+							 struct rspamd_fuzzy_reply *res,
+							 ev_tstamp timestamp)
+{
+	if (!matched && res->v1.value != 0) {
+		key_stat->errors ++;
+	}
+	else {
+		if (cmd == FUZZY_CHECK) {
+			key_stat->checked++;
+
+			if (matched) {
+				key_stat->matched ++;
+			}
+
+			if (G_UNLIKELY(key_stat->last_checked_time == 0.0)) {
+				key_stat->last_checked_time = timestamp;
+				key_stat->last_checked_count = key_stat->checked;
+				key_stat->last_matched_count = key_stat->matched;
+			}
+			else if (G_UNLIKELY(timestamp > key_stat->last_checked_time + KEY_STAT_INTERVAL)) {
+				guint64 nchecked = key_stat->checked - key_stat->last_checked_count;
+				guint64 nmatched = key_stat->matched - key_stat->last_matched_count;
+
+				rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5);
+				rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5);
+				key_stat->last_checked_time = timestamp;
+				key_stat->last_checked_count = key_stat->checked;
+				key_stat->last_matched_count = key_stat->matched;
+			}
+		}
+		else if (cmd == FUZZY_WRITE) {
+			key_stat->added++;
+		}
+		else if (cmd == FUZZY_DEL) {
+			key_stat->deleted++;
+		}
+	}
+}
+
+static void
 rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 		enum rspamd_fuzzy_epoch epoch,
 		gboolean matched,
 		gboolean is_shingle,
 		gboolean is_delayed,
-		struct fuzzy_key_stat *key_stat,
+		struct fuzzy_key *key,
 		struct fuzzy_key_stat *ip_stat,
 		guint cmd,
-		guint reply,
+		struct rspamd_fuzzy_reply *res,
 		ev_tstamp timestamp)
 {
 	ctx->stat.fuzzy_hashes_checked[epoch] ++;
@@ -688,45 +739,27 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 		ctx->stat.delayed_hashes ++;
 	}
 
-	if (key_stat) {
-		if (!matched && reply != 0) {
-			key_stat->errors ++;
+	if (key) {
+		rspamd_fuzzy_update_key_stat(matched, key->stat, cmd, res, timestamp);
+
+		/* Update per flag stats */
+		khiter_t k;
+		struct fuzzy_key_stat *flag_stat;
+		k = kh_get(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag);
+
+		if (k == kh_end(key->flags_stat)) {
+			/* Insert new flag */
+			int r;
+			k = kh_put(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag, &r);
+			memset(&kh_value(key->flags_stat, k), 0, sizeof(struct fuzzy_key_stat));
 		}
-		else {
-			if (cmd == FUZZY_CHECK) {
-				key_stat->checked++;
 
-				if (matched) {
-					key_stat->matched ++;
-				}
-
-				if (G_UNLIKELY(key_stat->last_checked_time == 0.0)) {
-					key_stat->last_checked_time = timestamp;
-					key_stat->last_checked_count = key_stat->checked;
-					key_stat->last_matched_count = key_stat->matched;
-				}
-				else if (G_UNLIKELY(timestamp > key_stat->last_checked_time + KEY_STAT_INTERVAL)) {
-					guint64 nchecked = key_stat->checked - key_stat->last_checked_count;
-					guint64 nmatched = key_stat->matched - key_stat->last_matched_count;
-
-					rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5);
-					rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5);
-					key_stat->last_checked_time = timestamp;
-					key_stat->last_checked_count = key_stat->checked;
-					key_stat->last_matched_count = key_stat->matched;
-				}
-			}
-			else if (cmd == FUZZY_WRITE) {
-				key_stat->added++;
-			}
-			else if (cmd == FUZZY_DEL) {
-				key_stat->deleted++;
-			}
-		}
+		flag_stat = &kh_value(key->flags_stat, k);
+		rspamd_fuzzy_update_key_stat(matched, flag_stat, cmd, res, timestamp);
 	}
 
 	if (ip_stat) {
-		if (!matched && reply != 0) {
+		if (!matched && res->v1.value != 0) {
 			ip_stat->errors++;
 		}
 		else {
@@ -770,10 +803,10 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				result->v1.prob > 0.5,
 				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
 				flags & RSPAMD_FUZZY_REPLY_DELAY,
-				session->key ? session->key->stat : NULL,
+				session->key,
 				session->ip_stat,
 				cmd->cmd,
-				result->v1.value,
+				result,
 				session->timestamp);
 
 		if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
@@ -2308,10 +2341,13 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 				fuzzy_key_stat_unref,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
+		key->flags_stat = kh_init(fuzzy_key_flag_stat);
+		/* Preallocate some space for flags */
+		kh_resize(fuzzy_key_flag_stat, key->flags_stat, 8);
 		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
 				NULL);
 		keystat->keypair = rspamd_keypair_ref(kp);
-		/* We map entries by pubkey in binary form for speed lookup */
+		/* We map entries by pubkey in binary form for faster lookup */
 		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
 
