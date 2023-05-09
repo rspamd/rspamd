@@ -291,6 +291,16 @@ return function(args, res)
           end
         end
 
+        if key_stat.flags then
+          print('')
+          print('\tFlags stat:')
+          for flag,v in ipairs(key_stat.flags) do
+            print(string.format('\t%s', flag))
+            print_stat(v, '\t\t')
+            print('')
+          end
+        end
+
         print('')
       end
     end
