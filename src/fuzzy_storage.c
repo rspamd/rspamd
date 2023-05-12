@@ -859,6 +859,20 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 				len = sizeof (session->reply.rep.v1);
 			}
 
+			/* Update stats before encryption */
+			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
+				rspamd_fuzzy_update_stats(session->ctx,
+					session->epoch,
+					session->reply.rep.v1.prob > 0.5f,
+					flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+					flags & RSPAMD_FUZZY_REPLY_DELAY,
+					session->key,
+					session->ip_stat,
+					cmd->cmd,
+					&session->reply.rep,
+					session->timestamp);
+			}
+
 			rspamd_cryptobox_encrypt_nm_inplace ((guchar *)&session->reply.rep,
 					len,
 					session->reply.hdr.nonce,
@@ -873,18 +887,19 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.value = 0;
 			session->reply.rep.v1.flag = 0;
 		}
-
-		if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
-			rspamd_fuzzy_update_stats(session->ctx,
-				session->epoch,
-				session->reply.rep.v1.prob > 0.5f,
-				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
-				flags & RSPAMD_FUZZY_REPLY_DELAY,
-				session->key,
-				session->ip_stat,
-				cmd->cmd,
-				&session->reply.rep,
-				session->timestamp);
+		if (!(flags & RSPAMD_FUZZY_REPLY_ENCRYPTED)) {
+			if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
+				rspamd_fuzzy_update_stats(session->ctx,
+					session->epoch,
+					session->reply.rep.v1.prob > 0.5f,
+					flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+					flags & RSPAMD_FUZZY_REPLY_DELAY,
+					session->key,
+					session->ip_stat,
+					cmd->cmd,
+					&session->reply.rep,
+					session->timestamp);
+			}
 		}
 	}
 
