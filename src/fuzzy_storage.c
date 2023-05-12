@@ -700,7 +700,7 @@ rspamd_fuzzy_update_key_stat(gboolean matched,
 				guint64 nmatched = key_stat->matched - key_stat->last_matched_count;
 
 				rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5f);
-				rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5f);
+				rspamd_set_counter_ema (&key_stat->matched_ctr, nmatched, 0.5f);
 				key_stat->last_checked_time = timestamp;
 				key_stat->last_checked_count = key_stat->checked;
 				key_stat->last_matched_count = key_stat->matched;
