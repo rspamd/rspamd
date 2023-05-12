@@ -57,10 +57,14 @@ local function add_data(target, src)
 end
 
 local function print_num(num)
-  if opts['n'] or opts['number'] then
-    return tostring(num)
+  if num then
+    if opts['n'] or opts['number'] then
+      return tostring(num)
+    else
+      return rspamd_util.humanize_number(num)
+    end
   else
-    return rspamd_util.humanize_number(num)
+    return 'na'
   end
 end
 
@@ -301,8 +305,10 @@ return function(args, res)
         if key_stat.flags then
           print('')
           print('\tFlags stat:')
-          for flag,v in ipairs(key_stat.flags) do
-            print(string.format('\t%s', flag))
+          for flag,v in pairs(key_stat.flags) do
+            print(string.format('\t[%s]:', flag))
+            -- Remove irrelevant fields
+            v.checked = nil
             print_stat(v, '\t\t')
             print('')
           end
@@ -331,7 +337,7 @@ return function(args, res)
     print('')
     print('IPs statistics:')
 
-    local sorted_ips = sort_hash_table(res_ips, opts)
+    local sorted_ips = sort_hash_table(res_ips, opts, 'ip')
     for _, v in ipairs(sorted_ips) do
       print(string.format('%s', v['ip']))
       print_stat(v['data'], '\t')
