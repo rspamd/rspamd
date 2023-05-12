@@ -874,16 +874,18 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.flag = 0;
 		}
 
-		rspamd_fuzzy_update_stats (session->ctx,
-			session->epoch,
-			session->reply.rep.v1.prob > 0.5f,
-			flags & RSPAMD_FUZZY_REPLY_SHINGLE,
-			flags & RSPAMD_FUZZY_REPLY_DELAY,
-			session->key,
-			session->ip_stat,
-			cmd->cmd,
-			&session->reply.rep,
-			session->timestamp);
+		if (cmd->cmd != FUZZY_STAT && cmd->cmd <= FUZZY_CLIENT_MAX) {
+			rspamd_fuzzy_update_stats(session->ctx,
+				session->epoch,
+				session->reply.rep.v1.prob > 0.5f,
+				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+				flags & RSPAMD_FUZZY_REPLY_DELAY,
+				session->key,
+				session->ip_stat,
+				cmd->cmd,
+				&session->reply.rep,
+				session->timestamp);
+		}
 	}
 
 	rspamd_fuzzy_write_reply (session);
