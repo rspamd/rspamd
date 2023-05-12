@@ -699,8 +699,8 @@ rspamd_fuzzy_update_key_stat(gboolean matched,
 				guint64 nchecked = key_stat->checked - key_stat->last_checked_count;
 				guint64 nmatched = key_stat->matched - key_stat->last_matched_count;
 
-				rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5);
-				rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5);
+				rspamd_set_counter_ema (&key_stat->checked_ctr, nchecked, 0.5f);
+				rspamd_set_counter_ema (&key_stat->checked_ctr, nmatched, 0.5f);
 				key_stat->last_checked_time = timestamp;
 				key_stat->last_checked_count = key_stat->checked;
 				key_stat->last_matched_count = key_stat->matched;
@@ -742,20 +742,22 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 	if (key) {
 		rspamd_fuzzy_update_key_stat(matched, key->stat, cmd, res, timestamp);
 
-		/* Update per flag stats */
-		khiter_t k;
-		struct fuzzy_key_stat *flag_stat;
-		k = kh_get(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag);
+		if (matched || ((cmd == FUZZY_WRITE || cmd == FUZZY_DEL) && res->v1.value == 0)) {
+			/* Update per flag stats */
+			khiter_t k;
+			struct fuzzy_key_stat *flag_stat;
+			k = kh_get(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag);
 
-		if (k == kh_end(key->flags_stat)) {
-			/* Insert new flag */
-			int r;
-			k = kh_put(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag, &r);
-			memset(&kh_value(key->flags_stat, k), 0, sizeof(struct fuzzy_key_stat));
+			if (k == kh_end(key->flags_stat)) {
+				/* Insert new flag */
+				int r;
+				k = kh_put(fuzzy_key_flag_stat, key->flags_stat, res->v1.flag, &r);
+				memset(&kh_value(key->flags_stat, k), 0, sizeof(struct fuzzy_key_stat));
+			}
+
+			flag_stat = &kh_value(key->flags_stat, k);
+			rspamd_fuzzy_update_key_stat(matched, flag_stat, cmd, res, timestamp);
 		}
-
-		flag_stat = &kh_value(key->flags_stat, k);
-		rspamd_fuzzy_update_key_stat(matched, flag_stat, cmd, res, timestamp);
 	}
 
 	if (ip_stat) {
@@ -798,21 +800,10 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		result->v1.tag = cmd->tag;
 		memcpy (&session->reply.rep, result, sizeof (*result));
 
-		rspamd_fuzzy_update_stats (session->ctx,
-				session->epoch,
-				result->v1.prob > 0.5,
-				flags & RSPAMD_FUZZY_REPLY_SHINGLE,
-				flags & RSPAMD_FUZZY_REPLY_DELAY,
-				session->key,
-				session->ip_stat,
-				cmd->cmd,
-				result,
-				session->timestamp);
-
 		if (flags & RSPAMD_FUZZY_REPLY_DELAY) {
 			/* Hash is too fresh, need to delay it */
 			session->reply.rep.ts = 0;
-			session->reply.rep.v1.prob = 0.0;
+			session->reply.rep.v1.prob = 0.0f;
 			session->reply.rep.v1.value = 0;
 		}
 
@@ -882,6 +873,17 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			session->reply.rep.v1.value = 0;
 			session->reply.rep.v1.flag = 0;
 		}
+
+		rspamd_fuzzy_update_stats (session->ctx,
+			session->epoch,
+			session->reply.rep.v1.prob > 0.5f,
+			flags & RSPAMD_FUZZY_REPLY_SHINGLE,
+			flags & RSPAMD_FUZZY_REPLY_DELAY,
+			session->key,
+			session->ip_stat,
+			cmd->cmd,
+			&session->reply.rep,
+			session->timestamp);
 	}
 
 	rspamd_fuzzy_write_reply (session);
