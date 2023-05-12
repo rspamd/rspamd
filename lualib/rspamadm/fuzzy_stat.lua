@@ -39,6 +39,13 @@ local function add_data(target, src)
         if not target['ips'][ip] then target['ips'][ip] = {} end
         add_data(target['ips'][ip], st)
       end
+    elseif k == 'flags' then
+      if not target['flags'] then target['flags'] = {} end
+      -- Iterate over Flags
+      for flag,st in pairs(v) do
+        if not target['flags'][flag] then target['flags'][flag] = {} end
+        add_data(target['flags'][flag], st)
+      end
     elseif k == 'keypair' then
       if type(v.extensions) == 'table' then
         if type(v.extensions.name) == 'string' then
