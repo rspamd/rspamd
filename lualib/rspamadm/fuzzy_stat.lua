@@ -78,11 +78,21 @@ local function print_stat(st, tabs)
     end
   end
   if st['matched'] then
-    if st.matched_per_hour then
-      print(string.format('%sMatched: %s (%s per hour in average)', tabs,
-          print_num(st['matched']), print_num(st['matched_per_hour'])))
+    if st.checked and st.checked > 0 and st.checked <= st.matched then
+      local percentage = st.matched / st.checked * 100.0
+      if st.matched_per_hour then
+        print(string.format('%sMatched: %s - %s percent (%s per hour in average)', tabs,
+            print_num(st['matched']), percentage, print_num(st['matched_per_hour'])))
+      else
+        print(string.format('%sMatched: %s - %s percent', tabs, print_num(st['matched']), percentage))
+      end
     else
-      print(string.format('%sMatched: %s', tabs, print_num(st['matched'])))
+      if st.matched_per_hour then
+        print(string.format('%sMatched: %s (%s per hour in average)', tabs,
+            print_num(st['matched']), print_num(st['matched_per_hour'])))
+      else
+        print(string.format('%sMatched: %s', tabs, print_num(st['matched'])))
+      end
     end
   end
   if st['errors'] then
