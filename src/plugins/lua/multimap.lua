@@ -521,8 +521,10 @@ local function multimap_callback(task, rule)
         local symbol = sym_start * sym_elt ^0
         local symbol_cap = lpeg.Cg(symbol, 'symbol')
         local score_cap = lpeg.Cg(number.decimal, 'score')
+        local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol))^0), 'opts')
         local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
-        local grammar = symscore_cap + symbol_cap + score_cap
+        local symscoreopt_cap = symscore_cap * lpeg.P(":") * opts_cap
+        local grammar = symscoreopt_cap + symscore_cap + symbol_cap + score_cap
         multimap_grammar = lpeg.Ct(grammar)
       end
       local tbl = multimap_grammar:match(p_ret)
@@ -530,32 +532,36 @@ local function multimap_callback(task, rule)
       if tbl then
         local sym
         local score = 1.0
+        local opts = {}
 
-        if tbl['symbol'] then
-          sym = tbl['symbol']
+        if tbl.symbol then
+          sym = tbl.symbol
         end
-        if tbl['score'] then
-          score = tbl['score']
+        if tbl.score then
+          score = tbl.score
+        end
+        if tbl.opts then
+          opts = tbl.opts
         end
 
-        return true,sym,score
+        return true,sym,score,opts
       else
         if p_ret ~= '' then
           rspamd_logger.infox(task, '%s: cannot parse string "%s"',
               parse_rule.symbol, p_ret)
         end
 
-        return true,nil,1.0
+        return true,nil,1.0,{}
       end
     elseif type(p_ret) == 'boolean' then
-      return p_ret,nil,1.0
+      return p_ret,nil,1.0,{}
     end
 
-    return false,nil,0.0
+    return false,nil,0.0,{}
   end
 
   local function insert_results(result, opt)
-    local _,symbol,score = parse_ret(rule, result)
+    local _,symbol,score,opts = parse_ret(rule, result)
     local forced = false
     if symbol then
       if rule.symbols_set then
@@ -581,15 +587,20 @@ local function multimap_callback(task, rule)
       symbol = rule.symbol
     end
 
-    if opt then
-      if type(opt) == 'table' then
-        task:insert_result(forced, symbol, score, fun.totable(fun.map(tostring, opt)))
-      else
-        task:insert_result(forced, symbol, score, tostring(opt))
-      end
-
+    if opts and #opts > 0 then
+      -- Options come from the map itself
+      task:insert_result(forced, symbol, score, opts)
     else
-      task:insert_result(forced, symbol, score)
+      if opt then
+        if type(opt) == 'table' then
+          task:insert_result(forced, symbol, score, fun.totable(fun.map(tostring, opt)))
+        else
+          task:insert_result(forced, symbol, score, tostring(opt))
+        end
+
+      else
+        task:insert_result(forced, symbol, score)
+      end
     end
 
     if rule.action then
