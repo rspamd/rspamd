@@ -272,7 +272,8 @@ detect_priv (struct rspamd_main *rspamd_main)
 				rspamd_main->workers_gid = grp->gr_gid;
 			}
 			else {
-				rspamd_main->workers_gid = (gid_t)-1;
+				/* Use the main group of user */
+				rspamd_main->workers_gid = pwd->pw_gid;
 			}
 			rspamd_main->workers_uid = pwd->pw_uid;
 		}
