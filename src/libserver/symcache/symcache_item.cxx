@@ -599,7 +599,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 			return check_trivial(SYMBOL_TYPE_VIRTUAL, symcache_item_type::VIRTUAL);
 		}
 
-		return tl::make_unexpected(fmt::format("internal error: impossible flags combination", type));
+		return tl::make_unexpected(fmt::format("internal error: impossible flags combination: {}", (int)type));
 	}
 
 	/* Maybe check other flags combination here? */
