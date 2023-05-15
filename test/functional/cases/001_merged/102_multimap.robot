@@ -167,6 +167,11 @@ MAP - MULSYM SYMBOL + SCORE
   ...   Settings={symbols_enabled = [RCPT_MAP, SYM1]}
   Expect Symbol With Score  SYM1  -10.1
 
+MAP - MULSYM SYMBOL + SCORE + OPTS
+  Scan File  ${MESSAGE}  Rcpt=user6@example.com
+  ...   Settings={symbols_enabled = [RCPT_MAP, SYM1]}
+  Expect Symbol With Score And Exact Options  SYM1  -10.1  opt1  opt2
+
 MAP - UTF
   Scan File  ${UTF_MESSAGE}
   ...   Settings={symbols_enabled = [HEADER_MAP]}

@@ -8,3 +8,5 @@ user3@example.com SYM1
 user4@example.com SYM2
 #symbol + score
 user5@example.com SYM1:-10.1
+#symbol + score + options
+user6@example.com SYM1:-10.1:opt1,opt2
