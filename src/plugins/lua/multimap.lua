@@ -538,7 +538,7 @@ local function multimap_callback(task, rule)
           sym = tbl.symbol
         end
         if tbl.score then
-          score = tbl.score
+          score = tonumber(tbl.score)
         end
         if tbl.opts then
           opts = tbl.opts
