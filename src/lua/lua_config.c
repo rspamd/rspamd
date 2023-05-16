@@ -2729,7 +2729,7 @@ lua_config_newindex (lua_State *L)
 
 			/* Deal with flags and ids */
 			lua_pushstring (L, "flags");
-			lua_gettable (L, 2);
+			lua_gettable (L, -2);
 			if (lua_type(L, -1) == LUA_TSTRING) {
 				flags = lua_parse_symbol_flags (lua_tostring (L, -1));
 			}
@@ -2741,7 +2741,7 @@ lua_config_newindex (lua_State *L)
 			lua_pop (L, 1); /* Clean flags */
 
 			lua_pushstring(L, "allowed_ids");
-			lua_gettable (L, 2);
+			lua_gettable (L, -2);
 			if (lua_type(L, -1) == LUA_TSTRING) {
 				allowed_ids = rspamd_process_id_list(lua_tostring (L, -1));
 			}
@@ -2751,6 +2751,21 @@ lua_config_newindex (lua_State *L)
 				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 					guint32 v = lua_tointeger(L, -1);
 					g_array_append_val(allowed_ids, v);
+				}
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring(L, "forbidden_ids");
+			lua_gettable (L, -2);
+			if (lua_type(L, -1) == LUA_TSTRING) {
+				forbidden_ids = rspamd_process_id_list(lua_tostring (L, -1));
+			}
+			else if (lua_type(L, -1) == LUA_TTABLE) {
+				forbidden_ids = g_array_sized_new(FALSE, FALSE, sizeof (guint32),
+					rspamd_lua_table_size(L, -1));
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+					guint32 v = lua_tointeger(L, -1);
+					g_array_append_val(forbidden_ids, v);
 				}
 			}
 			lua_pop (L, 1);
