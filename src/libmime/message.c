@@ -666,7 +666,14 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				gtube_pattern_no_action,
 				RSPAMD_MULTIPATTERN_DEFAULT);
 
-		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
+		GError *err = NULL;
+		rspamd_multipattern_compile (gtube_matcher, &err);
+
+		if (err != NULL) {
+			/* It will be expensive, but I don't care, still better than to abort */
+			msg_err ("cannot compile gtube matcher: %s", err->message);
+			g_error_free (err);
+		}
 	}
 
 	if (part->utf_content.len >= sizeof (gtube_pattern_reject) &&

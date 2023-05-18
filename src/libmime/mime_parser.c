@@ -167,7 +167,13 @@ rspamd_mime_parser_init_lib (void)
 	g_assert (lib_ctx->mp_boundary != NULL);
 	rspamd_multipattern_add_pattern (lib_ctx->mp_boundary, "\r--", 0);
 	rspamd_multipattern_add_pattern (lib_ctx->mp_boundary, "\n--", 0);
-	g_assert (rspamd_multipattern_compile (lib_ctx->mp_boundary, NULL));
+
+	GError *err = NULL;
+	if (!rspamd_multipattern_compile (lib_ctx->mp_boundary, &err)) {
+		msg_err ("fatal error: cannot compile multipattern for mime parser boundaries: %e", err);
+		g_error_free (err);
+		g_abort();
+	}
 	ottery_rand_bytes (lib_ctx->hkey, sizeof (lib_ctx->hkey));
 }
 

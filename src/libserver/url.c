@@ -630,7 +630,7 @@ rspamd_url_init (const gchar *tld_file)
 	if (url_scanner->search_trie_full) {
 		if (!rspamd_multipattern_compile (url_scanner->search_trie_full, &err)) {
 			msg_err ("cannot compile tld patterns, url matching will be "
-					 "broken completely: %e", err);
+					 "incomplete: %e", err);
 			g_error_free (err);
 			ret = FALSE;
 		}
