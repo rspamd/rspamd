@@ -3950,7 +3950,6 @@ fuzzy_lua_gen_hashes_handler (lua_State *L)
 	}
 	else if (lua_type (L, 2) == LUA_TSTRING) {
 		struct fuzzy_rule *rule;
-		guint i;
 		GHashTableIter it;
 		gpointer k, v;
 		struct fuzzy_mapping *map;
