@@ -1351,10 +1351,11 @@ read_pass_tmp_sig_handler (int s)
 #endif
 
 gint
-rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key)
+rspamd_read_passphrase_with_prompt (const gchar *prompt, gchar *buf, gint size, bool echo, gpointer key)
 {
 #ifdef HAVE_READPASSPHRASE_H
-	if (readpassphrase ("Enter passphrase: ", buf, size, RPP_ECHO_OFF |
+	int flags = echo ? RPP_ECHO_ON : RPP_ECHO_OFF;
+	if (readpassphrase (prompt, buf, size, flags |
 		RPP_REQUIRE_TTY) == NULL) {
 		return 0;
 	}
@@ -1383,7 +1384,10 @@ restart:
 	}
 
 	memcpy (&term, &oterm, sizeof(term));
-	term.c_lflag &= ~(ECHO | ECHONL);
+
+	if (!echo) {
+		term.c_lflag &= ~(ECHO | ECHONL);
+	}
 
 	if (tcsetattr (input, TCSAFLUSH, &term) == -1) {
 		errno = ENOTTY;
@@ -1391,7 +1395,7 @@ restart:
 		return 0;
 	}
 
-	g_assert (write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") -
+	g_assert (write (output, prompt, sizeof ("Enter passphrase: ") -
 		1) != -1);
 
 	/* Save the current sighandler */

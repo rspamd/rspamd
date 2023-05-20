@@ -281,11 +281,22 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
  * Read passphrase from tty
  * @param buf buffer to fill with a password
  * @param size size of the buffer
- * @param rwflag unused flag
+ * @param echo turn echo on or off
  * @param key unused key
  * @return size of password read
  */
-gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
+#define rspamd_read_passphrase(buf, size, echo, key) (rspamd_read_passphrase_with_prompt("Enter passphrase: ", (buf), (size), (echo), (key)))
+
+/**
+ * Read passphrase from tty with prompt
+ * @param prompt
+ * @param buf
+ * @param size
+ * @param echo
+ * @param key
+ * @return
+ */
+gint rspamd_read_passphrase_with_prompt (const gchar *prompt, gchar *buf, gint size, bool echo, gpointer key);
 
 /**
  * Portably return the current clock ticks as seconds
