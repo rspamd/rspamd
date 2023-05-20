@@ -194,6 +194,7 @@ static gint fuzzy_attach_controller (struct module_ctx *ctx,
 static gint fuzzy_lua_learn_handler (lua_State *L);
 static gint fuzzy_lua_unlearn_handler (lua_State *L);
 static gint fuzzy_lua_gen_hashes_handler (lua_State *L);
+static gint fuzzy_lua_hex_hashes_handler (lua_State *L);
 
 module_t fuzzy_check_module = {
 		"fuzzy_check",
@@ -1216,6 +1217,9 @@ fuzzy_check_module_config (struct rspamd_config *cfg, bool validate)
 		lua_settable (L, -3);
 		lua_pushstring (L, "gen_hashes");
 		lua_pushcfunction (L, fuzzy_lua_gen_hashes_handler);
+		lua_settable (L, -3);
+		lua_pushstring (L, "hex_hashes");
+		lua_pushcfunction (L, fuzzy_lua_hex_hashes_handler);
 		lua_settable (L, -3);
 		/* Finish fuzzy_check key */
 		lua_settable (L, -3);
@@ -4054,6 +4058,107 @@ fuzzy_lua_gen_hashes_handler (lua_State *L)
 		}
 	}
 
+
+	return 1;
+}
+
+static gint
+fuzzy_lua_hex_hashes_handler (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	guint flag = 0, weight = 1, send_flags = 0;
+	const gchar *symbol;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
+	struct fuzzy_rule *rule;
+	GPtrArray *commands;
+	gint i;
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		flag = lua_tonumber (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		struct fuzzy_rule *rule;
+		GHashTableIter it;
+		gpointer k, v;
+		struct fuzzy_mapping *map;
+
+		symbol = lua_tostring (L, 2);
+
+		PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+			if (flag != 0) {
+				break;
+			}
+
+			g_hash_table_iter_init (&it, rule->mappings);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				map = v;
+
+				if (g_ascii_strcasecmp (symbol, map->symbol) == 0) {
+					flag = map->fuzzy_flag;
+					break;
+				}
+			}
+		}
+	}
+
+	if (flag == 0) {
+		return luaL_error (L, "bad flag");
+	}
+
+	lua_createtable (L, 0, fuzzy_module_ctx->fuzzy_rules->len);
+
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+		/* Check for flag */
+		if (g_hash_table_lookup (rule->mappings,
+			GINT_TO_POINTER (flag)) == NULL) {
+			msg_debug_task ("skip rule %s as it has no flag %d defined"
+						   " false", rule->name, flag);
+			continue;
+		}
+
+		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, flag,
+			weight, send_flags);
+
+		lua_pushstring (L, rule->name);
+
+		if (commands != NULL) {
+			lua_createtable (L, commands->len, 0);
+			/*
+			 * We have all commands cached, so we can just read their cached value to
+			 * get hex hashes
+			 */
+			struct rspamd_mime_part *mp;
+			gint j, part_idx = 1;
+
+			PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), j, mp) {
+				struct rspamd_cached_shingles *cached;
+
+				cached = fuzzy_cmd_get_cached(rule, task, mp);
+
+				if (cached) {
+					gchar hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+					gint r = rspamd_encode_hex_buf (cached->digest, sizeof(cached->digest), hexbuf,
+							sizeof (hexbuf));
+					lua_pushlstring (L, hexbuf, r);
+					lua_rawseti(L, -2, part_idx++);
+				}
+			}
+
+			g_ptr_array_free (commands, TRUE);
+		}
+		else {
+			lua_pushnil(L);
+		}
+
+		/* res[rule->name] = {hex_hash1, ..., hex_hashn} */
+		lua_settable(L, -3);
+	}
 
 	return 1;
 }
