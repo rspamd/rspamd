@@ -183,36 +183,26 @@ static void
 rspamadm_pw_check (void)
 {
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
-	GIOChannel *in;
-	GString *encrypted_pwd;
 	const gchar *salt, *hash;
 	const gchar *start, *end;
 	guchar *salt_decoded, *key_decoded, *local_key;
 	gsize salt_len, key_len, size;
-	gchar test_password[8192];
+	gchar test_password[8192], encrypted_password[8192];
 	gsize plen, term = 0, i;
 	gint id;
 	gboolean ret = FALSE;
 
 	if (password == NULL) {
-		encrypted_pwd = g_string_new ("");
-		in = g_io_channel_unix_new (STDIN_FILENO);
-		rspamd_printf ("Enter encrypted password: ");
-		fflush (stdout);
-		g_io_channel_read_line_string (in, encrypted_pwd, &term, NULL);
-
-		if (term != 0) {
-			g_string_erase (encrypted_pwd, term, encrypted_pwd->len - term);
-		}
-		g_io_channel_unref (in);
+		plen = rspamd_read_passphrase_with_prompt("Enter encrypted password: ", encrypted_password,
+				sizeof (encrypted_password), 1, NULL);
 	}
 	else {
-		encrypted_pwd = g_string_new (password);
+		plen = rspamd_strlcpy(encrypted_password, password, sizeof (encrypted_password));
 	}
 
-	if (encrypted_pwd->str[0] == '$') {
+	if (encrypted_password[0] == '$') {
 		/* Parse id */
-		start = encrypted_pwd->str + 1;
+		start = encrypted_password + 1;
 		end = start;
 		size = 0;
 
@@ -240,19 +230,21 @@ rspamadm_pw_check (void)
 
 	if (!ret) {
 		rspamd_fprintf (stderr, "Invalid password format\n");
+		rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 		exit (EXIT_FAILURE);
 	}
 
-	if (encrypted_pwd->len < pbkdf->salt_len + pbkdf->key_len + 3) {
+	if (plen < pbkdf->salt_len + pbkdf->key_len + 3) {
 		msg_err ("incorrect salt: password length: %z, must be at least %z characters",
-				encrypted_pwd->len, pbkdf->salt_len);
+			plen, pbkdf->salt_len);
+		rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 		exit (EXIT_FAILURE);
 	}
 
 	/* get salt */
-	salt = rspamd_encrypted_password_get_str (encrypted_pwd->str, 3, &salt_len);
+	salt = rspamd_encrypted_password_get_str (encrypted_password, 3, &salt_len);
 	/* get hash */
-	hash = rspamd_encrypted_password_get_str (encrypted_pwd->str,
+	hash = rspamd_encrypted_password_get_str (encrypted_password,
 			3 + salt_len + 1,
 			&key_len);
 	if (salt != NULL && hash != NULL) {
@@ -262,6 +254,7 @@ rspamadm_pw_check (void)
 
 		if (salt_decoded == NULL || salt_len != pbkdf->salt_len) {
 			/* We have some unknown salt here */
+			rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 			msg_err ("incorrect salt: %z, while %z expected",
 					salt_len, pbkdf->salt_len);
 			exit (EXIT_FAILURE);
@@ -271,6 +264,7 @@ rspamadm_pw_check (void)
 
 		if (key_decoded == NULL || key_len != pbkdf->key_len) {
 			/* We have some unknown salt here */
+			rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 			msg_err ("incorrect key: %z, while %z expected",
 					key_len, pbkdf->key_len);
 			exit (EXIT_FAILURE);
@@ -279,6 +273,7 @@ rspamadm_pw_check (void)
 		plen = rspamd_read_passphrase (test_password, sizeof (test_password),
 				0, NULL);
 		if (plen == 0) {
+			rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 			fprintf (stderr, "Invalid password\n");
 			exit (EXIT_FAILURE);
 		}
@@ -290,6 +285,7 @@ rspamadm_pw_check (void)
 				pbkdf->complexity,
 				pbkdf->type);
 		rspamd_explicit_memzero (test_password, plen);
+		rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
 			if (!quiet) {
@@ -300,10 +296,10 @@ rspamadm_pw_check (void)
 
 		g_free (salt_decoded);
 		g_free (key_decoded);
-		g_string_free (encrypted_pwd, TRUE);
 	}
 	else {
 		msg_err ("bad encrypted password format");
+		rspamd_explicit_memzero (encrypted_password, sizeof(encrypted_password));
 		exit (EXIT_FAILURE);
 	}
 

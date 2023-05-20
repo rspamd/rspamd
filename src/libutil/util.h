@@ -289,11 +289,11 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
 
 /**
  * Read passphrase from tty with prompt
- * @param prompt
- * @param buf
- * @param size
- * @param echo
- * @param key
+ * @param prompt prompt to use
+ * @param buf buffer to fill with a password
+ * @param size size of the buffer
+ * @param echo turn echo on or off
+ * @param key unused key
  * @return
  */
 gint rspamd_read_passphrase_with_prompt (const gchar *prompt, gchar *buf, gint size, bool echo, gpointer key);
