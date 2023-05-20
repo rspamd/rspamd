@@ -127,6 +127,15 @@ LUA_FUNCTION_DEF (map, get_uri);
 LUA_FUNCTION_DEF (map, get_stats);
 
 /***
+ * @method map:foreach(callback, is_text)
+ * Iterate over map elements and call callback for each element.
+ * @param {function} callback callback function, that accepts two arguments: key and value, if it returns true then iteration is stopped
+ * @param {boolean} is_text if true then callback accepts rspamd_text instead of Lua strings
+ * @return {number} number of elements iterated
+ */
+LUA_FUNCTION_DEF (map, foreach);
+
+/***
  * @method map:get_data_digest()
  * Get data digest for specific map
  * @return {string} 64 bit number represented as string (due to Lua limitations)
@@ -149,6 +158,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, set_callback),
 	LUA_INTERFACE_DEF (map, get_uri),
 	LUA_INTERFACE_DEF (map, get_stats),
+	LUA_INTERFACE_DEF (map, foreach),
 	LUA_INTERFACE_DEF (map, get_data_digest),
 	LUA_INTERFACE_DEF (map, get_nelts),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -1054,6 +1064,76 @@ lua_map_get_stats (lua_State * L)
 
 		if (map->map->traverse_function) {
 			rspamd_map_traverse (map->map, lua_map_traverse_cb, L, do_reset);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+struct lua_map_traverse_cbdata {
+	lua_State *L;
+	gint cbref;
+	gboolean use_text;
+};
+
+static gboolean
+lua_map_foreach_cb (gconstpointer key, gconstpointer value, gsize _hits, gpointer ud)
+{
+	struct lua_map_traverse_cbdata *cbdata = ud;
+	lua_State *L = cbdata->L;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbdata->cbref);
+
+	if (cbdata->use_text) {
+		lua_new_text(L, key, strlen (key), 0);
+		lua_new_text(L, value, strlen (value), 0);
+	}
+	else {
+		lua_pushstring (L, key);
+		lua_pushstring (L, value);
+	}
+
+	if (lua_pcall(L, 2, 1, 0) != 0) {
+		msg_err("call to map foreach callback failed: %s", lua_tostring(L, -1));
+		lua_pop(L, 1);
+
+		return FALSE;
+	}
+	else {
+		if (lua_isboolean (L, -1)) {
+			lua_pop (L, 1);
+
+			return lua_toboolean (L, -1);
+		}
+
+		lua_pop (L, 1); /* Result */
+	}
+
+	return TRUE;
+}
+
+static gint
+lua_map_foreach (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
+	gboolean use_text = FALSE;
+
+	if (map != NULL && lua_isfunction(L, 2)) {
+		if (lua_isboolean (L, 3)) {
+			use_text = lua_toboolean (L, 3);
+		}
+
+		struct lua_map_traverse_cbdata cbdata;
+		cbdata.L = L;
+		lua_pushvalue (L, 2); /* func */
+		cbdata.cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+		if (map->map->traverse_function) {
+			rspamd_map_traverse (map->map, lua_map_foreach_cb, &cbdata, FALSE);
 		}
 	}
 	else {
