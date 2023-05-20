@@ -1049,8 +1049,16 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
 		value = g_string_sized_new (sizeof ("4294967296"));
 		rspamd_printf_gstring (value, "%d", cmd->flag);
-		session->argv[cur_shift] = g_strdup ("HSET");
-		session->argv_lens[cur_shift++] = sizeof ("HSET") - 1;
+
+		if (cmd->version & RSPAMD_FUZZY_FLAG_WEAK) {
+			session->argv[cur_shift] = g_strdup ("HSETNX");
+			session->argv_lens[cur_shift++] = sizeof ("HSETNX") - 1;
+		}
+		else {
+			session->argv[cur_shift] = g_strdup ("HSET");
+			session->argv_lens[cur_shift++] = sizeof ("HSET") - 1;
+		}
+
 		session->argv[cur_shift] = key->str;
 		session->argv_lens[cur_shift++] = key->len;
 		session->argv[cur_shift] = g_strdup ("F");
@@ -1445,7 +1453,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 	/*
 	 * For each normal hash addition we do 3 redis commands:
-	 * HSET <key> F <flag>
+	 * HSET <key> F <flag> **OR** HSETNX <key> F <flag> when flag is weak
 	 * HINCRBY <key> V <weight>
 	 * EXPIRE <key> <expire>
 	 * INCR <prefix||fuzzy_count>

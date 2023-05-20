@@ -13,6 +13,9 @@ extern "C" {
 #define RSPAMD_FUZZY_VERSION 4
 #define RSPAMD_FUZZY_KEYLEN 8
 
+#define RSPAMD_FUZZY_FLAG_WEAK (1u << 7u)
+/* Use lower 4 bits for the version */
+#define RSPAMD_FUZZY_VERSION_MASK 0x0fu
 /* Commands for fuzzy storage */
 #define FUZZY_CHECK 0
 #define FUZZY_WRITE 1
