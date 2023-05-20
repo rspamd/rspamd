@@ -64,12 +64,13 @@ rspamadm_pw_help (gboolean full_help, const struct rspamadm_command *cmd)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Manipulate with passwords in rspamd\n\n"
+		help_str = "Manipulate with passwords in Rspamd\n\n"
 				"Usage: rspamadm pw [command]\n"
 				"Where commands are:\n\n"
 				"--encrypt: encrypt password (this is a default command)\n"
 				"--check: check encrypted password using encrypted password\n"
 				"--list: list available pbkdf algorithms\n"
+				"--password: input password\n"
 				"--type: select the specified pbkdf type\n"
 				"--help: shows available options and commands";
 	}
