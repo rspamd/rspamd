@@ -238,10 +238,10 @@ table#symbolsTable input[type="number"] {
 .symbol-default:hover {
     background-color: #e6e6e6;
 }
-.symbol-negative {
+.symbol-negative.symbol-negative {
     background-color: #eef9e7;
 }
-.symbol-positive {
+.symbol-positive.symbol-positive {
     background-color: #fbe9e5;
 }
 .symbol-special {
