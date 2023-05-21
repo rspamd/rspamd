@@ -1085,7 +1085,7 @@ lua_map_foreach_cb (gconstpointer key, gconstpointer value, gsize _hits, gpointe
 	struct lua_map_traverse_cbdata *cbdata = ud;
 	lua_State *L = cbdata->L;
 
-	lua_rawgeti (L, LUA_REGISTRYINDEX, cbdata->cbref);
+	lua_pushvalue (L, cbdata->cbref);
 
 	if (cbdata->use_text) {
 		lua_new_text(L, key, strlen (key), 0);
@@ -1098,18 +1098,18 @@ lua_map_foreach_cb (gconstpointer key, gconstpointer value, gsize _hits, gpointe
 
 	if (lua_pcall(L, 2, 1, 0) != 0) {
 		msg_err("call to map foreach callback failed: %s", lua_tostring(L, -1));
-		lua_pop(L, 1);
+		lua_pop(L, 2); /* error + function */
 
 		return FALSE;
 	}
 	else {
 		if (lua_isboolean (L, -1)) {
-			lua_pop (L, 1);
+			lua_pop (L, 2);
 
 			return lua_toboolean (L, -1);
 		}
 
-		lua_pop (L, 1); /* Result */
+		lua_pop (L, 2); /* result + function */
 	}
 
 	return TRUE;
@@ -1130,11 +1130,14 @@ lua_map_foreach (lua_State * L)
 		struct lua_map_traverse_cbdata cbdata;
 		cbdata.L = L;
 		lua_pushvalue (L, 2); /* func */
-		cbdata.cbref = luaL_ref(L, LUA_REGISTRYINDEX);
+		cbdata.cbref = lua_gettop (L);
 
 		if (map->map->traverse_function) {
 			rspamd_map_traverse (map->map, lua_map_foreach_cb, &cbdata, FALSE);
 		}
+
+		/* Remove callback */
+		lua_pop (L, 1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
