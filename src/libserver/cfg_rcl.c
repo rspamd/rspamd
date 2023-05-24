@@ -759,7 +759,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			srch.name = ucl_object_key (cur);
-			srch.ptr = wrk->ctx; /* XXX: is it valid? */
+			srch.ptr = wrk->ctx; /* XXX: is it valid? Update! no, it is not valid, omfg... */
 			whandler = g_hash_table_lookup (wparser->parsers, &srch);
 
 			if (whandler != NULL) {

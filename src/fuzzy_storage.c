@@ -2296,7 +2296,7 @@ fuzzy_parse_ids (rspamd_mempool_t *pool,
 	struct rspamd_rcl_struct_parser *pd = (struct rspamd_rcl_struct_parser *)ud;
 	khash_t(fuzzy_key_ids_set) *target;
 
-	target = (khash_t(fuzzy_key_ids_set) *)pd->user_struct;
+	target = *(khash_t(fuzzy_key_ids_set) **)((gchar *)pd->user_struct + pd->offset);
 
 	if (ucl_object_type (obj) == UCL_ARRAY) {
 		const ucl_object_t *cur;
@@ -2543,8 +2543,8 @@ init_fuzzy (struct rspamd_config *cfg)
 			type,
 			"forbidden_ids",
 			fuzzy_parse_ids,
-			ctx->default_forbidden_ids,
-			0,
+			ctx,
+			G_STRUCT_OFFSET(struct rspamd_fuzzy_storage_ctx, default_forbidden_ids),
 			0,
 			"Deny specific flags by default");
 
@@ -2552,8 +2552,8 @@ init_fuzzy (struct rspamd_config *cfg)
 		type,
 		"weak_ids",
 		fuzzy_parse_ids,
-		ctx->weak_ids,
-		0,
+		ctx,
+		G_STRUCT_OFFSET(struct rspamd_fuzzy_storage_ctx, weak_ids),
 		0,
 		"Treat these flags as weak (i.e. they do not overwrite strong flags)");
 

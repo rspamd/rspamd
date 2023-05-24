@@ -363,7 +363,7 @@ gboolean rspamd_rcl_parse_struct_ucl (rspamd_mempool_t *pool,
  * @param type type of worker (GQuark)
  * @param name name of option
  * @param handler handler of option
- * @param target opaque target structure
+ * @param target opaque target structure, note it **MUST** be worker ctx due to some reasons I don't really remember
  * @param offset offset inside a structure
  */
 void rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
