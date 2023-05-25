@@ -244,13 +244,13 @@ public:
 		conns_by_ctx.emplace(ctx, conn);
 	}
 
-	~redis_pool() {
-		/*
-		 * XXX: this will prevent hiredis to unregister connections that
-		 * are already destroyed during redisAsyncFree...
-		 */
+	/* Hack to prevent Redis callbacks to be executed */
+	auto prepare_to_die() -> void
+	{
 		wanna_die = true;
 	}
+
+	~redis_pool() {}
 };
 
 
@@ -612,6 +612,7 @@ rspamd_redis_pool_destroy(void *p)
 {
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
 
+	pool->prepare_to_die();
 	delete pool;
 }
 

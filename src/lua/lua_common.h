@@ -648,6 +648,12 @@ bool rspamd_lua_universal_pcall (lua_State *L, gint cbref, const gchar* strloc,
 								 gint nret, const gchar *args, GError **err, ...);
 
 /**
+ * Returns true if lua is initialised
+ * @return
+ */
+bool rspamd_lua_is_initialised(void);
+
+/**
 * Wrapper for lua_geti from lua 5.3
 * @param L
 * @param index

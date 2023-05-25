@@ -460,7 +460,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	ctx = sp_ud->ctx;
 	ud = sp_ud->c;
 
-	if (ud->terminated) {
+	if (ud->terminated || !rspamd_lua_is_initialised()) {
 		/* We are already at the termination stage, just go out */
 		return;
 	}
