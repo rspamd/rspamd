@@ -422,8 +422,13 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 						auto &tmpfile_checked = tmpfile.value();
 						std::size_t unserialized_size;
 
-						hs_serialized_database_size(((const char *)cached_serialized.get_map()) + offset,
-							cached_serialized.get_size() - offset, &unserialized_size);
+						if (auto ret = hs_serialized_database_size(((const char *)cached_serialized.get_map()) + offset,
+							cached_serialized.get_size() - offset, &unserialized_size); ret != HS_SUCCESS) {
+							return tl::make_unexpected(error {
+								fmt::format("cannot get unserialized database size: {}", ret),
+								EINVAL,
+								error_category::IMPORTANT });
+						}
 
 						msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
 							tmpfile_pattern.data(), unserialized_size);
@@ -491,7 +496,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 					return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
 				});
 
-			hs_cache.add_cached_file(cached_serialized.get_file());
+			tl::expected<hs_shared_database, error> ret;
 
 			if (unserialized_file.has_value()) {
 
@@ -503,21 +508,26 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 					 * being created by another process.
 					 * We cannot use it!
 					 */
-					return hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
+					ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 				}
 				else {
-					return raii_mmaped_file::mmap_shared(std::move(unserialized_checked), PROT_READ)
+					ret = raii_mmaped_file::mmap_shared(std::move(unserialized_checked), PROT_READ)
 						.and_then([&]<class U>(U &&mmapped_unserialized) -> auto {
 							return hs_shared_from_unserialized(hs_cache, std::forward<U>(mmapped_unserialized));
 						});
 				}
 			}
 			else {
-				return hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
+				ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 			}
 #else // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
-			return hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
+			ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 #endif // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
+			// Add serialized file to cache merely if we have successfully loaded the actual db
+			if (ret.has_value()) {
+				hs_cache.add_cached_file(cached_serialized.get_file());
+			}
+			return ret;
 		});
 }
 } // namespace rspamd::util
