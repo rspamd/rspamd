@@ -521,7 +521,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 				ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 			}
 #else // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
-			ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
+			auto ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
 #endif // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			// Add serialized file to cache merely if we have successfully loaded the actual db
 			if (ret.has_value()) {
