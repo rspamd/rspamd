@@ -915,8 +915,8 @@ reconf['HAS_GUC_PROXY_URI'] = {
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
-  re = '/\\.google\\.com\\/url\\?/{url}i',
-  description = 'Has google.com/url redirection',
+  re = '/\\.google\\.(ac|ad|ae|af|ag|am|as|at|az|ba|be|bf|bg|bi|bj|bs|by|ca|cat|cc|cd|cf|cg|ch|ci|cl|cm|cn|co(|\\.ao|\\.bw|\\.ck|\\.cr|\\.hu|\\.id|\\.il|\\.im|\\.in|\\.je|\\.jp|\\.ke|\\.kr|\\.ls|\\.ma|\\.mz|\\.nz|\\.th|\\.tz|\\.ug|\\.uk|\\.uz|\\.ve|\\.vi|\\.za|\\.zm|\\.zw)|com(|\\.af|\\.ag|\\.ai|\\.ar|\\.au|\\.bd|\\.bh|\\.bn|\\.bo|\\.br|\\.by|\\.bz|\\.cn|\\.co|\\.cu|\\.cy|\\.do|\\.ec|\\.eg|\\.et|\\.fj|\\.ge|\\.gh|\\.gi|\\.gr|\\.gt|\\.hk|\\.iq|\\.jm|\\.jo|\\.kh|\\.kw|\\.lb|\\.ly|\\.mt|\\.mx|\\.my|\\.na|\\.nf|\\.ng|\\.ni|\\.np|\\.nr|\\.om|\\.pa|\\.pe|\\.ph|\\.pk|\\.pl|\\.pr|\\.py|\\.qa|\\.ru|\\.sa|\\.sb|\\.sg|\\.sl|\\.sv|\\.tj|\\.tn|\\.tr|\\.tw|\\.ua|\\.uy|\\.vc|\\.ve|\\.vn)|cv|cz|de|dj|dk|dm|dz|ee|es|fi|fm|fr|ga|ge|gg|gl|gm|gp|gr|gy|hk|hn|hr|ht|hu|ie|im|info|iq|is|it|it\\.ao|je|jo|jobs|jp|kg|ki|kz|la|li|lk|lt|lu|lv|md|me|mg|mk|ml|mn|ms|mu|mv|mw|ne|ne\\.jp|net|nl|no|nr|nu|off\\.ai|pk|pl|pn|ps|pt|ro|rs|ru|rw|sc|se|sh|si|sk|sm|sn|so|st|td|tg|tk|tl|tm|tn|to|tt|ua|us|uz|vg|vu|ws)\\/url\\?/{url}i',
+  description = 'Has google.com/url or alike Google redirection URL',
   score = 1.0,
   group = 'url'
 }
