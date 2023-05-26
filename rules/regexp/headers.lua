@@ -924,8 +924,8 @@ reconf['HAS_GOOGLE_REDIR'] = {
 reconf['HAS_GOOGLE_FIREBASE_URL'] = {
   re = '/\\.firebasestorage\\.googleapis\\.com\\//{url}i',
   description = 'Contains firebasestorage.googleapis.com URL',
-  score = 0.01,
-  group = 'experimental'
+  score = 2.0,
+  group = 'url'
 }
 
 reconf['XM_UA_NO_VERSION'] = {
