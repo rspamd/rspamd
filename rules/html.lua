@@ -21,7 +21,7 @@ local rspamd_regexp = require "rspamd_regexp"
 reconf['MIME_HTML_ONLY'] = {
   re = 'has_only_html_part()',
   score = 0.2,
-  description = 'Messages that have only HTML part',
+  description = 'Messages has only an HTML part',
   group = 'headers'
 }
 
@@ -74,7 +74,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_1 = {
   end,
   score = 2.0,
   group = 'html',
-  description = 'Short html part (0..1K) with a link to an image'
+  description = 'Short HTML part (0..1K) with a link to an image'
 }
 
 rspamd_config.HTML_SHORT_LINK_IMG_2 = {
@@ -83,7 +83,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_2 = {
   end,
   score = 1.0,
   group = 'html',
-  description = 'Short html part (1K..1.5K) with a link to an image'
+  description = 'Short HTML part (1K..1.5K) with a link to an image'
 }
 
 rspamd_config.HTML_SHORT_LINK_IMG_3 = {
@@ -92,7 +92,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_3 = {
   end,
   score = 0.5,
   group = 'html',
-  description = 'Short html part (1.5K..2K) with a link to an image'
+  description = 'Short HTML part (1.5K..2K) with a link to an image'
 }
 
 rspamd_config.R_EMPTY_IMAGE = {
@@ -395,7 +395,7 @@ rspamd_config.HTTP_TO_HTTPS = {
     end
     return false
   end,
-  description = 'Anchor text contains different scheme to target URL',
+  description = 'HTML anchor text contains different scheme to target URL',
   score = 0.5,
   group = 'html'
 }
@@ -425,7 +425,7 @@ rspamd_config.HTTP_TO_IP = {
       end
     end
   end,
-  description = 'Anchor points to an IP address',
+  description = 'HTML anchor points to an IP address',
   score = 1.0,
   group = 'html'
 }

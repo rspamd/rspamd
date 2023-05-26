@@ -570,7 +570,7 @@ rspamd_config.MISSING_FROM = {
   end,
   score = 2.0,
   group = 'headers',
-  description = 'Missing From: header'
+  description = 'Missing From header'
 }
 
 rspamd_config.MULTIPLE_FROM = {
@@ -583,7 +583,7 @@ rspamd_config.MULTIPLE_FROM = {
   end,
   score = 8.0,
   group = 'headers',
-  description = 'Multiple addresses in From'
+  description = 'Multiple addresses in From header'
 }
 
 rspamd_config.MV_CASE = {
