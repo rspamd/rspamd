@@ -139,8 +139,13 @@ define(["jquery"],
             }];
         }
 
+        function get_server(rspamd) {
+            var checked_server = rspamd.getSelector("selSrv");
+            return (checked_server === "All SERVERS") ? "local" : checked_server;
+        }
+
         // @upload text
-        function scanText(rspamd, tables, data, server, headers) {
+        function scanText(rspamd, tables, data, headers) {
             rspamd.query("checkv2", {
                 data: data,
                 params: {
@@ -195,7 +200,39 @@ define(["jquery"],
                         rspamd.alertMessage("alert-error", "Cannot tokenize message: no text data");
                     }
                 },
-                server: server
+                server: get_server(rspamd)
+            });
+        }
+
+        function getFuzzyHashes(rspamd, data) {
+            function fillHashTable(rules) {
+                $("#hashTable tbody").empty();
+                for (const [rule, hashes] of Object.entries(rules)) {
+                    hashes.forEach(function (hash, i) {
+                        $("#hashTable tbody").append("<tr>" +
+                          (i === 0 ? '<td rowspan="' + Object.keys(hashes).length + '">' + rule + "</td>" : "") +
+                          "<td>" + hash + "</td></tr>");
+                    });
+                }
+                $("#hash-card").slideDown();
+            }
+
+            rspamd.query("plugins/fuzzy/hashes?flag=" + $("#fuzzy-flag").val(), {
+                data: data,
+                params: {
+                    processData: false,
+                },
+                method: "POST",
+                success: function (neighbours_status) {
+                    var json = neighbours_status[0].data;
+                    if (json.success) {
+                        rspamd.alertMessage("alert-success", "Message successfully processed");
+                        fillHashTable(json.hashes);
+                    } else {
+                        rspamd.alertMessage("alert-error", "Unexpected error processing message");
+                    }
+                },
+                server: get_server(rspamd)
             });
         }
 
@@ -230,22 +267,26 @@ define(["jquery"],
                 $("html, body").animate({scrollTop:0}, 1000);
                 return false;
             });
-            // @init upload
+
+            $(".card-close-btn").on("click", function () {
+                $(this).closest(".card").slideUp();
+            });
+
             $("[data-upload]").on("click", function () {
                 var source = $(this).data("upload");
                 var data = $("#scanMsgSource").val();
                 var headers = {};
                 if ($.trim(data).length > 0) {
                     if (source === "scan") {
-                        var checked_server = rspamd.getSelector("selSrv");
-                        var server = (checked_server === "All SERVERS") ? "local" : checked_server;
                         headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
                             var value = $("#scan-opt-" + header.toLowerCase()).val();
                             if (value !== "") o[header] = value;
                             return o;
                         }, {});
                         if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
-                        scanText(rspamd, tables, data, server, headers);
+                        scanText(rspamd, tables, data, headers);
+                    } else if (source === "compute-fuzzy") {
+                        getFuzzyHashes(rspamd, data);
                     } else {
                         if (source === "fuzzy") {
                             headers = {
@@ -261,7 +302,6 @@ define(["jquery"],
                 return false;
             });
         };
-
 
         return ui;
     });
