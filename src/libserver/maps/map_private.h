@@ -151,6 +151,9 @@ struct rspamd_map {
 	rspamd_map_tmp_dtor tmp_dtor;
 	gpointer tmp_dtor_data;
 	rspamd_map_traverse_function traverse_function;
+	rspamd_map_on_load_function on_load_function;
+	gpointer on_load_ud;
+	GDestroyNotify on_load_ud_dtor;
 	gpointer lua_map;
 	gsize nelts;
 	guint64 digest;

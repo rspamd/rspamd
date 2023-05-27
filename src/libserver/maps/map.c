@@ -995,6 +995,10 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	if (periodic->need_modify || periodic->cbdata.errored) {
 		/* Need to notify the real data structure */
 		periodic->map->fin_callback (&periodic->cbdata, periodic->map->user_data);
+
+		if (map->on_load_function) {
+			map->on_load_function(map, map->on_load_ud);
+		}
 	}
 	else {
 		/* Not modified */
@@ -2300,6 +2304,10 @@ rspamd_map_preload (struct rspamd_config *cfg)
 
 			if (succeed) {
 				map->fin_callback (&fake_cbd.cbdata, map->user_data);
+
+				if (map->on_load_function) {
+					map->on_load_function(map, map->on_load_ud);
+				}
 			}
 			else {
 				msg_info_map ("preload of %s failed", map->name);
@@ -2334,6 +2342,10 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 
 			map->dtor (&cbdata);
 			*map->user_data = NULL;
+		}
+
+		if (map->on_load_ud_dtor) {
+			map->on_load_ud_dtor(map->on_load_ud);
 		}
 
 		for (i = 0; i < map->backends->len; i ++) {
@@ -3104,5 +3116,16 @@ rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
 {
 	if (*map->user_data && map->traverse_function) {
 		map->traverse_function (*map->user_data, cb, cbdata, reset_hits);
+	}
+}
+
+void
+rspamd_map_set_on_load_function (struct rspamd_map *map, rspamd_map_on_load_function cb,
+	gpointer cbdata, GDestroyNotify dtor)
+{
+	if (map) {
+		map->on_load_function = cb;
+		map->on_load_ud = cbdata;
+		map->on_load_ud_dtor = dtor;
 	}
 }

@@ -22,6 +22,12 @@ struct map_cb_data;
 struct rspamd_worker;
 
 /**
+ * Common map object
+ */
+struct rspamd_config;
+struct rspamd_map;
+
+/**
  * Callback types
  */
 typedef gchar *(*map_cb_t) (gchar *chunk, gint len,
@@ -37,12 +43,7 @@ typedef gboolean (*rspamd_map_traverse_cb) (gconstpointer key,
 typedef void (*rspamd_map_traverse_function) (void *data,
 											  rspamd_map_traverse_cb cb,
 											  gpointer cbdata, gboolean reset_hits);
-
-/**
- * Common map object
- */
-struct rspamd_config;
-struct rspamd_map;
+typedef void (*rspamd_map_on_load_function) (struct rspamd_map *map, gpointer ud);
 
 /**
  * Callback data for async load
@@ -150,6 +151,15 @@ rspamd_map_traverse_function rspamd_map_get_traverse_function (struct rspamd_map
  */
 void rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
 						  gpointer cbdata, gboolean reset_hits);
+
+/**
+ * Set map on load callback
+ * @param map
+ * @param cb
+ * @param cbdata
+ */
+void rspamd_map_set_on_load_function (struct rspamd_map *map, rspamd_map_on_load_function cb,
+								 gpointer cbdata, GDestroyNotify dtor);
 
 #ifdef  __cplusplus
 }

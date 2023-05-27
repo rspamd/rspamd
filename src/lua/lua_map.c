@@ -136,6 +136,13 @@ LUA_FUNCTION_DEF (map, get_stats);
 LUA_FUNCTION_DEF (map, foreach);
 
 /***
+ * @method map:on_load(callback)
+ * Sets a callback for a map that is called when map is loaded
+ * @param {function} callback callback function, that accepts no arguments (pass maps in a closure if needed)
+ */
+LUA_FUNCTION_DEF (map, on_load);
+
+/***
  * @method map:get_data_digest()
  * Get data digest for specific map
  * @return {string} 64 bit number represented as string (due to Lua limitations)
@@ -159,6 +166,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_uri),
 	LUA_INTERFACE_DEF (map, get_stats),
 	LUA_INTERFACE_DEF (map, foreach),
+	LUA_INTERFACE_DEF (map, on_load),
 	LUA_INTERFACE_DEF (map, get_data_digest),
 	LUA_INTERFACE_DEF (map, get_nelts),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -1131,6 +1139,7 @@ lua_map_foreach (lua_State * L)
 		cbdata.L = L;
 		lua_pushvalue (L, 2); /* func */
 		cbdata.cbref = lua_gettop (L);
+		cbdata.use_text = use_text;
 
 		if (map->map->traverse_function) {
 			rspamd_map_traverse (map->map, lua_map_foreach_cb, &cbdata, FALSE);
@@ -1362,6 +1371,58 @@ lua_map_get_uri (lua_State *L)
 	}
 
 	return map->map->backends->len;
+}
+
+struct lua_map_on_load_cbdata {
+	lua_State *L;
+	gint ref;
+};
+
+static void
+lua_map_on_load_dtor (gpointer p)
+{
+	struct lua_map_on_load_cbdata *cbd = p;
+
+	luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->ref);
+	g_free (cbd);
+}
+
+static void
+lua_map_on_load_handler (struct rspamd_map *map, gpointer ud)
+{
+	struct lua_map_on_load_cbdata *cbd = ud;
+	lua_State *L = cbd->L;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->ref);
+
+	if (lua_pcall(L, 0, 0, 0) != 0) {
+		msg_err_map ("call to on_load function failed: %s", lua_tostring (L, -1));
+	}
+}
+
+static gint
+lua_map_on_load (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
+
+	if (map == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TFUNCTION) {
+		lua_pushvalue (L, 2);
+		struct lua_map_on_load_cbdata *cbd = g_malloc (sizeof (struct lua_map_on_load_cbdata));
+		cbd->L = L;
+		cbd->ref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+		rspamd_map_set_on_load_function(map->map, lua_map_on_load_handler, cbd, lua_map_on_load_dtor);
+	}
+	else {
+		return luaL_error (L, "invalid callback");
+	}
+
+	return 0;
 }
 
 void
