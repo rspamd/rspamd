@@ -1088,13 +1088,15 @@ local function add_rbl(key, rbl, global_opts)
     lua_util.debugm(N, rspamd_config, 'rule dump for %s: %s',
         rbl.symbol, rbl)
 
+    local check_sym = rbl.symbol_prefixes and rbl.symbol .. '_CHECK' or rbl.symbol
+
     if rbl.dkim then
-      rspamd_config:register_dependency(rbl.symbol, 'DKIM_CHECK')
+      rspamd_config:register_dependency(check_sym, 'DKIM_CHECK')
     end
 
     if rbl.require_symbols then
       for _,dep in ipairs(rbl.require_symbols) do
-        rspamd_config:register_dependency(rbl.symbol, dep)
+        rspamd_config:register_dependency(check_sym, dep)
       end
     end
 
