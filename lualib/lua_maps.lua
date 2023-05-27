@@ -231,6 +231,12 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       end
 
       return nil
+    end,
+    foreach = function(t, cb)
+      return t.__data:foreach(cb)
+    end,
+    on_load = function(t, cb)
+      t.__data:on_load(cb)
     end
   }
   local ret_mt = {
@@ -413,6 +419,20 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
               end
 
               return nil
+            end
+            ret.foreach = function(_, func)
+              for k,v in pairs(ret.__data) do
+                if not func(k, v) then
+                  return false
+                end
+              end
+
+              return true
+            end
+            ret.on_load = function(_, cb)
+              rspamd_config:add_on_load(function(_, _, _)
+                cb()
+              end)
             end
 
             maps_cache[cache_key] = ret
