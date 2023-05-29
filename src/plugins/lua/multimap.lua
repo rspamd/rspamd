@@ -33,6 +33,76 @@ local redis_params
 local fun = require "fun"
 local N = 'multimap'
 
+local multimap_grammar
+-- Parse result in form: <symbol>:<score>|<symbol>|<score>
+local function parse_multimap_value(parse_rule, p_ret)
+  if p_ret and type(p_ret) == 'string' then
+    local lpeg = require "lpeg"
+
+    if not multimap_grammar then
+      local number = {}
+
+      local digit = lpeg.R("09")
+      number.integer =
+      (lpeg.S("+-") ^ -1) *
+          (digit   ^  1)
+
+      -- Matches: .6, .899, .9999873
+      number.fractional =
+      (lpeg.P(".")   ) *
+          (digit ^ 1)
+
+      -- Matches: 55.97, -90.8, .9
+      number.decimal =
+      (number.integer *              -- Integer
+          (number.fractional ^ -1)) +    -- Fractional
+          (lpeg.S("+-") * number.fractional)  -- Completely fractional number
+
+      local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
+      local sym_elt = sym_start + lpeg.R("09")
+      local symbol = sym_start * sym_elt ^0
+      local symbol_cap = lpeg.Cg(symbol, 'symbol')
+      local score_cap = lpeg.Cg(number.decimal, 'score')
+      local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol))^0), 'opts')
+      local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
+      local symscoreopt_cap = symscore_cap * lpeg.P(":") * opts_cap
+      local grammar = symscoreopt_cap + symscore_cap + symbol_cap + score_cap
+      multimap_grammar = lpeg.Ct(grammar)
+    end
+    local tbl = multimap_grammar:match(p_ret)
+
+    if tbl then
+      local sym
+      local score = 1.0
+      local opts = {}
+
+      if tbl.symbol then
+        sym = tbl.symbol
+      end
+      if tbl.score then
+        score = tonumber(tbl.score)
+      end
+      if tbl.opts then
+        opts = tbl.opts
+      end
+
+      return true,sym,score,opts
+    else
+      if p_ret ~= '' then
+        rspamd_logger.infox(task, '%s: cannot parse string "%s"',
+            parse_rule.symbol, p_ret)
+      end
+
+      return true,nil,1.0,{}
+    end
+  elseif type(p_ret) == 'boolean' then
+    return p_ret,nil,1.0,{}
+  end
+
+  return false,nil,0.0,{}
+end
+
+
 local value_types = {
   ip = {
     get_value = function(ip) return ip:to_string() end,
@@ -380,8 +450,6 @@ local multimap_filters = {
   --content = apply_content_filter, -- Content filters are special :(
 }
 
-local multimap_grammar
-
 local function multimap_query_redis(key, task, value, callback)
   local cmd = 'HGET'
   if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
@@ -485,76 +553,8 @@ local function multimap_callback(task, rule)
     end
   end
 
-  -- Parse result in form: <symbol>:<score>|<symbol>|<score>
-  local function parse_ret(parse_rule, p_ret)
-    if p_ret and type(p_ret) == 'string' then
-      local lpeg = require "lpeg"
-
-      if not multimap_grammar then
-        local number = {}
-
-        local digit = lpeg.R("09")
-        number.integer =
-        (lpeg.S("+-") ^ -1) *
-            (digit   ^  1)
-
-        -- Matches: .6, .899, .9999873
-        number.fractional =
-        (lpeg.P(".")   ) *
-            (digit ^ 1)
-
-        -- Matches: 55.97, -90.8, .9
-        number.decimal =
-        (number.integer *              -- Integer
-            (number.fractional ^ -1)) +    -- Fractional
-            (lpeg.S("+-") * number.fractional)  -- Completely fractional number
-
-        local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
-        local sym_elt = sym_start + lpeg.R("09")
-        local symbol = sym_start * sym_elt ^0
-        local symbol_cap = lpeg.Cg(symbol, 'symbol')
-        local score_cap = lpeg.Cg(number.decimal, 'score')
-        local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol))^0), 'opts')
-        local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
-        local symscoreopt_cap = symscore_cap * lpeg.P(":") * opts_cap
-        local grammar = symscoreopt_cap + symscore_cap + symbol_cap + score_cap
-        multimap_grammar = lpeg.Ct(grammar)
-      end
-      local tbl = multimap_grammar:match(p_ret)
-
-      if tbl then
-        local sym
-        local score = 1.0
-        local opts = {}
-
-        if tbl.symbol then
-          sym = tbl.symbol
-        end
-        if tbl.score then
-          score = tonumber(tbl.score)
-        end
-        if tbl.opts then
-          opts = tbl.opts
-        end
-
-        return true,sym,score,opts
-      else
-        if p_ret ~= '' then
-          rspamd_logger.infox(task, '%s: cannot parse string "%s"',
-              parse_rule.symbol, p_ret)
-        end
-
-        return true,nil,1.0,{}
-      end
-    elseif type(p_ret) == 'boolean' then
-      return p_ret,nil,1.0,{}
-    end
-
-    return false,nil,0.0,{}
-  end
-
   local function insert_results(result, opt)
-    local _,symbol,score,opts = parse_ret(rule, result)
+    local _,symbol,score,opts = parse_multimap_value(rule, result)
     local forced = false
     if symbol then
       if rule.symbols_set then
@@ -999,6 +999,7 @@ local function multimap_callback(task, rule)
   end
 end
 
+
 local function gen_multimap_callback(rule)
   return function(task)
     multimap_callback(task, rule)
@@ -1007,7 +1008,29 @@ end
 
 local function multimap_on_load_gen(rule)
   return function()
-    lua_util.debugm(N, "loaded multimap rule %s", rule['symbol'])
+    lua_util.debugm(N, rspamd_config, "loaded map object for rule %s", rule['symbol'])
+    local known_symbols = {}
+    rule.map_obj:foreach(function(key, value)
+      local r,symbol,score,_opts = parse_multimap_value(rule, value)
+
+      if r and symbol and not known_symbols[symbol] then
+        lua_util.debugm(N, rspamd_config, "%s: adding new symbol %s (score = %s), triggered by %s",
+            rule.symbol, symbol, score, key)
+        rspamd_config:register_symbol{
+          name = value,
+          parent = rule.callback_id,
+          type = 'virtual',
+          score = score,
+        }
+        rspamd_config:set_metric_symbol({
+          group = N,
+          score = score,
+          description = 'Automatic symbol generated by rule: ' .. rule.symbol,
+          name = value,
+        })
+        known_symbols[value] = true
+      end
+    end)
   end
 end
 
