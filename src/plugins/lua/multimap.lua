@@ -89,7 +89,7 @@ local function parse_multimap_value(parse_rule, p_ret)
       return true,sym,score,opts
     else
       if p_ret ~= '' then
-        rspamd_logger.infox(task, '%s: cannot parse string "%s"',
+        rspamd_logger.infox(rspamd_config, '%s: cannot parse string "%s"',
             parse_rule.symbol, p_ret)
       end
 
@@ -1011,7 +1011,7 @@ local function multimap_on_load_gen(rule)
     lua_util.debugm(N, rspamd_config, "loaded map object for rule %s", rule['symbol'])
     local known_symbols = {}
     rule.map_obj:foreach(function(key, value)
-      local r,symbol,score,_opts = parse_multimap_value(rule, value)
+      local r,symbol,score,_ = parse_multimap_value(rule, value)
 
       if r and symbol and not known_symbols[symbol] then
         lua_util.debugm(N, rspamd_config, "%s: adding new symbol %s (score = %s), triggered by %s",
