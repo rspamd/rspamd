@@ -480,14 +480,7 @@ local function multimap_callback(task, rule)
       end
 
       return ret
-    elseif r.radix then
-      r.radix:get_key(value, get_key_callback, task)
-    elseif r.kv_map then
-      if type(value) == 'userdata' then
-        if value.class == 'rspamd{ip}' then
-          value = value:tostring()
-        end
-      end
+    elseif r.map_obj then
       r.kv_map:get_key(value, get_key_callback, task)
     end
   end
@@ -581,7 +574,7 @@ local function multimap_callback(task, rule)
           opt = {result}
         end
       else
-        forced = true
+        forced = not rule.dynamic_symbols
       end
     else
       symbol = rule.symbol
@@ -1012,28 +1005,34 @@ local function gen_multimap_callback(rule)
   end
 end
 
+local function multimap_on_load_gen(rule)
+  return function()
+    lua_util.debugm(N, "loaded multimap rule %s", rule['symbol'])
+  end
+end
+
 local function add_multimap_rule(key, newrule)
   local ret = false
 
   local function multimap_load_kv_map(rule)
     if rule['regexp'] then
       if rule['multi'] then
-        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
+        rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
             rule.description)
       else
-        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'regexp',
+        rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'regexp',
             rule.description)
       end
     elseif rule['glob'] then
       if rule['multi'] then
-        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
+        rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
             rule.description)
       else
-        rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'glob',
+        rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'glob',
             rule.description)
       end
     else
-      rule.kv_map = lua_maps.map_add_from_ucl(rule.map, 'hash',
+      rule.map_obj = lua_maps.map_add_from_ucl(rule.map, 'hash',
           rule.description)
     end
   end
@@ -1135,7 +1134,8 @@ local function add_multimap_rule(key, newrule)
     newrule.combined = lua_maps_expressions.create(rspamd_config,
         {
           rules = newrule.rules,
-          expression = newrule.expression
+          expression = newrule.expression,
+          on_load = newrule.dynamic_symbols and multimap_on_load_gen(newrule) or nil,
         }, N, 'Combined map for ' .. newrule.symbol)
     if not newrule.combined then
       rspamd_logger.errx(rspamd_config, 'cannot add combined map for %s', newrule.symbol)
@@ -1144,9 +1144,9 @@ local function add_multimap_rule(key, newrule)
     end
   else
     if newrule['type'] == 'ip' then
-      newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+      newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
           newrule.description)
-      if newrule['radix'] then
+      if newrule.map_obj then
         ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
@@ -1165,15 +1165,18 @@ local function add_multimap_rule(key, newrule)
       end
       local filter = newrule['filter'] or 'real_ip'
       if filter == 'real_ip' or filter == 'from_ip' then
-        newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+        newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
             newrule.description)
-        if newrule['radix'] then
+        if newrule.map_obj then
           ret = true
+        else
+          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+              newrule['map'])
         end
       else
         multimap_load_kv_map(newrule)
 
-        if newrule.kv_map then
+        if newrule.map_obj then
           ret = true
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
@@ -1183,13 +1186,13 @@ local function add_multimap_rule(key, newrule)
     elseif known_generic_types[newrule.type] then
 
       if newrule.filter == 'ip_addr' then
-        newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+        newrule.map_obj = lua_maps.map_add_from_ucl(newrule.map, 'radix',
             newrule.description)
       elseif not newrule.combined then
         multimap_load_kv_map(newrule)
       end
 
-      if newrule.kv_map or newrule.radix then
+      if newrule.map_obj then
         ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
@@ -1201,6 +1204,9 @@ local function add_multimap_rule(key, newrule)
   end
 
   if ret then
+    if newrule.map_obj and newrule.dynamic_symbols then
+      newrule.map_obj:on_load(multimap_on_load_gen(newrule))
+    end
     if newrule['type'] == 'symbol_options' then
       rspamd_config:register_dependency(newrule['symbol'], newrule['target_symbol'])
     end
@@ -1277,6 +1283,8 @@ if opts and type(opts) == 'table' then
       augmentations = augmentations,
       callback = gen_multimap_callback(rule),
     })
+
+    rule.callback_id = id
 
     if rule['symbols'] then
       -- Find allowed symbols by this map
