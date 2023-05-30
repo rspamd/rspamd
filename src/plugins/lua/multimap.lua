@@ -549,7 +549,7 @@ local function multimap_callback(task, rule)
 
       return ret
     elseif r.map_obj then
-      r.kv_map:get_key(value, get_key_callback, task)
+      r.map_obj:get_key(value, get_key_callback, task)
     end
   end
 
