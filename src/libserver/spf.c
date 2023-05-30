@@ -1458,10 +1458,19 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	}
 
 	if (slash) {
-		mask = strtoul (slash + 1, NULL, 10);
+		gchar *end = NULL;
+
+		mask = strtoul (slash + 1, &end, 10);
 		if (mask > 32) {
 			msg_info_spf ("invalid mask for ip4 element for %s: %s", addr->spf_string,
 					rec->sender_domain);
+			return FALSE;
+		}
+
+		if (end != NULL && !g_ascii_isspace(*end) && *end != '\0') {
+			/* Invalid mask definition */
+			msg_info_spf ("invalid mask for ip4 element for %s: %s", addr->spf_string,
+				rec->sender_domain);
 			return FALSE;
 		}
 
@@ -1525,10 +1534,18 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	}
 
 	if (slash) {
-		mask = strtoul (slash + 1, NULL, 10);
+		gchar *end = NULL;
+		mask = strtoul (slash + 1, &end, 10);
 		if (mask > 128) {
 			msg_info_spf ("invalid mask for ip6 element for %s: %s", addr->spf_string,
 					rec->sender_domain);
+			return FALSE;
+		}
+
+		if (end != NULL && !g_ascii_isspace(*end) && *end != '\0') {
+			/* Invalid mask definition */
+			msg_info_spf ("invalid mask for ip4 element for %s: %s", addr->spf_string,
+				rec->sender_domain);
 			return FALSE;
 		}
 
@@ -1823,7 +1840,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 {
 	const gchar *p, *macro_value = NULL;
 	gchar *c, *new, *tmp, delim = '.';
-	gsize len = 0, slen = 0, macro_len = 0;
+	gsize len = 0, macro_len = 0;
 	gint state = 0, ndelim = 0;
 	gchar ip_buf[64 + 1]; /* cannot use INET6_ADDRSTRLEN as we use ptr lookup */
 	gboolean need_expand = FALSE, reversed;
@@ -1846,7 +1863,6 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				len++;
 			}
 
-			slen++;
 			p++;
 			break;
 		case 1:
@@ -1872,7 +1888,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				return begin;
 			}
 			p++;
-			slen++;
+
 			break;
 		case 2:
 			/* Read macro name */
@@ -1933,7 +1949,6 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				return begin;
 			}
 			p++;
-			slen++;
 			state = 3;
 			break;
 		case 3:
@@ -1943,7 +1958,6 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				need_expand = TRUE;
 			}
 			p++;
-			slen++;
 			break;
 
 		default:
