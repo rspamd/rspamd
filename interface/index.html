@@ -693,7 +693,10 @@
 	<div class="modal-dialog modal-sm modal-dialog-centered">
 		<div class="modal-content shadow">
 			<div class="modal-header text-secondary py-2">
-				<i class="fas fa-key my-auto"></i><h6 class="modal-title fw-bolder">Login to Rspamd</h6>
+				<i class="fas fa-key my-auto"></i>
+				<div id="authInvalidCharFeedback" class="invalid-tooltip">Invalid characters</div>
+				<div id="authUnauthorizedFeedback" class="invalid-tooltip">Wrong password</div>
+				<h6 class="modal-title fw-bolder">Login to Rspamd</h6>
 			</div>
 			<div class="modal-body" id="connectBody">
 				<form id="connectForm">

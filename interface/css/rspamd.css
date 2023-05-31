@@ -201,6 +201,13 @@ table#symbolsTable input[type="number"] {
     color: #3a87ad;
 }
 
+#authInvalidCharFeedback,
+#authUnauthorizedFeedback {
+    position: unset;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+}
+
 /* widget */
 .card-header,
 .modal-header {
