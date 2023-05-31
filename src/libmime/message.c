@@ -585,9 +585,17 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 	s2len = w2->len;
 
 	if (s1len + s2len > max_words) {
-		msg_err_task ("cannot compare parts with more than %ud words: (%ud + %ud)",
+		msg_info_task ("cannot direct compare multipart/alternative parts with more than %ud words in total: "
+					   "(%ud words in one part and %ud in another)",
 				max_words, s1len, s2len);
-		return 0;
+
+		/* Use approximate comparison of number of words */
+		if (s1len > s2len) {
+			return s1len - s2len;
+		}
+		else {
+			return s2len - s1len;
+		}
 	}
 
 	column = g_malloc0 ((s1len + 1) * sizeof (guint));
