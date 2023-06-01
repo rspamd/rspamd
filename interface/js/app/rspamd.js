@@ -588,18 +588,35 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                 displayUI();
             },
             error: function () {
+                function clearFeedback() {
+                    $("#connectPassword").off("input").removeClass("is-invalid");
+                    $("#authInvalidCharFeedback,#authUnauthorizedFeedback").hide();
+                }
+
                 $("#connectDialog")
-                    .on("shown.bs.modal", function () {
+                    .on("show.bs.modal", () => {
+                        $("#connectDialog").off("show.bs.modal");
+                        clearFeedback();
+                    })
+                    .on("shown.bs.modal", () => {
                         $("#connectDialog").off("shown.bs.modal");
                         $("#connectPassword").focus();
                     })
                     .modal("show");
 
-                $("#connectForm").on("submit", function (e) {
+                $("#connectForm").off("submit").on("submit", function (e) {
                     e.preventDefault();
                     var password = $("#connectPassword").val();
+
+                    function invalidFeedback(tooltip) {
+                        $("#connectPassword")
+                            .addClass("is-invalid")
+                            .off("input").on("input", () => clearFeedback());
+                        $(tooltip).show();
+                    }
+
                     if (!(/^[\u0020-\u007e]*$/).test(password)) {
-                        alertMessage("alert-modal alert-error", "Invalid characters in the password");
+                        invalidFeedback("#authInvalidCharFeedback");
                         $("#connectPassword").focus();
                         return;
                     }
@@ -619,8 +636,12 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                                 displayUI();
                             }
                         },
-                        error: function (jqXHR) {
-                            ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
+                        error: function (jqXHR, textStatus) {
+                            if (textStatus.statusText === "Unauthorized") {
+                                invalidFeedback("#authUnauthorizedFeedback");
+                            } else {
+                                ui.alertMessage("alert-modal alert-error", textStatus.statusText);
+                            }
                             $("#connectPassword").val("");
                             $("#connectPassword").focus();
                         },

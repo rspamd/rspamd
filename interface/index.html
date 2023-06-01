@@ -689,20 +689,23 @@
 </div>
 
 <!-- login modal -->
-<div id="connectDialog" class="modal fade" data-backdrop="static" data-keyboard="false" role="dialog">
+<div id="connectDialog" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false" role="dialog">
 	<div class="modal-dialog modal-sm modal-dialog-centered">
 		<div class="modal-content shadow">
 			<div class="modal-header text-secondary py-2">
-				<i class="fas fa-key my-auto"></i><h6 class="modal-title fw-bolder">Login to Rspamd</h6>
+				<i class="fas fa-key my-auto"></i>
+				<div id="authInvalidCharFeedback" class="invalid-tooltip">Invalid characters</div>
+				<div id="authUnauthorizedFeedback" class="invalid-tooltip">Wrong password</div>
+				<h6 class="modal-title fw-bolder">Login to Rspamd</h6>
 			</div>
 			<div class="modal-body" id="connectBody">
 				<form id="connectForm">
+					<!-- In recent browser versions username is required to save credentials in a password manager.
+					    Browser detects passwords by form.elements[n].type == "password" and then detects
+						the username field by searching backwards through form elements for the text field
+						immediately before the password fields. -->
+					<input value="Rspamd controller password" style="display: none;"/>
 					<div class="input-group">
-						<!-- In recent browser versions username is required to save credentials in a password manager.
-						    Browser detects passwords by form.elements[n].type == "password" and then detects
-							the username field by searching backwards through form elements for the text field
-							immediately before the password fields. -->
-						<input value="Rspamd controller password" style="display: none;"/>
 						<input class="form-control"
 							   type="password"
 							   id="connectPassword"
