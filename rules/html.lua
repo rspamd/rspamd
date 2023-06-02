@@ -21,7 +21,7 @@ local rspamd_regexp = require "rspamd_regexp"
 reconf['MIME_HTML_ONLY'] = {
   re = 'has_only_html_part()',
   score = 0.2,
-  description = 'Messages has only an HTML part',
+  description = 'Message has only an HTML part',
   group = 'headers'
 }
 
