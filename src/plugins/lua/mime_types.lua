@@ -53,6 +53,7 @@ local settings = {
     bat = 2,
     com = 2,
     exe = 1,
+    hta = 2,
     iso = 4,
     jar = 2,
     lnk = 4,
@@ -60,7 +61,11 @@ local settings = {
     -- Have you ever seen that in legit email?
     ace = 4,
     arj = 2,
+    asx = 2,
     cab = 3,
+    sfx = 2,
+    vst = 2,
+    vss = 2,
     -- Additional bad extensions from Gmail
     ade = 2,
     adp = 2,
