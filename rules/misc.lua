@@ -148,7 +148,7 @@ local obscured_id = rspamd_config:register_symbol{
   name = 'R_SUSPICIOUS_URL',
   score = 5.0,
   one_shot = true,
-  description = 'Has obfuscated or suspicious URL',
+  description = 'A message has been identified to contain an obfuscated or suspicious URL',
   group = 'url'
 }
 
@@ -382,7 +382,7 @@ end
 rspamd_config:register_symbol({
   name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
   callback = freemail_reply_neq_from,
-  description = 'Freemail addresses in From and Reply-To headers, but to different freemail services',
+  description = 'The From and Reply-To addresses in the email are from different freemail services',
   score = 3.0,
   group = 'headers',
 })
