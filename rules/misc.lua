@@ -91,7 +91,7 @@ local date_id = rspamd_config:register_symbol({
 rspamd_config:register_symbol({
   name = 'MISSING_DATE',
   score = 1.0,
-  description = 'Message date is missing',
+  description = 'Date header is missing',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
@@ -100,7 +100,7 @@ rspamd_config:register_symbol({
 rspamd_config:register_symbol({
   name = 'INVALID_DATE',
   score = 1.5,
-  description = 'Malformed date header',
+  description = 'Malformed Date header',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
@@ -109,7 +109,7 @@ rspamd_config:register_symbol({
 rspamd_config:register_symbol({
   name = 'DATE_IN_FUTURE',
   score = 4.0,
-  description = 'Message date is in future',
+  description = 'Message date is in the future',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
@@ -118,7 +118,7 @@ rspamd_config:register_symbol({
 rspamd_config:register_symbol({
   name = 'DATE_IN_PAST',
   score = 1.0,
-  description = 'Message date is in past',
+  description = 'Message date is in the past',
   group = 'headers',
   type = 'virtual',
   parent = date_id,
@@ -148,7 +148,7 @@ local obscured_id = rspamd_config:register_symbol{
   name = 'R_SUSPICIOUS_URL',
   score = 5.0,
   one_shot = true,
-  description = 'Obfuscated or suspicious URL has been found in a message',
+  description = 'A message has been identified to contain an obfuscated or suspicious URL',
   group = 'url'
 }
 
@@ -157,7 +157,7 @@ rspamd_config:register_symbol{
   name = 'ZERO_WIDTH_SPACE_URL',
   score = 7.0,
   one_shot = true,
-  description = 'Zero width space in url',
+  description = 'Zero width space in URL',
   group = 'url',
   parent = obscured_id,
 }
@@ -382,7 +382,7 @@ end
 rspamd_config:register_symbol({
   name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
   callback = freemail_reply_neq_from,
-  description = 'Freemail From and Reply-To, but to different Freemail services',
+  description = 'The From and Reply-To addresses in the email are from different freemail services',
   score = 3.0,
   group = 'headers',
 })
@@ -440,7 +440,7 @@ rspamd_config.OMOGRAPH_URL = {
   end,
   score = 5.0,
   group = 'url',
-  description = 'Url contains both latin and non-latin characters'
+  description = 'URL contains both latin and non-latin characters'
 }
 
 rspamd_config.URL_IN_SUBJECT = {
@@ -471,8 +471,7 @@ rspamd_config.URL_IN_SUBJECT = {
   score = 4.0,
   group = 'subject',
   type = 'mime',
-  description = 'URL found in Subject'
-
+  description = 'Subject contains URL'
 }
 
 local aliases_id = rspamd_config:register_symbol{
@@ -697,7 +696,7 @@ rspamd_config.R_BAD_CTE_7BIT = {
     return false
   end,
   score = 3.5,
-  description = 'Detects bad content-transfer-encoding for text parts',
+  description = 'Detects bad Content-Transfer-Encoding for text parts',
   group = 'headers',
   type = 'mime',
 }
@@ -776,7 +775,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_encrypted_name,
   name = 'ENCRYPTED_PGP',
-  description = 'Message is encrypted with pgp',
+  description = 'Message is encrypted with PGP',
   group = 'mime_types',
   score = -0.5,
   one_shot = true
@@ -786,7 +785,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_encrypted_name,
   name = 'ENCRYPTED_SMIME',
-  description = 'Message is encrypted with smime',
+  description = 'Message is encrypted with S/MIME',
   group = 'mime_types',
   score = -0.5,
   one_shot = true
@@ -796,7 +795,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_encrypted_name,
   name = 'SIGNED_PGP',
-  description = 'Message is signed with pgp',
+  description = 'Message is signed with PGP',
   group = 'mime_types',
   score = -2.0,
   one_shot = true
@@ -806,7 +805,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_encrypted_name,
   name = 'SIGNED_SMIME',
-  description = 'Message is signed with smime',
+  description = 'Message is signed with S/MIME',
   group = 'mime_types',
   score = -2.0,
   one_shot = true
