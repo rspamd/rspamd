@@ -58,7 +58,7 @@ reconf['HAS_ONION_URI'] = {
     re = string.format('(%s | %s)', onion_uri_v2, onion_uri_v3),
     description = 'Contains .onion hidden service URI',
     score = 0.0,
-    group = 'experimental'
+    group = 'url'
 }
 
 local my_victim = [[/(?:victim|prey)/{words}]]
