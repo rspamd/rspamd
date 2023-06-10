@@ -416,3 +416,21 @@ MAP - EXTERNAL MISS
   Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=example.com.bg
   ...   Settings={symbols_enabled = [EXTERNAL_MULTIMAP]}
   Do Not Expect Symbol  EXTERNAL_MULTIMAP
+
+MAP - DYNAMIC SYMBOLS - SYM1
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=foo
+  ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
+  Expect Symbol  DYN_TEST1
+  Do Not Expect Symbol  DYN_TEST2
+
+MAP - DYNAMIC SYMBOLS - SYM2
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=bar
+  ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
+  Expect Symbol  DYN_TEST2
+  Do Not Expect Symbol  DYN_TEST1
+
+MAP - DYNAMIC SYMBOLS - MISS
+  Scan File  ${MESSAGE}  IP=127.0.0.1  Hostname=baz
+  ...   Settings={symbols_enabled = [DYN_TEST1,DYN_TEST2,DYN_MULTIMAP]}
+  Do Not Expect Symbol  DYN_TEST2
+  Do Not Expect Symbol  DYN_TEST1
