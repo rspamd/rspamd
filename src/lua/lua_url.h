@@ -76,7 +76,7 @@ void lua_url_cbdata_dtor (struct lua_tree_cb_data *cbd);
  * @return
  */
 gsize lua_url_adjust_skip_prob (float timestamp,
-								guchar *digest,
+								guchar digest[16],
 								struct lua_tree_cb_data *cb,
 								gsize sz);
 
