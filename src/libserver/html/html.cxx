@@ -2161,7 +2161,8 @@ html_process_input(struct rspamd_task *task,
 		 * further algorithms can skip words when auto *pool = task->task_pool;there are too many.
 		 * It is still unclear about urls though...
 		 */
-		hc->parsed.append(end, in->len - process_size);
+		html_append_parsed(hc, {end, in->len - process_size}, false,
+				end - start, hc->parsed);
 	}
 
 	if (!hc->parsed.empty()) {
