@@ -428,6 +428,48 @@ rspamd_cryptobox_keypair_sig (rspamd_sig_pk_t pk, rspamd_sig_sk_t sk,
 	}
 }
 
+#if OPENSSL_VERSION_MAJOR >= 3
+/* Compatibility function for OpenSSL 3.0 - thanks for breaking all API one more time */
+EC_POINT *ec_point_bn2point_compat(const EC_GROUP *group,
+							const BIGNUM *bn, EC_POINT *point, BN_CTX *ctx)
+{
+	size_t buf_len = 0;
+	unsigned char *buf;
+	EC_POINT *ret;
+
+	if ((buf_len = BN_num_bytes(bn)) == 0)
+		buf_len = 1;
+	if ((buf = OPENSSL_malloc(buf_len)) == NULL) {
+		return NULL;
+	}
+
+	if (!BN_bn2binpad(bn, buf, buf_len)) {
+		OPENSSL_free(buf);
+		return NULL;
+	}
+
+	if (point == NULL) {
+		if ((ret = EC_POINT_new(group)) == NULL) {
+			OPENSSL_free(buf);
+			return NULL;
+		}
+	} else
+		ret = point;
+
+	if (!EC_POINT_oct2point(group, ret, buf, buf_len, ctx)) {
+		if (ret != point)
+			EC_POINT_clear_free(ret);
+		OPENSSL_free(buf);
+		return NULL;
+	}
+
+	OPENSSL_free(buf);
+	return ret;
+}
+#else
+#define ec_point_bn2point_compat EC_POINT_bn2point
+#endif
+
 void
 rspamd_cryptobox_nm (rspamd_nm_t nm,
 		const rspamd_pk_t pk, const rspamd_sk_t sk,
@@ -467,7 +509,7 @@ rspamd_cryptobox_nm (rspamd_nm_t nm,
 		g_assert (bn_sec != NULL);
 
 		g_assert (EC_KEY_set_private_key (lk, bn_sec) == 1);
-		ec_pub = EC_POINT_bn2point (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
+		ec_pub = ec_point_bn2point_compat (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
 		g_assert (ec_pub != NULL);
 		len = ECDH_compute_key (s, sizeof (s), ec_pub, lk, NULL);
 		g_assert (len == sizeof (s));
@@ -571,7 +613,7 @@ rspamd_cryptobox_verify (const guchar *sig,
 		g_assert (lk != NULL);
 		bn_pub = BN_bin2bn (pk, rspamd_cryptobox_pk_bytes (mode), NULL);
 		g_assert (bn_pub != NULL);
-		ec_pub = EC_POINT_bn2point (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
+		ec_pub = ec_point_bn2point_compat (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
 		g_assert (ec_pub != NULL);
 		g_assert (EC_KEY_set_public_key (lk, ec_pub) == 1);
 
