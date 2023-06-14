@@ -1106,7 +1106,7 @@ lua_map_foreach_cb (gconstpointer key, gconstpointer value, gsize _hits, gpointe
 
 	if (lua_pcall(L, 2, 1, 0) != 0) {
 		msg_err("call to map foreach callback failed: %s", lua_tostring(L, -1));
-		lua_pop(L, 2); /* error + function */
+		lua_pop(L, 1); /* error */
 
 		return FALSE;
 	}
@@ -1117,7 +1117,7 @@ lua_map_foreach_cb (gconstpointer key, gconstpointer value, gsize _hits, gpointe
 			return lua_toboolean (L, -1);
 		}
 
-		lua_pop (L, 2); /* result + function */
+		lua_pop (L, 1); /* result */
 	}
 
 	return TRUE;
