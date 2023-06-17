@@ -2728,17 +2728,16 @@ lua_task_get_rawbody (lua_State * L)
 
 	if (task) {
 		if (task->message != NULL) {
-			t = lua_newuserdata (L, sizeof (*t));
-			rspamd_lua_setclass (L, "rspamd{text}", -1);
+
 
 			if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
 				g_assert (MESSAGE_FIELD (task, raw_headers_content).len <= task->msg.len);
-				t->start = task->msg.begin + MESSAGE_FIELD (task, raw_headers_content).len;
-				t->len = task->msg.len - MESSAGE_FIELD (task, raw_headers_content).len;
+				t = lua_new_text_task (L, task, task->msg.begin + MESSAGE_FIELD (task, raw_headers_content).len,
+					task->msg.len - MESSAGE_FIELD (task, raw_headers_content).len, FALSE);
 			}
 			else {
-				t->len = task->msg.len;
-				t->start = task->msg.begin;
+				t = lua_new_text_task (L, task, task->msg.begin,
+					task->msg.len, FALSE);
 			}
 
 			t->flags = 0;
@@ -2746,7 +2745,7 @@ lua_task_get_rawbody (lua_State * L)
 		else {
 			/* Push body it it is there */
 			if (task->msg.len > 0 && task->msg.begin != NULL) {
-				lua_new_text (L, task->msg.begin, task->msg.len, FALSE);
+				lua_new_text_task (L, task->msg.begin, task->msg.len, FALSE);
 			}
 			else {
 				lua_pushnil (L);

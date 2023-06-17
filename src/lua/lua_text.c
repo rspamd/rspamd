@@ -348,6 +348,41 @@ lua_new_text (lua_State *L, const gchar *start, gsize len, gboolean own)
 	return t;
 }
 
+struct rspamd_lua_text *
+lua_new_text_task (lua_State *L, struct rspamd_task *task,
+				   const gchar *start, gsize len, gboolean own)
+{
+	struct rspamd_lua_text *t;
+
+	t = lua_newuserdata (L, sizeof (*t));
+	t->flags = 0;
+
+	if (own) {
+		gchar *storage;
+
+		if (len > 0) {
+			storage = rspamd_mempool_alloc (task->task_pool, len);
+
+			if (start != NULL) {
+				memcpy (storage, start, len);
+			}
+
+			t->start = storage;
+		}
+		else {
+			t->start = "";
+		}
+	}
+	else {
+		t->start = start;
+	}
+
+	t->len = len;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	return t;
+}
+
 bool
 lua_is_text_binary(struct rspamd_lua_text *t)
 {

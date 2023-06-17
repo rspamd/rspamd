@@ -255,9 +255,27 @@ struct rspamd_lua_text *lua_check_text (lua_State *L, gint pos);
 * @return
 */
 struct rspamd_lua_text *lua_check_text_or_string (lua_State *L, gint pos);
-/* Creates and *pushes* new rspamd text, data is copied if  RSPAMD_TEXT_FLAG_OWN is in flags*/
+/**
+ * Create new text object
+ * @param L
+ * @param start
+ * @param len
+ * @param own
+ * @return
+ */
 struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
 									  gsize len, gboolean own);
+/**
+ * Create new text object from task pool if allocation is needed
+ * @param task
+ * @param L
+ * @param start
+ * @param len
+ * @param own
+ * @return
+ */
+struct rspamd_lua_text * lua_new_text_task(lua_State *L, struct rspamd_task *task,
+										   const gchar *start, gsize len, gboolean own);
 /**
  * Checks if a text has binary characters (non ascii and non-utf8 characters)
  * @param t
