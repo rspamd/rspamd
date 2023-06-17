@@ -49,7 +49,7 @@ composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_
 }
 
 auto
-composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj) -> rspamd_composite *
+composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
 {
 
 	const auto *val = ucl_object_lookup(obj, "enabled");
@@ -59,7 +59,13 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	}
 
 	if (composites.contains(composite_name)) {
-		msg_warn_config ("composite %s is redefined", composite_name.data());
+		if (silent_duplicate) {
+			msg_debug_config ("composite %s is redefined", composite_name.data());
+			return nullptr;
+		}
+		else {
+			msg_warn_config ("composite %s is redefined", composite_name.data());
+		}
 	}
 
 	const char *composite_expression = nullptr;
@@ -142,10 +148,22 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 
 auto
 composites_manager::add_composite(std::string_view composite_name,
-								  std::string_view composite_expression) -> rspamd_composite *
+								  std::string_view composite_expression,
+								  bool silent_duplicate) -> rspamd_composite *
 {
 	GError *err = nullptr;
 	rspamd_expression *expr = nullptr;
+
+	if (composites.contains(composite_name)) {
+		/* Duplicate composite - refuse to add */
+		if (silent_duplicate) {
+			msg_debug_config ("composite %s is redefined", composite_name.data());
+			return nullptr;
+		}
+		else {
+			msg_warn_config ("composite %s is redefined", composite_name.data());
+		}
+	}
 
 	if (!rspamd_parse_expression(composite_expression.data(),
 			composite_expression.size(), &composite_expr_subr,
@@ -191,11 +209,23 @@ rspamd_composites_manager_nelts(void *ptr)
 void*
 rspamd_composites_manager_add_from_ucl(void *cm, const char *sym, const ucl_object_t *obj)
 {
-	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj));
+	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj, false));
 }
 
 void*
 rspamd_composites_manager_add_from_string(void *cm, const char *sym, const char *expr)
 {
-	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr));
+	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr, false));
+}
+
+void*
+rspamd_composites_manager_add_from_ucl_silent(void *cm, const char *sym, const ucl_object_t *obj)
+{
+	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj, true));
+}
+
+void*
+rspamd_composites_manager_add_from_string_silent(void *cm, const char *sym, const char *expr)
+{
+	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr, true));
 }

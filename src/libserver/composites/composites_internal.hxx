@@ -71,8 +71,8 @@ public:
 		return nullptr;
 	}
 
-	auto add_composite(std::string_view, const ucl_object_t *) -> rspamd_composite *;
-	auto add_composite(std::string_view name, std::string_view expression) -> rspamd_composite *;
+	auto add_composite(std::string_view, const ucl_object_t *, bool silent_duplicate) -> rspamd_composite *;
+	auto add_composite(std::string_view name, std::string_view expression, bool silent_duplicate) -> rspamd_composite *;
 private:
 	~composites_manager() = default;
 	static void composites_manager_dtor(void *ptr) {
