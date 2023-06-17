@@ -407,12 +407,33 @@ static kh_inline khint_t __ac_X31_hash_string(const char *s)
 	if (h) for (++s ; *s; ++s) h = (h << 5) - h + (khint_t)*s;
 	return h;
 }
+
+/**
+ * Wyhash implementation from https://github.com/wangyi-fudan/wyhash
+ */
+static inline unsigned _wyr32(const uint8_t *p) { unsigned v; memcpy(&v, p, 4); return v;}
+static inline unsigned _wyr24(const uint8_t *p, unsigned k) { return (((unsigned)p[0])<<16)|(((unsigned)p[k>>1])<<8)|p[k-1];}
+static inline void _wymix32(unsigned  *A,  unsigned  *B){
+	uint64_t  c=*A^0x53c5ca59u;  c*=*B^0x74743c1bu;
+	*A=(unsigned)c;
+	*B=(unsigned)(c>>32);
+}
+// This version is vulnerable when used with a few bad seeds, which should be skipped beforehand:
+// 0x429dacdd, 0xd637dbf3
+static inline unsigned _wyhash32(const void *key, uint64_t len, unsigned seed) {
+	const uint8_t *p=(const uint8_t *)key; uint64_t i=len;
+	unsigned see1=(unsigned)len; seed^=(unsigned)(len>>32); _wymix32(&seed, &see1);
+	for(;i>8;i-=8,p+=8){  seed^=_wyr32(p); see1^=_wyr32(p+4); _wymix32(&seed, &see1); }
+	if(i>=4){ seed^=_wyr32(p); see1^=_wyr32(p+i-4); } else if (i) seed^=_wyr24(p,(unsigned)i);
+	_wymix32(&seed, &see1); _wymix32(&seed, &see1); return seed^see1;
+}
+
 /*! @function
   @abstract     Another interface to const char* hash function
   @param  key   Pointer to a null terminated string [const char*]
   @return       The hash value [khint_t]
  */
-#define kh_str_hash_func(key) __ac_X31_hash_string(key)
+#define kh_str_hash_func(key) _wyhash32(key, strlen(key), 0)
 /*! @function
   @abstract     Const char* comparison function
  */
