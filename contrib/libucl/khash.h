@@ -197,11 +197,13 @@ static const double __ac_HASH_UPPER = 0.77;
 		khint32_t *flags; \
 		khkey_t *keys; \
 		khval_t *vals; \
-	} kh_##name##_t;
+	} kh_##name##_t
 
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 						\
 	extern kh_##name##_t * kh_init_##name(void);							\
+    extern void kh_static_init_##name(kh_##name##_t *);						\
 	extern void kh_destroy_##name(kh_##name##_t *h);						\
+	extern void kh_static_destroy_##name(kh_##name##_t *h);					\
 	extern void kh_clear_##name(kh_##name##_t *h);							\
 	extern khint_t kh_get_##name(const kh_##name##_t *h, khkey_t key); 		\
 	extern int kh_resize_##name(kh_##name##_t *h, khint_t new_n_buckets); 	\
@@ -211,6 +213,9 @@ static const double __ac_HASH_UPPER = 0.77;
 #define __KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
 	SCOPE kh_##name##_t *kh_init_##name(void) {							\
 		return (kh_##name##_t*)kcalloc(1, sizeof(kh_##name##_t));		\
+	}                                                                   \
+    SCOPE void kh_unused(kh_static_init_##name)(kh_##name##_t *target) {\
+		memset(target, 0, sizeof(*target));								\
 	}																	\
 	SCOPE void kh_destroy_##name(kh_##name##_t *h)						\
 	{																	\
@@ -219,6 +224,10 @@ static const double __ac_HASH_UPPER = 0.77;
 			kfree((void *)h->vals);										\
 			kfree(h);													\
 		}																\
+	}																	\
+    SCOPE void kh_unused(kh_static_destroy_##name)(kh_##name##_t *h) {	\
+			kfree((void *)h->keys); kfree(h->flags);					\
+			kfree((void *)h->vals);										\
 	}																	\
 	SCOPE void kh_unused(kh_clear_##name)(kh_##name##_t *h)				\
 	{																	\
@@ -346,7 +355,7 @@ static const double __ac_HASH_UPPER = 0.77;
 		} else *ret = 0; /* Don't touch h->keys[x] if present and not deleted */ \
 		return x;														\
 	}																	\
-	SCOPE void kh_del_##name(kh_##name##_t *h, khint_t x)				\
+	SCOPE void kh_unused(kh_del_##name)(kh_##name##_t *h, khint_t x)	\
 	{																	\
 		if (x != h->n_buckets && !__ac_iseither(h->flags, x)) {			\
 			__ac_set_isdel_true(h->flags, x);							\
@@ -355,11 +364,11 @@ static const double __ac_HASH_UPPER = 0.77;
 	}
 
 #define KHASH_DECLARE(name, khkey_t, khval_t)		 					\
-	__KHASH_TYPE(name, khkey_t, khval_t) 								\
+	__KHASH_TYPE(name, khkey_t, khval_t); 								\
 	__KHASH_PROTOTYPES(name, khkey_t, khval_t)
 
 #define KHASH_INIT2(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
-	__KHASH_TYPE(name, khkey_t, khval_t) 								\
+	__KHASH_TYPE(name, khkey_t, khval_t); 								\
 	__KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
 
 #define KHASH_INIT(name, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
