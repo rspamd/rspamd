@@ -80,9 +80,9 @@ guint rspamd_ftok_icase_hash (gconstpointer key);
 
 gboolean rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2);
 
-guint rspamd_ftok_hash (gconstpointer key);
-
-gboolean rspamd_ftok_equal (gconstpointer v, gconstpointer v2);
+/* Use in khash for speed */
+#define rspamd_ftok_hash(key) _wyhash32((key)->begin, (key)->len, 0)
+#define rspamd_ftok_equal(v1, v2) ((v1)->len == (v2)->len && memcmp((v1)->begin, (v2)->begin, (v1)->len) == 0)
 
 guint rspamd_gstring_icase_hash (gconstpointer key);
 
