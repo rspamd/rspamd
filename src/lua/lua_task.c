@@ -2745,7 +2745,7 @@ lua_task_get_rawbody (lua_State * L)
 		else {
 			/* Push body it it is there */
 			if (task->msg.len > 0 && task->msg.begin != NULL) {
-				lua_new_text_task (L, task->msg.begin, task->msg.len, FALSE);
+				lua_new_text_task (L, task, task->msg.begin, task->msg.len, FALSE);
 			}
 			else {
 				lua_pushnil (L);
