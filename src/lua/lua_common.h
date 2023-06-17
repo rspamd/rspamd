@@ -139,11 +139,6 @@ struct rspamd_lua_map {
 	} data;
 };
 
-struct rspamd_lua_cached_entry {
-	gint ref;
-	guint id;
-};
-
 struct rspamd_lua_upstream {
 	struct upstream *up;
 	gint upref;

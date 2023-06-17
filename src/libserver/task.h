@@ -155,7 +155,14 @@ struct rspamd_request_header_chain {
 	struct rspamd_request_header_chain *next;
 };
 
-__KHASH_TYPE (rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *)
+__KHASH_TYPE (rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *);
+
+struct rspamd_lua_cached_entry {
+	gint ref;
+	guint id;
+};
+
+KHASH_INIT(rspamd_task_lua_cache, char *, struct rspamd_lua_cached_entry, 1, kh_str_hash_func, kh_str_hash_equal);
 
 /**
  * Worker task structure
@@ -180,7 +187,7 @@ struct rspamd_task {
 	struct rspamd_http_connection *http_conn;        /**< HTTP server connection							*/
 	struct rspamd_async_session *s;                /**< async session object							*/
 	struct rspamd_scan_result *result;            /**< Metric result									*/
-	GHashTable *lua_cache;                            /**< cache of lua objects							*/
+	khash_t(rspamd_task_lua_cache) lua_cache;        /**< cache of lua objects							*/
 	GPtrArray *tokens;                                /**< statistics tokens */
 	GArray *meta_words;                                /**< rspamd_stat_token_t produced from meta headers
 														(e.g. Subject) */

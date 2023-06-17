@@ -121,7 +121,7 @@ rspamd_task_new (struct rspamd_worker *worker,
 
 	new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
-	new_task->lua_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	kh_static_init(rspamd_task_lua_cache, &new_task->lua_cache);
 
 	return new_task;
 }
@@ -178,10 +178,7 @@ void
 rspamd_task_free (struct rspamd_task *task)
 {
 	struct rspamd_email_address *addr;
-	struct rspamd_lua_cached_entry *entry;
 	static guint free_iters = 0;
-	GHashTableIter it;
-	gpointer k, v;
 	guint i;
 
 	if (task) {
@@ -247,17 +244,15 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		if (task->cfg) {
-			if (task->lua_cache) {
-				g_hash_table_iter_init (&it, task->lua_cache);
 
-				while (g_hash_table_iter_next (&it, &k, &v)) {
-					entry = (struct rspamd_lua_cached_entry *)v;
-					luaL_unref (task->cfg->lua_state,
-							LUA_REGISTRYINDEX, entry->ref);
-				}
 
-				g_hash_table_unref (task->lua_cache);
-			}
+			struct rspamd_lua_cached_entry entry;
+
+			kh_foreach_value(&task->lua_cache, entry, {
+				luaL_unref (task->cfg->lua_state,
+					LUA_REGISTRYINDEX, entry.ref);
+			});
+			kh_static_destroy(rspamd_task_lua_cache, &task->lua_cache);
 
 			if (task->cfg->full_gc_iters && (++free_iters > task->cfg->full_gc_iters)) {
 				/* Perform more expensive cleanup cycle */

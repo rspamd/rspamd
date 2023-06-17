@@ -1420,27 +1420,24 @@ lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 		gint pos)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cached_entry *entry;
+	khiter_t k;
 
 	lua_pushvalue (L, pos);
 
-	entry = g_hash_table_lookup (task->lua_cache, key);
+	k = kh_get(rspamd_task_lua_cache, &task->lua_cache, (char *)key);
 
-	if (G_UNLIKELY (entry != NULL)) {
+	if (G_UNLIKELY (k != kh_end(&task->lua_cache))) {
 		/* Unref previous value */
-		luaL_unref (L, LUA_REGISTRYINDEX, entry->ref);
+		luaL_unref (L, LUA_REGISTRYINDEX, kh_value(&task->lua_cache, k).ref);
 	}
 	else {
-		entry = rspamd_mempool_alloc (task->task_pool, sizeof (*entry));
-		g_hash_table_insert (task->lua_cache,
-				rspamd_mempool_strdup (task->task_pool, key), entry);
+		int r;
+
+		k = kh_put(rspamd_task_lua_cache, &task->lua_cache, rspamd_mempool_strdup (task->task_pool, key), &r);
 	}
 
-	entry->ref = luaL_ref (L, LUA_REGISTRYINDEX);
-
-	if (task->message) {
-		entry->id = GPOINTER_TO_UINT (task->message);
-	}
+	kh_value(&task->lua_cache, k).ref = luaL_ref (L, LUA_REGISTRYINDEX);
+	kh_value(&task->lua_cache, k).id = GPOINTER_TO_UINT (task->message);
 }
 
 
@@ -1448,13 +1445,12 @@ static gboolean
 lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cached_entry *entry;
+	khiter_t k;
 
-	entry = g_hash_table_lookup (task->lua_cache, key);
+	k = kh_get(rspamd_task_lua_cache, &task->lua_cache, (char *)key);
 
-	if (entry != NULL && (task->message &&
-						  entry->id == GPOINTER_TO_UINT (task->message))) {
-		lua_rawgeti (L, LUA_REGISTRYINDEX, entry->ref);
+	if (k != kh_end(&task->lua_cache) && (kh_value(&task->lua_cache, k).id == GPOINTER_TO_UINT (task->message))) {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, kh_value(&task->lua_cache, k).ref);
 
 		return TRUE;
 	}
