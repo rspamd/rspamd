@@ -467,6 +467,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
   @return       Pointer to the hash table [khash_t(name)*]
  */
 #define kh_init(name) kh_init_##name()
+#define kh_static_init(name, h) kh_static_init_##name(h)
 
 /*! @function
   @abstract     Destroy a hash table.
@@ -474,6 +475,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
   @param  h     Pointer to the hash table [khash_t(name)*]
  */
 #define kh_destroy(name, h) kh_destroy_##name(h)
+#define kh_static_destroy(name, h) kh_static_destroy_##name(h)
 
 /*! @function
   @abstract     Reset a hash table without deallocating memory.
