@@ -251,7 +251,7 @@ local types = {
     type = 'archive',
   },
   ['7z'] = {
-    ct = 'x-7z-compressed',
+    ct = 'application/x-7z-compressed',
     type = 'archive',
   },
   gz = {
