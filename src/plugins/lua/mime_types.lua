@@ -51,6 +51,7 @@ local settings = {
 
   bad_extensions = {
     bat = 2,
+    chm = 4,
     com = 2,
     exe = 1,
     hta = 2,
@@ -69,7 +70,6 @@ local settings = {
     -- Additional bad extensions from Gmail
     ade = 2,
     adp = 2,
-    chm = 2,
     cmd = 2,
     cpl = 2,
     ins = 2,
