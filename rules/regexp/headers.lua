@@ -915,7 +915,7 @@ reconf['HAS_GUC_PROXY_URI'] = {
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
-  re = '/\\.google\\.([a-z]{2,3}(|\\.[a-z]{2,3})|info|jobs|)\\/url\\?/{url}i',
+  re = '/\\.google\\.([a-z]{2,3}(|\\.[a-z]{2,3})|info|jobs)\\/url\\?/{url}i',
   description = 'Has google.com/url or alike Google redirection URL',
   score = 1.0,
   group = 'url'
