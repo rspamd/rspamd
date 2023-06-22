@@ -45,8 +45,10 @@ local settings = {
   extension_map = { -- extension -> mime_type
     html = 'text/html',
     htm = 'text/html',
-    txt = 'text/plain',
     pdf = 'application/pdf'
+    shtm = 'text/html',
+    shtml = 'text/html',
+    txt = 'text/plain',
   },
 
   bad_extensions = {
@@ -59,6 +61,11 @@ local settings = {
     jar = 2,
     lnk = 4,
     scr = 4,
+    -- In contrast to HTML MIME parts, dedicated HTML attachments are considered harmful
+    htm = 1,
+    html = 1,
+    shtm = 1,
+    shtml = 1,
     -- Have you ever seen that in legit email?
     ace = 4,
     arj = 2,
