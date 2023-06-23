@@ -57,6 +57,7 @@ local settings = {
   no_ssl_verify = false,
   max_fail = 3,
   ingest_module = false,
+  elasticsearch_version = 6,
 }
 
 local function read_file(path)
@@ -71,8 +72,13 @@ local function elastic_send_data(task)
   local es_index = os.date(settings['index_pattern'])
   local tbl = {}
   for _,value in pairs(rows) do
-    table.insert(tbl, '{ "index" : { "_index" : "'..es_index..
-        '", "_type" : "_doc" ,"pipeline": "rspamd-geoip"} }')
+    if settings.elasticsearch_version >= 7 then
+        table.insert(tbl, '{ "index" : { "_index" : "'..es_index..
+            '","pipeline": "rspamd-geoip"} }')
+    else
+        table.insert(tbl, '{ "index" : { "_index" : "'..es_index..
+            '", "_type" : "_doc" ,"pipeline": "rspamd-geoip"} }')
+    end
     table.insert(tbl, ucl.to_format(value, 'json-compact'))
   end
 
