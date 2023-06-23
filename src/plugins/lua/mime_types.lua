@@ -45,10 +45,10 @@ local settings = {
   extension_map = { -- extension -> mime_type
     html = 'text/html',
     htm = 'text/html',
-    pdf = 'application/pdf'
+    pdf = 'application/pdf',
     shtm = 'text/html',
     shtml = 'text/html',
-    txt = 'text/plain',
+    txt = 'text/plain'
   },
 
   bad_extensions = {
