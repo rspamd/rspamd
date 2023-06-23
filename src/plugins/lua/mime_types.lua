@@ -45,8 +45,10 @@ local settings = {
   extension_map = { -- extension -> mime_type
     html = 'text/html',
     htm = 'text/html',
-    txt = 'text/plain',
-    pdf = 'application/pdf'
+    pdf = 'application/pdf',
+    shtm = 'text/html',
+    shtml = 'text/html',
+    txt = 'text/plain'
   },
 
   bad_extensions = {
@@ -59,6 +61,11 @@ local settings = {
     jar = 2,
     lnk = 4,
     scr = 4,
+    -- In contrast to HTML MIME parts, dedicated HTML attachments are considered harmful
+    htm = 1,
+    html = 1,
+    shtm = 1,
+    shtml = 1,
     -- Have you ever seen that in legit email?
     ace = 4,
     arj = 2,
@@ -168,40 +175,40 @@ local settings = {
 
   -- Something that should not be in archive
   bad_archive_extensions = {
-    pptx = 0.1,
     docx = 0.1,
-    xlsx = 0.1,
-    pdf = 0.1,
+    hta = 4,
     jar = 3,
     js = 0.5,
+    pdf = 0.1,
+    pptx = 0.1,
     vbs = 4,
     wsf = 4,
-    hta = 4,
+    xlsx = 0.1,
   },
 
   archive_extensions = {
-    zip = 1,
-    arj = 1,
-    rar = 1,
-    ace = 1,
     ['7z'] = 1,
-    cab = 1,
-    bz2 = 1,
-    egg = 1,
+    ace = 1,
     alz = 1,
-    xz = 1,
+    arj = 1,
+    bz2 = 1,
+    cab = 1,
+    egg = 1,
     lz = 1,
+    rar = 1,
+    xz = 1,
+    zip = 1,
   },
 
   -- Not really archives
   archive_exceptions = {
-    odt = true,
-    ods = true,
-    odp = true,
     docx = true,
-    xlsx = true,
+    odp = true,
+    ods = true,
+    odt = true,
     pptx = true,
     vsdx = true,
+    xlsx = true,
     -- jar = true,
   },
 
