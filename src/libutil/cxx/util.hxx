@@ -23,6 +23,7 @@
 #include <string_view>
 #include <optional>
 #include <tuple>
+#include <algorithm>
 
 /*
  * Common C++ utilities
