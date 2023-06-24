@@ -66,6 +66,35 @@ inline constexpr auto make_string_view_from_it(_It begin, _It end)
 }
 
 /**
+ * Iterate over lines in a string, newline characters are dropped
+ * @tparam S
+ * @tparam F
+ * @param input
+ * @param functor
+ * @return
+ */
+template<class S, class F, typename std::enable_if_t<std::is_invocable_v<F, std::string_view> &&
+    std::is_constructible_v<std::string_view, S>, bool> = true>
+inline auto string_foreach_line(const S &input, const F &functor)
+{
+	auto it = input.begin();
+	auto end = input.end();
+
+	while (it != end) {
+		auto next = std::find(it, end, '\n');
+		while (next >= it && (*next == '\n' || *next == '\r')) {
+			--next;
+		}
+		functor(make_string_view_from_it(it, next));
+		it = next;
+
+		if (it != end) {
+			++it;
+		}
+	}
+}
+
+/**
  * Enumerate for range loop
  */
 template <typename T,
