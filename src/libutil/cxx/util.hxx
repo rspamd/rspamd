@@ -94,6 +94,24 @@ inline auto string_foreach_line(const S &input, const F &functor)
 	}
 }
 
+template<class S, typename std::enable_if_t<std::is_constructible_v<std::string_view, S>, bool> = true>
+inline auto string_split_on(const S &input, std::string_view::value_type chr) -> std::pair<std::string_view, std::string_view>
+{
+	auto pos = std::find(std::begin(input), std::end(input), chr);
+
+	if (pos != input.end()) {
+		auto first = std::string_view{std::begin(input), pos};
+		while (*pos == chr && pos != input.end()) {
+			++pos;
+		}
+		auto last = std::string_view{pos, std::end(input)};
+
+		return {first, last};
+	}
+
+	return {std::string_view{input}, std::string_view{}};
+}
+
 /**
  * Enumerate for range loop
  */
