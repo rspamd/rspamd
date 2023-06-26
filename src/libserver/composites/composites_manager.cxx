@@ -266,10 +266,7 @@ struct map_cbdata {
 	static void
 	map_dtor (struct map_cb_data *data) {
 		auto *cbd = reinterpret_cast<map_cbdata *>(data->cur_data);
-
-		if (cbd) {
-			delete cbd;
-		}
+		delete cbd;
 	}
 };
 
