@@ -3244,9 +3244,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_fuzzy_backend_close (ctx->backend);
 
 	if (worker->index == 0) {
-		if (ctx->ratelimit_buckets) {
-			rspamd_fuzzy_maybe_save_ratelimits (ctx);
-		}
 		g_array_free (ctx->updates_pending, TRUE);
 		ctx->updates_pending = NULL;
 	}
@@ -3256,6 +3253,12 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (ctx->ratelimit_buckets) {
+		/* Try the best to save ratelimits from the proper worker */
+		if ((!ctx->dedicated_update_worker && worker->index == 0) ||
+			(ctx->dedicated_update_worker && worker->index == 1)) {
+			rspamd_fuzzy_maybe_save_ratelimits (ctx);
+		}
+
 		rspamd_lru_hash_destroy (ctx->ratelimit_buckets);
 	}
 
