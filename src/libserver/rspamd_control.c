@@ -629,6 +629,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_FUZZY_SYNC:
 	case RSPAMD_CONTROL_LOG_PIPE:
 	case RSPAMD_CONTROL_CHILD_CHANGE:
+	case RSPAMD_CONTROL_FUZZY_BLOCKED:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
@@ -1020,11 +1021,21 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 			case RSPAMD_SRV_HEALTH:
 				rspamd_fill_health_reply (srv, &rdata->rep);
 				break;
-			case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+			case RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE:
 #ifdef WITH_HYPERSCAN
 				rspamd_hyperscan_notice_known(cmd.cmd.hyperscan_cache_file.path);
 #endif
 				rdata->rep.reply.hyperscan_cache_file.unused = 0;
+				break;
+			case RSPAMD_SRV_FUZZY_BLOCKED:
+				/* Broadcast command to all workers */
+				memset (&wcmd, 0, sizeof (wcmd));
+				wcmd.type = RSPAMD_CONTROL_FUZZY_BLOCKED;
+				/* Ensure that memcpy is safe */
+				G_STATIC_ASSERT(sizeof(wcmd.cmd.fuzzy_blocked) == sizeof(cmd.cmd.fuzzy_blocked));
+				memcpy(&wcmd.cmd.fuzzy_blocked, &cmd.cmd.fuzzy_blocked, sizeof(wcmd.cmd.fuzzy_blocked));
+				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
+					rspamd_control_ignore_io_handler, NULL, worker->pid);
 				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
@@ -1354,8 +1365,11 @@ const gchar *rspamd_srv_command_to_string (enum rspamd_srv_type cmd)
 	case RSPAMD_SRV_HEALTH:
 		reply = "health";
 		break;
-	case RSPAMD_NOTICE_HYPERSCAN_CACHE:
+	case RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE:
 		reply = "notice_hyperscan_cache";
+		break;
+	case RSPAMD_SRV_FUZZY_BLOCKED:
+		reply = "fuzzy_blocked";
 		break;
 	}
 

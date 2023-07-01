@@ -36,6 +36,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_FUZZY_SYNC,
 	RSPAMD_CONTROL_MONITORED_CHANGE,
 	RSPAMD_CONTROL_CHILD_CHANGE,
+	RSPAMD_CONTROL_FUZZY_BLOCKED,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -47,7 +48,8 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_ON_FORK,
 	RSPAMD_SRV_HEARTBEAT,
 	RSPAMD_SRV_HEALTH,
-	RSPAMD_NOTICE_HYPERSCAN_CACHE,
+	RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE,
+	RSPAMD_SRV_FUZZY_BLOCKED, /* Used to notify main process about a blocked ip */
 };
 
 enum rspamd_log_pipe_type {
@@ -96,6 +98,14 @@ struct rspamd_control_command {
 			pid_t pid;
 			guint additional;
 		} child_change;
+		struct {
+			union {
+				struct sockaddr sa;
+				struct sockaddr_in s4;
+				struct sockaddr_in6 s6;
+			} addr;
+			sa_family_t af;
+		} fuzzy_blocked;
 	} cmd;
 };
 
@@ -134,6 +144,9 @@ struct rspamd_control_reply {
 		struct {
 			guint status;
 		} fuzzy_sync;
+		struct {
+			guint status;
+		} fuzzy_blocked;
 	} reply;
 };
 
@@ -179,6 +192,15 @@ struct rspamd_srv_command {
 		struct {
 			char path[CONTROL_PATHLEN];
 		} hyperscan_cache_file;
+		/* Send when one worker has blocked some IP address */
+		struct {
+			union {
+				struct sockaddr sa;
+				struct sockaddr_in s4;
+				struct sockaddr_in6 s6;
+			} addr;
+			sa_family_t af;
+		} fuzzy_blocked;
 	} cmd;
 };
 
@@ -213,6 +235,9 @@ struct rspamd_srv_reply {
 		struct {
 			int unused;
 		} hyperscan_cache_file;
+		struct {
+			int unused;
+		} fuzzy_blocked;
 	} reply;
 };
 

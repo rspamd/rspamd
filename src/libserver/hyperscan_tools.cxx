@@ -609,7 +609,7 @@ rspamd_hyperscan_notice_known(const char *fname)
 				(int)strlen(fname), fname, (int)sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
 		}
 		else {
-			notice_cmd.type = RSPAMD_NOTICE_HYPERSCAN_CACHE;
+			notice_cmd.type = RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE;
 			rspamd_strlcpy(notice_cmd.cmd.hyperscan_cache_file.path, fname, sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
 			rspamd_srv_send_command(rspamd_current_worker,
 				rspamd_current_worker->srv->event_loop, &notice_cmd, -1,
