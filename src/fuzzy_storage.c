@@ -2223,6 +2223,124 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	return obj;
 }
 
+static void
+rspamd_fuzzy_maybe_load_ratelimits (struct rspamd_fuzzy_storage_ctx *ctx)
+{
+	char path[PATH_MAX];
+
+	rspamd_snprintf(path, sizeof(path), "%s" G_DIR_SEPARATOR_S "fuzzy_ratelimits.ucl",
+			RSPAMD_DBDIR);
+
+	if (access (path, R_OK) != -1) {
+		struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_NO_IMPLICIT_ARRAYS|UCL_PARSER_DISABLE_MACRO);
+		if (ucl_parser_add_file(parser, path)) {
+			const ucl_object_t *obj = ucl_parser_get_object(parser);
+			int loaded = 0;
+
+			if (ucl_object_type(obj) == UCL_ARRAY) {
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+
+				while ((cur = ucl_object_iterate(obj, &it, true)) != NULL) {
+					const ucl_object_t *ip, *value, *last;
+					const gchar *ip_str;
+					double limit_val, last_val;
+
+					ip = ucl_object_find_key(cur, "ip");
+					value = ucl_object_find_key(cur, "value");
+					last = ucl_object_find_key(cur, "last");
+
+					if (ip == NULL || value == NULL || last == NULL) {
+						msg_err("invalid ratelimit object");
+						continue;
+					}
+
+					ip_str = ucl_object_tostring(ip);
+					limit_val = ucl_object_todouble(value);
+					last_val = ucl_object_todouble(last);
+
+					if (ip_str == NULL || isnan(last_val)) {
+						msg_err("invalid ratelimit object");
+						continue;
+					}
+
+					rspamd_inet_addr_t *addr;
+					if (rspamd_parse_inet_address(&addr, ip_str, strlen(ip_str),
+						RSPAMD_INET_ADDRESS_PARSE_NO_UNIX|RSPAMD_INET_ADDRESS_PARSE_NO_PORT)) {
+						struct rspamd_leaky_bucket_elt *elt = g_malloc(sizeof(*elt));
+
+						elt->cur = limit_val;
+						elt->last = last_val;
+						elt->addr = addr;
+						rspamd_lru_hash_insert(ctx->ratelimit_buckets, addr, elt, elt->last, ctx->leaky_bucket_ttl);
+						loaded ++;
+					}
+					else {
+						msg_err("invalid ratelimit ip: %s", ip_str);
+						continue;
+					}
+				}
+
+				ucl_parser_free(parser);
+
+				msg_info("loaded %d ratelimit objects", loaded);
+			}
+		}
+	}
+}
+
+static void
+rspamd_fuzzy_maybe_save_ratelimits (struct rspamd_fuzzy_storage_ctx *ctx)
+{
+	char path[PATH_MAX];
+
+	rspamd_snprintf(path, sizeof(path), "%s" G_DIR_SEPARATOR_S "fuzzy_ratelimits.ucl.new",
+		RSPAMD_DBDIR);
+	FILE *f = fopen(path, "w");
+
+	if (f != NULL) {
+		ucl_object_t *top = ucl_object_typed_new(UCL_ARRAY);
+		int it = 0;
+		gpointer k, v;
+
+		ucl_object_reserve(top, rspamd_lru_hash_size(ctx->ratelimit_buckets));
+
+		while ((it = rspamd_lru_hash_foreach(ctx->ratelimit_buckets, it, &k, &v)) != -1) {
+			ucl_object_t *cur = ucl_object_typed_new(UCL_OBJECT);
+			struct rspamd_leaky_bucket_elt *elt = (struct rspamd_leaky_bucket_elt *)v;
+
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->cur), "value", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromdouble(elt->last), "last", 0, false);
+			ucl_object_insert_key(cur, ucl_object_fromstring(rspamd_inet_address_to_string(elt->addr)), "ip", 0, false);
+			ucl_array_append(top, cur);
+		}
+
+		if (ucl_object_emit_full(top, UCL_EMIT_JSON_COMPACT, ucl_object_emit_file_funcs(f), NULL)) {
+			char npath[PATH_MAX];
+
+			fflush(f);
+			rspamd_snprintf(npath, sizeof(npath), "%s" G_DIR_SEPARATOR_S "fuzzy_ratelimits.ucl",
+				RSPAMD_DBDIR);
+
+			if (rename(path, npath) == -1) {
+				msg_warn("cannot rename %s to %s: %s", path, npath, strerror(errno));
+			}
+			else {
+				msg_info("saved %d ratelimits in %s", rspamd_lru_hash_size(ctx->ratelimit_buckets), npath);
+			}
+		}
+		else {
+			msg_warn("cannot serialize ratelimit buckets to %s: %s", path, strerror(errno));
+		}
+
+		fclose(f);
+		ucl_object_unref(top);
+	}
+	else {
+		msg_warn("cannot save ratelimit buckets to %s: %s", path, strerror(errno));
+	}
+}
+
 static int
 lua_fuzzy_add_pre_handler (lua_State *L)
 {
@@ -3042,6 +3160,8 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->ratelimit_buckets = rspamd_lru_hash_new_full (ctx->max_buckets,
 				NULL, fuzzy_rl_bucket_free,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
+
+		rspamd_fuzzy_maybe_load_ratelimits (ctx);
 	}
 
 	/* Maps events */
@@ -3124,6 +3244,9 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_fuzzy_backend_close (ctx->backend);
 
 	if (worker->index == 0) {
+		if (ctx->ratelimit_buckets) {
+			rspamd_fuzzy_maybe_save_ratelimits (ctx);
+		}
 		g_array_free (ctx->updates_pending, TRUE);
 		ctx->updates_pending = NULL;
 	}
