@@ -58,7 +58,7 @@ auto raii_file::create(const char *fname, int flags, int perms) -> tl::expected<
 #endif
 
 	if (fname == nullptr) {
-		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
+		return tl::make_unexpected(error {"cannot create file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto fd = ::open(fname, oflags, perms);
@@ -239,7 +239,7 @@ auto raii_file_sink::create(const char *fname, int flags, int perms,
 							const char *suffix) -> tl::expected<raii_file_sink, error>
 {
 	if (!fname || !suffix) {
-		return tl::make_unexpected(error {"cannot open file; filename is nullptr", EINVAL, error_category::CRITICAL});
+		return tl::make_unexpected(error {"cannot create file; filename is nullptr", EINVAL, error_category::CRITICAL});
 	}
 
 	auto tmp_fname = fmt::format("{}.{}", fname, suffix);
