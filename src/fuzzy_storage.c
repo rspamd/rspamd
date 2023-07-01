@@ -276,11 +276,23 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 		gboolean ratelimited = FALSE, new_ratelimit = FALSE;
 
 		if (isnan (elt->cur)) {
-			/* Ratelimit exceeded, preserve it for the whole ttl */
-			ratelimited = TRUE;
+			/* There is an issue with the previous logic: the TTL is updated each time
+			 * we see that new bucket. Hence, we need to check the `last` and act accordingly
+			 */
+			if (elt->last < session->timestamp && session->timestamp - elt->last >= session->ctx->leaky_bucket_ttl) {
+				/*
+				 * We reset bucket to it's 90% capacity to allow some requests
+				 * This should cope with the issue when we block an IP network for some burst and never unblock it
+				 */
+				elt->cur = session->ctx->leaky_bucket_burst * 0.9;
+				elt->last = session->timestamp;
+			}
+			else {
+				ratelimited = TRUE;
+			}
 		}
 		else {
-			/* Update bucket */
+			/* Update bucket: leak some elements */
 			if (elt->last < session->timestamp) {
 				elt->cur -= session->ctx->leaky_bucket_rate * (session->timestamp - elt->last);
 				elt->last = session->timestamp;
@@ -293,7 +305,7 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 				elt->last = session->timestamp;
 			}
 
-			/* Check bucket */
+			/* Check the bucket */
 			if (elt->cur >= session->ctx->leaky_bucket_burst) {
 
 				msg_info ("ratelimiting %s (%s), %.1f max elts",
@@ -302,6 +314,7 @@ rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
 						session->ctx->leaky_bucket_burst);
 				elt->cur = NAN;
 				new_ratelimit = TRUE;
+				ratelimited = TRUE;
 			}
 			else {
 				elt->cur ++; /* Allow one more request */
