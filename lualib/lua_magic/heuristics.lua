@@ -63,13 +63,13 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    {[[(?i)<html\b]], 32},
+    {[=[(?i)<html[\s>]]=], 32},
     {[[(?i)<script\b]], 20}, -- Commonly used by spammers
     {[[<script\s+type="text\/javascript">]], 31}, -- Another spammy pattern
     {[[(?i)<\!DOCTYPE HTML\b]], 33},
     {[[(?i)<body\b]], 20},
     {[[(?i)<table\b]], 20},
-    {[[(?i)<a\b]], 10},
+    {[[(?i)<a\s]], 10},
     {[[(?i)<p\b]], 10},
     {[[(?i)<div\b]], 10},
     {[[(?i)<span\b]], 10},
