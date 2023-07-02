@@ -101,7 +101,7 @@ inline auto string_split_on(const S &input, std::string_view::value_type chr) ->
 	auto pos = std::find(std::begin(input), std::end(input), chr);
 
 	if (pos != input.end()) {
-		auto first = std::string_view{std::begin(input), pos};
+		auto first = std::string_view{std::begin(input), static_cast<std::size_t>(std::distance(std::begin(input), pos))};
 		while (*pos == chr && pos != input.end()) {
 			++pos;
 		}
