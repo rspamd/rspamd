@@ -105,7 +105,7 @@ inline auto string_split_on(const S &input, std::string_view::value_type chr) ->
 		while (*pos == chr && pos != input.end()) {
 			++pos;
 		}
-		auto last = std::string_view{pos, std::end(input)};
+		auto last = std::string_view{pos,  static_cast<std::size_t>(std::distance(pos, std::end(input)))};
 
 		return {first, last};
 	}
