@@ -3867,7 +3867,7 @@ fuzzy_lua_unlearn_handler (lua_State *L)
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
-		flag = lua_tonumber (L, 1);
+		flag = lua_tointeger (L, 2);
 	}
 	else if (lua_type (L, 2) == LUA_TSTRING) {
 		struct fuzzy_rule *rule;
