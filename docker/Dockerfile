@@ -1,6 +1,6 @@
-ARG DEBIAN_RELEASE=bullseye
+ARG DEBIAN_RELEASE=bookworm
 FROM debian:${DEBIAN_RELEASE}-slim
-ARG DEBIAN_RELEASE=bullseye
+ARG DEBIAN_RELEASE=bookworm
 ENV DEBIAN_RELEASE=$DEBIAN_RELEASE
 
 RUN	apt-get update && apt-get install -y --no-install-recommends \
