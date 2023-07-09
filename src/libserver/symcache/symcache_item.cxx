@@ -572,7 +572,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 		auto check_trivial = [&](auto flag,
 								 symcache_item_type ty) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
 			if (all_but_one_ty(type, flag)) {
-				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", type));
+				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", (int)type));
 			}
 
 			return std::make_pair(ty, type & ~flag);
