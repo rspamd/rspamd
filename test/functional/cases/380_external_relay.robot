@@ -33,6 +33,13 @@ EXTERNAL RELAY HOSTNAME MAP
   Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
   ...  IP=192.0.2.1  HOSTNAME=mail.example.org  HELO=mail.example.org
 
+EXTERNAL RELAY IP MAP
+  Scan File  ${RSPAMD_TESTDIR}/messages/received7.eml
+  ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_IP_MAP]}
+  ...  IP=198.51.100.1
+  Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
+  ...  IP=4.31.198.44  HOSTNAME=foobar.example.org  HELO=foobar.example.org
+
 EXTERNAL RELAY LOCAL
   Scan File  ${RSPAMD_TESTDIR}/messages/ham.eml
   ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_LOCAL]}

@@ -61,6 +61,12 @@ local config_schema = ts.shape{
         strategy = 'hostname_map',
         symbol = ts.string:is_optional(),
       },
+      ts.shape{
+        ip_map = lua_maps.map_schema,
+        priority = ts.number:is_optional(),
+        strategy = 'ip_map',
+        symbol = ts.string:is_optional(),
+      },
     }
   ),
 }
@@ -174,6 +180,42 @@ strategies.hostname_map = function(rule)
         else
           -- Keep checking with new hostname
           from_hn = rcvd.from_hostname
+        end
+      end
+    end
+
+    rspamd_logger.errx(task, 'found nothing useful in Received headers')
+  end
+end
+
+strategies.ip_map = function(rule)
+  local ip_map = lua_maps.map_add_from_ucl(rule.ip_map, 'radix', 'external relay IPs')
+  if not ip_map then
+    rspamd_logger.errx(rspamd_config, "couldn't add map %s; won't register symbol %s",
+        rule.ip_map, rule.symbol)
+    return
+  end
+
+  return function(task)
+    local from_ip = task:get_from_ip()
+    if not (from_ip and from_ip:is_valid()) then
+      lua_util.debugm(N, task, 'sender\'s IP is missing')
+      return
+    end
+
+    if not ip_map:get_key(from_ip) then
+      lua_util.debugm(N, task, 'sender\'s ip (%s) is not a relay', from_ip)
+      return
+    end
+
+    local rcvd_hdrs = task:get_received_headers()
+    local num_rcvd = #rcvd_hdrs
+    -- Try find sending IP in Received headers
+    for i, rcvd in ipairs(rcvd_hdrs) do
+      if rcvd.real_ip then
+        local rcvd_ip = rcvd.real_ip
+        if rcvd_ip:is_valid() and (not ip_map:get_key(rcvd_ip) or i == num_rcvd) then
+          return set_from_rcvd(task, rcvd)
         end
       end
     end
