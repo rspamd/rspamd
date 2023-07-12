@@ -963,6 +963,26 @@ reconf['OLD_X_MAILER'] = {
   group = 'headers',
 }
 
+-- Detect Apple Mail
+local apple_x_mailer = [[Apple Mail \(((Version )?[1-9]\.[0-9]*|[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*)\)]]
+reconf['APPLE_MAILER'] = {
+  description = 'Sent with Apple Mail',
+  re = string.format('X-Mailer=/^%s/{header}', apple_x_mailer),
+  score = 0.0,
+  group = 'headers',
+}
+
+-- Detect Apple iPhone/iPad Mail
+-- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c
+-- https://en.wikipedia.org/wiki/IOS_version_history
+local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \(\d{1,2}[A-Z]\d{1,4}[a-z]?\)]]
+reconf['APPLE_IOS_MAILER'] = {
+  description = 'Sent with Apple iPhone/iPad Mail',
+  re = string.format('X-Mailer=/^%s/{header}', apple_ios_x_mailer),
+  score = 0.0,
+  group = 'headers',
+}
+
 -- X-Mailer header values which should not occur (in the modern mail) at all
 local bad_x_mailers = {
   -- header name repeated in the header value
@@ -978,9 +998,6 @@ local bad_x_mailers = {
   -- but starts with 'iPhone Mail' or 'iPad Mail' is likely fake
   [[i(?:Phone|Pad) Mail]],
 }
--- Apple iPhone/iPad Mail X-Mailer contains iOS build number, e. g. 9B206, 16H5, 18G5023c
--- https://en.wikipedia.org/wiki/IOS_version_history
-local apple_ios_x_mailer = [[i(?:Phone|Pad) Mail \((?:1[AC]|[34][AB]|5[ABCFGH]|7[A-E]|8[ABCEFGHJKL]|9[AB]|\d{2}[A-Z])\d+[a-z]?\)]]
 
 reconf['FORGED_X_MAILER'] = {
   description = 'Forged X-Mailer header',
