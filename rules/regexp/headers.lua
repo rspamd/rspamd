@@ -964,7 +964,7 @@ reconf['OLD_X_MAILER'] = {
 }
 
 -- Detect Apple Mail
-local apple_x_mailer = [[Apple Mail \(((Version )?[1-9]\.[0-9]*|[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*)\)]]
+local apple_x_mailer = [[Apple Mail \((?:(?:Version )?[1-9]\d{0,2}\.\d{1,3}|[1-9]\d{0,2}\.\d{1,4}\.\d{1,4}\.\d{1,4})\)]]
 reconf['APPLE_MAILER'] = {
   description = 'Sent with Apple Mail',
   re = string.format('X-Mailer=/^%s/{header}', apple_x_mailer),
