@@ -539,7 +539,7 @@ rspamd_cryptobox_sign (guchar *sig, unsigned long long *siglen_p,
 		g_assert (0);
 #else
 		EC_KEY *lk;
-		BIGNUM *bn_sec, *kinv = NULL, *rp = NULL;
+		BIGNUM *bn_sec;
 		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 		guint diglen = rspamd_cryptobox_signature_bytes (mode);
@@ -558,9 +558,7 @@ rspamd_cryptobox_sign (guchar *sig, unsigned long long *siglen_p,
 		g_assert (EC_KEY_set_private_key (lk, bn_sec) == 1);
 
 		/* ECDSA */
-		g_assert (ECDSA_sign_setup (lk, NULL, &kinv, &rp) == 1);
-		g_assert (ECDSA_sign_ex (0, h, sizeof (h), sig,
-				&diglen, kinv, rp, lk) == 1);
+		g_assert (ECDSA_sign (0, h, sizeof (h), sig, &diglen, lk) == 1);
 		g_assert (diglen <= sizeof (rspamd_signature_t));
 
 		if (siglen_p) {
@@ -570,9 +568,6 @@ rspamd_cryptobox_sign (guchar *sig, unsigned long long *siglen_p,
 		EC_KEY_free (lk);
 		EVP_MD_CTX_destroy (sha_ctx);
 		BN_free (bn_sec);
-		BN_free (kinv);
-		BN_free (rp);
-
 #endif
 	}
 }
