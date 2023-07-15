@@ -429,17 +429,23 @@ local function hfilter_callback(task)
     end
   end
 
-
-  local function hostname_cb()
+  local function hostname_processed_cb()
     local weight_hostname = 0
     local hostname = task:get_hostname()
 
-    -- Check regexp HOSTNAME
-    local weights = checks_hellohost_map:get_key(hostname)
-    for _,weight in ipairs(weights or {}) do
-      weight = tonumber(weight) or 0
-      if weight > weight_hostname then
-        weight_hostname = weight
+    -- Check's HOSTNAME
+    if config['hostname_enabled'] then
+      if hostname then
+        -- Check regexp HOSTNAME
+        local weights = checks_hellohost_map:get_key(hostname)
+        for _,weight in ipairs(weights or {}) do
+          weight = tonumber(weight) or 0
+          if weight > weight_hostname then
+            weight_hostname = weight
+          end
+        end
+      else
+        task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
       end
     end
 
@@ -510,20 +516,22 @@ local function hfilter_callback(task)
     end
     rspamd_logger.infox('found result for %s: %s', to_resolve, results[1])
     task:set_hostname(results[1])
-    hostname_cb()
+    hostname_processed_cb()
   end
 
-  local hostname = task:get_hostname()
-
+  -- If the hostname isn't enabled, we can return early and skip processing it.
   if not config['hostname_enabled'] then
+    hostname_processed_cb()
     return false
   end
   
+  local hostname = task:get_hostname()
   if hostname then
-    hostname_cb()
+    hostname_processed_cb()
     return false
   end
   
+  -- If the hostname wasn't provided by the MTA, do a reverse lookup of the IP to find it.
   local ip = task:get_ip()
   if not (ip and ip:is_valid()) then
     rspamd_logger.errx(task, 'ip for task is not valid')
