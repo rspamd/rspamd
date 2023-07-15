@@ -23,6 +23,7 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local rspamc_local_helo = "rspamc.local"
@@ -428,79 +429,115 @@ local function hfilter_callback(task)
     end
   end
 
-  -- Check's HOSTNAME
-  local weight_hostname = 0
-  local hostname = task:get_hostname()
 
-  if config['hostname_enabled'] then
-    if hostname then
-      -- Check regexp HOSTNAME
-      local weights = checks_hellohost_map:get_key(hostname)
-      for _,weight in ipairs(weights or {}) do
-        weight = tonumber(weight) or 0
-        if weight > weight_hostname then
-          weight_hostname = weight
+  local function hostname_cb()
+    local weight_hostname = 0
+    local hostname = task:get_hostname()
+
+    -- Check regexp HOSTNAME
+    local weights = checks_hellohost_map:get_key(hostname)
+    for _,weight in ipairs(weights or {}) do
+      weight = tonumber(weight) or 0
+      if weight > weight_hostname then
+        weight_hostname = weight
+      end
+    end
+
+    --Insert weight's for HELO or HOSTNAME
+    if weight_helo > 0 and weight_helo >= weight_hostname then
+      task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0, helo)
+    elseif weight_hostname > 0 and weight_hostname > weight_helo then
+      task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0, hostname)
+    end
+
+    -- MAILFROM checks --
+    local frombounce = false
+    if config['from_enabled'] then
+      local from = task:get_from(1)
+      if from then
+        --FROM host check
+        for _,fr in ipairs(from) do
+          local fr_split = rspamd_str_split(fr['addr'], '@')
+          if #fr_split == 2 then
+            check_host(task, fr_split[2], 'FROMHOST', '', '')
+            if fr_split[1] == 'postmaster' then
+              frombounce = true
+            end
+          end
+        end
+      else
+        if helo and helo ~= rspamc_local_helo then
+          task:insert_result('HFILTER_FROM_BOUNCE', 1.00, helo)
+          frombounce = true
         end
       end
-    else
-      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end
-  end
 
-  --Insert weight's for HELO or HOSTNAME
-  if weight_helo > 0 and weight_helo >= weight_hostname then
-    task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0, helo)
-  elseif weight_hostname > 0 and weight_hostname > weight_helo then
-    task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0, hostname)
-  end
-
-  -- MAILFROM checks --
-  local frombounce = false
-  if config['from_enabled'] then
-    local from = task:get_from(1)
-    if from then
-      --FROM host check
-      for _,fr in ipairs(from) do
-        local fr_split = rspamd_str_split(fr['addr'], '@')
-        if #fr_split == 2 then
-          check_host(task, fr_split[2], 'FROMHOST', '', '')
-          if fr_split[1] == 'postmaster' then
-            frombounce = true
+    -- Recipients checks --
+    if config['rcpt_enabled'] then
+      local rcpt = task:get_recipients()
+      if rcpt then
+        local count_rcpt = #rcpt
+        if frombounce then
+          if count_rcpt > 1 then
+            task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00,
+              tostring(count_rcpt))
           end
         end
       end
-    else
-      if helo and helo ~= rspamc_local_helo then
-        task:insert_result('HFILTER_FROM_BOUNCE', 1.00, helo)
-        frombounce = true
-      end
     end
-  end
 
-  -- Recipients checks --
-  if config['rcpt_enabled'] then
-    local rcpt = task:get_recipients()
-    if rcpt then
-      local count_rcpt = #rcpt
-      if frombounce then
-        if count_rcpt > 1 then
-          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00,
-            tostring(count_rcpt))
+    --Message ID host check
+    if config['mid_enabled'] then
+      local message_id = task:get_message_id()
+      if message_id then
+        local mid_split = rspamd_str_split(message_id, '@')
+        if #mid_split == 2 and not string.find(mid_split[2], 'local') then
+          check_host(task, mid_split[2], 'MID')
         end
       end
     end
   end
 
-  --Message ID host check
-  if config['mid_enabled'] then
-    local message_id = task:get_message_id()
-    if message_id then
-      local mid_split = rspamd_str_split(message_id, '@')
-      if #mid_split == 2 and not string.find(mid_split[2], 'local') then
-        check_host(task, mid_split[2], 'MID')
-      end
+  local function recv_dns_cb(_, to_resolve, results, err)
+    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+      rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
+      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end
+    if not results then
+      rspamd_logger.errx(task, 'no results when looking up %s: %s', to_resolve, err)
+      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
+    end
+    rspamd_logger.infox('found result for %s: %s', to_resolve, results[1])
+    task:set_hostname(results[1])
+    hostname_cb()
   end
+
+  local hostname = task:get_hostname()
+
+  if not config['hostname_enabled'] then
+    return false
+  end
+  
+  if hostname then
+    hostname_cb()
+    return false
+  end
+  
+  local ip = task:get_ip()
+  if not (ip and ip:is_valid()) then
+    rspamd_logger.errx(task, 'ip for task is not valid')
+    task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
+    return false
+  end
+
+  rspamd_logger.infox('looking up hostname for ip %s', ip:to_string())
+
+  task:get_resolver():resolve_ptr({task = task,
+    name = ip:to_string(),
+    callback = recv_dns_cb,
+    forced = true
+  })
 
   return false
 end
