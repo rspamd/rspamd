@@ -1,6 +1,5 @@
 # Ported from Clickhouse: https://github.com/ClickHouse/ClickHouse/blob/master/cmake/sanitize.cmake
 
-option (SANITIZE "Enable sanitizer: address, memory, undefined, leak (comma separated list)" "")
 set (SAN_FLAGS "${SAN_FLAGS} -g -fno-omit-frame-pointer -DSANITIZER")
 # O1 is normally set by clang, and -Og by gcc
 if (COMPILER_GCC)

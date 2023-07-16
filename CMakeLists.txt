@@ -85,6 +85,7 @@ ENDIF()
 FIND_PACKAGE(PkgConfig REQUIRED)
 FIND_PACKAGE(Perl REQUIRED)
 
+option (SANITIZE "Enable sanitizer: address, memory, undefined, leak (comma separated list)" "")
 INCLUDE(Toolset)
 INCLUDE(Sanitizer)
 
