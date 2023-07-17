@@ -1274,7 +1274,10 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 				res = FALSE;
 			}
 			else {
-				g_assert_not_reached ();
+				/* Something bogus has been returned, so we should log it */
+				msg_err_task ("invalid return value for %s: %s",
+						cd->symbol, lua_typename (L, type));
+				res = FALSE;
 			}
 
 			if (res) {
