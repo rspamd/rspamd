@@ -24,6 +24,9 @@ BuildRequires:    cmake
 %if 0%{?el8}
 BuildRequires:    gcc-toolset-10-gcc-c++
 %endif
+%if 0%{?el9}
+BuildRequires:    gcc-toolset-12-gcc-c++
+%endif
 %endif
 BuildRequires:    file-devel
 BuildRequires:    glib2-devel
@@ -37,6 +40,9 @@ BuildRequires:    devtoolset-10-libasan-devel
 %else
 %if 0%{?el8}
 BuildRequires:    gcc-toolset-10-libasan-devel
+%endif
+%if 0%{?el9}
+BuildRequires:    gcc-toolset-12-libasan-devel
 %endif
 %endif
 %endif
@@ -83,6 +89,9 @@ source /opt/rh/devtoolset-10/enable
 %else
 %if 0%{?el8}
 source /opt/rh/gcc-toolset-10/enable
+%endif
+%if 0%{?el9}
+source /opt/rh/gcc-toolset-12/enable
 %endif
 %endif
 
