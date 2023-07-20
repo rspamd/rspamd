@@ -252,6 +252,15 @@ LUA_FUNCTION_DEF (util, lower_utf8);
  */
 LUA_FUNCTION_DEF (util, normalize_utf8);
 
+
+/***
+ * @function util.transliterate(str)
+ * Converts utf8 encoded string to latin transliteration
+ * @param {string/text} str utf8 encoded string
+ * @return {text} transliterated string
+ */
+LUA_FUNCTION_DEF (util, transliterate);
+
 /***
  * @function util.strequal_caseless(str1, str2)
  * Compares two strings regardless of their case using ascii comparison.
@@ -686,6 +695,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, strlen_utf8),
 	LUA_INTERFACE_DEF (util, lower_utf8),
 	LUA_INTERFACE_DEF (util, normalize_utf8),
+	LUA_INTERFACE_DEF (util, transliterate),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, strequal_caseless_utf8),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -1633,6 +1643,24 @@ lua_util_normalize_utf8 (lua_State *L)
 	lua_pushinteger(L, res);
 
 	return 2;
+}
+
+static gint
+lua_util_transliterate (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	t = lua_check_text_or_string (L, 1);
+
+	if (!t) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	gsize outlen;
+	char *transliterated = rspamd_utf8_transliterate(t->start, t->len, &outlen);
+	lua_new_text(L, transliterated, outlen, TRUE);
+
+	return 1;
 }
 
 static gint
