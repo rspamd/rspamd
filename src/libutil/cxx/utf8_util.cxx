@@ -21,6 +21,7 @@
 #include <unicode/normalizer2.h>
 #include <unicode/schriter.h>
 #include <unicode/coll.h>
+#include <unicode/translit.h>
 #include <utility>
 #include <tuple>
 #include <string>
@@ -157,6 +158,50 @@ rspamd_normalise_unicode_inplace(char *start, size_t *len)
 	}
 
 	return static_cast<enum rspamd_utf8_normalise_result>(ret);
+}
+
+gchar*
+rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	static const icu::Transliterator *transliterator = nullptr;
+
+	if (transliterator == nullptr) {
+		UParseError parse_err;
+		static const auto rules = icu::UnicodeString{":: Any-Latin;"
+													 ":: [:Nonspacing Mark:] Remove;"
+													 ":: [:Punctuation:] Remove;"
+													 ":: [:Symbol:] Remove;"
+													 ":: [:Format:] Remove;"
+													 ":: Latin-ASCII;"
+													 ":: Lower();"
+													 ":: NULL;"
+													 "[:Space Separator:] > ' '"
+		};
+		transliterator = icu::Transliterator::createFromRules("RspamdTranslit", rules, UTRANS_FORWARD, parse_err, uc_err);
+
+		if (U_FAILURE(uc_err) || transliterator == nullptr) {
+			auto context = icu::UnicodeString(parse_err.postContext, sizeof(parse_err.preContext) / sizeof(UChar));
+			g_error ("fatal error: cannot init libicu transliteration engine: %s, line: %d, offset: %d",
+					u_errorName(uc_err), parse_err.line, parse_err.offset);
+			abort();
+		}
+	}
+
+	auto uc_string = icu::UnicodeString::fromUTF8(icu::StringPiece(start, len));
+	transliterator->transliterate(uc_string);
+
+	// We assume that all characters are now ascii
+	auto dest_len = uc_string.length();
+	gchar *dest = (gchar *)g_malloc(dest_len + 1);
+	auto sink = icu::CheckedArrayByteSink(dest, dest_len);
+	uc_string.toUTF8(sink);
+
+	*target_len = sink.NumberOfBytesWritten();
+	dest[*target_len] = '\0';
+
+	return dest;
 }
 
 struct rspamd_icu_collate_storage {
@@ -307,6 +352,41 @@ TEST_CASE("utf8 strcmp") {
 		SUBCASE((std::string("test case: ") + s1 + " <=> " + s2).c_str()) {
 			auto ret = rspamd_utf8_strcmp(s1, s2, n);
 			CHECK(ret == expected);
+		}
+	}
+}
+
+TEST_CASE("transliterate") {
+	using namespace std::literals;
+	std::tuple<std::string_view, const char *> cases[] = {
+		{"abc"sv, "abc"},
+		{""sv,  ""},
+		{"тест"sv,  "test"},
+		// Diacritic to ascii
+		{"Ύ"sv, "y"},
+		// Chinese to pinyin
+		{"你好"sv, "ni hao"},
+		// Japanese to romaji
+		{"こんにちは"sv, "konnichiha"},
+		// Devanagari to latin
+		{"नमस्ते"sv, "namaste"},
+		// Arabic to latin
+		{"مرحبا"sv, "mrhba"},
+		// Remove of punctuation
+		{"a.b.c"sv, "abc"},
+		// Lowercase
+		{"ABC"sv, "abc"},
+		// Remove zero-width spaces
+		{"\xE2\x80\x8B""abc\xE2\x80\x8B""def"sv, "abcdef"},
+	};
+
+	for (const auto &c : cases) {
+		auto [s1, s2] = c;
+		SUBCASE((std::string("test case: ") + std::string(s1) + " => " + s2).c_str()) {
+			gsize tlen;
+			auto *ret = rspamd_utf8_transliterate(s1.data(), s1.length(), &tlen);
+			CHECK(tlen == strlen(s2));
+			CHECK(strcmp(s2, ret) == 0);
 		}
 	}
 }
