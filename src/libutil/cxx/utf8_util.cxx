@@ -165,9 +165,9 @@ rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len)
 {
 	UErrorCode uc_err = U_ZERO_ERROR;
 
-	static const icu::Transliterator *transliterator = nullptr;
+	static std::unique_ptr<icu::Transliterator> transliterator;
 
-	if (transliterator == nullptr) {
+	if (!transliterator) {
 		UParseError parse_err;
 		static const auto rules = icu::UnicodeString{":: Any-Latin;"
 													 ":: [:Nonspacing Mark:] Remove;"
@@ -179,9 +179,10 @@ rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len)
 													 ":: NULL;"
 													 "[:Space Separator:] > ' '"
 		};
-		transliterator = icu::Transliterator::createFromRules("RspamdTranslit", rules, UTRANS_FORWARD, parse_err, uc_err);
+		transliterator = std::unique_ptr<icu::Transliterator>(
+			icu::Transliterator::createFromRules("RspamdTranslit", rules, UTRANS_FORWARD, parse_err, uc_err));
 
-		if (U_FAILURE(uc_err) || transliterator == nullptr) {
+		if (U_FAILURE(uc_err) || !transliterator) {
 			auto context = icu::UnicodeString(parse_err.postContext, sizeof(parse_err.preContext) / sizeof(UChar));
 			g_error ("fatal error: cannot init libicu transliteration engine: %s, line: %d, offset: %d",
 					u_errorName(uc_err), parse_err.line, parse_err.offset);
