@@ -241,7 +241,7 @@ local function gen_dmarc_grammar()
   lpeg.locale(lpeg)
   local space = lpeg.space^0
   local name = lpeg.C(lpeg.alpha^1) * space
-  local sep = (lpeg.S("\\;") * space) + (lpeg.space^1)
+  local sep = space * (lpeg.S("\\;") * space) + (lpeg.space^1)
   local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
   local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
   local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
