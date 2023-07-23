@@ -186,7 +186,7 @@ lua_url_get_port (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushinteger (L, url->url->port);
+		lua_pushinteger (L, rspamd_url_get_port(url->url));
 	}
 	else {
 		lua_pushnil (L);
@@ -475,12 +475,13 @@ lua_url_get_phished (lua_State *L)
 	struct rspamd_lua_url *purl, *url = lua_check_url (L, 1);
 
 	if (url) {
-		if (url->url->linked_url != NULL) {
+		if (url->url->ext && url->url->ext->linked_url != NULL) {
+			/* XXX: in fact, this is the only possible combination of flags, so this check is redundant */
 			if (url->url->flags &
 					(RSPAMD_URL_FLAG_PHISHED|RSPAMD_URL_FLAG_REDIRECTED)) {
 				purl = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
-				purl->url = url->url->linked_url;
+				purl->url = url->url->ext->linked_url;
 
 				return 1;
 			}
@@ -535,7 +536,11 @@ lua_url_set_redirected (lua_State *L)
 			redir = lua_check_url (L, -1);
 
 			url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
-			url->url->linked_url = redir->url;
+
+			if (url->url->ext == NULL) {
+				url->url->ext = rspamd_mempool_alloc0_type(pool, struct rspamd_url_ext);
+			}
+			url->url->ext->linked_url = redir->url;
 		}
 	}
 	else {
@@ -546,7 +551,10 @@ lua_url_set_redirected (lua_State *L)
 		}
 
 		url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
-		url->url->linked_url = redir->url;
+		if (url->url->ext == NULL) {
+			url->url->ext = rspamd_mempool_alloc0_type(pool, struct rspamd_url_ext);
+		}
+		url->url->ext->linked_url = redir->url;
 
 		/* Push back on stack */
 		lua_pushvalue (L, 2);
@@ -629,8 +637,8 @@ lua_url_get_visible (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
-	if (url != NULL && url->url->visible_part) {
-		lua_pushstring (L, url->url->visible_part);
+	if (url != NULL && url->url->ext && url->url->ext->visible_part) {
+		lua_pushstring (L, url->url->ext->visible_part);
 	}
 	else {
 		lua_pushnil (L);
@@ -671,11 +679,9 @@ lua_url_to_table (lua_State *L)
 			lua_settable (L, -3);
 		}
 
-		if (u->port != 0) {
-			lua_pushstring (L, "port");
-			lua_pushinteger (L, u->port);
-			lua_settable (L, -3);
-		}
+		lua_pushstring (L, "port");
+		lua_pushinteger (L, rspamd_url_get_port(u));
+		lua_settable (L, -3);
 
 		if (u->tldlen > 0) {
 			lua_pushstring (L, "tld");

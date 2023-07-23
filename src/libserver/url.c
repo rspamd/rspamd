@@ -1797,11 +1797,11 @@ rspamd_url_regen_from_inet_addr (struct rspamd_url *uri, const void *addr, int a
 	uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 
 	/* Reconstruct URL */
-	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT) {
+	if (uri->flags & RSPAMD_URL_FLAG_HAS_PORT && uri->ext) {
 		p = strbuf + r;
 		start_offset = p + 1;
 		r += rspamd_snprintf (strbuf + r, slen - r, ":%ud",
-				(unsigned int)uri->port);
+				(unsigned int)uri->ext->port);
 	}
 	if (uri->datalen > 0) {
 		p = strbuf + r;
@@ -2351,7 +2351,6 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 	}
 
-	uri->port = u.port;
 	uri->flags = flags;
 
 	if (!uri->hostlen) {

@@ -52,35 +52,46 @@ struct rspamd_url_tag {
 	struct rspamd_url_tag *prev, *next;
 };
 
-
+struct rspamd_url_ext;
+/**
+ * URL structure
+ */
 struct rspamd_url {
-	gchar *string;
-	gchar *raw;
+	char *string;
+	char *raw;
+	struct rspamd_url_ext *ext;
 
+	uint32_t flags;
+
+	uint8_t protocol;
+	uint8_t protocollen;
+
+	uint16_t hostshift;
+	uint16_t datashift;
+	uint16_t queryshift;
+	uint16_t fragmentshift;
+	uint16_t tldshift;
+	guint16 usershift;
+	guint16 userlen;
+
+	uint16_t hostlen;
+	uint16_t datalen;
+	uint16_t querylen;
+	uint16_t fragmentlen;
+	uint16_t tldlen;
+	uint16_t count;
+	uint16_t urllen;
+	uint16_t rawlen;
+};
+
+/**
+ * Rarely used url fields
+ */
+struct rspamd_url_ext {
 	gchar *visible_part;
 	struct rspamd_url *linked_url;
 
-	guint32 flags;
-
-	guint8 protocol;
-	guint8 protocollen;
-
 	guint16 port;
-	guint16 usershift;
-	guint16 hostshift;
-	guint16 datashift;
-	guint16 queryshift;
-	guint16 fragmentshift;
-	guint16 tldshift;
-	guint16 userlen;
-	guint16 hostlen;
-	guint16 datalen;
-	guint16 querylen;
-	guint16 fragmentlen;
-	guint16 tldlen;
-	guint16 count;
-	guint16 urllen;
-	guint16 rawlen;
 };
 
 #define rspamd_url_user(u) ((u)->userlen > 0 ? (u)->string + (u)->usershift : NULL)
@@ -349,6 +360,22 @@ int rspamd_url_cmp(const struct rspamd_url *u1, const struct rspamd_url *u2);
  * @return
  */
 int rspamd_url_cmp_qsort(const void *u1, const void *u2);
+
+static inline uint16_t rspamd_url_get_port(struct rspamd_url *u)
+{
+	if (u->flags & RSPAMD_URL_FLAG_HAS_PORT && u->ext) {
+		return u->ext->port;
+	}
+	else {
+		/* Assume standard port */
+		if (u->protocol == PROTOCOL_HTTPS) {
+			return 443;
+		}
+		else {
+			return 80;
+		}
+	}
+}
 
 /**
  * Normalize unicode input and set out url flags as appropriate

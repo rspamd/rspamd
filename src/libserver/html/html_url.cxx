@@ -183,8 +183,12 @@ html_url_is_phished(rspamd_mempool_t *pool,
 
 						if (!rspamd_url_is_subdomain(disp_tok, href_tok)) {
 							href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
-							href_url->linked_url = text_url;
 							text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+
+							if (href_url->ext == nullptr) {
+								href_url->ext = rspamd_mempool_alloc0_type(pool, rspamd_url_ext);
+							}
+							href_url->ext->linked_url = text_url;
 						}
 					}
 				}
@@ -241,18 +245,21 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 		return;
 	}
 
-	url->visible_part = rspamd_mempool_alloc_buffer(pool, visible_part.size() + 1);
-	rspamd_strlcpy(url->visible_part,
+	if (url->ext == nullptr) {
+		url->ext = rspamd_mempool_alloc0_type(pool, rspamd_url_ext);
+	}
+	url->ext->visible_part = rspamd_mempool_alloc_buffer(pool, visible_part.size() + 1);
+	rspamd_strlcpy(url->ext->visible_part,
 			visible_part.data(),
 			visible_part.size() + 1);
 	dlen = visible_part.size();
 
 	/* Strip unicode spaces from the start and the end */
-	url->visible_part = const_cast<char *>(
-			rspamd_string_unicode_trim_inplace(url->visible_part,
+	url->ext->visible_part = const_cast<char *>(
+			rspamd_string_unicode_trim_inplace(url->ext->visible_part,
 			&dlen));
 	auto maybe_url = html_url_is_phished(pool, url,
-			{url->visible_part, dlen});
+			{url->ext->visible_part, dlen});
 
 	if (maybe_url) {
 		url->flags |= saved_flags;
@@ -300,7 +307,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 		}
 	}
 
-	rspamd_normalise_unicode_inplace(url->visible_part, &dlen);
+	rspamd_normalise_unicode_inplace(url->ext->visible_part, &dlen);
 }
 
 auto
