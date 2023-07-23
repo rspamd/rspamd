@@ -23,7 +23,7 @@
  */
 
 #include "fastutf8.h"
-#include "platform_config.h"
+#include "libcryptobox/platform_config.h"
 
 
 /*
@@ -125,10 +125,10 @@ rspamd_fast_utf8_validate_ref (const unsigned char *data, size_t len)
 }
 
 /* Prototypes */
-#ifdef HAVE_SSSE3
+#if defined(HAVE_SSE41) && defined(__x86_64__)
 extern off_t rspamd_fast_utf8_validate_sse41 (const unsigned char *data, size_t len);
 #endif
-#ifdef HAVE_AVX2
+#if defined(HAVE_AVX2) && defined(__x86_64__)
 extern off_t rspamd_fast_utf8_validate_avx2 (const unsigned char *data, size_t len);
 #endif
 
@@ -139,12 +139,12 @@ static off_t (*validate_func) (const unsigned char *data, size_t len) =
 void
 rspamd_fast_utf8_library_init (unsigned flags)
 {
-#ifdef HAVE_SSSE3
+#if defined(HAVE_SSE41) && defined(__x86_64__)
 	if (flags & RSPAMD_FAST_UTF8_FLAG_SSE41) {
 		validate_func = rspamd_fast_utf8_validate_sse41;
 	}
 #endif
-#ifdef HAVE_AVX2
+#if defined(HAVE_AVX2) && defined(__x86_64__)
 	if (flags & RSPAMD_FAST_UTF8_FLAG_AVX2) {
 		validate_func = rspamd_fast_utf8_validate_avx2;
 	}
