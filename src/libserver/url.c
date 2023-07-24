@@ -2310,6 +2310,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 	}
 
 	uri->urllen = len;
+	uri->flags = flags;
 
 	for (i = 0; i < UF_MAX; i++) {
 		if (u.field_set & (1 << i)) {
@@ -2351,7 +2352,14 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 	}
 
-	uri->flags = flags;
+	/* Port is 'special' in case of url_parser as it is not a part of UF_* macro logic */
+	if (u.port != 0) {
+		if (!uri->ext) {
+			uri->ext = rspamd_mempool_alloc0_type(pool, struct rspamd_url_ext);
+		}
+		uri->flags |= RSPAMD_URL_FLAG_HAS_PORT;
+		uri->ext->port = u.port;
+	}
 
 	if (!uri->hostlen) {
 		return URI_ERRNO_HOST_MISSING;
