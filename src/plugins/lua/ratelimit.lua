@@ -544,7 +544,7 @@ local function maybe_cleanup_pending(task)
   if task:cache_get('ratelimit_bucket_touched') then
     local prefixes = task:cache_get('ratelimit_prefixes')
     if prefixes then
-      for k, v in pairs(prefixes) or E do
+      for k, v in pairs(prefixes) do
         local bucket = v.bucket
         local function cleanup_cb(err, data)
           if err then
