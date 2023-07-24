@@ -1303,6 +1303,36 @@ rspamd_message_parse (struct rspamd_task *task)
 	return TRUE;
 }
 
+
+/*
+ * A helper structure to store text parts positions, if it was C++, I could just use std::pair,
+ * but here I have to make it all manually, sigh...
+ */
+struct rspamd_mime_part_text_position {
+	unsigned pos;
+	enum rspamd_message_part_is_text_result res;
+};
+
+/* Place html parts first during analysis */
+static int
+rspamd_mime_text_part_position_compare_func(const void *v1, const void *v2)
+{
+	const struct rspamd_mime_part_text_position *p1 = (const struct rspamd_mime_part_text_position *)v1;
+	const struct rspamd_mime_part_text_position *p2 = (const struct rspamd_mime_part_text_position *)v2;
+
+	if (p1->res == p2->res) {
+		return (int)p2->pos - (int)p1->pos;
+	}
+	else {
+		if (p1->res == RSPAMD_MESSAGE_PART_IS_TEXT_HTML) {
+			return -1;
+		}
+		else {
+			return 1;
+		}
+	}
+}
+
 void
 rspamd_message_process (struct rspamd_task *task)
 {
@@ -1343,6 +1373,8 @@ rspamd_message_process (struct rspamd_task *task)
 	if (L) {
 		funcs_top = lua_gettop (L);
 	}
+
+	GArray *detected_text_parts = g_array_sized_new (FALSE, FALSE, sizeof(struct rspamd_mime_part_text_position), 2);
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (magic_func_pos != -1 && part->parsed_data.len > 0) {
@@ -1441,16 +1473,27 @@ rspamd_message_process (struct rspamd_task *task)
 		/* Try to detect image before checking for text */
 		rspamd_images_process_mime_part_maybe (task, part);
 
-		/* Still no content detected, try text heuristic */
 		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED &&
-				!(part->flags & RSPAMD_MIME_PART_NO_TEXT_EXTRACTION)) {
+			!(part->flags & RSPAMD_MIME_PART_NO_TEXT_EXTRACTION)) {
 			enum rspamd_message_part_is_text_result res = rspamd_message_part_can_be_parsed_as_text(task, part);
 
 			if (res != RSPAMD_MESSAGE_PART_IS_NOT_TEXT) {
-				rspamd_message_process_text_part_maybe (task, part, res);
+				struct rspamd_mime_part_text_position p = {
+					.pos = i,
+					.res = res
+				};
+				g_array_append_val (detected_text_parts, p);
 			}
-
 		}
+	}
+
+	g_array_sort(detected_text_parts, rspamd_mime_text_part_position_compare_func);
+	/* One more iteration to process text parts in a more specific order */
+	for (i = 0; i < detected_text_parts->len; i ++) {
+		part = g_ptr_array_index (MESSAGE_FIELD (task, parts),
+			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).pos);
+		rspamd_message_process_text_part_maybe(task, part,
+			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).res);
 	}
 
 	if (old_top != -1) {
