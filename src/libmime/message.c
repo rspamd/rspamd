@@ -1496,6 +1496,8 @@ rspamd_message_process (struct rspamd_task *task)
 			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).res);
 	}
 
+	g_array_free (detected_text_parts, TRUE);
+
 	if (old_top != -1) {
 		lua_settop (L, old_top);
 	}
