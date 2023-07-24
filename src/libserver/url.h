@@ -361,9 +361,14 @@ int rspamd_url_cmp(const struct rspamd_url *u1, const struct rspamd_url *u2);
  */
 int rspamd_url_cmp_qsort(const void *u1, const void *u2);
 
-static inline uint16_t rspamd_url_get_port(struct rspamd_url *u)
+/**
+ * Returns a port for some url
+ * @param u
+ * @return
+ */
+static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port(struct rspamd_url *u)
 {
-	if (u->flags & RSPAMD_URL_FLAG_HAS_PORT && u->ext) {
+	if ((u->flags & RSPAMD_URL_FLAG_HAS_PORT) && u->ext) {
 		return u->ext->port;
 	}
 	else {
@@ -375,6 +380,20 @@ static inline uint16_t rspamd_url_get_port(struct rspamd_url *u)
 			return 80;
 		}
 	}
+}
+
+/**
+ * Returns a port for some url if it is set
+ * @param u
+ * @return
+ */
+static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port_if_special(struct rspamd_url *u)
+{
+	if ((u->flags & RSPAMD_URL_FLAG_HAS_PORT) && u->ext) {
+		return u->ext->port;
+	}
+
+	return 0;
 }
 
 /**

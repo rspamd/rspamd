@@ -186,7 +186,12 @@ lua_url_get_port (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushinteger (L, rspamd_url_get_port(url->url));
+		if (rspamd_url_get_port_if_special(url->url) == 0) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_pushinteger (L, rspamd_url_get_port_if_special(url->url));
+		}
 	}
 	else {
 		lua_pushnil (L);
@@ -679,9 +684,11 @@ lua_url_to_table (lua_State *L)
 			lua_settable (L, -3);
 		}
 
-		lua_pushstring (L, "port");
-		lua_pushinteger (L, rspamd_url_get_port(u));
-		lua_settable (L, -3);
+		if (rspamd_url_get_port_if_special(u) != 0) {
+			lua_pushstring (L, "port");
+			lua_pushinteger (L, rspamd_url_get_port_if_special(u));
+			lua_settable (L, -3);
+		}
 
 		if (u->tldlen > 0) {
 			lua_pushstring (L, "tld");
