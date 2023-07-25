@@ -22,7 +22,7 @@ pending = tonumber(pending or '0')
 if pending < nrcpt then pending = 0 else pending = pending - nrcpt end
 
 -- 3. Set the updated values back to Redis and update the expiration time for the bucket
-redis.call('HMSET', prefix, tostring(pending), 'l', KEYS[2])
+redis.call('HMSET', prefix, 'p', tostring(pending), 'l', KEYS[2])
 redis.call('EXPIRE', prefix, KEYS[3])
 
 -- 4. Return the updated pending value
