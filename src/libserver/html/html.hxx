@@ -132,7 +132,8 @@ auto html_process_input(struct rspamd_task *task,
 				   GList **exceptions,
 				   khash_t (rspamd_url_hash) *url_set,
 				   GPtrArray *part_urls,
-				   bool allow_css) -> html_content *;
+				   bool allow_css,
+				   std::uint16_t *cur_url_order) -> html_content *;
 auto html_debug_structure(const html_content &hc) -> std::string;
 
 }

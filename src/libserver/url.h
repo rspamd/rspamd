@@ -82,6 +82,11 @@ struct rspamd_url {
 	uint16_t count;
 	uint16_t urllen;
 	uint16_t rawlen;
+
+	/* Absolute order of the URL in a message */
+	uint16_t order;
+	/* Order of the URL in a specific part of message */
+	uint16_t part_order;
 };
 
 /**
@@ -156,6 +161,7 @@ void rspamd_url_deinit(void);
 void rspamd_url_text_extract(rspamd_mempool_t *pool,
 							 struct rspamd_task *task,
 							 struct rspamd_mime_text_part *part,
+							 uint16_t *cur_order,
 							 enum rspamd_url_find_type how);
 
 /*

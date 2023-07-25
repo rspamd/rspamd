@@ -58,7 +58,7 @@ TEST_CASE("html parsing")
 		SUBCASE((std::string("extract tags from: ") + c.first).c_str()) {
 			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
 			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
-			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
 			CHECK(hc != nullptr);
 			auto dump = html_debug_structure(*hc);
 			CHECK(c.second == dump);
@@ -215,7 +215,7 @@ TEST_CASE("html text extraction")
 		SUBCASE((fmt::format("html extraction case {}", i)).c_str()) {
 			GByteArray *tmp = g_byte_array_sized_new(c.first.size());
 			g_byte_array_append(tmp, (const guint8 *) c.first.data(), c.first.size());
-			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, nullptr, true, nullptr);
 			CHECK(hc != nullptr);
 			replace_newlines(hc->parsed);
 			auto expected = c.second;
@@ -259,7 +259,7 @@ TEST_CASE("html urls extraction")
 			auto input = std::get<0>(c);
 			GByteArray *tmp = g_byte_array_sized_new(input.size());
 			g_byte_array_append(tmp, (const guint8 *)input.data(), input.size());
-			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, purls, true);
+			auto *hc = html_process_input(&fake_task, tmp, nullptr, nullptr, purls, true, nullptr);
 			CHECK(hc != nullptr);
 			auto &expected_text = std::get<2>(c);
 			if (expected_text.has_value()) {

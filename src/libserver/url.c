@@ -2244,6 +2244,9 @@ rspamd_url_parse (struct rspamd_url *uri,
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));
 	uri->count = 1;
+	/* Undefine order */
+	uri->order = -1;
+	uri->part_order = -1;
 
 	if (*uristring == '\0') {
 		return URI_ERRNO_EMPTY;
@@ -3453,6 +3456,8 @@ struct rspamd_url_mimepart_cbdata {
 	struct rspamd_task *task;
 	struct rspamd_mime_text_part *part;
 	gsize url_len;
+	uint16_t *cur_url_order; /* Global ordering */
+	uint16_t cur_part_order; /* Per part ordering */
 };
 
 static gboolean
@@ -3487,6 +3492,12 @@ rspamd_url_query_callback (struct rspamd_url *url, gsize start_offset,
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url, false)) {
 		if (cbd->part && cbd->part->mime_part->urls) {
 			g_ptr_array_add (cbd->part->mime_part->urls, url);
+		}
+
+		url->part_order = cbd->cur_part_order ++;
+
+		if (cbd->cur_url_order) {
+			url->order = *(cbd->cur_url_order)++;
 		}
 	}
 
@@ -3542,6 +3553,11 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	if (rspamd_url_set_add_or_increase(MESSAGE_FIELD (task, urls), url, false) &&
 		cbd->part->mime_part->urls) {
+		url->part_order = cbd->cur_part_order ++;
+
+		if (cbd->cur_url_order) {
+			url->order = *(cbd->cur_url_order)++;
+		}
 		g_ptr_array_add (cbd->part->mime_part->urls, url);
 	}
 
@@ -3564,6 +3580,7 @@ void
 rspamd_url_text_extract (rspamd_mempool_t *pool,
 						 struct rspamd_task *task,
 						 struct rspamd_mime_text_part *part,
+						 uint16_t *cur_url_order,
 						 enum rspamd_url_find_type how)
 {
 	struct rspamd_url_mimepart_cbdata mcbd;
@@ -3576,6 +3593,8 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	mcbd.task = task;
 	mcbd.part = part;
 	mcbd.url_len = 0;
+	mcbd.cur_url_order = cur_url_order;
+	mcbd.cur_part_order = 0;
 
 	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
 			part->utf_stripped_content->len, how, part->newlines,

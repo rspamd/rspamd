@@ -763,7 +763,8 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 
 static gboolean
 rspamd_message_process_html_text_part (struct rspamd_task *task,
-										struct rspamd_mime_text_part *text_part)
+									   struct rspamd_mime_text_part *text_part,
+									   uint16_t *cur_url_order)
 {
 	text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
 
@@ -786,7 +787,8 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			&text_part->exceptions,
 			MESSAGE_FIELD (task, urls),
 			text_part->mime_part->urls,
-			task->cfg ? task->cfg->enable_css_parser : true);
+			task->cfg ? task->cfg->enable_css_parser : true,
+			cur_url_order);
 	rspamd_html_get_parsed_content(text_part->html, &text_part->utf_content);
 
 	if (text_part->utf_content.len == 0) {
@@ -842,7 +844,8 @@ rspamd_message_part_can_be_parsed_as_text (struct rspamd_task *task,
 static gboolean
 rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 										struct rspamd_mime_part *mime_part,
-										enum rspamd_message_part_is_text_result is_text)
+										enum rspamd_message_part_is_text_result is_text,
+										uint16_t *cur_url_order)
 {
 	struct rspamd_mime_text_part *text_part;
 	guint flags = 0;
@@ -864,7 +867,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	text_part->flags |= flags;
 
 	if (is_text == RSPAMD_MESSAGE_PART_IS_TEXT_HTML) {
-		if (!rspamd_message_process_html_text_part (task, text_part)) {
+		if (!rspamd_message_process_html_text_part (task, text_part, cur_url_order)) {
 			return FALSE;
 		}
 	}
@@ -911,14 +914,14 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 				 * Use strict extraction mode: we will extract missing urls from
 				 * an html part if needed
 				 */
-				rspamd_url_text_extract (task->task_pool, task, text_part,
+				rspamd_url_text_extract (task->task_pool, task, text_part, cur_url_order,
 						RSPAMD_URL_FIND_STRICT);
 			}
 			else {
 				/*
 				 * Fall back to full text extraction using TLD patterns
 				 */
-				rspamd_url_text_extract (task->task_pool, task, text_part,
+				rspamd_url_text_extract (task->task_pool, task, text_part, cur_url_order,
 						RSPAMD_URL_FIND_ALL);
 			}
 		}
@@ -926,12 +929,12 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 			/*
 			 * Fall back to full text extraction using TLD patterns
 			*/
-			rspamd_url_text_extract (task->task_pool, task, text_part,
+			rspamd_url_text_extract (task->task_pool, task, text_part, cur_url_order,
 					RSPAMD_URL_FIND_ALL);
 		}
 	}
 	else {
-		rspamd_url_text_extract (task->task_pool, task, text_part,
+		rspamd_url_text_extract (task->task_pool, task, text_part, cur_url_order,
 				RSPAMD_URL_FIND_STRICT);
 	}
 
@@ -1487,13 +1490,14 @@ rspamd_message_process (struct rspamd_task *task)
 		}
 	}
 
+	uint16_t cur_url_order = 0;
 	g_array_sort(detected_text_parts, rspamd_mime_text_part_position_compare_func);
 	/* One more iteration to process text parts in a more specific order */
 	for (i = 0; i < detected_text_parts->len; i ++) {
 		part = g_ptr_array_index (MESSAGE_FIELD (task, parts),
 			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).pos);
 		rspamd_message_process_text_part_maybe(task, part,
-			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).res);
+			g_array_index(detected_text_parts, struct rspamd_mime_part_text_position, i).res, &cur_url_order);
 	}
 
 	g_array_free (detected_text_parts, TRUE);
@@ -1640,7 +1644,6 @@ rspamd_message_process (struct rspamd_task *task)
 	}
 
 	rspamd_images_link (task);
-
 	rspamd_tokenize_meta_words (task);
 }
 

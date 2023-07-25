@@ -74,7 +74,8 @@ void *rspamd_html_process_part_full(struct rspamd_task *task,
 									GByteArray *in, GList **exceptions,
 									khash_t (rspamd_url_hash) *url_set,
 									GPtrArray *part_urls,
-									bool allow_css);
+									bool allow_css,
+									uint16_t *cur_url_order);
 
 /*
  * Returns true if a specified tag has been seen in a part

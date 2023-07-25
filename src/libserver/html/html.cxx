@@ -1328,7 +1328,8 @@ html_process_input(struct rspamd_task *task,
 				   GList **exceptions,
 				   khash_t (rspamd_url_hash) *url_set,
 				   GPtrArray *part_urls,
-				   bool allow_css) -> html_content *
+				   bool allow_css,
+				   std::uint16_t *cur_url_order) -> html_content *
 {
 	const gchar *p, *c, *end, *start;
 	guchar t;
@@ -1372,6 +1373,7 @@ html_process_input(struct rspamd_task *task,
 	g_assert (task != NULL);
 
 	auto *pool = task->task_pool;
+	auto cur_url_part_order = 0u;
 
 	auto *hc = new html_content;
 	rspamd_mempool_add_destructor(task->task_pool, html_content::html_content_dtor, hc);
@@ -1472,6 +1474,10 @@ html_process_input(struct rspamd_task *task,
 					struct rspamd_url *maybe_existing =
 							rspamd_url_set_add_or_return(url_set, maybe_url.value());
 					if (maybe_existing == maybe_url.value()) {
+						if (cur_url_order) {
+							url->order = *(cur_url_order)++;
+						}
+						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,
 								part_urls);
 					}
@@ -2273,10 +2279,11 @@ rspamd_html_process_part_full(struct rspamd_task *task,
 							  GByteArray *in, GList **exceptions,
 							  khash_t (rspamd_url_hash) *url_set,
 							  GPtrArray *part_urls,
-							  bool allow_css)
+							  bool allow_css,
+							  uint16_t *cur_url_order)
 {
 	return rspamd::html::html_process_input(task, in, exceptions, url_set,
-			part_urls, allow_css);
+			part_urls, allow_css, cur_url_order);
 }
 
 void *
@@ -2286,9 +2293,10 @@ rspamd_html_process_part(rspamd_mempool_t *pool,
 	struct rspamd_task fake_task;
 	memset(&fake_task, 0, sizeof(fake_task));
 	fake_task.task_pool = pool;
+	uint16_t order = 0;
 
 	return rspamd_html_process_part_full (&fake_task, in, NULL,
-			NULL, NULL, FALSE);
+			NULL, NULL, FALSE, &order);
 }
 
 guint
