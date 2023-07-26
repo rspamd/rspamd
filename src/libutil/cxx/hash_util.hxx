@@ -30,22 +30,28 @@ namespace rspamd {
 template<typename T>
 struct smart_ptr_equal {
 	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a, const std::shared_ptr<T> &b) const {
+	auto operator()(const std::shared_ptr<T> &a, const std::shared_ptr<T> &b) const
+	{
 		return (*a) == (*b);
 	}
-	auto operator()(const std::shared_ptr<T> &a, const T &b) const {
+	auto operator()(const std::shared_ptr<T> &a, const T &b) const
+	{
 		return (*a) == b;
 	}
-	auto operator()(const T &a, const std::shared_ptr<T> &b) const {
+	auto operator()(const T &a, const std::shared_ptr<T> &b) const
+	{
 		return a == (*b);
 	}
-	auto operator()(const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) const {
+	auto operator()(const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) const
+	{
 		return (*a) == (*b);
 	}
-	auto operator()(const std::unique_ptr<T> &a, const T &b) const {
+	auto operator()(const std::unique_ptr<T> &a, const T &b) const
+	{
 		return (*a) == b;
 	}
-	auto operator()(const T &a, const std::unique_ptr<T> &b) const {
+	auto operator()(const T &a, const std::unique_ptr<T> &b) const
+	{
 		return a == (*b);
 	}
 };
@@ -53,13 +59,16 @@ struct smart_ptr_equal {
 template<typename T>
 struct smart_ptr_hash {
 	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
-	auto operator()(const std::shared_ptr<T> &a) const {
+	auto operator()(const std::shared_ptr<T> &a) const
+	{
 		return std::hash<T>()(*a);
 	}
-	auto operator()(const std::unique_ptr<T> &a) const {
+	auto operator()(const std::unique_ptr<T> &a) const
+	{
 		return std::hash<T>()(*a);
 	}
-	auto operator()(const T &a) const {
+	auto operator()(const T &a) const
+	{
 		return std::hash<T>()(a);
 	}
 };
@@ -67,13 +76,16 @@ struct smart_ptr_hash {
 /* Enable lookup by string view */
 struct smart_str_equal {
 	using is_transparent = void;
-	auto operator()(const std::string &a, const std::string &b) const {
+	auto operator()(const std::string &a, const std::string &b) const
+	{
 		return a == b;
 	}
-	auto operator()(const std::string_view &a, const std::string &b) const {
+	auto operator()(const std::string_view &a, const std::string &b) const
+	{
 		return a == b;
 	}
-	auto operator()(const std::string &a, const std::string_view &b) const {
+	auto operator()(const std::string &a, const std::string_view &b) const
+	{
 		return a == b;
 	}
 };
@@ -81,14 +93,16 @@ struct smart_str_equal {
 struct smart_str_hash {
 	using is_transparent = void;
 	using is_avalanching = typename ankerl::unordered_dense::hash<std::string_view>::is_avalanching;
-	auto operator()(const std::string &a) const {
+	auto operator()(const std::string &a) const
+	{
 		return ankerl::unordered_dense::hash<std::string>()(a);
 	}
-	auto operator()(const std::string_view &a) const {
+	auto operator()(const std::string_view &a) const
+	{
 		return ankerl::unordered_dense::hash<std::string_view>()(a);
 	}
 };
 
-}
+}// namespace rspamd
 
-#endif //RSPAMD_HASH_UTIL_HXX
+#endif//RSPAMD_HASH_UTIL_HXX

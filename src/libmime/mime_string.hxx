@@ -39,8 +39,9 @@ namespace rspamd::mime {
  * Mime string iterators are always const, so the underlying storage should not
  * be modified externally.
  */
-template<class T=char, class Allocator = std::allocator<T>,
-		class Functor = fu2::function_view<UChar32(UChar32)>> class basic_mime_string;
+template<class T = char, class Allocator = std::allocator<T>,
+		 class Functor = fu2::function_view<UChar32(UChar32)>>
+class basic_mime_string;
 
 using mime_string = basic_mime_string<char>;
 using mime_pool_string = basic_mime_string<char, mempool_allocator<char>>;
@@ -52,27 +53,26 @@ enum class mime_string_flags : std::uint8_t {
 	MIME_STRING_SEEN_INVALID = 0x1 << 1,
 };
 
-constexpr mime_string_flags operator |(mime_string_flags lhs, mime_string_flags rhs)
+constexpr mime_string_flags operator|(mime_string_flags lhs, mime_string_flags rhs)
 {
 	using ut = std::underlying_type<mime_string_flags>::type;
 	return static_cast<mime_string_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
 }
 
-constexpr mime_string_flags operator &(mime_string_flags lhs, mime_string_flags rhs)
+constexpr mime_string_flags operator&(mime_string_flags lhs, mime_string_flags rhs)
 {
 	using ut = std::underlying_type<mime_string_flags>::type;
 	return static_cast<mime_string_flags>(static_cast<ut>(lhs) & static_cast<ut>(rhs));
 }
 
-constexpr bool operator !(mime_string_flags fl)
+constexpr bool operator!(mime_string_flags fl)
 {
 	return fl == mime_string_flags::MIME_STRING_DEFAULT;
 }
 
 // Codepoint iterator base class
 template<typename Container, bool Raw = false>
-struct iterator_base
-{
+struct iterator_base {
 	template<typename, typename, typename>
 	friend class basic_mime_string;
 
@@ -93,8 +93,10 @@ public:
 		return idx != it.idx;
 	}
 
-	iterator_base(difference_type index, Container *instance) noexcept:
-			idx(index), cont_instance(instance) {}
+	iterator_base(difference_type index, Container *instance) noexcept
+		: idx(index), cont_instance(instance)
+	{
+	}
 	iterator_base() noexcept = default;
 	iterator_base(const iterator_base &) noexcept = default;
 
@@ -105,7 +107,8 @@ public:
 		return cont_instance;
 	}
 
-	codepoint_type get_value() const noexcept {
+	codepoint_type get_value() const noexcept
+	{
 		auto i = idx;
 		codepoint_type uc;
 		U8_NEXT_UNSAFE(cont_instance->data(), i, uc);
@@ -113,10 +116,12 @@ public:
 	}
 
 protected:
-	difference_type		idx;
-	Container*			cont_instance = nullptr;
+	difference_type idx;
+	Container *cont_instance = nullptr;
+
 protected:
-	void advance(difference_type n) noexcept {
+	void advance(difference_type n) noexcept
+	{
 		if (n > 0) {
 			U8_FWD_N_UNSAFE(cont_instance->data(), idx, n);
 		}
@@ -124,12 +129,14 @@ protected:
 			U8_BACK_N_UNSAFE(cont_instance->data(), idx, (-n));
 		}
 	}
-	void increment() noexcept {
+	void increment() noexcept
+	{
 		codepoint_type uc;
 		U8_NEXT_UNSAFE(cont_instance->data(), idx, uc);
 	}
 
-	void decrement() noexcept {
+	void decrement() noexcept
+	{
 		codepoint_type uc;
 		U8_PREV_UNSAFE(cont_instance->data(), idx, uc);
 	}
@@ -137,8 +144,7 @@ protected:
 
 // Partial spec for raw Byte-based iterator base
 template<typename Container>
-struct iterator_base<Container, true>
-{
+struct iterator_base<Container, true> {
 	template<typename, typename, typename>
 	friend class basic_string;
 
@@ -148,40 +154,63 @@ public:
 	using reference_type = value_type;
 	using iterator_category = std::bidirectional_iterator_tag;
 
-	bool operator==( const iterator_base& it ) const noexcept { return idx == it.idx; }
-	bool operator!=( const iterator_base& it ) const noexcept { return idx != it.idx; }
+	bool operator==(const iterator_base &it) const noexcept
+	{
+		return idx == it.idx;
+	}
+	bool operator!=(const iterator_base &it) const noexcept
+	{
+		return idx != it.idx;
+	}
 
-	iterator_base(difference_type index, Container *instance) noexcept:
-			idx(index), cont_instance(instance) {}
+	iterator_base(difference_type index, Container *instance) noexcept
+		: idx(index), cont_instance(instance)
+	{
+	}
 
 	iterator_base() noexcept = default;
-	iterator_base( const iterator_base& ) noexcept = default;
-	iterator_base& operator=( const iterator_base& ) noexcept = default;
-	Container* get_instance() const noexcept { return cont_instance; }
+	iterator_base(const iterator_base &) noexcept = default;
+	iterator_base &operator=(const iterator_base &) noexcept = default;
+	Container *get_instance() const noexcept
+	{
+		return cont_instance;
+	}
 
-	value_type get_value() const noexcept { return cont_instance->get_storage().at(idx); }
+	value_type get_value() const noexcept
+	{
+		return cont_instance->get_storage().at(idx);
+	}
+
 protected:
-	difference_type		idx;
-	Container*			cont_instance = nullptr;
+	difference_type idx;
+	Container *cont_instance = nullptr;
 
 protected:
-
 	//! Advance the iterator n times (negative values allowed!)
-	void advance( difference_type n ) noexcept {
+	void advance(difference_type n) noexcept
+	{
 		idx += n;
 	}
 
-	void increment() noexcept { idx ++; }
-	void decrement() noexcept { idx --; }
+	void increment() noexcept
+	{
+		idx++;
+	}
+	void decrement() noexcept
+	{
+		idx--;
+	}
 };
 
-template<typename Container, bool Raw> struct iterator;
-template<typename Container, bool Raw> struct const_iterator;
+template<typename Container, bool Raw>
+struct iterator;
+template<typename Container, bool Raw>
+struct const_iterator;
 
 template<typename Container, bool Raw = false>
 struct iterator : iterator_base<Container, Raw> {
-	iterator(typename iterator_base<Container, Raw>::difference_type index, Container *instance) noexcept:
-			iterator_base<Container, Raw>(index, instance)
+	iterator(typename iterator_base<Container, Raw>::difference_type index, Container *instance) noexcept
+		: iterator_base<Container, Raw>(index, instance)
 	{
 	}
 	iterator() noexcept = default;
@@ -265,26 +294,39 @@ public:
 	using iterator = rspamd::mime::iterator<basic_mime_string, false>;
 	using raw_iterator = rspamd::mime::iterator<basic_mime_string, true>;
 	/* Ctors */
-	basic_mime_string() noexcept : Allocator() {}
-	explicit basic_mime_string(const Allocator& alloc) noexcept : Allocator(alloc) {}
-	explicit basic_mime_string(filter_type &&filt, const Allocator& alloc = Allocator()) noexcept :
-		Allocator(alloc), filter_func(std::move(filt)) {}
+	basic_mime_string() noexcept
+		: Allocator()
+	{
+	}
+	explicit basic_mime_string(const Allocator &alloc) noexcept
+		: Allocator(alloc)
+	{
+	}
+	explicit basic_mime_string(filter_type &&filt, const Allocator &alloc = Allocator()) noexcept
+		: Allocator(alloc), filter_func(std::move(filt))
+	{
+	}
 
-	basic_mime_string(const CharT* str, std::size_t sz, const Allocator& alloc = Allocator()) noexcept :
-			Allocator(alloc)
+	basic_mime_string(const CharT *str, std::size_t sz, const Allocator &alloc = Allocator()) noexcept
+		: Allocator(alloc)
 	{
 		append_c_string_unfiltered(str, sz);
 	}
 
 	basic_mime_string(const storage_type &st,
-					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), alloc) {}
+					  const Allocator &alloc = Allocator()) noexcept
+		: basic_mime_string(st.data(), st.size(), alloc)
+	{
+	}
 
 	basic_mime_string(const view_type &st,
-					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), alloc) {}
+					  const Allocator &alloc = Allocator()) noexcept
+		: basic_mime_string(st.data(), st.size(), alloc)
+	{
+	}
 	/* Explicit move ctor */
-	basic_mime_string(basic_mime_string &&other) noexcept {
+	basic_mime_string(basic_mime_string &&other) noexcept
+	{
 		*this = std::move(other);
 	}
 
@@ -297,45 +339,54 @@ public:
 	 * @param filt
 	 * @param alloc
 	 */
-	basic_mime_string(const CharT* str, std::size_t sz,
+	basic_mime_string(const CharT *str, std::size_t sz,
 					  filter_type &&filt,
-					  const Allocator& alloc = Allocator()) noexcept :
-			Allocator(alloc),
-			filter_func(std::move(filt))
+					  const Allocator &alloc = Allocator()) noexcept
+		: Allocator(alloc),
+		  filter_func(std::move(filt))
 	{
 		append_c_string_filtered(str, sz);
 	}
 
 	basic_mime_string(const storage_type &st,
 					  filter_type &&filt,
-					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), std::move(filt), alloc) {}
+					  const Allocator &alloc = Allocator()) noexcept
+		: basic_mime_string(st.data(), st.size(), std::move(filt), alloc)
+	{
+	}
 	basic_mime_string(const view_type &st,
 					  filter_type &&filt,
-					  const Allocator& alloc = Allocator()) noexcept :
-			basic_mime_string(st.data(), st.size(), std::move(filt), alloc) {}
+					  const Allocator &alloc = Allocator()) noexcept
+		: basic_mime_string(st.data(), st.size(), std::move(filt), alloc)
+	{
+	}
 
 	/* It seems some libc++ implementations still perform copy, this might fix them */
-	basic_mime_string& operator=(basic_mime_string &&other) {
+	basic_mime_string &operator=(basic_mime_string &&other)
+	{
 		storage = std::move(other.storage);
 		filter_func = std::move(other.filter_func);
 
 		return *this;
 	}
 
-	constexpr auto size() const noexcept -> std::size_t {
+	constexpr auto size() const noexcept -> std::size_t
+	{
 		return storage.size();
 	}
 
-	constexpr auto data() const noexcept -> const CharT* {
+	constexpr auto data() const noexcept -> const CharT *
+	{
 		return storage.data();
 	}
 
-	constexpr auto has_zeroes() const noexcept -> bool {
+	constexpr auto has_zeroes() const noexcept -> bool
+	{
 		return !!(flags & mime_string_flags::MIME_STRING_SEEN_ZEROES);
 	}
 
-	constexpr auto has_invalid() const noexcept -> bool {
+	constexpr auto has_invalid() const noexcept -> bool
+	{
 		return !!(flags & mime_string_flags::MIME_STRING_SEEN_INVALID);
 	}
 
@@ -347,12 +398,13 @@ public:
 	 * @param other
 	 * @return
 	 */
-	[[nodiscard]] auto assign_if_valid(storage_type &&other) -> bool {
+	[[nodiscard]] auto assign_if_valid(storage_type &&other) -> bool
+	{
 		if (filter_func) {
 			/* No way */
 			return false;
 		}
-		if (rspamd_fast_utf8_validate((const unsigned char *)other.data(), other.size()) == 0) {
+		if (rspamd_fast_utf8_validate((const unsigned char *) other.data(), other.size()) == 0) {
 			std::swap(storage, other);
 
 			return true;
@@ -366,7 +418,8 @@ public:
 	 * @param other
 	 * @return
 	 */
-	 auto assign_copy(const view_type &other) {
+	auto assign_copy(const view_type &other)
+	{
 		storage.clear();
 
 		if (filter_func) {
@@ -376,7 +429,8 @@ public:
 			append_c_string_unfiltered(other.data(), other.size());
 		}
 	}
-	auto assign_copy(const storage_type &other) {
+	auto assign_copy(const storage_type &other)
+	{
 		storage.clear();
 
 		if (filter_func) {
@@ -386,7 +440,8 @@ public:
 			append_c_string_unfiltered(other.data(), other.size());
 		}
 	}
-	auto assign_copy(const basic_mime_string &other) {
+	auto assign_copy(const basic_mime_string &other)
+	{
 		storage.clear();
 
 		if (filter_func) {
@@ -398,7 +453,8 @@ public:
 	}
 
 	/* Mutators */
-	auto append(const CharT* str, std::size_t size) -> std::size_t {
+	auto append(const CharT *str, std::size_t size) -> std::size_t
+	{
 		if (filter_func) {
 			return append_c_string_filtered(str, size);
 		}
@@ -406,47 +462,54 @@ public:
 			return append_c_string_unfiltered(str, size);
 		}
 	}
-	auto append(const storage_type &other) -> std::size_t {
+	auto append(const storage_type &other) -> std::size_t
+	{
 		return append(other.data(), other.size());
 	}
-	auto append(const view_type &other) -> std::size_t {
+	auto append(const view_type &other) -> std::size_t
+	{
 		return append(other.data(), other.size());
 	}
 
 	auto ltrim(const view_type &what) -> void
 	{
 		auto it = std::find_if(storage.begin(), storage.end(),
-				[&what](CharT c) {
-					return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
-				});
+							   [&what](CharT c) {
+								   return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
+							   });
 		storage.erase(storage.begin(), it);
 	}
 
 	auto rtrim(const view_type &what) -> void
 	{
 		auto it = std::find_if(storage.rbegin(), storage.rend(),
-				[&what](CharT c) {
-					return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
-				});
+							   [&what](CharT c) {
+								   return !std::any_of(what.begin(), what.end(), [&c](CharT sc) { return sc == c; });
+							   });
 		storage.erase(it.base(), storage.end());
 	}
 
-	auto trim(const view_type &what) -> void {
+	auto trim(const view_type &what) -> void
+	{
 		ltrim(what);
 		rtrim(what);
 	}
 
 	/* Comparison */
-	auto operator ==(const basic_mime_string &other) {
+	auto operator==(const basic_mime_string &other)
+	{
 		return other.storage == storage;
 	}
-	auto operator ==(const storage_type &other) {
+	auto operator==(const storage_type &other)
+	{
 		return other == storage;
 	}
-	auto operator ==(const view_type &other) {
+	auto operator==(const view_type &other)
+	{
 		return other == storage;
 	}
-	auto operator ==(const CharT* other) {
+	auto operator==(const CharT *other)
+	{
 		if (other == NULL) {
 			return false;
 		}
@@ -485,36 +548,43 @@ public:
 		return storage;
 	}
 
-	inline auto as_view() const noexcept -> view_type {
+	inline auto as_view() const noexcept -> view_type
+	{
 		return view_type{storage};
 	}
 
-	constexpr CharT operator[](std::size_t pos) const noexcept {
+	constexpr CharT operator[](std::size_t pos) const noexcept
+	{
 		return storage[pos];
 	}
-	constexpr CharT at(std::size_t pos) const {
+	constexpr CharT at(std::size_t pos) const
+	{
 		return storage.at(pos);
 	}
-	constexpr bool empty() const noexcept {
+	constexpr bool empty() const noexcept
+	{
 		return storage.empty();
 	}
 
 
 	/* For doctest stringify */
-	friend std::ostream& operator<< (std::ostream& os, const CharT& value) {
+	friend std::ostream &operator<<(std::ostream &os, const CharT &value)
+	{
 		os << value.storage;
 		return os;
 	}
+
 private:
 	mime_string_flags flags = mime_string_flags::MIME_STRING_DEFAULT;
 	storage_type storage;
 	filter_type filter_func;
 
-	auto append_c_string_unfiltered(const CharT* str, std::size_t len) -> std::size_t {
+	auto append_c_string_unfiltered(const CharT *str, std::size_t len) -> std::size_t
+	{
 		/* This is fast path */
 		const auto *p = str;
 		const auto *end = str + len;
-		std::int32_t err_offset; // We have to use int32_t here as old libicu is brain-damaged
+		std::int32_t err_offset;// We have to use int32_t here as old libicu is brain-damaged
 		auto orig_size = storage.size();
 
 		storage.reserve(len + storage.size());
@@ -526,7 +596,7 @@ private:
 		}
 
 		while (p < end && len > 0 &&
-		        (err_offset = rspamd_fast_utf8_validate((const unsigned char *)p, len)) > 0) {
+			   (err_offset = rspamd_fast_utf8_validate((const unsigned char *) p, len)) > 0) {
 			auto cur_offset = err_offset - 1;
 			storage.append(p, cur_offset);
 
@@ -554,8 +624,9 @@ private:
 		return storage.size() - orig_size;
 	}
 
-	auto append_c_string_filtered(const CharT* str, std::size_t len) -> std::size_t {
-		std::int32_t i = 0; // We have to use int32_t here as old libicu is brain-damaged
+	auto append_c_string_filtered(const CharT *str, std::size_t len) -> std::size_t
+	{
+		std::int32_t i = 0;// We have to use int32_t here as old libicu is brain-damaged
 		UChar32 uc;
 		char tmp[4];
 		auto orig_size = storage.size();
@@ -592,7 +663,7 @@ private:
 	}
 };
 
-}
+}// namespace rspamd::mime
 
 
-#endif //RSPAMD_MIME_STRING_HXX
+#endif//RSPAMD_MIME_STRING_HXX

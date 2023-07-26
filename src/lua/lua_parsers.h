@@ -26,7 +26,7 @@
  * @param {table} exceptions, a table of pairs containing <start_pos,length> of exceptions in the input
  * @return {table/strings} list of strings representing words in the text
  */
-LUA_PUBLIC_FUNCTION_DEF (parsers, tokenize_text);
+LUA_PUBLIC_FUNCTION_DEF(parsers, tokenize_text);
 
 /***
  * @function parsers.parse_html(input)
@@ -34,7 +34,7 @@ LUA_PUBLIC_FUNCTION_DEF (parsers, tokenize_text);
  * @param {string|text} in input HTML
  * @return {rspamd_text} processed text with no HTML tags
  */
-LUA_PUBLIC_FUNCTION_DEF (parsers, parse_html);
+LUA_PUBLIC_FUNCTION_DEF(parsers, parse_html);
 
 /***
  * @function parsers.parse_mail_address(str, [pool])
@@ -58,7 +58,7 @@ LUA_PUBLIC_FUNCTION_DEF (parsers, parse_html);
  * @param {rspamd_mempool} pool memory pool to use
  * @return {table/tables} parsed list of mail addresses
  */
-LUA_PUBLIC_FUNCTION_DEF (parsers, parse_mail_address);
+LUA_PUBLIC_FUNCTION_DEF(parsers, parse_mail_address);
 
 /***
  *  @function parsers.parse_content_type(ct_string, mempool)
@@ -73,7 +73,7 @@ LUA_PUBLIC_FUNCTION_DEF (parsers, parse_mail_address);
  * @param {rspamd_mempool} mempool needed to store temporary data (e.g. task pool)
  * @return table or nil if cannot parse content type
  */
-LUA_PUBLIC_FUNCTION_DEF (parsers, parse_content_type);
+LUA_PUBLIC_FUNCTION_DEF(parsers, parse_content_type);
 
 /***
  * @function parsers.parse_smtp_date(str[, local_tz])
@@ -82,7 +82,7 @@ LUA_PUBLIC_FUNCTION_DEF (parsers, parse_content_type);
  * @param {boolean} local_tz convert to local tz if `true`
  * @return {number} time as unix timestamp (converted to float)
  */
-LUA_PUBLIC_FUNCTION_DEF (parsers, parse_smtp_date);
+LUA_PUBLIC_FUNCTION_DEF(parsers, parse_smtp_date);
 
 
-#endif //RSPAMD_LUA_PARSERS_H
+#endif//RSPAMD_LUA_PARSERS_H

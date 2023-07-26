@@ -9,7 +9,7 @@
 #include "radix.h"
 #include "dns.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -30,20 +30,20 @@ struct rspamd_map;
 /**
  * Callback types
  */
-typedef gchar *(*map_cb_t) (gchar *chunk, gint len,
-							struct map_cb_data *data, gboolean final);
+typedef gchar *(*map_cb_t)(gchar *chunk, gint len,
+						   struct map_cb_data *data, gboolean final);
 
-typedef void (*map_fin_cb_t) (struct map_cb_data *data, void **target);
+typedef void (*map_fin_cb_t)(struct map_cb_data *data, void **target);
 
-typedef void (*map_dtor_t) (struct map_cb_data *data);
+typedef void (*map_dtor_t)(struct map_cb_data *data);
 
-typedef gboolean (*rspamd_map_traverse_cb) (gconstpointer key,
-											gconstpointer value, gsize hits, gpointer ud);
+typedef gboolean (*rspamd_map_traverse_cb)(gconstpointer key,
+										   gconstpointer value, gsize hits, gpointer ud);
 
-typedef void (*rspamd_map_traverse_function) (void *data,
-											  rspamd_map_traverse_cb cb,
-											  gpointer cbdata, gboolean reset_hits);
-typedef void (*rspamd_map_on_load_function) (struct rspamd_map *map, gpointer ud);
+typedef void (*rspamd_map_traverse_function)(void *data,
+											 rspamd_map_traverse_cb cb,
+											 gpointer cbdata, gboolean reset_hits);
+typedef void (*rspamd_map_on_load_function)(struct rspamd_map *map, gpointer ud);
 
 /**
  * Callback data for async load
@@ -61,7 +61,7 @@ struct map_cb_data {
  * @param map_line
  * @return
  */
-gboolean rspamd_map_is_map (const gchar *map_line);
+gboolean rspamd_map_is_map(const gchar *map_line);
 
 enum rspamd_map_flags {
 	RSPAMD_MAP_DEFAULT = 0,
@@ -72,28 +72,28 @@ enum rspamd_map_flags {
 /**
  * Add map from line
  */
-struct rspamd_map *rspamd_map_add (struct rspamd_config *cfg,
-								   const gchar *map_line,
-								   const gchar *description,
-								   map_cb_t read_callback,
-								   map_fin_cb_t fin_callback,
-								   map_dtor_t dtor,
-								   void **user_data,
-								   struct rspamd_worker *worker,
-								   int flags);
+struct rspamd_map *rspamd_map_add(struct rspamd_config *cfg,
+								  const gchar *map_line,
+								  const gchar *description,
+								  map_cb_t read_callback,
+								  map_fin_cb_t fin_callback,
+								  map_dtor_t dtor,
+								  void **user_data,
+								  struct rspamd_worker *worker,
+								  int flags);
 
 /**
  * Add map from ucl
  */
-struct rspamd_map *rspamd_map_add_from_ucl (struct rspamd_config *cfg,
-											const ucl_object_t *obj,
-											const gchar *description,
-											map_cb_t read_callback,
-											map_fin_cb_t fin_callback,
-											map_dtor_t dtor,
-											void **user_data,
-											struct rspamd_worker *worker,
-											int flags);
+struct rspamd_map *rspamd_map_add_from_ucl(struct rspamd_config *cfg,
+										   const ucl_object_t *obj,
+										   const gchar *description,
+										   map_cb_t read_callback,
+										   map_fin_cb_t fin_callback,
+										   map_dtor_t dtor,
+										   void **user_data,
+										   struct rspamd_worker *worker,
+										   int flags);
 
 /**
  * Adds a fake map structure (for logging purposes mainly)
@@ -101,9 +101,9 @@ struct rspamd_map *rspamd_map_add_from_ucl (struct rspamd_config *cfg,
  * @param description
  * @return
  */
-struct rspamd_map *rspamd_map_add_fake (struct rspamd_config *cfg,
-								   const gchar *description,
-								   const gchar *name);
+struct rspamd_map *rspamd_map_add_fake(struct rspamd_config *cfg,
+									   const gchar *description,
+									   const gchar *name);
 
 
 enum rspamd_map_watch_type {
@@ -117,29 +117,29 @@ enum rspamd_map_watch_type {
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void rspamd_map_watch (struct rspamd_config *cfg,
-					   struct ev_loop *event_loop,
-					   struct rspamd_dns_resolver *resolver,
-					   struct rspamd_worker *worker,
-					   enum rspamd_map_watch_type how);
+void rspamd_map_watch(struct rspamd_config *cfg,
+					  struct ev_loop *event_loop,
+					  struct rspamd_dns_resolver *resolver,
+					  struct rspamd_worker *worker,
+					  enum rspamd_map_watch_type how);
 
 /**
  * Preloads maps where all backends are file
  * @param cfg
  */
-void rspamd_map_preload (struct rspamd_config *cfg);
+void rspamd_map_preload(struct rspamd_config *cfg);
 
 /**
  * Remove all maps watched (remove events)
  */
-void rspamd_map_remove_all (struct rspamd_config *cfg);
+void rspamd_map_remove_all(struct rspamd_config *cfg);
 
 /**
  * Get traverse function for specific map
  * @param map
  * @return
  */
-rspamd_map_traverse_function rspamd_map_get_traverse_function (struct rspamd_map *map);
+rspamd_map_traverse_function rspamd_map_get_traverse_function(struct rspamd_map *map);
 
 /**
  * Perform map traverse
@@ -149,8 +149,8 @@ rspamd_map_traverse_function rspamd_map_get_traverse_function (struct rspamd_map
  * @param reset_hits
  * @return
  */
-void rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
-						  gpointer cbdata, gboolean reset_hits);
+void rspamd_map_traverse(struct rspamd_map *map, rspamd_map_traverse_cb cb,
+						 gpointer cbdata, gboolean reset_hits);
 
 /**
  * Set map on load callback
@@ -158,10 +158,10 @@ void rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
  * @param cb
  * @param cbdata
  */
-void rspamd_map_set_on_load_function (struct rspamd_map *map, rspamd_map_on_load_function cb,
-								 gpointer cbdata, GDestroyNotify dtor);
+void rspamd_map_set_on_load_function(struct rspamd_map *map, rspamd_map_on_load_function cb,
+									 gpointer cbdata, GDestroyNotify dtor);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

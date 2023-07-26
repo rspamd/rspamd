@@ -6,8 +6,7 @@
 #define TEST_FILENAME "/tmp/rspamd_test.stat"
 #define HASHES_NUM 256
 
-void 
-rspamd_statfile_test_func (void)
+void rspamd_statfile_test_func(void)
 {
 	/*
 	 * XXX: broken, old, need to be rewritten

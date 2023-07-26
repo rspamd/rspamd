@@ -52,7 +52,7 @@
 #define CR '\r'
 #define LF '\n'
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -77,13 +77,13 @@ struct rspamd_worker_accept_event {
 	struct rspamd_worker_accept_event *prev, *next;
 };
 
-typedef void (*rspamd_worker_term_cb) (EV_P_ ev_child *, struct rspamd_main *,
-									   struct rspamd_worker *);
+typedef void (*rspamd_worker_term_cb)(EV_P_ ev_child *, struct rspamd_main *,
+									  struct rspamd_worker *);
 
 struct rspamd_worker_heartbeat {
-	ev_timer heartbeat_ev;          /**< used by main for checking heartbeats and by workers to send heartbeats */
-	ev_tstamp last_event;           /**< last heartbeat received timestamp */
-	gint64 nbeats;                  /**< positive for beats received, negative for beats missed */
+	ev_timer heartbeat_ev; /**< used by main for checking heartbeats and by workers to send heartbeats */
+	ev_tstamp last_event;  /**< last heartbeat received timestamp */
+	gint64 nbeats;         /**< positive for beats received, negative for beats missed */
 };
 
 enum rspamd_worker_state {
@@ -99,31 +99,31 @@ enum rspamd_worker_state {
  * Worker process structure
  */
 struct rspamd_worker {
-	pid_t pid;                      /**< pid of worker									*/
-	pid_t ppid;                     /**< pid of parent									*/
-	guint index;                    /**< index number									*/
-	guint nconns;                   /**< current connections count						*/
-	enum rspamd_worker_state state; /**< current worker state							*/
-	gboolean cores_throttled;       /**< set to true if cores throttling took place		*/
-	gdouble start_time;             /**< start time										*/
-	struct rspamd_main *srv;        /**< pointer to server structure					*/
-	GQuark type;                    /**< process type									*/
-	GHashTable *signal_events;      /**< signal events									*/
+	pid_t pid;                                        /**< pid of worker									*/
+	pid_t ppid;                                       /**< pid of parent									*/
+	guint index;                                      /**< index number									*/
+	guint nconns;                                     /**< current connections count						*/
+	enum rspamd_worker_state state;                   /**< current worker state							*/
+	gboolean cores_throttled;                         /**< set to true if cores throttling took place		*/
+	gdouble start_time;                               /**< start time										*/
+	struct rspamd_main *srv;                          /**< pointer to server structure					*/
+	GQuark type;                                      /**< process type									*/
+	GHashTable *signal_events;                        /**< signal events									*/
 	struct rspamd_worker_accept_event *accept_events; /**< socket events				*/
-	struct rspamd_worker_conf *cf;  /**< worker config data								*/
-	gpointer ctx;                   /**< worker's specific data							*/
-	gint flags;                     /**< worker's flags (enum rspamd_worker_flags)		*/
-	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
+	struct rspamd_worker_conf *cf;                    /**< worker config data								*/
+	gpointer ctx;                                     /**< worker's specific data							*/
+	gint flags;                                       /**< worker's flags (enum rspamd_worker_flags)		*/
+	gint control_pipe[2];                             /**< control pipe. [0] is used by main process,
 	                                                   [1] is used by a worker			*/
-	gint srv_pipe[2];               /**< used by workers to request something from the
+	gint srv_pipe[2];                                 /**< used by workers to request something from the
 	                                     main process. [0] - main, [1] - worker			*/
-	ev_io srv_ev;                   /**< used by main for read workers' requests		*/
-	struct rspamd_worker_heartbeat hb; /**< heartbeat data */
-	gpointer control_data;          /**< used by control protocol to handle commands	*/
-	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
-	ev_child cld_ev;                /**< to allow reaping								*/
-	rspamd_worker_term_cb term_handler; /**< custom term handler						*/
-	GHashTable *control_events_pending; /**< control events pending indexed by ptr		*/
+	ev_io srv_ev;                                     /**< used by main for read workers' requests		*/
+	struct rspamd_worker_heartbeat hb;                /**< heartbeat data */
+	gpointer control_data;                            /**< used by control protocol to handle commands	*/
+	gpointer tmp_data;                                /**< used to avoid race condition to deal with control messages */
+	ev_child cld_ev;                                  /**< to allow reaping								*/
+	rspamd_worker_term_cb term_handler;               /**< custom term handler						*/
+	GHashTable *control_events_pending;               /**< control events pending indexed by ptr		*/
 };
 
 struct rspamd_abstract_worker_ctx {
@@ -139,8 +139,8 @@ struct rspamd_abstract_worker_ctx {
 
 struct rspamd_worker_signal_handler;
 
-typedef gboolean (*rspamd_worker_signal_cb_t) (
-		struct rspamd_worker_signal_handler *, void *ud);
+typedef gboolean (*rspamd_worker_signal_cb_t)(
+	struct rspamd_worker_signal_handler *, void *ud);
 
 struct rspamd_worker_signal_handler_elt {
 	rspamd_worker_signal_cb_t handler;
@@ -163,9 +163,9 @@ struct rspamd_worker_signal_handler {
 struct module_s;
 
 struct module_ctx {
-	gint (*filter) (struct rspamd_task *task);                   /**< pointer to headers process function			*/
-	struct module_s *mod;                                        /**< module pointer									*/
-	gboolean enabled;                                            /**< true if module is enabled in configuration		*/
+	gint (*filter)(struct rspamd_task *task); /**< pointer to headers process function			*/
+	struct module_s *mod;                     /**< module pointer									*/
+	gboolean enabled;                         /**< true if module is enabled in configuration		*/
 };
 
 #ifndef WITH_HYPERSCAN
@@ -192,33 +192,32 @@ struct module_ctx {
 #define RSPAMD_CUR_MODULE_VERSION 0x1
 #define RSPAMD_CUR_WORKER_VERSION 0x2
 
-#define RSPAMD_FEATURES \
-        RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
-        RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
+#define RSPAMD_FEATURES                           \
+	RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
+		RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
 
-#define RSPAMD_MODULE_VER \
-        RSPAMD_CUR_MODULE_VERSION, /* Module version */ \
-        RSPAMD_VERSION_NUM, /* Rspamd version */ \
-        RSPAMD_FEATURES /* Compilation features */ \
+#define RSPAMD_MODULE_VER                           \
+	RSPAMD_CUR_MODULE_VERSION, /* Module version */ \
+		RSPAMD_VERSION_NUM,    /* Rspamd version */ \
+		RSPAMD_FEATURES        /* Compilation features */
 
-#define RSPAMD_WORKER_VER \
-        RSPAMD_CUR_WORKER_VERSION, /* Worker version */ \
-        RSPAMD_VERSION_NUM, /* Rspamd version */ \
-        RSPAMD_FEATURES /* Compilation features */ \
-/**
+#define RSPAMD_WORKER_VER                                               \
+	RSPAMD_CUR_WORKER_VERSION,                     /* Worker version */ \
+		RSPAMD_VERSION_NUM,                        /* Rspamd version */ \
+		RSPAMD_FEATURES /* Compilation features */ /**
  * Module
  */
 typedef struct module_s {
 	const gchar *name;
 
-	int (*module_init_func) (struct rspamd_config *cfg, struct module_ctx **ctx);
+	int (*module_init_func)(struct rspamd_config *cfg, struct module_ctx **ctx);
 
-	int (*module_config_func) (struct rspamd_config *cfg, bool validate);
+	int (*module_config_func)(struct rspamd_config *cfg, bool validate);
 
-	int (*module_reconfig_func) (struct rspamd_config *cfg);
+	int (*module_reconfig_func)(struct rspamd_config *cfg);
 
-	int (*module_attach_controller_func) (struct module_ctx *ctx,
-										  GHashTable *custom_commands);
+	int (*module_attach_controller_func)(struct module_ctx *ctx,
+										 GHashTable *custom_commands);
 
 	guint module_version;
 	guint64 rspamd_version;
@@ -242,9 +241,9 @@ struct rspamd_worker_listen_socket {
 typedef struct worker_s {
 	const gchar *name;
 
-	gpointer (*worker_init_func) (struct rspamd_config *cfg);
+	gpointer (*worker_init_func)(struct rspamd_config *cfg);
 
-	void (*worker_start_func) (struct rspamd_worker *worker);
+	void (*worker_start_func)(struct rspamd_worker *worker);
 
 	int flags;
 	int listen_type;
@@ -259,7 +258,7 @@ typedef struct worker_s {
  * @param wrk
  * @return
  */
-gboolean rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk);
+gboolean rspamd_check_worker(struct rspamd_config *cfg, worker_t *wrk);
 
 /**
  * Check if loaded module is compatible with rspamd
@@ -267,7 +266,7 @@ gboolean rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk);
  * @param wrk
  * @return
  */
-gboolean rspamd_check_module (struct rspamd_config *cfg, module_t *wrk);
+gboolean rspamd_check_module(struct rspamd_config *cfg, module_t *wrk);
 
 struct pidfh;
 struct rspamd_config;
@@ -288,38 +287,38 @@ struct RSPAMD_ALIGNED(64) rspamd_avg_time {
  * Server statistics
  */
 struct RSPAMD_ALIGNED(64) rspamd_stat {
-	guint messages_scanned;                             /**< total number of messages scanned				*/
-	guint actions_stat[METRIC_ACTION_MAX];              /**< statistic for each action						*/
-	guint connections_count;                            /**< total connections count						*/
-	guint control_connections_count;                    /**< connections count to control interface			*/
-	guint messages_learned;                             /**< messages learned								*/
-	struct rspamd_avg_time avg_time;                    /**< average time stats								*/
+	guint messages_scanned;                /**< total number of messages scanned				*/
+	guint actions_stat[METRIC_ACTION_MAX]; /**< statistic for each action						*/
+	guint connections_count;               /**< total connections count						*/
+	guint control_connections_count;       /**< connections count to control interface			*/
+	guint messages_learned;                /**< messages learned								*/
+	struct rspamd_avg_time avg_time;       /**< average time stats								*/
 };
 
 /**
  * Struct that determine main server object (for logging purposes)
  */
 struct rspamd_main {
-	struct rspamd_config *cfg;                                  /**< pointer to config structure					*/
-	pid_t pid;                                                  /**< main pid										*/
+	struct rspamd_config *cfg; /**< pointer to config structure					*/
+	pid_t pid;                 /**< main pid										*/
 	/* Pid file structure */
-	rspamd_pidfh_t *pfh;                                        /**< struct pidfh for pidfile						*/
-	GQuark type;                                                /**< process type									*/
-	struct rspamd_stat *stat;                                   /**< pointer to statistics							*/
+	rspamd_pidfh_t *pfh;      /**< struct pidfh for pidfile						*/
+	GQuark type;              /**< process type									*/
+	struct rspamd_stat *stat; /**< pointer to statistics							*/
 
-	rspamd_mempool_t *server_pool;                              /**< server's memory pool							*/
-	rspamd_mempool_mutex_t *start_mtx;                          /**< server is starting up							*/
-	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
-	GHashTable *spairs;                                         /**< socket pairs requested by workers				*/
+	rspamd_mempool_t *server_pool;     /**< server's memory pool							*/
+	rspamd_mempool_mutex_t *start_mtx; /**< server is starting up							*/
+	GHashTable *workers;               /**< workers pool indexed by pid                    */
+	GHashTable *spairs;                /**< socket pairs requested by workers				*/
 	rspamd_logger_t *logger;
-	uid_t workers_uid;                                          /**< worker's uid running to                        */
-	gid_t workers_gid;                                          /**< worker's gid running to						*/
-	gboolean is_privileged;                                     /**< true if run in privileged mode                 */
-	gboolean wanna_die;                                         /**< no respawn of processes						*/
-	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
-	struct roll_history *history;                               /**< rolling history								*/
+	uid_t workers_uid;            /**< worker's uid running to                        */
+	gid_t workers_gid;            /**< worker's gid running to						*/
+	gboolean is_privileged;       /**< true if run in privileged mode                 */
+	gboolean wanna_die;           /**< no respawn of processes						*/
+	gboolean cores_throttling;    /**< turn off cores when limits are exceeded		*/
+	struct roll_history *history; /**< rolling history								*/
 	struct ev_loop *event_loop;
-	ev_signal term_ev, int_ev, hup_ev, usr1_ev;                 /**< signals 										*/
+	ev_signal term_ev, int_ev, hup_ev, usr1_ev; /**< signals 										*/
 	struct rspamd_http_context *http_ctx;
 };
 
@@ -329,18 +328,18 @@ struct rspamd_main {
 struct controller_command;
 struct controller_session;
 
-typedef gboolean (*controller_func_t) (gchar **args,
-									   struct controller_session *session);
+typedef gboolean (*controller_func_t)(gchar **args,
+									  struct controller_session *session);
 
 struct controller_session {
-	struct rspamd_worker *worker;                               /**< pointer to worker structure (controller in fact) */
-	gint sock;                                                  /**< socket descriptor								*/
-	struct controller_command *cmd;                             /**< real command									*/
-	struct rspamd_config *cfg;                                  /**< pointer to config file							*/
-	GList *parts;                                               /**< extracted mime parts							*/
-	struct rspamd_async_session *s;                             /**< async session object							*/
-	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
-	struct ev_loop *ev_base;                                 /**< Event base										*/
+	struct rspamd_worker *worker;         /**< pointer to worker structure (controller in fact) */
+	gint sock;                            /**< socket descriptor								*/
+	struct controller_command *cmd;       /**< real command									*/
+	struct rspamd_config *cfg;            /**< pointer to config file							*/
+	GList *parts;                         /**< extracted mime parts							*/
+	struct rspamd_async_session *s;       /**< async session object							*/
+	struct rspamd_dns_resolver *resolver; /**< DNS resolver									*/
+	struct ev_loop *ev_base;              /**< Event base										*/
 };
 
 struct zstd_dictionary {
@@ -366,12 +365,12 @@ struct rspamd_external_libs_ctx {
 /**
  * Register custom controller function
  */
-void register_custom_controller_command (const gchar *name,
-										 controller_func_t handler,
-										 gboolean privileged,
-										 gboolean require_message);
+void register_custom_controller_command(const gchar *name,
+										controller_func_t handler,
+										gboolean privileged,
+										gboolean require_message);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

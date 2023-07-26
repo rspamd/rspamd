@@ -28,7 +28,6 @@
 namespace rspamd::symcache {
 struct cache_refresh_cbdata {
 private:
-
 	symcache *cache;
 	struct ev_loop *event_loop;
 	struct rspamd_worker *w;
@@ -38,21 +37,21 @@ private:
 
 public:
 	explicit cache_refresh_cbdata(symcache *_cache,
-										 struct ev_loop *_ev_base,
-										 struct rspamd_worker *_w)
-			: cache(_cache), event_loop(_ev_base), w(_w)
+								  struct ev_loop *_ev_base,
+								  struct rspamd_worker *_w)
+		: cache(_cache), event_loop(_ev_base), w(_w)
 	{
 		auto log_tag = [&]() { return cache->log_tag(); };
 		last_resort = rspamd_get_ticks(TRUE);
 		reload_time = cache->get_reload_time();
 		auto tm = rspamd_time_jitter(reload_time, 0);
 		msg_debug_cache("next reload in %.2f seconds", tm);
-		ev_timer_init (&resort_ev, cache_refresh_cbdata::resort_cb,
-				tm, tm);
+		ev_timer_init(&resort_ev, cache_refresh_cbdata::resort_cb,
+					  tm, tm);
 		resort_ev.data = (void *) this;
 		ev_timer_start(event_loop, &resort_ev);
 		rspamd_mempool_add_destructor(cache->get_pool(),
-				cache_refresh_cbdata::refresh_dtor, (void *) this);
+									  cache_refresh_cbdata::refresh_dtor, (void *) this);
 	}
 
 	static void refresh_dtor(void *d)
@@ -61,8 +60,9 @@ public:
 		delete cbdata;
 	}
 
-	static void resort_cb(EV_P_ ev_timer *w, int _revents) {
-		auto *cbdata = (struct cache_refresh_cbdata *)w->data;
+	static void resort_cb(EV_P_ ev_timer *w, int _revents)
+	{
+		auto *cbdata = (struct cache_refresh_cbdata *) w->data;
 
 		auto log_tag = [&]() { return cbdata->cache->log_tag(); };
 
@@ -84,6 +84,6 @@ private:
 		ev_timer_stop(event_loop, &resort_ev);
 	}
 };
-}
+}// namespace rspamd::symcache
 
-#endif //RSPAMD_SYMCACHE_PERIODIC_HXX
+#endif//RSPAMD_SYMCACHE_PERIODIC_HXX

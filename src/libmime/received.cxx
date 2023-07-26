@@ -43,8 +43,10 @@ struct received_part {
 	std::vector<mime_string> comments;
 
 	explicit received_part(received_part_type t)
-								  : type(t),
-									data(received_char_filter) {}
+		: type(t),
+		  data(received_char_filter)
+	{
+	}
 };
 
 static inline auto
@@ -74,7 +76,8 @@ received_process_part(const std::string_view &data,
 		read_data,
 		read_tcpinfo,
 		all_done
-	} state, next_state;
+	} state,
+		next_state;
 
 	/* In this function, we just process comments and data separately */
 	const auto *p = data.data();
@@ -108,7 +111,7 @@ received_process_part(const std::string_view &data,
 							npart.comments.emplace_back(received_char_filter);
 							auto &comment = npart.comments.back();
 							received_part_set_or_append(c, p - c,
-									comment);
+														comment);
 						}
 					}
 
@@ -128,7 +131,7 @@ received_process_part(const std::string_view &data,
 				if (p > c) {
 					if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
 						received_part_set_or_append(c, p - c,
-								npart.data);
+													npart.data);
 					}
 				}
 
@@ -138,11 +141,11 @@ received_process_part(const std::string_view &data,
 				p++;
 				c = p;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (g_ascii_isspace(*p)) {
 				if (p > c) {
 					if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
 						received_part_set_or_append(c, p - c,
-								npart.data);
+													npart.data);
 					}
 				}
 
@@ -155,7 +158,7 @@ received_process_part(const std::string_view &data,
 				if (p > c) {
 					if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
 						received_part_set_or_append(c, p - c,
-								npart.data);
+													npart.data);
 					}
 				}
 
@@ -187,7 +190,7 @@ received_process_part(const std::string_view &data,
 		case read_tcpinfo:
 			if (*p == ']') {
 				received_part_set_or_append(c, p - c + 1,
-						npart.data);
+											npart.data);
 				seen_tcpinfo = TRUE;
 				state = skip_spaces;
 				next_state = read_data;
@@ -214,7 +217,7 @@ received_process_part(const std::string_view &data,
 		if (p > c) {
 			if (type != received_part_type::RSPAMD_RECEIVED_PART_UNKNOWN) {
 				received_part_set_or_append(c, p - c,
-						npart.data);
+											npart.data);
 			}
 
 			last = p - data.data();
@@ -235,11 +238,11 @@ received_process_part(const std::string_view &data,
 	return false;
 }
 
-template <std::size_t N>
+template<std::size_t N>
 constexpr auto lit_compare_lowercase(const char lit[N], const char *in) -> bool
 {
-	for (auto i = 0; i < N; i ++) {
-		if (lc_map[(unsigned char)in[i]] != lit[i]) {
+	for (auto i = 0; i < N; i++) {
+		if (lc_map[(unsigned char) in[i]] != lit[i]) {
 			return false;
 		}
 	}
@@ -259,7 +262,7 @@ received_spill(const std::string_view &in,
 	const auto *end = p + in.size();
 
 	auto skip_spaces = [&p, end]() {
-		while (p < end && g_ascii_isspace (*p)) {
+		while (p < end && g_ascii_isspace(*p)) {
 			p++;
 		}
 	};
@@ -272,13 +275,13 @@ received_spill(const std::string_view &in,
 
 		while (p < end) {
 			if (*p == ')') {
-				ebraces ++;
+				ebraces++;
 			}
 			else if (*p == '(') {
-				obraces ++;
+				obraces++;
 			}
 
-			p ++;
+			p++;
 
 			if (obraces == ebraces) {
 				/* Skip spaces after  */
@@ -317,7 +320,7 @@ received_spill(const std::string_view &in,
 			return {};
 		}
 
-		g_assert (pos != 0);
+		g_assert(pos != 0);
 		p += pos;
 		len = end > p ? end - p : 0;
 		seen_from = true;
@@ -330,7 +333,7 @@ received_spill(const std::string_view &in,
 			return {};
 		}
 
-		g_assert (pos != 0);
+		g_assert(pos != 0);
 		p += pos;
 		len = end > p ? end - p : 0;
 		seen_by = true;
@@ -364,7 +367,7 @@ received_spill(const std::string_view &in,
 			}
 			else {
 				while (p < end) {
-					if (!(g_ascii_isspace (*p) || *p == '(' || *p == ';')) {
+					if (!(g_ascii_isspace(*p) || *p == '(' || *p == ';')) {
 						p++;
 					}
 					else {
@@ -389,7 +392,7 @@ received_spill(const std::string_view &in,
 				len = end > p ? end - p : 0;
 			}
 			else {
-				g_assert (pos != 0);
+				g_assert(pos != 0);
 				p += pos;
 				len = end > p ? end - p : 0;
 			}
@@ -400,7 +403,7 @@ received_spill(const std::string_view &in,
 }
 
 #define RSPAMD_INET_ADDRESS_PARSE_RECEIVED \
-	(rspamd_inet_address_parse_flags)(RSPAMD_INET_ADDRESS_PARSE_REMOTE|RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)
+	(rspamd_inet_address_parse_flags)(RSPAMD_INET_ADDRESS_PARSE_REMOTE | RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)
 
 static auto
 received_process_rdns(rspamd_mempool_t *pool,
@@ -419,9 +422,9 @@ received_process_rdns(rspamd_mempool_t *pool,
 	if (*p == '[' && *(end - 1) == ']' && in.size() > 2) {
 		/* We have enclosed ip address */
 		auto *addr = rspamd_parse_inet_address_pool(p + 1,
-				(end - p) - 2,
-				pool,
-				RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
+													(end - p) - 2,
+													pool,
+													RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 		if (addr) {
 			const gchar *addr_str;
@@ -488,9 +491,9 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 		if (brace_pos != std::string_view::npos) {
 			auto substr_addr = in.substr(1, brace_pos - 1);
 			addr = rspamd_parse_inet_address_pool(substr_addr.data(),
-					substr_addr.size(),
-					pool,
-					RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
+												  substr_addr.size(),
+												  pool,
+												  RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 			if (addr) {
 				rh.addr = addr;
@@ -502,7 +505,7 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 		if (g_ascii_isxdigit(in[0])) {
 			/* Try to parse IP address */
 			addr = rspamd_parse_inet_address_pool(in.data(),
-					in.size(), pool, RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
+												  in.size(), pool, RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 			if (addr) {
 				rh.addr = addr;
 				rh.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(addr)));
@@ -518,11 +521,11 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 
 				if (ebrace_pos != std::string_view::npos && ebrace_pos > obrace_pos) {
 					auto substr_addr = in.substr(obrace_pos + 1,
-							ebrace_pos - obrace_pos - 1);
+												 ebrace_pos - obrace_pos - 1);
 					addr = rspamd_parse_inet_address_pool(substr_addr.data(),
-							substr_addr.size(),
-							pool,
-							RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
+														  substr_addr.size(),
+														  pool,
+														  RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 					if (addr) {
 						rh.addr = addr;
@@ -531,7 +534,7 @@ received_process_host_tcpinfo(rspamd_mempool_t *pool,
 						/* Process with rDNS */
 						auto rdns_substr = in.substr(0, obrace_pos);
 
-						if (received_process_rdns(pool,rdns_substr,rh.real_hostname)) {
+						if (received_process_rdns(pool, rdns_substr, rh.real_hostname)) {
 							ret = true;
 						}
 					}
@@ -568,8 +571,8 @@ received_process_from(rspamd_mempool_t *pool,
 		if (!rpart.comments.empty()) {
 			/* We can have info within comment as part of RFC */
 			received_process_host_tcpinfo(
-					pool, rh,
-					rpart.comments[0].as_view());
+				pool, rh,
+				rpart.comments[0].as_view());
 		}
 
 		if (rh.real_ip.size() == 0) {
@@ -585,12 +588,12 @@ received_process_from(rspamd_mempool_t *pool,
 			if (rh.real_ip.size() != 0) {
 				/* Get announced hostname (usually helo) */
 				received_process_rdns(pool,
-						rpart.data.as_view(),
-						rh.from_hostname);
+									  rpart.data.as_view(),
+									  rh.from_hostname);
 			}
 			else {
 				received_process_host_tcpinfo(pool,
-						rh, rpart.data.as_view());
+											  rh, rpart.data.as_view());
 			}
 		}
 	}
@@ -598,8 +601,8 @@ received_process_from(rspamd_mempool_t *pool,
 		/* rpart->dlen = 0 */
 		if (!rpart.comments.empty()) {
 			received_process_host_tcpinfo(
-					pool, rh,
-					rpart.comments[0].as_view());
+				pool, rh,
+				rpart.comments[0].as_view());
 		}
 	}
 }
@@ -611,25 +614,23 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 {
 	std::ptrdiff_t date_pos = -1;
 
-	static constexpr const auto protos_map = frozen::make_unordered_map<frozen::string, received_flags>({
-			{"smtp",    received_flags::SMTP},
-			{"esmtp",   received_flags::ESMTP},
-			{"esmtpa",  received_flags::ESMTPA |
-						received_flags::AUTHENTICATED},
-			{"esmtpsa", received_flags::ESMTPSA |
-						received_flags::SSL |
-						received_flags::AUTHENTICATED},
-			{"esmtps",  received_flags::ESMTPS |
-						received_flags::SSL},
-			{"lmtp",    received_flags::LMTP},
-			{"imap",    received_flags::IMAP},
-			{"imaps",   received_flags::IMAP |
-						received_flags::SSL},
-			{"http",    received_flags::HTTP},
-			{"https",   received_flags::HTTP |
-						received_flags::SSL},
-			{"local",   received_flags::LOCAL}
-	});
+	static constexpr const auto protos_map = frozen::make_unordered_map<frozen::string, received_flags>({{"smtp", received_flags::SMTP},
+																										 {"esmtp", received_flags::ESMTP},
+																										 {"esmtpa", received_flags::ESMTPA |
+																														received_flags::AUTHENTICATED},
+																										 {"esmtpsa", received_flags::ESMTPSA |
+																														 received_flags::SSL |
+																														 received_flags::AUTHENTICATED},
+																										 {"esmtps", received_flags::ESMTPS |
+																														received_flags::SSL},
+																										 {"lmtp", received_flags::LMTP},
+																										 {"imap", received_flags::IMAP},
+																										 {"imaps", received_flags::IMAP |
+																													   received_flags::SSL},
+																										 {"http", received_flags::HTTP},
+																										 {"https", received_flags::HTTP |
+																													   received_flags::SSL},
+																										 {"local", received_flags::LOCAL}});
 
 	auto parts = received_spill(in, date_pos);
 
@@ -642,15 +643,15 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 	rh.flags = received_flags::UNKNOWN;
 	rh.hdr = hdr;
 
-	for (const auto &part : parts) {
+	for (const auto &part: parts) {
 		switch (part.type) {
 		case received_part_type::RSPAMD_RECEIVED_PART_FROM:
 			received_process_from(pool, part, rh);
 			break;
 		case received_part_type::RSPAMD_RECEIVED_PART_BY:
 			received_process_rdns(pool,
-					part.data.as_view(),
-					rh.by_hostname);
+								  part.data.as_view(),
+								  rh.by_hostname);
 			break;
 		case received_part_type::RSPAMD_RECEIVED_PART_WITH:
 			if (part.data.size() > 0) {
@@ -664,7 +665,7 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 		case received_part_type::RSPAMD_RECEIVED_PART_FOR:
 			rh.for_mbox.assign_copy(part.data);
 			rh.for_addr = rspamd_email_address_from_smtp(rh.for_mbox.data(),
-					rh.for_mbox.size());
+														 rh.for_mbox.size());
 			break;
 		default:
 			/* Do nothing */
@@ -678,8 +679,8 @@ received_header_parse(received_header_chain &chain, rspamd_mempool_t *pool,
 
 	if (date_pos > 0 && date_pos < in.size()) {
 		auto date_sub = in.substr(date_pos);
-		rh.timestamp = rspamd_parse_smtp_date((const unsigned char*)date_sub.data(),
-				date_sub.size(), nullptr);
+		rh.timestamp = rspamd_parse_smtp_date((const unsigned char *) date_sub.data(),
+											  date_sub.size(), nullptr);
 	}
 
 	return true;
@@ -713,10 +714,9 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 				}
 			}
 
-			if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
-					&& task->from_addr) {
-				msg_debug_task ("the first received seems to be"
-								" not ours, prepend it with fake one");
+			if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
+				msg_debug_task("the first received seems to be"
+							   " not ours, prepend it with fake one");
 
 				auto &trecv = recv_chain_ptr->new_received(received_header_chain::append_type::append_head);
 				trecv.flags |= received_flags::ARTIFICIAL;
@@ -731,14 +731,14 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 
 				trecv.real_ip.assign_copy(std::string_view(rspamd_inet_address_to_string(task->from_addr)));
 
-				const auto *mta_name = (const char*)rspamd_mempool_get_variable(task->task_pool,
-						RSPAMD_MEMPOOL_MTA_NAME);
+				const auto *mta_name = (const char *) rspamd_mempool_get_variable(task->task_pool,
+																				  RSPAMD_MEMPOOL_MTA_NAME);
 
 				if (mta_name) {
 					trecv.by_hostname.assign_copy(std::string_view(mta_name));
 				}
 				trecv.addr = rspamd_inet_address_copy(task->from_addr,
-						task->task_pool);
+													  task->task_pool);
 
 				if (task->hostname) {
 					trecv.real_hostname.assign_copy(std::string_view(task->hostname));
@@ -752,12 +752,12 @@ received_maybe_fix_task(struct rspamd_task *task) -> bool
 			if (!need_recv_correction && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
 				(task->cfg && !task->cfg->ignore_received)) {
 				if (!top_recv.real_ip.empty()) {
-					if (!rspamd_parse_inet_address (&task->from_addr,
-							top_recv.real_ip.data(),
-							top_recv.real_ip.size(),
-							RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
-						msg_warn_task ("cannot get IP from received header: '%s'",
-								top_recv.real_ip.data());
+					if (!rspamd_parse_inet_address(&task->from_addr,
+												   top_recv.real_ip.data(),
+												   top_recv.real_ip.size(),
+												   RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
+						msg_warn_task("cannot get IP from received header: '%s'",
+									  top_recv.real_ip.data());
 						task->from_addr = nullptr;
 					}
 				}
@@ -789,8 +789,8 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 
 	auto i = 1;
 
-	for (const auto &rh : chain->as_vector()) {
-		lua_createtable (L, 0, 10);
+	for (const auto &rh: chain->as_vector()) {
+		lua_createtable(L, 0, 10);
 
 		if (rh.hdr && rh.hdr->decoded) {
 			rspamd_lua_table_set(L, "raw", rh.hdr->decoded);
@@ -838,57 +838,51 @@ received_export_to_lua(received_header_chain *chain, lua_State *L) -> bool
 	return true;
 }
 
-} // namespace rspamd::mime
+}// namespace rspamd::mime
 
-bool
-rspamd_received_header_parse(struct rspamd_task *task,
-							 const char *data, size_t sz,
-							 struct rspamd_mime_header *hdr)
+bool rspamd_received_header_parse(struct rspamd_task *task,
+								  const char *data, size_t sz,
+								  struct rspamd_mime_header *hdr)
 {
-	auto *recv_chain_ptr = static_cast<rspamd::mime::received_header_chain *>
-			(MESSAGE_FIELD(task, received_headers));
+	auto *recv_chain_ptr = static_cast<rspamd::mime::received_header_chain *>(MESSAGE_FIELD(task, received_headers));
 
 	if (recv_chain_ptr == nullptr) {
 		/* This constructor automatically registers dtor in mempool */
 		recv_chain_ptr = new rspamd::mime::received_header_chain(task);
-		MESSAGE_FIELD(task, received_headers) = (void *)recv_chain_ptr;
+		MESSAGE_FIELD(task, received_headers) = (void *) recv_chain_ptr;
 	}
 	return rspamd::mime::received_header_parse(*recv_chain_ptr, task->task_pool,
-			std::string_view{data, sz}, hdr);
+											   std::string_view{data, sz}, hdr);
 }
 
-bool
-rspamd_received_maybe_fix_task(struct rspamd_task *task)
+bool rspamd_received_maybe_fix_task(struct rspamd_task *task)
 {
 	return rspamd::mime::received_maybe_fix_task(task);
 }
 
-bool
-rspamd_received_export_to_lua(struct rspamd_task *task, lua_State *L)
+bool rspamd_received_export_to_lua(struct rspamd_task *task, lua_State *L)
 {
 	return rspamd::mime::received_export_to_lua(
-			static_cast<rspamd::mime::received_header_chain *>(MESSAGE_FIELD(task, received_headers)),
-			L);
+		static_cast<rspamd::mime::received_header_chain *>(MESSAGE_FIELD(task, received_headers)),
+		L);
 }
 
 /* Tests part */
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
 
-TEST_SUITE("received") {
-TEST_CASE("parse received")
+TEST_SUITE("received")
 {
-	using namespace std::string_view_literals;
-	using map_type = ankerl::unordered_dense::map<std::string_view, std::string_view>;
-	std::vector<std::pair<std::string_view, map_type>> cases{
+	TEST_CASE("parse received")
+	{
+		using namespace std::string_view_literals;
+		using map_type = ankerl::unordered_dense::map<std::string_view, std::string_view>;
+		std::vector<std::pair<std::string_view, map_type>> cases{
 			// Simple received
 			{"from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])"sv,
-					{
-							{"real_ip", "185.243.30.90"},
-							{"real_hostname", "smtp11.mailtrack.pl"},
-							{"from_hostname", "smtp11.mailtrack.pl"}
-					}
-			},
+			 {{"real_ip", "185.243.30.90"},
+			  {"real_hostname", "smtp11.mailtrack.pl"},
+			  {"from_hostname", "smtp11.mailtrack.pl"}}},
 			// Real Postfix IPv6 received
 			{"from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])\n"
 			 "\t(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))\n"
@@ -896,26 +890,22 @@ TEST_CASE("parse received")
 			 "\tby mx1.freebsd.org (Postfix) with ESMTPS id CF0171862\n"
 			 "\tfor <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)\n"
 			 "\t(envelope-from upwest201diana@outlook.com)"sv,
-					{
-							{"real_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
-							{"from_hostname", "server.chat-met-vreemden.nl"},
-							{"by_hostname", "mx1.freebsd.org"},
-							{"for_mbox", "<test@example.com>"}
-					}
-			},
+			 {{"real_ip", "2a01:7c8:aab6:26d:5054:ff:fed1:1da2"},
+			  {"from_hostname", "server.chat-met-vreemden.nl"},
+			  {"by_hostname", "mx1.freebsd.org"},
+			  {"for_mbox", "<test@example.com>"}}},
 			// Exim IPv4 received
 			{"from localhost ([127.0.0.1]:49019 helo=hummus.csx.cam.ac.uk)\n"
 			 " by hummus.csx.cam.ac.uk with esmtp (Exim 4.91-pdpfix1)\n"
 			 " (envelope-from <exim-dev-bounces@exim.org>)\n"
 			 " id 1fZ55o-0006DP-3H\n"
 			 " for <xxx@xxx.xxx>; Sat, 30 Jun 2018 02:54:28 +0100"sv,
-					{
-							{"from_hostname", "localhost"},
-							{"real_ip", "127.0.0.1"},
-							{"for_mbox", "<xxx@xxx.xxx>"},
-							{"by_hostname", "hummus.csx.cam.ac.uk"},
-					}
-			},
+			 {
+				 {"from_hostname", "localhost"},
+				 {"real_ip", "127.0.0.1"},
+				 {"for_mbox", "<xxx@xxx.xxx>"},
+				 {"by_hostname", "hummus.csx.cam.ac.uk"},
+			 }},
 			// Exim IPv6 received
 			{"from smtp.spodhuis.org ([2a02:898:31:0:48:4558:736d:7470]:38689\n"
 			 " helo=mx.spodhuis.org)\n"
@@ -923,116 +913,105 @@ TEST_CASE("parse received")
 			 " (Exim 4.91-pdpfix1+cc) (envelope-from <xxx@exim.org>)\n"
 			 " id 1fZ55k-0006CO-9M\n"
 			 " for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100"sv,
-					{
-							{"from_hostname", "smtp.spodhuis.org"},
-							{"real_ip", "2a02:898:31:0:48:4558:736d:7470"},
-							{"for_mbox", "exim-dev@exim.org"},
-							{"by_hostname", "hummus.csx.cam.ac.uk"},
-					}
-			},
+			 {
+				 {"from_hostname", "smtp.spodhuis.org"},
+				 {"real_ip", "2a02:898:31:0:48:4558:736d:7470"},
+				 {"for_mbox", "exim-dev@exim.org"},
+				 {"by_hostname", "hummus.csx.cam.ac.uk"},
+			 }},
 			// Haraka received
 			{"from aaa.cn ([1.1.1.1]) by localhost.localdomain (Haraka/2.8.18) with "
 			 "ESMTPA id 349C9C2B-491A-4925-A687-3EF14038C344.1 envelope-from <huxin@xxx.com> "
 			 "(authenticated bits=0); Tue, 03 Jul 2018 14:18:13 +0200"sv,
-					{
-							{"from_hostname", "aaa.cn"},
-							{"real_ip", "1.1.1.1"},
-							{"by_hostname", "localhost.localdomain"},
-					}
-			},
+			 {
+				 {"from_hostname", "aaa.cn"},
+				 {"real_ip", "1.1.1.1"},
+				 {"by_hostname", "localhost.localdomain"},
+			 }},
 			// Invalid by
 			{"from [192.83.172.101] (HELLO 148.251.238.35) (148.251.238.35) "
 			 "by guovswzqkvry051@sohu.com with gg login "
 			 "by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300"sv,
-					{
-							{"from_hostname", "192.83.172.101"},
-							{"real_ip", "192.83.172.101"},
-					}
-			},
+			 {
+				 {"from_hostname", "192.83.172.101"},
+				 {"real_ip", "192.83.172.101"},
+			 }},
 			// Invalid hostinfo
 			{"from example.com ([]) by example.com with ESMTP id 2019091111 ;"
 			 " Thu, 26 Sep 2019 11:19:07 +0200"sv,
-					{
-							{"by_hostname", "example.com"},
-							{"from_hostname", "example.com"},
-							{"real_hostname", "example.com"},
-					}
-			},
+			 {
+				 {"by_hostname", "example.com"},
+				 {"from_hostname", "example.com"},
+				 {"real_hostname", "example.com"},
+			 }},
 			// Different real and announced hostnames + broken crap
 			{"from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) "
 			 "with;ESMTP id 44QShF6xj4z1X for <hey@y.br>; Thu, 21 Mar 2019 23:45:46 -0300 "
 			 ": <g @yi.br>"sv,
-					{
-							{"real_ip", "1.1.1.1"},
-							{"from_hostname", "171-29.br"},
-							{"real_hostname", "1-1-1-1.z.com.br"},
-							{"by_hostname", "x.com.br"},
-					}
-			},
+			 {
+				 {"real_ip", "1.1.1.1"},
+				 {"from_hostname", "171-29.br"},
+				 {"real_hostname", "1-1-1-1.z.com.br"},
+				 {"by_hostname", "x.com.br"},
+			 }},
 			// Different real and announced ips + no hostname
 			{"from [127.0.0.1] ([127.0.0.2]) by smtp.gmail.com with ESMTPSA id xxxololo"sv,
-					{
-							{"real_ip", "127.0.0.2"},
-							{"from_hostname", "127.0.0.1"},
-							{"by_hostname", "smtp.gmail.com"},
-					}
-			},
+			 {
+				 {"real_ip", "127.0.0.2"},
+				 {"from_hostname", "127.0.0.1"},
+				 {"by_hostname", "smtp.gmail.com"},
+			 }},
 			// Different real and hostanes
 			{"from 185.118.166.127 (steven2.zhou01.pserver.ru [185.118.166.127]) "
 			 "by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
-					{
-							{"real_ip", "185.118.166.127"},
-							{"from_hostname", "185.118.166.127"},
-							{"real_hostname", "steven2.zhou01.pserver.ru"},
-							{"by_hostname", "mail.832zsu.cn"},
-					}
-			},
+			 {
+				 {"real_ip", "185.118.166.127"},
+				 {"from_hostname", "185.118.166.127"},
+				 {"real_hostname", "steven2.zhou01.pserver.ru"},
+				 {"by_hostname", "mail.832zsu.cn"},
+			 }},
 			// \0 in received must be filtered
 			{"from smtp11.mailt\0rack.pl (smtp11.mail\0track.pl [1\085.243.30.90])"sv,
-					{
-							{"real_ip", "185.243.30.90"},
-							{"real_hostname", "smtp11.mailtrack.pl"},
-							{"from_hostname", "smtp11.mailtrack.pl"}
-					}
-			},
+			 {{"real_ip", "185.243.30.90"},
+			  {"real_hostname", "smtp11.mailtrack.pl"},
+			  {"from_hostname", "smtp11.mailtrack.pl"}}},
 			// No from part
 			{"by mail.832zsu.cn (Postfix) with ESMTPA id AAD722133E34"sv,
-					{
-							{"by_hostname", "mail.832zsu.cn"},
-					}
-			},
+			 {
+				 {"by_hostname", "mail.832zsu.cn"},
+			 }},
 			// From part is in the comment
 			{"(from asterisk@localhost)\n"
 			 "        by pbx.xxx.com (8.14.7/8.14.7/Submit) id 076Go4wD014562;\n"
 			 "        Thu, 6 Aug 2020 11:50:04 -0500"sv,
-					{
-							{"by_hostname", "pbx.xxx.com"},
-					}
-			},
-	};
-	rspamd_mempool_t *pool = rspamd_mempool_new_default("rcvd test", 0);
+			 {
+				 {"by_hostname", "pbx.xxx.com"},
+			 }},
+		};
+		rspamd_mempool_t *pool = rspamd_mempool_new_default("rcvd test", 0);
 
-	for (auto &&c : cases) {
-		SUBCASE(c.first.data()) {
-			rspamd::mime::received_header_chain chain;
-			auto ret = rspamd::mime::received_header_parse(chain, pool,
-					c.first, nullptr);
-			CHECK(ret == true);
-			auto &&rh = chain.get_received(0);
-			CHECK(rh.has_value());
-			auto res = rh.value().get().as_map();
+		for (auto &&c: cases) {
+			SUBCASE(c.first.data())
+			{
+				rspamd::mime::received_header_chain chain;
+				auto ret = rspamd::mime::received_header_parse(chain, pool,
+															   c.first, nullptr);
+				CHECK(ret == true);
+				auto &&rh = chain.get_received(0);
+				CHECK(rh.has_value());
+				auto res = rh.value().get().as_map();
 
-			for (const auto &expected : c.second) {
-				CHECK_MESSAGE(res.contains(expected.first), expected.first.data());
-				CHECK(res[expected.first] == expected.second);
-			}
-			for (const auto &existing : res) {
-				CHECK_MESSAGE(c.second.contains(existing.first), existing.first.data());
-				CHECK(c.second[existing.first] == existing.second);
+				for (const auto &expected: c.second) {
+					CHECK_MESSAGE(res.contains(expected.first), expected.first.data());
+					CHECK(res[expected.first] == expected.second);
+				}
+				for (const auto &existing: res) {
+					CHECK_MESSAGE(c.second.contains(existing.first), existing.first.data());
+					CHECK(c.second[existing.first] == existing.second);
+				}
 			}
 		}
-	}
 
-	rspamd_mempool_delete(pool);
-}
+		rspamd_mempool_delete(pool);
+	}
 }

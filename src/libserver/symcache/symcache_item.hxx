@@ -43,13 +43,13 @@ using cache_item_ptr = std::shared_ptr<cache_item>;
 
 enum class symcache_item_type {
 	CONNFILTER, /* Executed on connection stage */
-	PREFILTER, /* Executed before all filters */
-	FILTER, /* Normal symbol with a callback */
+	PREFILTER,  /* Executed before all filters */
+	FILTER,     /* Normal symbol with a callback */
 	POSTFILTER, /* Executed after all filters */
 	IDEMPOTENT, /* Executed after postfilters, cannot change results */
 	CLASSIFIER, /* A virtual classifier symbol */
-	COMPOSITE, /* A virtual composite symbol */
-	VIRTUAL, /* A virtual symbol... */
+	COMPOSITE,  /* A virtual composite symbol */
+	VIRTUAL,    /* A virtual symbol... */
 };
 
 /*
@@ -58,8 +58,9 @@ enum class symcache_item_type {
  */
 bool operator<(symcache_item_type lhs, symcache_item_type rhs);
 
-constexpr static auto item_type_to_str(symcache_item_type t) -> const char * {
-	switch(t) {
+constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
+{
+	switch (t) {
 	case symcache_item_type::CONNFILTER:
 		return "connfilter";
 	case symcache_item_type::PREFILTER:
@@ -90,14 +91,20 @@ struct item_condition {
 private:
 	lua_State *L = nullptr;
 	int cb = -1;
+
 public:
-	explicit item_condition(lua_State *L_, int cb_) noexcept : L(L_), cb(cb_) {}
-	item_condition(item_condition &&other) noexcept {
+	explicit item_condition(lua_State *L_, int cb_) noexcept
+		: L(L_), cb(cb_)
+	{
+	}
+	item_condition(item_condition &&other) noexcept
+	{
 		*this = std::move(other);
 	}
 	/* Make it move only */
 	item_condition(const item_condition &) = delete;
-	item_condition& operator=(item_condition &&other) noexcept {
+	item_condition &operator=(item_condition &&other) noexcept
+	{
 		std::swap(other.L, L);
 		std::swap(other.cb, cb);
 		return *this;
@@ -113,8 +120,10 @@ private:
 	void *user_data = nullptr;
 	std::vector<cache_item *> virtual_children;
 	std::vector<item_condition> conditions;
+
 public:
-	explicit normal_item(symbol_func_t _func, void *_user_data) : func(_func), user_data(_user_data)
+	explicit normal_item(symbol_func_t _func, void *_user_data)
+		: func(_func), user_data(_user_data)
 	{
 	}
 
@@ -128,20 +137,24 @@ public:
 		func(task, item, user_data);
 	}
 
-	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) const -> bool {
+	auto check_conditions(std::string_view sym_name, struct rspamd_task *task) const -> bool
+	{
 		return std::all_of(std::begin(conditions), std::end(conditions),
 						   [&](const auto &cond) { return cond.check(sym_name, task); });
 	}
 
-	auto get_cbdata() const -> auto {
+	auto get_cbdata() const -> auto
+	{
 		return user_data;
 	}
 
-	auto add_child(cache_item *ptr) -> void {
+	auto add_child(cache_item *ptr) -> void
+	{
 		virtual_children.push_back(ptr);
 	}
 
-	auto get_childen() const -> const std::vector<cache_item *>& {
+	auto get_childen() const -> const std::vector<cache_item *> &
+	{
 		return virtual_children;
 	}
 };
@@ -150,8 +163,10 @@ class virtual_item {
 private:
 	int parent_id = -1;
 	cache_item *parent = nullptr;
+
 public:
-	explicit virtual_item(int _parent_id) : parent_id(_parent_id)
+	explicit virtual_item(int _parent_id)
+		: parent_id(_parent_id)
 	{
 	}
 
@@ -163,13 +178,13 @@ public:
 
 struct cache_dependency {
 	cache_item *item; /* Real dependency */
-	std::string sym; /* Symbolic dep name */
-	int id; /* Real from */
-	int vid; /* Virtual from */
+	std::string sym;  /* Symbolic dep name */
+	int id;           /* Real from */
+	int vid;          /* Virtual from */
 public:
 	/* Default piecewise constructor */
-	explicit cache_dependency(cache_item *_item, std::string _sym, int _id, int _vid) :
-			item(_item), sym(std::move(_sym)), id(_id), vid(_vid)
+	explicit cache_dependency(cache_item *_item, std::string _sym, int _id, int _vid)
+		: item(_item), sym(std::move(_sym)), id(_id), vid(_vid)
 	{
 	}
 };
@@ -181,9 +196,18 @@ struct item_augmentation {
 	std::variant<std::monostate, std::string, double> value;
 	int weight;
 
-	explicit item_augmentation(int weight) : value(std::monostate{}), weight(weight) {}
-	explicit item_augmentation(std::string str_value, int weight) : value(str_value), weight(weight) {}
-	explicit item_augmentation(double double_value, int weight) : value(double_value), weight(weight) {}
+	explicit item_augmentation(int weight)
+		: value(std::monostate{}), weight(weight)
+	{
+	}
+	explicit item_augmentation(std::string str_value, int weight)
+		: value(str_value), weight(weight)
+	{
+	}
+	explicit item_augmentation(double double_value, int weight)
+		: value(double_value), weight(weight)
+	{
+	}
 };
 
 struct cache_item : std::enable_shared_from_this<cache_item> {
@@ -218,7 +242,8 @@ struct cache_item : std::enable_shared_from_this<cache_item> {
 
 	/* Set of augmentations */
 	ankerl::unordered_dense::map<std::string, item_augmentation,
-		rspamd::smart_str_hash, rspamd::smart_str_equal> augmentations;
+								 rspamd::smart_str_hash, rspamd::smart_str_equal>
+		augmentations;
 
 	/* Dependencies */
 	std::vector<cache_dependency> deps;
@@ -236,20 +261,20 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	 template <typename T>
-	 static auto create_with_function(rspamd_mempool_t *pool,
-												   int id,
-												   T &&name,
-												   int priority,
-												   symbol_func_t func,
-												   void *user_data,
-												   symcache_item_type type,
-												   int flags) -> cache_item_ptr
+	template<typename T>
+	static auto create_with_function(rspamd_mempool_t *pool,
+									 int id,
+									 T &&name,
+									 int priority,
+									 symbol_func_t func,
+									 void *user_data,
+									 symcache_item_type type,
+									 int flags) -> cache_item_ptr
 	{
 		return std::shared_ptr<cache_item>(new cache_item(pool,
-				id, std::forward<T>(name), priority,
-				func, user_data,
-				type, flags));
+														  id, std::forward<T>(name), priority,
+														  func, user_data,
+														  type, flags));
 	}
 
 	/**
@@ -261,16 +286,16 @@ public:
 	 * @param flags
 	 * @return
 	 */
-	template <typename T>
+	template<typename T>
 	static auto create_with_virtual(rspamd_mempool_t *pool,
-												  int id,
-												  T &&name,
-												  int parent,
-												  symcache_item_type type,
-												  int flags) -> cache_item_ptr
+									int id,
+									T &&name,
+									int parent,
+									symcache_item_type type,
+									int flags) -> cache_item_ptr
 	{
 		return std::shared_ptr<cache_item>(new cache_item(pool, id, std::forward<T>(name),
-				parent, type, flags));
+														  parent, type, flags));
 	}
 
 	/**
@@ -307,9 +332,9 @@ public:
 	{
 		return !(flags & SYMBOL_TYPE_CALLBACK) &&
 			   ((type == symcache_item_type::FILTER) ||
-			   is_virtual() ||
-			   (type == symcache_item_type::COMPOSITE) ||
-			   (type == symcache_item_type::CLASSIFIER));
+				is_virtual() ||
+				(type == symcache_item_type::COMPOSITE) ||
+				(type == symcache_item_type::CLASSIFIER));
 	}
 
 	auto is_ghost() const -> bool
@@ -327,14 +352,15 @@ public:
 		return type;
 	}
 
-	auto get_type_str() const -> const char*;
+	auto get_type_str() const -> const char *;
 
 	auto get_name() const -> const std::string &
 	{
 		return symbol;
 	}
 
-	auto get_flags() const -> auto {
+	auto get_flags() const -> auto
+	{
 		return flags;
 	};
 
@@ -372,7 +398,8 @@ public:
 	 * Returns callback data
 	 * @return
 	 */
-	auto get_cbdata() const -> void * {
+	auto get_cbdata() const -> void *
+	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
@@ -387,7 +414,8 @@ public:
 	 * @param task
 	 * @return
 	 */
-	auto check_conditions(struct rspamd_task *task) const -> auto {
+	auto check_conditions(struct rspamd_task *task) const -> auto
+	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
@@ -397,11 +425,12 @@ public:
 		return false;
 	}
 
-	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> void {
+	auto call(struct rspamd_task *task, cache_dynamic_item *dyn_item) const -> void
+	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
-			filter_data.call(task, (struct rspamd_symcache_dynamic_item *)dyn_item);
+			filter_data.call(task, (struct rspamd_symcache_dynamic_item *) dyn_item);
 		}
 	}
 
@@ -437,7 +466,8 @@ public:
 	 * Add a virtual symbol as a child of some normal symbol
 	 * @param ptr
 	 */
-	auto add_child(cache_item *ptr) -> void {
+	auto add_child(cache_item *ptr) -> void
+	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			auto &filter_data = std::get<normal_item>(specific);
 
@@ -453,7 +483,8 @@ public:
 	 * @param ptr
 	 * @return
 	 */
-	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item *>>> {
+	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item *>>>
+	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
@@ -480,12 +511,13 @@ private:
 			   symbol_func_t func,
 			   void *user_data,
 			   symcache_item_type _type,
-			   int _flags) : id(_id),
-							 symbol(std::move(name)),
-							 type(_type),
-							 flags(_flags),
-							 priority(_priority),
-							 specific(normal_item{func, user_data})
+			   int _flags)
+		: id(_id),
+		  symbol(std::move(name)),
+		  type(_type),
+		  flags(_flags),
+		  priority(_priority),
+		  specific(normal_item{func, user_data})
 	{
 		/* These structures are kept trivial, so they need to be explicitly reset */
 		forbidden_ids.reset();
@@ -508,11 +540,12 @@ private:
 			   std::string &&name,
 			   int parent,
 			   symcache_item_type _type,
-			   int _flags) : id(_id),
-							 symbol(std::move(name)),
-							 type(_type),
-							 flags(_flags),
-							 specific(virtual_item{parent})
+			   int _flags)
+		: id(_id),
+		  symbol(std::move(name)),
+		  type(_type),
+		  flags(_flags),
+		  specific(virtual_item{parent})
 	{
 		/* These structures are kept trivial, so they need to be explicitly reset */
 		forbidden_ids.reset();
@@ -523,6 +556,6 @@ private:
 	}
 };
 
-}
+}// namespace rspamd::symcache
 
-#endif //RSPAMD_SYMCACHE_ITEM_HXX
+#endif//RSPAMD_SYMCACHE_ITEM_HXX

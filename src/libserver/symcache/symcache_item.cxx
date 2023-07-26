@@ -39,39 +39,17 @@ struct augmentation_info {
 
 /* A list of internal augmentations that are known to Rspamd with their weight */
 static const auto known_augmentations =
-		ankerl::unordered_dense::map<std::string, augmentation_info, rspamd::smart_str_hash, rspamd::smart_str_equal>{
-				{"passthrough", {
-										.weight = 10,
-										.implied_flags = SYMBOL_TYPE_IGNORE_PASSTHROUGH
-								}
-				},
-				{"single_network", {
-										.weight = 1,
-										.implied_flags = 0
-								}
-				},
-				{"no_network", {
-										.weight = 0,
-										.implied_flags = 0
-							   }
-				},
-				{"many_network", {
-									   .weight = 1,
-									   .implied_flags = 0
-							   }
-				},
-				{"important", {
-									   .weight = 5,
-									   .implied_flags = SYMBOL_TYPE_FINE
-							   }
-				},
-				{"timeout", {
-									   .weight = 0,
-									   .implied_flags = 0,
-									   .value_type = augmentation_value_type::NUMBER_VALUE,
-					}
-				}
-		};
+	ankerl::unordered_dense::map<std::string, augmentation_info, rspamd::smart_str_hash, rspamd::smart_str_equal>{
+		{"passthrough", {.weight = 10, .implied_flags = SYMBOL_TYPE_IGNORE_PASSTHROUGH}},
+		{"single_network", {.weight = 1, .implied_flags = 0}},
+		{"no_network", {.weight = 0, .implied_flags = 0}},
+		{"many_network", {.weight = 1, .implied_flags = 0}},
+		{"important", {.weight = 5, .implied_flags = SYMBOL_TYPE_FINE}},
+		{"timeout", {
+						.weight = 0,
+						.implied_flags = 0,
+						.value_type = augmentation_value_type::NUMBER_VALUE,
+					}}};
 
 auto cache_item::get_parent(const symcache &cache) const -> const cache_item *
 {
@@ -101,7 +79,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 	auto log_tag = [&]() { return cache.log_tag(); };
 
 	for (auto &dep: deps) {
-		msg_debug_cache ("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
+		msg_debug_cache("process real dependency %s on %s", symbol.c_str(), dep.sym.c_str());
 		auto *dit = cache.get_item_by_name_mut(dep.sym, true);
 
 		if (dep.vid >= 0) {
@@ -111,24 +89,24 @@ auto cache_item::process_deps(const symcache &cache) -> void
 			if (!vdit) {
 				if (dit) {
 					msg_err_cache("cannot add dependency from %s on %s: no dependency symbol registered",
-							dep.sym.c_str(), dit->symbol.c_str());
+								  dep.sym.c_str(), dit->symbol.c_str());
 				}
 			}
 			else {
 				msg_debug_cache("process virtual dependency %s(%d) on %s(%d)", symbol.c_str(),
-						dep.vid, vdit->symbol.c_str(), vdit->id);
+								dep.vid, vdit->symbol.c_str(), vdit->id);
 
 				unsigned nids = 0;
 
 				/* Propagate ids */
 				msg_debug_cache("check id propagation for dependency %s from %s",
-						symbol.c_str(), dit->symbol.c_str());
+								symbol.c_str(), dit->symbol.c_str());
 
 				const auto *ids = dit->allowed_ids.get_ids(nids);
 
 				if (nids > 0) {
 					msg_debug_cache("propagate allowed ids from %s to %s",
-							dit->symbol.c_str(), symbol.c_str());
+									dit->symbol.c_str(), symbol.c_str());
 
 					allowed_ids.set_ids(ids, nids);
 				}
@@ -137,7 +115,7 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 				if (nids > 0) {
 					msg_debug_cache("propagate forbidden ids from %s to %s",
-							dit->symbol.c_str(), symbol.c_str());
+									dit->symbol.c_str(), symbol.c_str());
 
 					forbidden_ids.set_ids(ids, nids);
 				}
@@ -165,17 +143,17 @@ auto cache_item::process_deps(const symcache &cache) -> void
 				}
 
 				if (!ok_dep) {
-					msg_err_cache ("cannot add dependency from %s on %s: invalid symbol types",
-							dep.sym.c_str(), symbol.c_str());
+					msg_err_cache("cannot add dependency from %s on %s: invalid symbol types",
+								  dep.sym.c_str(), symbol.c_str());
 
 					continue;
 				}
 			}
 			else {
 				if (dit->id == id) {
-					msg_err_cache ("cannot add dependency on self: %s -> %s "
-								   "(resolved to %s)",
-							symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
+					msg_err_cache("cannot add dependency on self: %s -> %s "
+								  "(resolved to %s)",
+								  symbol.c_str(), dep.sym.c_str(), dit->symbol.c_str());
 				}
 				else {
 					/* Create a reverse dep */
@@ -187,23 +165,23 @@ auto cache_item::process_deps(const symcache &cache) -> void
 							dep.item = dit;
 							dep.id = dit->id;
 
-							msg_debug_cache ("added reverse dependency from %d on %d", parent->id,
-									dit->id);
+							msg_debug_cache("added reverse dependency from %d on %d", parent->id,
+											dit->id);
 						}
 					}
 					else {
 						dep.item = dit;
 						dep.id = dit->id;
 						dit->rdeps.emplace_back(this, symbol, id, -1);
-						msg_debug_cache ("added reverse dependency from %d on %d", id,
-								dit->id);
+						msg_debug_cache("added reverse dependency from %d on %d", id,
+										dit->id);
 					}
 				}
 			}
 		}
 		else if (dep.id >= 0) {
-			msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
-					dep.sym.c_str(), symbol.c_str());
+			msg_err_cache("cannot find dependency on symbol %s for symbol %s",
+						  dep.sym.c_str(), symbol.c_str());
 
 			continue;
 		}
@@ -211,7 +189,8 @@ auto cache_item::process_deps(const symcache &cache) -> void
 
 	// Remove empty deps
 	deps.erase(std::remove_if(std::begin(deps), std::end(deps),
-			[](const auto &dep) { return !dep.item; }), std::end(deps));
+							  [](const auto &dep) { return !dep.item; }),
+			   std::end(deps));
 }
 
 auto cache_item::resolve_parent(const symcache &cache) -> bool
@@ -251,7 +230,7 @@ auto cache_item::update_counters_check_peak(lua_State *L,
 		auto cur_value = (st->total_hits - last_count) /
 						 (cur_time - last_resort);
 		rspamd_set_counter_ema(&st->frequency_counter,
-				cur_value, decay_rate);
+							   cur_value, decay_rate);
 		st->avg_frequency = st->frequency_counter.mean;
 		st->stddev_frequency = st->frequency_counter.stddev;
 
@@ -271,7 +250,7 @@ auto cache_item::update_counters_check_peak(lua_State *L,
 		if (!is_virtual()) {
 			st->avg_time = cd->mean;
 			rspamd_set_counter_ema(&st->time_counter,
-					st->avg_time, decay_rate);
+								   st->avg_time, decay_rate);
 			st->avg_time = st->time_counter.mean;
 			memset(cd, 0, sizeof(*cd));
 		}
@@ -344,7 +323,7 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 
 		if (!enabled) {
 			msg_debug_cache_task("skipping %s of %s as it is permanently disabled",
-					what, symbol.c_str());
+								 what, symbol.c_str());
 
 			return false;
 		}
@@ -356,7 +335,7 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 			if (exec_only) {
 				msg_debug_cache_task("skipping check of %s as it cannot be "
 									 "executed for this task type",
-						symbol.c_str());
+									 symbol.c_str());
 
 				return FALSE;
 			}
@@ -366,11 +345,11 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	/* Settings checks */
 	if (task->settings_elt != nullptr) {
 		if (forbidden_ids.check_id(task->settings_elt->id)) {
-			msg_debug_cache_task ("deny %s of %s as it is forbidden for "
-								  "settings id %ud",
-					what,
-					symbol.c_str(),
-					task->settings_elt->id);
+			msg_debug_cache_task("deny %s of %s as it is forbidden for "
+								 "settings id %ud",
+								 what,
+								 symbol.c_str(),
+								 task->settings_elt->id);
 
 			return false;
 		}
@@ -381,8 +360,8 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
 					msg_debug_cache_task("allow execution of %s settings id %ud "
 										 "allows implicit execution of the symbols;",
-							symbol.c_str(),
-							id);
+										 symbol.c_str(),
+										 id);
 
 					return true;
 				}
@@ -396,26 +375,26 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 					}
 				}
 
-				msg_debug_cache_task ("deny %s of %s as it is not listed "
-									  "as allowed for settings id %ud",
-						what,
-						symbol.c_str(),
-						task->settings_elt->id);
+				msg_debug_cache_task("deny %s of %s as it is not listed "
+									 "as allowed for settings id %ud",
+									 what,
+									 symbol.c_str(),
+									 task->settings_elt->id);
 				return false;
 			}
 		}
 		else {
-			msg_debug_cache_task ("allow %s of %s for "
-								  "settings id %ud as it can be only disabled explicitly",
-					what,
-					symbol.c_str(),
-					task->settings_elt->id);
+			msg_debug_cache_task("allow %s of %s for "
+								 "settings id %ud as it can be only disabled explicitly",
+								 what,
+								 symbol.c_str(),
+								 task->settings_elt->id);
 		}
 	}
 	else if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
-		msg_debug_cache_task ("deny %s of %s as it must be explicitly enabled",
-				what,
-				symbol.c_str());
+		msg_debug_cache_task("deny %s of %s as it must be explicitly enabled",
+							 what,
+							 symbol.c_str());
 		return false;
 	}
 
@@ -423,9 +402,9 @@ auto cache_item::is_allowed(struct rspamd_task *task, bool exec_only) const -> b
 	return true;
 }
 
-auto
-cache_item::add_augmentation(const symcache &cache, std::string_view augmentation,
-							 std::optional<std::string_view> value) -> bool {
+auto cache_item::add_augmentation(const symcache &cache, std::string_view augmentation,
+								  std::optional<std::string_view> value) -> bool
+{
 	auto log_tag = [&]() { return cache.log_tag(); };
 
 	if (augmentations.contains(augmentation)) {
@@ -442,7 +421,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 		if (known_info.implied_flags) {
 			if ((known_info.implied_flags & flags) == 0) {
 				msg_info_cache("added implied flags (%bd) for symbol %s as it has %s augmentation",
-						known_info.implied_flags, symbol.data(), augmentation.data());
+							   known_info.implied_flags, symbol.data(), augmentation.data());
 				flags |= known_info.implied_flags;
 			}
 		}
@@ -450,7 +429,7 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 		if (known_info.value_type == augmentation_value_type::NO_VALUE) {
 			if (value.has_value()) {
 				msg_err_cache("value specified for augmentation %s, that has no value",
-						augmentation.data());
+							  augmentation.data());
 
 				return false;
 			}
@@ -459,14 +438,15 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 		else {
 			if (!value.has_value()) {
 				msg_err_cache("value is not specified for augmentation %s, that requires explicit value",
-						augmentation.data());
+							  augmentation.data());
 
 				return false;
 			}
 
 			if (known_info.value_type == augmentation_value_type::STRING_VALUE) {
 				return augmentations.try_emplace(augmentation, std::string{value.value()},
-						known_info.weight).second;
+												 known_info.weight)
+					.second;
 			}
 			else if (known_info.value_type == augmentation_value_type::NUMBER_VALUE) {
 				/* I wish it was supported properly */
@@ -475,21 +455,22 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 				rspamd_strlcpy(numbuf, value->data(), MIN(value->size(), sizeof(numbuf)));
 				auto num = g_ascii_strtod(numbuf, &endptr);
 
-				if (fabs (num) >= G_MAXFLOAT || std::isnan(num)) {
+				if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
 					msg_err_cache("value for augmentation %s is not numeric: %*s",
-							augmentation.data(),
-							(int)value->size(), value->data());
+								  augmentation.data(),
+								  (int) value->size(), value->data());
 					return false;
 				}
 
 				return augmentations.try_emplace(augmentation, num,
-						known_info.weight).second;
+												 known_info.weight)
+					.second;
 			}
 		}
 	}
 	else {
 		msg_debug_cache("added unknown augmentation %s for symbol %s",
-				"unknown", augmentation.data(), symbol.data());
+						"unknown", augmentation.data(), symbol.data());
 		return augmentations.try_emplace(augmentation, 0).second;
 	}
 
@@ -497,13 +478,12 @@ cache_item::add_augmentation(const symcache &cache, std::string_view augmentatio
 	return false;
 }
 
-auto
-cache_item::get_augmentation_weight() const -> int
+auto cache_item::get_augmentation_weight() const -> int
 {
 	return std::accumulate(std::begin(augmentations), std::end(augmentations),
-						  0, [](int acc, const auto &map_pair) {
-				return acc + map_pair.second.weight;
-	});
+						   0, [](int acc, const auto &map_pair) {
+							   return acc + map_pair.second.weight;
+						   });
 }
 
 auto cache_item::get_numeric_augmentation(std::string_view name) const -> std::optional<double>
@@ -559,10 +539,7 @@ auto virtual_item::resolve_parent(const symcache &cache) -> bool
 
 auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>
 {
-	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_PREFILTER
-										 | SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_IDEMPOTENT
-										 | SYMBOL_TYPE_COMPOSITE | SYMBOL_TYPE_CLASSIFIER
-										 | SYMBOL_TYPE_VIRTUAL;
+	constexpr const auto trivial_types = SYMBOL_TYPE_CONNFILTER | SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_COMPOSITE | SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_VIRTUAL;
 
 	constexpr auto all_but_one_ty = [&](int type, int exclude_bit) -> auto {
 		return (type & trivial_types) & (trivial_types & ~exclude_bit);
@@ -572,7 +549,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 		auto check_trivial = [&](auto flag,
 								 symcache_item_type ty) -> tl::expected<std::pair<symcache_item_type, int>, std::string> {
 			if (all_but_one_ty(type, flag)) {
-				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", (int)type));
+				return tl::make_unexpected(fmt::format("invalid flags for a symbol: {}", (int) type));
 			}
 
 			return std::make_pair(ty, type & ~flag);
@@ -599,7 +576,7 @@ auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<sy
 			return check_trivial(SYMBOL_TYPE_VIRTUAL, symcache_item_type::VIRTUAL);
 		}
 
-		return tl::make_unexpected(fmt::format("internal error: impossible flags combination: {}", (int)type));
+		return tl::make_unexpected(fmt::format("internal error: impossible flags combination: {}", (int) type));
 	}
 
 	/* Maybe check other flags combination here? */
@@ -647,7 +624,7 @@ auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) 
 	if (cb != -1 && L != nullptr) {
 		auto ret = false;
 
-		lua_pushcfunction (L, &rspamd_lua_traceback);
+		lua_pushcfunction(L, &rspamd_lua_traceback);
 		auto err_idx = lua_gettop(L);
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
@@ -655,7 +632,7 @@ auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) 
 
 		if (lua_pcall(L, 1, 1, err_idx) != 0) {
 			msg_info_task("call to condition for %s failed: %s",
-					sym_name.data(), lua_tostring(L, -1));
+						  sym_name.data(), lua_tostring(L, -1));
 		}
 		else {
 			ret = lua_toboolean(L, -1);
@@ -669,4 +646,4 @@ auto item_condition::check(std::string_view sym_name, struct rspamd_task *task) 
 	return true;
 }
 
-}
+}// namespace rspamd::symcache

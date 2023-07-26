@@ -26,7 +26,7 @@
  * hyperscan and ac-trie
  */
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -56,27 +56,27 @@ struct rspamd_cryptobox_library_ctx;
  * @param context userdata
  * @return if 0 then search for another pattern, otherwise return this value to caller
  */
-typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
-										  guint strnum,
-										  gint match_start,
-										  gint match_pos,
-										  const gchar *text,
-										  gsize len,
-										  void *context);
+typedef gint (*rspamd_multipattern_cb_t)(struct rspamd_multipattern *mp,
+										 guint strnum,
+										 gint match_start,
+										 gint match_pos,
+										 const gchar *text,
+										 gsize len,
+										 void *context);
 
 /**
  * Init multipart library and set the appropriate cache dir
  * @param cache_dir
  */
-void rspamd_multipattern_library_init (const gchar *cache_dir);
+void rspamd_multipattern_library_init(const gchar *cache_dir);
 
 /**
  * Creates empty multipattern structure
  * @param flags
  * @return
  */
-struct rspamd_multipattern *rspamd_multipattern_create (
-		enum rspamd_multipattern_flags flags);
+struct rspamd_multipattern *rspamd_multipattern_create(
+	enum rspamd_multipattern_flags flags);
 
 /**
  * Creates multipattern with preallocated number of patterns to speed up loading
@@ -84,8 +84,8 @@ struct rspamd_multipattern *rspamd_multipattern_create (
  * @param reserved
  * @return
  */
-struct rspamd_multipattern *rspamd_multipattern_create_sized (guint reserved,
-															  enum rspamd_multipattern_flags flags);
+struct rspamd_multipattern *rspamd_multipattern_create_sized(guint reserved,
+															 enum rspamd_multipattern_flags flags);
 
 /**
  * Creates new multipattern structure
@@ -94,18 +94,18 @@ struct rspamd_multipattern *rspamd_multipattern_create_sized (guint reserved,
  * @param flags flags applied to all patterns
  * @return new multipattern structure
  */
-struct rspamd_multipattern *rspamd_multipattern_create_full (
-		const gchar **patterns,
-		guint npatterns,
-		enum rspamd_multipattern_flags flags);
+struct rspamd_multipattern *rspamd_multipattern_create_full(
+	const gchar **patterns,
+	guint npatterns,
+	enum rspamd_multipattern_flags flags);
 
 /**
  * Adds new pattern to match engine from zero-terminated string
  * @param mp
  * @param pattern
  */
-void rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
-									  const gchar *pattern, gint flags);
+void rspamd_multipattern_add_pattern(struct rspamd_multipattern *mp,
+									 const gchar *pattern, gint flags);
 
 /**
  * Adds new pattern from arbitrary string
@@ -114,16 +114,16 @@ void rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
  * @param patlen
  * @param flags
  */
-void rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
-										  const gchar *pattern, gsize patlen, gint flags);
+void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
+										 const gchar *pattern, gsize patlen, gint flags);
 
 /**
  * Compiles multipattern structure
  * @param mp
  * @return
  */
-gboolean rspamd_multipattern_compile (struct rspamd_multipattern *mp,
-									  GError **err);
+gboolean rspamd_multipattern_compile(struct rspamd_multipattern *mp,
+									 GError **err);
 
 /**
  * Lookups for patterns in a text using the specified callback function
@@ -134,9 +134,9 @@ gboolean rspamd_multipattern_compile (struct rspamd_multipattern *mp,
  * @param ud callback data
  * @return
  */
-gint rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
-								 const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
-								 gpointer ud, guint *pnfound);
+gint rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
+								const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
+								gpointer ud, guint *pnfound);
 
 /**
  * Get pattern string from multipattern identified by index
@@ -144,29 +144,29 @@ gint rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
  * @param index
  * @return
  */
-const gchar *rspamd_multipattern_get_pattern (struct rspamd_multipattern *mp,
-											  guint index);
+const gchar *rspamd_multipattern_get_pattern(struct rspamd_multipattern *mp,
+											 guint index);
 
 /**
  * Returns number of patterns in a multipattern matcher
  * @param mp
  * @return
  */
-guint rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp);
+guint rspamd_multipattern_get_npatterns(struct rspamd_multipattern *mp);
 
 /**
  * Destroys multipattern structure
  * @param mp
  */
-void rspamd_multipattern_destroy (struct rspamd_multipattern *mp);
+void rspamd_multipattern_destroy(struct rspamd_multipattern *mp);
 
 /**
  * Returns TRUE if hyperscan is supported
  * @return
  */
-gboolean rspamd_multipattern_has_hyperscan (void);
+gboolean rspamd_multipattern_has_hyperscan(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

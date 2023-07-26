@@ -20,7 +20,7 @@
 #include "cfg_file.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -28,14 +28,14 @@ extern "C" {
  * Init dynamic configuration using map logic and specific configuration
  * @param cfg config file
  */
-void init_dynamic_config (struct rspamd_config *cfg);
+void init_dynamic_config(struct rspamd_config *cfg);
 
 /**
  * Dump dynamic configuration to the disk
  * @param cfg
  * @return
  */
-gboolean dump_dynamic_config (struct rspamd_config *cfg);
+gboolean dump_dynamic_config(struct rspamd_config *cfg);
 
 /**
  * Add symbol for specified metric
@@ -45,14 +45,14 @@ gboolean dump_dynamic_config (struct rspamd_config *cfg);
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_symbol (struct rspamd_config *cfg,
-							 const gchar *metric,
-							 const gchar *symbol,
-							 gdouble value);
+gboolean add_dynamic_symbol(struct rspamd_config *cfg,
+							const gchar *metric,
+							const gchar *symbol,
+							gdouble value);
 
-gboolean remove_dynamic_symbol (struct rspamd_config *cfg,
-								const gchar *metric,
-								const gchar *symbol);
+gboolean remove_dynamic_symbol(struct rspamd_config *cfg,
+							   const gchar *metric,
+							   const gchar *symbol);
 
 /**
  * Add action for specified metric
@@ -62,19 +62,19 @@ gboolean remove_dynamic_symbol (struct rspamd_config *cfg,
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_action (struct rspamd_config *cfg,
-							 const gchar *metric,
-							 guint action,
-							 gdouble value);
+gboolean add_dynamic_action(struct rspamd_config *cfg,
+							const gchar *metric,
+							guint action,
+							gdouble value);
 
 /**
  * Removes dynamic action
  */
-gboolean remove_dynamic_action (struct rspamd_config *cfg,
-								const gchar *metric,
-								guint action);
+gboolean remove_dynamic_action(struct rspamd_config *cfg,
+							   const gchar *metric,
+							   guint action);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

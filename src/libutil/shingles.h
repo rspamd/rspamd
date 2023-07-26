@@ -21,7 +21,7 @@
 
 #define RSPAMD_SHINGLE_SIZE 32
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -42,8 +42,8 @@ enum rspamd_shingle_alg {
  * @param count number of hashes in the vector
  * @return shingle value
  */
-typedef guint64 (*rspamd_shingles_filter) (guint64 *input, gsize count,
-										   gint shno, const guchar *key, gpointer ud);
+typedef guint64 (*rspamd_shingles_filter)(guint64 *input, gsize count,
+										  gint shno, const guchar *key, gpointer ud);
 
 /**
  * Generate shingles from the input of fixed size strings using lemmatizer
@@ -55,12 +55,12 @@ typedef guint64 (*rspamd_shingles_filter) (guint64 *input, gsize count,
  * @param filterd opaque data for filtering function
  * @return shingles array
  */
-struct rspamd_shingle *rspamd_shingles_from_text (GArray *input,
-												  const guchar key[16],
-												  rspamd_mempool_t *pool,
-												  rspamd_shingles_filter filter,
-												  gpointer filterd,
-												  enum rspamd_shingle_alg alg);
+struct rspamd_shingle *rspamd_shingles_from_text(GArray *input,
+												 const guchar key[16],
+												 rspamd_mempool_t *pool,
+												 rspamd_shingles_filter filter,
+												 gpointer filterd,
+												 enum rspamd_shingle_alg alg);
 
 /**
  * Generate shingles from the DCT matrix of an image
@@ -71,12 +71,12 @@ struct rspamd_shingle *rspamd_shingles_from_text (GArray *input,
  * @param filterd opaque data for filtering function
  * @return shingles array
  */
-struct rspamd_shingle *rspamd_shingles_from_image (guchar *dct,
-												   const guchar key[16],
-												   rspamd_mempool_t *pool,
-												   rspamd_shingles_filter filter,
-												   gpointer filterd,
-												   enum rspamd_shingle_alg alg);
+struct rspamd_shingle *rspamd_shingles_from_image(guchar *dct,
+												  const guchar key[16],
+												  rspamd_mempool_t *pool,
+												  rspamd_shingles_filter filter,
+												  gpointer filterd,
+												  enum rspamd_shingle_alg alg);
 
 /**
  * Compares two shingles and return result as a floating point value - 1.0
@@ -85,16 +85,16 @@ struct rspamd_shingle *rspamd_shingles_from_image (guchar *dct,
  * @param b
  * @return
  */
-gdouble rspamd_shingles_compare (const struct rspamd_shingle *a,
-								 const struct rspamd_shingle *b);
+gdouble rspamd_shingles_compare(const struct rspamd_shingle *a,
+								const struct rspamd_shingle *b);
 
 /**
  * Default filtering function
  */
-guint64 rspamd_shingles_default_filter (guint64 *input, gsize count,
-										gint shno, const guchar *key, gpointer ud);
+guint64 rspamd_shingles_default_filter(guint64 *input, gsize count,
+									   gint shno, const guchar *key, gpointer ud);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

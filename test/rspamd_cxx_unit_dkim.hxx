@@ -29,16 +29,17 @@
 #include <string>
 #include <tuple>
 
-TEST_SUITE("rspamd_dkim") {
-
-TEST_CASE("rspamd_dkim_parse_key")
+TEST_SUITE("rspamd_dkim")
 {
-	struct test_case {
-		std::string input;
-		bool is_valid;
-		std::string expected_id;
-	};
-	std::vector<test_case> cases{
+
+	TEST_CASE("rspamd_dkim_parse_key")
+	{
+		struct test_case {
+			std::string input;
+			bool is_valid;
+			std::string expected_id;
+		};
+		std::vector<test_case> cases{
 			{"p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
 			 "QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
 			 "5zuyXsDj1eSprOgcPT9PY9RoSUsY8i/jnD49DHXtMfXoBk0J6epNzbZqqWU+"
@@ -47,7 +48,7 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 "kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB",
 			 true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
-			 // Spaces before p
+			// Spaces before p
 			{"   p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
 			 "QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
 			 "5zuyXsDj1eSprOgcPT9PY9RoSUsY8i/jnD49DHXtMfXoBk0J6epNzbZqqWU+"
@@ -64,8 +65,8 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "VKRoF3cK1cFXLo+bgO3sEJgGtvwzPodG0CqVu+gjehrjwdLnPhqyEspfI1IbL"
 			 "lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 "kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB",
-					true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
-			 // Spaces after p
+			 true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
+			// Spaces after p
 			{"k=rsa; t=s; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
 			 "QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
 			 "5zuyXsDj1eSprOgcPT9PY9RoSUsY8i/jnD49DHXtMfXoBk0J6epNzbZqqWU+"
@@ -119,8 +120,8 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "  VKRoF3cK1cFXLo+bgO3sEJgGtvwzPodG0CqVu+gjehrjwdLnPhqyEspfI1IbL"
 			 "  lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 " kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB",
-					true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
-			 // Invalid RSA
+			 true, "e40cc5c40ee29cb4f21d95c7f0dc9989"},
+			// Invalid RSA
 			{"ololo=trololo; k=rsa; t=s; "
 			 "p =   BADMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCA"
 			 "QEA5CeQZpoPbsS8lG41UI1rxTtOSqPrfgZzhrZsk0t9dIbFTvaoql/FLuYcbdUARc"
@@ -140,33 +141,33 @@ TEST_CASE("rspamd_dkim_parse_key")
 			 "lnNaq5pWei/B8pG6teV+y3t4yay5ZGktALJjlylKHVo2USkVYQTFQ9Ji25m2jupdCd"
 			 "kn1FTuYNqh0Nzg3KPQHNVp7mlE7lfwIDAQAB ",
 			 false, ""},
-	};
+		};
 
-	auto cur_test_idx = 0;
-	for (auto &&c : cases) {
-		SUBCASE (fmt::format("process DKIM record {}: {}", cur_test_idx++, c.input).c_str()) {
-			GError *err = nullptr;
-			gsize klen = c.input.size();
-			auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, &err);
-			if (c.is_valid) {
-				REQUIRE_MESSAGE(key != nullptr, (err ? err->message : "unknown error"));
-				char hexbuf[RSPAMD_DKIM_KEY_ID_LEN * 2 + 1];
-				auto *id = rspamd_dkim_key_id(key);
-				REQUIRE(id != nullptr);
+		auto cur_test_idx = 0;
+		for (auto &&c: cases) {
+			SUBCASE(fmt::format("process DKIM record {}: {}", cur_test_idx++, c.input).c_str())
+			{
+				GError *err = nullptr;
+				gsize klen = c.input.size();
+				auto *key = rspamd_dkim_parse_key(c.input.c_str(), &klen, &err);
+				if (c.is_valid) {
+					REQUIRE_MESSAGE(key != nullptr, (err ? err->message : "unknown error"));
+					char hexbuf[RSPAMD_DKIM_KEY_ID_LEN * 2 + 1];
+					auto *id = rspamd_dkim_key_id(key);
+					REQUIRE(id != nullptr);
 
-				auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
-						sizeof(hexbuf));
-				CHECK(hexlen > 0);
-				CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
-				rspamd_dkim_key_free(key);
-			}
-			else {
-				CHECK(key == nullptr);
+					auto hexlen = rspamd_encode_hex_buf(id, RSPAMD_DKIM_KEY_ID_LEN, hexbuf,
+														sizeof(hexbuf));
+					CHECK(hexlen > 0);
+					CHECK(std::string{hexbuf, (std::size_t) hexlen} == c.expected_id);
+					rspamd_dkim_key_free(key);
+				}
+				else {
+					CHECK(key == nullptr);
+				}
 			}
 		}
 	}
-}
-
 }
 
 #endif

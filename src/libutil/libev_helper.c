@@ -17,99 +17,95 @@
 #include "libev_helper.h"
 
 static void
-rspamd_ev_watcher_io_cb (EV_P_ struct ev_io *w, int revents)
+rspamd_ev_watcher_io_cb(EV_P_ struct ev_io *w, int revents)
 {
-	struct rspamd_io_ev *ev = (struct rspamd_io_ev *)w->data;
+	struct rspamd_io_ev *ev = (struct rspamd_io_ev *) w->data;
 
-	ev->cb (ev->io.fd, revents, ev->ud);
+	ev->cb(ev->io.fd, revents, ev->ud);
 }
 
 static void
-rspamd_ev_watcher_timer_cb (EV_P_ struct ev_timer *w, int revents)
+rspamd_ev_watcher_timer_cb(EV_P_ struct ev_timer *w, int revents)
 {
-	struct rspamd_io_ev *ev = (struct rspamd_io_ev *)w->data;
+	struct rspamd_io_ev *ev = (struct rspamd_io_ev *) w->data;
 
 	/*
 	 * We now call timeout callback in all the cases, as we assume that all
 	 * timeouts are final
 	 */
-	ev->cb (ev->io.fd, EV_TIMER, ev->ud);
+	ev->cb(ev->io.fd, EV_TIMER, ev->ud);
 }
 
 
-void
-rspamd_ev_watcher_init (struct rspamd_io_ev *ev,
-						int fd,
-						short what,
-						rspamd_ev_cb cb,
-						void *ud)
+void rspamd_ev_watcher_init(struct rspamd_io_ev *ev,
+							int fd,
+							short what,
+							rspamd_ev_cb cb,
+							void *ud)
 {
-	ev_io_init (&ev->io, rspamd_ev_watcher_io_cb, fd, what);
+	ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, fd, what);
 	ev->io.data = ev;
-	ev_init (&ev->tm, rspamd_ev_watcher_timer_cb);
+	ev_init(&ev->tm, rspamd_ev_watcher_timer_cb);
 	ev->tm.data = ev;
 	ev->ud = ud;
 	ev->cb = cb;
 }
 
-void
-rspamd_ev_watcher_start (struct ev_loop *loop,
-						 struct rspamd_io_ev *ev,
-						 ev_tstamp timeout)
+void rspamd_ev_watcher_start(struct ev_loop *loop,
+							 struct rspamd_io_ev *ev,
+							 ev_tstamp timeout)
 {
-	g_assert (ev->cb != NULL);
+	g_assert(ev->cb != NULL);
 
-	ev_io_start (EV_A_ &ev->io);
+	ev_io_start(EV_A_ & ev->io);
 
 	if (timeout > 0) {
 		/* Update timestamp to avoid timers running early */
-		ev_now_update_if_cheap (loop);
+		ev_now_update_if_cheap(loop);
 
 		ev->timeout = timeout;
-		ev_timer_set (&ev->tm, timeout, 0.0);
-		ev_timer_start (EV_A_ &ev->tm);
+		ev_timer_set(&ev->tm, timeout, 0.0);
+		ev_timer_start(EV_A_ & ev->tm);
 	}
 }
 
-void
-rspamd_ev_watcher_stop (struct ev_loop *loop,
-						struct rspamd_io_ev *ev)
+void rspamd_ev_watcher_stop(struct ev_loop *loop,
+							struct rspamd_io_ev *ev)
 {
-	if (ev_can_stop (&ev->io)) {
-		ev_io_stop (EV_A_ &ev->io);
+	if (ev_can_stop(&ev->io)) {
+		ev_io_stop(EV_A_ & ev->io);
 	}
 
 	if (ev->timeout > 0) {
-		ev_timer_stop (EV_A_ &ev->tm);
+		ev_timer_stop(EV_A_ & ev->tm);
 	}
 }
 
-void
-rspamd_ev_watcher_reschedule (struct ev_loop *loop,
-							  struct rspamd_io_ev *ev,
-							  short what)
+void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
+								  struct rspamd_io_ev *ev,
+								  short what)
 {
-	g_assert (ev->cb != NULL);
+	g_assert(ev->cb != NULL);
 
-	if (ev_can_stop (&ev->io)) {
-		ev_io_stop (EV_A_ &ev->io);
-		ev_io_set (&ev->io, ev->io.fd, what);
-		ev_io_start (EV_A_ &ev->io);
+	if (ev_can_stop(&ev->io)) {
+		ev_io_stop(EV_A_ & ev->io);
+		ev_io_set(&ev->io, ev->io.fd, what);
+		ev_io_start(EV_A_ & ev->io);
 	}
 	else {
 		ev->io.data = ev;
-		ev_io_init (&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
-		ev_io_start (EV_A_ &ev->io);
+		ev_io_init(&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
+		ev_io_start(EV_A_ & ev->io);
 	}
 
 	if (ev->timeout > 0) {
-		if (!(ev_can_stop (&ev->tm))) {
+		if (!(ev_can_stop(&ev->tm))) {
 			/* Update timestamp to avoid timers running early */
-			ev_now_update_if_cheap (loop);
+			ev_now_update_if_cheap(loop);
 
 			ev->tm.data = ev;
-			ev_timer_init (&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
-			ev_timer_start (EV_A_ &ev->tm);
+			ev_timer_init(&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
+			ev_timer_start(EV_A_ & ev->tm);
 		}
 	}
 }

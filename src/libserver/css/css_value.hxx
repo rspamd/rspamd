@@ -37,29 +37,36 @@ struct alignas(int) css_color {
 
 	std::uint8_t alpha;
 
-	css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255) :
-	 	r(_r), g(_g), b(_b), alpha(_alpha) {}
+	css_color(std::uint8_t _r, std::uint8_t _g, std::uint8_t _b, std::uint8_t _alpha = 255)
+		: r(_r), g(_g), b(_b), alpha(_alpha)
+	{
+	}
 	css_color() = default;
-	constexpr auto to_number() const -> std::uint32_t {
-		return (std::uint32_t)alpha << 24 |
-				(std::uint32_t)r << 16 |
-				(std::uint32_t)g << 8 |
-				(std::uint32_t)b << 0;
+	constexpr auto to_number() const -> std::uint32_t
+	{
+		return (std::uint32_t) alpha << 24 |
+			   (std::uint32_t) r << 16 |
+			   (std::uint32_t) g << 8 |
+			   (std::uint32_t) b << 0;
 	}
 
-	constexpr auto to_rgb() const -> std::uint32_t {
-		return (std::uint32_t)r << 16 |
-			   (std::uint32_t)g << 8 |
-			   (std::uint32_t)b << 0;
+	constexpr auto to_rgb() const -> std::uint32_t
+	{
+		return (std::uint32_t) r << 16 |
+			   (std::uint32_t) g << 8 |
+			   (std::uint32_t) b << 0;
 	}
-	friend bool operator==(const css_color& l, const css_color& r) {
+	friend bool operator==(const css_color &l, const css_color &r)
+	{
 		return (memcmp(&l, &r, sizeof(css_color)) == 0);
 	}
 
-	static auto white() -> css_color {
+	static auto white() -> css_color
+	{
 		return css_color{255, 255, 255};
 	}
-	static auto black() -> css_color {
+	static auto black() -> css_color
+	{
 		return css_color{0, 0, 0};
 	}
 };
@@ -85,38 +92,54 @@ enum class css_display_value : std::uint8_t {
  */
 struct css_value {
 	std::variant<css_color,
-			float,
-			css_display_value,
-			css_dimension,
-			std::monostate> value;
+				 float,
+				 css_display_value,
+				 css_dimension,
+				 std::monostate>
+		value;
 
-	css_value() {}
-	css_value(const css_color &color) :
-			value(color) {}
-	css_value(float num) :
-			value(num) {}
-	css_value(css_dimension dim) :
-			value(dim) {}
-	css_value(css_display_value d) :
-			value(d) {}
+	css_value()
+	{
+	}
+	css_value(const css_color &color)
+		: value(color)
+	{
+	}
+	css_value(float num)
+		: value(num)
+	{
+	}
+	css_value(css_dimension dim)
+		: value(dim)
+	{
+	}
+	css_value(css_display_value d)
+		: value(d)
+	{
+	}
 
-	auto to_color(void) const -> std::optional<css_color> {
+	auto to_color(void) const -> std::optional<css_color>
+	{
 		return extract_value_maybe<css_color>();
 	}
 
-	auto to_number(void) const -> std::optional<float> {
+	auto to_number(void) const -> std::optional<float>
+	{
 		return extract_value_maybe<float>();
 	}
 
-	auto to_dimension(void) const -> std::optional<css_dimension> {
+	auto to_dimension(void) const -> std::optional<css_dimension>
+	{
 		return extract_value_maybe<css_dimension>();
 	}
 
-	auto to_display(void) const -> std::optional<css_display_value> {
+	auto to_display(void) const -> std::optional<css_display_value>
+	{
 		return extract_value_maybe<css_display_value>();
 	}
 
-	auto is_valid(void) const -> bool {
+	auto is_valid(void) const -> bool
+	{
 		return !(std::holds_alternative<std::monostate>(value));
 	}
 
@@ -132,9 +155,11 @@ struct css_value {
 		-> std::optional<css_value>;
 	static auto maybe_display_from_string(const std::string_view &input)
 		-> std::optional<css_value>;
+
 private:
 	template<typename T>
-	auto extract_value_maybe(void) const -> std::optional<T> {
+	auto extract_value_maybe(void) const -> std::optional<T>
+	{
 		if (std::holds_alternative<T>(value)) {
 			return std::get<T>(value);
 		}
@@ -143,7 +168,7 @@ private:
 	}
 };
 
-}
+}// namespace rspamd::css
 
 
-#endif //RSPAMD_CSS_VALUE_HXX
+#endif//RSPAMD_CSS_VALUE_HXX

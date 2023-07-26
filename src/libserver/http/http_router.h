@@ -19,21 +19,21 @@
 #include "config.h"
 #include "http_connection.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 struct rspamd_http_connection_router;
 struct rspamd_http_connection_entry;
 
-typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry
-											 *conn_ent,
-											 struct rspamd_http_message *msg);
+typedef int (*rspamd_http_router_handler_t)(struct rspamd_http_connection_entry
+												*conn_ent,
+											struct rspamd_http_message *msg);
 
-typedef void (*rspamd_http_router_error_handler_t) (struct rspamd_http_connection_entry *conn_ent,
-													GError *err);
+typedef void (*rspamd_http_router_error_handler_t)(struct rspamd_http_connection_entry *conn_ent,
+												   GError *err);
 
-typedef void (*rspamd_http_router_finish_handler_t) (struct rspamd_http_connection_entry *conn_ent);
+typedef void (*rspamd_http_router_finish_handler_t)(struct rspamd_http_connection_entry *conn_ent);
 
 
 struct rspamd_http_connection_entry {
@@ -68,26 +68,26 @@ struct rspamd_http_connection_router {
  * the specified directory
  * @return
  */
-struct rspamd_http_connection_router *rspamd_http_router_new (
-		rspamd_http_router_error_handler_t eh,
-		rspamd_http_router_finish_handler_t fh,
-		ev_tstamp timeout,
-		const char *default_fs_path,
-		struct rspamd_http_context *ctx);
+struct rspamd_http_connection_router *rspamd_http_router_new(
+	rspamd_http_router_error_handler_t eh,
+	rspamd_http_router_finish_handler_t fh,
+	ev_tstamp timeout,
+	const char *default_fs_path,
+	struct rspamd_http_context *ctx);
 
 /**
  * Set encryption key for the HTTP router
  * @param router router structure
  * @param key opaque key structure
  */
-void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
-								 struct rspamd_cryptobox_keypair *key);
+void rspamd_http_router_set_key(struct rspamd_http_connection_router *router,
+								struct rspamd_cryptobox_keypair *key);
 
 /**
  * Add new path to the router
  */
-void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
-								  const gchar *path, rspamd_http_router_handler_t handler);
+void rspamd_http_router_add_path(struct rspamd_http_connection_router *router,
+								 const gchar *path, rspamd_http_router_handler_t handler);
 
 /**
  * Add custom header to append to router replies
@@ -95,24 +95,24 @@ void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
  * @param name
  * @param value
  */
-void rspamd_http_router_add_header (struct rspamd_http_connection_router *router,
-									const gchar *name, const gchar *value);
+void rspamd_http_router_add_header(struct rspamd_http_connection_router *router,
+								   const gchar *name, const gchar *value);
 
 /**
  * Sets method to handle unknown request methods
  * @param router
  * @param handler
  */
-void rspamd_http_router_set_unknown_handler (struct rspamd_http_connection_router *router,
-											 rspamd_http_router_handler_t handler);
+void rspamd_http_router_set_unknown_handler(struct rspamd_http_connection_router *router,
+											rspamd_http_router_handler_t handler);
 
 /**
  * Inserts router headers to the outbound message
  * @param router
  * @param msg
  */
-void rspamd_http_router_insert_headers (struct rspamd_http_connection_router *router,
-										struct rspamd_http_message *msg);
+void rspamd_http_router_insert_headers(struct rspamd_http_connection_router *router,
+									   struct rspamd_http_message *msg);
 
 struct rspamd_regexp_s;
 
@@ -122,8 +122,8 @@ struct rspamd_regexp_s;
  * @param re
  * @param handler
  */
-void rspamd_http_router_add_regexp (struct rspamd_http_connection_router *router,
-									struct rspamd_regexp_s *re, rspamd_http_router_handler_t handler);
+void rspamd_http_router_add_regexp(struct rspamd_http_connection_router *router,
+								   struct rspamd_regexp_s *re, rspamd_http_router_handler_t handler);
 
 /**
  * Handle new accepted socket
@@ -131,18 +131,18 @@ void rspamd_http_router_add_regexp (struct rspamd_http_connection_router *router
  * @param fd server socket
  * @param ud opaque userdata
  */
-void rspamd_http_router_handle_socket (
-		struct rspamd_http_connection_router *router,
-		gint fd,
-		gpointer ud);
+void rspamd_http_router_handle_socket(
+	struct rspamd_http_connection_router *router,
+	gint fd,
+	gpointer ud);
 
 /**
  * Free router and all connections associated
  * @param router
  */
-void rspamd_http_router_free (struct rspamd_http_connection_router *router);
+void rspamd_http_router_free(struct rspamd_http_connection_router *router);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

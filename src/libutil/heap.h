@@ -18,7 +18,7 @@
 
 #include "config.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -39,7 +39,7 @@ struct rspamd_min_heap;
  * @param reserved_size reserved size in elements
  * @return opaque minimal heap
  */
-struct rspamd_min_heap *rspamd_min_heap_create (gsize reserved_size);
+struct rspamd_min_heap *rspamd_min_heap_create(gsize reserved_size);
 
 /**
  * Pushes an element to the heap. `pri` should be initialized to use this function,
@@ -47,15 +47,15 @@ struct rspamd_min_heap *rspamd_min_heap_create (gsize reserved_size);
  * @param heap heap structure
  * @param elt element to push
  */
-void rspamd_min_heap_push (struct rspamd_min_heap *heap,
-						   struct rspamd_min_heap_elt *elt);
+void rspamd_min_heap_push(struct rspamd_min_heap *heap,
+						  struct rspamd_min_heap_elt *elt);
 
 /**
  * Pops the minimum element from the heap and reorder the queue
  * @param heap heap structure
  * @return minimum element
  */
-struct rspamd_min_heap_elt *rspamd_min_heap_pop (struct rspamd_min_heap *heap);
+struct rspamd_min_heap_elt *rspamd_min_heap_pop(struct rspamd_min_heap *heap);
 
 /**
  * Updates priority for the element. It must be in queue (so `idx` should be sane)
@@ -63,8 +63,8 @@ struct rspamd_min_heap_elt *rspamd_min_heap_pop (struct rspamd_min_heap *heap);
  * @param elt element to update
  * @param npri new priority
  */
-void rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
-								 struct rspamd_min_heap_elt *elt, guint npri);
+void rspamd_min_heap_update_elt(struct rspamd_min_heap *heap,
+								struct rspamd_min_heap_elt *elt, guint npri);
 
 
 /**
@@ -72,14 +72,14 @@ void rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
  * @param heap
  * @param elt
  */
-void rspamd_min_heap_remove_elt (struct rspamd_min_heap *heap,
-								 struct rspamd_min_heap_elt *elt);
+void rspamd_min_heap_remove_elt(struct rspamd_min_heap *heap,
+								struct rspamd_min_heap_elt *elt);
 
 /**
  * Destroys heap (elements are not destroyed themselves)
  * @param heap
  */
-void rspamd_min_heap_destroy (struct rspamd_min_heap *heap);
+void rspamd_min_heap_destroy(struct rspamd_min_heap *heap);
 
 /**
  * Returns element from the heap with the specified index
@@ -87,10 +87,10 @@ void rspamd_min_heap_destroy (struct rspamd_min_heap *heap);
  * @param idx
  * @return
  */
-struct rspamd_min_heap_elt *rspamd_min_heap_index (struct rspamd_min_heap *heap,
-												   guint idx);
+struct rspamd_min_heap_elt *rspamd_min_heap_index(struct rspamd_min_heap *heap,
+												  guint idx);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -22,18 +22,18 @@
 namespace rspamd::css {
 
 constexpr const auto prop_names_map = frozen::make_unordered_map<frozen::string, css_property_type>({
-		{"font", css_property_type::PROPERTY_FONT},
-		{"font-color", css_property_type::PROPERTY_FONT_COLOR},
-		{"font-size", css_property_type::PROPERTY_FONT_SIZE},
-		{"color", css_property_type::PROPERTY_COLOR},
-		{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
-		{"background-color", css_property_type::PROPERTY_BGCOLOR},
-		{"background", css_property_type::PROPERTY_BACKGROUND},
-		{"height", css_property_type::PROPERTY_HEIGHT},
-		{"width", css_property_type::PROPERTY_WIDTH},
-		{"display", css_property_type::PROPERTY_DISPLAY},
-		{"visibility", css_property_type::PROPERTY_VISIBILITY},
-		{"opacity", css_property_type::PROPERTY_OPACITY},
+	{"font", css_property_type::PROPERTY_FONT},
+	{"font-color", css_property_type::PROPERTY_FONT_COLOR},
+	{"font-size", css_property_type::PROPERTY_FONT_SIZE},
+	{"color", css_property_type::PROPERTY_COLOR},
+	{"bgcolor", css_property_type::PROPERTY_BGCOLOR},
+	{"background-color", css_property_type::PROPERTY_BGCOLOR},
+	{"background", css_property_type::PROPERTY_BACKGROUND},
+	{"height", css_property_type::PROPERTY_HEIGHT},
+	{"width", css_property_type::PROPERTY_WIDTH},
+	{"display", css_property_type::PROPERTY_DISPLAY},
+	{"visibility", css_property_type::PROPERTY_VISIBILITY},
+	{"opacity", css_property_type::PROPERTY_OPACITY},
 });
 
 /* Ensure that we have all cases listed */
@@ -55,7 +55,7 @@ auto token_string_to_property(const std::string_view &inp)
 }
 
 auto css_property::from_token(const css_parser_token &tok)
-	-> tl::expected<css_property,css_parse_error>
+	-> tl::expected<css_property, css_parse_error>
 {
 	if (tok.type == css_parser_token::token_type::ident_token) {
 		auto sv = tok.get_string_or_default("");
@@ -66,4 +66,4 @@ auto css_property::from_token(const css_parser_token &tok)
 	return tl::unexpected{css_parse_error(css_parse_error_type::PARSE_ERROR_NYI)};
 }
 
-}
+}// namespace rspamd::css

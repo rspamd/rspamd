@@ -54,15 +54,18 @@ struct alignas(int) css_property {
 	css_property_type type;
 	css_property_flag flag;
 
-	css_property(css_property_type t, css_property_flag fl = css_property_flag::FLAG_NORMAL) :
-			type(t), flag(fl) {}
-	static tl::expected<css_property,css_parse_error> from_token(
-			const css_parser_token &tok);
+	css_property(css_property_type t, css_property_flag fl = css_property_flag::FLAG_NORMAL)
+		: type(t), flag(fl)
+	{
+	}
+	static tl::expected<css_property, css_parse_error> from_token(
+		const css_parser_token &tok);
 
-	constexpr auto to_string(void) const -> const char * {
+	constexpr auto to_string(void) const -> const char *
+	{
 		const char *ret = "nyi";
 
-		switch(type) {
+		switch (type) {
 		case css_property_type::PROPERTY_FONT:
 			ret = "font";
 			break;
@@ -104,37 +107,45 @@ struct alignas(int) css_property {
 	}
 
 	/* Helpers to define which values are valid for which properties */
-	auto is_color(void) const -> bool {
+	auto is_color(void) const -> bool
+	{
 		return type == css_property_type::PROPERTY_COLOR ||
-				type == css_property_type::PROPERTY_BACKGROUND ||
-				type == css_property_type::PROPERTY_BGCOLOR ||
-				type == css_property_type::PROPERTY_FONT_COLOR ||
-				type == css_property_type::PROPERTY_FONT;
+			   type == css_property_type::PROPERTY_BACKGROUND ||
+			   type == css_property_type::PROPERTY_BGCOLOR ||
+			   type == css_property_type::PROPERTY_FONT_COLOR ||
+			   type == css_property_type::PROPERTY_FONT;
 	}
-	auto is_dimension(void) const -> bool {
+	auto is_dimension(void) const -> bool
+	{
 		return type == css_property_type::PROPERTY_HEIGHT ||
-				type == css_property_type::PROPERTY_WIDTH ||
-				type == css_property_type::PROPERTY_FONT_SIZE ||
-				type == css_property_type::PROPERTY_FONT;
+			   type == css_property_type::PROPERTY_WIDTH ||
+			   type == css_property_type::PROPERTY_FONT_SIZE ||
+			   type == css_property_type::PROPERTY_FONT;
 	}
 
-	auto is_normal_number(void) const -> bool {
+	auto is_normal_number(void) const -> bool
+	{
 		return type == css_property_type::PROPERTY_OPACITY;
 	}
 
-	auto is_display(void) const -> bool {
+	auto is_display(void) const -> bool
+	{
 		return type == css_property_type::PROPERTY_DISPLAY;
 	}
 
-	auto is_visibility(void) const -> bool {
+	auto is_visibility(void) const -> bool
+	{
 		return type == css_property_type::PROPERTY_VISIBILITY;
 	}
 
-	auto operator==(const css_property &other) const { return type == other.type; }
+	auto operator==(const css_property &other) const
+	{
+		return type == other.type;
+	}
 };
 
 
-}
+}// namespace rspamd::css
 
 /* Make properties hashable */
 namespace std {
@@ -143,8 +154,9 @@ class hash<rspamd::css::css_property> {
 public:
 	using is_avalanching = void;
 	/* Mix bits to provide slightly better distribution but being constexpr */
-	constexpr size_t operator() (const rspamd::css::css_property &prop) const {
-		std::size_t key = 0xdeadbeef ^static_cast<std::size_t>(prop.type);
+	constexpr size_t operator()(const rspamd::css::css_property &prop) const
+	{
+		std::size_t key = 0xdeadbeef ^ static_cast<std::size_t>(prop.type);
 		key = (~key) + (key << 21);
 		key = key ^ (key >> 24);
 		key = (key + (key << 3)) + (key << 8);
@@ -155,6 +167,6 @@ public:
 		return key;
 	}
 };
-}
+}// namespace std
 
-#endif //RSPAMD_CSS_PROPERTY_HXX
+#endif//RSPAMD_CSS_PROPERTY_HXX

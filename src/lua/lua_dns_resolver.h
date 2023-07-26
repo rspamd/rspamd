@@ -10,7 +10,6 @@ struct rdns_reply;
  * @param L
  * @param reply
  */
-void
-lua_push_dns_reply (struct lua_State *L, const struct rdns_reply *reply);
+void lua_push_dns_reply(struct lua_State *L, const struct rdns_reply *reply);
 
 #endif

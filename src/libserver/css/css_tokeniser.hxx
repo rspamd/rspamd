@@ -45,10 +45,10 @@ struct css_parser_token {
 		cdo_token, /* xml open comment */
 		cdc_token, /* xml close comment */
 		delim_token,
-		obrace_token, /* ( */
-		ebrace_token, /* ) */
-		osqbrace_token, /* [ */
-		esqbrace_token, /* ] */
+		obrace_token,     /* ( */
+		ebrace_token,     /* ) */
+		osqbrace_token,   /* [ */
+		esqbrace_token,   /* ] */
 		ocurlbrace_token, /* { */
 		ecurlbrace_token, /* } */
 		comma_token,
@@ -80,11 +80,11 @@ struct css_parser_token {
 	static const std::uint8_t number_percent = (1u << 2u);
 	static const std::uint8_t flag_bad_dimension = (1u << 3u);
 
-	using value_type = std::variant<std::string_view, /* For strings and string like tokens */
-			char, /* For delimiters (might need to move to unicode point) */
-			float, /* For numeric stuff */
-			css_parser_token_placeholder /* For general no token stuff */
-	>;
+	using value_type = std::variant<std::string_view,            /* For strings and string like tokens */
+									char,                        /* For delimiters (might need to move to unicode point) */
+									float,                       /* For numeric stuff */
+									css_parser_token_placeholder /* For general no token stuff */
+									>;
 
 	/* Typed storage */
 	value_type value;
@@ -96,14 +96,17 @@ struct css_parser_token {
 	dim_type dimension_type;
 
 	css_parser_token() = delete;
-	explicit css_parser_token(token_type type, const value_type &value) :
-			value(value), type(type) {}
+	explicit css_parser_token(token_type type, const value_type &value)
+		: value(value), type(type)
+	{
+	}
 	css_parser_token(css_parser_token &&other) = default;
 	css_parser_token(const css_parser_token &token) = default;
-	auto operator=(css_parser_token &&other) -> css_parser_token& = default;
+	auto operator=(css_parser_token &&other) -> css_parser_token & = default;
 	auto adjust_dim(const css_parser_token &dim_token) -> bool;
 
-	auto get_string_or_default(const std::string_view &def) const -> std::string_view {
+	auto get_string_or_default(const std::string_view &def) const -> std::string_view
+	{
 		if (std::holds_alternative<std::string_view>(value)) {
 			return std::get<std::string_view>(value);
 		}
@@ -114,15 +117,17 @@ struct css_parser_token {
 		return def;
 	}
 
-	auto get_delim() const -> char {
+	auto get_delim() const -> char
+	{
 		if (std::holds_alternative<char>(value)) {
 			return std::get<char>(value);
 		}
 
-		return (char)-1;
+		return (char) -1;
 	}
 
-	auto get_number_or_default(float def) const -> float {
+	auto get_number_or_default(float def) const -> float
+	{
 		if (std::holds_alternative<float>(value)) {
 			auto dbl = std::get<float>(value);
 
@@ -136,7 +141,8 @@ struct css_parser_token {
 		return def;
 	}
 
-	auto get_normal_number_or_default(float def) const -> float {
+	auto get_normal_number_or_default(float def) const -> float
+	{
 		if (std::holds_alternative<float>(value)) {
 			auto dbl = std::get<float>(value);
 
@@ -163,11 +169,11 @@ struct css_parser_token {
 	auto debug_token_str() -> std::string;
 };
 
-static auto css_parser_eof_token(void) -> const css_parser_token & {
-	static css_parser_token eof_tok {
+static auto css_parser_eof_token(void) -> const css_parser_token &
+{
+	static css_parser_token eof_tok{
 		css_parser_token::token_type::eof_token,
-				css_parser_token_placeholder()
-	};
+		css_parser_token_placeholder()};
 
 	return eof_tok;
 }
@@ -182,13 +188,17 @@ static_assert(std::is_trivially_copyable_v<css_parser_token>);
 class css_tokeniser {
 public:
 	css_tokeniser() = delete;
-	css_tokeniser(rspamd_mempool_t *pool, const std::string_view &sv) :
-			input(sv), offset(0), pool(pool) {}
+	css_tokeniser(rspamd_mempool_t *pool, const std::string_view &sv)
+		: input(sv), offset(0), pool(pool)
+	{
+	}
 
 	auto next_token(void) -> struct css_parser_token;
-	auto pushback_token(const struct css_parser_token &t) const -> void {
+	auto pushback_token(const struct css_parser_token &t) const -> void
+	{
 		backlog.push_back(t);
 	}
+
 private:
 	std::string_view input;
 	std::size_t offset;
@@ -199,7 +209,7 @@ private:
 	auto consume_ident(bool allow_number = false) -> struct css_parser_token;
 };
 
-}
+}// namespace rspamd::css
 
 
-#endif //RSPAMD_CSS_TOKENISER_HXX
+#endif//RSPAMD_CSS_TOKENISER_HXX

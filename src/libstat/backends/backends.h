@@ -21,7 +21,7 @@
 
 #define RSPAMD_DEFAULT_BACKEND "mmap"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -38,81 +38,81 @@ struct rspamd_stat_backend {
 	const char *name;
 	bool read_only;
 
-	gpointer (*init) (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg,
-					  struct rspamd_statfile *st);
+	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg,
+					 struct rspamd_statfile *st);
 
-	gpointer (*runtime) (struct rspamd_task *task,
-						 struct rspamd_statfile_config *stcf,
-						 gboolean learn, gpointer ctx,
-						 gint id);
+	gpointer (*runtime)(struct rspamd_task *task,
+						struct rspamd_statfile_config *stcf,
+						gboolean learn, gpointer ctx,
+						gint id);
 
-	gboolean (*process_tokens) (struct rspamd_task *task, GPtrArray *tokens,
-								gint id,
-								gpointer ctx);
+	gboolean (*process_tokens)(struct rspamd_task *task, GPtrArray *tokens,
+							   gint id,
+							   gpointer ctx);
 
-	gboolean (*finalize_process) (struct rspamd_task *task,
-								  gpointer runtime, gpointer ctx);
+	gboolean (*finalize_process)(struct rspamd_task *task,
+								 gpointer runtime, gpointer ctx);
 
-	gboolean (*learn_tokens) (struct rspamd_task *task, GPtrArray *tokens,
-							  gint id,
-							  gpointer ctx);
+	gboolean (*learn_tokens)(struct rspamd_task *task, GPtrArray *tokens,
+							 gint id,
+							 gpointer ctx);
 
-	gulong (*total_learns) (struct rspamd_task *task,
-							gpointer runtime, gpointer ctx);
+	gulong (*total_learns)(struct rspamd_task *task,
+						   gpointer runtime, gpointer ctx);
 
-	gboolean (*finalize_learn) (struct rspamd_task *task,
-								gpointer runtime, gpointer ctx, GError **err);
+	gboolean (*finalize_learn)(struct rspamd_task *task,
+							   gpointer runtime, gpointer ctx, GError **err);
 
-	gulong (*inc_learns) (struct rspamd_task *task,
-						  gpointer runtime, gpointer ctx);
+	gulong (*inc_learns)(struct rspamd_task *task,
+						 gpointer runtime, gpointer ctx);
 
-	gulong (*dec_learns) (struct rspamd_task *task,
-						  gpointer runtime, gpointer ctx);
+	gulong (*dec_learns)(struct rspamd_task *task,
+						 gpointer runtime, gpointer ctx);
 
-	ucl_object_t *(*get_stat) (gpointer runtime, gpointer ctx);
+	ucl_object_t *(*get_stat)(gpointer runtime, gpointer ctx);
 
-	void (*close) (gpointer ctx);
+	void (*close)(gpointer ctx);
 
-	gpointer (*load_tokenizer_config) (gpointer runtime, gsize *sz);
+	gpointer (*load_tokenizer_config)(gpointer runtime, gsize *sz);
 
 	gpointer ctx;
 };
 
-#define RSPAMD_STAT_BACKEND_DEF(name) \
-        gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, \
-            struct rspamd_config *cfg, struct rspamd_statfile *st); \
-        gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
-                struct rspamd_statfile_config *stcf, \
-                gboolean learn, gpointer ctx, gint id); \
-        gboolean rspamd_##name##_process_tokens (struct rspamd_task *task, \
-                GPtrArray *tokens, gint id, \
-                gpointer runtime); \
-        gboolean rspamd_##name##_finalize_process (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx); \
-        gboolean rspamd_##name##_learn_tokens (struct rspamd_task *task, \
-                GPtrArray *tokens, gint id, \
-                gpointer runtime); \
-        gboolean rspamd_##name##_finalize_learn (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx, GError **err); \
-        gulong rspamd_##name##_total_learns (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx); \
-        gulong rspamd_##name##_inc_learns (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx); \
-        gulong rspamd_##name##_dec_learns (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx); \
-        gulong rspamd_##name##_learns (struct rspamd_task *task, \
-                gpointer runtime, \
-                gpointer ctx); \
-        ucl_object_t * rspamd_##name##_get_stat (gpointer runtime, \
-                gpointer ctx); \
-        gpointer rspamd_##name##_load_tokenizer_config (gpointer runtime, \
-                gsize *len); \
-        void rspamd_##name##_close (gpointer ctx)
+#define RSPAMD_STAT_BACKEND_DEF(name)                                                     \
+	gpointer rspamd_##name##_init(struct rspamd_stat_ctx *ctx,                            \
+								  struct rspamd_config *cfg, struct rspamd_statfile *st); \
+	gpointer rspamd_##name##_runtime(struct rspamd_task *task,                            \
+									 struct rspamd_statfile_config *stcf,                 \
+									 gboolean learn, gpointer ctx, gint id);              \
+	gboolean rspamd_##name##_process_tokens(struct rspamd_task *task,                     \
+											GPtrArray *tokens, gint id,                   \
+											gpointer runtime);                            \
+	gboolean rspamd_##name##_finalize_process(struct rspamd_task *task,                   \
+											  gpointer runtime,                           \
+											  gpointer ctx);                              \
+	gboolean rspamd_##name##_learn_tokens(struct rspamd_task *task,                       \
+										  GPtrArray *tokens, gint id,                     \
+										  gpointer runtime);                              \
+	gboolean rspamd_##name##_finalize_learn(struct rspamd_task *task,                     \
+											gpointer runtime,                             \
+											gpointer ctx, GError **err);                  \
+	gulong rspamd_##name##_total_learns(struct rspamd_task *task,                         \
+										gpointer runtime,                                 \
+										gpointer ctx);                                    \
+	gulong rspamd_##name##_inc_learns(struct rspamd_task *task,                           \
+									  gpointer runtime,                                   \
+									  gpointer ctx);                                      \
+	gulong rspamd_##name##_dec_learns(struct rspamd_task *task,                           \
+									  gpointer runtime,                                   \
+									  gpointer ctx);                                      \
+	gulong rspamd_##name##_learns(struct rspamd_task *task,                               \
+								  gpointer runtime,                                       \
+								  gpointer ctx);                                          \
+	ucl_object_t *rspamd_##name##_get_stat(gpointer runtime,                              \
+										   gpointer ctx);                                 \
+	gpointer rspamd_##name##_load_tokenizer_config(gpointer runtime,                      \
+												   gsize *len);                           \
+	void rspamd_##name##_close(gpointer ctx)
 
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);
 RSPAMD_STAT_BACKEND_DEF(sqlite3);
@@ -120,7 +120,7 @@ RSPAMD_STAT_BACKEND_DEF(cdb);
 RSPAMD_STAT_BACKEND_DEF(redis);
 RSPAMD_STAT_BACKEND_DEF(http);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

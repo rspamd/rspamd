@@ -24,7 +24,7 @@
 #include "backends/backends.h"
 #include "learn_cache/learn_cache.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -59,11 +59,11 @@ struct rspamd_statfile {
 
 struct rspamd_stat_async_elt;
 
-typedef void (*rspamd_stat_async_handler) (struct rspamd_stat_async_elt *elt,
-										   gpointer ud);
+typedef void (*rspamd_stat_async_handler)(struct rspamd_stat_async_elt *elt,
+										  gpointer ud);
 
-typedef void (*rspamd_stat_async_cleanup) (struct rspamd_stat_async_elt *elt,
-										   gpointer ud);
+typedef void (*rspamd_stat_async_cleanup)(struct rspamd_stat_async_elt *elt,
+										  gpointer ud);
 
 struct rspamd_stat_async_elt {
 	rspamd_stat_async_handler handler;
@@ -88,9 +88,9 @@ struct rspamd_stat_ctx {
 	guint caches_count;
 
 	/* Runtime configuration */
-	GPtrArray *statfiles; /* struct rspamd_statfile */
+	GPtrArray *statfiles;   /* struct rspamd_statfile */
 	GPtrArray *classifiers; /* struct rspamd_classifier */
-	GQueue *async_elts; /* struct rspamd_stat_async_elt */
+	GQueue *async_elts;     /* struct rspamd_stat_async_elt */
 	struct rspamd_config *cfg;
 
 	gint lua_stat_tokens_ref;
@@ -108,25 +108,26 @@ typedef enum rspamd_learn_cache_result {
 	RSPAMD_LEARN_IGNORE
 } rspamd_learn_t;
 
-struct rspamd_stat_ctx *rspamd_stat_get_ctx (void);
+struct rspamd_stat_ctx *rspamd_stat_get_ctx(void);
 
-struct rspamd_stat_classifier *rspamd_stat_get_classifier (const gchar *name);
+struct rspamd_stat_classifier *rspamd_stat_get_classifier(const gchar *name);
 
-struct rspamd_stat_backend *rspamd_stat_get_backend (const gchar *name);
+struct rspamd_stat_backend *rspamd_stat_get_backend(const gchar *name);
 
-struct rspamd_stat_tokenizer *rspamd_stat_get_tokenizer (const gchar *name);
+struct rspamd_stat_tokenizer *rspamd_stat_get_tokenizer(const gchar *name);
 
-struct rspamd_stat_cache *rspamd_stat_get_cache (const gchar *name);
+struct rspamd_stat_cache *rspamd_stat_get_cache(const gchar *name);
 
-struct rspamd_stat_async_elt *rspamd_stat_ctx_register_async (
-		rspamd_stat_async_handler handler, rspamd_stat_async_cleanup cleanup,
-		gpointer d, gdouble timeout);
+struct rspamd_stat_async_elt *rspamd_stat_ctx_register_async(
+	rspamd_stat_async_handler handler, rspamd_stat_async_cleanup cleanup,
+	gpointer d, gdouble timeout);
 
-static GQuark rspamd_stat_quark (void) {
-	return g_quark_from_static_string ("rspamd-statistics");
+static GQuark rspamd_stat_quark(void)
+{
+	return g_quark_from_static_string("rspamd-statistics");
 }
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

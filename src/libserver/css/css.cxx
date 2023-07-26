@@ -35,7 +35,7 @@ public:
 	using sel_shared_eq = smart_ptr_equal<css_selector>;
 	using selector_ptr = std::unique_ptr<css_selector>;
 	using selectors_hash = ankerl::unordered_dense::map<selector_ptr, css_declarations_block_ptr,
-			sel_shared_hash, sel_shared_eq>;
+														sel_shared_hash, sel_shared_eq>;
 	using universal_selector_t = std::pair<selector_ptr, css_declarations_block_ptr>;
 	selectors_hash tags_selector;
 	selectors_hash class_selectors;
@@ -44,16 +44,19 @@ public:
 };
 
 css_style_sheet::css_style_sheet(rspamd_mempool_t *pool)
-		:  pool(pool), pimpl(new impl) {}
-css_style_sheet::~css_style_sheet() {}
+	: pool(pool), pimpl(new impl)
+{
+}
+css_style_sheet::~css_style_sheet()
+{
+}
 
-auto
-css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
-									css_declarations_block_ptr decls) -> void
+auto css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
+										css_declarations_block_ptr decls) -> void
 {
 	impl::selectors_hash *target_hash = nullptr;
 
-	switch(selector->type) {
+	switch (selector->type) {
 	case css_selector::selector_type::SELECTOR_ALL:
 		if (pimpl->universal_selector) {
 			/* Another universal selector */
@@ -63,7 +66,7 @@ css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 		else {
 			msg_debug_css("added universal selector");
 			pimpl->universal_selector = std::make_pair(std::move(selector),
-					decls);
+													   decls);
 		}
 		break;
 	case css_selector::selector_type::SELECTOR_CLASS:
@@ -95,16 +98,14 @@ css_style_sheet::add_selector_rule(std::unique_ptr<css_selector> &&selector,
 			 * merging when finally resolving paths.
 			 */
 			auto sel_str = selector->to_string().value_or("unknown");
-			msg_debug_css("found duplicate selector: %*s", (int)sel_str.size(),
-					sel_str.data());
+			msg_debug_css("found duplicate selector: %*s", (int) sel_str.size(),
+						  sel_str.data());
 			found_it->second->merge_block(*decls);
 		}
 	}
 }
 
-auto
-css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
-		rspamd::html::html_block *
+auto css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) -> rspamd::html::html_block *
 {
 	std::optional<std::string_view> id_comp, class_comp;
 	rspamd::html::html_block *res = nullptr;
@@ -114,7 +115,7 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 	}
 
 	/* First, find id in a tag and a class */
-	for (const auto &param : tag->components) {
+	for (const auto &param: tag->components) {
 		if (param.type == html::html_component_type::RSPAMD_HTML_COMPONENT_ID) {
 			id_comp = param.value;
 		}
@@ -157,9 +158,9 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 
 		auto elts = sv_split(class_comp.value());
 
-		for (const auto &e : elts) {
+		for (const auto &e: elts) {
 			auto found_class_sel = pimpl->class_selectors.find(
-					css_selector{e, css_selector::selector_type::SELECTOR_CLASS});
+				css_selector{e, css_selector::selector_type::SELECTOR_CLASS});
 
 			if (found_class_sel != pimpl->class_selectors.end()) {
 				const auto &decl = *(found_class_sel->second);
@@ -178,7 +179,7 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 	/* Tags part */
 	if (!pimpl->tags_selector.empty()) {
 		auto found_tag_sel = pimpl->tags_selector.find(
-				css_selector{static_cast<tag_id_t>(tag->id)});
+			css_selector{static_cast<tag_id_t>(tag->id)});
 
 		if (found_tag_sel != pimpl->tags_selector.end()) {
 			const auto &decl = *(found_tag_sel->second);
@@ -208,14 +209,13 @@ css_style_sheet::check_tag_block(const rspamd::html::html_tag *tag) ->
 	return res;
 }
 
-auto
-css_parse_style(rspamd_mempool_t *pool,
+auto css_parse_style(rspamd_mempool_t *pool,
 					 std::string_view input,
 					 std::shared_ptr<css_style_sheet> &&existing)
-					 -> css_return_pair
+	-> css_return_pair
 {
 	auto parse_res = rspamd::css::parse_css(pool, input,
-			std::forward<std::shared_ptr<css_style_sheet>>(existing));
+											std::forward<std::shared_ptr<css_style_sheet>>(existing));
 
 	if (parse_res.has_value()) {
 		return std::make_pair(parse_res.value(), css_parse_error());
@@ -224,4 +224,4 @@ css_parse_style(rspamd_mempool_t *pool,
 	return std::make_pair(nullptr, parse_res.error());
 }
 
-}
+}// namespace rspamd::css

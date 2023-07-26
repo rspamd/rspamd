@@ -22,7 +22,7 @@
 #include "libstat/stat_api.h"
 #include "libmime/message.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -70,11 +70,11 @@ struct rspamd_lang_detector_res {
  * @param cfg
  * @return
  */
-struct rspamd_lang_detector *rspamd_language_detector_init (struct rspamd_config *cfg);
+struct rspamd_lang_detector *rspamd_language_detector_init(struct rspamd_config *cfg);
 
-struct rspamd_lang_detector *rspamd_language_detector_ref (struct rspamd_lang_detector *d);
+struct rspamd_lang_detector *rspamd_language_detector_ref(struct rspamd_lang_detector *d);
 
-void rspamd_language_detector_unref (struct rspamd_lang_detector *d);
+void rspamd_language_detector_unref(struct rspamd_lang_detector *d);
 
 /**
  * Try to detect language of words
@@ -83,9 +83,9 @@ void rspamd_language_detector_unref (struct rspamd_lang_detector *d);
  * @param words_len
  * @return array of struct rspamd_lang_detector_res sorted by freq descending
  */
-gboolean rspamd_language_detector_detect (struct rspamd_task *task,
-										  struct rspamd_lang_detector *d,
-										  struct rspamd_mime_text_part *part);
+gboolean rspamd_language_detector_detect(struct rspamd_task *task,
+										 struct rspamd_lang_detector *d,
+										 struct rspamd_mime_text_part *part);
 
 /**
  * Returns TRUE if the specified word is known to be a stop word
@@ -94,16 +94,16 @@ gboolean rspamd_language_detector_detect (struct rspamd_task *task,
  * @param wlen
  * @return
  */
-gboolean rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
-												const gchar *word, gsize wlen);
+gboolean rspamd_language_detector_is_stop_word(struct rspamd_lang_detector *d,
+											   const gchar *word, gsize wlen);
 
 /**
  * Return language flags for a specific language elt
  * @param elt
  * @return
  */
-gint rspamd_language_detector_elt_flags (const struct rspamd_language_elt *elt);
-#ifdef  __cplusplus
+gint rspamd_language_detector_elt_flags(const struct rspamd_language_elt *elt);
+#ifdef __cplusplus
 }
 #endif
 

@@ -20,7 +20,7 @@
 #include <unicode/uchar.h>
 #include <unicode/utext.h>
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -48,7 +48,7 @@ enum rspamd_mime_part_type {
 
 #define IS_PART_MULTIPART(part) ((part) && ((part)->part_type == RSPAMD_MIME_PART_MULTIPART))
 #define IS_PART_TEXT(part) ((part) && ((part)->part_type == RSPAMD_MIME_PART_TEXT))
-#define IS_PART_MESSAGE(part) ((part) &&((part)->part_type == RSPAMD_MIME_PART_MESSAGE))
+#define IS_PART_MESSAGE(part) ((part) && ((part)->part_type == RSPAMD_MIME_PART_MESSAGE))
 
 enum rspamd_cte {
 	RSPAMD_CTE_UNKNOWN = 0,
@@ -135,16 +135,16 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t parsed; /* decoded from mime encodings */
 
 	/* UTF8 content */
-	rspamd_ftok_t utf_content; /* utf8 encoded processed content */
-	GByteArray *utf_raw_content; /* utf raw content */
+	rspamd_ftok_t utf_content;        /* utf8 encoded processed content */
+	GByteArray *utf_raw_content;      /* utf raw content */
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
-	GArray *normalized_hashes; /* Array of guint64 */
-	GArray *utf_words; /* Array of rspamd_stat_token_t */
-	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
+	GArray *normalized_hashes;        /* Array of guint64 */
+	GArray *utf_words;                /* Array of rspamd_stat_token_t */
+	UText utf_stripped_text;          /* Used by libicu to represent the utf8 content */
 
-	GPtrArray *newlines;    /**< positions of newlines in text, relative to content*/
+	GPtrArray *newlines; /**< positions of newlines in text, relative to content*/
 	void *html;
-	GList *exceptions;    /**< list of offsets of urls						*/
+	GList *exceptions; /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 
 	guint flags;
@@ -171,38 +171,36 @@ struct rspamd_message {
 	const gchar *message_id;
 	gchar *subject;
 
-	GPtrArray *parts;				/**< list of parsed parts							*/
-	GPtrArray *text_parts;			/**< list of text parts								*/
+	GPtrArray *parts;      /**< list of parsed parts							*/
+	GPtrArray *text_parts; /**< list of text parts								*/
 	struct rspamd_message_raw_headers_content raw_headers_content;
-	void *received_headers;			/**< list of received headers						*/
-	khash_t (rspamd_url_hash) *urls;
-	struct rspamd_mime_headers_table *raw_headers;	/**< list of raw headers						*/
-	struct rspamd_mime_header *headers_order;	/**< order of raw headers							*/
+	void *received_headers; /**< list of received headers						*/
+	khash_t(rspamd_url_hash) * urls;
+	struct rspamd_mime_headers_table *raw_headers; /**< list of raw headers						*/
+	struct rspamd_mime_header *headers_order;      /**< order of raw headers							*/
 	struct rspamd_task *task;
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
 	guchar digest[16];
-	enum rspamd_newlines_type nlines_type; 		/**< type of newlines (detected on most of headers 	*/
+	enum rspamd_newlines_type nlines_type; /**< type of newlines (detected on most of headers 	*/
 	ref_entry_t ref;
 };
 
 #define MESSAGE_FIELD(task, field) ((task)->message->field)
-#define MESSAGE_FIELD_CHECK(task, field) ((task)->message ? \
-	(task)->message->field : \
-	(__typeof__((task)->message->field))NULL)
+#define MESSAGE_FIELD_CHECK(task, field) ((task)->message ? (task)->message->field : (__typeof__((task)->message->field)) NULL)
 
 /**
  * Parse and pre-process mime message
  * @param task worker_task object
  * @return
  */
-gboolean rspamd_message_parse (struct rspamd_task *task);
+gboolean rspamd_message_parse(struct rspamd_task *task);
 
 /**
  * Process content in task (e.g. HTML parsing)
  * @param task
  */
-void rspamd_message_process (struct rspamd_task *task);
+void rspamd_message_process(struct rspamd_task *task);
 
 
 /**
@@ -210,20 +208,20 @@ void rspamd_message_process (struct rspamd_task *task);
  * @param str
  * @return
  */
-enum rspamd_cte rspamd_cte_from_string (const gchar *str);
+enum rspamd_cte rspamd_cte_from_string(const gchar *str);
 
 /**
  * Converts cte to string
  * @param ct
  * @return
  */
-const gchar *rspamd_cte_to_string (enum rspamd_cte ct);
+const gchar *rspamd_cte_to_string(enum rspamd_cte ct);
 
-struct rspamd_message* rspamd_message_new (struct rspamd_task *task);
+struct rspamd_message *rspamd_message_new(struct rspamd_task *task);
 
-struct rspamd_message *rspamd_message_ref (struct rspamd_message *msg);
+struct rspamd_message *rspamd_message_ref(struct rspamd_message *msg);
 
-void rspamd_message_unref (struct rspamd_message *msg);
+void rspamd_message_unref(struct rspamd_message *msg);
 
 /**
  * Updates digest of the message if modified
@@ -231,10 +229,10 @@ void rspamd_message_unref (struct rspamd_message *msg);
  * @param input
  * @param len
  */
-void rspamd_message_update_digest (struct rspamd_message *msg,
-		const void *input, gsize len);
+void rspamd_message_update_digest(struct rspamd_message *msg,
+								  const void *input, gsize len);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

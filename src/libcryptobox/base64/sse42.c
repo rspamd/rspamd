@@ -73,9 +73,9 @@ extern const uint8_t base64_table_dec[256];
 
 
 static inline __m128i
-dec_reshuffle (__m128i in) __attribute__((__target__("sse4.2")));
+dec_reshuffle(__m128i in) __attribute__((__target__("sse4.2")));
 
-static inline __m128i dec_reshuffle (__m128i in)
+static inline __m128i dec_reshuffle(__m128i in)
 {
 	// Mask in a single byte per shift:
 	const __m128i maskB2 = _mm_set1_epi32(0x003F0000);
@@ -92,64 +92,61 @@ static inline __m128i dec_reshuffle (__m128i in)
 
 	// Reshuffle and repack into 12-byte output format:
 	return _mm_shuffle_epi8(out, _mm_setr_epi8(
-		 3,  2,  1,
-		 7,  6,  5,
-		11, 10,  9,
-		15, 14, 13,
-		-1, -1, -1, -1));
+									 3, 2, 1,
+									 7, 6, 5,
+									 11, 10, 9,
+									 15, 14, 13,
+									 -1, -1, -1, -1));
 }
 
-#define CMPGT(s,n)	_mm_cmpgt_epi8((s), _mm_set1_epi8(n))
+#define CMPGT(s, n) _mm_cmpgt_epi8((s), _mm_set1_epi8(n))
 
-#define INNER_LOOP_SSE42 \
-	while (inlen >= 24) { \
-		__m128i str = _mm_loadu_si128((__m128i *)c); \
-		const __m128i lut = _mm_setr_epi8( \
-			19, 16,   4,   4, \
-			 4,  4,   4,   4, \
-			 4,  4,   4,   4, \
-			 0,  0, -71, -65 \
-		); \
-		const __m128i range = _mm_setr_epi8( \
-			'+','+', \
-			'+','+', \
-			'+','+', \
-			'+','+', \
-			'/','/', \
-			'0','9', \
-			'A','Z', \
-			'a','z'); \
+#define INNER_LOOP_SSE42                                                                              \
+	while (inlen >= 24) {                                                                             \
+		__m128i str = _mm_loadu_si128((__m128i *) c);                                                 \
+		const __m128i lut = _mm_setr_epi8(                                                            \
+			19, 16, 4, 4,                                                                             \
+			4, 4, 4, 4,                                                                               \
+			4, 4, 4, 4,                                                                               \
+			0, 0, -71, -65);                                                                          \
+		const __m128i range = _mm_setr_epi8(                                                          \
+			'+', '+',                                                                                 \
+			'+', '+',                                                                                 \
+			'+', '+',                                                                                 \
+			'+', '+',                                                                                 \
+			'/', '/',                                                                                 \
+			'0', '9',                                                                                 \
+			'A', 'Z',                                                                                 \
+			'a', 'z');                                                                                \
 		if (_mm_cmpistrc(range, str, _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES | _SIDD_NEGATIVE_POLARITY)) { \
-			seen_error = true; \
-			break; \
-		} \
-		__m128i indices = _mm_subs_epu8(str, _mm_set1_epi8(46)); \
-		__m128i mask45 = CMPGT(str, 64); \
-		__m128i mask5  = CMPGT(str, 96); \
-		indices = _mm_andnot_si128(mask45, indices); \
-		mask45 = _mm_add_epi8(_mm_slli_epi16(_mm_abs_epi8(mask45), 4), mask45); \
-		indices = _mm_add_epi8(indices, mask45); \
-		indices = _mm_add_epi8(indices, mask5); \
-		__m128i delta = _mm_shuffle_epi8(lut, indices); \
-		str = _mm_add_epi8(str, delta); \
-		str = dec_reshuffle(str); \
-		_mm_storeu_si128((__m128i *)o, str); \
-		c += 16; \
-		o += 12; \
-		outl += 12; \
-		inlen -= 16; \
+			seen_error = true;                                                                        \
+			break;                                                                                    \
+		}                                                                                             \
+		__m128i indices = _mm_subs_epu8(str, _mm_set1_epi8(46));                                      \
+		__m128i mask45 = CMPGT(str, 64);                                                              \
+		__m128i mask5 = CMPGT(str, 96);                                                               \
+		indices = _mm_andnot_si128(mask45, indices);                                                  \
+		mask45 = _mm_add_epi8(_mm_slli_epi16(_mm_abs_epi8(mask45), 4), mask45);                       \
+		indices = _mm_add_epi8(indices, mask45);                                                      \
+		indices = _mm_add_epi8(indices, mask5);                                                       \
+		__m128i delta = _mm_shuffle_epi8(lut, indices);                                               \
+		str = _mm_add_epi8(str, delta);                                                               \
+		str = dec_reshuffle(str);                                                                     \
+		_mm_storeu_si128((__m128i *) o, str);                                                         \
+		c += 16;                                                                                      \
+		o += 12;                                                                                      \
+		outl += 12;                                                                                   \
+		inlen -= 16;                                                                                  \
 	}
 
-int
-base64_decode_sse42 (const char *in, size_t inlen,
-		unsigned char *out, size_t *outlen) __attribute__((__target__("sse4.2")));
-int
-base64_decode_sse42 (const char *in, size_t inlen,
-		unsigned char *out, size_t *outlen)
+int base64_decode_sse42(const char *in, size_t inlen,
+						unsigned char *out, size_t *outlen) __attribute__((__target__("sse4.2")));
+int base64_decode_sse42(const char *in, size_t inlen,
+						unsigned char *out, size_t *outlen)
 {
 	ssize_t ret = 0;
-	const uint8_t *c = (const uint8_t *)in;
-	uint8_t *o = (uint8_t *)out;
+	const uint8_t *c = (const uint8_t *) in;
+	uint8_t *o = (uint8_t *) out;
 	uint8_t q, carry;
 	size_t outl = 0;
 	size_t leftover = 0;
@@ -159,7 +156,7 @@ repeat:
 	switch (leftover) {
 		for (;;) {
 		case 0:
-			if (G_LIKELY (!seen_error)) {
+			if (G_LIKELY(!seen_error)) {
 				INNER_LOOP_SSE42
 			}
 
@@ -209,7 +206,7 @@ repeat:
 					}
 				}
 				else {
-					leftover --;
+					leftover--;
 				}
 				/* If we get here, there was an error: */
 				break;
@@ -250,8 +247,8 @@ repeat:
 	if (!ret && inlen > 0) {
 		/* Skip to the next valid character in input */
 		while (inlen > 0 && base64_table_dec[*c] >= 254) {
-			c ++;
-			inlen --;
+			c++;
+			inlen--;
 		}
 
 		if (inlen > 0) {

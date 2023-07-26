@@ -19,12 +19,12 @@
 #include "dkim.h"
 
 static const gchar test_dkim_sig[] = "v=1; a=rsa-sha256; c=relaxed/relaxed; "
-		"d=highsecure.ru; s=dkim; t=1410516996; "
-		"bh=guFoWYHWVzFRqVyAQebnvPcdm7bUQo7pRHt/uIHD7gs=; "
-		"h=Message-ID:Date:From:MIME-Version:To:Subject:Content-Type:Content-Transfer-Encoding; "
-		"b=PCiECkOaPFb99DW+gApgfmdlTUo6XN6YXjnj52Cxoz2FoA857B0ZHFgeQe4JAKHuhW"
-		"oq3BLHap0GcMTTpSOgfQOKa8Df35Ns11JoOFjdBQ8GpM99kOrJP+vZcT8b7AMfthYm0Kwy"
-		"D9TjlkpScuoY5LjsWVnijh9dSNVLFqLatzg=;";
+									 "d=highsecure.ru; s=dkim; t=1410516996; "
+									 "bh=guFoWYHWVzFRqVyAQebnvPcdm7bUQo7pRHt/uIHD7gs=; "
+									 "h=Message-ID:Date:From:MIME-Version:To:Subject:Content-Type:Content-Transfer-Encoding; "
+									 "b=PCiECkOaPFb99DW+gApgfmdlTUo6XN6YXjnj52Cxoz2FoA857B0ZHFgeQe4JAKHuhW"
+									 "oq3BLHap0GcMTTpSOgfQOKa8Df35Ns11JoOFjdBQ8GpM99kOrJP+vZcT8b7AMfthYm0Kwy"
+									 "D9TjlkpScuoY5LjsWVnijh9dSNVLFqLatzg=;";
 
 extern struct ev_loop *event_loop;
 #if 0
@@ -49,8 +49,7 @@ session_fin (gpointer unused)
 	return TRUE;
 }
 #endif
-void
-rspamd_dkim_test_func (void)
+void rspamd_dkim_test_func(void)
 {
 #if 0
 	rspamd_dkim_context_t *ctx;

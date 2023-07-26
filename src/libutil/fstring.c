@@ -36,13 +36,13 @@ static const gsize default_initial_size = 16;
 #define fstravail(s) ((s)->allocated - (s)->len)
 
 rspamd_fstring_t *
-rspamd_fstring_new (void)
+rspamd_fstring_new(void)
 {
 	rspamd_fstring_t *s;
 
-	if ((s = malloc (default_initial_size + sizeof (*s))) == NULL) {
-		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
-				G_STRLOC, default_initial_size + sizeof (*s));
+	if ((s = malloc(default_initial_size + sizeof(*s))) == NULL) {
+		g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes",
+				G_STRLOC, default_initial_size + sizeof(*s));
 
 		return NULL;
 	}
@@ -54,14 +54,14 @@ rspamd_fstring_new (void)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_sized_new (gsize initial_size)
+rspamd_fstring_sized_new(gsize initial_size)
 {
 	rspamd_fstring_t *s;
-	gsize real_size = MAX (default_initial_size, initial_size);
+	gsize real_size = MAX(default_initial_size, initial_size);
 
-	if ((s = malloc (real_size + sizeof (*s))) == NULL) {
-		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
-				G_STRLOC, real_size + sizeof (*s));
+	if ((s = malloc(real_size + sizeof(*s))) == NULL) {
+		g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes",
+				G_STRLOC, real_size + sizeof(*s));
 
 		return NULL;
 	}
@@ -72,42 +72,42 @@ rspamd_fstring_sized_new (gsize initial_size)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_new_init (const gchar *init, gsize len)
+rspamd_fstring_new_init(const gchar *init, gsize len)
 {
 	rspamd_fstring_t *s;
-	gsize real_size = MAX (default_initial_size, len);
+	gsize real_size = MAX(default_initial_size, len);
 
-	if ((s = malloc (real_size + sizeof (*s))) == NULL) {
-		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
-				G_STRLOC, real_size + sizeof (*s));
+	if ((s = malloc(real_size + sizeof(*s))) == NULL) {
+		g_error("%s: failed to allocate %" G_GSIZE_FORMAT " bytes",
+				G_STRLOC, real_size + sizeof(*s));
 
-		abort ();
+		abort();
 	}
 
 	s->len = len;
 	s->allocated = real_size;
-	memcpy (s->str, init, len);
+	memcpy(s->str, init, len);
 
 	return s;
 }
 
 rspamd_fstring_t *
-rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
+rspamd_fstring_assign(rspamd_fstring_t *str, const gchar *init, gsize len)
 {
 	gsize avail;
 
 	if (str == NULL) {
-		return rspamd_fstring_new_init (init, len);
+		return rspamd_fstring_new_init(init, len);
 	}
 
-	avail = fstravail (str);
+	avail = fstravail(str);
 
 	if (avail < len) {
-		str = rspamd_fstring_grow (str, len);
+		str = rspamd_fstring_grow(str, len);
 	}
 
 	if (len > 0) {
-		memcpy (str->str, init, len);
+		memcpy(str->str, init, len);
 	}
 
 	str->len = len;
@@ -115,47 +115,46 @@ rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
 	return str;
 }
 
-void
-rspamd_fstring_free (rspamd_fstring_t *str)
+void rspamd_fstring_free(rspamd_fstring_t *str)
 {
-	free (str);
+	free(str);
 }
 
 inline gsize
-rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
+rspamd_fstring_suggest_size(gsize len, gsize allocated, gsize needed_len)
 {
 	gsize newlen, optlen = 0;
 
 	if (allocated < 4096) {
-		newlen =  MAX (len + needed_len, allocated * 2);
+		newlen = MAX(len + needed_len, allocated * 2);
 	}
 	else {
-		newlen = MAX (len + needed_len, 1 + allocated * 3 / 2);
+		newlen = MAX(len + needed_len, 1 + allocated * 3 / 2);
 	}
 
 #ifdef HAVE_MALLOC_SIZE
-	optlen = sys_alloc_size (newlen + sizeof (rspamd_fstring_t));
+	optlen = sys_alloc_size(newlen + sizeof(rspamd_fstring_t));
 #endif
 
-	return MAX (newlen, optlen);
+	return MAX(newlen, optlen);
 }
 
 rspamd_fstring_t *
-rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
+rspamd_fstring_grow(rspamd_fstring_t *str, gsize needed_len)
 {
 	gsize newlen;
 	gpointer nptr;
 
-	newlen = rspamd_fstring_suggest_size (str->len, str->allocated, needed_len);
+	newlen = rspamd_fstring_suggest_size(str->len, str->allocated, needed_len);
 
-	nptr = realloc (str, newlen + sizeof (*str));
+	nptr = realloc(str, newlen + sizeof(*str));
 
 	if (nptr == NULL) {
 		/* Avoid memory leak */
-		free (str);
-		g_error ("%s: failed to re-allocate %"G_GSIZE_FORMAT" bytes",
-				G_STRLOC, newlen + sizeof (*str));
-		abort ();
+		free(str);
+		g_error("%s: failed to re-allocate %" G_GSIZE_FORMAT " bytes",
+				G_STRLOC, newlen + sizeof(*str));
+		abort();
 	}
 
 	str = nptr;
@@ -165,19 +164,19 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_append (rspamd_fstring_t *str, const char *in, gsize len)
+rspamd_fstring_append(rspamd_fstring_t *str, const char *in, gsize len)
 {
 	if (str == NULL) {
-		str = rspamd_fstring_new_init (in, len);
+		str = rspamd_fstring_new_init(in, len);
 	}
 	else {
-		gsize avail = fstravail (str);
+		gsize avail = fstravail(str);
 
 		if (avail < len) {
-			str = rspamd_fstring_grow (str, len);
+			str = rspamd_fstring_grow(str, len);
 		}
 
-		memcpy (str->str + str->len, in, len);
+		memcpy(str->str + str->len, in, len);
 		str->len += len;
 	}
 
@@ -185,31 +184,30 @@ rspamd_fstring_append (rspamd_fstring_t *str, const char *in, gsize len)
 }
 
 rspamd_fstring_t *
-rspamd_fstring_append_chars (rspamd_fstring_t *str,
-		char c, gsize len)
+rspamd_fstring_append_chars(rspamd_fstring_t *str,
+							char c, gsize len)
 {
 	if (str == NULL) {
-		str = rspamd_fstring_sized_new (len);
+		str = rspamd_fstring_sized_new(len);
 
-		memset (str->str + str->len, c, len);
+		memset(str->str + str->len, c, len);
 		str->len += len;
 	}
 	else {
-		gsize avail = fstravail (str);
+		gsize avail = fstravail(str);
 
 		if (avail < len) {
-			str = rspamd_fstring_grow (str, len);
+			str = rspamd_fstring_grow(str, len);
 		}
 
-		memset (str->str + str->len, c, len);
+		memset(str->str + str->len, c, len);
 		str->len += len;
 	}
 
 	return str;
 }
 
-void
-rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
+void rspamd_fstring_erase(rspamd_fstring_t *str, gsize pos, gsize len)
 {
 	if (pos < str->len) {
 		if (pos + len > str->len) {
@@ -221,7 +219,7 @@ rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
 			str->len = pos;
 		}
 		else {
-			memmove (str->str + pos, str->str + pos + len, str->len - pos);
+			memmove(str->str + pos, str->str + pos + len, str->len - pos);
 			str->len -= pos;
 		}
 	}
@@ -232,7 +230,7 @@ rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
 
 /* Compat code */
 static guint64
-fstrhash_c (guint64 c, guint64 hval)
+fstrhash_c(guint64 c, guint64 hval)
 {
 	return mum_hash_step(hval, c);
 }
@@ -242,7 +240,7 @@ fstrhash_c (guint64 c, guint64 hval)
  * Return hash value for a string
  */
 guint32
-rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
+rspamd_fstrhash_lc(const rspamd_ftok_t *str, gboolean is_utf)
 {
 	gsize i;
 	guint64 hval;
@@ -258,32 +256,32 @@ rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 	end = p + str->len;
 
 	if (is_utf) {
-		if (rspamd_fast_utf8_validate (p, str->len) != 0) {
-			return rspamd_fstrhash_lc (str, FALSE);
+		if (rspamd_fast_utf8_validate(p, str->len) != 0) {
+			return rspamd_fstrhash_lc(str, FALSE);
 		}
 		while (p < end) {
-			uc = g_unichar_tolower (g_utf8_get_char (p));
-			hval = fstrhash_c (uc, hval);
-			p = g_utf8_next_char (p);
+			uc = g_unichar_tolower(g_utf8_get_char(p));
+			hval = fstrhash_c(uc, hval);
+			p = g_utf8_next_char(p);
 		}
 	}
 	else {
-		gsize large_steps = str->len / sizeof (guint64);
-		for (i = 0; i < large_steps; i++, p += sizeof (guint64)) {
+		gsize large_steps = str->len / sizeof(guint64);
+		for (i = 0; i < large_steps; i++, p += sizeof(guint64)) {
 			/* Copy to the uint64 lowercasing each byte */
 			union {
 				char c[sizeof(guint64)];
 				guint64 iu64;
 			} t;
-			for (int j = 0; j < sizeof(guint64); j ++) {
+			for (int j = 0; j < sizeof(guint64); j++) {
 				t.c[j] = g_ascii_tolower(p[j]);
 			}
-			hval = fstrhash_c (t.iu64, hval);
+			hval = fstrhash_c(t.iu64, hval);
 		}
 
 		gsize remain = str->len % sizeof(guint64);
-		for (i = 0; i < remain; i ++, p ++) {
-			hval = fstrhash_c (g_ascii_tolower(*p), hval);
+		for (i = 0; i < remain; i++, p++) {
+			hval = fstrhash_c(g_ascii_tolower(*p), hval);
 		}
 	}
 
@@ -291,28 +289,27 @@ rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 }
 
 gboolean
-rspamd_fstring_equal (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2)
+rspamd_fstring_equal(const rspamd_fstring_t *s1,
+					 const rspamd_fstring_t *s2)
 {
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		return (memcmp (s1->str, s2->str, s1->len) == 0);
+		return (memcmp(s1->str, s2->str, s1->len) == 0);
 	}
 
 	return FALSE;
 }
 
-gint
-rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2)
+gint rspamd_fstring_casecmp(const rspamd_fstring_t *s1,
+							const rspamd_fstring_t *s2)
 {
 	gint ret = 0;
 
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		ret = rspamd_lc_cmp (s1->str, s2->str, s1->len);
+		ret = rspamd_lc_cmp(s1->str, s2->str, s1->len);
 	}
 	else {
 		ret = s1->len - s2->len;
@@ -321,29 +318,27 @@ rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
 	return ret;
 }
 
-gint
-rspamd_fstring_cmp (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2)
+gint rspamd_fstring_cmp(const rspamd_fstring_t *s1,
+						const rspamd_fstring_t *s2)
 {
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		return memcmp (s1->str, s2->str, s1->len);
+		return memcmp(s1->str, s2->str, s1->len);
 	}
 
 	return s1->len - s2->len;
 }
 
-gint
-rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
-		const rspamd_ftok_t *s2)
+gint rspamd_ftok_casecmp(const rspamd_ftok_t *s1,
+						 const rspamd_ftok_t *s2)
 {
 	gint ret = 0;
 
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		ret = rspamd_lc_cmp (s1->begin, s2->begin, s1->len);
+		ret = rspamd_lc_cmp(s1->begin, s2->begin, s1->len);
 	}
 	else {
 		ret = s1->len - s2->len;
@@ -352,51 +347,49 @@ rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
 	return ret;
 }
 
-gint
-rspamd_ftok_cmp (const rspamd_ftok_t *s1,
-		const rspamd_ftok_t *s2)
+gint rspamd_ftok_cmp(const rspamd_ftok_t *s1,
+					 const rspamd_ftok_t *s2)
 {
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		return memcmp (s1->begin, s2->begin, s1->len);
+		return memcmp(s1->begin, s2->begin, s1->len);
 	}
 
 	return s1->len - s2->len;
 }
 
 gboolean
-rspamd_ftok_starts_with (const rspamd_ftok_t *s1,
-						 const rspamd_ftok_t *s2)
+rspamd_ftok_starts_with(const rspamd_ftok_t *s1,
+						const rspamd_ftok_t *s2)
 {
-	g_assert (s1 != NULL && s2 != NULL);
+	g_assert(s1 != NULL && s2 != NULL);
 
 	if (s1->len >= s2->len) {
-		return !!(memcmp (s1->begin, s2->begin, s2->len) == 0);
+		return !!(memcmp(s1->begin, s2->begin, s2->len) == 0);
 	}
 
 	return FALSE;
 }
 
-void
-rspamd_fstring_mapped_ftok_free (gpointer p)
+void rspamd_fstring_mapped_ftok_free(gpointer p)
 {
 	rspamd_ftok_t *tok = p;
 	rspamd_fstring_t *storage;
 
-	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof (gsize));
-	rspamd_fstring_free (storage);
-	g_free (tok);
+	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof(gsize));
+	rspamd_fstring_free(storage);
+	g_free(tok);
 }
 
 rspamd_ftok_t *
-rspamd_ftok_map (const rspamd_fstring_t *s)
+rspamd_ftok_map(const rspamd_fstring_t *s)
 {
 	rspamd_ftok_t *tok;
 
-	g_assert (s != NULL);
+	g_assert(s != NULL);
 
-	tok = g_malloc (sizeof (*tok));
+	tok = g_malloc(sizeof(*tok));
 	tok->begin = s->str;
 	tok->len = s->len;
 
@@ -404,7 +397,7 @@ rspamd_ftok_map (const rspamd_fstring_t *s)
 }
 
 char *
-rspamd_fstring_cstr (const rspamd_fstring_t *s)
+rspamd_fstring_cstr(const rspamd_fstring_t *s)
 {
 	char *result;
 
@@ -412,15 +405,15 @@ rspamd_fstring_cstr (const rspamd_fstring_t *s)
 		return NULL;
 	}
 
-	result = g_malloc (s->len + 1);
-	memcpy (result, s->str, s->len);
+	result = g_malloc(s->len + 1);
+	memcpy(result, s->str, s->len);
 	result[s->len] = '\0';
 
 	return result;
 }
 
 char *
-rspamd_ftok_cstr (const rspamd_ftok_t *s)
+rspamd_ftok_cstr(const rspamd_ftok_t *s)
 {
 	char *result;
 
@@ -428,36 +421,36 @@ rspamd_ftok_cstr (const rspamd_ftok_t *s)
 		return NULL;
 	}
 
-	result = g_malloc (s->len + 1);
-	memcpy (result, s->begin, s->len);
+	result = g_malloc(s->len + 1);
+	memcpy(result, s->begin, s->len);
 	result[s->len] = '\0';
 
 	return result;
 }
 
 gboolean
-rspamd_ftok_cstr_equal (const rspamd_ftok_t *s, const gchar *pat,
-		gboolean icase)
+rspamd_ftok_cstr_equal(const rspamd_ftok_t *s, const gchar *pat,
+					   gboolean icase)
 {
 	gsize slen;
 	rspamd_ftok_t srch;
 
-	g_assert (s != NULL);
-	g_assert (pat != NULL);
+	g_assert(s != NULL);
+	g_assert(pat != NULL);
 
-	slen = strlen (pat);
+	slen = strlen(pat);
 	srch.begin = pat;
 	srch.len = slen;
 
 	if (icase) {
-		return (rspamd_ftok_casecmp (s, &srch) == 0);
+		return (rspamd_ftok_casecmp(s, &srch) == 0);
 	}
 
-	return (rspamd_ftok_cmp (s, &srch) == 0);
+	return (rspamd_ftok_cmp(s, &srch) == 0);
 }
 
 gchar *
-rspamd_ftokdup (const rspamd_ftok_t *src)
+rspamd_ftokdup(const rspamd_ftok_t *src)
 {
 	gchar *newstr;
 
@@ -465,15 +458,15 @@ rspamd_ftokdup (const rspamd_ftok_t *src)
 		return NULL;
 	}
 
-	newstr = g_malloc (src->len + 1);
-	memcpy (newstr, src->begin, src->len);
+	newstr = g_malloc(src->len + 1);
+	memcpy(newstr, src->begin, src->len);
 	newstr[src->len] = '\0';
 
 	return newstr;
 }
 
 gchar *
-rspamd_fstringdup (const rspamd_fstring_t *src)
+rspamd_fstringdup(const rspamd_fstring_t *src)
 {
 	gchar *newstr;
 
@@ -481,8 +474,8 @@ rspamd_fstringdup (const rspamd_fstring_t *src)
 		return NULL;
 	}
 
-	newstr = g_malloc (src->len + 1);
-	memcpy (newstr, src->str, src->len);
+	newstr = g_malloc(src->len + 1);
+	memcpy(newstr, src->str, src->len);
 	newstr[src->len] = '\0';
 
 	return newstr;

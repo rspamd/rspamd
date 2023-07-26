@@ -59,17 +59,17 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 
 					if (delim_c == '.') {
 						cur_selector = std::make_unique<css_selector>(
-								css_selector::selector_type::SELECTOR_CLASS);
+							css_selector::selector_type::SELECTOR_CLASS);
 						state = selector_process_state::selector_expect_ident;
 					}
 					else if (delim_c == '#') {
 						cur_selector = std::make_unique<css_selector>(
-								css_selector::selector_type::SELECTOR_ID);
+							css_selector::selector_type::SELECTOR_ID);
 						state = selector_process_state::selector_expect_ident;
 					}
 					else if (delim_c == '*') {
 						cur_selector = std::make_unique<css_selector>(
-								css_selector::selector_type::SELECTOR_ALL);
+							css_selector::selector_type::SELECTOR_ALL);
 						state = selector_process_state::selector_ident_consumed;
 					}
 					break;
@@ -85,14 +85,14 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				}
 				case css_parser_token::token_type::hash_token:
 					cur_selector = std::make_unique<css_selector>(
-							css_selector::selector_type::SELECTOR_ID);
+						css_selector::selector_type::SELECTOR_ID);
 					cur_selector->value =
-							parser_tok.get_string_or_default("");
+						parser_tok.get_string_or_default("");
 					state = selector_process_state::selector_ident_consumed;
 					break;
 				default:
 					msg_debug_css("cannot consume more of a selector, invalid parser token: %s; expected start",
-							next_tok.token_type_str());
+								  next_tok.token_type_str());
 					can_continue = false;
 					break;
 				}
@@ -108,7 +108,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				}
 				else {
 					msg_debug_css("cannot consume more of a selector, invalid parser token: %s; expected ident",
-							next_tok.token_type_str());
+								  next_tok.token_type_str());
 					can_continue = false;
 				}
 			}
@@ -141,8 +141,8 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 				}
 				else {
 					auto debug_str = parser_tok.get_string_or_default("");
-					msg_debug_css("ignore token %*s", (int)debug_str.size(),
-							debug_str.data());
+					msg_debug_css("ignore token %*s", (int) debug_str.size(),
+								  debug_str.data());
 				}
 			}
 		}
@@ -157,14 +157,12 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 			}
 			can_continue = false;
 		}
-
 	}
 
 	return ret; /* copy elision */
 }
 
-auto
-css_selector::debug_str() const -> std::string
+auto css_selector::debug_str() const -> std::string
 {
 	std::string ret;
 
@@ -189,33 +187,34 @@ css_selector::debug_str() const -> std::string
 		else {
 			ret += arg;
 		}
-	}, value);
+	},
+			   value);
 
 	return ret;
 }
 
-TEST_SUITE("css") {
-	TEST_CASE("simple css selectors") {
+TEST_SUITE("css")
+{
+	TEST_CASE("simple css selectors")
+	{
 		const std::vector<std::pair<const char *, std::vector<css_selector::selector_type>>> cases{
-				{"em", {css_selector::selector_type::SELECTOR_TAG}},
-				{"*", {css_selector::selector_type::SELECTOR_ALL}},
-				{".class", {css_selector::selector_type::SELECTOR_CLASS}},
-				{"#id", {css_selector::selector_type::SELECTOR_ID}},
-				{"em,.class,#id", {css_selector::selector_type::SELECTOR_TAG,
-								   css_selector::selector_type::SELECTOR_CLASS,
-								   css_selector::selector_type::SELECTOR_ID}},
+			{"em", {css_selector::selector_type::SELECTOR_TAG}},
+			{"*", {css_selector::selector_type::SELECTOR_ALL}},
+			{".class", {css_selector::selector_type::SELECTOR_CLASS}},
+			{"#id", {css_selector::selector_type::SELECTOR_ID}},
+			{"em,.class,#id", {css_selector::selector_type::SELECTOR_TAG, css_selector::selector_type::SELECTOR_CLASS, css_selector::selector_type::SELECTOR_ID}},
 		};
 
 		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-			"css", 0);
+										"css", 0);
 
-		for (const auto &c : cases) {
+		for (const auto &c: cases) {
 			auto res = process_selector_tokens(pool,
-					get_selectors_parser_functor(pool, c.first));
+											   get_selectors_parser_functor(pool, c.first));
 
 			CHECK(c.second.size() == res.size());
 
-			for (auto i = 0; i < c.second.size(); i ++) {
+			for (auto i = 0; i < c.second.size(); i++) {
 				CHECK(res[i]->type == c.second[i]);
 			}
 		}
@@ -224,5 +223,4 @@ TEST_SUITE("css") {
 	}
 }
 
-}
-
+}// namespace rspamd::css

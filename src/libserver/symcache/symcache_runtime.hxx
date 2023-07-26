@@ -62,7 +62,7 @@ class symcache_runtime {
 	~symcache_runtime() = delete;
 
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
-			cache_dynamic_item *dyn_item) -> bool;
+						cache_dynamic_item *dyn_item) -> bool;
 	/* Specific stages of the processing */
 	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, int stage) -> bool;
 	auto process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool;
@@ -72,7 +72,8 @@ class symcache_runtime {
 
 public:
 	/* Dropper for a shared ownership */
-	auto savepoint_dtor() -> void {
+	auto savepoint_dtor() -> void
+	{
 
 		/* Drop shared ownership */
 		order.reset();
@@ -132,7 +133,8 @@ public:
 	 * Get the current processed item
 	 * @return
 	 */
-	auto get_cur_item() const -> auto {
+	auto get_cur_item() const -> auto
+	{
 		return cur_item;
 	}
 
@@ -141,7 +143,8 @@ public:
 	 * @param item
 	 * @return
 	 */
-	auto set_cur_item(cache_dynamic_item *item) -> auto {
+	auto set_cur_item(cache_dynamic_item *item) -> auto
+	{
 		std::swap(item, cur_item);
 		return item;
 	}
@@ -151,7 +154,8 @@ public:
 	 * @param enable
 	 * @return
 	 */
-	auto set_profile_mode(bool enable) -> auto {
+	auto set_profile_mode(bool enable) -> auto
+	{
 		std::swap(profile, enable);
 		return enable;
 	}
@@ -193,12 +197,13 @@ public:
 	auto process_item_rdeps(struct rspamd_task *task, cache_item *item) -> void;
 
 	/* XXX: a helper to allow hiding internal implementation of the slow timer structure */
-	auto unset_slow() -> void {
+	auto unset_slow() -> void
+	{
 		has_slow = false;
 	}
 };
 
 
-}
+}// namespace rspamd::symcache
 
-#endif //RSPAMD_SYMCACHE_RUNTIME_HXX
+#endif//RSPAMD_SYMCACHE_RUNTIME_HXX

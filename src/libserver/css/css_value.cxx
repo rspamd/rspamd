@@ -27,19 +27,23 @@
 
 /* Helper for unit test stringification */
 namespace doctest {
-template<> struct StringMaker<rspamd::css::css_color> {
-	static String convert(const rspamd::css::css_color& value) {
+template<>
+struct StringMaker<rspamd::css::css_color> {
+	static String convert(const rspamd::css::css_color &value)
+	{
 		return fmt::format("r={};g={};b={};alpha={}",
-				value.r, value.g, value.b, value.alpha).c_str();
+						   value.r, value.g, value.b, value.alpha)
+			.c_str();
 	}
 };
 
-}
+}// namespace doctest
 
 namespace rspamd::css {
 
 auto css_value::maybe_color_from_string(const std::string_view &input)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 
 	if (input.size() > 1 && input.front() == '#') {
 		return css_value::maybe_color_from_hex(input.substr(1));
@@ -55,44 +59,50 @@ auto css_value::maybe_color_from_string(const std::string_view &input)
 	return std::nullopt;
 }
 
-constexpr static inline auto hexpair_decode(char c1, char c2) -> std::uint8_t {
+constexpr static inline auto hexpair_decode(char c1, char c2) -> std::uint8_t
+{
 	std::uint8_t ret = 0;
 
 	if (c1 >= '0' && c1 <= '9') ret = c1 - '0';
-	else if (c1 >= 'A' && c1 <= 'F') ret = c1 - 'A' + 10;
-	else if (c1 >= 'a' && c1 <= 'f') ret = c1 - 'a' + 10;
+	else if (c1 >= 'A' && c1 <= 'F')
+		ret = c1 - 'A' + 10;
+	else if (c1 >= 'a' && c1 <= 'f')
+		ret = c1 - 'a' + 10;
 
 	ret *= 16;
 
 	if (c2 >= '0' && c2 <= '9') ret += c2 - '0';
-	else if (c2 >= 'A' && c2 <= 'F') ret += c2 - 'A' + 10;
-	else if (c2 >= 'a' && c2 <= 'f') ret += c2 - 'a' + 10;
+	else if (c2 >= 'A' && c2 <= 'F')
+		ret += c2 - 'A' + 10;
+	else if (c2 >= 'a' && c2 <= 'f')
+		ret += c2 - 'a' + 10;
 
 	return ret;
 }
 
 auto css_value::maybe_color_from_hex(const std::string_view &input)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 	if (input.length() == 6) {
 		/* Plain RGB */
 		css_color col(hexpair_decode(input[0], input[1]),
-				hexpair_decode(input[2], input[3]),
-				hexpair_decode(input[4], input[5]));
+					  hexpair_decode(input[2], input[3]),
+					  hexpair_decode(input[4], input[5]));
 		return css_value(col);
 	}
 	else if (input.length() == 3) {
 		/* Rgb as 3 hex digests */
 		css_color col(hexpair_decode(input[0], input[0]),
-				hexpair_decode(input[1], input[1]),
-				hexpair_decode(input[2], input[2]));
+					  hexpair_decode(input[1], input[1]),
+					  hexpair_decode(input[2], input[2]));
 		return css_value(col);
 	}
 	else if (input.length() == 8) {
 		/* RGBA */
 		css_color col(hexpair_decode(input[0], input[1]),
-				hexpair_decode(input[2], input[3]),
-				hexpair_decode(input[4], input[5]),
-				hexpair_decode(input[6], input[7]));
+					  hexpair_decode(input[2], input[3]),
+					  hexpair_decode(input[4], input[5]),
+					  hexpair_decode(input[6], input[7]));
 		return css_value(col);
 	}
 
@@ -100,7 +110,8 @@ auto css_value::maybe_color_from_hex(const std::string_view &input)
 }
 
 constexpr static inline auto rgb_color_component_convert(const css_parser_token &tok)
--> std::uint8_t {
+	-> std::uint8_t
+{
 	std::uint8_t ret = 0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
@@ -113,7 +124,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 			else if (dbl < 0) {
 				dbl = 0;
 			}
-			ret = (std::uint8_t) (dbl / 100.0 * 255.0);
+			ret = (std::uint8_t)(dbl / 100.0 * 255.0);
 		}
 		else {
 			if (dbl > 255) {
@@ -123,7 +134,7 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 				dbl = 0;
 			}
 
-			ret = (std::uint8_t) (dbl);
+			ret = (std::uint8_t)(dbl);
 		}
 	}
 
@@ -131,7 +142,8 @@ constexpr static inline auto rgb_color_component_convert(const css_parser_token 
 }
 
 constexpr static inline auto alpha_component_convert(const css_parser_token &tok)
--> std::uint8_t {
+	-> std::uint8_t
+{
 	double ret = 1.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
@@ -158,11 +170,12 @@ constexpr static inline auto alpha_component_convert(const css_parser_token &tok
 		}
 	}
 
-	return (std::uint8_t) (ret * 255.0);
+	return (std::uint8_t)(ret * 255.0);
 }
 
 constexpr static inline auto h_component_convert(const css_parser_token &tok)
--> double {
+	-> double
+{
 	double ret = 0.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
@@ -179,7 +192,7 @@ constexpr static inline auto h_component_convert(const css_parser_token &tok)
 		}
 		else {
 			dbl = ((((int) dbl % 360) + 360) % 360); /* Deal with rotations */
-			ret = dbl / 360.0; /* Normalize to 0..1 */
+			ret = dbl / 360.0;                       /* Normalize to 0..1 */
 		}
 	}
 
@@ -187,7 +200,8 @@ constexpr static inline auto h_component_convert(const css_parser_token &tok)
 }
 
 constexpr static inline auto sl_component_convert(const css_parser_token &tok)
--> double {
+	-> double
+{
 	double ret = 0.0;
 
 	if (tok.type == css_parser_token::token_type::number_token) {
@@ -198,7 +212,8 @@ constexpr static inline auto sl_component_convert(const css_parser_token &tok)
 }
 
 static inline auto hsl_to_rgb(double h, double s, double l)
--> css_color {
+	-> css_color
+{
 	css_color ret;
 
 	constexpr auto hue2rgb = [](auto p, auto q, auto t) -> auto {
@@ -229,9 +244,9 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 	else {
 		auto q = l <= 0.5 ? l * (1.0 + s) : l + s - l * s;
 		auto p = 2.0 * l - q;
-		ret.r = (std::uint8_t) (hue2rgb(p, q, h + 1.0 / 3.0) * 255);
-		ret.g = (std::uint8_t) (hue2rgb(p, q, h) * 255);
-		ret.b = (std::uint8_t) (hue2rgb(p, q, h - 1.0 / 3.0) * 255);
+		ret.r = (std::uint8_t)(hue2rgb(p, q, h + 1.0 / 3.0) * 255);
+		ret.g = (std::uint8_t)(hue2rgb(p, q, h) * 255);
+		ret.b = (std::uint8_t)(hue2rgb(p, q, h - 1.0 / 3.0) * 255);
 	}
 
 	ret.alpha = 255;
@@ -240,7 +255,8 @@ static inline auto hsl_to_rgb(double h, double s, double l)
 }
 
 auto css_value::maybe_color_from_function(const css_consumed_block::css_function_block &func)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 
 	if (func.as_string() == "rgb" && func.args.size() == 3) {
 		css_color col{rgb_color_component_convert(func.args[0]->get_token_or_empty()),
@@ -281,7 +297,8 @@ auto css_value::maybe_color_from_function(const css_consumed_block::css_function
 }
 
 auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 	if (std::holds_alternative<float>(tok.value)) {
 		auto dbl = std::get<float>(tok.value);
 		css_dimension dim;
@@ -302,33 +319,34 @@ auto css_value::maybe_dimension_from_number(const css_parser_token &tok)
 }
 
 constexpr const auto display_names_map = frozen::make_unordered_map<frozen::string, css_display_value>({
-		{"hidden",             css_display_value::DISPLAY_HIDDEN},
-		{"none",               css_display_value::DISPLAY_HIDDEN},
-		{"inline",             css_display_value::DISPLAY_INLINE},
-		{"block",              css_display_value::DISPLAY_BLOCK},
-		{"content",            css_display_value::DISPLAY_INLINE},
-		{"flex",               css_display_value::DISPLAY_BLOCK},
-		{"grid",               css_display_value::DISPLAY_BLOCK},
-		{"inline-block",       css_display_value::DISPLAY_INLINE},
-		{"inline-flex",        css_display_value::DISPLAY_INLINE},
-		{"inline-grid",        css_display_value::DISPLAY_INLINE},
-		{"inline-table",       css_display_value::DISPLAY_INLINE},
-		{"list-item",          css_display_value::DISPLAY_BLOCK},
-		{"run-in",             css_display_value::DISPLAY_INLINE},
-		{"table",              css_display_value::DISPLAY_BLOCK},
-		{"table-caption",      css_display_value::DISPLAY_TABLE_ROW},
-		{"table-column-group", css_display_value::DISPLAY_TABLE_ROW},
-		{"table-header-group", css_display_value::DISPLAY_TABLE_ROW},
-		{"table-footer-group", css_display_value::DISPLAY_TABLE_ROW},
-		{"table-row-group",    css_display_value::DISPLAY_TABLE_ROW},
-		{"table-cell",         css_display_value::DISPLAY_TABLE_ROW},
-		{"table-column",       css_display_value::DISPLAY_TABLE_ROW},
-		{"table-row",          css_display_value::DISPLAY_TABLE_ROW},
-		{"initial",            css_display_value::DISPLAY_INLINE},
+	{"hidden", css_display_value::DISPLAY_HIDDEN},
+	{"none", css_display_value::DISPLAY_HIDDEN},
+	{"inline", css_display_value::DISPLAY_INLINE},
+	{"block", css_display_value::DISPLAY_BLOCK},
+	{"content", css_display_value::DISPLAY_INLINE},
+	{"flex", css_display_value::DISPLAY_BLOCK},
+	{"grid", css_display_value::DISPLAY_BLOCK},
+	{"inline-block", css_display_value::DISPLAY_INLINE},
+	{"inline-flex", css_display_value::DISPLAY_INLINE},
+	{"inline-grid", css_display_value::DISPLAY_INLINE},
+	{"inline-table", css_display_value::DISPLAY_INLINE},
+	{"list-item", css_display_value::DISPLAY_BLOCK},
+	{"run-in", css_display_value::DISPLAY_INLINE},
+	{"table", css_display_value::DISPLAY_BLOCK},
+	{"table-caption", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-column-group", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-header-group", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-footer-group", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-row-group", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-cell", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-column", css_display_value::DISPLAY_TABLE_ROW},
+	{"table-row", css_display_value::DISPLAY_TABLE_ROW},
+	{"initial", css_display_value::DISPLAY_INLINE},
 });
 
 auto css_value::maybe_display_from_string(const std::string_view &input)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 	auto f = display_names_map.find(input);
 
 	if (f != display_names_map.end()) {
@@ -339,7 +357,8 @@ auto css_value::maybe_display_from_string(const std::string_view &input)
 }
 
 
-auto css_value::debug_str() const -> std::string {
+auto css_value::debug_str() const -> std::string
+{
 	std::string ret;
 
 	std::visit([&](const auto &arg) {
@@ -347,7 +366,7 @@ auto css_value::debug_str() const -> std::string {
 
 		if constexpr (std::is_same_v<T, css_color>) {
 			ret += fmt::format("color: r={};g={};b={};alpha={}",
-					arg.r, arg.g, arg.b, arg.alpha);
+							   arg.r, arg.g, arg.b, arg.alpha);
 		}
 		else if constexpr (std::is_same_v<T, double>) {
 			ret += "size: " + std::to_string(arg);
@@ -381,47 +400,50 @@ auto css_value::debug_str() const -> std::string {
 		else {
 			ret += "nyi";
 		}
-	}, value);
+	},
+			   value);
 
 	return ret;
 }
 
-TEST_SUITE("css") {
-	TEST_CASE("css hex colors") {
-		const std::pair<const char*, css_color> hex_tests[] = {
-				{"000", css_color(0, 0, 0)},
-				{"000000", css_color(0, 0, 0)},
-				{"f00", css_color(255, 0, 0)},
-				{"FEDCBA", css_color(254, 220, 186)},
-				{"234", css_color(34, 51, 68)},
+TEST_SUITE("css"){
+	TEST_CASE("css hex colors"){
+		const std::pair<const char *, css_color> hex_tests[] = {
+			{"000", css_color(0, 0, 0)},
+			{"000000", css_color(0, 0, 0)},
+			{"f00", css_color(255, 0, 0)},
+			{"FEDCBA", css_color(254, 220, 186)},
+			{"234", css_color(34, 51, 68)},
 		};
 
-		for (const auto &p : hex_tests) {
-			SUBCASE((std::string("parse hex color: ") + p.first).c_str()) {
-				auto col_parsed = css_value::maybe_color_from_hex(p.first);
-				//CHECK_UNARY(col_parsed);
-				//CHECK_UNARY(col_parsed.value().to_color());
-				auto final_col = col_parsed.value().to_color().value();
-				CHECK(final_col == p.second);
+for (const auto &p: hex_tests) {
+	SUBCASE((std::string("parse hex color: ") + p.first).c_str())
+	{
+		auto col_parsed = css_value::maybe_color_from_hex(p.first);
+		//CHECK_UNARY(col_parsed);
+		//CHECK_UNARY(col_parsed.value().to_color());
+		auto final_col = col_parsed.value().to_color().value();
+		CHECK(final_col == p.second);
+	}
+}
+}// namespace rspamd::css
+TEST_CASE("css colors strings")
+{
+	auto passed = 0;
+	for (const auto &p: css_colors_map) {
+		/* Match some of the colors selected randomly */
+		if (rspamd_random_double_fast() > 0.9) {
+			auto col_parsed = css_value::maybe_color_from_string(p.first);
+			auto final_col = col_parsed.value().to_color().value();
+			CHECK_MESSAGE(final_col == p.second, p.first.data());
+			passed++;
+
+			if (passed > 20) {
+				break;
 			}
 		}
 	}
-	TEST_CASE("css colors strings") {
-		auto passed = 0;
-		for (const auto &p : css_colors_map) {
-			/* Match some of the colors selected randomly */
-			if (rspamd_random_double_fast() > 0.9) {
-				auto col_parsed = css_value::maybe_color_from_string(p.first);
-				auto final_col = col_parsed.value().to_color().value();
-				CHECK_MESSAGE(final_col == p.second, p.first.data());
-				passed ++;
-
-				if (passed > 20) {
-					break;
-				}
-			}
-		}
-	}
-};
-
+}
+}
+;
 }

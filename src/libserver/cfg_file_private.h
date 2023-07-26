@@ -22,7 +22,7 @@
 #define HASH_CASELESS
 #include "uthash_strcase.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -39,7 +39,7 @@ struct rspamd_action {
 	struct UT_hash_handle hh; /* Index by name */
 };
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

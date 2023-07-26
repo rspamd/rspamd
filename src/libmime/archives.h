@@ -18,7 +18,7 @@
 
 #include "config.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -58,14 +58,14 @@ struct rspamd_archive {
 /**
  * Process archives from a worker task
  */
-void rspamd_archives_process (struct rspamd_task *task);
+void rspamd_archives_process(struct rspamd_task *task);
 
 /**
  * Get textual representation of an archive's type
  */
-const gchar *rspamd_archive_type_str (enum rspamd_archive_type type);
+const gchar *rspamd_archive_type_str(enum rspamd_archive_type type);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

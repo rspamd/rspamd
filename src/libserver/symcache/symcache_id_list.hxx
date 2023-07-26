@@ -19,8 +19,8 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring> // for memset
-#include <algorithm> // for sort/bsearch
+#include <cstring>  // for memset
+#include <algorithm>// for sort/bsearch
 
 #include "config.h"
 #include "libutil/mem_pool.h"
@@ -41,7 +41,8 @@ struct id_list {
 
 	id_list() = default;
 
-	auto reset(){
+	auto reset()
+	{
 		data.clear();
 	}
 
@@ -67,10 +68,11 @@ struct id_list {
 		}
 	}
 
-	auto set_ids(const std::uint32_t *ids, std::size_t nids) -> void {
+	auto set_ids(const std::uint32_t *ids, std::size_t nids) -> void
+	{
 		data.resize(nids);
 
-		for (auto &id : data) {
+		for (auto &id: data) {
 			id = *ids++;
 		}
 
@@ -88,6 +90,6 @@ struct id_list {
 	}
 };
 
-}
+}// namespace rspamd::symcache
 
-#endif //RSPAMD_SYMCACHE_ID_LIST_HXX
+#endif//RSPAMD_SYMCACHE_ID_LIST_HXX

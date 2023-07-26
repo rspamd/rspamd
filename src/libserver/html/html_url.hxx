@@ -36,8 +36,8 @@ namespace rspamd::html {
  * @return
  */
 auto html_url_is_phished(rspamd_mempool_t *pool,
-					struct rspamd_url *href_url,
-					std::string_view text_data) -> std::optional<rspamd_url *>;
+						 struct rspamd_url *href_url,
+						 std::string_view text_data) -> std::optional<rspamd_url *>;
 
 /**
  * Check displayed part of the url at specified offset
@@ -49,11 +49,11 @@ auto html_url_is_phished(rspamd_mempool_t *pool,
  * @param url
  */
 auto html_check_displayed_url(rspamd_mempool_t *pool,
-						 GList **exceptions,
-						 void *url_set,
-						 std::string_view visible_part,
-						 goffset href_offset,
-						 struct rspamd_url *url) -> void;
+							  GList **exceptions,
+							  void *url_set,
+							  std::string_view visible_part,
+							  goffset href_offset,
+							  struct rspamd_url *url) -> void;
 
 /**
  * Process HTML url (e.g. for href component)
@@ -63,6 +63,6 @@ auto html_check_displayed_url(rspamd_mempool_t *pool,
  */
 auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	-> std::optional<struct rspamd_url *>;
-}
+}// namespace rspamd::html
 
-#endif //RSPAMD_HTML_URL_HXX
+#endif//RSPAMD_HTML_URL_HXX

@@ -19,7 +19,7 @@
 #include "config.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -33,13 +33,13 @@ enum rspamd_mime_parse_error {
 	RSPAMD_MIME_PARSE_NO_PART,
 };
 
-enum rspamd_mime_parse_error rspamd_mime_parse_task (struct rspamd_task *task,
-													 GError **err);
+enum rspamd_mime_parse_error rspamd_mime_parse_task(struct rspamd_task *task,
+													GError **err);
 
-void rspamd_mime_parser_calc_digest (struct rspamd_mime_part *part);
+void rspamd_mime_parser_calc_digest(struct rspamd_mime_part *part);
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

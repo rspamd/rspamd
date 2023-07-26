@@ -6,7 +6,7 @@
 #include "shingles.h"
 #include "cryptobox.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -24,7 +24,7 @@ extern "C" {
 #define FUZZY_CLIENT_MAX 3
 /* Internal commands */
 #define FUZZY_REFRESH 100 /* Update expire */
-#define FUZZY_DUP 101 /* Skip duplicate in update queue */
+#define FUZZY_DUP 101     /* Skip duplicate in update queue */
 
 /**
  * The epoch of the fuzzy client
@@ -35,7 +35,8 @@ enum rspamd_fuzzy_epoch {
 	RSPAMD_FUZZY_EPOCH_MAX
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_cmd) {
+RSPAMD_PACKED(rspamd_fuzzy_cmd)
+{
 	guint8 version;
 	guint8 cmd;
 	guint8 shingles_count;
@@ -45,26 +46,30 @@ RSPAMD_PACKED(rspamd_fuzzy_cmd) {
 	gchar digest[rspamd_cryptobox_HASHBYTES];
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd) {
+RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd)
+{
 	struct rspamd_fuzzy_cmd basic;
 	struct rspamd_shingle sgl;
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_reply_v1) {
+RSPAMD_PACKED(rspamd_fuzzy_reply_v1)
+{
 	gint32 value;
 	guint32 flag;
 	guint32 tag;
 	float prob;
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_reply) {
+RSPAMD_PACKED(rspamd_fuzzy_reply)
+{
 	struct rspamd_fuzzy_reply_v1 v1;
 	gchar digest[rspamd_cryptobox_HASHBYTES];
 	guint32 ts;
 	guchar reserved[12];
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr)
+{
 	guchar magic[4];
 	guchar key_id[RSPAMD_FUZZY_KEYLEN];
 	guchar pubkey[32];
@@ -72,22 +77,26 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
 	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_encrypted_cmd) {
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_cmd)
+{
 	struct rspamd_fuzzy_encrypted_req_hdr hdr;
 	struct rspamd_fuzzy_cmd cmd;
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_encrypted_shingle_cmd) {
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_shingle_cmd)
+{
 	struct rspamd_fuzzy_encrypted_req_hdr hdr;
 	struct rspamd_fuzzy_shingle_cmd cmd;
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_encrypted_rep_hdr) {
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_rep_hdr)
+{
 	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
 	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply)
+{
 	struct rspamd_fuzzy_encrypted_rep_hdr hdr;
 	struct rspamd_fuzzy_reply rep;
 };
@@ -112,7 +121,8 @@ struct rspamd_fuzzy_stat_entry {
 	guint32 fuzzy_cnt;
 };
 
-RSPAMD_PACKED(fuzzy_peer_cmd) {
+RSPAMD_PACKED(fuzzy_peer_cmd)
+{
 	gint32 is_shingle;
 	union {
 		struct rspamd_fuzzy_cmd normal;
@@ -120,7 +130,7 @@ RSPAMD_PACKED(fuzzy_peer_cmd) {
 	} cmd;
 };
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

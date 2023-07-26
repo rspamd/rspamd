@@ -61,17 +61,17 @@ struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 };
 
 static GQuark
-rspamd_multipattern_quark (void)
+rspamd_multipattern_quark(void)
 {
-	return g_quark_from_static_string ("multipattern");
+	return g_quark_from_static_string("multipattern");
 }
 
 static inline gboolean
-rspamd_hs_check (void)
+rspamd_hs_check(void)
 {
 #ifdef WITH_HYPERSCAN
-	if (G_UNLIKELY (hs_suitable_cpu == RSPAMD_HS_UNCHECKED)) {
-		if (hs_valid_platform () == HS_SUCCESS) {
+	if (G_UNLIKELY(hs_suitable_cpu == RSPAMD_HS_UNCHECKED)) {
+		if (hs_valid_platform() == HS_SUCCESS) {
 			hs_suitable_cpu = RSPAMD_HS_SUPPORTED;
 		}
 		else {
@@ -83,19 +83,18 @@ rspamd_hs_check (void)
 	return hs_suitable_cpu == RSPAMD_HS_SUPPORTED;
 }
 
-void
-rspamd_multipattern_library_init (const gchar *cache_dir)
+void rspamd_multipattern_library_init(const gchar *cache_dir)
 {
 	hs_cache_dir = cache_dir;
 #ifdef WITH_HYPERSCAN
-	rspamd_hs_check ();
+	rspamd_hs_check();
 #endif
 }
 
 #ifdef WITH_HYPERSCAN
 static gchar *
-rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
-		gsize *dst_len)
+rspamd_multipattern_escape_tld_hyperscan(const gchar *pattern, gsize slen,
+										 gsize *dst_len)
 {
 	gsize len;
 	const gchar *p, *prefix, *suffix;
@@ -109,32 +108,32 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 	 */
 
 	if (pattern[0] == '*') {
-		p = strchr (pattern, '.');
+		p = strchr(pattern, '.');
 
 		if (p == NULL) {
 			/* XXX: bad */
 			p = pattern;
 		}
 		else {
-			p ++;
+			p++;
 		}
 
 		prefix = "\\.";
-		len = slen + strlen (prefix);
+		len = slen + strlen(prefix);
 	}
 	else {
 		prefix = "\\.";
 		p = pattern;
-		len = slen + strlen (prefix);
+		len = slen + strlen(prefix);
 	}
 
 	suffix = "(:?\\b|$)";
-	len += strlen (suffix);
+	len += strlen(suffix);
 
-	res = g_malloc (len + 1);
-	slen = rspamd_strlcpy (res, prefix, len + 1);
-	slen += rspamd_strlcpy (res + slen, p, len + 1 - slen);
-	slen += rspamd_strlcpy (res + slen, suffix, len + 1 - slen);
+	res = g_malloc(len + 1);
+	slen = rspamd_strlcpy(res, prefix, len + 1);
+	slen += rspamd_strlcpy(res + slen, p, len + 1 - slen);
+	slen += rspamd_strlcpy(res + slen, suffix, len + 1 - slen);
 
 	*dst_len = slen;
 
@@ -143,8 +142,8 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 
 #endif
 static gchar *
-rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
-		gsize *dst_len)
+rspamd_multipattern_escape_tld_acism(const gchar *pattern, gsize len,
+									 gsize *dst_len)
 {
 	gsize dlen, slen;
 	const gchar *p, *prefix;
@@ -160,19 +159,19 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
 
 	if (pattern[0] == '*') {
 		dlen = slen;
-		p = memchr (pattern, '.', len);
+		p = memchr(pattern, '.', len);
 
 		if (p == NULL) {
 			/* XXX: bad */
 			p = pattern;
 		}
 		else {
-			p ++;
+			p++;
 		}
 
 		dlen -= p - pattern;
 		prefix = ".";
-		dlen ++;
+		dlen++;
 	}
 	else {
 		dlen = slen + 1;
@@ -180,10 +179,10 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
 		p = pattern;
 	}
 
-	res = g_malloc (dlen + 1);
-	slen = strlen (prefix);
-	memcpy (res, prefix, slen);
-	rspamd_strlcpy (res + slen, p, dlen - slen + 1);
+	res = g_malloc(dlen + 1);
+	slen = strlen(prefix);
+	memcpy(res, prefix, slen);
+	rspamd_strlcpy(res + slen, p, dlen - slen + 1);
 
 	*dst_len = dlen;
 
@@ -194,9 +193,9 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
  * Escapes special characters from specific pattern
  */
 static gchar *
-rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
-		enum rspamd_multipattern_flags flags,
-		gsize *dst_len)
+rspamd_multipattern_pattern_filter(const gchar *pattern, gsize len,
+								   enum rspamd_multipattern_flags flags,
+								   gsize *dst_len)
 {
 	gchar *ret = NULL;
 	gint gl_flags = RSPAMD_REGEXP_ESCAPE_ASCII;
@@ -206,26 +205,25 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 	}
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
+	if (rspamd_hs_check()) {
 		if (flags & RSPAMD_MULTIPATTERN_TLD) {
 			gchar *tmp;
 			gsize tlen;
-			tmp = rspamd_multipattern_escape_tld_hyperscan (pattern, len, &tlen);
+			tmp = rspamd_multipattern_escape_tld_hyperscan(pattern, len, &tlen);
 
-			ret = rspamd_str_regexp_escape (tmp, tlen, dst_len,
-					gl_flags|RSPAMD_REGEXP_ESCAPE_RE);
-			g_free (tmp);
+			ret = rspamd_str_regexp_escape(tmp, tlen, dst_len,
+										   gl_flags | RSPAMD_REGEXP_ESCAPE_RE);
+			g_free(tmp);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_RE) {
-			ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags |
-					RSPAMD_REGEXP_ESCAPE_RE);
+			ret = rspamd_str_regexp_escape(pattern, len, dst_len, gl_flags | RSPAMD_REGEXP_ESCAPE_RE);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
-			ret = rspamd_str_regexp_escape (pattern, len, dst_len,
-					gl_flags | RSPAMD_REGEXP_ESCAPE_GLOB);
+			ret = rspamd_str_regexp_escape(pattern, len, dst_len,
+										   gl_flags | RSPAMD_REGEXP_ESCAPE_GLOB);
 		}
 		else {
-			ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags);
+			ret = rspamd_str_regexp_escape(pattern, len, dst_len, gl_flags);
 		}
 
 		return ret;
@@ -233,101 +231,98 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 #endif
 
 	if (flags & RSPAMD_MULTIPATTERN_TLD) {
-		ret = rspamd_multipattern_escape_tld_acism (pattern, len, dst_len);
+		ret = rspamd_multipattern_escape_tld_acism(pattern, len, dst_len);
 	}
 	else if (flags & RSPAMD_MULTIPATTERN_RE) {
-		ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags |
-															   RSPAMD_REGEXP_ESCAPE_RE);
+		ret = rspamd_str_regexp_escape(pattern, len, dst_len, gl_flags | RSPAMD_REGEXP_ESCAPE_RE);
 	}
 	else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
-		ret = rspamd_str_regexp_escape (pattern, len, dst_len,
-				gl_flags | RSPAMD_REGEXP_ESCAPE_GLOB);
+		ret = rspamd_str_regexp_escape(pattern, len, dst_len,
+									   gl_flags | RSPAMD_REGEXP_ESCAPE_GLOB);
 	}
 	else {
-		ret = malloc (len + 1);
-		*dst_len = rspamd_strlcpy (ret, pattern, len + 1);
+		ret = malloc(len + 1);
+		*dst_len = rspamd_strlcpy(ret, pattern, len + 1);
 	}
 
 	return ret;
 }
 
 struct rspamd_multipattern *
-rspamd_multipattern_create (enum rspamd_multipattern_flags flags)
+rspamd_multipattern_create(enum rspamd_multipattern_flags flags)
 {
 	struct rspamd_multipattern *mp;
 
 	/* Align due to blake2b state */
-	(void) !posix_memalign((void **)&mp, RSPAMD_ALIGNOF(struct rspamd_multipattern),
-			sizeof (*mp));
-	g_assert (mp != NULL);
-	memset (mp, 0, sizeof (*mp));
+	(void) !posix_memalign((void **) &mp, RSPAMD_ALIGNOF(struct rspamd_multipattern),
+						   sizeof(*mp));
+	g_assert(mp != NULL);
+	memset(mp, 0, sizeof(*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
-		mp->hs_pats = g_array_new (FALSE, TRUE, sizeof (gchar *));
-		mp->hs_flags = g_array_new (FALSE, TRUE, sizeof (gint));
-		mp->hs_ids = g_array_new (FALSE, TRUE, sizeof (gint));
-		rspamd_cryptobox_hash_init (&mp->hash_state, NULL, 0);
+	if (rspamd_hs_check()) {
+		mp->hs_pats = g_array_new(FALSE, TRUE, sizeof(gchar *));
+		mp->hs_flags = g_array_new(FALSE, TRUE, sizeof(gint));
+		mp->hs_ids = g_array_new(FALSE, TRUE, sizeof(gint));
+		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
 		return mp;
 	}
 #endif
 
-	mp->pats = g_array_new (FALSE, TRUE, sizeof (ac_trie_pat_t));
+	mp->pats = g_array_new(FALSE, TRUE, sizeof(ac_trie_pat_t));
 
 	return mp;
 }
 
 struct rspamd_multipattern *
-rspamd_multipattern_create_sized (guint npatterns,
-		enum rspamd_multipattern_flags flags)
+rspamd_multipattern_create_sized(guint npatterns,
+								 enum rspamd_multipattern_flags flags)
 {
 	struct rspamd_multipattern *mp;
 
 	/* Align due to blake2b state */
-	(void) !posix_memalign((void **)&mp, RSPAMD_ALIGNOF(struct rspamd_multipattern), sizeof (*mp));
-	g_assert (mp != NULL);
-	memset (mp, 0, sizeof (*mp));
+	(void) !posix_memalign((void **) &mp, RSPAMD_ALIGNOF(struct rspamd_multipattern), sizeof(*mp));
+	g_assert(mp != NULL);
+	memset(mp, 0, sizeof(*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
-		mp->hs_pats = g_array_sized_new (FALSE, TRUE, sizeof (gchar *), npatterns);
-		mp->hs_flags = g_array_sized_new (FALSE, TRUE, sizeof (gint), npatterns);
-		mp->hs_ids = g_array_sized_new (FALSE, TRUE, sizeof (gint), npatterns);
-		rspamd_cryptobox_hash_init (&mp->hash_state, NULL, 0);
+	if (rspamd_hs_check()) {
+		mp->hs_pats = g_array_sized_new(FALSE, TRUE, sizeof(gchar *), npatterns);
+		mp->hs_flags = g_array_sized_new(FALSE, TRUE, sizeof(gint), npatterns);
+		mp->hs_ids = g_array_sized_new(FALSE, TRUE, sizeof(gint), npatterns);
+		rspamd_cryptobox_hash_init(&mp->hash_state, NULL, 0);
 
 		return mp;
 	}
 #endif
 
-	mp->pats = g_array_sized_new (FALSE, TRUE, sizeof (ac_trie_pat_t), npatterns);
+	mp->pats = g_array_sized_new(FALSE, TRUE, sizeof(ac_trie_pat_t), npatterns);
 
 	return mp;
 }
 
-void
-rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
-		const gchar *pattern, gint flags)
+void rspamd_multipattern_add_pattern(struct rspamd_multipattern *mp,
+									 const gchar *pattern, gint flags)
 {
-	g_assert (pattern != NULL);
+	g_assert(pattern != NULL);
 
-	rspamd_multipattern_add_pattern_len (mp, pattern, strlen (pattern), flags);
+	rspamd_multipattern_add_pattern_len(mp, pattern, strlen(pattern), flags);
 }
 
-void
-rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
-		const gchar *pattern, gsize patlen, gint flags)
+void rspamd_multipattern_add_pattern_len(struct rspamd_multipattern *mp,
+										 const gchar *pattern, gsize patlen, gint flags)
 {
 	gsize dlen;
 
-	g_assert (pattern != NULL);
-	g_assert (mp != NULL);
-	g_assert (!mp->compiled);
+	g_assert(pattern != NULL);
+	g_assert(mp != NULL);
+	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
+	if (rspamd_hs_check()) {
 		gchar *np;
 		gint fl = HS_FLAG_SOM_LEFTMOST;
 		gint adjusted_flags = mp->flags | flags;
@@ -354,42 +349,42 @@ rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
 			fl &= ~HS_FLAG_SOM_LEFTMOST;
 		}
 
-		g_array_append_val (mp->hs_flags, fl);
-		np = rspamd_multipattern_pattern_filter (pattern, patlen, flags, &dlen);
-		g_array_append_val (mp->hs_pats, np);
+		g_array_append_val(mp->hs_flags, fl);
+		np = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
+		g_array_append_val(mp->hs_pats, np);
 		fl = mp->cnt;
-		g_array_append_val (mp->hs_ids, fl);
-		rspamd_cryptobox_hash_update (&mp->hash_state, np, dlen);
+		g_array_append_val(mp->hs_ids, fl);
+		rspamd_cryptobox_hash_update(&mp->hash_state, np, dlen);
 
-		mp->cnt ++;
+		mp->cnt++;
 
 		return;
 	}
 #endif
 	ac_trie_pat_t pat;
 
-	pat.ptr = rspamd_multipattern_pattern_filter (pattern, patlen, flags, &dlen);
+	pat.ptr = rspamd_multipattern_pattern_filter(pattern, patlen, flags, &dlen);
 	pat.len = dlen;
 
-	g_array_append_val (mp->pats, pat);
+	g_array_append_val(mp->pats, pat);
 
-	mp->cnt ++;
+	mp->cnt++;
 }
 
 struct rspamd_multipattern *
-rspamd_multipattern_create_full (const gchar **patterns,
-		guint npatterns, enum rspamd_multipattern_flags flags)
+rspamd_multipattern_create_full(const gchar **patterns,
+								guint npatterns, enum rspamd_multipattern_flags flags)
 {
 	struct rspamd_multipattern *mp;
 	guint i;
 
-	g_assert (npatterns > 0);
-	g_assert (patterns != NULL);
+	g_assert(npatterns > 0);
+	g_assert(patterns != NULL);
 
-	mp = rspamd_multipattern_create_sized (npatterns, flags);
+	mp = rspamd_multipattern_create_sized(npatterns, flags);
 
 	for (i = 0; i < npatterns; i++) {
-		rspamd_multipattern_add_pattern (mp, patterns[i], flags);
+		rspamd_multipattern_add_pattern(mp, patterns[i], flags);
 	}
 
 	return mp;
@@ -397,8 +392,8 @@ rspamd_multipattern_create_full (const gchar **patterns,
 
 #ifdef WITH_HYPERSCAN
 static gboolean
-rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
-		const guchar *hash)
+rspamd_multipattern_try_load_hs(struct rspamd_multipattern *mp,
+								const guchar *hash)
 {
 	gchar fp[PATH_MAX];
 
@@ -406,16 +401,16 @@ rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
 		return FALSE;
 	}
 
-	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp", hs_cache_dir,
-			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+	rspamd_snprintf(fp, sizeof(fp), "%s/%*xs.hsmp", hs_cache_dir,
+					(gint) rspamd_cryptobox_HASHBYTES / 2, hash);
 	mp->hs_db = rspamd_hyperscan_maybe_load(fp, 0);
 
 	return mp->hs_db != NULL;
 }
 
 static void
-rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
-		const guchar *hash)
+rspamd_multipattern_try_save_hs(struct rspamd_multipattern *mp,
+								const guchar *hash)
 {
 	gchar fp[PATH_MAX], np[PATH_MAX];
 	char *bytes = NULL;
@@ -426,29 +421,29 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf (fp, sizeof (fp), "%s%shsmp-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
-		hs_cache_dir);
+	rspamd_snprintf(fp, sizeof(fp), "%s%shsmp-XXXXXXXXXXXXX", G_DIR_SEPARATOR_S,
+					hs_cache_dir);
 
-	if ((fd = g_mkstemp_full(fp, O_CREAT|O_EXCL|O_WRONLY, 00644)) != -1) {
+	if ((fd = g_mkstemp_full(fp, O_CREAT | O_EXCL | O_WRONLY, 00644)) != -1) {
 		int ret;
-		if ((ret = hs_serialize_database (rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len)) == HS_SUCCESS) {
-			if (write (fd, bytes, len) == -1) {
-				msg_warn ("cannot write hyperscan cache to %s: %s",
-						fp, strerror (errno));
-				unlink (fp);
-				free (bytes);
+		if ((ret = hs_serialize_database(rspamd_hyperscan_get_database(mp->hs_db), &bytes, &len)) == HS_SUCCESS) {
+			if (write(fd, bytes, len) == -1) {
+				msg_warn("cannot write hyperscan cache to %s: %s",
+						 fp, strerror(errno));
+				unlink(fp);
+				free(bytes);
 			}
 			else {
-				free (bytes);
-				fsync (fd);
+				free(bytes);
+				fsync(fd);
 
-				rspamd_snprintf (np, sizeof (np), "%s/%*xs.hsmp", hs_cache_dir,
-						(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+				rspamd_snprintf(np, sizeof(np), "%s/%*xs.hsmp", hs_cache_dir,
+								(gint) rspamd_cryptobox_HASHBYTES / 2, hash);
 
-				if (rename (fp, np) == -1) {
-					msg_warn ("cannot rename hyperscan cache from %s to %s: %s",
-							fp, np, strerror (errno));
-					unlink (fp);
+				if (rename(fp, np) == -1) {
+					msg_warn("cannot rename hyperscan cache from %s to %s: %s",
+							 fp, np, strerror(errno));
+					unlink(fp);
 				}
 				else {
 					rspamd_hyperscan_notice_known(np);
@@ -456,63 +451,63 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 			}
 		}
 		else {
-			msg_warn ("cannot serialize hyperscan cache to %s: error code %d",
-					fp, ret);
-			unlink (fp);
+			msg_warn("cannot serialize hyperscan cache to %s: error code %d",
+					 fp, ret);
+			unlink(fp);
 		}
 
 
-		close (fd);
+		close(fd);
 	}
 	else {
-		msg_warn ("cannot open a temp file %s to write hyperscan cache: %s", fp, strerror(errno));
+		msg_warn("cannot open a temp file %s to write hyperscan cache: %s", fp, strerror(errno));
 	}
 }
 #endif
 
 gboolean
-rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
+rspamd_multipattern_compile(struct rspamd_multipattern *mp, GError **err)
 {
-	g_assert (mp != NULL);
-	g_assert (!mp->compiled);
+	g_assert(mp != NULL);
+	g_assert(!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
+	if (rspamd_hs_check()) {
 		guint i;
 		hs_platform_info_t plt;
 		hs_compile_error_t *hs_errors;
 		guchar hash[rspamd_cryptobox_HASHBYTES];
 
 		if (mp->cnt > 0) {
-			g_assert (hs_populate_platform (&plt) == HS_SUCCESS);
-			rspamd_cryptobox_hash_update (&mp->hash_state, (void *)&plt, sizeof (plt));
-			rspamd_cryptobox_hash_final (&mp->hash_state, hash);
+			g_assert(hs_populate_platform(&plt) == HS_SUCCESS);
+			rspamd_cryptobox_hash_update(&mp->hash_state, (void *) &plt, sizeof(plt));
+			rspamd_cryptobox_hash_final(&mp->hash_state, hash);
 
-			if (!rspamd_multipattern_try_load_hs (mp, hash)) {
+			if (!rspamd_multipattern_try_load_hs(mp, hash)) {
 				hs_database_t *db = NULL;
 
-				if (hs_compile_multi ((const char *const *)mp->hs_pats->data,
-						(const unsigned int *)mp->hs_flags->data,
-						(const unsigned int *)mp->hs_ids->data,
-						mp->cnt,
-						HS_MODE_BLOCK,
-						&plt,
-						&db,
-						&hs_errors) != HS_SUCCESS) {
+				if (hs_compile_multi((const char *const *) mp->hs_pats->data,
+									 (const unsigned int *) mp->hs_flags->data,
+									 (const unsigned int *) mp->hs_ids->data,
+									 mp->cnt,
+									 HS_MODE_BLOCK,
+									 &plt,
+									 &db,
+									 &hs_errors) != HS_SUCCESS) {
 
-					g_set_error (err, rspamd_multipattern_quark (), EINVAL,
-							"cannot create tree of regexp when processing '%s': %s",
-							g_array_index (mp->hs_pats, char *, hs_errors->expression),
-							hs_errors->message);
-					hs_free_compile_error (hs_errors);
+					g_set_error(err, rspamd_multipattern_quark(), EINVAL,
+								"cannot create tree of regexp when processing '%s': %s",
+								g_array_index(mp->hs_pats, char *, hs_errors->expression),
+								hs_errors->message);
+					hs_free_compile_error(hs_errors);
 
 					return FALSE;
 				}
 
 				if (hs_cache_dir != NULL) {
 					char fpath[PATH_MAX];
-					rspamd_snprintf (fpath, sizeof (fpath), "%s/%*xs.hsmp", hs_cache_dir,
-						(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+					rspamd_snprintf(fpath, sizeof(fpath), "%s/%*xs.hsmp", hs_cache_dir,
+									(gint) rspamd_cryptobox_HASHBYTES / 2, hash);
 					mp->hs_db = rspamd_hyperscan_from_raw_db(db, fpath);
 				}
 				else {
@@ -520,27 +515,27 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 					mp->hs_db = rspamd_hyperscan_from_raw_db(db, NULL);
 				}
 
-				rspamd_multipattern_try_save_hs (mp, hash);
+				rspamd_multipattern_try_save_hs(mp, hash);
 			}
 
-			for (i = 0; i < MAX_SCRATCH; i ++) {
+			for (i = 0; i < MAX_SCRATCH; i++) {
 				mp->scratch[i] = NULL;
 			}
 
-			for (i = 0; i < MAX_SCRATCH; i ++) {
+			for (i = 0; i < MAX_SCRATCH; i++) {
 				int ret;
 
-				if ((ret = hs_alloc_scratch (rspamd_hyperscan_get_database(mp->hs_db), &mp->scratch[i])) != HS_SUCCESS) {
+				if ((ret = hs_alloc_scratch(rspamd_hyperscan_get_database(mp->hs_db), &mp->scratch[i])) != HS_SUCCESS) {
 					msg_err("cannot allocate scratch space for hyperscan: error code %d", ret);
 
 					/* Clean all scratches that are non-NULL */
-					for (int ii = 0; ii < MAX_SCRATCH; ii ++) {
+					for (int ii = 0; ii < MAX_SCRATCH; ii++) {
 						if (mp->scratch[ii] != NULL) {
 							hs_free_scratch(mp->scratch[ii]);
 						}
 					}
-					g_set_error (err, rspamd_multipattern_quark (), EINVAL,
-						"cannot allocate scratch space for hyperscan: error code %d", ret);
+					g_set_error(err, rspamd_multipattern_quark(), EINVAL,
+								"cannot allocate scratch space for hyperscan: error code %d", ret);
 
 					rspamd_hyperscan_free(mp->hs_db, true);
 					mp->hs_db = NULL;
@@ -558,13 +553,13 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 
 	if (mp->cnt > 0) {
 
-		if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB|RSPAMD_MULTIPATTERN_RE)) {
+		if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB | RSPAMD_MULTIPATTERN_RE)) {
 			/* Fallback to pcre... */
 			rspamd_regexp_t *re;
-			mp->res = g_array_sized_new (FALSE, TRUE,
-					sizeof (rspamd_regexp_t *), mp->cnt);
+			mp->res = g_array_sized_new(FALSE, TRUE,
+										sizeof(rspamd_regexp_t *), mp->cnt);
 
-			for (guint i = 0; i < mp->cnt; i ++) {
+			for (guint i = 0; i < mp->cnt; i++) {
 				const ac_trie_pat_t *pat;
 				const gchar *pat_flags = NULL;
 
@@ -572,18 +567,18 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 					pat_flags = "u";
 				}
 
-				pat = &g_array_index (mp->pats, ac_trie_pat_t, i);
-				re = rspamd_regexp_new (pat->ptr, pat_flags, err);
+				pat = &g_array_index(mp->pats, ac_trie_pat_t, i);
+				re = rspamd_regexp_new(pat->ptr, pat_flags, err);
 
 				if (re == NULL) {
 					return FALSE;
 				}
 
-				g_array_append_val (mp->res, re);
+				g_array_append_val(mp->res, re);
 			}
 		}
 		else {
-			mp->t = acism_create ((const ac_trie_pat_t *) mp->pats->data, mp->cnt);
+			mp->t = acism_create((const ac_trie_pat_t *) mp->pats->data, mp->cnt);
 		}
 	}
 
@@ -604,11 +599,11 @@ struct rspamd_multipattern_cbdata {
 
 #ifdef WITH_HYPERSCAN
 static gint
-rspamd_multipattern_hs_cb (unsigned int id,
-		unsigned long long from,
-		unsigned long long to,
-		unsigned int flags,
-		void *ud)
+rspamd_multipattern_hs_cb(unsigned int id,
+						  unsigned long long from,
+						  unsigned long long to,
+						  unsigned int flags,
+						  void *ud)
 {
 	struct rspamd_multipattern_cbdata *cbd = ud;
 	gint ret = 0;
@@ -619,9 +614,9 @@ rspamd_multipattern_hs_cb (unsigned int id,
 			from = 0;
 		}
 
-		ret = cbd->cb (cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
+		ret = cbd->cb(cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
 
-		cbd->nfound ++;
+		cbd->nfound++;
 		cbd->ret = ret;
 	}
 
@@ -630,31 +625,30 @@ rspamd_multipattern_hs_cb (unsigned int id,
 #endif
 
 static gint
-rspamd_multipattern_acism_cb (int strnum, int textpos, void *context)
+rspamd_multipattern_acism_cb(int strnum, int textpos, void *context)
 {
 	struct rspamd_multipattern_cbdata *cbd = context;
 	gint ret;
 	ac_trie_pat_t pat;
 
-	pat = g_array_index (cbd->mp->pats, ac_trie_pat_t, strnum);
-	ret = cbd->cb (cbd->mp, strnum, textpos - pat.len,
-			textpos, cbd->in, cbd->len, cbd->ud);
+	pat = g_array_index(cbd->mp->pats, ac_trie_pat_t, strnum);
+	ret = cbd->cb(cbd->mp, strnum, textpos - pat.len,
+				  textpos, cbd->in, cbd->len, cbd->ud);
 
-	cbd->nfound ++;
+	cbd->nfound++;
 	cbd->ret = ret;
 
 	return ret;
 }
 
-gint
-rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
-		const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
-		gpointer ud, guint *pnfound)
+gint rspamd_multipattern_lookup(struct rspamd_multipattern *mp,
+								const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
+								gpointer ud, guint *pnfound)
 {
 	struct rspamd_multipattern_cbdata cbd;
 	gint ret = 0;
 
-	g_assert (mp != NULL);
+	g_assert(mp != NULL);
 
 	if (mp->cnt == 0 || !mp->compiled || len == 0) {
 		return 0;
@@ -669,11 +663,11 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 	cbd.ret = 0;
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
+	if (rspamd_hs_check()) {
 		hs_scratch_t *scr = NULL;
 		guint i;
 
-		for (i = 0; i < MAX_SCRATCH; i ++) {
+		for (i = 0; i < MAX_SCRATCH; i++) {
 			if (!(mp->scratch_used & (1 << i))) {
 				mp->scratch_used |= (1 << i);
 				scr = mp->scratch[i];
@@ -681,10 +675,10 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 			}
 		}
 
-		g_assert (scr != NULL);
+		g_assert(scr != NULL);
 
-		ret = hs_scan (rspamd_hyperscan_get_database(mp->hs_db), in, len, 0, scr,
-				rspamd_multipattern_hs_cb, &cbd);
+		ret = hs_scan(rspamd_hyperscan_get_database(mp->hs_db), in, len, 0, scr,
+					  rspamd_multipattern_hs_cb, &cbd);
 
 		mp->scratch_used &= ~(1 << i);
 
@@ -705,25 +699,25 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 
 	gint state = 0;
 
-	if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB|RSPAMD_MULTIPATTERN_RE)) {
+	if (mp->flags & (RSPAMD_MULTIPATTERN_GLOB | RSPAMD_MULTIPATTERN_RE)) {
 		/* Terribly inefficient, but who cares - just use hyperscan */
-		for (guint i = 0; i < mp->cnt; i ++) {
-			rspamd_regexp_t *re = g_array_index (mp->res, rspamd_regexp_t *, i);
+		for (guint i = 0; i < mp->cnt; i++) {
+			rspamd_regexp_t *re = g_array_index(mp->res, rspamd_regexp_t *, i);
 			const gchar *start = NULL, *end = NULL;
 
-			while (rspamd_regexp_search (re,
-					in,
-					len,
-					&start,
-					&end,
-					TRUE,
-					NULL)) {
-				if (rspamd_multipattern_acism_cb (i, end - in, &cbd)) {
+			while (rspamd_regexp_search(re,
+										in,
+										len,
+										&start,
+										&end,
+										TRUE,
+										NULL)) {
+				if (rspamd_multipattern_acism_cb(i, end - in, &cbd)) {
 					goto out;
 				}
 			}
 		}
-out:
+	out:
 		ret = cbd.ret;
 
 		if (pnfound) {
@@ -732,8 +726,8 @@ out:
 	}
 	else {
 		/* Plain trie */
-		ret = acism_lookup (mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
-				&state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
+		ret = acism_lookup(mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
+						   &state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
 
 		if (pnfound) {
 			*pnfound = cbd.nfound;
@@ -744,19 +738,18 @@ out:
 }
 
 
-void
-rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
+void rspamd_multipattern_destroy(struct rspamd_multipattern *mp)
 {
 	guint i;
 
 	if (mp) {
 #ifdef WITH_HYPERSCAN
-		if (rspamd_hs_check ()) {
+		if (rspamd_hs_check()) {
 			gchar *p;
 
 			if (mp->compiled && mp->cnt > 0) {
-				for (i = 0; i < MAX_SCRATCH; i ++) {
-					hs_free_scratch (mp->scratch[i]);
+				for (i = 0; i < MAX_SCRATCH; i++) {
+					hs_free_scratch(mp->scratch[i]);
 				}
 
 				if (mp->hs_db) {
@@ -764,15 +757,15 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 				}
 			}
 
-			for (i = 0; i < mp->cnt; i ++) {
-				p = g_array_index (mp->hs_pats, gchar *, i);
-				g_free (p);
+			for (i = 0; i < mp->cnt; i++) {
+				p = g_array_index(mp->hs_pats, gchar *, i);
+				g_free(p);
 			}
 
-			g_array_free (mp->hs_pats, TRUE);
-			g_array_free (mp->hs_ids, TRUE);
-			g_array_free (mp->hs_flags, TRUE);
-			free (mp); /* Due to posix_memalign */
+			g_array_free(mp->hs_pats, TRUE);
+			g_array_free(mp->hs_ids, TRUE);
+			g_array_free(mp->hs_flags, TRUE);
+			free(mp); /* Due to posix_memalign */
 
 			return;
 		}
@@ -780,50 +773,49 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 		ac_trie_pat_t pat;
 
 		if (mp->compiled && mp->cnt > 0) {
-			acism_destroy (mp->t);
+			acism_destroy(mp->t);
 		}
 
-		for (i = 0; i < mp->cnt; i ++) {
-			pat = g_array_index (mp->pats, ac_trie_pat_t, i);
-			g_free ((gchar *)pat.ptr);
+		for (i = 0; i < mp->cnt; i++) {
+			pat = g_array_index(mp->pats, ac_trie_pat_t, i);
+			g_free((gchar *) pat.ptr);
 		}
 
-		g_array_free (mp->pats, TRUE);
+		g_array_free(mp->pats, TRUE);
 
-		g_free (mp);
+		g_free(mp);
 	}
 }
 
-const gchar*
-rspamd_multipattern_get_pattern (struct rspamd_multipattern *mp,
-		guint index)
+const gchar *
+rspamd_multipattern_get_pattern(struct rspamd_multipattern *mp,
+								guint index)
 {
-	g_assert (mp != NULL);
-	g_assert (index < mp->cnt);
+	g_assert(mp != NULL);
+	g_assert(index < mp->cnt);
 
 #ifdef WITH_HYPERSCAN
-	if (rspamd_hs_check ()) {
-		return g_array_index (mp->hs_pats, gchar *, index);
+	if (rspamd_hs_check()) {
+		return g_array_index(mp->hs_pats, gchar *, index);
 	}
 #endif
 
 	ac_trie_pat_t pat;
 
-	pat = g_array_index (mp->pats, ac_trie_pat_t, index);
+	pat = g_array_index(mp->pats, ac_trie_pat_t, index);
 
 	return pat.ptr;
 }
 
-guint
-rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp)
+guint rspamd_multipattern_get_npatterns(struct rspamd_multipattern *mp)
 {
-	g_assert (mp != NULL);
+	g_assert(mp != NULL);
 
 	return mp->cnt;
 }
 
 gboolean
-rspamd_multipattern_has_hyperscan (void)
+rspamd_multipattern_has_hyperscan(void)
 {
-	return rspamd_hs_check ();
+	return rspamd_hs_check();
 }

@@ -33,7 +33,7 @@
 namespace rspamd::css {
 /* Forward declaration */
 class css_style_sheet;
-}
+}// namespace rspamd::css
 
 namespace rspamd::html {
 
@@ -51,18 +51,21 @@ struct html_content {
 	std::shared_ptr<css::css_style_sheet> css_style;
 
 	/* Preallocate and reserve all internal structures */
-	html_content() {
+	html_content()
+	{
 		tags_seen.resize(Tag_MAX, false);
 		all_tags.reserve(128);
 		parsed.reserve(256);
 	}
 
-	static void html_content_dtor(void *ptr) {
+	static void html_content_dtor(void *ptr)
+	{
 		delete html_content::from_ptr(ptr);
 	}
 
-	static auto from_ptr(void *ptr) -> html_content * {
-		return static_cast<html_content* >(ptr);
+	static auto from_ptr(void *ptr) -> html_content *
+	{
+		return static_cast<html_content *>(ptr);
 	}
 
 	enum class traverse_type {
@@ -70,7 +73,8 @@ struct html_content {
 		POST_ORDER
 	};
 	auto traverse_block_tags(fu2::function<bool(const html_tag *)> &&func,
-					traverse_type how = traverse_type::PRE_ORDER) const -> bool {
+							 traverse_type how = traverse_type::PRE_ORDER) const -> bool
+	{
 
 		if (root_tag == nullptr) {
 			return false;
@@ -79,7 +83,7 @@ struct html_content {
 		auto rec_functor_pre_order = [&](const html_tag *root, auto &&rec) -> bool {
 			if (func(root)) {
 
-				for (const auto *c : root->children) {
+				for (const auto *c: root->children) {
 					if (!rec(c, rec)) {
 						return false;
 					}
@@ -90,7 +94,7 @@ struct html_content {
 			return false;
 		};
 		auto rec_functor_post_order = [&](const html_tag *root, auto &&rec) -> bool {
-			for (const auto *c : root->children) {
+			for (const auto *c: root->children) {
 				if (!rec(c, rec)) {
 					return false;
 				}
@@ -99,7 +103,7 @@ struct html_content {
 			return func(root);
 		};
 
-		switch(how) {
+		switch (how) {
 		case traverse_type::PRE_ORDER:
 			return rec_functor_pre_order(root_tag, rec_functor_pre_order);
 		case traverse_type::POST_ORDER:
@@ -109,9 +113,10 @@ struct html_content {
 		}
 	}
 
-	auto traverse_all_tags(fu2::function<bool(const html_tag *)> &&func) const -> bool {
-		for (const auto &tag : all_tags) {
-			if (!(tag->flags & (FL_XML|FL_VIRTUAL))) {
+	auto traverse_all_tags(fu2::function<bool(const html_tag *)> &&func) const -> bool
+	{
+		for (const auto &tag: all_tags) {
+			if (!(tag->flags & (FL_XML | FL_VIRTUAL))) {
 				if (!func(tag.get())) {
 					return false;
 				}
@@ -128,14 +133,14 @@ private:
 
 auto html_tag_by_name(const std::string_view &name) -> std::optional<tag_id_t>;
 auto html_process_input(struct rspamd_task *task,
-				   GByteArray *in,
-				   GList **exceptions,
-				   khash_t (rspamd_url_hash) *url_set,
-				   GPtrArray *part_urls,
-				   bool allow_css,
-				   std::uint16_t *cur_url_order) -> html_content *;
+						GByteArray *in,
+						GList **exceptions,
+						khash_t(rspamd_url_hash) * url_set,
+						GPtrArray *part_urls,
+						bool allow_css,
+						std::uint16_t *cur_url_order) -> html_content *;
 auto html_debug_structure(const html_content &hc) -> std::string;
 
-}
+}// namespace rspamd::html
 
-#endif //RSPAMD_HTML_HXX
+#endif//RSPAMD_HTML_HXX

@@ -20,25 +20,25 @@
 #include "libutil/addr.h"
 #include "libutil/libev_helper.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 struct rspamd_ssl_connection;
 
-typedef void (*rspamd_ssl_handler_t) (gint fd, short what, gpointer d);
+typedef void (*rspamd_ssl_handler_t)(gint fd, short what, gpointer d);
 
-typedef void (*rspamd_ssl_error_handler_t) (gpointer d, GError *err);
+typedef void (*rspamd_ssl_error_handler_t)(gpointer d, GError *err);
 
 /**
  * Creates a new ssl connection data structure
  * @param ssl_ctx initialized SSL_CTX structure
  * @return opaque connection data
  */
-struct rspamd_ssl_connection *rspamd_ssl_connection_new (gpointer ssl_ctx,
-														 struct ev_loop *ev_base,
-														 gboolean verify_peer,
-														 const gchar *log_tag);
+struct rspamd_ssl_connection *rspamd_ssl_connection_new(gpointer ssl_ctx,
+														struct ev_loop *ev_base,
+														gboolean verify_peer,
+														const gchar *log_tag);
 
 /**
  * Connects SSL session using the specified (connected) FD
@@ -51,10 +51,10 @@ struct rspamd_ssl_connection *rspamd_ssl_connection_new (gpointer ssl_ctx,
  * @param handler_data opaque data
  * @return TRUE if a session has been connected
  */
-gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
-								const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
-								rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
-								gpointer handler_data);
+gboolean rspamd_ssl_connect_fd(struct rspamd_ssl_connection *conn, gint fd,
+							   const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
+							   rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
+							   gpointer handler_data);
 
 /**
  * Restores SSL handlers for the existing ssl connection (e.g. after keepalive)
@@ -63,11 +63,11 @@ gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
  * @param err_handler
  * @param handler_data
  */
-void rspamd_ssl_connection_restore_handlers (struct rspamd_ssl_connection *conn,
-											 rspamd_ssl_handler_t handler,
-											 rspamd_ssl_error_handler_t err_handler,
-											 gpointer handler_data,
-											 short ev_what);
+void rspamd_ssl_connection_restore_handlers(struct rspamd_ssl_connection *conn,
+											rspamd_ssl_handler_t handler,
+											rspamd_ssl_error_handler_t err_handler,
+											gpointer handler_data,
+											short ev_what);
 
 /**
  * Perform async read from SSL socket
@@ -76,8 +76,8 @@ void rspamd_ssl_connection_restore_handlers (struct rspamd_ssl_connection *conn,
  * @param buflen
  * @return
  */
-gssize rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
-						gsize buflen);
+gssize rspamd_ssl_read(struct rspamd_ssl_connection *conn, gpointer buf,
+					   gsize buflen);
 
 /**
  * Perform async write to ssl buffer
@@ -88,8 +88,8 @@ gssize rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
  * @param tv
  * @return
  */
-gssize rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
-						 gsize buflen);
+gssize rspamd_ssl_write(struct rspamd_ssl_connection *conn, gconstpointer buf,
+						gsize buflen);
 
 /**
  * Emulate writev by copying iovec to a temporary buffer
@@ -98,22 +98,22 @@ gssize rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
  * @param buflen
  * @return
  */
-gssize rspamd_ssl_writev (struct rspamd_ssl_connection *conn, struct iovec *iov,
-						  gsize iovlen);
+gssize rspamd_ssl_writev(struct rspamd_ssl_connection *conn, struct iovec *iov,
+						 gsize iovlen);
 
 /**
  * Removes connection data
  * @param conn
  */
-void rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn);
+void rspamd_ssl_connection_free(struct rspamd_ssl_connection *conn);
 
-gpointer rspamd_init_ssl_ctx (void);
-gpointer rspamd_init_ssl_ctx_noverify (void);
-void rspamd_ssl_ctx_config (struct rspamd_config *cfg, gpointer ssl_ctx);
-void rspamd_ssl_ctx_free (gpointer ssl_ctx);
-void rspamd_openssl_maybe_init (void);
+gpointer rspamd_init_ssl_ctx(void);
+gpointer rspamd_init_ssl_ctx_noverify(void);
+void rspamd_ssl_ctx_config(struct rspamd_config *cfg, gpointer ssl_ctx);
+void rspamd_ssl_ctx_free(gpointer ssl_ctx);
+void rspamd_openssl_maybe_init(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -25,17 +25,17 @@
 #include "re_cache.h"
 #include "khash.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 enum rspamd_command {
 	CMD_SKIP = 0,
 	CMD_PING,
-	CMD_CHECK_SPAMC, /* Legacy spamassassin format */
+	CMD_CHECK_SPAMC,  /* Legacy spamassassin format */
 	CMD_CHECK_RSPAMC, /* Legacy rspamc format (like SA one) */
-	CMD_CHECK, /* Legacy check - metric json reply */
-	CMD_CHECK_V2, /* Modern check - symbols in json reply  */
+	CMD_CHECK,        /* Legacy check - metric json reply */
+	CMD_CHECK_V2,     /* Modern check - symbols in json reply  */
 };
 
 enum rspamd_task_stage {
@@ -59,33 +59,33 @@ enum rspamd_task_stage {
 	RSPAMD_TASK_STAGE_REPLIED = (1u << 17u)
 };
 
-#define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
-        RSPAMD_TASK_STAGE_CONNFILTERS | \
-        RSPAMD_TASK_STAGE_READ_MESSAGE | \
-        RSPAMD_TASK_STAGE_PRE_FILTERS | \
-        RSPAMD_TASK_STAGE_PROCESS_MESSAGE | \
-        RSPAMD_TASK_STAGE_FILTERS | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS_PRE | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
-        RSPAMD_TASK_STAGE_COMPOSITES | \
-        RSPAMD_TASK_STAGE_POST_FILTERS | \
-        RSPAMD_TASK_STAGE_LEARN_PRE | \
-        RSPAMD_TASK_STAGE_LEARN | \
-        RSPAMD_TASK_STAGE_LEARN_POST | \
-        RSPAMD_TASK_STAGE_COMPOSITES_POST | \
-        RSPAMD_TASK_STAGE_IDEMPOTENT | \
-        RSPAMD_TASK_STAGE_DONE)
-#define RSPAMD_TASK_PROCESS_LEARN (RSPAMD_TASK_STAGE_CONNECT | \
-        RSPAMD_TASK_STAGE_READ_MESSAGE | \
-        RSPAMD_TASK_STAGE_PROCESS_MESSAGE | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS_PRE | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS | \
-        RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
-        RSPAMD_TASK_STAGE_LEARN_PRE | \
-        RSPAMD_TASK_STAGE_LEARN | \
-        RSPAMD_TASK_STAGE_LEARN_POST | \
-        RSPAMD_TASK_STAGE_DONE)
+#define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT |          \
+								 RSPAMD_TASK_STAGE_CONNFILTERS |      \
+								 RSPAMD_TASK_STAGE_READ_MESSAGE |     \
+								 RSPAMD_TASK_STAGE_PRE_FILTERS |      \
+								 RSPAMD_TASK_STAGE_PROCESS_MESSAGE |  \
+								 RSPAMD_TASK_STAGE_FILTERS |          \
+								 RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |  \
+								 RSPAMD_TASK_STAGE_CLASSIFIERS |      \
+								 RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
+								 RSPAMD_TASK_STAGE_COMPOSITES |       \
+								 RSPAMD_TASK_STAGE_POST_FILTERS |     \
+								 RSPAMD_TASK_STAGE_LEARN_PRE |        \
+								 RSPAMD_TASK_STAGE_LEARN |            \
+								 RSPAMD_TASK_STAGE_LEARN_POST |       \
+								 RSPAMD_TASK_STAGE_COMPOSITES_POST |  \
+								 RSPAMD_TASK_STAGE_IDEMPOTENT |       \
+								 RSPAMD_TASK_STAGE_DONE)
+#define RSPAMD_TASK_PROCESS_LEARN (RSPAMD_TASK_STAGE_CONNECT |          \
+								   RSPAMD_TASK_STAGE_READ_MESSAGE |     \
+								   RSPAMD_TASK_STAGE_PROCESS_MESSAGE |  \
+								   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |  \
+								   RSPAMD_TASK_STAGE_CLASSIFIERS |      \
+								   RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
+								   RSPAMD_TASK_STAGE_LEARN_PRE |        \
+								   RSPAMD_TASK_STAGE_LEARN |            \
+								   RSPAMD_TASK_STAGE_LEARN_POST |       \
+								   RSPAMD_TASK_STAGE_DONE)
 
 #define RSPAMD_TASK_FLAG_MIME (1u << 0u)
 #define RSPAMD_TASK_FLAG_SKIP_PROCESS (1u << 1u)
@@ -155,7 +155,7 @@ struct rspamd_request_header_chain {
 	struct rspamd_request_header_chain *next;
 };
 
-__KHASH_TYPE (rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *);
+__KHASH_TYPE(rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *);
 
 struct rspamd_lua_cached_entry {
 	gint ref;
@@ -168,81 +168,81 @@ KHASH_INIT(rspamd_task_lua_cache, char *, struct rspamd_lua_cached_entry, 1, kh_
  * Worker task structure
  */
 struct rspamd_task {
-	struct rspamd_worker *worker;                    /**< pointer to worker object						*/
-	enum rspamd_command cmd;                        /**< command										*/
-	gint sock;                                      /**< socket descriptor								*/
-	guint32 dns_requests;                           /**< number of DNS requests per this task			*/
-	guint32 flags;                                  /**< Bit flags										*/
+	struct rspamd_worker *worker; /**< pointer to worker object						*/
+	enum rspamd_command cmd;      /**< command										*/
+	gint sock;                    /**< socket descriptor								*/
+	guint32 dns_requests;         /**< number of DNS requests per this task			*/
+	guint32 flags;                /**< Bit flags										*/
 	guint32 protocol_flags;
-	guint32 processed_stages;                            /**< bits of stages that are processed			*/
-	gchar *helo;                                    /**< helo header value								*/
-	gchar *queue_id;                                /**< queue id if specified							*/
-	rspamd_inet_addr_t *from_addr;                    /**< from addr for a task							*/
-	rspamd_inet_addr_t *client_addr;                /**< address of connected socket					*/
-	gchar *deliver_to;                                /**< address to deliver								*/
-	gchar *auth_user;                                /**< SMTP authenticated user								*/
-	const gchar *hostname;                            /**< hostname reported by MTA						*/
-	khash_t(rspamd_req_headers_hash) *request_headers; /**< HTTP headers in a request						*/
-	struct rspamd_task_data_storage msg;            /**< message buffer									*/
-	struct rspamd_http_connection *http_conn;        /**< HTTP server connection							*/
-	struct rspamd_async_session *s;                /**< async session object							*/
-	struct rspamd_scan_result *result;            /**< Metric result									*/
-	khash_t(rspamd_task_lua_cache) lua_cache;        /**< cache of lua objects							*/
-	GPtrArray *tokens;                                /**< statistics tokens */
-	GArray *meta_words;                                /**< rspamd_stat_token_t produced from meta headers
+	guint32 processed_stages;                           /**< bits of stages that are processed			*/
+	gchar *helo;                                        /**< helo header value								*/
+	gchar *queue_id;                                    /**< queue id if specified							*/
+	rspamd_inet_addr_t *from_addr;                      /**< from addr for a task							*/
+	rspamd_inet_addr_t *client_addr;                    /**< address of connected socket					*/
+	gchar *deliver_to;                                  /**< address to deliver								*/
+	gchar *auth_user;                                   /**< SMTP authenticated user								*/
+	const gchar *hostname;                              /**< hostname reported by MTA						*/
+	khash_t(rspamd_req_headers_hash) * request_headers; /**< HTTP headers in a request						*/
+	struct rspamd_task_data_storage msg;                /**< message buffer									*/
+	struct rspamd_http_connection *http_conn;           /**< HTTP server connection							*/
+	struct rspamd_async_session *s;                     /**< async session object							*/
+	struct rspamd_scan_result *result;                  /**< Metric result									*/
+	khash_t(rspamd_task_lua_cache) lua_cache;           /**< cache of lua objects							*/
+	GPtrArray *tokens;                                  /**< statistics tokens */
+	GArray *meta_words;                                 /**< rspamd_stat_token_t produced from meta headers
 														(e.g. Subject) */
 
-	GPtrArray *rcpt_envelope;                        /**< array of rspamd_email_address					*/
+	GPtrArray *rcpt_envelope; /**< array of rspamd_email_address					*/
 	struct rspamd_email_address *from_envelope;
 	struct rspamd_email_address *from_envelope_orig;
 
-	ucl_object_t *messages;                            /**< list of messages that would be reported		*/
-	struct rspamd_re_runtime *re_rt;                /**< regexp runtime									*/
-	GPtrArray *stat_runtimes;                        /**< backend runtime							*/
-	struct rspamd_config *cfg;                        /**< pointer to config object						*/
+	ucl_object_t *messages;          /**< list of messages that would be reported		*/
+	struct rspamd_re_runtime *re_rt; /**< regexp runtime									*/
+	GPtrArray *stat_runtimes;        /**< backend runtime							*/
+	struct rspamd_config *cfg;       /**< pointer to config object						*/
 	GError *err;
-	rspamd_mempool_t *task_pool;                    /**< memory pool for task							*/
+	rspamd_mempool_t *task_pool; /**< memory pool for task							*/
 	double time_real_finish;
 	ev_tstamp task_timestamp;
 
-	gboolean (*fin_callback) (struct rspamd_task *task, void *arg);
+	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
 	/**< callback for filters finalizing					*/
-	void *fin_arg;                                    /**< argument for fin callback						*/
+	void *fin_arg; /**< argument for fin callback						*/
 
-	struct rspamd_dns_resolver *resolver;            /**< DNS resolver									*/
-	struct ev_loop *event_loop;                        /**< Event base										*/
-	struct ev_timer timeout_ev;                        /**< Global task timeout							*/
-	struct ev_io guard_ev;                            /**< Event for input sanity guard 					*/
+	struct rspamd_dns_resolver *resolver; /**< DNS resolver									*/
+	struct ev_loop *event_loop;           /**< Event base										*/
+	struct ev_timer timeout_ev;           /**< Global task timeout							*/
+	struct ev_io guard_ev;                /**< Event for input sanity guard 					*/
 
-	gpointer symcache_runtime;                            /**< Opaque checkpoint data							*/
-	ucl_object_t *settings;                            /**< Settings applied to task						*/
-	struct rspamd_config_settings_elt *settings_elt;    /**< preprocessed settings id elt				*/
+	gpointer symcache_runtime;                       /**< Opaque checkpoint data							*/
+	ucl_object_t *settings;                          /**< Settings applied to task						*/
+	struct rspamd_config_settings_elt *settings_elt; /**< preprocessed settings id elt				*/
 
-	const gchar *classifier;                        /**< Classifier to learn (if needed)				*/
-	struct rspamd_lang_detector *lang_det;            /**< Languages detector								*/
+	const gchar *classifier;               /**< Classifier to learn (if needed)				*/
+	struct rspamd_lang_detector *lang_det; /**< Languages detector								*/
 	struct rspamd_message *message;
 };
 
 /**
  * Construct new task for worker
  */
-struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
-									 struct rspamd_config *cfg,
-									 rspamd_mempool_t *pool,
-									 struct rspamd_lang_detector *lang_det,
-									 struct ev_loop *event_loop,
-									 gboolean debug_mem);
+struct rspamd_task *rspamd_task_new(struct rspamd_worker *worker,
+									struct rspamd_config *cfg,
+									rspamd_mempool_t *pool,
+									struct rspamd_lang_detector *lang_det,
+									struct ev_loop *event_loop,
+									gboolean debug_mem);
 
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */
-void rspamd_task_free (struct rspamd_task *task);
+void rspamd_task_free(struct rspamd_task *task);
 
 /**
  * Called if all filters are processed
  * @return TRUE if session should be terminated
  */
-gboolean rspamd_task_fin (void *arg);
+gboolean rspamd_task_fin(void *arg);
 
 /**
  * Load HTTP message with body in `msg` to an rspamd_task
@@ -252,23 +252,23 @@ gboolean rspamd_task_fin (void *arg);
  * @param len
  * @return
  */
-gboolean rspamd_task_load_message (struct rspamd_task *task,
-								   struct rspamd_http_message *msg,
-								   const gchar *start, gsize len);
+gboolean rspamd_task_load_message(struct rspamd_task *task,
+								  struct rspamd_http_message *msg,
+								  const gchar *start, gsize len);
 
 /**
  * Process task
  * @param task task to process
  * @return task has been successfully parsed and processed
  */
-gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
+gboolean rspamd_task_process(struct rspamd_task *task, guint stages);
 
 /**
  * Return address of sender or NULL
  * @param task
  * @return
  */
-struct rspamd_email_address *rspamd_task_get_sender (struct rspamd_task *task);
+struct rspamd_email_address *rspamd_task_get_sender(struct rspamd_task *task);
 
 /**
  * Return addresses in the following precedence:
@@ -278,7 +278,7 @@ struct rspamd_email_address *rspamd_task_get_sender (struct rspamd_task *task);
  * @param task
  * @return
  */
-const gchar *rspamd_task_get_principal_recipient (struct rspamd_task *task);
+const gchar *rspamd_task_get_principal_recipient(struct rspamd_task *task);
 
 /**
  * Add a recipient for a task
@@ -286,7 +286,7 @@ const gchar *rspamd_task_get_principal_recipient (struct rspamd_task *task);
  * @param rcpt string representation of recipient address
  * @return TRUE if an address has been parsed and added
  */
-gboolean rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt);
+gboolean rspamd_task_add_recipient(struct rspamd_task *task, const gchar *rcpt);
 
 /**
  * Learn specified statfile with message in a task
@@ -295,10 +295,10 @@ gboolean rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt)
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean rspamd_learn_task_spam (struct rspamd_task *task,
-								 gboolean is_spam,
-								 const gchar *classifier,
-								 GError **err);
+gboolean rspamd_learn_task_spam(struct rspamd_task *task,
+								gboolean is_spam,
+								const gchar *classifier,
+								GError **err);
 
 /**
  * Returns required score for a message (usually reject score)
@@ -308,8 +308,8 @@ gboolean rspamd_learn_task_spam (struct rspamd_task *task,
  */
 struct rspamd_scan_result;
 
-gdouble rspamd_task_get_required_score (struct rspamd_task *task,
-										struct rspamd_scan_result *m);
+gdouble rspamd_task_get_required_score(struct rspamd_task *task,
+									   struct rspamd_scan_result *m);
 
 /**
  * Returns the first header as value for a header
@@ -317,8 +317,8 @@ gdouble rspamd_task_get_required_score (struct rspamd_task *task,
  * @param name
  * @return
  */
-rspamd_ftok_t *rspamd_task_get_request_header (struct rspamd_task *task,
-											   const gchar *name);
+rspamd_ftok_t *rspamd_task_get_request_header(struct rspamd_task *task,
+											  const gchar *name);
 
 /**
  * Returns all headers with the specific name
@@ -326,9 +326,9 @@ rspamd_ftok_t *rspamd_task_get_request_header (struct rspamd_task *task,
  * @param name
  * @return
  */
-struct rspamd_request_header_chain *rspamd_task_get_request_header_multiple (
-		struct rspamd_task *task,
-		const gchar *name);
+struct rspamd_request_header_chain *rspamd_task_get_request_header_multiple(
+	struct rspamd_task *task,
+	const gchar *name);
 
 /**
  * Adds a new request header to task (name and value should be mapped to fstring)
@@ -336,13 +336,13 @@ struct rspamd_request_header_chain *rspamd_task_get_request_header_multiple (
  * @param name
  * @param value
  */
-void rspamd_task_add_request_header (struct rspamd_task *task,
-									 rspamd_ftok_t *name, rspamd_ftok_t *value);
+void rspamd_task_add_request_header(struct rspamd_task *task,
+									rspamd_ftok_t *name, rspamd_ftok_t *value);
 
 /**
  * Write log line about the specified task if needed
  */
-void rspamd_task_write_log (struct rspamd_task *task);
+void rspamd_task_write_log(struct rspamd_task *task);
 
 /**
  * Set profiling value for a specific key
@@ -350,8 +350,8 @@ void rspamd_task_write_log (struct rspamd_task *task);
  * @param key
  * @param value
  */
-void rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
-							  gdouble value);
+void rspamd_task_profile_set(struct rspamd_task *task, const gchar *key,
+							 gdouble value);
 
 /**
  * Get value for a specific profiling key
@@ -359,33 +359,33 @@ void rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
  * @param key
  * @return
  */
-gdouble *rspamd_task_profile_get (struct rspamd_task *task, const gchar *key);
+gdouble *rspamd_task_profile_get(struct rspamd_task *task, const gchar *key);
 
 /**
  * Sets finishing time for a task if not yet set
  * @param task
  * @return
  */
-gboolean rspamd_task_set_finish_time (struct rspamd_task *task);
+gboolean rspamd_task_set_finish_time(struct rspamd_task *task);
 
 /**
  * Returns task processing stage name
  * @param stg
  * @return
  */
-const gchar *rspamd_task_stage_name (enum rspamd_task_stage stg);
+const gchar *rspamd_task_stage_name(enum rspamd_task_stage stg);
 
 /*
  * Called on forced timeout
  */
-void rspamd_task_timeout (EV_P_ ev_timer *w, int revents);
+void rspamd_task_timeout(EV_P_ ev_timer *w, int revents);
 
 /*
  * Called on unexpected IO error (e.g. ECONNRESET)
  */
-void rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents);
+void rspamd_worker_guard_handler(EV_P_ ev_io *w, int revents);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

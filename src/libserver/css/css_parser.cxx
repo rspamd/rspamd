@@ -32,7 +32,8 @@ namespace rspamd::css {
 
 const css_consumed_block css_parser_eof_block{};
 
-auto css_consumed_block::attach_block(consumed_block_ptr &&block) -> bool {
+auto css_consumed_block::attach_block(consumed_block_ptr &&block) -> bool
+{
 	if (std::holds_alternative<std::monostate>(content)) {
 		/* Switch from monostate */
 		content = std::vector<consumed_block_ptr>();
@@ -48,7 +49,8 @@ auto css_consumed_block::attach_block(consumed_block_ptr &&block) -> bool {
 	return true;
 }
 
-auto css_consumed_block::add_function_argument(consumed_block_ptr &&block)  -> bool {
+auto css_consumed_block::add_function_argument(consumed_block_ptr &&block) -> bool
+{
 	if (!std::holds_alternative<css_function_block>(content)) {
 		return false;
 	}
@@ -63,7 +65,7 @@ auto css_consumed_block::token_type_str(void) const -> const char *
 {
 	const auto *ret = "";
 
-	switch(tag) {
+	switch (tag) {
 	case parser_tag_type::css_top_block:
 		ret = "top";
 		break;
@@ -93,53 +95,54 @@ auto css_consumed_block::token_type_str(void) const -> const char *
 	return ret;
 }
 
-auto css_consumed_block::debug_str(void) -> std::string {
+auto css_consumed_block::debug_str(void) -> std::string
+{
 	std::string ret = fmt::format(R"("type": "{}", "value": )", token_type_str());
 
-	std::visit([&](auto& arg) {
-				using T = std::decay_t<decltype(arg)>;
+	std::visit([&](auto &arg) {
+		using T = std::decay_t<decltype(arg)>;
 
-				if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
-					/* Array of blocks */
-					ret += "[";
-					for (const auto &block : arg) {
-						ret += "{";
-						ret += block->debug_str();
-						ret += "}, ";
-					}
+		if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
+			/* Array of blocks */
+			ret += "[";
+			for (const auto &block: arg) {
+				ret += "{";
+				ret += block->debug_str();
+				ret += "}, ";
+			}
 
-					if (*(--ret.end()) == ' ') {
-						ret.pop_back();
-						ret.pop_back(); /* Last ',' */
-					}
-					ret += "]";
-				}
-				else if constexpr (std::is_same_v<T, std::monostate>) {
-					/* Empty block */
-					ret += R"("empty")";
-				}
-				else if constexpr (std::is_same_v<T, css_function_block>) {
-					ret += R"({ "content": {"token": )";
-					ret += "\"" + arg.function.debug_token_str() + "\", ";
-					ret += R"("arguments":  [)";
+			if (*(--ret.end()) == ' ') {
+				ret.pop_back();
+				ret.pop_back(); /* Last ',' */
+			}
+			ret += "]";
+		}
+		else if constexpr (std::is_same_v<T, std::monostate>) {
+			/* Empty block */
+			ret += R"("empty")";
+		}
+		else if constexpr (std::is_same_v<T, css_function_block>) {
+			ret += R"({ "content": {"token": )";
+			ret += "\"" + arg.function.debug_token_str() + "\", ";
+			ret += R"("arguments":  [)";
 
-					for (const auto &block : arg.args) {
-						ret += "{";
-						ret += block->debug_str();
-						ret += "}, ";
-					}
-					if (*(--ret.end()) == ' ') {
-						ret.pop_back();
-						ret.pop_back(); /* Last ',' */
-					}
-					ret += "]}}";
-				}
-				else {
-					/* Single element block */
-					ret += "\"" + arg.debug_token_str() + "\"";
-				}
-			},
-			content);
+			for (const auto &block: arg.args) {
+				ret += "{";
+				ret += block->debug_str();
+				ret += "}, ";
+			}
+			if (*(--ret.end()) == ' ') {
+				ret.pop_back();
+				ret.pop_back(); /* Last ',' */
+			}
+			ret += "]}}";
+		}
+		else {
+			/* Single element block */
+			ret += "\"" + arg.debug_token_str() + "\"";
+		}
+	},
+			   content);
 
 	return ret;
 }
@@ -147,7 +150,9 @@ auto css_consumed_block::debug_str(void) -> std::string {
 class css_parser {
 public:
 	css_parser(void) = delete; /* Require mempool to be set for logging */
-	explicit css_parser(rspamd_mempool_t *pool) : pool (pool) {
+	explicit css_parser(rspamd_mempool_t *pool)
+		: pool(pool)
+	{
 		style_object.reset();
 		error.type = css_parse_error_type::PARSE_ERROR_NO_ERROR;
 	}
@@ -156,8 +161,9 @@ public:
 	 * This constructor captures existing via unique_ptr, but it does not
 	 * destruct it on errors (we assume that it is owned somewhere else)
 	 */
-	explicit css_parser(std::shared_ptr<css_style_sheet> &&existing, rspamd_mempool_t *pool) :
-			style_object(existing), pool(pool) {
+	explicit css_parser(std::shared_ptr<css_style_sheet> &&existing, rspamd_mempool_t *pool)
+		: style_object(existing), pool(pool)
+	{
 		error.type = css_parse_error_type::PARSE_ERROR_NO_ERROR;
 	}
 
@@ -171,7 +177,8 @@ public:
 	std::unique_ptr<css_consumed_block> consume_css_rule(const std::string_view &sv);
 	std::optional<css_parse_error> consume_input(const std::string_view &sv);
 
-	auto get_object_maybe(void) -> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error> {
+	auto get_object_maybe(void) -> tl::expected<std::shared_ptr<css_style_sheet>, css_parse_error>
+	{
 		if (style_object) {
 			return style_object;
 		}
@@ -206,13 +213,12 @@ private:
 /*
  * Find if we need to unescape css
  */
-bool
-css_parser::need_unescape(const std::string_view &sv)
+bool css_parser::need_unescape(const std::string_view &sv)
 {
 	bool in_quote = false;
 	char quote_char, prev_c = 0;
 
-	for (const auto c : sv) {
+	for (const auto c: sv) {
 		if (!in_quote) {
 			if (c == '"' || c == '\'') {
 				in_quote = true;
@@ -240,12 +246,12 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 	auto ret = true, want_more = true;
 
 	msg_debug_css("consume function block; top block: %s, recursion level %d",
-			top->token_type_str(), rec_level);
+				  top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
-				"maximum nesting has reached when parsing function value");
+								"maximum nesting has reached when parsing function value");
 		return false;
 	}
 
@@ -270,8 +276,8 @@ auto css_parser::function_consumer(std::unique_ptr<css_consumed_block> &top) -> 
 		default:
 			/* Attach everything to the function block */
 			top->add_function_argument(std::make_unique<css_consumed_block>(
-					css::css_consumed_block::parser_tag_type::css_function_arg,
-					std::move(next_token)));
+				css::css_consumed_block::parser_tag_type::css_function_arg,
+				std::move(next_token)));
 			break;
 		}
 	}
@@ -289,18 +295,18 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 	std::unique_ptr<css_consumed_block> block;
 
 	msg_debug_css("consume simple block; top block: %s, recursion level %d",
-			top->token_type_str(), rec_level);
+				  top->token_type_str(), rec_level);
 
 	if (!consume_current && ++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
-				"maximum nesting has reached when parsing simple block value");
+								"maximum nesting has reached when parsing simple block value");
 		return false;
 	}
 
 	if (!consume_current) {
 		block = std::make_unique<css_consumed_block>(
-				css_consumed_block::parser_tag_type::css_simple_block);
+			css_consumed_block::parser_tag_type::css_simple_block);
 	}
 
 
@@ -327,7 +333,7 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 
 	if (!consume_current && ret) {
 		msg_debug_css("attached node 'simple block' rule %s; length=%d",
-				block->token_type_str(), (int)block->size());
+					  block->token_type_str(), (int) block->size());
 		top->attach_block(std::move(block));
 	}
 
@@ -341,18 +347,18 @@ auto css_parser::simple_block_consumer(std::unique_ptr<css_consumed_block> &top,
 auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
 	msg_debug_css("consume qualified block; top block: %s, recursion level %d",
-			top->token_type_str(), rec_level);
+				  top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
-				"maximum nesting has reached when parsing qualified rule value");
+								"maximum nesting has reached when parsing qualified rule value");
 		return false;
 	}
 
 	auto ret = true, want_more = true;
 	auto block = std::make_unique<css_consumed_block>(
-			css_consumed_block::parser_tag_type::css_qualified_rule);
+		css_consumed_block::parser_tag_type::css_qualified_rule);
 
 	while (ret && want_more && !eof) {
 		auto next_token = tokeniser->next_token();
@@ -367,12 +373,11 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 				ret = true;
 			}
 			else {
-
 			}
 			break;
 		case css_parser_token::token_type::ocurlbrace_token:
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ecurlbrace_token, false);
+										css_parser_token::token_type::ecurlbrace_token, false);
 			want_more = false;
 			break;
 		case css_parser_token::token_type::whitespace_token:
@@ -388,7 +393,7 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 	if (ret) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
 			msg_debug_css("attached node qualified rule %s; length=%d",
-					block->token_type_str(), (int)block->size());
+						  block->token_type_str(), (int) block->size());
 			top->attach_block(std::move(block));
 		}
 	}
@@ -401,18 +406,18 @@ auto css_parser::qualified_rule_consumer(std::unique_ptr<css_consumed_block> &to
 auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> bool
 {
 	msg_debug_css("consume at-rule block; top block: %s, recursion level %d",
-			top->token_type_str(), rec_level);
+				  top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
 		msg_err_css("max nesting reached, ignore style");
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
-				"maximum nesting has reached when parsing at keyword");
+								"maximum nesting has reached when parsing at keyword");
 		return false;
 	}
 
 	auto ret = true, want_more = true;
 	auto block = std::make_unique<css_consumed_block>(
-			css_consumed_block::parser_tag_type::css_at_rule);
+		css_consumed_block::parser_tag_type::css_at_rule);
 
 	while (ret && want_more && !eof) {
 		auto next_token = tokeniser->next_token();
@@ -427,12 +432,11 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 				ret = true;
 			}
 			else {
-
 			}
 			break;
 		case css_parser_token::token_type::ocurlbrace_token:
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ecurlbrace_token, false);
+										css_parser_token::token_type::ecurlbrace_token, false);
 			want_more = false;
 			break;
 		case css_parser_token::token_type::whitespace_token:
@@ -451,7 +455,7 @@ auto css_parser::at_rule_consumer(std::unique_ptr<css_consumed_block> &top) -> b
 	if (ret) {
 		if (top->tag == css_consumed_block::parser_tag_type::css_top_block) {
 			msg_debug_css("attached node qualified rule %s; length=%d",
-					block->token_type_str(), (int)block->size());
+						  block->token_type_str(), (int) block->size());
 			top->attach_block(std::move(block));
 		}
 	}
@@ -467,11 +471,11 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	std::unique_ptr<css_consumed_block> block;
 
 	msg_debug_css("consume component block; top block: %s, recursion level %d",
-			top->token_type_str(), rec_level);
+				  top->token_type_str(), rec_level);
 
 	if (++rec_level > max_rec) {
 		error = css_parse_error(css_parse_error_type::PARSE_ERROR_BAD_NESTING,
-				"maximum nesting has reached when parsing component value");
+								"maximum nesting has reached when parsing component value");
 		return false;
 	}
 
@@ -484,26 +488,26 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 			break;
 		case css_parser_token::token_type::ocurlbrace_token:
 			block = std::make_unique<css_consumed_block>(
-					css_consumed_block::parser_tag_type::css_simple_block);
+				css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ecurlbrace_token,
-					true);
+										css_parser_token::token_type::ecurlbrace_token,
+										true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::obrace_token:
 			block = std::make_unique<css_consumed_block>(
-					css_consumed_block::parser_tag_type::css_simple_block);
+				css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::ebrace_token,
-					true);
+										css_parser_token::token_type::ebrace_token,
+										true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::osqbrace_token:
 			block = std::make_unique<css_consumed_block>(
-					css_consumed_block::parser_tag_type::css_simple_block);
+				css_consumed_block::parser_tag_type::css_simple_block);
 			ret = simple_block_consumer(block,
-					css_parser_token::token_type::esqbrace_token,
-					true);
+										css_parser_token::token_type::esqbrace_token,
+										true);
 			need_more = false;
 			break;
 		case css_parser_token::token_type::whitespace_token:
@@ -512,8 +516,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		case css_parser_token::token_type::function_token: {
 			need_more = false;
 			block = std::make_unique<css_consumed_block>(
-					css_consumed_block::parser_tag_type::css_function,
-					std::move(next_token));
+				css_consumed_block::parser_tag_type::css_function,
+				std::move(next_token));
 
 			/* Consume the rest */
 			ret = function_consumer(block);
@@ -521,8 +525,8 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 		}
 		default:
 			block = std::make_unique<css_consumed_block>(
-					css_consumed_block::parser_tag_type::css_component,
-					std::move(next_token));
+				css_consumed_block::parser_tag_type::css_component,
+				std::move(next_token));
 			need_more = false;
 			break;
 		}
@@ -530,7 +534,7 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 
 	if (ret && block) {
 		msg_debug_css("attached node component rule %s; length=%d",
-				block->token_type_str(), (int)block->size());
+					  block->token_type_str(), (int) block->size());
 		top->attach_block(std::move(block));
 	}
 
@@ -539,14 +543,13 @@ auto css_parser::component_value_consumer(std::unique_ptr<css_consumed_block> &t
 	return ret;
 }
 
-auto
-css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
+auto css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
 {
 	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
 	auto ret = true;
 
 	auto consumed_blocks =
-			std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
+		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_top_block);
 
 	while (!eof && ret) {
 		auto next_token = tokeniser->next_token();
@@ -567,7 +570,6 @@ css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<cs
 			ret = qualified_rule_consumer(consumed_blocks);
 			break;
 		}
-
 	}
 
 	tokeniser.reset(nullptr); /* No longer needed */
@@ -575,14 +577,13 @@ css_parser::consume_css_blocks(const std::string_view &sv) -> std::unique_ptr<cs
 	return consumed_blocks;
 }
 
-auto
-css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
+auto css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_consumed_block>
 {
 	tokeniser = std::make_unique<css_tokeniser>(pool, sv);
 	auto ret = true;
 
 	auto rule_block =
-			std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_simple_block);
+		std::make_unique<css_consumed_block>(css_consumed_block::parser_tag_type::css_simple_block);
 
 	while (!eof && ret) {
 		auto next_token = tokeniser->next_token();
@@ -599,7 +600,6 @@ css_parser::consume_css_rule(const std::string_view &sv) -> std::unique_ptr<css_
 			ret = component_value_consumer(rule_block);
 			break;
 		}
-
 	}
 
 	tokeniser.reset(nullptr); /* No longer needed */
@@ -616,7 +616,7 @@ css_parser::consume_input(const std::string_view &sv)
 	if (rules.empty()) {
 		if (error.type == css_parse_error_type::PARSE_ERROR_NO_ERROR) {
 			return css_parse_error(css_parse_error_type::PARSE_ERROR_EMPTY,
-					"no css rules consumed");
+								   "no css rules consumed");
 		}
 		else {
 			return error;
@@ -627,7 +627,7 @@ css_parser::consume_input(const std::string_view &sv)
 		style_object = std::make_shared<css_style_sheet>(pool);
 	}
 
-	for (auto &&rule : rules) {
+	for (auto &&rule: rules) {
 		/*
 		 * For now, we do not need any of the at rules, so we can safely ignore them
 		 */
@@ -636,9 +636,9 @@ css_parser::consume_input(const std::string_view &sv)
 		if (children.size() > 1 &&
 			children[0]->tag == css_consumed_block::parser_tag_type::css_component) {
 			auto simple_block = std::find_if(children.begin(), children.end(),
-					[](auto &bl) {
-						return bl->tag == css_consumed_block::parser_tag_type::css_simple_block;
-					});
+											 [](auto &bl) {
+												 return bl->tag == css_consumed_block::parser_tag_type::css_simple_block;
+											 });
 
 			if (simple_block != children.end()) {
 				/*
@@ -650,8 +650,8 @@ css_parser::consume_input(const std::string_view &sv)
 				/* First, tag all components as preamble */
 				auto selector_it = children.cbegin();
 
-				auto selector_token_functor = [&selector_it,&simple_block](void)
-						-> const css_consumed_block & {
+				auto selector_token_functor = [&selector_it, &simple_block](void)
+					-> const css_consumed_block & {
 					for (;;) {
 						if (selector_it == simple_block) {
 							return css_parser_eof_block;
@@ -668,11 +668,11 @@ css_parser::consume_input(const std::string_view &sv)
 				auto selectors_vec = process_selector_tokens(pool, selector_token_functor);
 
 				if (selectors_vec.size() > 0) {
-					msg_debug_css("processed %d selectors", (int)selectors_vec.size());
+					msg_debug_css("processed %d selectors", (int) selectors_vec.size());
 					auto decls_it = (*simple_block)->get_blocks_or_empty().cbegin();
 					auto decls_end = (*simple_block)->get_blocks_or_empty().cend();
 					auto declaration_token_functor = [&decls_it, &decls_end](void)
-							-> const css_consumed_block & {
+						-> const css_consumed_block & {
 						for (;;) {
 							if (decls_it == decls_end) {
 								return css_parser_eof_block;
@@ -687,15 +687,15 @@ css_parser::consume_input(const std::string_view &sv)
 					};
 
 					auto declarations_vec = process_declaration_tokens(pool,
-							declaration_token_functor);
+																	   declaration_token_functor);
 
 					if (declarations_vec && !declarations_vec->get_rules().empty()) {
 						msg_debug_css("processed %d rules",
-								(int)declarations_vec->get_rules().size());
+									  (int) declarations_vec->get_rules().size());
 
-						for (auto &&selector : selectors_vec) {
+						for (auto &&selector: selectors_vec) {
 							style_object->add_selector_rule(std::move(selector),
-									   declarations_vec);
+															declarations_vec);
 						}
 					}
 				}
@@ -704,14 +704,13 @@ css_parser::consume_input(const std::string_view &sv)
 	}
 
 	auto debug_str = consumed_blocks->debug_str();
-	msg_debug_css("consumed css: {%*s}", (int)debug_str.size(), debug_str.data());
+	msg_debug_css("consumed css: {%*s}", (int) debug_str.size(), debug_str.data());
 
 	return std::nullopt;
 }
 
-auto
-get_selectors_parser_functor(rspamd_mempool_t *pool,
-							 const std::string_view &st) -> blocks_gen_functor
+auto get_selectors_parser_functor(rspamd_mempool_t *pool,
+								  const std::string_view &st) -> blocks_gen_functor
 {
 	css_parser parser(pool);
 
@@ -734,7 +733,7 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 	 * mutable.
 	 */
 	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
-		-> const css_consumed_block & {
+		   -> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 
@@ -747,9 +746,8 @@ get_selectors_parser_functor(rspamd_mempool_t *pool,
 	};
 }
 
-auto
-get_rules_parser_functor(rspamd_mempool_t *pool,
-							 const std::string_view &st) -> blocks_gen_functor
+auto get_rules_parser_functor(rspamd_mempool_t *pool,
+							  const std::string_view &st) -> blocks_gen_functor
 {
 	css_parser parser(pool);
 
@@ -760,7 +758,7 @@ get_rules_parser_functor(rspamd_mempool_t *pool,
 	auto last = rules.end();
 
 	return [cur, consumed_blocks = std::move(consumed_blocks), last](void) mutable
-			-> const css_consumed_block & {
+		   -> const css_consumed_block & {
 		if (cur != last) {
 			const auto &ret = (*cur);
 
@@ -802,8 +800,7 @@ auto parse_css(rspamd_mempool_t *pool, const std::string_view &st,
 	return tl::make_unexpected(maybe_error.value());
 }
 
-auto
-parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
+auto parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 	-> rspamd::html::html_block *
 {
 	std::string_view processed_input;
@@ -817,7 +814,7 @@ parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 		processed_input = std::string_view{nspace, nlen};
 	}
 	auto &&res = process_declaration_tokens(pool,
-			get_rules_parser_functor(pool, processed_input));
+											get_rules_parser_functor(pool, processed_input));
 
 	if (res) {
 		return res->compile_to_block(pool);
@@ -826,8 +823,10 @@ parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 	return nullptr;
 }
 
-TEST_SUITE("css") {
-	TEST_CASE("parse colors") {
+TEST_SUITE("css")
+{
+	TEST_CASE("parse colors")
+	{
 		const std::vector<const char *> cases{
 			"P { CoLoR: rgb(100%, 50%, 0%); opacity: -1; width: 1em; display: none; } /* very transparent solid orange тест */",
 			"p { color: rgb(100%, 50%, 0%); opacity: 2; display: inline; } /* very transparent solid orange */",
@@ -867,17 +866,19 @@ TEST_SUITE("css") {
 		};
 
 		rspamd_mempool_t *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-				"css", 0);
-		for (const auto &c : cases) {
-			SUBCASE((std::string("parse css: ") + c).c_str()) {
+													"css", 0);
+		for (const auto &c: cases) {
+			SUBCASE((std::string("parse css: ") + c).c_str())
+			{
 				CHECK(parse_css(pool, c, nullptr).value().get() != nullptr);
 			}
 		}
 
 		/* We now merge all styles together */
-		SUBCASE("merged css parse") {
+		SUBCASE("merged css parse")
+		{
 			std::shared_ptr<css_style_sheet> merged;
-			for (const auto &c : cases) {
+			for (const auto &c: cases) {
 				auto ret = parse_css(pool, c, std::move(merged));
 				merged.swap(ret.value());
 			}
@@ -888,4 +889,4 @@ TEST_SUITE("css") {
 		rspamd_mempool_delete(pool);
 	}
 }
-}
+}// namespace rspamd::css

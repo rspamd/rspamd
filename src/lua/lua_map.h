@@ -18,20 +18,20 @@
 
 #include "lua_common.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-LUA_PUBLIC_FUNCTION_DEF (config, add_radix_map);
-LUA_PUBLIC_FUNCTION_DEF (config, radix_from_config);
-LUA_PUBLIC_FUNCTION_DEF (config, radix_from_ucl);
-LUA_PUBLIC_FUNCTION_DEF (config, add_map);
-LUA_PUBLIC_FUNCTION_DEF (config, add_hash_map);
-LUA_PUBLIC_FUNCTION_DEF (config, add_kv_map);
-LUA_PUBLIC_FUNCTION_DEF (config, add_map);
-LUA_PUBLIC_FUNCTION_DEF (config, get_maps);
+LUA_PUBLIC_FUNCTION_DEF(config, add_radix_map);
+LUA_PUBLIC_FUNCTION_DEF(config, radix_from_config);
+LUA_PUBLIC_FUNCTION_DEF(config, radix_from_ucl);
+LUA_PUBLIC_FUNCTION_DEF(config, add_map);
+LUA_PUBLIC_FUNCTION_DEF(config, add_hash_map);
+LUA_PUBLIC_FUNCTION_DEF(config, add_kv_map);
+LUA_PUBLIC_FUNCTION_DEF(config, add_map);
+LUA_PUBLIC_FUNCTION_DEF(config, get_maps);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

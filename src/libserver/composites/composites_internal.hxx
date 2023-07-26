@@ -53,15 +53,19 @@ struct rspamd_composite {
 
 class composites_manager {
 public:
-	composites_manager(struct rspamd_config *_cfg) : cfg(_cfg) {
+	composites_manager(struct rspamd_config *_cfg)
+		: cfg(_cfg)
+	{
 		rspamd_mempool_add_destructor(_cfg->cfg_pool, composites_manager_dtor, this);
 	}
 
-	auto size(void) const -> std::size_t {
+	auto size(void) const -> std::size_t
+	{
 		return all_composites.size();
 	}
 
-	auto find(std::string_view name) const -> const rspamd_composite * {
+	auto find(std::string_view name) const -> const rspamd_composite *
+	{
 		auto found = composites.find(std::string(name));
 
 		if (found != composites.end()) {
@@ -73,14 +77,16 @@ public:
 
 	auto add_composite(std::string_view, const ucl_object_t *, bool silent_duplicate) -> rspamd_composite *;
 	auto add_composite(std::string_view name, std::string_view expression, bool silent_duplicate, double score = NAN) -> rspamd_composite *;
+
 private:
 	~composites_manager() = default;
-	static void composites_manager_dtor(void *ptr) {
+	static void composites_manager_dtor(void *ptr)
+	{
 		delete COMPOSITE_MANAGER_FROM_PTR(ptr);
 	}
 
 	auto new_composite(std::string_view composite_name, rspamd_expression *expr,
-						std::string_view composite_expression) -> auto
+					   std::string_view composite_expression) -> auto
 	{
 		auto &composite = all_composites.emplace_back(std::make_shared<rspamd_composite>());
 		composite->expr = expr;
@@ -94,12 +100,13 @@ private:
 	}
 
 	ankerl::unordered_dense::map<std::string,
-			std::shared_ptr<rspamd_composite>, rspamd::smart_str_hash, rspamd::smart_str_equal> composites;
+								 std::shared_ptr<rspamd_composite>, rspamd::smart_str_hash, rspamd::smart_str_equal>
+		composites;
 	/* Store all composites here, even if we have duplicates */
 	std::vector<std::shared_ptr<rspamd_composite>> all_composites;
 	struct rspamd_config *cfg;
 };
 
-}
+}// namespace rspamd::composites
 
-#endif //RSPAMD_COMPOSITES_INTERNAL_HXX
+#endif//RSPAMD_COMPOSITES_INTERNAL_HXX

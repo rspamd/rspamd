@@ -22,7 +22,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -32,7 +32,7 @@ extern "C" {
  * @param len length
  * @return new length of the string trimmed
  */
-const char* rspamd_string_unicode_trim_inplace (const char *str, size_t *len);
+const char *rspamd_string_unicode_trim_inplace(const char *str, size_t *len);
 
 enum rspamd_utf8_normalise_result {
 	RSPAMD_UNICODE_NORM_NORMAL = 0,
@@ -58,7 +58,7 @@ enum rspamd_utf8_normalise_result rspamd_normalise_unicode_inplace(gchar *start,
  * @param target_len
  * @return a new string that should be freed with g_free
  */
-gchar* rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len);
+gchar *rspamd_utf8_transliterate(const gchar *start, gsize len, gsize *target_len);
 
 /**
  * Compare two strings using libicu collator
@@ -78,8 +78,8 @@ int rspamd_utf8_strcmp(const char *s1, const char *s2, gsize n);
  */
 int rspamd_utf8_strcmp_sizes(const char *s1, gsize n1, const char *s2, gsize n2);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif //RSPAMD_UTF8_UTIL_H
+#endif//RSPAMD_UTF8_UTIL_H

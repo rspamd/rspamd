@@ -19,7 +19,7 @@
 #include "config.h"
 #include "fuzzy_wire.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -31,9 +31,9 @@ struct rspamd_fuzzy_backend_sqlite;
  * @param err error pointer
  * @return backend structure or NULL
  */
-struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open (const gchar *path,
-																	  gboolean vacuum,
-																	  GError **err);
+struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open(const gchar *path,
+																	 gboolean vacuum,
+																	 GError **err);
 
 /**
  * Check specified fuzzy in the backend
@@ -41,16 +41,16 @@ struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open (const gcha
  * @param cmd
  * @return reply with probability and weight
  */
-struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check (
-		struct rspamd_fuzzy_backend_sqlite *backend,
-		const struct rspamd_fuzzy_cmd *cmd,
-		gint64 expire);
+struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check(
+	struct rspamd_fuzzy_backend_sqlite *backend,
+	const struct rspamd_fuzzy_cmd *cmd,
+	gint64 expire);
 
 /**
  * Prepare storage for updates (by starting transaction)
  */
-gboolean rspamd_fuzzy_backend_sqlite_prepare_update (struct rspamd_fuzzy_backend_sqlite *backend,
-													 const gchar *source);
+gboolean rspamd_fuzzy_backend_sqlite_prepare_update(struct rspamd_fuzzy_backend_sqlite *backend,
+													const gchar *source);
 
 /**
  * Add digest to the database
@@ -58,8 +58,8 @@ gboolean rspamd_fuzzy_backend_sqlite_prepare_update (struct rspamd_fuzzy_backend
  * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_sqlite_add (struct rspamd_fuzzy_backend_sqlite *backend,
-										  const struct rspamd_fuzzy_cmd *cmd);
+gboolean rspamd_fuzzy_backend_sqlite_add(struct rspamd_fuzzy_backend_sqlite *backend,
+										 const struct rspamd_fuzzy_cmd *cmd);
 
 /**
  * Delete digest from the database
@@ -67,40 +67,40 @@ gboolean rspamd_fuzzy_backend_sqlite_add (struct rspamd_fuzzy_backend_sqlite *ba
  * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_sqlite_del (
-		struct rspamd_fuzzy_backend_sqlite *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+gboolean rspamd_fuzzy_backend_sqlite_del(
+	struct rspamd_fuzzy_backend_sqlite *backend,
+	const struct rspamd_fuzzy_cmd *cmd);
 
 /**
  * Commit updates to storage
  */
-gboolean rspamd_fuzzy_backend_sqlite_finish_update (struct rspamd_fuzzy_backend_sqlite *backend,
-													const gchar *source, gboolean version_bump);
+gboolean rspamd_fuzzy_backend_sqlite_finish_update(struct rspamd_fuzzy_backend_sqlite *backend,
+												   const gchar *source, gboolean version_bump);
 
 /**
  * Sync storage
  * @param backend
  * @return
  */
-gboolean rspamd_fuzzy_backend_sqlite_sync (struct rspamd_fuzzy_backend_sqlite *backend,
-										   gint64 expire,
-										   gboolean clean_orphaned);
+gboolean rspamd_fuzzy_backend_sqlite_sync(struct rspamd_fuzzy_backend_sqlite *backend,
+										  gint64 expire,
+										  gboolean clean_orphaned);
 
 /**
  * Close storage
  * @param backend
  */
-void rspamd_fuzzy_backend_sqlite_close (struct rspamd_fuzzy_backend_sqlite *backend);
+void rspamd_fuzzy_backend_sqlite_close(struct rspamd_fuzzy_backend_sqlite *backend);
 
-gsize rspamd_fuzzy_backend_sqlite_count (struct rspamd_fuzzy_backend_sqlite *backend);
+gsize rspamd_fuzzy_backend_sqlite_count(struct rspamd_fuzzy_backend_sqlite *backend);
 
-gint rspamd_fuzzy_backend_sqlite_version (struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
+gint rspamd_fuzzy_backend_sqlite_version(struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
 
-gsize rspamd_fuzzy_backend_sqlite_expired (struct rspamd_fuzzy_backend_sqlite *backend);
+gsize rspamd_fuzzy_backend_sqlite_expired(struct rspamd_fuzzy_backend_sqlite *backend);
 
-const gchar *rspamd_fuzzy_sqlite_backend_id (struct rspamd_fuzzy_backend_sqlite *backend);
+const gchar *rspamd_fuzzy_sqlite_backend_id(struct rspamd_fuzzy_backend_sqlite *backend);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

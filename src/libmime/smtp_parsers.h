@@ -23,28 +23,28 @@
 #include "message.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-int rspamd_smtp_addr_parse (const char *data, size_t len,
-							struct rspamd_email_address *addr);
+int rspamd_smtp_addr_parse(const char *data, size_t len,
+						   struct rspamd_email_address *addr);
 
-gboolean rspamd_content_disposition_parser (const char *data, size_t len,
-											struct rspamd_content_disposition *cd,
-											rspamd_mempool_t *pool);
+gboolean rspamd_content_disposition_parser(const char *data, size_t len,
+										   struct rspamd_content_disposition *cd,
+										   rspamd_mempool_t *pool);
 
 gboolean
-rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
-					   const gchar **charset, gsize *charset_len,
-					   const gchar **encoded, gsize *encoded_len);
+rspamd_rfc2047_parser(const gchar *in, gsize len, gint *pencoding,
+					  const gchar **charset, gsize *charset_len,
+					  const gchar **encoded, gsize *encoded_len);
 
-rspamd_inet_addr_t *rspamd_parse_smtp_ip (const char *data, size_t len,
-										  rspamd_mempool_t *pool);
+rspamd_inet_addr_t *rspamd_parse_smtp_ip(const char *data, size_t len,
+										 rspamd_mempool_t *pool);
 
-guint64 rspamd_parse_smtp_date (const unsigned char *data, size_t len, GError **err);
+guint64 rspamd_parse_smtp_date(const unsigned char *data, size_t len, GError **err);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

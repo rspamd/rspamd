@@ -25,7 +25,7 @@
 #include "upstream.h"
 #include "libutil/hash.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -49,11 +49,11 @@ struct rspamd_dns_resolver {
 /**
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
-struct rspamd_dns_resolver *rspamd_dns_resolver_init (rspamd_logger_t *logger,
-													  struct ev_loop *ev_base,
-													  struct rspamd_config *cfg);
+struct rspamd_dns_resolver *rspamd_dns_resolver_init(rspamd_logger_t *logger,
+													 struct ev_loop *ev_base,
+													 struct rspamd_config *cfg);
 
-void rspamd_dns_resolver_deinit (struct rspamd_dns_resolver *resolver);
+void rspamd_dns_resolver_deinit(struct rspamd_dns_resolver *resolver);
 
 struct rspamd_dns_request_ud;
 
@@ -68,25 +68,25 @@ struct rspamd_dns_request_ud;
  * @param ... string or ip address based on a request type
  * @return TRUE if request was sent.
  */
-struct rspamd_dns_request_ud *rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
-														   struct rspamd_async_session *session,
-														   rspamd_mempool_t *pool,
-														   dns_callback_type cb,
-														   gpointer ud,
-														   enum rdns_request_type type,
-														   const char *name);
+struct rspamd_dns_request_ud *rspamd_dns_resolver_request(struct rspamd_dns_resolver *resolver,
+														  struct rspamd_async_session *session,
+														  rspamd_mempool_t *pool,
+														  dns_callback_type cb,
+														  gpointer ud,
+														  enum rdns_request_type type,
+														  const char *name);
 
-gboolean rspamd_dns_resolver_request_task (struct rspamd_task *task,
-										   dns_callback_type cb,
-										   gpointer ud,
-										   enum rdns_request_type type,
-										   const char *name);
+gboolean rspamd_dns_resolver_request_task(struct rspamd_task *task,
+										  dns_callback_type cb,
+										  gpointer ud,
+										  enum rdns_request_type type,
+										  const char *name);
 
-gboolean rspamd_dns_resolver_request_task_forced (struct rspamd_task *task,
-												  dns_callback_type cb,
-												  gpointer ud,
-												  enum rdns_request_type type,
-												  const char *name);
+gboolean rspamd_dns_resolver_request_task_forced(struct rspamd_task *task,
+												 dns_callback_type cb,
+												 gpointer ud,
+												 enum rdns_request_type type,
+												 const char *name);
 
 /**
  * Converts a name into idna from UTF8
@@ -96,13 +96,13 @@ gboolean rspamd_dns_resolver_request_task_forced (struct rspamd_task *task,
  * @param namelen length of input (-1 for zero terminated)
  * @return encoded string
  */
-gchar* rspamd_dns_resolver_idna_convert_utf8 (struct rspamd_dns_resolver *resolver,
-										  rspamd_mempool_t *pool,
-										  const char *name,
-										  gint namelen,
-										  guint *outlen);
+gchar *rspamd_dns_resolver_idna_convert_utf8(struct rspamd_dns_resolver *resolver,
+											 rspamd_mempool_t *pool,
+											 const char *name,
+											 gint namelen,
+											 guint *outlen);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

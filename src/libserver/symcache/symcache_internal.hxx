@@ -40,42 +40,42 @@
 
 #include "symcache_id_list.hxx"
 
-#define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "symcache", log_tag(), \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_err_cache_lambda(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "symcache", log_tag(), \
-        log_func, \
-        __VA_ARGS__)
-#define msg_err_cache_task(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "symcache", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        "symcache", log_tag(), \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "symcache", log_tag(), \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_cache_lambda(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
-        log_func, \
-        __VA_ARGS__)
-#define msg_debug_cache_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        ::rspamd::symcache::rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_cache_task_lambda(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        ::rspamd::symcache::rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
-        log_func, \
-        __VA_ARGS__)
+#define msg_err_cache(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,  \
+													   "symcache", log_tag(), \
+													   RSPAMD_LOG_FUNC,       \
+													   __VA_ARGS__)
+#define msg_err_cache_lambda(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,  \
+															  "symcache", log_tag(), \
+															  log_func,              \
+															  __VA_ARGS__)
+#define msg_err_cache_task(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,                 \
+															"symcache", task->task_pool->tag.uid, \
+															RSPAMD_LOG_FUNC,                      \
+															__VA_ARGS__)
+#define msg_warn_cache(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,   \
+														"symcache", log_tag(), \
+														RSPAMD_LOG_FUNC,       \
+														__VA_ARGS__)
+#define msg_info_cache(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,      \
+														"symcache", log_tag(), \
+														RSPAMD_LOG_FUNC,       \
+														__VA_ARGS__)
+#define msg_debug_cache(...) rspamd_conditional_debug_fast(NULL, NULL,                                                        \
+														   ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
+														   RSPAMD_LOG_FUNC,                                                   \
+														   __VA_ARGS__)
+#define msg_debug_cache_lambda(...) rspamd_conditional_debug_fast(NULL, NULL,                                                        \
+																  ::rspamd::symcache::rspamd_symcache_log_id, "symcache", log_tag(), \
+																  log_func,                                                          \
+																  __VA_ARGS__)
+#define msg_debug_cache_task(...) rspamd_conditional_debug_fast(NULL, NULL,                                                                       \
+																::rspamd::symcache::rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
+																RSPAMD_LOG_FUNC,                                                                  \
+																__VA_ARGS__)
+#define msg_debug_cache_task_lambda(...) rspamd_conditional_debug_fast(NULL, NULL,                                                                       \
+																	   ::rspamd::symcache::rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
+																	   log_func,                                                                         \
+																	   __VA_ARGS__)
 
 struct lua_State;
 
@@ -115,13 +115,18 @@ struct order_generation {
 	/* It matches cache->generation_id; if not, a fresh ordering is required */
 	unsigned int generation_id;
 
-	explicit order_generation(std::size_t nelts, unsigned id) : generation_id(id) {
+	explicit order_generation(std::size_t nelts, unsigned id)
+		: generation_id(id)
+	{
 		d.reserve(nelts);
 		by_symbol.reserve(nelts);
 		by_cache_id.reserve(nelts);
 	}
 
-	auto size() const -> auto { return d.size(); }
+	auto size() const -> auto
+	{
+		return d.size();
+	}
 };
 
 using order_generation_ptr = std::shared_ptr<order_generation>;
@@ -131,21 +136,28 @@ struct delayed_cache_dependency {
 	std::string from;
 	std::string to;
 
-	delayed_cache_dependency(std::string_view _from, std::string_view _to) : from(_from), to(_to) {}
+	delayed_cache_dependency(std::string_view _from, std::string_view _to)
+		: from(_from), to(_to)
+	{
+	}
 };
 
 struct delayed_cache_condition {
 	std::string sym;
 	int cbref;
 	lua_State *L;
+
 public:
-	delayed_cache_condition(std::string_view sym, int cbref, lua_State *L) :
-		sym(sym), cbref(cbref), L(L) {}
+	delayed_cache_condition(std::string_view sym, int cbref, lua_State *L)
+		: sym(sym), cbref(cbref), L(L)
+	{
+	}
 };
 
 class delayed_symbol_elt {
 private:
 	std::variant<std::string, rspamd_regexp_t *> content;
+
 public:
 	/* Disable copy */
 	delayed_symbol_elt() = delete;
@@ -155,7 +167,8 @@ public:
 	delayed_symbol_elt(delayed_symbol_elt &&other) noexcept = default;
 	delayed_symbol_elt &operator=(delayed_symbol_elt &&other) noexcept = default;
 
-	explicit delayed_symbol_elt(std::string_view elt) noexcept {
+	explicit delayed_symbol_elt(std::string_view elt) noexcept
+	{
 		if (!elt.empty() && elt[0] == '/') {
 			/* Possibly regexp */
 			auto *re = rspamd_regexp_new_len(elt.data(), elt.size(), nullptr, nullptr);
@@ -172,13 +185,15 @@ public:
 		}
 	}
 
-	~delayed_symbol_elt() {
+	~delayed_symbol_elt()
+	{
 		if (std::holds_alternative<rspamd_regexp_t *>(content)) {
 			rspamd_regexp_unref(std::get<rspamd_regexp_t *>(content));
 		}
 	}
 
-	auto matches(std::string_view what) const -> bool {
+	auto matches(std::string_view what) const -> bool
+	{
 		return std::visit([&](auto &elt) {
 			using T = typeof(elt);
 			if constexpr (std::is_same_v<T, rspamd_regexp_t *>) {
@@ -192,10 +207,11 @@ public:
 
 			return false;
 		},
-		content);
+						  content);
 	}
 
-	auto to_string_view() const -> std::string_view {
+	auto to_string_view() const -> std::string_view
+	{
 		return std::visit([&](auto &elt) {
 			using T = typeof(elt);
 			if constexpr (std::is_same_v<T, rspamd_regexp_t *>) {
@@ -207,29 +223,34 @@ public:
 
 			return std::string_view{};
 		},
-		content);
+						  content);
 	}
 };
 
 struct delayed_symbol_elt_equal {
 	using is_transparent = void;
-	auto operator()(const delayed_symbol_elt &a, const delayed_symbol_elt &b) const {
+	auto operator()(const delayed_symbol_elt &a, const delayed_symbol_elt &b) const
+	{
 		return a.to_string_view() == b.to_string_view();
 	}
-	auto operator()(const delayed_symbol_elt &a, const std::string_view &b) const {
+	auto operator()(const delayed_symbol_elt &a, const std::string_view &b) const
+	{
 		return a.to_string_view() == b;
 	}
-	auto operator()(const std::string_view &a, const delayed_symbol_elt &b) const {
+	auto operator()(const std::string_view &a, const delayed_symbol_elt &b) const
+	{
 		return a == b.to_string_view();
 	}
 };
 
 struct delayed_symbol_elt_hash {
 	using is_transparent = void;
-	auto operator()(const delayed_symbol_elt &a) const {
+	auto operator()(const delayed_symbol_elt &a) const
+	{
 		return ankerl::unordered_dense::hash<std::string_view>()(a.to_string_view());
 	}
-	auto operator()(const std::string_view &a) const {
+	auto operator()(const std::string_view &a) const
+	{
 		return ankerl::unordered_dense::hash<std::string_view>()(a);
 	}
 };
@@ -260,7 +281,7 @@ private:
 	std::unique_ptr<std::vector<delayed_cache_condition>> delayed_conditions;
 	/* Delayed statically enabled or disabled symbols */
 	using delayed_symbol_names = ankerl::unordered_dense::set<delayed_symbol_elt,
-		delayed_symbol_elt_hash, delayed_symbol_elt_equal>;
+															  delayed_symbol_elt_hash, delayed_symbol_elt_equal>;
 	std::unique_ptr<delayed_symbol_names> disabled_symbols;
 	std::unique_ptr<delayed_symbol_names> enabled_symbols;
 
@@ -285,12 +306,14 @@ private:
 	/* Internal methods */
 	auto load_items() -> bool;
 	auto resort() -> void;
-	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec&;
+	auto get_item_specific_vector(const cache_item &) -> items_ptr_vec &;
 	/* Helper for g_hash_table_foreach */
 	static auto metric_connect_cb(void *k, void *v, void *ud) -> void;
 
 public:
-	explicit symcache(struct rspamd_config *cfg) : cfg(cfg) {
+	explicit symcache(struct rspamd_config *cfg)
+		: cfg(cfg)
+	{
 		/* XXX: do we need a special pool for symcache? I don't think so */
 		static_pool = cfg->cfg_pool;
 		reload_time = cfg->cache_reload_time;
@@ -299,7 +322,7 @@ public:
 		cksum = 0xdeadbabe;
 		peak_cb = -1;
 		cache_id = rspamd_random_uint64_fast();
-		L = (lua_State *)cfg->lua_state;
+		L = (lua_State *) cfg->lua_state;
 		delayed_conditions = std::make_unique<std::vector<delayed_cache_condition>>();
 		delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
 	}
@@ -349,7 +372,8 @@ public:
 	 * @param from
 	 * @param to
 	 */
-	auto add_delayed_dependency(std::string_view from, std::string_view to) -> void {
+	auto add_delayed_dependency(std::string_view from, std::string_view to) -> void
+	{
 		if (!delayed_deps) {
 			delayed_deps = std::make_unique<std::vector<delayed_cache_dependency>>();
 		}
@@ -362,7 +386,8 @@ public:
 	 * @param sym
 	 * @return
 	 */
-	auto disable_symbol_delayed(std::string_view sym) -> bool {
+	auto disable_symbol_delayed(std::string_view sym) -> bool
+	{
 		if (!disabled_symbols) {
 			disabled_symbols = std::make_unique<delayed_symbol_names>();
 		}
@@ -381,7 +406,8 @@ public:
 	 * @param sym
 	 * @return
 	 */
-	auto enable_symbol_delayed(std::string_view sym) -> bool {
+	auto enable_symbol_delayed(std::string_view sym) -> bool
+	{
 		if (!enabled_symbols) {
 			enabled_symbols = std::make_unique<delayed_symbol_names>();
 		}
@@ -405,7 +431,8 @@ public:
 	 * Log helper that returns cfg checksum
 	 * @return
 	 */
-	auto log_tag() const -> const char* {
+	auto log_tag() const -> const char *
+	{
 		return cfg->checksum;
 	}
 
@@ -413,7 +440,8 @@ public:
 	 * Helper to return a memory pool associated with the cache
 	 * @return
 	 */
-	auto get_pool() const {
+	auto get_pool() const
+	{
 		return static_pool;
 	}
 
@@ -458,7 +486,8 @@ public:
 	 * Returns number of symbols that needs to be checked in statistical algorithm
 	 * @return
 	 */
-	auto get_stats_symbols_count() const {
+	auto get_stats_symbols_count() const
+	{
 		return stats_symbols_count;
 	}
 
@@ -466,7 +495,8 @@ public:
 	 * Returns a checksum for the cache
 	 * @return
 	 */
-	auto get_cksum() const {
+	auto get_cksum() const
+	{
 		return cksum;
 	}
 
@@ -492,7 +522,10 @@ public:
 	 * A simple helper to get the reload time
 	 * @return
 	 */
-	auto get_reload_time() const { return reload_time; };
+	auto get_reload_time() const
+	{
+		return reload_time;
+	};
 
 	/**
 	 * Iterate over all symbols using a specific functor
@@ -500,8 +533,9 @@ public:
 	 * @param f
 	 */
 	template<typename Functor>
-	auto symbols_foreach(Functor f) -> void {
-		for (const auto &sym_it : items_by_symbol) {
+	auto symbols_foreach(Functor f) -> void
+	{
+		for (const auto &sym_it: items_by_symbol) {
 			f(sym_it.second);
 		}
 	}
@@ -512,8 +546,9 @@ public:
 	 * @param f
 	 */
 	template<typename Functor>
-	auto composites_foreach(Functor f) -> void {
-		for (const auto &sym_it : composites) {
+	auto composites_foreach(Functor f) -> void
+	{
+		for (const auto &sym_it: composites) {
 			f(sym_it);
 		}
 	}
@@ -524,39 +559,44 @@ public:
 	 * @param f
 	 */
 	template<typename Functor>
-	auto connfilters_foreach(Functor f) -> bool {
+	auto connfilters_foreach(Functor f) -> bool
+	{
 		return std::all_of(std::begin(connfilters), std::end(connfilters),
-						   [&](const auto &sym_it){
-			return f(sym_it);
-		});
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
 	}
 	template<typename Functor>
-	auto prefilters_foreach(Functor f) -> bool {
+	auto prefilters_foreach(Functor f) -> bool
+	{
 		return std::all_of(std::begin(prefilters), std::end(prefilters),
-				[&](const auto &sym_it){
-					return f(sym_it);
-				});
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
 	}
 	template<typename Functor>
-	auto postfilters_foreach(Functor f) -> bool {
+	auto postfilters_foreach(Functor f) -> bool
+	{
 		return std::all_of(std::begin(postfilters), std::end(postfilters),
-				[&](const auto &sym_it){
-					return f(sym_it);
-				});
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
 	}
 	template<typename Functor>
-	auto idempotent_foreach(Functor f) -> bool {
+	auto idempotent_foreach(Functor f) -> bool
+	{
 		return std::all_of(std::begin(idempotent), std::end(idempotent),
-				[&](const auto &sym_it){
-					return f(sym_it);
-				});
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
 	}
 	template<typename Functor>
-	auto filters_foreach(Functor f) -> bool {
+	auto filters_foreach(Functor f) -> bool
+	{
 		return std::all_of(std::begin(filters), std::end(filters),
-				[&](const auto &sym_it){
-					return f(sym_it);
-				});
+						   [&](const auto &sym_it) {
+							   return f(sym_it);
+						   });
 	}
 
 	/**
@@ -569,7 +609,8 @@ public:
 	 * Returns current set of items ordered for sharing ownership
 	 * @return
 	 */
-	auto get_cache_order() const -> auto {
+	auto get_cache_order() const -> auto
+	{
 		return items_by_order;
 	}
 
@@ -577,7 +618,8 @@ public:
 	 * Get last profile timestamp
 	 * @return
 	 */
-	auto get_last_profile() const -> auto {
+	auto get_last_profile() const -> auto
+	{
 		return last_profile;
 	}
 
@@ -586,7 +628,8 @@ public:
 	 * @param last_profile
 	 * @return
 	 */
-	auto set_last_profile(double last_profile){
+	auto set_last_profile(double last_profile)
+	{
 		symcache::last_profile = last_profile;
 	}
 
@@ -604,6 +647,6 @@ public:
 };
 
 
-} // namespace rspamd
+}// namespace rspamd::symcache
 
-#endif //RSPAMD_SYMCACHE_INTERNAL_HXX
+#endif//RSPAMD_SYMCACHE_INTERNAL_HXX

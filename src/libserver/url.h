@@ -8,7 +8,7 @@
 #include "fstring.h"
 #include "libutil/cxx/utf8_util.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -112,10 +112,10 @@ struct rspamd_url_ext {
 
 enum uri_errno {
 	URI_ERRNO_OK = 0,           /* Parsing went well */
-	URI_ERRNO_EMPTY,        /* The URI string was empty */
+	URI_ERRNO_EMPTY,            /* The URI string was empty */
 	URI_ERRNO_INVALID_PROTOCOL, /* No protocol was found */
 	URI_ERRNO_INVALID_PORT,     /* Port number is bad */
-	URI_ERRNO_BAD_ENCODING, /* Bad characters encoding */
+	URI_ERRNO_BAD_ENCODING,     /* Bad characters encoding */
 	URI_ERRNO_BAD_FORMAT,
 	URI_ERRNO_TLD_MISSING,
 	URI_ERRNO_HOST_MISSING,
@@ -311,8 +311,8 @@ bool rspamd_url_flag_from_string(const gchar *str, gint *flag);
 const gchar *rspamd_url_flag_to_string(int flag);
 
 /* Defines sets of urls indexed by url as is */
-KHASH_DECLARE (rspamd_url_hash, struct rspamd_url *, char);
-KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
+KHASH_DECLARE(rspamd_url_hash, struct rspamd_url *, char);
+KHASH_DECLARE(rspamd_url_host_hash, struct rspamd_url *, char);
 
 /* Convenience functions for url sets */
 /**
@@ -321,7 +321,7 @@ KHASH_DECLARE (rspamd_url_host_hash, struct rspamd_url *, char);
  * @param u
  * @return true if a new url has been added
  */
-bool rspamd_url_set_add_or_increase(khash_t (rspamd_url_hash) *set,
+bool rspamd_url_set_add_or_increase(khash_t(rspamd_url_hash) * set,
 									struct rspamd_url *u,
 									bool enforce_replace);
 
@@ -331,7 +331,7 @@ bool rspamd_url_set_add_or_increase(khash_t (rspamd_url_hash) *set,
  * @param u
  * @return
  */
-struct rspamd_url *rspamd_url_set_add_or_return(khash_t (rspamd_url_hash) *set,
+struct rspamd_url *rspamd_url_set_add_or_return(khash_t(rspamd_url_hash) * set,
 												struct rspamd_url *u);
 /**
  * Helper for url host set
@@ -339,7 +339,7 @@ struct rspamd_url *rspamd_url_set_add_or_return(khash_t (rspamd_url_hash) *set,
  * @param u
  * @return
  */
-bool rspamd_url_host_set_add(khash_t (rspamd_url_host_hash) *set,
+bool rspamd_url_host_set_add(khash_t(rspamd_url_host_hash) * set,
 							 struct rspamd_url *u);
 /**
  * Checks if a url is in set
@@ -347,9 +347,9 @@ bool rspamd_url_host_set_add(khash_t (rspamd_url_host_hash) *set,
  * @param u
  * @return
  */
-bool rspamd_url_set_has(khash_t (rspamd_url_hash) *set, struct rspamd_url *u);
+bool rspamd_url_set_has(khash_t(rspamd_url_hash) * set, struct rspamd_url *u);
 
-bool rspamd_url_host_set_has(khash_t (rspamd_url_host_hash) *set, struct rspamd_url *u);
+bool rspamd_url_host_set_has(khash_t(rspamd_url_host_hash) * set, struct rspamd_url *u);
 
 /**
  * Compares two urls (similar to C comparison functions) lexicographically
@@ -410,20 +410,20 @@ static RSPAMD_PURE_FUNCTION inline uint16_t rspamd_url_get_port_if_special(struc
  * @param url_flags_out (must be just a var with no dereference)
  */
 #define rspamd_url_normalise_propagate_flags(pool, input, len_out, url_flags_out) \
-  do {                                                                            \
-     enum rspamd_utf8_normalise_result norm_res;                                       \
-     norm_res = rspamd_normalise_unicode_inplace((input), (len_out));     \
-     if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                               \
-       url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                             \
-     }                                                                            \
-     if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                            \
-       url_flags_out |= RSPAMD_URL_FLAG_ZW_SPACES;                                \
-     }                                                                            \
-     if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                                \
-       url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                                 \
-     }                                                                            \
-  } while(0)
-#ifdef  __cplusplus
+	do {                                                                          \
+		enum rspamd_utf8_normalise_result norm_res;                               \
+		norm_res = rspamd_normalise_unicode_inplace((input), (len_out));          \
+		if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {                            \
+			url_flags_out |= RSPAMD_URL_FLAG_UNNORMALISED;                        \
+		}                                                                         \
+		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {                         \
+			url_flags_out |= RSPAMD_URL_FLAG_ZW_SPACES;                           \
+		}                                                                         \
+		if (norm_res & (RSPAMD_UNICODE_NORM_ERROR)) {                             \
+			url_flags_out |= RSPAMD_URL_FLAG_OBSCURED;                            \
+		}                                                                         \
+	} while (0)
+#ifdef __cplusplus
 }
 #endif
 

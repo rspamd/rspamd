@@ -21,7 +21,7 @@
 #include "libutil/mem_pool.h"
 #include "libserver/url.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -67,12 +67,12 @@ struct rspamd_task;
  */
 guint rspamd_html_decode_entitles_inplace(gchar *s, gsize len);
 
-void* rspamd_html_process_part(rspamd_mempool_t *pool,
+void *rspamd_html_process_part(rspamd_mempool_t *pool,
 							   GByteArray *in);
 
 void *rspamd_html_process_part_full(struct rspamd_task *task,
 									GByteArray *in, GList **exceptions,
-									khash_t (rspamd_url_hash) *url_set,
+									khash_t(rspamd_url_hash) * url_set,
 									GPtrArray *part_urls,
 									bool allow_css,
 									uint16_t *cur_url_order);
@@ -111,8 +111,8 @@ const gchar *rspamd_html_tag_name(void *tag, gsize *len);
  * @param cid_len
  * @return
  */
-struct html_image* rspamd_html_find_embedded_image(void *html_content,
-		const char *cid, gsize cid_len);
+struct html_image *rspamd_html_find_embedded_image(void *html_content,
+												   const char *cid, gsize cid_len);
 
 /**
  * Stores parsed content in ftok_t structure
@@ -130,7 +130,7 @@ bool rspamd_html_get_parsed_content(void *html_content, rspamd_ftok_t *dest);
 gsize rspamd_html_get_tags_count(void *html_content);
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -28,7 +28,7 @@
  */
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -47,90 +47,90 @@ enum rspamd_regexp_map_flags {
 	RSPAMD_REGEXP_MAP_FLAG_GLOB = (1u << 2),
 };
 
-typedef void (*rspamd_map_insert_func) (gpointer st, gconstpointer key,
-										gconstpointer value);
+typedef void (*rspamd_map_insert_func)(gpointer st, gconstpointer key,
+									   gconstpointer value);
 
 /**
  * Radix list is a list like ip/mask
  */
-gchar *rspamd_radix_read (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_radix_read(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-void rspamd_radix_fin (struct map_cb_data *data, void **target);
+void rspamd_radix_fin(struct map_cb_data *data, void **target);
 
-void rspamd_radix_dtor (struct map_cb_data *data);
+void rspamd_radix_dtor(struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-gchar *rspamd_kv_list_read (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_kv_list_read(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-void rspamd_kv_list_fin (struct map_cb_data *data, void **target);
+void rspamd_kv_list_fin(struct map_cb_data *data, void **target);
 
-void rspamd_kv_list_dtor (struct map_cb_data *data);
+void rspamd_kv_list_dtor(struct map_cb_data *data);
 
 /**
  * Cdb is a cdb mapped file with shared data
  * chunk must be filename!
  */
-gchar *rspamd_cdb_list_read (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
-void rspamd_cdb_list_fin (struct map_cb_data *data, void **target);
-void rspamd_cdb_list_dtor (struct map_cb_data *data);
+gchar *rspamd_cdb_list_read(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
+void rspamd_cdb_list_fin(struct map_cb_data *data, void **target);
+void rspamd_cdb_list_dtor(struct map_cb_data *data);
 
 /**
  * Regexp list is a list of regular expressions
  */
 
-gchar *rspamd_regexp_list_read_single (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_regexp_list_read_single(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-gchar *rspamd_regexp_list_read_multiple (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_regexp_list_read_multiple(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-gchar *rspamd_glob_list_read_single (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_glob_list_read_single(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-gchar *rspamd_glob_list_read_multiple (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
+gchar *rspamd_glob_list_read_multiple(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
 
-void rspamd_regexp_list_fin (struct map_cb_data *data, void **target);
+void rspamd_regexp_list_fin(struct map_cb_data *data, void **target);
 
-void rspamd_regexp_list_dtor (struct map_cb_data *data);
+void rspamd_regexp_list_dtor(struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
 gchar *
-rspamd_parse_kv_list (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		rspamd_map_insert_func func,
-		const gchar *default_value,
-		gboolean final);
+rspamd_parse_kv_list(
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	rspamd_map_insert_func func,
+	const gchar *default_value,
+	gboolean final);
 
 /**
  * Find a single (any) matching regexp for the specified text or NULL if
@@ -140,8 +140,8 @@ rspamd_parse_kv_list (
  * @param len
  * @return
  */
-gconstpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *map,
-											  const gchar *in, gsize len);
+gconstpointer rspamd_match_regexp_map_single(struct rspamd_regexp_map_helper *map,
+											 const gchar *in, gsize len);
 
 /**
  * Find a multiple (all) matching regexp for the specified text or NULL if
@@ -151,8 +151,8 @@ gconstpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *m
  * @param len
  * @return
  */
-GPtrArray *rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
-										const gchar *in, gsize len);
+GPtrArray *rspamd_match_regexp_map_all(struct rspamd_regexp_map_helper *map,
+									   const gchar *in, gsize len);
 
 /**
  * Find value matching specific key in a hash map
@@ -161,8 +161,8 @@ GPtrArray *rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
  * @param len
  * @return
  */
-gconstpointer rspamd_match_hash_map (struct rspamd_hash_map_helper *map,
-									 const gchar *in, gsize len);
+gconstpointer rspamd_match_hash_map(struct rspamd_hash_map_helper *map,
+									const gchar *in, gsize len);
 
 /**
  * Find value matching specific key in a cdb map
@@ -171,8 +171,8 @@ gconstpointer rspamd_match_hash_map (struct rspamd_hash_map_helper *map,
  * @param len
  * @return rspamd_ftok_t pointer (allocated in a static buffer!)
  */
-gconstpointer rspamd_match_cdb_map (struct rspamd_cdb_map_helper *map,
-									 const gchar *in, gsize len);
+gconstpointer rspamd_match_cdb_map(struct rspamd_cdb_map_helper *map,
+								   const gchar *in, gsize len);
 
 /**
  * Find value matching specific key in a hash map
@@ -181,18 +181,18 @@ gconstpointer rspamd_match_cdb_map (struct rspamd_cdb_map_helper *map,
  * @param inlen ip address length (4 for IPv4 and 16 for IPv6)
  * @return
  */
-gconstpointer rspamd_match_radix_map (struct rspamd_radix_map_helper *map,
-									  const guchar *in, gsize inlen);
+gconstpointer rspamd_match_radix_map(struct rspamd_radix_map_helper *map,
+									 const guchar *in, gsize inlen);
 
-gconstpointer rspamd_match_radix_map_addr (struct rspamd_radix_map_helper *map,
-										   const rspamd_inet_addr_t *addr);
+gconstpointer rspamd_match_radix_map_addr(struct rspamd_radix_map_helper *map,
+										  const rspamd_inet_addr_t *addr);
 
 /**
  * Creates radix map helper
  * @param map
  * @return
  */
-struct rspamd_radix_map_helper *rspamd_map_helper_new_radix (struct rspamd_map *map);
+struct rspamd_radix_map_helper *rspamd_map_helper_new_radix(struct rspamd_map *map);
 
 /**
  * Inserts new value into radix map
@@ -200,7 +200,7 @@ struct rspamd_radix_map_helper *rspamd_map_helper_new_radix (struct rspamd_map *
  * @param key
  * @param value
  */
-void rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer value);
+void rspamd_map_helper_insert_radix(gpointer st, gconstpointer key, gconstpointer value);
 
 /**
  * Inserts new value into radix map performing synchronous resolving
@@ -208,14 +208,14 @@ void rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpoint
  * @param key
  * @param value
  */
-void rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key,
-											 gconstpointer value);
+void rspamd_map_helper_insert_radix_resolve(gpointer st, gconstpointer key,
+											gconstpointer value);
 
 /**
  * Destroys radix map helper
  * @param r
  */
-void rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r);
+void rspamd_map_helper_destroy_radix(struct rspamd_radix_map_helper *r);
 
 
 /**
@@ -223,7 +223,7 @@ void rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r);
  * @param map
  * @return
  */
-struct rspamd_hash_map_helper *rspamd_map_helper_new_hash (struct rspamd_map *map);
+struct rspamd_hash_map_helper *rspamd_map_helper_new_hash(struct rspamd_map *map);
 
 /**
  * Inserts a new value into a hash map
@@ -231,13 +231,13 @@ struct rspamd_hash_map_helper *rspamd_map_helper_new_hash (struct rspamd_map *ma
  * @param key
  * @param value
  */
-void rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer value);
+void rspamd_map_helper_insert_hash(gpointer st, gconstpointer key, gconstpointer value);
 
 /**
  * Destroys hash map helper
  * @param r
  */
-void rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r);
+void rspamd_map_helper_destroy_hash(struct rspamd_hash_map_helper *r);
 
 /**
  * Create new regexp map
@@ -245,8 +245,8 @@ void rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r);
  * @param flags
  * @return
  */
-struct rspamd_regexp_map_helper *rspamd_map_helper_new_regexp (struct rspamd_map *map,
-															   enum rspamd_regexp_map_flags flags);
+struct rspamd_regexp_map_helper *rspamd_map_helper_new_regexp(struct rspamd_map *map,
+															  enum rspamd_regexp_map_flags flags);
 
 /**
  * Inserts a new regexp into regexp map
@@ -254,15 +254,15 @@ struct rspamd_regexp_map_helper *rspamd_map_helper_new_regexp (struct rspamd_map
  * @param key
  * @param value
  */
-void rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value);
+void rspamd_map_helper_insert_re(gpointer st, gconstpointer key, gconstpointer value);
 
 /**
  * Destroy regexp map
  * @param re_map
  */
-void rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map);
+void rspamd_map_helper_destroy_regexp(struct rspamd_regexp_map_helper *re_map);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

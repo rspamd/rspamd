@@ -29,44 +29,42 @@
 namespace rspamd::composites {
 
 static auto
-composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy
-{
+composite_policy_from_str(const std::string_view &inp) -> enum rspamd_composite_policy {
 	const static ankerl::unordered_dense::map<std::string_view,
-			enum rspamd_composite_policy> names{
-			{"remove",        rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
-			{"remove_all",    rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
-			{"default",       rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+											  enum rspamd_composite_policy>
+		names{
+			{"remove", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+			{"remove_all", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
+			{"default", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_ALL},
 			{"remove_symbol", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL},
 			{"remove_weight", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT},
-			{"leave",         rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
-			{"remove_none",   rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
-	};
+			{"leave", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
+			{"remove_none", rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_LEAVE},
+		};
 
 	auto found = names.find(inp);
-	if (found != names.end()) {
-		return found->second;
-	}
+	if (found != names.end()){
+		return found->second;}
 
-	return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
-}
+return rspamd_composite_policy::RSPAMD_COMPOSITE_POLICY_UNKNOWN;
+}// namespace rspamd::composites
 
-auto
-composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
+auto composites_manager::add_composite(std::string_view composite_name, const ucl_object_t *obj, bool silent_duplicate) -> rspamd_composite *
 {
 
 	const auto *val = ucl_object_lookup(obj, "enabled");
 	if (val != nullptr && !ucl_object_toboolean(val)) {
-		msg_info_config ("composite %s is disabled", composite_name.data());
+		msg_info_config("composite %s is disabled", composite_name.data());
 		return nullptr;
 	}
 
 	if (composites.contains(composite_name)) {
 		if (silent_duplicate) {
-			msg_debug_config ("composite %s is redefined", composite_name.data());
+			msg_debug_config("composite %s is redefined", composite_name.data());
 			return nullptr;
 		}
 		else {
-			msg_warn_config ("composite %s is redefined", composite_name.data());
+			msg_warn_config("composite %s is redefined", composite_name.data());
 		}
 	}
 
@@ -74,8 +72,8 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	val = ucl_object_lookup(obj, "expression");
 
 	if (val == NULL || !ucl_object_tostring_safe(val, &composite_expression)) {
-		msg_err_config ("composite must have an expression defined in %s",
-				composite_name.data());
+		msg_err_config("composite must have an expression defined in %s",
+					   composite_name.data());
 		return nullptr;
 	}
 
@@ -83,9 +81,9 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	rspamd_expression *expr = nullptr;
 
 	if (!rspamd_parse_expression(composite_expression, 0, &composite_expr_subr,
-			NULL, cfg->cfg_pool, &err, &expr)) {
-		msg_err_config ("cannot parse composite expression for %s: %e",
-				composite_name.data(), err);
+								 NULL, cfg->cfg_pool, &err, &expr)) {
+		msg_err_config("cannot parse composite expression for %s: %e",
+					   composite_name.data(), err);
 
 		if (err) {
 			g_error_free(err);
@@ -117,10 +115,10 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	}
 
 	rspamd_config_add_symbol(cfg, composite_name.data(), score,
-			description, group,
-			0,
-			ucl_object_get_priority(obj), /* No +1 as it is default... */
-			1);
+							 description, group,
+							 0,
+							 ucl_object_get_priority(obj), /* No +1 as it is default... */
+							 1);
 
 	const auto *elt = ucl_object_lookup(obj, "groups");
 	if (elt && ucl_object_type(elt) == UCL_ARRAY) {
@@ -129,7 +127,7 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 
 		while ((cur_gr = ucl_object_iterate_safe(gr_it, true)) != nullptr) {
 			rspamd_config_add_symbol_group(cfg, composite_name.data(),
-					ucl_object_tostring(cur_gr));
+										   ucl_object_tostring(cur_gr));
 		}
 
 		ucl_object_iterate_free(gr_it);
@@ -148,10 +146,9 @@ composites_manager::add_composite(std::string_view composite_name, const ucl_obj
 	return composite.get();
 }
 
-auto
-composites_manager::add_composite(std::string_view composite_name,
-								  std::string_view composite_expression,
-								  bool silent_duplicate, double score) -> rspamd_composite *
+auto composites_manager::add_composite(std::string_view composite_name,
+									   std::string_view composite_expression,
+									   bool silent_duplicate, double score) -> rspamd_composite *
 {
 	GError *err = nullptr;
 	rspamd_expression *expr = nullptr;
@@ -159,19 +156,19 @@ composites_manager::add_composite(std::string_view composite_name,
 	if (composites.contains(composite_name)) {
 		/* Duplicate composite - refuse to add */
 		if (silent_duplicate) {
-			msg_debug_config ("composite %s is redefined", composite_name.data());
+			msg_debug_config("composite %s is redefined", composite_name.data());
 			return nullptr;
 		}
 		else {
-			msg_warn_config ("composite %s is redefined", composite_name.data());
+			msg_warn_config("composite %s is redefined", composite_name.data());
 		}
 	}
 
 	if (!rspamd_parse_expression(composite_expression.data(),
-			composite_expression.size(), &composite_expr_subr,
-			nullptr, cfg->cfg_pool, &err, &expr)) {
-		msg_err_config ("cannot parse composite expression for %s: %e",
-				composite_name.data(), err);
+								 composite_expression.size(), &composite_expr_subr,
+								 nullptr, cfg->cfg_pool, &err, &expr)) {
+		msg_err_config("cannot parse composite expression for %s: %e",
+					   composite_name.data(), err);
 
 		if (err) {
 			g_error_free(err);
@@ -182,10 +179,10 @@ composites_manager::add_composite(std::string_view composite_name,
 
 	auto final_score = std::isnan(score) ? (std::isnan(cfg->unknown_weight) ? 0.0 : cfg->unknown_weight) : score;
 	rspamd_config_add_symbol(cfg, composite_name.data(), final_score,
-			composite_name.data(), "composite",
-			0,
-			0,
-			1);
+							 composite_name.data(), "composite",
+							 0,
+							 0,
+							 1);
 
 	return new_composite(composite_name, expr, composite_expression).get();
 }
@@ -195,13 +192,16 @@ struct map_cbdata {
 	struct rspamd_config *cfg;
 	std::string buf;
 
-	explicit map_cbdata(struct rspamd_config *cfg) : cfg(cfg) {
+	explicit map_cbdata(struct rspamd_config *cfg)
+		: cfg(cfg)
+	{
 		cm = COMPOSITE_MANAGER_FROM_PTR(cfg->composites_manager);
 	}
 
 	static char *map_read(char *chunk, int len,
-				  struct map_cb_data *data,
-				  gboolean _final) {
+						  struct map_cb_data *data,
+						  gboolean _final)
+	{
 
 		if (data->cur_data == nullptr) {
 			data->cur_data = data->prev_data;
@@ -215,7 +215,8 @@ struct map_cbdata {
 	}
 
 	static void
-	map_fin(struct map_cb_data *data, void **target) {
+	map_fin(struct map_cb_data *data, void **target)
+	{
 		auto *cbd = reinterpret_cast<map_cbdata *>(data->cur_data);
 
 		if (data->errored) {
@@ -240,40 +241,39 @@ struct map_cbdata {
 					auto num = g_ascii_strtod(numbuf, &endptr);
 
 					if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
-						msg_err("invalid score for %*s", (int)name_and_score.size(), name_and_score.data());
+						msg_err("invalid score for %*s", (int) name_and_score.size(), name_and_score.data());
 						return;
 					}
 
 					auto ret = cbd->cm->add_composite(name, expr, true, num);
 
 					if (ret == nullptr) {
-						msg_err("cannot add composite %*s", (int)name_and_score.size(), name_and_score.data());
+						msg_err("cannot add composite %*s", (int) name_and_score.size(), name_and_score.data());
 						return;
 					}
 				}
 				else {
-					msg_err("missing score for %*s", (int)name_and_score.size(), name_and_score.data());
+					msg_err("missing score for %*s", (int) name_and_score.size(), name_and_score.data());
 					return;
 				}
 			});
-
 		}
 		else {
-			msg_err ("no data read for composites map");
+			msg_err("no data read for composites map");
 		}
 	}
 
 	static void
-	map_dtor (struct map_cb_data *data) {
+	map_dtor(struct map_cb_data *data)
+	{
 		auto *cbd = reinterpret_cast<map_cbdata *>(data->cur_data);
 		delete cbd;
 	}
 };
-
 }
 
 
-void*
+void *
 rspamd_composites_manager_create(struct rspamd_config *cfg)
 {
 	auto *cm = new rspamd::composites::composites_manager(cfg);
@@ -282,49 +282,46 @@ rspamd_composites_manager_create(struct rspamd_config *cfg)
 }
 
 
-gsize
-rspamd_composites_manager_nelts(void *ptr)
+gsize rspamd_composites_manager_nelts(void *ptr)
 {
 	return COMPOSITE_MANAGER_FROM_PTR(ptr)->size();
 }
 
-void*
+void *
 rspamd_composites_manager_add_from_ucl(void *cm, const char *sym, const ucl_object_t *obj)
 {
 	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj, false));
 }
 
-void*
+void *
 rspamd_composites_manager_add_from_string(void *cm, const char *sym, const char *expr)
 {
 	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr, false));
 }
 
-void*
+void *
 rspamd_composites_manager_add_from_ucl_silent(void *cm, const char *sym, const ucl_object_t *obj)
 {
 	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, obj, true));
 }
 
-void*
+void *
 rspamd_composites_manager_add_from_string_silent(void *cm, const char *sym, const char *expr)
 {
 	return reinterpret_cast<void *>(COMPOSITE_MANAGER_FROM_PTR(cm)->add_composite(sym, expr, true));
 }
 
 
-
-bool
-rspamd_composites_add_map_handlers(const ucl_object_t *obj, struct rspamd_config *cfg)
+bool rspamd_composites_add_map_handlers(const ucl_object_t *obj, struct rspamd_config *cfg)
 {
 	auto **pcbdata = rspamd_mempool_alloc_type(cfg->cfg_pool, rspamd::composites::map_cbdata *);
 	auto *cbdata = new rspamd::composites::map_cbdata{cfg};
 	*pcbdata = cbdata;
 
-	if (struct rspamd_map *m; (m = rspamd_map_add_from_ucl(cfg, obj, "composites map",
-		rspamd::composites::map_cbdata::map_read, rspamd::composites::map_cbdata::map_fin,
-		rspamd::composites::map_cbdata::map_dtor, (void **)pcbdata,
-		nullptr, RSPAMD_MAP_DEFAULT)) == nullptr) {
+	if (struct rspamd_map * m; (m = rspamd_map_add_from_ucl(cfg, obj, "composites map",
+															rspamd::composites::map_cbdata::map_read, rspamd::composites::map_cbdata::map_fin,
+															rspamd::composites::map_cbdata::map_dtor, (void **) pcbdata,
+															nullptr, RSPAMD_MAP_DEFAULT)) == nullptr) {
 		msg_err_config("cannot load composites map from %s", ucl_object_key(obj));
 		return false;
 	}

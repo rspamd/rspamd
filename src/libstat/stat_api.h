@@ -21,7 +21,7 @@
 #include "lua/lua_common.h"
 #include "contrib/libev/ev.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -46,10 +46,10 @@ extern "C" {
 #define RSPAMD_STAT_TOKEN_FLAG_EMOJI (1u << 13)
 
 typedef struct rspamd_stat_token_s {
-	rspamd_ftok_t original; /* utf8 raw */
+	rspamd_ftok_t original;        /* utf8 raw */
 	rspamd_ftok_unicode_t unicode; /* array of unicode characters, normalized, lowercased */
-	rspamd_ftok_t normalized; /* normalized and lowercased utf8 */
-	rspamd_ftok_t stemmed; /* stemmed utf8 */
+	rspamd_ftok_t normalized;      /* normalized and lowercased utf8 */
+	rspamd_ftok_t stemmed;         /* stemmed utf8 */
 	guint flags;
 } rspamd_stat_token_t;
 
@@ -80,20 +80,20 @@ typedef enum rspamd_stat_result_e {
  * Initialise statistics modules
  * @param cfg
  */
-void rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base);
+void rspamd_stat_init(struct rspamd_config *cfg, struct ev_loop *ev_base);
 
 /**
  * Finalize statistics
  */
-void rspamd_stat_close (void);
+void rspamd_stat_close(void);
 
 /**
  * Tokenize task
  * @param st_ctx
  * @param task
  */
-void rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
-								   struct rspamd_task *task);
+void rspamd_stat_process_tokenize(struct rspamd_stat_ctx *st_ctx,
+								  struct rspamd_task *task);
 
 /**
  * Classify the task specified and insert symbols if needed
@@ -102,8 +102,8 @@ void rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
  * @param err error returned
  * @return TRUE if task has been classified
  */
-rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
-										   lua_State *L, guint stage, GError **err);
+rspamd_stat_result_t rspamd_stat_classify(struct rspamd_task *task,
+										  lua_State *L, guint stage, GError **err);
 
 
 /**
@@ -111,7 +111,7 @@ rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
  * @param task
  * @return
  */
-gboolean rspamd_stat_check_autolearn (struct rspamd_task *task);
+gboolean rspamd_stat_check_autolearn(struct rspamd_task *task);
 
 /**
  * Learn task as spam or ham, task must be processed prior to this call
@@ -122,10 +122,10 @@ gboolean rspamd_stat_check_autolearn (struct rspamd_task *task);
  * @param err error returned
  * @return TRUE if task has been learned
  */
-rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
-										gboolean spam, lua_State *L, const gchar *classifier,
-										guint stage,
-										GError **err);
+rspamd_stat_result_t rspamd_stat_learn(struct rspamd_task *task,
+									   gboolean spam, lua_State *L, const gchar *classifier,
+									   guint stage,
+									   GError **err);
 
 /**
  * Get the overall statistics for all statfile backends
@@ -133,14 +133,14 @@ rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
  * @param total_learns the total number of learns is stored here
  * @return array of statistical information
  */
-rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
-											 struct rspamd_config *cfg,
-											 guint64 *total_learns,
-											 ucl_object_t **res);
+rspamd_stat_result_t rspamd_stat_statistics(struct rspamd_task *task,
+											struct rspamd_config *cfg,
+											guint64 *total_learns,
+											ucl_object_t **res);
 
-void rspamd_stat_unload (void);
+void rspamd_stat_unload(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -42,7 +42,7 @@ namespace rspamd::css {
  */
 class css_consumed_block {
 public:
-	enum class parser_tag_type : std::uint8_t  {
+	enum class parser_tag_type : std::uint8_t {
 		css_top_block = 0,
 		css_qualified_rule,
 		css_at_rule,
@@ -58,23 +58,32 @@ public:
 		css_parser_token function;
 		std::vector<consumed_block_ptr> args;
 
-		css_function_block(css_parser_token &&tok) :
-				function(std::forward<css_parser_token>(tok)) {}
+		css_function_block(css_parser_token &&tok)
+			: function(std::forward<css_parser_token>(tok))
+		{
+		}
 
-		auto as_string() const -> std::string_view {
+		auto as_string() const -> std::string_view
+		{
 			return function.get_string_or_default("");
 		}
 
-		static auto empty_function() -> const css_function_block & {
+		static auto empty_function() -> const css_function_block &
+		{
 			static const css_function_block invalid(
-					css_parser_token(css_parser_token::token_type::eof_token,
-							css_parser_token_placeholder()));
+				css_parser_token(css_parser_token::token_type::eof_token,
+								 css_parser_token_placeholder()));
 			return invalid;
 		}
 	};
 
-	css_consumed_block() : tag(parser_tag_type::css_eof_block) {}
-	css_consumed_block(parser_tag_type tag) : tag(tag) {
+	css_consumed_block()
+		: tag(parser_tag_type::css_eof_block)
+	{
+	}
+	css_consumed_block(parser_tag_type tag)
+		: tag(tag)
+	{
 		if (tag == parser_tag_type::css_top_block ||
 			tag == parser_tag_type::css_qualified_rule ||
 			tag == parser_tag_type::css_simple_block) {
@@ -85,8 +94,9 @@ public:
 		}
 	}
 	/* Construct a block from a single lexer token (for trivial blocks) */
-	explicit css_consumed_block(parser_tag_type tag, css_parser_token &&tok) :
-			tag(tag) {
+	explicit css_consumed_block(parser_tag_type tag, css_parser_token &&tok)
+		: tag(tag)
+	{
 		if (tag == parser_tag_type::css_function) {
 			content = css_function_block{std::move(tok)};
 		}
@@ -100,18 +110,21 @@ public:
 	/* Attach a new argument to the compound function block, consuming block inside */
 	auto add_function_argument(consumed_block_ptr &&block) -> bool;
 
-	auto assign_token(css_parser_token &&tok) -> void {
+	auto assign_token(css_parser_token &&tok) -> void
+	{
 		content = std::move(tok);
 	}
 
 	/* Empty blocks used to avoid type checks in loops */
 	const inline static std::vector<consumed_block_ptr> empty_block_vec{};
 
-	auto is_blocks_vec() const -> bool {
+	auto is_blocks_vec() const -> bool
+	{
 		return (std::holds_alternative<std::vector<consumed_block_ptr>>(content));
 	}
 
-	auto get_blocks_or_empty() const -> const std::vector<consumed_block_ptr>& {
+	auto get_blocks_or_empty() const -> const std::vector<consumed_block_ptr> &
+	{
 		if (is_blocks_vec()) {
 			return std::get<std::vector<consumed_block_ptr>>(content);
 		}
@@ -119,11 +132,13 @@ public:
 		return empty_block_vec;
 	}
 
-	auto is_token() const -> bool {
+	auto is_token() const -> bool
+	{
 		return (std::holds_alternative<css_parser_token>(content));
 	}
 
-	auto get_token_or_empty() const -> const css_parser_token& {
+	auto get_token_or_empty() const -> const css_parser_token &
+	{
 		if (is_token()) {
 			return std::get<css_parser_token>(content);
 		}
@@ -131,11 +146,13 @@ public:
 		return css_parser_eof_token();
 	}
 
-	auto is_function() const -> bool {
+	auto is_function() const -> bool
+	{
 		return (std::holds_alternative<css_function_block>(content));
 	}
 
-	auto get_function_or_invalid() const -> const css_function_block& {
+	auto get_function_or_invalid() const -> const css_function_block &
+	{
 		if (is_function()) {
 			return std::get<css_function_block>(content);
 		}
@@ -143,31 +160,33 @@ public:
 		return css_function_block::empty_function();
 	}
 
-	auto size() const -> std::size_t {
+	auto size() const -> std::size_t
+	{
 		auto ret = 0;
 
-		std::visit([&](auto& arg) {
-					using T = std::decay_t<decltype(arg)>;
+		std::visit([&](auto &arg) {
+			using T = std::decay_t<decltype(arg)>;
 
-					if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
-						/* Array of blocks */
-						ret = arg.size();
-					}
-					else if constexpr (std::is_same_v<T, std::monostate>) {
-						/* Empty block */
-						ret = 0;
-					}
-					else {
-						/* Single element block */
-						ret = 1;
-					}
-				},
-				content);
+			if constexpr (std::is_same_v<T, std::vector<consumed_block_ptr>>) {
+				/* Array of blocks */
+				ret = arg.size();
+			}
+			else if constexpr (std::is_same_v<T, std::monostate>) {
+				/* Empty block */
+				ret = 0;
+			}
+			else {
+				/* Single element block */
+				ret = 1;
+			}
+		},
+				   content);
 
 		return ret;
 	}
 
-	auto is_eof() -> bool {
+	auto is_eof() -> bool
+	{
 		return tag == parser_tag_type::css_eof_block;
 	}
 
@@ -177,11 +196,13 @@ public:
 
 public:
 	parser_tag_type tag;
+
 private:
 	std::variant<std::monostate,
-			std::vector<consumed_block_ptr>,
-			css_parser_token,
-			css_function_block> content;
+				 std::vector<consumed_block_ptr>,
+				 css_parser_token,
+				 css_function_block>
+		content;
 };
 
 extern const css_consumed_block css_parser_eof_block;
@@ -218,6 +239,6 @@ auto get_rules_parser_functor(rspamd_mempool_t *pool,
 auto parse_css_declaration(rspamd_mempool_t *pool, const std::string_view &st)
 	-> rspamd::html::html_block *;
 
-}
+}// namespace rspamd::css
 
-#endif //RSPAMD_CSS_PARSER_HXX
+#endif//RSPAMD_CSS_PARSER_HXX

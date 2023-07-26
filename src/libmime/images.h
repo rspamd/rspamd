@@ -4,7 +4,7 @@
 #include "config.h"
 #include "fstring.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -37,7 +37,7 @@ struct rspamd_image {
 /*
  * Process images from a worker task
  */
-void rspamd_images_process (struct rspamd_task *task);
+void rspamd_images_process(struct rspamd_task *task);
 
 /**
  * Process image if possible in a single mime part
@@ -45,13 +45,13 @@ void rspamd_images_process (struct rspamd_task *task);
  * @param part
  * @return
  */
-bool rspamd_images_process_mime_part_maybe (struct rspamd_task *task,
-		struct rspamd_mime_part *part);
+bool rspamd_images_process_mime_part_maybe(struct rspamd_task *task,
+										   struct rspamd_mime_part *part);
 
 /*
  * Link embedded images to the HTML parts
  */
-void rspamd_images_link (struct rspamd_task *task);
+void rspamd_images_link(struct rspamd_task *task);
 
 /**
  * Processes image in raw data
@@ -59,17 +59,17 @@ void rspamd_images_link (struct rspamd_task *task);
  * @param data
  * @return
  */
-struct rspamd_image *rspamd_maybe_process_image (rspamd_mempool_t *pool,
-												 rspamd_ftok_t *data);
+struct rspamd_image *rspamd_maybe_process_image(rspamd_mempool_t *pool,
+												rspamd_ftok_t *data);
 
 /*
  * Get textual representation of an image's type
  */
-const gchar *rspamd_image_type_str (enum rspamd_image_type type);
+const gchar *rspamd_image_type_str(enum rspamd_image_type type);
 
-void rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img);
+void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

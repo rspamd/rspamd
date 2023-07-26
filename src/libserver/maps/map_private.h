@@ -23,29 +23,29 @@
 #include "map.h"
 #include "ref.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef void (*rspamd_map_tmp_dtor) (gpointer p);
+typedef void (*rspamd_map_tmp_dtor)(gpointer p);
 
 extern guint rspamd_map_log_id;
-#define msg_err_map(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "map", map->tag, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_warn_map(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        "map", map->tag, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_map(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "map", map->tag, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_map(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        rspamd_map_log_id, "map", map->tag, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
+#define msg_err_map(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+													 "map", map->tag,      \
+													 RSPAMD_LOG_FUNC,      \
+													 __VA_ARGS__)
+#define msg_warn_map(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING, \
+													  "map", map->tag,     \
+													  RSPAMD_LOG_FUNC,     \
+													  __VA_ARGS__)
+#define msg_info_map(...) rspamd_default_log_function(G_LOG_LEVEL_INFO, \
+													  "map", map->tag,  \
+													  RSPAMD_LOG_FUNC,  \
+													  __VA_ARGS__)
+#define msg_debug_map(...) rspamd_conditional_debug_fast(NULL, NULL,                         \
+														 rspamd_map_log_id, "map", map->tag, \
+														 RSPAMD_LOG_FUNC,                    \
+														 __VA_ARGS__)
 
 enum fetch_proto {
 	MAP_PROTO_FILE,
@@ -162,9 +162,9 @@ struct rspamd_map {
 	gdouble poll_timeout;
 	time_t next_check;
 	bool active_http;
-	bool non_trivial; /* E.g. has http backends in active mode */
-	bool file_only; /* No HTTP backends found */
-	bool static_only; /* No need to check */
+	bool non_trivial;  /* E.g. has http backends in active mode */
+	bool file_only;    /* No HTTP backends found */
+	bool static_only;  /* No need to check */
 	bool no_file_read; /* Do not read files */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
@@ -173,9 +173,9 @@ struct rspamd_map {
 
 enum rspamd_map_http_stage {
 	http_map_resolve_host2 = 0, /* 2 requests sent */
-	http_map_resolve_host1, /* 1 requests sent */
-	http_map_http_conn, /* http connection */
-	http_map_terminated /* terminated when doing resolving */
+	http_map_resolve_host1,     /* 1 requests sent */
+	http_map_http_conn,         /* http connection */
+	http_map_terminated         /* terminated when doing resolving */
 };
 
 struct map_periodic_cbdata {
@@ -190,10 +190,10 @@ struct map_periodic_cbdata {
 };
 
 static const gchar rspamd_http_file_magic[] =
-		{'r', 'm', 'c', 'd', '2', '0', '0', '0'};
+	{'r', 'm', 'c', 'd', '2', '0', '0', '0'};
 
 struct rspamd_http_file_data {
-	guchar magic[sizeof (rspamd_http_file_magic)];
+	guchar magic[sizeof(rspamd_http_file_magic)];
 	goffset data_off;
 	gulong mtime;
 	gulong next_check;
@@ -219,7 +219,7 @@ struct http_callback_data {
 	ref_entry_t ref;
 };
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

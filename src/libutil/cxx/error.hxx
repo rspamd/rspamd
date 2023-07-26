@@ -44,8 +44,10 @@ public:
 	 * @param code
 	 * @param category
 	 */
-	error(const char *msg, int code, error_category category = error_category::INFORMAL) :
-		error_message(msg), error_code(code), category(category) {}
+	error(const char *msg, int code, error_category category = error_category::INFORMAL)
+		: error_message(msg), error_code(code), category(category)
+	{
+	}
 	/**
 	 * Construct error from a temporary string taking membership
 	 * @param msg
@@ -53,7 +55,8 @@ public:
 	 * @param category
 	 */
 	error(std::string &&msg, int code, error_category category = error_category::INFORMAL)
-		: error_code(code), category(category) {
+		: error_code(code), category(category)
+	{
 		static_storage = std::move(msg);
 		error_message = static_storage.value();
 	}
@@ -64,12 +67,15 @@ public:
 	 * @param category
 	 */
 	error(const std::string &msg, int code, error_category category = error_category::INFORMAL)
-		: error_code(code), category(category) {
+		: error_code(code), category(category)
+	{
 		static_storage = msg;
 		error_message = static_storage.value();
 	}
 
-	error(const error &other) : error_code(other.error_code), category(other.category) {
+	error(const error &other)
+		: error_code(other.error_code), category(other.category)
+	{
 		if (other.static_storage) {
 			static_storage = other.static_storage;
 			error_message = static_storage.value();
@@ -79,11 +85,13 @@ public:
 		}
 	}
 
-	error(error &&other) noexcept {
+	error(error &&other) noexcept
+	{
 		*this = std::move(other);
 	}
 
-	error& operator = (error &&other) noexcept {
+	error &operator=(error &&other) noexcept
+	{
 		if (other.static_storage.has_value()) {
 			std::swap(static_storage, other.static_storage);
 			error_message = static_storage.value();
@@ -101,28 +109,32 @@ public:
 	 * Convert into GError
 	 * @return
 	 */
-	auto into_g_error() const -> GError * {
+	auto into_g_error() const -> GError *
+	{
 		return g_error_new(g_quark_from_static_string("rspamd"), error_code, "%s",
-			error_message.data());
+						   error_message.data());
 	}
 
 	/**
 	 * Convenience alias for the `into_g_error`
 	 * @param err
 	 */
-	auto into_g_error_set(GError **err) const -> void {
+	auto into_g_error_set(GError **err) const -> void
+	{
 		if (err && *err == nullptr) {
 			*err = into_g_error();
 		}
 	}
+
 public:
 	std::string_view error_message;
 	int error_code;
 	error_category category;
+
 private:
 	std::optional<std::string> static_storage;
 };
 
-} // namespace rspamd::util
+}// namespace rspamd::util
 
-#endif //RSPAMD_ERROR_HXX
+#endif//RSPAMD_ERROR_HXX

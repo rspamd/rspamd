@@ -49,15 +49,18 @@ struct html_block {
 	constexpr static const auto transparent_flag = 2;
 
 	/* Helpers to set mask when setting the elements */
-	auto set_fgcolor(const rspamd::css::css_color &c, int how =  html_block::set) -> void {
+	auto set_fgcolor(const rspamd::css::css_color &c, int how = html_block::set) -> void
+	{
 		fg_color = c;
 		fg_color_mask = how;
 	}
-	auto set_bgcolor(const rspamd::css::css_color &c, int how =  html_block::set) -> void {
+	auto set_bgcolor(const rspamd::css::css_color &c, int how = html_block::set) -> void
+	{
 		bg_color = c;
 		bg_color_mask = how;
 	}
-	auto set_height(float h, bool is_percent = false, int how =  html_block::set) -> void {
+	auto set_height(float h, bool is_percent = false, int how = html_block::set) -> void
+	{
 		h = is_percent ? (-h) : h;
 		if (h < INT16_MIN) {
 			/* Negative numbers encode percents... */
@@ -72,7 +75,8 @@ struct html_block {
 		height_mask = how;
 	}
 
-	auto set_width(float w, bool is_percent = false, int how = html_block::set) -> void {
+	auto set_width(float w, bool is_percent = false, int how = html_block::set) -> void
+	{
 		w = is_percent ? (-w) : w;
 		if (w < INT16_MIN) {
 			width = INT16_MIN;
@@ -86,7 +90,8 @@ struct html_block {
 		width_mask = how;
 	}
 
-	auto set_display(bool v, int how = html_block::set) -> void  {
+	auto set_display(bool v, int how = html_block::set) -> void
+	{
 		if (v) {
 			display = rspamd::css::css_display_value::DISPLAY_INLINE;
 		}
@@ -96,12 +101,14 @@ struct html_block {
 		display_mask = how;
 	}
 
-	auto set_display(rspamd::css::css_display_value v, int how = html_block::set) -> void  {
+	auto set_display(rspamd::css::css_display_value v, int how = html_block::set) -> void
+	{
 		display = v;
 		display_mask = how;
 	}
 
-	auto set_font_size(float fs, bool is_percent = false, int how = html_block::set) -> void  {
+	auto set_font_size(float fs, bool is_percent = false, int how = html_block::set) -> void
+	{
 		fs = is_percent ? (-fs) : fs;
 		if (fs < INT8_MIN) {
 			font_size = -100;
@@ -122,7 +129,7 @@ private:
 	{
 		if (other_mask && other_mask > mask_val) {
 			our_val = other_val;
-			mask_val =  html_block::inherited;
+			mask_val = html_block::inherited;
 		}
 
 		return mask_val;
@@ -137,8 +144,8 @@ private:
 	 * 5) Parent size is undefined and our size is < 0 - tricky stuff, assume some defaults
 	 */
 	template<typename T, typename MT>
-	static constexpr auto size_prop (MT mask_val, MT other_mask, T &our_val,
-									 T other_val, T default_val) -> MT
+	static constexpr auto size_prop(MT mask_val, MT other_mask, T &our_val,
+									T other_val, T default_val) -> MT
 	{
 		if (mask_val) {
 			/* We have our value */
@@ -172,34 +179,37 @@ private:
 
 		return mask_val;
 	}
+
 public:
 	/**
 	 * Propagate values from the block if they are not defined by the current block
 	 * @param other
 	 * @return
 	 */
-	auto propagate_block(const html_block &other) -> void {
+	auto propagate_block(const html_block &other) -> void
+	{
 		fg_color_mask = html_block::simple_prop(fg_color_mask, other.fg_color_mask,
-				fg_color, other.fg_color);
+												fg_color, other.fg_color);
 		bg_color_mask = html_block::simple_prop(bg_color_mask, other.bg_color_mask,
-				bg_color, other.bg_color);
+												bg_color, other.bg_color);
 		display_mask = html_block::simple_prop(display_mask, other.display_mask,
-				display, other.display);
+											   display, other.display);
 
 		height_mask = html_block::size_prop(height_mask, other.height_mask,
-				height, other.height, static_cast<std::int16_t>(800));
+											height, other.height, static_cast<std::int16_t>(800));
 		width_mask = html_block::size_prop(width_mask, other.width_mask,
-				width, other.width, static_cast<std::int16_t>(1024));
+										   width, other.width, static_cast<std::int16_t>(1024));
 		font_mask = html_block::size_prop(font_mask, other.font_mask,
-				font_size, other.font_size, static_cast<std::int8_t>(10));
+										  font_size, other.font_size, static_cast<std::int8_t>(10));
 	}
 
 	/*
 	 * Set block overriding all inherited values
 	 */
-	auto set_block(const html_block &other) -> void {
+	auto set_block(const html_block &other) -> void
+	{
 		constexpr auto set_value = [](auto mask_val, auto other_mask, auto &our_val,
-									   auto other_val) constexpr -> int {
+									  auto other_val) constexpr -> int {
 			if (other_mask && mask_val != html_block::set) {
 				our_val = other_val;
 				mask_val = other_mask;
@@ -216,7 +226,8 @@ public:
 		font_mask = set_value(font_mask, other.font_mask, font_size, other.font_size);
 	}
 
-	auto compute_visibility(void) -> void {
+	auto compute_visibility(void) -> void
+	{
 		if (display_mask) {
 			if (display == css::css_display_value::DISPLAY_HIDDEN) {
 				visibility_mask = html_block::invisible_flag;
@@ -235,10 +246,10 @@ public:
 
 		auto is_similar_colors = [](const rspamd::css::css_color &fg, const rspamd::css::css_color &bg) -> bool {
 			constexpr const auto min_visible_diff = 0.1f;
-			auto diff_r = ((float)fg.r - bg.r);
-			auto diff_g = ((float)fg.g - bg.g);
-			auto diff_b = ((float)fg.b - bg.b);
-			auto ravg = ((float)fg.r + bg.r) / 2.0f;
+			auto diff_r = ((float) fg.r - bg.r);
+			auto diff_g = ((float) fg.g - bg.g);
+			auto diff_b = ((float) fg.b - bg.b);
+			auto ravg = ((float) fg.r + bg.r) / 2.0f;
 
 			/* Square diffs */
 			diff_r *= diff_r;
@@ -246,7 +257,8 @@ public:
 			diff_b *= diff_b;
 
 			auto diff = std::sqrt(2.0f * diff_r + 4.0f * diff_g + 3.0f * diff_b +
-								  (ravg * (diff_r - diff_b) / 256.0f)) / 256.0f;
+								  (ravg * (diff_r - diff_b) / 256.0f)) /
+						256.0f;
 
 			return diff < min_visible_diff;
 		};
@@ -293,15 +305,18 @@ public:
 		visibility_mask = html_block::unset;
 	}
 
-	constexpr auto is_visible(void) const -> bool {
+	constexpr auto is_visible(void) const -> bool
+	{
 		return visibility_mask == html_block::unset;
 	}
 
-	constexpr auto is_transparent(void) const -> bool {
+	constexpr auto is_transparent(void) const -> bool
+	{
 		return visibility_mask == html_block::transparent_flag;
 	}
 
-	constexpr auto has_display(int how = html_block::set) const -> bool {
+	constexpr auto has_display(int how = html_block::set) const -> bool
+	{
 		return display_mask >= how;
 	}
 
@@ -309,33 +324,35 @@ public:
 	 * Returns a default html block for root HTML element
 	 * @return
 	 */
-	static auto default_html_block(void) -> html_block {
+	static auto default_html_block(void) -> html_block
+	{
 		return html_block{.fg_color = rspamd::css::css_color::black(),
-				.bg_color = rspamd::css::css_color::white(),
-				.height = 0,
-				.width = 0,
-				.display = rspamd::css::css_display_value::DISPLAY_INLINE,
-				.font_size = 12,
-				.fg_color_mask = html_block::inherited,
-				.bg_color_mask = html_block::inherited,
-				.height_mask = html_block::unset,
-				.width_mask = html_block::unset,
-				.font_mask = html_block::unset,
-				.display_mask = html_block::inherited,
-				.visibility_mask = html_block::unset};
+						  .bg_color = rspamd::css::css_color::white(),
+						  .height = 0,
+						  .width = 0,
+						  .display = rspamd::css::css_display_value::DISPLAY_INLINE,
+						  .font_size = 12,
+						  .fg_color_mask = html_block::inherited,
+						  .bg_color_mask = html_block::inherited,
+						  .height_mask = html_block::unset,
+						  .width_mask = html_block::unset,
+						  .font_mask = html_block::unset,
+						  .display_mask = html_block::inherited,
+						  .visibility_mask = html_block::unset};
 	}
 	/**
 	 * Produces html block with no defined values allocated from the pool
 	 * @param pool
 	 * @return
 	 */
-	static auto undefined_html_block_pool(rspamd_mempool_t *pool) -> html_block* {
+	static auto undefined_html_block_pool(rspamd_mempool_t *pool) -> html_block *
+	{
 		auto *bl = rspamd_mempool_alloc0_type(pool, html_block);
 
 		return bl;
 	}
 };
 
-}
+}// namespace rspamd::html
 
-#endif //RSPAMD_HTML_BLOCK_HXX
+#endif//RSPAMD_HTML_BLOCK_HXX

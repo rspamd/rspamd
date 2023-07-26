@@ -20,47 +20,47 @@
 #include "fuzzy_backend.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
 /*
  * Subroutines for fuzzy_backend
  */
-void *rspamd_fuzzy_backend_init_redis (struct rspamd_fuzzy_backend *bk,
-									   const ucl_object_t *obj,
-									   struct rspamd_config *cfg,
-									   GError **err);
+void *rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
+									  const ucl_object_t *obj,
+									  struct rspamd_config *cfg,
+									  GError **err);
 
-void rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
-									   const struct rspamd_fuzzy_cmd *cmd,
-									   rspamd_fuzzy_check_cb cb, void *ud,
+void rspamd_fuzzy_backend_check_redis(struct rspamd_fuzzy_backend *bk,
+									  const struct rspamd_fuzzy_cmd *cmd,
+									  rspamd_fuzzy_check_cb cb, void *ud,
+									  void *subr_ud);
+
+void rspamd_fuzzy_backend_update_redis(struct rspamd_fuzzy_backend *bk,
+									   GArray *updates, const gchar *src,
+									   rspamd_fuzzy_update_cb cb, void *ud,
 									   void *subr_ud);
 
-void rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
-										GArray *updates, const gchar *src,
-										rspamd_fuzzy_update_cb cb, void *ud,
+void rspamd_fuzzy_backend_count_redis(struct rspamd_fuzzy_backend *bk,
+									  rspamd_fuzzy_count_cb cb, void *ud,
+									  void *subr_ud);
+
+void rspamd_fuzzy_backend_version_redis(struct rspamd_fuzzy_backend *bk,
+										const gchar *src,
+										rspamd_fuzzy_version_cb cb, void *ud,
 										void *subr_ud);
 
-void rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
-									   rspamd_fuzzy_count_cb cb, void *ud,
+const gchar *rspamd_fuzzy_backend_id_redis(struct rspamd_fuzzy_backend *bk,
+										   void *subr_ud);
+
+void rspamd_fuzzy_backend_expire_redis(struct rspamd_fuzzy_backend *bk,
 									   void *subr_ud);
 
-void rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
-										 const gchar *src,
-										 rspamd_fuzzy_version_cb cb, void *ud,
-										 void *subr_ud);
+void rspamd_fuzzy_backend_close_redis(struct rspamd_fuzzy_backend *bk,
+									  void *subr_ud);
 
-const gchar *rspamd_fuzzy_backend_id_redis (struct rspamd_fuzzy_backend *bk,
-											void *subr_ud);
-
-void rspamd_fuzzy_backend_expire_redis (struct rspamd_fuzzy_backend *bk,
-										void *subr_ud);
-
-void rspamd_fuzzy_backend_close_redis (struct rspamd_fuzzy_backend *bk,
-									   void *subr_ud);
-
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

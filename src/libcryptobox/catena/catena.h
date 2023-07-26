@@ -18,22 +18,21 @@
 
 /* Modes  */
 #define PASSWORD_HASHING_MODE 0
-#define KEY_DERIVATION_MODE   1
+#define KEY_DERIVATION_MODE 1
 #define REGULAR 0
 #define CLIENT 1
 
 #define CATENA_HLEN 64
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-int
-catena (const uint8_t *pwd, const uint32_t pwdlen,
-		const uint8_t *salt, const uint8_t saltlen,
-		const uint8_t *data, const uint32_t datalen,
-		const uint8_t lambda, const uint8_t min_garlic,
-		const uint8_t garlic, const uint8_t hashlen, uint8_t *hash);
+int catena(const uint8_t *pwd, const uint32_t pwdlen,
+		   const uint8_t *salt, const uint8_t saltlen,
+		   const uint8_t *data, const uint32_t datalen,
+		   const uint8_t lambda, const uint8_t min_garlic,
+		   const uint8_t garlic, const uint8_t hashlen, uint8_t *hash);
 
 /**
  * Simple interface for catena PBKDF
@@ -46,17 +45,17 @@ catena (const uint8_t *pwd, const uint32_t pwdlen,
  * @param hash output hash
  * @return 0 if hash is generated, -1 in case of error
  */
-int simple_catena (const uint8_t *pwd, const uint32_t pwdlen,
-				   const uint8_t *salt, const uint8_t saltlen,
-				   const uint8_t *data, const uint32_t datalen,
-				   uint8_t hash[CATENA_HLEN]);
+int simple_catena(const uint8_t *pwd, const uint32_t pwdlen,
+				  const uint8_t *salt, const uint8_t saltlen,
+				  const uint8_t *data, const uint32_t datalen,
+				  uint8_t hash[CATENA_HLEN]);
 
 /**
  * Run a quick test on catena implementation
  */
-int catena_test (void);
+int catena_test(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

@@ -83,58 +83,56 @@ get_icu_idna_instance(void) -> auto
 
 static auto
 convert_idna_hostname_maybe(rspamd_mempool_t *pool, struct rspamd_url *url, bool use_tld)
-		-> std::string_view
+	-> std::string_view
 {
-	std::string_view ret = use_tld ?
-			std::string_view{rspamd_url_tld_unsafe (url), url->tldlen} :
-			std::string_view {rspamd_url_host_unsafe (url), url->hostlen};
+	std::string_view ret = use_tld ? std::string_view{rspamd_url_tld_unsafe(url), url->tldlen} : std::string_view{rspamd_url_host_unsafe(url), url->hostlen};
 
 	/* Handle IDN url's */
 	if (ret.size() > 4 &&
 		rspamd_substring_search_caseless(ret.data(), ret.size(), "xn--", 4) != -1) {
 
 		const auto buf_capacity = ret.size() * 2 + 1;
-		auto *idn_hbuf = (char *)rspamd_mempool_alloc (pool, buf_capacity);
-		icu::CheckedArrayByteSink byte_sink{idn_hbuf, (int)buf_capacity};
+		auto *idn_hbuf = (char *) rspamd_mempool_alloc(pool, buf_capacity);
+		icu::CheckedArrayByteSink byte_sink{idn_hbuf, (int) buf_capacity};
 
 		/* We need to convert it to the normal value first */
 		icu::IDNAInfo info;
 		auto uc_err = U_ZERO_ERROR;
 		auto *udn = get_icu_idna_instance();
 		udn->nameToUnicodeUTF8(icu::StringPiece(ret.data(), ret.size()),
-				byte_sink, info, uc_err);
+							   byte_sink, info, uc_err);
 
 		if (uc_err == U_ZERO_ERROR && !info.hasErrors()) {
 			/* idn_hbuf is allocated in mempool, so it is safe to use */
-			ret = std::string_view{idn_hbuf, (std::size_t)byte_sink.NumberOfBytesWritten()};
+			ret = std::string_view{idn_hbuf, (std::size_t) byte_sink.NumberOfBytesWritten()};
 		}
 		else {
-			msg_err_pool ("cannot convert to IDN: %s (0x%xd)",
-					u_errorName(uc_err), info.getErrors());
+			msg_err_pool("cannot convert to IDN: %s (0x%xd)",
+						 u_errorName(uc_err), info.getErrors());
 		}
 	}
 
 	return ret;
 };
 
-constexpr auto sv_equals(std::string_view s1, std::string_view s2) -> auto {
+constexpr auto sv_equals(std::string_view s1, std::string_view s2) -> auto
+{
 	return (s1.size() == s2.size()) &&
-		std::equal(s1.begin(), s1.end(), s2.begin(), s2.end(),
-				[](const auto c1, const auto c2) {
-					return g_ascii_tolower(c1) == g_ascii_tolower(c2);
-		});
+		   std::equal(s1.begin(), s1.end(), s2.begin(), s2.end(),
+					  [](const auto c1, const auto c2) {
+						  return g_ascii_tolower(c1) == g_ascii_tolower(c2);
+					  });
 }
 
 constexpr auto
 is_transfer_proto(struct rspamd_url *u) -> bool
 {
-	return (u->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_FTP)) != 0;
+	return (u->protocol & (PROTOCOL_HTTP | PROTOCOL_HTTPS | PROTOCOL_FTP)) != 0;
 }
 
-auto
-html_url_is_phished(rspamd_mempool_t *pool,
-					struct rspamd_url *href_url,
-					std::string_view text_data) -> std::optional<rspamd_url *>
+auto html_url_is_phished(rspamd_mempool_t *pool,
+						 struct rspamd_url *href_url,
+						 std::string_view text_data) -> std::optional<rspamd_url *>
 {
 	struct rspamd_url *text_url;
 	std::string_view disp_tok, href_tok;
@@ -147,8 +145,9 @@ html_url_is_phished(rspamd_mempool_t *pool,
 
 	if (text_data.size() > 4 &&
 		rspamd_url_find(pool, text_data.data(), text_data.size(), &url_str,
-				RSPAMD_URL_FIND_ALL,
-				&url_pos, NULL) && url_str != nullptr) {
+						RSPAMD_URL_FIND_ALL,
+						&url_pos, NULL) &&
+		url_str != nullptr) {
 
 		if (url_pos > 0) {
 			/*
@@ -158,9 +157,9 @@ html_url_is_phished(rspamd_mempool_t *pool,
 			return std::nullopt;
 		}
 
-		text_url = rspamd_mempool_alloc0_type (pool, struct rspamd_url);
+		text_url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
 		auto rc = rspamd_url_parse(text_url, url_str, strlen(url_str), pool,
-				RSPAMD_URL_PARSE_TEXT);
+								   RSPAMD_URL_PARSE_TEXT);
 
 		if (rc == URI_ERRNO_OK) {
 			text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
@@ -205,17 +204,16 @@ html_url_is_phished(rspamd_mempool_t *pool,
 			 */
 			gboolean obfuscation_found = FALSE;
 
-			if (text_data.size() > 4
-				&& g_ascii_strncasecmp(text_data.begin(), "http", 4) == 0 &&
+			if (text_data.size() > 4 && g_ascii_strncasecmp(text_data.begin(), "http", 4) == 0 &&
 				rspamd_substring_search(text_data.begin(), text_data.size(), "://", 3) != -1) {
 				/* Clearly an obfuscation attempt */
 				obfuscation_found = TRUE;
 			}
 
-			msg_info_pool ("extract of url '%s' failed: %s; obfuscation detected: %s",
-					url_str,
-					rspamd_url_strerror(rc),
-					obfuscation_found ? "yes" : "no");
+			msg_info_pool("extract of url '%s' failed: %s; obfuscation detected: %s",
+						  url_str,
+						  rspamd_url_strerror(rc),
+						  obfuscation_found ? "yes" : "no");
 
 			if (obfuscation_found) {
 				href_url->flags |= RSPAMD_URL_FLAG_PHISHED | RSPAMD_URL_FLAG_OBSCURED;
@@ -226,13 +224,12 @@ html_url_is_phished(rspamd_mempool_t *pool,
 	return std::nullopt;
 }
 
-void
-html_check_displayed_url(rspamd_mempool_t *pool,
-						 GList **exceptions,
-						 void *url_set,
-						 std::string_view visible_part,
-						 goffset href_offset,
-						 struct rspamd_url *url)
+void html_check_displayed_url(rspamd_mempool_t *pool,
+							  GList **exceptions,
+							  void *url_set,
+							  std::string_view visible_part,
+							  goffset href_offset,
+							  struct rspamd_url *url)
 {
 	struct rspamd_url *displayed_url = nullptr;
 	struct rspamd_url *turl;
@@ -250,16 +247,16 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	}
 	url->ext->visible_part = rspamd_mempool_alloc_buffer(pool, visible_part.size() + 1);
 	rspamd_strlcpy(url->ext->visible_part,
-			visible_part.data(),
-			visible_part.size() + 1);
+				   visible_part.data(),
+				   visible_part.size() + 1);
 	dlen = visible_part.size();
 
 	/* Strip unicode spaces from the start and the end */
 	url->ext->visible_part = const_cast<char *>(
-			rspamd_string_unicode_trim_inplace(url->ext->visible_part,
-			&dlen));
+		rspamd_string_unicode_trim_inplace(url->ext->visible_part,
+										   &dlen));
 	auto maybe_url = html_url_is_phished(pool, url,
-			{url->ext->visible_part, dlen});
+										 {url->ext->visible_part, dlen});
 
 	if (maybe_url) {
 		url->flags |= saved_flags;
@@ -267,7 +264,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	}
 
 	if (exceptions && displayed_url != nullptr) {
-		ex = rspamd_mempool_alloc_type (pool,struct rspamd_process_exception);
+		ex = rspamd_mempool_alloc_type(pool, struct rspamd_process_exception);
 		ex->pos = href_offset;
 		ex->len = dlen;
 		ex->type = RSPAMD_EXCEPTION_URL;
@@ -277,7 +274,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	}
 
 	if (displayed_url && url_set) {
-		turl = rspamd_url_set_add_or_return((khash_t (rspamd_url_hash) *)url_set, displayed_url);
+		turl = rspamd_url_set_add_or_return((khash_t(rspamd_url_hash) *) url_set, displayed_url);
 
 		if (turl != nullptr) {
 			/* Here, we assume the following:
@@ -310,8 +307,7 @@ html_check_displayed_url(rspamd_mempool_t *pool,
 	rspamd_normalise_unicode_inplace(url->ext->visible_part, &dlen);
 }
 
-auto
-html_process_url(rspamd_mempool_t *pool, std::string_view &input)
+auto html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	-> std::optional<struct rspamd_url *>
 {
 	struct rspamd_url *url;
@@ -332,7 +328,7 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	dlen = 0;
 
 	for (auto i = 0; i < sz; i++) {
-		if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+		if (G_UNLIKELY(((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
 			dlen += 3;
 		}
 		else {
@@ -349,7 +345,7 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 		}
 		else {
 			for (auto i = 0; i < sz; i++) {
-				if (!((s[i] & 0x80) || g_ascii_isalnum (s[i]))) {
+				if (!((s[i] & 0x80) || g_ascii_isalnum(s[i]))) {
 					if (i == 0 && sz > 2 && s[i] == '/' && s[i + 1] == '/') {
 						prefix = "http:";
 						dlen += sizeof("http:") - 1;
@@ -398,17 +394,17 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	 * including essential ones
 	 */
 	for (auto i = 0; i < sz; i++) {
-		if (G_UNLIKELY (g_ascii_isspace(s[i]))) {
+		if (G_UNLIKELY(g_ascii_isspace(s[i]))) {
 			continue;
 		}
-		else if (G_UNLIKELY (((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
+		else if (G_UNLIKELY(((guint) s[i]) < 0x80 && !g_ascii_isgraph(s[i]))) {
 			/* URL encode */
 			*d++ = '%';
 			*d++ = hexdigests[(s[i] >> 4) & 0xf];
 			*d++ = hexdigests[s[i] & 0xf];
 			has_bad_chars = TRUE;
 		}
-		else if (G_UNLIKELY (s[i] == '%')) {
+		else if (G_UNLIKELY(s[i] == '%')) {
 			if (i + 2 < sz) {
 				auto c1 = s[i + 1];
 				auto c2 = s[i + 2];
@@ -416,21 +412,25 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 				if (g_ascii_isxdigit(c1) && g_ascii_isxdigit(c2)) {
 					auto codepoint = 0;
 
-					if      (c1 >= '0' && c1 <= '9') codepoint = c1 - '0';
-					else if (c1 >= 'A' && c1 <= 'F') codepoint = c1 - 'A' + 10;
-					else if (c1 >= 'a' && c1 <= 'f') codepoint = c1 - 'a' + 10;
+					if (c1 >= '0' && c1 <= '9') codepoint = c1 - '0';
+					else if (c1 >= 'A' && c1 <= 'F')
+						codepoint = c1 - 'A' + 10;
+					else if (c1 >= 'a' && c1 <= 'f')
+						codepoint = c1 - 'a' + 10;
 
 					codepoint <<= 4;
 
-					if      (c2 >= '0' && c2 <= '9') codepoint += c2 - '0';
-					else if (c2 >= 'A' && c2 <= 'F') codepoint += c2 - 'A' + 10;
-					else if (c2 >= 'a' && c2 <= 'f') codepoint += c2 - 'a' + 10;
+					if (c2 >= '0' && c2 <= '9') codepoint += c2 - '0';
+					else if (c2 >= 'A' && c2 <= 'F')
+						codepoint += c2 - 'A' + 10;
+					else if (c2 >= 'a' && c2 <= 'f')
+						codepoint += c2 - 'a' + 10;
 
 					/* Now check for 'interesting' codepoints */
 					if (codepoint == '@' || codepoint == ':' || codepoint == '|' ||
 						codepoint == '?' || codepoint == '\\' || codepoint == '/') {
 						/* Replace it back */
-						*d++ = (char)(codepoint & 0xff);
+						*d++ = (char) (codepoint & 0xff);
 						i += 2;
 					}
 					else {
@@ -454,7 +454,7 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	dlen = d - decoded;
 
 	url = rspamd_mempool_alloc0_type(pool, struct rspamd_url);
-	rspamd_url_normalise_propagate_flags (pool, decoded, &dlen, saved_flags);
+	rspamd_url_normalise_propagate_flags(pool, decoded, &dlen, saved_flags);
 	rc = rspamd_url_parse(url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
 
 	/* Filter some completely damaged urls */
@@ -493,4 +493,4 @@ html_process_url(rspamd_mempool_t *pool, std::string_view &input)
 	return std::nullopt;
 }
 
-}
+}// namespace rspamd::html

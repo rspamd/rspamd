@@ -23,7 +23,7 @@
 #include "libserver/cfg_file.h"
 #include "libserver/rspamd_control.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -60,12 +60,12 @@ struct rspamd_worker_ctx {
 /*
  * Init scanning routines
  */
-void rspamd_worker_init_scanner (struct rspamd_worker *worker,
-								 struct ev_loop *ev_base,
-								 struct rspamd_dns_resolver *resolver,
-								 struct rspamd_lang_detector **plang_det);
+void rspamd_worker_init_scanner(struct rspamd_worker *worker,
+								struct ev_loop *ev_base,
+								struct rspamd_dns_resolver *resolver,
+								struct rspamd_lang_detector **plang_det);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

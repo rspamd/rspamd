@@ -26,7 +26,7 @@ struct rspamd_task; /* for logging */
  * @param cfg
  * @return opaque pointer
  */
-void* rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg);
+void *rspamd_lang_detection_fasttext_init(struct rspamd_config *cfg);
 
 /**
  * Check if fasttext language detector is enabled
@@ -43,7 +43,7 @@ bool rspamd_lang_detection_fasttext_is_enabled(void *ud);
 char *rspamd_lang_detection_fasttext_show_info(void *ud);
 
 
-typedef  void * rspamd_fasttext_predict_result_t;
+typedef void *rspamd_fasttext_predict_result_t;
 /**
  * Detect language using fasttext
  * @param ud opaque pointer
@@ -53,7 +53,7 @@ typedef  void * rspamd_fasttext_predict_result_t;
  * @return TRUE if language is detected
  */
 rspamd_fasttext_predict_result_t rspamd_lang_detection_fasttext_detect(void *ud,
-		struct rspamd_task *task, GArray *utf_words, int k);
+																	   struct rspamd_task *task, GArray *utf_words, int k);
 
 /**
  * Get number of languages detected

@@ -24,7 +24,7 @@ static gdouble total_time = 0;
 
 
 static void
-rspamd_process_file (const gchar *fname, gint decode)
+rspamd_process_file(const gchar *fname, gint decode)
 {
 	gint fd;
 	gpointer map;
@@ -32,43 +32,42 @@ rspamd_process_file (const gchar *fname, gint decode)
 	guint8 *dest;
 	gsize destlen;
 
-	fd = open (fname, O_RDONLY);
+	fd = open(fname, O_RDONLY);
 
 	if (fd == -1) {
-		rspamd_fprintf (stderr, "cannot open %s: %s", fname, strerror (errno));
-		exit (EXIT_FAILURE);
+		rspamd_fprintf(stderr, "cannot open %s: %s", fname, strerror(errno));
+		exit(EXIT_FAILURE);
 	}
 
-	if (fstat (fd, &st) == -1) {
-		rspamd_fprintf (stderr, "cannot stat %s: %s", fname, strerror (errno));
-		exit (EXIT_FAILURE);
+	if (fstat(fd, &st) == -1) {
+		rspamd_fprintf(stderr, "cannot stat %s: %s", fname, strerror(errno));
+		exit(EXIT_FAILURE);
 	}
 
-	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-	close (fd);
+	map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	close(fd);
 
 	if (map == MAP_FAILED) {
-		rspamd_fprintf (stderr, "cannot mmap %s: %s", fname, strerror (errno));
-		exit (EXIT_FAILURE);
+		rspamd_fprintf(stderr, "cannot mmap %s: %s", fname, strerror(errno));
+		exit(EXIT_FAILURE);
 	}
 
 	if (decode) {
 		destlen = st.st_size / 4 * 3 + 10;
-		dest = g_malloc (destlen);
-		rspamd_cryptobox_base64_decode (map, st.st_size, dest, &destlen);
+		dest = g_malloc(destlen);
+		rspamd_cryptobox_base64_decode(map, st.st_size, dest, &destlen);
 	}
 	else {
-		dest = rspamd_encode_base64 (map, st.st_size, 80, &destlen);
+		dest = rspamd_encode_base64(map, st.st_size, 80, &destlen);
 	}
 
-	rspamd_printf ("%*s", (gint)destlen, dest);
-	g_free (dest);
+	rspamd_printf("%*s", (gint) destlen, dest);
+	g_free(dest);
 
-	munmap (map, st.st_size);
+	munmap(map, st.st_size);
 }
 
-int
-main (int argc, char **argv)
+int main(int argc, char **argv)
 {
 	gint i, start = 1, decode = 0;
 
@@ -80,9 +79,9 @@ main (int argc, char **argv)
 		}
 	}
 
-	for (i = start; i < argc; i ++) {
+	for (i = start; i < argc; i++) {
 		if (argv[i]) {
-			rspamd_process_file (argv[i], decode);
+			rspamd_process_file(argv[i], decode);
 		}
 	}
 

@@ -18,13 +18,13 @@
 
 #include "config.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-const char *base64_load (void);
+const char *base64_load(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

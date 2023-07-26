@@ -25,9 +25,9 @@
 #include "contrib/t1ha/t1ha.h"
 
 #ifdef __has_include
-# if __has_include(<version>)
-#   include <version>
-# endif
+#if __has_include(<version>)
+#include <version>
+#endif
 #endif
 #include <cmath>
 
@@ -58,14 +58,14 @@ auto symcache::init() -> bool
 			for (const auto &disable_pat: *disabled_symbols) {
 				if (disable_pat.matches(it->get_name())) {
 					msg_debug_cache("symbol %s matches %*s disable pattern", it->get_name().c_str(),
-						(int)disable_pat.to_string_view().size(), disable_pat.to_string_view().data());
+									(int) disable_pat.to_string_view().size(), disable_pat.to_string_view().data());
 					auto need_disable = true;
 
 					if (enabled_symbols) {
 						for (const auto &enable_pat: *enabled_symbols) {
 							if (enable_pat.matches(it->get_name())) {
 								msg_debug_cache("symbol %s matches %*s enable pattern; skip disabling", it->get_name().c_str(),
-										(int)enable_pat.to_string_view().size(), enable_pat.to_string_view().data());
+												(int) enable_pat.to_string_view().size(), enable_pat.to_string_view().data());
 								need_disable = false;
 								break;
 							}
@@ -81,18 +81,18 @@ auto symcache::init() -> bool
 							if (real_elt) {
 								disabled_ids.insert(real_elt->id);
 
-								for (const auto &cld : real_elt->get_children().value().get()) {
+								for (const auto &cld: real_elt->get_children().value().get()) {
 									msg_debug_cache("symbol %s is a virtual sibling of the disabled symbol %s",
-											cld->get_name().c_str(), it->get_name().c_str());
+													cld->get_name().c_str(), it->get_name().c_str());
 									disabled_ids.insert(cld->id);
 								}
 							}
 						}
 						else {
 							/* Also disable all virtual children of this element */
-							for (const auto &cld : it->get_children().value().get()) {
+							for (const auto &cld: it->get_children().value().get()) {
 								msg_debug_cache("symbol %s is a virtual child of the disabled symbol %s",
-										cld->get_name().c_str(), it->get_name().c_str());
+												cld->get_name().c_str(), it->get_name().c_str());
 								disabled_ids.insert(cld->id);
 							}
 						}
@@ -103,7 +103,7 @@ auto symcache::init() -> bool
 	}
 
 	/* Deal with the delayed dependencies */
-	msg_debug_cache("resolving delayed dependencies: %d in list", (int)delayed_deps->size());
+	msg_debug_cache("resolving delayed dependencies: %d in list", (int) delayed_deps->size());
 	for (const auto &delayed_dep: *delayed_deps) {
 		auto virt_item = get_item_by_name(delayed_dep.from, false);
 		auto real_item = get_item_by_name(delayed_dep.from, true);
@@ -111,25 +111,25 @@ auto symcache::init() -> bool
 		if (virt_item == nullptr || real_item == nullptr) {
 			msg_err_cache("cannot register delayed dependency between %s and %s: "
 						  "%s is missing",
-					delayed_dep.from.data(),
-					delayed_dep.to.data(), delayed_dep.from.data());
+						  delayed_dep.from.data(),
+						  delayed_dep.to.data(), delayed_dep.from.data());
 		}
 		else {
 
 			if (!disabled_ids.contains(real_item->id)) {
 				msg_debug_cache("delayed between %s(%d:%d) -> %s",
-						delayed_dep.from.data(),
-						real_item->id, virt_item->id,
-						delayed_dep.to.data());
+								delayed_dep.from.data(),
+								real_item->id, virt_item->id,
+								delayed_dep.to.data());
 				add_dependency(real_item->id, delayed_dep.to,
-						virt_item != real_item ? virt_item->id : -1);
+							   virt_item != real_item ? virt_item->id : -1);
 			}
 			else {
 				msg_debug_cache("no delayed between %s(%d:%d) -> %s; %s is disabled",
-						delayed_dep.from.data(),
-						real_item->id, virt_item->id,
-						delayed_dep.to.data(),
-						delayed_dep.from.data());
+								delayed_dep.from.data(),
+								real_item->id, virt_item->id,
+								delayed_dep.to.data(),
+								delayed_dep.from.data());
 			}
 		}
 	}
@@ -138,7 +138,7 @@ auto symcache::init() -> bool
 	delayed_deps.reset();
 
 	/* Physically remove ids that are disabled statically */
-	for (auto id_to_disable : disabled_ids) {
+	for (auto id_to_disable: disabled_ids) {
 		/*
 		 * This erasure is inefficient, we can swap the last element with the removed id
 		 * But in this way, our ids are still sorted by addition
@@ -156,9 +156,9 @@ auto symcache::init() -> bool
 		});
 #else
 		auto it = std::remove_if(additional_vec.begin(),
-		additional_vec.end(), [id_to_disable](cache_item *elt) {
-			return elt->id == id_to_disable;
-		});
+								 additional_vec.end(), [id_to_disable](cache_item *elt) {
+									 return elt->id == id_to_disable;
+								 });
 		additional_vec.erase(it, additional_vec.end());
 #endif
 
@@ -171,21 +171,21 @@ auto symcache::init() -> bool
 	disabled_symbols.reset();
 
 	/* Deal with the delayed conditions */
-	msg_debug_cache("resolving delayed conditions: %d in list", (int)delayed_conditions->size());
+	msg_debug_cache("resolving delayed conditions: %d in list", (int) delayed_conditions->size());
 	for (const auto &delayed_cond: *delayed_conditions) {
 		auto it = get_item_by_name_mut(delayed_cond.sym, true);
 
 		if (it == nullptr) {
-			msg_err_cache (
-					"cannot register delayed condition for %s",
-					delayed_cond.sym.c_str());
+			msg_err_cache(
+				"cannot register delayed condition for %s",
+				delayed_cond.sym.c_str());
 			luaL_unref(delayed_cond.L, LUA_REGISTRYINDEX, delayed_cond.cbref);
 		}
 		else {
 			if (!it->add_condition(delayed_cond.L, delayed_cond.cbref)) {
-				msg_err_cache (
-						"cannot register delayed condition for %s: virtual parent; qed",
-						delayed_cond.sym.c_str());
+				msg_err_cache(
+					"cannot register delayed condition for %s: virtual parent; qed",
+					delayed_cond.sym.c_str());
 				g_abort();
 			}
 
@@ -219,8 +219,8 @@ auto symcache::init() -> bool
 	if (cfg->symbols) {
 		msg_debug_cache("connect metrics");
 		g_hash_table_foreach(cfg->symbols,
-				symcache::metric_connect_cb,
-				(void *) this);
+							 symcache::metric_connect_cb,
+							 (void *) this);
 	}
 
 	return res;
@@ -229,7 +229,7 @@ auto symcache::init() -> bool
 auto symcache::load_items() -> bool
 {
 	auto cached_map = util::raii_mmaped_file::mmap_shared(cfg->cache_filename,
-			O_RDONLY, PROT_READ);
+														  O_RDONLY, PROT_READ);
 
 	if (!cached_map.has_value()) {
 		if (cached_map.error().category == util::error_category::CRITICAL) {
@@ -244,14 +244,14 @@ auto symcache::load_items() -> bool
 
 	if (cached_map->get_size() < (gint) sizeof(symcache_header)) {
 		msg_info_cache("cannot use file %s, truncated: %z", cfg->cache_filename,
-				errno, strerror(errno));
+					   errno, strerror(errno));
 		return false;
 	}
 
 	const auto *hdr = (struct symcache_header *) cached_map->get_map();
 
 	if (memcmp(hdr->magic, symcache_magic,
-			sizeof(symcache_magic)) != 0) {
+			   sizeof(symcache_magic)) != 0) {
 		msg_info_cache("cannot use file %s, bad magic", cfg->cache_filename);
 
 		return false;
@@ -261,8 +261,8 @@ auto symcache::load_items() -> bool
 	const auto *p = (const std::uint8_t *) (hdr + 1);
 
 	if (!ucl_parser_add_chunk(parser, p, cached_map->get_size() - sizeof(*hdr))) {
-		msg_info_cache ("cannot use file %s, cannot parse: %s", cfg->cache_filename,
-				ucl_parser_get_error(parser));
+		msg_info_cache("cannot use file %s, cannot parse: %s", cfg->cache_filename,
+					   ucl_parser_get_error(parser));
 		ucl_parser_free(parser);
 
 		return false;
@@ -272,7 +272,7 @@ auto symcache::load_items() -> bool
 	ucl_parser_free(parser);
 
 	if (top == nullptr || ucl_object_type(top) != UCL_OBJECT) {
-		msg_info_cache ("cannot use file %s, bad object", cfg->cache_filename);
+		msg_info_cache("cannot use file %s, bad object", cfg->cache_filename);
 		ucl_object_unref(top);
 
 		return false;
@@ -366,7 +366,7 @@ bool symcache::save_items() const
 	}
 
 	auto file_sink = util::raii_file_sink::create(cfg->cache_filename,
-			O_WRONLY | O_TRUNC, 00644);
+												  O_WRONLY | O_TRUNC, 00644);
 
 	if (!file_sink.has_value()) {
 		if (errno == EEXIST) {
@@ -385,7 +385,7 @@ bool symcache::save_items() const
 
 	if (write(file_sink->get_fd(), &hdr, sizeof(hdr)) == -1) {
 		msg_err_cache("cannot write to file %s, error %d, %s", cfg->cache_filename,
-				errno, strerror(errno));
+					  errno, strerror(errno));
 
 		return false;
 	}
@@ -396,21 +396,21 @@ bool symcache::save_items() const
 		auto item = it.second;
 		auto elt = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(elt,
-				ucl_object_fromdouble(round_to_hundreds(item->st->weight)),
-				"weight", 0, false);
+							  ucl_object_fromdouble(round_to_hundreds(item->st->weight)),
+							  "weight", 0, false);
 		ucl_object_insert_key(elt,
-				ucl_object_fromdouble(round_to_hundreds(item->st->time_counter.mean)),
-				"time", 0, false);
+							  ucl_object_fromdouble(round_to_hundreds(item->st->time_counter.mean)),
+							  "time", 0, false);
 		ucl_object_insert_key(elt, ucl_object_fromint(item->st->total_hits),
-				"count", 0, false);
+							  "count", 0, false);
 
 		auto *freq = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(freq,
-				ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.mean)),
-				"avg", 0, false);
+							  ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.mean)),
+							  "avg", 0, false);
 		ucl_object_insert_key(freq,
-				ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.stddev)),
-				"stddev", 0, false);
+							  ucl_object_fromdouble(round_to_hundreds(item->st->frequency_counter.stddev)),
+							  "stddev", 0, false);
 		ucl_object_insert_key(elt, freq, "frequency", 0, false);
 
 		ucl_object_insert_key(top, elt, it.first.data(), 0, true);
@@ -445,7 +445,7 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 {
 	if (id < 0 || id >= items_by_id.size()) {
 		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
-				id, (int) items_by_id.size());
+					  id, (int) items_by_id.size());
 		return nullptr;
 	}
 
@@ -453,7 +453,7 @@ auto symcache::get_item_by_id(int id, bool resolve_parent) const -> const cache_
 
 	if (!maybe_item.has_value()) {
 		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
-				id);
+					  id);
 		return nullptr;
 	}
 
@@ -470,7 +470,7 @@ auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_it
 {
 	if (id < 0 || id >= items_by_id.size()) {
 		msg_err_cache("internal error: requested item with id %d, when we have just %d items in the cache",
-				id, (int) items_by_id.size());
+					  id, (int) items_by_id.size());
 		return nullptr;
 	}
 
@@ -478,7 +478,7 @@ auto symcache::get_item_by_id_mut(int id, bool resolve_parent) const -> cache_it
 
 	if (!maybe_item.has_value()) {
 		msg_err_cache("internal error: requested item with id %d but it is empty; qed",
-				id);
+					  id);
 		return nullptr;
 	}
 
@@ -524,25 +524,25 @@ auto symcache::get_item_by_name_mut(std::string_view name, bool resolve_parent) 
 
 auto symcache::add_dependency(int id_from, std::string_view to, int virtual_id_from) -> void
 {
-	g_assert (id_from >= 0 && id_from < (gint) items_by_id.size());
+	g_assert(id_from >= 0 && id_from < (gint) items_by_id.size());
 	const auto &source = items_by_id[id_from];
-	g_assert (source.get() != nullptr);
+	g_assert(source.get() != nullptr);
 
 	source->deps.emplace_back(nullptr,
-			std::string(to),
-			id_from,
-			-1);
+							  std::string(to),
+							  id_from,
+							  -1);
 
 
 	if (virtual_id_from >= 0) {
-		g_assert (virtual_id_from < (gint) items_by_id.size());
+		g_assert(virtual_id_from < (gint) items_by_id.size());
 		/* We need that for settings id propagation */
 		const auto &vsource = items_by_id[virtual_id_from];
-		g_assert (vsource.get() != nullptr);
+		g_assert(vsource.get() != nullptr);
 		vsource->deps.emplace_back(nullptr,
-				std::string(to),
-				-1,
-				virtual_id_from);
+								   std::string(to),
+								   -1,
+								   virtual_id_from);
 	}
 }
 
@@ -550,12 +550,13 @@ auto symcache::resort() -> void
 {
 	auto log_func = RSPAMD_LOG_FUNC;
 	auto ord = std::make_shared<order_generation>(filters.size() +
-			prefilters.size() +
-			composites.size() +
-			postfilters.size() +
-			idempotent.size() +
-			connfilters.size() +
-			classifiers.size(), cur_order_gen);
+													  prefilters.size() +
+													  composites.size() +
+													  postfilters.size() +
+													  idempotent.size() +
+													  connfilters.size() +
+													  classifiers.size(),
+												  cur_order_gen);
 
 	for (auto &it: filters) {
 		if (it) {
@@ -610,7 +611,7 @@ auto symcache::resort() -> void
 		}
 		else if (tsort_is_marked(it, tsort_mask::TEMP)) {
 			msg_err_cache_lambda("cyclic dependencies found when checking '%s'!",
-					it->symbol.c_str());
+								 it->symbol.c_str());
 			return;
 		}
 
@@ -648,10 +649,10 @@ auto symcache::resort() -> void
 
 	auto cache_order_cmp = [&](const auto &it1, const auto &it2) -> auto {
 		constexpr const auto topology_mult = 1e7,
-				priority_mult = 1e6,
-				augmentations1_mult = 1e5;
+							 priority_mult = 1e6,
+							 augmentations1_mult = 1e5;
 		auto w1 = tsort_unmask(it1.get()) * topology_mult,
-			w2 = tsort_unmask(it2.get()) * topology_mult;
+			 w2 = tsort_unmask(it2.get()) * topology_mult;
 
 		w1 += it1->priority * priority_mult;
 		w2 += it2->priority * priority_mult;
@@ -704,7 +705,7 @@ auto symcache::resort() -> void
 	append_items_vec(classifiers, ord->d);
 
 	/* After sorting is done, we can assign all elements in the by_symbol hash */
-	for (const auto [i, it] : rspamd::enumerate(ord->d)) {
+	for (const auto [i, it]: rspamd::enumerate(ord->d)) {
 		ord->by_symbol.emplace(it->get_name(), i);
 		ord->by_cache_id[it->id] = i;
 	}
@@ -722,7 +723,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 
 	if (!real_type_pair_maybe.has_value()) {
 		msg_err_cache("incompatible flags when adding %s: %s", name.data(),
-				real_type_pair_maybe.error().c_str());
+					  real_type_pair_maybe.error().c_str());
 		return -1;
 	}
 
@@ -743,9 +744,9 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	std::string static_string_name;
 
 	if (name.empty()) {
-		static_string_name = fmt::format("AUTO_{}_{}", (void *)func, user_data);
+		static_string_name = fmt::format("AUTO_{}_{}", (void *) func, user_data);
 		msg_warn_cache("trying to add an empty symbol name, convert it to %s",
-				static_string_name.c_str());
+					   static_string_name.c_str());
 	}
 	else {
 		static_string_name = name;
@@ -753,7 +754,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 
 	if (real_type_pair.first == symcache_item_type::IDEMPOTENT && priority != 0) {
 		msg_warn_cache("priority has been set for idempotent symbol %s: %d",
-				static_string_name.c_str(), priority);
+					   static_string_name.c_str(), priority);
 	}
 
 	if ((real_type_pair.second & SYMBOL_TYPE_FINE) && priority == 0) {
@@ -769,13 +770,13 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	auto id = items_by_id.size();
 
 	auto item = cache_item::create_with_function(static_pool, id,
-			std::move(static_string_name),
-			priority, func, user_data,
-			real_type_pair.first, real_type_pair.second);
+												 std::move(static_string_name),
+												 priority, func, user_data,
+												 real_type_pair.first, real_type_pair.second);
 
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
-	items_by_id.emplace(id, std::move(item)); // Takes ownership
+	items_by_id.emplace(id, std::move(item));// Takes ownership
 
 	if (!(real_type_pair.second & SYMBOL_TYPE_NOSTAT)) {
 		cksum = t1ha(name.data(), name.size(), cksum);
@@ -796,7 +797,7 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 
 	if (!real_type_pair_maybe.has_value()) {
 		msg_err_cache("incompatible flags when adding %s: %s", name.data(),
-				real_type_pair_maybe.error().c_str());
+					  real_type_pair_maybe.error().c_str());
 		return -1;
 	}
 
@@ -815,14 +816,14 @@ auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rsp
 	auto id = items_by_id.size();
 
 	auto item = cache_item::create_with_virtual(static_pool,
-			id,
-			std::string{name},
-			parent_id, real_type_pair.first, real_type_pair.second);
+												id,
+												std::string{name},
+												parent_id, real_type_pair.first, real_type_pair.second);
 	const auto &parent = items_by_id[parent_id].get();
 	parent->add_child(item.get());
 	items_by_symbol.emplace(item->get_name(), item.get());
 	get_item_specific_vector(*item).push_back(item.get());
-	items_by_id.emplace(id, std::move(item)); // Takes ownership
+	items_by_id.emplace(id, std::move(item));// Takes ownership
 
 	return id;
 }
@@ -855,14 +856,14 @@ auto symcache::validate(bool strict) -> bool
 			if (!std::isnan(cfg->unknown_weight)) {
 				item->st->weight = cfg->unknown_weight;
 				auto *s = rspamd_mempool_alloc0_type(static_pool,
-						struct rspamd_symbol);
+													 struct rspamd_symbol);
 				/* Legit as we actually never modify this data */
 				s->name = (char *) item->symbol.c_str();
 				s->weight_ptr = &item->st->weight;
 				g_hash_table_insert(cfg->symbols, (void *) s->name, (void *) s);
 
-				msg_info_cache ("adding unknown symbol %s with weight: %.2f",
-						item->symbol.c_str(), cfg->unknown_weight);
+				msg_info_cache("adding unknown symbol %s with weight: %.2f",
+							   item->symbol.c_str(), cfg->unknown_weight);
 				ghost = false;
 				skipped = false;
 			}
@@ -878,13 +879,14 @@ auto symcache::validate(bool strict) -> bool
 			if (!(item->flags & SYMBOL_TYPE_SKIPPED)) {
 				item->flags |= SYMBOL_TYPE_SKIPPED;
 				msg_warn_cache("symbol %s has no score registered, skip its check",
-						item->symbol.c_str());
+							   item->symbol.c_str());
 			}
 		}
 
 		if (ghost) {
-			msg_debug_cache ("symbol %s is registered as ghost symbol, it won't be inserted "
-							 "to any metric", item->symbol.c_str());
+			msg_debug_cache("symbol %s is registered as ghost symbol, it won't be inserted "
+							"to any metric",
+							item->symbol.c_str());
 		}
 
 		if (item->st->weight < 0 && item->priority == 0) {
@@ -934,10 +936,10 @@ auto symcache::validate(bool strict) -> bool
 
 		if (!ignore_symbol) {
 			if (!items_by_symbol.contains((const char *) k)) {
-				msg_debug_cache (
-						"symbol '%s' has its score defined but there is no "
-						"corresponding rule registered",
-						k);
+				msg_debug_cache(
+					"symbol '%s' has its score defined but there is no "
+					"corresponding rule registered",
+					k);
 			}
 		}
 		else if (sym_def->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
@@ -966,52 +968,52 @@ auto symcache::counters() const -> ucl_object_t *
 
 		auto *obj = ucl_object_typed_new(UCL_OBJECT);
 		ucl_object_insert_key(obj, ucl_object_fromlstring(symbol.data(), symbol.size()),
-				"symbol", 0, false);
+							  "symbol", 0, false);
 
 		if (item->is_virtual()) {
 			if (!(item->flags & SYMBOL_TYPE_GHOST)) {
 				const auto *parent = item->get_parent(*this);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(round_float(item->st->weight, 3)),
-						"weight", 0, false);
+									  ucl_object_fromdouble(round_float(item->st->weight, 3)),
+									  "weight", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
-						"frequency", 0, false);
+									  ucl_object_fromdouble(round_float(parent->st->avg_frequency, 3)),
+									  "frequency", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromint(parent->st->total_hits),
-						"hits", 0, false);
+									  ucl_object_fromint(parent->st->total_hits),
+									  "hits", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(round_float(parent->st->avg_time, 3)),
-						"time", 0, false);
+									  ucl_object_fromdouble(round_float(parent->st->avg_time, 3)),
+									  "time", 0, false);
 			}
 			else {
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(round_float(item->st->weight, 3)),
-						"weight", 0, false);
+									  ucl_object_fromdouble(round_float(item->st->weight, 3)),
+									  "weight", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(0.0),
-						"frequency", 0, false);
+									  ucl_object_fromdouble(0.0),
+									  "frequency", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(0.0),
-						"hits", 0, false);
+									  ucl_object_fromdouble(0.0),
+									  "hits", 0, false);
 				ucl_object_insert_key(obj,
-						ucl_object_fromdouble(0.0),
-						"time", 0, false);
+									  ucl_object_fromdouble(0.0),
+									  "time", 0, false);
 			}
 		}
 		else {
 			ucl_object_insert_key(obj,
-					ucl_object_fromdouble(round_float(item->st->weight, 3)),
-					"weight", 0, false);
+								  ucl_object_fromdouble(round_float(item->st->weight, 3)),
+								  "weight", 0, false);
 			ucl_object_insert_key(obj,
-					ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
-					"frequency", 0, false);
+								  ucl_object_fromdouble(round_float(item->st->avg_frequency, 3)),
+								  "frequency", 0, false);
 			ucl_object_insert_key(obj,
-					ucl_object_fromint(item->st->total_hits),
-					"hits", 0, false);
+								  ucl_object_fromint(item->st->total_hits),
+								  "hits", 0, false);
 			ucl_object_insert_key(obj,
-					ucl_object_fromdouble(round_float(item->st->avg_time, 3)),
-					"time", 0, false);
+								  ucl_object_fromdouble(round_float(item->st->avg_time, 3)),
+								  "time", 0, false);
 		}
 
 		ucl_array_append(top, obj);
@@ -1029,13 +1031,13 @@ auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double 
 							 (cur_time - last_resort);
 			auto cur_err = (item->st->avg_frequency - cur_value);
 			cur_err *= cur_err;
-			msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
-							 "stddev: %.2f, error: %.2f, peaks: %d",
-					item->symbol.c_str(), cur_value,
-					item->st->avg_frequency,
-					item->st->stddev_frequency,
-					cur_err,
-					item->frequency_peaks);
+			msg_debug_cache("peak found for %s is %.2f, avg: %.2f, "
+							"stddev: %.2f, error: %.2f, peaks: %d",
+							item->symbol.c_str(), cur_value,
+							item->st->avg_frequency,
+							item->st->stddev_frequency,
+							cur_err,
+							item->frequency_peaks);
 
 			if (peak_cb != -1) {
 				struct ev_loop **pbase;
@@ -1051,9 +1053,9 @@ auto symcache::periodic_resort(struct ev_loop *ev_loop, double cur_time, double 
 				lua_pushnumber(L, cur_err);
 
 				if (lua_pcall(L, 6, 0, 0) != 0) {
-					msg_info_cache ("call to peak function for %s failed: %s",
-							item->symbol.c_str(), lua_tostring(L, -1));
-					lua_pop (L, 1);
+					msg_info_cache("call to peak function for %s failed: %s",
+								   item->symbol.c_str(), lua_tostring(L, -1));
+					lua_pop(L, 1);
 				}
 			}
 		}
@@ -1075,7 +1077,7 @@ auto symcache::maybe_resort() -> bool
 		 */
 		msg_info_cache("symbols cache has been modified since last check:"
 					   " old id: %ud, new id: %ud",
-				items_by_order->generation_id, cur_order_gen);
+					   items_by_order->generation_id, cur_order_gen);
 		resort();
 
 		return true;
@@ -1084,8 +1086,7 @@ auto symcache::maybe_resort() -> bool
 	return false;
 }
 
-auto
-symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_vec &
+auto symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_vec &
 {
 	switch (it.get_type()) {
 	case symcache_item_type::CONNFILTER:
@@ -1109,8 +1110,7 @@ symcache::get_item_specific_vector(const cache_item &it) -> symcache::items_ptr_
 	RSPAMD_UNREACHABLE;
 }
 
-auto
-symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
+auto symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 {
 
 	auto id = elt->id;
@@ -1134,19 +1134,19 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 					item->forbidden_ids.add_id(id);
 					msg_debug_cache("deny virtual symbol %s for settings %ud (%s); "
 									"parent can still be executed",
-							sym, id, elt->name);
+									sym, id, elt->name);
 				}
 				else {
 					/* Normal symbol, disable it */
 					item->forbidden_ids.add_id(id);
-					msg_debug_cache ("deny symbol %s for settings %ud (%s)",
-							sym, id, elt->name);
+					msg_debug_cache("deny symbol %s for settings %ud (%s)",
+									sym, id, elt->name);
 				}
 			}
 			else {
-				msg_warn_cache ("cannot find a symbol to disable %s "
-								"when processing settings %ud (%s)",
-						sym, id, elt->name);
+				msg_warn_cache("cannot find a symbol to disable %s "
+							   "when processing settings %ud (%s)",
+							   sym, id, elt->name);
 			}
 		}
 	}
@@ -1155,7 +1155,7 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 		ucl_object_iter_t iter = nullptr;
 		const ucl_object_t *cur;
 
-		while ((cur = ucl_object_iterate (elt->symbols_enabled, &iter, true)) != nullptr) {
+		while ((cur = ucl_object_iterate(elt->symbols_enabled, &iter, true)) != nullptr) {
 			/* Here, we resolve parent and explicitly allow it */
 			const auto *sym = ucl_object_key(cur);
 
@@ -1168,26 +1168,26 @@ symcache::process_settings_elt(struct rspamd_config_settings_elt *elt) -> void
 					if (parent) {
 						if (elt->symbols_disabled &&
 							ucl_object_lookup(elt->symbols_disabled, parent->symbol.data())) {
-							msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
-										   "wanted to enable symbol %s",
-									elt->name, parent->symbol.data(), sym);
+							msg_err_cache("conflict in %s: cannot enable disabled symbol %s, "
+										  "wanted to enable symbol %s",
+										  elt->name, parent->symbol.data(), sym);
 							continue;
 						}
 
 						parent->exec_only_ids.add_id(id);
-						msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
-								parent->symbol.data(), id, elt->name);
+						msg_debug_cache("allow just execution of symbol %s for settings %ud (%s)",
+										parent->symbol.data(), id, elt->name);
 					}
 				}
 
 				item->allowed_ids.add_id(id);
-				msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
-						sym, id, elt->name);
+				msg_debug_cache("allow execution of symbol %s for settings %ud (%s)",
+								sym, id, elt->name);
 			}
 			else {
-				msg_warn_cache ("cannot find a symbol to enable %s "
-								"when processing settings %ud (%s)",
-						sym, id, elt->name);
+				msg_warn_cache("cannot find a symbol to enable %s "
+							   "when processing settings %ud (%s)",
+							   sym, id, elt->name);
 			}
 		}
 	}
@@ -1208,7 +1208,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		auto own_timeout = get_item_timeout(it);
 		auto max_child_timeout = 0.0;
 
-		for (const auto &dep : it->deps) {
+		for (const auto &dep: it->deps) {
 			auto cld_timeout = self(dep.item, self);
 
 			if (cld_timeout > max_child_timeout) {
@@ -1224,7 +1224,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 		auto saved_priority = -1;
 		auto max_timeout = 0.0, added_timeout = 0.0;
 		const cache_item *max_elt = nullptr;
-		for (const auto &it : vec) {
+		for (const auto &it: vec) {
 			if (it->priority != saved_priority && max_elt != nullptr && max_timeout > 0) {
 				if (!seen_items.contains(max_elt)) {
 					accumulated_timeout += max_timeout;
@@ -1232,8 +1232,8 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 
 					msg_debug_cache_lambda("added %.2f to the timeout (%.2f) as the priority has changed (%d -> %d); "
 										   "symbol: %s",
-							max_timeout, accumulated_timeout, saved_priority, it->priority,
-							max_elt->symbol.c_str());
+										   max_timeout, accumulated_timeout, saved_priority, it->priority,
+										   max_elt->symbol.c_str());
 					elts.emplace_back(max_timeout, max_elt);
 					seen_items.insert(max_elt);
 				}
@@ -1257,8 +1257,8 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 
 				msg_debug_cache_lambda("added %.2f to the timeout (%.2f) end of processing; "
 									   "symbol: %s",
-						max_timeout, accumulated_timeout,
-						max_elt->symbol.c_str());
+									   max_timeout, accumulated_timeout,
+									   max_elt->symbol.c_str());
 				elts.emplace_back(max_timeout, max_elt);
 				seen_items.insert(max_elt);
 			}
@@ -1274,7 +1274,7 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	 * dependencies chain. But it is not the case in practice
 	 */
 	double max_filters_timeout = 0;
-	for (const auto &it : this->filters) {
+	for (const auto &it: this->filters) {
 		auto timeout = get_filter_timeout(it, get_filter_timeout);
 
 		if (timeout > max_filters_timeout) {
@@ -1306,4 +1306,4 @@ auto symcache::get_max_timeout(std::vector<std::pair<double, const cache_item *>
 	return accumulated_timeout;
 }
 
-}
+}// namespace rspamd::symcache

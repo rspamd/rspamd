@@ -32,6 +32,6 @@ namespace rspamd::css {
 std::string_view unescape_css(rspamd_mempool_t *pool,
 							  const std::string_view &sv);
 
-}
+}// namespace rspamd::css
 
-#endif //RSPAMD_CSS_UTIL_HXX
+#endif//RSPAMD_CSS_UTIL_HXX

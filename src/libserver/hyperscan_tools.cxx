@@ -27,7 +27,7 @@
 #include "worker_util.h"
 #include "hyperscan_tools.h"
 
-#include <glob.h> /* for glob */
+#include <glob.h>   /* for glob */
 #include <unistd.h> /* for unlink */
 #include <optional>
 #include <cstdlib> /* for std::getenv */
@@ -45,36 +45,36 @@
 #ifndef HS_VERSION_32BIT
 #define HS_VERSION_32BIT ((HS_MAJOR << 24) | (HS_MINOR << 16) | (HS_PATCH << 8) | 0)
 #endif
-#endif // defined(HS_MAJOR)
+#endif// defined(HS_MAJOR)
 
 #if !defined(HS_DB_VERSION) && defined(HS_VERSION_32BIT)
 #define HS_DB_VERSION HS_VERSION_32BIT
 #endif
 
 #ifndef HS_DB_MAGIC
-#define HS_DB_MAGIC   (0xdbdbdbdbU)
+#define HS_DB_MAGIC (0xdbdbdbdbU)
 #endif
 
-#define msg_info_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "hyperscan", HYPERSCAN_LOG_TAG, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_hyperscan_lambda(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "hyperscan", HYPERSCAN_LOG_TAG, \
-        log_func, \
-        __VA_ARGS__)
-#define msg_err_hyperscan(...)   rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "hyperscan", HYPERSCAN_LOG_TAG, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_hyperscan(...)  rspamd_conditional_debug_fast (nullptr, nullptr, \
-        rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_debug_hyperscan_lambda(...) rspamd_conditional_debug_fast (nullptr, nullptr, \
-        rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
-        log_func, \
-        __VA_ARGS__)
+#define msg_info_hyperscan(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,               \
+															"hyperscan", HYPERSCAN_LOG_TAG, \
+															RSPAMD_LOG_FUNC,                \
+															__VA_ARGS__)
+#define msg_info_hyperscan_lambda(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,               \
+																   "hyperscan", HYPERSCAN_LOG_TAG, \
+																   log_func,                       \
+																   __VA_ARGS__)
+#define msg_err_hyperscan(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,           \
+														   "hyperscan", HYPERSCAN_LOG_TAG, \
+														   RSPAMD_LOG_FUNC,                \
+														   __VA_ARGS__)
+#define msg_debug_hyperscan(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                        \
+															   rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
+															   RSPAMD_LOG_FUNC,                                         \
+															   __VA_ARGS__)
+#define msg_debug_hyperscan_lambda(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                        \
+																	  rspamd_hyperscan_log_id, "hyperscan", HYPERSCAN_LOG_TAG, \
+																	  log_func,                                                \
+																	  __VA_ARGS__)
 
 INIT_LOG_MODULE_PUBLIC(hyperscan)
 
@@ -92,16 +92,19 @@ private:
 	ankerl::svector<std::string, 4> cache_dirs;
 	ankerl::svector<std::string, 8> cache_extensions;
 	ankerl::unordered_dense::set<std::string> known_cached_files;
+
 private:
 	hs_known_files_cache() = default;
 
-	virtual ~hs_known_files_cache() {
+	virtual ~hs_known_files_cache()
+	{
 		// Cleanup cache dir
 		cleanup_maybe();
 	}
 
 	/* Have to duplicate raii_file methods to use raw filenames */
-	static auto get_dir(std::string_view fname) -> std::string_view {
+	static auto get_dir(std::string_view fname) -> std::string_view
+	{
 		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
 
 		if (sep_pos == std::string::npos) {
@@ -109,13 +112,14 @@ private:
 		}
 
 		while (sep_pos >= 1 && fname[sep_pos - 1] == G_DIR_SEPARATOR) {
-			sep_pos --;
+			sep_pos--;
 		}
 
 		return std::string_view{fname.data(), sep_pos};
 	}
 
-	static auto get_extension(std::string_view fname) -> std::string_view {
+	static auto get_extension(std::string_view fname) -> std::string_view
+	{
 		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
 
 		if (sep_pos == std::string::npos) {
@@ -132,11 +136,13 @@ private:
 			return std::string_view{filename.data() + dot_pos + 1, filename.size() - dot_pos - 1};
 		}
 	}
+
 public:
 	hs_known_files_cache(const hs_known_files_cache &) = delete;
 	hs_known_files_cache(hs_known_files_cache &&) = delete;
 
-	static auto get() -> hs_known_files_cache& {
+	static auto get() -> hs_known_files_cache &
+	{
 		static hs_known_files_cache *singleton = nullptr;
 
 		if (singleton == nullptr) {
@@ -146,27 +152,29 @@ public:
 		return *singleton;
 	}
 
-	void add_cached_file(const raii_file &file) {
+	void add_cached_file(const raii_file &file)
+	{
 		auto dir = file.get_dir();
 		auto ext = file.get_extension();
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
-			[&](const auto& item){ return item == dir; }) == std::end(cache_dirs)) {
+						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
 			cache_dirs.emplace_back(std::string{dir});
 		}
 		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
-			[&](const auto& item){ return item == ext; }) == std::end(cache_extensions)) {
+						 [&](const auto &item) { return item == ext; }) == std::end(cache_extensions)) {
 			cache_extensions.emplace_back(std::string{ext});
 		}
 
 		auto is_known = known_cached_files.insert(file.get_name());
 		msg_debug_hyperscan("added %s hyperscan file: %*s",
-			is_known.second ? "new" : "already known",
-			(int)file.get_name().size(),
-			file.get_name().data());
+							is_known.second ? "new" : "already known",
+							(int) file.get_name().size(),
+							file.get_name().data());
 	}
 
-	void add_cached_file(const char *fname) {
+	void add_cached_file(const char *fname)
+	{
 		auto mut_fname = std::string{fname};
 		std::size_t sz;
 
@@ -180,29 +188,30 @@ public:
 
 		if (access(mut_fname.c_str(), R_OK) == -1) {
 			msg_err_hyperscan("attempt to add non existing hyperscan file: %s, %s", mut_fname.c_str(),
-				strerror(errno));
+							  strerror(errno));
 			return;
 		}
 
 		auto dir = hs_known_files_cache::get_dir(mut_fname);
-		auto ext =  hs_known_files_cache::get_extension(mut_fname);
+		auto ext = hs_known_files_cache::get_extension(mut_fname);
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
-			[&](const auto& item){ return item == dir; }) == std::end(cache_dirs)) {
+						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
 			cache_dirs.emplace_back(std::string{dir});
 		}
 		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
-			[&](const auto& item){ return item == ext; }) == std::end(cache_extensions)) {
+						 [&](const auto &item) { return item == ext; }) == std::end(cache_extensions)) {
 			cache_extensions.emplace_back(std::string{ext});
 		}
 
 		auto is_known = known_cached_files.insert(mut_fname);
 		msg_debug_hyperscan("added %s hyperscan file: %s",
-			is_known.second ? "new" : "already known",
-			mut_fname.c_str());
+							is_known.second ? "new" : "already known",
+							mut_fname.c_str());
 	}
 
-	void delete_cached_file(const char *fname) {
+	void delete_cached_file(const char *fname)
+	{
 		auto mut_fname = std::string{fname};
 		std::size_t sz;
 
@@ -217,7 +226,7 @@ public:
 		if (access(mut_fname.c_str(), R_OK) != -1) {
 			if (unlink(mut_fname.c_str()) == -1) {
 				msg_err_hyperscan("cannot remove hyperscan file %s: %s",
-					mut_fname.c_str(), strerror(errno));
+								  mut_fname.c_str(), strerror(errno));
 			}
 			else {
 				msg_debug_hyperscan("removed hyperscan file %s", mut_fname.c_str());
@@ -225,25 +234,26 @@ public:
 		}
 		else {
 			msg_err_hyperscan("attempt to remove non-existent hyperscan file %s: %s",
-				mut_fname.c_str(), strerror(errno));
+							  mut_fname.c_str(), strerror(errno));
 		}
 
 		known_cached_files.erase(mut_fname);
 	}
 
-	auto cleanup_maybe() -> void {
+	auto cleanup_maybe() -> void
+	{
 		auto env_cleanup_disable = std::getenv("RSPAMD_NO_CLEANUP");
 		/* We clean dir merely if we are running from the main process */
 		if (rspamd_current_worker == nullptr && env_cleanup_disable == nullptr) {
 			const auto *log_func = RSPAMD_LOG_FUNC;
 			auto cleanup_dir = [&](std::string_view dir) -> void {
-				for (const auto &ext : cache_extensions) {
+				for (const auto &ext: cache_extensions) {
 					glob_t globbuf;
 
 					auto glob_pattern = fmt::format("{}{}*.{}",
-						dir, G_DIR_SEPARATOR_S, ext);
+													dir, G_DIR_SEPARATOR_S, ext);
 					msg_debug_hyperscan_lambda("perform glob for pattern: %s",
-						glob_pattern.c_str());
+											   glob_pattern.c_str());
 					memset(&globbuf, 0, sizeof(globbuf));
 
 					if (glob(glob_pattern.c_str(), 0, nullptr, &globbuf) == 0) {
@@ -257,7 +267,7 @@ public:
 
 							if (stat(path.c_str(), &st) == -1) {
 								msg_debug_hyperscan_lambda("cannot stat file %s: %s",
-									path.c_str(), strerror(errno));
+														   path.c_str(), strerror(errno));
 								continue;
 							}
 
@@ -268,7 +278,7 @@ public:
 								}
 								else {
 									msg_debug_hyperscan_lambda("found known hyperscan file %s, size: %Hz",
-										path.c_str(), st.st_size);
+															   path.c_str(), st.st_size);
 								}
 							}
 						}
@@ -302,17 +312,22 @@ struct hs_shared_database {
 	std::optional<raii_mmaped_file> maybe_map;
 	std::string cached_path;
 
-	~hs_shared_database() {
+	~hs_shared_database()
+	{
 		if (!maybe_map) {
 			hs_free_database(db);
 		}
 		// Otherwise, handled by maybe_map dtor
 	}
 
-	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db) : db(db), maybe_map(std::move(map)) {
+	explicit hs_shared_database(raii_mmaped_file &&map, hs_database_t *db)
+		: db(db), maybe_map(std::move(map))
+	{
 		cached_path = maybe_map.value().get_file().get_name();
 	}
-	explicit hs_shared_database(hs_database_t *db, const char *fname) : db(db), maybe_map(std::nullopt) {
+	explicit hs_shared_database(hs_database_t *db, const char *fname)
+		: db(db), maybe_map(std::nullopt)
+	{
 		if (fname) {
 			cached_path = fname;
 		}
@@ -323,10 +338,12 @@ struct hs_shared_database {
 	}
 	hs_shared_database(const hs_shared_database &other) = delete;
 	hs_shared_database() = default;
-	hs_shared_database(hs_shared_database &&other) noexcept {
+	hs_shared_database(hs_shared_database &&other) noexcept
+	{
 		*this = std::move(other);
 	}
-	hs_shared_database& operator=(hs_shared_database &&other) noexcept {
+	hs_shared_database &operator=(hs_shared_database &&other) noexcept
+	{
 		std::swap(db, other.db);
 		std::swap(maybe_map, other.maybe_map);
 		return *this;
@@ -353,13 +370,13 @@ hs_is_valid_database(void *raw, std::size_t len, std::string_view fname) -> tl::
 
 	if (test.magic != HS_DB_MAGIC) {
 		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: invalid magic: {} ({} expected)",
-			fname, test.magic, HS_DB_MAGIC));
+											   fname, test.magic, HS_DB_MAGIC));
 	}
 
 #ifdef HS_DB_VERSION
 	if (test.version != HS_DB_VERSION) {
 		return tl::make_unexpected(fmt::format("cannot load hyperscan database from {}: invalid version: {} ({} expected)",
-			fname, test.version, HS_DB_VERSION));
+											   fname, test.version, HS_DB_VERSION));
 	}
 #endif
 
@@ -370,7 +387,7 @@ static auto
 hs_shared_from_unserialized(hs_known_files_cache &hs_cache, raii_mmaped_file &&map) -> tl::expected<hs_shared_database, error>
 {
 	auto ptr = map.get_map();
-	auto db = (hs_database_t *)ptr;
+	auto db = (hs_database_t *) ptr;
 
 	auto is_valid = hs_is_valid_database(map.get_map(), map.get_size(), map.get_file().get_name());
 	if (!is_valid) {
@@ -386,9 +403,10 @@ hs_shared_from_serialized(hs_known_files_cache &hs_cache, raii_mmaped_file &&map
 {
 	hs_database_t *target = nullptr;
 
-	if (auto ret = hs_deserialize_database((const char *)map.get_map() + offset,
-		map.get_size() - offset, &target); ret != HS_SUCCESS) {
-		return tl::make_unexpected(error {"cannot deserialize database", ret});
+	if (auto ret = hs_deserialize_database((const char *) map.get_map() + offset,
+										   map.get_size() - offset, &target);
+		ret != HS_SUCCESS) {
+		return tl::make_unexpected(error{"cannot deserialize database", ret});
 	}
 
 	hs_cache.add_cached_file(map.get_file());
@@ -403,98 +421,101 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 	return raii_mmaped_file::mmap_shared(fname, O_RDONLY, PROT_READ, 0)
 		.and_then([&]<class T>(T &&cached_serialized) -> tl::expected<hs_shared_database, error> {
 			if (cached_serialized.get_size() <= offset) {
-				return tl::make_unexpected(error {"Invalid offset", EINVAL, error_category::CRITICAL });
+				return tl::make_unexpected(error{"Invalid offset", EINVAL, error_category::CRITICAL});
 			}
 #if defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto unserialized_fname = fmt::format("{}.unser", fname);
 			auto unserialized_file = raii_locked_file::create(unserialized_fname.c_str(), O_CREAT | O_RDWR | O_EXCL,
-				00644)
-				.and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, error> {
-					auto tmpfile_pattern = fmt::format("{}{}hsmp-XXXXXXXXXXXXXXXXXX",
-						cached_serialized.get_file().get_dir(), G_DIR_SEPARATOR);
-					auto tmpfile = raii_locked_file::mkstemp(tmpfile_pattern.data(), O_CREAT | O_RDWR | O_EXCL,
-						00644);
+															  00644)
+										 .and_then([&](auto &&new_file_locked) -> tl::expected<raii_file, error> {
+											 auto tmpfile_pattern = fmt::format("{}{}hsmp-XXXXXXXXXXXXXXXXXX",
+																				cached_serialized.get_file().get_dir(), G_DIR_SEPARATOR);
+											 auto tmpfile = raii_locked_file::mkstemp(tmpfile_pattern.data(), O_CREAT | O_RDWR | O_EXCL,
+																					  00644);
 
-					if (!tmpfile) {
-						return tl::make_unexpected(tmpfile.error());
-					}
-					else {
-						auto &tmpfile_checked = tmpfile.value();
-						std::size_t unserialized_size;
+											 if (!tmpfile) {
+												 return tl::make_unexpected(tmpfile.error());
+											 }
+											 else {
+												 auto &tmpfile_checked = tmpfile.value();
+												 std::size_t unserialized_size;
 
-						if (auto ret = hs_serialized_database_size(((const char *)cached_serialized.get_map()) + offset,
-							cached_serialized.get_size() - offset, &unserialized_size); ret != HS_SUCCESS) {
-							return tl::make_unexpected(error {
-								fmt::format("cannot get unserialized database size: {}", ret),
-								EINVAL,
-								error_category::IMPORTANT });
-						}
+												 if (auto ret = hs_serialized_database_size(((const char *) cached_serialized.get_map()) + offset,
+																							cached_serialized.get_size() - offset, &unserialized_size);
+													 ret != HS_SUCCESS) {
+													 return tl::make_unexpected(error{
+														 fmt::format("cannot get unserialized database size: {}", ret),
+														 EINVAL,
+														 error_category::IMPORTANT});
+												 }
 
-						msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
-							tmpfile_pattern.data(), unserialized_size);
-						void *buf;
+												 msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
+																			tmpfile_pattern.data(), unserialized_size);
+												 void *buf;
 #ifdef HAVE_GETPAGESIZE
-						auto page_size = getpagesize();
+												 auto page_size = getpagesize();
 #else
-						auto page_size = sysconf(_SC_PAGESIZE);
+												 auto page_size = sysconf(_SC_PAGESIZE);
 #endif
-						if (page_size == -1) {
-							page_size = 4096;
-						}
-						auto errcode = posix_memalign(&buf, page_size, unserialized_size);
-						if (errcode != 0 || buf == nullptr) {
-							return tl::make_unexpected(error {"Cannot allocate memory", errno, error_category::CRITICAL });
-						}
+												 if (page_size == -1) {
+													 page_size = 4096;
+												 }
+												 auto errcode = posix_memalign(&buf, page_size, unserialized_size);
+												 if (errcode != 0 || buf == nullptr) {
+													 return tl::make_unexpected(error{"Cannot allocate memory", errno, error_category::CRITICAL});
+												 }
 
-						// Store owned string
-						auto tmpfile_name = std::string{tmpfile_checked.get_name()};
+												 // Store owned string
+												 auto tmpfile_name = std::string{tmpfile_checked.get_name()};
 
-						if (auto ret = hs_deserialize_database_at(((const char *)cached_serialized.get_map()) + offset,
-								cached_serialized.get_size() - offset, (hs_database_t *) buf); ret != HS_SUCCESS) {
-							return tl::make_unexpected(error {
-								fmt::format("cannot deserialize hyperscan database: {}", ret), ret });
-						}
-						else {
-							if (write(tmpfile_checked.get_fd(), buf, unserialized_size) == -1) {
-								free(buf);
-								return tl::make_unexpected(error { fmt::format("cannot write to {}: {}",
-									tmpfile_name, ::strerror(errno)), errno, error_category::CRITICAL });
-							}
-							else {
-								free(buf);
+												 if (auto ret = hs_deserialize_database_at(((const char *) cached_serialized.get_map()) + offset,
+																						   cached_serialized.get_size() - offset, (hs_database_t *) buf);
+													 ret != HS_SUCCESS) {
+													 return tl::make_unexpected(error{
+														 fmt::format("cannot deserialize hyperscan database: {}", ret), ret});
+												 }
+												 else {
+													 if (write(tmpfile_checked.get_fd(), buf, unserialized_size) == -1) {
+														 free(buf);
+														 return tl::make_unexpected(error{fmt::format("cannot write to {}: {}",
+																									  tmpfile_name, ::strerror(errno)),
+																						  errno, error_category::CRITICAL});
+													 }
+													 else {
+														 free(buf);
 
-								/*
+														 /*
 								 * Unlink target file before renaming to avoid
 								 * race condition.
 								 * So what we have is that `new_file_locked`
 								 * will have flock on that file, so it will be
 								 * replaced after unlink safely, and also unlocked.
 								 */
-								(void) unlink(unserialized_fname.c_str());
-								if (rename(tmpfile_name.c_str(),
-									unserialized_fname.c_str()) == -1) {
-									if (errno != EEXIST) {
-										msg_info_hyperscan_lambda("cannot rename %s -> %s: %s",
-											tmpfile_name.c_str(),
-											unserialized_fname.c_str(),
-											strerror(errno));
-									}
-								}
-								else {
-									/* Unlock file but mark it as immortal first to avoid deletion */
-									tmpfile_checked.make_immortal();
-									(void) tmpfile_checked.unlock();
-								}
-							}
-						}
-						/* Reopen in RO mode */
-						return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
-					};
-				})
-				.or_else([&](auto unused) -> tl::expected<raii_file, error> {
-					// Cannot create file, so try to open it in RO mode
-					return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
-				});
+														 (void) unlink(unserialized_fname.c_str());
+														 if (rename(tmpfile_name.c_str(),
+																	unserialized_fname.c_str()) == -1) {
+															 if (errno != EEXIST) {
+																 msg_info_hyperscan_lambda("cannot rename %s -> %s: %s",
+																						   tmpfile_name.c_str(),
+																						   unserialized_fname.c_str(),
+																						   strerror(errno));
+															 }
+														 }
+														 else {
+															 /* Unlock file but mark it as immortal first to avoid deletion */
+															 tmpfile_checked.make_immortal();
+															 (void) tmpfile_checked.unlock();
+														 }
+													 }
+												 }
+												 /* Reopen in RO mode */
+												 return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
+											 };
+										 })
+										 .or_else([&](auto unused) -> tl::expected<raii_file, error> {
+											 // Cannot create file, so try to open it in RO mode
+											 return raii_file::open(unserialized_fname.c_str(), O_RDONLY);
+										 });
 
 			tl::expected<hs_shared_database, error> ret;
 
@@ -512,9 +533,9 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 				}
 				else {
 					ret = raii_mmaped_file::mmap_shared(std::move(unserialized_checked), PROT_READ)
-						.and_then([&]<class U>(U &&mmapped_unserialized) -> auto {
-							return hs_shared_from_unserialized(hs_cache, std::forward<U>(mmapped_unserialized));
-						});
+							  .and_then([&]<class U>(U &&mmapped_unserialized) -> auto {
+								  return hs_shared_from_unserialized(hs_cache, std::forward<U>(mmapped_unserialized));
+							  });
 				}
 			}
 			else {
@@ -522,15 +543,15 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 			}
 #else // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
 			auto ret = hs_shared_from_serialized(hs_cache, std::forward<T>(cached_serialized), offset);
-#endif // defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4
-			// Add serialized file to cache merely if we have successfully loaded the actual db
+#endif// defined(HS_MAJOR) && defined(HS_MINOR) && HS_MAJOR >= 5 && HS_MINOR >= 4 \
+	// Add serialized file to cache merely if we have successfully loaded the actual db
 			if (ret.has_value()) {
 				hs_cache.add_cached_file(cached_serialized.get_file());
 			}
 			return ret;
 		});
 }
-} // namespace rspamd::util
+}// namespace rspamd::util
 
 /* C API */
 
@@ -550,18 +571,18 @@ rspamd_hyperscan_maybe_load(const char *filename, goffset offset)
 	else {
 		auto error = maybe_db.error();
 
-		switch(error.category) {
+		switch (error.category) {
 		case rspamd::util::error_category::CRITICAL:
 			msg_err_hyperscan("critical error when trying to load cached hyperscan: %s",
-				error.error_message.data());
+							  error.error_message.data());
 			break;
 		case rspamd::util::error_category::IMPORTANT:
 			msg_info_hyperscan("error when trying to load cached hyperscan: %s",
-				error.error_message.data());
+							   error.error_message.data());
 			break;
 		default:
 			msg_debug_hyperscan("error when trying to load cached hyperscan: %s",
-				error.error_message.data());
+								error.error_message.data());
 			break;
 		}
 	}
@@ -569,7 +590,7 @@ rspamd_hyperscan_maybe_load(const char *filename, goffset offset)
 	return nullptr;
 }
 
-hs_database_t*
+hs_database_t *
 rspamd_hyperscan_get_database(rspamd_hyperscan_t *db)
 {
 	auto *real_db = CXX_DB_FROM_C(db);
@@ -584,8 +605,7 @@ rspamd_hyperscan_from_raw_db(hs_database_t *db, const char *fname)
 	return C_DB_FROM_CXX(ndb);
 }
 
-void
-rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid)
+void rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid)
 {
 	auto *real_db = CXX_DB_FROM_C(db);
 
@@ -595,8 +615,7 @@ rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid)
 	delete real_db;
 }
 
-void
-rspamd_hyperscan_notice_known(const char *fname)
+void rspamd_hyperscan_notice_known(const char *fname)
 {
 	rspamd::util::hs_known_files_cache::get().add_cached_file(fname);
 
@@ -606,23 +625,22 @@ rspamd_hyperscan_notice_known(const char *fname)
 
 		if (strlen(fname) >= sizeof(notice_cmd.cmd.hyperscan_cache_file.path)) {
 			msg_err("internal error: length of the filename %d ('%s') is larger than control buffer path: %d",
-				(int)strlen(fname), fname, (int)sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
+					(int) strlen(fname), fname, (int) sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
 		}
 		else {
 			notice_cmd.type = RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE;
 			rspamd_strlcpy(notice_cmd.cmd.hyperscan_cache_file.path, fname, sizeof(notice_cmd.cmd.hyperscan_cache_file.path));
 			rspamd_srv_send_command(rspamd_current_worker,
-				rspamd_current_worker->srv->event_loop, &notice_cmd, -1,
-				nullptr,
-				nullptr);
+									rspamd_current_worker->srv->event_loop, &notice_cmd, -1,
+									nullptr,
+									nullptr);
 		}
 	}
 }
 
-void
-rspamd_hyperscan_cleanup_maybe(void)
+void rspamd_hyperscan_cleanup_maybe(void)
 {
 	rspamd::util::hs_known_files_cache::get().cleanup_maybe();
 }
 
-#endif // WITH_HYPERSCAN
+#endif// WITH_HYPERSCAN

@@ -24,16 +24,16 @@
 
 namespace rspamd {
 
-	class PrintfCheckVisitor : public clang::RecursiveASTVisitor<PrintfCheckVisitor> {
-		class impl;
-		std::unique_ptr<impl> pimpl;
+class PrintfCheckVisitor : public clang::RecursiveASTVisitor<PrintfCheckVisitor> {
+	class impl;
+	std::unique_ptr<impl> pimpl;
 
-	public:
-		PrintfCheckVisitor (clang::ASTContext *ctx, clang::CompilerInstance &ci);
-		virtual ~PrintfCheckVisitor (void);
-		bool VisitCallExpr (clang::CallExpr *E);
-	};
+public:
+	PrintfCheckVisitor(clang::ASTContext *ctx, clang::CompilerInstance &ci);
+	virtual ~PrintfCheckVisitor(void);
+	bool VisitCallExpr(clang::CallExpr *E);
+};
 
-}
+}// namespace rspamd
 
 #endif

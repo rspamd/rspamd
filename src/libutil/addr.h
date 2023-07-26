@@ -35,7 +35,7 @@
 
 #include "mem_pool.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -48,16 +48,16 @@ typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
  * Returns pointer storage for global singleton (map for local addresses)
  * @return
  */
-void **rspamd_inet_library_init (void);
+void **rspamd_inet_library_init(void);
 /**
  * Returns local addresses singleton
  * @return
  */
-void *rspamd_inet_library_get_lib_ctx (void);
+void *rspamd_inet_library_get_lib_ctx(void);
 /**
  * Cleanup library (currently it does nothing)
  */
-void rspamd_inet_library_destroy (void);
+void rspamd_inet_library_destroy(void);
 
 /**
  * Create new inet address structure based on the address family and opaque init pointer
@@ -65,7 +65,7 @@ void rspamd_inet_library_destroy (void);
  * @param init
  * @return new inet addr
  */
-rspamd_inet_addr_t *rspamd_inet_address_new (int af, const void *init);
+rspamd_inet_addr_t *rspamd_inet_address_new(int af, const void *init);
 
 /**
  * Create new inet address structure from struct sockaddr
@@ -73,16 +73,16 @@ rspamd_inet_addr_t *rspamd_inet_address_new (int af, const void *init);
  * @param slen
  * @return
  */
-rspamd_inet_addr_t *rspamd_inet_address_from_sa (const struct sockaddr *sa,
-												 socklen_t slen);
+rspamd_inet_addr_t *rspamd_inet_address_from_sa(const struct sockaddr *sa,
+												socklen_t slen);
 
 /**
  * Create new inet address from rdns reply
  * @param rep reply element
  * @return new ipv4 or ipv6 addr (port is NOT set)
  */
-rspamd_inet_addr_t *rspamd_inet_address_from_rnds (
-		const struct rdns_reply_entry *rep);
+rspamd_inet_addr_t *rspamd_inet_address_from_rnds(
+	const struct rdns_reply_entry *rep);
 
 /**
  * Parse string with ipv6 address of length `len` to `target` which should be
@@ -92,8 +92,8 @@ rspamd_inet_addr_t *rspamd_inet_address_from_rnds (
  * @param target target structure
  * @return TRUE if the address has been parsed, otherwise `target` content is undefined
  */
-gboolean rspamd_parse_inet_address_ip6 (const guchar *text, gsize len,
-										gpointer target);
+gboolean rspamd_parse_inet_address_ip6(const guchar *text, gsize len,
+									   gpointer target);
 
 enum rspamd_inet_address_parse_flags {
 	RSPAMD_INET_ADDRESS_PARSE_DEFAULT = 0,
@@ -110,8 +110,8 @@ enum rspamd_inet_address_parse_flags {
  * @param target target structure
  * @return TRUE if the address has been parsed, otherwise `target` content is undefined
  */
-gboolean rspamd_parse_inet_address_ip4 (const guchar *text, gsize len,
-										gpointer target);
+gboolean rspamd_parse_inet_address_ip4(const guchar *text, gsize len,
+									   gpointer target);
 
 /**
  * Parse ipv4 or ipv6 address to a static buffer `target`. Does not support Unix sockets
@@ -120,9 +120,9 @@ gboolean rspamd_parse_inet_address_ip4 (const guchar *text, gsize len,
  * @param target
  * @return
  */
-gboolean rspamd_parse_inet_address_ip (const char *src,
-									   gsize srclen,
-									   rspamd_inet_addr_t *target);
+gboolean rspamd_parse_inet_address_ip(const char *src,
+									  gsize srclen,
+									  rspamd_inet_addr_t *target);
 
 /**
  * Try to parse address from string
@@ -130,10 +130,10 @@ gboolean rspamd_parse_inet_address_ip (const char *src,
  * @param src IP string representation
  * @return TRUE if addr has been parsed
  */
-gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
-									const char *src,
-									gsize srclen,
-									enum rspamd_inet_address_parse_flags how);
+gboolean rspamd_parse_inet_address(rspamd_inet_addr_t **target,
+								   const char *src,
+								   gsize srclen,
+								   enum rspamd_inet_address_parse_flags how);
 
 /**
  * Use memory pool allocated inet address
@@ -142,38 +142,38 @@ gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
  * @param pool
  * @return
  */
-rspamd_inet_addr_t *rspamd_parse_inet_address_pool (const char *src,
-													gsize srclen,
-													rspamd_mempool_t *pool,
-													enum rspamd_inet_address_parse_flags how);
+rspamd_inet_addr_t *rspamd_parse_inet_address_pool(const char *src,
+												   gsize srclen,
+												   rspamd_mempool_t *pool,
+												   enum rspamd_inet_address_parse_flags how);
 
 /**
  * Returns string representation of inet address
  * @param addr
  * @return statically allocated string pointer (not thread safe)
  */
-const char *rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr);
+const char *rspamd_inet_address_to_string(const rspamd_inet_addr_t *addr);
 
 /**
  * Returns pretty string representation of inet address
  * @param addr
  * @return statically allocated string pointer (not thread safe)
  */
-const char *rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr);
+const char *rspamd_inet_address_to_string_pretty(const rspamd_inet_addr_t *addr);
 
 /**
  * Returns port number for the specified inet address in host byte order
  * @param addr
  * @return
  */
-uint16_t rspamd_inet_address_get_port (const rspamd_inet_addr_t *addr);
+uint16_t rspamd_inet_address_get_port(const rspamd_inet_addr_t *addr);
 
 /**
  * Returns address family of inet address
  * @param addr
  * @return
  */
-gint rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr);
+gint rspamd_inet_address_get_af(const rspamd_inet_addr_t *addr);
 
 /**
  * Returns sockaddr and size for this address
@@ -181,8 +181,8 @@ gint rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr);
  * @param sz
  * @return
  */
-struct sockaddr *rspamd_inet_address_get_sa (const rspamd_inet_addr_t *addr,
-											 socklen_t *sz);
+struct sockaddr *rspamd_inet_address_get_sa(const rspamd_inet_addr_t *addr,
+											socklen_t *sz);
 
 /**
  * Makes a radix key from inet address
@@ -190,7 +190,7 @@ struct sockaddr *rspamd_inet_address_get_sa (const rspamd_inet_addr_t *addr,
  * @param klen
  * @return
  */
-guchar *rspamd_inet_address_get_hash_key (const rspamd_inet_addr_t *addr, guint *klen);
+guchar *rspamd_inet_address_get_hash_key(const rspamd_inet_addr_t *addr, guint *klen);
 
 /**
  * Receive data from an unconnected socket and fill the inet_addr structure if needed
@@ -200,8 +200,8 @@ guchar *rspamd_inet_address_get_hash_key (const rspamd_inet_addr_t *addr, guint 
  * @param target
  * @return same as recvfrom(2)
  */
-gssize rspamd_inet_address_recvfrom (gint fd, void *buf, gsize len, gint fl,
-									 rspamd_inet_addr_t **target);
+gssize rspamd_inet_address_recvfrom(gint fd, void *buf, gsize len, gint fl,
+									rspamd_inet_addr_t **target);
 
 /**
  * Send data via unconnected socket using the specified inet_addr structure
@@ -211,13 +211,13 @@ gssize rspamd_inet_address_recvfrom (gint fd, void *buf, gsize len, gint fl,
  * @param target
  * @return
  */
-gssize rspamd_inet_address_sendto (gint fd, const void *buf, gsize len, gint fl,
-								   const rspamd_inet_addr_t *addr);
+gssize rspamd_inet_address_sendto(gint fd, const void *buf, gsize len, gint fl,
+								  const rspamd_inet_addr_t *addr);
 
 /**
  * Set port for inet address
  */
-void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
+void rspamd_inet_address_set_port(rspamd_inet_addr_t *addr, uint16_t port);
 
 /**
  * Connect to inet_addr address
@@ -225,8 +225,8 @@ void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
  * @param async perform operations asynchronously
  * @return newly created and connected socket
  */
-int rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
-								 gboolean async);
+int rspamd_inet_address_connect(const rspamd_inet_addr_t *addr, gint type,
+								gboolean async);
 
 enum rspamd_inet_address_listen_opts {
 	RSPAMD_INET_ADDRESS_LISTEN_DEFAULT = 0,
@@ -241,9 +241,9 @@ enum rspamd_inet_address_listen_opts {
  * @param opts
  * @return
  */
-int rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
-								enum rspamd_inet_address_listen_opts opts,
-								gint listen_queue);
+int rspamd_inet_address_listen(const rspamd_inet_addr_t *addr, gint type,
+							   enum rspamd_inet_address_listen_opts opts,
+							   gint listen_queue);
 
 /**
  * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6
@@ -251,9 +251,9 @@ int rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
  * @param af address family (AF_INET or AF_INET6)
  * @return TRUE if the address is valid
  */
-gboolean rspamd_ip_is_valid (const rspamd_inet_addr_t *addr);
+gboolean rspamd_ip_is_valid(const rspamd_inet_addr_t *addr);
 
-typedef void (*rspamd_accept_throttling_handler) (gint, void *);
+typedef void (*rspamd_accept_throttling_handler)(gint, void *);
 
 /**
  * Accept from listening socket filling addr structure
@@ -261,10 +261,10 @@ typedef void (*rspamd_accept_throttling_handler) (gint, void *);
  * @param target allocated inet addr structure
  * @return
  */
-gint rspamd_accept_from_socket (gint sock,
-								rspamd_inet_addr_t **target,
-								rspamd_accept_throttling_handler hdl,
-								void *hdl_data);
+gint rspamd_accept_from_socket(gint sock,
+							   rspamd_inet_addr_t **target,
+							   rspamd_accept_throttling_handler hdl,
+							   void *hdl_data);
 
 enum rspamd_parse_host_port_result {
 	RSPAMD_PARSE_ADDR_FAIL = 0,
@@ -279,25 +279,25 @@ enum rspamd_parse_host_port_result {
  * @return RSPAMD_PARSE_ADDR_FAIL in case of error, RSPAMD_PARSE_ADDR_NUMERIC in case of pure ip/unix socket
  */
 enum rspamd_parse_host_port_result
-rspamd_parse_host_port_priority (const gchar *str,
-								 GPtrArray **addrs,
-								 guint *priority, gchar **name,
-								 guint default_port,
-								 gboolean allow_listen,
-								 rspamd_mempool_t *pool);
+rspamd_parse_host_port_priority(const gchar *str,
+								GPtrArray **addrs,
+								guint *priority, gchar **name,
+								guint default_port,
+								gboolean allow_listen,
+								rspamd_mempool_t *pool);
 
 /**
  * Destroy the specified IP address
  * @param addr
  */
-void rspamd_inet_address_free (rspamd_inet_addr_t *addr);
+void rspamd_inet_address_free(rspamd_inet_addr_t *addr);
 
 /**
  * Apply the specified mask to an address (ignored for AF_UNIX)
  * @param addr
  * @param mask
  */
-void rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask);
+void rspamd_inet_address_apply_mask(rspamd_inet_addr_t *addr, guint mask);
 
 /**
  * Compare a1 and a2 and return value >0, ==0 and <0 if a1 is more, equal or less than a2 correspondingly
@@ -305,8 +305,8 @@ void rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask);
  * @param a2
  * @return
  */
-gint rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
-								  const rspamd_inet_addr_t *a2, gboolean compare_ports);
+gint rspamd_inet_address_compare(const rspamd_inet_addr_t *a1,
+								 const rspamd_inet_addr_t *a2, gboolean compare_ports);
 
 /**
  * Utility function to compare addresses by in g_ptr_array
@@ -314,8 +314,8 @@ gint rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
  * @param a2
  * @return
  */
-gint rspamd_inet_address_compare_ptr (gconstpointer a1,
-									  gconstpointer a2);
+gint rspamd_inet_address_compare_ptr(gconstpointer a1,
+									 gconstpointer a2);
 
 /**
  * Performs deep copy of rspamd inet addr
@@ -327,29 +327,29 @@ rspamd_inet_addr_t *rspamd_inet_address_copy(const rspamd_inet_addr_t *addr, rsp
 /**
  * Returns hash for inet address (ignoring port)
  */
-guint rspamd_inet_address_hash (gconstpointer a);
+guint rspamd_inet_address_hash(gconstpointer a);
 
-guint rspamd_inet_address_port_hash (gconstpointer a);
+guint rspamd_inet_address_port_hash(gconstpointer a);
 
 /**
  * Returns true if two address are equal
  */
-gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
+gboolean rspamd_inet_address_equal(gconstpointer a, gconstpointer b);
 
-gboolean rspamd_inet_address_port_equal (gconstpointer a, gconstpointer b);
+gboolean rspamd_inet_address_port_equal(gconstpointer a, gconstpointer b);
 
 /**
  * Returns TRUE if an address belongs to some local address
  */
-gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr);
+gboolean rspamd_inet_address_is_local(const rspamd_inet_addr_t *addr);
 
 /**
  * Returns size of storage required to store a complete IP address
  * @return
  */
-gsize rspamd_inet_address_storage_size (void);
+gsize rspamd_inet_address_storage_size(void);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

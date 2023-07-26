@@ -42,15 +42,20 @@ struct css_parse_error {
 	css_parse_error_type type = css_parse_error_type::PARSE_ERROR_UNKNOWN_ERROR;
 	std::optional<std::string> description;
 
-	explicit css_parse_error (css_parse_error_type type, const std::string &description) :
-		type(type), description(description) {}
-	explicit css_parse_error (css_parse_error_type type = css_parse_error_type::PARSE_ERROR_NO_ERROR) :
-			type(type) {}
+	explicit css_parse_error(css_parse_error_type type, const std::string &description)
+		: type(type), description(description)
+	{
+	}
+	explicit css_parse_error(css_parse_error_type type = css_parse_error_type::PARSE_ERROR_NO_ERROR)
+		: type(type)
+	{
+	}
 
-	constexpr auto is_fatal(void) const -> bool {
+	constexpr auto is_fatal(void) const -> bool
+	{
 		return type < css_parse_error_type::PARSE_ERROR_NO_ERROR;
 	}
 };
 
-}
-#endif //RSPAMD_PARSE_ERROR_HXX
+}// namespace rspamd::css
+#endif//RSPAMD_PARSE_ERROR_HXX

@@ -21,7 +21,7 @@
 #include "config.h"
 #include "libutil/addr.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 /*
@@ -41,7 +41,7 @@ struct rspamd_mime_header;
  * @return
  */
 bool rspamd_received_header_parse(struct rspamd_task *task,
-		const char *data, size_t sz, struct rspamd_mime_header *hdr);
+								  const char *data, size_t sz, struct rspamd_mime_header *hdr);
 
 
 /**
@@ -60,9 +60,9 @@ struct lua_State;
  */
 bool rspamd_received_export_to_lua(struct rspamd_task *task, struct lua_State *L);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
 
-#endif //RSPAMD_RECEIVED_H
+#endif//RSPAMD_RECEIVED_H

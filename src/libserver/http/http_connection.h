@@ -33,7 +33,7 @@
 
 #include "contrib/libev/ev.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -87,25 +87,25 @@ struct rspamd_storage_shmem {
  * Options for HTTP connection
  */
 enum rspamd_http_options {
-	RSPAMD_HTTP_BODY_PARTIAL = 1, /**< Call body handler on all body data portions */
-	RSPAMD_HTTP_CLIENT_SIMPLE = 1u << 1, /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_BODY_PARTIAL = 1,           /**< Call body handler on all body data portions */
+	RSPAMD_HTTP_CLIENT_SIMPLE = 1u << 1,    /**< Read HTTP client reply automatically */
 	RSPAMD_HTTP_CLIENT_ENCRYPTED = 1u << 2, /**< Encrypt data for client */
-	RSPAMD_HTTP_CLIENT_SHARED = 1u << 3, /**< Store reply in shared memory */
+	RSPAMD_HTTP_CLIENT_SHARED = 1u << 3,    /**< Store reply in shared memory */
 	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 1u << 4,
 	RSPAMD_HTTP_CLIENT_KEEP_ALIVE = 1u << 5,
 	RSPAMD_HTTP_CLIENT_SSL = 1u << 6u,
 };
 
-typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
-										   struct rspamd_http_message *msg,
-										   const gchar *chunk,
-										   gsize len);
+typedef int (*rspamd_http_body_handler_t)(struct rspamd_http_connection *conn,
+										  struct rspamd_http_message *msg,
+										  const gchar *chunk,
+										  gsize len);
 
-typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn,
-											 GError *err);
+typedef void (*rspamd_http_error_handler_t)(struct rspamd_http_connection *conn,
+											GError *err);
 
-typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn,
-											 struct rspamd_http_message *msg);
+typedef int (*rspamd_http_finish_handler_t)(struct rspamd_http_connection *conn,
+											struct rspamd_http_message *msg);
 
 /**
  * HTTP connection structure
@@ -137,13 +137,13 @@ struct rspamd_http_connection {
  * @param opts
  * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new_server (
-		struct rspamd_http_context *ctx,
-		gint fd,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts);
+struct rspamd_http_connection *rspamd_http_connection_new_server(
+	struct rspamd_http_context *ctx,
+	gint fd,
+	rspamd_http_body_handler_t body_handler,
+	rspamd_http_error_handler_t error_handler,
+	rspamd_http_finish_handler_t finish_handler,
+	unsigned opts);
 
 /**
  * Creates or reuses a new keepalive client connection identified by hostname and inet_addr
@@ -155,14 +155,14 @@ struct rspamd_http_connection *rspamd_http_connection_new_server (
  * @param host
  * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new_client_keepalive (
-		struct rspamd_http_context *ctx,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts,
-		rspamd_inet_addr_t *addr,
-		const gchar *host);
+struct rspamd_http_connection *rspamd_http_connection_new_client_keepalive(
+	struct rspamd_http_context *ctx,
+	rspamd_http_body_handler_t body_handler,
+	rspamd_http_error_handler_t error_handler,
+	rspamd_http_finish_handler_t finish_handler,
+	unsigned opts,
+	rspamd_inet_addr_t *addr,
+	const gchar *host);
 
 /**
  * Creates an ordinary connection using the address specified (if proxy is not set)
@@ -174,13 +174,13 @@ struct rspamd_http_connection *rspamd_http_connection_new_client_keepalive (
  * @param addr
  * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new_client (
-		struct rspamd_http_context *ctx,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts,
-		rspamd_inet_addr_t *addr);
+struct rspamd_http_connection *rspamd_http_connection_new_client(
+	struct rspamd_http_context *ctx,
+	rspamd_http_body_handler_t body_handler,
+	rspamd_http_error_handler_t error_handler,
+	rspamd_http_finish_handler_t finish_handler,
+	unsigned opts,
+	rspamd_inet_addr_t *addr);
 
 /**
  * Creates an ordinary client connection using ready file descriptor (ignores proxy)
@@ -192,42 +192,42 @@ struct rspamd_http_connection *rspamd_http_connection_new_client (
  * @param addr
  * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new_client_socket (
-		struct rspamd_http_context *ctx,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts,
-		gint fd);
+struct rspamd_http_connection *rspamd_http_connection_new_client_socket(
+	struct rspamd_http_context *ctx,
+	rspamd_http_body_handler_t body_handler,
+	rspamd_http_error_handler_t error_handler,
+	rspamd_http_finish_handler_t finish_handler,
+	unsigned opts,
+	gint fd);
 
 /**
  * Set key pointed by an opaque pointer
  * @param conn connection structure
  * @param key opaque key structure
  */
-void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
-									 struct rspamd_cryptobox_keypair *key);
+void rspamd_http_connection_set_key(struct rspamd_http_connection *conn,
+									struct rspamd_cryptobox_keypair *key);
 
 /**
  * Transfer ownership on socket to an HTTP connection
  * @param conn
  */
-void rspamd_http_connection_own_socket (struct rspamd_http_connection *conn);
+void rspamd_http_connection_own_socket(struct rspamd_http_connection *conn);
 
 /**
  * Get peer's public key
  * @param conn connection structure
  * @return pubkey structure or NULL
  */
-const struct rspamd_cryptobox_pubkey *rspamd_http_connection_get_peer_key (
-		struct rspamd_http_connection *conn);
+const struct rspamd_cryptobox_pubkey *rspamd_http_connection_get_peer_key(
+	struct rspamd_http_connection *conn);
 
 /**
  * Returns TRUE if a connection is encrypted
  * @param conn
  * @return
  */
-gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *conn);
+gboolean rspamd_http_connection_is_encrypted(struct rspamd_http_connection *conn);
 
 /**
  * Handle a request using socket fd and user data ud
@@ -235,15 +235,15 @@ gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *con
  * @param ud opaque user data
  * @param fd fd to read/write
  */
-void rspamd_http_connection_read_message (
-		struct rspamd_http_connection *conn,
-		gpointer ud,
-		ev_tstamp timeout);
+void rspamd_http_connection_read_message(
+	struct rspamd_http_connection *conn,
+	gpointer ud,
+	ev_tstamp timeout);
 
-void rspamd_http_connection_read_message_shared (
-		struct rspamd_http_connection *conn,
-		gpointer ud,
-		ev_tstamp timeout);
+void rspamd_http_connection_read_message_shared(
+	struct rspamd_http_connection *conn,
+	gpointer ud,
+	ev_tstamp timeout);
 
 /**
  * Send reply using initialised connection
@@ -252,27 +252,27 @@ void rspamd_http_connection_read_message_shared (
  * @param ud opaque user data
  * @param fd fd to read/write
  */
-gboolean rspamd_http_connection_write_message (
-		struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg,
-		const gchar *host,
-		const gchar *mime_type,
-		gpointer ud,
-		ev_tstamp timeout);
+gboolean rspamd_http_connection_write_message(
+	struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *host,
+	const gchar *mime_type,
+	gpointer ud,
+	ev_tstamp timeout);
 
-gboolean rspamd_http_connection_write_message_shared (
-		struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg,
-		const gchar *host,
-		const gchar *mime_type,
-		gpointer ud,
-		ev_tstamp timeout);
+gboolean rspamd_http_connection_write_message_shared(
+	struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *host,
+	const gchar *mime_type,
+	gpointer ud,
+	ev_tstamp timeout);
 
 /**
  * Free connection structure
  * @param conn
  */
-void rspamd_http_connection_free (struct rspamd_http_connection *conn);
+void rspamd_http_connection_free(struct rspamd_http_connection *conn);
 
 /**
  * Increase refcount for a connection
@@ -280,7 +280,8 @@ void rspamd_http_connection_free (struct rspamd_http_connection *conn);
  * @return
  */
 static inline struct rspamd_http_connection *
-rspamd_http_connection_ref (struct rspamd_http_connection *conn) {
+rspamd_http_connection_ref(struct rspamd_http_connection *conn)
+{
 	conn->ref++;
 	return conn;
 }
@@ -290,9 +291,10 @@ rspamd_http_connection_ref (struct rspamd_http_connection *conn) {
  * @param conn
  */
 static void
-rspamd_http_connection_unref (struct rspamd_http_connection *conn) {
+rspamd_http_connection_unref(struct rspamd_http_connection *conn)
+{
 	if (--conn->ref <= 0) {
-		rspamd_http_connection_free (conn);
+		rspamd_http_connection_free(conn);
 	}
 }
 
@@ -300,18 +302,18 @@ rspamd_http_connection_unref (struct rspamd_http_connection *conn) {
  * Reset connection for a new request
  * @param conn
  */
-void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
+void rspamd_http_connection_reset(struct rspamd_http_connection *conn);
 
 /**
  * Sets global maximum size for HTTP message being processed
  * @param sz
  */
-void rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
-										  gsize sz);
+void rspamd_http_connection_set_max_size(struct rspamd_http_connection *conn,
+										 gsize sz);
 
-void rspamd_http_connection_disable_encryption (struct rspamd_http_connection *conn);
+void rspamd_http_connection_disable_encryption(struct rspamd_http_connection *conn);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

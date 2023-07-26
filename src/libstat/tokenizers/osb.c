@@ -27,16 +27,26 @@
 #define DEFAULT_OSB_VERSION 2
 
 static const int primes[] = {
-	1, 7,
-	3, 13,
-	5, 29,
-	11, 51,
-	23, 101,
-	47, 203,
-	97, 407,
-	197, 817,
-	397, 1637,
-	797, 3277,
+	1,
+	7,
+	3,
+	13,
+	5,
+	29,
+	11,
+	51,
+	23,
+	101,
+	47,
+	203,
+	97,
+	407,
+	197,
+	817,
+	397,
+	1637,
+	797,
+	3277,
 };
 
 static const guchar osb_tokenizer_magic[] = {'o', 's', 'b', 't', 'o', 'k', 'v', '2'};
@@ -60,13 +70,13 @@ struct rspamd_osb_tokenizer_config {
  * Return default config
  */
 static struct rspamd_osb_tokenizer_config *
-rspamd_tokenizer_osb_default_config (void)
+rspamd_tokenizer_osb_default_config(void)
 {
 	static struct rspamd_osb_tokenizer_config def;
 
-	if (memcmp (def.magic, osb_tokenizer_magic, sizeof (osb_tokenizer_magic)) != 0) {
-		memset (&def, 0, sizeof (def));
-		memcpy (def.magic, osb_tokenizer_magic, sizeof (osb_tokenizer_magic));
+	if (memcmp(def.magic, osb_tokenizer_magic, sizeof(osb_tokenizer_magic)) != 0) {
+		memset(&def, 0, sizeof(def));
+		memcpy(def.magic, osb_tokenizer_magic, sizeof(osb_tokenizer_magic));
 		def.version = DEFAULT_OSB_VERSION;
 		def.window_size = DEFAULT_FEATURE_WINDOW_SIZE;
 		def.ht = RSPAMD_OSB_HASH_XXHASH;
@@ -77,8 +87,8 @@ rspamd_tokenizer_osb_default_config (void)
 }
 
 static struct rspamd_osb_tokenizer_config *
-rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
-		const ucl_object_t *obj)
+rspamd_tokenizer_osb_config_from_ucl(rspamd_mempool_t *pool,
+									 const ucl_object_t *obj)
 {
 	const ucl_object_t *elt;
 	struct rspamd_osb_tokenizer_config *cf, *def;
@@ -87,61 +97,58 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 
 
 	if (pool != NULL) {
-		cf = rspamd_mempool_alloc0 (pool, sizeof (*cf));
+		cf = rspamd_mempool_alloc0(pool, sizeof(*cf));
 	}
 	else {
-		cf = g_malloc0 (sizeof (*cf));
+		cf = g_malloc0(sizeof(*cf));
 	}
 
 	/* Use default config */
-	def = rspamd_tokenizer_osb_default_config ();
-	memcpy (cf, def, sizeof (*cf));
+	def = rspamd_tokenizer_osb_default_config();
+	memcpy(cf, def, sizeof(*cf));
 
-	elt = ucl_object_lookup (obj, "hash");
-	if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-		if (g_ascii_strncasecmp (ucl_object_tostring (elt), "xxh", 3)
-				== 0) {
+	elt = ucl_object_lookup(obj, "hash");
+	if (elt != NULL && ucl_object_type(elt) == UCL_STRING) {
+		if (g_ascii_strncasecmp(ucl_object_tostring(elt), "xxh", 3) == 0) {
 			cf->ht = RSPAMD_OSB_HASH_XXHASH;
-			elt = ucl_object_lookup (obj, "seed");
-			if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-				cf->seed = ucl_object_toint (elt);
+			elt = ucl_object_lookup(obj, "seed");
+			if (elt != NULL && ucl_object_type(elt) == UCL_INT) {
+				cf->seed = ucl_object_toint(elt);
 			}
 		}
-		else if (g_ascii_strncasecmp (ucl_object_tostring (elt), "sip", 3)
-				== 0) {
+		else if (g_ascii_strncasecmp(ucl_object_tostring(elt), "sip", 3) == 0) {
 			cf->ht = RSPAMD_OSB_HASH_SIPHASH;
-			elt = ucl_object_lookup (obj, "key");
+			elt = ucl_object_lookup(obj, "key");
 
-			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-				key = rspamd_decode_base32 (ucl_object_tostring (elt),
-						0, &keylen, RSPAMD_BASE32_DEFAULT);
-				if (keylen < sizeof (rspamd_sipkey_t)) {
-					msg_warn ("siphash key is too short: %z", keylen);
-					g_free (key);
+			if (elt != NULL && ucl_object_type(elt) == UCL_STRING) {
+				key = rspamd_decode_base32(ucl_object_tostring(elt),
+										   0, &keylen, RSPAMD_BASE32_DEFAULT);
+				if (keylen < sizeof(rspamd_sipkey_t)) {
+					msg_warn("siphash key is too short: %z", keylen);
+					g_free(key);
 				}
 				else {
-					memcpy (cf->sk, key, sizeof (cf->sk));
-					g_free (key);
+					memcpy(cf->sk, key, sizeof(cf->sk));
+					g_free(key);
 				}
 			}
 			else {
-				msg_warn_pool ("siphash cannot be used without key");
+				msg_warn_pool("siphash cannot be used without key");
 			}
-
 		}
 	}
 	else {
-		elt = ucl_object_lookup (obj, "compat");
-		if (elt != NULL && ucl_object_toboolean (elt)) {
+		elt = ucl_object_lookup(obj, "compat");
+		if (elt != NULL && ucl_object_toboolean(elt)) {
 			cf->ht = RSPAMD_OSB_HASH_COMPAT;
 		}
 	}
 
-	elt = ucl_object_lookup (obj, "window");
-	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-		cf->window_size = ucl_object_toint (elt);
+	elt = ucl_object_lookup(obj, "window");
+	if (elt != NULL && ucl_object_type(elt) == UCL_INT) {
+		cf->window_size = ucl_object_toint(elt);
 		if (cf->window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {
-			msg_err_pool ("too large window size: %d", cf->window_size);
+			msg_err_pool("too large window size: %d", cf->window_size);
 			cf->window_size = DEFAULT_FEATURE_WINDOW_SIZE;
 		}
 	}
@@ -150,31 +157,31 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 }
 
 gpointer
-rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
-		struct rspamd_tokenizer_config *cf,
-		gsize *len)
+rspamd_tokenizer_osb_get_config(rspamd_mempool_t *pool,
+								struct rspamd_tokenizer_config *cf,
+								gsize *len)
 {
 	struct rspamd_osb_tokenizer_config *osb_cf, *def;
 
 	if (cf != NULL && cf->opts != NULL) {
-		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, cf->opts);
+		osb_cf = rspamd_tokenizer_osb_config_from_ucl(pool, cf->opts);
 	}
 	else {
-		def = rspamd_tokenizer_osb_default_config ();
-		osb_cf = rspamd_mempool_alloc (pool, sizeof (*osb_cf));
-		memcpy (osb_cf, def, sizeof (*osb_cf));
+		def = rspamd_tokenizer_osb_default_config();
+		osb_cf = rspamd_mempool_alloc(pool, sizeof(*osb_cf));
+		memcpy(osb_cf, def, sizeof(*osb_cf));
 		/* Do not write sipkey to statfile */
 	}
 
 	if (osb_cf->ht == RSPAMD_OSB_HASH_SIPHASH) {
-		msg_info_pool ("siphash key is not stored into statfiles, so you'd "
-				"need to keep it inside the configuration");
+		msg_info_pool("siphash key is not stored into statfiles, so you'd "
+					  "need to keep it inside the configuration");
 	}
 
-	memset (osb_cf->sk, 0, sizeof (osb_cf->sk));
+	memset(osb_cf->sk, 0, sizeof(osb_cf->sk));
 
 	if (len != NULL) {
-		*len = sizeof (*osb_cf);
+		*len = sizeof(*osb_cf);
 	}
 
 	return osb_cf;
@@ -259,13 +266,12 @@ struct token_pipe_entry {
 	rspamd_stat_token_t *t;
 };
 
-gint
-rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
-					  struct rspamd_task *task,
-					  GArray *words,
-					  gboolean is_utf,
-					  const gchar *prefix,
-					  GPtrArray *result)
+gint rspamd_tokenizer_osb(struct rspamd_stat_ctx *ctx,
+						  struct rspamd_task *task,
+						  GArray *words,
+						  gboolean is_utf,
+						  const gchar *prefix,
+						  GPtrArray *result)
 {
 	rspamd_token_t *new_tok = NULL;
 	rspamd_stat_token_t *token;
@@ -284,31 +290,31 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	window_size = osb_cf->window_size;
 
 	if (prefix) {
-		seed = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-				prefix, strlen (prefix), osb_cf->seed);
+		seed = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
+												   prefix, strlen(prefix), osb_cf->seed);
 	}
 	else {
 		seed = osb_cf->seed;
 	}
 
-	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
+	hashpipe = g_alloca(window_size * sizeof(hashpipe[0]));
 	for (i = 0; i < window_size; i++) {
 		hashpipe[i].h = 0xfe;
 		hashpipe[i].t = NULL;
 	}
 
-	token_size = sizeof (rspamd_token_t) +
-			sizeof (gdouble) * ctx->statfiles->len;
-	g_assert (token_size > 0);
+	token_size = sizeof(rspamd_token_t) +
+				 sizeof(gdouble) * ctx->statfiles->len;
+	g_assert(token_size > 0);
 
-	for (w = 0; w < words->len; w ++) {
-		token = &g_array_index (words, rspamd_stat_token_t, w);
+	for (w = 0; w < words->len; w++) {
+		token = &g_array_index(words, rspamd_stat_token_t, w);
 		token_flags = token->flags;
 		const gchar *begin;
 		gsize len;
 
 		if (token->flags &
-			(RSPAMD_STAT_TOKEN_FLAG_STOP_WORD|RSPAMD_STAT_TOKEN_FLAG_SKIPPED)) {
+			(RSPAMD_STAT_TOKEN_FLAG_STOP_WORD | RSPAMD_STAT_TOKEN_FLAG_SKIPPED)) {
 			/* Skip stop/skipped words */
 			continue;
 		}
@@ -327,17 +333,17 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 
 			ftok.begin = begin;
 			ftok.len = len;
-			cur = rspamd_fstrhash_lc (&ftok, is_utf);
+			cur = rspamd_fstrhash_lc(&ftok, is_utf);
 		}
 		else {
 			/* We know that the words are normalized */
 			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
-				cur = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-						begin, len, osb_cf->seed);
+				cur = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
+														  begin, len, osb_cf->seed);
 			}
 			else {
-				rspamd_cryptobox_siphash ((guchar *)&cur, begin,
-						len, osb_cf->sk);
+				rspamd_cryptobox_siphash((guchar *) &cur, begin,
+										 len, osb_cf->sk);
 
 				if (prefix) {
 					cur ^= seed;
@@ -346,36 +352,37 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		}
 
 		if (token_flags & RSPAMD_STAT_TOKEN_FLAG_UNIGRAM) {
-			new_tok = rspamd_mempool_alloc0 (task->task_pool, token_size);
+			new_tok = rspamd_mempool_alloc0(task->task_pool, token_size);
 			new_tok->flags = token_flags;
 			new_tok->t1 = token;
 			new_tok->t2 = token;
 			new_tok->data = cur;
 			new_tok->window_idx = 0;
-			g_ptr_array_add (result, new_tok);
+			g_ptr_array_add(result, new_tok);
 
 			continue;
 		}
 
-#define ADD_TOKEN do {\
-    new_tok = rspamd_mempool_alloc0 (task->task_pool, token_size); \
-    new_tok->flags = token_flags; \
-    new_tok->t1 = hashpipe[0].t; \
-    new_tok->t2 = hashpipe[i].t; \
-    if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) { \
-        h1 = ((guint32)hashpipe[0].h) * primes[0] + \
-            ((guint32)hashpipe[i].h) * primes[i << 1]; \
-        h2 = ((guint32)hashpipe[0].h) * primes[1] + \
-            ((guint32)hashpipe[i].h) * primes[(i << 1) - 1]; \
-        memcpy((guchar *)&new_tok->data, &h1, sizeof (h1)); \
-        memcpy(((guchar *)&new_tok->data) + sizeof (h1), &h2, sizeof (h2)); \
-    } \
-    else { \
-        new_tok->data = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
-    } \
-    new_tok->window_idx = i; \
-    g_ptr_array_add (result, new_tok); \
-  } while(0)
+#define ADD_TOKEN                                                                       \
+	do {                                                                                \
+		new_tok = rspamd_mempool_alloc0(task->task_pool, token_size);                   \
+		new_tok->flags = token_flags;                                                   \
+		new_tok->t1 = hashpipe[0].t;                                                    \
+		new_tok->t2 = hashpipe[i].t;                                                    \
+		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {                                     \
+			h1 = ((guint32) hashpipe[0].h) * primes[0] +                                \
+				 ((guint32) hashpipe[i].h) * primes[i << 1];                            \
+			h2 = ((guint32) hashpipe[0].h) * primes[1] +                                \
+				 ((guint32) hashpipe[i].h) * primes[(i << 1) - 1];                      \
+			memcpy((guchar *) &new_tok->data, &h1, sizeof(h1));                         \
+			memcpy(((guchar *) &new_tok->data) + sizeof(h1), &h2, sizeof(h2));          \
+		}                                                                               \
+		else {                                                                          \
+			new_tok->data = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
+		}                                                                               \
+		new_tok->window_idx = i;                                                        \
+		g_ptr_array_add(result, new_tok);                                               \
+	} while (0)
 
 		if (processed < window_size) {
 			/* Just fill a hashpipe */
@@ -402,9 +409,9 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	}
 
 	if (processed > 1 && processed <= window_size) {
-		processed --;
-		memmove (hashpipe, &hashpipe[window_size - processed],
-				processed * sizeof (hashpipe[0]));
+		processed--;
+		memmove(hashpipe, &hashpipe[window_size - processed],
+				processed * sizeof(hashpipe[0]));
 
 		for (i = 1; i < processed; i++) {
 			ADD_TOKEN;

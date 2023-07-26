@@ -20,7 +20,7 @@
 #include "ucl.h"
 #include "contrib/libev/ev.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -40,18 +40,18 @@ struct rspamd_http_client_header {
  * @param ud opaque user data
  * @param err error pointer
  */
-typedef void (*rspamd_client_callback) (
-		struct rspamd_client_connection *conn,
-		struct rspamd_http_message *msg,
-		const gchar *name,
-		ucl_object_t *result,
-		GString *input,
-		gpointer ud,
-		gdouble start_time,
-		gdouble send_time,
-		const gchar *body,
-		gsize body_len,
-		GError *err);
+typedef void (*rspamd_client_callback)(
+	struct rspamd_client_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *name,
+	ucl_object_t *result,
+	GString *input,
+	gpointer ud,
+	gdouble start_time,
+	gdouble send_time,
+	const gchar *body,
+	gsize body_len,
+	GError *err);
 
 struct rspamd_http_context;
 
@@ -63,13 +63,13 @@ struct rspamd_http_context;
  * @param timeout timeout in seconds
  * @return
  */
-struct rspamd_client_connection *rspamd_client_init (
-		struct rspamd_http_context *http_ctx,
-		struct ev_loop *ev_base,
-		const gchar *name,
-		guint16 port,
-		gdouble timeout,
-		const gchar *key);
+struct rspamd_client_connection *rspamd_client_init(
+	struct rspamd_http_context *http_ctx,
+	struct ev_loop *ev_base,
+	const gchar *name,
+	guint16 port,
+	gdouble timeout,
+	const gchar *key);
 
 /**
  *
@@ -81,25 +81,25 @@ struct rspamd_client_connection *rspamd_client_init (
  * @param ud opaque user data
  * @return
  */
-gboolean rspamd_client_command (
-		struct rspamd_client_connection *conn,
-		const gchar *command,
-		GQueue *attrs,
-		FILE *in,
-		rspamd_client_callback cb,
-		gpointer ud,
-		gboolean compressed,
-		const gchar *comp_dictionary,
-		const gchar *filename,
-		GError **err);
+gboolean rspamd_client_command(
+	struct rspamd_client_connection *conn,
+	const gchar *command,
+	GQueue *attrs,
+	FILE *in,
+	rspamd_client_callback cb,
+	gpointer ud,
+	gboolean compressed,
+	const gchar *comp_dictionary,
+	const gchar *filename,
+	GError **err);
 
 /**
  * Destroy a connection to rspamd
  * @param conn
  */
-void rspamd_client_destroy (struct rspamd_client_connection *conn);
+void rspamd_client_destroy(struct rspamd_client_connection *conn);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

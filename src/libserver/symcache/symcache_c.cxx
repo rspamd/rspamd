@@ -28,8 +28,7 @@
 #define C_API_SYMCACHE_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_item *>(ptr))
 #define C_API_SYMCACHE_DYN_ITEM(ptr) (reinterpret_cast<rspamd::symcache::cache_dynamic_item *>(ptr))
 
-void
-rspamd_symcache_destroy(struct rspamd_symcache *cache)
+void rspamd_symcache_destroy(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -52,22 +51,20 @@ rspamd_symcache_init(struct rspamd_symcache *cache)
 	return real_cache->init();
 }
 
-void
-rspamd_symcache_save(struct rspamd_symcache *cache)
+void rspamd_symcache_save(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	real_cache->save_items();
 }
 
-gint
-rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
-						   const gchar *name,
-						   gint priority,
-						   symbol_func_t func,
-						   gpointer user_data,
-						   enum rspamd_symbol_type type,
-						   gint parent)
+gint rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
+								const gchar *name,
+								gint priority,
+								symbol_func_t func,
+								gpointer user_data,
+								enum rspamd_symbol_type type,
+								gint parent)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -84,11 +81,10 @@ rspamd_symcache_add_symbol(struct rspamd_symcache *cache,
 	}
 }
 
-bool
-rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
-										int sym_id,
-										const char *augmentation,
-										const char *value)
+bool rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
+											 int sym_id,
+											 const char *augmentation,
+											 const char *value)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	auto log_tag = [&]() { return real_cache->log_tag(); };
@@ -114,8 +110,7 @@ rspamd_symcache_add_symbol_augmentation(struct rspamd_symcache *cache,
 	return item->add_augmentation(*real_cache, augmentation, value);
 }
 
-void
-rspamd_symcache_set_peak_callback(struct rspamd_symcache *cache, gint cbref)
+void rspamd_symcache_set_peak_callback(struct rspamd_symcache *cache, gint cbref)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -133,8 +128,7 @@ rspamd_symcache_add_condition_delayed(struct rspamd_symcache *cache,
 	return TRUE;
 }
 
-gint
-rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
+gint rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
 								 const gchar *name)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -155,11 +149,11 @@ rspamd_symcache_find_symbol(struct rspamd_symcache *cache,
 
 gboolean
 rspamd_symcache_stat_symbol(struct rspamd_symcache *cache,
-									 const gchar *name,
-									 gdouble *frequency,
-									 gdouble *freq_stddev,
-									 gdouble *tm,
-									 guint *nhits)
+							const gchar *name,
+							gdouble *frequency,
+							gdouble *freq_stddev,
+							gdouble *tm,
+							guint *nhits)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -181,8 +175,7 @@ rspamd_symcache_stat_symbol(struct rspamd_symcache *cache,
 }
 
 
-guint
-rspamd_symcache_stats_symbols_count(struct rspamd_symcache *cache)
+guint rspamd_symcache_stats_symbols_count(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	return real_cache->get_stats_symbols_count();
@@ -220,9 +213,8 @@ rspamd_symcache_start_refresh(struct rspamd_symcache *cache,
 	return new rspamd::symcache::cache_refresh_cbdata{real_cache, ev_base, w};
 }
 
-void
-rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_symcache_item *item,
-		const char *sym_name)
+void rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_symcache_item *item,
+								   const char *sym_name)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -232,9 +224,8 @@ rspamd_symcache_inc_frequency(struct rspamd_symcache *cache, struct rspamd_symca
 	}
 }
 
-void
-rspamd_symcache_add_delayed_dependency(struct rspamd_symcache *cache,
-									   const gchar *from, const gchar *to)
+void rspamd_symcache_add_delayed_dependency(struct rspamd_symcache *cache,
+											const gchar *from, const gchar *to)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	real_cache->add_delayed_dependency(from, to);
@@ -271,8 +262,7 @@ rspamd_symcache_item_name(struct rspamd_symcache_item *item)
 	return real_item->get_name().c_str();
 }
 
-gint
-rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
+gint rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
 {
 	auto *real_item = C_API_SYMCACHE_ITEM(item);
 
@@ -284,9 +274,9 @@ rspamd_symcache_item_flags(struct rspamd_symcache_item *item)
 }
 
 
-const gchar*
-rspamd_symcache_dyn_item_name (struct rspamd_task *task,
-							   struct rspamd_symcache_dynamic_item *dyn_item)
+const gchar *
+rspamd_symcache_dyn_item_name(struct rspamd_task *task,
+							  struct rspamd_symcache_dynamic_item *dyn_item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(dyn_item);
@@ -300,9 +290,8 @@ rspamd_symcache_dyn_item_name (struct rspamd_task *task,
 	return static_item->get_name().c_str();
 }
 
-gint
-rspamd_symcache_item_flags(struct rspamd_task *task,
-						   struct rspamd_symcache_dynamic_item *dyn_item)
+gint rspamd_symcache_item_flags(struct rspamd_task *task,
+								struct rspamd_symcache_dynamic_item *dyn_item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(dyn_item);
@@ -316,9 +305,8 @@ rspamd_symcache_item_flags(struct rspamd_task *task,
 	return static_item->get_flags();
 }
 
-guint
-rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
-								 const gchar *symbol)
+guint rspamd_symcache_get_symbol_flags(struct rspamd_symcache *cache,
+									   const gchar *symbol)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -338,10 +326,9 @@ rspamd_symcache_item_stat(struct rspamd_symcache_item *item)
 	return real_item->st;
 }
 
-void
-rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
-								   const gchar *symbol,
-								   ucl_object_t *this_sym_ucl)
+void rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
+										const gchar *symbol,
+										ucl_object_t *this_sym_ucl)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -349,15 +336,14 @@ rspamd_symcache_get_symbol_details(struct rspamd_symcache *cache,
 
 	if (sym) {
 		ucl_object_insert_key(this_sym_ucl,
-				ucl_object_fromstring(sym->get_type_str()),
-				"type", strlen("type"), false);
+							  ucl_object_fromstring(sym->get_type_str()),
+							  "type", strlen("type"), false);
 	}
 }
 
-void
-rspamd_symcache_foreach(struct rspamd_symcache *cache,
-						void (*func)(struct rspamd_symcache_item *item, gpointer /* userdata */),
-						gpointer ud)
+void rspamd_symcache_foreach(struct rspamd_symcache *cache,
+							 void (*func)(struct rspamd_symcache_item *item, gpointer /* userdata */),
+							 gpointer ud)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -366,20 +352,18 @@ rspamd_symcache_foreach(struct rspamd_symcache *cache,
 	});
 }
 
-void
-rspamd_symcache_process_settings_elt(struct rspamd_symcache *cache,
-									 struct rspamd_config_settings_elt *elt)
+void rspamd_symcache_process_settings_elt(struct rspamd_symcache *cache,
+										  struct rspamd_config_settings_elt *elt)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	real_cache->process_settings_elt(elt);
 }
 
-bool
-rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
-										 const gchar *symbol,
-										 const guint32 *ids,
-										 guint nids)
+bool rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
+											  const gchar *symbol,
+											  const guint32 *ids,
+											  guint nids)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -393,11 +377,10 @@ rspamd_symcache_set_allowed_settings_ids(struct rspamd_symcache *cache,
 	return true;
 }
 
-bool
-rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
-										   const gchar *symbol,
-										   const guint32 *ids,
-										   guint nids)
+bool rspamd_symcache_set_forbidden_settings_ids(struct rspamd_symcache *cache,
+												const gchar *symbol,
+												const guint32 *ids,
+												guint nids)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -420,7 +403,6 @@ rspamd_symcache_get_allowed_settings_ids(struct rspamd_symcache *cache,
 
 	const auto *item = real_cache->get_item_by_name(symbol, false);
 	return item->allowed_ids.get_ids(*nids);
-
 }
 
 const guint32 *
@@ -434,10 +416,9 @@ rspamd_symcache_get_forbidden_settings_ids(struct rspamd_symcache *cache,
 	return item->forbidden_ids.get_ids(*nids);
 }
 
-void
-rspamd_symcache_disable_all_symbols(struct rspamd_task *task,
-									struct rspamd_symcache *_cache,
-									guint skip_mask)
+void rspamd_symcache_disable_all_symbols(struct rspamd_task *task,
+										 struct rspamd_symcache *_cache,
+										 guint skip_mask)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 
@@ -474,17 +455,16 @@ rspamd_symcache_enable_symbol(struct rspamd_task *task,
 	return cache_runtime->enable_symbol(task, *real_cache, symbol);
 }
 
-void
-rspamd_symcache_disable_symbol_static (struct rspamd_symcache *cache,
-									   const gchar *symbol)
+void rspamd_symcache_disable_symbol_static(struct rspamd_symcache *cache,
+										   const gchar *symbol)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
 	real_cache->disable_symbol_delayed(symbol);
 }
 
-void rspamd_symcache_enable_symbol_static (struct rspamd_symcache *cache,
-										   const gchar *symbol)
+void rspamd_symcache_enable_symbol_static(struct rspamd_symcache *cache,
+										  const gchar *symbol)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
@@ -497,7 +477,7 @@ struct rspamd_symcache_real_timeout_result {
 	std::vector<std::pair<double, const rspamd::symcache::cache_item *>> elts;
 };
 
-struct rspamd_symcache_timeout_result*
+struct rspamd_symcache_timeout_result *
 rspamd_symcache_get_max_timeout(struct rspamd_symcache *cache)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
@@ -510,8 +490,7 @@ rspamd_symcache_get_max_timeout(struct rspamd_symcache *cache)
 	return &res->c_api_result;
 }
 
-void
-rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *res)
+void rspamd_symcache_timeout_result_free(struct rspamd_symcache_timeout_result *res)
 {
 	auto *real_result = reinterpret_cast<rspamd_symcache_real_timeout_result *>(res);
 	delete real_result;
@@ -600,8 +579,7 @@ rspamd_symcache_set_cur_item(struct rspamd_task *task, struct rspamd_symcache_dy
 	return (struct rspamd_symcache_dynamic_item *) cache_runtime->set_cur_item(real_dyn_item);
 }
 
-void
-rspamd_symcache_enable_profile(struct rspamd_task *task)
+void rspamd_symcache_enable_profile(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	if (!cache_runtime) {
@@ -611,11 +589,10 @@ rspamd_symcache_enable_profile(struct rspamd_task *task)
 	cache_runtime->set_profile_mode(true);
 }
 
-guint
-rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
-									struct rspamd_symcache_dynamic_item *item,
-									const gchar *subsystem,
-									const gchar *loc)
+guint rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
+										  struct rspamd_symcache_dynamic_item *item,
+										  const gchar *subsystem,
+										  const gchar *loc)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
@@ -623,17 +600,16 @@ rspamd_symcache_item_async_inc_full(struct rspamd_task *task,
 	auto *static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
 	msg_debug_cache_task("increase async events counter for %s(%d) = %d + 1; "
 						 "subsystem %s (%s)",
-			static_item->symbol.c_str(), static_item->id,
-			real_dyn_item->async_events, subsystem, loc);
+						 static_item->symbol.c_str(), static_item->id,
+						 real_dyn_item->async_events, subsystem, loc);
 
 	return ++real_dyn_item->async_events;
 }
 
-guint
-rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
-									struct rspamd_symcache_dynamic_item *item,
-									const gchar *subsystem,
-									const gchar *loc)
+guint rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
+										  struct rspamd_symcache_dynamic_item *item,
+										  const gchar *subsystem,
+										  const gchar *loc)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
@@ -641,14 +617,14 @@ rspamd_symcache_item_async_dec_full(struct rspamd_task *task,
 	auto *static_item = cache_runtime->get_item_by_dynamic_item(real_dyn_item);
 	msg_debug_cache_task("decrease async events counter for %s(%d) = %d - 1; "
 						 "subsystem %s (%s)",
-			static_item->symbol.c_str(), static_item->id,
-			real_dyn_item->async_events, subsystem, loc);
+						 static_item->symbol.c_str(), static_item->id,
+						 real_dyn_item->async_events, subsystem, loc);
 
 	if (G_UNLIKELY(real_dyn_item->async_events == 0)) {
 		msg_err_cache_task("INTERNAL ERROR: trying decrease async events counter for %s(%d) that is already zero; "
-							 "subsystem %s (%s)",
-				static_item->symbol.c_str(), static_item->id,
-				real_dyn_item->async_events, subsystem, loc);
+						   "subsystem %s (%s)",
+						   static_item->symbol.c_str(), static_item->id,
+						   real_dyn_item->async_events, subsystem, loc);
 		g_abort();
 		g_assert_not_reached();
 	}
@@ -686,11 +662,10 @@ rspamd_symcache_get_cbdata(struct rspamd_symcache *cache,
 	return nullptr;
 }
 
-void
-rspamd_symcache_composites_foreach(struct rspamd_task *task,
-								   struct rspamd_symcache *cache,
-								   GHFunc func,
-								   gpointer fd)
+void rspamd_symcache_composites_foreach(struct rspamd_task *task,
+										struct rspamd_symcache *cache,
+										GHFunc func,
+										gpointer fd)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
@@ -700,7 +675,7 @@ rspamd_symcache_composites_foreach(struct rspamd_task *task,
 
 		if (dyn_item && !dyn_item->started) {
 			auto *old_item = cache_runtime->set_cur_item(dyn_item);
-			func((void *)item->get_name().c_str(), item->get_cbdata(), fd);
+			func((void *) item->get_name().c_str(), item->get_cbdata(), fd);
 			dyn_item->finished = true;
 			cache_runtime->set_cur_item(old_item);
 		}
@@ -724,9 +699,8 @@ rspamd_symcache_process_symbols(struct rspamd_task *task,
 	return cache_runtime->process_symbols(task, *real_cache, stage);
 }
 
-void
-rspamd_symcache_finalize_item(struct rspamd_task *task,
-							  struct rspamd_symcache_dynamic_item *item)
+void rspamd_symcache_finalize_item(struct rspamd_task *task,
+								   struct rspamd_symcache_dynamic_item *item)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	auto *real_dyn_item = C_API_SYMCACHE_DYN_ITEM(item);
@@ -734,8 +708,7 @@ rspamd_symcache_finalize_item(struct rspamd_task *task,
 	cache_runtime->finalize_item(task, real_dyn_item);
 }
 
-void
-rspamd_symcache_runtime_destroy (struct rspamd_task *task)
+void rspamd_symcache_runtime_destroy(struct rspamd_task *task)
 {
 	auto *cache_runtime = C_API_SYMCACHE_RUNTIME(task->symcache_runtime);
 	cache_runtime->savepoint_dtor();

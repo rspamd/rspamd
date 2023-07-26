@@ -29,7 +29,7 @@
 
 #define CHACHA_BLOCKBYTES 64
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -56,31 +56,31 @@ typedef struct chacha_iv24_t {
 	unsigned char b[24];
 } chacha_iv24;
 
-void hchacha (const unsigned char key[32], const unsigned char iv[16],
-			  unsigned char out[32], size_t rounds);
+void hchacha(const unsigned char key[32], const unsigned char iv[16],
+			 unsigned char out[32], size_t rounds);
 
-void chacha_init (chacha_state *S, const chacha_key *key, const chacha_iv *iv,
-				  size_t rounds);
+void chacha_init(chacha_state *S, const chacha_key *key, const chacha_iv *iv,
+				 size_t rounds);
 
-void xchacha_init (chacha_state *S, const chacha_key *key,
-				   const chacha_iv24 *iv, size_t rounds);
+void xchacha_init(chacha_state *S, const chacha_key *key,
+				  const chacha_iv24 *iv, size_t rounds);
 
-size_t chacha_update (chacha_state *S, const unsigned char *in,
-					  unsigned char *out, size_t inlen);
+size_t chacha_update(chacha_state *S, const unsigned char *in,
+					 unsigned char *out, size_t inlen);
 
-size_t chacha_final (chacha_state *S, unsigned char *out);
+size_t chacha_final(chacha_state *S, unsigned char *out);
 
-void chacha (const chacha_key *key, const chacha_iv *iv,
+void chacha(const chacha_key *key, const chacha_iv *iv,
+			const unsigned char *in, unsigned char *out, size_t inlen,
+			size_t rounds);
+
+void xchacha(const chacha_key *key, const chacha_iv24 *iv,
 			 const unsigned char *in, unsigned char *out, size_t inlen,
 			 size_t rounds);
 
-void xchacha (const chacha_key *key, const chacha_iv24 *iv,
-			  const unsigned char *in, unsigned char *out, size_t inlen,
-			  size_t rounds);
+const char *chacha_load(void);
 
-const char *chacha_load (void);
-
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

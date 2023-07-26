@@ -19,10 +19,10 @@
 #include "message.h"
 #include "libserver/html/html.h"
 
-#define msg_debug_images(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        rspamd_images_log_id, "images", task->task_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
+#define msg_debug_images(...) rspamd_conditional_debug_fast(NULL, NULL,                                               \
+															rspamd_images_log_id, "images", task->task_pool->tag.uid, \
+															G_STRFUNC,                                                \
+															__VA_ARGS__)
 
 INIT_LOG_MODULE(images)
 
@@ -43,60 +43,58 @@ static const guint8 jpg_sig_exif[] = {0xff, 0xe1};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
-static bool process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
+static bool process_image(struct rspamd_task *task, struct rspamd_mime_part *part);
 
 
-bool
-rspamd_images_process_mime_part_maybe (struct rspamd_task *task,
-											struct rspamd_mime_part *part)
+bool rspamd_images_process_mime_part_maybe(struct rspamd_task *task,
+										   struct rspamd_mime_part *part)
 {
 	if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
 		if (part->detected_type &&
-			strcmp (part->detected_type, "image") == 0 &&
+			strcmp(part->detected_type, "image") == 0 &&
 			part->parsed_data.len > 0) {
 
-			return process_image (task, part);
+			return process_image(task, part);
 		}
 	}
 
 	return false;
 }
 
-void
-rspamd_images_process (struct rspamd_task *task)
+void rspamd_images_process(struct rspamd_task *task)
 {
 	guint i;
 	struct rspamd_mime_part *part;
 
-	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		rspamd_images_process_mime_part_maybe (task, part);
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
+	{
+		rspamd_images_process_mime_part_maybe(task, part);
 	}
-
 }
 
 static enum rspamd_image_type
-detect_image_type (rspamd_ftok_t *data)
+detect_image_type(rspamd_ftok_t *data)
 {
-	if (data->len > sizeof (png_signature) / sizeof (png_signature[0])) {
-		if (memcmp (data->begin, png_signature, sizeof (png_signature)) == 0) {
+	if (data->len > sizeof(png_signature) / sizeof(png_signature[0])) {
+		if (memcmp(data->begin, png_signature, sizeof(png_signature)) == 0) {
 			return IMAGE_TYPE_PNG;
 		}
 	}
 	if (data->len > 10) {
-		if (memcmp (data->begin, jpg_sig1, sizeof (jpg_sig1)) == 0) {
-			if (memcmp (data->begin + 2, jpg_sig_jfif, sizeof (jpg_sig_jfif)) == 0 ||
-					memcmp (data->begin + 2, jpg_sig_exif, sizeof (jpg_sig_exif)) == 0) {
+		if (memcmp(data->begin, jpg_sig1, sizeof(jpg_sig1)) == 0) {
+			if (memcmp(data->begin + 2, jpg_sig_jfif, sizeof(jpg_sig_jfif)) == 0 ||
+				memcmp(data->begin + 2, jpg_sig_exif, sizeof(jpg_sig_exif)) == 0) {
 				return IMAGE_TYPE_JPG;
 			}
 		}
 	}
-	if (data->len > sizeof (gif_signature) / sizeof (gif_signature[0])) {
-		if (memcmp (data->begin, gif_signature, sizeof (gif_signature)) == 0) {
+	if (data->len > sizeof(gif_signature) / sizeof(gif_signature[0])) {
+		if (memcmp(data->begin, gif_signature, sizeof(gif_signature)) == 0) {
 			return IMAGE_TYPE_GIF;
 		}
 	}
-	if (data->len > sizeof (bmp_signature) / sizeof (bmp_signature[0])) {
-		if (memcmp (data->begin, bmp_signature, sizeof (bmp_signature)) == 0) {
+	if (data->len > sizeof(bmp_signature) / sizeof(bmp_signature[0])) {
+		if (memcmp(data->begin, bmp_signature, sizeof(bmp_signature)) == 0) {
 			return IMAGE_TYPE_BMP;
 		}
 	}
@@ -106,47 +104,47 @@ detect_image_type (rspamd_ftok_t *data)
 
 
 static struct rspamd_image *
-process_png_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
+process_png_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	guint32 t;
 	const guint8 *p;
 
 	if (data->len < 24) {
-		msg_info_pool ("bad png detected (maybe striped)");
+		msg_info_pool("bad png detected (maybe striped)");
 		return NULL;
 	}
 
 	/* In png we should find iHDR section and get data from it */
 	/* Skip signature and read header section */
 	p = data->begin + 12;
-	if (memcmp (p, "IHDR", 4) != 0) {
-		msg_info_pool ("png doesn't begins with IHDR section");
+	if (memcmp(p, "IHDR", 4) != 0) {
+		msg_info_pool("png doesn't begins with IHDR section");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
 	img->type = IMAGE_TYPE_PNG;
 	img->data = data;
 
 	p += 4;
-	memcpy (&t, p, sizeof (guint32));
-	img->width = ntohl (t);
+	memcpy(&t, p, sizeof(guint32));
+	img->width = ntohl(t);
 	p += 4;
-	memcpy (&t, p, sizeof (guint32));
-	img->height = ntohl (t);
+	memcpy(&t, p, sizeof(guint32));
+	img->height = ntohl(t);
 
 	return img;
 }
 
 static struct rspamd_image *
-process_jpg_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
+process_jpg_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	const guint8 *p, *end;
 	guint16 h, w;
 	struct rspamd_image *img;
 
-	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
 
@@ -158,11 +156,11 @@ process_jpg_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 		if (p[0] == 0xFF && p[1] != 0xFF) {
 			guint len = p[2] * 256 + p[3];
 
-			p ++;
+			p++;
 
 			if (*p == 0xc0 || *p == 0xc1 || *p == 0xc2 || *p == 0xc3 ||
-					*p == 0xc9 || *p == 0xca || *p == 0xcb) {
-				memcpy (&h, p + 4, sizeof (guint16));
+				*p == 0xc9 || *p == 0xca || *p == 0xcb) {
+				memcpy(&h, p + 4, sizeof(guint16));
 				h = p[4] * 0xff + p[5];
 				img->height = h;
 				w = p[6] * 0xff + p[7];
@@ -183,50 +181,50 @@ process_jpg_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 }
 
 static struct rspamd_image *
-process_gif_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
+process_gif_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	const guint8 *p;
 	guint16 t;
 
 	if (data->len < 10) {
-		msg_info_pool ("bad gif detected (maybe striped)");
+		msg_info_pool("bad gif detected (maybe striped)");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
 	img->type = IMAGE_TYPE_GIF;
 	img->data = data;
 
 	p = data->begin + 6;
-	memcpy (&t, p,	   sizeof (guint16));
-	img->width = GUINT16_FROM_LE (t);
-	memcpy (&t, p + 2, sizeof (guint16));
-	img->height = GUINT16_FROM_LE (t);
+	memcpy(&t, p, sizeof(guint16));
+	img->width = GUINT16_FROM_LE(t);
+	memcpy(&t, p + 2, sizeof(guint16));
+	img->height = GUINT16_FROM_LE(t);
 
 	return img;
 }
 
 static struct rspamd_image *
-process_bmp_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
+process_bmp_image(rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	gint32 t;
 	const guint8 *p;
 
 	if (data->len < 28) {
-		msg_info_pool ("bad bmp detected (maybe striped)");
+		msg_info_pool("bad bmp detected (maybe striped)");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0(pool, sizeof(struct rspamd_image));
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->begin + 18;
-	memcpy (&t, p, sizeof (guint32));
-	img->width = GUINT32_FROM_LE (t);
-	memcpy (&t, p + 4, sizeof (gint32));
-	img->height = GUINT32_FROM_LE (t);
+	memcpy(&t, p, sizeof(guint32));
+	img->width = GUINT32_FROM_LE(t);
+	memcpy(&t, p + 4, sizeof(gint32));
+	img->height = GUINT32_FROM_LE(t);
 
 	return img;
 }
@@ -237,18 +235,18 @@ process_bmp_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
  * http://unix4lyfe.org/dct/
  */
 static void
-rspamd_image_dct_block (gint pixels[8][8], gdouble *out)
+rspamd_image_dct_block(gint pixels[8][8], gdouble *out)
 {
 	gint i;
 	gint rows[8][8];
 
 	static const gint c1 = 1004 /* cos(pi/16) << 10 */,
-			s1 = 200 /* sin(pi/16) */,
-			c3 = 851 /* cos(3pi/16) << 10 */,
-			s3 = 569 /* sin(3pi/16) << 10 */,
-			r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
-			r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
-			r2 = 181; /* sqrt(2) << 7*/
+					  s1 = 200 /* sin(pi/16) */,
+					  c3 = 851 /* cos(3pi/16) << 10 */,
+					  s3 = 569 /* sin(3pi/16) << 10 */,
+					  r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
+					  r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
+					  r2 = 181; /* sqrt(2) << 7*/
 
 	gint x0, x1, x2, x3, x4, x5, x6, x7, x8;
 
@@ -369,52 +367,52 @@ struct rspamd_image_cache_entry {
 };
 
 static void
-rspamd_image_cache_entry_dtor (gpointer p)
+rspamd_image_cache_entry_dtor(gpointer p)
 {
 	struct rspamd_image_cache_entry *entry = p;
-	g_free (entry);
+	g_free(entry);
 }
 
 static guint32
-rspamd_image_dct_hash (gconstpointer p)
+rspamd_image_dct_hash(gconstpointer p)
 {
-	return rspamd_cryptobox_fast_hash (p, rspamd_cryptobox_HASHBYTES,
-			rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash(p, rspamd_cryptobox_HASHBYTES,
+									  rspamd_hash_seed());
 }
 
 static gboolean
-rspamd_image_dct_equal (gconstpointer a, gconstpointer b)
+rspamd_image_dct_equal(gconstpointer a, gconstpointer b)
 {
-	return memcmp (a, b, rspamd_cryptobox_HASHBYTES) == 0;
+	return memcmp(a, b, rspamd_cryptobox_HASHBYTES) == 0;
 }
 
 static void
-rspamd_image_create_cache (struct rspamd_config *cfg)
+rspamd_image_create_cache(struct rspamd_config *cfg)
 {
-	images_hash = rspamd_lru_hash_new_full (cfg->images_cache_size, NULL,
-			rspamd_image_cache_entry_dtor,
-			rspamd_image_dct_hash, rspamd_image_dct_equal);
+	images_hash = rspamd_lru_hash_new_full(cfg->images_cache_size, NULL,
+										   rspamd_image_cache_entry_dtor,
+										   rspamd_image_dct_hash, rspamd_image_dct_equal);
 }
 
 static gboolean
-rspamd_image_check_hash (struct rspamd_task *task, struct rspamd_image *img)
+rspamd_image_check_hash(struct rspamd_task *task, struct rspamd_image *img)
 {
 	struct rspamd_image_cache_entry *found;
 
 	if (images_hash == NULL) {
-		rspamd_image_create_cache (task->cfg);
+		rspamd_image_create_cache(task->cfg);
 	}
 
-	found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
-			task->tv.tv_sec);
+	found = rspamd_lru_hash_lookup(images_hash, img->parent->digest,
+								   task->tv.tv_sec);
 
 	if (found) {
 		/* We need to decompress */
-		img->dct = g_malloc (RSPAMD_DCT_LEN / NBBY);
-		rspamd_mempool_add_destructor (task->task_pool, g_free,
-				img->dct);
+		img->dct = g_malloc(RSPAMD_DCT_LEN / NBBY);
+		rspamd_mempool_add_destructor(task->task_pool, g_free,
+									  img->dct);
 		/* Copy as found could be destroyed by LRU */
-		memcpy (img->dct, found->dct, RSPAMD_DCT_LEN / NBBY);
+		memcpy(img->dct, found->dct, RSPAMD_DCT_LEN / NBBY);
 		img->is_normalized = TRUE;
 
 		return TRUE;
@@ -424,29 +422,28 @@ rspamd_image_check_hash (struct rspamd_task *task, struct rspamd_image *img)
 }
 
 static void
-rspamd_image_save_hash (struct rspamd_task *task, struct rspamd_image *img)
+rspamd_image_save_hash(struct rspamd_task *task, struct rspamd_image *img)
 {
 	struct rspamd_image_cache_entry *found;
 
 	if (img->is_normalized) {
-		found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
-				task->tv.tv_sec);
+		found = rspamd_lru_hash_lookup(images_hash, img->parent->digest,
+									   task->tv.tv_sec);
 
 		if (!found) {
-			found = g_malloc0 (sizeof (*found));
-			memcpy (found->dct, img->dct, RSPAMD_DCT_LEN / NBBY);
-			memcpy (found->digest, img->parent->digest, sizeof (found->digest));
+			found = g_malloc0(sizeof(*found));
+			memcpy(found->dct, img->dct, RSPAMD_DCT_LEN / NBBY);
+			memcpy(found->digest, img->parent->digest, sizeof(found->digest));
 
-			rspamd_lru_hash_insert (images_hash, found->digest, found,
-					task->tv.tv_sec, 0);
+			rspamd_lru_hash_insert(images_hash, found->digest, found,
+								   task->tv.tv_sec, 0);
 		}
 	}
 }
 
 #endif
 
-void
-rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
+void rspamd_image_normalize(struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef USABLE_GD
 	gdImagePtr src = NULL, dst = NULL;
@@ -458,7 +455,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 	}
 
 	if (img->height <= RSPAMD_NORMALIZED_DIM ||
-			img->width <= RSPAMD_NORMALIZED_DIM) {
+		img->width <= RSPAMD_NORMALIZED_DIM) {
 		return;
 	}
 
@@ -466,43 +463,43 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		return;
 	}
 
-	if (rspamd_image_check_hash (task, img)) {
+	if (rspamd_image_check_hash(task, img)) {
 		return;
 	}
 
 	switch (img->type) {
 	case IMAGE_TYPE_JPG:
-		src = gdImageCreateFromJpegPtr (img->data->len, (void *)img->data->begin);
+		src = gdImageCreateFromJpegPtr(img->data->len, (void *) img->data->begin);
 		break;
 	case IMAGE_TYPE_PNG:
-		src = gdImageCreateFromPngPtr (img->data->len, (void *)img->data->begin);
+		src = gdImageCreateFromPngPtr(img->data->len, (void *) img->data->begin);
 		break;
 	case IMAGE_TYPE_GIF:
-		src = gdImageCreateFromGifPtr (img->data->len, (void *)img->data->begin);
+		src = gdImageCreateFromGifPtr(img->data->len, (void *) img->data->begin);
 		break;
 	case IMAGE_TYPE_BMP:
-		src = gdImageCreateFromBmpPtr (img->data->len, (void *)img->data->begin);
+		src = gdImageCreateFromBmpPtr(img->data->len, (void *) img->data->begin);
 		break;
 	default:
 		return;
 	}
 
 	if (src == NULL) {
-		msg_info_task ("cannot load image of type %s from %T",
-				rspamd_image_type_str (img->type), img->filename);
+		msg_info_task("cannot load image of type %s from %T",
+					  rspamd_image_type_str(img->type), img->filename);
 	}
 	else {
-		gdImageSetInterpolationMethod (src, GD_BILINEAR_FIXED);
+		gdImageSetInterpolationMethod(src, GD_BILINEAR_FIXED);
 
-		dst = gdImageScale (src, RSPAMD_NORMALIZED_DIM, RSPAMD_NORMALIZED_DIM);
-		gdImageGrayScale (dst);
-		gdImageDestroy (src);
+		dst = gdImageScale(src, RSPAMD_NORMALIZED_DIM, RSPAMD_NORMALIZED_DIM);
+		gdImageGrayScale(dst);
+		gdImageDestroy(src);
 
 		img->is_normalized = TRUE;
-		dct = g_malloc0 (sizeof (gdouble) * RSPAMD_DCT_LEN);
-		img->dct = g_malloc0 (RSPAMD_DCT_LEN / NBBY);
-		rspamd_mempool_add_destructor (task->task_pool, g_free,
-				img->dct);
+		dct = g_malloc0(sizeof(gdouble) * RSPAMD_DCT_LEN);
+		img->dct = g_malloc0(RSPAMD_DCT_LEN / NBBY);
+		rspamd_mempool_add_destructor(task->task_pool, g_free,
+									  img->dct);
 
 		/*
 		 * Split message into blocks:
@@ -525,73 +522,70 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 			for (j = 0; j < RSPAMD_NORMALIZED_DIM; j += 8) {
 				gint p[8][8];
 
-				for (k = 0; k < 8; k ++) {
-					p[k][0] = gdImageGetPixel (dst, i + k, j);
-					p[k][1] = gdImageGetPixel (dst, i + k, j + 1);
-					p[k][2] = gdImageGetPixel (dst, i + k, j + 2);
-					p[k][3] = gdImageGetPixel (dst, i + k, j + 3);
-					p[k][4] = gdImageGetPixel (dst, i + k, j + 4);
-					p[k][5] = gdImageGetPixel (dst, i + k, j + 5);
-					p[k][6] = gdImageGetPixel (dst, i + k, j + 6);
-					p[k][7] = gdImageGetPixel (dst, i + k, j + 7);
+				for (k = 0; k < 8; k++) {
+					p[k][0] = gdImageGetPixel(dst, i + k, j);
+					p[k][1] = gdImageGetPixel(dst, i + k, j + 1);
+					p[k][2] = gdImageGetPixel(dst, i + k, j + 2);
+					p[k][3] = gdImageGetPixel(dst, i + k, j + 3);
+					p[k][4] = gdImageGetPixel(dst, i + k, j + 4);
+					p[k][5] = gdImageGetPixel(dst, i + k, j + 5);
+					p[k][6] = gdImageGetPixel(dst, i + k, j + 6);
+					p[k][7] = gdImageGetPixel(dst, i + k, j + 7);
 				}
 
-				rspamd_image_dct_block (p,
-						dct + i * RSPAMD_NORMALIZED_DIM + j);
+				rspamd_image_dct_block(p,
+									   dct + i * RSPAMD_NORMALIZED_DIM + j);
 
 				gdouble avg = 0.0;
 
-				for (k = 0; k < 8; k ++) {
-					for (l = 0; l < 8; l ++) {
+				for (k = 0; k < 8; k++) {
+					for (l = 0; l < 8; l++) {
 						gdouble x = *(dct +
-								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
-						avg += (x - avg) / (gdouble)(k * 8 + l + 1);
+									  i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
+						avg += (x - avg) / (gdouble) (k * 8 + l + 1);
 					}
-
 				}
 
 
-				for (k = 0; k < 8; k ++) {
-					for (l = 0; l < 8; l ++) {
+				for (k = 0; k < 8; k++) {
+					for (l = 0; l < 8; l++) {
 						guint idx = i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
 
 						if (dct[idx] >= avg) {
-							setbit (img->dct, idx);
+							setbit(img->dct, idx);
 						}
 					}
 				}
-
-
 			}
 		}
 
-		gdImageDestroy (dst);
-		g_free (dct);
-		rspamd_image_save_hash (task, img);
+		gdImageDestroy(dst);
+		g_free(dct);
+		rspamd_image_save_hash(task, img);
 	}
 #endif
 }
 
-struct rspamd_image*
-rspamd_maybe_process_image (rspamd_mempool_t *pool,
-							rspamd_ftok_t *data)
+struct rspamd_image *
+rspamd_maybe_process_image(rspamd_mempool_t *pool,
+						   rspamd_ftok_t *data)
 {
 	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
 
-	if ((type = detect_image_type (data)) != IMAGE_TYPE_UNKNOWN) {
+	if ((type = detect_image_type(data)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
 		case IMAGE_TYPE_PNG:
-			img = process_png_image (pool, data);
+			img = process_png_image(pool, data);
 			break;
 		case IMAGE_TYPE_JPG:
-			img = process_jpg_image (pool, data);
+			img = process_jpg_image(pool, data);
 			break;
 		case IMAGE_TYPE_GIF:
-			img = process_gif_image (pool, data);
+			img = process_gif_image(pool, data);
 			break;
 		case IMAGE_TYPE_BMP:
-			img = process_bmp_image (pool, data);
+			img = process_bmp_image(pool, data);
 			break;
 		default:
 			img = NULL;
@@ -603,16 +597,16 @@ rspamd_maybe_process_image (rspamd_mempool_t *pool,
 }
 
 static bool
-process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
+process_image(struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	struct rspamd_image *img;
 
-	img = rspamd_maybe_process_image (task->task_pool, &part->parsed_data);
+	img = rspamd_maybe_process_image(task->task_pool, &part->parsed_data);
 
 	if (img != NULL) {
-		msg_debug_images ("detected %s image of size %ud x %ud",
-			rspamd_image_type_str (img->type),
-			img->width, img->height);
+		msg_debug_images("detected %s image of size %ud x %ud",
+						 rspamd_image_type_str(img->type),
+						 img->width, img->height);
 
 		if (part->cd) {
 			img->filename = &part->cd->filename;
@@ -630,7 +624,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 }
 
 const gchar *
-rspamd_image_type_str (enum rspamd_image_type type)
+rspamd_image_type_str(enum rspamd_image_type type)
 {
 	switch (type) {
 	case IMAGE_TYPE_PNG:
@@ -653,7 +647,7 @@ rspamd_image_type_str (enum rspamd_image_type type)
 }
 
 static void
-rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *part)
+rspamd_image_process_part(struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *tp;
@@ -662,37 +656,38 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 	guint cid_len, i;
 	struct rspamd_image *img;
 
-	img = (struct rspamd_image *)part->specific.img;
+	img = (struct rspamd_image *) part->specific.img;
 
 	if (img) {
 		/* Check Content-Id */
 		rh = rspamd_message_get_header_from_hash(part->raw_headers,
-				"Content-Id", FALSE);
+												 "Content-Id", FALSE);
 
 		if (rh) {
 			cid = rh->decoded;
 
 			if (*cid == '<') {
-				cid ++;
+				cid++;
 			}
 
-			cid_len = strlen (cid);
+			cid_len = strlen(cid);
 
 			if (cid_len > 0) {
 				if (cid[cid_len - 1] == '>') {
-					cid_len --;
+					cid_len--;
 				}
 
-				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-					if (IS_TEXT_PART_HTML (tp) && tp->html != NULL) {
+				PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, tp)
+				{
+					if (IS_TEXT_PART_HTML(tp) && tp->html != NULL) {
 						himg = rspamd_html_find_embedded_image(tp->html, cid, cid_len);
 
 						if (himg != NULL) {
 							img->html_image = himg;
 							himg->embedded_image = img;
 
-							msg_debug_images ("found linked image by cid: <%s>",
-									cid);
+							msg_debug_images("found linked image by cid: <%s>",
+											 cid);
 
 							if (himg->height == 0) {
 								himg->height = img->height;
@@ -709,15 +704,15 @@ rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *pa
 	}
 }
 
-void
-rspamd_images_link (struct rspamd_task *task)
+void rspamd_images_link(struct rspamd_task *task)
 {
 	struct rspamd_mime_part *part;
 	guint i;
 
-	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, parts), i, part)
+	{
 		if (part->part_type == RSPAMD_MIME_PART_IMAGE) {
-			rspamd_image_process_part (task, part);
+			rspamd_image_process_part(task, part);
 		}
 	}
 }

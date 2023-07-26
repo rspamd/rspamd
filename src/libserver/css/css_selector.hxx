@@ -38,10 +38,10 @@ namespace rspamd::css {
  */
 struct css_selector {
 	enum class selector_type {
-		SELECTOR_TAG, /* e.g. tr, for this value we use tag_id_t */
+		SELECTOR_TAG,   /* e.g. tr, for this value we use tag_id_t */
 		SELECTOR_CLASS, /* generic class, e.g. .class */
-		SELECTOR_ID, /* e.g. #id */
-		SELECTOR_ALL /* * selector */
+		SELECTOR_ID,    /* e.g. #id */
+		SELECTOR_ALL    /* * selector */
 	};
 
 	selector_type type;
@@ -60,29 +60,39 @@ struct css_selector {
 	using css_selector_dep = std::variant<css_attribute_condition, css_selector_ptr>;
 	std::vector<css_selector_dep> dependencies;
 
-	 auto to_tag(void) const -> std::optional<tag_id_t> {
+	auto to_tag(void) const -> std::optional<tag_id_t>
+	{
 		if (type == selector_type::SELECTOR_TAG) {
 			return std::get<tag_id_t>(value);
 		}
 		return std::nullopt;
 	}
 
-	auto to_string(void) const -> std::optional<const std::string_view> {
+	auto to_string(void) const -> std::optional<const std::string_view>
+	{
 		if (type != selector_type::SELECTOR_TAG) {
 			return std::string_view(std::get<std::string_view>(value));
 		}
 		return std::nullopt;
 	};
 
-	explicit css_selector(selector_type t) : type(t) {}
-	explicit css_selector(tag_id_t t) : type(selector_type::SELECTOR_TAG) {
+	explicit css_selector(selector_type t)
+		: type(t)
+	{
+	}
+	explicit css_selector(tag_id_t t)
+		: type(selector_type::SELECTOR_TAG)
+	{
 		value = t;
 	}
-	explicit css_selector(const std::string_view &st, selector_type t = selector_type::SELECTOR_ID) : type(t) {
+	explicit css_selector(const std::string_view &st, selector_type t = selector_type::SELECTOR_ID)
+		: type(t)
+	{
 		value = st;
 	}
 
-	auto operator ==(const css_selector &other) const -> bool {
+	auto operator==(const css_selector &other) const -> bool
+	{
 		return type == other.type && value == other.value;
 	}
 
@@ -99,7 +109,7 @@ auto process_selector_tokens(rspamd_mempool_t *pool,
 							 blocks_gen_functor &&next_token_functor)
 	-> selectors_vec;
 
-}
+}// namespace rspamd::css
 
 /* Selectors hashing */
 namespace std {
@@ -107,7 +117,8 @@ template<>
 class hash<rspamd::css::css_selector> {
 public:
 	using is_avalanching = void;
-	auto operator() (const rspamd::css::css_selector &sel) const -> std::size_t {
+	auto operator()(const rspamd::css::css_selector &sel) const -> std::size_t
+	{
 		if (sel.type == rspamd::css::css_selector::selector_type::SELECTOR_TAG) {
 			return static_cast<std::size_t>(std::get<tag_id_t>(sel.value));
 		}
@@ -118,6 +129,6 @@ public:
 		}
 	}
 };
-}
+}// namespace std
 
-#endif //RSPAMD_CSS_SELECTOR_HXX
+#endif//RSPAMD_CSS_SELECTOR_HXX

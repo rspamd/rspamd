@@ -19,7 +19,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -62,16 +62,16 @@ struct roll_history {
  * @param pool pool for shared memory
  * @return new structure
  */
-struct roll_history *rspamd_roll_history_new (rspamd_mempool_t *pool,
-											  guint max_rows, struct rspamd_config *cfg);
+struct roll_history *rspamd_roll_history_new(rspamd_mempool_t *pool,
+											 guint max_rows, struct rspamd_config *cfg);
 
 /**
  * Update roll history with data from task
  * @param history roll history object
  * @param task task object
  */
-void rspamd_roll_history_update (struct roll_history *history,
-								 struct rspamd_task *task);
+void rspamd_roll_history_update(struct roll_history *history,
+								struct rspamd_task *task);
 
 /**
  * Load previously saved history from file
@@ -79,8 +79,8 @@ void rspamd_roll_history_update (struct roll_history *history,
  * @param filename filename to load from
  * @return TRUE if history has been loaded
  */
-gboolean rspamd_roll_history_load (struct roll_history *history,
-								   const gchar *filename);
+gboolean rspamd_roll_history_load(struct roll_history *history,
+								  const gchar *filename);
 
 /**
  * Save history to file
@@ -88,10 +88,10 @@ gboolean rspamd_roll_history_load (struct roll_history *history,
  * @param filename filename to load from
  * @return TRUE if history has been saved
  */
-gboolean rspamd_roll_history_save (struct roll_history *history,
-								   const gchar *filename);
+gboolean rspamd_roll_history_save(struct roll_history *history,
+								  const gchar *filename);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

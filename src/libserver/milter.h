@@ -23,7 +23,7 @@
 #include "contrib/libev/ev.h"
 #include "ref.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -73,12 +73,12 @@ struct rspamd_milter_session {
 	ref_entry_t ref;
 };
 
-typedef void (*rspamd_milter_finish) (gint fd,
-									  struct rspamd_milter_session *session, void *ud);
+typedef void (*rspamd_milter_finish)(gint fd,
+									 struct rspamd_milter_session *session, void *ud);
 
-typedef void (*rspamd_milter_error) (gint fd,
-									 struct rspamd_milter_session *session,
-									 void *ud, GError *err);
+typedef void (*rspamd_milter_error)(gint fd,
+									struct rspamd_milter_session *session,
+									void *ud, GError *err);
 
 /**
  * Handles socket with milter protocol
@@ -88,10 +88,10 @@ typedef void (*rspamd_milter_error) (gint fd,
  * @param ud
  * @return
  */
-gboolean rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
-									  rspamd_mempool_t *pool,
-									  struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
-									  rspamd_milter_error error_cb, void *ud);
+gboolean rspamd_milter_handle_socket(gint fd, ev_tstamp timeout,
+									 rspamd_mempool_t *pool,
+									 struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
+									 rspamd_milter_error error_cb, void *ud);
 
 /**
  * Updates userdata for a session, returns previous userdata
@@ -99,8 +99,8 @@ gboolean rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
  * @param ud
  * @return
  */
-void *rspamd_milter_update_userdata (struct rspamd_milter_session *session,
-									 void *ud);
+void *rspamd_milter_update_userdata(struct rspamd_milter_session *session,
+									void *ud);
 
 /**
  * Sets SMTP reply string
@@ -110,10 +110,10 @@ void *rspamd_milter_update_userdata (struct rspamd_milter_session *session,
  * @param reply
  * @return
  */
-gboolean rspamd_milter_set_reply (struct rspamd_milter_session *session,
-								  rspamd_fstring_t *rcode,
-								  rspamd_fstring_t *xcode,
-								  rspamd_fstring_t *reply);
+gboolean rspamd_milter_set_reply(struct rspamd_milter_session *session,
+								 rspamd_fstring_t *rcode,
+								 rspamd_fstring_t *xcode,
+								 rspamd_fstring_t *reply);
 
 /**
  * Send some action to the MTA
@@ -122,8 +122,8 @@ gboolean rspamd_milter_set_reply (struct rspamd_milter_session *session,
  * @param act
  * @return
  */
-gboolean rspamd_milter_send_action (struct rspamd_milter_session *session,
-									enum rspamd_milter_reply act, ...);
+gboolean rspamd_milter_send_action(struct rspamd_milter_session *session,
+								   enum rspamd_milter_reply act, ...);
 
 /**
  * Adds some header
@@ -132,8 +132,8 @@ gboolean rspamd_milter_send_action (struct rspamd_milter_session *session,
  * @param value
  * @return
  */
-gboolean rspamd_milter_add_header (struct rspamd_milter_session *session,
-								   GString *name, GString *value);
+gboolean rspamd_milter_add_header(struct rspamd_milter_session *session,
+								  GString *name, GString *value);
 
 /**
  * Removes some header
@@ -141,47 +141,47 @@ gboolean rspamd_milter_add_header (struct rspamd_milter_session *session,
  * @param name
  * @return
  */
-gboolean rspamd_milter_del_header (struct rspamd_milter_session *session,
-								   GString *name);
+gboolean rspamd_milter_del_header(struct rspamd_milter_session *session,
+								  GString *name);
 
-void rspamd_milter_session_unref (struct rspamd_milter_session *session);
+void rspamd_milter_session_unref(struct rspamd_milter_session *session);
 
-struct rspamd_milter_session *rspamd_milter_session_ref (
-		struct rspamd_milter_session *session);
+struct rspamd_milter_session *rspamd_milter_session_ref(
+	struct rspamd_milter_session *session);
 
 /**
  * Converts milter session to HTTP session that is suitable for Rspamd
  * @param session
  * @return
  */
-struct rspamd_http_message *rspamd_milter_to_http (
-		struct rspamd_milter_session *session);
+struct rspamd_http_message *rspamd_milter_to_http(
+	struct rspamd_milter_session *session);
 
 /**
  * Sends task results to the
  * @param session
  * @param results
  */
-void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
-									  const ucl_object_t *results,
-									  const gchar *new_body,
-									  gsize bodylen);
+void rspamd_milter_send_task_results(struct rspamd_milter_session *session,
+									 const ucl_object_t *results,
+									 const gchar *new_body,
+									 gsize bodylen);
 
 /**
  * Init internal milter context
  * @param spam_header spam header name (must NOT be NULL)
  */
-void rspamd_milter_init_library (const struct rspamd_milter_context *ctx);
+void rspamd_milter_init_library(const struct rspamd_milter_context *ctx);
 
 /**
  * Returns pool for a session
  * @param session
  * @return
  */
-rspamd_mempool_t *rspamd_milter_get_session_pool (
-		struct rspamd_milter_session *session);
+rspamd_mempool_t *rspamd_milter_get_session_pool(
+	struct rspamd_milter_session *session);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

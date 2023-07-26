@@ -21,8 +21,8 @@
  * Internal memory pool stuff
  */
 
-#define align_ptr(p, a)                                                   \
-	((guint8 *) ((uintptr_t) (p) + ((-(intptr_t)(p)) & ((a) - 1))))
+#define align_ptr(p, a) \
+	((guint8 *) ((uintptr_t) (p) + ((-(intptr_t) (p)) & ((a) -1))))
 
 enum rspamd_mempool_chain_type {
 	RSPAMD_MEMPOOL_NORMAL = 0,
@@ -49,10 +49,10 @@ struct rspamd_mempool_entry_point {
  * Destructors list item structure
  */
 struct _pool_destructors {
-	rspamd_mempool_destruct_t func;         /**< pointer to destructor					*/
-	void *data;                             /**< data to free							*/
-	const gchar *function;                  /**< function from which this destructor was added */
-	const gchar *loc;                       /**< line number                            */
+	rspamd_mempool_destruct_t func; /**< pointer to destructor					*/
+	void *data;                     /**< data to free							*/
+	const gchar *function;          /**< function from which this destructor was added */
+	const gchar *loc;               /**< line number                            */
 	struct _pool_destructors *next;
 };
 
@@ -62,17 +62,17 @@ struct rspamd_mempool_variable {
 	rspamd_mempool_destruct_t dtor;
 };
 
-KHASH_INIT (rspamd_mempool_vars_hash,
-		guint32, struct rspamd_mempool_variable, 1,
-		kh_int_hash_func, kh_int_hash_equal);
+KHASH_INIT(rspamd_mempool_vars_hash,
+		   guint32, struct rspamd_mempool_variable, 1,
+		   kh_int_hash_func, kh_int_hash_equal);
 
 struct rspamd_mempool_specific {
 	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
 	struct _pool_destructors *dtors_head, *dtors_tail;
 	GPtrArray *trash_stack;
-	khash_t(rspamd_mempool_vars_hash) *variables;
+	khash_t(rspamd_mempool_vars_hash) * variables;
 	struct rspamd_mempool_entry_point *entry;
-	gsize elt_len;                            /**< size of an element						*/
+	gsize elt_len; /**< size of an element						*/
 	gsize used_memory;
 	guint wasted_memory;
 	gint flags;
@@ -82,9 +82,9 @@ struct rspamd_mempool_specific {
  * Pool page structure
  */
 struct _pool_chain {
-	guint8 *begin;                  /**< begin of pool chain block              */
-	guint8 *pos;                    /**< current start of free space in block   */
-	gsize slice_size;               /**< length of block                        */
+	guint8 *begin;    /**< begin of pool chain block              */
+	guint8 *pos;      /**< current start of free space in block   */
+	gsize slice_size; /**< length of block                        */
 	struct _pool_chain *next;
 };
 

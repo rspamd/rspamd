@@ -22,7 +22,7 @@
 
 #include <stdalign.h>
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -36,12 +36,12 @@ enum rspamd_newlines_type {
 /**
  * Compare two memory regions of size `l` using case insensitive matching
  */
-gint rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l);
+gint rspamd_lc_cmp(const gchar *s, const gchar *d, gsize l);
 
 /**
  * Convert string to lowercase in-place using ASCII conversion
  */
-guint rspamd_str_lc (gchar *str, guint size);
+guint rspamd_str_lc(gchar *str, guint size);
 
 /**
  * Performs ascii copy & lowercase
@@ -49,44 +49,44 @@ guint rspamd_str_lc (gchar *str, guint size);
  * @param size
  * @return
  */
-gsize rspamd_str_copy_lc (const gchar *src, gchar *dst, gsize size);
+gsize rspamd_str_copy_lc(const gchar *src, gchar *dst, gsize size);
 
 /**
  * Convert string to lowercase in-place using utf (limited) conversion
  */
-guint rspamd_str_lc_utf8 (gchar *str, guint size);
+guint rspamd_str_lc_utf8(gchar *str, guint size);
 
 /*
  * Hash table utility functions for case insensitive hashing
  */
-guint64 rspamd_icase_hash (const gchar *in, gsize len, guint64 seed);
+guint64 rspamd_icase_hash(const gchar *in, gsize len, guint64 seed);
 
-guint rspamd_strcase_hash (gconstpointer key);
+guint rspamd_strcase_hash(gconstpointer key);
 
-gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
+gboolean rspamd_strcase_equal(gconstpointer v, gconstpointer v2);
 
 /*
  * Hash table utility functions for case sensitive hashing
  */
-guint rspamd_str_hash (gconstpointer key);
+guint rspamd_str_hash(gconstpointer key);
 
-gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
+gboolean rspamd_str_equal(gconstpointer v, gconstpointer v2);
 
 
 /*
  * Hash table utility functions for hashing fixed strings
  */
-guint rspamd_ftok_icase_hash (gconstpointer key);
+guint rspamd_ftok_icase_hash(gconstpointer key);
 
-gboolean rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2);
+gboolean rspamd_ftok_icase_equal(gconstpointer v, gconstpointer v2);
 
 /* Use in khash for speed */
 #define rspamd_ftok_hash(key) _wyhash32((key)->begin, (key)->len, 0)
 #define rspamd_ftok_equal(v1, v2) ((v1)->len == (v2)->len && memcmp((v1)->begin, (v2)->begin, (v1)->len) == 0)
 
-guint rspamd_gstring_icase_hash (gconstpointer key);
+guint rspamd_gstring_icase_hash(gconstpointer key);
 
-gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
+gboolean rspamd_gstring_icase_equal(gconstpointer v, gconstpointer v2);
 
 /**
  * Copy src to dest limited to len, in compare with standard strlcpy(3) rspamd strlcpy does not
@@ -98,26 +98,26 @@ gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
  * @param siz length of destination buffer
  * @return bytes copied
  */
-gsize rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz);
+gsize rspamd_strlcpy_fast(gchar *dst, const gchar *src, gsize siz);
 
-gsize rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz);
+gsize rspamd_strlcpy_safe(gchar *dst, const gchar *src, gsize siz);
 
 #if defined(__has_feature)
-#  if __has_feature(address_sanitizer)
-#    define rspamd_strlcpy rspamd_strlcpy_safe
-#  else
-#    ifdef __SANITIZE_ADDRESS__
-#      define rspamd_strlcpy rspamd_strlcpy_safe
-#    else
-#      define rspamd_strlcpy rspamd_strlcpy_fast
-#    endif
-#  endif
+#if __has_feature(address_sanitizer)
+#define rspamd_strlcpy rspamd_strlcpy_safe
 #else
-#  ifdef __SANITIZE_ADDRESS__
-#    define rspamd_strlcpy rspamd_strlcpy_safe
-#  else
-#    define rspamd_strlcpy rspamd_strlcpy_fast
-#  endif
+#ifdef __SANITIZE_ADDRESS__
+#define rspamd_strlcpy rspamd_strlcpy_safe
+#else
+#define rspamd_strlcpy rspamd_strlcpy_fast
+#endif
+#endif
+#else
+#ifdef __SANITIZE_ADDRESS__
+#define rspamd_strlcpy rspamd_strlcpy_safe
+#else
+#define rspamd_strlcpy rspamd_strlcpy_fast
+#endif
 #endif
 
 /**
@@ -128,25 +128,24 @@ gsize rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz);
  * @param destlen
  * @return number of bytes copied
  */
-gsize
-rspamd_null_safe_copy (const gchar *src, gsize srclen,
-					   gchar *dest, gsize destlen);
+gsize rspamd_null_safe_copy(const gchar *src, gsize srclen,
+							gchar *dest, gsize destlen);
 
 /*
  * Try to convert string of length to long
  */
-gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
+gboolean rspamd_strtol(const gchar *s, gsize len, glong *value);
 
 /*
  * Try to convert a string of length to unsigned long
  */
-gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
-gboolean rspamd_strtou64 (const gchar *s, gsize len, guint64 *value);
+gboolean rspamd_strtoul(const gchar *s, gsize len, gulong *value);
+gboolean rspamd_strtou64(const gchar *s, gsize len, guint64 *value);
 
 /*
  * Try to convert a hex string of length to unsigned long
  */
-gboolean rspamd_xstrtoul (const gchar *s, gsize len, gulong *value);
+gboolean rspamd_xstrtoul(const gchar *s, gsize len, gulong *value);
 
 /**
  * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
@@ -154,7 +153,7 @@ gboolean rspamd_xstrtoul (const gchar *s, gsize len, gulong *value);
  * @param ud memory pool to use
  * @return
  */
-gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
+gpointer rspamd_str_pool_copy(gconstpointer data, gpointer ud);
 
 /**
  * Encode string using hex encoding
@@ -162,7 +161,7 @@ gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
  * @param inlen input length
  * @return freshly allocated base32 encoding of a specified string
  */
-gchar *rspamd_encode_hex (const guchar *in, gsize inlen);
+gchar *rspamd_encode_hex(const guchar *in, gsize inlen);
 
 /**
  * Decode string using hex encoding
@@ -170,7 +169,7 @@ gchar *rspamd_encode_hex (const guchar *in, gsize inlen);
  * @param inlen input length
  * @return freshly allocated base32 decoded value or NULL if input is invalid
  */
-guchar *rspamd_decode_hex (const gchar *in, gsize inlen);
+guchar *rspamd_decode_hex(const gchar *in, gsize inlen);
 
 enum rspamd_base32_type {
 	RSPAMD_BASE32_DEFAULT = 0,
@@ -185,7 +184,7 @@ enum rspamd_base32_type {
  * @param str
  * @return
  */
-enum rspamd_base32_type rspamd_base32_decode_type_from_str (const gchar *str);
+enum rspamd_base32_type rspamd_base32_decode_type_from_str(const gchar *str);
 
 /**
  * Encode string using base32 encoding
@@ -193,8 +192,8 @@ enum rspamd_base32_type rspamd_base32_decode_type_from_str (const gchar *str);
  * @param inlen input length
  * @return freshly allocated base32 encoding of a specified string
  */
-gchar *rspamd_encode_base32 (const guchar *in, gsize inlen,
-		enum rspamd_base32_type type);
+gchar *rspamd_encode_base32(const guchar *in, gsize inlen,
+							enum rspamd_base32_type type);
 
 /**
  * Decode string using base32 encoding
@@ -202,7 +201,7 @@ gchar *rspamd_encode_base32 (const guchar *in, gsize inlen,
  * @param inlen input length
  * @return freshly allocated base32 decoded value or NULL if input is invalid
  */
-guchar *rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen, enum rspamd_base32_type type);
+guchar *rspamd_decode_base32(const gchar *in, gsize inlen, gsize *outlen, enum rspamd_base32_type type);
 
 /**
  * Encode string using base32 encoding
@@ -212,8 +211,8 @@ guchar *rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen, enum 
  * @param outlen output buf len
  * @return encoded len if `outlen` is enough to encode `inlen`
  */
-gint rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
-		gsize outlen, enum rspamd_base32_type type);
+gint rspamd_encode_base32_buf(const guchar *in, gsize inlen, gchar *out,
+							  gsize outlen, enum rspamd_base32_type type);
 
 /**
  * Decode string using base32 encoding
@@ -223,8 +222,8 @@ gint rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
  * @param outlen output buf len
  * @return decoded len if in is valid base32 and `outlen` is enough to encode `inlen`
  */
-gint rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out,
-		gsize outlen, enum rspamd_base32_type type);
+gint rspamd_decode_base32_buf(const gchar *in, gsize inlen, guchar *out,
+							  gsize outlen, enum rspamd_base32_type type);
 
 /**
  * Encode string using hex encoding
@@ -234,8 +233,8 @@ gint rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out,
  * @param outlen output buf len
  * @return encoded len if `outlen` is enough to encode `inlen`
  */
-gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
-							gsize outlen);
+gint rspamd_encode_hex_buf(const guchar *in, gsize inlen, gchar *out,
+						   gsize outlen);
 
 
 /**
@@ -246,8 +245,8 @@ gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
  * @param outlen output buf len
  * @return decoded len if in is valid hex and `outlen` is enough to encode `inlen`
  */
-gssize rspamd_decode_hex_buf (const gchar *in, gsize inlen,
-							  guchar *out, gsize outlen);
+gssize rspamd_decode_hex_buf(const gchar *in, gsize inlen,
+							 guchar *out, gsize outlen);
 
 /**
  * Common version of base64 encoder
@@ -260,12 +259,12 @@ gssize rspamd_decode_hex_buf (const gchar *in, gsize inlen,
  * @return
  */
 gchar *
-rspamd_encode_base64_common (const guchar *in,
-							 gsize inlen,
-							 gint str_len,
-							 gsize *outlen,
-							 gboolean fold,
-							 enum rspamd_newlines_type how);
+rspamd_encode_base64_common(const guchar *in,
+							gsize inlen,
+							gint str_len,
+							gsize *outlen,
+							gboolean fold,
+							enum rspamd_newlines_type how);
 
 /**
  * Encode string using base64 encoding
@@ -274,8 +273,8 @@ rspamd_encode_base64_common (const guchar *in,
  * @param str_len maximum string length (if <= 0 then no lines are split)
  * @return freshly allocated base64 encoded value or NULL if input is invalid
  */
-gchar *rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
-							 gsize *outlen);
+gchar *rspamd_encode_base64(const guchar *in, gsize inlen, gint str_len,
+							gsize *outlen);
 
 /**
  * Encode and fold string using base64 encoding
@@ -284,8 +283,8 @@ gchar *rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
  * @param str_len maximum string length (if <= 0 then no lines are split)
  * @return freshly allocated base64 encoded value or NULL if input is invalid
  */
-gchar *rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
-								  gsize *outlen, enum rspamd_newlines_type how);
+gchar *rspamd_encode_base64_fold(const guchar *in, gsize inlen, gint str_len,
+								 gsize *outlen, enum rspamd_newlines_type how);
 
 /**
  * Encode and fold string using quoted printable encoding
@@ -294,8 +293,8 @@ gchar *rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
  * @param str_len maximum string length (if <= 0 then no lines are split)
  * @return freshly allocated base64 encoded value or NULL if input is invalid
  */
-gchar *rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
-							  gsize *outlen, enum rspamd_newlines_type how);
+gchar *rspamd_encode_qp_fold(const guchar *in, gsize inlen, gint str_len,
+							 gsize *outlen, enum rspamd_newlines_type how);
 
 /**
  * Decode quoted-printable encoded buffer, input and output must not overlap
@@ -305,8 +304,8 @@ gchar *rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
  * @param outlen length of output
  * @return real size of decoded output or (-1) if outlen is not enough
  */
-gssize rspamd_decode_qp_buf (const gchar *in, gsize inlen,
-							 gchar *out, gsize outlen);
+gssize rspamd_decode_qp_buf(const gchar *in, gsize inlen,
+							gchar *out, gsize outlen);
 
 /**
  * Decode uuencode encoded buffer, input and output must not overlap
@@ -316,7 +315,7 @@ gssize rspamd_decode_qp_buf (const gchar *in, gsize inlen,
  * @param outlen length of output
  * @return real size of decoded output or (-1) if outlen is not enough
  */
-gssize rspamd_decode_uue_buf (const gchar *in, gsize inlen,
+gssize rspamd_decode_uue_buf(const gchar *in, gsize inlen,
 							 gchar *out, gsize outlen);
 
 /**
@@ -327,8 +326,8 @@ gssize rspamd_decode_uue_buf (const gchar *in, gsize inlen,
  * @param outlen length of output
  * @return real size of decoded output or (-1) if outlen is not enough
  */
-gssize rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
-								 gchar *out, gsize outlen);
+gssize rspamd_decode_qp2047_buf(const gchar *in, gsize inlen,
+								gchar *out, gsize outlen);
 
 /**
  * Encode quoted-printable buffer using rfc2047 format, input and output must not overlap
@@ -338,11 +337,11 @@ gssize rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
  * @param outlen
  * @return
  */
-gssize rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
-								 gchar *out, gsize outlen);
+gssize rspamd_encode_qp2047_buf(const gchar *in, gsize inlen,
+								gchar *out, gsize outlen);
 
 #ifndef g_tolower
-#   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
+#define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif
 
 /**
@@ -353,8 +352,8 @@ gssize rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
  * @param s2len
  * @return
  */
-gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
-										  const gchar *s2, gsize s2len, guint replace_cost);
+gint rspamd_strings_levenshtein_distance(const gchar *s1, gsize s1len,
+										 const gchar *s2, gsize s2len, guint replace_cost);
 
 /**
  * Fold header using rfc822 rules, return new GString from the previous one
@@ -365,13 +364,13 @@ gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
  * @param fold_on_chars
  * @return new GString with the folded value
  */
-GString *rspamd_header_value_fold (const gchar *name,
-								   gsize name_len,
-								   const gchar *value,
-								   gsize value_len,
-								   guint fold_max,
-								   enum rspamd_newlines_type how,
-								   const gchar *fold_on_chars);
+GString *rspamd_header_value_fold(const gchar *name,
+								  gsize name_len,
+								  const gchar *value,
+								  gsize value_len,
+								  guint fold_max,
+								  enum rspamd_newlines_type how,
+								  const gchar *fold_on_chars);
 
 /**
  * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm
@@ -382,8 +381,8 @@ GString *rspamd_header_value_fold (const gchar *name,
  * @param srchlen length of the search string
  * @return position of the first substring match or (-1) if not found
  */
-goffset rspamd_substring_search (const gchar *in, gsize inlen,
-								 const gchar *srch, gsize srchlen);
+goffset rspamd_substring_search(const gchar *in, gsize inlen,
+								const gchar *srch, gsize srchlen);
 
 /**
  * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm in caseless matter (ASCII only)
@@ -394,8 +393,8 @@ goffset rspamd_substring_search (const gchar *in, gsize inlen,
  * @param srchlen length of the search string
  * @return position of the first substring match or (-1) if not found
  */
-goffset rspamd_substring_search_caseless (const gchar *in, gsize inlen,
-										  const gchar *srch, gsize srchlen);
+goffset rspamd_substring_search_caseless(const gchar *in, gsize inlen,
+										 const gchar *srch, gsize srchlen);
 
 /**
  * Search for end-of-headers mark in the input string. Returns position just after
@@ -403,11 +402,11 @@ goffset rspamd_substring_search_caseless (const gchar *in, gsize inlen,
  * Hence, to obtain the real EOH position, it is also required to skip
  * space characters
  */
-goffset rspamd_string_find_eoh (GString *input, goffset *body_start);
+goffset rspamd_string_find_eoh(GString *input, goffset *body_start);
 
 
 #define rspamd_ucl_emit_gstring(o, t, target) \
-    rspamd_ucl_emit_gstring_comments((o), (t), (target), NULL)
+	rspamd_ucl_emit_gstring_comments((o), (t), (target), NULL)
 
 /**
  * Emit UCL object to gstring
@@ -416,13 +415,13 @@ goffset rspamd_string_find_eoh (GString *input, goffset *body_start);
  * @param comments optional comments object
  * @param target target string
  */
-void rspamd_ucl_emit_gstring_comments (const ucl_object_t *obj,
-									   enum ucl_emitter emit_type,
-									   GString *target,
-									   const ucl_object_t *comments);
+void rspamd_ucl_emit_gstring_comments(const ucl_object_t *obj,
+									  enum ucl_emitter emit_type,
+									  GString *target,
+									  const ucl_object_t *comments);
 
 #define rspamd_ucl_emit_fstring(o, t, target) \
-    rspamd_ucl_emit_fstring_comments((o), (t), (target), NULL)
+	rspamd_ucl_emit_fstring_comments((o), (t), (target), NULL)
 
 /**
  * Emit UCL object to fstring
@@ -431,10 +430,10 @@ void rspamd_ucl_emit_gstring_comments (const ucl_object_t *obj,
  *  * @param comments optional comments object
  * @param target target string
  */
-void rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
-									   enum ucl_emitter emit_type,
-									   rspamd_fstring_t **target,
-									   const ucl_object_t *comments);
+void rspamd_ucl_emit_fstring_comments(const ucl_object_t *obj,
+									  enum ucl_emitter emit_type,
+									  rspamd_fstring_t **target,
+									  const ucl_object_t *comments);
 
 extern const guchar lc_map[256];
 
@@ -448,7 +447,7 @@ extern const guchar lc_map[256];
 #ifdef HAVE_MEMRCHR
 #define rspamd_memrchr memrchr
 #else
-void *rspamd_memrchr (const void *m, gint c, gsize len);
+void *rspamd_memrchr(const void *m, gint c, gsize len);
 #endif
 
 /**
@@ -458,7 +457,7 @@ void *rspamd_memrchr (const void *m, gint c, gsize len);
  * @param len length of `s`
  * @return segment size
  */
-gsize rspamd_memcspn (const gchar *s, const gchar *e, gsize len);
+gsize rspamd_memcspn(const gchar *s, const gchar *e, gsize len);
 
 /**
  * Return length of memory segment starting in `s` that contains only chars from `e`
@@ -467,25 +466,24 @@ gsize rspamd_memcspn (const gchar *s, const gchar *e, gsize len);
  * @param len length of `s`
  * @return segment size
  */
-gsize rspamd_memspn (const gchar *s, const gchar *e, gsize len);
+gsize rspamd_memspn(const gchar *s, const gchar *e, gsize len);
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#HasMoreInWord */
-#define rspamd_str_hasmore(x, n) ((((x)+~0UL/255*(127-(n)))|(x))&~0UL/255*128)
+#define rspamd_str_hasmore(x, n) ((((x) + ~0UL / 255 * (127 - (n))) | (x)) & ~0UL / 255 * 128)
 /*
  * Check if a pointer is aligned; n must be power of two
  */
-#define rspamd_is_aligned(p, n) (((uintptr_t)(p) & ((uintptr_t)(n) - 1)) == 0)
+#define rspamd_is_aligned(p, n) (((uintptr_t) (p) & ((uintptr_t) (n) -1)) == 0)
 #define rspamd_is_aligned_as(p, v) rspamd_is_aligned(p, RSPAMD_ALIGNOF(__typeof((v))))
-gboolean rspamd_str_has_8bit (const guchar *beg, gsize len);
+gboolean rspamd_str_has_8bit(const guchar *beg, gsize len);
 
 struct UConverter;
 
-struct UConverter *rspamd_get_utf8_converter (void);
+struct UConverter *rspamd_get_utf8_converter(void);
 
 struct UNormalizer2;
 
-const struct UNormalizer2 *rspamd_get_unicode_normalizer (void);
-
+const struct UNormalizer2 *rspamd_get_unicode_normalizer(void);
 
 
 enum rspamd_regexp_escape_flags {
@@ -504,8 +502,8 @@ enum rspamd_regexp_escape_flags {
  * @return newly allocated zero terminated escaped pattern
  */
 gchar *
-rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-						  gsize *dst_len, enum rspamd_regexp_escape_flags flags) G_GNUC_WARN_UNUSED_RESULT;
+rspamd_str_regexp_escape(const gchar *pattern, gsize slen,
+						 gsize *dst_len, enum rspamd_regexp_escape_flags flags) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Returns copy of src (zero terminated) where all unicode is made valid or replaced
@@ -515,23 +513,23 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
  * @param dstelen
  * @return
  */
-gchar *rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen,
-								  rspamd_mempool_t *pool) G_GNUC_WARN_UNUSED_RESULT;
+gchar *rspamd_str_make_utf_valid(const guchar *src, gsize slen, gsize *dstlen,
+								 rspamd_mempool_t *pool) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Strips characters in `strip_chars` from start and end of the GString
  * @param s
  * @param strip_chars
  */
-gsize rspamd_gstring_strip (GString *s, const gchar *strip_chars);
+gsize rspamd_gstring_strip(GString *s, const gchar *strip_chars);
 
 /**
  * Strips characters in `strip_chars` from start and end of the sized string
  * @param s
  * @param strip_chars
  */
-const gchar *rspamd_string_len_strip (const gchar *in,
-									  gsize *len, const gchar *strip_chars) G_GNUC_WARN_UNUSED_RESULT;
+const gchar *rspamd_string_len_strip(const gchar *in,
+									 gsize *len, const gchar *strip_chars) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Returns a NULL terminated list of zero terminated strings based on splitting of
@@ -544,23 +542,23 @@ const gchar *rspamd_string_len_strip (const gchar *in,
  * @param max_elts
  * @return
  */
-gchar ** rspamd_string_len_split (const gchar *in, gsize len,
-		const gchar *spill, gint max_elts, rspamd_mempool_t *pool);
+gchar **rspamd_string_len_split(const gchar *in, gsize len,
+								const gchar *spill, gint max_elts, rspamd_mempool_t *pool);
 
 #define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200B || \
-                                (uc) == 0x200C || \
-                                (uc) == 0x200D || \
-                                (uc) == 0xFEFF || \
-								(uc) == 0x00AD)
+								 (uc) == 0x200C || \
+								 (uc) == 0x200D || \
+								 (uc) == 0xFEFF || \
+								 (uc) == 0x00AD)
 #define IS_OBSCURED_CHAR(uc) (((uc) >= 0x200B && (uc) <= 0x200F) || \
-                                ((uc) >= 0x2028 && (uc) <= 0x202F) || \
-                                ((uc) >= 0x205F && (uc) <= 0x206F) || \
-                                (uc) == 0xFEFF)
+							  ((uc) >= 0x2028 && (uc) <= 0x202F) || \
+							  ((uc) >= 0x205F && (uc) <= 0x206F) || \
+							  (uc) == 0xFEFF)
 
 #define RSPAMD_LEN_CHECK_STARTS_WITH(s, len, lit) \
-    ((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp ((s), (lit), sizeof(lit) - 1) == 0)
+	((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp((s), (lit), sizeof(lit) - 1) == 0)
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

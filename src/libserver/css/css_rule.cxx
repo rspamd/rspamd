@@ -32,11 +32,11 @@ void css_rule::override_values(const css_rule &other)
 	static_assert(1 << std::variant_size_v<decltype(css_value::value)> <
 				  std::numeric_limits<int>::max());
 
-	for (const auto &v : values) {
+	for (const auto &v: values) {
 		bits |= static_cast<int>(1 << v.value.index());
 	}
 
-	for (const auto &ov : other.values) {
+	for (const auto &ov: other.values) {
 		if (isset(&bits, static_cast<int>(1 << ov.value.index()))) {
 			/* We need to override the existing value */
 			/*
@@ -46,7 +46,7 @@ void css_rule::override_values(const css_rule &other)
 			 * number of elements about less then 10, so this O(N^2) algorithm
 			 * is probably ok here
 			 */
-			for (auto &v : values) {
+			for (auto &v: values) {
 				if (v.value.index() == ov.value.index()) {
 					v = ov;
 				}
@@ -56,24 +56,24 @@ void css_rule::override_values(const css_rule &other)
 
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
-			[&bits](const auto &elt) -> bool {
-				return (bits & (1 << static_cast<int>(elt.value.index()))) == 0;
-			});
+				 [&bits](const auto &elt) -> bool {
+					 return (bits & (1 << static_cast<int>(elt.value.index()))) == 0;
+				 });
 }
 
 void css_rule::merge_values(const css_rule &other)
 {
 	unsigned int bits = 0;
 
-	for (const auto &v : values) {
+	for (const auto &v: values) {
 		bits |= 1 << v.value.index();
 	}
 
 	/* Copy only not set values */
 	std::copy_if(other.values.begin(), other.values.end(), std::back_inserter(values),
-			[&bits](const auto &elt) -> bool {
-				return (bits & (1 << elt.value.index())) == 0;
-			});
+				 [&bits](const auto &elt) -> bool {
+					 return (bits & (1 << elt.value.index())) == 0;
+				 });
 }
 
 auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
@@ -131,7 +131,7 @@ auto css_declarations_block::add_rule(rule_shared_ptr rule) -> bool
 	return ret;
 }
 
-}
+}// namespace rspamd::css
 
 namespace rspamd::css {
 
@@ -139,7 +139,8 @@ namespace rspamd::css {
 
 static auto
 allowed_property_value(const css_property &prop, const css_consumed_block &parser_block)
--> std::optional<css_value> {
+	-> std::optional<css_value>
+{
 	if (prop.is_color()) {
 		if (parser_block.is_token()) {
 			/* A single token */
@@ -207,7 +208,8 @@ allowed_property_value(const css_property &prop, const css_consumed_block &parse
 
 auto process_declaration_tokens(rspamd_mempool_t *pool,
 								blocks_gen_functor &&next_block_functor)
--> css_declarations_block_ptr {
+	-> css_declarations_block_ptr
+{
 	css_declarations_block_ptr ret;
 	bool can_continue = true;
 	css_property cur_property{css_property_type::PROPERTY_NYI,
@@ -233,7 +235,7 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 			/* Component can be a property or a compound list of values */
 			if (state == parse_property) {
 				cur_property = css_property::from_token(next_tok.get_token_or_empty())
-						.value_or(bad_property);
+								   .value_or(bad_property);
 
 				if (cur_property.type == css_property_type::PROPERTY_NYI) {
 					state = ignore_value;
@@ -283,12 +285,12 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 						if (parser_tok.get_string_or_default("") == "important") {
 							if (seen_not) {
 								msg_debug_css("add !important flag to property %s",
-										cur_property.to_string());
+											  cur_property.to_string());
 								cur_property.flag = css_property_flag::FLAG_NOT_IMPORTANT;
 							}
 							else {
 								msg_debug_css("add important flag to property %s",
-										cur_property.to_string());
+											  cur_property.to_string());
 								cur_property.flag = css_property_flag::FLAG_IMPORTANT;
 							}
 
@@ -306,8 +308,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 
 				if (maybe_value) {
 					msg_debug_css("added value %s to the property %s",
-							maybe_value.value().debug_str().c_str(),
-							cur_property.to_string());
+								  maybe_value.value().debug_str().c_str(),
+								  cur_property.to_string());
 					cur_rule->add_value(maybe_value.value());
 				}
 			}
@@ -328,8 +330,8 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 
 				if (maybe_value && cur_rule) {
 					msg_debug_css("added value %s to the property %s",
-							maybe_value.value().debug_str().c_str(),
-							cur_property.to_string());
+								  maybe_value.value().debug_str().c_str(),
+								  cur_property.to_string());
 					cur_rule->add_value(maybe_value.value());
 				}
 			}
@@ -349,13 +351,12 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 	return ret; /* copy elision */
 }
 
-auto
-css_declarations_block::merge_block(const css_declarations_block &other, merge_type how) -> void
+auto css_declarations_block::merge_block(const css_declarations_block &other, merge_type how) -> void
 {
 	const auto &other_rules = other.get_rules();
 
 
-	for (auto &rule : other_rules) {
+	for (auto &rule: other_rules) {
 		auto &&found_it = rules.find(rule);
 
 		if (found_it != rules.end()) {
@@ -381,14 +382,13 @@ css_declarations_block::merge_block(const css_declarations_block &other, merge_t
 	}
 }
 
-auto
-css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *
+auto css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd::html::html_block *
 {
 	auto *block = rspamd_mempool_alloc0_type(pool, rspamd::html::html_block);
 	auto opacity = -1;
 	const css_rule *font_rule = nullptr, *background_rule = nullptr;
 
-	for (const auto &rule : rules) {
+	for (const auto &rule: rules) {
 		auto prop = rule->get_prop().type;
 		const auto &vals = rule->get_values();
 
@@ -459,7 +459,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 	if (!(block->fg_color_mask) && font_rule) {
 		auto &vals = font_rule->get_values();
 
-		for (const auto &val : vals) {
+		for (const auto &val: vals) {
 			auto maybe_color = val.to_color();
 
 			if (maybe_color) {
@@ -471,7 +471,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 	if (!(block->font_mask) && font_rule) {
 		auto &vals = font_rule->get_values();
 
-		for (const auto &val : vals) {
+		for (const auto &val: vals) {
 			auto maybe_dim = val.to_dimension();
 
 			if (maybe_dim) {
@@ -483,7 +483,7 @@ css_declarations_block::compile_to_block(rspamd_mempool_t *pool) const -> rspamd
 	if (!(block->bg_color_mask) && background_rule) {
 		auto &vals = background_rule->get_values();
 
-		for (const auto &val : vals) {
+		for (const auto &val: vals) {
 			auto maybe_color = val.to_color();
 
 			if (maybe_color) {
@@ -501,34 +501,31 @@ void css_rule::add_value(const css_value &value)
 }
 
 
-TEST_SUITE("css") {
-	TEST_CASE("simple css rules") {
+TEST_SUITE("css")
+{
+	TEST_CASE("simple css rules")
+	{
 		const std::vector<std::pair<const char *, std::vector<css_property>>> cases{
-				{
-					"font-size:12.0pt;line-height:115%",
-	 				{css_property(css_property_type::PROPERTY_FONT_SIZE)}
-	 			},
-				{
-					"font-size:12.0pt;display:none",
-				{css_property(css_property_type::PROPERTY_FONT_SIZE),
-	 				css_property(css_property_type::PROPERTY_DISPLAY)}
-				}
-		};
+			{"font-size:12.0pt;line-height:115%",
+			 {css_property(css_property_type::PROPERTY_FONT_SIZE)}},
+			{"font-size:12.0pt;display:none",
+			 {css_property(css_property_type::PROPERTY_FONT_SIZE),
+			  css_property(css_property_type::PROPERTY_DISPLAY)}}};
 
 		auto *pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
-				"css", 0);
+										"css", 0);
 
-		for (const auto &c : cases) {
+		for (const auto &c: cases) {
 			auto res = process_declaration_tokens(pool,
-					get_rules_parser_functor(pool, c.first));
+												  get_rules_parser_functor(pool, c.first));
 
 			CHECK(res.get() != nullptr);
 
-			for (auto i = 0; i < c.second.size(); i ++) {
+			for (auto i = 0; i < c.second.size(); i++) {
 				CHECK(res->has_property(c.second[i]));
 			}
 		}
 	}
 }
 
-} // namespace rspamd::css
+}// namespace rspamd::css

@@ -27,15 +27,14 @@
 
 static gboolean verbose = false;
 static const GOptionEntry entries[] =
-		{
-				{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
-						"Enable verbose logging",                  NULL},
-				{NULL,      0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
-		};
+	{
+		{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
+		 "Enable verbose logging", NULL},
+		{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
 
 
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 	struct rspamd_main *rspamd_main;
 	rspamd_mempool_t *pool;
 	struct rspamd_config *cfg;
@@ -64,13 +63,13 @@ main(int argc, char **argv) {
 
 	if (verbose) {
 		rspamd_main->logger = rspamd_log_open_emergency(rspamd_main->server_pool,
-				RSPAMD_LOG_FLAG_USEC | RSPAMD_LOG_FLAG_ENFORCED | RSPAMD_LOG_FLAG_RSPAMADM);
+														RSPAMD_LOG_FLAG_USEC | RSPAMD_LOG_FLAG_ENFORCED | RSPAMD_LOG_FLAG_RSPAMADM);
 
 		rspamd_log_set_log_level(rspamd_main->logger, G_LOG_LEVEL_DEBUG);
 	}
 	else {
 		rspamd_main->logger = rspamd_log_open_emergency(rspamd_main->server_pool,
-				RSPAMD_LOG_FLAG_RSPAMADM);
+														RSPAMD_LOG_FLAG_RSPAMADM);
 		rspamd_log_set_log_level(rspamd_main->logger, G_LOG_LEVEL_MESSAGE);
 	}
 

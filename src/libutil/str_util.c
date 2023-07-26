@@ -34,46 +34,44 @@
 #include "contrib/fastutf8/fastutf8.h"
 
 const guchar lc_map[256] = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-		0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-		0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
-		0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-		0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-		0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-		0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
-		0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
-		0x78, 0x79, 0x7a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
-		0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-		0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
-		0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
-		0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
-		0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
-		0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
-		0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
-		0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
-		0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
-		0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
-		0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
-		0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
-		0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
-		0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
-		0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
-		0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
-		0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
-		0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
-		0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
-		0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
-};
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+	0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+	0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+	0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+	0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+	0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+	0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+	0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+	0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+	0x78, 0x79, 0x7a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+	0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+	0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+	0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+	0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+	0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+	0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+	0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+	0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+	0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+	0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+	0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+	0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+	0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+	0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+	0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+	0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+	0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+	0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+	0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff};
 
-guint
-rspamd_str_lc (gchar *str, guint size)
+guint rspamd_str_lc(gchar *str, guint size)
 {
 	guint leftover = size % 4;
 	guint fp, i;
-	const uint8_t* s = (const uint8_t*) str;
+	const uint8_t *s = (const uint8_t *) str;
 	gchar *dest = str;
 	guchar c1, c2, c3, c4;
 
@@ -90,41 +88,40 @@ rspamd_str_lc (gchar *str, guint size)
 
 	switch (leftover) {
 	case 3:
-		*dest++ = lc_map[(guchar)str[i++]];
+		*dest++ = lc_map[(guchar) str[i++]];
 		/* FALLTHRU */
 	case 2:
-		*dest++ = lc_map[(guchar)str[i++]];
+		*dest++ = lc_map[(guchar) str[i++]];
 		/* FALLTHRU */
 	case 1:
-		*dest = lc_map[(guchar)str[i]];
+		*dest = lc_map[(guchar) str[i]];
 	}
 
 	return size;
 }
 
-gsize
-rspamd_str_copy_lc (const gchar *src, gchar *dst, gsize size)
+gsize rspamd_str_copy_lc(const gchar *src, gchar *dst, gsize size)
 {
 	gchar *d = dst;
 
 	/* Find aligned start */
-	while ((0xf & (uintptr_t)src) && size > 0) {
-		*d++ = lc_map[(guchar)*src++];
-		size --;
+	while ((0xf & (uintptr_t) src) && size > 0) {
+		*d++ = lc_map[(guchar) *src++];
+		size--;
 	}
 
 	/* Aligned start in src */
 #ifdef __x86_64__
 	while (size >= 16) {
-		__m128i sv = _mm_load_si128((const __m128i*)src);
+		__m128i sv = _mm_load_si128((const __m128i *) src);
 		/* From A */
-		__m128i rangeshift = _mm_sub_epi8(sv, _mm_set1_epi8((char)('A'+128)));
+		__m128i rangeshift = _mm_sub_epi8(sv, _mm_set1_epi8((char) ('A' + 128)));
 		/* To Z */
 		__m128i nomodify = _mm_cmpgt_epi8(rangeshift, _mm_set1_epi8(-128 + 25));
 		/* ^ ' ' */
-		__m128i flip  = _mm_andnot_si128(nomodify, _mm_set1_epi8(0x20));
+		__m128i flip = _mm_andnot_si128(nomodify, _mm_set1_epi8(0x20));
 		__m128i uc = _mm_xor_si128(sv, flip);
-		_mm_storeu_si128((__m128i*)d, uc);
+		_mm_storeu_si128((__m128i *) d, uc);
 		d += 16;
 		src += 16;
 		size -= 16;
@@ -133,15 +130,14 @@ rspamd_str_copy_lc (const gchar *src, gchar *dst, gsize size)
 
 	/* Leftover */
 	while (size > 0) {
-		*d++ = lc_map[(guchar)*src++];
-		size --;
+		*d++ = lc_map[(guchar) *src++];
+		size--;
 	}
 
 	return (d - dst);
 }
 
-gint
-rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
+gint rspamd_lc_cmp(const gchar *s, const gchar *d, gsize l)
 {
 	gsize fp, i;
 	guchar c1, c2, c3, c4;
@@ -173,7 +169,7 @@ rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
 	}
 
 	while (leftover > 0) {
-		if (g_ascii_tolower (s[i]) != g_ascii_tolower (d[i])) {
+		if (g_ascii_tolower(s[i]) != g_ascii_tolower(d[i])) {
 			return s[i] - d[i];
 		}
 
@@ -189,24 +185,23 @@ rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
  * string to lower case, so some locale peculiarities are simply ignored
  * If the target string is longer than initial one, then we just trim it
  */
-guint
-rspamd_str_lc_utf8 (gchar *str, guint size)
+guint rspamd_str_lc_utf8(gchar *str, guint size)
 {
-	guchar *d = (guchar *)str, tst[6];
+	guchar *d = (guchar *) str, tst[6];
 	gint32 i = 0, prev = 0;
 	UChar32 uc;
 
 	while (i < size) {
 		prev = i;
 
-		U8_NEXT ((guint8*)str, i, size, uc);
-		uc = u_tolower (uc);
+		U8_NEXT((guint8 *) str, i, size, uc);
+		uc = u_tolower(uc);
 
 		gint32 olen = 0;
-		U8_APPEND_UNSAFE (tst, olen, uc);
+		U8_APPEND_UNSAFE(tst, olen, uc);
 
 		if (olen <= (i - prev)) {
-			memcpy (d, tst, olen);
+			memcpy(d, tst, olen);
 			d += olen;
 		}
 		else {
@@ -215,13 +210,13 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 		}
 	}
 
-	return d - (guchar *)str;
+	return d - (guchar *) str;
 }
 
 gboolean
-rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
+rspamd_strcase_equal(gconstpointer v, gconstpointer v2)
 {
-	if (g_ascii_strcasecmp ((const gchar *)v, (const gchar *)v2) == 0) {
+	if (g_ascii_strcasecmp((const gchar *) v, (const gchar *) v2) == 0) {
 		return TRUE;
 	}
 
@@ -229,11 +224,11 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 }
 
 guint64
-rspamd_icase_hash (const gchar *in, gsize len, guint64 seed)
+rspamd_icase_hash(const gchar *in, gsize len, guint64 seed)
 {
-	guint leftover = len % sizeof (guint64);
+	guint leftover = len % sizeof(guint64);
 	guint fp, i;
-	const uint8_t* s = (const uint8_t*) in;
+	const uint8_t *s = (const uint8_t *) in;
 	union {
 		struct {
 			guchar c1, c2, c3, c4, c5, c6, c7, c8;
@@ -255,68 +250,66 @@ rspamd_icase_hash (const gchar *in, gsize len, guint64 seed)
 		u.c.c6 = lc_map[u.c.c6];
 		u.c.c7 = lc_map[u.c.c7];
 		u.c.c8 = lc_map[u.c.c8];
-		h = t1ha (&u.pp, sizeof (u), h);
+		h = t1ha(&u.pp, sizeof(u), h);
 	}
 
 	u.pp = 0;
 
 	switch (leftover) {
 	case 7:
-		u.c.c7 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c7 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 6:
-		u.c.c6 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c6 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 5:
-		u.c.c5 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c5 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 4:
-		u.c.c4 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c4 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 3:
-		u.c.c3 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c3 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 2:
-		u.c.c2 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
+		u.c.c2 = lc_map[(guchar) s[i++]]; /* FALLTHRU */
 	case 1:
-		u.c.c1 = lc_map[(guchar)s[i]];
+		u.c.c1 = lc_map[(guchar) s[i]];
 		break;
 	}
 
-	h = t1ha (&u.pp, sizeof (u), h);
+	h = t1ha(&u.pp, sizeof(u), h);
 
 	return h;
 }
 
-guint
-rspamd_strcase_hash (gconstpointer key)
+guint rspamd_strcase_hash(gconstpointer key)
 {
 	const gchar *p = key;
 	gsize len;
 
-	len = strlen (p);
+	len = strlen(p);
 
-	return (guint)rspamd_icase_hash (p, len, rspamd_hash_seed ());
+	return (guint) rspamd_icase_hash(p, len, rspamd_hash_seed());
 }
 
-guint
-rspamd_str_hash (gconstpointer key)
+guint rspamd_str_hash(gconstpointer key)
 {
 	gsize len;
 
-	len = strlen ((const gchar *)key);
+	len = strlen((const gchar *) key);
 
-	return (guint)rspamd_cryptobox_fast_hash (key, len, rspamd_hash_seed ());
+	return (guint) rspamd_cryptobox_fast_hash(key, len, rspamd_hash_seed());
 }
 
 gboolean
-rspamd_str_equal (gconstpointer v, gconstpointer v2)
+rspamd_str_equal(gconstpointer v, gconstpointer v2)
 {
-	return strcmp ((const gchar *)v, (const gchar *)v2) == 0;
+	return strcmp((const gchar *) v, (const gchar *) v2) == 0;
 }
 
 gboolean
-rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2)
+rspamd_ftok_icase_equal(gconstpointer v, gconstpointer v2)
 {
 	const rspamd_ftok_t *f1 = v, *f2 = v2;
 
 	if (f1->len == f2->len &&
-			rspamd_lc_cmp (f1->begin, f2->begin, f1->len) == 0) {
+		rspamd_lc_cmp(f1->begin, f2->begin, f1->len) == 0) {
 		return TRUE;
 	}
 
@@ -324,48 +317,45 @@ rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2)
 }
 
 
-guint
-rspamd_ftok_icase_hash (gconstpointer key)
+guint rspamd_ftok_icase_hash(gconstpointer key)
 {
 	const rspamd_ftok_t *f = key;
 
-	return (guint)rspamd_icase_hash (f->begin, f->len, rspamd_hash_seed ());
+	return (guint) rspamd_icase_hash(f->begin, f->len, rspamd_hash_seed());
 }
 
 gboolean
-rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2)
+rspamd_gstring_icase_equal(gconstpointer v, gconstpointer v2)
 {
 	const GString *f1 = v, *f2 = v2;
 	if (f1->len == f2->len &&
-		rspamd_lc_cmp (f1->str, f2->str, f1->len) == 0) {
+		rspamd_lc_cmp(f1->str, f2->str, f1->len) == 0) {
 		return TRUE;
 	}
 
 	return FALSE;
 }
 
-guint
-rspamd_gstring_icase_hash (gconstpointer key)
+guint rspamd_gstring_icase_hash(gconstpointer key)
 {
 	const GString *f = key;
 
-	return (guint)rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
+	return (guint) rspamd_icase_hash(f->str, f->len, rspamd_hash_seed());
 }
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */
-#define MEM_ALIGN (sizeof(gsize)-1)
+#define MEM_ALIGN (sizeof(gsize) - 1)
 #if defined(__LP64__) || defined(_LP64)
 #define WORD_TYPE guint64
-#define ZEROMASK  0x7F7F7F7F7F7F7F7FLLU
+#define ZEROMASK 0x7F7F7F7F7F7F7F7FLLU
 #else
 #define WORD_TYPE guint32
-#define ZEROMASK  0x7F7F7F7FU
+#define ZEROMASK 0x7F7F7F7FU
 #endif
 
-#define HASZERO(x) ~(((((x) & ZEROMASK) + ZEROMASK) | (x)) | ZEROMASK)
+#define HASZERO(x) ~(((((x) &ZEROMASK) + ZEROMASK) | (x)) | ZEROMASK)
 
-gsize
-rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
+gsize rspamd_strlcpy_fast(gchar *dst, const gchar *src, gsize siz)
 {
 	gchar *d = dst;
 	const gchar *s = src;
@@ -377,15 +367,16 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 	if (n-- != 0) {
 		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
 			/* Init copy byte by byte */
-			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
+			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++)
+				;
 			if (n && *s) {
 				wd = (void *) d;
 				ws = (const void *) s;
 				/*
 				 * Copy by 32 or 64 bits (causes valgrind warnings)
 				 */
-				for (; n >= sizeof (WORD_TYPE) && !HASZERO(*ws);
-					   n -= sizeof (WORD_TYPE), ws++, wd++) {
+				for (; n >= sizeof(WORD_TYPE) && !HASZERO(*ws);
+					 n -= sizeof(WORD_TYPE), ws++, wd++) {
 					*wd = *ws;
 				}
 
@@ -395,7 +386,8 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 		}
 
 		/* Copy the rest */
-		for (; n && (*d = *s); n--, s++, d++);
+		for (; n && (*d = *s); n--, s++, d++)
+			;
 
 		*d = 0;
 	}
@@ -406,9 +398,8 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 	return (d - dst);
 }
 
-gsize
-rspamd_null_safe_copy (const gchar *src, gsize srclen,
-					   gchar *dest, gsize destlen)
+gsize rspamd_null_safe_copy(const gchar *src, gsize srclen,
+							gchar *dest, gsize destlen)
 {
 	gsize copied = 0, si = 0, di = 0;
 
@@ -419,10 +410,10 @@ rspamd_null_safe_copy (const gchar *src, gsize srclen,
 	while (si < srclen && di + 1 < destlen) {
 		if (src[si] != '\0') {
 			dest[di++] = src[si++];
-			copied ++;
+			copied++;
 		}
 		else {
-			si ++;
+			si++;
 		}
 	}
 
@@ -433,7 +424,7 @@ rspamd_null_safe_copy (const gchar *src, gsize srclen,
 
 
 size_t
-rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
+rspamd_strlcpy_safe(gchar *dst, const gchar *src, gsize siz)
 {
 	gchar *d = dst;
 	gsize nleft = siz;
@@ -441,7 +432,7 @@ rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
 	if (nleft != 0) {
 		while (--nleft != 0) {
 			if ((*d++ = *src++) == '\0') {
-				d --;
+				d--;
 				break;
 			}
 		}
@@ -460,7 +451,7 @@ rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
  * Try to convert string of length to long
  */
 gboolean
-rspamd_strtol (const gchar *s, gsize len, glong *value)
+rspamd_strtol(const gchar *s, gsize len, glong *value)
 {
 	const gchar *p = s, *end = s + len;
 	gchar c;
@@ -505,30 +496,31 @@ rspamd_strtol (const gchar *s, gsize len, glong *value)
 /*
  * Try to convert string of length to long
  */
-#define CONV_STR_LIM_DECIMAL(max_num) do { \
-    while (p < end) { \
-        c = *p; \
-        if (c >= '0' && c <= '9') { \
-            c -= '0'; \
-            if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) { \
-                *value = (max_num); \
-                return FALSE; \
-            } \
-            else { \
-                v *= 10; \
-                v += c; \
-            } \
-        } \
-        else { \
-            *value = v; \
-            return FALSE; \
-        } \
-    p++; \
-    } \
-} while(0)
+#define CONV_STR_LIM_DECIMAL(max_num)                                     \
+	do {                                                                  \
+		while (p < end) {                                                 \
+			c = *p;                                                       \
+			if (c >= '0' && c <= '9') {                                   \
+				c -= '0';                                                 \
+				if (v > cutoff || (v == cutoff && (guint8) c > cutlim)) { \
+					*value = (max_num);                                   \
+					return FALSE;                                         \
+				}                                                         \
+				else {                                                    \
+					v *= 10;                                              \
+					v += c;                                               \
+				}                                                         \
+			}                                                             \
+			else {                                                        \
+				*value = v;                                               \
+				return FALSE;                                             \
+			}                                                             \
+			p++;                                                          \
+		}                                                                 \
+	} while (0)
 
 gboolean
-rspamd_strtoul (const gchar *s, gsize len, gulong *value)
+rspamd_strtoul(const gchar *s, gsize len, gulong *value)
 {
 	const gchar *p = s, *end = s + len;
 	gchar c;
@@ -543,7 +535,7 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 }
 
 gboolean
-rspamd_strtou64 (const gchar *s, gsize len, guint64 *value)
+rspamd_strtou64(const gchar *s, gsize len, guint64 *value)
 {
 	const gchar *p = s, *end = s + len;
 	gchar c;
@@ -558,7 +550,7 @@ rspamd_strtou64 (const gchar *s, gsize len, guint64 *value)
 }
 
 gboolean
-rspamd_xstrtoul (const gchar *s, gsize len, gulong *value)
+rspamd_xstrtoul(const gchar *s, gsize len, gulong *value)
 {
 	const gchar *p = s, *end = s + len;
 	gchar c;
@@ -567,10 +559,10 @@ rspamd_xstrtoul (const gchar *s, gsize len, gulong *value)
 
 	/* Some preparations for range errors */
 	while (p < end) {
-		c = g_ascii_tolower (*p);
+		c = g_ascii_tolower(*p);
 		if (c >= '0' && c <= '9') {
 			c -= '0';
-			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
+			if (v > cutoff || (v == cutoff && (guint8) c > cutlim)) {
 				/* Range error */
 				*value = G_MAXULONG;
 				return FALSE;
@@ -582,7 +574,7 @@ rspamd_xstrtoul (const gchar *s, gsize len, gulong *value)
 		}
 		else if (c >= 'a' || c <= 'f') {
 			c = c - 'a' + 10;
-			if (v > cutoff || (v == cutoff && (guint8)c > cutlim)) {
+			if (v > cutoff || (v == cutoff && (guint8) c > cutlim)) {
 				/* Range error */
 				*value = G_MAXULONG;
 				return FALSE;
@@ -611,11 +603,11 @@ rspamd_xstrtoul (const gchar *s, gsize len, gulong *value)
  * @return
  */
 gpointer
-rspamd_str_pool_copy (gconstpointer data, gpointer ud)
+rspamd_str_pool_copy(gconstpointer data, gpointer ud)
 {
 	rspamd_mempool_t *pool = ud;
 
-	return data ? rspamd_mempool_strdup (pool, data) : NULL;
+	return data ? rspamd_mempool_strdup(pool, data) : NULL;
 }
 
 /*
@@ -623,14 +615,13 @@ rspamd_str_pool_copy (gconstpointer data, gpointer ud)
  * http://philzimmermann.com/docs/human-oriented-base-32-encoding.txt
  */
 
-gint
-rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outlen,
-		enum rspamd_base32_type type)
+gint rspamd_encode_base32_buf(const guchar *in, gsize inlen, gchar *out, gsize outlen,
+							  enum rspamd_base32_type type)
 {
 	static const char b32_default[] = "ybndrfg8ejkmcpqxot1uwisza345h769",
-		b32_bleach[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l",
-		b32_rfc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
-		*b32;
+					  b32_bleach[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l",
+					  b32_rfc[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+					  *b32;
 	gchar *o, *end;
 	gsize i;
 	gint remain = -1, x;
@@ -652,8 +643,8 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 		inverse_order = false;
 		break;
 	default:
-		g_assert_not_reached ();
-		abort ();
+		g_assert_not_reached();
+		abort();
 	}
 
 	if (inverse_order) {
@@ -754,15 +745,15 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out, gsize outle
 }
 
 gchar *
-rspamd_encode_base32 (const guchar *in, gsize inlen, enum rspamd_base32_type type)
+rspamd_encode_base32(const guchar *in, gsize inlen, enum rspamd_base32_type type)
 {
 	gsize allocated_len = inlen * 8 / 5 + 2;
 	gchar *out;
 	gint outlen;
 
-	out = g_malloc (allocated_len);
-	outlen = rspamd_encode_base32_buf (in, inlen, out,
-			allocated_len - 1, type);
+	out = g_malloc(allocated_len);
+	outlen = rspamd_encode_base32_buf(in, inlen, out,
+									  allocated_len - 1, type);
 
 	if (outlen >= 0) {
 		out[outlen] = 0;
@@ -770,13 +761,13 @@ rspamd_encode_base32 (const guchar *in, gsize inlen, enum rspamd_base32_type typ
 		return out;
 	}
 
-	g_free (out);
+	g_free(out);
 
 	return NULL;
 }
 
 enum rspamd_base32_type
-rspamd_base32_decode_type_from_str (const gchar *str)
+rspamd_base32_decode_type_from_str(const gchar *str)
 {
 	enum rspamd_base32_type ret = RSPAMD_BASE32_INVALID;
 
@@ -784,13 +775,13 @@ rspamd_base32_decode_type_from_str (const gchar *str)
 		return RSPAMD_BASE32_DEFAULT;
 	}
 
-	if (strcmp (str, "default") == 0 || strcmp (str, "zbase") == 0) {
+	if (strcmp(str, "default") == 0 || strcmp(str, "zbase") == 0) {
 		ret = RSPAMD_BASE32_ZBASE;
 	}
-	else if (strcmp (str, "bleach") == 0) {
+	else if (strcmp(str, "bleach") == 0) {
 		ret = RSPAMD_BASE32_BLEACH;
 	}
-	else if (strcmp (str, "rfc") == 0) {
+	else if (strcmp(str, "rfc") == 0) {
 		ret = RSPAMD_BASE32_RFC;
 	}
 
@@ -798,112 +789,333 @@ rspamd_base32_decode_type_from_str (const gchar *str)
 }
 
 static const guchar b32_dec_zbase[] = {
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0x12, 0xff, 0x19, 0x1a, 0x1b, 0x1e, 0x1d,
-		0x07, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0x18, 0x01, 0x0c, 0x03, 0x08, 0x05, 0x06,
-		0x1c, 0x15, 0x09, 0x0a, 0xff, 0x0b, 0x02, 0x10,
-		0x0d, 0x0e, 0x04, 0x16, 0x11, 0x13, 0xff, 0x14,
-		0x0f, 0x00, 0x17, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0x12, 0xff, 0x19, 0x1a, 0x1b, 0x1e, 0x1d,
+	0x07, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0x18, 0x01, 0x0c, 0x03, 0x08, 0x05, 0x06,
+	0x1c, 0x15, 0x09, 0x0a, 0xff, 0x0b, 0x02, 0x10,
+	0x0d, 0x0e, 0x04, 0x16, 0x11, 0x13, 0xff, 0x14,
+	0x0f, 0x00, 0x17, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 static const guchar b32_dec_bleach[] = {
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0x0f, 0xff, 0x0a, 0x11, 0x15, 0x14, 0x1a, 0x1e,
-		0x07, 0x05, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0x1d, 0xff, 0x18, 0x0d, 0x19, 0x09, 0x08,
-		0x17, 0xff, 0x12, 0x16, 0x1f, 0x1b, 0x13, 0xff,
-		0x01, 0x00, 0x03, 0x10, 0x0b, 0x1c, 0x0c, 0x0e,
-		0x06, 0x04, 0x02, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0x0f, 0xff, 0x0a, 0x11, 0x15, 0x14, 0x1a, 0x1e,
+	0x07, 0x05, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0x1d, 0xff, 0x18, 0x0d, 0x19, 0x09, 0x08,
+	0x17, 0xff, 0x12, 0x16, 0x1f, 0x1b, 0x13, 0xff,
+	0x01, 0x00, 0x03, 0x10, 0x0b, 0x1c, 0x0c, 0x0e,
+	0x06, 0x04, 0x02, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 static const guchar b32_dec_rfc[] = {
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-		0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
-		0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
-		0x17, 0x18, 0x19, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0x1a,
+	0x1b,
+	0x1c,
+	0x1d,
+	0x1e,
+	0x1f,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0x00,
+	0x01,
+	0x02,
+	0x03,
+	0x04,
+	0x05,
+	0x06,
+	0x07,
+	0x08,
+	0x09,
+	0x0a,
+	0x0b,
+	0x0c,
+	0x0d,
+	0x0e,
+	0x0f,
+	0x10,
+	0x11,
+	0x12,
+	0x13,
+	0x14,
+	0x15,
+	0x16,
+	0x17,
+	0x18,
+	0x19,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
+	0xff,
 };
 
 
-gint
-rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outlen,
-		enum rspamd_base32_type type)
+gint rspamd_decode_base32_buf(const gchar *in, gsize inlen, guchar *out, gsize outlen,
+							  enum rspamd_base32_type type)
 {
 	guchar *o, *end, decoded;
 	guchar c;
@@ -929,8 +1141,8 @@ rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outle
 		inverse_bits = false;
 		break;
 	default:
-		g_assert_not_reached ();
-		abort ();
+		g_assert_not_reached();
+		abort();
 	}
 
 	if (inverse_bits) {
@@ -999,24 +1211,24 @@ rspamd_decode_base32_buf (const gchar *in, gsize inlen, guchar *out, gsize outle
 }
 
 guchar *
-rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen,
-		enum rspamd_base32_type type)
+rspamd_decode_base32(const gchar *in, gsize inlen, gsize *outlen,
+					 enum rspamd_base32_type type)
 {
 	guchar *res;
 
 	gsize allocated_len = inlen * 5 / 8 + 2;
 	gssize olen;
 
-	res = g_malloc (allocated_len);
+	res = g_malloc(allocated_len);
 
-	olen = rspamd_decode_base32_buf (in, inlen, res, allocated_len - 1,
-			type);
+	olen = rspamd_decode_base32_buf(in, inlen, res, allocated_len - 1,
+									type);
 
 	if (olen >= 0) {
 		res[olen] = '\0';
 	}
 	else {
-		g_free (res);
+		g_free(res);
 
 		if (outlen) {
 			*outlen = 0;
@@ -1034,20 +1246,22 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen,
 
 
 gchar *
-rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen, gboolean fold, enum rspamd_newlines_type how)
+rspamd_encode_base64_common(const guchar *in, gsize inlen, gint str_len,
+							gsize *outlen, gboolean fold, enum rspamd_newlines_type how)
 {
-#define ADD_SPLIT do { \
-	if (how == RSPAMD_TASK_NEWLINES_CR || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\r'; \
-	if (how == RSPAMD_TASK_NEWLINES_LF || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\n'; \
-	if (fold) *o++ = '\t'; \
-} while (0)
-#define CHECK_SPLIT \
-	do { if (str_len > 0 && cols >= str_len) { \
-		ADD_SPLIT; \
-		cols = 0; \
-	} } \
-while (0)
+#define ADD_SPLIT                                                                            \
+	do {                                                                                     \
+		if (how == RSPAMD_TASK_NEWLINES_CR || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\r'; \
+		if (how == RSPAMD_TASK_NEWLINES_LF || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\n'; \
+		if (fold) *o++ = '\t';                                                               \
+	} while (0)
+#define CHECK_SPLIT                           \
+	do {                                      \
+		if (str_len > 0 && cols >= str_len) { \
+			ADD_SPLIT;                        \
+			cols = 0;                         \
+		}                                     \
+	} while (0)
 
 	gsize allocated_len = (inlen / 3) * 4 + 5;
 	gchar *out, *o;
@@ -1060,7 +1274,7 @@ while (0)
 		"0123456789+/";
 
 	if (str_len > 0) {
-		g_assert (str_len > 8);
+		g_assert(str_len > 8);
 		if (fold) {
 			switch (how) {
 			case RSPAMD_TASK_NEWLINES_CR:
@@ -1085,13 +1299,13 @@ while (0)
 		}
 	}
 
-	out = g_malloc (allocated_len);
+	out = g_malloc(allocated_len);
 	o = out;
 	cols = 0;
 
 	while (inlen > 6) {
-		memcpy (&n, in, sizeof (n));
-		n = GUINT64_TO_BE (n);
+		memcpy(&n, in, sizeof(n));
+		n = GUINT64_TO_BE(n);
 
 		if (str_len <= 0 || cols <= str_len - 8) {
 			*o++ = b64_enc[(n >> 58) & 0x3F];
@@ -1110,7 +1324,7 @@ while (0)
 			while (cols) {
 				*o++ = b64_enc[(n >> shift) & 0x3F];
 				shift -= 6;
-				cols --;
+				cols--;
 			}
 
 			ADD_SPLIT;
@@ -1119,7 +1333,7 @@ while (0)
 			while (shift >= 16) {
 				*o++ = b64_enc[(n >> shift) & 0x3F];
 				shift -= 6;
-				cols ++;
+				cols++;
 			}
 		}
 
@@ -1143,7 +1357,7 @@ while (0)
 			*o++ = b64_enc[t >> 2];
 			carry = (t << 4) & 0x30;
 			rem = 1;
-			cols ++;
+			cols++;
 		case 1:
 			if (inlen-- == 0) {
 				goto end;
@@ -1153,18 +1367,18 @@ while (0)
 			*o++ = b64_enc[carry | (t >> 4)];
 			carry = (t << 2) & 0x3C;
 			rem = 2;
-			cols ++;
+			cols++;
 		default:
 			if (inlen-- == 0) {
 				goto end;
 			}
 			CHECK_SPLIT;
-			t = *in ++;
+			t = *in++;
 			*o++ = b64_enc[carry | (t >> 6)];
-			cols ++;
+			cols++;
 			CHECK_SPLIT;
 			*o++ = b64_enc[t & 0x3F];
-			cols ++;
+			cols++;
 			CHECK_SPLIT;
 			rem = 0;
 		}
@@ -1173,21 +1387,21 @@ while (0)
 end:
 	if (rem == 1) {
 		*o++ = b64_enc[carry];
-		cols ++;
+		cols++;
 		CHECK_SPLIT;
 		*o++ = '=';
-		cols ++;
+		cols++;
 		CHECK_SPLIT;
 		*o++ = '=';
-		cols ++;
+		cols++;
 		CHECK_SPLIT;
 	}
 	else if (rem == 2) {
 		*o++ = b64_enc[carry];
-		cols ++;
+		cols++;
 		CHECK_SPLIT;
 		*o++ = '=';
-		cols ++;
+		cols++;
 	}
 
 	CHECK_SPLIT;
@@ -1202,30 +1416,29 @@ end:
 }
 
 gchar *
-rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen)
+rspamd_encode_base64(const guchar *in, gsize inlen, gint str_len,
+					 gsize *outlen)
 {
-	return rspamd_encode_base64_common (in, inlen, str_len, outlen, FALSE,
-			RSPAMD_TASK_NEWLINES_CRLF);
+	return rspamd_encode_base64_common(in, inlen, str_len, outlen, FALSE,
+									   RSPAMD_TASK_NEWLINES_CRLF);
 }
 
 gchar *
-rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen, enum rspamd_newlines_type how)
+rspamd_encode_base64_fold(const guchar *in, gsize inlen, gint str_len,
+						  gsize *outlen, enum rspamd_newlines_type how)
 {
-	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE, how);
+	return rspamd_encode_base64_common(in, inlen, str_len, outlen, TRUE, how);
 }
 
-#define QP_RANGE(x) (((x) >= 33 && (x) <= 60) || ((x) >= 62 && (x) <= 126) \
-		|| (x) == '\r' || (x) == '\n' || (x) == ' ' || (x) == '\t')
+#define QP_RANGE(x) (((x) >= 33 && (x) <= 60) || ((x) >= 62 && (x) <= 126) || (x) == '\r' || (x) == '\n' || (x) == ' ' || (x) == '\t')
 #define QP_SPAN_NORMAL(span, str_len) ((str_len) > 0 && \
-		((span) + 1) >= (str_len))
+									   ((span) + 1) >= (str_len))
 #define QP_SPAN_SPECIAL(span, str_len) ((str_len) > 0 && \
-		((span) + 4) >= (str_len))
+										((span) + 4) >= (str_len))
 
 gchar *
-rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
-						   gsize *outlen, enum rspamd_newlines_type how)
+rspamd_encode_qp_fold(const guchar *in, gsize inlen, gint str_len,
+					  gsize *outlen, enum rspamd_newlines_type how)
 {
 	gsize olen = 0, span = 0, i = 0, seen_spaces = 0;
 	gchar *out;
@@ -1237,8 +1450,8 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 		ch = *p;
 
 		if (QP_RANGE(ch)) {
-			olen ++;
-			span ++;
+			olen++;
+			span++;
 
 			if (ch == '\r' || ch == '\n') {
 				if (seen_spaces > 0) {
@@ -1262,7 +1475,7 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 				span = 0;
 			}
 			else if (ch == ' ' || ch == '\t') {
-				seen_spaces ++;
+				seen_spaces++;
 				last_sp = ch;
 			}
 			else {
@@ -1296,7 +1509,7 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 			span = 0;
 		}
 
-		p ++;
+		p++;
 	}
 
 	if (seen_spaces > 0) {
@@ -1304,7 +1517,7 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 		olen += 3;
 	}
 
-	out = g_malloc (olen + 1);
+	out = g_malloc(olen + 1);
 	p = in;
 	i = 0;
 	span = 0;
@@ -1313,12 +1526,12 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 	while (p < end) {
 		ch = *p;
 
-		if (QP_RANGE (ch)) {
+		if (QP_RANGE(ch)) {
 			if (ch == '\r' || ch == '\n') {
 				if (seen_spaces > 0) {
 					if (QP_SPAN_SPECIAL(span, str_len)) {
 						/* Add soft newline */
-						i --;
+						i--;
 
 						if (p + 1 < end || span + 3 >= str_len) {
 							switch (how) {
@@ -1360,13 +1573,13 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 				span = 0;
 			}
 			else if (ch == ' ' || ch == '\t') {
-				seen_spaces ++;
+				seen_spaces++;
 				last_sp = ch;
-				span ++;
+				span++;
 			}
 			else {
 				seen_spaces = 0;
-				span ++;
+				span++;
 			}
 
 			out[i++] = ch;
@@ -1426,13 +1639,13 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 			}
 		}
 
-		g_assert (i <= olen);
-		p ++;
+		g_assert(i <= olen);
+		p++;
 	}
 
 	/* Deal with the last space character */
 	if (seen_spaces > 0) {
-		i --;
+		i--;
 		out[i++] = '=';
 		out[i++] = hexdigests[((last_sp >> 4) & 0xF)];
 		out[i++] = hexdigests[(last_sp & 0xF)];
@@ -1449,10 +1662,9 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 
-gint
-rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
-		const gchar *s2, gsize s2len,
-		guint replace_cost)
+gint rspamd_strings_levenshtein_distance(const gchar *s1, gsize s1len,
+										 const gchar *s2, gsize s2len,
+										 guint replace_cost)
 {
 	gchar c1, c2, last_c2, last_c1;
 	static GArray *current_row = NULL, *prev_row = NULL, *transp_row = NULL;
@@ -1460,14 +1672,14 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 	static const guint max_cmp = 8192;
 	gint ret;
 
-	g_assert (s1 != NULL);
-	g_assert (s2 != NULL);
+	g_assert(s1 != NULL);
+	g_assert(s2 != NULL);
 
 	if (s1len == 0) {
-		s1len = strlen (s1);
+		s1len = strlen(s1);
 	}
 	if (s2len == 0) {
-		s2len = strlen (s2);
+		s2len = strlen(s2);
 	}
 
 	if (MAX(s1len, s2len) > max_cmp) {
@@ -1491,46 +1703,46 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 
 	/* Adjust static space */
 	if (current_row == NULL) {
-		current_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
-		prev_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
-		transp_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
-		g_array_set_size (current_row, s1len + 1);
-		g_array_set_size (prev_row, s1len + 1);
-		g_array_set_size (transp_row, s1len + 1);
+		current_row = g_array_sized_new(FALSE, FALSE, sizeof(gint), s1len + 1);
+		prev_row = g_array_sized_new(FALSE, FALSE, sizeof(gint), s1len + 1);
+		transp_row = g_array_sized_new(FALSE, FALSE, sizeof(gint), s1len + 1);
+		g_array_set_size(current_row, s1len + 1);
+		g_array_set_size(prev_row, s1len + 1);
+		g_array_set_size(transp_row, s1len + 1);
 	}
 	else if (current_row->len < s1len + 1) {
-		g_array_set_size (current_row, s1len + 1);
-		g_array_set_size (prev_row, s1len + 1);
-		g_array_set_size (transp_row, s1len + 1);
+		g_array_set_size(current_row, s1len + 1);
+		g_array_set_size(prev_row, s1len + 1);
+		g_array_set_size(transp_row, s1len + 1);
 	}
 
-	memset (current_row->data, 0, (s1len + 1) * sizeof (gint));
-	memset (transp_row->data, 0, (s1len + 1) * sizeof (gint));
+	memset(current_row->data, 0, (s1len + 1) * sizeof(gint));
+	memset(transp_row->data, 0, (s1len + 1) * sizeof(gint));
 
 	for (gint i = 0; i <= s1len; i++) {
-		g_array_index (prev_row, gint, i) = i;
+		g_array_index(prev_row, gint, i) = i;
 	}
 
 	last_c2 = '\0';
 
 	for (gint i = 1; i <= s2len; i++) {
 		c2 = s2[i - 1];
-		g_array_index (current_row, gint, 0) = i;
+		g_array_index(current_row, gint, 0) = i;
 		last_c1 = '\0';
 
 		for (gint j = 1; j <= s1len; j++) {
 			c1 = s1[j - 1];
 			eq = c1 == c2 ? 0 : replace_cost;
-			ret = MIN3 (g_array_index (current_row, gint, j - 1) + 1, /* Insert */
-					g_array_index (prev_row, gint, j) + 1, /* Remove */
-					g_array_index (prev_row, gint, j - 1) + eq /* Replace */);
+			ret = MIN3(g_array_index(current_row, gint, j - 1) + 1, /* Insert */
+					   g_array_index(prev_row, gint, j) + 1,        /* Remove */
+					   g_array_index(prev_row, gint, j - 1) + eq /* Replace */);
 
 			/* Take reordering into account */
 			if (c1 == last_c2 && c2 == last_c1 && j >= 2) {
-				ret = MIN (ret, g_array_index (transp_row, gint, j - 2) + eq);
+				ret = MIN(ret, g_array_index(transp_row, gint, j - 2) + eq);
 			}
 
-			g_array_index (current_row, gint, j) = ret;
+			g_array_index(current_row, gint, j) = ret;
 			last_c1 = c1;
 		}
 
@@ -1544,18 +1756,18 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 		current_row = tmp;
 	}
 
-	ret = g_array_index (prev_row, gint, s1len);
+	ret = g_array_index(prev_row, gint, s1len);
 
 	return ret;
 }
 
 GString *
-rspamd_header_value_fold (const gchar *name, gsize name_len,
-						  const gchar *value,
-						  gsize value_len,
-						  guint fold_max,
-						  enum rspamd_newlines_type how,
-						  const gchar *fold_on_chars)
+rspamd_header_value_fold(const gchar *name, gsize name_len,
+						 const gchar *value,
+						 gsize value_len,
+						 guint fold_max,
+						 enum rspamd_newlines_type how,
+						 const gchar *fold_on_chars)
 {
 	GString *res;
 	const guint default_fold_max = 76;
@@ -1572,10 +1784,11 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 		read_quoted,
 		after_quote,
 		fold_token,
-	} state = read_token, next_state = read_token;
+	} state = read_token,
+	  next_state = read_token;
 
-	g_assert (name != NULL);
-	g_assert (value != NULL);
+	g_assert(name != NULL);
+	g_assert(value != NULL);
 
 	/* Filter insane values */
 	if (fold_max < 20) {
@@ -1591,11 +1804,11 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 		break;
 	case RSPAMD_TASK_NEWLINES_CRLF:
 	default:
-		fold_sequence ="\r\n\t";
+		fold_sequence = "\r\n\t";
 		break;
 	}
 
-	res = g_string_sized_new (value_len);
+	res = g_string_sized_new(value_len);
 
 	c = value;
 	p = c;
@@ -1608,13 +1821,13 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 
 		case read_token:
 			if (fold_on_chars) {
-				if (strchr (fold_on_chars, *p) != NULL) {
+				if (strchr(fold_on_chars, *p) != NULL) {
 					fold_type = fold_after;
 					state = fold_token;
 					next_state = read_token;
 				}
 
-				p ++;
+				p++;
 			}
 			else {
 				if (*p == ',' || *p == ';') {
@@ -1624,27 +1837,32 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 						fold_type = fold_after;
 						state = fold_token;
 						next_state = read_token;
-					} else if (cur_len > fold_max && !first_token) {
+					}
+					else if (cur_len > fold_max && !first_token) {
 						fold_type = fold_before;
 						state = fold_token;
 						next_state = read_token;
-					} else {
-						g_string_append_len (res, c, p - c + 1);
+					}
+					else {
+						g_string_append_len(res, c, p - c + 1);
 						c = p + 1;
 						first_token = FALSE;
 					}
 					p++;
-				} else if (*p == '"') {
+				}
+				else if (*p == '"') {
 					/* Fold before quoted tokens */
-					g_string_append_len (res, c, p - c);
+					g_string_append_len(res, c, p - c);
 					c = p;
 					state = read_quoted;
-				} else if (*p == '\r' || *p == '\n') {
+				}
+				else if (*p == '\r' || *p == '\n') {
 					if (cur_len > fold_max && !first_token) {
 						fold_type = fold_before;
 						state = fold_token;
 						next_state = read_token;
-					} else {
+					}
+					else {
 						/* We need to ensure that it is a folding and not something else */
 
 						const char *t = p;
@@ -1666,7 +1884,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 							/* Reset line length */
 							cur_len = 0;
 
-							while (g_ascii_isspace (*p)) {
+							while (g_ascii_isspace(*p)) {
 								p++;
 							}
 
@@ -1676,32 +1894,36 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 						}
 						else {
 							/* Not seen folding, inject it */
-							g_string_append_len (res, c, p - c);
-							g_string_append (res, fold_sequence);
+							g_string_append_len(res, c, p - c);
+							g_string_append(res, fold_sequence);
 							p = t; /* Adjust p to ensure that we do not append extra stuff */
 							state = read_token;
 							first_token = TRUE;
 							c = p;
 						}
 					}
-				} else if (g_ascii_isspace (*p)) {
+				}
+				else if (g_ascii_isspace(*p)) {
 					if (cur_len > fold_max * 0.8 && cur_len < fold_max) {
 						/* We want fold */
 						fold_type = fold_after;
 						state = fold_token;
 						next_state = read_token;
-					} else if (cur_len > fold_max && !first_token) {
+					}
+					else if (cur_len > fold_max && !first_token) {
 						fold_type = fold_before;
 						state = fold_token;
 						next_state = read_token;
-					} else {
-						g_string_append_len (res, c, p - c);
+					}
+					else {
+						g_string_append_len(res, c, p - c);
 						c = p;
 						first_token = FALSE;
 						p++;
 						cur_len++;
 					}
-				} else {
+				}
+				else {
 					p++;
 					cur_len++;
 				}
@@ -1712,7 +1934,7 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 			if (fold_type == fold_after) {
 				nspaces = 0;
 				if (p > c) {
-					g_string_append_len (res, c, p - c);
+					g_string_append_len(res, c, p - c);
 
 					/*
 					 * Check any spaces that are appended to the result
@@ -1720,24 +1942,24 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 					 */
 					const gchar *last = &res->str[res->len - 1];
 
-					while (g_ascii_isspace (*last)) {
-						last --;
-						nspaces ++;
-						res->len --;
+					while (g_ascii_isspace(*last)) {
+						last--;
+						nspaces++;
+						res->len--;
 					}
 				}
 
-				g_string_append (res, fold_sequence);
+				g_string_append(res, fold_sequence);
 
 				/* Skip space if needed */
-				if (g_ascii_isspace (*p)) {
-					p ++;
+				if (g_ascii_isspace(*p)) {
+					p++;
 				}
 
 				/* Move leftover spaces */
 				while (nspaces) {
-					g_string_append_c (res, ' ');
-					nspaces --;
+					g_string_append_c(res, ' ');
+					nspaces--;
 				}
 
 				cur_len = 0;
@@ -1746,35 +1968,35 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 				const gchar *last;
 
 				/* Skip space if needed */
-				if (g_ascii_isspace (*c) && p > c) {
-					c ++;
+				if (g_ascii_isspace(*c) && p > c) {
+					c++;
 				}
 
 				/* Avoid double folding */
 				last = &res->str[res->len - 1];
-				last --;
+				last--;
 
 				if (*last != '\r' && *last != '\n') {
-					last ++;
-					while (g_ascii_isspace (*last)) {
-						last --;
-						nspaces ++;
-						res->len --;
+					last++;
+					while (g_ascii_isspace(*last)) {
+						last--;
+						nspaces++;
+						res->len--;
 					}
 
-					g_string_append (res, fold_sequence);
+					g_string_append(res, fold_sequence);
 				}
 
 				/* Move leftover spaces */
 				cur_len = nspaces;
 
 				while (nspaces) {
-					g_string_append_c (res, ' ');
-					nspaces --;
+					g_string_append_c(res, ' ');
+					nspaces--;
 				}
 
 				if (p > c) {
-					g_string_append_len (res, c, p - c);
+					g_string_append_len(res, c, p - c);
 					cur_len += p - c;
 				}
 				else {
@@ -1791,16 +2013,16 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 			if (p != c && *p == '"') {
 				state = after_quote;
 			}
-			p ++;
-			cur_len ++;
+			p++;
+			cur_len++;
 			break;
 
 		case after_quote:
 			state = read_token;
 			/* Skip one more character after the quote */
-			p ++;
-			cur_len ++;
-			g_string_append_len (res, c, p - c);
+			p++;
+			cur_len++;
+			g_string_append_len(res, c, p - c);
 			c = p;
 			first_token = TRUE;
 			break;
@@ -1811,53 +2033,59 @@ rspamd_header_value_fold (const gchar *name, gsize name_len,
 	switch (state) {
 	case read_token:
 		if (!fold_on_chars && cur_len > fold_max && !first_token) {
-			if (g_ascii_isspace (*c)) {
-				c ++;
+			if (g_ascii_isspace(*c)) {
+				c++;
 			}
-			g_string_append (res, fold_sequence);
-			g_string_append_len (res, c, p - c);
+			g_string_append(res, fold_sequence);
+			g_string_append_len(res, c, p - c);
 		}
 		else {
-			g_string_append_len (res, c, p - c);
+			g_string_append_len(res, c, p - c);
 		}
 		break;
 	case read_quoted:
 	case after_quote:
-		g_string_append_len (res, c, p - c);
+		g_string_append_len(res, c, p - c);
 		break;
 	case fold_token:
 		/* Here, we have token start at 'c' and token end at 'p' */
-		if (g_ascii_isspace (res->str[res->len - 1])) {
-			g_string_append_len (res, c, p - c);
+		if (g_ascii_isspace(res->str[res->len - 1])) {
+			g_string_append_len(res, c, p - c);
 		}
 		else {
 			if (*c != '\r' && *c != '\n') {
 				/* We need to add folding as well */
-				g_string_append (res, fold_sequence);
-				g_string_append_len (res, c, p - c);
+				g_string_append(res, fold_sequence);
+				g_string_append_len(res, c, p - c);
 			}
 			else {
-				g_string_append_len (res, c, p - c);
+				g_string_append_len(res, c, p - c);
 			}
 		}
 		break;
 	default:
-		g_assert (p == c);
+		g_assert(p == c);
 		break;
 	}
 
 	return res;
 }
 
-static inline bool rspamd_substring_cmp_func (guchar a, guchar b) { return a == b; }
+static inline bool rspamd_substring_cmp_func(guchar a, guchar b)
+{
+	return a == b;
+}
 
-static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) { return lc_map[a] == lc_map[b]; }
+static inline bool rspamd_substring_casecmp_func(guchar a, guchar b)
+{
+	return lc_map[a] == lc_map[b];
+}
 
-typedef bool (*rspamd_cmpchar_func_t) (guchar a, guchar b);
+typedef bool (*rspamd_cmpchar_func_t)(guchar a, guchar b);
 
 static inline void
-rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
-		rspamd_cmpchar_func_t f)
+rspamd_substring_preprocess_kmp(const gchar *pat, gsize len, goffset *fsm,
+								rspamd_cmpchar_func_t f)
 {
 	goffset i, j;
 
@@ -1883,11 +2111,11 @@ rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
 }
 
 static inline goffset
-rspamd_substring_search_preprocessed (const gchar *in, gsize inlen,
-								const gchar *srch,
-								gsize srchlen,
-								const goffset *fsm,
-								rspamd_cmpchar_func_t f)
+rspamd_substring_search_preprocessed(const gchar *in, gsize inlen,
+									 const gchar *srch,
+									 gsize srchlen,
+									 const goffset *fsm,
+									 rspamd_cmpchar_func_t f)
 {
 	goffset i, j, k, ell;
 
@@ -1924,7 +2152,8 @@ rspamd_substring_search_preprocessed (const gchar *in, gsize inlen,
 			if (fsm[i] <= ell) {
 				k = MAX(0, fsm[i]);
 				i = ell;
-			} else {
+			}
+			else {
 				k = ell;
 				i = fsm[i];
 			}
@@ -1935,38 +2164,38 @@ rspamd_substring_search_preprocessed (const gchar *in, gsize inlen,
 }
 
 static inline goffset
-rspamd_substring_search_common (const gchar *in, gsize inlen,
-		const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
+rspamd_substring_search_common(const gchar *in, gsize inlen,
+							   const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
 {
 	static goffset st_fsm[128];
 	goffset *fsm, ret;
 
-	if (G_LIKELY (srchlen < G_N_ELEMENTS (st_fsm))) {
+	if (G_LIKELY(srchlen < G_N_ELEMENTS(st_fsm))) {
 		fsm = st_fsm;
 	}
 	else {
-		fsm = g_malloc ((srchlen + 1) * sizeof (*fsm));
+		fsm = g_malloc((srchlen + 1) * sizeof(*fsm));
 	}
 
-	rspamd_substring_preprocess_kmp (srch, srchlen, fsm, f);
-	ret = rspamd_substring_search_preprocessed (in, inlen, srch, srchlen, fsm, f);
+	rspamd_substring_preprocess_kmp(srch, srchlen, fsm, f);
+	ret = rspamd_substring_search_preprocessed(in, inlen, srch, srchlen, fsm, f);
 
-	if (G_UNLIKELY (srchlen >= G_N_ELEMENTS (st_fsm))) {
-		g_free (fsm);
+	if (G_UNLIKELY(srchlen >= G_N_ELEMENTS(st_fsm))) {
+		g_free(fsm);
 	}
 
 	return ret;
 }
 
 goffset
-rspamd_substring_search (const gchar *in, gsize inlen,
-		const gchar *srch, gsize srchlen)
+rspamd_substring_search(const gchar *in, gsize inlen,
+						const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
-		if (G_UNLIKELY (srchlen == 1)) {
+		if (G_UNLIKELY(srchlen == 1)) {
 			const gchar *p;
 
-			p = memchr (in, srch[0], inlen);
+			p = memchr(in, srch[0], inlen);
 
 			if (p) {
 				return p - in;
@@ -1974,15 +2203,15 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 
 			return (-1);
 		}
-		else if (G_UNLIKELY (srchlen == 0)) {
+		else if (G_UNLIKELY(srchlen == 0)) {
 			return 0;
 		}
 
-		return rspamd_substring_search_common (in, inlen, srch, srchlen,
-				rspamd_substring_cmp_func);
+		return rspamd_substring_search_common(in, inlen, srch, srchlen,
+											  rspamd_substring_cmp_func);
 	}
 	else if (inlen == srchlen) {
-		return (rspamd_lc_cmp (srch, in, srchlen) == 0 ? 0 : -1);
+		return (rspamd_lc_cmp(srch, in, srchlen) == 0 ? 0 : -1);
 	}
 	else {
 		return (-1);
@@ -1992,16 +2221,16 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 }
 
 goffset
-rspamd_substring_search_caseless (const gchar *in, gsize inlen,
-		const gchar *srch, gsize srchlen)
+rspamd_substring_search_caseless(const gchar *in, gsize inlen,
+								 const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
-		if (G_UNLIKELY (srchlen == 1)) {
+		if (G_UNLIKELY(srchlen == 1)) {
 			goffset i;
-			gchar s = lc_map[(guchar)srch[0]];
+			gchar s = lc_map[(guchar) srch[0]];
 
 			for (i = 0; i < inlen; i++) {
-				if (lc_map[(guchar)in[i]] == s) {
+				if (lc_map[(guchar) in[i]] == s) {
 					return i;
 				}
 			}
@@ -2009,18 +2238,18 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 			return (-1);
 		}
 
-		return rspamd_substring_search_common (in, inlen, srch, srchlen,
-				rspamd_substring_casecmp_func);
+		return rspamd_substring_search_common(in, inlen, srch, srchlen,
+											  rspamd_substring_casecmp_func);
 	}
 	else if (inlen == srchlen) {
-		return rspamd_lc_cmp (srch, in, srchlen) == 0 ? 0 : (-1);
+		return rspamd_lc_cmp(srch, in, srchlen) == 0 ? 0 : (-1);
 	}
 
 	return (-1);
 }
 
 goffset
-rspamd_string_find_eoh (GString *input, goffset *body_start)
+rspamd_string_find_eoh(GString *input, goffset *body_start)
 {
 	const gchar *p, *c = NULL, *end;
 	enum {
@@ -2033,7 +2262,7 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 		obs_fws
 	} state = skip_char;
 
-	g_assert (input != NULL);
+	g_assert(input != NULL);
 
 	p = input->str;
 	end = p + input->len;
@@ -2078,10 +2307,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 				p++;
 				state = got_lf;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (g_ascii_isspace(*p)) {
 				/* We have \r<space>*, allow to stay in this state */
 				c = p;
-				p ++;
+				p++;
 				state = obs_fws;
 			}
 			else {
@@ -2100,10 +2329,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			else if (*p == '\r') {
 				state = got_linebreak;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (g_ascii_isspace(*p)) {
 				/* We have \n<space>*, allow to stay in this state */
 				c = p;
-				p ++;
+				p++;
 				state = obs_fws;
 			}
 			else {
@@ -2122,10 +2351,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 				p++;
 				state = got_linebreak_lf;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (g_ascii_isspace(*p)) {
 				/* We have <linebreak><space>*, allow to stay in this state */
 				c = p;
-				p ++;
+				p++;
 				state = obs_fws;
 			}
 			else {
@@ -2143,11 +2372,11 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 				state = got_linebreak_lf;
 				p++;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (g_ascii_isspace(*p)) {
 				/* We have \r\n<space>*, allow to keep in this state */
 				c = p;
 				state = obs_fws;
-				p ++;
+				p++;
 			}
 			else {
 				p++;
@@ -2155,7 +2384,7 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			break;
 		case got_linebreak_lf:
-			g_assert (c != NULL);
+			g_assert(c != NULL);
 			if (body_start) {
 				/* \r\n\r\n */
 				*body_start = p - input->str;
@@ -2164,19 +2393,19 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			return c - input->str;
 		case obs_fws:
 			if (*p == ' ' || *p == '\t') {
-				p ++;
+				p++;
 			}
 			else if (*p == '\r') {
 				/* Perform lookahead due to #2349 */
 				if (end - p > 2) {
-					if (p[1] == '\n' && g_ascii_isspace (p[2])) {
+					if (p[1] == '\n' && g_ascii_isspace(p[2])) {
 						/* Real obs_fws state, switch */
 						c = p;
-						p ++;
+						p++;
 						state = got_cr;
 					}
-					else if (g_ascii_isspace (p[1])) {
-						p ++;
+					else if (g_ascii_isspace(p[1])) {
+						p++;
 						state = obs_fws;
 					}
 					else {
@@ -2186,7 +2415,7 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 						 * https://tools.ietf.org/html/rfc2822#section-4.2
 						 */
 						c = p;
-						p ++;
+						p++;
 						state = got_cr;
 					}
 				}
@@ -2205,13 +2434,13 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 					/* Continue folding with an empty line */
 					if (p[1] == ' ' || p[1] == '\t') {
 						c = p;
-						p ++;
+						p++;
 						state = obs_fws;
 					}
 					else if (p[1] == '\r') {
 						/* WTF state: we have seen spaces, \n and then it follows \r */
 						c = p;
-						p ++;
+						p++;
 						state = got_lf;
 					}
 					else if (p[1] == '\n') {
@@ -2220,7 +2449,7 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 						 * the cycle.
 						 */
 						c = p;
-						p ++;
+						p++;
 						state = got_lf;
 					}
 					else {
@@ -2230,10 +2459,9 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 						 * https://tools.ietf.org/html/rfc2822#section-4.2
 						 */
 						c = p;
-						p ++;
+						p++;
 						state = got_lf;
 					}
-
 				}
 				else {
 					/* shortage */
@@ -2250,7 +2478,6 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			break;
 		}
-
 	}
 
 	if (state == got_linebreak_lf) {
@@ -2265,9 +2492,8 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 	return -1;
 }
 
-gint
-rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
-		gsize outlen)
+gint rspamd_encode_hex_buf(const guchar *in, gsize inlen, gchar *out,
+						   gsize outlen)
 {
 	gchar *o, *end;
 	const guchar *p;
@@ -2280,7 +2506,7 @@ rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 	while (inlen > 0 && o < end - 1) {
 		*o++ = hexdigests[((*p >> 4) & 0xF)];
 		*o++ = hexdigests[((*p++) & 0xF)];
-		inlen --;
+		inlen--;
 	}
 
 	if (o <= end) {
@@ -2291,7 +2517,7 @@ rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 }
 
 gchar *
-rspamd_encode_hex (const guchar *in, gsize inlen)
+rspamd_encode_hex(const guchar *in, gsize inlen)
 {
 	gchar *out;
 	gsize outlen = inlen * 2 + 1;
@@ -2301,14 +2527,14 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 		return NULL;
 	}
 
-	out = g_malloc (outlen);
-	olen = rspamd_encode_hex_buf (in, inlen, out, outlen - 1);
+	out = g_malloc(outlen);
+	olen = rspamd_encode_hex_buf(in, inlen, out, outlen - 1);
 
 	if (olen >= 0) {
 		out[olen] = '\0';
 	}
 	else {
-		g_free (out);
+		g_free(out);
 
 		return NULL;
 	}
@@ -2317,8 +2543,8 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 }
 
 gssize
-rspamd_decode_hex_buf (const gchar *in, gsize inlen,
-		guchar *out, gsize outlen)
+rspamd_decode_hex_buf(const gchar *in, gsize inlen,
+					  guchar *out, gsize outlen)
 {
 	guchar *o, *end, ret = 0;
 	const gchar *p;
@@ -2334,16 +2560,20 @@ rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 	while (inlen > 1 && o < end) {
 		c = *p++;
 
-		if      (c >= '0' && c <= '9') ret = c - '0';
-		else if (c >= 'A' && c <= 'F') ret = c - 'A' + 10;
-		else if (c >= 'a' && c <= 'f') ret = c - 'a' + 10;
+		if (c >= '0' && c <= '9') ret = c - '0';
+		else if (c >= 'A' && c <= 'F')
+			ret = c - 'A' + 10;
+		else if (c >= 'a' && c <= 'f')
+			ret = c - 'a' + 10;
 
 		c = *p++;
 		ret *= 16;
 
-		if      (c >= '0' && c <= '9') ret += c - '0';
-		else if (c >= 'A' && c <= 'F') ret += c - 'A' + 10;
-		else if (c >= 'a' && c <= 'f') ret += c - 'a' + 10;
+		if (c >= '0' && c <= '9') ret += c - '0';
+		else if (c >= 'A' && c <= 'F')
+			ret += c - 'A' + 10;
+		else if (c >= 'a' && c <= 'f')
+			ret += c - 'a' + 10;
 
 		*o++ = ret;
 
@@ -2357,8 +2587,8 @@ rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 	return -1;
 }
 
-guchar*
-rspamd_decode_hex (const gchar *in, gsize inlen)
+guchar *
+rspamd_decode_hex(const gchar *in, gsize inlen)
 {
 	guchar *out;
 	gsize outlen = (inlen / 2 + inlen % 2) + 1;
@@ -2368,9 +2598,9 @@ rspamd_decode_hex (const gchar *in, gsize inlen)
 		return NULL;
 	}
 
-	out = g_malloc (outlen);
+	out = g_malloc(outlen);
 
-	olen = rspamd_decode_hex_buf (in, inlen, out, outlen - 1);
+	olen = rspamd_decode_hex_buf(in, inlen, out, outlen - 1);
 
 	if (olen >= 0) {
 		out[olen] = '\0';
@@ -2378,14 +2608,14 @@ rspamd_decode_hex (const gchar *in, gsize inlen)
 		return out;
 	}
 
-	g_free (out);
+	g_free(out);
 
 	return NULL;
 }
 
 gssize
-rspamd_decode_qp_buf (const gchar *in, gsize inlen,
-		gchar *out, gsize outlen)
+rspamd_decode_qp_buf(const gchar *in, gsize inlen,
+					 gchar *out, gsize outlen)
 {
 	gchar *o, *end, *pos, c;
 	const gchar *p;
@@ -2399,7 +2629,7 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 
 	while (remain > 0 && o < end) {
 		if (*p == '=') {
-			remain --;
+			remain--;
 
 			if (remain == 0) {
 				/* Last '=' character, bugon */
@@ -2414,11 +2644,11 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 				break;
 			}
 
-			p ++;
-decode:
+			p++;
+		decode:
 			/* Decode character after '=' */
 			c = *p++;
-			remain --;
+			remain--;
 			ret = 0;
 
 			if (c >= '0' && c <= '9') {
@@ -2433,8 +2663,8 @@ decode:
 			else if (c == '\r') {
 				/* Eat one more endline */
 				if (remain > 0 && *p == '\n') {
-					p ++;
-					remain --;
+					p++;
+					remain--;
 				}
 
 				continue;
@@ -2459,7 +2689,7 @@ decode:
 			if (remain > 0) {
 				c = *p++;
 				ret *= 16;
-				remain --;
+				remain--;
 
 				if (c >= '0' && c <= '9') {
 					ret += c - '0';
@@ -2485,7 +2715,7 @@ decode:
 				}
 
 				if (end - o > 0) {
-					*o++ = (gchar)ret;
+					*o++ = (gchar) ret;
 				}
 				else {
 					return (-1);
@@ -2494,7 +2724,7 @@ decode:
 		}
 		else {
 			if (end - o >= remain) {
-				if ((pos = memccpy (o, p, '=', remain)) == NULL) {
+				if ((pos = memccpy(o, p, '=', remain)) == NULL) {
 					/* All copied */
 					o += remain;
 					break;
@@ -2539,7 +2769,7 @@ decode:
 }
 
 gssize
-rspamd_decode_uue_buf (const gchar *in, gsize inlen,
+rspamd_decode_uue_buf(const gchar *in, gsize inlen,
 					  gchar *out, gsize outlen)
 {
 	gchar *o, *out_end;
@@ -2555,26 +2785,32 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 	remain = inlen;
 
 	/* Skip newlines */
-#define SKIP_NEWLINE do { while (remain > 0 && (*p == '\n' || *p == '\r')) {p ++; remain --; } } while (0)
+#define SKIP_NEWLINE                                       \
+	do {                                                   \
+		while (remain > 0 && (*p == '\n' || *p == '\r')) { \
+			p++;                                           \
+			remain--;                                      \
+		}                                                  \
+	} while (0)
 	SKIP_NEWLINE;
 
 	/* First of all, we need to read the first line (and probably skip it) */
-	if (remain < sizeof ("begin-base64 ")) {
+	if (remain < sizeof("begin-base64 ")) {
 		/* Obviously truncated */
 		return -1;
 	}
 
-	if (memcmp (p, "begin ", sizeof ("begin ") - 1) == 0) {
-		p += sizeof ("begin ") - 1;
-		remain -= sizeof ("begin ") - 1;
+	if (memcmp(p, "begin ", sizeof("begin ") - 1) == 0) {
+		p += sizeof("begin ") - 1;
+		remain -= sizeof("begin ") - 1;
 
-		pos = rspamd_memcspn (p, nline, remain);
+		pos = rspamd_memcspn(p, nline, remain);
 	}
-	else if (memcmp (p, "begin-base64 ", sizeof ("begin-base64 ") - 1) == 0) {
+	else if (memcmp(p, "begin-base64 ", sizeof("begin-base64 ") - 1) == 0) {
 		base64 = TRUE;
-		p += sizeof ("begin-base64 ") - 1;
-		remain -= sizeof ("begin-base64 ") - 1;
-		pos = rspamd_memcspn (p, nline, remain);
+		p += sizeof("begin-base64 ") - 1;
+		remain -= sizeof("begin-base64 ") - 1;
+		pos = rspamd_memcspn(p, nline, remain);
 	}
 	else {
 		/* Crap */
@@ -2586,18 +2822,24 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 		return (-1);
 	}
 
-#define	DEC(c)	(((c) - ' ') & 077)		/* single character decode */
-#define IS_DEC(c) ( (((c) - ' ') >= 0) && (((c) - ' ') <= 077 + 1) )
-#define CHAR_OUT(c) do { if (o < out_end) { *o++ = c; } else { return (-1); } } while(0)
+#define DEC(c) (((c) - ' ') & 077) /* single character decode */
+#define IS_DEC(c) ((((c) - ' ') >= 0) && (((c) - ' ') <= 077 + 1))
+#define CHAR_OUT(c)                    \
+	do {                               \
+		if (o < out_end) { *o++ = c; } \
+		else {                         \
+			return (-1);               \
+		}                              \
+	} while (0)
 
 	remain -= pos;
 	p = p + pos;
 	SKIP_NEWLINE;
 
 	if (base64) {
-		if (!rspamd_cryptobox_base64_decode (p,
-				remain,
-				out, &outlen)) {
+		if (!rspamd_cryptobox_base64_decode(p,
+											remain,
+											out, &outlen)) {
 			return (-1);
 		}
 
@@ -2609,7 +2851,7 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 		const gchar *eol;
 		gint i, ch;
 
-		pos = rspamd_memcspn (p, nline, remain);
+		pos = rspamd_memcspn(p, nline, remain);
 
 		if (pos == 0) {
 			/* Skip empty lines */
@@ -2684,51 +2926,55 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 	return (o - out);
 }
 
-#define BITOP(a,b,op) \
-		((a)[(gsize)(b)/(8*sizeof *(a))] op (gsize)1<<((gsize)(b)%(8*sizeof *(a))))
+#define BITOP(a, b, op) \
+	((a)[(gsize) (b) / (8 * sizeof *(a))] op(gsize) 1 << ((gsize) (b) % (8 * sizeof *(a))))
 
 
-gsize
-rspamd_memcspn (const gchar *s, const gchar *e, gsize len)
+gsize rspamd_memcspn(const gchar *s, const gchar *e, gsize len)
 {
 	gsize byteset[32 / sizeof(gsize)];
 	const gchar *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; p < end && *p != *e; p++);
+		for (; p < end && *p != *e; p++)
+			;
 		return p - s;
 	}
 
-	memset (byteset, 0, sizeof byteset);
+	memset(byteset, 0, sizeof byteset);
 
-	for (; *e && BITOP (byteset, *(guchar *)e, |=); e++);
-	for (; p < end && !BITOP (byteset, *(guchar *)p, &); p++);
+	for (; *e && BITOP(byteset, *(guchar *) e, |=); e++)
+		;
+	for (; p < end && !BITOP(byteset, *(guchar *) p, &); p++)
+		;
 
 	return p - s;
 }
 
-gsize
-rspamd_memspn (const gchar *s, const gchar *e, gsize len)
+gsize rspamd_memspn(const gchar *s, const gchar *e, gsize len)
 {
 	gsize byteset[32 / sizeof(gsize)];
 	const gchar *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; p < end && *p == *e; p++);
+		for (; p < end && *p == *e; p++)
+			;
 		return p - s;
 	}
 
-	memset (byteset, 0, sizeof byteset);
+	memset(byteset, 0, sizeof byteset);
 
-	for (; *e && BITOP (byteset, *(guchar *)e, |=); e++);
-	for (; p < end && BITOP (byteset, *(guchar *)p, &); p++);
+	for (; *e && BITOP(byteset, *(guchar *) e, |=); e++)
+		;
+	for (; p < end && BITOP(byteset, *(guchar *) p, &); p++)
+		;
 
 	return p - s;
 }
 
 gssize
-rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
-		gchar *out, gsize outlen)
+rspamd_decode_qp2047_buf(const gchar *in, gsize inlen,
+						 gchar *out, gsize outlen)
 {
 	gchar *o, *end, c;
 	const gchar *p;
@@ -2742,8 +2988,8 @@ rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
 
 	while (remain > 0 && o < end) {
 		if (*p == '=') {
-			p ++;
-			remain --;
+			p++;
+			remain--;
 
 			if (remain == 0) {
 				if (end - o > 0) {
@@ -2751,20 +2997,24 @@ rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
 					break;
 				}
 			}
-decode:
+		decode:
 			/* Decode character after '=' */
 			c = *p++;
-			remain --;
+			remain--;
 			ret = 0;
 
-			if      (c >= '0' && c <= '9') { ret = c - '0'; }
-			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
-			else if (c >= 'a' && c <= 'f') { ret = c - 'a' + 10; }
+			if (c >= '0' && c <= '9') { ret = c - '0'; }
+			else if (c >= 'A' && c <= 'F') {
+				ret = c - 'A' + 10;
+			}
+			else if (c >= 'a' && c <= 'f') {
+				ret = c - 'a' + 10;
+			}
 			else if (c == '\r' || c == '\n') {
 				/* Soft line break */
 				while (remain > 0 && (*p == '\r' || *p == '\n')) {
-					remain --;
-					p ++;
+					remain--;
+					p++;
 				}
 
 				continue;
@@ -2774,24 +3024,28 @@ decode:
 				c = *p++;
 				ret *= 16;
 
-				if      (c >= '0' && c <= '9') { ret += c - '0'; }
-				else if (c >= 'A' && c <= 'F') { ret += c - 'A' + 10; }
-				else if (c >= 'a' && c <= 'f') { ret += c - 'a' + 10; }
+				if (c >= '0' && c <= '9') { ret += c - '0'; }
+				else if (c >= 'A' && c <= 'F') {
+					ret += c - 'A' + 10;
+				}
+				else if (c >= 'a' && c <= 'f') {
+					ret += c - 'a' + 10;
+				}
 
 				if (end - o > 0) {
-					*o++ = (gchar)ret;
+					*o++ = (gchar) ret;
 				}
 				else {
 					return (-1);
 				}
 
-				remain --;
+				remain--;
 			}
 		}
 		else {
 			if (end - o >= remain) {
-				processed = rspamd_memcspn (p, "=_", remain);
-				memcpy (o, p, processed);
+				processed = rspamd_memcspn(p, "=_", remain);
+				memcpy(o, p, processed);
 				o += processed;
 
 				if (processed == remain) {
@@ -2802,16 +3056,16 @@ decode:
 					remain -= processed;
 					p += processed;
 
-					if (G_LIKELY (*p == '=')) {
-						p ++;
+					if (G_LIKELY(*p == '=')) {
+						p++;
 						/* Skip comparison, as we know that we have found match */
-						remain --;
+						remain--;
 						goto decode;
 					}
 					else {
 						*o++ = ' ';
-						p ++;
-						remain --;
+						p++;
+						remain--;
 					}
 				}
 			}
@@ -2826,8 +3080,8 @@ decode:
 }
 
 gssize
-rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
-		gchar *out, gsize outlen)
+rspamd_encode_qp2047_buf(const gchar *in, gsize inlen,
+						 gchar *out, gsize outlen)
 {
 	gchar *o = out, *end = out + outlen, c;
 	static const gchar hexdigests[16] = "0123456789ABCDEF";
@@ -2835,13 +3089,13 @@ rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
 	while (inlen > 0 && o < end) {
 		c = *in;
 
-		if (g_ascii_isalnum (c)) {
+		if (g_ascii_isalnum(c)) {
 			*o++ = c;
 		}
 		else if (c == ' ') {
 			*o++ = '_';
 		}
-		else if (end - o >= 3){
+		else if (end - o >= 3) {
 			*o++ = '=';
 			*o++ = hexdigests[((c >> 4) & 0xF)];
 			*o++ = hexdigests[(c & 0xF)];
@@ -2850,8 +3104,8 @@ rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
 			return (-1);
 		}
 
-		in ++;
-		inlen --;
+		in++;
+		inlen--;
 	}
 
 	if (inlen != 0) {
@@ -2866,21 +3120,21 @@ rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
  * GString ucl emitting functions
  */
 static int
-rspamd_gstring_append_character (unsigned char c, size_t len, void *ud)
+rspamd_gstring_append_character(unsigned char c, size_t len, void *ud)
 {
 	GString *buf = ud;
 	gsize old_len;
 
 	if (len == 1) {
-		g_string_append_c (buf, c);
+		g_string_append_c(buf, c);
 	}
 	else {
 		if (buf->allocated_len - buf->len <= len) {
 			old_len = buf->len;
-			g_string_set_size (buf, buf->len + len + 1);
+			g_string_set_size(buf, buf->len + len + 1);
 			buf->len = old_len;
 		}
-		memset (&buf->str[buf->len], c, len);
+		memset(&buf->str[buf->len], c, len);
 		buf->len += len;
 	}
 
@@ -2888,143 +3142,142 @@ rspamd_gstring_append_character (unsigned char c, size_t len, void *ud)
 }
 
 static int
-rspamd_gstring_append_len (const unsigned char *str, size_t len, void *ud)
+rspamd_gstring_append_len(const unsigned char *str, size_t len, void *ud)
 {
 	GString *buf = ud;
 
-	g_string_append_len (buf, str, len);
+	g_string_append_len(buf, str, len);
 
 	return 0;
 }
 
 static int
-rspamd_gstring_append_int (int64_t val, void *ud)
+rspamd_gstring_append_int(int64_t val, void *ud)
 {
 	GString *buf = ud;
 
-	rspamd_printf_gstring (buf, "%L", (intmax_t) val);
+	rspamd_printf_gstring(buf, "%L", (intmax_t) val);
 	return 0;
 }
 
 static int
-rspamd_gstring_append_double (double val, void *ud)
+rspamd_gstring_append_double(double val, void *ud)
 {
 	GString *buf = ud;
 	const double delta = 0.0000001;
 
-	if (isfinite (val)) {
+	if (isfinite(val)) {
 		if (val == (double) (int) val) {
-			rspamd_printf_gstring (buf, "%.1f", val);
-		} else if (fabs (val - (double) (int) val) < delta) {
+			rspamd_printf_gstring(buf, "%.1f", val);
+		}
+		else if (fabs(val - (double) (int) val) < delta) {
 			/* Write at maximum precision */
-			rspamd_printf_gstring (buf, "%.*g", DBL_DIG, val);
-		} else {
-			rspamd_printf_gstring (buf, "%f", val);
+			rspamd_printf_gstring(buf, "%.*g", DBL_DIG, val);
+		}
+		else {
+			rspamd_printf_gstring(buf, "%f", val);
 		}
 	}
 	else {
-		rspamd_printf_gstring (buf, "null");
+		rspamd_printf_gstring(buf, "null");
 	}
 
 	return 0;
 }
 
-void
-rspamd_ucl_emit_gstring_comments (const ucl_object_t *obj,
-		enum ucl_emitter emit_type,
-		GString *target,
-		const ucl_object_t *comments)
+void rspamd_ucl_emit_gstring_comments(const ucl_object_t *obj,
+									  enum ucl_emitter emit_type,
+									  GString *target,
+									  const ucl_object_t *comments)
 {
 	struct ucl_emitter_functions func = {
-			.ucl_emitter_append_character = rspamd_gstring_append_character,
-			.ucl_emitter_append_len = rspamd_gstring_append_len,
-			.ucl_emitter_append_int = rspamd_gstring_append_int,
-			.ucl_emitter_append_double = rspamd_gstring_append_double
-	};
+		.ucl_emitter_append_character = rspamd_gstring_append_character,
+		.ucl_emitter_append_len = rspamd_gstring_append_len,
+		.ucl_emitter_append_int = rspamd_gstring_append_int,
+		.ucl_emitter_append_double = rspamd_gstring_append_double};
 
 	func.ud = target;
-	ucl_object_emit_full (obj, emit_type, &func, comments);
+	ucl_object_emit_full(obj, emit_type, &func, comments);
 }
 
 /*
  * FString ucl emitting functions
  */
 static int
-rspamd_fstring_emit_append_character (unsigned char c, size_t len, void *ud)
+rspamd_fstring_emit_append_character(unsigned char c, size_t len, void *ud)
 {
 	rspamd_fstring_t **buf = ud;
 
-	*buf = rspamd_fstring_append_chars (*buf, c, len);
+	*buf = rspamd_fstring_append_chars(*buf, c, len);
 
 	return 0;
 }
 
 static int
-rspamd_fstring_emit_append_len (const unsigned char *str, size_t len, void *ud)
+rspamd_fstring_emit_append_len(const unsigned char *str, size_t len, void *ud)
 {
 	rspamd_fstring_t **buf = ud;
 
-	*buf = rspamd_fstring_append (*buf, str, len);
+	*buf = rspamd_fstring_append(*buf, str, len);
 
 	return 0;
 }
 
 static int
-rspamd_fstring_emit_append_int (int64_t val, void *ud)
+rspamd_fstring_emit_append_int(int64_t val, void *ud)
 {
 	rspamd_fstring_t **buf = ud;
 
-	rspamd_printf_fstring (buf, "%L", (intmax_t) val);
+	rspamd_printf_fstring(buf, "%L", (intmax_t) val);
 	return 0;
 }
 
 static int
-rspamd_fstring_emit_append_double (double val, void *ud)
+rspamd_fstring_emit_append_double(double val, void *ud)
 {
 	rspamd_fstring_t **buf = ud;
 #define MAX_PRECISION 6
 
-	if (isfinite (val)) {
+	if (isfinite(val)) {
 		if (val == (double) ((gint) val)) {
-			rspamd_printf_fstring (buf, "%.1f", val);
-		} else {
-			rspamd_printf_fstring (buf, "%." G_STRINGIFY (MAX_PRECISION) "f",
-					val);
+			rspamd_printf_fstring(buf, "%.1f", val);
+		}
+		else {
+			rspamd_printf_fstring(buf, "%." G_STRINGIFY(MAX_PRECISION) "f",
+								  val);
 		}
 	}
 	else {
-		rspamd_printf_fstring (buf, "null");
+		rspamd_printf_fstring(buf, "null");
 	}
 
 	return 0;
 }
 
-void
-rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
-		enum ucl_emitter emit_type,
-		rspamd_fstring_t **buf,
-		const ucl_object_t *comments)
+void rspamd_ucl_emit_fstring_comments(const ucl_object_t *obj,
+									  enum ucl_emitter emit_type,
+									  rspamd_fstring_t **buf,
+									  const ucl_object_t *comments)
 {
 	struct ucl_emitter_functions func = {
-			.ucl_emitter_append_character = rspamd_fstring_emit_append_character,
-			.ucl_emitter_append_len = rspamd_fstring_emit_append_len,
-			.ucl_emitter_append_int = rspamd_fstring_emit_append_int,
-			.ucl_emitter_append_double = rspamd_fstring_emit_append_double
-	};
+		.ucl_emitter_append_character = rspamd_fstring_emit_append_character,
+		.ucl_emitter_append_len = rspamd_fstring_emit_append_len,
+		.ucl_emitter_append_int = rspamd_fstring_emit_append_int,
+		.ucl_emitter_append_double = rspamd_fstring_emit_append_double};
 
 	func.ud = buf;
-	ucl_object_emit_full (obj, emit_type, &func, comments);
+	ucl_object_emit_full(obj, emit_type, &func, comments);
 }
 
 #ifndef HAVE_MEMRCHR
 void *
-rspamd_memrchr (const void *m, gint c, gsize len)
+rspamd_memrchr(const void *m, gint c, gsize len)
 {
 	const guint8 *p = m;
 
-	for (gsize i = len; i > 0; i --) {
+	for (gsize i = len; i > 0; i--) {
 		if (p[i - 1] == c) {
-			return (void *)(p + i - 1);
+			return (void *) (p + i - 1);
 		}
 	}
 
@@ -3033,32 +3286,32 @@ rspamd_memrchr (const void *m, gint c, gsize len)
 #endif
 
 struct UConverter *
-rspamd_get_utf8_converter (void)
+rspamd_get_utf8_converter(void)
 {
 	static UConverter *utf8_conv = NULL;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (utf8_conv == NULL) {
-		utf8_conv = ucnv_open ("UTF-8", &uc_err);
-		if (!U_SUCCESS (uc_err)) {
-			msg_err ("FATAL error: cannot open converter for utf8: %s",
-					u_errorName (uc_err));
+		utf8_conv = ucnv_open("UTF-8", &uc_err);
+		if (!U_SUCCESS(uc_err)) {
+			msg_err("FATAL error: cannot open converter for utf8: %s",
+					u_errorName(uc_err));
 
-			g_assert_not_reached ();
+			g_assert_not_reached();
 		}
 
-		ucnv_setFromUCallBack (utf8_conv,
-				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-				NULL,
-				NULL,
-				NULL,
-				&uc_err);
-		ucnv_setToUCallBack (utf8_conv,
-				UCNV_TO_U_CALLBACK_SUBSTITUTE,
-				NULL,
-				NULL,
-				NULL,
-				&uc_err);
+		ucnv_setFromUCallBack(utf8_conv,
+							  UCNV_FROM_U_CALLBACK_SUBSTITUTE,
+							  NULL,
+							  NULL,
+							  NULL,
+							  &uc_err);
+		ucnv_setToUCallBack(utf8_conv,
+							UCNV_TO_U_CALLBACK_SUBSTITUTE,
+							NULL,
+							NULL,
+							NULL,
+							&uc_err);
 	}
 
 	return utf8_conv;
@@ -3066,15 +3319,15 @@ rspamd_get_utf8_converter (void)
 
 
 const struct UNormalizer2 *
-rspamd_get_unicode_normalizer (void)
+rspamd_get_unicode_normalizer(void)
 {
 #if U_ICU_VERSION_MAJOR_NUM >= 44
 	UErrorCode uc_err = U_ZERO_ERROR;
 	static const UNormalizer2 *norm = NULL;
 
 	if (norm == NULL) {
-		norm = unorm2_getInstance (NULL, "nfkc", UNORM2_COMPOSE, &uc_err);
-		g_assert (U_SUCCESS (uc_err));
+		norm = unorm2_getInstance(NULL, "nfkc", UNORM2_COMPOSE, &uc_err);
+		g_assert(U_SUCCESS(uc_err));
 	}
 
 	return norm;
@@ -3085,8 +3338,8 @@ rspamd_get_unicode_normalizer (void)
 }
 
 gchar *
-rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, enum rspamd_regexp_escape_flags flags)
+rspamd_str_regexp_escape(const gchar *pattern, gsize slen,
+						 gsize *dst_len, enum rspamd_regexp_escape_flags flags)
 {
 	const gchar *p, *end = pattern + slen;
 	gchar *res, *d, t, *tmp_utf = NULL, *dend;
@@ -3098,7 +3351,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
 	while (p < end) {
-		t = *p ++;
+		t = *p++;
 
 		switch (t) {
 		case '[':
@@ -3123,11 +3376,11 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			}
 			break;
 		default:
-			if (g_ascii_isspace (t)) {
-				len ++;
+			if (g_ascii_isspace(t)) {
+				len++;
 			}
 			else {
-				if (!g_ascii_isprint (t) || (t & 0x80)) {
+				if (!g_ascii_isprint(t) || (t & 0x80)) {
 
 					if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
 						/* \x{code}, where code can be up to 5 digits */
@@ -3144,8 +3397,8 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	}
 
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
-		if (rspamd_fast_utf8_validate (pattern, slen) != 0) {
-			tmp_utf = rspamd_str_make_utf_valid (pattern, slen, NULL, NULL);
+		if (rspamd_fast_utf8_validate(pattern, slen) != 0) {
+			tmp_utf = rspamd_str_make_utf_valid(pattern, slen, NULL, NULL);
 		}
 	}
 
@@ -3160,7 +3413,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			return tmp_utf;
 		}
 		else {
-			return g_strdup (pattern);
+			return g_strdup(pattern);
 		}
 	}
 
@@ -3170,14 +3423,14 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	}
 
 	len = slen + len;
-	res = g_malloc (len + 1);
+	res = g_malloc(len + 1);
 	p = pattern;
 	d = res;
 	dend = d + len;
 
 	while (p < end) {
-		g_assert (d < dend);
-		t = *p ++;
+		g_assert(d < dend);
+		t = *p++;
 
 		switch (t) {
 		case '[':
@@ -3210,12 +3463,12 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 					if (!g_ascii_isalnum(*search) && *search != '-') {
 						break;
 					}
-					if (*search == '[' ) {
+					if (*search == '[') {
 						seen_brace = true;
 						break;
 					}
 
-					search --;
+					search--;
 				}
 
 				if (!seen_brace) {
@@ -3239,28 +3492,28 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			}
 			break;
 		default:
-			if (g_ascii_isspace (t)) {
+			if (g_ascii_isspace(t)) {
 				if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
 					*d++ = '\\';
 				}
 			}
-			else if (t & 0x80 || !g_ascii_isprint (t)) {
+			else if (t & 0x80 || !g_ascii_isprint(t)) {
 				if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF)) {
 					*d++ = '\\';
 					*d++ = 'x';
 					*d++ = hexdigests[((t >> 4) & 0xF)];
-					*d++ = hexdigests[((t) & 0xF)];
+					*d++ = hexdigests[((t) &0xF)];
 					continue; /* To avoid *d++ = t; */
 				}
 				else {
-					if (flags & (RSPAMD_REGEXP_ESCAPE_RE|RSPAMD_REGEXP_ESCAPE_GLOB)) {
+					if (flags & (RSPAMD_REGEXP_ESCAPE_RE | RSPAMD_REGEXP_ESCAPE_GLOB)) {
 						UChar32 uc;
 						gint32 off = p - pattern - 1;
-						U8_NEXT (pattern, off, slen, uc);
+						U8_NEXT(pattern, off, slen, uc);
 
 						if (uc > 0) {
-							d += rspamd_snprintf (d, dend - d,
-									"\\x{%xd}", uc);
+							d += rspamd_snprintf(d, dend - d,
+												 "\\x{%xd}", uc);
 							p = pattern + off;
 						}
 
@@ -3281,7 +3534,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	}
 
 	if (tmp_utf) {
-		g_free (tmp_utf);
+		g_free(tmp_utf);
 	}
 
 	return res;
@@ -3289,9 +3542,9 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 
 gchar *
-rspamd_str_make_utf_valid (const guchar *src, gsize slen,
-		gsize *dstlen,
-		rspamd_mempool_t *pool)
+rspamd_str_make_utf_valid(const guchar *src, gsize slen,
+						  gsize *dstlen,
+						  rspamd_mempool_t *pool)
 {
 	UChar32 uc;
 	goffset err_offset;
@@ -3308,24 +3561,24 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 			*dstlen = 0;
 		}
 
-		return pool ? rspamd_mempool_strdup (pool, "") : g_strdup ("");
+		return pool ? rspamd_mempool_strdup(pool, "") : g_strdup("");
 	}
 
 	p = src;
 	dlen = slen + 1; /* As we add '\0' */
 
 	/* Check space required */
-	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain)) > 0) {
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate(p, remain)) > 0) {
 		gint i = 0;
 
-		err_offset --; /* As it returns it 1 indexed */
+		err_offset--; /* As it returns it 1 indexed */
 		p += err_offset;
 		remain -= err_offset;
 		dlen += err_offset;
 
 		/* Each invalid character of input requires 3 bytes of output (+2 bytes) */
 		while (i < remain) {
-			U8_NEXT (p, i, remain, uc);
+			U8_NEXT(p, i, remain, uc);
 
 			if (uc < 0) {
 				dlen += 2;
@@ -3340,20 +3593,20 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 	}
 
 	if (pool) {
-		dst = rspamd_mempool_alloc (pool, dlen + 1);
+		dst = rspamd_mempool_alloc(pool, dlen + 1);
 	}
 	else {
-		dst = g_malloc (dlen + 1);
+		dst = g_malloc(dlen + 1);
 	}
 
 	p = src;
 	d = dst;
 	remain = slen;
 
-	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain)) > 0) {
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate(p, remain)) > 0) {
 		/* Copy valid */
-		err_offset --; /* As it returns it 1 indexed */
-		memcpy (d, p, err_offset);
+		err_offset--; /* As it returns it 1 indexed */
+		memcpy(d, p, err_offset);
 		d += err_offset;
 
 		/* Append 0xFFFD for each bad character */
@@ -3364,7 +3617,7 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 
 		while (i < remain) {
 			gint old_i = i;
-			U8_NEXT (p, i, remain, uc);
+			U8_NEXT(p, i, remain, uc);
 
 			if (uc < 0) {
 				*d++ = '\357';
@@ -3387,12 +3640,12 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 
 	if (err_offset == 0 && remain > 0) {
 		/* Last piece */
-		memcpy (d, p, remain);
+		memcpy(d, p, remain);
 		d += remain;
 	}
 
 	/* Last '\0' */
-	g_assert (dlen > d - dst);
+	g_assert(dlen > d - dst);
 	*d = '\0';
 
 	if (dstlen) {
@@ -3402,8 +3655,7 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 	return dst;
 }
 
-gsize
-rspamd_gstring_strip (GString *s, const gchar *strip_chars)
+gsize rspamd_gstring_strip(GString *s, const gchar *strip_chars)
 {
 	const gchar *p, *sc;
 	gsize strip_len = 0, total = 0;
@@ -3417,19 +3669,19 @@ rspamd_gstring_strip (GString *s, const gchar *strip_chars)
 
 		while (*sc != '\0') {
 			if (*p == *sc) {
-				strip_len ++;
+				strip_len++;
 				seen = TRUE;
 				break;
 			}
 
-			sc ++;
+			sc++;
 		}
 
 		if (!seen) {
 			break;
 		}
 
-		p --;
+		p--;
 	}
 
 	if (strip_len > 0) {
@@ -3439,10 +3691,10 @@ rspamd_gstring_strip (GString *s, const gchar *strip_chars)
 	}
 
 	if (s->len > 0) {
-		strip_len = rspamd_memspn (s->str, strip_chars, s->len);
+		strip_len = rspamd_memspn(s->str, strip_chars, s->len);
 
 		if (strip_len > 0) {
-			memmove (s->str, s->str + strip_len, s->len - strip_len);
+			memmove(s->str, s->str + strip_len, s->len - strip_len);
 			s->len -= strip_len;
 			total += strip_len;
 		}
@@ -3451,9 +3703,9 @@ rspamd_gstring_strip (GString *s, const gchar *strip_chars)
 	return total;
 }
 
-const gchar* rspamd_string_len_strip (const gchar *in,
-									  gsize *len,
-									  const gchar *strip_chars)
+const gchar *rspamd_string_len_strip(const gchar *in,
+									 gsize *len,
+									 const gchar *strip_chars)
 {
 	const gchar *p, *sc;
 	gsize strip_len = 0, old_len = *len;
@@ -3468,19 +3720,19 @@ const gchar* rspamd_string_len_strip (const gchar *in,
 
 		while (*sc != '\0') {
 			if (*p == *sc) {
-				strip_len ++;
+				strip_len++;
 				seen = TRUE;
 				break;
 			}
 
-			sc ++;
+			sc++;
 		}
 
 		if (!seen) {
 			break;
 		}
 
-		p --;
+		p--;
 	}
 
 	if (strip_len > 0) {
@@ -3491,7 +3743,7 @@ const gchar* rspamd_string_len_strip (const gchar *in,
 	old_len = *len;
 
 	if (old_len > 0) {
-		strip_len = rspamd_memspn (in, strip_chars, old_len);
+		strip_len = rspamd_memspn(in, strip_chars, old_len);
 
 		if (strip_len > 0) {
 			*len -= strip_len;
@@ -3504,8 +3756,8 @@ const gchar* rspamd_string_len_strip (const gchar *in,
 }
 
 gchar **
-rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
-		gint max_elts, rspamd_mempool_t *pool)
+rspamd_string_len_split(const gchar *in, gsize len, const gchar *spill,
+						gint max_elts, rspamd_mempool_t *pool)
 {
 	const gchar *p = in, *end = in + len;
 	gsize detected_elts = 0;
@@ -3513,10 +3765,10 @@ rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
 
 	/* Detect number of elements */
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn (p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
 
 		if (cur_fragment > 0) {
-			detected_elts ++;
+			detected_elts++;
 			p += cur_fragment;
 
 			if (max_elts > 0 && detected_elts >= max_elts) {
@@ -3525,31 +3777,27 @@ rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
 		}
 
 		/* Something like a,,b produces {'a', 'b'} not {'a', '', 'b'} */
-		p += rspamd_memspn (p, spill, end - p);
+		p += rspamd_memspn(p, spill, end - p);
 	}
 
-	res = pool ?
-			rspamd_mempool_alloc (pool, sizeof (gchar *) * (detected_elts + 1)) :
-			g_malloc (sizeof (gchar *) * (detected_elts + 1));
+	res = pool ? rspamd_mempool_alloc(pool, sizeof(gchar *) * (detected_elts + 1)) : g_malloc(sizeof(gchar *) * (detected_elts + 1));
 	/* Last one */
 	res[detected_elts] = NULL;
 	detected_elts = 0;
 	p = in;
 
 	while (p < end) {
-		gsize cur_fragment = rspamd_memcspn (p, spill, end - p);
+		gsize cur_fragment = rspamd_memcspn(p, spill, end - p);
 
 		if (cur_fragment > 0) {
 			gchar *elt;
 
-			elt = pool ?
-				  rspamd_mempool_alloc (pool, cur_fragment + 1) :
-				  g_malloc (cur_fragment + 1);
+			elt = pool ? rspamd_mempool_alloc(pool, cur_fragment + 1) : g_malloc(cur_fragment + 1);
 
-			memcpy (elt, p, cur_fragment);
+			memcpy(elt, p, cur_fragment);
 			elt[cur_fragment] = '\0';
 
-			res[detected_elts ++] = elt;
+			res[detected_elts++] = elt;
 			p += cur_fragment;
 
 			if (max_elts > 0 && detected_elts >= max_elts) {
@@ -3557,7 +3805,7 @@ rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
 			}
 		}
 
-		p += rspamd_memspn (p, spill, end - p);
+		p += rspamd_memspn(p, spill, end - p);
 	}
 
 	return res;
@@ -3568,7 +3816,7 @@ rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
 #endif
 
 static inline gboolean
-rspamd_str_has_8bit_u64 (const guchar *beg, gsize len)
+rspamd_str_has_8bit_u64(const guchar *beg, gsize len)
 {
 	guint8 orb = 0;
 
@@ -3603,36 +3851,36 @@ rspamd_str_has_8bit_u64 (const guchar *beg, gsize len)
 }
 
 gboolean
-rspamd_str_has_8bit (const guchar *beg, gsize len)
+rspamd_str_has_8bit(const guchar *beg, gsize len)
 {
 #if defined(__x86_64__)
 	if (len >= 32) {
 		const uint8_t *nextd = beg + 16;
 
-		__m128i n1 = _mm_set1_epi8 (0), n2;
+		__m128i n1 = _mm_set1_epi8(0), n2;
 
 		n2 = n1;
 
 		while (len >= 32) {
-			__m128i xmm1 = _mm_loadu_si128 ((const __m128i *)beg);
-			__m128i xmm2 = _mm_loadu_si128 ((const __m128i *)nextd);
+			__m128i xmm1 = _mm_loadu_si128((const __m128i *) beg);
+			__m128i xmm2 = _mm_loadu_si128((const __m128i *) nextd);
 
-			n1 = _mm_or_si128 (n1, xmm1);
-			n2 = _mm_or_si128 (n2, xmm2);
+			n1 = _mm_or_si128(n1, xmm1);
+			n2 = _mm_or_si128(n2, xmm2);
 
 			beg += 32;
 			nextd += 32;
 			len -= 32;
 		}
 
-		n1 = _mm_or_si128 (n1, n2);
+		n1 = _mm_or_si128(n1, n2);
 
 		/* We assume 2 complement here */
-		if (_mm_movemask_epi8 (n1)) {
+		if (_mm_movemask_epi8(n1)) {
 			return TRUE;
 		}
 	}
 #endif
 
-	return rspamd_str_has_8bit_u64 (beg, len);
+	return rspamd_str_has_8bit_u64(beg, len);
 }

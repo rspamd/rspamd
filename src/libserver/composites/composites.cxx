@@ -29,23 +29,23 @@
 
 #include "composites_internal.hxx"
 
-#define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "composites", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_warn_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        "composites", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
-#define msg_info_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "composites", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
+#define msg_err_composites(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL,                   \
+															"composites", task->task_pool->tag.uid, \
+															RSPAMD_LOG_FUNC,                        \
+															__VA_ARGS__)
+#define msg_warn_composites(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,                    \
+															 "composites", task->task_pool->tag.uid, \
+															 RSPAMD_LOG_FUNC,                        \
+															 __VA_ARGS__)
+#define msg_info_composites(...) rspamd_default_log_function(G_LOG_LEVEL_INFO,                       \
+															 "composites", task->task_pool->tag.uid, \
+															 RSPAMD_LOG_FUNC,                        \
+															 __VA_ARGS__)
 
-#define msg_debug_composites(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
-        rspamd_composites_log_id, "composites", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
+#define msg_debug_composites(...) rspamd_conditional_debug_fast(NULL, task->from_addr,                                            \
+																rspamd_composites_log_id, "composites", task->task_pool->tag.uid, \
+																RSPAMD_LOG_FUNC,                                                  \
+																__VA_ARGS__)
 
 INIT_LOG_MODULE(composites)
 
@@ -60,12 +60,11 @@ static void rspamd_composite_expr_destroy(rspamd_expression_atom_t *atom);
 static void composites_foreach_callback(gpointer key, gpointer value, void *data);
 
 const struct rspamd_atom_subr composite_expr_subr = {
-		.parse = rspamd::composites::rspamd_composite_expr_parse,
-		.process = rspamd::composites::rspamd_composite_expr_process,
-		.priority = rspamd::composites::rspamd_composite_expr_priority,
-		.destroy = rspamd::composites::rspamd_composite_expr_destroy
-};
-}
+	.parse = rspamd::composites::rspamd_composite_expr_parse,
+	.process = rspamd::composites::rspamd_composite_expr_process,
+	.priority = rspamd::composites::rspamd_composite_expr_priority,
+	.destroy = rspamd::composites::rspamd_composite_expr_destroy};
+}// namespace rspamd::composites
 
 namespace rspamd::composites {
 
@@ -83,13 +82,15 @@ struct composites_data {
 	struct rspamd_composite *composite;
 	struct rspamd_scan_result *metric_res;
 	ankerl::unordered_dense::map<std::string_view,
-			std::vector<symbol_remove_data>> symbols_to_remove;
+								 std::vector<symbol_remove_data>>
+		symbols_to_remove;
 	std::vector<bool> checked;
 
-	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres) :
-			task(task), composite(nullptr), metric_res(mres) {
+	explicit composites_data(struct rspamd_task *task, struct rspamd_scan_result *mres)
+		: task(task), composite(nullptr), metric_res(mres)
+	{
 		checked.resize(rspamd_composites_manager_nelts(task->cfg->composites_manager) * 2,
-				false);
+					   false);
 	}
 };
 
@@ -97,11 +98,15 @@ struct rspamd_composite_option_match {
 	rspamd_regexp_t *re;
 	std::string match;
 
-	explicit rspamd_composite_option_match(const char *start, std::size_t len) noexcept :
-			re(nullptr), match(start, len) {}
+	explicit rspamd_composite_option_match(const char *start, std::size_t len) noexcept
+		: re(nullptr), match(start, len)
+	{
+	}
 
-	explicit rspamd_composite_option_match(rspamd_regexp_t *re) noexcept :
-			re(rspamd_regexp_ref(re)) {}
+	explicit rspamd_composite_option_match(rspamd_regexp_t *re) noexcept
+		: re(rspamd_regexp_ref(re))
+	{
+	}
 
 	rspamd_composite_option_match(const rspamd_composite_option_match &other) noexcept
 	{
@@ -113,7 +118,7 @@ struct rspamd_composite_option_match {
 			re = nullptr;
 		}
 	}
-	rspamd_composite_option_match& operator=(const rspamd_composite_option_match &other) noexcept
+	rspamd_composite_option_match &operator=(const rspamd_composite_option_match &other) noexcept
 	{
 		if (other.re) {
 			if (re) {
@@ -143,7 +148,7 @@ struct rspamd_composite_option_match {
 			match = std::move(other.match);
 		}
 	}
-	rspamd_composite_option_match& operator=(rspamd_composite_option_match &&other) noexcept
+	rspamd_composite_option_match &operator=(rspamd_composite_option_match &&other) noexcept
 	{
 		if (other.re) {
 			if (re) {
@@ -174,8 +179,8 @@ struct rspamd_composite_option_match {
 	{
 		if (re) {
 			return rspamd_regexp_search(re,
-					data.data(), data.size(),
-					nullptr, nullptr, false, nullptr);
+										data.data(), data.size(),
+										nullptr, nullptr, false, nullptr);
 		}
 		else {
 			return data == match;
@@ -303,7 +308,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 			}
 			break;
 		case comp_state_read_comma:
-			if (!g_ascii_isspace (*p)) {
+			if (!g_ascii_isspace(*p)) {
 				if (*p == '/') {
 					state = comp_state_read_regexp;
 				}
@@ -324,14 +329,14 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 			state = comp_state_read_end;
 			break;
 		case comp_state_read_end:
-			g_assert_not_reached ();
+			g_assert_not_reached();
 		}
 	}
 
 	if (state != comp_state_read_end) {
 		g_set_error(err, rspamd_composites_quark(), 100, "invalid composite: %s;"
 														 "parser stopped in state %d",
-				line, state);
+					line, state);
 		return NULL;
 	}
 
@@ -366,7 +371,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 
 			atom->symbol = std::string{line, clen};
 			auto norm_start = std::find_if(atom->symbol.begin(), atom->symbol.end(),
-					[](char c) { return g_ascii_isalnum(c); });
+										   [](char c) { return g_ascii_isalnum(c); });
 			if (norm_start == atom->symbol.end()) {
 				msg_err_pool("invalid composite atom: %s", atom->symbol.c_str());
 			}
@@ -428,8 +433,8 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 				re = rspamd_regexp_new_len(opt_start, opt_len, nullptr, &re_err);
 
 				if (re == nullptr) {
-					msg_err_pool ("cannot create regexp from string %*s: %e",
-							opt_len, opt_start, re_err);
+					msg_err_pool("cannot create regexp from string %*s: %e",
+								 opt_len, opt_start, re_err);
 
 					g_error_free(re_err);
 				}
@@ -451,7 +456,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 			}
 			break;
 		case comp_state_read_comma:
-			if (!g_ascii_isspace (*p)) {
+			if (!g_ascii_isspace(*p)) {
 				if (*p == '/') {
 					state = comp_state_read_regexp;
 					opt_start = p;
@@ -474,7 +479,7 @@ rspamd_composite_expr_parse(const gchar *line, gsize len,
 			state = comp_state_read_end;
 			break;
 		case comp_state_read_end:
-			g_assert_not_reached ();
+			g_assert_not_reached();
 		}
 	}
 
@@ -523,7 +528,7 @@ process_symbol_removal(rspamd_expression_atom_t *atom,
 			break;
 		}
 
-		for (auto t : beg) {
+		for (auto t: beg) {
 			if (t == '~') {
 				nrd.action &= ~RSPAMD_COMPOSITE_REMOVE_SYMBOL;
 			}
@@ -545,18 +550,18 @@ process_symbol_removal(rspamd_expression_atom_t *atom,
 
 	if (rd_it != cd->symbols_to_remove.end()) {
 		fill_removal_structure(rd_it->second.emplace_back());
-		msg_debug_composites ("%s: added symbol %s to removal: %d policy, from composite %s",
-				cd->metric_res->name,
-				ms->name, rd_it->second.back().action,
-				cd->composite->sym.c_str());
+		msg_debug_composites("%s: added symbol %s to removal: %d policy, from composite %s",
+							 cd->metric_res->name,
+							 ms->name, rd_it->second.back().action,
+							 cd->composite->sym.c_str());
 	}
 	else {
 		std::vector<symbol_remove_data> nrd;
 		fill_removal_structure(nrd.emplace_back());
-		msg_debug_composites ("%s: added symbol %s to removal: %d policy, from composite %s",
-				cd->metric_res->name,
-				ms->name, nrd.front().action,
-				cd->composite->sym.c_str());
+		msg_debug_composites("%s: added symbol %s to removal: %d policy, from composite %s",
+							 cd->metric_res->name,
+							 ms->name, nrd.front().action,
+							 cd->composite->sym.c_str());
 		cd->symbols_to_remove[ms->name] = std::move(nrd);
 	}
 }
@@ -572,8 +577,8 @@ process_single_symbol(struct composites_data *cd,
 	struct rspamd_task *task = cd->task;
 
 	if ((ms = rspamd_task_find_symbol_result(cd->task, sym.data(), cd->metric_res)) == nullptr) {
-		msg_debug_composites ("not found symbol %s in composite %s", sym.data(),
-				cd->composite->sym.c_str());
+		msg_debug_composites("not found symbol %s in composite %s", sym.data(),
+							 cd->composite->sym.c_str());
 
 		if (G_UNLIKELY(atom->comp_type == rspamd_composite_atom_type::ATOM_UNKNOWN)) {
 			const struct rspamd_composite *ncomp;
@@ -588,23 +593,23 @@ process_single_symbol(struct composites_data *cd,
 		}
 
 		if (atom->comp_type == rspamd_composite_atom_type::ATOM_COMPOSITE) {
-			msg_debug_composites ("symbol %s for composite %s is another composite",
-					sym.data(), cd->composite->sym.c_str());
+			msg_debug_composites("symbol %s for composite %s is another composite",
+								 sym.data(), cd->composite->sym.c_str());
 
 			if (!cd->checked[atom->ncomp->id * 2]) {
 				msg_debug_composites("composite dependency %s for %s is not checked",
-						sym.data(), cd->composite->sym.c_str());
+									 sym.data(), cd->composite->sym.c_str());
 				/* Set checked for this symbol to avoid cyclic references */
 				cd->checked[cd->composite->id * 2] = true;
 				auto *saved = cd->composite; /* Save the current composite */
-				composites_foreach_callback((gpointer)atom->ncomp->sym.c_str(),
-						(gpointer)atom->ncomp, (gpointer)cd);
+				composites_foreach_callback((gpointer) atom->ncomp->sym.c_str(),
+											(gpointer) atom->ncomp, (gpointer) cd);
 				/* Restore state */
 				cd->composite = saved;
 				cd->checked[cd->composite->id * 2] = false;
 
 				ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
-						cd->metric_res);
+													cd->metric_res);
 			}
 			else {
 				/*
@@ -612,7 +617,7 @@ process_single_symbol(struct composites_data *cd,
 				 */
 				if (cd->checked[atom->ncomp->id * 2 + 1]) {
 					ms = rspamd_task_find_symbol_result(cd->task, sym.data(),
-							cd->metric_res);
+														cd->metric_res);
 				}
 			}
 		}
@@ -620,14 +625,15 @@ process_single_symbol(struct composites_data *cd,
 
 	if (ms) {
 		msg_debug_composites("found symbol %s in composite %s, weight: %.3f",
-				sym.data(), cd->composite->sym.c_str(), ms->score);
+							 sym.data(), cd->composite->sym.c_str(), ms->score);
 
 		/* Now check options */
-		for (const auto &cur_opt : atom->opts) {
+		for (const auto &cur_opt: atom->opts) {
 			struct rspamd_symbol_option *opt;
 			auto found = false;
 
-			DL_FOREACH (ms->opts_head, opt) {
+			DL_FOREACH(ms->opts_head, opt)
+			{
 				if (cur_opt.match_opt({opt->option, opt->optlen})) {
 					found = true;
 					break;
@@ -636,10 +642,10 @@ process_single_symbol(struct composites_data *cd,
 
 			if (!found) {
 				auto pat = cur_opt.get_pat();
-				msg_debug_composites ("symbol %s in composite %s misses required option %*s",
-						sym.data(),
-						cd->composite->sym.c_str(),
-						(int) pat.size(), pat.data());
+				msg_debug_composites("symbol %s in composite %s misses required option %*s",
+									 sym.data(),
+									 cd->composite->sym.c_str(),
+									 (int) pat.size(), pat.data());
 				ms = nullptr;
 
 				break;
@@ -674,8 +680,8 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		/* We have already checked this composite, so just return its value */
 		if (cd->checked[cd->composite->id * 2 + 1]) {
 			ms = rspamd_task_find_symbol_result(cd->task,
-					comp_atom->norm_symbol.data(),
-					cd->metric_res);
+												comp_atom->norm_symbol.data(),
+												cd->metric_res);
 		}
 
 		if (ms) {
@@ -689,7 +695,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		}
 
 		msg_debug_composites("composite %s is already checked, result: %.2f",
-				cd->composite->sym.c_str(), rc);
+							 cd->composite->sym.c_str(), rc);
 
 		return rc;
 	}
@@ -703,7 +709,7 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 		struct rspamd_symbols_group *gr;
 
 		gr = (struct rspamd_symbols_group *) g_hash_table_lookup(cd->task->cfg->groups,
-				sym.substr(sub_start).data());
+																 sym.substr(sub_start).data());
 
 		if (gr != nullptr) {
 			g_hash_table_iter_init(&it, gr->symbols);
@@ -713,15 +719,15 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 
 				if (cond(sdef->score)) {
 					rc = process_single_symbol(cd,
-							std::string_view(sdef->name),
-							&ms,
-							comp_atom);
+											   std::string_view(sdef->name),
+											   &ms,
+											   comp_atom);
 
 					if (fabs(rc) > epsilon) {
 						process_symbol_removal(atom,
-								cd,
-								ms,
-								comp_atom->symbol);
+											   cd,
+											   ms,
+											   comp_atom->symbol);
 
 						if (fabs(rc) > max) {
 							max = fabs(rc);
@@ -750,9 +756,9 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 
 			if (fabs(rc) > epsilon) {
 				process_symbol_removal(atom,
-						cd,
-						ms,
-						comp_atom->symbol);
+									   cd,
+									   ms,
+									   comp_atom->symbol);
 			}
 		}
 	}
@@ -761,16 +767,16 @@ rspamd_composite_expr_process(void *ud, rspamd_expression_atom_t *atom) -> doubl
 
 		if (fabs(rc) > epsilon) {
 			process_symbol_removal(atom,
-					cd,
-					ms,
-					comp_atom->symbol);
+								   cd,
+								   ms,
+								   comp_atom->symbol);
 		}
 	}
 
-	msg_debug_composites ("%s: result for atom %s in composite %s is %.4f",
-			cd->metric_res->name,
-			comp_atom->norm_symbol.data(),
-			cd->composite->sym.c_str(), rc);
+	msg_debug_composites("%s: result for atom %s in composite %s is %.4f",
+						 cd->metric_res->name,
+						 comp_atom->norm_symbol.data(),
+						 cd->composite->sym.c_str(), rc);
 
 	return rc;
 }
@@ -795,7 +801,7 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 {
 	auto *cd = (struct composites_data *) data;
 	auto *comp = (struct rspamd_composite *) value;
-	auto *str_key = (const gchar *)key;
+	auto *str_key = (const gchar *) key;
 	struct rspamd_task *task;
 	gdouble rc;
 
@@ -806,43 +812,45 @@ composites_foreach_callback(gpointer key, gpointer value, void *data)
 
 	if (!cd->checked[cd->composite->id * 2]) {
 		if (rspamd_symcache_is_checked(cd->task, cd->task->cfg->cache,
-				str_key)) {
-			msg_debug_composites ("composite %s is checked in symcache but not "
-								  "in composites bitfield", cd->composite->sym.c_str());
+									   str_key)) {
+			msg_debug_composites("composite %s is checked in symcache but not "
+								 "in composites bitfield",
+								 cd->composite->sym.c_str());
 			cd->checked[comp->id * 2] = true;
 			cd->checked[comp->id * 2 + 1] = false;
 		}
 		else {
 			if (rspamd_task_find_symbol_result(cd->task, str_key,
-					cd->metric_res) != nullptr) {
+											   cd->metric_res) != nullptr) {
 				/* Already set, no need to check */
-				msg_debug_composites ("composite %s is already in metric "
-									  "in composites bitfield", cd->composite->sym.c_str());
+				msg_debug_composites("composite %s is already in metric "
+									 "in composites bitfield",
+									 cd->composite->sym.c_str());
 				cd->checked[comp->id * 2] = true;
 				cd->checked[comp->id * 2 + 1] = true;
 
 				return;
 			}
 
-			msg_debug_composites ("%s: start processing composite %s",
-					cd->metric_res->name,
-					cd->composite->sym.c_str());
+			msg_debug_composites("%s: start processing composite %s",
+								 cd->metric_res->name,
+								 cd->composite->sym.c_str());
 
 			rc = rspamd_process_expression(comp->expr, RSPAMD_EXPRESSION_FLAG_NOOPT,
-					cd);
+										   cd);
 
 			/* Checked bit */
 			cd->checked[comp->id * 2] = true;
 
-			msg_debug_composites ("%s: final result for composite %s is %.4f",
-					cd->metric_res->name,
-					cd->composite->sym.c_str(), rc);
+			msg_debug_composites("%s: final result for composite %s is %.4f",
+								 cd->metric_res->name,
+								 cd->composite->sym.c_str(), rc);
 
 			/* Result bit */
 			if (fabs(rc) > epsilon) {
 				cd->checked[comp->id * 2 + 1] = true;
 				rspamd_task_insert_result_full(cd->task, str_key, 1.0, NULL,
-						RSPAMD_SYMBOL_INSERT_SINGLE, cd->metric_res);
+											   RSPAMD_SYMBOL_INSERT_SINGLE, cd->metric_res);
 			}
 			else {
 				cd->checked[comp->id * 2 + 1] = false;
@@ -857,16 +865,16 @@ remove_symbols(const composites_data &cd, const std::vector<symbol_remove_data> 
 {
 	struct rspamd_task *task = cd.task;
 	gboolean skip = FALSE,
-			has_valid_op = FALSE,
-			want_remove_score = TRUE,
-			want_remove_symbol = TRUE,
-			want_forced = FALSE;
+			 has_valid_op = FALSE,
+			 want_remove_score = TRUE,
+			 want_remove_symbol = TRUE,
+			 want_forced = FALSE;
 	const gchar *disable_score_reason = "no policy",
-			*disable_symbol_reason = "no policy";
+				*disable_symbol_reason = "no policy";
 
 	task = cd.task;
 
-	for (const auto &cur : rd) {
+	for (const auto &cur: rd) {
 		if (!cd.checked[cur.comp->id * 2 + 1]) {
 			continue;
 		}
@@ -923,22 +931,22 @@ remove_symbols(const composites_data &cd, const std::vector<symbol_remove_data> 
 	if (has_valid_op && ms && !(ms->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 
 		if (want_remove_score || want_forced) {
-			msg_debug_composites ("%s: %s remove symbol weight for %s (was %.2f), "
-								  "score removal affected by %s, symbol removal affected by %s",
-					cd.metric_res->name,
-					(want_forced ? "forced" : "normal"), rd.front().sym, ms->score,
-					disable_score_reason, disable_symbol_reason);
+			msg_debug_composites("%s: %s remove symbol weight for %s (was %.2f), "
+								 "score removal affected by %s, symbol removal affected by %s",
+								 cd.metric_res->name,
+								 (want_forced ? "forced" : "normal"), rd.front().sym, ms->score,
+								 disable_score_reason, disable_symbol_reason);
 			cd.metric_res->score -= ms->score;
 			ms->score = 0.0;
 		}
 
 		if (want_remove_symbol || want_forced) {
 			ms->flags |= RSPAMD_SYMBOL_RESULT_IGNORED;
-			msg_debug_composites ("%s: %s remove symbol %s (score %.2f), "
-								  "score removal affected by %s, symbol removal affected by %s",
-					cd.metric_res->name,
-					(want_forced ? "forced" : "normal"), rd.front().sym, ms->score,
-					disable_score_reason, disable_symbol_reason);
+			msg_debug_composites("%s: %s remove symbol %s (score %.2f), "
+								 "score removal affected by %s, symbol removal affected by %s",
+								 cd.metric_res->name,
+								 (want_forced ? "forced" : "normal"), rd.front().sym, ms->score,
+								 disable_score_reason, disable_symbol_reason);
 		}
 	}
 }
@@ -951,32 +959,31 @@ composites_metric_callback(struct rspamd_task *task)
 
 	comp_data_vec.reserve(1);
 
-	DL_FOREACH (task->result, mres) {
+	DL_FOREACH(task->result, mres)
+	{
 		auto &cd = comp_data_vec.emplace_back(task, mres);
 
 		/* Process metric result */
 		rspamd_symcache_composites_foreach(task,
-				task->cfg->cache,
-				composites_foreach_callback,
-				&cd);
+										   task->cfg->cache,
+										   composites_foreach_callback,
+										   &cd);
 	}
 
-	for (const auto &cd : comp_data_vec) {
+	for (const auto &cd: comp_data_vec) {
 		/* Remove symbols that are in composites */
-		for (const auto &srd_it : cd.symbols_to_remove) {
+		for (const auto &srd_it: cd.symbols_to_remove) {
 			remove_symbols(cd, srd_it.second);
 		}
 	}
 }
 
-}
+}// namespace rspamd::composites
 
 
-void
-rspamd_composites_process_task (struct rspamd_task *task)
+void rspamd_composites_process_task(struct rspamd_task *task)
 {
-	if (task->result && !RSPAMD_TASK_IS_SKIPPED (task)) {
+	if (task->result && !RSPAMD_TASK_IS_SKIPPED(task)) {
 		rspamd::composites::composites_metric_callback(task);
 	}
 }
-

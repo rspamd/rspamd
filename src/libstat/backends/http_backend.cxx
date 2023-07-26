@@ -24,10 +24,10 @@
 
 namespace rspamd::stat::http {
 
-#define msg_debug_stat_http(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        rspamd_stat_http_log_id, "stat_http", task->task_pool->tag.uid, \
-        RSPAMD_LOG_FUNC, \
-        __VA_ARGS__)
+#define msg_debug_stat_http(...) rspamd_conditional_debug_fast(NULL, NULL,                                                     \
+															   rspamd_stat_http_log_id, "stat_http", task->task_pool->tag.uid, \
+															   RSPAMD_LOG_FUNC,                                                \
+															   __VA_ARGS__)
 
 INIT_LOG_MODULE(stat_http)
 
@@ -37,8 +37,10 @@ class http_backends_collection {
 	double timeout = 1.0; /* Default timeout */
 	struct upstream_list *read_servers = nullptr;
 	struct upstream_list *write_servers = nullptr;
+
 public:
-	static auto get() -> http_backends_collection& {
+	static auto get() -> http_backends_collection &
+	{
 		static http_backends_collection *singleton = nullptr;
 
 		if (singleton == nullptr) {
@@ -81,26 +83,31 @@ class http_backend_runtime final {
 public:
 	static auto create(struct rspamd_task *task, bool is_learn) -> http_backend_runtime *;
 	/* Add a new statfile with a specific id to the list of statfiles */
-	auto notice_statfile(int id, const struct rspamd_statfile_config *st) -> void {
+	auto notice_statfile(int id, const struct rspamd_statfile_config *st) -> void
+	{
 		seen_statfiles[id] = st;
 	}
 
-	auto process_tokens(struct rspamd_task* task,
-						GPtrArray* tokens,
+	auto process_tokens(struct rspamd_task *task,
+						GPtrArray *tokens,
 						gint id,
 						bool learn) -> bool;
+
 private:
 	http_backends_collection *all_backends;
 	ankerl::unordered_dense::map<int, const struct rspamd_statfile_config *> seen_statfiles;
 	struct upstream *selected;
+
 private:
-	http_backend_runtime(struct rspamd_task *task, bool is_learn) :
-			all_backends(&http_backends_collection::get()) {
+	http_backend_runtime(struct rspamd_task *task, bool is_learn)
+		: all_backends(&http_backends_collection::get())
+	{
 		selected = all_backends->get_upstream(is_learn);
 	}
 	~http_backend_runtime() = default;
-	static auto dtor(void *p) -> void {
-		((http_backend_runtime *)p)->~http_backend_runtime();
+	static auto dtor(void *p) -> void
+	{
+		((http_backend_runtime *) p)->~http_backend_runtime();
 	}
 };
 
@@ -126,14 +133,15 @@ stat_tokens_to_msgpack(GPtrArray *tokens) -> std::vector<std::uint8_t>
 	ret.resize(tokens->len * (sizeof(std::uint64_t) + 1) + 5);
 	ret.push_back('\xdd');
 	std::uint32_t ulen = GUINT32_TO_BE(tokens->len);
-	std::copy((const std::uint8_t *)&ulen,
-			((const std::uint8_t *)&ulen) + sizeof(ulen), std::back_inserter(ret));
+	std::copy((const std::uint8_t *) &ulen,
+			  ((const std::uint8_t *) &ulen) + sizeof(ulen), std::back_inserter(ret));
 
-	PTR_ARRAY_FOREACH(tokens, i, cur) {
+	PTR_ARRAY_FOREACH(tokens, i, cur)
+	{
 		ret.push_back('\xcf');
 		std::uint64_t val = GUINT64_TO_BE(cur->data);
-		std::copy((const std::uint8_t *)&val,
-				((const std::uint8_t *)&val) + sizeof(val), std::back_inserter(ret));
+		std::copy((const std::uint8_t *) &val,
+				  ((const std::uint8_t *) &val) + sizeof(val), std::back_inserter(ret));
 	}
 
 	return ret;
@@ -149,8 +157,7 @@ auto http_backend_runtime::create(struct rspamd_task *task, bool is_learn) -> ht
 	return new (allocated_runtime) http_backend_runtime{task, is_learn};
 }
 
-auto
-http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens, gint id, bool learn) -> bool
+auto http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens, gint id, bool learn) -> bool
 {
 	if (!learn) {
 		if (id == seen_statfiles.size() - 1) {
@@ -171,10 +178,9 @@ http_backend_runtime::process_tokens(struct rspamd_task *task, GPtrArray *tokens
 	return true;
 }
 
-auto
-http_backends_collection::add_backend(struct rspamd_stat_ctx *ctx,
-									  struct rspamd_config *cfg,
-									  struct rspamd_statfile *st) -> bool
+auto http_backends_collection::add_backend(struct rspamd_stat_ctx *ctx,
+										   struct rspamd_config *cfg,
+										   struct rspamd_statfile *st) -> bool
 {
 	/* On empty list of backends we know that we need to load backend data actually */
 	if (backends.empty()) {
@@ -235,7 +241,7 @@ auto http_backends_collection::first_init(struct rspamd_stat_ctx *ctx,
 	};
 
 	auto ret = false;
-	auto obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
+	auto obj = ucl_object_lookup(st->classifier->cfg->opts, "backend");
 	if (obj != nullptr) {
 		ret = try_load_backend_config(obj);
 	}
@@ -291,14 +297,14 @@ upstream *http_backends_collection::get_upstream(bool is_learn)
 	return rspamd_upstream_get(ups_list, RSPAMD_UPSTREAM_ROUND_ROBIN, nullptr, 0);
 }
 
-}
+}// namespace rspamd::stat::http
 
 /* C API */
 
 gpointer
-rspamd_http_init(struct rspamd_stat_ctx* ctx,
-				struct rspamd_config* cfg,
-				struct rspamd_statfile* st)
+rspamd_http_init(struct rspamd_stat_ctx *ctx,
+				 struct rspamd_config *cfg,
+				 struct rspamd_statfile *st)
 {
 	auto &collections = rspamd::stat::http::http_backends_collection::get();
 
@@ -308,11 +314,11 @@ rspamd_http_init(struct rspamd_stat_ctx* ctx,
 		return nullptr;
 	}
 
-	return (void *)&collections;
+	return (void *) &collections;
 }
 gpointer
-rspamd_http_runtime(struct rspamd_task* task,
-					struct rspamd_statfile_config* stcf,
+rspamd_http_runtime(struct rspamd_task *task,
+					struct rspamd_statfile_config *stcf,
 					gboolean learn,
 					gpointer ctx,
 					gint id)
@@ -320,7 +326,7 @@ rspamd_http_runtime(struct rspamd_task* task,
 	auto maybe_existing = rspamd_mempool_get_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME);
 
 	if (maybe_existing != nullptr) {
-		auto real_runtime = (rspamd::stat::http::http_backend_runtime *)maybe_existing;
+		auto real_runtime = (rspamd::stat::http::http_backend_runtime *) maybe_existing;
 		real_runtime->notice_statfile(id, stcf);
 
 		return maybe_existing;
@@ -331,19 +337,19 @@ rspamd_http_runtime(struct rspamd_task* task,
 	if (runtime) {
 		runtime->notice_statfile(id, stcf);
 		rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_HTTP_STAT_BACKEND_RUNTIME,
-				(void *)runtime, nullptr);
+									(void *) runtime, nullptr);
 	}
 
-	return (void *)runtime;
+	return (void *) runtime;
 }
 
 gboolean
-rspamd_http_process_tokens(struct rspamd_task* task,
-						  GPtrArray* tokens,
-						  gint id,
-						  gpointer runtime)
+rspamd_http_process_tokens(struct rspamd_task *task,
+						   GPtrArray *tokens,
+						   gint id,
+						   gpointer runtime)
 {
-	auto real_runtime = (rspamd::stat::http::http_backend_runtime *)runtime;
+	auto real_runtime = (rspamd::stat::http::http_backend_runtime *) runtime;
 
 	if (real_runtime) {
 		return real_runtime->process_tokens(task, tokens, id, false);
@@ -351,24 +357,23 @@ rspamd_http_process_tokens(struct rspamd_task* task,
 
 
 	return false;
-
 }
 gboolean
-rspamd_http_finalize_process(struct rspamd_task* task,
-							gpointer runtime,
-							gpointer ctx)
+rspamd_http_finalize_process(struct rspamd_task *task,
+							 gpointer runtime,
+							 gpointer ctx)
 {
 	/* Not needed */
 	return true;
 }
 
 gboolean
-rspamd_http_learn_tokens(struct rspamd_task* task,
-						GPtrArray* tokens,
-						gint id,
-						gpointer runtime)
+rspamd_http_learn_tokens(struct rspamd_task *task,
+						 GPtrArray *tokens,
+						 gint id,
+						 gpointer runtime)
 {
-	auto real_runtime = (rspamd::stat::http::http_backend_runtime *)runtime;
+	auto real_runtime = (rspamd::stat::http::http_backend_runtime *) runtime;
 
 	if (real_runtime) {
 		return real_runtime->process_tokens(task, tokens, id, true);
@@ -378,58 +383,57 @@ rspamd_http_learn_tokens(struct rspamd_task* task,
 	return false;
 }
 gboolean
-rspamd_http_finalize_learn(struct rspamd_task* task,
-						  gpointer runtime,
-						  gpointer ctx,
-						  GError** err)
+rspamd_http_finalize_learn(struct rspamd_task *task,
+						   gpointer runtime,
+						   gpointer ctx,
+						   GError **err)
 {
 	return false;
 }
 
-gulong rspamd_http_total_learns(struct rspamd_task* task,
-							   gpointer runtime,
-							   gpointer ctx)
+gulong rspamd_http_total_learns(struct rspamd_task *task,
+								gpointer runtime,
+								gpointer ctx)
 {
 	/* TODO */
 	return 0;
 }
 gulong
-rspamd_http_inc_learns(struct rspamd_task* task,
-					  gpointer runtime,
-					  gpointer ctx)
+rspamd_http_inc_learns(struct rspamd_task *task,
+					   gpointer runtime,
+					   gpointer ctx)
 {
 	/* TODO */
 	return 0;
 }
 gulong
-rspamd_http_dec_learns(struct rspamd_task* task,
-					  gpointer runtime,
-					  gpointer ctx)
+rspamd_http_dec_learns(struct rspamd_task *task,
+					   gpointer runtime,
+					   gpointer ctx)
 {
 	/* TODO */
-	return (gulong)-1;
+	return (gulong) -1;
 }
 gulong
-rspamd_http_learns(struct rspamd_task* task,
-				  gpointer runtime,
-				  gpointer ctx)
+rspamd_http_learns(struct rspamd_task *task,
+				   gpointer runtime,
+				   gpointer ctx)
 {
 	/* TODO */
 	return 0;
 }
-ucl_object_t*
+ucl_object_t *
 rspamd_http_get_stat(gpointer runtime, gpointer ctx)
 {
 	/* TODO */
 	return nullptr;
 }
 gpointer
-rspamd_http_load_tokenizer_config(gpointer runtime, gsize* len)
+rspamd_http_load_tokenizer_config(gpointer runtime, gsize *len)
 {
 	return nullptr;
 }
-void
-rspamd_http_close(gpointer ctx)
+void rspamd_http_close(gpointer ctx)
 {
 	/* TODO */
 }

@@ -11,7 +11,7 @@
 #include "libserver/http/http_connection.h"
 #include "task.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -43,8 +43,8 @@ struct rspamd_metric;
  * @param msg
  * @return
  */
-gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
-										 struct rspamd_http_message *msg);
+gboolean rspamd_protocol_handle_headers(struct rspamd_task *task,
+										struct rspamd_http_message *msg);
 
 /**
  * Process control chunk and update task structure accordingly
@@ -52,8 +52,8 @@ gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
  * @param control
  * @return
  */
-gboolean rspamd_protocol_handle_control (struct rspamd_task *task,
-										 const ucl_object_t *control);
+gboolean rspamd_protocol_handle_control(struct rspamd_task *task,
+										const ucl_object_t *control);
 
 /**
  * Process HTTP request to the task structure
@@ -61,22 +61,22 @@ gboolean rspamd_protocol_handle_control (struct rspamd_task *task,
  * @param msg
  * @return
  */
-gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
-										 struct rspamd_http_message *msg);
+gboolean rspamd_protocol_handle_request(struct rspamd_task *task,
+										struct rspamd_http_message *msg);
 
 /**
  * Write task results to http message
  * @param msg
  * @param task
  */
-void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
-								 struct rspamd_task *task, ucl_object_t **pobj);
+void rspamd_protocol_http_reply(struct rspamd_http_message *msg,
+								struct rspamd_task *task, ucl_object_t **pobj);
 
 /**
  * Write data to log pipes
  * @param task
  */
-void rspamd_protocol_write_log_pipe (struct rspamd_task *task);
+void rspamd_protocol_write_log_pipe(struct rspamd_task *task);
 
 enum rspamd_protocol_flags {
 	RSPAMD_PROTOCOL_BASIC = 1 << 0,
@@ -88,12 +88,12 @@ enum rspamd_protocol_flags {
 	RSPAMD_PROTOCOL_EXTRA = 1 << 6,
 };
 
-#define RSPAMD_PROTOCOL_DEFAULT (RSPAMD_PROTOCOL_BASIC| \
-        RSPAMD_PROTOCOL_METRICS| \
-        RSPAMD_PROTOCOL_MESSAGES| \
-        RSPAMD_PROTOCOL_RMILTER| \
-        RSPAMD_PROTOCOL_DKIM| \
-        RSPAMD_PROTOCOL_EXTRA)
+#define RSPAMD_PROTOCOL_DEFAULT (RSPAMD_PROTOCOL_BASIC |    \
+								 RSPAMD_PROTOCOL_METRICS |  \
+								 RSPAMD_PROTOCOL_MESSAGES | \
+								 RSPAMD_PROTOCOL_RMILTER |  \
+								 RSPAMD_PROTOCOL_DKIM |     \
+								 RSPAMD_PROTOCOL_EXTRA)
 
 /**
  * Write reply to ucl object filling log buffer
@@ -101,15 +101,15 @@ enum rspamd_protocol_flags {
  * @param logbuf
  * @return
  */
-ucl_object_t *rspamd_protocol_write_ucl (struct rspamd_task *task,
-										 enum rspamd_protocol_flags flags);
+ucl_object_t *rspamd_protocol_write_ucl(struct rspamd_task *task,
+										enum rspamd_protocol_flags flags);
 
 /**
  * Write reply for specified task command
  * @param task task object
  * @return 0 if we wrote reply and -1 if there was some error
  */
-void rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout);
+void rspamd_protocol_write_reply(struct rspamd_task *task, ev_tstamp timeout);
 
 /**
  * Convert rspamd output to legacy protocol reply
@@ -117,13 +117,13 @@ void rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout);
  * @param top
  * @param out
  */
-void rspamd_ucl_torspamc_output (const ucl_object_t *top,
-								 rspamd_fstring_t **out);
-
-void rspamd_ucl_tospamc_output (const ucl_object_t *top,
+void rspamd_ucl_torspamc_output(const ucl_object_t *top,
 								rspamd_fstring_t **out);
 
-#ifdef  __cplusplus
+void rspamd_ucl_tospamc_output(const ucl_object_t *top,
+							   rspamd_fstring_t **out);
+
+#ifdef __cplusplus
 }
 #endif
 

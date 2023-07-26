@@ -91,17 +91,15 @@
  */
 
 static const struct luaL_reg parserslib_f[] = {
-	LUA_INTERFACE_DEF (parsers, tokenize_text),
-	LUA_INTERFACE_DEF (parsers, parse_html),
-	LUA_INTERFACE_DEF (parsers, parse_mail_address),
-	LUA_INTERFACE_DEF (parsers, parse_content_type),
-	LUA_INTERFACE_DEF (parsers, parse_smtp_date),
+	LUA_INTERFACE_DEF(parsers, tokenize_text),
+	LUA_INTERFACE_DEF(parsers, parse_html),
+	LUA_INTERFACE_DEF(parsers, parse_mail_address),
+	LUA_INTERFACE_DEF(parsers, parse_content_type),
+	LUA_INTERFACE_DEF(parsers, parse_smtp_date),
 
-	{NULL, NULL}
-};
+	{NULL, NULL}};
 
-gint
-lua_parsers_tokenize_text (lua_State *L)
+gint lua_parsers_tokenize_text(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *in = NULL;
@@ -113,11 +111,11 @@ lua_parsers_tokenize_text (lua_State *L)
 	GArray *res;
 	rspamd_stat_token_t *w;
 
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		in = luaL_checklstring (L, 1, &len);
+	if (lua_type(L, 1) == LUA_TSTRING) {
+		in = luaL_checklstring(L, 1, &len);
 	}
-	else if (lua_type (L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text (L, 1);
+	else if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
 
 		if (t) {
 			in = t->start;
@@ -126,81 +124,80 @@ lua_parsers_tokenize_text (lua_State *L)
 	}
 
 	if (in == NULL) {
-		lua_pushnil (L);
+		lua_pushnil(L);
 		return 1;
 	}
 
-	if (lua_gettop (L) > 1 && lua_type (L, 2) == LUA_TTABLE) {
-		lua_pushvalue (L, 2);
-		lua_pushnil (L);
+	if (lua_gettop(L) > 1 && lua_type(L, 2) == LUA_TTABLE) {
+		lua_pushvalue(L, 2);
+		lua_pushnil(L);
 
-		while (lua_next (L, -2) != 0) {
-			if (lua_type (L, -1) == LUA_TTABLE) {
-				lua_rawgeti (L, -1, 1);
-				pos = luaL_checknumber (L, -1);
-				lua_pop (L, 1);
-				lua_rawgeti (L, -1, 2);
-				ex_len = luaL_checknumber (L, -1);
-				lua_pop (L, 1);
+		while (lua_next(L, -2) != 0) {
+			if (lua_type(L, -1) == LUA_TTABLE) {
+				lua_rawgeti(L, -1, 1);
+				pos = luaL_checknumber(L, -1);
+				lua_pop(L, 1);
+				lua_rawgeti(L, -1, 2);
+				ex_len = luaL_checknumber(L, -1);
+				lua_pop(L, 1);
 
 				if (ex_len > 0) {
-					ex = g_malloc0 (sizeof (*ex));
+					ex = g_malloc0(sizeof(*ex));
 					ex->pos = pos;
 					ex->len = ex_len;
 					ex->type = RSPAMD_EXCEPTION_GENERIC;
-					exceptions = g_list_prepend (exceptions, ex);
+					exceptions = g_list_prepend(exceptions, ex);
 				}
 			}
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 		}
 
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 	}
 
 	if (exceptions) {
-		exceptions = g_list_reverse (exceptions);
+		exceptions = g_list_reverse(exceptions);
 	}
 
 	UErrorCode uc_err = U_ZERO_ERROR;
-	utext_openUTF8 (&utxt,
-			in,
-			len,
-			&uc_err);
+	utext_openUTF8(&utxt,
+				   in,
+				   len,
+				   &uc_err);
 
-	res = rspamd_tokenize_text ((gchar *)in, len,
-			&utxt,
-			RSPAMD_TOKENIZE_UTF, NULL,
-			exceptions,
-			NULL, NULL, NULL);
+	res = rspamd_tokenize_text((gchar *) in, len,
+							   &utxt,
+							   RSPAMD_TOKENIZE_UTF, NULL,
+							   exceptions,
+							   NULL, NULL, NULL);
 
 	if (res == NULL) {
-		lua_pushnil (L);
+		lua_pushnil(L);
 	}
 	else {
-		lua_createtable (L, res->len, 0);
+		lua_createtable(L, res->len, 0);
 
-		for (i = 0; i < res->len; i ++) {
-			w = &g_array_index (res, rspamd_stat_token_t, i);
-			lua_pushlstring (L, w->original.begin, w->original.len);
-			lua_rawseti (L, -2, i + 1);
+		for (i = 0; i < res->len; i++) {
+			w = &g_array_index(res, rspamd_stat_token_t, i);
+			lua_pushlstring(L, w->original.begin, w->original.len);
+			lua_rawseti(L, -2, i + 1);
 		}
 	}
 
 	cur = exceptions;
 	while (cur) {
 		ex = cur->data;
-		g_free (ex);
-		cur = g_list_next (cur);
+		g_free(ex);
+		cur = g_list_next(cur);
 	}
 
-	g_list_free (exceptions);
-	utext_close (&utxt);
+	g_list_free(exceptions);
+	utext_close(&utxt);
 
 	return 1;
 }
 
-gint
-lua_parsers_parse_html (lua_State *L)
+gint lua_parsers_parse_html(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
@@ -210,22 +207,22 @@ lua_parsers_parse_html (lua_State *L)
 	rspamd_mempool_t *pool;
 	void *hc;
 
-	if (lua_type (L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text (L, 1);
+	if (lua_type(L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text(L, 1);
 
 		if (t != NULL) {
 			start = t->start;
 			len = t->len;
 		}
 	}
-	else if (lua_type (L, 1) == LUA_TSTRING) {
-		start = luaL_checklstring (L, 1, &len);
+	else if (lua_type(L, 1) == LUA_TSTRING) {
+		start = luaL_checklstring(L, 1, &len);
 	}
 
 	if (start != NULL) {
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
-		in = g_byte_array_sized_new (len);
-		g_byte_array_append (in, start, len);
+		pool = rspamd_mempool_new(rspamd_mempool_suggest_size(), NULL, 0);
+		in = g_byte_array_sized_new(len);
+		g_byte_array_append(in, start, len);
 
 		hc = rspamd_html_process_part(pool, in);
 
@@ -233,127 +230,127 @@ lua_parsers_parse_html (lua_State *L)
 		rspamd_html_get_parsed_content(hc, &res);
 		lua_new_text(L, res.begin, res.len, TRUE);
 
-		g_byte_array_free (in, TRUE);
-		rspamd_mempool_delete (pool);
+		g_byte_array_free(in, TRUE);
+		rspamd_mempool_delete(pool);
 	}
 	else {
-		lua_pushnil (L);
+		lua_pushnil(L);
 	}
 
 	return 1;
 }
 
-gint
-lua_parsers_parse_mail_address (lua_State *L)
+gint lua_parsers_parse_mail_address(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	GPtrArray *addrs;
 	gsize len;
-	const gchar *str = luaL_checklstring (L, 1, &len);
+	const gchar *str = luaL_checklstring(L, 1, &len);
 	gint max_addrs = luaL_optinteger(L, 3, 10240);
 	rspamd_mempool_t *pool;
 	gboolean own_pool = FALSE;
 
 	if (str) {
 
-		if (lua_type (L, 2) == LUA_TUSERDATA) {
-			pool = rspamd_lua_check_mempool (L, 2);
+		if (lua_type(L, 2) == LUA_TUSERDATA) {
+			pool = rspamd_lua_check_mempool(L, 2);
 
 			if (pool == NULL) {
-				return luaL_error (L, "invalid arguments");
+				return luaL_error(L, "invalid arguments");
 			}
 		}
 		else {
-			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-					"lua parsers", 0);
+			pool = rspamd_mempool_new(rspamd_mempool_suggest_size(),
+									  "lua parsers", 0);
 			own_pool = TRUE;
 		}
 
-		addrs = rspamd_email_address_from_mime (pool, str, len, NULL, max_addrs);
+		addrs = rspamd_email_address_from_mime(pool, str, len, NULL, max_addrs);
 
 		if (addrs == NULL) {
-			lua_pushnil (L);
+			lua_pushnil(L);
 		}
 		else {
-			lua_push_emails_address_list (L, addrs, 0);
+			lua_push_emails_address_list(L, addrs, 0);
 		}
 
 		if (own_pool) {
-			rspamd_mempool_delete (pool);
+			rspamd_mempool_delete(pool);
 		}
 	}
 	else {
-		lua_pushnil (L);
+		lua_pushnil(L);
 	}
 
 	return 1;
 }
 
-gint
-lua_parsers_parse_content_type (lua_State *L)
+gint lua_parsers_parse_content_type(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len;
-	const gchar *ct_str = luaL_checklstring (L, 1, &len);
-	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 2);
+	const gchar *ct_str = luaL_checklstring(L, 1, &len);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool(L, 2);
 	struct rspamd_content_type *ct;
 
 	if (!ct_str || !pool) {
-		return luaL_error (L, "invalid arguments");
+		return luaL_error(L, "invalid arguments");
 	}
 
-	ct = rspamd_content_type_parse (ct_str, len, pool);
+	ct = rspamd_content_type_parse(ct_str, len, pool);
 
 	if (ct == NULL) {
-		lua_pushnil (L);
+		lua_pushnil(L);
 	}
 	else {
 		GHashTableIter it;
 		gpointer k, v;
 
-		lua_createtable (L, 0, 4 + (ct->attrs ? g_hash_table_size (ct->attrs) : 0));
+		lua_createtable(L, 0, 4 + (ct->attrs ? g_hash_table_size(ct->attrs) : 0));
 
 		if (ct->type.len > 0) {
-			lua_pushstring (L, "type");
-			lua_pushlstring (L, ct->type.begin, ct->type.len);
-			lua_settable (L, -3);
+			lua_pushstring(L, "type");
+			lua_pushlstring(L, ct->type.begin, ct->type.len);
+			lua_settable(L, -3);
 		}
 
 		if (ct->subtype.len > 0) {
-			lua_pushstring (L, "subtype");
-			lua_pushlstring (L, ct->subtype.begin, ct->subtype.len);
-			lua_settable (L, -3);
+			lua_pushstring(L, "subtype");
+			lua_pushlstring(L, ct->subtype.begin, ct->subtype.len);
+			lua_settable(L, -3);
 		}
 
 		if (ct->charset.len > 0) {
-			lua_pushstring (L, "charset");
-			lua_pushlstring (L, ct->charset.begin, ct->charset.len);
-			lua_settable (L, -3);
+			lua_pushstring(L, "charset");
+			lua_pushlstring(L, ct->charset.begin, ct->charset.len);
+			lua_settable(L, -3);
 		}
 
 		if (ct->orig_boundary.len > 0) {
-			lua_pushstring (L, "boundary");
-			lua_pushlstring (L, ct->orig_boundary.begin, ct->orig_boundary.len);
-			lua_settable (L, -3);
+			lua_pushstring(L, "boundary");
+			lua_pushlstring(L, ct->orig_boundary.begin, ct->orig_boundary.len);
+			lua_settable(L, -3);
 		}
 
 		if (ct->attrs) {
-			g_hash_table_iter_init (&it, ct->attrs);
+			g_hash_table_iter_init(&it, ct->attrs);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
+			while (g_hash_table_iter_next(&it, &k, &v)) {
 				struct rspamd_content_type_param *param =
-						(struct rspamd_content_type_param *)v, *cur;
+													 (struct rspamd_content_type_param *) v,
+												 *cur;
 				guint i = 1;
 
-				lua_pushlstring (L, param->name.begin, param->name.len);
-				lua_createtable (L, 1, 0);
+				lua_pushlstring(L, param->name.begin, param->name.len);
+				lua_createtable(L, 1, 0);
 
-				DL_FOREACH (param, cur) {
-					lua_pushlstring (L, cur->value.begin, cur->value.len);
-					lua_rawseti (L, -2, i++);
+				DL_FOREACH(param, cur)
+				{
+					lua_pushlstring(L, cur->value.begin, cur->value.len);
+					lua_rawseti(L, -2, i++);
 				}
 
-				lua_settable (L, -3);
+				lua_settable(L, -3);
 			}
 		}
 	}
@@ -361,37 +358,36 @@ lua_parsers_parse_content_type (lua_State *L)
 	return 1;
 }
 
-int
-lua_parsers_parse_smtp_date (lua_State *L)
+int lua_parsers_parse_smtp_date(lua_State *L)
 {
 	gsize slen;
-	const gchar *str = lua_tolstring (L, 1, &slen);
+	const gchar *str = lua_tolstring(L, 1, &slen);
 	GError *err = NULL;
 
 	if (str == NULL) {
-		return luaL_argerror (L, 1, "invalid argument");
+		return luaL_argerror(L, 1, "invalid argument");
 	}
 
-	time_t tt = rspamd_parse_smtp_date (str, slen, &err);
+	time_t tt = rspamd_parse_smtp_date(str, slen, &err);
 
 	if (err == NULL) {
-		if (lua_isboolean (L, 2) && !!lua_toboolean (L, 2)) {
+		if (lua_isboolean(L, 2) && !!lua_toboolean(L, 2)) {
 			struct tm t;
 
-			rspamd_localtime (tt, &t);
+			rspamd_localtime(tt, &t);
 #if !defined(__sun)
 			t.tm_gmtoff = 0;
 #endif
 			t.tm_isdst = 0;
-			tt = mktime (&t);
+			tt = mktime(&t);
 		}
 
-		lua_pushnumber (L, tt);
+		lua_pushnumber(L, tt);
 	}
 	else {
-		lua_pushnil (L);
-		lua_pushstring (L, err->message);
-		g_error_free (err);
+		lua_pushnil(L);
+		lua_pushstring(L, err->message);
+		g_error_free(err);
 
 		return 2;
 	}
@@ -400,16 +396,15 @@ lua_parsers_parse_smtp_date (lua_State *L)
 }
 
 static gint
-lua_load_parsers (lua_State * L)
+lua_load_parsers(lua_State *L)
 {
-	lua_newtable (L);
-	luaL_register (L, NULL, parserslib_f);
+	lua_newtable(L);
+	luaL_register(L, NULL, parserslib_f);
 
 	return 1;
 }
 
-void
-luaopen_parsers (lua_State * L)
+void luaopen_parsers(lua_State *L)
 {
-	rspamd_lua_add_preload (L, "rspamd_parsers", lua_load_parsers);
+	rspamd_lua_add_preload(L, "rspamd_parsers", lua_load_parsers);
 }

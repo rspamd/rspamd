@@ -35,9 +35,9 @@
 
 #include <math.h>
 
-typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
-		rspamd_stat_token_t * token,
-		GList **exceptions, gsize *rl, gboolean check_signature);
+typedef gboolean (*token_get_function)(rspamd_stat_token_t *buf, gchar const **pos,
+									   rspamd_stat_token_t *token,
+									   GList **exceptions, gsize *rl, gboolean check_signature);
 
 const gchar t_delimiters[256] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
@@ -65,14 +65,13 @@ const gchar t_delimiters[256] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0
-};
+	0, 0, 0, 0, 0, 0};
 
 /* Get next word from specified f_str_t buf */
 static gboolean
-rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
-		gchar const **cur, rspamd_stat_token_t * token,
-		GList **exceptions, gsize *rl, gboolean unused)
+rspamd_tokenizer_get_word_raw(rspamd_stat_token_t *buf,
+							  gchar const **cur, rspamd_stat_token_t *token,
+							  GList **exceptions, gsize *rl, gboolean unused)
 {
 	gsize remain, pos;
 	const gchar *p;
@@ -82,7 +81,7 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 		return FALSE;
 	}
 
-	g_assert (cur != NULL);
+	g_assert(cur != NULL);
 
 	if (exceptions != NULL && *exceptions != NULL) {
 		ex = (*exceptions)->data;
@@ -121,20 +120,20 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 	do {
 		if (ex != NULL && ex->pos == pos) {
 			/* Go to the next exception */
-			*exceptions = g_list_next (*exceptions);
+			*exceptions = g_list_next(*exceptions);
 			*cur = p + ex->len;
 			return TRUE;
 		}
 		pos++;
 		p++;
 		remain--;
-	} while (remain > 0 && t_delimiters[(guchar)*p]);
+	} while (remain > 0 && t_delimiters[(guchar) *p]);
 
 	token->original.begin = p;
 
-	while (remain > 0 && !t_delimiters[(guchar)*p]) {
+	while (remain > 0 && !t_delimiters[(guchar) *p]) {
 		if (ex != NULL && ex->pos == pos) {
-			*exceptions = g_list_next (*exceptions);
+			*exceptions = g_list_next(*exceptions);
 			*cur = p + ex->len;
 			return TRUE;
 		}
@@ -160,40 +159,40 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 }
 
 static inline gboolean
-rspamd_tokenize_check_limit (gboolean decay,
-							 guint word_decay,
-							 guint nwords,
-							 guint64 *hv,
-							 guint64 *prob,
-							 const rspamd_stat_token_t *token,
-							 gssize remain,
-							 gssize total)
+rspamd_tokenize_check_limit(gboolean decay,
+							guint word_decay,
+							guint nwords,
+							guint64 *hv,
+							guint64 *prob,
+							const rspamd_stat_token_t *token,
+							gssize remain,
+							gssize total)
 {
 	static const gdouble avg_word_len = 6.0;
 
 	if (!decay) {
-		if (token->original.len >= sizeof (guint64)) {
+		if (token->original.len >= sizeof(guint64)) {
 			guint64 tmp;
-			memcpy (&tmp, token->original.begin, sizeof (tmp));
-			*hv = mum_hash_step (*hv, tmp);
+			memcpy(&tmp, token->original.begin, sizeof(tmp));
+			*hv = mum_hash_step(*hv, tmp);
 		}
 
 		/* Check for decay */
-		if (word_decay > 0 && nwords > word_decay && remain < (gssize)total) {
+		if (word_decay > 0 && nwords > word_decay && remain < (gssize) total) {
 			/* Start decay */
 			gdouble decay_prob;
 
-			*hv = mum_hash_finish (*hv);
+			*hv = mum_hash_finish(*hv);
 
 			/* We assume that word is 6 symbols length in average */
-			decay_prob = (gdouble)word_decay / ((total - (remain)) / avg_word_len) * 10;
-			decay_prob = floor (decay_prob) / 10.0;
+			decay_prob = (gdouble) word_decay / ((total - (remain)) / avg_word_len) * 10;
+			decay_prob = floor(decay_prob) / 10.0;
 
 			if (decay_prob >= 1.0) {
 				*prob = G_MAXUINT64;
 			}
 			else {
-				*prob = (guint64)(decay_prob * (double)G_MAXUINT64);
+				*prob = (guint64) (decay_prob * (double) G_MAXUINT64);
 			}
 
 			return TRUE;
@@ -213,8 +212,8 @@ rspamd_tokenize_check_limit (gboolean decay,
 }
 
 static inline gboolean
-rspamd_utf_word_valid (const guchar *text, const guchar *end,
-		gint32 start, gint32 finish)
+rspamd_utf_word_valid(const guchar *text, const guchar *end,
+					  gint32 start, gint32 finish)
 {
 	const guchar *st = text + start, *fin = text + finish;
 	UChar32 c;
@@ -223,37 +222,38 @@ rspamd_utf_word_valid (const guchar *text, const guchar *end,
 		return FALSE;
 	}
 
-	U8_NEXT (text, start, finish, c);
+	U8_NEXT(text, start, finish, c);
 
-	if (u_isJavaIDPart (c)) {
+	if (u_isJavaIDPart(c)) {
 		return TRUE;
 	}
 
 	return FALSE;
 }
-#define SHIFT_EX do { \
-    cur = g_list_next (cur); \
-    if (cur) { \
-        ex = (struct rspamd_process_exception *) cur->data; \
-    } \
-    else { \
-        ex = NULL; \
-    } \
-} while(0)
+#define SHIFT_EX                                                \
+	do {                                                        \
+		cur = g_list_next(cur);                                 \
+		if (cur) {                                              \
+			ex = (struct rspamd_process_exception *) cur->data; \
+		}                                                       \
+		else {                                                  \
+			ex = NULL;                                          \
+		}                                                       \
+	} while (0)
 
 static inline void
-rspamd_tokenize_exception (struct rspamd_process_exception *ex, GArray *res)
+rspamd_tokenize_exception(struct rspamd_process_exception *ex, GArray *res)
 {
 	rspamd_stat_token_t token;
 
-	memset (&token, 0, sizeof (token));
+	memset(&token, 0, sizeof(token));
 
 	if (ex->type == RSPAMD_EXCEPTION_GENERIC) {
 		token.original.begin = "!!EX!!";
-		token.original.len = sizeof ("!!EX!!") - 1;
+		token.original.len = sizeof("!!EX!!") - 1;
 		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 
-		g_array_append_val (res, token);
+		g_array_append_val(res, token);
 		token.flags = 0;
 	}
 	else if (ex->type == RSPAMD_EXCEPTION_URL) {
@@ -262,31 +262,30 @@ rspamd_tokenize_exception (struct rspamd_process_exception *ex, GArray *res)
 		uri = ex->ptr;
 
 		if (uri && uri->tldlen > 0) {
-			token.original.begin = rspamd_url_tld_unsafe (uri);
+			token.original.begin = rspamd_url_tld_unsafe(uri);
 			token.original.len = uri->tldlen;
-
 		}
 		else {
 			token.original.begin = "!!EX!!";
-			token.original.len = sizeof ("!!EX!!") - 1;
+			token.original.len = sizeof("!!EX!!") - 1;
 		}
 
 		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
-		g_array_append_val (res, token);
+		g_array_append_val(res, token);
 		token.flags = 0;
 	}
 }
 
 
 GArray *
-rspamd_tokenize_text (const gchar *text, gsize len,
-					  const UText *utxt,
-					  enum rspamd_tokenize_type how,
-					  struct rspamd_config *cfg,
-					  GList *exceptions,
-					  guint64 *hash,
-					  GArray *cur_words,
-					  rspamd_mempool_t *pool)
+rspamd_tokenize_text(const gchar *text, gsize len,
+					 const UText *utxt,
+					 enum rspamd_tokenize_type how,
+					 struct rspamd_config *cfg,
+					 GList *exceptions,
+					 guint64 *hash,
+					 GArray *cur_words,
+					 rspamd_mempool_t *pool)
 {
 	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
@@ -297,7 +296,7 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	guint64 hv = 0;
 	gboolean decay = FALSE, long_text_mode = FALSE;
 	guint64 prob = 0;
-	static UBreakIterator* bi = NULL;
+	static UBreakIterator *bi = NULL;
 	static const gsize long_text_limit = 1 * 1024 * 1024;
 	static const ev_tstamp max_exec_time = 0.2; /* 200 ms */
 	ev_tstamp start;
@@ -311,14 +310,14 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 		 * In this mode we do additional checks to avoid performance issues
 		 */
 		long_text_mode = TRUE;
-		start = ev_time ();
+		start = ev_time();
 	}
 
 	buf.original.begin = text;
 	buf.original.len = len;
 	buf.flags = 0;
 
-	memset (&token, 0, sizeof (token));
+	memset(&token, 0, sizeof(token));
 
 	if (cfg != NULL) {
 		min_len = cfg->min_word_len;
@@ -328,15 +327,15 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	}
 
 	if (!cur_words) {
-		res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_stat_token_t),
-				initial_size);
+		res = g_array_sized_new(FALSE, FALSE, sizeof(rspamd_stat_token_t),
+								initial_size);
 	}
 	else {
 		res = cur_words;
 	}
 
-	if (G_UNLIKELY (how == RSPAMD_TOKENIZE_RAW || utxt == NULL)) {
-		while (rspamd_tokenizer_get_word_raw (&buf, &pos, &token, &cur, &l, FALSE)) {
+	if (G_UNLIKELY(how == RSPAMD_TOKENIZE_RAW || utxt == NULL)) {
+		while (rspamd_tokenizer_get_word_raw(&buf, &pos, &token, &cur, &l, FALSE)) {
 			if (l == 0 || (min_len > 0 && l < min_len) ||
 				(max_len > 0 && l > max_len)) {
 				token.original.begin = pos;
@@ -344,8 +343,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 			}
 
 			if (token.original.len > 0 &&
-				rspamd_tokenize_check_limit (decay, word_decay, res->len,
-					&hv, &prob, &token, pos - text, len)) {
+				rspamd_tokenize_check_limit(decay, word_decay, res->len,
+											&hv, &prob, &token, pos - text, len)) {
 				if (!decay) {
 					decay = TRUE;
 				}
@@ -357,27 +356,27 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 
 			if (long_text_mode) {
 				if ((res->len + 1) % 16 == 0) {
-					ev_tstamp now = ev_time ();
+					ev_tstamp now = ev_time();
 
 					if (now - start > max_exec_time) {
-						msg_warn_pool_check (
-								"too long time has been spent on tokenization:"
-								  " %.1f ms, limit is %.1f ms; %d words added so far",
-								(now - start) * 1e3, max_exec_time * 1e3,
-								res->len);
+						msg_warn_pool_check(
+							"too long time has been spent on tokenization:"
+							" %.1f ms, limit is %.1f ms; %d words added so far",
+							(now - start) * 1e3, max_exec_time * 1e3,
+							res->len);
 
 						goto end;
 					}
 				}
 			}
 
-			g_array_append_val (res, token);
+			g_array_append_val(res, token);
 
-			if (((gsize)res->len) * sizeof (token) > (0x1ull << 30u)) {
+			if (((gsize) res->len) * sizeof(token) > (0x1ull << 30u)) {
 				/* Due to bug in glib ! */
-				msg_err_pool_check (
-						"too many words found: %d, stop tokenization to avoid DoS",
-						res->len);
+				msg_err_pool_check(
+					"too many words found: %d, stop tokenization to avoid DoS",
+					res->len);
 
 				goto end;
 			}
@@ -392,21 +391,21 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 		struct rspamd_process_exception *ex = NULL;
 
 		if (bi == NULL) {
-			bi = ubrk_open (UBRK_WORD, NULL, NULL, 0, &uc_err);
+			bi = ubrk_open(UBRK_WORD, NULL, NULL, 0, &uc_err);
 
-			g_assert (U_SUCCESS (uc_err));
+			g_assert(U_SUCCESS(uc_err));
 		}
 
-		ubrk_setUText (bi, (UText*)utxt, &uc_err);
-		last = ubrk_first (bi);
+		ubrk_setUText(bi, (UText *) utxt, &uc_err);
+		last = ubrk_first(bi);
 		p = last;
 
 		if (cur) {
-			ex = (struct rspamd_process_exception *)cur->data;
+			ex = (struct rspamd_process_exception *) cur->data;
 		}
 
 		while (p != UBRK_DONE) {
-start_over:
+		start_over:
 			token.original.len = 0;
 
 			if (p > last) {
@@ -418,19 +417,19 @@ start_over:
 						while (cur && ex->pos <= last) {
 							/* We have an exception at the beginning, skip those */
 							last += ex->len;
-							rspamd_tokenize_exception (ex, res);
+							rspamd_tokenize_exception(ex, res);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
 									gint32 old_p = p;
-									p = ubrk_next (bi);
+									p = ubrk_next(bi);
 
 									if (p != UBRK_DONE && p <= old_p) {
-										msg_warn_pool_check (
-												"tokenization reversed back on position %d,"
-												"%d new position (%d backward), likely libicu bug!",
-												(gint)(p), (gint)(old_p), old_p - p);
+										msg_warn_pool_check(
+											"tokenization reversed back on position %d,"
+											"%d new position (%d backward), likely libicu bug!",
+											(gint) (p), (gint) (old_p), old_p - p);
 
 										goto end;
 									}
@@ -447,8 +446,8 @@ start_over:
 						/* Now, we can have an exception within boundary again */
 						if (cur && ex->pos >= last && ex->pos <= p) {
 							/* Append the first part */
-							if (rspamd_utf_word_valid (text, text + len, last,
-									ex->pos)) {
+							if (rspamd_utf_word_valid(text, text + len, last,
+													  ex->pos)) {
 								token.original.begin = text + last;
 								token.original.len = ex->pos - last;
 								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
@@ -458,18 +457,18 @@ start_over:
 							/* Process the current exception */
 							last += ex->len + (ex->pos - last);
 
-							rspamd_tokenize_exception (ex, res);
+							rspamd_tokenize_exception(ex, res);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
 									gint32 old_p = p;
-									p = ubrk_next (bi);
+									p = ubrk_next(bi);
 									if (p != UBRK_DONE && p <= old_p) {
-										msg_warn_pool_check (
-												"tokenization reversed back on position %d,"
-												"%d new position (%d backward), likely libicu bug!",
-												(gint)(p), (gint)(old_p), old_p - p);
+										msg_warn_pool_check(
+											"tokenization reversed back on position %d,"
+											"%d new position (%d backward), likely libicu bug!",
+											(gint) (p), (gint) (old_p), old_p - p);
 
 										goto end;
 									}
@@ -482,7 +481,7 @@ start_over:
 							SHIFT_EX;
 						}
 						else if (p > last) {
-							if (rspamd_utf_word_valid (text, text + len, last, p)) {
+							if (rspamd_utf_word_valid(text, text + len, last, p)) {
 								token.original.begin = text + last;
 								token.original.len = p - last;
 								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
@@ -497,7 +496,7 @@ start_over:
 							SHIFT_EX;
 						}
 
-						if (rspamd_utf_word_valid (text, text + len, last, p)) {
+						if (rspamd_utf_word_valid(text, text + len, last, p)) {
 							token.original.begin = text + last;
 							token.original.len = p - last;
 							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
@@ -506,7 +505,7 @@ start_over:
 					}
 					else {
 						/* No exceptions within boundary */
-						if (rspamd_utf_word_valid (text, text + len, last, p)) {
+						if (rspamd_utf_word_valid(text, text + len, last, p)) {
 							token.original.begin = text + last;
 							token.original.len = p - last;
 							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
@@ -515,7 +514,7 @@ start_over:
 					}
 				}
 				else {
-					if (rspamd_utf_word_valid (text, text + len, last, p)) {
+					if (rspamd_utf_word_valid(text, text + len, last, p)) {
 						token.original.begin = text + last;
 						token.original.len = p - last;
 						token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
@@ -524,11 +523,12 @@ start_over:
 				}
 
 				if (token.original.len > 0 &&
-					rspamd_tokenize_check_limit (decay, word_decay, res->len,
-						&hv, &prob, &token, p, len)) {
+					rspamd_tokenize_check_limit(decay, word_decay, res->len,
+												&hv, &prob, &token, p, len)) {
 					if (!decay) {
 						decay = TRUE;
-					} else {
+					}
+					else {
 						token.flags |= RSPAMD_STAT_TOKEN_FLAG_SKIPPED;
 					}
 				}
@@ -536,15 +536,15 @@ start_over:
 
 			if (token.original.len > 0) {
 				/* Additional check for number of words */
-				if (((gsize)res->len) * sizeof (token) > (0x1ull << 30u)) {
+				if (((gsize) res->len) * sizeof(token) > (0x1ull << 30u)) {
 					/* Due to bug in glib ! */
-					msg_err ("too many words found: %d, stop tokenization to avoid DoS",
+					msg_err("too many words found: %d, stop tokenization to avoid DoS",
 							res->len);
 
 					goto end;
 				}
 
-				g_array_append_val (res, token);
+				g_array_append_val(res, token);
 			}
 
 			/* Also check for long text mode */
@@ -553,14 +553,14 @@ start_over:
 				const int words_check_mask = 0x7F;
 
 				if ((res->len & words_check_mask) == words_check_mask) {
-					ev_tstamp now = ev_time ();
+					ev_tstamp now = ev_time();
 
 					if (now - start > max_exec_time) {
-						msg_warn_pool_check (
-								"too long time has been spent on tokenization:"
-								  " %.1f ms, limit is %.1f ms; %d words added so far",
-								(now - start) * 1e3, max_exec_time * 1e3,
-								res->len);
+						msg_warn_pool_check(
+							"too long time has been spent on tokenization:"
+							" %.1f ms, limit is %.1f ms; %d words added so far",
+							(now - start) * 1e3, max_exec_time * 1e3,
+							res->len);
 
 						goto end;
 					}
@@ -568,12 +568,12 @@ start_over:
 			}
 
 			last = p;
-			p = ubrk_next (bi);
+			p = ubrk_next(bi);
 
 			if (p != UBRK_DONE && p <= last) {
-				msg_warn_pool_check ("tokenization reversed back on position %d,"
-						 "%d new position (%d backward), likely libicu bug!",
-						(gint)(p), (gint)(last), last - p);
+				msg_warn_pool_check("tokenization reversed back on position %d,"
+									"%d new position (%d backward), likely libicu bug!",
+									(gint) (p), (gint) (last), last - p);
 
 				goto end;
 			}
@@ -582,7 +582,7 @@ start_over:
 
 end:
 	if (!decay) {
-		hv = mum_hash_finish (hv);
+		hv = mum_hash_finish(hv);
 	}
 
 	if (hash) {
@@ -595,8 +595,8 @@ end:
 #undef SHIFT_EX
 
 static void
-rspamd_add_metawords_from_str (const gchar *beg, gsize len,
-								struct rspamd_task *task)
+rspamd_add_metawords_from_str(const gchar *beg, gsize len,
+							  struct rspamd_task *task)
 {
 	UText utxt = UTEXT_INITIALIZER;
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -605,7 +605,7 @@ rspamd_add_metawords_from_str (const gchar *beg, gsize len,
 	gboolean valid_utf = TRUE;
 
 	while (i < len) {
-		U8_NEXT (beg, i, len, uc);
+		U8_NEXT(beg, i, len, uc);
 
 		if (((gint32) uc) < 0) {
 			valid_utf = FALSE;
@@ -613,12 +613,12 @@ rspamd_add_metawords_from_str (const gchar *beg, gsize len,
 		}
 
 #if U_ICU_VERSION_MAJOR_NUM < 50
-		if (u_isalpha (uc)) {
-			gint32 sc = ublock_getCode (uc);
+		if (u_isalpha(uc)) {
+			gint32 sc = ublock_getCode(uc);
 
 			if (sc == UBLOCK_THAI) {
 				valid_utf = FALSE;
-				msg_info_task ("enable workaround for Thai characters for old libicu");
+				msg_info_task("enable workaround for Thai characters for old libicu");
 				break;
 			}
 		}
@@ -626,101 +626,100 @@ rspamd_add_metawords_from_str (const gchar *beg, gsize len,
 	}
 
 	if (valid_utf) {
-		utext_openUTF8 (&utxt,
-				beg,
-				len,
-				&uc_err);
+		utext_openUTF8(&utxt,
+					   beg,
+					   len,
+					   &uc_err);
 
-		task->meta_words = rspamd_tokenize_text (beg, len,
-				&utxt, RSPAMD_TOKENIZE_UTF,
-				task->cfg, NULL, NULL,
-				task->meta_words,
-				task->task_pool);
+		task->meta_words = rspamd_tokenize_text(beg, len,
+												&utxt, RSPAMD_TOKENIZE_UTF,
+												task->cfg, NULL, NULL,
+												task->meta_words,
+												task->task_pool);
 
-		utext_close (&utxt);
+		utext_close(&utxt);
 	}
 	else {
-		task->meta_words = rspamd_tokenize_text (beg, len,
-				NULL, RSPAMD_TOKENIZE_RAW,
-				task->cfg, NULL, NULL, task->meta_words,
-				task->task_pool);
+		task->meta_words = rspamd_tokenize_text(beg, len,
+												NULL, RSPAMD_TOKENIZE_RAW,
+												task->cfg, NULL, NULL, task->meta_words,
+												task->task_pool);
 	}
 }
 
-void
-rspamd_tokenize_meta_words (struct rspamd_task *task)
+void rspamd_tokenize_meta_words(struct rspamd_task *task)
 {
 	guint i = 0;
 	rspamd_stat_token_t *tok;
 
-	if (MESSAGE_FIELD (task, subject)) {
-		rspamd_add_metawords_from_str (MESSAGE_FIELD (task, subject),
-				strlen (MESSAGE_FIELD (task, subject)), task);
+	if (MESSAGE_FIELD(task, subject)) {
+		rspamd_add_metawords_from_str(MESSAGE_FIELD(task, subject),
+									  strlen(MESSAGE_FIELD(task, subject)), task);
 	}
 
-	if (MESSAGE_FIELD (task, from_mime) && MESSAGE_FIELD (task, from_mime)->len > 0) {
+	if (MESSAGE_FIELD(task, from_mime) && MESSAGE_FIELD(task, from_mime)->len > 0) {
 		struct rspamd_email_address *addr;
 
-		addr = g_ptr_array_index (MESSAGE_FIELD (task, from_mime), 0);
+		addr = g_ptr_array_index(MESSAGE_FIELD(task, from_mime), 0);
 
 		if (addr->name) {
-			rspamd_add_metawords_from_str (addr->name, strlen (addr->name), task);
+			rspamd_add_metawords_from_str(addr->name, strlen(addr->name), task);
 		}
 	}
 
 	if (task->meta_words != NULL) {
 		const gchar *language = NULL;
 
-		if (MESSAGE_FIELD (task, text_parts) &&
-				MESSAGE_FIELD (task, text_parts)->len > 0) {
-			struct rspamd_mime_text_part *tp = g_ptr_array_index (
-					MESSAGE_FIELD (task, text_parts), 0);
+		if (MESSAGE_FIELD(task, text_parts) &&
+			MESSAGE_FIELD(task, text_parts)->len > 0) {
+			struct rspamd_mime_text_part *tp = g_ptr_array_index(
+				MESSAGE_FIELD(task, text_parts), 0);
 
 			if (tp->language) {
 				language = tp->language;
 			}
 		}
 
-		rspamd_normalize_words (task->meta_words, task->task_pool);
-		rspamd_stem_words (task->meta_words, task->task_pool, language,
-				task->lang_det);
+		rspamd_normalize_words(task->meta_words, task->task_pool);
+		rspamd_stem_words(task->meta_words, task->task_pool, language,
+						  task->lang_det);
 
 		for (i = 0; i < task->meta_words->len; i++) {
-			tok = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
+			tok = &g_array_index(task->meta_words, rspamd_stat_token_t, i);
 			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_HEADER;
 		}
 	}
 }
 
 static inline void
-rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
-						rspamd_stat_token_t *tok,
-						rspamd_mempool_t *pool)
+rspamd_uchars_to_ucs32(const UChar *src, gsize srclen,
+					   rspamd_stat_token_t *tok,
+					   rspamd_mempool_t *pool)
 {
 	UChar32 *dest, t, *d;
 	gint32 i = 0;
 
-	dest = rspamd_mempool_alloc (pool, srclen * sizeof (UChar32));
+	dest = rspamd_mempool_alloc(pool, srclen * sizeof(UChar32));
 	d = dest;
 
 	while (i < srclen) {
-		U16_NEXT_UNSAFE (src, i, t);
+		U16_NEXT_UNSAFE(src, i, t);
 
-		if (u_isgraph (t)) {
+		if (u_isgraph(t)) {
 			UCharCategory cat;
 
-			cat = u_charType (t);
+			cat = u_charType(t);
 #if U_ICU_VERSION_MAJOR_NUM >= 57
-			if (u_hasBinaryProperty (t, UCHAR_EMOJI)) {
+			if (u_hasBinaryProperty(t, UCHAR_EMOJI)) {
 				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_EMOJI;
 			}
 #endif
 
 			if ((cat >= U_UPPERCASE_LETTER && cat <= U_OTHER_NUMBER) ||
-					cat == U_CONNECTOR_PUNCTUATION ||
-					cat == U_MATH_SYMBOL ||
-					cat == U_CURRENCY_SYMBOL) {
-				*d++ = u_tolower (t);
+				cat == U_CONNECTOR_PUNCTUATION ||
+				cat == U_MATH_SYMBOL ||
+				cat == U_CURRENCY_SYMBOL) {
+				*d++ = u_tolower(t);
 			}
 		}
 		else {
@@ -734,52 +733,51 @@ rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
 }
 
 static inline void
-rspamd_ucs32_to_normalised (rspamd_stat_token_t *tok,
-							rspamd_mempool_t *pool)
+rspamd_ucs32_to_normalised(rspamd_stat_token_t *tok,
+						   rspamd_mempool_t *pool)
 {
 	guint i, doff = 0;
 	gsize utflen = 0;
 	gchar *dest;
 	UChar32 t;
 
-	for (i = 0; i < tok->unicode.len; i ++) {
-		utflen += U8_LENGTH (tok->unicode.begin[i]);
+	for (i = 0; i < tok->unicode.len; i++) {
+		utflen += U8_LENGTH(tok->unicode.begin[i]);
 	}
 
-	dest = rspamd_mempool_alloc (pool, utflen + 1);
+	dest = rspamd_mempool_alloc(pool, utflen + 1);
 
-	for (i = 0; i < tok->unicode.len; i ++) {
+	for (i = 0; i < tok->unicode.len; i++) {
 		t = tok->unicode.begin[i];
-		U8_APPEND_UNSAFE (dest, doff, t);
+		U8_APPEND_UNSAFE(dest, doff, t);
 	}
 
-	g_assert (doff <= utflen);
+	g_assert(doff <= utflen);
 	dest[doff] = '\0';
 
 	tok->normalized.len = doff;
 	tok->normalized.begin = dest;
 }
 
-void
-rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
+void rspamd_normalize_single_word(rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
 {
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *utf8_converter;
 	UChar tmpbuf[1024]; /* Assume that we have no longer words... */
 	gsize ulen;
 
-	utf8_converter = rspamd_get_utf8_converter ();
+	utf8_converter = rspamd_get_utf8_converter();
 
 	if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
-		ulen = ucnv_toUChars (utf8_converter,
-				tmpbuf,
-				G_N_ELEMENTS (tmpbuf),
-				tok->original.begin,
-				tok->original.len,
-				&uc_err);
+		ulen = ucnv_toUChars(utf8_converter,
+							 tmpbuf,
+							 G_N_ELEMENTS(tmpbuf),
+							 tok->original.begin,
+							 tok->original.len,
+							 &uc_err);
 
 		/* Now, we need to understand if we need to normalise the word */
-		if (!U_SUCCESS (uc_err)) {
+		if (!U_SUCCESS(uc_err)) {
 			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
 			tok->unicode.begin = NULL;
 			tok->unicode.len = 0;
@@ -788,14 +786,14 @@ rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
 		}
 		else {
 #if U_ICU_VERSION_MAJOR_NUM >= 44
-			const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
+			const UNormalizer2 *norm = rspamd_get_unicode_normalizer();
 			gint32 end;
 
 			/* We can now check if we need to decompose */
-			end = unorm2_spanQuickCheckYes (norm, tmpbuf, ulen, &uc_err);
+			end = unorm2_spanQuickCheckYes(norm, tmpbuf, ulen, &uc_err);
 
-			if (!U_SUCCESS (uc_err)) {
-				rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
+			if (!U_SUCCESS(uc_err)) {
+				rspamd_uchars_to_ucs32(tmpbuf, ulen, tok, pool);
 				tok->normalized.begin = NULL;
 				tok->normalized.len = 0;
 				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
@@ -803,46 +801,46 @@ rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
 			else {
 				if (end == ulen) {
 					/* Already normalised, just lowercase */
-					rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
-					rspamd_ucs32_to_normalised (tok, pool);
+					rspamd_uchars_to_ucs32(tmpbuf, ulen, tok, pool);
+					rspamd_ucs32_to_normalised(tok, pool);
 				}
 				else {
 					/* Perform normalization */
 					UChar normbuf[1024];
 
-					g_assert (end < G_N_ELEMENTS (normbuf));
+					g_assert(end < G_N_ELEMENTS(normbuf));
 					/* First part */
-					memcpy (normbuf, tmpbuf, end * sizeof (UChar));
+					memcpy(normbuf, tmpbuf, end * sizeof(UChar));
 					/* Second part */
-					ulen = unorm2_normalizeSecondAndAppend (norm,
-							normbuf, end,
-							G_N_ELEMENTS (normbuf),
-							tmpbuf + end,
-							ulen - end,
-							&uc_err);
+					ulen = unorm2_normalizeSecondAndAppend(norm,
+														   normbuf, end,
+														   G_N_ELEMENTS(normbuf),
+														   tmpbuf + end,
+														   ulen - end,
+														   &uc_err);
 
-					if (!U_SUCCESS (uc_err)) {
+					if (!U_SUCCESS(uc_err)) {
 						if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
-							msg_warn_pool_check ("cannot normalise text '%*s': %s",
-									(gint)tok->original.len, tok->original.begin,
-									u_errorName (uc_err));
-							rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
-							rspamd_ucs32_to_normalised (tok, pool);
+							msg_warn_pool_check("cannot normalise text '%*s': %s",
+												(gint) tok->original.len, tok->original.begin,
+												u_errorName(uc_err));
+							rspamd_uchars_to_ucs32(tmpbuf, ulen, tok, pool);
+							rspamd_ucs32_to_normalised(tok, pool);
 							tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
 						}
 					}
 					else {
 						/* Copy normalised back */
-						rspamd_uchars_to_ucs32 (normbuf, ulen, tok, pool);
+						rspamd_uchars_to_ucs32(normbuf, ulen, tok, pool);
 						tok->flags |= RSPAMD_STAT_TOKEN_FLAG_NORMALISED;
-						rspamd_ucs32_to_normalised (tok, pool);
+						rspamd_ucs32_to_normalised(tok, pool);
 					}
 				}
 			}
 #else
 			/* Legacy version with no unorm2 interface */
-			rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
-			rspamd_ucs32_to_normalised (tok, pool);
+			rspamd_uchars_to_ucs32(tmpbuf, ulen, tok, pool);
+			rspamd_ucs32_to_normalised(tok, pool);
 #endif
 		}
 	}
@@ -851,31 +849,29 @@ rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
 			/* Simple lowercase */
 			gchar *dest;
 
-			dest = rspamd_mempool_alloc (pool, tok->original.len + 1);
-			rspamd_strlcpy (dest, tok->original.begin, tok->original.len + 1);
-			rspamd_str_lc (dest, tok->original.len);
+			dest = rspamd_mempool_alloc(pool, tok->original.len + 1);
+			rspamd_strlcpy(dest, tok->original.begin, tok->original.len + 1);
+			rspamd_str_lc(dest, tok->original.len);
 			tok->normalized.len = tok->original.len;
 			tok->normalized.begin = dest;
 		}
 	}
 }
 
-void
-rspamd_normalize_words (GArray *words, rspamd_mempool_t *pool)
+void rspamd_normalize_words(GArray *words, rspamd_mempool_t *pool)
 {
 	rspamd_stat_token_t *tok;
 	guint i;
 
 	for (i = 0; i < words->len; i++) {
-		tok = &g_array_index (words, rspamd_stat_token_t, i);
-		rspamd_normalize_single_word (tok, pool);
+		tok = &g_array_index(words, rspamd_stat_token_t, i);
+		rspamd_normalize_single_word(tok, pool);
 	}
 }
 
-void
-rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
-				   const gchar *language,
-				   struct rspamd_lang_detector *d)
+void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
+					   const gchar *language,
+					   struct rspamd_lang_detector *d)
 {
 	static GHashTable *stemmers = NULL;
 	struct sb_stemmer *stem = NULL;
@@ -885,49 +881,49 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 	gsize dlen;
 
 	if (!stemmers) {
-		stemmers = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		stemmers = g_hash_table_new(rspamd_strcase_hash,
+									rspamd_strcase_equal);
 	}
 
 	if (language && language[0] != '\0') {
-		stem = g_hash_table_lookup (stemmers, language);
+		stem = g_hash_table_lookup(stemmers, language);
 
 		if (stem == NULL) {
 
-			stem = sb_stemmer_new (language, "UTF_8");
+			stem = sb_stemmer_new(language, "UTF_8");
 
 			if (stem == NULL) {
-				msg_debug_pool (
-						"<%s> cannot create lemmatizer for %s language",
-						language);
-				g_hash_table_insert (stemmers, g_strdup (language),
-						GINT_TO_POINTER (-1));
+				msg_debug_pool(
+					"<%s> cannot create lemmatizer for %s language",
+					language);
+				g_hash_table_insert(stemmers, g_strdup(language),
+									GINT_TO_POINTER(-1));
 			}
 			else {
-				g_hash_table_insert (stemmers, g_strdup (language),
-						stem);
+				g_hash_table_insert(stemmers, g_strdup(language),
+									stem);
 			}
 		}
-		else if (stem == GINT_TO_POINTER (-1)) {
+		else if (stem == GINT_TO_POINTER(-1)) {
 			/* Negative cache */
 			stem = NULL;
 		}
 	}
 	for (i = 0; i < words->len; i++) {
-		tok = &g_array_index (words, rspamd_stat_token_t, i);
+		tok = &g_array_index(words, rspamd_stat_token_t, i);
 
 		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 			if (stem) {
 				const gchar *stemmed = NULL;
 
-				stemmed = sb_stemmer_stem (stem,
-						tok->normalized.begin, tok->normalized.len);
+				stemmed = sb_stemmer_stem(stem,
+										  tok->normalized.begin, tok->normalized.len);
 
-				dlen = stemmed ? strlen (stemmed) : 0;
+				dlen = stemmed ? strlen(stemmed) : 0;
 
 				if (dlen > 0) {
-					dest = rspamd_mempool_alloc (pool, dlen + 1);
-					memcpy (dest, stemmed, dlen);
+					dest = rspamd_mempool_alloc(pool, dlen + 1);
+					memcpy(dest, stemmed, dlen);
 					dest[dlen] = '\0';
 					tok->stemmed.len = dlen;
 					tok->stemmed.begin = dest;
@@ -945,7 +941,7 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 			}
 
 			if (tok->stemmed.len > 0 && d != NULL &&
-				rspamd_language_detector_is_stop_word (d, tok->stemmed.begin, tok->stemmed.len)) {
+				rspamd_language_detector_is_stop_word(d, tok->stemmed.begin, tok->stemmed.len)) {
 				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STOP_WORD;
 			}
 		}

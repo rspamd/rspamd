@@ -21,7 +21,7 @@
 #include "fstring.h"
 #include <unicode/uchar.h>
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -36,8 +36,8 @@ struct rspamd_charset_converter;
  * @param in
  * @return
  */
-const gchar *rspamd_mime_detect_charset (const rspamd_ftok_t *in,
-										 rspamd_mempool_t *pool);
+const gchar *rspamd_mime_detect_charset(const rspamd_ftok_t *in,
+										rspamd_mempool_t *pool);
 
 /**
  * Convert text chunk to utf-8. Input encoding is substituted using
@@ -52,9 +52,9 @@ const gchar *rspamd_mime_detect_charset (const rspamd_ftok_t *in,
  * @param err
  * @return
  */
-gchar *rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
-								 gchar *input, gsize len, const gchar *in_enc,
-								 gsize *olen, GError **err);
+gchar *rspamd_mime_text_to_utf8(rspamd_mempool_t *pool,
+								gchar *input, gsize len, const gchar *in_enc,
+								gsize *olen, GError **err);
 
 /**
  * Converts data from `in` to `out`,
@@ -67,10 +67,10 @@ gchar *rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
  * @param enc validated canonical charset name. If NULL, then utf8 check is done only
  * @return
  */
-gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
-										 GByteArray *out,
-										 rspamd_mempool_t *pool,
-										 const gchar *enc);
+gboolean rspamd_mime_to_utf8_byte_array(GByteArray *in,
+										GByteArray *out,
+										rspamd_mempool_t *pool,
+										const gchar *enc);
 
 /**
  * Maybe convert part to utf-8
@@ -78,8 +78,8 @@ gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
  * @param text_part
  * @return
  */
-void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
-										  struct rspamd_mime_text_part *text_part);
+void rspamd_mime_text_part_maybe_convert(struct rspamd_task *task,
+										 struct rspamd_mime_text_part *text_part);
 
 /**
  * Checks utf8 charset and normalize/validate utf8 string
@@ -88,9 +88,9 @@ void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
  * @param len
  * @return
  */
-gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-										gchar *in, gsize len,
-										gboolean content_check);
+gboolean rspamd_mime_charset_utf_check(rspamd_ftok_t *charset,
+									   gchar *in, gsize len,
+									   gboolean content_check);
 
 /**
  * Ensure that all characters in string are valid utf8 chars or replace them
@@ -98,9 +98,9 @@ gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
  * @param in
  * @param len
  */
-void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
+void rspamd_mime_charset_utf_enforce(gchar *in, gsize len);
 
- /**
+/**
   * Gets cached converter
   * @param enc input encoding
   * @param pool pool to use for temporary normalisation
@@ -108,11 +108,11 @@ void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
   * @param err output error
   * @return converter
   */
-struct rspamd_charset_converter *rspamd_mime_get_converter_cached (
-		const gchar *enc,
-		rspamd_mempool_t *pool,
-		gboolean is_canon,
-		UErrorCode *err);
+struct rspamd_charset_converter *rspamd_mime_get_converter_cached(
+	const gchar *enc,
+	rspamd_mempool_t *pool,
+	gboolean is_canon,
+	UErrorCode *err);
 
 /**
  * Performs charset->utf16 conversion
@@ -125,12 +125,12 @@ struct rspamd_charset_converter *rspamd_mime_get_converter_cached (
  * @return
  */
 gint32
-rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
-							UChar *dest,
-							gint32 destCapacity,
-							const char *src,
-							gint32 srcLength,
-							UErrorCode *pErrorCode);
+rspamd_converter_to_uchars(struct rspamd_charset_converter *cnv,
+						   UChar *dest,
+						   gint32 destCapacity,
+						   const char *src,
+						   gint32 srcLength,
+						   UErrorCode *pErrorCode);
 
 /**
  * Detect charset in text
@@ -138,10 +138,10 @@ rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
  * @param inlen
  * @return detected charset name or NULL
  */
-const char *rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen,
-												 bool check_utf8);
+const char *rspamd_mime_charset_find_by_content(const gchar *in, gsize inlen,
+												bool check_utf8);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

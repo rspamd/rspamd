@@ -41,7 +41,8 @@ public:
 	using cdb_element_t = std::shared_ptr<struct cdb>;
 	cdb_shared_storage() = default;
 
-	auto get_cdb(const char *path) const -> std::optional<cdb_element_t> {
+	auto get_cdb(const char *path) const -> std::optional<cdb_element_t>
+	{
 		auto found = elts.find(path);
 
 		if (found != elts.end()) {
@@ -53,13 +54,15 @@ public:
 		return std::nullopt;
 	}
 	/* Create a new smart pointer over POD cdb structure */
-	static auto new_cdb() -> cdb_element_t {
+	static auto new_cdb() -> cdb_element_t
+	{
 		auto ret = cdb_element_t(new struct cdb, cdb_deleter());
 		memset(ret.get(), 0, sizeof(struct cdb));
 		return ret;
 	}
 	/* Enclose cdb into storage */
-	auto push_cdb(const char *path, cdb_element_t cdbp) -> cdb_element_t {
+	auto push_cdb(const char *path, cdb_element_t cdbp) -> cdb_element_t
+	{
 		auto found = elts.find(path);
 
 		if (found != elts.end()) {
@@ -82,6 +85,7 @@ public:
 			return cdbp;
 		}
 	}
+
 private:
 	/*
 	 * We store weak pointers here to allow owning cdb statfiles to free
@@ -90,7 +94,8 @@ private:
 	ankerl::unordered_dense::map<std::string, std::weak_ptr<struct cdb>> elts;
 
 	struct cdb_deleter {
-		void operator()(struct cdb *c) const {
+		void operator()(struct cdb *c) const
+		{
 			cdb_free(c);
 			delete c;
 		}
@@ -102,13 +107,16 @@ static cdb_shared_storage cdb_shared_storage;
 class ro_backend final {
 public:
 	explicit ro_backend(struct rspamd_statfile *_st, cdb_shared_storage::cdb_element_t _db)
-			: st(_st), db(std::move(_db)) {}
+		: st(_st), db(std::move(_db))
+	{
+	}
 	ro_backend() = delete;
 	ro_backend(const ro_backend &) = delete;
-	ro_backend(ro_backend &&other) noexcept {
+	ro_backend(ro_backend &&other) noexcept
+	{
 		*this = std::move(other);
 	}
-	ro_backend& operator=(ro_backend &&other) noexcept
+	ro_backend &operator=(ro_backend &&other) noexcept
 	{
 		std::swap(st, other.st);
 		std::swap(db, other.db);
@@ -118,14 +126,18 @@ public:
 
 		return *this;
 	}
-	~ro_backend() {}
+	~ro_backend()
+	{
+	}
 
 	auto load_cdb() -> tl::expected<bool, std::string>;
 	auto process_token(const rspamd_token_t *tok) const -> std::optional<float>;
-	constexpr auto is_spam() const -> bool {
+	constexpr auto is_spam() const -> bool
+	{
 		return st->stcf->is_spam;
 	}
-	auto get_learns() const -> std::uint64_t {
+	auto get_learns() const -> std::uint64_t
+	{
 		if (is_spam()) {
 			return learns_spam;
 		}
@@ -133,9 +145,11 @@ public:
 			return learns_ham;
 		}
 	}
-	auto get_total_learns() const -> std::uint64_t {
+	auto get_total_learns() const -> std::uint64_t
+	{
 		return learns_spam + learns_ham;
 	}
+
 private:
 	struct rspamd_statfile *st;
 	cdb_shared_storage::cdb_element_t db;
@@ -148,7 +162,7 @@ template<typename T>
 static inline auto
 cdb_get_key_as_int64(struct cdb *cdb, T key) -> std::optional<std::int64_t>
 {
-	auto pos = cdb_find(cdb, (void *)&key, sizeof(key));
+	auto pos = cdb_find(cdb, (void *) &key, sizeof(key));
 
 	if (pos > 0) {
 		auto vpos = cdb_datapos(cdb);
@@ -156,7 +170,7 @@ cdb_get_key_as_int64(struct cdb *cdb, T key) -> std::optional<std::int64_t>
 
 		if (vlen == sizeof(std::int64_t)) {
 			std::int64_t ret;
-			cdb_read(cdb, (void *)&ret, vlen, vpos);
+			cdb_read(cdb, (void *) &ret, vlen, vpos);
 
 			return ret;
 		}
@@ -169,7 +183,7 @@ template<typename T>
 static inline auto
 cdb_get_key_as_float_pair(struct cdb *cdb, T key) -> std::optional<std::pair<float, float>>
 {
-	auto pos = cdb_find(cdb, (void *)&key, sizeof(key));
+	auto pos = cdb_find(cdb, (void *) &key, sizeof(key));
 
 	if (pos > 0) {
 		auto vpos = cdb_datapos(cdb);
@@ -183,7 +197,7 @@ cdb_get_key_as_float_pair(struct cdb *cdb, T key) -> std::optional<std::pair<flo
 				} d;
 				char c[sizeof(float) * 2];
 			} u;
-			cdb_read(cdb, (void *)u.c, vlen, vpos);
+			cdb_read(cdb, (void *) u.c, vlen, vpos);
 
 			return std::make_pair(u.d.v1, u.d.v2);
 		}
@@ -193,8 +207,7 @@ cdb_get_key_as_float_pair(struct cdb *cdb, T key) -> std::optional<std::pair<flo
 }
 
 
-auto
-ro_backend::load_cdb() -> tl::expected<bool, std::string>
+auto ro_backend::load_cdb() -> tl::expected<bool, std::string>
 {
 	if (!db) {
 		return tl::make_unexpected("no database loaded");
@@ -205,7 +218,7 @@ ro_backend::load_cdb() -> tl::expected<bool, std::string>
 	static const char learn_spam_key[9] = "_lrnspam", learn_ham_key[9] = "_lrnham_";
 
 	auto check_key = [&](const char *key, std::uint64_t &target) -> tl::expected<bool, std::string> {
-		memcpy((void *)&cdb_key, key, sizeof(cdb_key));
+		memcpy((void *) &cdb_key, key, sizeof(cdb_key));
 
 		auto maybe_value = cdb_get_key_as_int64(db.get(), cdb_key);
 
@@ -213,7 +226,7 @@ ro_backend::load_cdb() -> tl::expected<bool, std::string>
 			return tl::make_unexpected(fmt::format("missing {} key", key));
 		}
 
-		target = (std::uint64_t)maybe_value.value();
+		target = (std::uint64_t) maybe_value.value();
 
 		return true;
 	};
@@ -232,11 +245,10 @@ ro_backend::load_cdb() -> tl::expected<bool, std::string>
 
 	loaded = true;
 
-	return true; // expected
+	return true;// expected
 }
 
-auto
-ro_backend::process_token(const rspamd_token_t *tok) const -> std::optional<float>
+auto ro_backend::process_token(const rspamd_token_t *tok) const -> std::optional<float>
 {
 	if (!loaded) {
 		return std::nullopt;
@@ -258,15 +270,14 @@ ro_backend::process_token(const rspamd_token_t *tok) const -> std::optional<floa
 	return std::nullopt;
 }
 
-auto
-open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
+auto open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 {
 	const char *path = nullptr;
 	const auto *stf = st->stcf;
 
 	auto get_filename = [](const ucl_object_t *obj) -> const char * {
 		const auto *filename = ucl_object_lookup_any(obj,
-				"filename", "path", "cdb", nullptr);
+													 "filename", "path", "cdb", nullptr);
 
 		if (filename && ucl_object_type(filename) == UCL_STRING) {
 			return ucl_object_tostring(filename);
@@ -276,8 +287,8 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 	};
 
 	/* First search in backend configuration */
-	const auto *obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
-	if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+	const auto *obj = ucl_object_lookup(st->classifier->cfg->opts, "backend");
+	if (obj != NULL && ucl_object_type(obj) == UCL_OBJECT) {
 		path = get_filename(obj);
 	}
 
@@ -304,7 +315,7 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 
 		if (fd == -1) {
 			return tl::make_unexpected(fmt::format("cannot open {}: {}",
-					path, strerror(errno)));
+												   path, strerror(errno)));
 		}
 
 		cdbp = cdb_shared_storage::new_cdb();
@@ -313,7 +324,7 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 			close(fd);
 
 			return tl::make_unexpected(fmt::format("cannot init cdb in {}: {}",
-					path, strerror(errno)));
+												   path, strerror(errno)));
 		}
 
 		cdbp = cdb_shared_storage.push_cdb(path, cdbp);
@@ -326,7 +337,7 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 
 	if (!cdbp) {
 		return tl::make_unexpected(fmt::format("cannot init cdb in {}: internal error",
-				path));
+											   path));
 	}
 
 	ro_backend bk{st, std::move(cdbp)};
@@ -340,15 +351,15 @@ open_cdb(struct rspamd_statfile *st) -> tl::expected<ro_backend, std::string>
 	return bk;
 }
 
-}
+}// namespace rspamd::stat::cdb
 
 #define CDB_FROM_RAW(p) (reinterpret_cast<rspamd::stat::cdb::ro_backend *>(p))
 
 /* C exports */
 gpointer
-rspamd_cdb_init(struct rspamd_stat_ctx* ctx,
-						 struct rspamd_config* cfg,
-						 struct rspamd_statfile* st)
+rspamd_cdb_init(struct rspamd_stat_ctx *ctx,
+				struct rspamd_config *cfg,
+				struct rspamd_statfile *st)
 {
 	auto maybe_backend = rspamd::stat::cdb::open_cdb(st);
 
@@ -365,21 +376,21 @@ rspamd_cdb_init(struct rspamd_stat_ctx* ctx,
 	return nullptr;
 }
 gpointer
-rspamd_cdb_runtime(struct rspamd_task* task,
-							struct rspamd_statfile_config* stcf,
-							gboolean learn,
-							gpointer ctx,
-							gint _id)
+rspamd_cdb_runtime(struct rspamd_task *task,
+				   struct rspamd_statfile_config *stcf,
+				   gboolean learn,
+				   gpointer ctx,
+				   gint _id)
 {
 	/* In CDB we don't have any dynamic stuff */
 	return ctx;
 }
 
 gboolean
-rspamd_cdb_process_tokens(struct rspamd_task* task,
-								   GPtrArray* tokens,
-								   gint id,
-								   gpointer runtime)
+rspamd_cdb_process_tokens(struct rspamd_task *task,
+						  GPtrArray *tokens,
+						  gint id,
+						  gpointer runtime)
 {
 	auto *cdbp = CDB_FROM_RAW(runtime);
 	bool seen_values = false;
@@ -409,33 +420,32 @@ rspamd_cdb_process_tokens(struct rspamd_task* task,
 	}
 
 	return true;
-
 }
 gboolean
-rspamd_cdb_finalize_process(struct rspamd_task* task,
-									 gpointer runtime,
-									 gpointer ctx)
+rspamd_cdb_finalize_process(struct rspamd_task *task,
+							gpointer runtime,
+							gpointer ctx)
 {
 	return true;
 }
 gboolean
-rspamd_cdb_learn_tokens(struct rspamd_task* task,
-								 GPtrArray* tokens,
-								 gint id,
-								 gpointer ctx)
+rspamd_cdb_learn_tokens(struct rspamd_task *task,
+						GPtrArray *tokens,
+						gint id,
+						gpointer ctx)
 {
 	return false;
 }
 gboolean
-rspamd_cdb_finalize_learn(struct rspamd_task* task,
-								   gpointer runtime,
-								   gpointer ctx,
-								   GError** err)
+rspamd_cdb_finalize_learn(struct rspamd_task *task,
+						  gpointer runtime,
+						  gpointer ctx,
+						  GError **err)
 {
 	return false;
 }
 
-gulong rspamd_cdb_total_learns(struct rspamd_task* task,
+gulong rspamd_cdb_total_learns(struct rspamd_task *task,
 							   gpointer runtime,
 							   gpointer ctx)
 {
@@ -443,39 +453,38 @@ gulong rspamd_cdb_total_learns(struct rspamd_task* task,
 	return cdbp->get_total_learns();
 }
 gulong
-rspamd_cdb_inc_learns(struct rspamd_task* task,
-							 gpointer runtime,
-							 gpointer ctx)
+rspamd_cdb_inc_learns(struct rspamd_task *task,
+					  gpointer runtime,
+					  gpointer ctx)
 {
-	return (gulong)-1;
+	return (gulong) -1;
 }
 gulong
-rspamd_cdb_dec_learns(struct rspamd_task* task,
-							 gpointer runtime,
-							 gpointer ctx)
+rspamd_cdb_dec_learns(struct rspamd_task *task,
+					  gpointer runtime,
+					  gpointer ctx)
 {
-	return (gulong)-1;
+	return (gulong) -1;
 }
 gulong
-rspamd_cdb_learns(struct rspamd_task* task,
-						 gpointer runtime,
-						 gpointer ctx)
+rspamd_cdb_learns(struct rspamd_task *task,
+				  gpointer runtime,
+				  gpointer ctx)
 {
 	auto *cdbp = CDB_FROM_RAW(ctx);
 	return cdbp->get_learns();
 }
-ucl_object_t*
+ucl_object_t *
 rspamd_cdb_get_stat(gpointer runtime, gpointer ctx)
 {
 	return nullptr;
 }
 gpointer
-rspamd_cdb_load_tokenizer_config(gpointer runtime, gsize* len)
+rspamd_cdb_load_tokenizer_config(gpointer runtime, gsize *len)
 {
 	return nullptr;
 }
-void
-rspamd_cdb_close(gpointer ctx)
+void rspamd_cdb_close(gpointer ctx)
 {
 	auto *cdbp = CDB_FROM_RAW(ctx);
 	delete cdbp;

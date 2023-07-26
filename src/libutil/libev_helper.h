@@ -21,7 +21,7 @@
 #include "contrib/libev/ev.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -30,7 +30,7 @@ extern "C" {
  * It allows to create timed IO watchers utilising both
  */
 
-typedef void (*rspamd_ev_cb) (int fd, short what, void *ud);
+typedef void (*rspamd_ev_cb)(int fd, short what, void *ud);
 
 struct rspamd_io_ev {
 	ev_io io;
@@ -48,8 +48,8 @@ struct rspamd_io_ev {
  * @param cb
  * @param ud
  */
-void rspamd_ev_watcher_init (struct rspamd_io_ev *ev,
-							 int fd, short what, rspamd_ev_cb cb, void *ud);
+void rspamd_ev_watcher_init(struct rspamd_io_ev *ev,
+							int fd, short what, rspamd_ev_cb cb, void *ud);
 
 /**
  * Start watcher with the specific timeout
@@ -57,17 +57,17 @@ void rspamd_ev_watcher_init (struct rspamd_io_ev *ev,
  * @param ev
  * @param timeout
  */
-void rspamd_ev_watcher_start (struct ev_loop *loop,
-							  struct rspamd_io_ev *ev,
-							  ev_tstamp timeout);
+void rspamd_ev_watcher_start(struct ev_loop *loop,
+							 struct rspamd_io_ev *ev,
+							 ev_tstamp timeout);
 
 /**
  * Stops watcher and clean it up
  * @param loop
  * @param ev
  */
-void rspamd_ev_watcher_stop (struct ev_loop *loop,
-							 struct rspamd_io_ev *ev);
+void rspamd_ev_watcher_stop(struct ev_loop *loop,
+							struct rspamd_io_ev *ev);
 
 /**
  * Convenience function to reschedule watcher with different events
@@ -75,11 +75,11 @@ void rspamd_ev_watcher_stop (struct ev_loop *loop,
  * @param ev
  * @param what
  */
-void rspamd_ev_watcher_reschedule (struct ev_loop *loop,
-								   struct rspamd_io_ev *ev,
-								   short what);
+void rspamd_ev_watcher_reschedule(struct ev_loop *loop,
+								  struct rspamd_io_ev *ev,
+								  short what);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

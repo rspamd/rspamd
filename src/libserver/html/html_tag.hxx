@@ -52,15 +52,15 @@ enum class html_component_type : std::uint8_t {
 
 /* Public tags flags */
 /* XML tag */
-#define FL_XML          (1u << CM_USER_SHIFT)
+#define FL_XML (1u << CM_USER_SHIFT)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << (CM_USER_SHIFT + 1))
-#define FL_BROKEN       (1 << (CM_USER_SHIFT + 2))
-#define FL_IGNORE       (1 << (CM_USER_SHIFT + 3))
-#define FL_BLOCK        (1 << (CM_USER_SHIFT + 4))
-#define FL_HREF         (1 << (CM_USER_SHIFT + 5))
-#define FL_COMMENT      (1 << (CM_USER_SHIFT + 6))
-#define FL_VIRTUAL      (1 << (CM_USER_SHIFT + 7))
+#define FL_CLOSED (1 << (CM_USER_SHIFT + 1))
+#define FL_BROKEN (1 << (CM_USER_SHIFT + 2))
+#define FL_IGNORE (1 << (CM_USER_SHIFT + 3))
+#define FL_BLOCK (1 << (CM_USER_SHIFT + 4))
+#define FL_HREF (1 << (CM_USER_SHIFT + 5))
+#define FL_COMMENT (1 << (CM_USER_SHIFT + 6))
+#define FL_VIRTUAL (1 << (CM_USER_SHIFT + 7))
 
 /**
  * Returns component type from a string
@@ -75,7 +75,9 @@ struct html_tag_component {
 	std::string_view value;
 
 	html_tag_component(html_component_type type, std::string_view value)
-		: type(type), value(value) {}
+		: type(type), value(value)
+	{
+	}
 };
 
 /* Pairing closing tag representation */
@@ -83,7 +85,8 @@ struct html_closing_tag {
 	int start = -1;
 	int end = -1;
 
-	auto clear() -> void {
+	auto clear() -> void
+	{
 		start = end = -1;
 	}
 };
@@ -104,7 +107,7 @@ struct html_tag {
 
 	auto find_component(html_component_type what) const -> std::optional<std::string_view>
 	{
-		for (const auto &comp : components) {
+		for (const auto &comp: components) {
 			if (comp.type == what) {
 				return comp.value;
 			}
@@ -122,7 +125,8 @@ struct html_tag {
 		return std::nullopt;
 	}
 
-	auto clear(void) -> void {
+	auto clear(void) -> void
+	{
 		id = Tag_UNKNOWN;
 		tag_start = content_offset = 0;
 		extra = std::monostate{};
@@ -133,8 +137,9 @@ struct html_tag {
 		closing.clear();
 	}
 
-	constexpr auto get_content_length() const -> std::size_t {
-		if (flags & (FL_IGNORE|CM_HEAD)) {
+	constexpr auto get_content_length() const -> std::size_t
+	{
+		if (flags & (FL_IGNORE | CM_HEAD)) {
 			return 0;
 		}
 		if (closing.start > content_offset) {
@@ -149,6 +154,6 @@ struct html_tag {
 
 static_assert(CM_USER_SHIFT + 7 < sizeof(html_tag::flags) * NBBY);
 
-}
+}// namespace rspamd::html
 
-#endif //RSPAMD_HTML_TAG_HXX
+#endif//RSPAMD_HTML_TAG_HXX

@@ -21,7 +21,7 @@
 #include "libutil/ref.h"
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -66,7 +66,7 @@ struct rspamd_task;
  * @param len length of string
  * @return
  */
-struct rspamd_email_address *rspamd_email_address_from_smtp (const gchar *str, guint len);
+struct rspamd_email_address *rspamd_email_address_from_smtp(const gchar *str, guint len);
 
 /**
  * Parses email address from the mime header, decodes names and return the array
@@ -78,19 +78,19 @@ struct rspamd_email_address *rspamd_email_address_from_smtp (const gchar *str, g
  * @return
  */
 GPtrArray *
-rspamd_email_address_from_mime (rspamd_mempool_t *pool, const gchar *hdr, guint len,
-		GPtrArray *src, gint max_elements);
+rspamd_email_address_from_mime(rspamd_mempool_t *pool, const gchar *hdr, guint len,
+							   GPtrArray *src, gint max_elements);
 
 /**
  * Destroys list of email addresses
  * @param ptr
  */
-void rspamd_email_address_list_destroy (gpointer ptr);
+void rspamd_email_address_list_destroy(gpointer ptr);
 
-void rspamd_email_address_free (struct rspamd_email_address *addr);
+void rspamd_email_address_free(struct rspamd_email_address *addr);
 
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

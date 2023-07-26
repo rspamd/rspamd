@@ -30,7 +30,7 @@
 namespace rspamd::html {
 /* Forward declaration */
 struct html_block;
-}
+}// namespace rspamd::html
 
 namespace rspamd::css {
 
@@ -48,17 +48,31 @@ public:
 	/* Constructors */
 	css_rule(css_rule &&other) noexcept = default;
 
-	explicit css_rule(css_property &&prop, css_values_vec &&values) noexcept :
-			prop(prop), values(std::forward<css_values_vec>(values)) {}
+	explicit css_rule(css_property &&prop, css_values_vec &&values) noexcept
+		: prop(prop), values(std::forward<css_values_vec>(values))
+	{
+	}
 
-	explicit css_rule(const css_property &prop) noexcept : prop(prop), values{} {}
+	explicit css_rule(const css_property &prop) noexcept
+		: prop(prop), values{}
+	{
+	}
 
 	/* Methods */
 	/* Comparison is special, as we care merely about property, not the values */
-	auto operator==(const css_rule &other) const { return prop == other.prop; }
+	auto operator==(const css_rule &other) const
+	{
+		return prop == other.prop;
+	}
 
-	constexpr const css_values_vec &get_values(void) const { return values; }
-	constexpr const css_property &get_prop(void) const { return prop; }
+	constexpr const css_values_vec &get_values(void) const
+	{
+		return values;
+	}
+	constexpr const css_property &get_prop(void) const
+	{
+		return prop;
+	}
 
 	/* Import values from another rules according to the importance */
 	void override_values(const css_rule &other);
@@ -66,7 +80,7 @@ public:
 	void add_value(const css_value &value);
 };
 
-}
+}// namespace rspamd::css
 
 /* Make rules hashable by property */
 namespace std {
@@ -74,12 +88,13 @@ template<>
 class hash<rspamd::css::css_rule> {
 public:
 	using is_avalanching = void;
-	constexpr auto operator()(const rspamd::css::css_rule &rule) const -> auto {
+	constexpr auto operator()(const rspamd::css::css_rule &rule) const -> auto
+	{
 		return hash<rspamd::css::css_property>()(rule.get_prop());
 	}
 };
 
-}
+}// namespace std
 
 namespace rspamd::css {
 
@@ -100,8 +115,9 @@ public:
 	css_declarations_block() = default;
 	auto add_rule(rule_shared_ptr rule) -> bool;
 	auto merge_block(const css_declarations_block &other,
-				  merge_type how = merge_type::merge_duplicate) -> void;
-	auto get_rules(void) const -> const auto & {
+					 merge_type how = merge_type::merge_duplicate) -> void;
+	auto get_rules(void) const -> const auto &
+	{
 		return rules;
 	}
 
@@ -110,7 +126,8 @@ public:
 	 * @param prop
 	 * @return
 	 */
-	auto has_property(const css_property &prop) const -> bool {
+	auto has_property(const css_property &prop) const -> bool
+	{
 		return (rules.find(css_rule{prop}) != rules.end());
 	}
 
@@ -131,6 +148,6 @@ auto process_declaration_tokens(rspamd_mempool_t *pool,
 								blocks_gen_functor &&next_token_functor)
 	-> css_declarations_block_ptr;
 
-}
+}// namespace rspamd::css
 
-#endif //RSPAMD_CSS_RULE_HXX
+#endif//RSPAMD_CSS_RULE_HXX

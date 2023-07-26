@@ -47,7 +47,7 @@ rspamd_hyperscan_t *rspamd_hyperscan_from_raw_db(hs_database_t *db, const char *
  * @param db
  * @return
  */
-hs_database_t* rspamd_hyperscan_get_database(rspamd_hyperscan_t *db);
+hs_database_t *rspamd_hyperscan_get_database(rspamd_hyperscan_t *db);
 /**
  * Free the database
  * @param db

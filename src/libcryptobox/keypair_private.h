@@ -20,7 +20,7 @@
 #include "ref.h"
 #include "cryptobox.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 /*
@@ -46,7 +46,7 @@ struct rspamd_cryptobox_keypair {
 /*
  * NIST p256 ecdh keypair
  */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_NIST(x) ((struct rspamd_cryptobox_keypair_nist *)(x))
+#define RSPAMD_CRYPTOBOX_KEYPAIR_NIST(x) ((struct rspamd_cryptobox_keypair_nist *) (x))
 struct rspamd_cryptobox_keypair_nist {
 	struct rspamd_cryptobox_keypair parent;
 	guchar sk[32];
@@ -56,7 +56,7 @@ struct rspamd_cryptobox_keypair_nist {
 /*
  * Curve25519 ecdh keypair
  */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_25519(x) ((struct rspamd_cryptobox_keypair_25519 *)(x))
+#define RSPAMD_CRYPTOBOX_KEYPAIR_25519(x) ((struct rspamd_cryptobox_keypair_25519 *) (x))
 struct rspamd_cryptobox_keypair_25519 {
 	struct rspamd_cryptobox_keypair parent;
 	guchar sk[32];
@@ -66,7 +66,7 @@ struct rspamd_cryptobox_keypair_25519 {
 /*
  * NIST p256 ecdsa keypair
  */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_NIST(x) ((struct rspamd_cryptobox_keypair_sig_nist *)(x))
+#define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_NIST(x) ((struct rspamd_cryptobox_keypair_sig_nist *) (x))
 struct rspamd_cryptobox_keypair_sig_nist {
 	struct rspamd_cryptobox_keypair parent;
 	guchar sk[32];
@@ -76,7 +76,7 @@ struct rspamd_cryptobox_keypair_sig_nist {
 /*
  * Ed25519 keypair
  */
-#define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_25519(x) ((struct rspamd_cryptobox_keypair_sig_25519 *)(x))
+#define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_25519(x) ((struct rspamd_cryptobox_keypair_sig_25519 *) (x))
 struct rspamd_cryptobox_keypair_sig_25519 {
 	struct rspamd_cryptobox_keypair parent;
 	guchar sk[64];
@@ -97,7 +97,7 @@ struct rspamd_cryptobox_pubkey {
 /*
  * Public p256 ecdh
  */
-#define RSPAMD_CRYPTOBOX_PUBKEY_NIST(x) ((struct rspamd_cryptobox_pubkey_nist *)(x))
+#define RSPAMD_CRYPTOBOX_PUBKEY_NIST(x) ((struct rspamd_cryptobox_pubkey_nist *) (x))
 struct rspamd_cryptobox_pubkey_nist {
 	struct rspamd_cryptobox_pubkey parent;
 	guchar pk[65];
@@ -106,7 +106,7 @@ struct rspamd_cryptobox_pubkey_nist {
 /*
  * Public curve25519 ecdh
  */
-#define RSPAMD_CRYPTOBOX_PUBKEY_25519(x) ((struct rspamd_cryptobox_pubkey_25519 *)(x))
+#define RSPAMD_CRYPTOBOX_PUBKEY_25519(x) ((struct rspamd_cryptobox_pubkey_25519 *) (x))
 struct rspamd_cryptobox_pubkey_25519 {
 	struct rspamd_cryptobox_pubkey parent;
 	guchar pk[32];
@@ -115,7 +115,7 @@ struct rspamd_cryptobox_pubkey_25519 {
 /*
  * Public p256 ecdsa
  */
-#define RSPAMD_CRYPTOBOX_PUBKEY_SIG_NIST(x) ((struct rspamd_cryptobox_pubkey_sig_nist *)(x))
+#define RSPAMD_CRYPTOBOX_PUBKEY_SIG_NIST(x) ((struct rspamd_cryptobox_pubkey_sig_nist *) (x))
 struct rspamd_cryptobox_pubkey_sig_nist {
 	struct rspamd_cryptobox_pubkey parent;
 	guchar pk[65];
@@ -124,19 +124,19 @@ struct rspamd_cryptobox_pubkey_sig_nist {
 /*
  * Public ed25519
  */
-#define RSPAMD_CRYPTOBOX_PUBKEY_SIG_25519(x) ((struct rspamd_cryptobox_pubkey_sig_25519 *)(x))
+#define RSPAMD_CRYPTOBOX_PUBKEY_SIG_25519(x) ((struct rspamd_cryptobox_pubkey_sig_25519 *) (x))
 struct rspamd_cryptobox_pubkey_sig_25519 {
 	struct rspamd_cryptobox_pubkey parent;
 	guchar pk[32];
 };
 
-void rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm);
+void rspamd_cryptobox_nm_dtor(struct rspamd_cryptobox_nm *nm);
 
-void rspamd_cryptobox_keypair_dtor (struct rspamd_cryptobox_keypair *kp);
+void rspamd_cryptobox_keypair_dtor(struct rspamd_cryptobox_keypair *kp);
 
-void rspamd_cryptobox_pubkey_dtor (struct rspamd_cryptobox_pubkey *p);
+void rspamd_cryptobox_pubkey_dtor(struct rspamd_cryptobox_pubkey *p);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

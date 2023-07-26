@@ -66,20 +66,20 @@ struct rspamd_lru_volatile_element_s {
 };
 typedef struct rspamd_lru_volatile_element_s rspamd_lru_vol_element_t;
 
-#define TIME_TO_TS(t) ((guint16)(((t) / 60) & 0xFFFFU))
+#define TIME_TO_TS(t) ((guint16) (((t) / 60) & 0xFFFFU))
 
 static rspamd_lru_vol_element_t *
-rspamd_lru_hash_get (const rspamd_lru_hash_t *h, gconstpointer key)
+rspamd_lru_hash_get(const rspamd_lru_hash_t *h, gconstpointer key)
 {
 	if (h->n_buckets) {
 		khint_t k, i, last, mask, step = 0;
 		mask = h->n_buckets - 1;
-		k = h->hfunc (key);
+		k = h->hfunc(key);
 		i = k & mask;
 		last = i;
 
 		while (!__ac_isempty(h->flags, i) &&
-			(__ac_isdel(h->flags, i) || !h->eqfunc(h->keys[i], key))) {
+			   (__ac_isdel(h->flags, i) || !h->eqfunc(h->keys[i], key))) {
 			i = (i + (++step)) & mask;
 			if (i == last) {
 				return NULL;
@@ -93,8 +93,8 @@ rspamd_lru_hash_get (const rspamd_lru_hash_t *h, gconstpointer key)
 }
 
 static int
-rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
-						khint_t new_n_buckets)
+rspamd_lru_hash_resize(rspamd_lru_hash_t *h,
+					   khint_t new_n_buckets)
 {
 	/* This function uses 0.25*n_buckets bytes of working space instead of [sizeof(key_t+val_t)+.25]*n_buckets. */
 	khint32_t *new_flags = 0;
@@ -111,17 +111,17 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 	}
 	else {
 		/* hash table size to be changed (shrink or expand); rehash */
-		new_flags = (khint32_t *) g_malloc(__ac_fsize (new_n_buckets) * sizeof (khint32_t));
+		new_flags = (khint32_t *) g_malloc(__ac_fsize(new_n_buckets) * sizeof(khint32_t));
 
 		if (!new_flags) {
 			return -1;
 		}
 
-		memset(new_flags, 0xaa, __ac_fsize (new_n_buckets) * sizeof (khint32_t));
+		memset(new_flags, 0xaa, __ac_fsize(new_n_buckets) * sizeof(khint32_t));
 		if (h->n_buckets < new_n_buckets) {
 			/* expand */
 			gpointer *new_keys = (gpointer *) g_realloc((void *) h->keys,
-					new_n_buckets * sizeof (gpointer));
+														new_n_buckets * sizeof(gpointer));
 
 			if (!new_keys) {
 				g_free(new_flags);
@@ -130,8 +130,8 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 
 			h->keys = new_keys;
 			rspamd_lru_vol_element_t *new_vals =
-					(rspamd_lru_vol_element_t *) g_realloc((void *) h->vals,
-							new_n_buckets * sizeof (rspamd_lru_vol_element_t));
+				(rspamd_lru_vol_element_t *) g_realloc((void *) h->vals,
+													   new_n_buckets * sizeof(rspamd_lru_vol_element_t));
 			if (!new_vals) {
 				g_free(new_flags);
 				return -1;
@@ -153,7 +153,7 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 				khint_t new_mask;
 				new_mask = new_n_buckets - 1;
 				val = h->vals[j];
-				val.e.eviction_pos = (guint8)-1;
+				val.e.eviction_pos = (guint8) -1;
 				__ac_set_isdel_true(h->flags, j);
 
 				while (1) { /* kick-out process; sort of like in Cuckoo hashing */
@@ -178,11 +178,12 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 							rspamd_lru_vol_element_t tmp = h->vals[i];
 							h->vals[i] = val;
 							val = tmp;
-							val.e.eviction_pos = (guint8)-1;
+							val.e.eviction_pos = (guint8) -1;
 						}
 						__ac_set_isdel_true(h->flags, i);
 						/* mark it as deleted in the old hash table */
-					} else { /* write the element and jump out of the loop */
+					}
+					else { /* write the element and jump out of the loop */
 						h->keys[i] = key;
 						h->vals[i] = val;
 						break;
@@ -194,9 +195,9 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 		if (h->n_buckets > new_n_buckets) {
 			/* shrink the hash table */
 			h->keys = (gpointer *) g_realloc((void *) h->keys,
-					new_n_buckets * sizeof (gpointer));
+											 new_n_buckets * sizeof(gpointer));
 			h->vals = (rspamd_lru_vol_element_t *) g_realloc((void *) h->vals,
-					new_n_buckets * sizeof (rspamd_lru_vol_element_t));
+															 new_n_buckets * sizeof(rspamd_lru_vol_element_t));
 		}
 
 		g_free(h->flags); /* free the working space */
@@ -210,20 +211,20 @@ rspamd_lru_hash_resize (rspamd_lru_hash_t *h,
 }
 
 static rspamd_lru_vol_element_t *
-rspamd_lru_hash_put (rspamd_lru_hash_t *h, gpointer key, int *ret)
+rspamd_lru_hash_put(rspamd_lru_hash_t *h, gpointer key, int *ret)
 {
 	khint_t x;
 
 	if (h->n_occupied >= h->upper_bound) {
 		/* update the hash table */
 		if (h->n_buckets > (h->size << 1)) {
-			if (rspamd_lru_hash_resize (h, h->n_buckets - 1) < 0) {
+			if (rspamd_lru_hash_resize(h, h->n_buckets - 1) < 0) {
 				/* clear "deleted" elements */
 				*ret = -1;
 				return NULL;
 			}
 		}
-		else if (rspamd_lru_hash_resize (h, h->n_buckets + 1) < 0) {
+		else if (rspamd_lru_hash_resize(h, h->n_buckets + 1) < 0) {
 			/* expand the hash table */
 			*ret = -1;
 			return NULL;
@@ -242,7 +243,7 @@ rspamd_lru_hash_put (rspamd_lru_hash_t *h, gpointer key, int *ret)
 		last = i;
 		while (!__ac_isempty(h->flags, i) &&
 			   (__ac_isdel(h->flags, i) ||
-			   !h->eqfunc (h->keys[i], key))) {
+				!h->eqfunc(h->keys[i], key))) {
 			if (__ac_isdel(h->flags, i)) {
 				site = i;
 			}
@@ -287,7 +288,7 @@ rspamd_lru_hash_put (rspamd_lru_hash_t *h, gpointer key, int *ret)
 }
 
 static void
-rspamd_lru_hash_del (rspamd_lru_hash_t *h, rspamd_lru_vol_element_t *elt)
+rspamd_lru_hash_del(rspamd_lru_hash_t *h, rspamd_lru_vol_element_t *elt)
 {
 	khint_t x = elt - h->vals;
 
@@ -296,29 +297,29 @@ rspamd_lru_hash_del (rspamd_lru_hash_t *h, rspamd_lru_vol_element_t *elt)
 		--h->size;
 
 		if (h->key_destroy) {
-			h->key_destroy (h->keys[x]);
+			h->key_destroy(h->keys[x]);
 		}
 
 		if (h->value_destroy) {
-			h->value_destroy (elt->e.data);
+			h->value_destroy(elt->e.data);
 		}
 	}
 }
 
 static void
-rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
-		rspamd_lru_element_t *elt)
+rspamd_lru_hash_remove_evicted(rspamd_lru_hash_t *hash,
+							   rspamd_lru_element_t *elt)
 {
 	guint i;
 	rspamd_lru_element_t *cur;
 
-	g_assert (hash->eviction_used > 0);
-	g_assert (elt->eviction_pos < hash->eviction_used);
+	g_assert(hash->eviction_used > 0);
+	g_assert(elt->eviction_pos < hash->eviction_used);
 
-	memmove (&hash->eviction_pool[elt->eviction_pos],
+	memmove(&hash->eviction_pool[elt->eviction_pos],
 			&hash->eviction_pool[elt->eviction_pos + 1],
-			sizeof (rspamd_lru_element_t *) *
-					(eviction_candidates - elt->eviction_pos - 1));
+			sizeof(rspamd_lru_element_t *) *
+				(eviction_candidates - elt->eviction_pos - 1));
 
 	hash->eviction_used--;
 
@@ -326,7 +327,7 @@ rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
 		/* We also need to update min_prio and renumber eviction list */
 		hash->eviction_min_prio = G_MAXUINT;
 
-		for (i = 0; i < hash->eviction_used; i ++) {
+		for (i = 0; i < hash->eviction_used; i++) {
 			cur = hash->eviction_pool[i];
 
 			if (hash->eviction_min_prio > cur->lg_usages) {
@@ -339,19 +340,17 @@ rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
 	else {
 		hash->eviction_min_prio = G_MAXUINT;
 	}
-
-
 }
 
 static void
-rspamd_lru_hash_update_counter (rspamd_lru_element_t *elt)
+rspamd_lru_hash_update_counter(rspamd_lru_element_t *elt)
 {
 	guint8 counter = elt->lg_usages;
 
 	if (counter != 255) {
 		double r, baseval, p;
 
-		r = rspamd_random_double_fast ();
+		r = rspamd_random_double_fast();
 		baseval = counter - lfu_base_value;
 
 		if (baseval < 0) {
@@ -361,13 +360,13 @@ rspamd_lru_hash_update_counter (rspamd_lru_element_t *elt)
 		p = 1.0 / (baseval * log_base + 1);
 
 		if (r < p) {
-			elt->lg_usages ++;
+			elt->lg_usages++;
 		}
 	}
 }
 
 static inline void
-rspamd_lru_hash_decrease_counter (rspamd_lru_element_t *elt, time_t now)
+rspamd_lru_hash_decrease_counter(rspamd_lru_element_t *elt, time_t now)
 {
 	if (now - elt->last > lfu_base_value) {
 		/* Penalise counters for outdated records */
@@ -376,18 +375,18 @@ rspamd_lru_hash_decrease_counter (rspamd_lru_element_t *elt, time_t now)
 }
 
 static gboolean
-rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
-		rspamd_lru_element_t *elt)
+rspamd_lru_hash_maybe_evict(rspamd_lru_hash_t *hash,
+							rspamd_lru_element_t *elt)
 {
 	guint i;
 	rspamd_lru_element_t *cur;
 
-	if (elt->eviction_pos == (guint8)-1) {
+	if (elt->eviction_pos == (guint8) -1) {
 		if (hash->eviction_used < eviction_candidates) {
 			/* There are free places in eviction pool */
 			hash->eviction_pool[hash->eviction_used] = elt;
 			elt->eviction_pos = hash->eviction_used;
-			hash->eviction_used ++;
+			hash->eviction_used++;
 
 			if (hash->eviction_min_prio > elt->lg_usages) {
 				hash->eviction_min_prio = elt->lg_usages;
@@ -397,7 +396,7 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 		}
 		else {
 			/* Find any candidate that has higher usage count */
-			for (i = 0; i < hash->eviction_used; i ++) {
+			for (i = 0; i < hash->eviction_used; i++) {
 				cur = hash->eviction_pool[i];
 
 				if (cur->lg_usages > elt->lg_usages) {
@@ -423,17 +422,17 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 }
 
 static void
-rspamd_lru_hash_remove_node (rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
+rspamd_lru_hash_remove_node(rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
 {
-	if (elt->eviction_pos != (guint8)-1) {
-		rspamd_lru_hash_remove_evicted (hash, elt);
+	if (elt->eviction_pos != (guint8) -1) {
+		rspamd_lru_hash_remove_evicted(hash, elt);
 	}
 
-	rspamd_lru_hash_del (hash, (rspamd_lru_vol_element_t *)elt);
+	rspamd_lru_hash_del(hash, (rspamd_lru_vol_element_t *) elt);
 }
 
 static void
-rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
+rspamd_lru_hash_evict(rspamd_lru_hash_t *hash, time_t now)
 {
 	double r;
 	guint i;
@@ -445,14 +444,14 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 	 * or, at some probability scan all table and update eviction
 	 * list first
 	 */
-	r = rspamd_random_double_fast ();
+	r = rspamd_random_double_fast();
 
-	if (r < ((double)eviction_candidates) / hash->maxsize) {
+	if (r < ((double) eviction_candidates) / hash->maxsize) {
 		/* Full hash scan */
 		rspamd_lru_vol_element_t *cur;
 		rspamd_lru_element_t *selected = NULL;
 
-		kh_foreach_value_ptr (hash, cur, {
+		kh_foreach_value_ptr(hash, cur, {
 			rspamd_lru_element_t *node = &cur->e;
 
 			if (node->flags & RSPAMD_LRU_ELEMENT_IMMORTAL) {
@@ -462,16 +461,16 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 			if (node->flags & RSPAMD_LRU_ELEMENT_VOLATILE) {
 				/* If element is expired, just remove it */
 				if (now - cur->creation_time > cur->ttl) {
-					rspamd_lru_hash_remove_node (hash, node);
+					rspamd_lru_hash_remove_node(hash, node);
 
-					nexpired ++;
+					nexpired++;
 					continue;
 				}
 			}
 			else {
-				rspamd_lru_hash_decrease_counter (node, now);
+				rspamd_lru_hash_decrease_counter(node, now);
 
-				if (rspamd_lru_hash_maybe_evict (hash, node)) {
+				if (rspamd_lru_hash_maybe_evict(hash, node)) {
 					if (selected && node->lg_usages < selected->lg_usages) {
 						selected = node;
 					}
@@ -488,7 +487,7 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 	}
 	else {
 		/* Fast random eviction */
-		for (i = 0; i < hash->eviction_used; i ++) {
+		for (i = 0; i < hash->eviction_used; i++) {
 			elt = hash->eviction_pool[i];
 
 			if (elt->lg_usages <= hash->eviction_min_prio) {
@@ -499,16 +498,16 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 
 	/* Evict if nothing else has been cleaned */
 	if (elt && nexpired == 0) {
-		rspamd_lru_hash_remove_node (hash, elt);
+		rspamd_lru_hash_remove_node(hash, elt);
 	}
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new_full (gint maxsize,
-						  GDestroyNotify key_destroy,
-						  GDestroyNotify value_destroy,
-						  GHashFunc hf,
-						  GEqualFunc cmpf)
+rspamd_lru_hash_new_full(gint maxsize,
+						 GDestroyNotify key_destroy,
+						 GDestroyNotify value_destroy,
+						 GHashFunc hf,
+						 GEqualFunc cmpf)
 {
 	rspamd_lru_hash_t *h;
 
@@ -516,39 +515,39 @@ rspamd_lru_hash_new_full (gint maxsize,
 		maxsize = eviction_candidates * 2;
 	}
 
-	h = g_malloc0 (sizeof (rspamd_lru_hash_t));
+	h = g_malloc0(sizeof(rspamd_lru_hash_t));
 	h->hfunc = hf;
 	h->eqfunc = cmpf;
-	h->eviction_pool = g_malloc0 (sizeof (rspamd_lru_element_t *) *
-			eviction_candidates);
+	h->eviction_pool = g_malloc0(sizeof(rspamd_lru_element_t *) *
+								 eviction_candidates);
 	h->maxsize = maxsize;
 	h->value_destroy = value_destroy;
 	h->key_destroy = key_destroy;
 	h->eviction_min_prio = G_MAXUINT;
 
 	/* Preallocate some elements */
-	rspamd_lru_hash_resize (h, MIN (h->maxsize, 128));
+	rspamd_lru_hash_resize(h, MIN(h->maxsize, 128));
 
 	return h;
 }
 
 rspamd_lru_hash_t *
-rspamd_lru_hash_new (gint maxsize,
-					 GDestroyNotify key_destroy,
-					 GDestroyNotify value_destroy)
+rspamd_lru_hash_new(gint maxsize,
+					GDestroyNotify key_destroy,
+					GDestroyNotify value_destroy)
 {
-	return rspamd_lru_hash_new_full (maxsize,
-			key_destroy, value_destroy,
-			rspamd_strcase_hash, rspamd_strcase_equal);
+	return rspamd_lru_hash_new_full(maxsize,
+									key_destroy, value_destroy,
+									rspamd_strcase_hash, rspamd_strcase_equal);
 }
 
 gpointer
-rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
+rspamd_lru_hash_lookup(rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 {
 	rspamd_lru_element_t *res;
 	rspamd_lru_vol_element_t *vnode;
 
-	vnode = rspamd_lru_hash_get (hash, (gpointer)key);
+	vnode = rspamd_lru_hash_get(hash, (gpointer) key);
 	if (vnode != NULL) {
 		res = &vnode->e;
 
@@ -556,16 +555,16 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 			/* Check ttl */
 
 			if (now - vnode->creation_time > vnode->ttl) {
-				rspamd_lru_hash_remove_node (hash, res);
+				rspamd_lru_hash_remove_node(hash, res);
 
 				return NULL;
 			}
 		}
 
 		now = TIME_TO_TS(now);
-		res->last = MAX (res->last, now);
-		rspamd_lru_hash_update_counter (res);
-		rspamd_lru_hash_maybe_evict (hash, res);
+		res->last = MAX(res->last, now);
+		rspamd_lru_hash_update_counter(res);
+		rspamd_lru_hash_maybe_evict(hash, res);
 
 		return res->data;
 	}
@@ -574,15 +573,15 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 }
 
 gboolean
-rspamd_lru_hash_remove (rspamd_lru_hash_t *hash,
-		gconstpointer key)
+rspamd_lru_hash_remove(rspamd_lru_hash_t *hash,
+					   gconstpointer key)
 {
 	rspamd_lru_vol_element_t *res;
 
-	res = rspamd_lru_hash_get (hash, key);
+	res = rspamd_lru_hash_get(hash, key);
 
 	if (res != NULL) {
-		rspamd_lru_hash_remove_node (hash, &res->e);
+		rspamd_lru_hash_remove_node(hash, &res->e);
 
 		return TRUE;
 	}
@@ -590,32 +589,31 @@ rspamd_lru_hash_remove (rspamd_lru_hash_t *hash,
 	return FALSE;
 }
 
-void
-rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
-						gpointer key,
-						gpointer value,
-						time_t now,
-						guint ttl)
+void rspamd_lru_hash_insert(rspamd_lru_hash_t *hash,
+							gpointer key,
+							gpointer value,
+							time_t now,
+							guint ttl)
 {
 	rspamd_lru_element_t *node;
 	rspamd_lru_vol_element_t *vnode;
 	gint ret;
 
-	vnode = rspamd_lru_hash_put (hash, key, &ret);
+	vnode = rspamd_lru_hash_put(hash, key, &ret);
 	node = &vnode->e;
 
 	if (ret == 0) {
 		/* Existing element, be careful about destructors */
 		if (hash->value_destroy) {
 			/* Remove old data */
-			hash->value_destroy (vnode->e.data);
+			hash->value_destroy(vnode->e.data);
 		}
 
 		if (hash->key_destroy) {
 			/* Here are dragons! */
 			goffset off = vnode - hash->vals;
 
-			hash->key_destroy (hash->keys[off]);
+			hash->key_destroy(hash->keys[off]);
 			hash->keys[off] = key;
 		}
 	}
@@ -631,63 +629,61 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 	}
 
 	node->data = value;
-	node->lg_usages = (guint8)lfu_base_value;
-	node->last = TIME_TO_TS (now);
-	node->eviction_pos = (guint8)-1;
+	node->lg_usages = (guint8) lfu_base_value;
+	node->last = TIME_TO_TS(now);
+	node->eviction_pos = (guint8) -1;
 
 	if (ret != 0) {
 		/* Also need to check maxsize */
-		if (kh_size (hash) >= hash->maxsize) {
+		if (kh_size(hash) >= hash->maxsize) {
 			node->flags |= RSPAMD_LRU_ELEMENT_IMMORTAL;
-			rspamd_lru_hash_evict (hash, now);
+			rspamd_lru_hash_evict(hash, now);
 			node->flags &= ~RSPAMD_LRU_ELEMENT_IMMORTAL;
 		}
 	}
 
-	rspamd_lru_hash_maybe_evict (hash, node);
+	rspamd_lru_hash_maybe_evict(hash, node);
 }
 
-void
-rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
+void rspamd_lru_hash_destroy(rspamd_lru_hash_t *hash)
 {
 	if (hash) {
 		if (hash->key_destroy || hash->value_destroy) {
 			gpointer k;
 			rspamd_lru_vol_element_t cur;
 
-			kh_foreach (hash, k, cur, {
+			kh_foreach(hash, k, cur, {
 				if (hash->key_destroy) {
-					hash->key_destroy (k);
+					hash->key_destroy(k);
 				}
 				if (hash->value_destroy) {
-					hash->value_destroy (cur.e.data);
+					hash->value_destroy(cur.e.data);
 				}
 			});
 		}
 
-		g_free (hash->keys);
-		g_free (hash->vals);
-		g_free (hash->flags);
-		g_free (hash->eviction_pool);
-		g_free (hash);
+		g_free(hash->keys);
+		g_free(hash->vals);
+		g_free(hash->flags);
+		g_free(hash->eviction_pool);
+		g_free(hash);
 	}
 }
 
 gpointer
-rspamd_lru_hash_element_data (rspamd_lru_element_t *elt)
+rspamd_lru_hash_element_data(rspamd_lru_element_t *elt)
 {
 	return elt->data;
 }
 
-int
-rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
-						 gpointer *v)
+int rspamd_lru_hash_foreach(rspamd_lru_hash_t *h, int it, gpointer *k,
+							gpointer *v)
 {
 	gint i;
-	g_assert (it >= 0);
+	g_assert(it >= 0);
 
-	for (i = it; i != kh_end (h); ++i) {
-		if (!kh_exist (h, i)) {
+	for (i = it; i != kh_end(h); ++i) {
+		if (!kh_exist(h, i)) {
 			continue;
 		}
 
@@ -697,7 +693,7 @@ rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
 		break;
 	}
 
-	if (i == kh_end (h)) {
+	if (i == kh_end(h)) {
 		return -1;
 	}
 
@@ -705,18 +701,16 @@ rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
 }
 
 
-guint
-rspamd_lru_hash_size (rspamd_lru_hash_t *hash)
+guint rspamd_lru_hash_size(rspamd_lru_hash_t *hash)
 {
-	return kh_size (hash);
+	return kh_size(hash);
 }
 
 /**
  * Returns hash capacity
  * @param hash hash object
  */
-guint
-rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash)
+guint rspamd_lru_hash_capacity(rspamd_lru_hash_t *hash)
 {
 	return hash->maxsize;
 }

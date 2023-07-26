@@ -23,9 +23,9 @@
 
 namespace rspamd::html {
 
-auto decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces = false) -> std::size_t ;
+auto decode_html_entitles_inplace(char *s, std::size_t len, bool norm_spaces = false) -> std::size_t;
 auto decode_html_entitles_inplace(std::string &st) -> void;
 
-}
+}// namespace rspamd::html
 
 #endif

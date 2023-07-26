@@ -60,44 +60,46 @@ enum class received_flags {
 	AUTHENTICATED = (1u << 13u),
 };
 
-constexpr received_flags operator |(received_flags lhs, received_flags rhs)
+constexpr received_flags operator|(received_flags lhs, received_flags rhs)
 {
 	using ut = std::underlying_type<received_flags>::type;
 	return static_cast<received_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
 }
 
-constexpr received_flags operator |=(received_flags &lhs, const received_flags rhs)
+constexpr received_flags operator|=(received_flags &lhs, const received_flags rhs)
 {
 	using ut = std::underlying_type<received_flags>::type;
 	lhs = static_cast<received_flags>(static_cast<ut>(lhs) | static_cast<ut>(rhs));
 	return lhs;
 }
 
-constexpr received_flags operator &(received_flags lhs, received_flags rhs)
+constexpr received_flags operator&(received_flags lhs, received_flags rhs)
 {
 	using ut = std::underlying_type<received_flags>::type;
 	return static_cast<received_flags>(static_cast<ut>(lhs) & static_cast<ut>(rhs));
 }
 
-constexpr bool operator !(received_flags fl)
+constexpr bool operator!(received_flags fl)
 {
 	return fl == received_flags::DEFAULT;
 }
 
-constexpr received_flags received_type_apply_protocols_mask(received_flags fl) {
-	return fl & (received_flags::SMTP|
-			received_flags::ESMTP|
-			received_flags::ESMTPA|
-			received_flags::ESMTPS|
-			received_flags::ESMTPSA|
-			received_flags::IMAP|
-			received_flags::HTTP|
-			received_flags::LOCAL|
-			received_flags::MAPI|
-			received_flags::LMTP);
+constexpr received_flags received_type_apply_protocols_mask(received_flags fl)
+{
+	return fl & (received_flags::SMTP |
+				 received_flags::ESMTP |
+				 received_flags::ESMTPA |
+				 received_flags::ESMTPS |
+				 received_flags::ESMTPSA |
+				 received_flags::IMAP |
+				 received_flags::HTTP |
+				 received_flags::LOCAL |
+				 received_flags::MAPI |
+				 received_flags::LMTP);
 }
 
-constexpr const char *received_protocol_to_string(received_flags fl) {
+constexpr const char *received_protocol_to_string(received_flags fl)
+{
 	const auto *proto = "unknown";
 
 	switch (received_type_apply_protocols_mask(fl)) {
@@ -151,18 +153,22 @@ struct received_header {
 	received_flags flags = received_flags::DEFAULT; /* See enum rspamd_received_type */
 
 	received_header() noexcept
-			: from_hostname(received_char_filter),
-			  real_hostname(received_char_filter),
-			  real_ip(received_char_filter),
-			  by_hostname(received_char_filter),
-			  for_mbox() {}
+		: from_hostname(received_char_filter),
+		  real_hostname(received_char_filter),
+		  real_ip(received_char_filter),
+		  by_hostname(received_char_filter),
+		  for_mbox()
+	{
+	}
 	/* We have raw C pointers, so copy is explicitly disabled */
 	received_header(const received_header &other) = delete;
-	received_header(received_header &&other) noexcept {
+	received_header(received_header &&other) noexcept
+	{
 		*this = std::move(other);
 	}
 
-	received_header& operator=(received_header &&other) noexcept {
+	received_header &operator=(received_header &&other) noexcept
+	{
 		if (this != &other) {
 			from_hostname = std::move(other.from_hostname);
 			real_hostname = std::move(other.real_hostname);
@@ -179,7 +185,8 @@ struct received_header {
 	}
 
 	/* Unit tests helper */
-	static auto from_map(const ankerl::unordered_dense::map<std::string_view, std::string_view> &map) -> received_header {
+	static auto from_map(const ankerl::unordered_dense::map<std::string_view, std::string_view> &map) -> received_header
+	{
 		using namespace std::string_view_literals;
 		received_header rh;
 
@@ -225,7 +232,8 @@ struct received_header {
 		return map;
 	}
 
-	~received_header() {
+	~received_header()
+	{
 		if (for_addr) {
 			rspamd_email_address_free(for_addr);
 		}
@@ -234,12 +242,14 @@ struct received_header {
 
 class received_header_chain {
 public:
-	explicit received_header_chain(struct rspamd_task *task) {
+	explicit received_header_chain(struct rspamd_task *task)
+	{
 		headers.reserve(2);
 		rspamd_mempool_add_destructor(task->task_pool,
-				received_header_chain::received_header_chain_pool_dtor, this);
+									  received_header_chain::received_header_chain_pool_dtor, this);
 	}
-	explicit received_header_chain() {
+	explicit received_header_chain()
+	{
 		headers.reserve(2);
 	}
 
@@ -248,7 +258,8 @@ public:
 		append_head
 	};
 
-	auto new_received(append_type how = append_type::append_tail) -> received_header & {
+	auto new_received(append_type how = append_type::append_tail) -> received_header &
+	{
 		if (how == append_type::append_tail) {
 			headers.emplace_back();
 
@@ -260,7 +271,8 @@ public:
 			return headers.front();
 		}
 	}
-	auto new_received(received_header &&hdr, append_type how = append_type::append_tail) -> received_header & {
+	auto new_received(received_header &&hdr, append_type how = append_type::append_tail) -> received_header &
+	{
 		if (how == append_type::append_tail) {
 			headers.emplace_back(std::move(hdr));
 
@@ -272,26 +284,31 @@ public:
 			return headers.front();
 		}
 	}
-	auto get_received(std::size_t nth) -> std::optional<std::reference_wrapper<received_header>>{
+	auto get_received(std::size_t nth) -> std::optional<std::reference_wrapper<received_header>>
+	{
 		if (nth < headers.size()) {
 			return headers[nth];
 		}
 
 		return std::nullopt;
 	}
-	auto size() const -> std::size_t {
+	auto size() const -> std::size_t
+	{
 		return headers.size();
 	}
-	constexpr auto as_vector() const -> const std::vector<received_header>& {
+	constexpr auto as_vector() const -> const std::vector<received_header> &
+	{
 		return headers;
 	}
+
 private:
-	static auto received_header_chain_pool_dtor(void *ptr) -> void {
+	static auto received_header_chain_pool_dtor(void *ptr) -> void
+	{
 		delete static_cast<received_header_chain *>(ptr);
 	}
 	std::vector<received_header> headers;
 };
 
-} // namespace rspamd::mime
+}// namespace rspamd::mime
 
-#endif //RSPAMD_RECEIVED_HXX
+#endif//RSPAMD_RECEIVED_HXX

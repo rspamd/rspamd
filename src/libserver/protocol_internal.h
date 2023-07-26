@@ -17,7 +17,7 @@
 #ifndef RSPAMD_PROTOCOL_INTERNAL_H
 #define RSPAMD_PROTOCOL_INTERNAL_H
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -92,8 +92,8 @@ extern "C" {
 #define COMPRESSION_HEADER "Compression"
 #define MESSAGE_OFFSET_HEADER "Message-Offset"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif //RSPAMD_PROTOCOL_INTERNAL_H
+#endif//RSPAMD_PROTOCOL_INTERNAL_H

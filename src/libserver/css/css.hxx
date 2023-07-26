@@ -28,20 +28,20 @@ namespace rspamd::html {
 /* Forward declaration */
 struct html_tag;
 struct html_block;
-}
+}// namespace rspamd::html
 
 namespace rspamd::css {
 
 extern int rspamd_css_log_id;
 
-#define msg_debug_css(...)  rspamd_conditional_debug_fast (NULL, NULL, \
-        rspamd_css_log_id, "css", pool->tag.uid, \
-        __FUNCTION__, \
-        __VA_ARGS__)
-#define msg_err_css(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        "css", pool->tag.uid, \
-        __FUNCTION__, \
-        __VA_ARGS__)
+#define msg_debug_css(...) rspamd_conditional_debug_fast(NULL, NULL,                              \
+														 rspamd_css_log_id, "css", pool->tag.uid, \
+														 __FUNCTION__,                            \
+														 __VA_ARGS__)
+#define msg_err_css(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+													 "css", pool->tag.uid, \
+													 __FUNCTION__,         \
+													 __VA_ARGS__)
 
 class css_style_sheet {
 public:
@@ -50,8 +50,8 @@ public:
 	auto add_selector_rule(std::unique_ptr<css_selector> &&selector,
 						   css_declarations_block_ptr decls) -> void;
 
-	auto check_tag_block(const rspamd::html::html_tag *tag) ->
-		rspamd::html::html_block *;
+	auto check_tag_block(const rspamd::html::html_tag *tag) -> rspamd::html::html_block *;
+
 private:
 	class impl;
 	rspamd_mempool_t *pool;
@@ -61,9 +61,8 @@ private:
 using css_return_pair = std::pair<std::shared_ptr<css_style_sheet>, css_parse_error>;
 auto css_parse_style(rspamd_mempool_t *pool,
 					 std::string_view input,
-					 std::shared_ptr<css_style_sheet> &&existing) ->
-					 css_return_pair;
+					 std::shared_ptr<css_style_sheet> &&existing) -> css_return_pair;
 
-}
+}// namespace rspamd::css
 
-#endif //RSPAMD_CSS_H
+#endif//RSPAMD_CSS_H

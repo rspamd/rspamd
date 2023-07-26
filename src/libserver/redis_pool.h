@@ -18,7 +18,7 @@
 
 #include "config.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 struct rspamd_config;
@@ -29,16 +29,16 @@ struct ev_loop;
  * Creates new redis pool
  * @return
  */
-void* rspamd_redis_pool_init (void);
+void *rspamd_redis_pool_init(void);
 
 /**
  * Configure redis pool and binds it to a specific event base
  * @param cfg
  * @param ev_base
  */
-void rspamd_redis_pool_config (void *pool,
-							   struct rspamd_config *cfg,
-							   struct ev_loop *ev_base);
+void rspamd_redis_pool_config(void *pool,
+							  struct rspamd_config *cfg,
+							  struct ev_loop *ev_base);
 
 
 /**
@@ -50,10 +50,10 @@ void rspamd_redis_pool_config (void *pool,
  * @param port
  * @return
  */
-struct redisAsyncContext *rspamd_redis_pool_connect (
-		void *pool,
-		const gchar *db, const gchar *password,
-		const char *ip, int port);
+struct redisAsyncContext *rspamd_redis_pool_connect(
+	void *pool,
+	const gchar *db, const gchar *password,
+	const char *ip, int port);
 
 enum rspamd_redis_pool_release_type {
 	RSPAMD_REDIS_RELEASE_DEFAULT = 0,
@@ -66,24 +66,24 @@ enum rspamd_redis_pool_release_type {
  * @param pool
  * @param ctx
  */
-void rspamd_redis_pool_release_connection (void *pool,
-										   struct redisAsyncContext *ctx,
-										   enum rspamd_redis_pool_release_type how);
+void rspamd_redis_pool_release_connection(void *pool,
+										  struct redisAsyncContext *ctx,
+										  enum rspamd_redis_pool_release_type how);
 
 /**
  * Stops redis pool and destroys it
  * @param pool
  */
-void rspamd_redis_pool_destroy (void *pool);
+void rspamd_redis_pool_destroy(void *pool);
 
 /**
  * Missing in hiredis
  * @param type
  * @return
  */
-const gchar *rspamd_redis_type_to_string (int type);
+const gchar *rspamd_redis_type_to_string(int type);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

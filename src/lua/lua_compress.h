@@ -19,19 +19,19 @@
 
 #include "lua_common.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-gint lua_compress_zstd_compress (lua_State *L);
-gint lua_compress_zstd_decompress (lua_State *L);
-gint lua_compress_zlib_compress (lua_State *L);
-gint lua_compress_zlib_decompress (lua_State *L, bool is_gzip);
+gint lua_compress_zstd_compress(lua_State *L);
+gint lua_compress_zstd_decompress(lua_State *L);
+gint lua_compress_zlib_compress(lua_State *L);
+gint lua_compress_zlib_decompress(lua_State *L, bool is_gzip);
 
-void luaopen_compress (lua_State *L);
+void luaopen_compress(lua_State *L);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 
-#endif //RSPAMD_LUA_COMPRESS_H
+#endif//RSPAMD_LUA_COMPRESS_H

@@ -20,7 +20,7 @@
 #include "cryptobox.h"
 #include "ucl.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -49,31 +49,31 @@ struct rspamd_cryptobox_pubkey;
  * @param alg algorithm for the keypair
  * @return fresh keypair generated
  */
-struct rspamd_cryptobox_keypair *rspamd_keypair_new (
-		enum rspamd_cryptobox_keypair_type type,
-		enum rspamd_cryptobox_mode alg);
+struct rspamd_cryptobox_keypair *rspamd_keypair_new(
+	enum rspamd_cryptobox_keypair_type type,
+	enum rspamd_cryptobox_mode alg);
 
 /**
  * Increase refcount for the specific keypair
  * @param kp
  * @return
  */
-struct rspamd_cryptobox_keypair *rspamd_keypair_ref (
-		struct rspamd_cryptobox_keypair *kp);
+struct rspamd_cryptobox_keypair *rspamd_keypair_ref(
+	struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Decrease refcount for the specific keypair (or destroy when refcount == 0)
  * @param kp
  */
-void rspamd_keypair_unref (struct rspamd_cryptobox_keypair *kp);
+void rspamd_keypair_unref(struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Increase refcount for the specific pubkey
  * @param kp
  * @return
  */
-struct rspamd_cryptobox_pubkey *rspamd_pubkey_ref (
-		struct rspamd_cryptobox_pubkey *kp);
+struct rspamd_cryptobox_pubkey *rspamd_pubkey_ref(
+	struct rspamd_cryptobox_pubkey *kp);
 
 /**
  * Load pubkey from base32 string
@@ -82,10 +82,10 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_ref (
  * @param alg algorithm of the key (nist or curve25519)
  * @return new pubkey or NULL in case of error
  */
-struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_base32 (const gchar *b32,
-														   gsize len,
-														   enum rspamd_cryptobox_keypair_type type,
-														   enum rspamd_cryptobox_mode alg);
+struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_base32(const gchar *b32,
+														  gsize len,
+														  enum rspamd_cryptobox_keypair_type type,
+														  enum rspamd_cryptobox_mode alg);
 
 /**
  * Load pubkey from hex string
@@ -94,10 +94,10 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_base32 (const gchar *b32,
  * @param alg algorithm of the key (nist or curve25519)
  * @return new pubkey or NULL in case of error
  */
-struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_hex (const gchar *hex,
-														gsize len,
-														enum rspamd_cryptobox_keypair_type type,
-														enum rspamd_cryptobox_mode alg);
+struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_hex(const gchar *hex,
+													   gsize len,
+													   enum rspamd_cryptobox_keypair_type type,
+													   enum rspamd_cryptobox_mode alg);
 
 /**
  * Load pubkey from raw chunk string
@@ -106,76 +106,76 @@ struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_hex (const gchar *hex,
  * @param alg algorithm of the key (nist or curve25519)
  * @return new pubkey or NULL in case of error
  */
-struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_bin (const guchar *raw,
-														gsize len,
-														enum rspamd_cryptobox_keypair_type type,
-														enum rspamd_cryptobox_mode alg);
+struct rspamd_cryptobox_pubkey *rspamd_pubkey_from_bin(const guchar *raw,
+													   gsize len,
+													   enum rspamd_cryptobox_keypair_type type,
+													   enum rspamd_cryptobox_mode alg);
 
 
 /**
  * Decrease refcount for the specific pubkey (or destroy when refcount == 0)
  * @param kp
  */
-void rspamd_pubkey_unref (struct rspamd_cryptobox_pubkey *kp);
+void rspamd_pubkey_unref(struct rspamd_cryptobox_pubkey *kp);
 
 /**
  * Get type of keypair
  */
-enum rspamd_cryptobox_keypair_type rspamd_keypair_type (
-		struct rspamd_cryptobox_keypair *kp);
+enum rspamd_cryptobox_keypair_type rspamd_keypair_type(
+	struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Get type of pubkey
  */
-enum rspamd_cryptobox_keypair_type rspamd_pubkey_type (
-		struct rspamd_cryptobox_pubkey *p);
+enum rspamd_cryptobox_keypair_type rspamd_pubkey_type(
+	struct rspamd_cryptobox_pubkey *p);
 
 /**
  * Get algorithm of keypair
  */
-enum rspamd_cryptobox_mode rspamd_keypair_alg (struct rspamd_cryptobox_keypair *kp);
+enum rspamd_cryptobox_mode rspamd_keypair_alg(struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Get algorithm of pubkey
  */
-enum rspamd_cryptobox_mode rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p);
+enum rspamd_cryptobox_mode rspamd_pubkey_alg(struct rspamd_cryptobox_pubkey *p);
 
 /**
  * Get cached NM for this specific pubkey
  * @param p
  * @return
  */
-const guchar *rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p,
-									struct rspamd_cryptobox_keypair *kp);
+const guchar *rspamd_pubkey_get_nm(struct rspamd_cryptobox_pubkey *p,
+								   struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Calculate and store nm value for the specified local key (performs ECDH)
  * @param p
  * @return
  */
-const guchar *rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
-										  struct rspamd_cryptobox_keypair *kp);
+const guchar *rspamd_pubkey_calculate_nm(struct rspamd_cryptobox_pubkey *p,
+										 struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Get raw public key id for a specified keypair (rspamd_cryptobox_HASHBYTES)
  * @param kp
  * @return
  */
-const guchar *rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp);
+const guchar *rspamd_keypair_get_id(struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Returns keypair extensions if any
  * @param kp
  * @return
  */
-const ucl_object_t *rspamd_keypair_get_extensions (struct rspamd_cryptobox_keypair *kp);
+const ucl_object_t *rspamd_keypair_get_extensions(struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Get raw public key id for a specified key (rspamd_cryptobox_HASHBYTES)
  * @param kp
  * @return
  */
-const guchar *rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
+const guchar *rspamd_pubkey_get_id(struct rspamd_cryptobox_pubkey *pk);
 
 /**
  * Get raw public key from pubkey opaque structure
@@ -183,8 +183,8 @@ const guchar *rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
  * @param len
  * @return
  */
-const guchar *rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
-									guint *len);
+const guchar *rspamd_pubkey_get_pk(struct rspamd_cryptobox_pubkey *pk,
+								   guint *len);
 
 /** Short ID characters count */
 #define RSPAMD_KEYPAIR_SHORT_ID_LEN 5
@@ -208,8 +208,8 @@ const guchar *rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
  * @param how flags that specifies printing behaviour
  * @return newly allocated string with keypair
  */
-GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
-							   guint how);
+GString *rspamd_keypair_print(struct rspamd_cryptobox_keypair *kp,
+							  guint how);
 
 /**
  * Print pubkey encoding it if needed
@@ -217,8 +217,8 @@ GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
  * @param how flags that specifies printing behaviour
  * @return newly allocated string with keypair
  */
-GString *rspamd_pubkey_print (struct rspamd_cryptobox_pubkey *pk,
-							  guint how);
+GString *rspamd_pubkey_print(struct rspamd_cryptobox_pubkey *pk,
+							 guint how);
 
 /** Get keypair pubkey ID */
 #define RSPAMD_KEYPAIR_COMPONENT_ID 0
@@ -234,15 +234,15 @@ GString *rspamd_pubkey_print (struct rspamd_cryptobox_pubkey *pk,
  * @param len length of input
  * @return raw content of the component
  */
-const guchar *rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
-										guint ncomp, guint *len);
+const guchar *rspamd_keypair_component(struct rspamd_cryptobox_keypair *kp,
+									   guint ncomp, guint *len);
 
 /**
  * Create a new keypair from ucl object
  * @param obj object to load
  * @return new structure or NULL if an object is invalid
  */
-struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl (const ucl_object_t *obj);
+struct rspamd_cryptobox_keypair *rspamd_keypair_from_ucl(const ucl_object_t *obj);
 
 
 enum rspamd_keypair_dump_flags {
@@ -257,8 +257,8 @@ enum rspamd_keypair_dump_flags {
  * @param kp
  * @return
  */
-ucl_object_t *rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
-									 enum rspamd_keypair_dump_flags flags);
+ucl_object_t *rspamd_keypair_to_ucl(struct rspamd_cryptobox_keypair *kp,
+									enum rspamd_keypair_dump_flags flags);
 
 
 /**
@@ -271,10 +271,10 @@ ucl_object_t *rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
  * @param outlen output size
  * @return TRUE if decryption is completed, out must be freed in this case
  */
-gboolean rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
-								 const guchar *in, gsize inlen,
-								 guchar **out, gsize *outlen,
-								 GError **err);
+gboolean rspamd_keypair_decrypt(struct rspamd_cryptobox_keypair *kp,
+								const guchar *in, gsize inlen,
+								guchar **out, gsize *outlen,
+								GError **err);
 
 /**
  * Encrypts data usign specific keypair.
@@ -288,10 +288,10 @@ gboolean rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
  * @param err pointer to error
  * @return TRUE if encryption has been completed, out must be freed in this case
  */
-gboolean rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
-								 const guchar *in, gsize inlen,
-								 guchar **out, gsize *outlen,
-								 GError **err);
+gboolean rspamd_keypair_encrypt(struct rspamd_cryptobox_keypair *kp,
+								const guchar *in, gsize inlen,
+								guchar **out, gsize *outlen,
+								GError **err);
 
 /**
  * Encrypts data usign specific pubkey (must have KEX type).
@@ -305,12 +305,12 @@ gboolean rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
  * @param err pointer to error
  * @return TRUE if encryption has been completed, out must be freed in this case
  */
-gboolean rspamd_pubkey_encrypt (struct rspamd_cryptobox_pubkey *pk,
-								const guchar *in, gsize inlen,
-								guchar **out, gsize *outlen,
-								GError **err);
+gboolean rspamd_pubkey_encrypt(struct rspamd_cryptobox_pubkey *pk,
+							   const guchar *in, gsize inlen,
+							   guchar **out, gsize *outlen,
+							   GError **err);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

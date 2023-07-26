@@ -25,7 +25,7 @@
 #include "upstream.h"
 #include "khash.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -39,9 +39,9 @@ struct rspamd_http_header {
 	struct rspamd_http_header *prev, *next;
 };
 
-KHASH_INIT (rspamd_http_headers_hash, rspamd_ftok_t *,
-		struct rspamd_http_header *, 1,
-		rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
+KHASH_INIT(rspamd_http_headers_hash, rspamd_ftok_t *,
+		   struct rspamd_http_header *, 1,
+		   rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
 
 /**
  * HTTP message structure, used for requests and replies
@@ -50,7 +50,7 @@ struct rspamd_http_message {
 	rspamd_fstring_t *url;
 	GString *host;
 	rspamd_fstring_t *status;
-	khash_t (rspamd_http_headers_hash) *headers;
+	khash_t(rspamd_http_headers_hash) * headers;
 
 	struct _rspamd_body_buf_s {
 		/* Data start */
@@ -91,13 +91,13 @@ struct rspamd_keepalive_hash_key {
 	GQueue conns;
 };
 
-gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key *k);
+gint32 rspamd_keep_alive_key_hash(struct rspamd_keepalive_hash_key *k);
 
-bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
-								  struct rspamd_keepalive_hash_key *k2);
+bool rspamd_keep_alive_key_equal(struct rspamd_keepalive_hash_key *k1,
+								 struct rspamd_keepalive_hash_key *k2);
 
-KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key *,
-		char, 0, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
+KHASH_INIT(rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key *,
+		   char, 0, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
 
 struct rspamd_http_context {
 	struct rspamd_http_context_cfg config;
@@ -110,19 +110,19 @@ struct rspamd_http_context {
 	gpointer ssl_ctx_noverify;
 	struct ev_loop *event_loop;
 	ev_timer client_rotate_ev;
-	khash_t (rspamd_keep_alive_hash) *keep_alive_hash;
+	khash_t(rspamd_keep_alive_hash) * keep_alive_hash;
 };
 
-#define HTTP_ERROR http_error_quark ()
+#define HTTP_ERROR http_error_quark()
 
-GQuark http_error_quark (void);
+GQuark http_error_quark(void);
 
-void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
+void rspamd_http_message_storage_cleanup(struct rspamd_http_message *msg);
 
-gboolean rspamd_http_message_grow_body (struct rspamd_http_message *msg,
-										gsize len);
+gboolean rspamd_http_message_grow_body(struct rspamd_http_message *msg,
+									   gsize len);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

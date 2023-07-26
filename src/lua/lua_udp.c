@@ -52,12 +52,11 @@ end
 
 static const double default_udp_timeout = 1.0;
 
-LUA_FUNCTION_DEF (udp, sendto);
+LUA_FUNCTION_DEF(udp, sendto);
 
 static const struct luaL_reg udp_libf[] = {
-	LUA_INTERFACE_DEF (udp, sendto),
-	{NULL, NULL}
-};
+	LUA_INTERFACE_DEF(udp, sendto),
+	{NULL, NULL}};
 
 struct lua_udp_cbdata {
 	struct ev_loop *event_loop;
@@ -77,70 +76,70 @@ struct lua_udp_cbdata {
 	gboolean sent;
 };
 
-#define msg_debug_udp(...)  rspamd_conditional_debug_fast (NULL, cbd->addr, \
-        rspamd_lua_udp_log_id, "lua_udp", cbd->pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
+#define msg_debug_udp(...) rspamd_conditional_debug_fast(NULL, cbd->addr,                                      \
+														 rspamd_lua_udp_log_id, "lua_udp", cbd->pool->tag.uid, \
+														 G_STRFUNC,                                            \
+														 __VA_ARGS__)
 
 INIT_LOG_MODULE(lua_udp)
 
 static inline void
-lua_fill_iov (lua_State *L, rspamd_mempool_t *pool,
-		struct iovec *iov, gint pos)
+lua_fill_iov(lua_State *L, rspamd_mempool_t *pool,
+			 struct iovec *iov, gint pos)
 {
-	if (lua_type (L, pos) == LUA_TUSERDATA) {
-		struct rspamd_lua_text *t = lua_check_text (L, pos);
+	if (lua_type(L, pos) == LUA_TUSERDATA) {
+		struct rspamd_lua_text *t = lua_check_text(L, pos);
 
 		if (t) {
-			iov->iov_base = rspamd_mempool_alloc (pool, t->len);
+			iov->iov_base = rspamd_mempool_alloc(pool, t->len);
 			iov->iov_len = t->len;
-			memcpy (iov->iov_base, t->start, t->len);
+			memcpy(iov->iov_base, t->start, t->len);
 		}
 	}
 	else {
 		const gchar *s;
 		gsize len;
 
-		s = lua_tolstring (L, pos, &len);
+		s = lua_tolstring(L, pos, &len);
 
-		iov->iov_base = rspamd_mempool_alloc (pool, len);
+		iov->iov_base = rspamd_mempool_alloc(pool, len);
 		iov->iov_len = len;
-		memcpy (iov->iov_base, s, len);
+		memcpy(iov->iov_base, s, len);
 	}
 }
 
 static void
-lua_udp_cbd_fin (gpointer p)
+lua_udp_cbd_fin(gpointer p)
 {
-	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
+	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *) p;
 
 	if (cbd->sock != -1) {
-		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
-		close (cbd->sock);
+		rspamd_ev_watcher_stop(cbd->event_loop, &cbd->ev);
+		close(cbd->sock);
 	}
 
 	if (cbd->addr) {
-		rspamd_inet_address_free (cbd->addr);
+		rspamd_inet_address_free(cbd->addr);
 	}
 
 	if (cbd->cbref) {
-		luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+		luaL_unref(cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
 	}
 }
 
 static void
-lua_udp_maybe_free (struct lua_udp_cbdata *cbd)
+lua_udp_maybe_free(struct lua_udp_cbdata *cbd)
 {
 	if (cbd->item) {
-		rspamd_symcache_item_async_dec_check (cbd->task, cbd->item, M);
+		rspamd_symcache_item_async_dec_check(cbd->task, cbd->item, M);
 		cbd->item = NULL;
 	}
 
 	if (cbd->async_ev) {
-		rspamd_session_remove_event (cbd->s, lua_udp_cbd_fin, cbd);
+		rspamd_session_remove_event(cbd->s, lua_udp_cbd_fin, cbd);
 	}
 	else {
-		lua_udp_cbd_fin (cbd);
+		lua_udp_cbd_fin(cbd);
 	}
 }
 
@@ -152,17 +151,17 @@ enum rspamd_udp_send_result {
 };
 
 static enum rspamd_udp_send_result
-lua_try_send_request (struct lua_udp_cbdata *cbd)
+lua_try_send_request(struct lua_udp_cbdata *cbd)
 {
 	struct msghdr msg;
 	gint r;
 
-	memset (&msg, 0, sizeof (msg));
+	memset(&msg, 0, sizeof(msg));
 	msg.msg_iov = cbd->iov;
 	msg.msg_iovlen = cbd->iovlen;
-	msg.msg_name = rspamd_inet_address_get_sa (cbd->addr, &msg.msg_namelen);
+	msg.msg_name = rspamd_inet_address_get_sa(cbd->addr, &msg.msg_namelen);
 
-	r = sendmsg (cbd->sock, &msg, 0);
+	r = sendmsg(cbd->sock, &msg, 0);
 
 	if (r != -1) {
 		return RSPAMD_SENT_OK;
@@ -176,74 +175,74 @@ lua_try_send_request (struct lua_udp_cbdata *cbd)
 }
 
 static void
-lua_udp_maybe_push_error (struct lua_udp_cbdata *cbd, const gchar *err)
+lua_udp_maybe_push_error(struct lua_udp_cbdata *cbd, const gchar *err)
 {
 	if (cbd->cbref != -1) {
 		gint top;
 		lua_State *L = cbd->L;
 
-		top = lua_gettop (L);
-		lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
+		top = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 
 		/* Error message */
-		lua_pushboolean (L, false);
-		lua_pushstring (L, err);
+		lua_pushboolean(L, false);
+		lua_pushstring(L, err);
 
 		if (cbd->item) {
-			rspamd_symcache_set_cur_item (cbd->task, cbd->item);
+			rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 		}
 
-		if (lua_pcall (L, 2, 0, 0) != 0) {
-			msg_info ("callback call failed: %s", lua_tostring (L, -1));
+		if (lua_pcall(L, 2, 0, 0) != 0) {
+			msg_info("callback call failed: %s", lua_tostring(L, -1));
 		}
 
-		lua_settop (L, top);
+		lua_settop(L, top);
 	}
 
-	lua_udp_maybe_free (cbd);
+	lua_udp_maybe_free(cbd);
 }
 
 static void
-lua_udp_push_data (struct lua_udp_cbdata *cbd, const gchar *data,
-		gssize len)
+lua_udp_push_data(struct lua_udp_cbdata *cbd, const gchar *data,
+				  gssize len)
 {
 	if (cbd->cbref != -1) {
 		gint top;
 		lua_State *L = cbd->L;
 
-		top = lua_gettop (L);
-		lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
+		top = lua_gettop(L);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cbd->cbref);
 
 		/* Error message */
-		lua_pushboolean (L, true);
-		lua_pushlstring (L, data, len);
+		lua_pushboolean(L, true);
+		lua_pushlstring(L, data, len);
 
 		if (cbd->item) {
-			rspamd_symcache_set_cur_item (cbd->task, cbd->item);
+			rspamd_symcache_set_cur_item(cbd->task, cbd->item);
 		}
 
-		if (lua_pcall (L, 2, 0, 0) != 0) {
-			msg_info ("callback call failed: %s", lua_tostring (L, -1));
+		if (lua_pcall(L, 2, 0, 0) != 0) {
+			msg_info("callback call failed: %s", lua_tostring(L, -1));
 		}
 
-		lua_settop (L, top);
+		lua_settop(L, top);
 	}
 
-	lua_udp_maybe_free (cbd);
+	lua_udp_maybe_free(cbd);
 }
 
 static gboolean
-lua_udp_maybe_register_event (struct lua_udp_cbdata *cbd)
+lua_udp_maybe_register_event(struct lua_udp_cbdata *cbd)
 {
 	if (cbd->s && !cbd->async_ev) {
 		if (cbd->item) {
-			cbd->async_ev = rspamd_session_add_event_full (cbd->s, lua_udp_cbd_fin,
-					cbd, M,
-					rspamd_symcache_dyn_item_name (cbd->task, cbd->item));
+			cbd->async_ev = rspamd_session_add_event_full(cbd->s, lua_udp_cbd_fin,
+														  cbd, M,
+														  rspamd_symcache_dyn_item_name(cbd->task, cbd->item));
 		}
 		else {
-			cbd->async_ev = rspamd_session_add_event (cbd->s, lua_udp_cbd_fin,
-					cbd, M);
+			cbd->async_ev = rspamd_session_add_event(cbd->s, lua_udp_cbd_fin,
+													 cbd, M);
 		}
 
 		if (!cbd->async_ev) {
@@ -252,63 +251,63 @@ lua_udp_maybe_register_event (struct lua_udp_cbdata *cbd)
 	}
 
 	if (cbd->task && !cbd->item) {
-		cbd->item = rspamd_symcache_get_cur_item (cbd->task);
-		rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
+		cbd->item = rspamd_symcache_get_cur_item(cbd->task);
+		rspamd_symcache_item_async_inc(cbd->task, cbd->item, M);
 	}
 
 	return TRUE;
 }
 
 static void
-lua_udp_io_handler (gint fd, short what, gpointer p)
+lua_udp_io_handler(gint fd, short what, gpointer p)
 {
-	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
+	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *) p;
 	gssize r;
 
 	if (what == EV_TIMEOUT) {
 		if (cbd->sent && cbd->retransmits > 0) {
-			r = lua_try_send_request (cbd);
+			r = lua_try_send_request(cbd);
 
 			if (r == RSPAMD_SENT_OK) {
-				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_READ);
-				lua_udp_maybe_register_event (cbd);
-				cbd->retransmits --;
+				rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_READ);
+				lua_udp_maybe_register_event(cbd);
+				cbd->retransmits--;
 			}
 			else if (r == RSPAMD_SENT_FAILURE) {
-				lua_udp_maybe_push_error (cbd, "write error");
+				lua_udp_maybe_push_error(cbd, "write error");
 			}
 			else {
-				cbd->retransmits --;
-				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_WRITE);
+				cbd->retransmits--;
+				rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_WRITE);
 			}
 		}
 		else {
 			if (!cbd->sent) {
-				lua_udp_maybe_push_error (cbd, "sent timeout");
+				lua_udp_maybe_push_error(cbd, "sent timeout");
 			}
 			else {
-				lua_udp_maybe_push_error (cbd, "read timeout");
+				lua_udp_maybe_push_error(cbd, "read timeout");
 			}
 		}
 	}
 	else if (what == EV_WRITE) {
-		r = lua_try_send_request (cbd);
+		r = lua_try_send_request(cbd);
 
 		if (r == RSPAMD_SENT_OK) {
 			if (cbd->cbref != -1) {
-				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_READ);
+				rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_READ);
 				cbd->sent = TRUE;
 			}
 			else {
-				lua_udp_maybe_free (cbd);
+				lua_udp_maybe_free(cbd);
 			}
 		}
 		else if (r == RSPAMD_SENT_FAILURE) {
-			lua_udp_maybe_push_error (cbd, "write error");
+			lua_udp_maybe_push_error(cbd, "write error");
 		}
 		else {
-			cbd->retransmits --;
-			rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_WRITE);
+			cbd->retransmits--;
+			rspamd_ev_watcher_reschedule(cbd->event_loop, &cbd->ev, EV_WRITE);
 		}
 	}
 	else if (what == EV_READ) {
@@ -316,15 +315,15 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 		socklen_t slen;
 		struct sockaddr *sa;
 
-		sa = rspamd_inet_address_get_sa (cbd->addr, &slen);
+		sa = rspamd_inet_address_get_sa(cbd->addr, &slen);
 
-		r = recvfrom (cbd->sock, udpbuf, sizeof (udpbuf), 0, sa, &slen);
+		r = recvfrom(cbd->sock, udpbuf, sizeof(udpbuf), 0, sa, &slen);
 
 		if (r == -1) {
-			lua_udp_maybe_push_error (cbd, strerror (errno));
+			lua_udp_maybe_push_error(cbd, strerror(errno));
 		}
 		else {
-			lua_udp_push_data (cbd, udpbuf, r);
+			lua_udp_push_data(cbd, udpbuf, r);
 		}
 	}
 }
@@ -345,7 +344,8 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
  * @return {boolean} true if request has been sent (additional string if it has not)
  */
 static gint
-lua_udp_sendto (lua_State *L) {
+lua_udp_sendto(lua_State *L)
+{
 	LUA_TRACE_POINT;
 	const gchar *host;
 	guint port;
@@ -357,236 +357,238 @@ lua_udp_sendto (lua_State *L) {
 	rspamd_mempool_t *pool = NULL;
 	gdouble timeout = default_udp_timeout;
 
-	if (lua_type (L, 1) == LUA_TTABLE) {
-		lua_pushstring (L, "port");
-		lua_gettable (L, -2);
+	if (lua_type(L, 1) == LUA_TTABLE) {
+		lua_pushstring(L, "port");
+		lua_gettable(L, -2);
 
-		if (lua_type (L, -1) == LUA_TNUMBER) {
-			port = lua_tointeger (L, -1);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			port = lua_tointeger(L, -1);
 		}
 		else {
 			/* We assume that it is a unix socket */
 			port = 0;
 		}
 
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
-		lua_pushstring (L, "host");
-		lua_gettable (L, -2);
+		lua_pushstring(L, "host");
+		lua_gettable(L, -2);
 
-		if (lua_type (L, -1) == LUA_TSTRING) {
-			host = luaL_checkstring (L, -1);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			host = luaL_checkstring(L, -1);
 
-			if (rspamd_parse_inet_address (&addr,
-					host, strlen (host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+			if (rspamd_parse_inet_address(&addr,
+										  host, strlen(host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				if (port != 0) {
-					rspamd_inet_address_set_port (addr, port);
+					rspamd_inet_address_set_port(addr, port);
 				}
 			}
 			else {
-				lua_pop (L, 1);
-				return luaL_error (L, "invalid host: %s", host);
+				lua_pop(L, 1);
+				return luaL_error(L, "invalid host: %s", host);
 			}
 		}
-		else if (lua_type (L, -1) == LUA_TUSERDATA) {
+		else if (lua_type(L, -1) == LUA_TUSERDATA) {
 			struct rspamd_lua_ip *lip;
 
-			lip = lua_check_ip (L, -1);
+			lip = lua_check_ip(L, -1);
 
 			if (lip == NULL || lip->addr == NULL) {
-				lua_pop (L, 1);
-				return luaL_error (L, "invalid host class");
+				lua_pop(L, 1);
+				return luaL_error(L, "invalid host class");
 			}
 
 			addr = rspamd_inet_address_copy(lip->addr, NULL);
 
 			if (port != 0) {
-				rspamd_inet_address_set_port (addr, port);
+				rspamd_inet_address_set_port(addr, port);
 			}
 		}
 		else {
-			lua_pop (L, 1);
-			return luaL_error (L, "invalid host");
+			lua_pop(L, 1);
+			return luaL_error(L, "invalid host");
 		}
 
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
-		lua_pushstring (L, "task");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TUSERDATA) {
-			task = lua_check_task (L, -1);
+		lua_pushstring(L, "task");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TUSERDATA) {
+			task = lua_check_task(L, -1);
 			ev_base = task->event_loop;
 			session = task->s;
 			pool = task->task_pool;
 		}
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
 		if (task == NULL) {
-			lua_pushstring (L, "ev_base");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct ev_loop **) lua_touserdata (L, -1);
-			} else {
+			lua_pushstring(L, "ev_base");
+			lua_gettable(L, -2);
+			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{ev_base}")) {
+				ev_base = *(struct ev_loop **) lua_touserdata(L, -1);
+			}
+			else {
 				ev_base = NULL;
 			}
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 
-			lua_pushstring (L, "session");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{session}")) {
-				session = *(struct rspamd_async_session **) lua_touserdata (L, -1);
-			} else {
+			lua_pushstring(L, "session");
+			lua_gettable(L, -2);
+			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{session}")) {
+				session = *(struct rspamd_async_session **) lua_touserdata(L, -1);
+			}
+			else {
 				session = NULL;
 			}
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 
-			lua_pushstring (L, "pool");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{mempool}")) {
-				pool = *(rspamd_mempool_t **) lua_touserdata (L, -1);
-			} else {
+			lua_pushstring(L, "pool");
+			lua_gettable(L, -2);
+			if (rspamd_lua_check_udata_maybe(L, -1, "rspamd{mempool}")) {
+				pool = *(rspamd_mempool_t **) lua_touserdata(L, -1);
+			}
+			else {
 				pool = NULL;
 			}
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 		}
 
-		lua_pushstring (L, "timeout");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TNUMBER) {
-			timeout = lua_tonumber (L, -1);
+		lua_pushstring(L, "timeout");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			timeout = lua_tonumber(L, -1);
 		}
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
 		if (!ev_base || !pool) {
-			rspamd_inet_address_free (addr);
+			rspamd_inet_address_free(addr);
 
-			return luaL_error (L, "invalid arguments");
+			return luaL_error(L, "invalid arguments");
 		}
 
 
-		cbd = rspamd_mempool_alloc0 (pool, sizeof (*cbd));
+		cbd = rspamd_mempool_alloc0(pool, sizeof(*cbd));
 		cbd->event_loop = ev_base;
 		cbd->pool = pool;
 		cbd->s = session;
 		cbd->addr = addr;
-		cbd->sock = rspamd_socket_create (rspamd_inet_address_get_af (addr),
-				SOCK_DGRAM, 0, TRUE);
+		cbd->sock = rspamd_socket_create(rspamd_inet_address_get_af(addr),
+										 SOCK_DGRAM, 0, TRUE);
 		cbd->cbref = -1;
 		cbd->ev.timeout = timeout;
 
 		if (cbd->sock == -1) {
-			rspamd_inet_address_free (addr);
+			rspamd_inet_address_free(addr);
 
-			return luaL_error (L, "cannot open socket: %s", strerror (errno));
+			return luaL_error(L, "cannot open socket: %s", strerror(errno));
 		}
 
 		cbd->L = L;
 
 		gsize data_len;
 
-		lua_pushstring (L, "data");
-		lua_gettable (L, -2);
+		lua_pushstring(L, "data");
+		lua_gettable(L, -2);
 
-		if (lua_type (L, -1) == LUA_TTABLE) {
-			data_len = rspamd_lua_table_size (L, -1);
-			cbd->iov = rspamd_mempool_alloc (pool,
-					sizeof (*cbd->iov) * data_len);
+		if (lua_type(L, -1) == LUA_TTABLE) {
+			data_len = rspamd_lua_table_size(L, -1);
+			cbd->iov = rspamd_mempool_alloc(pool,
+											sizeof(*cbd->iov) * data_len);
 
-			for (int i = 0; i < data_len; i ++) {
-				lua_rawgeti (L, -1, i + 1);
-				lua_fill_iov (L, pool, &cbd->iov[i], -1);
-				lua_pop (L, 1);
+			for (int i = 0; i < data_len; i++) {
+				lua_rawgeti(L, -1, i + 1);
+				lua_fill_iov(L, pool, &cbd->iov[i], -1);
+				lua_pop(L, 1);
 			}
 
 			cbd->iovlen = data_len;
 		}
 		else {
-			cbd->iov = rspamd_mempool_alloc (pool, sizeof (*cbd->iov));
+			cbd->iov = rspamd_mempool_alloc(pool, sizeof(*cbd->iov));
 			cbd->iovlen = 1;
-			lua_fill_iov (L, pool, cbd->iov, -1);
+			lua_fill_iov(L, pool, cbd->iov, -1);
 		}
 
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
-		lua_pushstring (L, "callback");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TFUNCTION) {
-			cbd->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		lua_pushstring(L, "callback");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TFUNCTION) {
+			cbd->cbref = luaL_ref(L, LUA_REGISTRYINDEX);
 		}
 		else {
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 		}
 
-		lua_pushstring (L, "retransmits");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TNUMBER) {
-			cbd->retransmits = lua_tonumber (L, -1);
+		lua_pushstring(L, "retransmits");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TNUMBER) {
+			cbd->retransmits = lua_tonumber(L, -1);
 		}
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 
 		enum rspamd_udp_send_result r;
 
-		r = lua_try_send_request (cbd);
+		r = lua_try_send_request(cbd);
 		if (r == RSPAMD_SENT_OK) {
 			if (cbd->cbref == -1) {
-				lua_udp_maybe_free (cbd);
+				lua_udp_maybe_free(cbd);
 			}
 			else {
-				if (!lua_udp_maybe_register_event (cbd)) {
-					lua_pushboolean (L, false);
-					lua_pushstring (L, "session error");
-					lua_udp_maybe_free (cbd);
+				if (!lua_udp_maybe_register_event(cbd)) {
+					lua_pushboolean(L, false);
+					lua_pushstring(L, "session error");
+					lua_udp_maybe_free(cbd);
 
 					return 2;
 				}
 
-				rspamd_ev_watcher_init (&cbd->ev, cbd->sock, EV_READ,
-						lua_udp_io_handler, cbd);
-				rspamd_ev_watcher_start (cbd->event_loop, &cbd->ev, timeout);
+				rspamd_ev_watcher_init(&cbd->ev, cbd->sock, EV_READ,
+									   lua_udp_io_handler, cbd);
+				rspamd_ev_watcher_start(cbd->event_loop, &cbd->ev, timeout);
 				cbd->sent = TRUE;
 			}
 
-			lua_pushboolean (L, true);
+			lua_pushboolean(L, true);
 		}
 		else if (r == RSPAMD_SENT_FAILURE) {
-			lua_pushboolean (L, false);
-			lua_pushstring (L, strerror (errno));
-			lua_udp_maybe_free (cbd);
+			lua_pushboolean(L, false);
+			lua_pushstring(L, strerror(errno));
+			lua_udp_maybe_free(cbd);
 
 			return 2;
 		}
 		else {
-			rspamd_ev_watcher_init (&cbd->ev, cbd->sock, EV_WRITE,
-					lua_udp_io_handler, cbd);
-			rspamd_ev_watcher_start (cbd->event_loop, &cbd->ev, timeout);
+			rspamd_ev_watcher_init(&cbd->ev, cbd->sock, EV_WRITE,
+								   lua_udp_io_handler, cbd);
+			rspamd_ev_watcher_start(cbd->event_loop, &cbd->ev, timeout);
 
-			if (!lua_udp_maybe_register_event (cbd)) {
-				lua_pushboolean (L, false);
-				lua_pushstring (L, "session error");
-				lua_udp_maybe_free (cbd);
+			if (!lua_udp_maybe_register_event(cbd)) {
+				lua_pushboolean(L, false);
+				lua_pushstring(L, "session error");
+				lua_udp_maybe_free(cbd);
 
 				return 2;
 			}
 		}
 	}
 	else {
-		return luaL_error (L, "invalid arguments");
+		return luaL_error(L, "invalid arguments");
 	}
 
 	return 1;
 }
 
 static gint
-lua_load_udp (lua_State * L)
+lua_load_udp(lua_State *L)
 {
-	lua_newtable (L);
-	luaL_register (L, NULL, udp_libf);
+	lua_newtable(L);
+	luaL_register(L, NULL, udp_libf);
 
 	return 1;
 }
 
-void
-luaopen_udp (lua_State * L)
+void luaopen_udp(lua_State *L)
 {
-	rspamd_lua_add_preload (L, "rspamd_udp", lua_load_udp);
+	rspamd_lua_add_preload(L, "rspamd_udp", lua_load_udp);
 }

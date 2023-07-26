@@ -20,7 +20,7 @@
 #include "libutil/fstring.h"
 #include "libutil/mem_pool.h"
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -83,11 +83,10 @@ struct rspamd_content_disposition {
  * @param value_start (can be modified)
  * @param value_end
  */
-void
-rspamd_content_type_add_param (rspamd_mempool_t *pool,
-							   struct rspamd_content_type *ct,
-							   gchar *name_start, gchar *name_end,
-							   gchar *value_start, gchar *value_end);
+void rspamd_content_type_add_param(rspamd_mempool_t *pool,
+								   struct rspamd_content_type *ct,
+								   gchar *name_start, gchar *name_end,
+								   gchar *value_start, gchar *value_end);
 
 /**
  * Parse content type from the header (performs copy + lowercase)
@@ -96,8 +95,8 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
  * @param pool
  * @return
  */
-struct rspamd_content_type *rspamd_content_type_parse (const gchar *in,
-													   gsize len, rspamd_mempool_t *pool);
+struct rspamd_content_type *rspamd_content_type_parse(const gchar *in,
+													  gsize len, rspamd_mempool_t *pool);
 
 /**
  * Adds new param for content disposition header
@@ -108,11 +107,10 @@ struct rspamd_content_type *rspamd_content_type_parse (const gchar *in,
  * @param value_start
  * @param value_end
  */
-void
-rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
-									  struct rspamd_content_disposition *cd,
-									  const gchar *name_start, const gchar *name_end,
-									  const gchar *value_start, const gchar *value_end);
+void rspamd_content_disposition_add_param(rspamd_mempool_t *pool,
+										  struct rspamd_content_disposition *cd,
+										  const gchar *name_start, const gchar *name_end,
+										  const gchar *value_start, const gchar *value_end);
 
 /**
  * Parse content-disposition header
@@ -121,11 +119,11 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
  * @param pool
  * @return
  */
-struct rspamd_content_disposition *rspamd_content_disposition_parse (const gchar *in,
-																	 gsize len,
-																	 rspamd_mempool_t *pool);
+struct rspamd_content_disposition *rspamd_content_disposition_parse(const gchar *in,
+																	gsize len,
+																	rspamd_mempool_t *pool);
 
-#ifdef  __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

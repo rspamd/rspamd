@@ -35,42 +35,42 @@ auto make_token(const Arg &arg) -> css_parser_token;
 
 template<>
 auto make_token<css_parser_token::token_type::string_token, std::string_view>(const std::string_view &s)
-        -> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::string_token, s};
 }
 
 template<>
 auto make_token<css_parser_token::token_type::ident_token, std::string_view>(const std::string_view &s)
--> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::ident_token, s};
 }
 
 template<>
 auto make_token<css_parser_token::token_type::function_token, std::string_view>(const std::string_view &s)
--> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::function_token, s};
 }
 
 template<>
 auto make_token<css_parser_token::token_type::url_token, std::string_view>(const std::string_view &s)
--> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::url_token, s};
 }
 
 template<>
 auto make_token<css_parser_token::token_type::whitespace_token, std::string_view>(const std::string_view &s)
-        -> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::whitespace_token, s};
 }
 
 template<>
 auto make_token<css_parser_token::token_type::delim_token, char>(const char &c)
-        -> css_parser_token
+	-> css_parser_token
 {
 	return css_parser_token{css_parser_token::token_type::delim_token, c};
 }
@@ -119,35 +119,33 @@ struct css_dimension_data {
  */
 constexpr const auto max_dims = static_cast<int>(css_parser_token::dim_type::dim_max);
 constexpr frozen::unordered_map<frozen::string, css_dimension_data, max_dims> dimensions_map{
-		{"px", { css_parser_token::dim_type::dim_px, 1.0}},
-		/* EM/REM are 16 px, so multiply and round */
-		{"em", { css_parser_token::dim_type::dim_em, 16.0}},
-		{"rem", { css_parser_token::dim_type::dim_rem, 16.0}},
-		/*
+	{"px", {css_parser_token::dim_type::dim_px, 1.0}},
+	/* EM/REM are 16 px, so multiply and round */
+	{"em", {css_parser_token::dim_type::dim_em, 16.0}},
+	{"rem", {css_parser_token::dim_type::dim_rem, 16.0}},
+	/*
 		 * Represents the x-height of the element's font.
 		 * On fonts with the "x" letter, this is generally the height
 		 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
 		 */
-		{"ex", { css_parser_token::dim_type::dim_ex, 8.0}},
-		{"wv", { css_parser_token::dim_type::dim_wv, 8.0}},
-		{"wh", { css_parser_token::dim_type::dim_wh, 6.0}},
-		{"vmax", { css_parser_token::dim_type::dim_vmax, 8.0}},
-		{"vmin", { css_parser_token::dim_type::dim_vmin, 6.0}},
-		/* One point. 1pt = 1/72nd of 1in */
-		{"pt", { css_parser_token::dim_type::dim_pt, 96.0 / 72.0}},
-		/* 96px/2.54 */
-		{"cm", { css_parser_token::dim_type::dim_cm, 96.0 / 2.54}},
-		{"mm", { css_parser_token::dim_type::dim_mm, 9.60 / 2.54}},
-		{"in", { css_parser_token::dim_type::dim_in, 96.0}},
-		/* 1pc = 12pt = 1/6th of 1in. */
-		{"pc", { css_parser_token::dim_type::dim_pc, 96.0 / 6.0}}
-};
+	{"ex", {css_parser_token::dim_type::dim_ex, 8.0}},
+	{"wv", {css_parser_token::dim_type::dim_wv, 8.0}},
+	{"wh", {css_parser_token::dim_type::dim_wh, 6.0}},
+	{"vmax", {css_parser_token::dim_type::dim_vmax, 8.0}},
+	{"vmin", {css_parser_token::dim_type::dim_vmin, 6.0}},
+	/* One point. 1pt = 1/72nd of 1in */
+	{"pt", {css_parser_token::dim_type::dim_pt, 96.0 / 72.0}},
+	/* 96px/2.54 */
+	{"cm", {css_parser_token::dim_type::dim_cm, 96.0 / 2.54}},
+	{"mm", {css_parser_token::dim_type::dim_mm, 9.60 / 2.54}},
+	{"in", {css_parser_token::dim_type::dim_in, 96.0}},
+	/* 1pc = 12pt = 1/6th of 1in. */
+	{"pc", {css_parser_token::dim_type::dim_pc, 96.0 / 6.0}}};
 
-auto
-css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
+auto css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 {
 	if (!std::holds_alternative<float>(value) ||
-	        !std::holds_alternative<std::string_view>(dim_token.value)) {
+		!std::holds_alternative<std::string_view>(dim_token.value)) {
 		/* Invalid tokens */
 		return false;
 	}
@@ -178,8 +176,7 @@ css_parser_token::adjust_dim(const css_parser_token &dim_token) -> bool
 /*
  * Consume functions: return a token and advance lexer offset
  */
-auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
-{
+auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token {
 	auto i = offset;
 	auto need_escape = false;
 	auto allow_middle_minus = false;
@@ -187,7 +184,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 	auto maybe_escape_sv = [&](auto cur_pos, auto tok_type) -> auto {
 		if (need_escape) {
 			auto escaped = rspamd::css::unescape_css(pool, {&input[offset],
-												   cur_pos - offset});
+															cur_pos - offset});
 			offset = cur_pos;
 
 			return css_parser_token{tok_type, escaped};
@@ -201,10 +198,10 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 
 	/* Ident token can start from `-` or `--` */
 	if (input[i] == '-') {
-		i ++;
+		i++;
 
 		if (i < input.size() && input[i] == '-') {
-			i ++;
+			i++;
 			allow_middle_minus = true;
 		}
 	}
@@ -212,10 +209,9 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 	while (i < input.size()) {
 		auto c = input[i];
 
-		auto is_plain_c = (allow_number || allow_middle_minus) ? is_plain_ident(c) :
-						  is_plain_ident_start(c);
+		auto is_plain_c = (allow_number || allow_middle_minus) ? is_plain_ident(c) : is_plain_ident_start(c);
 		if (!is_plain_c) {
-			if (c == '\\' && i + 1 < input.size ()) {
+			if (c == '\\' && i + 1 < input.size()) {
 				/* Escape token */
 				need_escape = true;
 				auto nhex = 0;
@@ -240,7 +236,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 						/* Single \ + char */
 						break;
 					}
-				} while (i < input.size ());
+				} while (i < input.size());
 			}
 			else if (c == '(') {
 				/* Function or url token */
@@ -254,7 +250,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 					if (j < input.size() && (input[j] == '"' || input[j] == '\'')) {
 						/* Function token */
 						auto ret = maybe_escape_sv(i,
-								css_parser_token::token_type::function_token);
+												   css_parser_token::token_type::function_token);
 						return ret;
 					}
 					else {
@@ -266,13 +262,13 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 						if (j < input.size() && input[j] == ')') {
 							/* Valid url token */
 							auto ret = maybe_escape_sv(j + 1,
-									css_parser_token::token_type::url_token);
+													   css_parser_token::token_type::url_token);
 							return ret;
 						}
 						else {
 							/* Incomplete url token */
 							auto ret = maybe_escape_sv(j,
-									css_parser_token::token_type::url_token);
+													   css_parser_token::token_type::url_token);
 
 							ret.flags |= css_parser_token::flag_bad_string;
 							return ret;
@@ -281,7 +277,7 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 				}
 				else {
 					auto ret = maybe_escape_sv(i,
-							css_parser_token::token_type::function_token);
+											   css_parser_token::token_type::function_token);
 					return ret;
 				}
 			}
@@ -297,23 +293,23 @@ auto css_tokeniser::consume_ident(bool allow_number) -> struct css_parser_token
 			allow_middle_minus = true;
 		}
 
-		i ++;
+		i++;
 	}
 
 	return maybe_escape_sv(i, css_parser_token::token_type::ident_token);
 }
 
-auto css_tokeniser::consume_number() -> struct css_parser_token
-{
+auto
+css_tokeniser::consume_number() -> struct css_parser_token {
 	auto i = offset;
 	auto seen_dot = false, seen_exp = false;
 
 	if (input[i] == '-' || input[i] == '+') {
-		i ++;
+		i++;
 	}
 	if (input[i] == '.' && i < input.size()) {
 		seen_dot = true;
-		i ++;
+		i++;
 	}
 
 	while (i < input.size()) {
@@ -336,7 +332,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 					if (i + 1 < input.size()) {
 						auto next_c = input[i + 1];
 						if (next_c == '+' || next_c == '-') {
-							i ++;
+							i++;
 						}
 						else if (!g_ascii_isdigit(next_c)) {
 							/* Not an exponent */
@@ -357,7 +353,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 			}
 		}
 
-		i ++;
+		i++;
 	}
 
 	if (i > offset) {
@@ -368,7 +364,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 		auto num = g_ascii_strtod(numbuf, &endptr);
 		offset = i;
 
-		if (fabs (num) >= G_MAXFLOAT || std::isnan(num)) {
+		if (fabs(num) >= G_MAXFLOAT || std::isnan(num)) {
 			msg_debug_css("invalid number: %s", numbuf);
 			return make_token<css_parser_token::token_type::delim_token>(input[i - 1]);
 		}
@@ -390,7 +386,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 						if (!ret.adjust_dim(dim_token)) {
 							auto sv = std::get<std::string_view>(dim_token.value);
 							msg_debug_css("cannot apply dimension from the token %*s; number value = %.1f",
-									(int) sv.size(), sv.begin(), num);
+										  (int) sv.size(), sv.begin(), num);
 							/* Unconsume ident */
 							offset = i;
 						}
@@ -410,7 +406,7 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 	}
 	else {
 		msg_err_css("internal error: invalid number, empty token");
-		i ++;
+		i++;
 	}
 
 	offset = i;
@@ -421,8 +417,8 @@ auto css_tokeniser::consume_number() -> struct css_parser_token
 /*
  * Main routine to produce lexer tokens
  */
-auto css_tokeniser::next_token(void) -> struct css_parser_token
-{
+auto
+css_tokeniser::next_token(void) -> struct css_parser_token {
 	/* Check pushback queue */
 	if (!backlog.empty()) {
 		auto tok = backlog.front();
@@ -508,7 +504,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 				/* Should be a error, but we ignore it for now */
 			}
 
-			i ++;
+			i++;
 		}
 
 		/* EOF with no quote character, consider it fine */
@@ -531,7 +527,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 		case '/':
 			if (i + 1 < input.size() && input[i + 1] == '*') {
 				offset = i + 2;
-				consume_comment(); /* Consume comment and go forward */
+				consume_comment();   /* Consume comment and go forward */
 				return next_token(); /* Tail call */
 			}
 			else {
@@ -550,7 +546,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			}
 
 			auto ret = make_token<css_parser_token::token_type::whitespace_token>(
-					std::string_view(&input[offset], i - offset));
+				std::string_view(&input[offset], i - offset));
 			offset = i;
 			return ret;
 		}
@@ -593,8 +589,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			return make_token<css_parser_token::token_type::colon_token>();
 		case '<':
 			/* Maybe an xml like comment */
-			if (i + 3 < input.size () && input[i + 1] == '!'
-				&& input[i + 2] == '-' && input[i + 3] == '-') {
+			if (i + 3 < input.size() && input[i + 1] == '!' && input[i + 2] == '-' && input[i + 3] == '-') {
 				offset += 3;
 
 				return make_token<css_parser_token::token_type::cdo_token>();
@@ -691,7 +686,7 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			if (i + 2 < input.size()) {
 				auto next_c = input[i + 1], next_next_c = input[i + 2];
 				if ((is_plain_ident(next_c) || next_c == '-') &&
-						(is_plain_ident(next_next_c) || next_next_c == '-')) {
+					(is_plain_ident(next_next_c) || next_next_c == '-')) {
 					offset = i + 1;
 					/* We consume indent, but we allow numbers there */
 					auto ident_token = consume_ident(true);
@@ -728,17 +723,17 @@ auto css_tokeniser::next_token(void) -> struct css_parser_token
 			}
 			break;
 		}
-
 	}
 
 	return make_token<css_parser_token::token_type::eof_token>();
 }
 
-constexpr auto css_parser_token::get_token_type() -> const char *
+constexpr auto
+css_parser_token::get_token_type() -> const char *
 {
 	const char *ret = "unknown";
 
-	switch(type) {
+	switch (type) {
 	case token_type::whitespace_token:
 		ret = "whitespace";
 		break;
@@ -825,7 +820,7 @@ auto css_parser_token::debug_token_str() -> std::string
 			ret += std::to_string(arg);
 		}
 	},
-	value);
+			   value);
 
 	if ((flags & (~number_dimension)) != default_flags) {
 		ret += "; flags=" + std::to_string(flags);
@@ -838,4 +833,4 @@ auto css_parser_token::debug_token_str() -> std::string
 	return ret; /* Copy elision */
 }
 
-}
+}// namespace rspamd::css
