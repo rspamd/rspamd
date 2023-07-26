@@ -1474,7 +1474,7 @@ auto html_process_input(struct rspamd_task *task,
 						rspamd_url_set_add_or_return(url_set, maybe_url.value());
 					if (maybe_existing == maybe_url.value()) {
 						if (cur_url_order) {
-							url->order = *(cur_url_order)++;
+							url->order = (*cur_url_order)++;
 						}
 						url->part_order = cur_url_part_order++;
 						html_process_query_url(pool, url, url_set,

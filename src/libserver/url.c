@@ -3469,7 +3469,7 @@ rspamd_url_query_callback(struct rspamd_url *url, gsize start_offset,
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
-			url->order = *(cbd->cur_url_order)++;
+			url->order = (*cbd->cur_url_order)++;
 		}
 	}
 
@@ -3528,7 +3528,7 @@ rspamd_url_text_part_callback(struct rspamd_url *url, gsize start_offset,
 		url->part_order = cbd->cur_part_order++;
 
 		if (cbd->cur_url_order) {
-			url->order = *(cbd->cur_url_order)++;
+			url->order = (*cbd->cur_url_order)++;
 		}
 		g_ptr_array_add(cbd->part->mime_part->urls, url);
 	}
