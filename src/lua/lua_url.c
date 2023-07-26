@@ -72,6 +72,8 @@ LUA_FUNCTION_DEF(url, init);
 LUA_FUNCTION_DEF(url, all);
 LUA_FUNCTION_DEF(url, lt);
 LUA_FUNCTION_DEF(url, eq);
+LUA_FUNCTION_DEF(url, get_order);
+LUA_FUNCTION_DEF(url, get_part_order);
 
 static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_length),
@@ -97,6 +99,8 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF(url, get_count),
 	LUA_INTERFACE_DEF(url, get_flags),
 	LUA_INTERFACE_DEF(url, get_flags_num),
+	LUA_INTERFACE_DEF(url, get_order),
+	LUA_INTERFACE_DEF(url, get_part_order),
 	{"get_redirected", lua_url_get_phished},
 	LUA_INTERFACE_DEF(url, set_redirected),
 	{"__tostring", lua_url_tostring},
@@ -934,6 +938,48 @@ lua_url_get_flags_num(lua_State *L)
 
 	if (url) {
 		lua_pushinteger(L, url->url->flags);
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_get_order(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url) {
+		if (url->url->order != (uint16_t) -1) {
+			lua_pushinteger(L, url->url->order);
+		}
+		else {
+			lua_pushnil(L);
+		}
+	}
+	else {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_get_part_order(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url(L, 1);
+
+	if (url) {
+		if (url->url->part_order != (uint16_t) -1) {
+			lua_pushinteger(L, url->url->part_order);
+		}
+		else {
+			lua_pushnil(L);
+		}
 	}
 	else {
 		return luaL_error(L, "invalid arguments");
