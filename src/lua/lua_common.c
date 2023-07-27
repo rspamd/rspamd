@@ -908,7 +908,7 @@ rspamd_lua_wipe_realloc(void *ud,
 extern int luaopen_bit(lua_State *L);
 #endif
 
-static bool lua_initialized = false;
+static unsigned int lua_initialized = 0;
 
 lua_State *
 rspamd_lua_init(bool wipe_mem)
@@ -1032,7 +1032,7 @@ rspamd_lua_init(bool wipe_mem)
 	lua_setglobal(L, "get_traces");
 #endif
 
-	lua_initialized = true;
+	lua_initialized++;
 
 	return L;
 }
@@ -1058,12 +1058,12 @@ void rspamd_lua_close(lua_State *L)
 	kh_destroy(lua_class_set, ctx->classes);
 	g_free(ctx);
 
-	lua_initialized = false;
+	lua_initialized--;
 }
 
 bool rspamd_lua_is_initialised(void)
 {
-	return lua_initialized;
+	return lua_initialized != 0;
 }
 
 void rspamd_lua_start_gc(struct rspamd_config *cfg)
