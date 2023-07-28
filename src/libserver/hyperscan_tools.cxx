@@ -438,6 +438,8 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 											 }
 											 else {
 												 auto &tmpfile_checked = tmpfile.value();
+												 // Store owned string
+												 auto tmpfile_name = std::string{tmpfile_checked.get_name()};
 												 std::size_t unserialized_size;
 
 												 if (auto ret = hs_serialized_database_size(((const char *) cached_serialized.get_map()) + offset,
@@ -450,7 +452,7 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 												 }
 
 												 msg_debug_hyperscan_lambda("multipattern: create new database in %s; %Hz size",
-																			tmpfile_pattern.data(), unserialized_size);
+																			tmpfile_name.c_str(), unserialized_size);
 												 void *buf;
 #ifdef HAVE_GETPAGESIZE
 												 auto page_size = getpagesize();
@@ -462,11 +464,9 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 												 }
 												 auto errcode = posix_memalign(&buf, page_size, unserialized_size);
 												 if (errcode != 0 || buf == nullptr) {
-													 return tl::make_unexpected(error{"Cannot allocate memory", errno, error_category::CRITICAL});
+													 return tl::make_unexpected(error{"Cannot allocate memory",
+																					  errno, error_category::CRITICAL});
 												 }
-
-												 // Store owned string
-												 auto tmpfile_name = std::string{tmpfile_checked.get_name()};
 
 												 if (auto ret = hs_deserialize_database_at(((const char *) cached_serialized.get_map()) + offset,
 																						   cached_serialized.get_size() - offset, (hs_database_t *) buf);
@@ -483,14 +483,13 @@ auto load_cached_hs_file(const char *fname, std::int64_t offset = 0) -> tl::expe
 													 }
 													 else {
 														 free(buf);
-
 														 /*
-								 * Unlink target file before renaming to avoid
-								 * race condition.
-								 * So what we have is that `new_file_locked`
-								 * will have flock on that file, so it will be
-								 * replaced after unlink safely, and also unlocked.
-								 */
+														 * Unlink target file before renaming to avoid
+														 * race condition.
+														 * So what we have is that `new_file_locked`
+														 * will have flock on that file, so it will be
+														 * replaced after unlink safely, and also unlocked.
+														 */
 														 (void) unlink(unserialized_fname.c_str());
 														 if (rename(tmpfile_name.c_str(),
 																	unserialized_fname.c_str()) == -1) {
