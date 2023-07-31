@@ -26,6 +26,7 @@
 #include <tuple>
 #include <string>
 #include <limits>
+#include <memory>
 
 #include "utf8_util.h"
 #include "str_util.h"
