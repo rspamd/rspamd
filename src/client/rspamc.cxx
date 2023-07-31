@@ -1,11 +1,11 @@
-/*-
+/*
  * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -353,6 +353,14 @@ static constexpr auto emphasis_argument(const T &arg, int precision) -> auto
 
 	return fmt::format("{:.{}f}", arg, precision);
 }
+
+template<>
+struct fmt::formatter<rspamd_action_type> : fmt::formatter<string_view> {
+	auto format(rspamd_action_type c, format_context &ctx) const
+	{
+		return formatter<string_view>::format(std::string_view{rspamd_action_to_str(c)}, ctx);
+	}
+};
 
 using sort_lambda = std::function<int(const ucl_object_t *, const ucl_object_t *)>;
 static const auto sort_map = frozen::make_unordered_map<frozen::string, sort_lambda>({
