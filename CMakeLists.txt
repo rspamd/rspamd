@@ -14,12 +14,12 @@ SET(RSPAMD_VERSION_MINOR 6)
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
 SET(RSPAMD_VERSION_MINOR_NUM ${RSPAMD_VERSION_MINOR}0)
 
-IF(GIT_ID)
-	SET(GIT_VERSION 1)
-	SET(RSPAMD_ID "${GIT_ID}")
-ENDIF()
+IF (GIT_ID)
+    SET(GIT_VERSION 1)
+    SET(RSPAMD_ID "${GIT_ID}")
+ENDIF ()
 
-SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}")
+SET(RSPAMD_VERSION "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}")
 
 PROJECT(rspamd VERSION "${RSPAMD_VERSION}" LANGUAGES C CXX ASM)
 
@@ -34,34 +34,34 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 
 SET(RSPAMD_MASTER_SITE_URL "https://rspamd.com")
 
-IF(NOT RSPAMD_USER)
-	SET(RSPAMD_USER "nobody")
-	SET(RSPAMD_GROUP "nobody")
-ENDIF(NOT RSPAMD_USER)
+IF (NOT RSPAMD_USER)
+    SET(RSPAMD_USER "nobody")
+    SET(RSPAMD_GROUP "nobody")
+ENDIF (NOT RSPAMD_USER)
 
 # Default for SysV Init
 SET(RSPAMD_WORKER_NORMAL "*:11333")
 SET(RSPAMD_WORKER_CONTROLLER "*:11334")
 
 ############################# OPTIONS SECTION #############################################
-OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
-OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
-OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
-OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
-OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
-OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
+OPTION(ENABLE_LUAJIT "Link with libluajit [default: ON]" ON)
+OPTION(ENABLE_URL_INCLUDE "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
+OPTION(NO_SHARED "Build internal libs static [default: ON]" ON)
+OPTION(INSTALL_WEBUI "Install web interface [default: ON]" ON)
+OPTION(WANT_SYSTEMD_UNITS "Install systemd unit files on Linux [default: OFF]" OFF)
+OPTION(ENABLE_SNOWBALL "Enable snowball stemmer [default: ON]" ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
-OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: ON]"         ON)
-OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
-OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
-OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
-OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
-OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
-OPTION(ENABLE_FASTTEXT     "Link with FastText library [default: OFF]"                  OFF)
-OPTION(SYSTEM_ZSTD         "Use system zstd instead of bundled one [default: OFF]" OFF)
-OPTION(SYSTEM_FMT          "Use system fmt instead of bundled one [default: OFF]" OFF)
-OPTION(SYSTEM_DOCTEST      "Use system doctest instead of bundled one [default: OFF]" OFF)
-OPTION(SYSTEM_XXHASH       "Use system xxhash instead of bundled one [default: OFF]" OFF)
+OPTION(ENABLE_PCRE2 "Enable pcre2 instead of pcre  [default: ON]" ON)
+OPTION(ENABLE_JEMALLOC "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
+OPTION(ENABLE_UTILS "Build rspamd internal utils [default: OFF]" OFF)
+OPTION(ENABLE_LIBUNWIND "Use libunwind to print crash traces [default: OFF]" OFF)
+OPTION(ENABLE_LUA_TRACE "Trace all Lua C API invocations [default: OFF]" OFF)
+OPTION(ENABLE_LUA_REPL "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
+OPTION(ENABLE_FASTTEXT "Link with FastText library [default: OFF]" OFF)
+OPTION(SYSTEM_ZSTD "Use system zstd instead of bundled one [default: OFF]" OFF)
+OPTION(SYSTEM_FMT "Use system fmt instead of bundled one [default: OFF]" OFF)
+OPTION(SYSTEM_DOCTEST "Use system doctest instead of bundled one [default: OFF]" OFF)
+OPTION(SYSTEM_XXHASH "Use system xxhash instead of bundled one [default: OFF]" OFF)
 
 ############################# INCLUDE SECTION #############################################
 
@@ -78,52 +78,52 @@ INCLUDE(AsmOp)
 INCLUDE(FindRagel)
 INCLUDE(ProcessPackage)
 
-IF(NOT RAGEL_FOUND)
-	MESSAGE(FATAL_ERROR "Ragel is required to build rspamd")
-ENDIF()
+IF (NOT RAGEL_FOUND)
+    MESSAGE(FATAL_ERROR "Ragel is required to build rspamd")
+ENDIF ()
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 FIND_PACKAGE(Perl REQUIRED)
 
-option (SANITIZE "Enable sanitizer: address, memory, undefined, leak (comma separated list)" "")
+option(SANITIZE "Enable sanitizer: address, memory, undefined, leak (comma separated list)" "")
 INCLUDE(Toolset)
 INCLUDE(Sanitizer)
 
 INCLUDE(ArchDep)
 INCLUDE(Paths)
 
-IF(ENABLE_PCRE2 MATCHES "ON")
-	SET(WITH_PCRE2 1)
-	# For utf8 API
-	LIST(APPEND CMAKE_REQUIRED_DEFINITIONS "-DPCRE2_CODE_UNIT_WIDTH=8")
-ENDIF()
+IF (ENABLE_PCRE2 MATCHES "ON")
+    SET(WITH_PCRE2 1)
+    # For utf8 API
+    LIST(APPEND CMAKE_REQUIRED_DEFINITIONS "-DPCRE2_CODE_UNIT_WIDTH=8")
+ENDIF ()
 ############################# CONFIG SECTION #############################################
 # Initial set
 
 # Prefer local include dirs to system ones
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
-		"${CMAKE_SOURCE_DIR}/src"
-		"${CMAKE_SOURCE_DIR}/src/libutil"
-		"${CMAKE_SOURCE_DIR}/src/libserver"
-		"${CMAKE_SOURCE_DIR}/src/libmime"
-		"${CMAKE_SOURCE_DIR}/src/libstat"
-		"${CMAKE_SOURCE_DIR}/src/libcryptobox"
-		"${CMAKE_SOURCE_DIR}/contrib/libucl"
-		"${CMAKE_SOURCE_DIR}/contrib/replxx/include"
-		"${CMAKE_SOURCE_DIR}/contrib/uthash"
-		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
-		"${CMAKE_SOURCE_DIR}/contrib/fpconv"
-		"${CMAKE_SOURCE_DIR}/contrib/libottery"
-		"${CMAKE_SOURCE_DIR}/contrib/cdb"
-		"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
-		"${CMAKE_SOURCE_DIR}/contrib/librdns"
-		"${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
-		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
-		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
-		"${CMAKE_SOURCE_DIR}/contrib/frozen/include"
-		"${CMAKE_SOURCE_DIR}/contrib/fu2/include"
-		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
-		"${CMAKE_BINARY_DIR}/src/libcryptobox")
+        "${CMAKE_SOURCE_DIR}/src"
+        "${CMAKE_SOURCE_DIR}/src/libutil"
+        "${CMAKE_SOURCE_DIR}/src/libserver"
+        "${CMAKE_SOURCE_DIR}/src/libmime"
+        "${CMAKE_SOURCE_DIR}/src/libstat"
+        "${CMAKE_SOURCE_DIR}/src/libcryptobox"
+        "${CMAKE_SOURCE_DIR}/contrib/libucl"
+        "${CMAKE_SOURCE_DIR}/contrib/replxx/include"
+        "${CMAKE_SOURCE_DIR}/contrib/uthash"
+        "${CMAKE_SOURCE_DIR}/contrib/http-parser"
+        "${CMAKE_SOURCE_DIR}/contrib/fpconv"
+        "${CMAKE_SOURCE_DIR}/contrib/libottery"
+        "${CMAKE_SOURCE_DIR}/contrib/cdb"
+        "${CMAKE_SOURCE_DIR}/contrib/snowball/include"
+        "${CMAKE_SOURCE_DIR}/contrib/librdns"
+        "${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
+        "${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
+        "${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
+        "${CMAKE_SOURCE_DIR}/contrib/frozen/include"
+        "${CMAKE_SOURCE_DIR}/contrib/fu2/include"
+        "${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
+        "${CMAKE_BINARY_DIR}/src/libcryptobox")
 
 SET(TAR "tar")
 INCLUDE(OSDep)
@@ -132,132 +132,132 @@ INCLUDE(OSDep)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "m")
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "pthread")
 
-IF(ENABLE_LUAJIT MATCHES "ON")
-	ProcessPackage(LIBLUAJIT LIBRARY	"luajit"
-										"luajit-2.1"
-										"luajit2.1"
-										"luajit-2.0"
-										"luajit2.0"
-										"luajit-5.1"
-			INCLUDE luajit.h INCLUDE_SUFFIXES
-										"include/luajit-2.1"
-										"include/luajit-2.0"
-										"include/luajit"
-			ROOT ${LUA_ROOT}
-			MODULES luajit)
-	SET(WITH_LUAJIT 1)
-ELSE(ENABLE_LUAJIT MATCHES "ON")
+IF (ENABLE_LUAJIT MATCHES "ON")
+    ProcessPackage(LIBLUAJIT LIBRARY "luajit"
+            "luajit-2.1"
+            "luajit2.1"
+            "luajit-2.0"
+            "luajit2.0"
+            "luajit-5.1"
+            INCLUDE luajit.h INCLUDE_SUFFIXES
+            "include/luajit-2.1"
+            "include/luajit-2.0"
+            "include/luajit"
+            ROOT ${LUA_ROOT}
+            MODULES luajit)
+    SET(WITH_LUAJIT 1)
+ELSE (ENABLE_LUAJIT MATCHES "ON")
 
-	ProcessPackage(LIBLUA LIBRARY	"lua"
-			"lua-5.3"
-			LIB_SUFFIXES	"lua5.3"
-			INCLUDE lua.h INCLUDE_SUFFIXES
-			"include/lua-5.3"
-			"include/lua5.3"
-			"include/lua53"
-			"include/lua"
-			ROOT ${LUA_ROOT}
-			MODULES lua53
-			OPTIONAL)
+    ProcessPackage(LIBLUA LIBRARY "lua"
+            "lua-5.3"
+            LIB_SUFFIXES "lua5.3"
+            INCLUDE lua.h INCLUDE_SUFFIXES
+            "include/lua-5.3"
+            "include/lua5.3"
+            "include/lua53"
+            "include/lua"
+            ROOT ${LUA_ROOT}
+            MODULES lua53
+            OPTIONAL)
 
-	IF (NOT WITH_LIBLUA)
-		ProcessPackage(LIBLUA LIBRARY	"lua"
-				"lua-5.4"
-				LIB_SUFFIXES	"lua5.4"
-				INCLUDE lua.h INCLUDE_SUFFIXES
-				"include/lua-5.4"
-				"include/lua5.4"
-				"include/lua54"
-				"include/lua"
-				ROOT ${LUA_ROOT}
-				MODULES lua54
-				OPTIONAL)
-		IF (NOT WITH_LIBLUA)
-			ProcessPackage(LIBLUA LIBRARY	"lua"
-					"lua-5.2"
-					LIB_SUFFIXES	"lua5.2"
-					INCLUDE lua.h INCLUDE_SUFFIXES
-					"include/lua-5.2"
-					"include/lua5.2"
-					"include/lua52"
-					"include/lua"
-					ROOT ${LUA_ROOT}
-					MODULES lua52
-					OPTIONAL)
+    IF (NOT WITH_LIBLUA)
+        ProcessPackage(LIBLUA LIBRARY "lua"
+                "lua-5.4"
+                LIB_SUFFIXES "lua5.4"
+                INCLUDE lua.h INCLUDE_SUFFIXES
+                "include/lua-5.4"
+                "include/lua5.4"
+                "include/lua54"
+                "include/lua"
+                ROOT ${LUA_ROOT}
+                MODULES lua54
+                OPTIONAL)
+        IF (NOT WITH_LIBLUA)
+            ProcessPackage(LIBLUA LIBRARY "lua"
+                    "lua-5.2"
+                    LIB_SUFFIXES "lua5.2"
+                    INCLUDE lua.h INCLUDE_SUFFIXES
+                    "include/lua-5.2"
+                    "include/lua5.2"
+                    "include/lua52"
+                    "include/lua"
+                    ROOT ${LUA_ROOT}
+                    MODULES lua52
+                    OPTIONAL)
 
-			IF (NOT WITH_LIBLUA)
-				ProcessPackage(LIBLUA LIBRARY	"lua"
-						"lua-5.1"
-						INCLUDE lua.h INCLUDE_SUFFIXES
-						"include/lua-5.1"
-						"include/lua5.1"
-						"include/lua51"
-						"include/lua"
-						ROOT ${LUA_ROOT}
-						MODULES lua51)
-			ENDIF()
-		ENDIF()
-	ENDIF()
-ENDIF(ENABLE_LUAJIT MATCHES "ON")
+            IF (NOT WITH_LIBLUA)
+                ProcessPackage(LIBLUA LIBRARY "lua"
+                        "lua-5.1"
+                        INCLUDE lua.h INCLUDE_SUFFIXES
+                        "include/lua-5.1"
+                        "include/lua5.1"
+                        "include/lua51"
+                        "include/lua"
+                        ROOT ${LUA_ROOT}
+                        MODULES lua51)
+            ENDIF ()
+        ENDIF ()
+    ENDIF ()
+ENDIF (ENABLE_LUAJIT MATCHES "ON")
 
-IF(ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
-	ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
-		ROOT ${JEMALLOC_ROOT_DIR})
-	SET(WITH_JEMALLOC "1")
-ENDIF()
+IF (ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
+    ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+            ROOT ${JEMALLOC_ROOT_DIR})
+    SET(WITH_JEMALLOC "1")
+ENDIF ()
 
-IF(ENABLE_LIBUNWIND MATCHES "ON")
-	ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
-			ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
-	SET(WITH_LIBUNWIND "1")
-ENDIF()
+IF (ENABLE_LIBUNWIND MATCHES "ON")
+    ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
+            ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
+    SET(WITH_LIBUNWIND "1")
+ENDIF ()
 
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
+        INCLUDE_SUFFIXES include/glib include/glib-2.0
+        ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
 
-IF(ENABLE_PCRE2 MATCHES "ON")
-	ProcessPackage(PCRE LIBRARY pcre2 pcre2-8 INCLUDE pcre2.h INCLUDE_SUFFIXES include/pcre2
-		ROOT ${PCRE_ROOT_DIR} MODULES pcre2 pcre2-8 libpcre2 libpcre2-8)
-ELSE()
-	ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre
-		ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
-ENDIF()
+IF (ENABLE_PCRE2 MATCHES "ON")
+    ProcessPackage(PCRE LIBRARY pcre2 pcre2-8 INCLUDE pcre2.h INCLUDE_SUFFIXES include/pcre2
+            ROOT ${PCRE_ROOT_DIR} MODULES pcre2 pcre2-8 libpcre2 libpcre2-8)
+ELSE ()
+    ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre
+            ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
+ENDIF ()
 
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
-	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
+        ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
 ProcessPackage(ICUDATA LIBRARY icudata INCLUDE unicode/ucnv.h
-	ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
+        ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
 ProcessPackage(ICUC LIBRARY icuuc INCLUDE unicode/ucnv.h
-	ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
+        ROOT ${ICU_ROOT_DIR} MODULES icu-uc)
 ProcessPackage(ICUIO LIBRARY icuio INCLUDE unicode/ucnv.h
-		ROOT ${ICU_ROOT_DIR} MODULES icu-io)
+        ROOT ${ICU_ROOT_DIR} MODULES icu-io)
 ProcessPackage(ICUI18N LIBRARY icui18n INCLUDE unicode/ucnv.h
-	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
+        ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
 ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE openssl/evp.h
-	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
+        ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
 ProcessPackage(LIBSSL LIBRARY ssl INCLUDE openssl/ssl.h
-	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
+        ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
 ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
-		ROOT ${LIBZ_ROOT_DIR} MODULES z)
+        ROOT ${LIBZ_ROOT_DIR} MODULES z)
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
-		INCLUDE_SUFFIXES include/libsodium include/sodium
-		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
+        INCLUDE_SUFFIXES include/libsodium include/sodium
+        ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 
-if(ENABLE_FASTTEXT MATCHES "ON")
-	ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext.h
-			INCLUDE_SUFFIXES include/fasttext
-			ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
-	SET(WITH_FASTTEXT "1")
-endif()
+if (ENABLE_FASTTEXT MATCHES "ON")
+    ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext.h
+            INCLUDE_SUFFIXES include/fasttext
+            ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
+    SET(WITH_FASTTEXT "1")
+endif ()
 
-include (CompilerWarnings)
-include (Hyperscan)
-include (Openblas)
+include(CompilerWarnings)
+include(Hyperscan)
+include(Openblas)
 
-IF(ENABLE_LUA_TRACE)
-	SET(WITH_LUA_TRACE 1)
-ENDIF(ENABLE_LUA_TRACE)
+IF (ENABLE_LUA_TRACE)
+    SET(WITH_LUA_TRACE 1)
+ENDIF (ENABLE_LUA_TRACE)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_CXX_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_CXX_FLAGS}")
@@ -271,34 +271,34 @@ ADD_DEFINITIONS(-DU_CHARSET_IS_UTF8)
 
 # Check platform specific includes
 CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
-CHECK_INCLUDE_FILES(sys/uio.h   HAVE_SYS_UIO_H)
+CHECK_INCLUDE_FILES(sys/uio.h HAVE_SYS_UIO_H)
 
-CHECK_INCLUDE_FILES(fcntl.h     HAVE_FCNTL_H)
-CHECK_INCLUDE_FILES(math.h      HAVE_MATH_H)
-CHECK_INCLUDE_FILES(stdio.h     HAVE_STDIO_H)
-CHECK_INCLUDE_FILES(stdlib.h    HAVE_STDLIB_H)
-CHECK_INCLUDE_FILES(string.h    HAVE_STRING_H)
-CHECK_INCLUDE_FILES(strings.h   HAVE_STRINGS_H)
-CHECK_INCLUDE_FILES(time.h      HAVE_TIME_H)
-CHECK_INCLUDE_FILES(unistd.h    HAVE_UNISTD_H)
-CHECK_INCLUDE_FILES(stdint.h  HAVE_STDINT_H)
-CHECK_INCLUDE_FILES(inttypes.h  HAVE_INTTYPES_H)
-CHECK_INCLUDE_FILES(stdbool.h  HAVE_STDBOOL_H)
-CHECK_INCLUDE_FILES(endian.h  HAVE_ENDIAN_H)
-CHECK_INCLUDE_FILES(sys/endian.h  HAVE_SYS_ENDIAN_H)
-CHECK_INCLUDE_FILES(machine/endian.h  HAVE_MACHINE_ENDIAN_H)
-CHECK_INCLUDE_FILES(sys/socket.h  HAVE_SYS_SOCKET_H)
-CHECK_INCLUDE_FILES(sys/mman.h  HAVE_SYS_MMAN_H)
-CHECK_INCLUDE_FILES(sys/un.h  HAVE_SYS_UN_H)
-CHECK_INCLUDE_FILES(sys/stat.h  HAVE_SYS_STAT_H)
-CHECK_INCLUDE_FILES(sys/wait.h  HAVE_SYS_WAIT_H)
-CHECK_INCLUDE_FILES(sys/param.h  HAVE_SYS_PARAM_H)
-CHECK_INCLUDE_FILES(sys/file.h  HAVE_SYS_FILE_H)
-CHECK_INCLUDE_FILES(sys/resource.h  HAVE_SYS_RESOURCE_H)
-CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
-CHECK_INCLUDE_FILES(netinet/tcp.h  HAVE_NETINET_TCP_H)
-CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
-CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
+CHECK_INCLUDE_FILES(fcntl.h HAVE_FCNTL_H)
+CHECK_INCLUDE_FILES(math.h HAVE_MATH_H)
+CHECK_INCLUDE_FILES(stdio.h HAVE_STDIO_H)
+CHECK_INCLUDE_FILES(stdlib.h HAVE_STDLIB_H)
+CHECK_INCLUDE_FILES(string.h HAVE_STRING_H)
+CHECK_INCLUDE_FILES(strings.h HAVE_STRINGS_H)
+CHECK_INCLUDE_FILES(time.h HAVE_TIME_H)
+CHECK_INCLUDE_FILES(unistd.h HAVE_UNISTD_H)
+CHECK_INCLUDE_FILES(stdint.h HAVE_STDINT_H)
+CHECK_INCLUDE_FILES(inttypes.h HAVE_INTTYPES_H)
+CHECK_INCLUDE_FILES(stdbool.h HAVE_STDBOOL_H)
+CHECK_INCLUDE_FILES(endian.h HAVE_ENDIAN_H)
+CHECK_INCLUDE_FILES(sys/endian.h HAVE_SYS_ENDIAN_H)
+CHECK_INCLUDE_FILES(machine/endian.h HAVE_MACHINE_ENDIAN_H)
+CHECK_INCLUDE_FILES(sys/socket.h HAVE_SYS_SOCKET_H)
+CHECK_INCLUDE_FILES(sys/mman.h HAVE_SYS_MMAN_H)
+CHECK_INCLUDE_FILES(sys/un.h HAVE_SYS_UN_H)
+CHECK_INCLUDE_FILES(sys/stat.h HAVE_SYS_STAT_H)
+CHECK_INCLUDE_FILES(sys/wait.h HAVE_SYS_WAIT_H)
+CHECK_INCLUDE_FILES(sys/param.h HAVE_SYS_PARAM_H)
+CHECK_INCLUDE_FILES(sys/file.h HAVE_SYS_FILE_H)
+CHECK_INCLUDE_FILES(sys/resource.h HAVE_SYS_RESOURCE_H)
+CHECK_INCLUDE_FILES(netinet/in.h HAVE_NETINET_IN_H)
+CHECK_INCLUDE_FILES(netinet/tcp.h HAVE_NETINET_TCP_H)
+CHECK_INCLUDE_FILES(arpa/inet.h HAVE_ARPA_INET_H)
+CHECK_INCLUDE_FILES(netdb.h HAVE_NETDB_H)
 CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
 CHECK_INCLUDE_FILES(siginfo.h HAVE_SIGINFO_H)
 CHECK_INCLUDE_FILES(locale.h HAVE_LOCALE_H)
@@ -339,25 +339,25 @@ CHECK_SYMBOL_EXISTS(getaddrinfo "sys/types.h;sys/socket.h;netdb.h" HAVE_GETADDRI
 CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
 CHECK_SYMBOL_EXISTS(nftw "sys/types.h;ftw.h" HAVE_NFTW)
 CHECK_SYMBOL_EXISTS(memrchr "string.h" HAVE_MEMRCHR)
-IF(ENABLE_PCRE2 MATCHES "ON")
-	LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
-	CHECK_SYMBOL_EXISTS(PCRE2_CONFIG_JIT "pcre2.h" HAVE_PCRE_JIT)
-ELSE()
-	LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
-	CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
-ENDIF()
+IF (ENABLE_PCRE2 MATCHES "ON")
+    LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
+    CHECK_SYMBOL_EXISTS(PCRE2_CONFIG_JIT "pcre2.h" HAVE_PCRE_JIT)
+ELSE ()
+    LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
+    CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
+ENDIF ()
 CHECK_SYMBOL_EXISTS(SOCK_SEQPACKET "sys/types.h;sys/socket.h" HAVE_SOCK_SEQPACKET)
 CHECK_SYMBOL_EXISTS(O_NOFOLLOW "sys/types.h;sys/fcntl.h" HAVE_ONOFOLLOW)
 CHECK_SYMBOL_EXISTS(O_CLOEXEC "sys/types.h;sys/fcntl.h" HAVE_OCLOEXEC)
 
 # OpenSSL specific stuff
 LIST(APPEND CMAKE_REQUIRED_INCLUDES "${LIBSSL_INCLUDE}")
-IF(LIBCRYPT_LIBRARY_PATH)
-	SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${LIBCRYPT_LIBRARY_PATH};${LIBCRYPT_LIBRARY}")
-	SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${LIBSSL_LIBRARY_PATH};${LIBSSL_LIBRARY}")
-ELSE()
-	SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-lcrypt;-lssl")
-ENDIF()
+IF (LIBCRYPT_LIBRARY_PATH)
+    SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${LIBCRYPT_LIBRARY_PATH};${LIBCRYPT_LIBRARY}")
+    SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${LIBSSL_LIBRARY_PATH};${LIBSSL_LIBRARY}")
+ELSE ()
+    SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-lcrypt;-lssl")
+ENDIF ()
 
 CHECK_SYMBOL_EXISTS(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOSTNAME)
 CHECK_SYMBOL_EXISTS(FIPS_mode "openssl/crypto.h" HAVE_FIPS_MODE)
@@ -371,19 +371,19 @@ CHECK_SYMBOL_EXISTS(clock_getcpuclockid "sys/types.h;time.h" HAVE_CLOCK_GETCPUCL
 CHECK_SYMBOL_EXISTS(RUSAGE_SELF "sys/types.h;sys/resource.h" HAVE_RUSAGE_SELF)
 CHECK_SYMBOL_EXISTS(ffsll "strings.h" HAVE_FFSLL)
 
-IF(ENABLE_PCRE2 MATCHES "ON")
-	IF(HAVE_PCRE_JIT)
-		SET(HAVE_PCRE_JIT_FAST 1)
-	ENDIF()
-ELSE()
-	LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
-	IF(PCRE_LIBRARY_PATH)
-		SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${PCRE_LIBRARY_PATH};${PCRE_LIBRARY}")
-	ELSE(PCRE_LIBRARY_PATH)
-		SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-lpcre")
-	ENDIF(PCRE_LIBRARY_PATH)
-# Some PCRE implementations are lacking of pcre_jit_exec fast path
-SET(_PCRE_FAST_TEST "
+IF (ENABLE_PCRE2 MATCHES "ON")
+    IF (HAVE_PCRE_JIT)
+        SET(HAVE_PCRE_JIT_FAST 1)
+    ENDIF ()
+ELSE ()
+    LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
+    IF (PCRE_LIBRARY_PATH)
+        SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${PCRE_LIBRARY_PATH};${PCRE_LIBRARY}")
+    ELSE (PCRE_LIBRARY_PATH)
+        SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-lpcre")
+    ENDIF (PCRE_LIBRARY_PATH)
+    # Some PCRE implementations are lacking of pcre_jit_exec fast path
+    SET(_PCRE_FAST_TEST "
 #include \"pcre.h\"
 int main (void)
 {
@@ -402,18 +402,18 @@ int main (void)
 	return rc;
 }
 ")
-CHECK_C_SOURCE_COMPILES("${_PCRE_FAST_TEST}" HAVE_PCRE_JIT_FAST)
-IF(HAVE_PCRE_JIT_FAST)
-	MESSAGE(STATUS "pcre_jit_exec is supported")
-ELSE(HAVE_PCRE_JIT_FAST)
-	MESSAGE(STATUS "pcre_jit_exec is -NOT- supported")
-ENDIF(HAVE_PCRE_JIT_FAST)
-ENDIF()
+    CHECK_C_SOURCE_COMPILES("${_PCRE_FAST_TEST}" HAVE_PCRE_JIT_FAST)
+    IF (HAVE_PCRE_JIT_FAST)
+        MESSAGE(STATUS "pcre_jit_exec is supported")
+    ELSE (HAVE_PCRE_JIT_FAST)
+        MESSAGE(STATUS "pcre_jit_exec is -NOT- supported")
+    ENDIF (HAVE_PCRE_JIT_FAST)
+ENDIF ()
 
 CHECK_C_COMPILER_FLAG(-fPIC SUPPORT_FPIC)
-IF(SUPPORT_FPIC)
-	ADD_COMPILE_OPTIONS("-fPIC")
-ENDIF(SUPPORT_FPIC)
+IF (SUPPORT_FPIC)
+    ADD_COMPILE_OPTIONS("-fPIC")
+ENDIF (SUPPORT_FPIC)
 
 FILE(WRITE ${CMAKE_BINARY_DIR}/pthread_setpshared.c "
 #include <pthread.h>
@@ -428,34 +428,34 @@ int main (void)
 }
 ")
 TRY_RUN(_CAN_RUN _CAN_COMPILE
-	"${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/pthread_setpshared.c"
-	CMAKE_FLAGS CMAKE_C_FLAGS="-pthread")
-IF(_CAN_RUN EQUAL 1)
-	SET(HAVE_PTHREAD_PROCESS_SHARED 1 CACHE INTERNAL "")
-ENDIF(_CAN_RUN EQUAL 1)
-IF(HAVE_PTHREAD_PROCESS_SHARED)
-	MESSAGE(STATUS "pthread_mutexattr_setpshared is supported")
-ELSE(HAVE_PTHREAD_PROCESS_SHARED)
-	MESSAGE(STATUS "pthread_mutexattr_setpshared is -NOT- supported")
-ENDIF(HAVE_PTHREAD_PROCESS_SHARED)
+        "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/pthread_setpshared.c"
+        CMAKE_FLAGS CMAKE_C_FLAGS="-pthread")
+IF (_CAN_RUN EQUAL 1)
+    SET(HAVE_PTHREAD_PROCESS_SHARED 1 CACHE INTERNAL "")
+ENDIF (_CAN_RUN EQUAL 1)
+IF (HAVE_PTHREAD_PROCESS_SHARED)
+    MESSAGE(STATUS "pthread_mutexattr_setpshared is supported")
+ELSE (HAVE_PTHREAD_PROCESS_SHARED)
+    MESSAGE(STATUS "pthread_mutexattr_setpshared is -NOT- supported")
+ENDIF (HAVE_PTHREAD_PROCESS_SHARED)
 
-IF(NOT HAVE_GETADDRINFO)
-	MESSAGE(FATAL_ERROR "Your system does not support getaddrinfo call, please consider upgrading it to run rspamd")
-ENDIF(NOT HAVE_GETADDRINFO)
-IF(HAVE_SIGINFO_H)
-	CHECK_SYMBOL_EXISTS(SA_SIGINFO "signal.h;siginfo.h" HAVE_SA_SIGINFO)
-ELSE(HAVE_SIGINFO_H)
-	CHECK_SYMBOL_EXISTS(SA_SIGINFO "signal.h" HAVE_SA_SIGINFO)
-ENDIF(HAVE_SIGINFO_H)
+IF (NOT HAVE_GETADDRINFO)
+    MESSAGE(FATAL_ERROR "Your system does not support getaddrinfo call, please consider upgrading it to run rspamd")
+ENDIF (NOT HAVE_GETADDRINFO)
+IF (HAVE_SIGINFO_H)
+    CHECK_SYMBOL_EXISTS(SA_SIGINFO "signal.h;siginfo.h" HAVE_SA_SIGINFO)
+ELSE (HAVE_SIGINFO_H)
+    CHECK_SYMBOL_EXISTS(SA_SIGINFO "signal.h" HAVE_SA_SIGINFO)
+ENDIF (HAVE_SIGINFO_H)
 
-IF(NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-IF(HAVE_CLOCK_GETTIME)
-	CHECK_SYMBOL_EXISTS(CLOCK_PROCESS_CPUTIME_ID time.h HAVE_CLOCK_PROCESS_CPUTIME_ID)
-	CHECK_SYMBOL_EXISTS(CLOCK_VIRTUAL time.h HAVE_CLOCK_VIRTUAL)
-ELSE(HAVE_CLOCK_GETTIME)
-	CHECK_INCLUDE_FILES(sys/timeb.h HAVE_SYS_TIMEB_H)
-ENDIF(HAVE_CLOCK_GETTIME)
-ENDIF(NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+IF (NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+    IF (HAVE_CLOCK_GETTIME)
+        CHECK_SYMBOL_EXISTS(CLOCK_PROCESS_CPUTIME_ID time.h HAVE_CLOCK_PROCESS_CPUTIME_ID)
+        CHECK_SYMBOL_EXISTS(CLOCK_VIRTUAL time.h HAVE_CLOCK_VIRTUAL)
+    ELSE (HAVE_CLOCK_GETTIME)
+        CHECK_INCLUDE_FILES(sys/timeb.h HAVE_SYS_TIMEB_H)
+    ENDIF (HAVE_CLOCK_GETTIME)
+ENDIF (NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 
 CHECK_C_SOURCE_RUNS("
 #include <stdbool.h>
@@ -468,11 +468,17 @@ int main(int argc, char **argv) {
 }
 " HAVE_ATOMIC_BUILTINS)
 
-IF(NOT HAVE_ATOMIC_BUILTINS)
-	MESSAGE(STATUS "atomic builtins are -NOT- supported")
-ELSE()
-	MESSAGE(STATUS "atomic builtins are supported")
-ENDIF()
+IF (NOT HAVE_ATOMIC_BUILTINS)
+    MESSAGE(STATUS "atomic builtins are -NOT- supported")
+ELSE ()
+    MESSAGE(STATUS "atomic builtins are supported")
+ENDIF ()
+
+CHECK_LIBRARY_EXISTS(atomic __atomic_fetch_add_4 "" HAVE_LIBATOMIC)
+IF (HAVE_LIBATOMIC)
+    list(APPEND CMAKE_REQUIRED_LIBRARIES "atomic")
+endif ()
+
 
 CHECK_C_SOURCE_RUNS("
 #include <x86intrin.h>
@@ -485,29 +491,29 @@ int main(int argc, char **argv) {
 }
 " HAVE_RDTSC)
 
-IF(NOT HAVE_RDTSC)
-	MESSAGE(STATUS "rdtsc intrinsic is -NOT- supported")
-ELSE()
-	MESSAGE(STATUS "rdtsc intrinsic is supported")
-ENDIF()
+IF (NOT HAVE_RDTSC)
+    MESSAGE(STATUS "rdtsc intrinsic is -NOT- supported")
+ELSE ()
+    MESSAGE(STATUS "rdtsc intrinsic is supported")
+ENDIF ()
 
-IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-	# In linux, we need to mount /run/shm to test which could be unavailable
-	# on a build system. On the other hand, we know that linux has stupid
-	# but compatible shmem support, so we assume this macro as true
-	SET(HAVE_SANE_SHMEM 1)
-	CHECK_C_SOURCE_COMPILES ("#define _GNU_SOURCE
+IF (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # In linux, we need to mount /run/shm to test which could be unavailable
+    # on a build system. On the other hand, we know that linux has stupid
+    # but compatible shmem support, so we assume this macro as true
+    SET(HAVE_SANE_SHMEM 1)
+    CHECK_C_SOURCE_COMPILES("#define _GNU_SOURCE
 						  #include <sys/socket.h>
 						  int main (int argc, char **argv) {
 							return ((int*)(&recvmmsg))[argc];
 						  }" HAVE_RECVMMSG)
-	CHECK_C_SOURCE_COMPILES ("#define _GNU_SOURCE
+    CHECK_C_SOURCE_COMPILES("#define _GNU_SOURCE
 						  #include <fcntl.h>
 						  int main (int argc, char **argv) {
 							return ((int*)(&readahead))[argc];
 						  }" HAVE_READAHEAD)
-ELSE()
-	CHECK_C_SOURCE_RUNS("
+ELSE ()
+    CHECK_C_SOURCE_RUNS("
 	#include <sys/mman.h>
 	#include <fcntl.h>
 	#include <unistd.h>
@@ -543,37 +549,37 @@ ELSE()
 	  return 0;
 	}
 	" HAVE_SANE_SHMEM)
-	IF(NOT HAVE_SANE_SHMEM)
-		MESSAGE(STATUS "shmem support is NOT compatible with POSIX")
-	ELSE()
-		MESSAGE(STATUS "shmem support is compatible with POSIX")
-	ENDIF()
-ENDIF()
+    IF (NOT HAVE_SANE_SHMEM)
+        MESSAGE(STATUS "shmem support is NOT compatible with POSIX")
+    ELSE ()
+        MESSAGE(STATUS "shmem support is compatible with POSIX")
+    ENDIF ()
+ENDIF ()
 
-IF(ENABLE_URL_INCLUDE MATCHES "ON")
-	FIND_LIBRARY(LIBFETCH_LIBRARY HINTS "${RSPAMD_SEARCH_PATH}"
-					NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
-					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
-					DOC "Path where the libfetch library can be found")
-	IF(LIBFETCH_LIBRARY)
-		FIND_FILE(HAVE_FETCH_H HINTS "${RSPAMD_SEARCH_PATH}"
-			NAMES fetch.h
-			PATH_SUFFIXES include
-			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
-					DOC "Path to libfetch header")
-	ELSE(LIBFETCH_LIBRARY)
-		# Try to find libcurl
-		ProcessPackage(CURL LIBRARY curl INCLUDE curl.h INCLUDE_SUFFIXES include/curl
-			ROOT ${CURL_ROOT})
-		IF(NOT WITH_CURL)
-			MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
-		ENDIF(NOT WITH_CURL)
-	ENDIF(LIBFETCH_LIBRARY)
-ENDIF(ENABLE_URL_INCLUDE MATCHES "ON")
+IF (ENABLE_URL_INCLUDE MATCHES "ON")
+    FIND_LIBRARY(LIBFETCH_LIBRARY HINTS "${RSPAMD_SEARCH_PATH}"
+            NAMES fetch PATHS PATH_SUFFIXES lib64 lib
+            PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+            DOC "Path where the libfetch library can be found")
+    IF (LIBFETCH_LIBRARY)
+        FIND_FILE(HAVE_FETCH_H HINTS "${RSPAMD_SEARCH_PATH}"
+                NAMES fetch.h
+                PATH_SUFFIXES include
+                PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+                DOC "Path to libfetch header")
+    ELSE (LIBFETCH_LIBRARY)
+        # Try to find libcurl
+        ProcessPackage(CURL LIBRARY curl INCLUDE curl.h INCLUDE_SUFFIXES include/curl
+                ROOT ${CURL_ROOT})
+        IF (NOT WITH_CURL)
+            MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
+        ENDIF (NOT WITH_CURL)
+    ENDIF (LIBFETCH_LIBRARY)
+ENDIF (ENABLE_URL_INCLUDE MATCHES "ON")
 
-IF(NOT DESTDIR)
-	SET(DESTDIR $ENV{DESTDIR})
-ENDIF(NOT DESTDIR)
+IF (NOT DESTDIR)
+    SET(DESTDIR $ENV{DESTDIR})
+ENDIF (NOT DESTDIR)
 
 
 ################################ SUBDIRS SECTION ###########################
@@ -581,9 +587,9 @@ ADD_SUBDIRECTORY(contrib/hiredis)
 INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
 
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
-IF(HAVE_FETCH_H)
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES fetch)
-ENDIF(HAVE_FETCH_H)
+IF (HAVE_FETCH_H)
+    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES fetch)
+ENDIF (HAVE_FETCH_H)
 
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${LUA_LIBRARY}")
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ucl)
@@ -591,29 +597,29 @@ LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rdns)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ottery)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES xxhash)
 
-IF(SYSTEM_XXHASH MATCHES "OFF")
-	ADD_SUBDIRECTORY(contrib/xxhash)
-	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/xxhash")
-ELSE()
-	ProcessPackage(XXHASH LIBRARY xxhash INCLUDE xxhash.h
-		ROOT ${LIBXXHASH_ROOT_DIR} MODULES xxhash libxxhash)
-ENDIF()
+IF (SYSTEM_XXHASH MATCHES "OFF")
+    ADD_SUBDIRECTORY(contrib/xxhash)
+    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/xxhash")
+ELSE ()
+    ProcessPackage(XXHASH LIBRARY xxhash INCLUDE xxhash.h
+            ROOT ${LIBXXHASH_ROOT_DIR} MODULES xxhash libxxhash)
+ENDIF ()
 ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/fpconv)
 ADD_SUBDIRECTORY(contrib/lc-btrie)
 ADD_SUBDIRECTORY(contrib/libottery)
-IF(SYSTEM_ZSTD MATCHES "OFF")
-	ADD_SUBDIRECTORY(contrib/zstd)
-ELSE()
-	ProcessPackage(LIBZSTD LIBRARY zstd INCLUDE zstd.h
-		ROOT ${LIBZSTD_ROOT_DIR} MODULES zstd libzstd)
-	ADD_DEFINITIONS(-DSYS_ZSTD)
-ENDIF()
-IF(ENABLE_SNOWBALL MATCHES "ON")
-	ADD_SUBDIRECTORY(contrib/snowball)
-	SET(WITH_SNOWBALL 1)
-ENDIF()
+IF (SYSTEM_ZSTD MATCHES "OFF")
+    ADD_SUBDIRECTORY(contrib/zstd)
+ELSE ()
+    ProcessPackage(LIBZSTD LIBRARY zstd INCLUDE zstd.h
+            ROOT ${LIBZSTD_ROOT_DIR} MODULES zstd libzstd)
+    ADD_DEFINITIONS(-DSYS_ZSTD)
+ENDIF ()
+IF (ENABLE_SNOWBALL MATCHES "ON")
+    ADD_SUBDIRECTORY(contrib/snowball)
+    SET(WITH_SNOWBALL 1)
+ENDIF ()
 ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
@@ -623,31 +629,31 @@ ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
 ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
-IF(SYSTEM_FMT MATCHES "OFF")
-	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/fmt/include")
-ELSE()
-	find_package(fmt)
-ENDIF()
-IF(SYSTEM_DOCTEST MATCHES "OFF")
-	ADD_SUBDIRECTORY(contrib/doctest)
-	INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/doctest")
-ELSE()
-	find_package(doctest)
-ENDIF()
+IF (SYSTEM_FMT MATCHES "OFF")
+    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/fmt/include")
+ELSE ()
+    find_package(fmt)
+ENDIF ()
+IF (SYSTEM_DOCTEST MATCHES "OFF")
+    ADD_SUBDIRECTORY(contrib/doctest)
+    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/doctest")
+ELSE ()
+    find_package(doctest)
+ENDIF ()
 
 IF (NOT WITH_LUAJIT)
-	ADD_SUBDIRECTORY(contrib/lua-bit)
-ENDIF()
+    ADD_SUBDIRECTORY(contrib/lua-bit)
+ENDIF ()
 
 IF (ENABLE_LUA_REPL MATCHES "ON")
-	ADD_SUBDIRECTORY(contrib/replxx)
-	SET(WITH_LUA_REPL 1)
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-replxx)
-ENDIF()
+    ADD_SUBDIRECTORY(contrib/replxx)
+    SET(WITH_LUA_REPL 1)
+    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-replxx)
+ENDIF ()
 
 IF (ENABLE_SNOWBALL MATCHES "ON")
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES stemmer)
-ENDIF()
+    LIST(APPEND RSPAMD_REQUIRED_LIBRARIES stemmer)
+ENDIF ()
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-hiredis)
 
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-actrie)
@@ -656,9 +662,9 @@ LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-ev)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-kann)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-ced)
 
-IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
-	ADD_SUBDIRECTORY(clang-plugin)
-ENDIF()
+IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
+    ADD_SUBDIRECTORY(clang-plugin)
+ENDIF ()
 
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(test)
@@ -684,55 +690,55 @@ LIST(LENGTH CONFFILES CONFLIST_COUNT)
 MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
 
 FILE(GLOB_RECURSE CONF_FILES RELATIVE "${CMAKE_SOURCE_DIR}/conf" CONFIGURE_DEPENDS
-	"${CMAKE_SOURCE_DIR}/conf/*.conf"
-	"${CMAKE_SOURCE_DIR}/conf/*.inc" )
-FOREACH(CONF_FILE ${CONF_FILES})
-	GET_FILENAME_COMPONENT(_rp ${CONF_FILE} PATH)
-	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")
-	INSTALL(FILES "${CMAKE_CURRENT_SOURCE_DIR}/conf/${CONF_FILE}"
-		DESTINATION ${CONFDIR}/${_rp})
-ENDFOREACH(CONF_FILE)
+        "${CMAKE_SOURCE_DIR}/conf/*.conf"
+        "${CMAKE_SOURCE_DIR}/conf/*.inc")
+FOREACH (CONF_FILE ${CONF_FILES})
+    GET_FILENAME_COMPONENT(_rp ${CONF_FILE} PATH)
+    INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")
+    INSTALL(FILES "${CMAKE_CURRENT_SOURCE_DIR}/conf/${CONF_FILE}"
+            DESTINATION ${CONFDIR}/${_rp})
+ENDFOREACH (CONF_FILE)
 
 # Lua plugins
 
 FILE(GLOB LUA_PLUGINS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua" CONFIGURE_DEPENDS
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua/*.lua" )
-FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
-	GET_FILENAME_COMPONENT(_rp ${LUA_PLUGIN} PATH)
-	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${PLUGINSDIR}/${_rp})")
-	INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION ${PLUGINSDIR}/${_rp})
-ENDFOREACH(LUA_PLUGIN)
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua/*.lua")
+FOREACH (LUA_PLUGIN ${LUA_PLUGINS})
+    GET_FILENAME_COMPONENT(_rp ${LUA_PLUGIN} PATH)
+    INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${PLUGINSDIR}/${_rp})")
+    INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION ${PLUGINSDIR}/${_rp})
+ENDFOREACH (LUA_PLUGIN)
 
 
 # Install TLD list
 INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION
-	"${SHAREDIR}")
+        "${SHAREDIR}")
 
 # Install languages data
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${SHAREDIR}/languages)")
 FILE(GLOB LANGUAGES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/languages-data/*.json")
-FOREACH(_LANG ${LANGUAGES})
-	INSTALL(FILES "${_LANG}" DESTINATION ${SHAREDIR}/languages)
-ENDFOREACH()
+FOREACH (_LANG ${LANGUAGES})
+    INSTALL(FILES "${_LANG}" DESTINATION ${SHAREDIR}/languages)
+ENDFOREACH ()
 INSTALL(FILES "${CMAKE_CURRENT_SOURCE_DIR}/contrib/languages-data/stop_words" DESTINATION ${SHAREDIR}/languages)
 
 # Lua config
 FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/rules" CONFIGURE_DEPENDS
-	"${CMAKE_CURRENT_SOURCE_DIR}/rules/*.lua")
-FOREACH(LUA_CONF ${LUA_CONFIGS})
-	GET_FILENAME_COMPONENT(_rp ${LUA_CONF} PATH)
-	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${RULESDIR}/${_rp})")
-	INSTALL(FILES "rules/${LUA_CONF}" DESTINATION ${RULESDIR}/${_rp})
-ENDFOREACH(LUA_CONF)
+        "${CMAKE_CURRENT_SOURCE_DIR}/rules/*.lua")
+FOREACH (LUA_CONF ${LUA_CONFIGS})
+    GET_FILENAME_COMPONENT(_rp ${LUA_CONF} PATH)
+    INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${RULESDIR}/${_rp})")
+    INSTALL(FILES "rules/${LUA_CONF}" DESTINATION ${RULESDIR}/${_rp})
+ENDFOREACH (LUA_CONF)
 
 # Lua libs
 FILE(GLOB_RECURSE LUA_LIBS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/lualib" CONFIGURE_DEPENDS
-		"${CMAKE_CURRENT_SOURCE_DIR}/lualib/*.lua")
-FOREACH(LUA_LIB ${LUA_LIBS})
-	GET_FILENAME_COMPONENT(_rp ${LUA_LIB} PATH)
-	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${LUALIBDIR}/${_rp})")
-	INSTALL(FILES "lualib/${LUA_LIB}" DESTINATION ${LUALIBDIR}/${_rp})
-ENDFOREACH(LUA_LIB)
+        "${CMAKE_CURRENT_SOURCE_DIR}/lualib/*.lua")
+FOREACH (LUA_LIB ${LUA_LIBS})
+    GET_FILENAME_COMPONENT(_rp ${LUA_LIB} PATH)
+    INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${LUALIBDIR}/${_rp})")
+    INSTALL(FILES "lualib/${LUA_LIB}" DESTINATION ${LUALIBDIR}/${_rp})
+ENDFOREACH (LUA_LIB)
 
 # Install lua fun library
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
@@ -742,9 +748,9 @@ INSTALL(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
 
 # systemd unit
-IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
-	INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
-ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
+IF (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
+    INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
+ENDIF (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
 
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)
@@ -755,34 +761,34 @@ INSTALL(FILES "doc/rspamadm.1" DESTINATION ${MANDIR}/man1)
 INSTALL(PROGRAMS "utils/rspamd_stats.pl" RENAME rspamd_stats DESTINATION bin)
 
 # Install webui
-IF(INSTALL_WEBUI MATCHES "ON")
-	INSTALL(DIRECTORY "interface/" DESTINATION ${WWWDIR} PATTERN ".git" EXCLUDE)
-ENDIF(INSTALL_WEBUI MATCHES "ON")
+IF (INSTALL_WEBUI MATCHES "ON")
+    INSTALL(DIRECTORY "interface/" DESTINATION ${WWWDIR} PATTERN ".git" EXCLUDE)
+ENDIF (INSTALL_WEBUI MATCHES "ON")
 
 
 INSTALL(DIRECTORY "contrib/elastic/" DESTINATION "${SHAREDIR}/elastic" PATTERN ".git" EXCLUDE)
 
 ADD_CUSTOM_TARGET(dist ${CMAKE_SOURCE_DIR}/dist.sh
-	"${CMAKE_BINARY_DIR}/rspamd-${RSPAMD_VERSION}.tar.xz" "${TAR}"
-	COMMENT "Create source distribution"
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+        "${CMAKE_BINARY_DIR}/rspamd-${RSPAMD_VERSION}.tar.xz" "${TAR}"
+        COMMENT "Create source distribution"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-IF(NOT DEBIAN_BUILD)
-	ADD_CUSTOM_TARGET(check DEPENDS rspamd-test-cxx rspamd-test)
-	ADD_CUSTOM_TARGET(run-test DEPENDS check
-	COMMAND test/rspamd-test-cxx
-	COMMAND sh -c 'LUA_PATH="${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
-		test/rspamd-test -p /rspamd/lua')
-ENDIF(NOT DEBIAN_BUILD)
+IF (NOT DEBIAN_BUILD)
+    ADD_CUSTOM_TARGET(check DEPENDS rspamd-test-cxx rspamd-test)
+    ADD_CUSTOM_TARGET(run-test DEPENDS check
+            COMMAND test/rspamd-test-cxx
+            COMMAND sh -c 'LUA_PATH= "${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
+            test/rspamd-test -p /rspamd/lua')
+ENDIF (NOT DEBIAN_BUILD)
 
 
 # PVS Studio
 find_program(_PVS_STUDIO "pvs-studio-analyzer")
 
-if(_PVS_STUDIO)
-	include(PVS-Studio)
-	pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
-			ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
-			OUTPUT FORMAT errorfile
-			LOG target_${PROJECT_NAME}.err)
-endif()
+if (_PVS_STUDIO)
+    include(PVS-Studio)
+    pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
+            ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
+            OUTPUT FORMAT errorfile
+            LOG target_${PROJECT_NAME}.err)
+endif ()
