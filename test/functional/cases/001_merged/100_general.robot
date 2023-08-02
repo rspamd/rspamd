@@ -49,3 +49,13 @@ EMAILS DETECTION ZEROFONT
   ...  Settings={symbols_enabled = [MANY_INVISIBLE_PARTS, ZERO_FONT]}
   Expect Symbol  MANY_INVISIBLE_PARTS
   Expect Symbol  ZERO_FONT
+
+HTML ONLY - TRUE POSITIVE
+  Scan File  ${RSPAMD_TESTDIR}/messages/zerofont.eml
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Expect Symbol  MIME_HTML_ONLY
+
+HTML ONLY - TRUE NEGATIVE
+  Scan File  ${RSPAMD_TESTDIR}/messages/btc.eml
+  ...  Settings={symbols_enabled = [MIME_HTML_ONLY]}
+  Do Not Expect Symbol  MIME_HTML_ONLY
