@@ -1470,8 +1470,6 @@ rspamd_has_only_html_part(struct rspamd_task *task, GArray *args,
 
 	PTR_ARRAY_FOREACH(MESSAGE_FIELD(task, text_parts), i, p)
 	{
-		p = g_ptr_array_index(MESSAGE_FIELD(task, text_parts), 0);
-
 		if (!IS_TEXT_PART_ATTACHMENT(p)) {
 			if (IS_TEXT_PART_HTML(p)) {
 				cnt_html++;
