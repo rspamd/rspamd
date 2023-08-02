@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -546,7 +546,11 @@ rspamd_task_insert_result_full(struct rspamd_task *task,
 	struct rspamd_symbol_result *symbol_result = NULL, *ret = NULL;
 	struct rspamd_scan_result *mres;
 
-	if (task->processed_stages & (RSPAMD_TASK_STAGE_IDEMPOTENT >> 1)) {
+	/*
+	 * We allow symbols to be inserted for skipped tasks, as it might be a
+	 * race condition before some symbol is finished and skip flag being set.
+	 */
+	if (!RSPAMD_TASK_IS_SKIPPED(task) && (task->processed_stages & (RSPAMD_TASK_STAGE_IDEMPOTENT >> 1))) {
 		msg_err_task("cannot insert symbol %s on idempotent phase",
 					 symbol);
 
