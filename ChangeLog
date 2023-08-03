@@ -1,3 +1,55 @@
+3.6: 03 Aug 2023
+  * [Conf] Add `one_shot` to some specific multimap rules
+  * [Conf] Add language detection configuration
+  * [Conf] Add missing attributes for the language detection configuration
+  * [Conf] Remove outdated composite rules
+  * [Feature] Add `sentinel_password` option
+  * [Feature] Add ability to deny specific fuzzy flags by default
+  * [Feature] Add controller endpoint to get fuzzy hashes from messages
+  * [Feature] Add extra symbol when URL redirector reaches nested limit
+  * [Feature] Add function to transliterate utf8 to ascii with some normalisation
+  * [Feature] Add html parsing limit
+  * [Feature] Add order to urls structure
+  * [Feature] Add some missing functions to `lua_rsa` library
+  * [Feature] Allow fuzzy workers to exchange blocked information
+  * [Feature] Allow to have weak flags in fuzzy storage
+  * [Feature] Allow to read options from maps in the multimap plugin
+  * [Feature] Allow to use other methods when fasttext detection is enabled
+  * [Feature] Count stats per key per flag
+  * [Feature] Finish all features of dkim_keygen in Lua
+  * [Feature] Khash: Allow static initialisation
+  * [Feature] Maps: Add on_load support
+  * [Feature] Preliminary implementation of dynamic composites
+  * [Feature] Process HTML parts before text ones
+  * [Feature] Reorganise struct rspamd_url to be 64 bytes size
+  * [Feature] Save fuzzy ratelimit buckets
+  * [Feature] Use in-place deflation for strings
+  * [Feature] external_relay: add ip_map strategy
+  * [Fix] Avoid race between config new/free by using a counter
+  * [Fix] Do not use `rspamadm.dkim_keygen`
+  * [Fix] Feed fasttext language model with the pre-tokenized words
+  * [Fix] Fix `rspamd_has_only_html_part`
+  * [Fix] Fix an old issue with order of destruction race between redis pool and lua
+  * [Fix] Fix format string usage
+  * [Fix] Fix parsing due to old bug revealed
+  * [Fix] Fix parsing of the mask values that are invalid
+  * [Fix] Ignore non-unique stop words
+  * [Fix] Include the last character when parsing the last header with no value
+  * [Fix] More fixes to fuzzystat
+  * [Fix] Set proper counter
+  * [Fix] Try harder to clean pending bucket
+  * [Fix] Try harder to remove bad hyperscan files
+  * [Fix] Update stats before encryption...
+  * [Fix] dmarc gramar - allow spaces before ";"
+  * [Fix] rbl: fix dependency registration when symbols_prefixes is used
+  * [Fix] remove obsolete rspamd-redirector files
+  * [Fix] test external_relay: count should always be the last rule, as it have no matching condition
+  * [Project] Allow to register multimap symbols dynamically
+  * [Project] Implement fasttext language detection
+  * [Rework] Default max shots must not influence options
+  * [Rework] Write dkim keygen tool in lua
+  * [Rules] Add thread hijacking composite rule
+
 3.5: 17 Mar 2023
   * [Conf] Clarify `timeout` in rspamd_proxy
   * [Conf] Fix hashbl
