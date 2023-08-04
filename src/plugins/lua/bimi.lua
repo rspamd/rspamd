@@ -34,7 +34,7 @@ local settings = {
 }
 local redis_params
 
-local settings_schema = ts.shape({
+local settings_schema = lua_redis.generate_schema({
   helper_url = ts.string,
   helper_timeout = ts.number + ts.string / lua_util.parse_time_interval,
   helper_sync = ts.boolean,
@@ -42,7 +42,7 @@ local settings_schema = ts.shape({
   redis_min_expiry = ts.number + ts.string / lua_util.parse_time_interval,
   redis_prefix = ts.string,
   enabled = ts.boolean:is_optional(),
-}, {extra_fields = lua_redis.config_schema})
+})
 
 local function check_dmarc_policy(task)
   local dmarc_sym = task:get_symbol('DMARC_POLICY_ALLOW')

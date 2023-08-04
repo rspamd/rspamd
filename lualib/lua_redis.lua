@@ -39,25 +39,39 @@ local common_schema = ts.shape {
   sentinel_password = ts.string:is_optional(),
 }
 
-local config_schema = -- Allow separate read/write servers to allow usage in the `extra_fields`
-ts.shape({
+local read_schema = lutil.table_merge({
   read_servers = ts.string + ts.array_of(ts.string),
-}, { extra_fields = common_schema }) +
-    ts.shape({
-      write_servers = ts.string + ts.array_of(ts.string),
-    }, { extra_fields = common_schema }) +
-    ts.shape({
-      read_servers = ts.string + ts.array_of(ts.string),
-      write_servers = ts.string + ts.array_of(ts.string),
-    }, { extra_fields = common_schema }) +
-    ts.shape({
-      servers = ts.string + ts.array_of(ts.string),
-    }, { extra_fields = common_schema }) +
-    ts.shape({
-      server = ts.string + ts.array_of(ts.string),
-    }, { extra_fields = common_schema })
+}, common_schema)
 
-exports.config_schema = config_schema
+local write_schema = lutil.table_merge({
+  write_servers = ts.string + ts.array_of(ts.string),
+}, common_schema)
+
+local rw_schema = lutil.table_merge({
+  read_servers = ts.string + ts.array_of(ts.string),
+  write_servers = ts.string + ts.array_of(ts.string),
+}, common_schema)
+
+local servers_schema = lutil.table_merge({
+  servers = ts.string + ts.array_of(ts.string),
+}, common_schema)
+
+local server_schema = lutil.table_merge({
+  server = ts.string + ts.array_of(ts.string),
+}, common_schema)
+
+local generate_schema = function(external)
+  return ts.one_of {
+    ts.shape(external),
+    ts.shape(lutil.table_merge(read_schema, external)),
+    ts.shape(lutil.table_merge(write_schema, external)),
+    ts.shape(lutil.table_merge(rw_schema, external)),
+    ts.shape(lutil.table_merge(servers_schema, external)),
+    ts.shape(lutil.table_merge(server_schema, external)),
+  }
+end
+
+exports.generate_schema = generate_schema
 
 local function redis_query_sentinel(ev_base, params, initialised)
   local function flatten_redis_table(tbl)
@@ -1122,20 +1136,14 @@ local function script_set_loaded(script)
 end
 
 local function prepare_redis_call(script)
-  local function merge_tables(t1, t2)
-    for k, v in pairs(t2) do
-      t1[k] = v
-    end
-  end
-
   local servers = {}
   local options = {}
 
   if script.redis_params.read_servers then
-    merge_tables(servers, script.redis_params.read_servers:all_upstreams())
+    lutil.table_merge(servers, script.redis_params.read_servers:all_upstreams())
   end
   if script.redis_params.write_servers then
-    merge_tables(servers, script.redis_params.write_servers:all_upstreams())
+    lutil.table_merge(servers, script.redis_params.write_servers:all_upstreams())
   end
 
   -- Call load script on each server, set loaded flag
