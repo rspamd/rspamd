@@ -1064,7 +1064,7 @@ end
 --]]
 local backends = {
   redis = {
-    schema = ts.shape({
+    schema = lua_redis.generate_schema({
       prefix = ts.string,
       expiry = ts.number + ts.string / lua_util.parse_time_interval,
       buckets = ts.array_of(ts.shape{
@@ -1072,7 +1072,7 @@ local backends = {
         name = ts.string,
         mult = ts.number + ts.string / tonumber
       }),
-    }, {extra_fields = lua_redis.config_schema}),
+    }),
     config = {
       expiry = default_expiry,
       prefix = default_prefix,

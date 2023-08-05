@@ -65,7 +65,7 @@ local settings = {
   subject_privacy_length = 16, -- cut the length of the hash
 }
 
-local settings_schema = ts.shape({
+local settings_schema = lua_redis.generate_schema({
   key_prefix = ts.string,
   expire = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
   nrows = ts.number,
@@ -74,7 +74,7 @@ local settings_schema = ts.shape({
   subject_privacy_alg = ts.string:is_optional(),
   subject_privacy_prefix = ts.string:is_optional(),
   subject_privacy_length = ts.number:is_optional(),
-}, {extra_fields = lua_redis.config_schema})
+})
 
 local function process_addr(addr)
   if addr then

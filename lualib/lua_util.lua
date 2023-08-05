@@ -619,6 +619,19 @@ end
 exports.table_cmp = table_cmp
 
 --[[[
+-- @function lua_util.table_merge(t1, t2)
+-- Merge two tables
+--]]
+local function table_merge(t1, t2)
+  for k, v in pairs(t2) do
+    t1[k] = v
+  end
+  return t1
+end
+
+exports.table_merge = table_merge
+
+--[[[
 -- @function lua_util.table_cmp(task, name, value, stop_chars)
 -- Performs header folding
 --]]
