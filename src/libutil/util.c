@@ -1,11 +1,11 @@
-/*-
- * Copyright 2017 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2231,6 +2231,7 @@ rspamd_fstring_gzip(rspamd_fstring_t **in)
 	strm.avail_out = sizeof(temp) > buf->allocated ? buf->allocated : sizeof(temp);
 	ret = deflate(&strm, Z_FINISH);
 	if (ret == Z_STREAM_ERROR) {
+		deflateEnd(&strm);
 		return FALSE;
 	}
 
@@ -2247,6 +2248,8 @@ rspamd_fstring_gzip(rspamd_fstring_t **in)
 		if (ret != Z_BUF_ERROR || strm.avail_in == 0) {
 			buf->len = strm.next_out - (unsigned char *) buf->str;
 			*in = buf;
+			deflateEnd(&strm);
+
 			return ret == Z_STREAM_END;
 		}
 	}
@@ -2267,6 +2270,7 @@ rspamd_fstring_gzip(rspamd_fstring_t **in)
 	g_free(hold);
 	buf->len = strm.next_out - (unsigned char *) buf->str;
 	*in = buf;
+	deflateEnd(&strm);
 
 	return ret == Z_STREAM_END;
 }
