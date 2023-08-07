@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef RSPAMD_LUA_H
 #define RSPAMD_LUA_H
 
@@ -652,7 +668,7 @@ gchar *rspamd_lua_get_module_name(lua_State *L);
 * - f - lua_function, argument - int - position of the function on stack (not lua_registry)
 * - t - lua_text, argument - int - position of the lua_text on stack (not lua_registry)
 * @param L lua state
-* @param cbref LUA_REGISTRY reference
+* @param cbref LUA_REGISTRY reference (if it is -1 then a function on top of the stack is called - it must be removed by caller manually)
 * @param strloc where this function is called from
 * @param nret number of results (or LUA_MULTRET)
 * @param args arguments format string
