@@ -1140,10 +1140,10 @@ local function prepare_redis_call(script)
   local options = {}
 
   if script.redis_params.read_servers then
-    lutil.table_merge(servers, script.redis_params.read_servers:all_upstreams())
+    servers = lutil.table_merge(servers, script.redis_params.read_servers:all_upstreams())
   end
   if script.redis_params.write_servers then
-    lutil.table_merge(servers, script.redis_params.write_servers:all_upstreams())
+    servers = lutil.table_merge(servers, script.redis_params.write_servers:all_upstreams())
   end
 
   -- Call load script on each server, set loaded flag
