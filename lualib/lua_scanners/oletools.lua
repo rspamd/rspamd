@@ -122,7 +122,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
             callback = oletools_callback,
           })
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
               'exceed - err: %s', rule.log_prefix, error)
           common.yield_result(task, rule,
               'failed to scan, maximum retransmits exceed - err: ' .. error,
@@ -137,9 +137,9 @@ local function oletools_check(task, content, digest, rule, maybe_part)
       else
         json_response = json_response .. tostring(data)
 
-	      if not string.find(json_response, '\t\n\n\t') and #data == 8192 then
+        if not string.find(json_response, '\t\n\n\t') and #data == 8192 then
           lua_util.debugm(rule.name, task, '%s: no stop word: add_read - #json: %s / current packet: %s',
-            rule.log_prefix, #json_response, #data)
+              rule.log_prefix, #json_response, #data)
           conn:add_read(oletools_callback)
 
         else
@@ -243,7 +243,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
                   rule.log_prefix, v.message)
               --common.yield_result(task, rule, 'failed - err: ' .. v.error, 0.0, 'fail')
 
-            elseif type(v.analysis) == 'table' and type(v.macros) == 'table'  then
+            elseif type(v.analysis) == 'table' and type(v.macros) == 'table' then
               -- analysis + macro found - evaluate response
 
               if type(v.analysis) == 'table' and #v.analysis == 0 and #v.macros == 0 then
@@ -259,20 +259,20 @@ local function oletools_check(task, content, digest, rule, maybe_part)
                 lua_util.debugm(rule.name, task,
                     '%s: type: %s', rule.log_prefix, result[2]['type'])
 
-                for _,m in ipairs(v.macros) do
-                  lua_util.debugm(rule.name, task, '%s: macros found - code: %s, ole_stream: %s, '..
+                for _, m in ipairs(v.macros) do
+                  lua_util.debugm(rule.name, task, '%s: macros found - code: %s, ole_stream: %s, ' ..
                       'vba_filename: %s', rule.log_prefix, m.code, m.ole_stream, m.vba_filename)
                 end
 
-                for _,a in ipairs(v.analysis) do
-                  lua_util.debugm(rule.name, task, '%s: threat found - type: %s, keyword: %s, '..
+                for _, a in ipairs(v.analysis) do
+                  lua_util.debugm(rule.name, task, '%s: threat found - type: %s, keyword: %s, ' ..
                       'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
                   if a.type == 'AutoExec' then
                     analysis_cat_table.autoexec = 'A'
                     table.insert(analysis_keyword_table, a.keyword)
                   elseif a.type == 'Suspicious' then
                     if rule.extended == true or
-                      (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
+                        (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
                     then
                       analysis_cat_table.suspicious = 'S'
                       table.insert(analysis_keyword_table, a.keyword)
@@ -312,7 +312,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
             local analysis_cat_table_keys_sorted = lua_util.keys(analysis_cat_table)
             table.sort(analysis_cat_table_keys_sorted)
 
-            for _,v in ipairs(analysis_cat_table_keys_sorted) do
+            for _, v in ipairs(analysis_cat_table_keys_sorted) do
               table.insert(analysis_cat_table_values_sorted, analysis_cat_table[v])
             end
 
@@ -361,7 +361,7 @@ local function oletools_check(task, content, digest, rule, maybe_part)
 end
 
 return {
-  type = {N, 'attachment scanner', 'hash', 'scanner'},
+  type = { N, 'attachment scanner', 'hash', 'scanner' },
   description = 'oletools office macro scanner',
   configure = oletools_config,
   check = oletools_check,

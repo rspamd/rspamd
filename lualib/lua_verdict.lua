@@ -32,7 +32,7 @@ local function default_verdict_function(task)
   if result then
 
     if result.passthrough then
-      return 'passthrough',nil
+      return 'passthrough', nil
     end
 
     local score = result.score
@@ -40,21 +40,21 @@ local function default_verdict_function(task)
     local action = result.action
 
     if action == 'reject' and result.npositive > 1 then
-      return 'spam',score
+      return 'spam', score
     elseif action == 'no action' then
       if score < 0 or result.nnegative > 3 then
-        return 'ham',score
+        return 'ham', score
       end
     else
       -- All colors of junk
       if action == 'add header' or action == 'rewrite subject' then
         if result.npositive > 2 then
-          return 'junk',score
+          return 'junk', score
         end
       end
     end
 
-    return 'uncertain',score
+    return 'uncertain', score
   end
 end
 
@@ -120,8 +120,8 @@ end
 
 exports.set_verdict_table = function(verdict_tbl, what)
   assert(type(verdict_tbl) == 'table' and
-    type(verdict_tbl.callback) == 'function' and
-    type(verdict_tbl.possible_verdicts) == 'table')
+      type(verdict_tbl.callback) == 'function' and
+      type(verdict_tbl.possible_verdicts) == 'table')
 
   if not what then
     -- Default verdict
@@ -195,7 +195,7 @@ end
 exports.adjust_passthrough_action = function(task)
   local action = task:get_metric_action()
   if action == 'soft reject' then
-    local has_pr,_,_,module = task:has_pre_result()
+    local has_pr, _, _, module = task:has_pre_result()
 
     if has_pr and module then
       action = module

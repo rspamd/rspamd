@@ -43,28 +43,27 @@ parser:option "-o --output"
       :description "Output format ('ucl', 'json', 'json-compact', 'yaml')"
       :argname("<type>")
       :convert {
-        ucl = "ucl",
-        json = "json",
-        ['json-compact'] = "json-compact",
-        yaml = "yaml",
-      }
-    :default "ucl"
+  ucl = "ucl",
+  json = "json",
+  ['json-compact'] = "json-compact",
+  yaml = "yaml",
+}
+      :default "ucl"
 
 parser:command "list ls l"
-    :description "List elements in the vault"
+      :description "List elements in the vault"
 
 local show = parser:command "show get"
-      :description "Extract element from the vault"
+                   :description "Extract element from the vault"
 show:argument "domain"
-      :description "Domain to create key for"
-      :args "+"
-
-local delete = parser:command "delete del rm remove"
-      :description "Delete element from the vault"
-delete:argument "domain"
-    :description "Domain to create delete key(s) for"
+    :description "Domain to create key for"
     :args "+"
 
+local delete = parser:command "delete del rm remove"
+                     :description "Delete element from the vault"
+delete:argument "domain"
+      :description "Domain to create delete key(s) for"
+      :args "+"
 
 local newkey = parser:command "newkey new create"
                      :description "Add new key to the vault"
@@ -77,10 +76,10 @@ newkey:option "-s --selector"
 newkey:option "-A --algorithm"
       :argname("<type>")
       :convert {
-        rsa = "rsa",
-        ed25519 = "ed25519",
-        eddsa = "ed25519",
-      }
+  rsa = "rsa",
+  ed25519 = "ed25519",
+  eddsa = "ed25519",
+}
       :default "rsa"
 newkey:option "-b --bits"
       :argname("<nbits>")
@@ -137,18 +136,18 @@ end
 
 local function parse_vault_reply(data)
   local p = ucl.parser()
-  local res,parser_err = p:parse_string(data)
+  local res, parser_err = p:parse_string(data)
 
   if not res then
-    return nil,parser_err
+    return nil, parser_err
   else
-    return p:get_object(),nil
+    return p:get_object(), nil
   end
 end
 
 local function maybe_print_vault_data(opts, data, func)
   if data then
-    local res,parser_err = parse_vault_reply(data)
+    local res, parser_err = parse_vault_reply(data)
 
     if not res then
       printf('vault reply for cannot be parsed: %s', parser_err)
@@ -169,9 +168,9 @@ local function print_dkim_txt_record(b64, selector, alg)
   local prefix = string.format("v=DKIM1; k=%s; p=", alg)
   b64 = prefix .. b64
   if #b64 < 255 then
-    labels = {'"' .. b64 .. '"'}
+    labels = { '"' .. b64 .. '"' }
   else
-    for sl=1,#b64,256 do
+    for sl = 1, #b64, 256 do
       table.insert(labels, '"' .. b64:sub(sl, sl + 255) .. '"')
     end
   end
@@ -182,7 +181,7 @@ end
 
 local function show_handler(opts, domain)
   local uri = vault_url(opts, domain)
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -206,7 +205,7 @@ end
 
 local function delete_handler(opts, domain)
   local uri = vault_url(opts, domain)
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -229,7 +228,7 @@ end
 
 local function list_handler(opts)
   local uri = vault_url(opts)
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -258,7 +257,7 @@ end
 
 local function create_and_push_key(opts, domain, existing)
   local uri = vault_url(opts, domain)
-  local sk,pk = genkey(opts)
+  local sk, pk = genkey(opts)
 
   local res = {
     selectors = {
@@ -274,7 +273,7 @@ local function create_and_push_key(opts, domain, existing)
     }
   }
 
-  for _,sel in ipairs(existing) do
+  for _, sel in ipairs(existing) do
     res.selectors[#res.selectors + 1] = sel
   end
 
@@ -282,7 +281,7 @@ local function create_and_push_key(opts, domain, existing)
     res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
   end
 
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -303,7 +302,7 @@ local function create_and_push_key(opts, domain, existing)
     maybe_print_vault_data(opts, data.content)
     os.exit(1)
   else
-    maybe_printf(opts,'stored key for: %s, selector: %s', domain, opts.selector)
+    maybe_printf(opts, 'stored key for: %s, selector: %s', domain, opts.selector)
     maybe_printf(opts, 'please place the corresponding public key as following:')
 
     if opts.silent then
@@ -322,7 +321,7 @@ local function newkey_handler(opts, domain)
         os.date("!%Y%m%d"))
   end
 
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -335,7 +334,7 @@ local function newkey_handler(opts, domain)
   }
 
   if is_http_error(err, data) or not data.content then
-    create_and_push_key(opts, domain,{})
+    create_and_push_key(opts, domain, {})
   else
     -- Key exists
     local rep = parse_vault_reply(data.content)
@@ -348,11 +347,11 @@ local function newkey_handler(opts, domain)
     local elts = rep.data.selectors
 
     if not elts then
-      create_and_push_key(opts, domain,{})
+      create_and_push_key(opts, domain, {})
       os.exit(0)
     end
 
-    for _,sel in ipairs(elts) do
+    for _, sel in ipairs(elts) do
       if sel.alg == opts.algorithm then
         printf('key with the specific algorithm %s is already presented at %s selector for %s domain',
             opts.algorithm, sel.selector, domain)
@@ -370,7 +369,7 @@ local function roll_handler(opts, domain)
     selectors = {}
   }
 
-  local err,data = rspamd_http.request{
+  local err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -414,7 +413,7 @@ local function roll_handler(opts, domain)
       table.insert(nkeys[sel.alg], sel)
     end
 
-    for _,sel in ipairs(elts) do
+    for _, sel in ipairs(elts) do
       if sel.valid_end and sel.valid_end < os.time() then
         if not opts.remove_expired then
           insert_key(sel, false)
@@ -428,7 +427,7 @@ local function roll_handler(opts, domain)
     end
 
     -- Now we need to ensure that all but one selectors have either expired or just a single key
-    for alg,keys in pairs(nkeys) do
+    for alg, keys in pairs(nkeys) do
       table.sort(keys, function(k1, k2)
         if k1.valid_end and k2.valid_end then
           return k1.valid_end > k2.valid_end
@@ -441,8 +440,8 @@ local function roll_handler(opts, domain)
       end)
       -- Exclude the key with the highest expiration date and examine the rest
       if not (#keys == 1 or fun.all(function(k)
-            return k.valid_end and k.valid_end < os.time()
-          end, fun.tail(keys))) then
+        return k.valid_end and k.valid_end < os.time()
+      end, fun.tail(keys))) then
         printf('bad keys list for %s and %s algorithm', domain, alg)
         fun.each(function(k)
           if not k.valid_end then
@@ -459,7 +458,7 @@ local function roll_handler(opts, domain)
       if not opts.remove_expired then
         -- OK to process
         -- Insert keys for each algorithm in pairs <old_key(s)>, <new_key>
-        local sk,pk = genkey({algorithm = alg, bits = keys[1].bits})
+        local sk, pk = genkey({ algorithm = alg, bits = keys[1].bits })
         local selector = string.format('%s-%s', alg,
             os.date("!%Y%m%d"))
 
@@ -482,14 +481,14 @@ local function roll_handler(opts, domain)
 
         table.insert(res.selectors, nelt)
       end
-      for _,k in ipairs(keys) do
+      for _, k in ipairs(keys) do
         table.insert(res.selectors, k)
       end
     end
   end
 
   -- We can now store res in the vault
-  err,data = rspamd_http.request{
+  err, data = rspamd_http.request {
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
@@ -510,9 +509,9 @@ local function roll_handler(opts, domain)
     maybe_print_vault_data(opts, data.content)
     os.exit(1)
   else
-    for _,key in ipairs(res.selectors) do
-      if not key.valid_end or key.valid_end > os.time() + opts.ttl * 3600 * 24  then
-        maybe_printf(opts,'rolled key for: %s, new selector: %s', domain, key.selector)
+    for _, key in ipairs(res.selectors) do
+      if not key.valid_end or key.valid_end > os.time() + opts.ttl * 3600 * 24 then
+        maybe_printf(opts, 'rolled key for: %s, new selector: %s', domain, key.selector)
         maybe_printf(opts, 'please place the corresponding public key as following:')
 
         if opts.silent then
@@ -553,13 +552,21 @@ local function handler(args)
   if command == 'list' then
     list_handler(opts)
   elseif command == 'show' then
-    fun.each(function(d) show_handler(opts, d) end, opts.domain)
+    fun.each(function(d)
+      show_handler(opts, d)
+    end, opts.domain)
   elseif command == 'newkey' then
-    fun.each(function(d) newkey_handler(opts, d) end, opts.domain)
+    fun.each(function(d)
+      newkey_handler(opts, d)
+    end, opts.domain)
   elseif command == 'roll' then
-    fun.each(function(d) roll_handler(opts, d) end, opts.domain)
+    fun.each(function(d)
+      roll_handler(opts, d)
+    end, opts.domain)
   elseif command == 'delete' then
-    fun.each(function(d) delete_handler(opts, d) end, opts.domain)
+    fun.each(function(d)
+      delete_handler(opts, d)
+    end, opts.domain)
   else
     parser:error(string.format('command %s is not implemented', command))
   end

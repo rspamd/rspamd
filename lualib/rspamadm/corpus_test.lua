@@ -177,10 +177,9 @@ local function handler(args)
   rspamd_logger.messagex("Messages/sec: %s", (total_msgs / elapsed_time))
 end
 
-
 return {
   name = 'corpustest',
-  aliases = {'corpus_test', 'corpus'},
+  aliases = { 'corpus_test', 'corpus' },
   handler = handler,
   description = parser._description
 }

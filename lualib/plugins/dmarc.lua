@@ -73,7 +73,7 @@ exports.default_settings = {
 
 
 -- Returns a key used to be inserted into dmarc report sample
-exports.dmarc_report = function (task, settings, data)
+exports.dmarc_report = function(task, settings, data)
   local rspamd_lua_utils = require "lua_util"
   local E = {}
 
@@ -100,16 +100,15 @@ exports.dmarc_report = function (task, settings, data)
   local res = table.concat({
     ip, data.spf_ok, data.dkim_ok,
     disposition_to_return, (data.sampled_out and 'sampled_out' or ''), data.domain,
-    dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, data.spf_domain, data.spf_result}, ',')
+    dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, data.spf_domain, data.spf_result }, ',')
 
   return res
 end
 
-
 exports.gen_munging_callback = function(munging_opts, settings)
   local rspamd_util = require "rspamd_util"
   local lua_mime = require "lua_mime"
-  return function (task)
+  return function(task)
     if munging_opts.mitigate_allow_only then
       if not task:has_symbol(settings.symbols.allow) then
         lua_util.debugm(N, task, 'skip munging, no %s symbol',
@@ -131,11 +130,11 @@ exports.gen_munging_callback = function(munging_opts, settings)
       end
     end
     if munging_opts.mitigate_strict_only then
-      local s = task:get_symbol(settings.symbols.allow) or {[1] = {}}
+      local s = task:get_symbol(settings.symbols.allow) or { [1] = {} }
       local sopts = s[1].options or {}
 
       local seen_strict
-      for _,o in ipairs(sopts) do
+      for _, o in ipairs(sopts) do
         if o == 'reject' or o == 'quarantine' then
           seen_strict = true
           break
@@ -150,7 +149,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
       end
     end
     if munging_opts.munge_map_condition then
-      local accepted,trace = munging_opts.munge_map_condition:process(task)
+      local accepted, trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
         lua_util.debugm(task, 'skip munging, maps condition not satisfied: (%s)',
             trace)
@@ -159,10 +158,10 @@ exports.gen_munging_callback = function(munging_opts, settings)
       end
     end
     -- Now, look for domain for munging
-    local mr = task:get_recipients({ 'mime', 'orig'})
+    local mr = task:get_recipients({ 'mime', 'orig' })
     local rcpt_found
     if mr then
-      for _,r in ipairs(mr) do
+      for _, r in ipairs(mr) do
         if r.domain and munging_opts.list_map:get_key(r.addr) then
           rcpt_found = r
           break
@@ -176,7 +175,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
       return
     end
 
-    local from = task:get_from({ 'mime', 'orig'})
+    local from = task:get_from({ 'mime', 'orig' })
 
     if not from or not from[1] then
       lua_util.debugm(task, 'skip munging, from is bad')
@@ -204,7 +203,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     local add_hdrs = {
       ['From'] = { order = 1, value = hdr_encoded },
     }
-    local remove_hdrs = {['From'] = 0}
+    local remove_hdrs = { ['From'] = 0 }
 
     local nreply = from.addr
     if munging_opts.reply_goes_to_list then
@@ -222,9 +221,9 @@ exports.gen_munging_callback = function(munging_opts, settings)
       remove_hdrs['Reply-To'] = 1
     end
 
-    add_hdrs['Reply-To'] = {order = 0, value = nreply}
+    add_hdrs['Reply-To'] = { order = 0, value = nreply }
 
-    add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded}
+    add_hdrs['X-Original-From'] = { order = 0, value = orig_from_encoded }
     lua_mime.modify_headers(task, {
       remove = remove_hdrs,
       add = add_hdrs
@@ -239,12 +238,12 @@ end
 local function gen_dmarc_grammar()
   local lpeg = require "lpeg"
   lpeg.locale(lpeg)
-  local space = lpeg.space^0
-  local name = lpeg.C(lpeg.alpha^1) * space
-  local sep = space * (lpeg.S("\\;") * space) + (lpeg.space^1)
-  local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
-  local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
-  local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
+  local space = lpeg.space ^ 0
+  local name = lpeg.C(lpeg.alpha ^ 1) * space
+  local sep = space * (lpeg.S("\\;") * space) + (lpeg.space ^ 1)
+  local value = lpeg.C(lpeg.P(lpeg.graph - sep) ^ 1)
+  local pair = lpeg.Cg(name * "=" * space * value) * sep ^ -1
+  local list = lpeg.Cf(lpeg.Ct("") * pair ^ 0, rawset)
   local version = lpeg.P("v") * space * lpeg.P("=") * space * lpeg.P("DMARC1")
   local record = version * sep * list
 
@@ -297,7 +296,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
         result.strict_dkim = true
       elseif dkim_pol ~= 'r' then
         failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
-        return false,failed_policy
+        return false, failed_policy
       end
     end
 
@@ -307,7 +306,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
         result.strict_spf = true
       elseif spf_pol ~= 'r' then
         failed_policy = 'aspf tag has invalid value: ' .. spf_pol
-        return false,failed_policy
+        return false, failed_policy
       end
     end
 
@@ -319,7 +318,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
         result.dmarc_policy = 'quarantine'
       elseif (policy ~= 'none') then
         failed_policy = 'p tag has invalid value: ' .. policy
-        return false,failed_policy
+        return false, failed_policy
       end
     end
 
@@ -336,7 +335,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
         result.dmarc_policy = 'none'
       elseif (subdomain_policy ~= 'none') then
         failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
-        return false,failed_policy
+        return false, failed_policy
       end
     end
     result.pct = elts['pct']
@@ -349,7 +348,7 @@ local function dmarc_check_record(log_obj, record, is_tld)
     end
     result.raw_elts = elts
   else
-    return false,false -- Ignore garbage
+    return false, false -- Ignore garbage
   end
 
   return true, result

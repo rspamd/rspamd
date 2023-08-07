@@ -70,7 +70,6 @@ local function process_patterns(log_obj)
               str, pattern.ext)
         end
 
-
         if max_short_offset < match.position then
           max_short_offset = match.position
         end
@@ -93,10 +92,10 @@ local function process_patterns(log_obj)
   end
 
   if not compiled_patterns then
-    for ext,pattern in pairs(patterns) do
+    for ext, pattern in pairs(patterns) do
       assert(types[ext], 'not found type: ' .. ext)
       pattern.ext = ext
-      for _,match in ipairs(pattern.matches) do
+      for _, match in ipairs(pattern.matches) do
         if match.string then
           if match.relative_position and not match.position then
             match.position = match.relative_position + #match.string
@@ -111,7 +110,7 @@ local function process_patterns(log_obj)
         elseif match.hex then
           local hex_table = {}
 
-          for i=1,#match.hex,2 do
+          for i = 1, #match.hex, 2 do
             local subc = match.hex:sub(i, i + 1)
             hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
           end
@@ -131,15 +130,21 @@ local function process_patterns(log_obj)
     compile_flags = bit.bor(compile_flags, rspamd_trie.flags.single_match)
     compile_flags = bit.bor(compile_flags, rspamd_trie.flags.no_start)
     compiled_patterns = rspamd_trie.create(fun.totable(
-        fun.map(function(t) return t[1] end, processed_patterns)),
+        fun.map(function(t)
+          return t[1]
+        end, processed_patterns)),
         compile_flags
     )
     compiled_short_patterns = rspamd_trie.create(fun.totable(
-        fun.map(function(t) return t[1] end, short_patterns)),
+        fun.map(function(t)
+          return t[1]
+        end, short_patterns)),
         compile_flags
     )
     compiled_tail_patterns = rspamd_trie.create(fun.totable(
-        fun.map(function(t) return t[1] end, tail_patterns)),
+        fun.map(function(t)
+          return t[1]
+        end, tail_patterns)),
         compile_flags
     )
 
@@ -167,24 +172,36 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
       res[ext] = res[ext] + 1
     end
 
-    lua_util.debugm(N, log_obj,'add pattern for %s, weight %s, total weight %s',
+    lua_util.debugm(N, log_obj, 'add pattern for %s, weight %s, total weight %s',
         ext, weight, res[ext])
   end
 
   local function match_position(pos, expected)
-    local cmp = function(a, b) return a == b end
+    local cmp = function(a, b)
+      return a == b
+    end
     if type(expected) == 'table' then
       -- Something like {'>', 0}
       if expected[1] == '>' then
-        cmp = function(a, b) return a > b end
+        cmp = function(a, b)
+          return a > b
+        end
       elseif expected[1] == '>=' then
-        cmp = function(a, b) return a >= b end
+        cmp = function(a, b)
+          return a >= b
+        end
       elseif expected[1] == '<' then
-        cmp = function(a, b) return a < b end
+        cmp = function(a, b)
+          return a < b
+        end
       elseif expected[1] == '<=' then
-        cmp = function(a, b) return a <= b end
+        cmp = function(a, b)
+          return a <= b
+        end
       elseif expected[1] == '!=' then
-        cmp = function(a, b) return a ~= b end
+        cmp = function(a, b)
+          return a ~= b
+        end
       end
       expected = expected[2]
     end
@@ -196,7 +213,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
     return cmp(pos, expected)
   end
 
-  for npat,matched_positions in pairs(matches) do
+  for npat, matched_positions in pairs(matches) do
     local pat_data = processed_tbl[npat]
     local pattern = pat_data[3]
     local match = pat_data[2]
@@ -205,12 +222,12 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
     if match.position then
       local position = match.position
 
-      for _,pos in ipairs(matched_positions) do
+      for _, pos in ipairs(matched_positions) do
         lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
             pattern.ext, pos, offset)
         if match_position(pos + offset, position) then
           if match.heuristic then
-            local ext,weight = match.heuristic(input, log_obj, pos + offset, part)
+            local ext, weight = match.heuristic(input, log_obj, pos + offset, part)
 
             if ext then
               add_result(weight, ext)
@@ -226,9 +243,9 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
       -- Match all positions
       local all_right = true
       local matched_pos = 0
-      for _,position in ipairs(match.positions) do
+      for _, position in ipairs(match.positions) do
         local matched = false
-        for _,pos in ipairs(matched_positions) do
+        for _, pos in ipairs(matched_positions) do
           lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
               pattern.ext, pos, offset)
           if not match_position(pos + offset, position) then
@@ -245,7 +262,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
 
       if all_right then
         if match.heuristic then
-          local ext,weight = match.heuristic(input, log_obj, matched_pos + offset, part)
+          local ext, weight = match.heuristic(input, log_obj, matched_pos + offset, part)
 
           if ext then
             add_result(weight, ext)
@@ -269,14 +286,16 @@ local function process_detected(res)
       return res[ex1] > res[ex2]
     end)
 
-    return extensions,res[extensions[1]]
+    return extensions, res[extensions[1]]
   end
 
   return nil
 end
 
 exports.detect = function(part, log_obj)
-  if not log_obj then log_obj = rspamd_config end
+  if not log_obj then
+    log_obj = rspamd_config
+  end
   local input = part:get_content()
 
   local res = {}
@@ -285,7 +304,6 @@ exports.detect = function(part, log_obj)
     -- Convert to rspamd_text
     input = rspamd_text.fromstring(input)
   end
-
 
   if type(input) == 'userdata' then
     local inplen = #input
@@ -303,18 +321,17 @@ exports.detect = function(part, log_obj)
         compiled_short_patterns, short_patterns, log_obj, res, part)
 
     -- Check if we have enough data or go to long patterns
-    local extensions,confidence = process_detected(res)
+    local extensions, confidence = process_detected(res)
 
     if extensions and #extensions > 0 and confidence > 30 then
       -- We are done on short patterns
-      return extensions[1],types[extensions[1]]
+      return extensions[1], types[extensions[1]]
     end
 
     -- No way, let's check data in chunks or just the whole input if it is small enough
     if #input > exports.chunk_size * 3 then
       -- Chunked version as input is too long
-      local chunk1, chunk2 =
-      input:span(1, exports.chunk_size * 2),
+      local chunk1, chunk2 = input:span(1, exports.chunk_size * 2),
       input:span(inplen - exports.chunk_size, exports.chunk_size)
       local offset1, offset2 = 0, inplen - exports.chunk_size
 
@@ -335,7 +352,7 @@ exports.detect = function(part, log_obj)
   local extensions = process_detected(res)
 
   if extensions and #extensions > 0 then
-    return extensions[1],types[extensions[1]]
+    return extensions[1], types[extensions[1]]
   end
 
   -- Nothing found
@@ -343,22 +360,22 @@ exports.detect = function(part, log_obj)
 end
 
 exports.detect_mime_part = function(part, log_obj)
-  local ext,weight = heuristics.mime_part_heuristic(part, log_obj)
+  local ext, weight = heuristics.mime_part_heuristic(part, log_obj)
 
   if ext and weight and weight > 20 then
-    return ext,types[ext]
+    return ext, types[ext]
   end
 
   ext = exports.detect(part, log_obj)
 
   if ext then
-    return ext,types[ext]
+    return ext, types[ext]
   end
 
   -- Text/html and other parts
-  ext,weight = heuristics.text_part_heuristic(part, log_obj)
+  ext, weight = heuristics.text_part_heuristic(part, log_obj)
   if ext and weight and weight > 20 then
-    return ext,types[ext]
+    return ext, types[ext]
   end
 end
 

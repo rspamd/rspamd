@@ -55,7 +55,7 @@ local dmarc_symbols = {
 
 local opts = rspamd_config:get_all_opt('dmarc')
 if opts and opts['symbols'] then
-  for k,_ in pairs(dmarc_symbols) do
+  for k, _ in pairs(dmarc_symbols) do
     if opts['symbols'][k] then
       dmarc_symbols[k] = opts['symbols'][k]
     end
@@ -64,7 +64,7 @@ end
 
 opts = rspamd_config:get_all_opt('dkim')
 if opts then
-  for k,_ in pairs(dkim_symbols) do
+  for k, _ in pairs(dkim_symbols) do
     if opts[k] then
       dkim_symbols[k] = opts[k]
     end
@@ -73,7 +73,7 @@ end
 
 opts = rspamd_config:get_all_opt('spf')
 if opts then
-  for k,_ in pairs(spf_symbols) do
+  for k, _ in pairs(spf_symbols) do
     if opts[k] then
       spf_symbols[k] = opts[k]
     end
@@ -95,28 +95,28 @@ rspamd_config:add_condition("DKIM_CHECK", function(task)
     local p_obj = parser:get_object()
     local results = p_obj['results']
     if not results and p_obj['result'] then
-      results = {{result = p_obj['result'], domain = 'unknown'}}
+      results = { { result = p_obj['result'], domain = 'unknown' } }
     end
 
     if results then
       for _, obj in ipairs(results) do
-	local dkim_domain = obj['domain'] or 'unknown'
+        local dkim_domain = obj['domain'] or 'unknown'
         if obj['result'] == 'pass' or obj['result'] == 'allow' then
           task:insert_result(dkim_symbols['symbol_allow'], 1.0, 'http header')
           task:insert_result(dkim_symbols['symbol_trace'], 1.0,
-	      string.format('%s:%s', dkim_domain, dkim_trace.pass))
+              string.format('%s:%s', dkim_domain, dkim_trace.pass))
         elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
           task:insert_result(dkim_symbols['symbol_deny'], 1.0, 'http header')
           task:insert_result(dkim_symbols['symbol_trace'], 1.0,
-	      string.format('%s:%s', dkim_domain, dkim_trace.fail))
+              string.format('%s:%s', dkim_domain, dkim_trace.fail))
         elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
           task:insert_result(dkim_symbols['symbol_tempfail'], 1.0, 'http header')
           task:insert_result(dkim_symbols['symbol_trace'], 1.0,
-	      string.format('%s:%s', dkim_domain, dkim_trace.temperror))
+              string.format('%s:%s', dkim_domain, dkim_trace.temperror))
         elseif obj['result'] == 'permfail' then
           task:insert_result(dkim_symbols['symbol_permfail'], 1.0, 'http header')
           task:insert_result(dkim_symbols['symbol_trace'], 1.0,
-	      string.format('%s:%s', dkim_domain, dkim_trace.permerror))
+              string.format('%s:%s', dkim_domain, dkim_trace.permerror))
         elseif obj['result'] == 'na' then
           task:insert_result(dkim_symbols['symbol_na'], 1.0, 'http header')
         end

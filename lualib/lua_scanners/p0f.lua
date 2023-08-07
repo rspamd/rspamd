@@ -30,8 +30,8 @@ local common = require "lua_scanners/common"
 -- SEE: https://github.com/p0f/p0f/blob/v3.06b/docs/README#L317
 local S = {
   BAD_QUERY = 0x0,
-  OK        = 0x10,
-  NO_MATCH  = 0x20
+  OK = 0x10,
+  NO_MATCH = 0x20
 }
 
 local N = 'p0f'
@@ -49,7 +49,7 @@ local function p0f_check(task, ip, rule)
   end
 
   local function trim(...)
-    local vars = {...}
+    local vars = { ... }
 
     for k, v in ipairs(vars) do
       -- skip numbers, trim only strings
@@ -73,22 +73,22 @@ local function p0f_check(task, ip, rule)
     -- API response must be 232 bytes long
     if #data ~= 232 then
       rspamd_logger.errx(task, 'malformed response from p0f on %s, %s bytes',
-        rule.socket, #data)
+          rule.socket, #data)
 
       common.yield_result(task, rule, 'Malformed Response: ' .. rule.socket,
-        0.0, 'fail')
+          0.0, 'fail')
       return
     end
 
     local _, status, _, _, _, uptime_min, _, _, _, distance, _, _, os_name,
-      os_flavor, _, _, link_type, _ = trim(rspamd_util.unpack(
+    os_flavor, _, _, link_type, _ = trim(rspamd_util.unpack(
         'I4I4I4I4I4I4I4I4I4hbbc32c32c32c32c32c32', data))
 
     if status ~= S.OK then
       if status == S.BAD_QUERY then
         rspamd_logger.errx(task, 'malformed p0f query on %s', rule.socket)
         common.yield_result(task, rule, 'Malformed Query: ' .. rule.socket,
-          0.0, 'fail')
+            0.0, 'fail')
       end
 
       return
@@ -97,19 +97,19 @@ local function p0f_check(task, ip, rule)
     local os_string = #os_name == 0 and 'unknown' or os_name .. ' ' .. os_flavor
 
     task:get_mempool():set_variable('os_fingerprint', os_string, link_type,
-      uptime_min, distance)
+        uptime_min, distance)
 
     if link_type and #link_type > 0 then
       common.yield_result(task, rule, {
         os_string,
         'link=' .. link_type,
-        'distance=' .. distance},
+        'distance=' .. distance },
           0.0)
     else
       common.yield_result(task, rule, {
         os_string,
         'link=unknown',
-        'distance=' .. distance},
+        'distance=' .. distance },
           0.0)
     end
 
@@ -153,7 +153,7 @@ local function p0f_check(task, ip, rule)
     end
 
     local query = rspamd_util.pack('I4 I1 c16', 0x50304601,
-      ip:get_version(), ip2bin(ip))
+        ip:get_version(), ip2bin(ip))
 
     tcp.request({
       host = rule.socket,
@@ -176,12 +176,12 @@ local function p0f_check(task, ip, rule)
   if rule.redis_params then
     local key = rule.prefix .. ip:to_string()
     ret = lua_redis.redis_make_request(task,
-      rule.redis_params,
-      key,
-      false,
-      redis_get_cb,
-      'GET',
-      { key }
+        rule.redis_params,
+        key,
+        false,
+        redis_get_cb,
+        'GET',
+        { key }
     )
   end
 
@@ -219,7 +219,7 @@ local function p0f_config(opts)
 end
 
 return {
-  type = {N, 'fingerprint', 'scanner'},
+  type = { N, 'fingerprint', 'scanner' },
   description = 'passive OS fingerprinter',
   configure = p0f_config,
   check = p0f_check,

@@ -23,7 +23,7 @@ local tonumber = tonumber
 local fun = require "fun"
 local E = {}
 
-local rcvd_cb_id = rspamd_config:register_symbol{
+local rcvd_cb_id = rspamd_config:register_symbol {
   name = 'CHECK_RECEIVED',
   type = 'callback',
   score = 0.0,
@@ -40,12 +40,12 @@ local rcvd_cb_id = rspamd_config:register_symbol{
     local def = 'ZERO'
     local received = task:get_received_headers()
     local nreceived = fun.reduce(function(acc, rcvd)
-        return acc + 1
-      end, 0, fun.filter(function(h)
-        return not h['flags']['artificial']
-      end, received))
+      return acc + 1
+    end, 0, fun.filter(function(h)
+      return not h['flags']['artificial']
+    end, received))
 
-    for k,v in pairs(cnts) do
+    for k, v in pairs(cnts) do
       if nreceived >= tonumber(k) then
         def = v
       end
@@ -55,7 +55,7 @@ local rcvd_cb_id = rspamd_config:register_symbol{
   end
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_ZERO',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -63,7 +63,7 @@ rspamd_config:register_symbol{
   description = 'Message has no Received headers',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_ONE',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -71,7 +71,7 @@ rspamd_config:register_symbol{
   description = 'Message has one Received header',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_TWO',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -79,7 +79,7 @@ rspamd_config:register_symbol{
   description = 'Message has two Received headers',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_THREE',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -87,7 +87,7 @@ rspamd_config:register_symbol{
   description = 'Message has 3-5 Received headers',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_FIVE',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -95,7 +95,7 @@ rspamd_config:register_symbol{
   description = 'Message has 5-7 Received headers',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_SEVEN',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -103,7 +103,7 @@ rspamd_config:register_symbol{
   description = 'Message has 7-11 Received headers',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCVD_COUNT_TWELVE',
   score = 0.0,
   parent = rcvd_cb_id,
@@ -118,8 +118,8 @@ local prio_cb_id = rspamd_config:register_symbol {
   description = 'X-Priority check callback rule',
   score = 0.0,
   group = 'headers',
-  callback = function (task)
-     local cnts = {
+  callback = function(task)
+    local cnts = {
       [1] = 'ONE',
       [2] = 'TWO',
       [3] = 'THREE',
@@ -127,11 +127,13 @@ local prio_cb_id = rspamd_config:register_symbol {
     }
     local def = 'ZERO'
     local xprio = task:get_header('X-Priority');
-    if not xprio then return false end
-    local _,_,x = xprio:find('^%s?(%d+)');
+    if not xprio then
+      return false
+    end
+    local _, _, x = xprio:find('^%s?(%d+)');
     if (x) then
       x = tonumber(x)
-      for k,v in pairs(cnts) do
+      for k, v in pairs(cnts) do
         if x >= tonumber(k) then
           def = v
         end
@@ -140,7 +142,7 @@ local prio_cb_id = rspamd_config:register_symbol {
     end
   end
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_X_PRIO_ZERO',
   score = 0.0,
   parent = prio_cb_id,
@@ -148,7 +150,7 @@ rspamd_config:register_symbol{
   description = 'Message has X-Priority header set to 0',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_X_PRIO_ONE',
   score = 0.0,
   parent = prio_cb_id,
@@ -156,7 +158,7 @@ rspamd_config:register_symbol{
   description = 'Message has X-Priority header set to 1',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_X_PRIO_TWO',
   score = 0.0,
   parent = prio_cb_id,
@@ -164,7 +166,7 @@ rspamd_config:register_symbol{
   description = 'Message has X-Priority header set to 2',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_X_PRIO_THREE',
   score = 0.0,
   parent = prio_cb_id,
@@ -172,7 +174,7 @@ rspamd_config:register_symbol{
   description = 'Message has X-Priority header set to 3 or 4',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_X_PRIO_FIVE',
   score = 0.0,
   parent = prio_cb_id,
@@ -214,7 +216,7 @@ local check_replyto_id = rspamd_config:register_symbol({
     end
 
     -- See if Reply-To matches From in some way
-    local from = task:get_from{'mime', 'orig'}
+    local from = task:get_from { 'mime', 'orig' }
     local from_h = get_raw_header(task, 'From')
     if not (from and from[1]) then
       return false
@@ -257,7 +259,7 @@ local check_replyto_id = rspamd_config:register_symbol({
   end
 })
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_UNPARSEABLE',
   score = 1.0,
   parent = check_replyto_id,
@@ -265,7 +267,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To header could not be parsed',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'HAS_REPLYTO',
   score = 0.0,
   parent = check_replyto_id,
@@ -273,7 +275,7 @@ rspamd_config:register_symbol{
   description = 'Has Reply-To header',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_EQ_FROM',
   score = 0.0,
   parent = check_replyto_id,
@@ -281,7 +283,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To header is identical to From header',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_ADDR_EQ_FROM',
   score = 0.0,
   parent = check_replyto_id,
@@ -289,7 +291,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To header is identical to SMTP From',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_DOM_EQ_FROM_DOM',
   score = 0.0,
   parent = check_replyto_id,
@@ -297,7 +299,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To domain matches the From domain',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_DOM_NEQ_FROM_DOM',
   score = 0.0,
   parent = check_replyto_id,
@@ -305,7 +307,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To domain does not match the From domain',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_DN_EQ_FROM_DN',
   score = 0.0,
   parent = check_replyto_id,
@@ -313,7 +315,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To display name matches From',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_EMAIL_HAS_TITLE',
   score = 2.0,
   parent = check_replyto_id,
@@ -321,7 +323,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To header has title',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'REPLYTO_EQ_TO_ADDR',
   score = 5.0,
   parent = check_replyto_id,
@@ -332,7 +334,7 @@ rspamd_config:register_symbol{
 
 rspamd_config:register_dependency('CHECK_REPLYTO', 'CHECK_FROM')
 
-local check_mime_id = rspamd_config:register_symbol{
+local check_mime_id = rspamd_config:register_symbol {
   name = 'CHECK_MIME',
   type = 'callback',
   group = 'headers',
@@ -383,7 +385,7 @@ local check_mime_id = rspamd_config:register_symbol{
   end
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'MISSING_MIME_VERSION',
   score = 2.0,
   parent = check_mime_id,
@@ -391,7 +393,7 @@ rspamd_config:register_symbol{
   description = 'MIME-Version header is missing in MIME message',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'MIME_MA_MISSING_TEXT',
   score = 2.0,
   parent = check_mime_id,
@@ -399,7 +401,7 @@ rspamd_config:register_symbol{
   description = 'MIME multipart/alternative missing text/plain part',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'MIME_MA_MISSING_HTML',
   score = 1.0,
   parent = check_mime_id,
@@ -411,12 +413,16 @@ rspamd_config:register_symbol{
 -- Used to be called IS_LIST
 rspamd_config.PREVIOUSLY_DELIVERED = {
   callback = function(task)
-    if not task:has_recipients(2) then return false end
+    if not task:has_recipients(2) then
+      return false
+    end
     local to = task:get_recipients(2)
     local rcvds = task:get_header_full('Received')
-    if not rcvds then return false end
+    if not rcvds then
+      return false
+    end
     for _, rcvd in ipairs(rcvds) do
-      local _,_,addr = rcvd['decoded']:lower():find("%sfor%s<(.-)>")
+      local _, _, addr = rcvd['decoded']:lower():find("%sfor%s<(.-)>")
       if addr then
         for _, toa in ipairs(to) do
           if toa and toa.addr:lower() == addr then
@@ -442,8 +448,10 @@ rspamd_config.BROKEN_HEADERS = {
 
 rspamd_config.BROKEN_CONTENT_TYPE = {
   callback = function(task)
-    return fun.any(function(p) return p:is_broken() end,
-      task:get_parts())
+    return fun.any(function(p)
+      return p:is_broken()
+    end,
+        task:get_parts())
   end,
   score = 1.5,
   group = 'headers',
@@ -451,18 +459,20 @@ rspamd_config.BROKEN_CONTENT_TYPE = {
 }
 
 rspamd_config.HEADER_RCONFIRM_MISMATCH = {
-  callback = function (task)
+  callback = function(task)
     local header_from = nil
     local cread = task:get_header('X-Confirm-Reading-To')
 
     if task:has_from('mime') then
-      header_from  = task:get_from('mime')[1]
+      header_from = task:get_from('mime')[1]
     end
 
     local header_cread = nil
     if cread then
       local headers_cread = util.parse_mail_address(cread, task:get_mempool())
-      if headers_cread then header_cread = headers_cread[1] end
+      if headers_cread then
+        header_cread = headers_cread[1]
+      end
     end
 
     if header_from and header_cread then
@@ -480,9 +490,11 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 }
 
 rspamd_config.HEADER_FORGED_MDN = {
-  callback = function (task)
+  callback = function(task)
     local mdn = task:get_header('Disposition-Notification-To')
-    if not mdn then return false end
+    if not mdn then
+      return false
+    end
     local header_rp = nil
 
     if task:has_from('smtp') then
@@ -492,9 +504,15 @@ rspamd_config.HEADER_FORGED_MDN = {
     -- Parse mail addr
     local headers_mdn = util.parse_mail_address(mdn, task:get_mempool())
 
-    if headers_mdn and not header_rp  then return true end
-    if header_rp  and not headers_mdn then return false end
-    if not headers_mdn and not header_rp then return false end
+    if headers_mdn and not header_rp then
+      return true
+    end
+    if header_rp and not headers_mdn then
+      return false
+    end
+    if not headers_mdn and not header_rp then
+      return false
+    end
 
     local found_match = false
     for _, h in ipairs(headers_mdn) do
@@ -535,7 +553,7 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
     local max_mult = 0.0
     local res_tbl = {}
 
-    for hdr,mult in pairs(headers_unique) do
+    for hdr, mult in pairs(headers_unique) do
       local hc = task:get_header_count(hdr)
 
       if hc > 1 then
@@ -548,7 +566,7 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
     end
 
     if res > 0 then
-      return true,max_mult,table.concat(res_tbl, ',')
+      return true, max_mult, table.concat(res_tbl, ',')
     end
 
     return false
@@ -577,7 +595,9 @@ rspamd_config.MULTIPLE_FROM = {
   callback = function(task)
     local from = task:get_from('mime')
     if from and from[2] then
-      return true, 1.0, fun.totable(fun.map(function(a) return a.raw end, from))
+      return true, 1.0, fun.totable(fun.map(function(a)
+        return a.raw
+      end, from))
     end
     return false
   end,
@@ -587,7 +607,7 @@ rspamd_config.MULTIPLE_FROM = {
 }
 
 rspamd_config.MV_CASE = {
-  callback = function (task)
+  callback = function(task)
     return task:has_header('Mime-Version', true)
   end,
   description = 'Mime-Version .vs. MIME-Version',
@@ -595,7 +615,7 @@ rspamd_config.MV_CASE = {
   group = 'headers'
 }
 
-local check_from_id = rspamd_config:register_symbol{
+local check_from_id = rspamd_config:register_symbol {
   name = 'CHECK_FROM',
   type = 'callback',
   score = 0.0,
@@ -610,10 +630,10 @@ local check_from_id = rspamd_config:register_symbol{
       if not (from[1]["flags"]["valid"]) then
         task:insert_result('FROM_INVALID', 1.0)
       end
-      if (from[1].name == nil or from[1].name == '' ) then
+      if (from[1].name == nil or from[1].name == '') then
         task:insert_result('FROM_NO_DN', 1.0)
       elseif (from[1].name and
-            util.strequal_caseless(from[1].name, from[1].addr)) then
+          util.strequal_caseless(from[1].name, from[1].addr)) then
         task:insert_result('FROM_DN_EQ_ADDR', 1.0)
       elseif (from[1].name and from[1].name ~= '') then
         task:insert_result('FROM_HAS_DN', 1.0)
@@ -622,11 +642,11 @@ local check_from_id = rspamd_config:register_symbol{
         local match, match_end
         match, match_end = n:find('^mrs?[%.%s]')
         if match then
-          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end - 1))
         end
         match, match_end = n:find('^dr[%.%s]')
         if match then
-          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+          task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end - 1))
         end
         -- Check for excess spaces
         if n:find('%s%s') then
@@ -644,19 +664,21 @@ local check_from_id = rspamd_config:register_symbol{
     end
 
     local to = task:get_recipients(2)
-    if not (to and to[1] and #to == 1 and from and from[1]) then return false end
+    if not (to and to[1] and #to == 1 and from and from[1]) then
+      return false
+    end
     -- Check if FROM == TO
     if (util.strequal_caseless(to[1].addr, from[1].addr)) then
       task:insert_result('TO_EQ_FROM', 1.0)
     elseif (to[1].domain and from[1].domain and
-            util.strequal_caseless(to[1].domain, from[1].domain))
+        util.strequal_caseless(to[1].domain, from[1].domain))
     then
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end
   end
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'ENVFROM_INVALID',
   score = 2.0,
   group = 'headers',
@@ -664,7 +686,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'Envelope from does not have a valid format',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_INVALID',
   score = 2.0,
   group = 'headers',
@@ -672,7 +694,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header does not have a valid format',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_NO_DN',
   score = 0.0,
   group = 'headers',
@@ -680,7 +702,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header does not have a display name',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_DN_EQ_ADDR',
   score = 1.0,
   group = 'headers',
@@ -688,7 +710,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header display name is the same as the address',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_HAS_DN',
   score = 0.0,
   group = 'headers',
@@ -696,7 +718,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header has a display name',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_NAME_EXCESS_SPACE',
   score = 1.0,
   group = 'headers',
@@ -704,7 +726,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header display name contains excess whitespace',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_NAME_HAS_TITLE',
   score = 1.0,
   group = 'headers',
@@ -712,7 +734,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From header display name has a title (Mr/Mrs/Dr)',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_EQ_ENVFROM',
   score = 0.0,
   group = 'headers',
@@ -720,7 +742,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From address is the same as the envelope',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'FROM_NEQ_ENVFROM',
   score = 0.0,
   group = 'headers',
@@ -728,7 +750,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'From address is different to the envelope',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_EQ_FROM',
   score = 0.0,
   group = 'headers',
@@ -736,7 +758,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'To address matches the From address',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DOM_EQ_FROM_DOM',
   score = 0.0,
   group = 'headers',
@@ -745,7 +767,7 @@ rspamd_config:register_symbol{
   description = 'To domain is the same as the From domain',
 }
 
-local check_to_cc_id = rspamd_config:register_symbol{
+local check_to_cc_id = rspamd_config:register_symbol {
   name = 'CHECK_TO_CC',
   type = 'callback',
   score = 0.0,
@@ -764,10 +786,12 @@ local check_to_cc_id = rspamd_config:register_symbol{
       [50] = 'GT_50'
     }
     local def = 'ZERO'
-    if (not to) then return false end
+    if (not to) then
+      return false
+    end
     -- Add symbol for recipient count
     local nrcpt = #to
-    for k,v in pairs(cnts) do
+    for k, v in pairs(cnts) do
       if nrcpt >= tonumber(k) then
         def = v
       end
@@ -820,7 +844,7 @@ local check_to_cc_id = rspamd_config:register_symbol{
   end
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_ZERO',
   score = 0.0,
   parent = check_to_cc_id,
@@ -828,7 +852,7 @@ rspamd_config:register_symbol{
   description = 'No recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_ONE',
   score = 0.0,
   parent = check_to_cc_id,
@@ -836,7 +860,7 @@ rspamd_config:register_symbol{
   description = 'One recipient',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_TWO',
   score = 0.0,
   parent = check_to_cc_id,
@@ -844,7 +868,7 @@ rspamd_config:register_symbol{
   description = 'Two recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_THREE',
   score = 0.0,
   parent = check_to_cc_id,
@@ -852,7 +876,7 @@ rspamd_config:register_symbol{
   description = '3-5 recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_FIVE',
   score = 0.0,
   parent = check_to_cc_id,
@@ -860,7 +884,7 @@ rspamd_config:register_symbol{
   description = '5-7 recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_SEVEN',
   score = 0.0,
   parent = check_to_cc_id,
@@ -868,7 +892,7 @@ rspamd_config:register_symbol{
   description = '7-11 recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_TWELVE',
   score = 0.0,
   parent = check_to_cc_id,
@@ -876,7 +900,7 @@ rspamd_config:register_symbol{
   description = '12-50 recipients',
   group = 'headers',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'RCPT_COUNT_GT_50',
   score = 0.0,
   parent = check_to_cc_id,
@@ -885,7 +909,7 @@ rspamd_config:register_symbol{
   group = 'headers',
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_RECIPIENTS',
   score = 2.0,
   group = 'headers',
@@ -893,7 +917,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'To header display name is "Recipients"',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_NONE',
   score = 0.0,
   group = 'headers',
@@ -901,7 +925,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'None of the recipients have display names',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_ALL',
   score = 0.0,
   group = 'headers',
@@ -909,7 +933,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'All the recipients have display names',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_SOME',
   score = 0.0,
   group = 'headers',
@@ -917,7 +941,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'Some of the recipients have display names',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_EQ_ADDR_ALL',
   score = 0.0,
   group = 'headers',
@@ -925,7 +949,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'All of the recipients have display names that are the same as their address',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_DN_EQ_ADDR_SOME',
   score = 0.0,
   group = 'headers',
@@ -933,7 +957,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'Some of the recipients have display names that are the same as their address',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_MATCH_ENVRCPT_ALL',
   score = 0.0,
   group = 'headers',
@@ -941,7 +965,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'All of the recipients match the envelope',
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   name = 'TO_MATCH_ENVRCPT_SOME',
   score = 0.0,
   group = 'headers',
@@ -954,8 +978,10 @@ rspamd_config:register_symbol{
 rspamd_config.CTYPE_MISSING_DISPOSITION = {
   callback = function(task)
     local parts = task:get_parts()
-    if (not parts) or (parts and #parts < 1) then return false end
-    for _,p in ipairs(parts) do
+    if (not parts) or (parts and #parts < 1) then
+      return false
+    end
+    for _, p in ipairs(parts) do
       local ct = p:get_header('Content-Type')
       if (ct and ct:lower():match('^application/octet%-stream') ~= nil) then
         local cd = p:get_header('Content-Disposition')
@@ -969,7 +995,7 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
           local parent = p:get_parent()
 
           if parent then
-            local t,st = parent:get_type()
+            local t, st = parent:get_type()
 
             if t == 'multipart' and st == 'encrypted' then
               -- Special case
@@ -991,15 +1017,21 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
 rspamd_config.CTYPE_MIXED_BOGUS = {
   callback = function(task)
     local ct = task:get_header('Content-Type')
-    if (not ct) then return false end
+    if (not ct) then
+      return false
+    end
     local parts = task:get_parts()
-    if (not parts) then return false end
-    if (not ct:lower():match('^multipart/mixed')) then return false end
+    if (not parts) then
+      return false
+    end
+    if (not ct:lower():match('^multipart/mixed')) then
+      return false
+    end
     local found = false
     -- Check each part and look for a part that isn't multipart/* or text/plain or text/html
     local ntext_parts = 0
-    for _,p in ipairs(parts) do
-      local mtype,_ = p:get_type()
+    for _, p in ipairs(parts) do
+      local mtype, _ = p:get_type()
       if mtype then
         if mtype == 'text' and not p:is_attachment() then
           ntext_parts = ntext_parts + 1
@@ -1013,7 +1045,9 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
         end
       end
     end
-    if (not found) then return true end
+    if (not found) then
+      return true
+    end
     return false
   end,
   description = 'multipart/mixed without non-textual part',
@@ -1023,7 +1057,9 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
 
 local function check_for_base64_text(part)
   local ct = part:get_header('Content-Type')
-  if (not ct) then return false end
+  if (not ct) then
+    return false
+  end
   ct = ct:lower()
   if (ct:match('^text')) then
     -- Check encoding
@@ -1042,7 +1078,9 @@ rspamd_config.MIME_BASE64_TEXT = {
       return true
     else
       local parts = task:get_parts()
-      if (not parts) then return false end
+      if (not parts) then
+        return false
+      end
       -- Check each part and look for base64 encoded text parts
       for _, part in ipairs(parts) do
         if (check_for_base64_text(part)) then
@@ -1060,7 +1098,9 @@ rspamd_config.MIME_BASE64_TEXT = {
 rspamd_config.MIME_BASE64_TEXT_BOGUS = {
   callback = function(task)
     local parts = task:get_text_parts()
-    if (not parts) then return false end
+    if (not parts) then
+      return false
+    end
     -- Check each part and look for base64 encoded text parts
     -- where the part does not have any 8bit characters within it
     for _, part in ipairs(parts) do
@@ -1113,7 +1153,7 @@ rspamd_config.INVALID_RCPT_8BIT = {
 }
 
 rspamd_config.XM_CASE = {
-  callback = function (task)
+  callback = function(task)
     return task:has_header('X-mailer', true)
   end,
   description = 'X-mailer .vs. X-Mailer',

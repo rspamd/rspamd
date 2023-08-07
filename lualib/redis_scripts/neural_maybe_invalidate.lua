@@ -8,7 +8,7 @@ local lim = tonumber(KEYS[2])
 if card > lim then
   local to_delete = redis.call('ZRANGE', KEYS[1], 0, card - lim - 1)
   if to_delete then
-    for _,k in ipairs(to_delete) do
+    for _, k in ipairs(to_delete) do
       local tb = cjson.decode(k)
       if type(tb) == 'table' and type(tb.redis_key) == 'string' then
         redis.call('DEL', tb.redis_key)

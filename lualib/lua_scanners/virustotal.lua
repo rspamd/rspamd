@@ -123,7 +123,7 @@ local function virustotal_check(task, content, digest, rule, maybe_part)
         else
           local ucl = require "ucl"
           local parser = ucl.parser()
-          local res,json_err = parser:parse_string(body)
+          local res, json_err = parser:parse_string(body)
 
           lua_util.debugm(rule.name, task, '%s: got reply data: "%s"',
               rule.log_prefix, body)

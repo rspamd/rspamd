@@ -42,13 +42,13 @@ local function meta_size_function(task)
   }
 
   local size = task:get_size()
-  for i = 1,#sizes do
+  for i = 1, #sizes do
     if sizes[i] >= size then
-      return {(1.0 * i) / #sizes}
+      return { (1.0 * i) / #sizes }
     end
   end
 
-  return {0}
+  return { 0 }
 end
 
 local function meta_images_function(task)
@@ -60,7 +60,7 @@ local function meta_images_function(task)
   local nsmall = 0
 
   if images then
-    for _,img in ipairs(images) do
+    for _, img in ipairs(images) do
       if img:get_type() == 'png' then
         npng = npng + 1
       elseif img:get_type() == 'jpeg' then
@@ -87,7 +87,7 @@ local function meta_images_function(task)
     nlarge = 1.0 * nlarge / ntotal
     nsmall = 1.0 * nsmall / ntotal
   end
-  return {ntotal,njpg,npng,nlarge,nsmall}
+  return { ntotal, njpg, npng, nlarge, nsmall }
 end
 
 local function meta_nparts_function(task)
@@ -103,7 +103,7 @@ local function meta_nparts_function(task)
   local parts = task:get_parts()
 
   if parts then
-    for _,p in ipairs(parts) do
+    for _, p in ipairs(parts) do
       if p:is_attachment() then
         nattachments = nattachments + 1
       end
@@ -111,7 +111,7 @@ local function meta_nparts_function(task)
     end
   end
 
-  return {(1.0 * ntextparts)/totalparts, (1.0 * nattachments)/totalparts}
+  return { (1.0 * ntextparts) / totalparts, (1.0 * nattachments) / totalparts }
 end
 
 local function meta_encoding_function(task)
@@ -120,7 +120,7 @@ local function meta_encoding_function(task)
 
   local tp = task:get_text_parts()
   if tp and #tp > 0 then
-    for _,p in ipairs(tp) do
+    for _, p in ipairs(tp) do
       if p:is_utf() then
         nutf = nutf + 1
       else
@@ -128,10 +128,10 @@ local function meta_encoding_function(task)
       end
     end
 
-    return {nutf / #tp, nother / #tp}
+    return { nutf / #tp, nother / #tp }
   end
 
-  return {0, 0}
+  return { 0, 0 }
 end
 
 local function meta_recipients_function(task)
@@ -145,10 +145,14 @@ local function meta_recipients_function(task)
     nsmtp = #(task:get_recipients('smtp'))
   end
 
-  if nmime > 0 then nmime = 1.0 / nmime end
-  if nsmtp > 0 then nsmtp = 1.0 / nsmtp end
+  if nmime > 0 then
+    nmime = 1.0 / nmime
+  end
+  if nsmtp > 0 then
+    nsmtp = 1.0 / nsmtp
+  end
 
-  return {nmime,nsmtp}
+  return { nmime, nsmtp }
 end
 
 local function meta_received_function(task)
@@ -180,7 +184,9 @@ local function meta_received_function(task)
         secure_factor = secure_factor + 1.0
       end
     end,
-    fun.filter(function(rc) return not rc.flags or not rc.flags['artificial'] end, rh))
+        fun.filter(function(rc)
+          return not rc.flags or not rc.flags['artificial']
+        end, rh))
 
     if ntotal > 0 then
       invalid_factor = invalid_factor / ntotal
@@ -193,16 +199,16 @@ local function meta_received_function(task)
     end
   end
 
-  return {count_factor, invalid_factor, time_factor, secure_factor}
+  return { count_factor, invalid_factor, time_factor, secure_factor }
 end
 
 local function meta_urls_function(task)
-  local has_urls,nurls = task:has_urls()
+  local has_urls, nurls = task:has_urls()
   if has_urls and nurls > 0 then
-    return {1.0 / nurls}
+    return { 1.0 / nurls }
   end
 
-  return {0}
+  return { 0 }
 end
 
 local function meta_words_function(task)
@@ -224,7 +230,7 @@ local function meta_words_function(task)
     20,
   }
 
-  for i = 1,#lens do
+  for i = 1, #lens do
     if lens[i] >= avg_len then
       ret_len = (1.0 * i) / #lens
       break
@@ -241,7 +247,7 @@ local function meta_words_function(task)
     0, -- capital characters rate
     0, -- numeric characters
   }
-  for _,p in ipairs(tp) do
+  for _, p in ipairs(tp) do
     local stats = p:get_stats()
     local len = p:get_length()
 
@@ -266,7 +272,7 @@ local function meta_words_function(task)
     divisor = #tp
   end
 
-  for _,wr in ipairs(wres) do
+  for _, wr in ipairs(wres) do
     table.insert(ret, wr / divisor)
   end
 
@@ -401,7 +407,7 @@ local metafunctions = {
   },
 }
 
-local meta_schema = ts.shape{
+local meta_schema = ts.shape {
   cb = ts.func,
   ninputs = ts.number,
   names = ts.array_of(ts.string),
@@ -413,8 +419,8 @@ local metatokens_by_name = {}
 local function fill_metatokens_by_name()
   metatokens_by_name = {}
 
-  for _,mt in ipairs(metafunctions) do
-    for i=1,mt.ninputs do
+  for _, mt in ipairs(metafunctions) do
+    for i = 1, mt.ninputs do
       local name = mt.names[i]
 
       metatokens_by_name[name] = function(task)
@@ -429,8 +435,8 @@ local function calculate_digest()
   local cr = require "rspamd_cryptobox_hash"
 
   local h = cr.create()
-  for _,mt in ipairs(metafunctions) do
-    for i=1,mt.ninputs do
+  for _, mt in ipairs(metafunctions) do
+    for i = 1, mt.ninputs do
       local name = mt.names[i]
       h:update(name)
     end
@@ -450,9 +456,9 @@ local function rspamd_gen_metatokens(task, names)
     if cached then
       return cached
     else
-      for _,mt in ipairs(metafunctions) do
+      for _, mt in ipairs(metafunctions) do
         local ct = mt.cb(task)
-        for i,tok in ipairs(ct) do
+        for i, tok in ipairs(ct) do
           lua_util.debugm(N, task, "metatoken: %s = %s",
               mt.names[i], tok)
           if tok ~= tok or tok == math.huge then
@@ -468,7 +474,7 @@ local function rspamd_gen_metatokens(task, names)
     end
 
   else
-    for _,n in ipairs(names) do
+    for _, n in ipairs(names) do
       if metatokens_by_name[n] then
         local tok = metatokens_by_name[n](task)
         if tok ~= tok or tok == math.huge then
@@ -484,7 +490,7 @@ local function rspamd_gen_metatokens(task, names)
   end
 
   return metatokens
-  end
+end
 
 exports.rspamd_gen_metatokens = rspamd_gen_metatokens
 exports.gen_metatokens = rspamd_gen_metatokens
@@ -492,9 +498,9 @@ exports.gen_metatokens = rspamd_gen_metatokens
 local function rspamd_gen_metatokens_table(task)
   local metatokens = {}
 
-  for _,mt in ipairs(metafunctions) do
+  for _, mt in ipairs(metafunctions) do
     local ct = mt.cb(task)
-    for i,tok in ipairs(ct) do
+    for i, tok in ipairs(ct) do
       if tok ~= tok or tok == math.huge then
         logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
             mt.names[i], tok)
@@ -514,7 +520,7 @@ exports.gen_metatokens_table = rspamd_gen_metatokens_table
 local function rspamd_count_metatokens()
   local ipairs = ipairs
   local total = 0
-  for _,mt in ipairs(metafunctions) do
+  for _, mt in ipairs(metafunctions) do
     total = total + mt.ninputs
   end
 

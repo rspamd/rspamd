@@ -200,7 +200,7 @@ local function check_regexp(str, regexp_text)
 end
 
 local function add_static_map(data)
-  return rspamd_config:add_map{
+  return rspamd_config:add_map {
     type = 'regexp_multi',
     url = {
       upstreams = 'static',
@@ -227,13 +227,13 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 
   local function check_host_cb_mx(_, to_resolve, results, err)
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-        lua_util.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
+      lua_util.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
     end
     if not results then
       task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0,
-        to_resolve)
+          to_resolve)
     else
-      for _,mx in pairs(results) do
+      for _, mx in pairs(results) do
         if mx['name'] then
           local failed_mx_address = 0
           -- Capture failed_mx_address
@@ -244,12 +244,12 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 
             if failed_mx_address >= 2 then
               task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX',
-                1.0, mx['name'])
+                  1.0, mx['name'])
             end
           end
 
           task:get_resolver():resolve('a', {
-            task=task,
+            task = task,
             name = mx['name'],
             callback = check_host_cb_mx_a
           })
@@ -266,7 +266,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     if not results then
       failed_address = failed_address + 1
     else
-      for _,result in pairs(results) do
+      for _, result in pairs(results) do
         table.insert(resolved_address, result:to_string())
       end
     end
@@ -274,7 +274,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     if failed_address >= 2 then
       -- No A or AAAA records
       if eq_ip and eq_ip ~= '' then
-        for _,result in pairs(resolved_address) do
+        for _, result in pairs(resolved_address) do
           if result == eq_ip then
             return true
           end
@@ -303,7 +303,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   if check_fqdn(host) then
     if eq_host == '' or eq_host ~= host then
       task:get_resolver():resolve('a', {
-        task=task,
+        task = task,
         name = host,
         callback = check_host_cb_a
       })
@@ -329,7 +329,7 @@ local function hfilter_callback(task)
     if parts then
       local plain_text_part, html_text_part
 
-      for _,p in ipairs(parts) do
+      for _, p in ipairs(parts) do
         if p:is_html() then
           html_text_part = p
         else
@@ -345,7 +345,9 @@ local function hfilter_callback(task)
           local rel = url_len / plen
           if rel > 0.8 then
             local sc = (rel - 0.8) * 5.0
-            if sc > 1.0 then sc = 1.0 end
+            if sc > 1.0 then
+              sc = 1.0
+            end
             task:insert_result('HFILTER_URL_ONLY', sc, tostring(sc))
             local lines = part:get_lines_count()
             if lines > 0 and lines < 2 then
@@ -405,7 +407,7 @@ local function hfilter_callback(task)
         if not find_badip and not find_bareip then
           -- Regexp check HELO (checks_hello)
           local weights = checks_hello_map:get_key(helo)
-          for _,weight in ipairs(weights or {}) do
+          for _, weight in ipairs(weights or {}) do
             weight = tonumber(weight) or 0
             if weight > weight_helo then
               weight_helo = weight
@@ -413,7 +415,7 @@ local function hfilter_callback(task)
           end
           -- Regexp check HELO (checks_hellohost)
           weights = checks_hellohost_map:get_key(helo)
-          for _,weight in ipairs(weights or {}) do
+          for _, weight in ipairs(weights or {}) do
             weight = tonumber(weight) or 0
             if weight > weight_helo then
               weight_helo = weight
@@ -436,7 +438,7 @@ local function hfilter_callback(task)
     if hostname then
       -- Check regexp HOSTNAME
       local weights = checks_hellohost_map:get_key(hostname)
-      for _,weight in ipairs(weights or {}) do
+      for _, weight in ipairs(weights or {}) do
         weight = tonumber(weight) or 0
         if weight > weight_hostname then
           weight_hostname = weight
@@ -460,7 +462,7 @@ local function hfilter_callback(task)
     local from = task:get_from(1)
     if from then
       --FROM host check
-      for _,fr in ipairs(from) do
+      for _, fr in ipairs(from) do
         local fr_split = rspamd_str_split(fr['addr'], '@')
         if #fr_split == 2 then
           check_host(task, fr_split[2], 'FROMHOST', '', '')
@@ -485,7 +487,7 @@ local function hfilter_callback(task)
       if frombounce then
         if count_rcpt > 1 then
           task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00,
-            tostring(count_rcpt))
+              tostring(count_rcpt))
         end
       end
     end
@@ -555,13 +557,15 @@ local timeout = 0.0
 
 local opts = rspamd_config:get_all_opt('hfilter')
 if opts then
-  for k,v in pairs(opts) do
+  for k, v in pairs(opts) do
     config[k] = v
   end
 end
 
 local function append_t(t, a)
-  for _,v in ipairs(a) do table.insert(t, v) end
+  for _, v in ipairs(a) do
+    table.insert(t, v)
+  end
 end
 if config['helo_enabled'] then
   checks_hello_bareip_map = add_static_map(checks_hello_bareip)
@@ -594,14 +598,14 @@ end
 
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
-  local id = rspamd_config:register_symbol{
+  local id = rspamd_config:register_symbol {
     name = 'HFILTER_CHECK',
     callback = hfilter_callback,
     type = 'callback',
-    augmentations = {string.format("timeout=%f", timeout)},
+    augmentations = { string.format("timeout=%f", timeout) },
   }
-  for _,sym in ipairs(symbols_enabled) do
-    rspamd_config:register_symbol{
+  for _, sym in ipairs(symbols_enabled) do
+    rspamd_config:register_symbol {
       type = 'virtual',
       score = 1.0,
       parent = id,

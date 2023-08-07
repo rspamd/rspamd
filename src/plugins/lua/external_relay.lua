@@ -34,40 +34,40 @@ local settings = {
   rules = {},
 }
 
-local config_schema = ts.shape{
+local config_schema = ts.shape {
   enabled = ts.boolean:is_optional(),
   rules = ts.map_of(
-    ts.string, ts.one_of{
-      ts.shape{
-        priority = ts.number:is_optional(),
-        strategy = 'authenticated',
-        symbol = ts.string:is_optional(),
-        user_map = lua_maps.map_schema:is_optional(),
-      },
-      ts.shape{
-        count = ts.number,
-        priority = ts.number:is_optional(),
-        strategy = 'count',
-        symbol = ts.string:is_optional(),
-      },
-      ts.shape{
-        priority = ts.number:is_optional(),
-        strategy = 'local',
-        symbol = ts.string:is_optional(),
-      },
-      ts.shape{
-        hostname_map = lua_maps.map_schema,
-        priority = ts.number:is_optional(),
-        strategy = 'hostname_map',
-        symbol = ts.string:is_optional(),
-      },
-      ts.shape{
-        ip_map = lua_maps.map_schema,
-        priority = ts.number:is_optional(),
-        strategy = 'ip_map',
-        symbol = ts.string:is_optional(),
-      },
-    }
+      ts.string, ts.one_of {
+        ts.shape {
+          priority = ts.number:is_optional(),
+          strategy = 'authenticated',
+          symbol = ts.string:is_optional(),
+          user_map = lua_maps.map_schema:is_optional(),
+        },
+        ts.shape {
+          count = ts.number,
+          priority = ts.number:is_optional(),
+          strategy = 'count',
+          symbol = ts.string:is_optional(),
+        },
+        ts.shape {
+          priority = ts.number:is_optional(),
+          strategy = 'local',
+          symbol = ts.string:is_optional(),
+        },
+        ts.shape {
+          hostname_map = lua_maps.map_schema,
+          priority = ts.number:is_optional(),
+          strategy = 'hostname_map',
+          symbol = ts.string:is_optional(),
+        },
+        ts.shape {
+          ip_map = lua_maps.map_schema,
+          priority = ts.number:is_optional(),
+          strategy = 'ip_map',
+          symbol = ts.string:is_optional(),
+        },
+      }
   ),
 }
 

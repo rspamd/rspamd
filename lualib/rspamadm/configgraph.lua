@@ -31,7 +31,6 @@ parser:option "-c --config"
 parser:flag "-a --all"
       :description('Show all nodes, not just existing ones')
 
-
 local function process_filename(fname)
   local cdir = rspamd_paths['CONFDIR'] .. '/'
   fname = fname:gsub(cdir, '')
@@ -40,8 +39,8 @@ end
 
 local function output_dot(opts, nodes, adjacency)
   rspamd_logger.messagex("digraph rspamd {")
-  for k,node in pairs(nodes) do
-    local attrs = {"shape=box"}
+  for k, node in pairs(nodes) do
+    local attrs = { "shape=box" }
     local skip = false
     if node.exists then
       if node.priority >= 10 then
@@ -62,7 +61,7 @@ local function output_dot(opts, nodes, adjacency)
           table.concat(attrs, ','))
     end
   end
-  for _,adj in ipairs(adjacency) do
+  for _, adj in ipairs(adjacency) do
     local attrs = {}
     local skip = false
 
@@ -95,7 +94,7 @@ local function load_config_traced(opts)
   local nodes = {}
 
   local function maybe_match_glob(file)
-    for _,gl in ipairs(glob_traces) do
+    for _, gl in ipairs(glob_traces) do
       if gl.re:match(file) then
         return gl
       end
@@ -151,7 +150,7 @@ local function load_config_traced(opts)
     end
   end
 
-  local _r,err = rspamd_config:load_ucl(opts['config'], trace_func)
+  local _r, err = rspamd_config:load_ucl(opts['config'], trace_func)
   if not _r then
     rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
@@ -159,7 +158,6 @@ local function load_config_traced(opts)
 
   output_dot(opts, nodes, adjacency)
 end
-
 
 local function handler(args)
   local res = parser:parse(args)

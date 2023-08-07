@@ -80,3 +80,4 @@ files['/**/test/functional/'].ignore = {'631'}
 
 max_string_line_length = 500
 max_comment_line_length = 500
+max_line_length = 140

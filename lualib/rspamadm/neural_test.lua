@@ -4,9 +4,9 @@ local lua_util = require "lua_util"
 local ucl = require "ucl"
 
 local parser = argparse()
-  :name "rspamadm neural_test"
-  :description "Test the neural network with labelled dataset"
-  :help_description_margin(32)
+    :name "rspamadm neural_test"
+    :description "Test the neural network with labelled dataset"
+    :help_description_margin(32)
 
 parser:option "-c --config"
       :description "Path to config file"
@@ -40,25 +40,23 @@ parser:option '--rule'
       :description 'Rule to test'
       :argname('<rule>')
 
-
 local HAM = "HAM"
 local SPAM = "SPAM"
 
 local function load_config(opts)
-  local _r,err = rspamd_config:load_ucl(opts['config'])
+  local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
     rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
   end
 end
-
 
 local function scan_email(rspamc_path, host, n_parallel, path, timeout)
 
@@ -128,13 +126,13 @@ end
 local function get_stats_from_scan_results(results, rules)
 
   local rule_stats = {}
-  for rule,_ in pairs(rules) do 
-    rule_stats[rule] = {tp = 0, tn = 0, fp = 0, fn = 0}
+  for rule, _ in pairs(rules) do
+    rule_stats[rule] = { tp = 0, tn = 0, fp = 0, fn = 0 }
   end
 
-  for _,result in ipairs(results) do
-    for _,symbol in ipairs(result["symbols"]) do
-      for name,rule in pairs(rules) do
+  for _, result in ipairs(results) do
+    for _, symbol in ipairs(result["symbols"]) do
+      for name, rule in pairs(rules) do
         if rule.symbol_spam and rule.symbol_spam == symbol then
           if result.type == HAM then
             rule_stats[name].fp = rule_stats[name].fp + 1
@@ -152,7 +150,7 @@ local function get_stats_from_scan_results(results, rules)
     end
   end
 
-  for rule,_ in pairs(rules) do 
+  for rule, _ in pairs(rules) do
     rule_stats[rule].fpr = rule_stats[rule].fp / (rule_stats[rule].fp + rule_stats[rule].tn)
     rule_stats[rule].fnr = rule_stats[rule].fn / (rule_stats[rule].fn + rule_stats[rule].tp)
   end
@@ -222,10 +220,9 @@ local function handler(args)
 
 end
 
-
 return {
   name = "neuraltest",
-  aliases = {"neural_test"},
+  aliases = { "neural_test" },
   handler = handler,
   description = parser._description
 }

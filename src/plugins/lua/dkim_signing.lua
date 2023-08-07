@@ -58,7 +58,7 @@ local function insert_sign_results(task, ret, hdr, dkim_params)
   if settings.use_milter_headers then
     lua_mime.modify_headers(task, {
       add = {
-        ['DKIM-Signature'] = {order = 1, value = hdr},
+        ['DKIM-Signature'] = { order = 1, value = hdr },
       }
     })
   end
@@ -106,7 +106,7 @@ local function sign_error(task, msg)
 end
 
 local function dkim_signing_cb(task)
-  local ret,selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
+  local ret, selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
   if not ret then
     return
@@ -140,8 +140,10 @@ local function dkim_signing_cb(task)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('dkim_signing')
-if not opts then return end
+local opts = rspamd_config:get_all_opt('dkim_signing')
+if not opts then
+  return
+end
 
 dkim_sign_tools.process_signing_settings(N, settings, opts)
 
@@ -167,7 +169,7 @@ end
 local sym_reg_tbl = {
   name = settings['symbol'],
   callback = dkim_signing_cb,
-  groups = {"policies", "dkim"},
+  groups = { "policies", "dkim" },
   flags = 'ignore_passthrough',
   score = 0.0,
 }

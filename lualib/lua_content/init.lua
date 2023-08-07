@@ -26,21 +26,21 @@ local lua_util = require "lua_util"
 
 local content_modules = {
   ical = {
-    mime_type = {"text/calendar", "application/calendar"},
+    mime_type = { "text/calendar", "application/calendar" },
     module = require "lua_content/ical",
-    extensions = {'ics'},
+    extensions = { 'ics' },
     output = "text"
   },
   vcf = {
-    mime_type = {"text/vcard", "application/vcard"},
+    mime_type = { "text/vcard", "application/vcard" },
     module = require "lua_content/vcard",
-    extensions = {'vcf'},
+    extensions = { 'vcf' },
     output = "text"
   },
   pdf = {
     mime_type = "application/pdf",
     module = require "lua_content/pdf",
-    extensions = {'pdf'},
+    extensions = { 'pdf' },
     output = "table"
   },
 }
@@ -51,20 +51,20 @@ local modules_by_extension
 local function init()
   modules_by_mime_type = {}
   modules_by_extension = {}
-  for k,v in pairs(content_modules) do
+  for k, v in pairs(content_modules) do
     if v.mime_type then
       if type(v.mime_type) == 'table' then
-        for _,mt in ipairs(v.mime_type) do
-          modules_by_mime_type[mt] = {k, v}
+        for _, mt in ipairs(v.mime_type) do
+          modules_by_mime_type[mt] = { k, v }
         end
       else
-        modules_by_mime_type[v.mime_type] = {k, v}
+        modules_by_mime_type[v.mime_type] = { k, v }
       end
 
     end
     if v.extensions then
-      for _,ext in ipairs(v.extensions) do
-        modules_by_extension[ext] = {k, v}
+      for _, ext in ipairs(v.extensions) do
+        modules_by_extension[ext] = { k, v }
       end
     end
   end
@@ -105,6 +105,5 @@ exports.maybe_process_mime_part = function(part, task)
   end
 
 end
-
 
 return exports

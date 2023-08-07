@@ -35,7 +35,7 @@ local N = "neural"
 
 local settings = neural_common.settings
 
-local redis_profile_schema = ts.shape{
+local redis_profile_schema = ts.shape {
   digest = ts.string,
   symbols = ts.array_of(ts.string),
   version = ts.number,
@@ -77,7 +77,7 @@ local function new_ann_profile(task, rule, set, version)
       true, -- is write
       add_cb, --callback
       'ZADD', -- command
-      {set.prefix, tostring(rspamd_util.get_time()), profile_serialized}
+      { set.prefix, tostring(rspamd_util.get_time()), profile_serialized }
   )
 
   return profile
@@ -87,7 +87,7 @@ end
 -- ANN filter function, used to insert scores based on the existing symbols
 local function ann_scores_filter(task)
 
-  for _,rule in pairs(settings.rules) do
+  for _, rule in pairs(settings.rules) do
     local sid = task:get_settings_id() or -1
     local ann
     local profile
@@ -228,14 +228,17 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     end
   end
 
-
   if learn_spam or learn_ham then
     local learn_type
-    if learn_spam then learn_type = 'spam' else learn_type = 'ham' end
+    if learn_spam then
+      learn_type = 'spam'
+    else
+      learn_type = 'ham'
+    end
 
     local function vectors_len_cb(err, data)
       if not err and type(data) == 'table' then
-        local nspam,nham = data[1],data[2]
+        local nspam, nham = data[1], data[2]
 
         if neural_common.can_push_train_vector(rule, task, learn_type, nspam, nham) then
           local vec = neural_common.result_to_vector(task, set)
@@ -296,7 +299,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
       end
 
       lua_redis.exec_redis_script(neural_common.redis_script_id.vectors_len,
-          {task = task, is_write = false},
+          { task = task, is_write = false },
           vectors_len_cb,
           {
             set.ann.redis_key,
@@ -318,7 +321,7 @@ end
 -- Utility to extract and split saved training vectors to a table of tables
 local function process_training_vectors(data)
   return fun.totable(fun.map(function(tok)
-    local _,str = rspamd_util.zstd_decompress(tok)
+    local _, str = rspamd_util.zstd_decompress(tok)
     return fun.totable(fun.map(tonumber, lua_util.str_split(tostring(str), ';')))
   end, data))
 end
@@ -334,23 +337,23 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
   local function redis_ham_cb(err, data)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get ham tokens for ANN %s from redis: %s',
-        ann_key, err)
+          ann_key, err)
       -- Unlock on error
       lua_redis.redis_make_request_taskless(ev_base,
-        rspamd_config,
-        rule.redis,
-        nil,
-        true, -- is write
+          rspamd_config,
+          rule.redis,
+          nil,
+          true, -- is write
           neural_common.gen_unlock_cb(rule, set, ann_key), --callback
-        'HDEL', -- command
-        {ann_key, 'lock'}
+          'HDEL', -- command
+          { ann_key, 'lock' }
       )
     else
       -- Decompress and convert to numbers each training vector
       ham_elts = process_training_vectors(data)
-      neural_common.spawn_train({worker = worker, ev_base = ev_base,
-          rule = rule, set = set, ann_key = ann_key, ham_vec = ham_elts,
-          spam_vec = spam_elts})
+      neural_common.spawn_train({ worker = worker, ev_base = ev_base,
+                                  rule = rule, set = set, ann_key = ann_key, ham_vec = ham_elts,
+                                  spam_vec = spam_elts })
     end
   end
 
@@ -358,29 +361,29 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
   local function redis_spam_cb(err, data)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get spam tokens for ANN %s from redis: %s',
-        ann_key, err)
+          ann_key, err)
       -- Unlock ANN on error
       lua_redis.redis_make_request_taskless(ev_base,
-        rspamd_config,
-        rule.redis,
-        nil,
-        true, -- is write
+          rspamd_config,
+          rule.redis,
+          nil,
+          true, -- is write
           neural_common.gen_unlock_cb(rule, set, ann_key), --callback
-        'HDEL', -- command
-        {ann_key, 'lock'}
+          'HDEL', -- command
+          { ann_key, 'lock' }
       )
     else
       -- Decompress and convert to numbers each training vector
       spam_elts = process_training_vectors(data)
       -- Now get ham vectors...
       lua_redis.redis_make_request_taskless(ev_base,
-        rspamd_config,
-        rule.redis,
-        nil,
-        false, -- is write
-        redis_ham_cb, --callback
-        'SMEMBERS', -- command
-        {ann_key .. '_ham_set'}
+          rspamd_config,
+          rule.redis,
+          nil,
+          false, -- is write
+          redis_ham_cb, --callback
+          'SMEMBERS', -- command
+          { ann_key .. '_ham_set' }
       )
     end
   end
@@ -388,21 +391,21 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
   local function redis_lock_cb(err, data)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot call lock script for ANN %s from redis: %s',
-        ann_key, err)
+          ann_key, err)
     elseif type(data) == 'number' and data == 1 then
       -- ANN is locked, so we can extract SPAM and HAM vectors and spawn learning
       lua_redis.redis_make_request_taskless(ev_base,
-        rspamd_config,
-        rule.redis,
-        nil,
-        false, -- is write
-        redis_spam_cb, --callback
-        'SMEMBERS', -- command
-        {ann_key .. '_spam_set'}
+          rspamd_config,
+          rule.redis,
+          nil,
+          false, -- is write
+          redis_spam_cb, --callback
+          'SMEMBERS', -- command
+          { ann_key .. '_spam_set' }
       )
 
       rspamd_logger.infox(rspamd_config, 'lock ANN %s:%s (key name %s) for learning',
-        rule.prefix, set.name, ann_key)
+          rule.prefix, set.name, ann_key)
     else
       local lock_tm = tonumber(data[1])
       rspamd_logger.infox(rspamd_config, 'do not learn ANN %s:%s (key name %s), ' ..
@@ -422,14 +425,14 @@ local function do_train_ann(worker, ev_base, rule, set, ann_key)
   -- This script returns either a boolean or a pair {'lock_time', 'hostname'} when
   -- ANN is locked by another host (or a process, meh)
   lua_redis.exec_redis_script(neural_common.redis_script_id.maybe_lock,
-    {ev_base = ev_base, is_write = true},
-    redis_lock_cb,
+      { ev_base = ev_base, is_write = true },
+      redis_lock_cb,
       {
         ann_key,
         tostring(os.time()),
         tostring(math.max(10.0, rule.watch_interval * 2)),
         rspamd_util.get_hostname()
-    })
+      })
 end
 
 -- This function loads new ann from Redis
@@ -448,7 +451,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
     else
       if type(data) == 'table' then
         if type(data[1]) == 'userdata' and data[1].cookie == text_cookie then
-          local _err,ann_data = rspamd_util.zstd_decompress(data[1])
+          local _err, ann_data = rspamd_util.zstd_decompress(data[1])
           local ann
 
           if _err or not ann_data then
@@ -482,7 +485,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
                   true, -- is write
                   rank_cb, --callback
                   'ZADD', -- command
-                  {set.prefix, tostring(rspamd_util.get_time()), profile_serialized}
+                  { set.prefix, tostring(rspamd_util.get_time()), profile_serialized }
               )
               rspamd_logger.infox(rspamd_config,
                   'loaded ANN for %s:%s from %s; %s bytes compressed; version=%s',
@@ -507,15 +510,15 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
             local roc_thresholds = parser:get_object()
             set.ann.roc_thresholds = roc_thresholds
             rspamd_logger.infox(rspamd_config,
-                                'loaded ROC thresholds for %s:%s; version=%s',
-                                rule.prefix, set.name, profile.version)
+                'loaded ROC thresholds for %s:%s; version=%s',
+                rule.prefix, set.name, profile.version)
             rspamd_logger.debugx("ROC thresholds: %s", roc_thresholds)
           end
         end
 
         if set.ann and set.ann.ann and type(data[3]) == 'userdata' and data[3].cookie == text_cookie then
           -- PCA table
-          local _err,pca_data = rspamd_util.zstd_decompress(data[3])
+          local _err, pca_data = rspamd_util.zstd_decompress(data[3])
           if pca_data then
             if rule.max_inputs then
               -- We can use PCA
@@ -555,8 +558,8 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
       false, -- is write
       data_cb, --callback
       'HMGET', -- command
-      {ann_key, 'ann', 'roc_thresholds', 'pca'}, -- arguments
-      {opaque_data = true}
+      { ann_key, 'ann', 'roc_thresholds', 'pca' }, -- arguments
+      { opaque_data = true }
   )
 end
 
@@ -570,7 +573,7 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
   local min_diff = math.huge
   local sel_elt
 
-  for _,elt in fun.iter(profiles) do
+  for _, elt in fun.iter(profiles) do
     if elt and elt.symbols then
       local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
       -- Check distance
@@ -641,7 +644,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
     ham = 0,
   }
 
-  for _,elt in fun.iter(profiles) do
+  for _, elt in fun.iter(profiles) do
     if elt and elt.symbols then
       local dist = lua_util.distance_sorted(elt.symbols, my_symbols)
       -- Check distance
@@ -734,7 +737,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
           false, -- is write
           redis_len_cb_gen(initiate_train, 'ham', true), --callback
           'SCARD', -- command
-          {ann_key .. '_ham_set'}
+          { ann_key .. '_ham_set' }
       )
     end
 
@@ -745,7 +748,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         false, -- is write
         redis_len_cb_gen(check_ham_len, 'spam', false), --callback
         'SCARD', -- command
-        {ann_key .. '_spam_set'}
+        { ann_key .. '_spam_set' }
     )
   end
 end
@@ -755,14 +758,14 @@ local function load_ann_profile(element)
   local ucl = require "ucl"
 
   local parser = ucl.parser()
-  local res,ucl_err = parser:parse_string(element)
+  local res, ucl_err = parser:parse_string(element)
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse ANN from redis: %s',
         ucl_err)
     return nil
   else
     local profile = parser:get_object()
-    local checked,schema_err = redis_profile_schema:transform(profile)
+    local checked, schema_err = redis_profile_schema:transform(profile)
     if not checked then
       rspamd_logger.errx(rspamd_config, "cannot parse profile schema: %s", schema_err)
 
@@ -774,7 +777,7 @@ end
 
 -- Function to check or load ANNs from Redis
 local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
-  for _,set in pairs(rule.settings) do
+  for _, set in pairs(rule.settings) do
     local function members_cb(err, data)
       if err then
         rspamd_logger.errx(cfg, 'cannot get ANNs list from redis: %s',
@@ -800,7 +803,7 @@ local function check_anns(worker, cfg, ev_base, rule, process_callback, what)
           false, -- is write
           members_cb, --callback
           'ZREVRANGE', -- command
-          {set.prefix, '0', tostring(settings.max_profiles)} -- arguments
+          { set.prefix, '0', tostring(settings.max_profiles) } -- arguments
       )
     end
   end -- Cycle over all settings
@@ -810,13 +813,13 @@ end
 
 -- Function to clean up old ANNs
 local function cleanup_anns(rule, cfg, ev_base)
-  for _,set in pairs(rule.settings) do
+  for _, set in pairs(rule.settings) do
     local function invalidate_cb(err, data)
       if err then
         rspamd_logger.errx(cfg, 'cannot exec invalidate script in redis: %s',
             err)
       elseif type(data) == 'table' then
-        for _,expired in ipairs(data) do
+        for _, expired in ipairs(data) do
           local profile = load_ann_profile(expired)
           rspamd_logger.infox(cfg, 'invalidated ANN for %s; redis key: %s; version=%s',
               rule.prefix .. ':' .. set.name,
@@ -828,9 +831,9 @@ local function cleanup_anns(rule, cfg, ev_base)
 
     if type(set) == 'table' then
       lua_redis.exec_redis_script(neural_common.redis_script_id.maybe_invalidate,
-          {ev_base = ev_base, is_write = true},
+          { ev_base = ev_base, is_write = true },
           invalidate_cb,
-          {set.prefix, tostring(settings.max_profiles)})
+          { set.prefix, tostring(settings.max_profiles) })
     end
   end
 end
@@ -845,7 +848,7 @@ local function ann_push_vector(task)
     return
   end
 
-  local verdict,score = lua_verdict.get_specific_verdict(N, task)
+  local verdict, score = lua_verdict.get_specific_verdict(N, task)
 
   if verdict == 'passthrough' then
     lua_util.debugm(N, task, 'ignore task as its verdict is %s(%s)',
@@ -861,7 +864,7 @@ local function ann_push_vector(task)
     return
   end
 
-  for _,rule in pairs(settings.rules) do
+  for _, rule in pairs(settings.rules) do
     local set = neural_common.get_rule_settings(task, rule)
 
     if set then
@@ -906,7 +909,7 @@ if settings.blacklisted_symbols and settings.blacklisted_symbols[1] then
 end
 
 -- Check all rules
-for k,r in pairs(rules) do
+for k, r in pairs(rules) do
   local rule_elt = lua_util.override_defaults(neural_common.default_options, r)
   rule_elt['redis'] = neural_common.redis_params
   rule_elt['anns'] = {} -- Store ANNs here
@@ -921,7 +924,9 @@ for k,r in pairs(rules) do
     rule_elt.train.max_trains = rule_elt.train.max_train
   end
 
-  if not rule_elt.profile then rule_elt.profile = {} end
+  if not rule_elt.profile then
+    rule_elt.profile = {}
+  end
 
   if rule_elt.max_inputs and not has_blas then
     rspamd_logger.errx('cannot set max inputs to %s as BLAS is not compiled in',
@@ -969,7 +974,7 @@ rspamd_config:register_symbol({
 rspamd_config:add_post_init(neural_common.process_rules_settings)
 
 -- Add training scripts
-for _,rule in pairs(settings.rules) do
+for _, rule in pairs(settings.rules) do
   neural_common.load_scripts(rule.redis)
   -- This function will check ANNs in Redis when a worker is loaded
   rspamd_config:add_on_load(function(cfg, ev_base, worker)

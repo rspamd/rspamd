@@ -21,7 +21,7 @@ limitations under the License.
 
 local ffi = require 'ffi'
 
-ffi.cdef[[
+ffi.cdef [[
 struct rspamd_dkim_sign_context_s;
 struct rspamd_dkim_key_s;
 struct rspamd_task;
@@ -69,23 +69,22 @@ local function load_sign_key(what, format)
     elseif format == 'raw' then
       format = ffi.C.RSPAMD_DKIM_KEY_RAW
     else
-      return nil,'unknown key format'
+      return nil, 'unknown key format'
     end
   end
 
   return ffi.C.rspamd_dkim_sign_key_load(what, #what, format, nil)
 end
 
-local default_dkim_headers =
-"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:" ..
-"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:" ..
-"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:" ..
-"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:" ..
-"list-subscribe:list-post:(o)openpgp:(o)autocrypt"
+local default_dkim_headers = "(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:" ..
+    "(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:" ..
+    "resent-to:resent-cc:resent-from:resent-sender:resent-message-id:" ..
+    "(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:" ..
+    "list-subscribe:list-post:(o)openpgp:(o)autocrypt"
 
 local function create_sign_context(task, privkey, dkim_headers, sign_type)
   if not task or not privkey then
-    return nil,'invalid arguments'
+    return nil, 'invalid arguments'
   end
 
   if not dkim_headers then
@@ -103,9 +102,8 @@ local function create_sign_context(task, privkey, dkim_headers, sign_type)
   elseif sign_type == 'arc-seal' then
     sign_type = ffi.C.RSPAMD_DKIM_ARC_SEAL
   else
-    return nil,'invalid sign type'
+    return nil, 'invalid sign type'
   end
-
 
   return ffi.C.rspamd_create_dkim_sign_context(task:topointer(), privkey,
       1, 1, dkim_headers, sign_type, nil)
@@ -114,17 +112,23 @@ end
 local function do_sign(task, sign_context, selector, domain,
                        expire, len, arc_idx)
   if not task or not sign_context or not selector or not domain then
-    return nil,'invalid arguments'
+    return nil, 'invalid arguments'
   end
 
-  if not expire then expire = 0 end
-  if not len then len = 0 end
-  if not arc_idx then arc_idx = 0 end
+  if not expire then
+    expire = 0
+  end
+  if not len then
+    len = 0
+  end
+  if not arc_idx then
+    arc_idx = 0
+  end
 
   local gstring = ffi.C.rspamd_dkim_sign(task:topointer(), selector, domain, expire, len, arc_idx, nil, sign_context)
 
   if not gstring then
-    return nil,'cannot sign'
+    return nil, 'cannot sign'
   end
 
   local ret = ffi.string(gstring.str, gstring.len)

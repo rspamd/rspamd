@@ -137,7 +137,7 @@ local function clamav_check(task, content, digest, rule, maybe_part)
           local vname = string.match(data, 'stream: (.+) FOUND')
           if string.find(vname, '^Heuristics%.Encrypted') then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
-            common.yield_result(task, rule, 'File is encrypted: '.. vname,
+            common.yield_result(task, rule, 'File is encrypted: ' .. vname,
                 0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           elseif string.find(vname, '^Heuristics%.OLE2%.ContainsMacros') then
@@ -146,7 +146,7 @@ local function clamav_check(task, content, digest, rule, maybe_part)
             cached = 'MACRO'
           elseif string.find(vname, '^Heuristics%.Limits%.Exceeded') then
             rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
-            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0,
+            common.yield_result(task, rule, 'Limits Exceeded: ' .. vname, 0.0,
                 'fail', maybe_part)
           elseif vname then
             common.yield_result(task, rule, vname, 1.0, nil, maybe_part)

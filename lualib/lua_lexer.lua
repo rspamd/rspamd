@@ -22,36 +22,38 @@ local lpeg = require "lpeg"
 local P = lpeg.P
 local R = lpeg.R
 local S = lpeg.S
-local D = R'09' -- Digits
+local D = R '09' -- Digits
 local I = R('AZ', 'az', '\127\255') + '_' -- Identifiers
 local B = -(I + D) -- Word boundary
 local EOS = -lpeg.P(1) -- end of string
 
 -- Pattern for long strings and long comments.
-local longstring = #(P'[[' + (P'[' * P'='^0 * '[')) * P(function(input, index)
+local longstring = #(P '[[' + (P '[' * P '=' ^ 0 * '[')) * P(function(input, index)
   local level = input:match('^%[(=*)%[', index)
   if level then
     local _, last = input:find(']' .. level .. ']', index, true)
-    if last then return last + 1 end
+    if last then
+      return last + 1
+    end
   end
 end)
 
 -- String literals.
-local singlequoted = P"'" * ((1 - S"'\r\n\f\\") + (P'\\' * 1))^0 * "'"
-local doublequoted = P'"' * ((1 - S'"\r\n\f\\') + (P'\\' * 1))^0 * '"'
+local singlequoted = P "'" * ((1 - S "'\r\n\f\\") + (P '\\' * 1)) ^ 0 * "'"
+local doublequoted = P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"'
 
 -- Comments.
-local eol = P'\r\n' + '\n'
-local line = (1 - S'\r\n\f')^0 * eol^-1
-local singleline = P'--' * line
-local multiline = P'--' * longstring
+local eol = P '\r\n' + '\n'
+local line = (1 - S '\r\n\f') ^ 0 * eol ^ -1
+local singleline = P '--' * line
+local multiline = P '--' * longstring
 
 -- Numbers.
-local sign = S'+-'^-1
-local decimal = D^1
-local hexadecimal = P'0' * S'xX' * R('09', 'AF', 'af') ^ 1
-local float = D^1 * P'.' * D^0 + P'.' * D^1
-local maybeexp = (float + decimal) * (S'eE' * sign * D^1)^-1
+local sign = S '+-' ^ -1
+local decimal = D ^ 1
+local hexadecimal = P '0' * S 'xX' * R('09', 'AF', 'af') ^ 1
+local float = D ^ 1 * P '.' * D ^ 0 + P '.' * D ^ 1
+local maybeexp = (float + decimal) * (S 'eE' * sign * D ^ 1) ^ -1
 
 local function compile_keywords(keywords)
   local list = {}
@@ -74,26 +76,26 @@ local function compile_keywords(keywords)
 end
 
 -- Identifiers
-local ident = I * (I + D)^0
-local expr = ('.' * ident)^0
+local ident = I * (I + D) ^ 0
+local expr = ('.' * ident) ^ 0
 
 local patterns = {
-  {'whitespace',  S'\r\n\f\t\v '^1},
-  {'constant', (P'true' + 'false' + 'nil') * B},
-  {'string', singlequoted + doublequoted + longstring},
-  {'comment', multiline + singleline},
-  {'number', hexadecimal + maybeexp},
-  {'operator', P'not' + '...' + 'and' + '..' + '~=' + '==' + '>=' + '<='
-      + 'or' + S']{=>^[<;)*(%}+-:,/.#'},
-  {'keyword', compile_keywords([[
+  { 'whitespace', S '\r\n\f\t\v ' ^ 1 },
+  { 'constant', (P 'true' + 'false' + 'nil') * B },
+  { 'string', singlequoted + doublequoted + longstring },
+  { 'comment', multiline + singleline },
+  { 'number', hexadecimal + maybeexp },
+  { 'operator', P 'not' + '...' + 'and' + '..' + '~=' + '==' + '>=' + '<='
+      + 'or' + S ']{=>^[<;)*(%}+-:,/.#' },
+  { 'keyword', compile_keywords([[
       break do else elseif end for function if in local repeat return then until while
-      ]])},
-  {'identifier', lpeg.Cmt(ident,
+      ]]) },
+  { 'identifier', lpeg.Cmt(ident,
       function(input, index)
         return expr:match(input, index)
       end)
   },
-  {'error', 1},
+  { 'error', 1 },
 }
 
 local compiled
@@ -101,7 +103,7 @@ local compiled
 local function compile_patterns()
   if not compiled then
     local function process(elt)
-      local n,grammar = elt[1],elt[2]
+      local n, grammar = elt[1], elt[2]
       return lpeg.Cc(n) * lpeg.P(grammar) * lpeg.Cp()
     end
     local any = process(patterns[1])
@@ -151,7 +153,7 @@ exports.lex_to_table = function(input)
   local out = {}
 
   for kind, text, lnum, cnum in exports.gmatch(input) do
-    out[#out + 1] = {kind, text, lnum, cnum}
+    out[#out + 1] = { kind, text, lnum, cnum }
   end
 
   return out

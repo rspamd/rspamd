@@ -35,7 +35,7 @@ local function escape_spaces(query)
 end
 
 local function ch_number(a)
-  if (a+2^52)-2^52 == a then
+  if (a + 2 ^ 52) - 2 ^ 52 == a then
     -- Integer
     return tostring(math.floor(a))
   end
@@ -59,7 +59,7 @@ end
 
 -- Converts an array to a string suitable for clickhouse
 local function array_to_string(ar)
-  for i,elt in ipairs(ar) do
+  for i, elt in ipairs(ar) do
     local t = type(elt)
     if t == 'string' then
       ar[i] = string.format('\'%s\'', clickhouse_quote(elt))
@@ -76,7 +76,7 @@ end
 -- Converts a row into TSV, taking extra care about arrays
 local function row_to_tsv(row)
 
-  for i,elt in ipairs(row) do
+  for i, elt in ipairs(row) do
     local t = type(elt)
     if t == 'table' then
       row[i] = '[' .. array_to_string(elt) .. ']'
@@ -107,9 +107,9 @@ local function parse_clickhouse_response_json_eachrow(params, data, row_cb)
     local parser = ucl.parser()
     local res, err
     if type(s) == 'string' then
-      res,err = parser:parse_string(s)
+      res, err = parser:parse_string(s)
     else
-      res,err = parser:parse_text(s)
+      res, err = parser:parse_text(s)
     end
 
     if not res then
@@ -151,9 +151,9 @@ local function parse_clickhouse_response_json(params, data)
     local res, err
 
     if type(s) == 'string' then
-      res,err = parser:parse_string(s)
+      res, err = parser:parse_string(s)
     else
-      res,err = parser:parse_text(s)
+      res, err = parser:parse_text(s)
     end
 
     if not res then
@@ -169,14 +169,16 @@ local function parse_clickhouse_response_json(params, data)
     return 'bad json', {}
   end
 
-  return nil,json
+  return nil, json
 end
 
 -- Helper to generate HTTP closure
 local function mk_http_select_cb(upstream, params, ok_cb, fail_cb, row_cb)
   local function http_cb(err_message, code, data, _)
     if code ~= 200 or err_message then
-      if not err_message then err_message = data end
+      if not err_message then
+        err_message = data
+      end
       local ip_addr = upstream:get_addr():to_string(true)
 
       if fail_cb then
@@ -205,8 +207,8 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb, row_cb)
         else
           local ip_addr = upstream:get_addr():to_string(true)
           rspamd_logger.errx(params.log_obj,
-            "request failed on clickhouse server %s: %s",
-            ip_addr, 'failed to parse reply')
+              "request failed on clickhouse server %s: %s",
+              ip_addr, 'failed to parse reply')
         end
       end
     end
@@ -219,7 +221,9 @@ end
 local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
   local function http_cb(err_message, code, data, _)
     if code ~= 200 or err_message then
-      if not err_message then err_message = data end
+      if not err_message then
+        err_message = data
+      end
       local ip_addr = upstream:get_addr():to_string(true)
 
       if fail_cb then
@@ -234,7 +238,7 @@ local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
       upstream:ok()
 
       if ok_cb then
-        local err,parsed = parse_clickhouse_response_json(data)
+        local err, parsed = parse_clickhouse_response_json(data)
 
         if err then
           fail_cb(params, err, data)
@@ -273,10 +277,12 @@ end
 -- @example
 --
 --]]
-exports.select = function (upstream, settings, params, query, ok_cb, fail_cb, row_cb)
+exports.select = function(upstream, settings, params, query, ok_cb, fail_cb, row_cb)
   local http_params = {}
 
-  for k,v in pairs(params) do http_params[k] = v end
+  for k, v in pairs(params) do
+    http_params[k] = v
+  end
 
   http_params.callback = mk_http_select_cb(upstream, http_params, ok_cb, fail_cb, row_cb)
   http_params.gzip = settings.use_gzip
@@ -327,10 +333,12 @@ end
 -- @example
 --
 --]]
-exports.select_sync = function (upstream, settings, params, query, row_cb)
+exports.select_sync = function(upstream, settings, params, query, row_cb)
   local http_params = {}
 
-  for k,v in pairs(params) do http_params[k] = v end
+  for k, v in pairs(params) do
+    http_params[k] = v
+  end
 
   http_params.gzip = settings.use_gzip
   http_params.mime_type = 'text/plain'
@@ -388,11 +396,13 @@ end
 -- @example
 --
 --]]
-exports.insert = function (upstream, settings, params, query, rows,
-                              ok_cb, fail_cb)
+exports.insert = function(upstream, settings, params, query, rows,
+                          ok_cb, fail_cb)
   local http_params = {}
 
-  for k,v in pairs(params) do http_params[k] = v end
+  for k, v in pairs(params) do
+    http_params[k] = v
+  end
 
   http_params.callback = mk_http_insert_cb(upstream, http_params, ok_cb, fail_cb)
   http_params.gzip = settings.use_gzip
@@ -402,7 +412,7 @@ exports.insert = function (upstream, settings, params, query, rows,
   http_params.user = settings.user
   http_params.password = settings.password
   http_params.method = 'POST'
-  http_params.body = {rspamd_text.fromtable(rows, '\n'), '\n'}
+  http_params.body = { rspamd_text.fromtable(rows, '\n'), '\n' }
   http_params.log_obj = params.task or params.config
 
   if not http_params.url then
@@ -441,11 +451,13 @@ end
 -- @example
 --
 --]]
-exports.generic = function (upstream, settings, params, query,
+exports.generic = function(upstream, settings, params, query,
                            ok_cb, fail_cb)
   local http_params = {}
 
-  for k,v in pairs(params) do http_params[k] = v end
+  for k, v in pairs(params) do
+    http_params[k] = v
+  end
 
   http_params.callback = mk_http_insert_cb(upstream, http_params, ok_cb, fail_cb)
   http_params.gzip = settings.use_gzip
@@ -488,10 +500,12 @@ end
 -- @example
 --
 --]]
-exports.generic_sync = function (upstream, settings, params, query)
+exports.generic_sync = function(upstream, settings, params, query)
   local http_params = {}
 
-  for k,v in pairs(params) do http_params[k] = v end
+  for k, v in pairs(params) do
+    http_params[k] = v
+  end
 
   http_params.gzip = settings.use_gzip
   http_params.mime_type = 'text/plain'
@@ -521,10 +535,10 @@ exports.generic_sync = function (upstream, settings, params, query)
     return response.content, response
   else
     lua_util.debugm(N, http_params.log_obj, "clickhouse generic response: %1", response)
-    local e,obj = parse_clickhouse_response_json(params, response.content)
+    local e, obj = parse_clickhouse_response_json(params, response.content)
 
     if e then
-      return e,nil
+      return e, nil
     end
     return nil, obj
   end

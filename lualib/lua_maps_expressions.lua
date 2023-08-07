@@ -64,7 +64,7 @@ local function process_func(elt, task)
 
     if values then
       if type(values) == 'table' then
-        for _,val in ipairs(values) do
+        for _, val in ipairs(values) do
           if res == 0 then
             match_rule(val)
           end
@@ -80,17 +80,16 @@ local function process_func(elt, task)
   local res = elt.expr:process(process_atom)
 
   if res > 0 then
-    return res,matched
+    return res, matched
   end
 
   return nil
 end
 
-
-exports.schema = ts.shape{
+exports.schema = ts.shape {
   expression = ts.string,
   rules = ts.array_of(
-      ts.shape{
+      ts.shape {
         selector = ts.string,
         map = lua_maps.map_schema,
       }
@@ -119,7 +118,9 @@ exports.schema = ts.shape{
 --
 --]]
 local function create(cfg, obj, module_name)
-  if not module_name then module_name = 'lua_maps_expressions' end
+  if not module_name then
+    module_name = 'lua_maps_expressions'
+  end
 
   if not obj or not obj.rules or not obj.expression then
     rspamd_logger.errx(cfg, 'cannot add maps combination for module %s: required elements are missing',
@@ -133,7 +134,7 @@ local function create(cfg, obj, module_name)
     module_name = module_name
   }
 
-  for name,rule in pairs(obj.rules) do
+  for name, rule in pairs(obj.rules) do
     local sel = lua_selectors.create_selector_closure(cfg, rule.selector)
 
     if not sel then
@@ -201,7 +202,7 @@ local function create(cfg, obj, module_name)
   ret.expr = expr
 
   if obj.symbol then
-    rspamd_config:register_symbol{
+    rspamd_config:register_symbol {
       type = 'virtual,ghost',
       name = obj.symbol,
       score = 0.0,

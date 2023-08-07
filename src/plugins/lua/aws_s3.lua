@@ -35,7 +35,7 @@ local settings = {
   inline_content_limit = nil,
 }
 
-local settings_schema = ts.shape{
+local settings_schema = ts.shape {
   s3_bucket = ts.string,
   s3_region = ts.string,
   s3_host = ts.string,
@@ -103,11 +103,11 @@ local function structured_data(task, nonce, queue_id)
   local message_split = lua_mime.message_to_ucl(task)
   if settings.inline_content_limit and settings.inline_content_limit > 0 then
 
-    for i,part in ipairs(message_split.parts or {}) do
+    for i, part in ipairs(message_split.parts or {}) do
       if part.content and #part.content >= settings.inline_content_limit then
         local ref = convert_to_ref(task, nonce, queue_id, part, external_refs)
         lua_util.debugm(N, task, "convert part number %s to a reference %s",
-          i, ref)
+            i, ref)
       end
     end
   end
@@ -137,7 +137,7 @@ local function s3_aws_callback(task)
   local aws_host = string.format('%s.%s', settings.s3_bucket, settings.s3_host)
 
   local function gen_s3_http_callback(path, what)
-    return function (http_err, code, body, headers)
+    return function(http_err, code, body, headers)
 
       if http_err then
         if settings.fail_action then
@@ -201,7 +201,7 @@ local function s3_aws_callback(task)
       timeout = settings.s3_timeout,
     })
 
-    for ref,part_content in pairs(external_refs) do
+    for ref, part_content in pairs(external_refs) do
       local part_hdrs = lua_aws.aws_request_enrich({
         region = settings.s3_region,
         headers = {
@@ -235,7 +235,7 @@ if not opts then
 end
 
 settings = lua_util.override_defaults(settings, opts)
-local res,err = settings_schema:transform(settings)
+local res, err = settings_schema:transform(settings)
 
 if not res then
   rspamd_logger.warnx(rspamd_config, 'plugin is misconfigured: %s', err)
@@ -263,7 +263,7 @@ rspamd_config:register_symbol({
   name = 'EXPORT_AWS_S3',
   type = is_postfilter and 'postfilter' or 'idempotent',
   callback = s3_aws_callback,
-  augmentations = {string.format("timeout=%f", settings.s3_timeout)},
+  augmentations = { string.format("timeout=%f", settings.s3_timeout) },
   priority = is_postfilter and lua_util.symbols_priorities.high or nil,
   flags = 'empty,explicit_disable,ignore_passthrough,nostat',
 })

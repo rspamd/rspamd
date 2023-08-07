@@ -24,11 +24,15 @@ local vcard_grammar
 local function gen_grammar()
   if not vcard_grammar then
     local wsp = l.S(" \t\v\f")
-    local crlf = (l.P"\r"^-1 * l.P"\n") + l.P"\r"
-    local eol = (crlf * #crlf) + (crlf - (crlf^-1 * wsp))
-    local name = l.C((l.P(1) - (l.P":"))^1) / function(v) return (v:gsub("[\n\r]+%s","")) end
-    local value = l.C((l.P(1) - eol)^0) / function(v) return (v:gsub("[\n\r]+%s","")) end
-    vcard_grammar = name * ":" * wsp^0 * value * eol^-1
+    local crlf = (l.P "\r" ^ -1 * l.P "\n") + l.P "\r"
+    local eol = (crlf * #crlf) + (crlf - (crlf ^ -1 * wsp))
+    local name = l.C((l.P(1) - (l.P ":")) ^ 1) / function(v)
+      return (v:gsub("[\n\r]+%s", ""))
+    end
+    local value = l.C((l.P(1) - eol) ^ 0) / function(v)
+      return (v:gsub("[\n\r]+%s", ""))
+    end
+    vcard_grammar = name * ":" * wsp ^ 0 * value * eol ^ -1
   end
 
   return vcard_grammar
@@ -37,7 +41,7 @@ end
 local exports = {}
 
 local function process_vcard(input, mpart, task)
-  local control={n='\n', r=''}
+  local control = { n = '\n', r = '' }
   local rspamd_url = require "rspamd_url"
   local escaper = l.Ct((gen_grammar() / function(key, value)
     value = value:gsub("\\(.)", control)
@@ -45,7 +49,7 @@ local function process_vcard(input, mpart, task)
     local local_urls = rspamd_url.all(task:get_mempool(), value)
 
     if local_urls and #local_urls > 0 then
-      for _,u in ipairs(local_urls) do
+      for _, u in ipairs(local_urls) do
         lua_util.debugm(N, task, 'vcard: found URL in vcard %s',
             tostring(u))
         task:inject_url(u, mpart)
@@ -53,8 +57,8 @@ local function process_vcard(input, mpart, task)
     end
     lua_util.debugm(N, task, 'vcard: vcard key %s = "%s"',
         key, value)
-    return {key, value}
-  end)^1)
+    return { key, value }
+  end) ^ 1)
 
   local elts = escaper:match(input)
 
@@ -64,7 +68,9 @@ local function process_vcard(input, mpart, task)
 
   return {
     tag = 'vcard',
-    extract_text = function() return nil end, -- NYI
+    extract_text = function()
+      return nil
+    end, -- NYI
     elts = elts
   }
 end

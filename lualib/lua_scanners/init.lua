@@ -25,7 +25,7 @@ local exports = {
 }
 
 local function require_scanner(name)
-  local sc = require ("lua_scanners/" .. name)
+  local sc = require("lua_scanners/" .. name)
 
   exports[sc.name or name] = sc
 end
@@ -65,7 +65,9 @@ exports.filter = function(t)
   return fun.tomap(fun.filter(function(_, elt)
     return type(elt) == 'table' and elt.type and (
         (type(elt.type) == 'string' and elt.type == t) or
-        (type(elt.type) == 'table' and fun.any(function(tt) return tt == t end, elt.type))
+            (type(elt.type) == 'table' and fun.any(function(tt)
+              return tt == t
+            end, elt.type))
     )
   end, exports))
 end

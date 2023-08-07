@@ -39,7 +39,7 @@ if rspamd_util.file_exists(local_conf .. '/controller.lua') then
   end
 end
 
-for plug,paths in pairs(controller_plugin_paths) do
+for plug, paths in pairs(controller_plugin_paths) do
   if not rspamd_plugins[plug] then
     rspamd_plugins[plug] = {}
   end
@@ -49,7 +49,7 @@ for plug,paths in pairs(controller_plugin_paths) do
 
   local webui = rspamd_plugins[plug].webui
 
-  for path,attrs in pairs(paths) do
+  for path, attrs in pairs(paths) do
     if type(attrs) == 'table' then
       if type(attrs.handler) ~= 'function' then
         rspamd_logger.infox(rspamd_config, 'controller plugin %s; webui path %s has invalid handler: %s; ignore it',
@@ -61,7 +61,7 @@ for plug,paths in pairs(controller_plugin_paths) do
       end
     else
       rspamd_logger.infox(rspamd_config, 'controller plugin %s; webui path %s has invalid type: %s; ignore it',
-        plug, path, type(attrs))
+          plug, path, type(attrs))
     end
   end
 end

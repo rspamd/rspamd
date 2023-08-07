@@ -36,15 +36,15 @@ local function map_hash_key(data, mtype)
   return st:hex()
 end
 
-local function starts(where,st)
-  return string.sub(where,1,string.len(st))==st
+local function starts(where, st)
+  return string.sub(where, 1, string.len(st)) == st
 end
 
-local function cut_prefix(where,st)
-  return string.sub(where,#st + 1)
+local function cut_prefix(where, st)
+  return string.sub(where, #st + 1)
 end
 
-local function maybe_adjust_type(data,mtype)
+local function maybe_adjust_type(data, mtype)
   local function check_prefix(prefix, t)
     if starts(data, prefix) then
       data = cut_prefix(data, prefix)
@@ -57,41 +57,40 @@ local function maybe_adjust_type(data,mtype)
   end
 
   local known_types = {
-    {'regexp;', 'regexp'},
-    {'re;', 'regexp'},
-    {'regexp_multi;', 'regexp_multi'},
-    {'re_multi;', 'regexp_multi'},
-    {'glob;', 'glob'},
-    {'glob_multi;', 'glob_multi'},
-    {'radix;', 'radix'},
-    {'ipnet;', 'radix'},
-    {'set;', 'set'},
-    {'hash;', 'hash'},
-    {'plain;', 'hash'},
-    {'cdb;', 'cdb'},
-    {'cdb:/', 'cdb'},
+    { 'regexp;', 'regexp' },
+    { 're;', 'regexp' },
+    { 'regexp_multi;', 'regexp_multi' },
+    { 're_multi;', 'regexp_multi' },
+    { 'glob;', 'glob' },
+    { 'glob_multi;', 'glob_multi' },
+    { 'radix;', 'radix' },
+    { 'ipnet;', 'radix' },
+    { 'set;', 'set' },
+    { 'hash;', 'hash' },
+    { 'plain;', 'hash' },
+    { 'cdb;', 'cdb' },
+    { 'cdb:/', 'cdb' },
   }
 
   if mtype == 'callback' then
     return mtype
   end
 
-  for _,t in ipairs(known_types) do
+  for _, t in ipairs(known_types) do
     if check_prefix(t[1], t[2]) then
-      return data,mtype
+      return data, mtype
     end
   end
 
   -- No change
-  return data,mtype
+  return data, mtype
 end
 
-
-local external_map_schema = ts.shape{
+local external_map_schema = ts.shape {
   external = ts.equivalent(true), -- must be true
   backend = ts.string, -- where to get data, required
-  method = ts.one_of{"body", "header", "query"}, -- how to pass input
-  encode = ts.one_of{"json", "messagepack"}:is_optional(), -- how to encode input (if relevant)
+  method = ts.one_of { "body", "header", "query" }, -- how to pass input
+  encode = ts.one_of { "json", "messagepack" }:is_optional(), -- how to encode input (if relevant)
   timeout = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
 }
 
@@ -100,7 +99,9 @@ local ucl = require "ucl"
 
 local function url_encode_string(str)
   str = string.gsub(str, "([^%w _%%%-%.~])",
-      function(c) return string.format("%%%02X", string.byte(c)) end)
+      function(c)
+        return string.format("%%%02X", string.byte(c))
+      end)
   str = string.gsub(str, " ", "+")
   return str
 end
@@ -147,7 +148,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
       -- query/header and no encode
       if map_config.method == 'query' then
         local params_table = {}
-        for k,v in pairs(key) do
+        for k, v in pairs(key) do
           if type(v) == 'string' then
             table.insert(params_table, string.format('%s=%s', url_encode_string(k), url_encode_string(v)))
           end
@@ -176,7 +177,7 @@ local function query_external_map(map_config, upstreams, key, callback, task)
     end
   end
 
-  local ret = rspamd_http.request{
+  local ret = rspamd_http.request {
     task = task,
     url = url,
     callback = map_callback,
@@ -261,7 +262,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
   end
 
   if type(opt) == 'string' then
-    opt,mtype = maybe_adjust_type(opt, mtype)
+    opt, mtype = maybe_adjust_type(opt, mtype)
     local cache_key = map_hash_key(opt, mtype)
     if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
@@ -270,7 +271,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       return maps_cache[cache_key]
     end
     -- We have a single string, so we treat it as a map
-    local map = rspamd_config:add_map{
+    local map = rspamd_config:add_map {
       type = mtype,
       description = description,
       url = opt,
@@ -287,7 +288,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     local cache_key = lua_util.table_digest(opt)
     if not callback and maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
-          cache_key:sub(1,8), description)
+          cache_key:sub(1, 8), description)
 
       return maps_cache[cache_key]
     end
@@ -295,8 +296,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     if opt[1] then
       -- Adjust each element if needed
       local adjusted
-      for i,source in ipairs(opt) do
-        local nsrc,ntype = maybe_adjust_type(source, mtype)
+      for i, source in ipairs(opt) do
+        local nsrc, ntype = maybe_adjust_type(source, mtype)
 
         if mtype ~= ntype then
           if not adjusted then
@@ -322,7 +323,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           end
         else
           -- Plain table
-          local map = rspamd_config:add_map{
+          local map = rspamd_config:add_map {
             type = mtype,
             description = description,
             url = opt,
@@ -339,7 +340,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       elseif mtype == 'regexp' or mtype == 'glob' then
         if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
           -- Plain table
-          local map = rspamd_config:add_map{
+          local map = rspamd_config:add_map {
             type = mtype,
             description = description,
             url = opt,
@@ -353,7 +354,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
             return ret
           end
         else
-          local map = rspamd_config:add_map{
+          local map = rspamd_config:add_map {
             type = mtype,
             description = description,
             url = {
@@ -373,7 +374,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       else
         if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
           -- Plain table
-          local map = rspamd_config:add_map{
+          local map = rspamd_config:add_map {
             type = mtype,
             description = description,
             url = opt,
@@ -390,7 +391,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
           local data = {}
           local nelts = 0
           -- Plain array of keys, count merely numeric elts
-          for _,elt in ipairs(opt) do
+          for _, elt in ipairs(opt) do
             if type(elt) == 'string' then
               -- Numeric table
               if mtype == 'hash' then
@@ -421,7 +422,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
               return nil
             end
             ret.foreach = function(_, func)
-              for k,v in pairs(ret.__data) do
+              for k, v in pairs(ret.__data) do
                 if not func(k, v) then
                   return false
                 end
@@ -449,7 +450,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
     else
       if opt.external then
         -- External map definition, missing fields are handled by schema
-        local parse_res,parse_err = external_map_schema(opt)
+        local parse_res, parse_err = external_map_schema(opt)
 
         if parse_res then
           ret.__upstreams = lua_util.http_upstreams_by_url(rspamd_config:get_mempool(), opt.backend)
@@ -471,14 +472,14 @@ local function rspamd_map_add_from_ucl(opt, mtype, description, callback)
       else
         -- Adjust lua specific augmentations in a trivial case
         if type(opt.url) == 'string' then
-          local nsrc,ntype = maybe_adjust_type(opt.url, mtype)
+          local nsrc, ntype = maybe_adjust_type(opt.url, mtype)
           if nsrc and ntype then
             opt.url = nsrc
             mtype = ntype
           end
         end
         -- We have some non-trivial object so let C code to deal with it somehow...
-        local map = rspamd_config:add_map{
+        local map = rspamd_config:add_map {
           type = mtype,
           description = description,
           url = opt,
@@ -526,7 +527,9 @@ local function rspamd_maybe_check_map(key, what)
   local fun = require "fun"
 
   if type(what) == "table" then
-    return fun.any(function(elt) return rspamd_maybe_check_map(key, elt) end, what)
+    return fun.any(function(elt)
+      return rspamd_maybe_check_map(key, elt)
+    end, what)
   end
   if type(rspamd_maps) == "table" then
     local mn
@@ -572,7 +575,7 @@ exports.fill_config_maps = function(mname, opts, map_defs)
         rspamd_logger.errx(rspamd_config, 'map add error %s for module %s', k, mname)
         return false
       end
-      opts[k..'_orig'] = opts[k]
+      opts[k .. '_orig'] = opts[k]
       opts[k] = map
     elseif not v.optional then
       rspamd_logger.errx(rspamd_config, 'cannot find non optional map %s for module %s', k, mname)
@@ -583,27 +586,27 @@ exports.fill_config_maps = function(mname, opts, map_defs)
   return true
 end
 
-local direct_map_schema = ts.shape{ -- complex object
+local direct_map_schema = ts.shape { -- complex object
   name = ts.string:is_optional(),
   description = ts.string:is_optional(),
   selector_alias = ts.string:is_optional(), -- an optional alias for the selectos framework
   timeout = ts.number,
   data = ts.array_of(ts.string):is_optional(),
   -- Tableshape has no options support for something like key1 or key2?
-  upstreams = ts.one_of{
+  upstreams = ts.one_of {
     ts.string,
     ts.array_of(ts.string),
-  }:is_optional(),
-  url = ts.one_of{
+  }             :is_optional(),
+  url = ts.one_of {
     ts.string,
     ts.array_of(ts.string),
-  }:is_optional(),
+  }       :is_optional(),
 }
 
-exports.map_schema = ts.one_of{
+exports.map_schema = ts.one_of {
   ts.string, -- 'http://some_map'
   ts.array_of(ts.string), -- ['foo', 'bar']
-  ts.one_of{direct_map_schema, external_map_schema}
+  ts.one_of { direct_map_schema, external_map_schema }
 }
 
 return exports

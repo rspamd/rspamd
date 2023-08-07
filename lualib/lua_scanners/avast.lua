@@ -189,7 +189,7 @@ local function avast_check(task, content, digest, rule, maybe_part)
 
 
     -- Define callbacks
-    avast_helo_cb = function (merr, mdata, conn)
+    avast_helo_cb = function(merr, mdata, conn)
       -- Called when we have established a connection but not read anything
       tcp_conn = conn
 
@@ -203,7 +203,6 @@ local function avast_check(task, content, digest, rule, maybe_part)
         end
       end
     end
-
 
     avast_scan_cb = function(merr)
       -- Called when we have send request to avast and are waiting for reply

@@ -55,10 +55,10 @@ reconf['INTRODUCTION'] = {
 local onion_uri_v2 = '/[a-z0-9]{16}\\.onion?/{url}i'
 local onion_uri_v3 = '/[a-z0-9]{56}\\.onion?/{url}i'
 reconf['HAS_ONION_URI'] = {
-    re = string.format('(%s | %s)', onion_uri_v2, onion_uri_v3),
-    description = 'Contains .onion hidden service URI',
-    score = 0.0,
-    group = 'url'
+  re = string.format('(%s | %s)', onion_uri_v2, onion_uri_v3),
+  description = 'Contains .onion hidden service URI',
+  score = 0.0,
+  group = 'url'
 }
 
 local my_victim = [[/(?:victim|prey)/{words}]]
@@ -82,7 +82,7 @@ reconf['LEAKED_PASSWORD_SCAM_RE'] = {
     check_data_images = function(task)
       local tp = task:get_text_parts() or {}
 
-      for _,p in ipairs(tp) do
+      for _, p in ipairs(tp) do
         if p:is_html() then
           local hc = p:get_html()
 

@@ -80,7 +80,6 @@ local function razor_config(opts)
   return nil
 end
 
-
 local function razor_check(task, content, digest, rule)
   local function razor_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -96,14 +95,14 @@ local function razor_check(task, content, digest, rule)
           retransmits = retransmits - 1
 
           lua_util.debugm(rule.name, task, '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, err, retransmits)
+              rule.log_prefix, err, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
           lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
-            rule.log_prefix, addr, addr:get_port())
+              rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
             task = task,
@@ -116,8 +115,8 @@ local function razor_check(task, content, digest, rule)
             callback = razor_callback,
           })
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed', rule.log_prefix)
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
+              'exceed', rule.log_prefix)
           common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       end
@@ -148,7 +147,7 @@ local function razor_check(task, content, digest, rule)
           end
           common.save_cache(task, digest, rule, 'OK', rule.default_score)
         else
-          rspamd_logger.errx(task,"%s - unknown response from razorfy: %s", addr:to_string(), threat_string)
+          rspamd_logger.errx(task, "%s - unknown response from razorfy: %s", addr:to_string(), threat_string)
         end
 
       end
@@ -174,7 +173,7 @@ local function razor_check(task, content, digest, rule)
 end
 
 return {
-  type = {'razor','spam', 'hash', 'scanner'},
+  type = { 'razor', 'spam', 'hash', 'scanner' },
   description = 'razor bulk scanner',
   configure = razor_config,
   check = razor_check,

@@ -81,7 +81,7 @@ local function asn_check(task)
       end
 
       lua_util.debugm(N, task, 'got reply from %s when requesting %s: %s',
-        serv, req_name, results[1])
+          serv, req_name, results[1])
 
       local parts = rspamd_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
@@ -106,9 +106,9 @@ end
 
 -- Configuration options
 local configure_asn_module = function()
-  local opts =  rspamd_config:get_all_opt('asn')
+  local opts = rspamd_config:get_all_opt('asn')
   if opts then
-    for k,v in pairs(opts) do
+    for k, v in pairs(opts) do
       options[k] = v
     end
   end
@@ -145,7 +145,7 @@ if configure_asn_module() then
     callback = asn_check,
     priority = lua_util.symbols_priorities.high,
     flags = 'empty,nostat',
-    augmentations = {lua_util.dns_timeout_augmentation(rspamd_config)},
+    augmentations = { lua_util.dns_timeout_augmentation(rspamd_config) },
   })
   if options['symbol'] then
     rspamd_config:register_symbol({
@@ -156,7 +156,7 @@ if configure_asn_module() then
       score = 0,
     })
   end
-  rspamd_config:register_symbol{
+  rspamd_config:register_symbol {
     name = options['symbol_fail'],
     parent = id,
     type = 'virtual',

@@ -68,12 +68,11 @@ end
 local function save_cached_key(date_str, secret_key, region, service, req_type, key)
   local numdate = tonumber(date_str)
   -- expire old buckets
-  for k,_ in pairs(cached_keys) do
+  for k, _ in pairs(cached_keys) do
     if k < numdate then
       cached_keys[k] = nil
     end
   end
-
 
   local bucket = cached_keys[tonumber(date_str)]
   local idx = string.format('%s.%s.%s.%s', secret_key, region, service, req_type)
@@ -113,7 +112,7 @@ local function aws_signing_key(date_str, secret_key, region, service, req_type)
   end
 
   local hmac1 = rspamd_crypto_hash.create_specific_keyed("AWS4" .. secret_key, "sha256", date_str):bin()
-  local hmac2 = rspamd_crypto_hash.create_specific_keyed(hmac1, "sha256",region):bin()
+  local hmac2 = rspamd_crypto_hash.create_specific_keyed(hmac1, "sha256", region):bin()
   local hmac3 = rspamd_crypto_hash.create_specific_keyed(hmac2, "sha256", service):bin()
   local final_key = rspamd_crypto_hash.create_specific_keyed(hmac3, "sha256", req_type):bin()
 
@@ -155,7 +154,7 @@ local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
   end, headers_to_sign))
   local header_names = lua_util.keys(hdr_canon)
   table.sort(header_names)
-  for _,hn in ipairs(header_names) do
+  for _, hn in ipairs(header_names) do
     local v = hdr_canon[hn]
     lua_util.debugm(N, 'update signature with the header %s, %s',
         hn, v)
@@ -165,19 +164,25 @@ local function aws_canon_request_hash(method, uri, headers_to_sign, hex_hash)
   lua_util.debugm(N, 'headers list to sign: %s', hdrs_list)
   sha_ctx:update(string.format('\n%s\n%s', hdrs_list, hex_hash))
 
-  return sha_ctx:hex(),hdrs_list
+  return sha_ctx:hex(), hdrs_list
 end
 
 exports.aws_canon_request_hash = aws_canon_request_hash
 
-local aws_authorization_hdr_args_schema = ts.shape{
+local aws_authorization_hdr_args_schema = ts.shape {
   date = ts.string + ts['nil'] / today_canonical,
   secret_key = ts.string,
-  method = ts.string + ts['nil'] / function() return 'GET' end,
+  method = ts.string + ts['nil'] / function()
+    return 'GET'
+  end,
   uri = ts.string,
   region = ts.string,
-  service = ts.string + ts['nil'] / function() return 's3' end,
-  req_type = ts.string + ts['nil'] / function() return 'aws4_request' end,
+  service = ts.string + ts['nil'] / function()
+    return 's3'
+  end,
+  req_type = ts.string + ts['nil'] / function()
+    return 'aws4_request'
+  end,
   headers = ts.map_of(ts.string, ts.string),
   key_id = ts.string,
 }
@@ -199,9 +204,9 @@ ts.shape{
 --
 --]]
 local function aws_authorization_hdr(tbl, transformed)
-  local res,err
+  local res, err
   if not transformed then
-    res,err = aws_authorization_hdr_args_schema:transform(tbl)
+    res, err = aws_authorization_hdr_args_schema:transform(tbl)
     assert(res, err)
   else
     res = tbl
@@ -210,7 +215,7 @@ local function aws_authorization_hdr(tbl, transformed)
   local signing_key = aws_signing_key(res.date, res.secret_key, res.region, res.service,
       res.req_type)
   assert(signing_key ~= nil)
-  local signed_sha,signed_hdrs = aws_canon_request_hash(res.method, res.uri,
+  local signed_sha, signed_hdrs = aws_canon_request_hash(res.method, res.uri,
       res.headers)
 
   if not signed_sha then
@@ -224,7 +229,7 @@ local function aws_authorization_hdr(tbl, transformed)
   lua_util.debugm(N, "string to sign: %s", string_to_sign)
   local hmac = rspamd_crypto_hash.create_specific_keyed(signing_key, 'sha256', string_to_sign):hex()
   lua_util.debugm(N, "hmac: %s", hmac)
-  local auth_hdr = string.format('AWS4-HMAC-SHA256 Credential=%s/%s/%s/%s/%s,'..
+  local auth_hdr = string.format('AWS4-HMAC-SHA256 Credential=%s/%s/%s/%s/%s,' ..
       'SignedHeaders=%s,Signature=%s',
       res.key_id, res.date, res.region, res.service, res.req_type,
       signed_hdrs, hmac)
@@ -255,7 +260,7 @@ This method returns new/modified in place table of the headers
 --
 --]]
 local function aws_request_enrich(tbl, content)
-  local res,err = aws_authorization_hdr_args_schema:transform(tbl)
+  local res, err = aws_authorization_hdr_args_schema:transform(tbl)
   assert(res, err)
   local content_sha256 = rspamd_crypto_hash.create_specific('sha256', content):hex()
   local hdrs = res.headers
@@ -281,7 +286,7 @@ local test_request_hdrs = {
 assert(aws_canon_request_hash('GET', '/test.txt', test_request_hdrs) ==
     '7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972')
 
-assert(aws_authorization_hdr{
+assert(aws_authorization_hdr {
   date = '20130524',
   region = 'us-east-1',
   headers = test_request_hdrs,

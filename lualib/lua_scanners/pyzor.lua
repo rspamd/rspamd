@@ -28,7 +28,7 @@ local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
 local N = 'pyzor'
-local categories = {'pyzor','bulk', 'hash', 'scanner'}
+local categories = { 'pyzor', 'bulk', 'hash', 'scanner' }
 
 local function pyzor_config(opts)
 
@@ -174,10 +174,10 @@ local function pyzor_check(task, content, digest, rule)
       end
     end
 
-   if digest == 'da39a3ee5e6b4b0d3255bfef95601890afd80709' then
-     rspamd_logger.infox(task, '%s: not checking default digest', rule.log_prefix)
-     return
-   end
+    if digest == 'da39a3ee5e6b4b0d3255bfef95601890afd80709' then
+      rspamd_logger.infox(task, '%s: not checking default digest', rule.log_prefix)
+      return
+    end
 
     tcp.request({
       task = task,
@@ -196,7 +196,6 @@ local function pyzor_check(task, content, digest, rule)
     pyzor_check_uncached()
   end
 end
-
 
 return {
   type = categories,

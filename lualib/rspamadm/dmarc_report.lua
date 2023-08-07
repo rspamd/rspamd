@@ -46,9 +46,9 @@ parser:flag "-n --no-opt"
       :description "Do not reset reporting data/send reports"
 
 parser:argument "date"
-       :description "Date to process (today by default)"
-       :argname "<YYYYMMDD>"
-       :args "*"
+      :description "Date to process (today by default)"
+      :argname "<YYYYMMDD>"
+      :args "*"
 parser:option "-b --batch-size"
       :description "Send reports in batches up to <batch-size> messages"
       :argname "<number>"
@@ -102,14 +102,14 @@ local redis_attrs = {
 local pool
 
 local function load_config(opts)
-  local _r,err = rspamd_config:load_ucl(opts['config'])
+  local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
     logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
@@ -118,10 +118,8 @@ end
 
 -- Concat elements using redis_keys.join_char
 local function redis_prefix(...)
-  return table.concat({...}, dmarc_settings.reporting.redis_keys.join_char)
+  return table.concat({ ... }, dmarc_settings.reporting.redis_keys.join_char)
 end
-
-
 
 local function get_rua(rep_key)
   local parts = lua_util.str_split(rep_key, dmarc_settings.reporting.redis_keys.join_char)
@@ -144,8 +142,8 @@ local function get_domain(rep_key)
 end
 
 local function gen_uuid()
-  local template ='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
-  return string.gsub(template, '[xy]', function (c)
+  local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+  return string.gsub(template, '[xy]', function(c)
     local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
     return string.format('%x', v)
   end)
@@ -159,7 +157,7 @@ local function gen_xml_grammar()
   local quot = lpeg.P('"') / '&quot;'
   local apos = lpeg.P("'") / '&apos;'
   local special = lt + gt + amp + quot + apos
-  local grammar = lpeg.Cs((special + 1)^0)
+  local grammar = lpeg.Cs((special + 1) ^ 0)
   return grammar
 end
 
@@ -250,7 +248,7 @@ local function entry_to_xml(data)
   </auth_results>
 </record>
 ]]
-  return lua_util.jinja_template(xml_template, {data = data}, true)
+  return lua_util.jinja_template(xml_template, { data = data }, true)
 end
 
 -- Process a report entry stored in Redis splitting it to a lua table
@@ -273,7 +271,7 @@ local function process_report_entry(data, score)
     if dkim_data and dkim_data ~= '' then
       local dkim_elts = lua_util.str_split(dkim_data, '|')
       for _, d in ipairs(dkim_elts) do
-        table.insert(row.dkim_results, {domain = d, result = result})
+        table.insert(row.dkim_results, { domain = d, result = result })
       end
     end
   end
@@ -313,7 +311,7 @@ local function process_rua(dmarc_domain, rua)
           logger.errx('cannot resolve %s: %s; exclude %s', resolve_str, results, rua_part)
         else
           local found = false
-          for _,t in ipairs(results) do
+          for _, t in ipairs(results) do
             if string.match(t, 'v=DMARC1') then
               found = true
               break
@@ -350,7 +348,7 @@ local function validate_reporting_domain(reporting_domain)
     config = rspamd_config,
     session = rspamadm_session,
     type = 'txt',
-    name = '_dmarc.' .. dmarc_domain ,
+    name = '_dmarc.' .. dmarc_domain,
   })
 
   if not is_ok or not results then
@@ -358,8 +356,8 @@ local function validate_reporting_domain(reporting_domain)
     return nil
   end
 
-  for _,r in ipairs(results) do
-    local processed,rec = dmarc_common.dmarc_check_record(rspamd_config, r, false)
+  for _, r in ipairs(results) do
+    local processed, rec = dmarc_common.dmarc_check_record(rspamd_config, r, false)
     if processed and rec.rua then
       -- We need to check or alter rua if needed
       local processed_rua = process_rua(dmarc_domain, rec.rua)
@@ -385,7 +383,7 @@ end
 -- Returns a list of recipients from a table as a string processing elements if needed
 local function rcpt_list(tbl, func)
   local res = {}
-  for _,r in ipairs(tbl) do
+  for _, r in ipairs(tbl) do
     if func then
       table.insert(res, func(r))
     else
@@ -431,14 +429,14 @@ local function send_reports_by_smtp(opts, reports, finish_cb)
     local nreports = math.min(#reports - cur_batch + 1, opts.batch_size)
     local next_start = cur_batch + nreports
     lua_util.debugm(N, 'send data for %s domains (from %s to %s)',
-        nreports, cur_batch, next_start-1)
+        nreports, cur_batch, next_start - 1)
     -- Shared across all closures
     local gen_args = {
       cont_func = send_data_in_batches,
       nreports = nreports,
       next_start = next_start
     }
-    for i=cur_batch,next_start-1 do
+    for i = cur_batch, next_start - 1 do
       local report = reports[i]
       local send_opts = {
         ev_base = rspamadm_ev_base,
@@ -475,7 +473,7 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   end
 
   local ret, results = lua_redis.request(redis_params, redis_attrs,
-      {'EXISTS', rep_key})
+      { 'EXISTS', rep_key })
 
   if not ret or not results or results == 0 then
     return nil
@@ -484,7 +482,7 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   -- Rename report key to avoid races
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
-        {'RENAME', rep_key, rep_key .. '_processing'})
+        { 'RENAME', rep_key, rep_key .. '_processing' })
     rep_key = rep_key .. '_processing'
   end
 
@@ -494,7 +492,7 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   if not dmarc_record then
     if not opts.no_opt then
       lua_redis.request(redis_params, redis_attrs,
-          {'DEL', rep_key})
+          { 'DEL', rep_key })
     end
     logger.messagex('Cannot process reports for domain %s; invalid dmarc record', reporting_domain)
     return nil
@@ -502,11 +500,11 @@ local function prepare_report(opts, start_time, end_time, rep_key)
 
   -- Get all reports for a domain
   ret, results = lua_redis.request(redis_params, redis_attrs,
-      {'ZRANGE', rep_key, '0', '-1', 'WITHSCORES'})
+      { 'ZRANGE', rep_key, '0', '-1', 'WITHSCORES' })
   local report_entries = {}
   table.insert(report_entries,
       report_header(reporting_domain, start_time, end_time, dmarc_record))
-  for i=1,#results,2 do
+  for i = 1, #results, 2 do
     local xml_record = entry_to_xml(process_report_entry(results[i], results[i + 1]))
     table.insert(report_entries, xml_record)
   end
@@ -542,24 +540,23 @@ local function prepare_report(opts, start_time, end_time, rep_key)
   local rfooter = lua_util.jinja_template(report_footer, {
     uuid = uuid,
   }, true)
-  local message = rspamd_text.fromtable{
+  local message = rspamd_text.fromtable {
     (rhead:gsub("\n", "\r\n")),
     rspamd_util.encode_base64(rspamd_util.gzip_compress(xml_to_compress), 73),
     rfooter:gsub("\n", "\r\n"),
   }
 
-
   lua_util.debugm(N, 'got final message: %s', message)
 
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
-        {'DEL', rep_key})
+        { 'DEL', rep_key })
   end
 
   local report_rcpts = lua_util.str_split(rcpt_string, ',')
 
   if report_settings.bcc_addrs then
-    for _,b in ipairs(report_settings.bcc_addrs) do
+    for _, b in ipairs(report_settings.bcc_addrs) do
       table.insert(report_rcpts, b)
     end
   end
@@ -574,7 +571,7 @@ end
 local function process_report_date(opts, start_time, end_time, date)
   local idx_key = redis_prefix(dmarc_settings.reporting.redis_keys.index_prefix, date)
   local ret, results = lua_redis.request(redis_params, redis_attrs,
-      {'EXISTS', idx_key})
+      { 'EXISTS', idx_key })
 
   if not ret or not results or results == 0 then
     logger.messagex('No reports for %s', date)
@@ -584,24 +581,24 @@ local function process_report_date(opts, start_time, end_time, date)
   -- Rename index key to avoid races
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
-        {'RENAME', idx_key, idx_key .. '_processing'})
+        { 'RENAME', idx_key, idx_key .. '_processing' })
     idx_key = idx_key .. '_processing'
   end
   ret, results = lua_redis.request(redis_params, redis_attrs,
-      {'SMEMBERS', idx_key})
+      { 'SMEMBERS', idx_key })
 
   if not ret or not results then
     -- Remove bad key
     if not opts.no_opt then
       lua_redis.request(redis_params, redis_attrs,
-          {'DEL', idx_key})
+          { 'DEL', idx_key })
     end
     logger.messagex('Cannot get reports for %s', date)
     return {}
   end
 
   local reports = {}
-  for _,rep in ipairs(results) do
+  for _, rep in ipairs(results) do
     local report = prepare_report(opts, start_time, end_time, rep)
 
     if report then
@@ -614,7 +611,7 @@ local function process_report_date(opts, start_time, end_time, date)
   -- Remove processed key
   if not opts.no_opt then
     lua_redis.request(redis_params, redis_attrs,
-        {'DEL', idx_key})
+        { 'DEL', idx_key })
   end
 
   return reports
@@ -669,14 +666,14 @@ local function handler(args)
     os.exit(1)
   end
 
-  for _, e in ipairs({'email', 'domain', 'org_name'}) do
+  for _, e in ipairs({ 'email', 'domain', 'org_name' }) do
     if not dmarc_settings.reporting[e] then
       logger.errx('Missing required setting: dmarc.reporting.%s', e)
       return
     end
   end
 
-  local ret,results = lua_redis.request(redis_params, redis_attrs, {
+  local ret, results = lua_redis.request(redis_params, redis_attrs, {
     'GET', 'rspamd_dmarc_last_collection'
   })
 
@@ -696,14 +693,14 @@ local function handler(args)
   local ndates = 0
   local nreports = 0
   local all_reports = {}
-  for _,date in ipairs(opts.date) do
+  for _, date in ipairs(opts.date) do
     lua_util.debugm(N, 'Process date %s', date)
     local reports_for_date = process_report_date(opts, start_time, start_collection, date)
     if #reports_for_date > 0 then
       ndates = ndates + 1
       nreports = nreports + #reports_for_date
 
-      for _,r in ipairs(reports_for_date) do
+      for _, r in ipairs(reports_for_date) do
         table.insert(all_reports, r)
       end
     end
@@ -718,8 +715,8 @@ local function handler(args)
             ndates, nreports, nsuccess, nfail)
       end
       lua_redis.request(redis_params, redis_attrs,
-          {'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire * 2,
-           tostring(start_collection)})
+          { 'SETEX', 'rspamd_dmarc_last_collection', dmarc_settings.reporting.keys_expire * 2,
+            tostring(start_collection) })
     else
       logger.messagex('Reporting collection has finished %s dates processed, %s reports: %s completed, %s failed',
           ndates, nreports, nsuccess, nfail)
@@ -736,7 +733,7 @@ end
 
 return {
   name = 'dmarc_report',
-  aliases = {'dmarc_reporting'},
+  aliases = { 'dmarc_reporting' },
   handler = handler,
   description = parser._description
 }

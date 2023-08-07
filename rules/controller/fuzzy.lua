@@ -19,16 +19,16 @@ local function handle_gen_fuzzy(task, conn, req_params)
     local ret, hashes
     task:process_message()
     if req_params.rule then
-      ret,hashes = pcall(rspamd_plugins.fuzzy_check.hex_hashes, task, req_params.rule)
+      ret, hashes = pcall(rspamd_plugins.fuzzy_check.hex_hashes, task, req_params.rule)
     elseif req_params.flag then
-      ret,hashes = pcall(rspamd_plugins.fuzzy_check.hex_hashes, task, tonumber(req_params.flag))
+      ret, hashes = pcall(rspamd_plugins.fuzzy_check.hex_hashes, task, tonumber(req_params.flag))
     else
       conn:send_error(404, 'missing rule or flag')
       return
     end
 
     if ret then
-      conn:send_ucl({success = true, hashes = hashes})
+      conn:send_ucl({ success = true, hashes = hashes })
     else
       conn:send_error(500, 'cannot generate hashes')
     end

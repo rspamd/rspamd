@@ -84,7 +84,9 @@ local function fprot_check(task, content, digest, rule, maybe_part)
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
     local scan_id = task:get_queue_id()
-    if not scan_id then scan_id = task:get_uid() end
+    if not scan_id then
+      scan_id = task:get_uid()
+    end
     local header = string.format('SCAN STREAM %s SIZE %d\n', scan_id,
         #content)
     local footer = '\n'

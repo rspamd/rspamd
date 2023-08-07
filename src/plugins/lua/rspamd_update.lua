@@ -74,14 +74,14 @@ local function check_version(obj)
     if rspamd_version('cmp', obj['min_version']) > 0 then
       ret = false
       rspamd_logger.errx(rspamd_config, 'updates require at least %s version of rspamd',
-        obj['min_version'])
+          obj['min_version'])
     end
   end
   if obj['max_version'] then
     if rspamd_version('cmp', obj['max_version']) < 0 then
       ret = false
       rspamd_logger.errx(rspamd_config, 'updates require maximum %s version of rspamd',
-        obj['max_version'])
+          obj['max_version'])
     end
   end
 
@@ -92,7 +92,7 @@ local function gen_callback()
 
   return function(data)
     local parser = ucl.parser()
-    local res,err = parser:parse_string(data)
+    local res, err = parser:parse_string(data)
 
     if not res then
       rspamd_logger.warnx(rspamd_config, 'cannot parse updates map: ' .. err)
@@ -114,7 +114,7 @@ local function gen_callback()
         end
 
         rspamd_logger.infox(rspamd_config, 'loaded new rules with hash "%s"',
-          h:hex())
+            h:hex())
       end
     end
 
@@ -131,7 +131,7 @@ if section and section.rules then
   end
 
   if type(section.rules) ~= 'table' then
-    section.rules = {section.rules}
+    section.rules = { section.rules }
   end
 
   fun.each(function(elt)

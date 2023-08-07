@@ -38,7 +38,7 @@ local policies = {
     min_width = 500,
     min_length = 64,
     text_multiplier = 4.0, -- divide min_bytes by 4 for texts
-    mime_types = {"application/*"},
+    mime_types = { "application/*" },
     scan_archives = true,
     short_text_direct_hash = true,
     text_shingles = true,
@@ -48,7 +48,7 @@ local policies = {
 
 local default_policy = policies.recommended
 
-local policy_schema = ts.shape{
+local policy_schema = ts.shape {
   min_bytes = ts.number + ts.string / tonumber,
   min_height = ts.number + ts.string / tonumber,
   min_width = ts.number + ts.string / tonumber,
@@ -60,7 +60,6 @@ local policy_schema = ts.shape{
   text_shingles = ts.boolean,
   skip_images = ts.boolean,
 }
-
 
 local exports = {}
 
@@ -74,7 +73,7 @@ exports.register_policy = function(name, policy)
     rspamd_logger.warnx(rspamd_config, "overriding policy %s", name)
   end
 
-  local parsed_policy,err = policy_schema:transform(policy)
+  local parsed_policy, err = policy_schema:transform(policy)
 
   if not parsed_policy then
     rspamd_logger.errx(rspamd_config, 'invalid fuzzy rule policy %s: %s',
@@ -160,7 +159,7 @@ local function check_length(task, part, rule)
 end
 
 local function check_text_part(task, part, rule, text)
-  local allow_direct,allow_shingles = false,false
+  local allow_direct, allow_shingles = false, false
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check text part %s', id)
@@ -200,7 +199,7 @@ local function check_text_part(task, part, rule, text)
     allow_direct = check_length(task, part, rule)
   end
 
-  return allow_direct,allow_shingles
+  return allow_direct, allow_shingles
 end
 
 --local function has_sane_text_parts(task)
@@ -211,7 +210,7 @@ end
 local function check_image_part(task, part, rule, image)
   if rule.skip_images then
     lua_util.debugm(N, task, 'skip image part as images are disabled')
-    return false,false
+    return false, false
   end
 
   local id = part:get_id()
@@ -227,7 +226,7 @@ local function check_image_part(task, part, rule, image)
     if height and width then
       if height < min_height or width < min_width then
         lua_util.debugm(N, task, 'skip image part %s as it does not meet minimum sizes: %sx%s < %sx%s',
-                id, width, height, min_width, min_height)
+            id, width, height, min_width, min_height)
         return false, false
       else
         lua_util.debugm(N, task, 'allow image part %s: %sx%s',
@@ -236,18 +235,20 @@ local function check_image_part(task, part, rule, image)
     end
   end
 
-  return check_length(task, part, rule),false
+  return check_length(task, part, rule), false
 end
 
 local function mime_types_check(task, part, rule)
-  local t,st = part:get_type()
+  local t, st = part:get_type()
 
-  if not t then return false, false end
+  if not t then
+    return false, false
+  end
 
   local ct = string.format('%s/%s', t, st)
 
   local detected_ct
-  t,st = part:get_detected_type()
+  t, st = part:get_detected_type()
   if t then
     detected_ct = string.format('%s/%s', t, st)
   else
@@ -266,12 +267,12 @@ local function mime_types_check(task, part, rule)
   end
   opts = fun.tomap(fun.map(function(opt)
     local elts = lua_util.str_split(opt, ':')
-    return elts[1],elts[2]
+    return elts[1], elts[2]
   end, opts))
 
   if opts[id] and opts[id] == '-' then
     lua_util.debugm(N, task, 'explicitly check binary part %s: bad mime type %s', id, ct)
-    return check_length(task, part, rule),false
+    return check_length(task, part, rule), false
   end
 
   if rule.mime_types then
@@ -285,13 +286,13 @@ local function mime_types_check(task, part, rule)
     end, rule.mime_types) then
       lua_util.debugm(N, task, 'found mime type match for part %s: %s (%s detected)',
           id, ct, detected_ct)
-      return check_length(task, part, rule),false
+      return check_length(task, part, rule), false
     end
 
     return false, false
   end
 
-  return false,false
+  return false, false
 end
 
 exports.check_mime_part = function(task, part, rule_id)
@@ -300,7 +301,7 @@ exports.check_mime_part = function(task, part, rule_id)
   if not rule then
     rspamd_logger.errx(task, 'cannot find rule with id %s', rule_id)
 
-    return false,false
+    return false, false
   end
 
   if part:is_text() then
@@ -315,7 +316,7 @@ exports.check_mime_part = function(task, part, rule_id)
     -- Always send archives
     lua_util.debugm(N, task, 'check archive part %s', part:get_id())
 
-    return true,false
+    return true, false
   end
 
   if part:is_specific() then
@@ -323,7 +324,7 @@ exports.check_mime_part = function(task, part, rule_id)
 
     if type(sp) == 'table' and sp.fuzzy_hashes then
       lua_util.debugm(N, task, 'check specific part %s', part:get_id())
-      return true,false
+      return true, false
     end
   end
 
@@ -331,7 +332,7 @@ exports.check_mime_part = function(task, part, rule_id)
     return mime_types_check(task, part, rule)
   end
 
-  return false,false
+  return false, false
 end
 
 exports.cleanup_rules = function()

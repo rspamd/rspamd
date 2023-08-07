@@ -64,7 +64,7 @@ local function do_append_footer(task, part, footer, is_multipart, out, state)
   end
 
   if is_multipart then
-    out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
+    out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s' ..
         'Content-Transfer-Encoding: %s',
         ct, newline_s, cte)
     out[#out + 1] = ''
@@ -79,11 +79,11 @@ local function do_append_footer(task, part, footer, is_multipart, out, state)
   if content:sub(-(nlen), nlen + 1) == double_nline then
     -- content without last newline
     content = content:sub(-(#newline_s), #newline_s + 1) .. footer
-    out[#out + 1] = {encode_func(content), true}
+    out[#out + 1] = { encode_func(content), true }
     out[#out + 1] = ''
   else
     content = content .. footer
-    out[#out + 1] = {encode_func(content), true}
+    out[#out + 1] = { encode_func(content), true }
     out[#out + 1] = ''
   end
 
@@ -156,7 +156,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
   local boundaries = {}
   local cur_boundary
-  for _,part in ipairs(task:get_parts()) do
+  for _, part in ipairs(task:get_parts()) do
     local boundary = part:get_boundary()
     if part:is_multipart() then
       if cur_boundary then
@@ -169,7 +169,7 @@ exports.add_text_footer = function(task, html_footer, text_footer)
 
       local rh = part:get_raw_headers()
       if #rh > 0 then
-        out[#out + 1] = {rh, true}
+        out[#out + 1] = { rh, true }
       end
     elseif part:is_message() then
       if boundary then
@@ -184,14 +184,14 @@ exports.add_text_footer = function(task, html_footer, text_footer)
             boundary)
       end
 
-      out[#out + 1] = {part:get_raw_headers(), true}
+      out[#out + 1] = { part:get_raw_headers(), true }
     else
       local append_footer = false
       local skip_footer = part:is_attachment()
 
       local parent = part:get_parent()
       if parent then
-        local t,st = parent:get_type()
+        local t, st = parent:get_type()
 
         if t == 'multipart' and st == 'signed' then
           -- Do not modify signed parts
@@ -230,8 +230,8 @@ exports.add_text_footer = function(task, html_footer, text_footer)
         do_append_footer(task, part, append_footer,
             parent and parent:is_multipart(), out, state)
       else
-        out[#out + 1] = {part:get_raw_headers(), true}
-        out[#out + 1] = {part:get_raw_content(), false}
+        out[#out + 1] = { part:get_raw_headers(), true }
+        out[#out + 1] = { part:get_raw_content(), false }
       end
     end
   end
@@ -285,38 +285,40 @@ local function do_replacement (task, part, mp, replacements,
     -- sort matches and form the table:
     -- start .. end for inclusion position
     local matches_flattened = {}
-    for npat,matches in pairs(match_pos) do
-      for _,m in ipairs(matches) do
-        table.insert(matches_flattened, {m, npat})
+    for npat, matches in pairs(match_pos) do
+      for _, m in ipairs(matches) do
+        table.insert(matches_flattened, { m, npat })
       end
     end
 
     -- Handle the case of empty match
     if #matches_flattened == 0 then
-      out[#out + 1] = {part:get_raw_headers(), true}
-      out[#out + 1] = {part:get_raw_content(), false}
+      out[#out + 1] = { part:get_raw_headers(), true }
+      out[#out + 1] = { part:get_raw_content(), false }
 
       return
     end
 
     if is_multipart then
-      out[#out + 1] = {string.format('Content-Type: %s; charset="utf-8"%s'..
+      out[#out + 1] = { string.format('Content-Type: %s; charset="utf-8"%s' ..
           'Content-Transfer-Encoding: %s',
-          ct, newline_s, cte), true}
-      out[#out + 1] = {'', true}
+          ct, newline_s, cte), true }
+      out[#out + 1] = { '', true }
     else
       state.new_cte = cte
     end
 
     state.has_matches = true
     -- now sort flattened by start of match and eliminate all overlaps
-    table.sort(matches_flattened, function(m1, m2) return m1[1][1] < m2[1][1] end)
+    table.sort(matches_flattened, function(m1, m2)
+      return m1[1][1] < m2[1][1]
+    end)
 
-    for i=1,#matches_flattened - 1 do
+    for i = 1, #matches_flattened - 1 do
       local st = matches_flattened[i][1][1] -- current start of match
       local e = matches_flattened[i][1][2] -- current end of match
       local max_npat = matches_flattened[i][2]
-      for j=i+1,#matches_flattened do
+      for j = i + 1, #matches_flattened do
         if matches_flattened[j][1][1] == st then
           -- overlap
           if matches_flattened[j][1][2] > e then
@@ -329,7 +331,7 @@ local function do_replacement (task, part, mp, replacements,
         end
       end
       -- Maximum overlap for all matches
-      for j=i,#matches_flattened do
+      for j = i, #matches_flattened do
         if matches_flattened[j][1][1] == st then
           if e > matches_flattened[j][1][2] then
             matches_flattened[j][1][2] = e
@@ -341,7 +343,7 @@ local function do_replacement (task, part, mp, replacements,
       end
     end
     -- Off-by one: match returns 0 based positions while we use 1 based in Lua
-    for _,m in ipairs(matches_flattened) do
+    for _, m in ipairs(matches_flattened) do
       m[1][1] = m[1][1] + 1
       m[1][2] = m[1][2] + 1
     end
@@ -354,7 +356,7 @@ local function do_replacement (task, part, mp, replacements,
 
     local cur_start = 1
     local fragments = {}
-    for _,m in ipairs(matches_flattened) do
+    for _, m in ipairs(matches_flattened) do
       if m[1][1] >= cur_start then
         fragments[#fragments + 1] = content:sub(cur_start, m[1][1] - 1)
         fragments[#fragments + 1] = replacements[m[2]]
@@ -368,11 +370,11 @@ local function do_replacement (task, part, mp, replacements,
     end
 
     -- Final stuff
-    out[#out + 1] = {encode_func(rspamd_text.fromtable(fragments)), false}
+    out[#out + 1] = { encode_func(rspamd_text.fromtable(fragments)), false }
   else
     -- No matches
-    out[#out + 1] = {part:get_raw_headers(), true}
-    out[#out + 1] = {part:get_raw_content(), false}
+    out[#out + 1] = { part:get_raw_headers(), true }
+    out[#out + 1] = { part:get_raw_content(), false }
   end
 end
 
@@ -429,12 +431,12 @@ exports.multipattern_text_replace = function(task, mp, replacements)
 
   local boundaries = {}
   local cur_boundary
-  for _,part in ipairs(task:get_parts()) do
+  for _, part in ipairs(task:get_parts()) do
     local boundary = part:get_boundary()
     if part:is_multipart() then
       if cur_boundary then
-        out[#out + 1] = {string.format('--%s',
-            boundaries[#boundaries]), true}
+        out[#out + 1] = { string.format('--%s',
+            boundaries[#boundaries]), true }
       end
 
       boundaries[#boundaries + 1] = boundary or '--XXX'
@@ -442,28 +444,28 @@ exports.multipattern_text_replace = function(task, mp, replacements)
 
       local rh = part:get_raw_headers()
       if #rh > 0 then
-        out[#out + 1] = {rh, true}
+        out[#out + 1] = { rh, true }
       end
     elseif part:is_message() then
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
-          out[#out + 1] = {string.format('--%s--',
-              boundaries[#boundaries]), true}
+          out[#out + 1] = { string.format('--%s--',
+              boundaries[#boundaries]), true }
           table.remove(boundaries)
           cur_boundary = nil
         end
-        out[#out + 1] = {string.format('--%s',
-            boundary), true}
+        out[#out + 1] = { string.format('--%s',
+            boundary), true }
       end
 
-      out[#out + 1] = {part:get_raw_headers(), true}
+      out[#out + 1] = { part:get_raw_headers(), true }
     else
       local skip_replacement = part:is_attachment()
 
       local parent = part:get_parent()
       if parent then
-        local t,st = parent:get_type()
+        local t, st = parent:get_type()
 
         if t == 'multipart' and st == 'signed' then
           -- Do not modify signed parts
@@ -477,13 +479,13 @@ exports.multipattern_text_replace = function(task, mp, replacements)
       if boundary then
         if cur_boundary and boundary ~= cur_boundary then
           -- Need to close boundary
-          out[#out + 1] = {string.format('--%s--',
-              boundaries[#boundaries]), true}
+          out[#out + 1] = { string.format('--%s--',
+              boundaries[#boundaries]), true }
           table.remove(boundaries)
           cur_boundary = boundary
         end
-        out[#out + 1] = {string.format('--%s',
-            boundary), true}
+        out[#out + 1] = { string.format('--%s',
+            boundary), true }
       end
 
       if not skip_replacement then
@@ -491,8 +493,8 @@ exports.multipattern_text_replace = function(task, mp, replacements)
             parent and parent:is_multipart(), out, state)
       else
         -- Append as is
-        out[#out + 1] = {part:get_raw_headers(), true}
-        out[#out + 1] = {part:get_raw_content(), false}
+        out[#out + 1] = { part:get_raw_headers(), true }
+        out[#out + 1] = { part:get_raw_content(), false }
       end
     end
   end
@@ -500,9 +502,9 @@ exports.multipattern_text_replace = function(task, mp, replacements)
   -- Close remaining
   local b = table.remove(boundaries)
   while b do
-    out[#out + 1] = {string.format('--%s--', b), true}
+    out[#out + 1] = { string.format('--%s--', b), true }
     if #boundaries > 0 then
-      out[#out + 1] = {'', true}
+      out[#out + 1] = { '', true }
     end
     b = table.remove(boundaries)
   end
@@ -519,7 +521,9 @@ end
 --]]
 exports.modify_headers = function(task, hdr_alterations, mode)
   -- Assume default mode compatibility
-  if not mode then mode = 'compat' end
+  if not mode then
+    mode = 'compat'
+  end
   local add = hdr_alterations.add or {}
   local remove = hdr_alterations.remove or {}
 
@@ -531,7 +535,7 @@ exports.modify_headers = function(task, hdr_alterations, mode)
       add_headers[hname] = {}
     end
     if not hdr_flattened[hname] then
-      hdr_flattened[hname] = {add = {}}
+      hdr_flattened[hname] = { add = {} }
     end
     local add_tbl = hdr_flattened[hname].add
     if hdr.value then
@@ -539,9 +543,9 @@ exports.modify_headers = function(task, hdr_alterations, mode)
         order = (tonumber(hdr.order) or -1),
         value = hdr.value,
       })
-      table.insert(add_tbl, {tonumber(hdr.order) or -1, hdr.value})
+      table.insert(add_tbl, { tonumber(hdr.order) or -1, hdr.value })
     elseif type(hdr) == 'table' then
-      for _,v in ipairs(hdr) do
+      for _, v in ipairs(hdr) do
         flatten_add_header(hname, v)
       end
     elseif type(hdr) == 'string' then
@@ -549,7 +553,7 @@ exports.modify_headers = function(task, hdr_alterations, mode)
         order = -1,
         value = hdr,
       })
-      table.insert(add_tbl, {-1, hdr})
+      table.insert(add_tbl, { -1, hdr })
     else
       logger.errx(task, 'invalid modification of header: %s', hdr)
     end
@@ -561,19 +565,18 @@ exports.modify_headers = function(task, hdr_alterations, mode)
   end
   if hdr_alterations.order then
     -- Get headers alterations ordered
-    for _,hname in ipairs(hdr_alterations.order) do
+    for _, hname in ipairs(hdr_alterations.order) do
       flatten_add_header(hname, add[hname])
     end
   else
-    for hname,hdr in pairs(add) do
+    for hname, hdr in pairs(add) do
       flatten_add_header(hname, hdr)
     end
   end
 
-
-  for hname,hdr in pairs(remove) do
+  for hname, hdr in pairs(remove) do
     if not hdr_flattened[hname] then
-      hdr_flattened[hname] = {remove = {}}
+      hdr_flattened[hname] = { remove = {} }
     end
     if not hdr_flattened[hname].remove then
       hdr_flattened[hname].remove = {}
@@ -582,7 +585,7 @@ exports.modify_headers = function(task, hdr_alterations, mode)
     if type(hdr) == 'number' then
       table.insert(remove_tbl, hdr)
     else
-      for _,num in ipairs(hdr) do
+      for _, num in ipairs(hdr) do
         table.insert(remove_tbl, num)
       end
     end
@@ -590,15 +593,19 @@ exports.modify_headers = function(task, hdr_alterations, mode)
 
   if mode == 'compat' then
     -- Clear empty alterations in the compat mode
-    if add_headers and not next(add_headers) then add_headers = nil end
-    if hdr_alterations.remove and not next(hdr_alterations.remove) then hdr_alterations.remove = nil end
+    if add_headers and not next(add_headers) then
+      add_headers = nil
+    end
+    if hdr_alterations.remove and not next(hdr_alterations.remove) then
+      hdr_alterations.remove = nil
+    end
   end
   task:set_milter_reply({
     add_headers = add_headers,
     remove_headers = hdr_alterations.remove
   })
 
-  for hname,flat_rules in pairs(hdr_flattened) do
+  for hname, flat_rules in pairs(hdr_flattened) do
     task:modify_header(hname, flat_rules)
   end
 end
@@ -611,7 +618,9 @@ exports.message_to_ucl = function(task, stringify_content)
   local E = {}
 
   local maybe_stringify_f = stringify_content and
-    tostring or function(t) return t  end
+      tostring or function(t)
+    return t
+  end
   local result = {
     size = task:get_size(),
     digest = task:get_digest(),
@@ -643,7 +652,7 @@ exports.message_to_ucl = function(task, stringify_content)
 
   local parts = task:get_parts() or E
   result.parts = {}
-  for _,part in ipairs(parts) do
+  for _, part in ipairs(parts) do
     if not part:is_multipart() and not part:is_message() then
       local p = {
         size = part:get_length(),
@@ -651,7 +660,7 @@ exports.message_to_ucl = function(task, stringify_content)
         detected_type = string.format('%s/%s', part:get_detected_type()),
         filename = part:get_filename(),
         content = maybe_stringify_f(part:get_content()),
-        headers =  part:get_headers(true) or E,
+        headers = part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary(),
       }
       table.insert(result.parts, p)
@@ -659,7 +668,7 @@ exports.message_to_ucl = function(task, stringify_content)
       -- Service part: multipart container or message/rfc822
       local p = {
         type = string.format('%s/%s', part:get_type()),
-        headers =  part:get_headers(true) or E,
+        headers = part:get_headers(true) or E,
         boundary = part:get_enclosing_boundary(),
         size = 0,
       }
@@ -683,8 +692,8 @@ exports.message_to_ucl_schema = function()
   local ts = require("tableshape").types
 
   local function headers_schema()
-    return ts.shape{
-      order =  ts.integer:describe('Header order in a message'),
+    return ts.shape {
+      order = ts.integer:describe('Header order in a message'),
       raw = ts.string:describe('Raw header value'):is_optional(),
       empty_separator = ts.boolean:describe('Whether header has an empty separator'),
       separator = ts.string:describe('Separator between a header and a value'),
@@ -696,8 +705,8 @@ exports.message_to_ucl_schema = function()
   end
 
   local function part_schema()
-    return ts.shape{
-      content =  ts.string:describe('Decoded content'):is_optional(),
+    return ts.shape {
+      content = ts.string:describe('Decoded content'):is_optional(),
       multipart_boundary = ts.string:describe('Multipart service boundary'):is_optional(),
       size = ts.integer:describe('Size of the part'),
       type = ts.string:describe('Announced type'):is_optional(),
@@ -709,10 +718,10 @@ exports.message_to_ucl_schema = function()
   end
 
   local function email_addr_schema()
-    return ts.shape{
-      addr =  ts.string:describe('Parsed address'):is_optional(),
+    return ts.shape {
+      addr = ts.string:describe('Parsed address'):is_optional(),
       raw = ts.string:describe('Raw address'),
-      flags = ts.shape{
+      flags = ts.shape {
         valid = ts.boolean:describe('Valid address'):is_optional(),
         ip = ts.boolean:describe('IP like address'):is_optional(),
         braced = ts.boolean:describe('Have braces around address'):is_optional(),
@@ -721,13 +730,13 @@ exports.message_to_ucl_schema = function()
         backslash = ts.boolean:describe('Backslash in address'):is_optional(),
         ['8bit'] = ts.boolean:describe('8 bit characters in address'):is_optional(),
       },
-      user =  ts.string:describe('Parsed user part'):is_optional(),
-      name =  ts.string:describe('Displayed name'):is_optional(),
-      domain =  ts.string:describe('Parsed domain part'):is_optional(),
+      user = ts.string:describe('Parsed user part'):is_optional(),
+      name = ts.string:describe('Displayed name'):is_optional(),
+      domain = ts.string:describe('Parsed domain part'):is_optional(),
     }
   end
   local function envelope_schema()
-    return ts.shape{
+    return ts.shape {
       from_smtp = email_addr_schema():describe('SMTP from'):is_optional(),
       recipients_smtp = ts.array_of(email_addr_schema()):describe('SMTP recipients'):is_optional(),
       helo = ts.string:describe('SMTP Helo'):is_optional(),
@@ -737,12 +746,12 @@ exports.message_to_ucl_schema = function()
     }
   end
 
-  return ts.shape{
+  return ts.shape {
     headers = ts.array_of(headers_schema()),
     parts = ts.array_of(part_schema()),
     digest = ts.pattern(string.format('^%s$', string.rep('%x', 32)))
-        :describe('Message digest'),
-    newlines = ts.one_of({"cr", "lf", "crlf"}):describe('Newlines type'),
+               :describe('Message digest'),
+    newlines = ts.one_of({ "cr", "lf", "crlf" }):describe('Newlines type'),
     size = ts.integer:describe('Size of the message in bytes'),
     envelope = envelope_schema()
   }

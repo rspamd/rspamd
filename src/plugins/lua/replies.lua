@@ -77,7 +77,9 @@ local function replies_check(task)
         return real_rcpt_h == stored_rcpt
       end
 
-      if fun.any(filter_predicate, fun.map(function(rcpt) return rcpt.addr or '' end, rcpts)) then
+      if fun.any(filter_predicate, fun.map(function(rcpt)
+        return rcpt.addr or ''
+      end, rcpts)) then
         lua_util.debugm(N, task, 'reply to %s validated', in_reply_to)
         return true
       end
@@ -121,12 +123,12 @@ local function replies_check(task)
   local key = make_key(in_reply_to, settings.key_size, settings.key_prefix)
 
   local ret = lua_redis.redis_make_request(task,
-    redis_params, -- connect params
-    key, -- hash key
-    false, -- is write
-    redis_get_cb, --callback
-    'GET', -- command
-    {key} -- arguments
+      redis_params, -- connect params
+      key, -- hash key
+      false, -- is write
+      redis_get_cb, --callback
+      'GET', -- command
+      { key } -- arguments
   )
 
   if not ret then
@@ -136,7 +138,7 @@ end
 
 local function replies_set(task)
   local function redis_set_cb(err, _, addr)
-    if err ~=nil then
+    if err ~= nil then
       rspamd_logger.errx(task, 'redis_set_cb error when writing data to %s: %s', addr:get_addr(), err)
     end
   end
@@ -162,14 +164,14 @@ local function replies_set(task)
   if sender then
     local sender_hash = make_key(sender:lower(), 8)
     lua_util.debugm(N, task, 'storing id: %s (%s), reply-to: %s (%s) for replies check',
-                      msg_id, key, sender, sender_hash)
+        msg_id, key, sender, sender_hash)
     local ret = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         key, -- hash key
         true, -- is write
         redis_set_cb, --callback
         'PSETEX', -- command
-        {key, tostring(math.floor(settings['expire'] * 1000)), sender_hash} -- arguments
+        { key, tostring(math.floor(settings['expire'] * 1000)), sender_hash } -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, "redis request wasn't scheduled")
@@ -181,7 +183,7 @@ end
 
 local function replies_check_cookie(task)
   local function cookie_matched(extra, ts)
-    local dt = task:get_date{format = 'connect', gmt = true}
+    local dt = task:get_date { format = 'connect', gmt = true }
 
     if dt < ts then
       rspamd_logger.infox(task, 'ignore cookie as its date is in future')
@@ -232,7 +234,7 @@ local function replies_check_cookie(task)
     extracted_cookie = irt
   end
 
-  local dec_cookie,ts = cr.decrypt_cookie(settings.cookie_key, extracted_cookie)
+  local dec_cookie, ts = cr.decrypt_cookie(settings.cookie_key, extracted_cookie)
 
   if dec_cookie then
     -- We have something that looks like a cookie
@@ -266,8 +268,10 @@ if opts then
     else
       -- Cookies mode
       -- Check key sanity:
-      local pattern = {'^'}
-      for i=1,32 do pattern[i + 1] = '[a-zA-Z0-9]' end
+      local pattern = { '^' }
+      for i = 1, 32 do
+        pattern[i + 1] = '[a-zA-Z0-9]'
+      end
       pattern[34] = '$'
       if not settings.cookie_key:match(table.concat(pattern, '')) then
         rspamd_logger.errx(rspamd_config,

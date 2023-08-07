@@ -47,7 +47,7 @@ local function sendmail(opts, message, callback)
       wantcode = wantcode or '2'
       if merr then
         callback(false, string.format('error on stage %s: %s',
-          stage, merr))
+            stage, merr))
         if conn then
           conn:close()
         end
@@ -108,9 +108,9 @@ local function sendmail(opts, message, callback)
     local function data_done_cb(merr, mdata)
       if no_error_read(merr, mdata, '3') then
         if type(message) == 'string' or type(message) == 'userdata' then
-          conn:add_write(pre_quit_cb, {message, CRLF.. '.' .. CRLF})
+          conn:add_write(pre_quit_cb, { message, CRLF .. '.' .. CRLF })
         else
-          table.insert(message, CRLF.. '.' .. CRLF)
+          table.insert(message, CRLF .. '.' .. CRLF)
           conn:add_write(pre_quit_cb, message)
         end
       end
@@ -124,7 +124,7 @@ local function sendmail(opts, message, callback)
     -- RCPT phase
     local next_recipient
     local function rcpt_done_cb_gen(i)
-      return function (merr, mdata)
+      return function(merr, mdata)
         if no_error_read(merr, mdata) then
           if i == #opts.recipients then
             conn:add_write(data_cb, 'DATA' .. CRLF)
@@ -136,7 +136,7 @@ local function sendmail(opts, message, callback)
     end
 
     local function rcpt_cb_gen(i)
-      return function (merr, _)
+      return function(merr, _)
         if no_error_write(merr, '2') then
           conn:add_read(rcpt_done_cb_gen(i), CRLF)
         end
@@ -178,12 +178,12 @@ local function sendmail(opts, message, callback)
     if no_error_read(err, data) then
       stage = 'helo'
       conn:add_write(hello_cb, string.format('HELO %s%s',
-        opts.helo, CRLF))
+          opts.helo, CRLF))
     end
   end
 
   if type(opts.recipients) == 'string' then
-    opts.recipients = {opts.recipients}
+    opts.recipients = { opts.recipients }
   end
 
   local tcp_opts = lua_util.shallowcopy(opts)

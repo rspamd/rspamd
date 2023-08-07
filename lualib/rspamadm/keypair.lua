@@ -84,9 +84,9 @@ verify:mutex(
           :argname "<file>"
 )
 verify:argument "file"
-    :description "File to verify"
-    :argname "<file>"
-    :args "*"
+      :description "File to verify"
+      :argname "<file>"
+      :args "*"
 verify:flag "-n --nist"
       :description "Uses nistp curves (P256)"
 verify:option "-s --suffix"
@@ -143,15 +143,15 @@ decrypt:flag "-r --rm"
 -- Default command is generate, so duplicate options to be compatible
 
 parser:flag "-s --sign"
-        :description "Generates a sign keypair instead of the encryption one"
+      :description "Generates a sign keypair instead of the encryption one"
 parser:flag "-n --nist"
-        :description "Uses nistp curves (P256)"
+      :description "Uses nistp curves (P256)"
 parser:mutex(
     parser:flag "-j --json"
-            :description "Output JSON instead of UCL",
+          :description "Output JSON instead of UCL",
     parser:flag "-u --ucl"
-            :description "Output UCL"
-            :default(true)
+          :description "Output UCL"
+          :default(true)
 )
 parser:option "-o --output"
       :description "Write keypair to file"
@@ -174,10 +174,16 @@ local function ask_yes_no(greet, default)
 
   local reply = rspamd_util.readline(greet)
 
-  if not reply then os.exit(0) end
-  if #reply == 0 then reply = def_str end
+  if not reply then
+    os.exit(0)
+  end
+  if #reply == 0 then
+    reply = def_str
+  end
   reply = reply:lower()
-  if reply == 'y' or reply == 'yes' then return true end
+  if reply == 'y' or reply == 'yes' then
+    return true
+  end
 
   return false
 end
@@ -221,7 +227,7 @@ end
 local function sign_handler(opts)
   if opts.file then
     if type(opts.file) == 'string' then
-      opts.file = {opts.file}
+      opts.file = { opts.file }
     end
   else
     parser:error('no files to sign')
@@ -231,7 +237,7 @@ local function sign_handler(opts)
   end
 
   local ucl_parser = ucl.parser()
-  local res,err = ucl_parser:parse_file(opts.keypair)
+  local res, err = ucl_parser:parse_file(opts.keypair)
 
   if not res then
     fatal(string.format('cannot load %s: %s', opts.keypair, err))
@@ -243,7 +249,7 @@ local function sign_handler(opts)
     fatal("cannot load keypair: " .. opts.keypair)
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local sig = rspamd_crypto.sign_file(kp, fname)
 
     if not sig then
@@ -264,7 +270,7 @@ end
 local function verify_handler(opts)
   if opts.file then
     if type(opts.file) == 'string' then
-      opts.file = {opts.file}
+      opts.file = { opts.file }
     end
   else
     parser:error('no files to verify')
@@ -275,7 +281,7 @@ local function verify_handler(opts)
 
   if opts.keypair then
     local ucl_parser = ucl.parser()
-    local res,err = ucl_parser:parse_file(opts.keypair)
+    local res, err = ucl_parser:parse_file(opts.keypair)
 
     if not res then
       fatal(string.format('cannot load %s: %s', opts.keypair, err))
@@ -290,10 +296,14 @@ local function verify_handler(opts)
     pk = kp:pk()
     alg = kp:alg()
   elseif opts.pubkey then
-    if opts.nist then alg = 'nist' end
+    if opts.nist then
+      alg = 'nist'
+    end
     pk = rspamd_pubkey.load(opts.pubkey, 'sign', alg)
   elseif opts.pubstr then
-    if opts.nist then alg = 'nist' end
+    if opts.nist then
+      alg = 'nist'
+    end
     pk = rspamd_pubkey.create(opts.pubstr, 'sign', alg)
   end
 
@@ -303,7 +313,7 @@ local function verify_handler(opts)
 
   local valid = true
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
 
     local sig_fname = string.format('%s.%s', fname, opts.suffix or 'sig')
     local sig = rspamd_signature.load(sig_fname, alg)
@@ -330,7 +340,7 @@ end
 local function encrypt_handler(opts)
   if opts.file then
     if type(opts.file) == 'string' then
-      opts.file = {opts.file}
+      opts.file = { opts.file }
     end
   else
     parser:error('no files to sign')
@@ -341,7 +351,7 @@ local function encrypt_handler(opts)
 
   if opts.keypair then
     local ucl_parser = ucl.parser()
-    local res,err = ucl_parser:parse_file(opts.keypair)
+    local res, err = ucl_parser:parse_file(opts.keypair)
 
     if not res then
       fatal(string.format('cannot load %s: %s', opts.keypair, err))
@@ -356,10 +366,14 @@ local function encrypt_handler(opts)
     pk = kp:pk()
     alg = kp:alg()
   elseif opts.pubkey then
-    if opts.nist then alg = 'nist' end
+    if opts.nist then
+      alg = 'nist'
+    end
     pk = rspamd_pubkey.load(opts.pubkey, 'sign', alg)
   elseif opts.pubstr then
-    if opts.nist then alg = 'nist' end
+    if opts.nist then
+      alg = 'nist'
+    end
     pk = rspamd_pubkey.create(opts.pubstr, 'sign', alg)
   end
 
@@ -367,7 +381,7 @@ local function encrypt_handler(opts)
     fatal("cannot load keypair: " .. opts.keypair)
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local enc = rspamd_crypto.encrypt_file(pk, fname, alg)
 
     if not enc then
@@ -404,7 +418,7 @@ end
 local function decrypt_handler(opts)
   if opts.file then
     if type(opts.file) == 'string' then
-      opts.file = {opts.file}
+      opts.file = { opts.file }
     end
   else
     parser:error('no files to decrypt')
@@ -414,7 +428,7 @@ local function decrypt_handler(opts)
   end
 
   local ucl_parser = ucl.parser()
-  local res,err = ucl_parser:parse_file(opts.keypair)
+  local res, err = ucl_parser:parse_file(opts.keypair)
 
   if not res then
     fatal(string.format('cannot load %s: %s', opts.keypair, err))
@@ -426,7 +440,7 @@ local function decrypt_handler(opts)
     fatal("cannot load keypair: " .. opts.keypair)
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local decrypted = rspamd_crypto.decrypt_file(kp, fname)
 
     if not decrypted then
@@ -488,7 +502,7 @@ end
 
 return {
   name = 'keypair',
-  aliases = {'kp', 'key'},
+  aliases = { 'kp', 'key' },
   handler = handler,
   description = parser._description
 }

@@ -21,7 +21,7 @@ limitations under the License.
 
 local ffi = require 'ffi'
 
-ffi.cdef[[
+ffi.cdef [[
 enum spf_mech_e {
 	SPF_FAIL,
 	SPF_SOFT_FAIL,
@@ -112,7 +112,7 @@ local function spf_resolve(task, cb)
       local digstr = ffi.new("char[64]")
       ffi.C.rspamd_snprintf(digstr, 64, "0x%xuL", rec.digest)
       res.digest = ffi.string(digstr)
-      for i = 1,nelts do
+      for i = 1, nelts do
         res.addrs[i] = spf_addr_tolua(elts[i - 1])
       end
 

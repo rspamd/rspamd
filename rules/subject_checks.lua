@@ -22,8 +22,8 @@ local subject_re = rspamd_regexp.create('/^(?:(?:Re|Fwd|Fw|Aw|Antwort|Sv):\\s*)+
 
 local function test_subject(task, check_function, rate)
   local function normalize_linear(a, x)
-      local f = a * x
-      return true, (( f < 1 ) and f or 1), tostring(x)
+    local f = a * x
+    return true, ((f < 1) and f or 1), tostring(x)
   end
 
   local sbj = task:get_header('Subject')
@@ -48,7 +48,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
     local caps_test = function(sbj)
       return util.is_uppercase(sbj)
     end
-    return test_subject(task, caps_test, 1.0/40.0)
+    return test_subject(task, caps_test, 1.0 / 40.0)
   end,
   score = 3.0,
   group = 'subject',
@@ -61,7 +61,7 @@ rspamd_config.LONG_SUBJ = {
     local length_test = function(_, len)
       return len > 200
     end
-    return test_subject(task, length_test, 1.0/400.0)
+    return test_subject(task, length_test, 1.0 / 400.0)
   end,
   score = 3.0,
   group = 'subject',

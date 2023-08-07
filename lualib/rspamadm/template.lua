@@ -42,17 +42,17 @@ parser:mutex(
           :description "Store files with the new suffix"
           :argname "<suffix>",
     parser:flag "-i --inplace"
-      :description "Replace input file(s)"
+          :description "Replace input file(s)"
 )
 
 local lua_util = require "lua_util"
 
 local function set_env(opts, env)
   if opts.env then
-    for _,fname in ipairs(opts.env) do
+    for _, fname in ipairs(opts.env) do
       for kv in assert(io.open(fname)):lines() do
         if not kv:match('%s*#.*') then
-          local k,v = kv:match('([^=%s]+)%s*=%s*(.+)')
+          local k, v = kv:match('([^=%s]+)%s*=%s*(.+)')
 
           if k and v then
             env[k] = v
@@ -65,14 +65,14 @@ local function set_env(opts, env)
   end
 
   if opts.lua_env then
-    for _,fname in ipairs(opts.env) do
-      local ret,res_or_err = pcall(loadfile(fname))
+    for _, fname in ipairs(opts.env) do
+      local ret, res_or_err = pcall(loadfile(fname))
 
       if not ret then
         io.write(string.format('cannot load %s: %s\n', fname, res_or_err))
       else
         if type(res_or_err) == 'table' then
-          for k,v in pairs(res_or_err) do
+          for k, v in pairs(res_or_err) do
             env[k] = lua_util.deepcopy(v)
           end
         else
@@ -100,8 +100,10 @@ local function handler(args)
   local env = {}
   set_env(opts, env)
 
-  if not opts.file or #opts.file == 0 then opts.file = {'-'} end
-  for _,fname in ipairs(opts.file) do
+  if not opts.file or #opts.file == 0 then
+    opts.file = { '-' }
+  end
+  for _, fname in ipairs(opts.file) do
     local content = read_file(fname)
     local res = lua_util.jinja_template(content, env, opts.no_vars)
 

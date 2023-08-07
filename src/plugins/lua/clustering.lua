@@ -44,7 +44,7 @@ local default_rule = {
   score_mult = 0.1,
 }
 
-local rule_schema = ts.shape{
+local rule_schema = ts.shape {
   max_elts = ts.number + ts.string / tonumber,
   expire = ts.number + ts.string / lua_util.parse_time_interval,
   expire_overflow = ts.number + ts.string / lua_util.parse_time_interval,
@@ -157,9 +157,9 @@ local function clusterting_filter_cb(task, rule)
         'processed rule %s, selectors: source="%s", cluster="%s"; data: %s elts, %s score, %s elt score',
         rule.name, source_selector, cluster_selector, cur_elts, total_score, element_score)
     if final_score > 0.1 then
-      task:insert_result(rule.symbol, final_score, {source_selector,
-                                                    tostring(size_score),
-                                                    tostring(cluster_score)})
+      task:insert_result(rule.symbol, final_score, { source_selector,
+                                                     tostring(size_score),
+                                                     tostring(cluster_score) })
     end
   end
 
@@ -182,14 +182,18 @@ local function clusterting_filter_cb(task, rule)
   end
 
   lua_redis.exec_redis_script(query_cluster_id,
-      {task = task, is_write = false, key = source_selector},
+      { task = task, is_write = false, key = source_selector },
       redis_get_cb,
-      {source_selector, cluster_selector})
+      { source_selector, cluster_selector })
 end
 
 local function clusterting_idempotent_cb(task, rule)
-  if task:has_flag('skip') then return end
-  if not rule.allow_local and lua_util.is_rspamc_or_controller(task) then return end
+  if task:has_flag('skip') then
+    return
+  end
+  if not rule.allow_local and lua_util.is_rspamc_or_controller(task) then
+    return
+  end
 
   local verdict = lua_verdict.get_specific_verdict(N, task)
   local score
@@ -230,7 +234,7 @@ local function clusterting_idempotent_cb(task, rule)
   end
 
   lua_redis.exec_redis_script(update_cluster_id,
-      {task = task, is_write = true, key = source_selector},
+      { task = task, is_write = true, key = source_selector },
       redis_set_cb,
       {
         source_selector,
@@ -258,22 +262,26 @@ if not redis_params then
 end
 
 if opts['rules'] then
-  for k,v in pairs(opts['rules']) do
+  for k, v in pairs(opts['rules']) do
     local raw_rule = lua_util.override_defaults(default_rule, v)
 
-    local rule,err = rule_schema:transform(raw_rule)
+    local rule, err = rule_schema:transform(raw_rule)
 
     if not rule then
       rspamd_logger.errx(rspamd_config, 'invalid clustering rule %s: %s',
           k, err)
     else
 
-      if not rule.symbol then rule.symbol = k end
-      if not rule.prefix then rule.prefix = k .. "_" end
+      if not rule.symbol then
+        rule.symbol = k
+      end
+      if not rule.prefix then
+        rule.prefix = k .. "_"
+      end
 
       rule.source_selector = lua_selectors.create_selector_closure(rspamd_config,
           rule.source_selector, '')
-      rule.cluster_selector =  lua_selectors.create_selector_closure(rspamd_config,
+      rule.cluster_selector = lua_selectors.create_selector_closure(rspamd_config,
           rule.cluster_selector, '')
       if rule.source_selector and rule.cluster_selector then
         rule.name = k
@@ -287,21 +295,23 @@ if opts['rules'] then
     query_cluster_id = lua_redis.add_redis_script(query_cluster_script, redis_params)
     update_cluster_id = lua_redis.add_redis_script(update_cluster_script, redis_params)
     local function callback_gen(f, rule)
-      return function(task) return f(task, rule) end
+      return function(task)
+        return f(task, rule)
+      end
     end
 
-    for _,rule in ipairs(rules) do
-      rspamd_config:register_symbol{
+    for _, rule in ipairs(rules) do
+      rspamd_config:register_symbol {
         name = rule.symbol,
         type = 'normal',
         callback = callback_gen(clusterting_filter_cb, rule),
       }
-      rspamd_config:register_symbol{
+      rspamd_config:register_symbol {
         name = rule.symbol .. '_STORE',
         type = 'idempotent',
         flags = 'empty,explicit_disable,ignore_passthrough',
         callback = callback_gen(clusterting_idempotent_cb, rule),
-        augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)}
+        augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
       }
     end
   else

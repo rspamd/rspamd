@@ -23,15 +23,15 @@ local ffi = require 'ffi'
 
 local exports = {}
 
-ffi.cdef[[
+ffi.cdef [[
   void kad_sgemm_simple(int trans_A, int trans_B, int M, int N, int K, const float *A, const float *B, float *C);
   bool kad_ssyev_simple (int N, float *A, float *output);
 ]]
 
 local function table_to_ffi(a, m, n)
   local a_conv = ffi.new("float[?]", m * n)
-  for i=1,m or #a do
-    for j=1,n or #a[1] do
+  for i = 1, m or #a do
+    for j = 1, n or #a[1] do
       a_conv[(i - 1) * n + (j - 1)] = a[i][j]
     end
   end
@@ -41,9 +41,9 @@ end
 local function ffi_to_table(a, m, n)
   local res = {}
 
-  for i=0,m-1 do
+  for i = 0, m - 1 do
     res[i + 1] = {}
-    for j=0,n-1 do
+    for j = 0, n - 1 do
       res[i + 1][j + 1] = a[i * n + j]
     end
   end
@@ -75,7 +75,7 @@ exports.eigen = function(a, n)
   local res = ffi.new("float[?]", n)
 
   if ffi.C.kad_ssyev_simple(n, ffi.cast('float*', a), res) then
-    return res,a
+    return res, a
   end
 
   return nil

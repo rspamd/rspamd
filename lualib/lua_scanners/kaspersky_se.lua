@@ -125,7 +125,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
     local req_body
 
     if rule.use_files then
-      local fname =  string.format('%s/%s.tmp',
+      local fname = string.format('%s/%s.tmp',
           rule.tmpdir, rspamd_util.random_hex(32))
       local message_fd = rspamd_util.create_file(fname)
 
@@ -187,9 +187,9 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
 
           http.request(request_data)
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
               'exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and ' ..
               'retransmits exceed')
         end
       end
@@ -198,7 +198,9 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
         requery()
       else
         -- Parse the response
-        if upstream then upstream:ok() end
+        if upstream then
+          upstream:ok()
+        end
         if code ~= 200 then
           rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
@@ -242,7 +244,7 @@ local function kaspersky_se_check(task, content, digest, rule, maybe_part)
 
           if why == 'PASSWORD PROTECTED' then
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
-            common.yield_result(task, rule, 'File is encrypted: '.. why,
+            common.yield_result(task, rule, 'File is encrypted: ' .. why,
                 0.0, 'encrypted', maybe_part)
             cached = 'ENCRYPTED'
           else

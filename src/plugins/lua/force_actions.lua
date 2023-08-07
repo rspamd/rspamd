@@ -59,7 +59,7 @@ local function gen_cb(params)
     return 0
   end
 
-  local e, err = rspamd_expression.create(params.expr, {parse_atom, process_atom}, params.pool)
+  local e, err = rspamd_expression.create(params.expr, { parse_atom, process_atom }, params.pool)
   if err then
     rspamd_logger.errx(rspamd_config, 'Couldnt create expression [%1]: %2', params.expr, err)
     return
@@ -112,9 +112,9 @@ local function gen_cb(params)
       if type(params.message) == 'string' then
         -- process selector expressions in the message
         local message = string.gsub(params.message, '(${(.-)})', process_message_selectors)
-        task:set_pre_result{action = params.act, message = message, module = N, flags = flags}
+        task:set_pre_result { action = params.act, message = message, module = N, flags = flags }
       else
-        task:set_pre_result{action = params.act, module = N, flags = flags}
+        task:set_pre_result { action = params.act, module = N, flags = flags }
       end
       return true, params.act
     end
@@ -143,11 +143,11 @@ local function configure_module()
           end
           if type(expr) == 'string' then
             -- expr, act, pool, message, subject, raction, honor, limit, flags
-            local cb, atoms = gen_cb{expr = expr,
-                                     act = action,
-                                     pool = rspamd_config:get_mempool(),
-                                     message = message,
-                                     subject = subject}
+            local cb, atoms = gen_cb { expr = expr,
+                                       act = action,
+                                       pool = rspamd_config:get_mempool(),
+                                       message = message,
+                                       subject = subject }
             if cb and atoms then
               local h = rspamd_cryptobox_hash.create()
               h:update(expr)
@@ -175,19 +175,23 @@ local function configure_module()
 
       if action and expr then
         local flags = {}
-        if sett.least then table.insert(flags, "least") end
-        if sett.process_all then table.insert(flags, "process_all") end
+        if sett.least then
+          table.insert(flags, "least")
+        end
+        if sett.process_all then
+          table.insert(flags, "process_all")
+        end
         local raction = lua_util.list_to_hash(sett.require_action)
         local honor = lua_util.list_to_hash(sett.honor_action)
-        local cb, atoms = gen_cb{expr = expr,
-                                 act = action,
-                                 pool = rspamd_config:get_mempool(),
-                                 message = sett.message,
-                                 subject = sett.subject,
-                                 raction = raction,
-                                 honor = honor,
-                                 limit = sett.limit,
-                                 flags = table.concat(flags, ',')}
+        local cb, atoms = gen_cb { expr = expr,
+                                   act = action,
+                                   pool = rspamd_config:get_mempool(),
+                                   message = sett.message,
+                                   subject = sett.subject,
+                                   raction = raction,
+                                   honor = honor,
+                                   limit = sett.limit,
+                                   flags = table.concat(flags, ',') }
         if cb and atoms then
           local t = {}
           if (raction or honor) then
@@ -196,7 +200,7 @@ local function configure_module()
           else
             t.type = 'normal'
             if not sett.least then
-              t.augmentations = {'passthrough', 'important'}
+              t.augmentations = { 'passthrough', 'important' }
             end
           end
           t.name = 'FORCE_ACTION_' .. name

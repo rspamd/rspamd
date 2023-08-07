@@ -11,7 +11,7 @@ function utility.get_all_symbols(logs, ignore_symbols)
 
   for _, line in pairs(logs) do
     line = lua_util.rspamd_str_split(line, " ")
-    for i=4,(#line-1) do
+    for i = 4, (#line - 1) do
       line[i] = line[i]:gsub("%s+", "")
       if not symbols_set[line[i]] then
         symbols_set[line[i]] = true
@@ -41,57 +41,57 @@ function utility.read_log_file(file)
   local fname = string.gsub(file, "(.*/)(.*)", "%2")
 
   for line in fd:lines() do
-    local start,stop = string.find(line, fname .. ':')
+    local start, stop = string.find(line, fname .. ':')
 
     if start and stop then
       table.insert(lines, string.sub(line, 1, start))
       table.insert(messages, string.sub(line, stop + 1, -1))
     end
-end
+  end
 
   io.close(fd)
 
-  return lines,messages
+  return lines, messages
 end
 
 function utility.get_all_logs(dirs)
   -- Reads all log files in the directory and returns a list of logs.
 
   if type(dirs) == 'string' then
-    dirs = {dirs}
+    dirs = { dirs }
   end
 
   local all_logs = {}
   local all_messages = {}
 
-  for _,dir in ipairs(dirs) do
+  for _, dir in ipairs(dirs) do
     if dir:sub(-1, -1) == "/" then
       dir = dir:sub(1, -2)
       local files = rspamd_util.glob(dir .. "/*.log")
       for _, file in pairs(files) do
-        local logs,messages = utility.read_log_file(file)
-        for i=1,#logs do
+        local logs, messages = utility.read_log_file(file)
+        for i = 1, #logs do
           table.insert(all_logs, logs[i])
           table.insert(all_messages, messages[i])
         end
       end
     else
-      local logs,messages = utility.read_log_file(dir)
-      for i=1,#logs do
+      local logs, messages = utility.read_log_file(dir)
+      for i = 1, #logs do
         table.insert(all_logs, logs[i])
         table.insert(all_messages, messages[i])
       end
     end
   end
 
-  return all_logs,all_messages
+  return all_logs, all_messages
 end
 
 function utility.get_all_symbol_scores(conf, ignore_symbols)
   local symbols = conf:get_symbols_scores()
 
   return fun.tomap(fun.map(function(name, elt)
-    return name,elt['score']
+    return name, elt['score']
   end, fun.filter(function(name, elt)
     return not ignore_symbols[name]
   end, symbols)))
@@ -158,7 +158,7 @@ function utility.generate_statistics_from_logs(logs, messages, threshold)
       true_negatives = true_negatives + 1
     end
 
-    for j=4, (#log-1) do
+    for j = 4, (#log - 1) do
       if all_symbols_stats[log[j]] == nil then
         all_symbols_stats[log[j]] = {
           name = message,
@@ -180,8 +180,8 @@ function utility.generate_statistics_from_logs(logs, messages, threshold)
 
       -- Find slowest message
       if ((tonumber(log[#log]) or 0) > file_stats.slowest) then
-          file_stats.slowest = tonumber(log[#log])
-          file_stats.slowest_file = message
+        file_stats.slowest = tonumber(log[#log])
+        file_stats.slowest_file = message
       end
     end
   end

@@ -57,12 +57,11 @@ rspamd_config.BOUNCE = {
       return false
     end
 
-
     local parts = task:get_parts()
     local top_type, top_subtype, params = parts[1]:get_type_full()
     -- RFC 3464, RFC 8098
     if top_type == 'multipart' and top_subtype == 'report' and params and
-       (params['report-type'] == 'delivery-status' or params['report-type'] == 'disposition-notification') then
+        (params['report-type'] == 'delivery-status' or params['report-type'] == 'disposition-notification') then
       -- Assume that inner parts are OK, don't check them to save time
       return true, 1.0, 'DSN'
     end
@@ -75,9 +74,9 @@ rspamd_config.BOUNCE = {
       -- Check common bounce senders
       if (from_user == 'postmaster' or from_user == 'mailer-daemon') then
         bounce_sender = from_user
-      -- MDaemon >= 14.5 sends multipart/report (RFC 3464) DSN covered above,
-      -- but older versions send non-standard bounces with localized subjects and they
-      -- are still around
+        -- MDaemon >= 14.5 sends multipart/report (RFC 3464) DSN covered above,
+        -- but older versions send non-standard bounces with localized subjects and they
+        -- are still around
       elseif from_user == 'mdaemon' and task:has_header('X-MDDSN-Message') then
         return true, 1.0, 'MDaemon'
       end

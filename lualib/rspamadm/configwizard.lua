@@ -74,19 +74,29 @@ local function ask_yes_no(greet, default)
 
   local reply = rspamd_util.readline(greet)
 
-  if not reply then os.exit(0) end
-  if #reply == 0 then reply = def_str end
+  if not reply then
+    os.exit(0)
+  end
+  if #reply == 0 then
+    reply = def_str
+  end
   reply = reply:lower()
-  if reply == 'y' or reply == 'yes' then return true end
+  if reply == 'y' or reply == 'yes' then
+    return true
+  end
 
   return false
 end
 
 local function readline_default(greet, def_value)
   local reply = rspamd_util.readline(greet)
-  if not reply then os.exit(0) end
+  if not reply then
+    os.exit(0)
+  end
 
-  if #reply == 0 then return def_value end
+  if #reply == 0 then
+    return def_value
+  end
 
   return reply
 end
@@ -95,7 +105,7 @@ local function readline_expire()
   local expire = '100d'
   repeat
     expire = readline_default("Expire time for new tokens [" .. expire .. "]: ",
-      expire)
+        expire)
     expire = lua_util.parse_time_interval(expire)
 
     if not expire then
@@ -118,9 +128,9 @@ end
 local function print_changes(changes)
   local function print_change(k, c, where)
     printf('File: %s, changes list:', highlight(local_conf .. '/'
-        .. where .. '/'.. k))
+        .. where .. '/' .. k))
 
-    for ek,ev in pairs(c) do
+    for ek, ev in pairs(c) do
       printf("%s => %s", highlight(ek), rspamd_logger.slog("%s", ev))
     end
   end
@@ -144,7 +154,7 @@ local function apply_changes(changes)
   end
 
   local function apply_change(k, c, where)
-    local fname = local_conf .. '/' .. where .. '/'.. k
+    local fname = local_conf .. '/' .. where .. '/' .. k
 
     if not rspamd_util.file_exists(fname) then
       printf("Create file %s", highlight(fname))
@@ -181,7 +191,6 @@ local function apply_changes(changes)
   end
 end
 
-
 local function setup_controller(controller, changes)
   printf("Setup %s and controller worker:", highlight("WebUI"))
 
@@ -208,13 +217,13 @@ local function setup_redis(cfg, changes)
   printf("%s servers are not set:", highlight("Redis"))
   printf("The following modules will be enabled if you add Redis servers:")
 
-  for k,_ in pairs(rspamd_plugins_state.disabled_redis) do
+  for k, _ in pairs(rspamd_plugins_state.disabled_redis) do
     printf("\t* %s", highlight(k))
   end
 
   if ask_yes_no("Do you wish to set Redis servers?", true) then
     local read_servers = readline_default("Input read only servers separated by `,` [default: localhost]: ",
-      "localhost")
+        "localhost")
 
     local rs = parse_servers(read_servers)
     if rs and #rs > 0 then
@@ -263,7 +272,9 @@ end
 local function setup_dkim_signing(cfg, changes)
   -- Remove the trailing slash of a pathname, if present.
   local function remove_trailing_slash(path)
-    if string.sub(path, -1) ~= "/" then return path end
+    if string.sub(path, -1) ~= "/" then
+      return path
+    end
     return string.sub(path, 1, string.len(path) - 1)
   end
 
@@ -281,7 +292,7 @@ local function setup_dkim_signing(cfg, changes)
   local use_esld
   local sign_domain = 'pet luacheck'
 
-  local defined_auth_types = {'header', 'envelope', 'auth', 'recipient'}
+  local defined_auth_types = { 'header', 'envelope', 'auth', 'recipient' }
 
   if sign_type == '4' then
     repeat
@@ -318,7 +329,9 @@ local function setup_dkim_signing(cfg, changes)
     sign_authenticated = true
   end
 
-  if fun.any(function(s) return s == sign_domain end, defined_auth_types) then
+  if fun.any(function(s)
+    return s == sign_domain
+  end, defined_auth_types) then
     -- Allow mismatch
     allow_mismatch = ask_yes_no(
         string.format('Allow data %s, e.g. if mime from domain is not equal to authenticated user domain? ',
@@ -337,7 +350,7 @@ local function setup_dkim_signing(cfg, changes)
   local dkim_keys_dir = rspamd_paths["DBDIR"] .. "/dkim/"
 
   local prompt = string.format("Enter output directory for the keys [default: %s]: ",
-    highlight(dkim_keys_dir))
+      highlight(dkim_keys_dir))
   dkim_keys_dir = remove_trailing_slash(readline_default(prompt, dkim_keys_dir))
 
   local ret, err = rspamd_util.mkdir(dkim_keys_dir, true)
@@ -349,7 +362,7 @@ local function setup_dkim_signing(cfg, changes)
 
   local function print_domains()
     printf("Domains configured:")
-    for k,v in pairs(domains) do
+    for k, v in pairs(domains) do
       printf("Domain: %s, selector: %s, privkey: %s", highlight(k),
           v.selector, v.privkey)
     end
@@ -370,13 +383,15 @@ local function setup_dkim_signing(cfg, changes)
     until #domain ~= 0
 
     local selector = readline_default("Enter selector [default: dkim]: ", 'dkim')
-    if not selector then selector = 'dkim' end
+    if not selector then
+      selector = 'dkim'
+    end
 
     local privkey_file = string.format("%s/%s.%s.key", dkim_keys_dir, domain,
         selector)
     if not rspamd_util.file_exists(privkey_file) then
       if ask_yes_no("Do you want to create privkey " .. highlight(privkey_file),
-        true) then
+          true) then
         local pubkey_file = privkey_file .. ".pub"
         local rspamd_cryptobox = require "rspamd_cryptobox"
         local sk, pk = rspamd_cryptobox.generate_keypair("rsa", 2048)
@@ -402,7 +417,7 @@ local function setup_dkim_signing(cfg, changes)
     }
   until not ask_yes_no("Do you wish to add another DKIM domain?")
 
-  changes.l['dkim_signing.conf'] = {domain = domains}
+  changes.l['dkim_signing.conf'] = { domain = domains }
   local res_tbl = changes.l['dkim_signing.conf']
 
   if sign_networks then
@@ -426,7 +441,7 @@ local function check_redis_classifier(cls, changes)
   local symbol_spam, symbol_ham
   -- Load symbols from statfiles
   local statfiles = cls.statfile
-  for _,stf in ipairs(statfiles) do
+  for _, stf in ipairs(statfiles) do
     local symbol = stf.symbol or 'undefined'
 
     local spam
@@ -484,12 +499,14 @@ local function check_redis_classifier(cls, changes)
   end
 
   local function get_version(conn)
-    conn:add_cmd("SMEMBERS", {"RS_keys"})
+    conn:add_cmd("SMEMBERS", { "RS_keys" })
 
-    local ret,members = conn:exec()
+    local ret, members = conn:exec()
 
     -- Empty db
-    if not ret or #members == 0 then return false,0 end
+    if not ret or #members == 0 then
+      return false, 0
+    end
 
     -- We still need to check versions
     local lua_script = [[
@@ -502,10 +519,10 @@ end
 
 return ver
 ]]
-    conn:add_cmd('EVAL', {lua_script, '1', 'RS'})
-    local _,ver = conn:exec()
+    conn:add_cmd('EVAL', { lua_script, '1', 'RS' })
+    local _, ver = conn:exec()
 
-    return true,tonumber(ver)
+    return true, tonumber(ver)
   end
 
   local function check_expire(conn)
@@ -522,21 +539,23 @@ end
 
 return ttl
 ]]
-    conn:add_cmd('EVAL', {lua_script, '0'})
-    local _,ttl = conn:exec()
+    conn:add_cmd('EVAL', { lua_script, '0' })
+    local _, ttl = conn:exec()
 
     return tonumber(ttl)
   end
 
-  local res,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+  local res, conn = lua_redis.redis_connect_sync(parsed_redis, true)
   if not res then
     printf("Cannot connect to Redis server")
     return false
   end
 
   if not cls.new_schema then
-    local r,ver = get_version(conn)
-    if not r then return false end
+    local r, ver = get_version(conn)
+    if not r then
+      return false
+    end
     if ver ~= 2 then
       if not ver then
         printf('Key "RS_version" has not been found in Redis for %s/%s',
@@ -562,17 +581,19 @@ return ttl
       end
     end
   else
-    local r,ver = get_version(conn)
-    if not r then return false end
+    local r, ver = get_version(conn)
+    if not r then
+      return false
+    end
     if ver ~= 2 then
       printf("You have configured new schema for %s/%s but your DB has old version: %s",
-        symbol_spam, symbol_ham, ver)
+          symbol_spam, symbol_ham, ver)
       try_convert(false)
     else
       printf(
           'You have configured new schema for %s/%s and your DB already has new layout (v. %s).' ..
               ' DB conversion is not needed.',
-        symbol_spam, symbol_ham, ver)
+          symbol_spam, symbol_ham, ver)
     end
   end
 end
@@ -584,7 +605,7 @@ local function setup_statistic(cfg, changes)
 
     if not redis_params then
       printf('You have %d sqlite classifiers, but you have no Redis servers being set',
-        #sqlite_configs)
+          #sqlite_configs)
       return false
     end
 
@@ -596,7 +617,7 @@ local function setup_statistic(cfg, changes)
       local reset_previous = ask_yes_no("Reset previous data?")
       if ask_yes_no('Do you wish to convert them to Redis?', true) then
 
-        for _,cls in ipairs(sqlite_configs) do
+        for _, cls in ipairs(sqlite_configs) do
           if rspamd_util.file_exists(cls.db_spam) and rspamd_util.file_exists(cls.db_ham) then
             if not lua_stat_tools.convert_sqlite_to_redis(parsed_redis, cls.db_spam,
                 cls.db_ham, cls.symbol_spam, cls.symbol_ham, cls.learn_cache, expire,
@@ -634,8 +655,10 @@ local function setup_statistic(cfg, changes)
 
     if classifier then
       if classifier[1] then
-        for _,cls in ipairs(classifier) do
-          if cls.bayes then cls = cls.bayes end
+        for _, cls in ipairs(classifier) do
+          if cls.bayes then
+            cls = cls.bayes
+          end
           if cls.backend and cls.backend == 'redis' then
             check_redis_classifier(cls, changes)
           end
@@ -645,7 +668,7 @@ local function setup_statistic(cfg, changes)
 
           classifier = classifier.bayes
           if classifier[1] then
-            for _,cls in ipairs(classifier) do
+            for _, cls in ipairs(classifier) do
               if cls.backend and cls.backend == 'redis' then
                 check_redis_classifier(cls, changes)
               end
@@ -663,21 +686,23 @@ end
 
 local function find_worker(cfg, wtype)
   if cfg.worker then
-    for k,s in pairs(cfg.worker) do
+    for k, s in pairs(cfg.worker) do
       if type(k) == 'number' and type(s) == 'table' then
-        if s[wtype] then return s[wtype] end
+        if s[wtype] then
+          return s[wtype]
+        end
       end
       if type(s) == 'table' and s.type and s.type == wtype then
         return s
       end
-      if type(k) == 'string' and k == wtype then return s end
+      if type(k) == 'string' and k == wtype then
+        return s
+      end
     end
   end
 
   return nil
 end
-
-
 
 return {
   handler = function(cmd_args)
@@ -698,14 +723,14 @@ return {
     local opts = parser:parse(cmd_args)
     local args = opts['checks'] or {}
 
-    local _r,err = rspamd_config:load_ucl(opts['config'])
+    local _r, err = rspamd_config:load_ucl(opts['config'])
 
     if not _r then
       rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
       os.exit(1)
     end
 
-    _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+    _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
     if not _r then
       rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
       os.exit(1)
@@ -721,13 +746,13 @@ return {
     if #args > 0 then
       interactive_start = false
 
-      for _,arg in ipairs(args) do
+      for _, arg in ipairs(args) do
         if arg == 'all' then
           checks = all_checks
         elseif arg == 'list' then
           printf(highlight(rspamd_logo))
           printf('Available modules')
-          for _,c in ipairs(all_checks) do
+          for _, c in ipairs(all_checks) do
             printf('- %s', c)
           end
           return
@@ -740,7 +765,7 @@ return {
     end
 
     local function has_check(check)
-      for _,c in ipairs(checks) do
+      for _, c in ipairs(checks) do
         if c == check then
           return true
         end
@@ -791,8 +816,12 @@ return {
       end
 
       local nchanges = 0
-      for _,_ in pairs(changes.l) do nchanges = nchanges + 1 end
-      for _,_ in pairs(changes.o) do nchanges = nchanges + 1 end
+      for _, _ in pairs(changes.l) do
+        nchanges = nchanges + 1
+      end
+      for _, _ in pairs(changes.o) do
+        nchanges = nchanges + 1
+      end
 
       if nchanges > 0 then
         print_changes(changes)

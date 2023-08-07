@@ -34,7 +34,9 @@ local function process_pdf_specific(task, part, specific)
   end
 
   if suspicious_factor > 0.5 then
-    if suspicious_factor > 1.0 then suspicious_factor = 1.0 end
+    if suspicious_factor > 1.0 then
+      suspicious_factor = 1.0
+    end
     task:insert_result('PDF_SUSPICIOUS', suspicious_factor, part:get_filename() or 'unknown')
   end
 
@@ -59,7 +61,7 @@ local tags_processors = {
 local function process_specific_cb(task)
   local parts = task:get_parts() or {}
 
-  for _,p in ipairs(parts) do
+  for _, p in ipairs(parts) do
     if p:is_specific() then
       local data = p:get_specific()
 
@@ -72,45 +74,45 @@ local function process_specific_cb(task)
   end
 end
 
-local id = rspamd_config:register_symbol{
+local id = rspamd_config:register_symbol {
   type = 'callback',
   name = 'SPECIFIC_CONTENT_CHECK',
   callback = process_specific_cb
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_ENCRYPTED',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_JAVASCRIPT',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_SUSPICIOUS',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_LONG_TRAILER',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_MANY_OBJECTS',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   name = 'PDF_TIMEOUT',
   parent = id,
-  groups = {"content", "pdf"},
+  groups = { "content", "pdf" },
 }

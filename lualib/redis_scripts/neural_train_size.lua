@@ -13,8 +13,12 @@ local nspam = 0
 local nham = 0
 
 local ret = redis.call('SCARD', prefix .. '_spam_set')
-if ret then nspam = tonumber(ret) end
+if ret then
+  nspam = tonumber(ret)
+end
 ret = redis.call('SCARD', prefix .. '_ham_set')
-if ret then nham = tonumber(ret) end
+if ret then
+  nham = tonumber(ret)
+end
 
-return {nspam,nham}
+return { nspam, nham }

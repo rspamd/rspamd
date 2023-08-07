@@ -48,7 +48,7 @@ local function known_mid_cb(task)
   local header = task:get_header('Message-Id')
   local das = task:get_symbol(settings['symbol_dkim_allow'])
   if ((das or E)[1] or E).options then
-    for _,dkim_domain in ipairs(das[1]['options']) do
+    for _, dkim_domain in ipairs(das[1]['options']) do
       if dkim_domain then
         local v = map:get_key(dkim_domain:match "[^:]+")
         if v then
@@ -70,9 +70,9 @@ local function known_mid_cb(task)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('mid')
+local opts = rspamd_config:get_all_opt('mid')
 if opts then
-  for k,v in pairs(opts) do
+  for k, v in pairs(opts) do
     settings[k] = v
   end
 
@@ -82,7 +82,7 @@ if opts then
     return
   end
 
-  map = rspamd_config:add_map{
+  map = rspamd_config:add_map {
     url = opts.source,
     description = "Message-IDs map",
     type = 'map'

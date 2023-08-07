@@ -90,7 +90,7 @@ local function dcc_check(task, content, digest, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local client =  rule.client
+    local client = rule.client
 
     local client_ip = task:get_from_ip()
     if client_ip and client_ip:is_valid() then
@@ -116,7 +116,8 @@ local function dcc_check(task, content, digest, rule)
     local rcpts = task:get_recipients();
     if rcpts then
       local dcc_recipients = table.concat(fun.totable(fun.map(function(rcpt)
-        return rcpt['addr'] end,
+        return rcpt['addr']
+      end,
           rcpts)), '\n')
       if dcc_recipients then
         envrcpt = dcc_recipients
@@ -164,8 +165,8 @@ local function dcc_check(task, content, digest, rule)
             fuz2_max = 999999,
           })
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed', rule.log_prefix)
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
+              'exceed', rule.log_prefix)
           common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       end
@@ -176,14 +177,14 @@ local function dcc_check(task, content, digest, rule)
 
       else
         -- Parse the response
-        local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)$")
+        local _, _, result, disposition, header = tostring(data):find("(.-)\n(.-)\n(.-)$")
         lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
 
         if header then
           -- Unfold header
           header = header:gsub('\r?\n%s*', ' ')
-          local _,_,info = header:find("; (.-)$")
+          local _, _, info = header:find("; (.-)$")
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
@@ -194,63 +195,65 @@ local function dcc_check(task, content, digest, rule)
             dcc_requery()
           elseif result == 'A' then
 
-              local opts = {}
-              local score = 0.0
-              info = info:lower()
-              local rep = info:match('rep=([^=%s]+)')
+            local opts = {}
+            local score = 0.0
+            info = info:lower()
+            local rep = info:match('rep=([^=%s]+)')
 
-              -- Adjust reputation if available
-              if rep then rep = tonumber(rep) end
-              if not rep then
-                rep = 1.0
-              end
+            -- Adjust reputation if available
+            if rep then
+              rep = tonumber(rep)
+            end
+            if not rep then
+              rep = 1.0
+            end
 
-              local function check_threshold(what, num, lim)
-                local rnum
-                if num == 'many' then
-                  rnum = lim
-                else
-                  rnum = tonumber(num)
-                end
-
-                if rnum and rnum >= lim then
-                  opts[#opts + 1] = string.format('%s=%s', what, num)
-                  score = score + rep / 3.0
-                end
-              end
-
-              info = info:lower()
-              local body = info:match('body=([^=%s]+)')
-
-              if body then
-                check_threshold('body', body, rule.body_max)
-              end
-
-              local fuz1 = info:match('fuz1=([^=%s]+)')
-
-              if fuz1 then
-                check_threshold('fuz1', fuz1, rule.fuz1_max)
-              end
-
-              local fuz2 = info:match('fuz2=([^=%s]+)')
-
-              if fuz2 then
-                check_threshold('fuz2', fuz2, rule.fuz2_max)
-              end
-
-              if #opts > 0 and score > 0 then
-                task:insert_result(rule.symbol_bulk,
-                    score,
-                    opts)
-                common.save_cache(task, digest, rule, opts, score)
+            local function check_threshold(what, num, lim)
+              local rnum
+              if num == 'many' then
+                rnum = lim
               else
-                common.save_cache(task, digest, rule, 'OK')
-                if rule.log_clean then
-                  rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
-                      rule.log_prefix, info)
-                else
-                  lua_util.debugm(rule.name, task, '%s: returned result A - info: %s',
-                      rule.log_prefix, info)
+                rnum = tonumber(num)
+              end
+
+              if rnum and rnum >= lim then
+                opts[#opts + 1] = string.format('%s=%s', what, num)
+                score = score + rep / 3.0
+              end
+            end
+
+            info = info:lower()
+            local body = info:match('body=([^=%s]+)')
+
+            if body then
+              check_threshold('body', body, rule.body_max)
+            end
+
+            local fuz1 = info:match('fuz1=([^=%s]+)')
+
+            if fuz1 then
+              check_threshold('fuz1', fuz1, rule.fuz1_max)
+            end
+
+            local fuz2 = info:match('fuz2=([^=%s]+)')
+
+            if fuz2 then
+              check_threshold('fuz2', fuz2, rule.fuz2_max)
+            end
+
+            if #opts > 0 and score > 0 then
+              task:insert_result(rule.symbol_bulk,
+                  score,
+                  opts)
+              common.save_cache(task, digest, rule, opts, score)
+            else
+              common.save_cache(task, digest, rule, 'OK')
+              if rule.log_clean then
+                rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
+                    rule.log_prefix, info)
+              else
+                lua_util.debugm(rule.name, task, '%s: returned result A - info: %s',
+                    rule.log_prefix, info)
               end
             end
           elseif result == 'G' then
@@ -302,7 +305,7 @@ local function dcc_check(task, content, digest, rule)
 end
 
 return {
-  type = {'dcc','bulk', 'hash', 'scanner'},
+  type = { 'dcc', 'bulk', 'hash', 'scanner' },
   description = 'dcc bulk scanner',
   configure = dcc_config,
   check = dcc_check,

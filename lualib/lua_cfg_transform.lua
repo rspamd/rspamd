@@ -32,24 +32,24 @@ local function metric_pairs(t)
 
   local function gen_keys(tbl)
     if implicit_array then
-      for _,v in ipairs(tbl) do
+      for _, v in ipairs(tbl) do
         if v.name then
-          table.insert(keys, {v.name, v})
+          table.insert(keys, { v.name, v })
           v.name = nil
         else
           -- Very tricky to distinguish:
           -- group {name = "foo" ... } + group "blah" { ... }
-          for gr_name,gr in pairs(v) do
+          for gr_name, gr in pairs(v) do
             if type(gr_name) ~= 'number' then
               -- We can also have implicit arrays here
               local gr_implicit = is_implicit(gr)
 
               if gr_implicit then
-                for _,gr_elt in ipairs(gr) do
-                  table.insert(keys, {gr_name, gr_elt})
+                for _, gr_elt in ipairs(gr) do
+                  table.insert(keys, { gr_name, gr_elt })
                 end
               else
-                table.insert(keys, {gr_name, gr})
+                table.insert(keys, { gr_name, gr })
               end
             end
           end
@@ -57,20 +57,20 @@ local function metric_pairs(t)
       end
     else
       if tbl.name then
-        table.insert(keys, {tbl.name, tbl})
+        table.insert(keys, { tbl.name, tbl })
         tbl.name = nil
       else
-        for k,v in pairs(tbl) do
+        for k, v in pairs(tbl) do
           if type(k) ~= 'number' then
             -- We can also have implicit arrays here
             local sym_implicit = is_implicit(v)
 
             if sym_implicit then
-              for _,elt in ipairs(v) do
-                table.insert(keys, {k, elt})
+              for _, elt in ipairs(v) do
+                table.insert(keys, { k, elt })
               end
             else
-              table.insert(keys, {k, v})
+              table.insert(keys, { k, v })
             end
           end
         end
@@ -91,18 +91,26 @@ local function metric_pairs(t)
 end
 
 local function group_transform(cfg, k, v)
-  if v.name then k = v.name end
+  if v.name then
+    k = v.name
+  end
 
   local new_group = {
     symbols = {}
   }
 
-  if v.enabled then new_group.enabled = v.enabled end
-  if v.disabled then new_group.disabled = v.disabled end
-  if v.max_score then new_group.max_score = v.max_score end
+  if v.enabled then
+    new_group.enabled = v.enabled
+  end
+  if v.disabled then
+    new_group.disabled = v.disabled
+  end
+  if v.max_score then
+    new_group.max_score = v.max_score
+  end
 
   if v.symbol then
-    for sk,sv in metric_pairs(v.symbol) do
+    for sk, sv in metric_pairs(v.symbol) do
       if sv.name then
         sk = sv.name
         sv.name = nil -- Remove field
@@ -112,7 +120,9 @@ local function group_transform(cfg, k, v)
     end
   end
 
-  if not cfg.group then cfg.group = {} end
+  if not cfg.group then
+    cfg.group = {}
+  end
 
   if cfg.group[k] then
     cfg.group[k] = lua_util.override_defaults(cfg.group[k], new_group)
@@ -153,7 +163,9 @@ local function test_groups(groups)
   for gr_name, gr in pairs(groups) do
     if not gr.symbols then
       local cnt = 0
-      for _,_ in pairs(gr) do cnt = cnt + 1 end
+      for _, _ in pairs(gr) do
+        cnt = cnt + 1
+      end
 
       if cnt == 0 then
         logger.debugx('group %s is empty', gr_name)
@@ -205,9 +217,9 @@ end
 -- merged group definition
 local function merge_groups(groups)
   local ret = {}
-  for k,gr in pairs(groups) do
+  for k, gr in pairs(groups) do
     if type(k) == 'number' then
-      for key,sec in pairs(gr) do
+      for key, sec in pairs(gr) do
         ret[key] = sec
       end
     else
@@ -228,7 +240,7 @@ local function check_statistics_sanity()
 
   if rspamd_util.file_exists(local_stat) and
       rspamd_util.file_exists(local_bayes) then
-    logger.warnx(rspamd_config, 'conflicting files %s and %s are found: '..
+    logger.warnx(rspamd_config, 'conflicting files %s and %s are found: ' ..
         'Rspamd classifier configuration might be broken!', local_stat, local_bayes)
   end
 end
@@ -237,7 +249,7 @@ end
 local function surbl_section_convert(cfg, section)
   local rbl_section = cfg.rbl.rbls
   local wl = section.whitelist
-  for name,value in pairs(section.rules or {}) do
+  for name, value in pairs(section.rules or {}) do
     if rbl_section[name] then
       logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, prefer surbl rule!',
           name)
@@ -251,13 +263,21 @@ local function surbl_section_convert(cfg, section)
       converted.whitelist = wl
     end
 
-    for k,v in pairs(value) do
+    for k, v in pairs(value) do
       local skip = false
       -- Rename
-      if k == 'suffix' then k = 'rbl' end
-      if k == 'ips' then k = 'returncodes' end
-      if k == 'bits' then k = 'returnbits' end
-      if k == 'noip' then k = 'no_ip' end
+      if k == 'suffix' then
+        k = 'rbl'
+      end
+      if k == 'ips' then
+        k = 'returncodes'
+      end
+      if k == 'bits' then
+        k = 'returnbits'
+      end
+      if k == 'noip' then
+        k = 'no_ip'
+      end
       -- Crappy legacy
       if k == 'options' then
         if v == 'noip' or v == 'no_ip' then
@@ -292,7 +312,7 @@ end
 local function emails_section_convert(cfg, section)
   local rbl_section = cfg.rbl.rbls
   local wl = section.whitelist
-  for name,value in pairs(section.rules or {}) do
+  for name, value in pairs(section.rules or {}) do
     if rbl_section[name] then
       logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, prefer emails rule!',
           name)
@@ -306,15 +326,27 @@ local function emails_section_convert(cfg, section)
       converted.whitelist = wl
     end
 
-    for k,v in pairs(value) do
+    for k, v in pairs(value) do
       local skip = false
       -- Rename
-      if k == 'dnsbl' then k = 'rbl' end
-      if k == 'check_replyto' then k = 'replyto' end
-      if k == 'hashlen' then k = 'hash_len' end
-      if k == 'encoding' then k = 'hash_format' end
-      if k == 'domain_only' then k = 'emails_domainonly' end
-      if k == 'delimiter' then k = 'emails_delimiter' end
+      if k == 'dnsbl' then
+        k = 'rbl'
+      end
+      if k == 'check_replyto' then
+        k = 'replyto'
+      end
+      if k == 'hashlen' then
+        k = 'hash_len'
+      end
+      if k == 'encoding' then
+        k = 'hash_format'
+      end
+      if k == 'domain_only' then
+        k = 'emails_domainonly'
+      end
+      if k == 'delimiter' then
+        k = 'emails_delimiter'
+      end
       if k == 'skip_body' then
         skip = true
         if v then
@@ -365,14 +397,14 @@ return function(cfg)
     logger.errx('no actions defined')
   else
     -- Perform sanity check for actions
-    local actions_defs = {'no action', 'no_action', -- In case if that's added
-                          'greylist', 'add header', 'add_header',
-                          'rewrite subject', 'rewrite_subject', 'quarantine',
-                          'reject', 'discard'}
+    local actions_defs = { 'no action', 'no_action', -- In case if that's added
+                           'greylist', 'add header', 'add_header',
+                           'rewrite subject', 'rewrite_subject', 'quarantine',
+                           'reject', 'discard' }
 
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
-            not cfg.actions['accept'] then
-      for _,d in ipairs(actions_defs) do
+        not cfg.actions['accept'] then
+      for _, d in ipairs(actions_defs) do
         if cfg.actions[d] then
 
           local action_score = nil
@@ -387,7 +419,7 @@ return function(cfg)
           elseif type(action_score) == 'number' and action_score < 0 then
             cfg.actions['no_action'] = cfg.actions[d] - 0.001
             logger.infox(rspamd_config, 'set no_action score to: %s, as action %s has negative score',
-                    cfg.actions['no_action'], d)
+                cfg.actions['no_action'], d)
             break
           end
         end
@@ -401,7 +433,7 @@ return function(cfg)
     actions_set['grow_factor'] = true
     actions_set['subject'] = true
 
-    for k,_ in pairs(cfg.actions) do
+    for k, _ in pairs(cfg.actions) do
       if not actions_set[k] then
         logger.warnx(rspamd_config, 'unknown element in actions section: %s', k)
       end
@@ -417,18 +449,18 @@ return function(cfg)
       'reject',
       'discard'
     }
-    for i=1,(#actions_order - 1) do
+    for i = 1, (#actions_order - 1) do
       local act = actions_order[i]
 
       if cfg.actions[act] and type(cfg.actions[act]) == 'number' then
         local score = cfg.actions[act]
 
-        for j=i+1,#actions_order do
+        for j = i + 1, #actions_order do
           local next_act = actions_order[j]
           if cfg.actions[next_act] and type(cfg.actions[next_act]) == 'number' then
             local next_score = cfg.actions[next_act]
             if next_score <= score then
-              logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower '..
+              logger.errx(rspamd_config, 'invalid actions thresholds order: action %s (%s) must have lower ' ..
                   'score than action %s (%s)', act, score, next_act, next_score)
               ret = false
             end
@@ -475,7 +507,9 @@ return function(cfg)
   -- Again: legacy stuff :(
   if not cfg.dkim.sign_headers then
     local sec = cfg.dkim_signing
-    if sec and sec[1] then sec = cfg.dkim_signing[1] end
+    if sec and sec[1] then
+      sec = cfg.dkim_signing[1]
+    end
 
     if sec and sec.sign_headers then
       cfg.dkim.sign_headers = sec.sign_headers
@@ -483,7 +517,7 @@ return function(cfg)
   end
 
   -- DKIM signing/ARC legacy
-  for _, mod in ipairs({'dkim_signing', 'arc'}) do
+  for _, mod in ipairs({ 'dkim_signing', 'arc' }) do
     if cfg[mod] then
       if cfg[mod].auth_only ~= nil then
         if cfg[mod].sign_authenticated ~= nil then
@@ -502,10 +536,10 @@ return function(cfg)
   end
 
   -- Try to find some obvious issues with configuration
-  for k,v in pairs(cfg) do
-    if type(v) == 'table' and v[k] and type (v[k]) == 'table' then
+  for k, v in pairs(cfg) do
+    if type(v) == 'table' and v[k] and type(v[k]) == 'table' then
       logger.errx('nested section: %s { %s { ... } }, it is likely a configuration error',
-              k, k)
+          k, k)
     end
   end
 
@@ -531,9 +565,13 @@ return function(cfg)
       }
     end
 
-    if not cfg.reputation.rules then cfg.reputation.rules = {} end
+    if not cfg.reputation.rules then
+      cfg.reputation.rules = {}
+    end
 
-    if not fun.any(function(_, v) return v.selector and v.selector.ip end,
+    if not fun.any(function(_, v)
+      return v.selector and v.selector.ip
+    end,
         cfg.reputation.rules) then
       logger.infox(rspamd_config, 'attach ip reputation element to use it')
 

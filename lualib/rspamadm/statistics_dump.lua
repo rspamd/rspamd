@@ -68,31 +68,31 @@ restore:argument "file"
        :argname "<file>"
        :args "*"
 restore:option "-b --batch-size"
-    :description "Number of entires to process at once"
-    :argname("<elts>")
-    :convert(tonumber)
-    :default(1000)
+       :description "Number of entires to process at once"
+       :argname("<elts>")
+       :convert(tonumber)
+       :default(1000)
 restore:option "-m --mode"
        :description "Number of entires to process at once"
        :argname("<append|subtract|replace>")
        :convert {
-          ['append'] = 'append',
-          ['subtract'] = 'subtract',
-          ['replace'] = 'replace',
-        }
+  ['append'] = 'append',
+  ['subtract'] = 'subtract',
+  ['replace'] = 'replace',
+}
        :default 'append'
 restore:flag "-n --no-operation"
-    :description "Only show redis commands to be issued"
+       :description "Only show redis commands to be issued"
 
 local function load_config(opts)
-  local _r,err = rspamd_config:load_ucl(opts['config'])
+  local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
     rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
@@ -128,9 +128,9 @@ local function check_redis_classifier(cls, cfg)
 
     local statfiles = cls.statfile
     if statfiles[1] then
-      for _,stf in ipairs(statfiles) do
+      for _, stf in ipairs(statfiles) do
         if not stf.symbol then
-          for k,v in pairs(stf) do
+          for k, v in pairs(stf) do
             check_statfile_table(v, k)
           end
         else
@@ -138,7 +138,7 @@ local function check_redis_classifier(cls, cfg)
         end
       end
     else
-      for stn,stf in pairs(statfiles) do
+      for stn, stf in pairs(statfiles) do
         check_statfile_table(stf, stn)
       end
     end
@@ -168,7 +168,7 @@ end
 
 local function redis_map_zip(ar)
   local data = {}
-  for j=1,#ar,2 do
+  for j = 1, #ar, 2 do
     data[ar[j]] = ar[j + 1]
   end
 
@@ -178,7 +178,7 @@ end
 -- Used to clear tables
 local clear_fcn = table.clear or function(tbl)
   local keys = lua_util.keys(tbl)
-  for _,k in ipairs(keys) do
+  for _, k in ipairs(keys) do
     tbl[k] = nil
   end
 end
@@ -197,7 +197,7 @@ local function dump_out(out, opts, last)
       compress_ctx:stream(rspamd_text.fromtable(out), 'flush'):write()
     end
   else
-    for _,o in ipairs(out) do
+    for _, o in ipairs(out) do
       io.write(o)
     end
   end
@@ -213,7 +213,7 @@ local function dump_cdb(out, opts, last, pattern)
     out.cdb_builder:add('_lrnham_', rspamd_i64.fromstring(results.learns_ham or '0'))
   end
 
-  for _,o in ipairs(results.elts) do
+  for _, o in ipairs(results.elts) do
     out.cdb_builder:add(o.key, o.value)
   end
 
@@ -227,9 +227,9 @@ local function dump_pattern(conn, pattern, opts, out, key)
   local cursor = 0
 
   repeat
-    conn:add_cmd('SCAN', {tostring(cursor),
-                          'MATCH', pattern,
-                          'COUNT', tostring(opts.batch_size)})
+    conn:add_cmd('SCAN', { tostring(cursor),
+                           'MATCH', pattern,
+                           'COUNT', tostring(opts.batch_size) })
     local ret, results = conn:exec()
 
     if not ret then
@@ -242,26 +242,26 @@ local function dump_pattern(conn, pattern, opts, out, key)
     local elts = results[2]
     local tokens = {}
 
-    for _,e in ipairs(elts) do
-      conn:add_cmd('HGETALL', {e})
+    for _, e in ipairs(elts) do
+      conn:add_cmd('HGETALL', { e })
     end
     -- This function returns many results, each for each command
     -- So if we have batch 1000, then we would have 1000 tables in form
     -- [result, {hash_content}]
-    local all_results = {conn:exec()}
+    local all_results = { conn:exec() }
 
-    for i=1,#all_results,2 do
+    for i = 1, #all_results, 2 do
       local r, hash_content = all_results[i], all_results[i + 1]
 
       if r then
         -- List to a hash map
         local data = redis_map_zip(hash_content)
-        tokens[#tokens + 1] = {key = elts[(i + 1)/2], data = data}
+        tokens[#tokens + 1] = { key = elts[(i + 1) / 2], data = data }
       end
     end
 
     -- Output keeping track of the commas
-    for i,d in ipairs(tokens) do
+    for i, d in ipairs(tokens) do
       if cursor == 0 and i == #tokens or not opts.json then
         if opts.cdb then
           table.insert(out[key].elts, {
@@ -302,8 +302,8 @@ end
 
 local function dump_handler(opts)
   local patterns_seen = {}
-  for _,cls in ipairs(classifiers) do
-    local res,conn = lua_redis.redis_connect_sync(cls.redis_params, false)
+  for _, cls in ipairs(classifiers) do
+    local res, conn = lua_redis.redis_connect_sync(cls.redis_params, false)
 
     if not res then
       rspamd_logger.errx("cannot connect to redis server: %s", cls.redis_params)
@@ -314,7 +314,7 @@ local function dump_handler(opts)
     local function check_keys(sym)
       local sym_keys_pattern = string.format("%s_keys", sym)
       conn:add_cmd('SMEMBERS', { sym_keys_pattern })
-      local ret,keys = conn:exec()
+      local ret, keys = conn:exec()
 
       if not ret then
         rspamd_logger.errx("cannot execute command to get keys: %s", keys)
@@ -325,11 +325,11 @@ local function dump_handler(opts)
         out[#out + 1] = string.format('"%s": %s\n', sym_keys_pattern,
             ucl.to_format(keys, 'json-compact'))
       end
-      for _,k in ipairs(keys) do
+      for _, k in ipairs(keys) do
         local pat = string.format('%s*_*', k)
         if not patterns_seen[pat] then
-          conn:add_cmd('HGETALL', {k})
-          local _ret,additional_keys = conn:exec()
+          conn:add_cmd('HGETALL', { k })
+          local _ret, additional_keys = conn:exec()
 
           if _ret then
             if opts.json then
@@ -359,19 +359,19 @@ local function dump_handler(opts)
 end
 
 local function obj_to_redis_arguments(obj, opts, cmd_pipe)
-  local key,value = next(obj)
+  local key, value = next(obj)
 
   if type(key) == 'string' then
     if type(value) == 'table' then
       if not value[1] then
         if opts.mode == 'replace' then
           local cmd = 'HMSET'
-          local params = {key}
-          for k,v in pairs(value) do
+          local params = { key }
+          for k, v in pairs(value) do
             table.insert(params, k)
             table.insert(params, v)
           end
-          table.insert(cmd_pipe, {cmd, params})
+          table.insert(cmd_pipe, { cmd, params })
         else
           local cmd = 'HINCRBYFLOAT'
           local mult = 1.0
@@ -379,19 +379,19 @@ local function obj_to_redis_arguments(obj, opts, cmd_pipe)
             mult = (-mult)
           end
 
-          for k,v in pairs(value) do
+          for k, v in pairs(value) do
             if tonumber(v) then
               v = tonumber(v)
-              table.insert(cmd_pipe, {cmd, {key, k, tostring(v * mult)}})
+              table.insert(cmd_pipe, { cmd, { key, k, tostring(v * mult) } })
             else
-              table.insert(cmd_pipe, {'HSET', {key, k, v}})
+              table.insert(cmd_pipe, { 'HSET', { key, k, v } })
             end
           end
         end
       else
         -- Numeric table of elements (e.g. _keys) - it is actually a set in Redis
-        for _,elt in ipairs(value) do
-          table.insert(cmd_pipe, {'SADD', {key, elt}})
+        for _, elt in ipairs(value) do
+          table.insert(cmd_pipe, { 'SADD', { key, elt } })
         end
       end
     end
@@ -403,17 +403,17 @@ end
 local function execute_batch(batch, conns, opts)
   local cmd_pipe = {}
 
-  for _,cmd in ipairs(batch) do
+  for _, cmd in ipairs(batch) do
     obj_to_redis_arguments(cmd, opts, cmd_pipe)
   end
 
   if opts.no_operation then
-    for _,cmd in ipairs(cmd_pipe) do
+    for _, cmd in ipairs(cmd_pipe) do
       rspamd_logger.messagex('%s %s', cmd[1], table.concat(cmd[2], ' '))
     end
   else
     for _, conn in ipairs(conns) do
-      for _,cmd in ipairs(cmd_pipe) do
+      for _, cmd in ipairs(cmd_pipe) do
         local is_ok, err = conn:add_cmd(cmd[1], cmd[2])
 
         if not is_ok then
@@ -427,11 +427,11 @@ local function execute_batch(batch, conns, opts)
 end
 
 local function restore_handler(opts)
-  local files = opts.file or {'-'}
+  local files = opts.file or { '-' }
   local conns = {}
 
-  for _,cls in ipairs(classifiers) do
-    local res,conn = lua_redis.redis_connect_sync(cls.redis_params, true)
+  for _, cls in ipairs(classifiers) do
+    local res, conn = lua_redis.redis_connect_sync(cls.redis_params, true)
 
     if not res then
       rspamd_logger.errx("cannot connect to redis server: %s", cls.redis_params)
@@ -443,7 +443,7 @@ local function restore_handler(opts)
 
   local batch = {}
 
-  for _,f in ipairs(files) do
+  for _, f in ipairs(files) do
     local fd
     if f ~= '-' then
       fd = io.open(f, 'r')
@@ -454,7 +454,7 @@ local function restore_handler(opts)
     for line in io.lines() do
       local ucl_parser = ucl.parser()
       local res, err
-      res,err = ucl_parser:parse_string(line)
+      res, err = ucl_parser:parse_string(line)
 
       if not res then
         rspamd_logger.errx("%s: cannot read line %s: %s", f, cur_line, err)
@@ -470,7 +470,9 @@ local function restore_handler(opts)
       end
     end
 
-    if fd then fd:close() end
+    if fd then
+      fd:close()
+    end
   end
 
   if #batch > 0 then
@@ -492,8 +494,10 @@ local function handler(args)
 
   if classifier then
     if classifier[1] then
-      for _,cls in ipairs(classifier) do
-        if cls.bayes then cls = cls.bayes end
+      for _, cls in ipairs(classifier) do
+        if cls.bayes then
+          cls = cls.bayes
+        end
         if cls.backend and cls.backend == 'redis' then
           check_redis_classifier(cls, obj)
         end
@@ -503,7 +507,7 @@ local function handler(args)
 
         classifier = classifier.bayes
         if classifier[1] then
-          for _,cls in ipairs(classifier) do
+          for _, cls in ipairs(classifier) do
             if cls.backend and cls.backend == 'redis' then
               check_redis_classifier(cls, obj)
             end
@@ -518,7 +522,7 @@ local function handler(args)
   end
 
   if type(opts.file) == 'string' then
-    opts.file = {opts.file}
+    opts.file = { opts.file }
   elseif type(opts.file) == 'none' then
     opts.file = {}
   end
@@ -534,7 +538,7 @@ end
 
 return {
   name = 'statistics_dump',
-  aliases = {'stat_dump', 'bayes_dump'},
+  aliases = { 'stat_dump', 'bayes_dump' },
   handler = handler,
   description = parser._description
 }

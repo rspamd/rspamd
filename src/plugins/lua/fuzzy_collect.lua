@@ -39,7 +39,7 @@ local function send_data_mirror(m, cfg, ev_base, body)
       rspamd_logger.infox(cfg, 'saved data on %s(%s)', m.server, m.name)
     end
   end
-  rspamd_http.request{
+  rspamd_http.request {
     url = string.format('http://%s//update_v1/%s', m.server, m.name),
     resolver = cfg:get_resolver(),
     config = cfg,
@@ -58,8 +58,10 @@ local function collect_fuzzy_hashes(cfg, ev_base)
       rspamd_logger.errx(cfg, 'cannot load data: %s', err)
     else
       -- Here, we actually copy body once for each mirror
-      fun.each(function(_, v) send_data_mirror(v, cfg, ev_base, body) end,
-        settings.mirrors)
+      fun.each(function(_, v)
+        send_data_mirror(v, cfg, ev_base, body)
+      end,
+          settings.mirrors)
     end
   end
 
@@ -70,13 +72,13 @@ local function collect_fuzzy_hashes(cfg, ev_base)
       if settings.saved_cookie ~= tostring(body) then
         settings.saved_cookie = tostring(body)
         rspamd_logger.infox(cfg, 'received collection cookie %s',
-          tostring(rspamd_util.encode_base32(settings.saved_cookie:sub(1, 6))))
+            tostring(rspamd_util.encode_base32(settings.saved_cookie:sub(1, 6))))
         local sig = rspamd_cryptolib.sign_memory(settings.sign_keypair,
-          settings.saved_cookie)
+            settings.saved_cookie)
         if not sig then
           rspamd_logger.info(cfg, 'cannot sign cookie')
         else
-          rspamd_http.request{
+          rspamd_http.request {
             url = string.format('http://%s/data', settings.collect_server),
             resolver = cfg:get_resolver(),
             config = cfg,
@@ -96,8 +98,8 @@ local function collect_fuzzy_hashes(cfg, ev_base)
     end
   end
   rspamd_logger.infox(cfg, 'start fuzzy collection, next sync in %s seconds',
-    settings.sync_time)
-  rspamd_http.request{
+      settings.sync_time)
+  rspamd_http.request {
     url = string.format('http://%s/cookie', settings.collect_server),
     resolver = cfg:get_resolver(),
     config = cfg,
@@ -141,7 +143,7 @@ end
 local opts = rspamd_config:get_all_opt('fuzzy_collect')
 
 if opts and type(opts) == 'table' then
-  for k,v in pairs(opts) do
+  for k, v in pairs(opts) do
     settings[k] = v
   end
   local sane_config = true
@@ -180,9 +182,9 @@ if opts and type(opts) == 'table' then
     rspamd_config:add_on_load(function(_, ev_base, worker)
       if worker:is_primary_controller() then
         rspamd_config:add_periodic(ev_base, 0.0,
-          function(cfg, _)
-            return collect_fuzzy_hashes(cfg, ev_base)
-          end)
+            function(cfg, _)
+              return collect_fuzzy_hashes(cfg, ev_base)
+            end)
       end
     end)
   else

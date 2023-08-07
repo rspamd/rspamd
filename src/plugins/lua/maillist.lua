@@ -104,7 +104,8 @@ local function check_ml_mailman(task)
       -- not much elase we can check, Subjects can be changed in settings
       return true
     end
-  else -- Mailman 3
+  else
+    -- Mailman 3
     -- XXX not Mailman3 admin messages have this headers, but one
     -- which don't usually have List-* headers examined below
     if task:has_header('List-Administrivia') then
@@ -113,7 +114,7 @@ local function check_ml_mailman(task)
   end
 
   -- List-Archive and List-Post are optional, check other headers
-  for _, h in ipairs({'List-Help', 'List-Subscribe', 'List-Unsubscribe'}) do
+  for _, h in ipairs({ 'List-Help', 'List-Subscribe', 'List-Unsubscribe' }) do
     header = task:get_header(h)
     if not (header and header:find('<mailto:', 1, true)) then
       return false
@@ -173,7 +174,7 @@ local function check_generic_list_headers(task)
     end,
   }
 
-  for hname,hscore in pairs(common_list_headers) do
+  for hname, hscore in pairs(common_list_headers) do
     if task:has_header(hname) then
       if type(hscore) == 'number' then
         score = score + hscore
@@ -210,7 +211,9 @@ local function check_maillist(task)
     elseif check_ml_cgp(task) then
       task:insert_result(symbol, 1, 'cgp')
     else
-      if score > 2 then score = 2 end
+      if score > 2 then
+        score = 2
+      end
       task:insert_result(symbol, 0.5 * score, 'generic')
     end
   end
@@ -219,7 +222,7 @@ end
 
 
 -- Configuration
-local opts =  rspamd_config:get_all_opt('maillist')
+local opts = rspamd_config:get_all_opt('maillist')
 if opts then
   if opts['symbol'] then
     symbol = opts['symbol']

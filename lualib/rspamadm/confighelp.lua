@@ -16,11 +16,11 @@ local parser = argparse()
 parser:argument "path":args "*"
       :description('Optional config paths')
 parser:flag "--no-color"
-    :description "Disable coloured output"
+      :description "Disable coloured output"
 parser:flag "--short"
-    :description "Show only option names"
+      :description "Show only option names"
 parser:flag "--no-examples"
-    :description "Do not show examples (implied by --short)"
+      :description "Do not show examples (implied by --short)"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then
@@ -84,10 +84,10 @@ local function print_help(key, value, tabs)
     if type(value['required']) == 'boolean' then
       if value['required'] then
         print(string.format('%s\tRequired: %s', tabs,
-          maybe_print_color(tostring(value['required']))))
+            maybe_print_color(tostring(value['required']))))
       else
         print(string.format('%s\tRequired: %s', tabs,
-          tostring(value['required'])))
+            tostring(value['required'])))
       end
     end
     if value['default'] then
@@ -116,7 +116,7 @@ return function(args, res)
 
   local sorted = sort_values(res)
 
-  for _,v in ipairs(sorted) do
+  for _, v in ipairs(sorted) do
     print_help(v['key'], v['value'], '')
     print('')
   end

@@ -66,62 +66,62 @@ parser:flag '--use-https'
       :argname('use_https')
 
 local neural_profile = parser:command 'neural_profile'
-      :description 'Generate symbols profile using data from Clickhouse'
+                             :description 'Generate symbols profile using data from Clickhouse'
 neural_profile:option '-w --where'
-      :description 'WHERE clause for Clickhouse query'
-      :argname('where')
+              :description 'WHERE clause for Clickhouse query'
+              :argname('where')
 neural_profile:flag '-j --json'
-      :description 'Write output as JSON'
-      :argname('json')
+              :description 'Write output as JSON'
+              :argname('json')
 neural_profile:option '--days'
-      :description 'Number of days to collect stats for'
-      :argname('days')
-      :default('7')
+              :description 'Number of days to collect stats for'
+              :argname('days')
+              :default('7')
 neural_profile:option '--limit -l'
-      :description 'Maximum rows to fetch per day'
-      :argname('limit')
+              :description 'Maximum rows to fetch per day'
+              :argname('limit')
 neural_profile:option '--settings-id'
-      :description 'Settings ID to query'
-      :argname('settings_id')
-      :default('')
+              :description 'Settings ID to query'
+              :argname('settings_id')
+              :default('')
 
 local neural_train = parser:command 'neural_train'
-      :description 'Train neural using data from Clickhouse'
+                           :description 'Train neural using data from Clickhouse'
 neural_train:option '--days'
-      :description 'Number of days to query data for'
-      :argname('days')
-      :default('7')
+            :description 'Number of days to query data for'
+            :argname('days')
+            :default('7')
 neural_train:option '--column-name-digest'
-      :description 'Name of neural profile digest column in Clickhouse'
-      :argname('column_name_digest')
-      :default('NeuralDigest')
+            :description 'Name of neural profile digest column in Clickhouse'
+            :argname('column_name_digest')
+            :default('NeuralDigest')
 neural_train:option '--column-name-vector'
-      :description 'Name of neural training vector column in Clickhouse'
-      :argname('column_name_vector')
-      :default('NeuralMpack')
+            :description 'Name of neural training vector column in Clickhouse'
+            :argname('column_name_vector')
+            :default('NeuralMpack')
 neural_train:option '--limit -l'
-      :description 'Maximum rows to fetch per day'
-      :argname('limit')
+            :description 'Maximum rows to fetch per day'
+            :argname('limit')
 neural_train:option '--profile -p'
-      :description 'Profile to use for training'
-      :argname('profile')
-      :default('default')
+            :description 'Profile to use for training'
+            :argname('profile')
+            :default('default')
 neural_train:option '--rule -r'
-      :description 'Rule to train'
-      :argname('rule')
-      :default('default')
+            :description 'Rule to train'
+            :argname('rule')
+            :default('default')
 neural_train:option '--spam -s'
-      :description 'WHERE clause to use for spam'
-      :argname('spam')
-      :default("Action == 'reject'")
+            :description 'WHERE clause to use for spam'
+            :argname('spam')
+            :default("Action == 'reject'")
 neural_train:option '--ham -h'
-      :description 'WHERE clause to use for ham'
-      :argname('ham')
-      :default('Score < 0')
+            :description 'WHERE clause to use for ham'
+            :argname('ham')
+            :default('Score < 0')
 neural_train:option '--url -u'
-      :description 'URL to use for training'
-      :argname('url')
-      :default('http://127.0.0.1:11334/plugins/neural/learn')
+            :description 'URL to use for training'
+            :argname('url')
+            :default('http://127.0.0.1:11334/plugins/neural/learn')
 
 local http_params = {
   config = rspamd_config,
@@ -131,14 +131,14 @@ local http_params = {
 }
 
 local function load_config(config_file)
-  local _r,err = rspamd_config:load_ucl(config_file)
+  local _r, err = rspamd_config:load_ucl(config_file)
 
   if not _r then
     rspamd_logger.errx('cannot load %s: %s', config_file, err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', config_file, err)
     os.exit(1)
@@ -196,7 +196,7 @@ local function get_excluded_symbols(known_symbols, correlations, seen_total)
     elseif not all_symbols[k] then
       remove[k] = 'nonexistent symbol'
     else
-      for fl,_ in pairs(all_symbols[k].flags or {}) do
+      for fl, _ in pairs(all_symbols[k].flags or {}) do
         if skip_flags[fl] then
           remove[k] = fl .. ' symbol'
           break
@@ -238,7 +238,7 @@ local function handle_neural_profile(args)
 
     local nsym = #r['Symbols.Names']
 
-    for i = 1,nsym do
+    for i = 1, nsym do
       local sym = r['Symbols.Names'][i]
       local t = known_symbols[sym]
       if not t then
@@ -266,8 +266,8 @@ local function handle_neural_profile(args)
     end
 
     -- Fill correlations
-    for i = 1,nsym do
-      for j = 1,nsym do
+    for i = 1, nsym do
+      for j = 1, nsym do
         if i ~= j then
           local sym = r['Symbols.Names'][i]
           local inner_sym_name = r['Symbols.Names'][j]
@@ -342,11 +342,11 @@ end
 local function post_neural_training(url, rule, spam_rows, ham_rows)
   -- Prepare JSON payload
   local payload = ucl.to_format(
-    {
-      ham_vec = ham_rows,
-      rule = rule,
-      spam_vec = spam_rows,
-    }, 'json')
+      {
+        ham_vec = ham_rows,
+        rule = rule,
+        spam_vec = spam_rows,
+      }, 'json')
 
   -- POST the payload
   local err, response = rspamd_http.request({
@@ -423,11 +423,11 @@ local function handle_neural_train(args)
     limit = string.format(' LIMIT %d', num_limit) -- Contains leading space
   end
   -- Prepare query elements
-  local conditions = {string.format("%s = '%s'", args.column_name_digest, symbols_digest)}
+  local conditions = { string.format("%s = '%s'", args.column_name_digest, symbols_digest) }
   local query_fmt = 'SELECT %s FROM rspamd WHERE %s%s'
 
   -- Run queries
-  for _, the_where in ipairs({args.ham, args.spam}) do
+  for _, the_where in ipairs({ args.ham, args.spam }) do
     -- Inform callback which group of vectors we're collecting
     this_where = the_where
     table.insert(conditions, the_where) -- should be 2nd from last condition
@@ -437,7 +437,7 @@ local function handle_neural_train(args)
       if this_where == args.ham then
         if not want_ham then
           break
-	end
+        end
       else
         if not want_spam then
           break

@@ -116,13 +116,13 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_fin_cb(err, conn)
       local vnames_reordered = {}
       -- Swap table
-      for virus,_ in pairs(vnames) do
+      for virus, _ in pairs(vnames) do
         table.insert(vnames_reordered, virus)
       end
       lua_util.debugm(rule.name, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
       if #vnames_reordered > 0 then
         local vname = {}
-        for _,virus in ipairs(vnames_reordered) do
+        for _, virus in ipairs(vnames_reordered) do
           table.insert(vname, virus)
         end
 
@@ -181,8 +181,8 @@ local function savapi_check(task, content, digest, rule)
       if string.find(result, '100 PRODUCT') then
         lua_util.debugm(rule.name, task, "%s: scanning file: %s",
             rule['type'], fname)
-        conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n',
-            fname)})
+        conn:add_write(savapi_scan1_cb, { string.format('SCAN %s\n',
+            fname) })
       else
         rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'],
             rule['product_id'])
@@ -217,7 +217,7 @@ local function savapi_check(task, content, digest, rule)
             upstream = upstream,
             timeout = rule['timeout'],
             callback = savapi_callback_init,
-            stop_pattern = {'\n'},
+            stop_pattern = { '\n' },
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
@@ -228,7 +228,7 @@ local function savapi_check(task, content, digest, rule)
 
         -- 100 SAVAPI:4.0 greeting
         if string.find(result, '100') then
-          conn:add_write(savapi_greet1_cb, {string.format('SET PRODUCT %s\n', rule['product_id'])})
+          conn:add_write(savapi_greet1_cb, { string.format('SET PRODUCT %s\n', rule['product_id']) })
         end
       end
     end
@@ -240,7 +240,7 @@ local function savapi_check(task, content, digest, rule)
       upstream = upstream,
       timeout = rule['timeout'],
       callback = savapi_callback_init,
-      stop_pattern = {'\n'},
+      stop_pattern = { '\n' },
     })
   end
 

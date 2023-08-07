@@ -84,7 +84,7 @@ local function get_general_metadata(task, flatten, no_content)
   local fuzzy = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
   if fuzzy and #fuzzy > 0 then
     local fz = {}
-    for _,h in ipairs(fuzzy) do
+    for _, h in ipairs(fuzzy) do
       table.insert(fz, h)
     end
     if not flatten then
@@ -224,7 +224,7 @@ local formatters = {
     meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return lua_util.template(rule.email_template or settings.email_template, meta), { mail_targets = mail_targets}
+    return lua_util.template(rule.email_template or settings.email_template, meta), { mail_targets = mail_targets }
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -276,7 +276,7 @@ end
 
 local pushers = {
   redis_pubsub = function(task, formatted, rule)
-    local _,ret,upstream
+    local _, ret, upstream
     local function redis_pub_cb(err)
       if err then
         rspamd_logger.errx(task, 'got error %s when publishing on server %s',
@@ -285,13 +285,13 @@ local pushers = {
       end
       return true
     end
-    ret,_,upstream = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      nil, -- hash key
-      true, -- is write
-      redis_pub_cb, --callback
-      'PUBLISH', -- command
-      {rule.channel, formatted} -- arguments
+    ret, _, upstream = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        nil, -- hash key
+        true, -- is write
+        redis_pub_cb, --callback
+        'PUBLISH', -- command
+        { rule.channel, formatted } -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, 'error connecting to redis')
@@ -300,7 +300,7 @@ local pushers = {
   end,
   http = function(task, formatted, rule)
     local function http_callback(err, code)
-      local valid_status = {200, 201, 202, 204}
+      local valid_status = { 200, 201, 202, 204 }
 
       if err then
         rspamd_logger.errx(task, 'got error %s in http callback', err)
@@ -327,14 +327,14 @@ local pushers = {
       end
     end
     rspamd_http.request({
-      task=task,
-      url=rule.url,
-      user=rule.user,
-      password=rule.password,
-      body=formatted,
-      callback=http_callback,
-      mime_type=rule.mime_type or settings.mime_type,
-      headers=hdrs,
+      task = task,
+      url = rule.url,
+      user = rule.user,
+      password = rule.password,
+      body = formatted,
+      callback = http_callback,
+      mime_type = rule.mime_type or settings.mime_type,
+      headers = hdrs,
     })
   end,
   send_mail = function(task, formatted, rule, extra)
@@ -359,7 +359,9 @@ local pushers = {
 }
 
 local opts = rspamd_config:get_all_opt(N)
-if not opts then return end
+if not opts then
+  return
+end
 local process_settings = {
   select = function(val)
     selectors.custom = assert(load(val))()
@@ -632,8 +634,10 @@ for k, v in pairs(settings.rules) do
 end
 
 local function gen_exporter(rule)
-  return function (task)
-    if task:has_flag('skip') then return end
+  return function(task)
+    if task:has_flag('skip') then
+      return
+    end
     local selector = rule.selector or 'default'
     local selected = selectors[selector](task)
     if selected then
@@ -661,6 +665,6 @@ for k, r in pairs(settings.rules) do
     type = 'idempotent',
     callback = gen_exporter(r),
     flags = 'empty,explicit_disable,ignore_passthrough',
-    augmentations = {string.format("timeout=%f", r.timeout or 0.0)}
+    augmentations = { string.format("timeout=%f", r.timeout or 0.0) }
   })
 end

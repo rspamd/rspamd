@@ -30,7 +30,7 @@ local function handle_check_selector(_, conn, req_params)
   if req_params.selector and req_params.selector ~= '' then
     local selector = lua_selectors.create_selector_closure(rspamd_config,
         req_params.selector, '', true)
-      conn:send_ucl({success = selector and true})
+    conn:send_ucl({ success = selector and true })
   else
     conn:send_error(404, 'missing selector')
   end
@@ -45,7 +45,7 @@ local function handle_check_message(task, conn, req_params)
     else
       task:process_message()
       local elts = selector(task)
-      conn:send_ucl({success = true, data = elts})
+      conn:send_ucl({ success = true, data = elts })
     end
   else
     conn:send_error(404, 'missing selector')

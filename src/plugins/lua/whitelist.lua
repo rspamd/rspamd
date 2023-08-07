@@ -45,66 +45,70 @@ local function whitelist_cb(symbol, rule, task)
     local how = 'wl'
 
     -- Can be overridden
-    if rule.blacklist then how = 'bl' end
+    if rule.blacklist then
+      how = 'bl'
+    end
 
     local function parse_val(val)
       local how_override
       -- Strict is 'special'
-      if rule.strict then how_override = 'both' end
+      if rule.strict then
+        how_override = 'both'
+      end
       if val then
         lua_util.debugm(N, task, "found whitelist key: %s=%s", dom, val)
         if val == '' then
-          return (how_override or how),1.0
+          return (how_override or how), 1.0
         elseif val:match('^bl:') then
-          return (how_override or 'bl'),(tonumber(val:sub(4)) or 1.0)
+          return (how_override or 'bl'), (tonumber(val:sub(4)) or 1.0)
         elseif val:match('^wl:') then
-          return (how_override or 'wl'),(tonumber(val:sub(4)) or 1.0)
+          return (how_override or 'wl'), (tonumber(val:sub(4)) or 1.0)
         elseif val:match('^both:') then
-          return (how_override or 'both'),(tonumber(val:sub(6)) or 1.0)
+          return (how_override or 'both'), (tonumber(val:sub(6)) or 1.0)
         else
-          return (how_override or how),(tonumber(val) or 1.0)
+          return (how_override or how), (tonumber(val) or 1.0)
         end
       end
 
-      return (how_override or how),1.0
+      return (how_override or how), 1.0
     end
 
     if rule['map'] then
       local val = rule['map']:get_key(dom)
       if val then
-        how,mult = parse_val(val)
+        how, mult = parse_val(val)
 
         if not domains[check] then
           domains[check] = {}
         end
 
         domains[check] = {
-          [dom] = {how, mult}
+          [dom] = { how, mult }
         }
 
         lua_util.debugm(N, task, "final result: %s: %s->%s",
             dom, how, mult)
-        return true,mult,how
+        return true, mult, how
       end
     elseif rule['maps'] then
-      for _,v in pairs(rule['maps']) do
+      for _, v in pairs(rule['maps']) do
         local map = v.map
         if map then
           local val = map:get_key(dom)
           if val then
-            how,mult = parse_val(val)
+            how, mult = parse_val(val)
 
             if not domains[check] then
               domains[check] = {}
             end
 
             domains[check] = {
-              [dom] = {how, mult}
+              [dom] = { how, mult }
             }
 
             lua_util.debugm(N, task, "final result: %s: %s->%s",
                 dom, how, mult)
-            return true,mult,how
+            return true, mult, how
           end
         end
       end
@@ -116,14 +120,14 @@ local function whitelist_cb(symbol, rule, task)
         end
 
         domains[check] = {
-          [dom] = {how, mult}
+          [dom] = { how, mult }
         }
 
-        return true, mult,how
+        return true, mult, how
       end
     end
 
-    return false,0.0,how
+    return false, 0.0, how
   end
 
   local spf_violated = false
@@ -164,14 +168,14 @@ local function whitelist_cb(symbol, rule, task)
       local dkim_opts = sym[1]['options']
       if dkim_opts then
         fun.each(function(val)
-            if val[2] == '+' then
-              local tld = rspamd_util.get_tld(val[1])
-              find_domain(tld, 'dkim_success')
-            elseif val[2] == '-' then
-              local tld = rspamd_util.get_tld(val[1])
-              find_domain(tld, 'dkim_fail')
-            end
-          end,
+          if val[2] == '+' then
+            local tld = rspamd_util.get_tld(val[1])
+            find_domain(tld, 'dkim_success')
+          elseif val[2] == '-' then
+            local tld = rspamd_util.get_tld(val[1])
+            find_domain(tld, 'dkim_fail')
+          end
+        end,
             fun.map(function(s)
               return lua_util.rspamd_str_split(s, ':')
             end, dkim_opts))
@@ -198,7 +202,6 @@ local function whitelist_cb(symbol, rule, task)
     end
   end
 
-
   local final_mult = 1.0
   local found_wl, found_bl = false, false
   local opts = {}
@@ -206,7 +209,7 @@ local function whitelist_cb(symbol, rule, task)
   if rule.valid_dkim then
     dkim_violated = true
 
-    for dom,val in pairs(domains.dkim_success or E) do
+    for dom, val in pairs(domains.dkim_success or E) do
       if val[1] == 'wl' or val[1] == 'both' then
         -- We have valid and whitelisted signature
         table.insert(opts, dom .. ':d:+')
@@ -220,7 +223,7 @@ local function whitelist_cb(symbol, rule, task)
     end
 
     -- Blacklist counterpart
-    for dom,val in pairs(domains.dkim_fail or E) do
+    for dom, val in pairs(domains.dkim_fail or E) do
       if val[1] == 'bl' or val[1] == 'both' then
         -- We have valid and whitelisted signature
         table.insert(opts, dom .. ':d:-')
@@ -255,7 +258,7 @@ local function whitelist_cb(symbol, rule, task)
 
     found_wl = false
 
-    for dom,val in pairs(domains.dmarc or E) do
+    for dom, val in pairs(domains.dmarc or E) do
       check_domain_violation('D', dom, val,
           (dmarc_violated or dkim_violated))
     end
@@ -264,7 +267,7 @@ local function whitelist_cb(symbol, rule, task)
   if rule.valid_spf then
     found_wl = false
 
-    for dom,val in pairs(domains.spf or E) do
+    for dom, val in pairs(domains.spf or E) do
       check_domain_violation('s', dom, val,
           (spf_violated or dkim_violated))
     end
@@ -318,7 +321,7 @@ end
 local configure_whitelist_module = function()
   local opts = rspamd_config:get_all_opt('whitelist')
   if opts then
-    for k,v in pairs(opts) do
+    for k, v in pairs(opts) do
       options[k] = v
     end
 
@@ -335,7 +338,7 @@ local configure_whitelist_module = function()
     fun.each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
-          rule['map'] = rspamd_config:add_map{
+          rule['map'] = rspamd_config:add_map {
             url = rule['domains'],
             description = "Whitelist map for " .. symbol,
             type = 'map'
@@ -347,7 +350,7 @@ local configure_whitelist_module = function()
             if type(v) == 'table' then
               return true
             elseif type(v) == 'string' and not (string.match(v, '^https?://') or
-              string.match(v, '^ftp://') or string.match(v, '^[./]')) then
+                string.match(v, '^ftp://') or string.match(v, '^[./]')) then
               return true
             end
 
@@ -357,13 +360,13 @@ local configure_whitelist_module = function()
           if is_domains_list then
             rule['domains'] = fun.tomap(fun.map(function(d)
               if type(d) == 'table' then
-                return d[1],d[2]
+                return d[1], d[2]
               end
 
-              return d,1.0
+              return d, 1.0
             end, rule['domains']))
           else
-            rule['map'] = rspamd_config:add_map{
+            rule['map'] = rspamd_config:add_map {
               url = rule['domains'],
               description = "Whitelist map for " .. symbol,
               type = 'map'
@@ -371,7 +374,7 @@ local configure_whitelist_module = function()
           end
         else
           rspamd_logger.errx(rspamd_config, 'whitelist %s has bad "domains" value',
-            symbol)
+              symbol)
           return
         end
 

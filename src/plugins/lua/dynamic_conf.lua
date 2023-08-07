@@ -52,7 +52,7 @@ end
 
 local function apply_dynamic_actions(_, acts)
   fun.each(function(k, v)
-     if type(v) == 'table' then
+    if type(v) == 'table' then
       v['name'] = k
       if not v['priority'] then
         v['priority'] = settings.priority
@@ -145,7 +145,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
           settings.redis_key,
           true,
           redis_version_set_cb,
-          'HINCRBY', {settings.redis_key, 'v', '1'})
+          'HINCRBY', { settings.redis_key, 'v', '1' })
     end
   end
 
@@ -158,12 +158,12 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       fun.each(function(k, v)
         cur_settings.data.scores[k] = v
       end,
-      fun.filter(function(k)
-        if cur_settings.updates.symbols[k] then
-          return false
-        end
-        return true
-      end, recv['scores']))
+          fun.filter(function(k)
+            if cur_settings.updates.symbols[k] then
+              return false
+            end
+            return true
+          end, recv['scores']))
     end
     if recv['actions'] then
       if not cur_settings.data.actions then
@@ -172,18 +172,18 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       fun.each(function(k, v)
         cur_settings.data.actions[k] = v
       end,
-      fun.filter(function(k)
-        if cur_settings.updates.actions[k] then
-          return false
-        end
-        return true
-      end, recv['actions']))
+          fun.filter(function(k)
+            if cur_settings.updates.actions[k] then
+              return false
+            end
+            return true
+          end, recv['actions']))
     end
   end
   local newdata = ucl.to_format(cur_settings.data, 'json-compact')
   rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
       settings.redis_key, true,
-      redis_data_set_cb, 'HSET', {settings.redis_key, 'd', newdata})
+      redis_data_set_cb, 'HSET', { settings.redis_key, 'd', newdata })
 end
 
 local function check_dynamic_conf(cfg, ev_base)
@@ -192,7 +192,7 @@ local function check_dynamic_conf(cfg, ev_base)
       rspamd_logger.errx(cfg, "cannot read dynamic conf from redis: %s", redis_err)
     elseif data and type(data) == 'string' then
       local parser = ucl.parser()
-      local _,err = parser:parse_string(data)
+      local _, err = parser:parse_string(data)
 
       if err then
         rspamd_logger.errx(cfg, "cannot load dynamic conf from redis: %s", err)
@@ -214,11 +214,11 @@ local function check_dynamic_conf(cfg, ev_base)
 
       if not cur_settings.version or (rver and rver > cur_settings.version) then
         rspamd_logger.infox(cfg, "need to load fresh dynamic settings with version %s, local version is %s",
-          rver, cur_settings.version)
+            rver, cur_settings.version)
         cur_settings.version = rver
         rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
             settings.redis_key, false,
-            redis_load_cb, 'HGET', {settings.redis_key, 'd'})
+            redis_load_cb, 'HGET', { settings.redis_key, 'd' })
       elseif cur_settings.updates.has_updates then
         -- Need to send our updates to Redis
         update_dynamic_conf(cfg, ev_base)
@@ -231,7 +231,7 @@ local function check_dynamic_conf(cfg, ev_base)
 
   rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
       settings.redis_key, false,
-      redis_check_cb, 'HGET', {settings.redis_key, 'v'})
+      redis_check_cb, 'HGET', { settings.redis_key, 'v' })
 end
 
 local section = rspamd_config:get_all_opt("dynamic_conf")
@@ -242,7 +242,7 @@ if section then
     return
   end
 
-  for k,v in pairs(section) do
+  for k, v in pairs(section) do
     settings[k] = v
   end
 

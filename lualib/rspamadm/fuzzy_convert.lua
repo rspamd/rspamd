@@ -13,13 +13,13 @@ local function connect_redis(server, password, db)
   end
 
   if password then
-    ret = conn:add_cmd('AUTH', {password})
+    ret = conn:add_cmd('AUTH', { password })
     if not ret then
       return nil, 'Cannot queue command'
     end
   end
   if db then
-    ret = conn:add_cmd('SELECT', {db})
+    ret = conn:add_cmd('SELECT', { db })
     if not ret then
       return nil, 'Cannot queue command'
     end
@@ -126,7 +126,7 @@ local function update_counters(total, redis_host, redis_password, redis_db)
   return true
 end
 
-return function (_, res)
+return function(_, res)
   local db = sqlite3.open(res['source_db'])
   local shingles = {}
   local digests = {}
@@ -152,11 +152,11 @@ return function (_, res)
 
     local expire_in = math.floor(now - row.time + res['expiry'])
     if expire_in >= 1 then
-      table.insert(digests, {row.digest, row.flag, row.value, expire_in})
+      table.insert(digests, { row.digest, row.flag, row.value, expire_in })
       num_batch_digests = num_batch_digests + 1
       total_digests = total_digests + 1
       for srow in db:rows('SELECT value, number FROM shingles WHERE digest_id = ' .. row.id) do
-        table.insert(shingles, {srow.value, srow.number, expire_in, row.digest})
+        table.insert(shingles, { srow.value, srow.number, expire_in, row.digest })
         total_shingles = total_shingles + 1
         num_batch_shingles = num_batch_shingles + 1
       end
@@ -188,8 +188,8 @@ return function (_, res)
   end
 
   local message = string.format(
-    'Migrated %d digests and %d shingles',
-    total_digests, total_shingles
+      'Migrated %d digests and %d shingles',
+      total_digests, total_shingles
   )
   if not update_counters(total_digests, res['redis_host'], redis_password, redis_db) then
     message = message .. ' but failed to update counters'

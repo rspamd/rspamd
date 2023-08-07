@@ -43,27 +43,24 @@ local function parse_multimap_value(parse_rule, p_ret)
       local number = {}
 
       local digit = lpeg.R("09")
-      number.integer =
-      (lpeg.S("+-") ^ -1) *
-          (digit   ^  1)
+      number.integer = (lpeg.S("+-") ^ -1) *
+          (digit ^ 1)
 
       -- Matches: .6, .899, .9999873
-      number.fractional =
-      (lpeg.P(".")   ) *
+      number.fractional = (lpeg.P(".")) *
           (digit ^ 1)
 
       -- Matches: 55.97, -90.8, .9
-      number.decimal =
-      (number.integer *              -- Integer
-          (number.fractional ^ -1)) +    -- Fractional
+      number.decimal = (number.integer * -- Integer
+          (number.fractional ^ -1)) + -- Fractional
           (lpeg.S("+-") * number.fractional)  -- Completely fractional number
 
       local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
       local sym_elt = sym_start + lpeg.R("09")
-      local symbol = sym_start * sym_elt ^0
+      local symbol = sym_start * sym_elt ^ 0
       local symbol_cap = lpeg.Cg(symbol, 'symbol')
       local score_cap = lpeg.Cg(number.decimal, 'score')
-      local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol))^0), 'opts')
+      local opts_cap = lpeg.Cg(lpeg.Ct(lpeg.C(symbol) * (lpeg.P(",") * lpeg.C(symbol)) ^ 0), 'opts')
       local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
       local symscoreopt_cap = symscore_cap * lpeg.P(":") * opts_cap
       local grammar = symscoreopt_cap + symscore_cap + symbol_cap + score_cap
@@ -86,74 +83,107 @@ local function parse_multimap_value(parse_rule, p_ret)
         opts = tbl.opts
       end
 
-      return true,sym,score,opts
+      return true, sym, score, opts
     else
       if p_ret ~= '' then
         rspamd_logger.infox(rspamd_config, '%s: cannot parse string "%s"',
             parse_rule.symbol, p_ret)
       end
 
-      return true,nil,1.0,{}
+      return true, nil, 1.0, {}
     end
   elseif type(p_ret) == 'boolean' then
-    return p_ret,nil,1.0,{}
+    return p_ret, nil, 1.0, {}
   end
 
-  return false,nil,0.0,{}
+  return false, nil, 0.0, {}
 end
-
 
 local value_types = {
   ip = {
-    get_value = function(ip) return ip:to_string() end,
+    get_value = function(ip)
+      return ip:to_string()
+    end,
   },
   from = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   helo = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   header = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   rcpt = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   user = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   url = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   dnsbl = {
-    get_value = function(ip) return ip:to_string() end,
+    get_value = function(ip)
+      return ip:to_string()
+    end,
   },
   filename = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   content = {
-    get_value = function() return nil end,
+    get_value = function()
+      return nil
+    end,
   },
   hostname = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   asn = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   country = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   received = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   mempool = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   selector = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
   symbol_options = {
-    get_value = function(val) return val end,
+    get_value = function(val)
+      return val
+    end,
   },
 }
 
@@ -236,7 +266,7 @@ local function apply_url_filter(task, filter, url, r)
     return nil
   elseif string.find(filter, 'tld:regexp:') then
     if not r['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         r['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -254,7 +284,7 @@ local function apply_url_filter(task, filter, url, r)
     end
   elseif string.find(filter, 'full:regexp:') then
     if not r['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         r['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -272,7 +302,7 @@ local function apply_url_filter(task, filter, url, r)
     end
   elseif string.find(filter, 'regexp:') then
     if not r['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         r['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -305,27 +335,37 @@ local function apply_addr_filter(task, filter, input, rule)
   if filter == 'email:addr' or filter == 'email' then
     local addr = rspamd_util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
-      return fun.totable(fun.map(function(a) return a.addr end, addr))
+      return fun.totable(fun.map(function(a)
+        return a.addr
+      end, addr))
     end
   elseif filter == 'email:user' then
     local addr = rspamd_util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
-      return fun.totable(fun.map(function(a) return a.user end, addr))
+      return fun.totable(fun.map(function(a)
+        return a.user
+      end, addr))
     end
   elseif filter == 'email:domain' then
     local addr = rspamd_util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
-      return fun.totable(fun.map(function(a) return a.domain end, addr))
+      return fun.totable(fun.map(function(a)
+        return a.domain
+      end, addr))
     end
   elseif filter == 'email:domain:tld' then
     local addr = rspamd_util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
-      return fun.totable(fun.map(function(a) return rspamd_util.get_tld(a.domain) end, addr))
+      return fun.totable(fun.map(function(a)
+        return rspamd_util.get_tld(a.domain)
+      end, addr))
     end
   elseif filter == 'email:name' then
     local addr = rspamd_util.parse_mail_address(input, task:get_mempool(), 1024)
     if addr and addr[1] then
-      return fun.totable(fun.map(function(a) return a.name end, addr))
+      return fun.totable(fun.map(function(a)
+        return a.name
+      end, addr))
     end
   elseif filter == 'ip_addr' then
     local ip_addr = rspamd_ip.from_string(input)
@@ -336,7 +376,7 @@ local function apply_addr_filter(task, filter, input, rule)
   else
     -- regexp case
     if not rule['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         rule['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -359,7 +399,7 @@ local function apply_filename_filter(task, filter, fn, r)
     return string.match(fn, '%.([^.]+)$')
   elseif string.find(filter, 'regexp:') then
     if not r['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         r['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -383,7 +423,7 @@ end
 local function apply_regexp_filter(task, filter, fn, r)
   if string.find(filter, 'regexp:') then
     if not r['re_filter'] then
-      local type,pat = string.match(filter, '(regexp:)(.+)')
+      local type, pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         r['re_filter'] = rspamd_regexp.create_cached(pat)
       end
@@ -406,26 +446,26 @@ end
 
 local function apply_content_filter(task, filter)
   if filter == 'body' then
-    return {task:get_rawbody()}
+    return { task:get_rawbody() }
   elseif filter == 'full' then
-    return {task:get_content()}
+    return { task:get_content() }
   elseif filter == 'headers' then
-    return {task:get_raw_headers()}
+    return { task:get_raw_headers() }
   elseif filter == 'text' then
     local ret = {}
-    for _,p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_content())
     end
     return ret
   elseif filter == 'rawtext' then
     local ret = {}
-    for _,p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_raw_content())
     end
     return ret
   elseif filter == 'oneline' then
     local ret = {}
-    for _,p in ipairs(task:get_text_parts()) do
+    for _, p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_content_oneline())
     end
     return ret
@@ -456,7 +496,7 @@ local function multimap_query_redis(key, task, value, callback)
     cmd = 'HMGET'
   end
 
-  local srch = {key}
+  local srch = { key }
 
   -- Insert all ips for some mask :(
   if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
@@ -468,7 +508,7 @@ local function multimap_query_redis(key, task, value, callback)
       maxbits = 32
       minbits = 8
     end
-    for i=maxbits,minbits,-1 do
+    for i = maxbits, minbits, -1 do
       local nip = value:apply_mask(i):tostring() .. "/" .. i
       srch[#srch + 1] = nip
     end
@@ -508,7 +548,7 @@ local function multimap_callback(task, rule)
 
       if ret then
         if type(err_or_data) == 'table' then
-          for _,elt in ipairs(err_or_data) do
+          for _, elt in ipairs(err_or_data) do
             callback(elt)
           end
         else
@@ -516,7 +556,7 @@ local function multimap_callback(task, rule)
         end
       elseif err_code ~= 404 then
         rspamd_logger.infox(task, "map %s: get key returned error %s: %s",
-          rule.symbol, err_code, err_or_data)
+            rule.symbol, err_code, err_or_data)
       end
     end
 
@@ -535,7 +575,7 @@ local function multimap_callback(task, rule)
 
         -- Here we need to spill this function into multiple queries
         if type(results) == 'table' then
-          for _,res in ipairs(results) do
+          for _, res in ipairs(results) do
             ret = multimap_query_redis(res, task, value, callback)
 
             if not ret then
@@ -554,7 +594,7 @@ local function multimap_callback(task, rule)
   end
 
   local function insert_results(result, opt)
-    local _,symbol,score,opts = parse_multimap_value(rule, result)
+    local _, symbol, score, opts = parse_multimap_value(rule, result)
     local forced = false
     if symbol then
       if rule.symbols_set then
@@ -569,9 +609,9 @@ local function multimap_callback(task, rule)
         if type(opt) == 'table' then
           table.insert(opt, result)
         elseif type(opt) ~= nil then
-          opt = {opt,result}
+          opt = { opt, result }
         else
-          opt = {result}
+          opt = { result }
         end
       else
         forced = not rule.dynamic_symbols
@@ -614,7 +654,7 @@ local function multimap_callback(task, rule)
     local function rule_callback(result)
       if result then
         if type(result) == 'table' then
-          for _,rs in ipairs(result) do
+          for _, rs in ipairs(result) do
             if type(rs) ~= 'userdata' then
               rule_callback(rs)
             end
@@ -639,7 +679,9 @@ local function multimap_callback(task, rule)
     end
 
     if type(value) == 'table' then
-      fun.each(function(elt) match_element(r, elt, rule_callback) end, value)
+      fun.each(function(elt)
+        match_element(r, elt, rule_callback)
+      end, value)
     else
       match_element(r, value, rule_callback)
     end
@@ -659,17 +701,19 @@ local function multimap_callback(task, rule)
           end
         end, ls)
       else
-        fun.each(function(e) match_rule(r, e) end, ls)
+        fun.each(function(e)
+          match_rule(r, e)
+        end, ls)
       end
     end
   end
 
   local function match_addr(r, addr)
-    match_list(r, addr, {'addr'})
+    match_list(r, addr, { 'addr' })
 
     if not r.filter then
-      match_list(r, addr, {'domain'})
-      match_list(r, addr, {'user'})
+      match_list(r, addr, { 'domain' })
+      match_list(r, addr, { 'user' })
     end
   end
 
@@ -703,7 +747,7 @@ local function multimap_callback(task, rule)
               return
             end
           else
-            if pos <= (total - (min_pos*-1)) then
+            if pos <= (total - (min_pos * -1)) then
               return
             end
           end
@@ -713,7 +757,7 @@ local function multimap_callback(task, rule)
       end
       if max_pos then
         if max_pos < -1 then
-          if (total - (max_pos*-1)) >= pos then
+          if (total - (max_pos * -1)) >= pos then
             return
           end
         elseif max_pos > 0 then
@@ -728,12 +772,16 @@ local function multimap_callback(task, rule)
         local got_flags = h['flags']
         if match_flags then
           for _, flag in ipairs(match_flags) do
-            if not got_flags[flag] then return end
+            if not got_flags[flag] then
+              return
+            end
           end
         end
         if nmatch_flags then
           for _, flag in ipairs(nmatch_flags) do
-            if got_flags[flag] then return end
+            if got_flags[flag] then
+              return
+            end
           end
         end
       end
@@ -759,16 +807,16 @@ local function multimap_callback(task, rule)
     if r['filter'] then
       data = apply_content_filter(task, r['filter'], r)
     else
-      data = {task:get_content()}
+      data = { task:get_content() }
     end
 
-    for _,v in ipairs(data) do
+    for _, v in ipairs(data) do
       match_rule(r, v)
     end
   end
 
   if rule.expression and not rule.combined then
-    local res,trace = rule['expression']:process_traced(task)
+    local res, trace = rule['expression']:process_traced(task)
 
     if not res or res == 0 then
       lua_util.debugm(N, task, 'condition is false for %s',
@@ -811,7 +859,7 @@ local function multimap_callback(task, rule)
         end
 
         task:get_resolver():resolve_a({
-          task= task,
+          task = task,
           name = to_resolve,
           callback = dns_cb,
           forced = true
@@ -820,13 +868,13 @@ local function multimap_callback(task, rule)
     end,
     header = function()
       if type(rule['header']) == 'table' then
-        for _,rh in ipairs(rule['header']) do
+        for _, rh in ipairs(rule['header']) do
           local hv = task:get_header_full(rh)
-          match_list(rule, hv, {'decoded'})
+          match_list(rule, hv, { 'decoded' })
         end
       else
         local hv = task:get_header_full(rule['header'])
-        match_list(rule, hv, {'decoded'})
+        match_list(rule, hv, { 'decoded' })
       end
     end,
     rcpt = function()
@@ -857,7 +905,7 @@ local function multimap_callback(task, rule)
       if task:has_urls() then
         local msg_urls = task:get_urls()
 
-        for _,url in ipairs(msg_urls) do
+        for _, url in ipairs(msg_urls) do
           match_url(rule, url)
         end
       end
@@ -891,11 +939,11 @@ local function multimap_callback(task, rule)
         return p:is_archive() and det_type == 'archive' and not rule.skip_archives
       end
 
-      for _,p in fun.iter(fun.filter(filter_parts, parts)) do
+      for _, p in fun.iter(fun.filter(filter_parts, parts)) do
         if filter_archive(p) then
           local fnames = p:get_archive():get_files(1000)
 
-          for _,fn in ipairs(fnames) do
+          for _, fn in ipairs(fnames) do
             match_filename(rule, fn)
           end
         end
@@ -971,7 +1019,7 @@ local function multimap_callback(task, rule)
 
       if elts then
         if type(elts) == 'table' then
-          for _,elt in ipairs(elts) do
+          for _, elt in ipairs(elts) do
             match_rule(rule, elt)
           end
         else
@@ -980,9 +1028,9 @@ local function multimap_callback(task, rule)
       end
     end,
     combined = function()
-      local ret,trace = rule.combined:process(task)
+      local ret, trace = rule.combined:process(task)
       if ret and ret ~= 0 then
-        for n,t in pairs(trace) do
+        for n, t in pairs(trace) do
           insert_results(t.value, string.format("%s=%s",
               n, t.matched))
         end
@@ -999,7 +1047,6 @@ local function multimap_callback(task, rule)
   end
 end
 
-
 local function gen_multimap_callback(rule)
   return function(task)
     multimap_callback(task, rule)
@@ -1011,12 +1058,12 @@ local function multimap_on_load_gen(rule)
     lua_util.debugm(N, rspamd_config, "loaded map object for rule %s", rule['symbol'])
     local known_symbols = {}
     rule.map_obj:foreach(function(key, value)
-      local r,symbol,score,_ = parse_multimap_value(rule, value)
+      local r, symbol, score, _ = parse_multimap_value(rule, value)
 
       if r and symbol and not known_symbols[symbol] then
         lua_util.debugm(N, rspamd_config, "%s: adding new symbol %s (score = %s), triggered by %s",
             rule.symbol, symbol, score, key)
-        rspamd_config:register_symbol{
+        rspamd_config:register_symbol {
           name = value,
           parent = rule.callback_id,
           type = 'virtual',
@@ -1084,7 +1131,7 @@ local function add_multimap_rule(key, newrule)
   if newrule['url'] and not newrule['map'] then
     newrule['map'] = newrule['url']
   end
-  if not (newrule.map or newrule.rules)  then
+  if not (newrule.map or newrule.rules) then
     rspamd_logger.errx(rspamd_config, 'incomplete rule, missing map')
     return nil
   end
@@ -1179,12 +1226,12 @@ local function add_multimap_rule(key, newrule)
       if type(newrule['flags']) == 'table' and newrule['flags'][1] then
         newrule['flags'] = newrule['flags']
       elseif type(newrule['flags']) == 'string' then
-        newrule['flags'] = {newrule['flags']}
+        newrule['flags'] = { newrule['flags'] }
       end
       if type(newrule['nflags']) == 'table' and newrule['nflags'][1] then
         newrule['nflags'] = newrule['nflags']
       elseif type(newrule['nflags']) == 'string' then
-        newrule['nflags'] = {newrule['nflags']}
+        newrule['nflags'] = { newrule['nflags'] }
       end
       local filter = newrule['filter'] or 'real_ip'
       if filter == 'real_ip' or filter == 'from_ip' then
@@ -1259,7 +1306,7 @@ local function add_multimap_rule(key, newrule)
       end
 
       local expression = rspamd_expression.create(newrule['require_symbols'],
-          {parse_atom, process_atom}, rspamd_config:get_mempool())
+          { parse_atom, process_atom }, rspamd_config:get_mempool())
       if expression then
         newrule['expression'] = expression
 
@@ -1280,11 +1327,11 @@ end
 local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server(N)
-  for k,m in pairs(opts) do
+  for k, m in pairs(opts) do
     if type(m) == 'table' and m['type'] then
       local rule = add_multimap_rule(k, m)
       if not rule then
-        rspamd_logger.errx(rspamd_config, 'cannot add rule: "'..k..'"')
+        rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
         rspamd_logger.infox(rspamd_config, 'added multimap rule: %s (%s)',
             k, rule.type)

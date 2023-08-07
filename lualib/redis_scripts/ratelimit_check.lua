@@ -34,36 +34,46 @@ if not last then
   -- New bucket
   redis.call('HMSET', prefix, 'l', tostring(now), 'b', '0', 'dr', '10000', 'db', '10000', 'p', tostring(nrcpt))
   redis.call('EXPIRE', prefix, KEYS[5])
-  return {0, '0', '1', '1', '0'}
+  return { 0, '0', '1', '1', '0' }
 end
 last = tonumber(last)
 
-local burst,pending = unpack(redis.call('HMGET', prefix, 'b', 'p'))
-burst,pending = tonumber(burst or '0'),tonumber(pending or '0')
+local burst, pending = unpack(redis.call('HMGET', prefix, 'b', 'p'))
+burst, pending = tonumber(burst or '0'), tonumber(pending or '0')
 -- Sanity to avoid races
-if burst < 0 then burst = 0 end
-if pending < 0 then pending = 0 end
+if burst < 0 then
+  burst = 0
+end
+if pending < 0 then
+  pending = 0
+end
 pending = pending + nrcpt -- this message
 -- Perform leak
 if burst + pending > 0 then
   -- If we have any time passed
   if burst > 0 and last < now then
     dynr = tonumber(redis.call('HGET', prefix, 'dr')) / 10000.0
-    if dynr == 0 then dynr = 0.0001 end
+    if dynr == 0 then
+      dynr = 0.0001
+    end
     leak_rate = leak_rate * dynr
     leaked = ((now - last) * leak_rate)
-    if leaked > burst then leaked = burst end
+    if leaked > burst then
+      leaked = burst
+    end
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', prefix, 'b', -(leaked))
     redis.call('HSET', prefix, 'l', tostring(now))
   end
 
   dynb = tonumber(redis.call('HGET', prefix, 'db')) / 10000.0
-  if dynb == 0 then dynb = 0.0001 end
+  if dynb == 0 then
+    dynb = 0.0001
+  end
 
   burst = burst + pending
   if burst > 0 and burst > max_burst * dynb then
-    return {1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked)}
+    return { 1, tostring(burst - pending), tostring(dynr), tostring(dynb), tostring(leaked) }
   end
   -- Increase pending if we allow ratelimit
   redis.call('HINCRBY', prefix, 'p', nrcpt)
@@ -72,4 +82,4 @@ else
   redis.call('HMSET', prefix, 'b', '0', 'p', tostring(nrcpt))
 end
 
-return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
+return { 0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked) }

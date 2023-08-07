@@ -19,7 +19,11 @@ end
 -- 2. Update the pending values based on the number of recipients (requests)
 local pending = redis.call('HGET', prefix, 'p')
 pending = tonumber(pending or '0')
-if pending < nrcpt then pending = 0 else pending = pending - nrcpt end
+if pending < nrcpt then
+  pending = 0
+else
+  pending = pending - nrcpt
+end
 
 -- 3. Set the updated values back to Redis and update the expiration time for the bucket
 redis.call('HMSET', prefix, 'p', tostring(pending), 'l', KEYS[2])

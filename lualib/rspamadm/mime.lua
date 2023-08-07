@@ -44,7 +44,7 @@ parser:mutex(
     parser:flag "-U --ucl"
           :description "UCL output",
     parser:flag "-M --messagepack"
-        :description "MessagePack output"
+          :description "MessagePack output"
 )
 parser:flag "-C --compact"
       :description "Use compact format"
@@ -67,12 +67,12 @@ extract:option "-o --output"
        :description "Output format ('raw', 'content', 'oneline', 'decoded', 'decoded_utf')"
        :argname("<type>")
        :convert {
-          raw = "raw",
-          content = "content",
-          oneline = "content_oneline",
-          decoded = "raw_parsed",
-          decoded_utf = "raw_utf"
-       }
+  raw = "raw",
+  content = "content",
+  oneline = "content_oneline",
+  decoded = "raw_parsed",
+  decoded_utf = "raw_utf"
+}
        :default "content"
 extract:flag "-w --words"
        :description "Extracts words"
@@ -86,16 +86,15 @@ extract:option "-F --words-format"
        :description "Words format ('stem', 'norm', 'raw', 'full')"
        :argname("<type>")
        :convert {
-          stem = "stem",
-          norm = "norm",
-          raw = "raw",
-          full = "full",
-       }
+  stem = "stem",
+  norm = "norm",
+  raw = "raw",
+  full = "full",
+}
        :default "stem"
 
-
 local stat = parser:command "stat st s"
-                    :description "Extracts statistical data from MIME messages"
+                   :description "Extracts statistical data from MIME messages"
 stat:argument "file"
     :description "File to process"
     :argname "<file>"
@@ -123,7 +122,7 @@ urls:mutex(
     urls:flag "-H --host"
         :description "Get hosts only",
     urls:flag "-f --full"
-      :description "Show piecewise urls as processed by Rspamd"
+        :description "Show piecewise urls as processed by Rspamd"
 )
 
 urls:flag "-u --unique"
@@ -136,7 +135,7 @@ urls:flag "-r --reverse"
     :description "Reverse sort order"
 
 local modify = parser:command "modify mod m"
-                   :description "Modifies MIME message"
+                     :description "Modifies MIME message"
 modify:argument "file"
       :description "File to process"
       :argname "<file>"
@@ -162,11 +161,11 @@ modify:option "-H --html-footer"
       :argname "<file>"
 
 local sign = parser:command "sign"
-                     :description "Performs DKIM signing"
+                   :description "Performs DKIM signing"
 sign:argument "file"
-      :description "File to process"
-      :argname "<file>"
-      :args "+"
+    :description "File to process"
+    :argname "<file>"
+    :args "+"
 
 sign:option "-d --domain"
     :description "Use specific domain"
@@ -184,17 +183,17 @@ sign:option "-t type"
     :description "ARC or DKIM signing"
     :argname("<arc|dkim>")
     :convert {
-      ['arc'] = 'arc',
-      ['dkim'] = 'dkim',
-    }
+  ['arc'] = 'arc',
+  ['dkim'] = 'dkim',
+}
     :default 'dkim'
 sign:option "-o --output"
     :description "Output format"
     :argname("<message|signature>")
     :convert {
-      ['message'] = 'message',
-      ['signature'] = 'signature',
-    }
+  ['message'] = 'message',
+  ['signature'] = 'signature',
+}
     :default 'message'
 
 local dump = parser:command "dump"
@@ -213,21 +212,21 @@ dump:mutex(
           :description "MessagePack output"
 )
 dump:flag "-s --split"
-      :description "Split the output file contents such that no content is embedded"
+    :description "Split the output file contents such that no content is embedded"
 
 dump:option "-o --outdir"
-      :description "Output directory"
-      :argname("<directory>")
+    :description "Output directory"
+    :argname("<directory>")
 
 local function load_config(opts)
-  local _r,err = rspamd_config:load_ucl(opts['config'])
+  local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
     rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
@@ -239,7 +238,7 @@ local function load_task(opts, fname)
     fname = '-'
   end
 
-  local res,task = rspamd_task.load_from_file(fname, rspamd_config)
+  local res, task = rspamd_task.load_from_file(fname, rspamd_config)
 
   if not res then
     parser:error(string.format('cannot read message from %s: %s', fname,
@@ -266,9 +265,15 @@ end
 
 local function output_fmt(opts)
   local fmt = 'json'
-  if opts.compact then fmt = 'json-compact' end
-  if opts.ucl then fmt = 'ucl' end
-  if opts.messagepack then fmt = 'msgpack' end
+  if opts.compact then
+    fmt = 'json-compact'
+  end
+  if opts.ucl then
+    fmt = 'ucl'
+  end
+  if opts.messagepack then
+    fmt = 'msgpack'
+  end
 
   return fmt
 end
@@ -320,20 +325,20 @@ local function extract_handler(opts)
       if not opts.json and not opts.ucl then
         table.insert(out,
             rspamd_logger.slog('Part: %s: %s, language: %s, size: %s (%s raw), words: %s',
-            part:get_mimepart():get_digest():sub(1,8),
-            t,
-            part:get_language(),
-            part:get_length(), part:get_raw_length(),
-            part:get_words_count()))
+                part:get_mimepart():get_digest():sub(1, 8),
+                t,
+                part:get_language(),
+                part:get_length(), part:get_raw_length(),
+                part:get_words_count()))
         table.insert(out,
             rspamd_logger.slog('Stats: %s',
-            fun.foldl(function(acc, k, v)
-              if acc ~= '' then
-                return string.format('%s, %s:%s', acc, k, v)
-              else
-                return string.format('%s:%s', k,v)
-              end
-            end, '', part:get_stats())))
+                fun.foldl(function(acc, k, v)
+                  if acc ~= '' then
+                    return string.format('%s, %s:%s', acc, k, v)
+                  else
+                    return string.format('%s:%s', k, v)
+                  end
+                end, '', part:get_stats())))
       end
     end
   end
@@ -342,11 +347,11 @@ local function extract_handler(opts)
     if opts.part then
 
       if not opts.json and not opts.ucl then
-        local mtype,msubtype = part:get_type()
-        local det_mtype,det_msubtype = part:get_detected_type()
+        local mtype, msubtype = part:get_type()
+        local det_mtype, det_msubtype = part:get_detected_type()
         table.insert(out,
             rspamd_logger.slog('Mime Part: %s: %s/%s (%s/%s detected), filename: %s (%s detected ext), size: %s',
-                part:get_digest():sub(1,8),
+                part:get_digest():sub(1, 8),
                 mtype, msubtype,
                 det_mtype, det_msubtype,
                 part:get_filename(),
@@ -378,7 +383,7 @@ local function extract_handler(opts)
     end
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
 
@@ -396,10 +401,12 @@ local function extract_handler(opts)
     if opts.text or opts.html then
       local mp = task:get_parts() or {}
 
-      for _,mime_part in ipairs(mp) do
+      for _, mime_part in ipairs(mp) do
         local how = opts.output
         local part
-        if mime_part:is_text() then part = mime_part:get_text() end
+        if mime_part:is_text() then
+          part = mime_part:get_text()
+        end
 
         if part and opts.text and not part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
@@ -445,24 +452,25 @@ local function extract_handler(opts)
               end
 
               hc:foreach_tag('any', function(tag)
-                  local elt = {}
-                  local ex = tag:get_extra()
-                  elt.tag = tag:get_type()
-                  if ex then
-                    elt.extra = ex
-                  end
-                  local content = tag:get_content()
-                  if content then
-                    elt.content = tostring(content)
-                  end
-                  local style = tag:get_style()
-                  if style then
-                    elt.style = style
-                  end
-                  table.insert(res, elt)
+                local elt = {}
+                local ex = tag:get_extra()
+                elt.tag = tag:get_type()
+                if ex then
+                  elt.extra = ex
+                end
+                local content = tag:get_content()
+                if content then
+                  elt.content = tostring(content)
+                end
+                local style = tag:get_style()
+                if style then
+                  elt.style = style
+                end
+                table.insert(res, elt)
               end)
               table.insert(out_elts[fname], res)
-            else -- opts.structure
+            else
+              -- opts.structure
               table.insert(out_elts[fname], tostring(part:get_content(how)))
             end
             if opts.invisible then
@@ -485,7 +493,9 @@ local function extract_handler(opts)
 
   print_elts(out_elts, opts, process_func)
   -- To avoid use after free we postpone tasks destruction
-  for _,task in ipairs(tasks) do task:destroy() end
+  for _, task in ipairs(tasks) do
+    task:destroy()
+  end
 end
 
 local function stat_handler(opts)
@@ -498,7 +508,7 @@ local function stat_handler(opts)
 
   local process_func
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
 
@@ -514,7 +524,9 @@ local function stat_handler(opts)
       process_func = function(e)
         return string.format('%s (%d): "%s"+"%s", [%s]', e.data, e.win, e.t1 or "",
             e.t2 or "", table.concat(fun.totable(
-                fun.map(function(k) return k end, e.flags)), ","))
+                fun.map(function(k)
+                  return k
+                end, e.flags)), ","))
       end
     elseif opts.fuzzy then
       local parts = task:get_parts() or {}
@@ -523,7 +535,7 @@ local function stat_handler(opts)
         local ret = string.format('part: %s(%s): %s', e.type, e.file or "", e.digest)
         if opts.shingles and e.shingles then
           local sgl = {}
-          for _,s in ipairs(e.shingles) do
+          for _, s in ipairs(e.shingles) do
             table.insert(sgl, string.format('%s: %s+%s+%s', s[1], s[2], s[3], s[4]))
           end
 
@@ -531,26 +543,26 @@ local function stat_handler(opts)
         end
         return ret
       end
-      for _,part in ipairs(parts) do
+      for _, part in ipairs(parts) do
         if not part:is_multipart() then
           local text = part:get_text()
 
           if text then
-            local digest,shingles = text:get_fuzzy_hashes(task:get_mempool())
+            local digest, shingles = text:get_fuzzy_hashes(task:get_mempool())
             table.insert(out_elts[fname], {
               digest = digest,
               shingles = shingles,
               type = string.format('%s/%s',
-                  ({part:get_type()})[1],
-                  ({part:get_type()})[2])
+                  ({ part:get_type() })[1],
+                  ({ part:get_type() })[2])
             })
           else
             table.insert(out_elts[fname], {
               digest = part:get_digest(),
               file = part:get_filename(),
               type = string.format('%s/%s',
-                  ({part:get_type()})[1],
-                  ({part:get_type()})[2])
+                  ({ part:get_type() })[1],
+                  ({ part:get_type() })[2])
             })
           end
         end
@@ -568,9 +580,11 @@ local function urls_handler(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
   local out_elts = {}
 
-  if opts.json then rspamd_logger.messagex('[') end
+  if opts.json then
+    rspamd_logger.messagex('[')
+  end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     out_elts[fname] = {}
     local task = load_task(opts, fname)
     local elts = {}
@@ -605,7 +619,7 @@ local function urls_handler(opts)
       end
     end
 
-    for _,u in ipairs(task:get_urls(true)) do
+    for _, u in ipairs(task:get_urls(true)) do
       process_url(u)
     end
 
@@ -672,12 +686,11 @@ local function urls_handler(opts)
         end
       end
 
-
-      for s,u in lua_util.spairs(elts, sfunc) do
+      for s, u in lua_util.spairs(elts, sfunc) do
         process_elt(s, u)
       end
     else
-      for s,u in pairs(elts) do
+      for s, u in pairs(elts) do
         process_elt(s, u)
       end
     end
@@ -723,7 +736,7 @@ local function modify_handler(opts)
     html_footer = read_file(opts['html_footer'])
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local newline_s = newline(task)
     local seen_cte
@@ -732,14 +745,14 @@ local function modify_handler(opts)
     local out = {} -- Start with headers
 
     local function process_headers_cb(name, hdr)
-      for _,h in ipairs(opts['remove_header']) do
+      for _, h in ipairs(opts['remove_header']) do
         if name:match(h) then
           return
         end
       end
 
-      for _,h in ipairs(opts['rewrite_header']) do
-        local hname,hpattern = h:match('^([^=]+)=(.+)$')
+      for _, h in ipairs(opts['rewrite_header']) do
+        local hname, hpattern = h:match('^([^=]+)=(.+)$')
         if hname == name then
           local new_value = string.format(hpattern, hdr.decoded)
           new_value = string.format('%s:%s%s',
@@ -769,10 +782,10 @@ local function modify_handler(opts)
       out[#out + 1] = hdr.raw:gsub('\r?\n?$', '')
     end
 
-    task:headers_foreach(process_headers_cb, {full = true})
+    task:headers_foreach(process_headers_cb, { full = true })
 
-    for _,h in ipairs(opts['add_header']) do
-      local hname,hvalue = h:match('^([^=]+)=(.+)$')
+    for _, h in ipairs(opts['add_header']) do
+      local hname, hvalue = h:match('^([^=]+)=(.+)$')
 
       if hname and hvalue then
         out[#out + 1] = string.format('%s: %s', hname,
@@ -789,14 +802,14 @@ local function modify_handler(opts)
     out[#out + 1] = ''
 
     if rewrite.out then
-      for _,o in ipairs(rewrite.out) do
+      for _, o in ipairs(rewrite.out) do
         out[#out + 1] = o
       end
     else
-      out[#out + 1] = {task:get_rawbody(), false}
+      out[#out + 1] = { task:get_rawbody(), false }
     end
 
-    for _,o in ipairs(out) do
+    for _, o in ipairs(out) do
       if type(o) == 'string' then
         io.write(o)
         io.write(newline_s)
@@ -844,7 +857,7 @@ local function sign_handler(opts)
     os.exit(1)
   end
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local ctx = lua_dkim.create_sign_context(task, sign_key, nil, opts.algorithm)
 
@@ -917,7 +930,7 @@ local function write_dump_content(dump_content, fname, extension, outdir)
     end
     if dump_content:save_in_file(outpath) then
       wrote_filepath = outpath
-      io.write(wrote_filepath.."\n")
+      io.write(wrote_filepath .. "\n")
     else
       io.stderr:write(string.format("Unable to save dump content to file: %s\n", outpath))
     end
@@ -954,7 +967,7 @@ local function dump_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
-  for _,fname in ipairs(opts.file) do
+  for _, fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local data, extension = get_dump_content(task, opts, fname)
     write_dump_content(data, fname, extension, opts.outdir)
@@ -969,7 +982,7 @@ local function handler(args)
   local command = opts.command
 
   if type(opts.file) == 'string' then
-    opts.file = {opts.file}
+    opts.file = { opts.file }
   elseif type(opts.file) == 'none' then
     opts.file = {}
   end
@@ -993,7 +1006,7 @@ end
 
 return {
   name = 'mime',
-  aliases = {'mime_tool'},
+  aliases = { 'mime_tool' },
   handler = handler,
   description = parser._description
 }

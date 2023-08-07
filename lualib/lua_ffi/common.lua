@@ -21,7 +21,7 @@ limitations under the License.
 
 local ffi = require 'ffi'
 
-ffi.cdef[[
+ffi.cdef [[
 struct GString {
   char  *str;
   size_t len;

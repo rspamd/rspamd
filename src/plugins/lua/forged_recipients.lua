@@ -40,10 +40,14 @@ local function check_forged_headers(task)
   local smtp_rcpts = task:get_recipients(1)
   local smtp_from = task:get_from(1)
 
-  if not smtp_rcpts then return end
-  if #smtp_rcpts == 0 then return end
+  if not smtp_rcpts then
+    return
+  end
+  if #smtp_rcpts == 0 then
+    return
+  end
 
-  local mime_rcpts = task:get_recipients({ 'mime', 'orig'})
+  local mime_rcpts = task:get_recipients({ 'mime', 'orig' })
 
   if not mime_rcpts then
     return
@@ -88,10 +92,10 @@ local function check_forged_headers(task)
     end
   end
 
-  for _,mime_rcpt in ipairs(mime_rcpts) do
+  for _, mime_rcpt in ipairs(mime_rcpts) do
     if mime_rcpt.addr and mime_rcpt.addr ~= '' then
       local addr = string.lower(mime_rcpt.addr)
-      local dom =  string.lower(mime_rcpt.domain)
+      local dom = string.lower(mime_rcpt.domain)
       local matched_smtp_addr = smtp_rcpt_map[addr]
       if matched_smtp_addr then
         -- Direct match, go forward
@@ -119,13 +123,13 @@ local function check_forged_headers(task)
   local opts = {}
   local seen_mime_unmatched = false
   local seen_smtp_unmatched = false
-  for _,mime_rcpt in ipairs(mime_rcpts) do
+  for _, mime_rcpt in ipairs(mime_rcpts) do
     if not mime_rcpt.matched then
       seen_mime_unmatched = true
       table.insert(opts, 'm:' .. mime_rcpt.addr)
     end
   end
-  for _,smtp_rcpt in ipairs(smtp_rcpts) do
+  for _, smtp_rcpt in ipairs(smtp_rcpts) do
     if not smtp_rcpt.matched then
       if not smtp_rcpt_domain_map[smtp_rcpt.domain:lower()]._seen_mime_domain then
         seen_smtp_unmatched = true
@@ -149,7 +153,7 @@ local function check_forged_headers(task)
 end
 
 -- Configuration
-local opts =  rspamd_config:get_all_opt('forged_recipients')
+local opts = rspamd_config:get_all_opt('forged_recipients')
 if opts then
   if opts['symbol_rcpt'] or opts['symbol_sender'] then
     local id = rspamd_config:register_symbol({
@@ -169,7 +173,7 @@ if opts then
     end
     if opts['symbol_sender'] then
       symbol_sender = opts['symbol_sender']
-       rspamd_config:register_symbol({
+      rspamd_config:register_symbol({
         name = symbol_sender,
         type = 'virtual',
         parent = id,

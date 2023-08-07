@@ -44,7 +44,9 @@ parser:argument "cookie":args "?"
 local function gen_cookie(args, key)
   local cr = require "rspamd_cryptobox"
 
-  if not args.cookie then return end
+  if not args.cookie then
+    return
+  end
 
   local function encrypt()
     if #args.cookie > 31 then
@@ -67,7 +69,7 @@ local function gen_cookie(args, key)
       extracted_cookie = args.cookie
     end
 
-    local dec_cookie,ts = cr.decrypt_cookie(key, extracted_cookie)
+    local dec_cookie, ts = cr.decrypt_cookie(key, extracted_cookie)
 
     if dec_cookie then
       if args.timestamp then
@@ -79,7 +81,7 @@ local function gen_cookie(args, key)
       print('cannot decrypt cookie')
       os.exit(1)
     end
-    end
+  end
 
   if args.decrypt then
     decrypt()
@@ -96,8 +98,10 @@ local function handler(args)
   end
 
   if res.key then
-    local pattern = {'^'}
-    for i=1,32 do pattern[i + 1] = '[a-zA-Z0-9]' end
+    local pattern = { '^' }
+    for i = 1, 32 do
+      pattern[i + 1] = '[a-zA-Z0-9]'
+    end
     pattern[34] = '$'
 
     if not res.key:match(table.concat(pattern, '')) then

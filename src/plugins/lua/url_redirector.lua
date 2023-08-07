@@ -60,7 +60,7 @@ local settings = {
 
 local function adjust_url(task, orig_url, redir_url)
   if type(redir_url) == 'string' then
-    redir_url = rspamd_url.create(task:get_mempool(), redir_url, {'redirect_target'})
+    redir_url = rspamd_url.create(task:get_mempool(), redir_url, { 'redirect_target' })
   end
 
   if redir_url then
@@ -90,7 +90,7 @@ local function cache_url(task, orig_url, url, key, prefix)
       rspamd_logger.errx(task, 'got error while getting top urls count: %s', err)
     else
       rspamd_logger.infox(task, 'trimmed url set to %s elements',
-        settings.top_urls_count)
+          settings.top_urls_count)
     end
   end
 
@@ -102,20 +102,20 @@ local function cache_url(task, orig_url, url, key, prefix)
       if data then
         if tonumber(data) > settings.top_urls_count * 2 then
           local ret = lua_redis.redis_make_request(task,
-            redis_params, -- connect params
-            key, -- hash key
-            true, -- is write
-            redis_trim_cb, --callback
-            'ZREMRANGEBYRANK', -- command
-            {settings.top_urls_key, '0',
-              tostring(-(settings.top_urls_count + 1))} -- arguments
+              redis_params, -- connect params
+              key, -- hash key
+              true, -- is write
+              redis_trim_cb, --callback
+              'ZREMRANGEBYRANK', -- command
+              { settings.top_urls_key, '0',
+                tostring(-(settings.top_urls_count + 1)) } -- arguments
           )
           if not ret then
             rspamd_logger.errx(task, 'cannot trim top urls set')
           else
             rspamd_logger.infox(task, 'need to trim urls set from %s to %s elements',
-              data,
-              settings.top_urls_count)
+                data,
+                settings.top_urls_count)
             return
           end
         end
@@ -128,12 +128,12 @@ local function cache_url(task, orig_url, url, key, prefix)
       rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
     else
       local ret = lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        key, -- hash key
-        false, -- is write
-        redis_card_cb, --callback
-        'ZCARD', -- command
-        {settings.top_urls_key} -- arguments
+          redis_params, -- connect params
+          key, -- hash key
+          false, -- is write
+          redis_card_cb, --callback
+          'ZCARD', -- command
+          { settings.top_urls_key } -- arguments
       )
       if not ret then
         rspamd_logger.errx(task, 'cannot make redis request to cache results')
@@ -145,25 +145,27 @@ local function cache_url(task, orig_url, url, key, prefix)
     -- Save url with prefix
     str_url = string.format('^%s:%s', prefix, str_url)
   end
-  local ret,conn,_ = lua_redis.redis_make_request(task,
-    redis_params, -- connect params
-    key, -- hash key
-    true, -- is write
-    redis_set_cb, --callback
-    'SETEX', -- command
-    {key, tostring(settings.expire), str_url} -- arguments
+  local ret, conn, _ = lua_redis.redis_make_request(task,
+      redis_params, -- connect params
+      key, -- hash key
+      true, -- is write
+      redis_set_cb, --callback
+      'SETEX', -- command
+      { key, tostring(settings.expire), str_url } -- arguments
   )
 
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to cache results')
   else
-    conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', str_url})
+    conn:add_cmd('ZINCRBY', { settings.top_urls_key, '1', str_url })
   end
 end
 
 -- Reduce length of a string to a given length (16 by default)
 local function maybe_trim_url(url, limit)
-  if not limit then limit = 16 end
+  if not limit then
+    limit = 16
+  end
   if #url > limit then
     return string.sub(url, 1, limit) .. '...'
   else
@@ -179,7 +181,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
     if ntries > settings.nested_limit then
       -- We cannot resolve more, stop
       rspamd_logger.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
-        orig_url, url, ntries)
+          orig_url, url, ntries)
       cache_url(task, orig_url, url, key, 'nested')
       task:insert_result(settings.redirector_symbol_nested, 1.0,
           string.format('%s->%s:%d', maybe_trim_url(orig_url), maybe_trim_url(url), ntries))
@@ -198,16 +200,16 @@ local function resolve_cached(task, orig_url, url, key, ntries)
     local function http_callback(err, code, _, headers)
       if err then
         rspamd_logger.infox(task, 'found redirect error from %s to %s, err message: %s',
-          orig_url, url, err)
+            orig_url, url, err)
         cache_url(task, orig_url, url, key)
       else
         if code == 200 then
           if orig_url == url then
             rspamd_logger.infox(task, 'direct url %s, err code 200',
-              url)
+                url)
           else
             rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-              orig_url, url)
+                orig_url, url)
           end
 
           cache_url(task, orig_url, url, key)
@@ -219,7 +221,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
             redir_url = rspamd_url.create(task:get_mempool(), loc)
           end
           rspamd_logger.debugm(N, task, 'found redirect from %s to %s, err code %s',
-            orig_url, loc, code)
+              orig_url, loc, code)
 
           if redir_url then
             if settings.redirectors_only then
@@ -227,7 +229,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
                 resolve_cached(task, orig_url, redir_url, key, ntries + 1)
               else
                 lua_util.debugm(N, task,
-                  "stop resolving redirects as %s is not a redirector", loc)
+                    "stop resolving redirects as %s is not a redirector", loc)
                 cache_url(task, orig_url, redir_url, key)
               end
             else
@@ -239,7 +241,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           end
         else
           rspamd_logger.debugm(N, task, 'found redirect error from %s to %s, err code: %s',
-            orig_url, url, code)
+              orig_url, url, code)
           cache_url(task, orig_url, url, key)
         end
       end
@@ -254,7 +256,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
 
     lua_util.debugm(N, task, 'select user agent %s', ua)
 
-    rspamd_http.request{
+    rspamd_http.request {
       headers = {
         ['User-Agent'] = ua,
       },
@@ -274,7 +276,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
         if data ~= 'processing' then
           -- Got cached result
           rspamd_logger.debugm(N, task, 'found cached redirect from %s to %s',
-            url, data)
+              url, data)
           if data.sub(1, 1) == '^' then
             -- Prefixed url stored
             local prefix, new_url = data:match('^%^(%a+):(.+)$')
@@ -302,12 +304,12 @@ local function resolve_cached(task, orig_url, url, key, ntries)
     if ntries == 1 then
       -- Reserve key in Redis that we are processing this redirection
       local ret = lua_redis.redis_make_request(task,
-        redis_params, -- connect params
-        key, -- hash key
-        true, -- is write
-        redis_reserve_cb, --callback
-        'SET', -- command
-        {key, 'processing', 'EX', tostring(settings.timeout * 2), 'NX'} -- arguments
+          redis_params, -- connect params
+          key, -- hash key
+          true, -- is write
+          redis_reserve_cb, --callback
+          'SET', -- command
+          { key, 'processing', 'EX', tostring(settings.timeout * 2), 'NX' } -- arguments
       )
       if not ret then
         rspamd_logger.errx(task, 'Couldn\'t schedule SET')
@@ -319,12 +321,12 @@ local function resolve_cached(task, orig_url, url, key, ntries)
 
   end
   local ret = lua_redis.redis_make_request(task,
-    redis_params, -- connect params
-    key, -- hash key
-    false, -- is write
-    redis_get_cb, --callback
-    'GET', -- command
-    {key} -- arguments
+      redis_params, -- connect params
+      key, -- hash key
+      false, -- is write
+      redis_get_cb, --callback
+      'GET', -- command
+      { key } -- arguments
   )
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to check results')
@@ -354,13 +356,13 @@ local function url_redirector_handler(task)
   })
 
   if sp_urls then
-    for _,u in ipairs(sp_urls) do
+    for _, u in ipairs(sp_urls) do
       url_redirector_process_url(task, u)
     end
   end
 end
 
-local opts =  rspamd_config:get_all_opt('url_redirector')
+local opts = rspamd_config:get_all_opt('url_redirector')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
   redis_params = lua_redis.parse_redis_server('url_redirector', settings)
@@ -388,16 +390,16 @@ if opts then
               type = 'zlist',
             })
       end
-      local id = rspamd_config:register_symbol{
+      local id = rspamd_config:register_symbol {
         name = 'URL_REDIRECTOR_CHECK',
         type = 'callback,prefilter',
         priority = lua_util.symbols_priorities.medium,
         callback = url_redirector_handler,
         -- In fact, the real timeout is nested_limit * timeout...
-        augmentations = {string.format("timeout=%f", settings.timeout)}
+        augmentations = { string.format("timeout=%f", settings.timeout) }
       }
 
-      rspamd_config:register_symbol{
+      rspamd_config:register_symbol {
         name = settings.redirector_symbol_nested,
         type = 'virtual',
         parent = id,
@@ -405,7 +407,7 @@ if opts then
       }
 
       if settings.redirector_symbol then
-        rspamd_config:register_symbol{
+        rspamd_config:register_symbol {
           name = settings.redirector_symbol,
           type = 'virtual',
           parent = id,

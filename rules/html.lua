@@ -42,16 +42,15 @@ end
 local function check_html_image(task, min, max)
   local tp = task:get_text_parts()
 
-  for _,p in ipairs(tp) do
+  for _, p in ipairs(tp) do
     if p:is_html() then
       local hc = p:get_html()
       local len = p:get_length()
 
-
       if hc and len >= min and len < max then
         local images = hc:get_images()
         if images then
-          for _,i in ipairs(images) do
+          for _, i in ipairs(images) do
             local tag = i['tag']
             if tag then
               if has_anchor_parent(tag) then
@@ -99,16 +98,22 @@ rspamd_config.R_EMPTY_IMAGE = {
   callback = function(task)
     local tp = task:get_text_parts() -- get text parts in a message
 
-    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
-      if p:is_html() then -- if the current part is html part
+    for _, p in ipairs(tp) do
+      -- iterate over text parts array using `ipairs`
+      if p:is_html() then
+        -- if the current part is html part
         local hc = p:get_html() -- we get HTML context
         local len = p:get_length() -- and part's length
-        if hc and len < 50 then -- if we have a part that has less than 50 bytes of text
+        if hc and len < 50 then
+          -- if we have a part that has less than 50 bytes of text
           local images = hc:get_images() -- then we check for HTML images
 
-          if images then -- if there are images
-            for _,i in ipairs(images) do -- then iterate over images in the part
-              if i['height'] + i['width'] >= 400 then -- if we have a large image
+          if images then
+            -- if there are images
+            for _, i in ipairs(images) do
+              -- then iterate over images in the part
+              if i['height'] + i['width'] >= 400 then
+                -- if we have a large image
                 local tag = i['tag']
                 if tag then
                   if not has_anchor_parent(tag) then
@@ -174,7 +179,7 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
   description = 'Message contains many suspicious messages'
 }
 
-local vis_check_id = rspamd_config:register_symbol{
+local vis_check_id = rspamd_config:register_symbol {
   name = 'HTML_VISIBLE_CHECKS',
   type = 'callback',
   group = 'html',
@@ -190,12 +195,14 @@ local vis_check_id = rspamd_config:register_symbol{
     local normal_len = 0
     local transp_len = 0
 
-    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+    for _, p in ipairs(tp) do
+      -- iterate over text parts array using `ipairs`
       normal_len = normal_len + p:get_length()
-      if p:is_html() and p:get_html() then -- if the current part is html part
+      if p:is_html() and p:get_html() then
+        -- if the current part is html part
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag, clen, is_leaf)
+        hc:foreach_tag({ 'font', 'span', 'div', 'p', 'td' }, function(tag, clen, is_leaf)
           local bl = tag:get_style()
           if bl then
             if not bl.visible and clen > 0 and is_leaf then
@@ -214,8 +221,12 @@ local vis_check_id = rspamd_config:register_symbol{
               local tr = transp_len / (normal_len + transp_len)
               if tr > transp_rate then
                 transp_rate = tr
-                if not bl.color then bl.color = {0, 0, 0} end
-                if not bl.bgcolor then bl.bgcolor = {0, 0, 0} end
+                if not bl.color then
+                  bl.color = { 0, 0, 0 }
+                end
+                if not bl.bgcolor then
+                  bl.bgcolor = { 0, 0, 0 }
+                end
                 arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
                     tag:get_type(),
                     bl.color[1], bl.color[2], bl.color[3],
@@ -288,7 +299,7 @@ local vis_check_id = rspamd_config:register_symbol{
   end,
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   parent = vis_check_id,
   name = 'R_WHITE_ON_WHITE',
@@ -298,7 +309,7 @@ rspamd_config:register_symbol{
   one_shot = true,
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   parent = vis_check_id,
   name = 'ZERO_FONT',
@@ -308,7 +319,7 @@ rspamd_config:register_symbol{
   group = 'html'
 }
 
-rspamd_config:register_symbol{
+rspamd_config:register_symbol {
   type = 'virtual',
   parent = vis_check_id,
   name = 'MANY_INVISIBLE_PARTS',
@@ -324,10 +335,12 @@ rspamd_config.EXT_CSS = {
     local re = regexp_lib.create_cached('/^.*\\.css(?:[?#].*)?$/i')
     local tp = task:get_text_parts() -- get text parts in a message
     local ret = false
-    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
-      if p:is_html() and p:get_html() then -- if the current part is html part
+    for _, p in ipairs(tp) do
+      -- iterate over text parts array using `ipairs`
+      if p:is_html() and p:get_html() then
+        -- if the current part is html part
         local hc = p:get_html() -- we get HTML context
-        hc:foreach_tag({'link'}, function(tag)
+        hc:foreach_tag({ 'link' }, function(tag)
           local bl = tag:get_extra()
           if bl then
             local s = tostring(bl)
@@ -357,26 +370,36 @@ rspamd_config.HTTP_TO_HTTPS = {
     local found_opts
     local tp = task:get_text_parts() or {}
 
-    for _,p in ipairs(tp) do
+    for _, p in ipairs(tp) do
       if p:is_html() then
         local hc = p:get_html()
-        if (not hc) then return false end
+        if (not hc) then
+          return false
+        end
 
         local found = false
 
-        hc:foreach_tag('a', function (tag, _)
+        hc:foreach_tag('a', function(tag, _)
           -- Skip this loop if we already have a match
-          if (found) then return true end
+          if (found) then
+            return true
+          end
 
           local c = tag:get_content()
           if (c) then
-            if (not https_re:match(c)) then return false end
+            if (not https_re:match(c)) then
+              return false
+            end
 
             local u = tag:get_extra()
-            if (not u) then return false end
+            if (not u) then
+              return false
+            end
             local url_proto = u:get_protocol()
 
-            if url_proto ~= 'http' then return false end
+            if url_proto ~= 'http' then
+              return false
+            end
             -- Capture matches for http in href to https in visible part only
             found = true
             found_opts = u:get_host()
@@ -387,7 +410,7 @@ rspamd_config.HTTP_TO_HTTPS = {
         end)
 
         if (found) then
-          return true,1.0,found_opts
+          return true, 1.0, found_opts
         end
 
         return false
@@ -403,14 +426,20 @@ rspamd_config.HTTP_TO_HTTPS = {
 rspamd_config.HTTP_TO_IP = {
   callback = function(task)
     local tp = task:get_text_parts()
-    if (not tp) then return false end
-    for _,p in ipairs(tp) do
+    if (not tp) then
+      return false
+    end
+    for _, p in ipairs(tp) do
       if p:is_html() then
         local hc = p:get_html()
-        if (not hc) then return false end
+        if (not hc) then
+          return false
+        end
         local found = false
-        hc:foreach_tag('a', function (tag, length)
-          if (found) then return true end
+        hc:foreach_tag('a', function(tag, length)
+          if (found) then
+            return true
+          end
           local u = tag:get_extra()
           if (u) then
             u = tostring(u):lower()
@@ -420,7 +449,9 @@ rspamd_config.HTTP_TO_IP = {
           end
           return false
         end)
-        if found then return true end
+        if found then
+          return true
+        end
         return false
       end
     end

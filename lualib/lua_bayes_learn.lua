@@ -40,7 +40,7 @@ exports.can_learn = function(task, is_spam, is_unlearn)
       end
 
       if in_class then
-        return false,string.format(
+        return false, string.format(
             'already in class %s; probability %.2f%%',
             cl, math.abs((prob - 0.5) * 200.0))
       end
@@ -56,7 +56,7 @@ exports.autolearn = function(task, conf)
     local mime_rcpts = 'undef'
     local mr = task:get_recipients('mime')
     if mr then
-      for _,r in ipairs(mr) do
+      for _, r in ipairs(mr) do
         if mime_rcpts == 'undef' then
           mime_rcpts = r.addr
         else
@@ -76,8 +76,8 @@ exports.autolearn = function(task, conf)
   end
 
   -- We have autolearn config so let's figure out what is requested
-  local verdict,score = lua_verdict.get_specific_verdict("bayes", task)
-  local learn_spam,learn_ham = false, false
+  local verdict, score = lua_verdict.get_specific_verdict("bayes", task)
+  local learn_spam, learn_ham = false, false
 
   if verdict == 'passthrough' then
     -- No need to autolearn
@@ -117,12 +117,14 @@ exports.autolearn = function(task, conf)
     local ham_learns = task:get_mempool():get_variable('ham_learns', 'int64') or 0
 
     local min_balance = 0.9
-    if conf.min_balance then min_balance = conf.min_balance end
+    if conf.min_balance then
+      min_balance = conf.min_balance
+    end
 
     if spam_learns > 0 or ham_learns > 0 then
       local max_ratio = 1.0 / min_balance
       local spam_learns_ratio = spam_learns / (ham_learns + 1)
-      if  spam_learns_ratio > max_ratio and learn_spam then
+      if spam_learns_ratio > max_ratio and learn_spam then
         lua_util.debugm(N, task,
             'skip learning spam, balance is not satisfied: %s < %s; %s spam learns; %s ham learns',
             spam_learns_ratio, min_balance, spam_learns, ham_learns)
@@ -130,7 +132,7 @@ exports.autolearn = function(task, conf)
       end
 
       local ham_learns_ratio = ham_learns / (spam_learns + 1)
-      if  ham_learns_ratio > max_ratio and learn_ham then
+      if ham_learns_ratio > max_ratio and learn_ham then
         lua_util.debugm(N, task,
             'skip learning ham, balance is not satisfied: %s < %s; %s spam learns; %s ham learns',
             ham_learns_ratio, min_balance, spam_learns, ham_learns)

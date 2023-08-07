@@ -71,8 +71,8 @@ local function spamassassin_config(opts)
   end
 
   spamassassin_conf.upstreams = upstream_list.create(rspamd_config,
-    spamassassin_conf.servers,
-    spamassassin_conf.default_port)
+      spamassassin_conf.servers,
+      spamassassin_conf.default_port)
 
   if spamassassin_conf.upstreams then
     lua_util.add_debug_alias('external_services', spamassassin_conf.N)
@@ -80,7 +80,7 @@ local function spamassassin_config(opts)
   end
 
   rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-    spamassassin_conf.servers)
+      spamassassin_conf.servers)
   return nil
 end
 
@@ -95,7 +95,7 @@ local function spamassassin_check(task, content, digest, rule)
     local request_data = {
       "HEADERS SPAMC/1.5\r\n",
       "User: root\r\n",
-      "Content-length: ".. #content .. "\r\n",
+      "Content-length: " .. #content .. "\r\n",
       "\r\n",
       content,
     }
@@ -110,14 +110,14 @@ local function spamassassin_check(task, content, digest, rule)
           retransmits = retransmits - 1
 
           lua_util.debugm(rule.N, task, '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, error, retransmits)
+              rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
           lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',
-            rule.log_prefix, addr, addr:get_port())
+              rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
             task = task,
@@ -129,8 +129,8 @@ local function spamassassin_check(task, content, digest, rule)
             callback = spamassassin_callback,
           })
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed - err: %s', rule.log_prefix, error)
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
+              'exceed - err: %s', rule.log_prefix, error)
           common.yield_result(task, rule, 'failed to scan and retransmits exceed: ' .. error, 0.0, 'fail')
         end
       end
@@ -164,7 +164,7 @@ local function spamassassin_check(task, content, digest, rule)
         end
 
         lua_util.debugm(rule.N, task, '%s: spam_score: %s, symbols: %s, int spam_score: |%s|, type spam_score: |%s|',
-          rule.log_prefix, spam_score, symbols, tonumber(spam_score), type(spam_score))
+            rule.log_prefix, spam_score, symbols, tonumber(spam_score), type(spam_score))
 
         if tonumber(spam_score) > 0 and #symbols > 0 and symbols ~= "none" then
 
@@ -205,7 +205,7 @@ local function spamassassin_check(task, content, digest, rule)
 end
 
 return {
-  type = {N,'spam', 'scanner'},
+  type = { N, 'spam', 'scanner' },
   description = 'spamassassin spam scanner',
   configure = spamassassin_config,
   check = spamassassin_check,

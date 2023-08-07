@@ -32,39 +32,39 @@ parser:option '-k --privkey'
       :description 'Save private key to file instead of printing it to stdout'
 parser:option '-b --bits'
       :convert(function(input)
-        local n = tonumber(input)
-        if not n or n < 512 or n > 4096 then
-          return nil
-        end
-        return n
-      end)
+  local n = tonumber(input)
+  if not n or n < 512 or n > 4096 then
+    return nil
+  end
+  return n
+end)
       :description 'Generate an RSA key with the specified number of bits (512 to 4096)'
       :default(1024)
 parser:option '-t --type'
       :description 'Key type: RSA, ED25519 or ED25119-seed'
       :convert {
-        ['rsa'] = 'rsa',
-        ['RSA'] = 'rsa',
-        ['ed25519'] = 'ed25519',
-        ['ED25519'] = 'ed25519',
-        ['ed25519-seed'] = 'ed25519-seed',
-        ['ED25519-seed'] = 'ed25519-seed',
-      }
+  ['rsa'] = 'rsa',
+  ['RSA'] = 'rsa',
+  ['ed25519'] = 'ed25519',
+  ['ED25519'] = 'ed25519',
+  ['ed25519-seed'] = 'ed25519-seed',
+  ['ED25519-seed'] = 'ed25519-seed',
+}
       :default 'rsa'
 parser:option '-o --output'
       :description 'Output public key in the following format: dns, dnskey or plain'
       :convert {
-        ['dns'] = 'dns',
-        ['plain'] = 'plain',
-        ['dnskey'] = 'dnskey',
-      }
+  ['dns'] = 'dns',
+  ['plain'] = 'plain',
+  ['dnskey'] = 'dnskey',
+}
       :default 'dns'
 parser:option '--priv-output'
       :description 'Output private key in the following format: PEM or DER (for RSA)'
       :convert {
-        ['pem'] = 'pem',
-        ['der'] = 'der',
-      }
+  ['pem'] = 'pem',
+  ['der'] = 'der',
+}
       :default 'pem'
 parser:flag '-f --force'
       :description 'Force overwrite of existing files'
@@ -83,7 +83,6 @@ local function split_string(input, max_length)
   return pieces
 end
 
-
 local function print_public_key_dns(opts, base64_pk)
   local key_type = opts.type == 'rsa' and 'rsa' or 'ed25519'
   if #base64_pk < 255 - 2 then
@@ -93,7 +92,7 @@ local function print_public_key_dns(opts, base64_pk)
     -- Split it  by parts
     local parts = split_string(base64_pk)
     io.write(string.format('%s._domainkey IN TXT ( "v=DKIM1; k=%s; "\n', opts.selector, key_type))
-    for i,part in ipairs(parts) do
+    for i, part in ipairs(parts) do
       if i == 1 then
         io.write(string.format('\t"p=%s"\n', part))
       else
@@ -121,7 +120,7 @@ end
 local function gen_rsa_key(opts)
   local rsa = require "rspamd_rsa"
 
-  local sk,pk = rsa.keypair(opts.bits or 1024)
+  local sk, pk = rsa.keypair(opts.bits or 1024)
   if opts.privkey then
     if opts.force then
       os.remove(opts.privkey)
@@ -135,7 +134,7 @@ local function gen_rsa_key(opts)
 end
 
 local function gen_eddsa_key(opts)
-  local sk,pk = rspamd_cryptobox.gen_dkim_keypair(opts.type)
+  local sk, pk = rspamd_cryptobox.gen_dkim_keypair(opts.type)
 
   if opts.privkey and opts.force then
     os.remove(opts.privkey)
@@ -156,7 +155,9 @@ end
 local function handler(args)
   local opts = parser:parse(args)
 
-  if not opts then os.exit(1) end
+  if not opts then
+    os.exit(1)
+  end
 
   if opts.type == 'rsa' then
     gen_rsa_key(opts)
@@ -167,7 +168,7 @@ end
 
 return {
   name = 'dkim_keygen',
-  aliases = {'dkimkeygen'},
+  aliases = { 'dkimkeygen' },
   handler = handler,
   description = parser._description
 }

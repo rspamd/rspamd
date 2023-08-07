@@ -56,14 +56,14 @@ local function tries_callback(task)
       params = body_params
     end
 
-    return function (idx, pos)
+    return function(idx, pos)
       local param = params[idx]
       local pattern = patterns[idx]
       local pattern_idx = pattern .. tostring(idx) .. type
 
       if param['multi'] or not matched[pattern_idx] then
         lua_util.debugm(N, task, "<%1> matched pattern %2 at pos %3",
-          task:get_message_id(), pattern, pos)
+            task:get_message_id(), pattern, pos)
         task:insert_result(param['symbol'], 1.0, type)
         if not param['multi'] then
           matched[pattern_idx] = true
@@ -86,17 +86,19 @@ end
 local function process_single_pattern(pat, symbol, cf)
   if pat then
     local multi = false
-    if cf['multi'] then multi = true end
+    if cf['multi'] then
+      multi = true
+    end
 
     if cf['raw'] then
       table.insert(raw_patterns, pat)
-      table.insert(raw_params, {symbol=symbol, multi=multi})
+      table.insert(raw_params, { symbol = symbol, multi = multi })
     elseif cf['body'] then
       table.insert(body_patterns, pat)
-      table.insert(body_params, {symbol=symbol, multi=multi})
+      table.insert(body_params, { symbol = symbol, multi = multi })
     else
       table.insert(mime_patterns, pat)
-      table.insert(mime_params, {symbol=symbol, multi=multi})
+      table.insert(mime_params, { symbol = symbol, multi = multi })
     end
   end
 end
@@ -109,7 +111,7 @@ local function process_trie_file(symbol, cf)
   else
     if cf['binary'] then
       rspamd_logger.errx(rspamd_config, 'binary trie patterns are not implemented yet: %1',
-        cf['file'])
+          cf['file'])
     else
       for line in file:lines() do
         local pat = string.match(line, '^([^#].*[^%s])%s*$')
@@ -122,7 +124,7 @@ end
 local function process_trie_conf(symbol, cf)
   if type(cf) ~= 'table' then
     rspamd_logger.errx(rspamd_config, 'invalid value for symbol %1: "%2", expected table',
-      symbol, cf)
+        symbol, cf)
     return
   end
 
@@ -135,16 +137,16 @@ local function process_trie_conf(symbol, cf)
   end
 end
 
-local opts =  rspamd_config:get_all_opt("trie")
+local opts = rspamd_config:get_all_opt("trie")
 if opts then
   for sym, opt in pairs(opts) do
-     process_trie_conf(sym, opt)
+    process_trie_conf(sym, opt)
   end
 
   if #raw_patterns > 0 then
     raw_trie = rspamd_trie.create(raw_patterns)
     rspamd_logger.infox(rspamd_config, 'registered raw search trie from %1 patterns', #raw_patterns)
-	end
+  end
 
   if #mime_patterns > 0 then
     mime_trie = rspamd_trie.create(mime_patterns)

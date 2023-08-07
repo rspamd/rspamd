@@ -380,8 +380,8 @@ reconf['SUSPICIOUS_BOUNDARY3'] = {
   group = 'mua'
 }
 -- Forged OE/MSO boundary
-local suspicious_boundary_01C4	= 'Content-Type=/^\\s*multipart.+boundary="----=_NextPart_000_[A-Z\\d]{4}_01C4[\\dA-F]{4}\\.[A-Z\\d]{8}"[\\r\\n]*$/siX'
-local suspicious_boundary_01C4_date	= 'Date=/^\\s*\\w\\w\\w,\\s+\\d+\\s+\\w\\w\\w 20(0[56789]|1\\d)/'
+local suspicious_boundary_01C4 = 'Content-Type=/^\\s*multipart.+boundary="----=_NextPart_000_[A-Z\\d]{4}_01C4[\\dA-F]{4}\\.[A-Z\\d]{8}"[\\r\\n]*$/siX'
+local suspicious_boundary_01C4_date = 'Date=/^\\s*\\w\\w\\w,\\s+\\d+\\s+\\w\\w\\w 20(0[56789]|1\\d)/'
 reconf['SUSPICIOUS_BOUNDARY4'] = {
   re = string.format('(%s) & (%s)', suspicious_boundary_01C4, suspicious_boundary_01C4_date),
   score = 4.0,
@@ -439,24 +439,27 @@ reconf['FORGED_MUA_OPERA_MSGID'] = {
 
 -- Detect forged Mozilla Mail/Thunderbird/Seamonkey/Postbox headers
 -- Mozilla based X-Mailer
-local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/H'
-local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Betterbird|Icedove)\\/)/H'
-local user_agent_seamonkey	= 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/H'
-local user_agent_postbox	= [[User-Agent=/^\s*Mozilla\/5\.0\s\([^)]+\)\sGecko\/\d+\sPostboxApp\/\d+(?:\.\d+){2,3}$/H]]
-local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey, user_agent_postbox)
+local user_agent_mozilla5 = 'User-Agent=/^\\s*Mozilla\\/5\\.0/H'
+local user_agent_thunderbird = 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Betterbird|Icedove)\\/)/H'
+local user_agent_seamonkey = 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/H'
+local user_agent_postbox = [[User-Agent=/^\s*Mozilla\/5\.0\s\([^)]+\)\sGecko\/\d+\sPostboxApp\/\d+(?:\.\d+){2,3}$/H]]
+local user_agent_mozilla = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird,
+    user_agent_seamonkey, user_agent_postbox)
 -- Mozilla based common Message-ID template
-local mozilla_msgid_common	= 'Message-ID=/^\\s*<[\\dA-F]{8}\\.\\d{1,7}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
-local mozilla_msgid_common_sec	= 'Message-ID=/^\\s*<[\\da-f]{8}-([\\da-f]{4}-){3}[\\da-f]{12}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
-local mozilla_msgid		= 'Message-ID=/^\\s*<(3[3-9A-F]|[4-9A-F][\\dA-F])[\\dA-F]{6}\\.(\\d0){1,4}\\d\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
+local mozilla_msgid_common = 'Message-ID=/^\\s*<[\\dA-F]{8}\\.\\d{1,7}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
+local mozilla_msgid_common_sec = 'Message-ID=/^\\s*<[\\da-f]{8}-([\\da-f]{4}-){3}[\\da-f]{12}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
+local mozilla_msgid = 'Message-ID=/^\\s*<(3[3-9A-F]|[4-9A-F][\\dA-F])[\\dA-F]{6}\\.(\\d0){1,4}\\d\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
 -- Summary rule for forged Mozilla Mail Message-ID header
 reconf['FORGED_MUA_MOZILLA_MAIL_MSGID'] = {
-  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid,
+      unusable_msgid),
   score = 4.0,
   description = 'Message pretends to be send from Mozilla Mail but has forged Message-ID',
   group = 'mua'
 }
 reconf['FORGED_MUA_MOZILLA_MAIL_MSGID_UNKNOWN'] = {
-  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla, mozilla_msgid_common, mozilla_msgid,
+      unusable_msgid),
   score = 2.5,
   description = 'Message pretends to be send from Mozilla Mail but has forged Message-ID',
   group = 'mua'
@@ -464,39 +467,45 @@ reconf['FORGED_MUA_MOZILLA_MAIL_MSGID_UNKNOWN'] = {
 
 -- Summary rule for forged Thunderbird Message-ID header
 reconf['FORGED_MUA_THUNDERBIRD_MSGID'] = {
-  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common, mozilla_msgid,
+      unusable_msgid),
   score = 4.0,
   description = 'Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID',
   group = 'mua'
 }
 reconf['FORGED_MUA_THUNDERBIRD_MSGID_UNKNOWN'] = {
-  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_thunderbird, mozilla_msgid_common,
+      mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
   score = 2.5,
   description = 'Forged mail pretending to be from Mozilla Thunderbird but has forged Message-ID',
   group = 'mua'
 }
 -- Summary rule for forged Seamonkey Message-ID header
 reconf['FORGED_MUA_SEAMONKEY_MSGID'] = {
-  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid,
+      unusable_msgid),
   score = 4.0,
   description = 'Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID',
   group = 'mua'
 }
 reconf['FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN'] = {
-  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common,
+      mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
   score = 2.5,
   description = 'Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID',
   group = 'mua'
 }
 -- Summary rule for forged Postbox Message-ID header
 reconf['FORGED_MUA_POSTBOX_MSGID'] = {
-  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common, mozilla_msgid,
+      unusable_msgid),
   score = 4.0,
   description = 'Forged mail pretending to be from Postbox but has forged Message-ID',
   group = 'mua'
 }
 reconf['FORGED_MUA_POSTBOX_MSGID_UNKNOWN'] = {
-  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common,
+      mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
   score = 2.5,
   description = 'Forged mail pretending to be from Postbox but has forged Message-ID',
   group = 'mua'
@@ -647,8 +656,10 @@ reconf['MISSING_MIMEOLE'] = {
 -- Empty delimiters between header names and header values
 local function gen_check_header_delimiter_empty(header_name)
   return function(task)
-    for _,rh in ipairs(task:get_header_full(header_name) or {}) do
-      if rh['empty_separator'] then return true end
+    for _, rh in ipairs(task:get_header_full(header_name) or {}) do
+      if rh['empty_separator'] then
+        return true
+      end
     end
     return false
   end
@@ -707,10 +718,10 @@ reconf['RCVD_ILLEGAL_CHARS'] = {
   group = 'headers'
 }
 
-local MAIL_RU_Return_Path	= 'Return-path=/^\\s*<.+\\@mail\\.ru>$/iX'
-local MAIL_RU_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@mail\\.ru>$/iX'
-local MAIL_RU_From		= 'From=/\\@mail\\.ru>?$/iX'
-local MAIL_RU_Received		= 'Received=/from mail\\.ru \\(/mH'
+local MAIL_RU_Return_Path = 'Return-path=/^\\s*<.+\\@mail\\.ru>$/iX'
+local MAIL_RU_X_Envelope_From = 'X-Envelope-From=/^\\s*<.+\\@mail\\.ru>$/iX'
+local MAIL_RU_From = 'From=/\\@mail\\.ru>?$/iX'
+local MAIL_RU_Received = 'Received=/from mail\\.ru \\(/mH'
 
 reconf['FAKE_RECEIVED_mail_ru'] = {
   re = string.format('(%s) & !(((%s) | (%s)) & (%s))',
@@ -720,26 +731,26 @@ reconf['FAKE_RECEIVED_mail_ru'] = {
   group = 'headers'
 }
 
-local GMAIL_COM_Return_Path	= 'Return-path=/^\\s*<.+\\@gmail\\.com>$/iX'
-local GMAIL_COM_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@gmail\\.com>$/iX'
-local GMAIL_COM_From		= 'From=/\\@gmail\\.com>?$/iX'
+local GMAIL_COM_Return_Path = 'Return-path=/^\\s*<.+\\@gmail\\.com>$/iX'
+local GMAIL_COM_X_Envelope_From = 'X-Envelope-From=/^\\s*<.+\\@gmail\\.com>$/iX'
+local GMAIL_COM_From = 'From=/\\@gmail\\.com>?$/iX'
 
-local UKR_NET_Return_Path	= 'Return-path=/^\\s*<.+\\@ukr\\.net>$/iX'
-local UKR_NET_X_Envelope_From	= 'X-Envelope-From=/^\\s*<.+\\@ukr\\.net>$/iX'
-local UKR_NET_From		= 'From=/\\@ukr\\.net>?$/iX'
+local UKR_NET_Return_Path = 'Return-path=/^\\s*<.+\\@ukr\\.net>$/iX'
+local UKR_NET_X_Envelope_From = 'X-Envelope-From=/^\\s*<.+\\@ukr\\.net>$/iX'
+local UKR_NET_From = 'From=/\\@ukr\\.net>?$/iX'
 
-local RECEIVED_smtp_yandex_ru_1	= 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\((port=\\d+ )?helo=smtp\\.yandex\\.ru\\)/iX'
-local RECEIVED_smtp_yandex_ru_2	= 'Received=/from \\[UNAVAILABLE\\] \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
-local RECEIVED_smtp_yandex_ru_3	= 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
-local RECEIVED_smtp_yandex_ru_4	= 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\(account \\S+ HELO smtp\\.yandex\\.ru\\)/iX'
-local RECEIVED_smtp_yandex_ru_5	= 'Received=/from smtp\\.yandex\\.ru \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
-local RECEIVED_smtp_yandex_ru_6	= 'Received=/from smtp\\.yandex\\.ru \\(\\S+ \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
-local RECEIVED_smtp_yandex_ru_7	= 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\S+\\@\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
-local RECEIVED_smtp_yandex_ru_8	= 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
-local RECEIVED_smtp_yandex_ru_9	= 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_1 = 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\((port=\\d+ )?helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_2 = 'Received=/from \\[UNAVAILABLE\\] \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_3 = 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]:\\d+ helo=smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_4 = 'Received=/from \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] \\(account \\S+ HELO smtp\\.yandex\\.ru\\)/iX'
+local RECEIVED_smtp_yandex_ru_5 = 'Received=/from smtp\\.yandex\\.ru \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
+local RECEIVED_smtp_yandex_ru_6 = 'Received=/from smtp\\.yandex\\.ru \\(\\S+ \\[\\d+\\.\\d+\\.\\d+\\.\\d+\\]\\)/iX'
+local RECEIVED_smtp_yandex_ru_7 = 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\S+\\@\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
+local RECEIVED_smtp_yandex_ru_8 = 'Received=/from \\S+ \\(HELO smtp\\.yandex\\.ru\\) \\(\\d+\\.\\d+\\.\\d+\\.\\d+\\)/iX'
+local RECEIVED_smtp_yandex_ru_9 = 'Received=/from \\S+ \\(\\[\\d+\\.\\d+\\.\\d+\\.\\d+\\] helo=smtp\\.yandex\\.ru\\)/iX'
 
 reconf['FAKE_RECEIVED_smtp_yandex_ru'] = {
-  re = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) '..
+  re = string.format('(((%s) & ((%s) | (%s))) | ((%s) & ((%s) | (%s))) ' ..
       ' | ((%s) & ((%s) | (%s)))) & (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)',
       MAIL_RU_From, MAIL_RU_Return_Path, MAIL_RU_X_Envelope_From, GMAIL_COM_From,
       GMAIL_COM_Return_Path, GMAIL_COM_X_Envelope_From, UKR_NET_From, UKR_NET_Return_Path,

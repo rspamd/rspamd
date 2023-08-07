@@ -51,21 +51,21 @@ local function implicit_tostring(t, ud_or_table)
   if t == 'table' then
     -- Table (very special)
     if ud_or_table.value then
-      return ud_or_table.value,'string'
+      return ud_or_table.value, 'string'
     elseif ud_or_table.addr then
-      return ud_or_table.addr,'string'
+      return ud_or_table.addr, 'string'
     end
 
-    return logger.slog("%s", ud_or_table),'string'
+    return logger.slog("%s", ud_or_table), 'string'
   elseif (t == 'string' or t == 'text') and type(ud_or_table) == 'userdata' then
     if ud_or_table.cookie and ud_or_table.cookie == text_cookie then
       -- Preserve opaque
-      return ud_or_table,'string'
+      return ud_or_table, 'string'
     else
-      return tostring(ud_or_table),'string'
+      return tostring(ud_or_table), 'string'
     end
   elseif t ~= 'nil' then
-    return tostring(ud_or_table),'string'
+    return tostring(ud_or_table), 'string'
   end
 
   return nil
@@ -84,7 +84,7 @@ local function process_selector(task, sel)
     return pure_type(t)
   end
 
-  local input,etype = sel.selector.get_value(task, sel.selector.args)
+  local input, etype = sel.selector.get_value(task, sel.selector.args)
 
   if not input then
     lua_util.debugm(M, task, 'no value extracted for %s', sel.selector.name)
@@ -98,14 +98,16 @@ local function process_selector(task, sel)
   local first_elt = pipe[1]
 
   if first_elt and (first_elt.method or
-      fun.any(function(t) return t == 'userdata' or t == 'table' end, first_elt.types)) then
+      fun.any(function(t)
+        return t == 'userdata' or t == 'table'
+      end, first_elt.types)) then
     -- Explicit conversion
     local meth = first_elt
 
     if meth.types[etype] then
       lua_util.debugm(M, task, 'apply method `%s` to %s',
           meth.name, etype)
-      input,etype = meth.process(input, etype, meth.args)
+      input, etype = meth.process(input, etype, meth.args)
     else
       local pt = pure_type(etype)
 
@@ -114,7 +116,9 @@ local function process_selector(task, sel)
             meth.name, pt)
         -- Map method to a list of inputs, excluding empty elements
         -- We need to fold it down here to get a proper type resolution
-        input = fun.totable(fun.filter(function(map_elt, _) return map_elt end,
+        input = fun.totable(fun.filter(function(map_elt, _)
+          return map_elt
+        end,
             fun.map(function(list_elt)
               local ret, ty = meth.process(list_elt, pt, meth.args)
               etype = ty
@@ -139,7 +143,9 @@ local function process_selector(task, sel)
       etype = 'string'
     else
       lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
-      input = fun.filter(function(map_elt) return map_elt end,
+      input = fun.filter(function(map_elt)
+        return map_elt
+      end,
           fun.map(function(list_elt)
             local ret = implicit_tostring(pt, list_elt)
             return ret
@@ -166,16 +172,20 @@ local function process_selector(task, sel)
       if pt and x.types['list'] then
         -- Generic list processor
         lua_util.debugm(M, task, 'apply list function `%s` to %s', x.name, t)
-        return {x.process(value, t, x.args)}
+        return { x.process(value, t, x.args) }
       elseif pt and x.map_type and x.types[pt] then
         local map_type = x.map_type .. '_list'
         lua_util.debugm(M, task, 'map `%s` to list of %s resulting %s',
             x.name, pt, map_type)
         -- Apply map, filtering empty values
         return {
-          fun.filter(function(map_elt) return map_elt end,
+          fun.filter(function(map_elt)
+            return map_elt
+          end,
               fun.map(function(list_elt)
-                if not list_elt then return nil end
+                if not list_elt then
+                  return nil
+                end
                 local ret, _ = x.process(list_elt, pt, x.args)
                 return ret
               end, value)),
@@ -187,14 +197,16 @@ local function process_selector(task, sel)
     end
 
     lua_util.debugm(M, task, 'apply %s to %s', x.name, t)
-    return {x.process(value, t, x.args)}
+    return { x.process(value, t, x.args) }
   end
 
   local res = fun.foldl(fold_function,
-      {input, etype},
+      { input, etype },
       pipe)
 
-  if not res or not res[1] then return nil end -- Pipeline failed
+  if not res or not res[1] then
+    return nil
+  end -- Pipeline failed
 
   if not allowed_type(res[2]) then
     -- Search for implicit conversion
@@ -202,7 +214,9 @@ local function process_selector(task, sel)
 
     if pt then
       lua_util.debugm(M, task, 'apply implicit map %s->string_list', pt)
-      res[1] = fun.map(function(e) return implicit_tostring(pt, e) end, res[1])
+      res[1] = fun.map(function(e)
+        return implicit_tostring(pt, e)
+      end, res[1])
       res[2] = 'string_list'
     else
       res[1] = implicit_tostring(res[2], res[1])
@@ -222,14 +236,14 @@ end
 
 local function make_grammar()
   local l = require "lpeg"
-  local spc = l.S(" \t\n")^0
+  local spc = l.S(" \t\n") ^ 0
   local cont = l.R("\128\191") -- continuation byte
   local utf8_high = l.R("\194\223") * cont
       + l.R("\224\239") * cont * cont
       + l.R("\240\244") * cont * cont * cont
-  local atom = l.C((l.R("az") + l.R("AZ") + l.R("09") + l.S("_-") + utf8_high)^1)
-  local singlequoted_string = l.P "'" * l.C(((1 - l.S "'\r\n\f\\") + (l.P'\\' * 1))^0) * "'"
-  local doublequoted_string = l.P '"' * l.C(((1 - l.S'"\r\n\f\\') + (l.P'\\' * 1))^0) * '"'
+  local atom = l.C((l.R("az") + l.R("AZ") + l.R("09") + l.S("_-") + utf8_high) ^ 1)
+  local singlequoted_string = l.P "'" * l.C(((1 - l.S "'\r\n\f\\") + (l.P '\\' * 1)) ^ 0) * "'"
+  local doublequoted_string = l.P '"' * l.C(((1 - l.S '"\r\n\f\\') + (l.P '\\' * 1)) ^ 0) * '"'
   local argument = atom + singlequoted_string + doublequoted_string
   local dot = l.P(".")
   local semicolon = l.P(":")
@@ -239,20 +253,22 @@ local function make_grammar()
   local tbl_ebrace = spc * "}"
   local ebrace = spc * ")"
   local comma = spc * "," * spc
-  local sel_separator = spc * l.S";*" * spc
+  local sel_separator = spc * l.S ";*" * spc
 
-  return l.P{
+  return l.P {
     "LIST";
-    LIST = l.Ct(l.V("EXPR")) * (sel_separator * l.Ct(l.V("EXPR")))^0,
-    EXPR = l.V("FUNCTION") * (semicolon * l.V("METHOD"))^-1 * (dot * l.V("PROCESSOR"))^0,
-    PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
-    FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
-    METHOD = l.Ct(atom / function(e) return '__' .. e end * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
-    ARG_LIST = l.Ct((l.V("ARG") * comma^0)^0),
+    LIST = l.Ct(l.V("EXPR")) * (sel_separator * l.Ct(l.V("EXPR"))) ^ 0,
+    EXPR = l.V("FUNCTION") * (semicolon * l.V("METHOD")) ^ -1 * (dot * l.V("PROCESSOR")) ^ 0,
+    PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace) ^ 0),
+    FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace) ^ 0),
+    METHOD = l.Ct(atom / function(e)
+      return '__' .. e
+    end * spc * (obrace * l.V("ARG_LIST") * ebrace) ^ 0),
+    ARG_LIST = l.Ct((l.V("ARG") * comma ^ 0) ^ 0),
     ARG = l.Cf(tbl_obrace * l.V("NAMED_ARG") * tbl_ebrace, rawset) + argument + l.V("LIST_ARGS"),
-    NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma^0)^0),
+    NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * (argument + l.V("LIST_ARGS")) * comma ^ 0) ^ 0),
     LIST_ARGS = l.Ct(tbl_obrace * l.V("LIST_ARG") * tbl_ebrace),
-    LIST_ARG = l.Cg(argument * comma^0)^0,
+    LIST_ARG = l.Cg(argument * comma ^ 0) ^ 0,
   }
 end
 
@@ -262,27 +278,29 @@ local parser = make_grammar()
 -- @function lua_selectors.parse_selector(cfg, str)
 --]]
 exports.parse_selector = function(cfg, str)
-  local parsed = {parser:match(str)}
+  local parsed = { parser:match(str) }
   local output = {}
 
-  if not parsed or not parsed[1] then return nil end
+  if not parsed or not parsed[1] then
+    return nil
+  end
 
   local function check_args(name, schema, args)
     if schema then
       if getmetatable(schema) then
         -- Schema covers all arguments
-        local res,err = schema:transform(args)
+        local res, err = schema:transform(args)
         if not res then
           logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
           return false
         else
-          for i,elt in ipairs(res) do
+          for i, elt in ipairs(res) do
             args[i] = elt
           end
         end
       else
-        for i,selt in ipairs(schema) do
-          local res,err = selt:transform(args[i])
+        for i, selt in ipairs(schema) do
+          local res, err = selt:transform(args[i])
 
           if err then
             logger.errx(rspamd_config, 'invalid arguments for %s: argument number: %s, error: %s', name, i, err)
@@ -301,7 +319,7 @@ exports.parse_selector = function(cfg, str)
   -- table of individual selectors
   -- each selector: list of functions
   -- each function: function name + optional list of arguments
-  for _,sel in ipairs(parsed) do
+  for _, sel in ipairs(parsed) do
     local res = {
       selector = {},
       processor_pipe = {},
@@ -364,13 +382,15 @@ exports.parse_selector = function(cfg, str)
 
             local ret_type = type(ret)
 
-            if ret_type == 'nil' then return nil end
+            if ret_type == 'nil' then
+              return nil
+            end
             -- Now apply types heuristic
             if ret_type == 'string' then
-              return ret,'string'
+              return ret, 'string'
             elseif ret_type == 'table' then
               -- TODO: we need to ensure that 1) table is numeric 2) table has merely strings
-              return ret,'string_list'
+              return ret, 'string_list'
             else
               return implicit_tostring(ret_type, ret)
             end
@@ -452,11 +472,13 @@ end
 exports.process_selectors = function(task, selectors_pipe)
   local ret = {}
 
-  for _,sel in ipairs(selectors_pipe) do
+  for _, sel in ipairs(selectors_pipe) do
     local r = process_selector(task, sel)
 
     -- If any element is nil, then the whole selector is nil
-    if not r then return nil end
+    if not r then
+      return nil
+    end
     table.insert(ret, r)
   end
 
@@ -467,13 +489,17 @@ end
 -- @function lua_selectors.combine_selectors(task, selectors, delimiter)
 --]]
 exports.combine_selectors = function(_, selectors, delimiter)
-  if not delimiter then delimiter = '' end
+  if not delimiter then
+    delimiter = ''
+  end
 
-  if not selectors then return nil end
+  if not selectors then
+    return nil
+  end
 
   local have_tables, have_userdata
 
-  for _,s in ipairs(selectors) do
+  for _, s in ipairs(selectors) do
     if type(s) == 'table' then
       have_tables = true
     elseif type(s) == 'userdata' then
@@ -493,7 +519,7 @@ exports.combine_selectors = function(_, selectors, delimiter)
     local tbl = {}
     local res = {}
 
-    for i,s in ipairs(selectors) do
+    for i, s in ipairs(selectors) do
       if type(s) == 'string' then
         rawset(tbl, i, fun.duplicate(s))
       elseif type(s) == 'userdata' then
@@ -505,7 +531,7 @@ exports.combine_selectors = function(_, selectors, delimiter)
     end
 
     fun.each(function(...)
-      table.insert(res, table.concat({...}, delimiter))
+      table.insert(res, table.concat({ ... }, delimiter))
     end, fun.zip(lua_util.unpack(tbl)))
 
     return res
@@ -520,7 +546,7 @@ exports.flatten_selectors = function(_, selectors, _)
   local res = {}
 
   local function fill(tbl)
-    for _,s in ipairs(tbl) do
+    for _, s in ipairs(tbl) do
       if type(s) == 'string' then
         rawset(res, #res + 1, s)
       elseif type(s) == 'userdata' then
@@ -553,7 +579,7 @@ exports.kv_table_from_pairs = function(log_obj, selectors, _)
           tbl_len)
       return
     end
-    for i=1,tbl_len,2 do
+    for i = 1, tbl_len, 2 do
       local k = tostring(tbl[i])
       local v = tbl[i + 1]
       if type(v) == 'string' then
@@ -561,7 +587,9 @@ exports.kv_table_from_pairs = function(log_obj, selectors, _)
       elseif type(v) == 'userdata' then
         res[k] = tostring(v)
       else
-        res[k] = fun.totable(fun.map(function(elt) return tostring(elt) end, v))
+        res[k] = fun.totable(fun.map(function(elt)
+          return tostring(elt)
+        end, v))
       end
     end
   end
@@ -605,7 +633,7 @@ exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten
 end
 
 local function display_selectors(tbl)
-  return fun.tomap(fun.map(function(k,v)
+  return fun.tomap(fun.map(function(k, v)
     return k, fun.tomap(fun.filter(function(kk, vv)
       return type(vv) ~= 'function'
     end, v))

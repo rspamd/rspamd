@@ -22,7 +22,7 @@ local E = {}
 
 -- Controller neural plugin
 
-local learn_request_schema = ts.shape{
+local learn_request_schema = ts.shape {
   ham_vec = ts.array_of(ts.array_of(ts.number)),
   rule = ts.string:is_optional(),
   spam_vec = ts.array_of(ts.array_of(ts.number)),
@@ -48,7 +48,7 @@ local function handle_learn(task, conn)
   local set = neural_common.get_rule_settings(task, rule)
   local version = ((set.ann or E).version or 0) + 1
 
-  neural_common.spawn_train{
+  neural_common.spawn_train {
     ev_base = task:get_ev_base(),
     ann_key = neural_common.new_ann_key(rule, set, version),
     set = set,

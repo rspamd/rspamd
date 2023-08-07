@@ -73,12 +73,12 @@ end
 local function gen_bimi_grammar()
   local lpeg = require "lpeg"
   lpeg.locale(lpeg)
-  local space = lpeg.space^0
-  local name = lpeg.C(lpeg.alpha^1) * space
-  local sep = (lpeg.S("\\;") * space) + (lpeg.space^1)
-  local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
-  local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
-  local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
+  local space = lpeg.space ^ 0
+  local name = lpeg.C(lpeg.alpha ^ 1) * space
+  local sep = (lpeg.S("\\;") * space) + (lpeg.space ^ 1)
+  local value = lpeg.C(lpeg.P(lpeg.graph - sep) ^ 1)
+  local pair = lpeg.Cg(name * "=" * space * value) * sep ^ -1
+  local list = lpeg.Cf(lpeg.Ct("") * pair ^ 0, rawset)
   local version = lpeg.P("v") * space * lpeg.P("=") * space * lpeg.P("BIMI1")
   local record = version * sep * list
 
@@ -114,7 +114,7 @@ local function insert_bimi_headers(task, domain, bimi_content)
   local content = rspamd_util.encode_base64(rspamd_util.decode_base64(bimi_content),
       73, task:get_newlines_type())
   lua_mime.modify_headers(task, {
-    remove = {[hdr_name] = 0},
+    remove = { [hdr_name] = 0 },
     add = {
       [hdr_name] = {
         order = 0,
@@ -123,12 +123,12 @@ local function insert_bimi_headers(task, domain, bimi_content)
       }
     }
   })
-  task:insert_result('BIMI_VALID', 1.0, {domain})
+  task:insert_result('BIMI_VALID', 1.0, { domain })
 end
 
 local function process_bimi_json(task, domain, redis_data)
   local parser = ucl.parser()
-  local _,err = parser:parse_string(redis_data)
+  local _, err = parser:parse_string(redis_data)
 
   if err then
     rspamd_logger.errx(task, "cannot parse BIMI result from Redis for %s: %s",
@@ -163,7 +163,7 @@ local function make_helper_request(task, domain, record, redis_server)
     end
     if is_sync then
       local parser = ucl.parser()
-      local _,err = parser:parse_string(body)
+      local _, err = parser:parse_string(body)
 
       if err then
         rspamd_logger.errx(task, "cannot parse BIMI result from helper for %s: %s",
@@ -185,18 +185,18 @@ local function make_helper_request(task, domain, record, redis_server)
             upstream:fail()
           else
             lua_util.debugm(N, task, 'stored bimi image in Redis for domain %s; key=%s',
-              domain, redis_key)
+                domain, redis_key)
           end
         end
 
-        ret,_,upstream = lua_redis.redis_make_request(task,
+        ret, _, upstream = lua_redis.redis_make_request(task,
             redis_params, -- connect params
             redis_key, -- hash key
             true, -- is write
             redis_set_cb, --callback
             'PSETEX', -- command
-            {redis_key, tostring(settings.redis_min_expiry * 1000.0),
-             ucl.to_format(d, "json-compact")})
+            { redis_key, tostring(settings.redis_min_expiry * 1000.0),
+              ucl.to_format(d, "json-compact") })
 
         if not ret then
           rspamd_logger.warnx(task, 'cannot make request to Redis when storing image; domain %s',
@@ -227,7 +227,7 @@ local function make_helper_request(task, domain, record, redis_server)
 
   local serialised = ucl.to_format(request_data, 'json-compact')
   lua_util.debugm(N, task, "send request to BIMI helper: %s",
-    serialised)
+      serialised)
   rspamd_http.request({
     task = task,
     mime_type = 'application/json',
@@ -241,7 +241,7 @@ end
 
 local function check_bimi_vmc(task, domain, record)
   local redis_key = string.format('%s%s', settings.redis_prefix,
-    domain)
+      domain)
   local ret, _, upstream
 
   local function redis_cached_cb(err, data)
@@ -276,13 +276,13 @@ local function check_bimi_vmc(task, domain, record)
   end
 
   -- We first check Redis and then try to use helper
-  ret,_,upstream = lua_redis.redis_make_request(task,
+  ret, _, upstream = lua_redis.redis_make_request(task,
       redis_params, -- connect params
       redis_key, -- hash key
       false, -- is write
       redis_cached_cb, --callback
       'GET', -- command
-      {redis_key})
+      { redis_key })
 
   if not ret then
     rspamd_logger.warnx(task, 'cannot make request to Redis; domain %s', domain)
@@ -291,12 +291,12 @@ end
 
 local function check_bimi_dns(task, domain)
   local resolve_name = string.format('default._bimi.%s', domain)
-  local dns_cb = function (_, _, results, err)
+  local dns_cb = function(_, _, results, err)
     if err then
       lua_util.debugm(N, task, "cannot resolve bimi for %s: %s",
           domain, err)
     else
-      for _,rec in ipairs(results) do
+      for _, rec in ipairs(results) do
         local res = check_bimi_record(task, rec)
 
         if res then
@@ -319,7 +319,7 @@ local function check_bimi_dns(task, domain)
     end
   end
   task:get_resolver():resolve_txt({
-    task=task,
+    task = task,
     name = resolve_name,
     callback = dns_cb,
     forced = true
@@ -329,7 +329,9 @@ end
 local function bimi_callback(task)
   local dmarc_domain_maybe = check_dmarc_policy(task)
 
-  if not dmarc_domain_maybe then return end
+  if not dmarc_domain_maybe then
+    return
+  end
 
 
   -- We can either check BIMI via DNS or check Redis cache
@@ -347,7 +349,7 @@ if not opts then
 end
 
 settings = lua_util.override_defaults(settings, opts)
-local res,err = settings_schema:transform(settings)
+local res, err = settings_schema:transform(settings)
 
 if not res then
   rspamd_logger.warnx(rspamd_config, 'plugin is misconfigured: %s', err)
@@ -365,10 +367,10 @@ if redis_params then
     name = 'BIMI_CHECK',
     type = 'normal',
     callback = bimi_callback,
-    augmentations = {string.format("timeout=%f", settings.helper_timeout or
-        redis_params.timeout or 0.0)}
+    augmentations = { string.format("timeout=%f", settings.helper_timeout or
+        redis_params.timeout or 0.0) }
   })
-  rspamd_config:register_symbol{
+  rspamd_config:register_symbol {
     name = 'BIMI_VALID',
     type = 'virtual',
     parent = id,

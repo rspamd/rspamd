@@ -21,24 +21,24 @@ local lua_util = require "lua_util"
 -- Common RBL plugin definitions
 
 local check_types = {
-    from = {
-      connfilter = true,
-    },
-    received = {},
-    helo = {
-      connfilter = true,
-    },
-    urls = {},
-    content_urls = {},
-    emails = {},
-    replyto = {},
-    dkim = {},
-    rdns = {
-      connfilter = true,
-    },
-    selector = {
-      require_argument = true,
-    },
+  from = {
+    connfilter = true,
+  },
+  received = {},
+  helo = {
+    connfilter = true,
+  },
+  urls = {},
+  content_urls = {},
+  emails = {},
+  replyto = {},
+  dkim = {},
+  rdns = {
+    connfilter = true,
+  },
+  selector = {
+    require_argument = true,
+  },
 }
 
 local default_options = {
@@ -93,8 +93,8 @@ local rule_schema_tbl = {
   exclude_private_ips = ts.boolean:is_optional(),
   exclude_users = ts.boolean:is_optional(),
   from = ts.boolean:is_optional(),
-  hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
-  hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
+  hash = ts.one_of { "sha1", "sha256", "sha384", "sha512", "md5", "blake2" }:is_optional(),
+  hash_format = ts.one_of { "hex", "base32", "base64" }:is_optional(),
   hash_len = (ts.integer + ts.string / tonumber):is_optional(),
   helo = ts.boolean:is_optional(),
   ignore_default = ts.boolean:is_optional(), -- alias
@@ -120,14 +120,16 @@ local rule_schema_tbl = {
   replyto = ts.boolean:is_optional(),
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   require_symbols = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
+      ts.array_of(ts.string) + (ts.string / function(s)
+        return { s }
+      end)
   ):is_optional(),
   resolve_ip = ts.boolean:is_optional(),
   return_bits = return_bits_schema:is_optional(),
   return_codes = return_codes_schema:is_optional(),
   returnbits = return_bits_schema:is_optional(),
   returncodes = return_codes_schema:is_optional(),
-  selector = ts.one_of{ts.string, ts.table}:is_optional(),
+  selector = ts.one_of { ts.string, ts.table }:is_optional(),
   selector_flatten = ts.boolean:is_optional(),
   symbol = ts.string:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
@@ -137,7 +139,9 @@ local rule_schema_tbl = {
   urls = ts.boolean:is_optional(),
   whitelist = lua_maps.map_schema:is_optional(),
   whitelist_exception = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
+      ts.array_of(ts.string) + (ts.string / function(s)
+        return { s }
+      end)
   ):is_optional(),
   checks = ts.array_of(ts.one_of(lua_util.keys(check_types))):is_optional(),
   exclude_checks = ts.array_of(ts.one_of(lua_util.keys(check_types))):is_optional(),
@@ -148,13 +152,13 @@ local function convert_checks(rule)
   if rule.checks then
     local all_connfilter = true
     local exclude_checks = lua_util.list_to_hash(rule.exclude_checks or {})
-    for _,check in ipairs(rule.checks) do
+    for _, check in ipairs(rule.checks) do
       if not exclude_checks[check] then
         local check_type = check_types[check]
         if check_type.require_argument then
           if not rule[check] then
             rspamd_logger.errx(rspamd_config, 'rbl rule %s has check %s which requires an argument',
-                    rule.symbol, check)
+                rule.symbol, check)
             return nil
           end
         end
@@ -167,12 +171,12 @@ local function convert_checks(rule)
 
         if not check_type then
           rspamd_logger.errx(rspamd_config, 'rbl rule %s has invalid check type: %s',
-                  rule.symbol, check)
+              rule.symbol, check)
           return nil
         end
       else
         rspamd_logger.infox(rspamd_config, 'disable check %s in %s: excluded explicitly',
-                check, rule.symbol)
+            check, rule.symbol)
       end
     end
     rule.connfilter = all_connfilter
@@ -180,7 +184,7 @@ local function convert_checks(rule)
 
   -- Now check if we have any check enabled at all
   local check_found = false
-  for k,_ in pairs(check_types) do
+  for k, _ in pairs(check_types) do
     if type(rule[k]) ~= 'nil' then
       check_found = true
       break
@@ -199,7 +203,7 @@ end
 
 
 -- Add default boolean flags to the schema
-for def_k,_ in pairs(default_options) do
+for def_k, _ in pairs(default_options) do
   rule_schema_tbl[def_k:sub(#('default_') + 1)] = ts.boolean:is_optional()
 end
 

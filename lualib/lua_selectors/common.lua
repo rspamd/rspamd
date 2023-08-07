@@ -21,8 +21,8 @@ local cr_hash = require 'rspamd_cryptobox_hash'
 local blake2b_key = cr_hash.create_specific('blake2'):update('rspamd'):bin()
 
 local function digest_schema()
-  return {ts.one_of{'hex', 'base32', 'bleach32', 'rbase32', 'base64'}:is_optional(),
-          ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
+  return { ts.one_of { 'hex', 'base32', 'bleach32', 'rbase32', 'base64' }:is_optional(),
+           ts.one_of { 'blake2', 'sha256', 'sha1', 'sha512', 'md5' }:is_optional() }
 end
 
 exports.digest_schema = digest_schema
@@ -65,7 +65,6 @@ local function create_digest(data, args)
   local h = create_raw_digest(data, args)
   return encode_digest(h, args)
 end
-
 
 local function get_cached_or_raw_digest(task, idx, mime_part, args)
   if #args == 0 then

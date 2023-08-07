@@ -4,9 +4,9 @@ local lua_util = require "lua_util"
 local exports = {}
 local N = 'tcp_sync'
 
-local tcp_sync = {_conn = nil, _data = '', _eof = false, _addr = ''}
+local tcp_sync = { _conn = nil, _data = '', _eof = false, _addr = '' }
 local metatable = {
-  __tostring = function (self)
+  __tostring = function(self)
     return "class {tcp_sync connect to: " .. self._addr .. "}"
   end
 }
@@ -66,7 +66,7 @@ end
 --
 --]]
 function tcp_sync:read_until(pattern)
-  repeat 
+  repeat
     local pos_start, pos_end = self._data:find(pattern, 1, true)
     if pos_start then
       local data = self._data:sub(1, pos_start - 1)
@@ -196,7 +196,7 @@ function tcp_sync:shutdown()
   return self._conn:shutdown()
 end
 
-exports.connect = function (args)
+exports.connect = function(args)
   local is_ok, connection = rspamd_tcp.connect_sync(args)
   if not is_ok then
     return is_ok, connection

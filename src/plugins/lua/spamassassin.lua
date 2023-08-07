@@ -159,7 +159,7 @@ end
 local ffi
 if type(jit) == 'table' then
   ffi = require("ffi")
-  ffi.cdef[[
+  ffi.cdef [[
     int rspamd_re_cache_type_from_string (const char *str);
     int rspamd_re_cache_process_ffi (void *ptask,
         void *pre,
@@ -207,7 +207,7 @@ local function handle_header_def(hline, cur_rule)
   -- Check if an re is an ordinary re
   local ordinary = true
 
-  for _,h in ipairs(hdrs) do
+  for _, h in ipairs(hdrs) do
     if h == 'ALL' or h == 'ALL:raw' then
       ordinary = false
       cur_rule['type'] = 'function'
@@ -239,78 +239,77 @@ local function handle_header_def(hline, cur_rule)
       end
 
       fun.each(function(func)
-          if func == 'addr' then
-            cur_param['function'] = function(str)
-              local addr_parsed = util.parse_mail_address(str)
-              local ret = {}
-              if addr_parsed then
-                for _,elt in ipairs(addr_parsed) do
-                  if elt['addr'] then
-                    table.insert(ret, elt['addr'])
-                  end
+        if func == 'addr' then
+          cur_param['function'] = function(str)
+            local addr_parsed = util.parse_mail_address(str)
+            local ret = {}
+            if addr_parsed then
+              for _, elt in ipairs(addr_parsed) do
+                if elt['addr'] then
+                  table.insert(ret, elt['addr'])
                 end
               end
-
-              return ret
             end
-          elseif func == 'name' then
-            cur_param['function'] = function(str)
-              local addr_parsed = util.parse_mail_address(str)
-              local ret = {}
-              if addr_parsed then
-                for _,elt in ipairs(addr_parsed) do
-                  if elt['name'] then
-                    table.insert(ret, elt['name'])
-                  end
+
+            return ret
+          end
+        elseif func == 'name' then
+          cur_param['function'] = function(str)
+            local addr_parsed = util.parse_mail_address(str)
+            local ret = {}
+            if addr_parsed then
+              for _, elt in ipairs(addr_parsed) do
+                if elt['name'] then
+                  table.insert(ret, elt['name'])
                 end
               end
-
-              return ret
-            end
-          elseif func == 'raw' then
-            cur_param['raw'] = true
-          elseif func == 'case' then
-            cur_param['strong'] = true
-          else
-            rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
-              func, cur_rule['symbol'])
-          end
-        end, fun.tail(args))
-
-        local function split_hdr_param(param, headers)
-          for _,hh in ipairs(headers) do
-            local nparam = {}
-            for k,v in pairs(param) do
-              if k ~= 'header' then
-                nparam[k] = v
-              end
             end
 
-            nparam['header'] = hh
-            table.insert(hdr_params, nparam)
+            return ret
           end
-        end
-        -- Some header rules require splitting to check of multiple headers
-        if cur_param['header'] == 'MESSAGEID' then
-          -- Special case for spamassassin
-          ordinary = false
-          split_hdr_param(cur_param, {
-            'Message-ID',
-            'X-Message-ID',
-            'Resent-Message-ID'})
-        elseif cur_param['header'] == 'ToCc' then
-          ordinary = false
-          split_hdr_param(cur_param, { 'To', 'Cc', 'Bcc' })
+        elseif func == 'raw' then
+          cur_param['raw'] = true
+        elseif func == 'case' then
+          cur_param['strong'] = true
         else
-          table.insert(hdr_params, cur_param)
+          rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
+              func, cur_rule['symbol'])
         end
+      end, fun.tail(args))
+
+      local function split_hdr_param(param, headers)
+        for _, hh in ipairs(headers) do
+          local nparam = {}
+          for k, v in pairs(param) do
+            if k ~= 'header' then
+              nparam[k] = v
+            end
+          end
+
+          nparam['header'] = hh
+          table.insert(hdr_params, nparam)
+        end
+      end
+      -- Some header rules require splitting to check of multiple headers
+      if cur_param['header'] == 'MESSAGEID' then
+        -- Special case for spamassassin
+        ordinary = false
+        split_hdr_param(cur_param, {
+          'Message-ID',
+          'X-Message-ID',
+          'Resent-Message-ID' })
+      elseif cur_param['header'] == 'ToCc' then
+        ordinary = false
+        split_hdr_param(cur_param, { 'To', 'Cc', 'Bcc' })
+      else
+        table.insert(hdr_params, cur_param)
+      end
     end
 
     cur_rule['ordinary'] = ordinary
     cur_rule['header'] = hdr_params
   end
 end
-
 
 local function freemail_search(input)
   local res = 0
@@ -328,19 +327,19 @@ end
 
 local function gen_eval_rule(arg)
   local eval_funcs = {
-    {'check_freemail_from', function(task)
-        local from = task:get_from('mime')
-        if from and from[1] then
-          return freemail_search(string.lower(from[1]['addr']))
-        end
-        return 0
-      end},
-    {'check_freemail_replyto',
+    { 'check_freemail_from', function(task)
+      local from = task:get_from('mime')
+      if from and from[1] then
+        return freemail_search(string.lower(from[1]['addr']))
+      end
+      return 0
+    end },
+    { 'check_freemail_replyto',
       function(task)
         return freemail_search(task:get_header('Reply-To'))
       end
     },
-    {'check_freemail_header',
+    { 'check_freemail_header',
       function(task, remain)
         -- Remain here contains one or two args: header and regexp to match
         local larg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
@@ -353,7 +352,9 @@ local function gen_eval_rule(arg)
           local h
           if larg == 'EnvelopeFrom' then
             h = task:get_from('smtp')
-            if h then h = h[1]['addr'] end
+            if h then
+              h = h[1]['addr']
+            end
           else
             h = task:get_header(larg)
           end
@@ -382,7 +383,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_for_missing_to_header',
-      function (task)
+      function(task)
         local th = task:get_recipients('mime')
         if not th or #th == 0 then
           return 1
@@ -398,16 +399,20 @@ local function gen_eval_rule(arg)
         local rh_parsed = task:get_received_headers()
 
         local rh_cnt = 0
-        if rh_mime then rh_cnt = #rh_mime end
+        if rh_mime then
+          rh_cnt = #rh_mime
+        end
         local parsed_cnt = 0
-        if rh_parsed then parsed_cnt = #rh_parsed end
+        if rh_parsed then
+          parsed_cnt = #rh_parsed
+        end
 
         return rh_cnt - parsed_cnt
       end
     },
     {
       'check_for_shifted_date',
-      function (task, remain)
+      function(task, remain)
         -- Remain here contains two args: start and end hours shift
         local matches = internal_regexp['date_shift']:search(remain, true, true)
         if matches and matches[1] then
@@ -426,8 +431,8 @@ local function gen_eval_rule(arg)
           end
 
           -- Now get the difference between Date and message received date
-          local dm = task:get_date { format = 'message', gmt = true}
-          local dt = task:get_date { format = 'connect', gmt = true}
+          local dm = task:get_date { format = 'message', gmt = true }
+          local dt = task:get_date { format = 'connect', gmt = true }
           local diff = dm - dt
 
           if (max_diff == 0 and diff >= min_diff) or
@@ -449,7 +454,7 @@ local function gen_eval_rule(arg)
           if larg == 'mime_attachment' then
             local parts = task:get_parts()
             if parts then
-              for _,p in ipairs(parts) do
+              for _, p in ipairs(parts) do
                 if p:get_filename() then
                   return 1
                 end
@@ -507,7 +512,7 @@ local function gen_eval_rule(arg)
       function(task)
         local rcpt = task:get_recipients('mime')
         if rcpt then
-          for _,r in ipairs(rcpt) do
+          for _, r in ipairs(rcpt) do
             if sa_lists['to_blacklist'][string.lower(r['addr'])] then
               return 1
             end
@@ -522,7 +527,7 @@ local function gen_eval_rule(arg)
       function(task)
         local rcpt = task:get_recipients('mime')
         if rcpt then
-          for _,r in ipairs(rcpt) do
+          for _, r in ipairs(rcpt) do
             if sa_lists['to_whitelist'][string.lower(r['addr'])] then
               return 1
             end
@@ -537,7 +542,7 @@ local function gen_eval_rule(arg)
       function(task, remain)
         local tp = task:get_text_parts()
 
-        for _,p in ipairs(tp) do
+        for _, p in ipairs(tp) do
           if p:is_html() then
             local hc = p:get_html()
 
@@ -552,9 +557,9 @@ local function gen_eval_rule(arg)
     }
   }
 
-  for _,f in ipairs(eval_funcs) do
+  for _, f in ipairs(eval_funcs) do
     local pat = string.format('^%s', f[1])
-    local first,last = string.find(arg, pat)
+    local first, last = string.find(arg, pat)
 
     if first then
       local func_arg = string.sub(arg, last + 1)
@@ -572,10 +577,11 @@ local function maybe_parse_sa_function(line)
   arg = elts[2]
 
   lua_util.debugm(N, rspamd_config, 'trying to parse SA function %1 with args %2',
-    elts[1], elts[2])
+      elts[1], elts[2])
   local substitutions = {
-    {'^exists:',
-      function(task) -- filter
+    { '^exists:',
+      function(task)
+        -- filter
         local hdrs_check
         if arg == 'MESSAGEID' then
           hdrs_check = {
@@ -586,10 +592,10 @@ local function maybe_parse_sa_function(line)
         elseif arg == 'ToCc' then
           hdrs_check = { 'To', 'Cc', 'Bcc' }
         else
-          hdrs_check = {arg}
+          hdrs_check = { arg }
         end
 
-        for _,h in ipairs(hdrs_check) do
+        for _, h in ipairs(hdrs_check) do
           if task:has_header(h) then
             return 1
           end
@@ -597,7 +603,7 @@ local function maybe_parse_sa_function(line)
         return 0
       end,
     },
-    {'^eval:',
+    { '^eval:',
       function(task)
         local func = func_cache[arg]
         if not func then
@@ -607,7 +613,7 @@ local function maybe_parse_sa_function(line)
 
         if not func then
           rspamd_logger.errx(task, 'cannot find appropriate eval rule for function %1',
-            arg)
+              arg)
         else
           return func(task)
         end
@@ -617,7 +623,7 @@ local function maybe_parse_sa_function(line)
     },
   }
 
-  for _,s in ipairs(substitutions) do
+  for _, s in ipairs(substitutions) do
     if string.find(line, s[1]) then
       return s[2]
     end
@@ -664,26 +670,26 @@ local function process_sa_conf(f)
   local valid_rule = false
 
   local function insert_cur_rule()
-   if cur_rule['type'] ~= 'meta' and cur_rule['publish'] then
-     -- Create meta rule from this rule
-     local nsym = '__fake' .. cur_rule['symbol']
-     local nrule = {
-       type = 'meta',
-       symbol = cur_rule['symbol'],
-       score = cur_rule['score'],
-       meta = nsym,
-       description = cur_rule['description'],
-     }
-     rules[nrule['symbol']] = nrule
-     cur_rule['symbol'] = nsym
-   end
-   -- We have previous rule valid
-   if not cur_rule['symbol'] then
-     rspamd_logger.errx(rspamd_config, 'bad rule definition: %1', cur_rule)
-   end
-   rules[cur_rule['symbol']] = cur_rule
-   cur_rule = {}
-   valid_rule = false
+    if cur_rule['type'] ~= 'meta' and cur_rule['publish'] then
+      -- Create meta rule from this rule
+      local nsym = '__fake' .. cur_rule['symbol']
+      local nrule = {
+        type = 'meta',
+        symbol = cur_rule['symbol'],
+        score = cur_rule['score'],
+        meta = nsym,
+        description = cur_rule['description'],
+      }
+      rules[nrule['symbol']] = nrule
+      cur_rule['symbol'] = nsym
+    end
+    -- We have previous rule valid
+    if not cur_rule['symbol'] then
+      rspamd_logger.errx(rspamd_config, 'bad rule definition: %1', cur_rule)
+    end
+    rules[cur_rule['symbol']] = cur_rule
+    cur_rule = {}
+    valid_rule = false
   end
 
   local function parse_score(words)
@@ -706,359 +712,370 @@ local function process_sa_conf(f)
   local skip_to_endif = false
   local if_nested = 0
   for l in f:lines() do
-    (function ()
-    l = lua_util.rspamd_str_trim(l)
-    -- Replace bla=~/re/ with bla =~ /re/ (#2372)
-    l = l:gsub('([^%s])%s*([=!]~)%s*([^%s])', '%1 %2 %3')
+    (function()
+      l = lua_util.rspamd_str_trim(l)
+      -- Replace bla=~/re/ with bla =~ /re/ (#2372)
+      l = l:gsub('([^%s])%s*([=!]~)%s*([^%s])', '%1 %2 %3')
 
-    if string.len(l) == 0 or string.sub(l, 1, 1) == '#' then
-      return
-    end
+      if string.len(l) == 0 or string.sub(l, 1, 1) == '#' then
+        return
+      end
 
-    -- Unbalanced if/endif
-    if if_nested < 0 then if_nested = 0 end
-    if skip_to_endif then
-      if string.match(l, '^endif') then
-        if_nested = if_nested - 1
+      -- Unbalanced if/endif
+      if if_nested < 0 then
+        if_nested = 0
+      end
+      if skip_to_endif then
+        if string.match(l, '^endif') then
+          if_nested = if_nested - 1
 
-        if if_nested == 0 then
+          if if_nested == 0 then
+            skip_to_endif = false
+          end
+        elseif string.match(l, '^if') then
+          if_nested = if_nested + 1
+        elseif string.match(l, '^else') then
+          -- Else counterpart for if
           skip_to_endif = false
         end
-      elseif string.match(l, '^if') then
-        if_nested = if_nested + 1
-      elseif string.match(l, '^else') then
-        -- Else counterpart for if
-        skip_to_endif = false
-      end
-      return
-    else
-      if string.match(l, '^ifplugin') then
-        local ls = split(l)
+        return
+      else
+        if string.match(l, '^ifplugin') then
+          local ls = split(l)
 
-        if not fun.any(function(pl)
-            if pl == ls[2] then return true end
+          if not fun.any(function(pl)
+            if pl == ls[2] then
+              return true
+            end
             return false
-            end, known_plugins) then
+          end, known_plugins) then
+            skip_to_endif = true
+          end
+          if_nested = if_nested + 1
+        elseif string.match(l, '^if !plugin%(') then
+          local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
+          if fun.any(function(pl)
+            if pl == pname then
+              return true
+            end
+            return false
+          end, known_plugins) then
+            skip_to_endif = true
+          end
+          if_nested = if_nested + 1
+        elseif string.match(l, '^if') then
+          -- Unknown if
           skip_to_endif = true
+          if_nested = if_nested + 1
+        elseif string.match(l, '^else') then
+          -- Else counterpart for if
+          skip_to_endif = true
+        elseif string.match(l, '^endif') then
+          if_nested = if_nested - 1
         end
-        if_nested = if_nested + 1
-      elseif string.match(l, '^if !plugin%(') then
-         local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
-         if fun.any(function(pl)
-           if pl == pname then return true end
-           return false
-         end, known_plugins) then
-           skip_to_endif = true
-         end
-         if_nested = if_nested + 1
-      elseif string.match(l, '^if') then
-        -- Unknown if
-        skip_to_endif = true
-        if_nested = if_nested + 1
-      elseif string.match(l, '^else') then
-        -- Else counterpart for if
-        skip_to_endif = true
-      elseif string.match(l, '^endif') then
-        if_nested = if_nested - 1
       end
-    end
 
-    -- Skip comments
-    local words = fun.totable(fun.take_while(
-      function(w) return string.sub(w, 1, 1) ~= '#' end,
-      fun.filter(function(w)
-          return w ~= "" end,
-      fun.iter(split(l)))))
+      -- Skip comments
+      local words = fun.totable(fun.take_while(
+          function(w)
+            return string.sub(w, 1, 1) ~= '#'
+          end,
+          fun.filter(function(w)
+            return w ~= ""
+          end,
+              fun.iter(split(l)))))
 
-    if words[1] == "header" or words[1] == 'mimeheader' then
-      -- header SYMBOL Header ~= /regexp/
-      if valid_rule then
-        insert_cur_rule()
-      end
-      if words[4] and (words[4] == '=~' or words[4] == '!~') then
-        cur_rule['type'] = 'header'
-        cur_rule['symbol'] = words[2]
-
-        if words[4] == '!~' then
-          cur_rule['not'] = true
+      if words[1] == "header" or words[1] == 'mimeheader' then
+        -- header SYMBOL Header ~= /regexp/
+        if valid_rule then
+          insert_cur_rule()
         end
+        if words[4] and (words[4] == '=~' or words[4] == '!~') then
+          cur_rule['type'] = 'header'
+          cur_rule['symbol'] = words[2]
 
-        cur_rule['re_expr'] = words_to_re(words, 4)
-        local unset_comp = string.find(cur_rule['re_expr'], '%s+%[if%-unset:')
-        if unset_comp then
-          -- We have optional part that needs to be processed
-          local unset = string.match(string.sub(cur_rule['re_expr'], unset_comp),
-            '%[if%-unset:%s*([^%]%s]+)]')
-          cur_rule['unset'] = unset
-          -- Cut it down
-           cur_rule['re_expr'] = string.sub(cur_rule['re_expr'], 1, unset_comp - 1)
-        end
+          if words[4] == '!~' then
+            cur_rule['not'] = true
+          end
 
-        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
+          cur_rule['re_expr'] = words_to_re(words, 4)
+          local unset_comp = string.find(cur_rule['re_expr'], '%s+%[if%-unset:')
+          if unset_comp then
+            -- We have optional part that needs to be processed
+            local unset = string.match(string.sub(cur_rule['re_expr'], unset_comp),
+                '%[if%-unset:%s*([^%]%s]+)]')
+            cur_rule['unset'] = unset
+            -- Cut it down
+            cur_rule['re_expr'] = string.sub(cur_rule['re_expr'], 1, unset_comp - 1)
+          end
 
-        if not cur_rule['re'] then
-          rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
-            cur_rule['re_expr'], cur_rule['symbol'])
-        else
-          cur_rule['re']:set_max_hits(1)
-          handle_header_def(words[3], cur_rule)
-        end
+          cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
 
-        if cur_rule['unset'] then
-          cur_rule['ordinary'] = false
-        end
+          if not cur_rule['re'] then
+            rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
+                cur_rule['re_expr'], cur_rule['symbol'])
+          else
+            cur_rule['re']:set_max_hits(1)
+            handle_header_def(words[3], cur_rule)
+          end
 
-        if words[1] == 'mimeheader' then
-          cur_rule['mime'] = true
-        else
-          cur_rule['mime'] = false
-        end
+          if cur_rule['unset'] then
+            cur_rule['ordinary'] = false
+          end
 
-        if cur_rule['re'] and cur_rule['symbol'] and
-          (cur_rule['header'] or cur_rule['function']) then
-          valid_rule = true
-          cur_rule['re']:set_max_hits(1)
-          if cur_rule['header'] and cur_rule['ordinary'] then
-            for _,h in ipairs(cur_rule['header']) do
-              if type(h) == 'string' then
-                if cur_rule['mime'] then
-                  rspamd_config:register_regexp({
-                    re = cur_rule['re'],
-                    type = 'mimeheader',
-                    header = h,
-                    pcre_only = is_pcre_only(cur_rule['symbol']),
-                  })
-                else
-                  rspamd_config:register_regexp({
-                    re = cur_rule['re'],
-                    type = 'header',
-                    header = h,
-                    pcre_only = is_pcre_only(cur_rule['symbol']),
-                  })
-                end
-              else
-                h['mime'] = cur_rule['mime']
-                if cur_rule['mime'] then
-                  rspamd_config:register_regexp({
-                    re = cur_rule['re'],
-                    type = 'mimeheader',
-                    header = h['header'],
-                    pcre_only = is_pcre_only(cur_rule['symbol']),
-                  })
-                else
-                  if h['raw'] then
+          if words[1] == 'mimeheader' then
+            cur_rule['mime'] = true
+          else
+            cur_rule['mime'] = false
+          end
+
+          if cur_rule['re'] and cur_rule['symbol'] and
+              (cur_rule['header'] or cur_rule['function']) then
+            valid_rule = true
+            cur_rule['re']:set_max_hits(1)
+            if cur_rule['header'] and cur_rule['ordinary'] then
+              for _, h in ipairs(cur_rule['header']) do
+                if type(h) == 'string' then
+                  if cur_rule['mime'] then
                     rspamd_config:register_regexp({
                       re = cur_rule['re'],
-                      type = 'rawheader',
-                      header = h['header'],
+                      type = 'mimeheader',
+                      header = h,
                       pcre_only = is_pcre_only(cur_rule['symbol']),
                     })
                   else
                     rspamd_config:register_regexp({
                       re = cur_rule['re'],
                       type = 'header',
-                      header = h['header'],
+                      header = h,
                       pcre_only = is_pcre_only(cur_rule['symbol']),
                     })
                   end
+                else
+                  h['mime'] = cur_rule['mime']
+                  if cur_rule['mime'] then
+                    rspamd_config:register_regexp({
+                      re = cur_rule['re'],
+                      type = 'mimeheader',
+                      header = h['header'],
+                      pcre_only = is_pcre_only(cur_rule['symbol']),
+                    })
+                  else
+                    if h['raw'] then
+                      rspamd_config:register_regexp({
+                        re = cur_rule['re'],
+                        type = 'rawheader',
+                        header = h['header'],
+                        pcre_only = is_pcre_only(cur_rule['symbol']),
+                      })
+                    else
+                      rspamd_config:register_regexp({
+                        re = cur_rule['re'],
+                        type = 'header',
+                        header = h['header'],
+                        pcre_only = is_pcre_only(cur_rule['symbol']),
+                      })
+                    end
+                  end
                 end
               end
+              cur_rule['re']:set_limit(match_limit)
+              cur_rule['re']:set_max_hits(1)
             end
+          end
+        else
+          -- Maybe we know the function and can convert it
+          local args = words_to_re(words, 2)
+          local func = maybe_parse_sa_function(args)
+
+          if func then
+            cur_rule['type'] = 'function'
+            cur_rule['symbol'] = words[2]
+            cur_rule['function'] = func
+            valid_rule = true
+          else
+            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+          end
+        end
+      elseif words[1] == "body" then
+        -- body SYMBOL /regexp/
+        if valid_rule then
+          insert_cur_rule()
+        end
+
+        cur_rule['symbol'] = words[2]
+        if words[3] and (string.sub(words[3], 1, 1) == '/'
+            or string.sub(words[3], 1, 1) == 'm') then
+          cur_rule['type'] = 'sabody'
+          cur_rule['re_expr'] = words_to_re(words, 2)
+          cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
+          if cur_rule['re'] then
+
+            rspamd_config:register_regexp({
+              re = cur_rule['re'],
+              type = 'sabody',
+              pcre_only = is_pcre_only(cur_rule['symbol']),
+            })
+            valid_rule = true
             cur_rule['re']:set_limit(match_limit)
             cur_rule['re']:set_max_hits(1)
           end
-        end
-      else
-        -- Maybe we know the function and can convert it
-        local args =  words_to_re(words, 2)
-        local func = maybe_parse_sa_function(args)
-
-        if func then
-          cur_rule['type'] = 'function'
-          cur_rule['symbol'] = words[2]
-          cur_rule['function'] = func
-          valid_rule = true
         else
-          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
-        end
-      end
-    elseif words[1] == "body" then
-      -- body SYMBOL /regexp/
-      if valid_rule then
-        insert_cur_rule()
-      end
+          -- might be function
+          local args = words_to_re(words, 2)
+          local func = maybe_parse_sa_function(args)
 
-      cur_rule['symbol'] = words[2]
-      if words[3] and (string.sub(words[3], 1, 1) == '/'
-          or string.sub(words[3], 1, 1) == 'm') then
-        cur_rule['type'] = 'sabody'
+          if func then
+            cur_rule['type'] = 'function'
+            cur_rule['symbol'] = words[2]
+            cur_rule['function'] = func
+            valid_rule = true
+          else
+            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+          end
+        end
+      elseif words[1] == "rawbody" then
+        -- body SYMBOL /regexp/
+        if valid_rule then
+          insert_cur_rule()
+        end
+
+        cur_rule['symbol'] = words[2]
+        if words[3] and (string.sub(words[3], 1, 1) == '/'
+            or string.sub(words[3], 1, 1) == 'm') then
+          cur_rule['type'] = 'sarawbody'
+          cur_rule['re_expr'] = words_to_re(words, 2)
+          cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
+          if cur_rule['re'] then
+
+            rspamd_config:register_regexp({
+              re = cur_rule['re'],
+              type = 'sarawbody',
+              pcre_only = is_pcre_only(cur_rule['symbol']),
+            })
+            valid_rule = true
+            cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_max_hits(1)
+          end
+        else
+          -- might be function
+          local args = words_to_re(words, 2)
+          local func = maybe_parse_sa_function(args)
+
+          if func then
+            cur_rule['type'] = 'function'
+            cur_rule['symbol'] = words[2]
+            cur_rule['function'] = func
+            valid_rule = true
+          else
+            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+          end
+        end
+      elseif words[1] == "full" then
+        -- body SYMBOL /regexp/
+        if valid_rule then
+          insert_cur_rule()
+        end
+
+        cur_rule['symbol'] = words[2]
+
+        if words[3] and (string.sub(words[3], 1, 1) == '/'
+            or string.sub(words[3], 1, 1) == 'm') then
+          cur_rule['type'] = 'message'
+          cur_rule['re_expr'] = words_to_re(words, 2)
+          cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
+          cur_rule['raw'] = true
+          if cur_rule['re'] then
+            valid_rule = true
+            rspamd_config:register_regexp({
+              re = cur_rule['re'],
+              type = 'body',
+              pcre_only = is_pcre_only(cur_rule['symbol']),
+            })
+            cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_max_hits(1)
+          end
+        else
+          -- might be function
+          local args = words_to_re(words, 2)
+          local func = maybe_parse_sa_function(args)
+
+          if func then
+            cur_rule['type'] = 'function'
+            cur_rule['symbol'] = words[2]
+            cur_rule['function'] = func
+            valid_rule = true
+          else
+            rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+          end
+        end
+      elseif words[1] == "uri" then
+        -- uri SYMBOL /regexp/
+        if valid_rule then
+          insert_cur_rule()
+        end
+        cur_rule['type'] = 'uri'
+        cur_rule['symbol'] = words[2]
         cur_rule['re_expr'] = words_to_re(words, 2)
         cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
-        if cur_rule['re'] then
-
-          rspamd_config:register_regexp({
-            re = cur_rule['re'],
-            type = 'sabody',
-            pcre_only = is_pcre_only(cur_rule['symbol']),
-          })
-          valid_rule = true
-          cur_rule['re']:set_limit(match_limit)
-          cur_rule['re']:set_max_hits(1)
-        end
-      else
-        -- might be function
-        local args = words_to_re(words, 2)
-        local func = maybe_parse_sa_function(args)
-
-        if func then
-          cur_rule['type'] = 'function'
-          cur_rule['symbol'] = words[2]
-          cur_rule['function'] = func
-          valid_rule = true
-        else
-          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
-        end
-      end
-    elseif words[1] == "rawbody" then
-      -- body SYMBOL /regexp/
-      if valid_rule then
-        insert_cur_rule()
-      end
-
-      cur_rule['symbol'] = words[2]
-      if words[3] and (string.sub(words[3], 1, 1) == '/'
-          or string.sub(words[3], 1, 1) == 'm') then
-        cur_rule['type'] = 'sarawbody'
-        cur_rule['re_expr'] = words_to_re(words, 2)
-        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
-        if cur_rule['re'] then
-
-          rspamd_config:register_regexp({
-            re = cur_rule['re'],
-            type = 'sarawbody',
-            pcre_only = is_pcre_only(cur_rule['symbol']),
-          })
-          valid_rule = true
-          cur_rule['re']:set_limit(match_limit)
-          cur_rule['re']:set_max_hits(1)
-        end
-      else
-        -- might be function
-        local args = words_to_re(words, 2)
-        local func = maybe_parse_sa_function(args)
-
-        if func then
-          cur_rule['type'] = 'function'
-          cur_rule['symbol'] = words[2]
-          cur_rule['function'] = func
-          valid_rule = true
-        else
-          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
-        end
-      end
-    elseif words[1] == "full" then
-      -- body SYMBOL /regexp/
-      if valid_rule then
-        insert_cur_rule()
-      end
-
-      cur_rule['symbol'] = words[2]
-
-      if words[3] and (string.sub(words[3], 1, 1) == '/'
-          or string.sub(words[3], 1, 1) == 'm') then
-        cur_rule['type'] = 'message'
-        cur_rule['re_expr'] = words_to_re(words, 2)
-        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
-        cur_rule['raw'] = true
-        if cur_rule['re'] then
+        if cur_rule['re'] and cur_rule['symbol'] then
           valid_rule = true
           rspamd_config:register_regexp({
             re = cur_rule['re'],
-            type = 'body',
+            type = 'url',
             pcre_only = is_pcre_only(cur_rule['symbol']),
           })
           cur_rule['re']:set_limit(match_limit)
           cur_rule['re']:set_max_hits(1)
         end
-      else
-        -- might be function
-        local args = words_to_re(words, 2)
-        local func = maybe_parse_sa_function(args)
-
-        if func then
-          cur_rule['type'] = 'function'
-          cur_rule['symbol'] = words[2]
-          cur_rule['function'] = func
-          valid_rule = true
-        else
-          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+      elseif words[1] == "meta" then
+        -- meta SYMBOL expression
+        if valid_rule then
+          insert_cur_rule()
         end
-      end
-    elseif words[1] == "uri" then
-      -- uri SYMBOL /regexp/
-      if valid_rule then
-        insert_cur_rule()
-      end
-      cur_rule['type'] = 'uri'
-      cur_rule['symbol'] = words[2]
-      cur_rule['re_expr'] = words_to_re(words, 2)
-      cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
-      if cur_rule['re'] and cur_rule['symbol'] then
-        valid_rule = true
-        rspamd_config:register_regexp({
-          re = cur_rule['re'],
-          type = 'url',
-          pcre_only = is_pcre_only(cur_rule['symbol']),
-        })
-        cur_rule['re']:set_limit(match_limit)
-        cur_rule['re']:set_max_hits(1)
-      end
-    elseif words[1] == "meta" then
-      -- meta SYMBOL expression
-      if valid_rule then
-        insert_cur_rule()
-      end
-      cur_rule['type'] = 'meta'
-      cur_rule['symbol'] = words[2]
-      cur_rule['meta'] = words_to_re(words, 2)
-      if cur_rule['meta'] and cur_rule['symbol']
-        and cur_rule['meta'] ~= '0' then
+        cur_rule['type'] = 'meta'
+        cur_rule['symbol'] = words[2]
+        cur_rule['meta'] = words_to_re(words, 2)
+        if cur_rule['meta'] and cur_rule['symbol']
+            and cur_rule['meta'] ~= '0' then
           valid_rule = true
-      end
-    elseif words[1] == "describe" and valid_rule then
-      cur_rule['description'] = words_to_re(words, 2)
-    elseif words[1] == "score" then
-      scores[words[2]] = parse_score(words)
-    elseif words[1] == 'freemail_domains' then
-      fun.each(function(dom)
+        end
+      elseif words[1] == "describe" and valid_rule then
+        cur_rule['description'] = words_to_re(words, 2)
+      elseif words[1] == "score" then
+        scores[words[2]] = parse_score(words)
+      elseif words[1] == 'freemail_domains' then
+        fun.each(function(dom)
           table.insert(freemail_domains, '@' .. dom)
         end, fun.drop_n(1, words))
-    elseif words[1] == 'blacklist_from' then
-      sa_lists['from_blacklist'][words[2]] = 1
-      sa_lists['elts'] = sa_lists['elts'] + 1
-    elseif words[1] == 'whitelist_from' then
-      sa_lists['from_whitelist'][words[2]] = 1
-      sa_lists['elts'] = sa_lists['elts'] + 1
-    elseif words[1] == 'whitelist_to' then
-      sa_lists['to_whitelist'][words[2]] = 1
-      sa_lists['elts'] = sa_lists['elts'] + 1
-    elseif words[1] == 'blacklist_to' then
-      sa_lists['to_blacklist'][words[2]] = 1
-      sa_lists['elts'] = sa_lists['elts'] + 1
-    elseif words[1] == 'tflags' then
-      process_tflags(cur_rule, words)
-    elseif words[1] == 'replace_tag' then
-      process_replace(words, replace['tags'])
-    elseif words[1] == 'replace_pre' then
-      process_replace(words, replace['pre'])
-    elseif words[1] == 'replace_inter' then
-      process_replace(words, replace['inter'])
-    elseif words[1] == 'replace_post' then
-      process_replace(words, replace['post'])
-    elseif words[1] == 'replace_rules' then
-      fun.each(function(r) table.insert(replace['rules'], r) end,
-        fun.drop_n(1, words))
-    end
+      elseif words[1] == 'blacklist_from' then
+        sa_lists['from_blacklist'][words[2]] = 1
+        sa_lists['elts'] = sa_lists['elts'] + 1
+      elseif words[1] == 'whitelist_from' then
+        sa_lists['from_whitelist'][words[2]] = 1
+        sa_lists['elts'] = sa_lists['elts'] + 1
+      elseif words[1] == 'whitelist_to' then
+        sa_lists['to_whitelist'][words[2]] = 1
+        sa_lists['elts'] = sa_lists['elts'] + 1
+      elseif words[1] == 'blacklist_to' then
+        sa_lists['to_blacklist'][words[2]] = 1
+        sa_lists['elts'] = sa_lists['elts'] + 1
+      elseif words[1] == 'tflags' then
+        process_tflags(cur_rule, words)
+      elseif words[1] == 'replace_tag' then
+        process_replace(words, replace['tags'])
+      elseif words[1] == 'replace_pre' then
+        process_replace(words, replace['pre'])
+      elseif words[1] == 'replace_inter' then
+        process_replace(words, replace['inter'])
+      elseif words[1] == 'replace_post' then
+        process_replace(words, replace['post'])
+      elseif words[1] == 'replace_rules' then
+        fun.each(function(r)
+          table.insert(replace['rules'], r)
+        end,
+            fun.drop_n(1, words))
+      end
     end)()
   end
   if valid_rule then
@@ -1069,7 +1086,9 @@ end
 -- Now check all valid rules and add the according rspamd rules
 
 local function calculate_score(sym, rule)
-  if fun.all(function(c) return c == '_' end, fun.take_n(2, fun.iter(sym))) then
+  if fun.all(function(c)
+    return c == '_'
+  end, fun.take_n(2, fun.iter(sym))) then
     return 0.0
   end
 
@@ -1102,7 +1121,9 @@ local function sa_regexp_match(data, re, raw, rule)
     end
     res = res + re:matchn(data, lim, raw)
   else
-    if re:match(data, raw) then res = 1 end
+    if re:match(data, raw) then
+      res = 1
+    end
   end
 
   return res
@@ -1117,26 +1138,26 @@ local function apply_replacements(str)
     local replacement = nil
     local ret = s
     fun.each(function(n, t)
-      local ns,matches = string.gsub(s, string.format("<%s%s>", prefix, n), "")
+      local ns, matches = string.gsub(s, string.format("<%s%s>", prefix, n), "")
       if matches > 0 then
         replacement = t
         ret = ns
       end
     end, tbl)
 
-    return ret,replacement
+    return ret, replacement
   end
 
   local repl
-  str,repl = check_specific_tag("pre ", str, replace['pre'])
+  str, repl = check_specific_tag("pre ", str, replace['pre'])
   if repl then
     pre = repl
   end
-  str,repl = check_specific_tag("inter ", str, replace['inter'])
+  str, repl = check_specific_tag("inter ", str, replace['inter'])
   if repl then
     inter = repl
   end
-  str,repl = check_specific_tag("post ", str, replace['post'])
+  str, repl = check_specific_tag("post ", str, replace['post'])
   if repl then
     post = repl
   end
@@ -1160,12 +1181,11 @@ local function apply_replacements(str)
 
   local s = replace_all_tags(str)
 
-
   if str ~= s then
-    return true,s
+    return true, s
   end
 
-  return false,str
+  return false, str
 end
 
 local function parse_atom(str)
@@ -1180,7 +1200,7 @@ local function parse_atom(str)
 end
 
 local function gen_process_atom_cb(result_name, task)
-  return  function (atom)
+  return function(atom)
     local atom_cb = atoms[atom]
 
     if atom_cb then
@@ -1212,7 +1232,9 @@ local function post_process()
   -- Replace rule tags
   local ntags = {}
   local function rec_replace_tags(tag, tagv)
-    if ntags[tag] then return ntags[tag] end
+    if ntags[tag] then
+      return ntags[tag]
+    end
     fun.each(function(n, t)
       if n ~= tag then
         local s, matches = string.gsub(tagv, string.format("<%s>", n), t)
@@ -1222,7 +1244,9 @@ local function post_process()
       end
     end, replace['tags'])
 
-    if not ntags[tag] then ntags[tag] = tagv end
+    if not ntags[tag] then
+      ntags[tag] = tagv
+    end
     return ntags[tag]
   end
 
@@ -1283,7 +1307,7 @@ local function post_process()
 
         if not r['re'] then
           rspamd_logger.errx(task, 're is missing for rule %1 (%2 header)', k,
-            h['header'])
+              h['header'])
           return 0
         end
 
@@ -1333,7 +1357,9 @@ local function post_process()
             else
               str = rh['decoded']
             end
-            if not str then return 0 end
+            if not str then
+              return 0
+            end
 
             if h['function'] then
               str = h['function'](str)
@@ -1353,7 +1379,9 @@ local function post_process()
       end, r['header'])
 
       if #check == 0 then
-        if r['not'] then return 1 end
+        if r['not'] then
+          return 1
+        end
         return 0
       end
 
@@ -1375,10 +1403,10 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(_, r)
-      return r['type'] == 'header' and r['header']
-  end,
-  rules))
+      fun.filter(function(_, r)
+        return r['type'] == 'header' and r['header']
+      end,
+          rules))
 
   -- Custom function rules
   fun.each(function(k, r)
@@ -1397,10 +1425,10 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    fun.filter(function(_, r)
-      return r['type'] == 'function' and r['function']
-    end,
-      rules))
+      fun.filter(function(_, r)
+        return r['type'] == 'function' and r['function']
+      end,
+          rules))
 
   -- Parts rules
   fun.each(function(k, r)
@@ -1411,7 +1439,9 @@ local function post_process()
       end
 
       local t = 'mime'
-      if r['raw'] then t = 'rawmime' end
+      if r['raw'] then
+        t = 'rawmime'
+      end
 
       return process_regexp_opt(r.re, task, t)
     end
@@ -1423,9 +1453,9 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(_, r)
-      return r['type'] == 'part'
-  end, rules))
+      fun.filter(function(_, r)
+        return r['type'] == 'part'
+      end, rules))
 
   -- SA body rules
   fun.each(function(k, r)
@@ -1448,9 +1478,9 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(_, r)
-      return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
-  end, rules))
+      fun.filter(function(_, r)
+        return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
+      end, rules))
 
   -- URL rules
   fun.each(function(k, r)
@@ -1470,156 +1500,156 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    fun.filter(function(_, r)
-      return r['type'] == 'uri'
-    end,
-      rules))
+      fun.filter(function(_, r)
+        return r['type'] == 'uri'
+      end,
+          rules))
   -- Meta rules
   fun.each(function(k, r)
-      local expression = nil
-      -- Meta function callback
-      -- Here are dragons!
-      -- This function can be called from 2 DIFFERENT type of invocations:
-      -- 1) Invocation from Rspamd itself where `res_name` will be nil
-      -- 2) Invocation from other meta during expression:process_traced call
-      -- So we need to distinguish that and return different stuff to be able to deal with atoms
-      local meta_cb = function(task, res_name)
-        lua_util.debugm(N, task, 'meta callback for %s; result name: %s', k, res_name)
-        local cached = task:cache_get('sa_metas_processed')
+    local expression = nil
+    -- Meta function callback
+    -- Here are dragons!
+    -- This function can be called from 2 DIFFERENT type of invocations:
+    -- 1) Invocation from Rspamd itself where `res_name` will be nil
+    -- 2) Invocation from other meta during expression:process_traced call
+    -- So we need to distinguish that and return different stuff to be able to deal with atoms
+    local meta_cb = function(task, res_name)
+      lua_util.debugm(N, task, 'meta callback for %s; result name: %s', k, res_name)
+      local cached = task:cache_get('sa_metas_processed')
 
-        -- We avoid many task methods invocations here (likely)
-        if not cached then
-          cached = {}
-          task:cache_set('sa_metas_processed', cached)
-        end
-
-        local already_processed = cached[k]
-
-        -- Exclude elements that are named in the same way as the symbol itself
-        local function exclude_sym_filter(sopt)
-          return sopt ~= k
-        end
-
-        if not (already_processed and already_processed[res_name or 'default']) then
-          -- Execute symbol
-          local function exec_symbol(cur_res)
-            local res,trace = expression:process_traced(gen_process_atom_cb(cur_res, task))
-            lua_util.debugm(N, task, 'meta result for %s: %s; result name: %s', k, res, cur_res)
-            if res > 0 then
-              -- Symbol should be one shot to make it working properly
-              task:insert_result_named(cur_res, k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
-            end
-
-            if not cached[k] then
-              cached[k] = {}
-            end
-
-            cached[k][cur_res] = res
-          end
-
-          if not res_name then
-            -- Invoke for all named results
-            local named_results = task:get_all_named_results()
-            for _,cur_res in ipairs(named_results) do
-              exec_symbol(cur_res)
-            end
-          else
-            -- Invoked from another meta
-            exec_symbol(res_name)
-            return cached[k][res_name] or 0
-          end
-        else
-          -- We have cached the result
-          local res = already_processed[res_name or 'default'] or 0
-          lua_util.debugm(N, task, 'cached meta result for %s: %s; result name: %s',
-              k, res, res_name)
-
-          if res_name then
-            return res
-          end
-        end
-
-        -- No return if invoked directly from Rspamd as we use task:insert_result_named directly
+      -- We avoid many task methods invocations here (likely)
+      if not cached then
+        cached = {}
+        task:cache_set('sa_metas_processed', cached)
       end
 
-      expression = rspamd_expression.create(r['meta'], parse_atom, rspamd_config:get_mempool())
-      if not expression then
-        rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
+      local already_processed = cached[k]
+
+      -- Exclude elements that are named in the same way as the symbol itself
+      local function exclude_sym_filter(sopt)
+        return sopt ~= k
+      end
+
+      if not (already_processed and already_processed[res_name or 'default']) then
+        -- Execute symbol
+        local function exec_symbol(cur_res)
+          local res, trace = expression:process_traced(gen_process_atom_cb(cur_res, task))
+          lua_util.debugm(N, task, 'meta result for %s: %s; result name: %s', k, res, cur_res)
+          if res > 0 then
+            -- Symbol should be one shot to make it working properly
+            task:insert_result_named(cur_res, k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
+          end
+
+          if not cached[k] then
+            cached[k] = {}
+          end
+
+          cached[k][cur_res] = res
+        end
+
+        if not res_name then
+          -- Invoke for all named results
+          local named_results = task:get_all_named_results()
+          for _, cur_res in ipairs(named_results) do
+            exec_symbol(cur_res)
+          end
+        else
+          -- Invoked from another meta
+          exec_symbol(res_name)
+          return cached[k][res_name] or 0
+        end
       else
+        -- We have cached the result
+        local res = already_processed[res_name or 'default'] or 0
+        lua_util.debugm(N, task, 'cached meta result for %s: %s; result name: %s',
+            k, res, res_name)
 
-        if r['score'] then
-          rspamd_config:set_metric_symbol{
-            name = k, score = r['score'],
-            description = r['description'],
-            priority = scores_priority,
-            one_shot = true
-          }
-          scores_added[k] = 1
-          rspamd_config:register_symbol{
-            name = k,
-            weight = calculate_score(k, r),
-            callback = meta_cb
-          }
-        else
-          -- Add 0 score to avoid issues
-          rspamd_config:register_symbol{
-            name = k,
-            weight = calculate_score(k, r),
-            callback = meta_cb,
-            score = 0,
-          }
-        end
-
-        r['expression'] = expression
-
-        if not atoms[k] then
-          atoms[k] = meta_cb
+        if res_name then
+          return res
         end
       end
-    end,
-    fun.filter(function(_, r)
+
+      -- No return if invoked directly from Rspamd as we use task:insert_result_named directly
+    end
+
+    expression = rspamd_expression.create(r['meta'], parse_atom, rspamd_config:get_mempool())
+    if not expression then
+      rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
+    else
+
+      if r['score'] then
+        rspamd_config:set_metric_symbol {
+          name = k, score = r['score'],
+          description = r['description'],
+          priority = scores_priority,
+          one_shot = true
+        }
+        scores_added[k] = 1
+        rspamd_config:register_symbol {
+          name = k,
+          weight = calculate_score(k, r),
+          callback = meta_cb
+        }
+      else
+        -- Add 0 score to avoid issues
+        rspamd_config:register_symbol {
+          name = k,
+          weight = calculate_score(k, r),
+          callback = meta_cb,
+          score = 0,
+        }
+      end
+
+      r['expression'] = expression
+
+      if not atoms[k] then
+        atoms[k] = meta_cb
+      end
+    end
+  end,
+      fun.filter(function(_, r)
         return r['type'] == 'meta'
       end,
-      rules))
+          rules))
 
   -- Check meta rules for foreign symbols and register dependencies
   -- First direct dependencies:
   fun.each(function(k, r)
-      if r['expression'] then
-        local expr_atoms = r['expression']:atoms()
+    if r['expression'] then
+      local expr_atoms = r['expression']:atoms()
 
-        for _,a in ipairs(expr_atoms) do
-          if not atoms[a] then
-            local rspamd_symbol = replace_symbol(a)
-            if not external_deps[k] then
-              external_deps[k] = {}
-            end
+      for _, a in ipairs(expr_atoms) do
+        if not atoms[a] then
+          local rspamd_symbol = replace_symbol(a)
+          if not external_deps[k] then
+            external_deps[k] = {}
+          end
 
-            if not external_deps[k][rspamd_symbol] then
-              rspamd_config:register_dependency(k, rspamd_symbol)
-              external_deps[k][rspamd_symbol] = true
-              lua_util.debugm(N, rspamd_config,
+          if not external_deps[k][rspamd_symbol] then
+            rspamd_config:register_dependency(k, rspamd_symbol)
+            external_deps[k][rspamd_symbol] = true
+            lua_util.debugm(N, rspamd_config,
                 'atom %1 is a direct foreign dependency, ' ..
-                'register dependency for %2 on %3',
+                    'register dependency for %2 on %3',
                 a, k, rspamd_symbol)
-            end
           end
         end
       end
-    end,
-    fun.filter(function(_, r)
-      return r['type'] == 'meta'
-    end,
-    rules))
+    end
+  end,
+      fun.filter(function(_, r)
+        return r['type'] == 'meta'
+      end,
+          rules))
 
   -- ... And then indirect ones ...
   local nchanges
   repeat
-  nchanges = 0
+    nchanges = 0
     fun.each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
-        for _,a in ipairs(expr_atoms) do
+        for _, a in ipairs(expr_atoms) do
           if type(external_deps[a]) == 'table' then
             for dep in pairs(external_deps[a]) do
               if not external_deps[k] then
@@ -1629,16 +1659,16 @@ local function post_process()
                 rspamd_config:register_dependency(k, dep)
                 external_deps[k][dep] = true
                 lua_util.debugm(N, rspamd_config,
-                  'atom %1 is an indirect foreign dependency, ' ..
-                  'register dependency for %2 on %3',
-                  a, k, dep)
-                  nchanges = nchanges + 1
+                    'atom %1 is an indirect foreign dependency, ' ..
+                        'register dependency for %2 on %3',
+                    a, k, dep)
+                nchanges = nchanges + 1
               end
             end
           else
             local rspamd_symbol, replaced_symbol = replace_symbol(a)
             if replaced_symbol then
-              external_deps[a] = {[rspamd_symbol] = true}
+              external_deps[a] = { [rspamd_symbol] = true }
             else
               external_deps[a] = {}
             end
@@ -1646,18 +1676,18 @@ local function post_process()
         end
       end
     end,
-    fun.filter(function(_, r)
-      return r['type'] == 'meta'
-    end,
-    rules))
+        fun.filter(function(_, r)
+          return r['type'] == 'meta'
+        end,
+            rules))
   until nchanges == 0
 
   -- Set missing symbols
   fun.each(function(key, score)
     if not scores_added[key] then
       rspamd_config:set_metric_symbol({
-            name = key, score = score,
-            priority = 2, flags = 'ignore'})
+        name = key, score = score,
+        priority = 2, flags = 'ignore' })
     end
   end, scores)
 
@@ -1665,7 +1695,7 @@ local function post_process()
   if freemail_domains then
     freemail_trie = rspamd_trie.create(freemail_domains)
     rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
-      #freemail_domains)
+        #freemail_domains)
   end
   rspamd_logger.infox(rspamd_config, 'loaded %1 blacklist/whitelist elements',
       sa_lists['elts'])
@@ -1675,10 +1705,18 @@ local has_rules = false
 
 if type(section) == "table" then
   local keywords = {
-    pcre_only = {'table', function(v) pcre_only_regexps = lua_util.list_to_hash(v) end},
-    alpha = {'number', function(v) meta_score_alpha = tonumber(v) end},
-    match_limit = {'number', function(v) match_limit = tonumber(v) end},
-    scores_priority = {'number', function(v) scores_priority = tonumber(v) end},
+    pcre_only = { 'table', function(v)
+      pcre_only_regexps = lua_util.list_to_hash(v)
+    end },
+    alpha = { 'number', function(v)
+      meta_score_alpha = tonumber(v)
+    end },
+    match_limit = { 'number', function(v)
+      match_limit = tonumber(v)
+    end },
+    scores_priority = { 'number', function(v)
+      scores_priority = tonumber(v)
+    end },
   }
 
   for k, fn in pairs(section) do
@@ -1694,7 +1732,7 @@ if type(section) == "table" then
           if not files or #files == 0 then
             rspamd_logger.errx(rspamd_config, "cannot find any files matching pattern %s", elt)
           else
-            for _,matched in ipairs(files) do
+            for _, matched in ipairs(files) do
               local f = io.open(matched, "r")
               if f then
                 rspamd_logger.infox(rspamd_config, 'loading SA rules from %s', matched)
@@ -1713,7 +1751,7 @@ if type(section) == "table" then
         if not files or #files == 0 then
           rspamd_logger.errx(rspamd_config, "cannot find any files matching pattern %s", fn)
         else
-          for _,matched in ipairs(files) do
+          for _, matched in ipairs(files) do
             local f = io.open(matched, "r")
             if f then
               rspamd_logger.infox(rspamd_config, 'loading SA rules from %s', matched)

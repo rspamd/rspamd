@@ -31,17 +31,17 @@ parser:option '-c --config'
       :default(rspamd_paths['CONFDIR'] .. '/rspamd.conf')
 
 parser:command 'compile'
-    :description 'Compile publicsuffix list if needed'
+      :description 'Compile publicsuffix list if needed'
 
 local function load_config(config_file)
-  local _r,err = rspamd_config:load_ucl(config_file)
+  local _r, err = rspamd_config:load_ucl(config_file)
 
   if not _r then
     rspamd_logger.errx('cannot load %s: %s', config_file, err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', config_file, err)
     os.exit(1)
@@ -66,7 +66,6 @@ local function handler(args)
   local cmd_opts = parser:parse(args)
 
   load_config(cmd_opts.config_file)
-
 
   if cmd_opts.command == 'compile' then
     compile_handler(cmd_opts)

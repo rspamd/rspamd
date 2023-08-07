@@ -16,7 +16,7 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
-require "global_functions" ()
+require "global_functions"()
 
 config['regexp'] = {}
 rspamd_maps = {} -- Global maps
@@ -53,11 +53,13 @@ if rspamd_util.file_exists(local_conf .. '/local.d/rspamd.lua') then
   dofile(local_conf .. '/local.d/rspamd.lua')
 end
 
-local rmaps =  rspamd_config:get_all_opt("lua_maps")
+local rmaps = rspamd_config:get_all_opt("lua_maps")
 if rmaps and type(rmaps) == 'table' then
   local rspamd_logger = require "rspamd_logger"
-  for k,v in pairs(rmaps) do
-    local status,map_or_err = pcall(function () return rspamd_config:add_map(v) end)
+  for k, v in pairs(rmaps) do
+    local status, map_or_err = pcall(function()
+      return rspamd_config:add_map(v)
+    end)
 
     if not status then
       rspamd_logger.errx(rspamd_config, "cannot add map %s: %s", k, map_or_err)

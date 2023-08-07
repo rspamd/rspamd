@@ -48,7 +48,6 @@ local openphish_hash
 local generic_service_data = {}
 local openphish_data = {}
 
-
 local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
@@ -70,7 +69,7 @@ local function phishing_cb(task)
         local query = url:get_query()
 
         if path then
-          for _,d in ipairs(elt) do
+          for _, d in ipairs(elt) do
             if d['path'] == path then
               found_path = true
               data = d['data']
@@ -83,7 +82,7 @@ local function phishing_cb(task)
             end
           end
         else
-          for _,d in ipairs(elt) do
+          for _, d in ipairs(elt) do
             if not d['path'] then
               found_path = true
             end
@@ -135,7 +134,9 @@ local function phishing_cb(task)
     local function compose_dns_query(elts)
       local cr = require "rspamd_cryptobox_hash"
       local h = cr.create()
-      for _,elt in ipairs(elts) do h:update(elt) end
+      for _, elt in ipairs(elts) do
+        h:update(elt)
+      end
       return string.format("%s.%s", h:base32():sub(1, 32), dns_suffix)
     end
     local r = task:get_resolver()
@@ -154,14 +155,13 @@ local function phishing_cb(task)
         end
       end
 
-      local to_resolve_hp = compose_dns_query({host, path})
+      local to_resolve_hp = compose_dns_query({ host, path })
       rspamd_logger.debugm(N, task, 'try to resolve {%s, %s} -> %s',
           host, path, to_resolve_hp)
       r:resolve_txt({
         task = task,
         name = to_resolve_hp,
-        callback = host_host_path_cb})
-
+        callback = host_host_path_cb })
 
       if query then
         local function host_host_path_query_cb(_, _, results, err)
@@ -170,13 +170,13 @@ local function phishing_cb(task)
           end
         end
 
-        local to_resolve_hpq = compose_dns_query({host, path, query})
+        local to_resolve_hpq = compose_dns_query({ host, path, query })
         rspamd_logger.debugm(N, task, 'try to resolve {%s, %s, %s} -> %s',
             host, path, query, to_resolve_hpq)
         r:resolve_txt({
           task = task,
           name = to_resolve_hpq,
-          callback = host_host_path_query_cb})
+          callback = host_host_path_query_cb })
       end
 
     end
@@ -193,8 +193,9 @@ local function phishing_cb(task)
   end
 
   local urls = task:get_urls() or {}
-  for _,url_iter in ipairs(urls) do
-    local function do_loop_iter() -- to emulate continue
+  for _, url_iter in ipairs(urls) do
+    local function do_loop_iter()
+      -- to emulate continue
       local url = url_iter
       if generic_service_hash then
         check_phishing_map(generic_service_data, url, generic_service_symbol)
@@ -225,7 +226,6 @@ local function phishing_cb(task)
           purl = url:get_phished()
         end
 
-
         if not purl then
           return
         end
@@ -239,15 +239,15 @@ local function phishing_cb(task)
 
         if dmarc_dom and tld == dmarc_dom then
           lua_util.debugm(N, 'exclude phishing from %s -> %s by dmarc domain', tld,
-                  ptld)
+              ptld)
           return
         end
 
         -- Now we can safely remove the last dot component if it is the same
-        local b,_ = string.find(tld, '%.[^%.]+$')
-        local b1,_ = string.find(ptld, '%.[^%.]+$')
+        local b, _ = string.find(tld, '%.[^%.]+$')
+        local b1, _ = string.find(ptld, '%.[^%.]+$')
 
-        local stripped_tld,stripped_ptld = tld, ptld
+        local stripped_tld, stripped_ptld = tld, ptld
         if b1 and b then
           if string.sub(tld, b) == string.sub(ptld, b1) then
             stripped_ptld = string.gsub(ptld, '%.[^%.]+$', '')
@@ -260,7 +260,7 @@ local function phishing_cb(task)
         end
 
         local weight = 1.0
-        local spoofed,why = util.is_utf_spoofed(tld, ptld)
+        local spoofed, why = util.is_utf_spoofed(tld, ptld)
         if spoofed then
           lua_util.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
           weight = 1.0
@@ -273,15 +273,19 @@ local function phishing_cb(task)
             weight = util.tanh(3 * (1 - dist + 0.1))
           elseif dist > 1 then
             -- We also check if two labels are in the same ascii/non-ascii representation
-            local a1, a2 = false,false
+            local a1, a2 = false, false
 
-            if string.match(tld, '^[\001-\127]*$') then a1 = true end
-            if string.match(ptld, '^[\001-\127]*$') then a2 = true end
+            if string.match(tld, '^[\001-\127]*$') then
+              a1 = true
+            end
+            if string.match(ptld, '^[\001-\127]*$') then
+              a2 = true
+            end
 
             if a1 ~= a2 then
               weight = 1
               lua_util.debugm(N, task, "confusable: %1 -> %2: different characters",
-                      tld, ptld, why)
+                  tld, ptld, why)
             else
               -- We have totally different strings in tld, so penalize it somehow
               weight = 0.5
@@ -292,20 +296,24 @@ local function phishing_cb(task)
         end
 
         local function is_url_in_map(map, furl)
-          for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
+          for _, dn in ipairs({ furl:get_tld(), furl:get_host() }) do
             if map:get_key(dn) then
-              return true,dn
+              return true, dn
             end
           end
 
           return false
         end
         local function found_in_map(map, furl, sweight)
-          if not furl then furl = url end
-          if not sweight then sweight = weight end
+          if not furl then
+            furl = url
+          end
+          if not sweight then
+            sweight = weight
+          end
           if #map > 0 then
-            for _,rule in ipairs(map) do
-              local found,dn = is_url_in_map(rule.map, furl)
+            for _, rule in ipairs(map) do
+              local found, dn = is_url_in_map(rule.map, furl)
               if found then
                 task:insert_result(rule.symbol, sweight, string.format("%s->%s:%s", ptld, tld, dn))
                 return true
@@ -342,13 +350,12 @@ local function phishing_map(mapname, phishmap, id)
       rspamd_logger.errx(rspamd_config, 'invalid exception table')
     end
 
-
-    for sym,map_data in pairs(xd) do
-      local rmap = lua_maps.map_add_from_ucl (map_data, 'set',
-              'Phishing ' .. mapname .. ' map')
+    for sym, map_data in pairs(xd) do
+      local rmap = lua_maps.map_add_from_ucl(map_data, 'set',
+          'Phishing ' .. mapname .. ' map')
       if rmap then
         rspamd_config:register_virtual_symbol(sym, 1, id)
-        local rule = {symbol = sym, map = rmap}
+        local rule = { symbol = sym, map = rmap }
         table.insert(phishmap, rule)
       else
         rspamd_logger.infox(rspamd_config, 'cannot add map for symbol: %s', sym)
@@ -360,8 +367,8 @@ end
 local function rspamd_str_split_fun(s, sep, func)
   local lpeg = require "lpeg"
   sep = lpeg.P(sep)
-  local elem = lpeg.P((1 - sep)^0 / func)
-  local p = lpeg.P(elem * (sep * elem)^0)
+  local elem = lpeg.P((1 - sep) ^ 0 / func)
+  local p = lpeg.P(elem * (sep * elem) ^ 0)
   return p:match(s)
 end
 
@@ -382,7 +389,7 @@ local function insert_url_from_string(pool, tbl, str, data)
       if tbl[host] then
         table.insert(tbl[host], elt)
       else
-        tbl[host] = {elt}
+        tbl[host] = { elt }
       end
 
       return true
@@ -408,7 +415,7 @@ local function generic_service_plain_cb(string)
 
   generic_service_data = new_data
   rspamd_logger.infox(generic_service_hash, "parsed %s elements from %s feed",
-    nelts, generic_service_name)
+      nelts, generic_service_name)
   pool:destroy()
 end
 
@@ -424,7 +431,7 @@ local function openphish_json_cb(string)
   local function openphish_elt_parser(cap)
     if valid then
       local parser = ucl.parser()
-      local res,err = parser:parse_string(cap)
+      local res, err = parser:parse_string(cap)
       if not res then
         valid = false
         rspamd_logger.warnx(openphish_hash, 'cannot parse openphish map: ' .. err)
@@ -445,7 +452,7 @@ local function openphish_json_cb(string)
   if valid then
     openphish_data = new_json_map
     rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
-      nelts)
+        nelts)
   end
 
   pool:destroy()
@@ -467,7 +474,7 @@ local function openphish_plain_cb(s)
 
   openphish_data = new_data
   rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
-    nelts)
+      nelts)
   pool:destroy()
 end
 
@@ -499,11 +506,11 @@ if opts then
 
     if opts['generic_service_enabled'] then
       generic_service_hash = rspamd_config:add_map({
-          type = 'callback',
-          url = generic_service_map,
-          callback = generic_service_plain_cb,
-          description = 'Generic feed'
-        })
+        type = 'callback',
+        url = generic_service_map,
+        callback = generic_service_plain_cb,
+        description = 'Generic feed'
+      })
     end
 
     if opts['openphish_map'] then
@@ -528,12 +535,12 @@ if opts then
         })
       else
         openphish_hash = rspamd_config:add_map({
-            type = 'callback',
-            url = openphish_map,
-            callback = openphish_json_cb,
-            opaque_data = true,
-            description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
-          })
+          type = 'callback',
+          url = openphish_map,
+          callback = openphish_json_cb,
+          opaque_data = true,
+          description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
+        })
       end
     end
 
@@ -564,7 +571,7 @@ if opts then
   end
   if opts['domains'] and type(opts['domains']) == 'string' then
     domains = lua_maps.map_add_from_ucl(opts['domains'], 'set',
-            'Phishing domains')
+        'Phishing domains')
   end
   phishing_map('phishing_exceptions', phishing_exceptions_maps, id)
   phishing_map('exceptions', anchor_exceptions_maps, id)

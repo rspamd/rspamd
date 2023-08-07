@@ -39,8 +39,8 @@ local function process_url(self, log_obj, url_tld, url_host)
     lua_util.debugm(N, log_obj, 'found compose tld for %s (host = %s)',
         url_tld, url_host)
 
-    for _,excl in ipairs(tld_elt.except_rules) do
-      local matched,ret = excl[2](url_tld, url_host)
+    for _, excl in ipairs(tld_elt.except_rules) do
+      local matched, ret = excl[2](url_tld, url_host)
       if matched then
         lua_util.debugm(N, log_obj, 'found compose exclusion for %s (%s) -> %s',
             url_host, excl[1], ret)
@@ -55,7 +55,7 @@ local function process_url(self, log_obj, url_tld, url_host)
       if matches then
         local lua_pat_idx = math.huge
 
-        for m,_ in pairs(matches) do
+        for m, _ in pairs(matches) do
           if m < lua_pat_idx then
             lua_pat_idx = m
           end
@@ -63,7 +63,7 @@ local function process_url(self, log_obj, url_tld, url_host)
 
         if #tld_elt.compose_rules >= lua_pat_idx then
           local lua_pat = tld_elt.compose_rules[lua_pat_idx]
-          local matched,ret = lua_pat[2](url_tld, url_host)
+          local matched, ret = lua_pat[2](url_tld, url_host)
 
           if not matched then
             lua_util.debugm(N, log_obj, 'NOT found compose inclusion for %s (%s) -> %s',
@@ -85,8 +85,8 @@ local function process_url(self, log_obj, url_tld, url_host)
       end
     else
       -- Match one by one
-      for _,lua_pat in ipairs(tld_elt.compose_rules) do
-        local matched,ret = lua_pat[2](url_tld, url_host)
+      for _, lua_pat in ipairs(tld_elt.compose_rules) do
+        local matched, ret = lua_pat[2](url_tld, url_host)
         if matched then
           lua_util.debugm(N, log_obj, 'found compose inclusion for %s (%s) -> %s',
               url_host, lua_pat[1], ret)
@@ -128,7 +128,7 @@ local function include_elt_gen(pat)
   return function(_, host)
     local matches = pat:search(host, false, true)
     if matches then
-      return true,matches[1][2]
+      return true, matches[1][2]
     end
 
     return false
@@ -139,7 +139,7 @@ local function exclude_elt_gen(pat)
   pat = rspamd_regexp.create(tld_pattern_transform(pat))
   return function(tld, host)
     if pat:search(host) then
-      return true,tld
+      return true, tld
     end
 
     return false
@@ -150,22 +150,26 @@ local function compose_map_cb(self, map_text)
   local lpeg = require "lpeg"
 
   local singleline_comment = lpeg.P '#' * (1 - lpeg.S '\r\n\f') ^ 0
-  local comments_strip_grammar = lpeg.C((1 - lpeg.P '#') ^ 1) * lpeg.S(' \t')^0 * singleline_comment^0
+  local comments_strip_grammar = lpeg.C((1 - lpeg.P '#') ^ 1) * lpeg.S(' \t') ^ 0 * singleline_comment ^ 0
 
   local function process_tld_rule(tld_elt, l)
     if l:sub(1, 1) == '!' then
       -- Exclusion elt
-      table.insert(tld_elt.except_rules, {l, exclude_elt_gen(l:sub(2))})
+      table.insert(tld_elt.except_rules, { l, exclude_elt_gen(l:sub(2)) })
     else
-      table.insert(tld_elt.compose_rules, {l, include_elt_gen(l)})
+      table.insert(tld_elt.compose_rules, { l, include_elt_gen(l) })
     end
   end
 
   local function process_map_line(l)
     -- Skip empty lines and comments
-    if #l == 0 then return end
+    if #l == 0 then
+      return
+    end
     l = comments_strip_grammar:match(l)
-    if not l or #l == 0 then return end
+    if not l or #l == 0 then
+      return
+    end
 
     -- Get TLD
     local tld = rspamd_util.get_tld(l)
@@ -195,12 +199,12 @@ local function compose_map_cb(self, map_text)
   end
 
   local multipattern_threshold = 1
-  for tld,tld_elt in pairs(self.tlds) do
+  for tld, tld_elt in pairs(self.tlds) do
     -- Sort patterns to have longest labels before shortest ones,
     -- so we can ensure that they match before
     table.sort(tld_elt.compose_rules, function(e1, e2)
-      local _,ndots1 = string.gsub(e1[1], '(%.)', '')
-      local _,ndots2 = string.gsub(e2[1], '(%.)', '')
+      local _, ndots1 = string.gsub(e1[1], '(%.)', '')
+      local _, ndots2 = string.gsub(e2[1], '(%.)', '')
 
       return ndots1 > ndots2
     end)
@@ -237,11 +241,13 @@ exports.add_composition_map = function(cfg, map_obj)
       tlds = {},
     }
 
-    map = cfg:add_map{
+    map = cfg:add_map {
       type = 'callback',
       description = 'URL compose map',
       url = map_obj,
-      callback = function(input) compose_map_cb(ret, input) end,
+      callback = function(input)
+        compose_map_cb(ret, input)
+      end,
       opaque_data = true,
     }
 

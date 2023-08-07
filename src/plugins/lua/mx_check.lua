@@ -80,7 +80,9 @@ local function mx_check(task)
   local valid = false
 
   local function check_results(mxes)
-    if fun.all(function(_, elt) return elt.checked end, mxes) then
+    if fun.all(function(_, elt)
+      return elt.checked
+    end, mxes) then
       -- Save cache
       local key = settings.key_prefix .. mx_domain
       local function redis_cache_cb(err)
@@ -99,12 +101,12 @@ local function mx_check(task)
           task:insert_result(settings.symbol_bad_mx, 1.0)
         end
         local ret = rspamd_redis_make_request(task,
-          redis_params, -- connect params
-          key, -- hash key
-          true, -- is write
-          redis_cache_cb, --callback
-          'SETEX', -- command
-          {key, tostring(settings.expire_novalid), '0'} -- arguments
+            redis_params, -- connect params
+            key, -- hash key
+            true, -- is write
+            redis_cache_cb, --callback
+            'SETEX', -- command
+            { key, tostring(settings.expire_novalid), '0' } -- arguments
         )
         lua_util.debugm(N, task, "set redis cache key: %s; invalid MX", key)
         if not ret then
@@ -114,19 +116,21 @@ local function mx_check(task)
         local valid_mx = {}
         fun.each(function(k)
           table.insert(valid_mx, k)
-        end, fun.filter(function (_, elt) return elt.working end, mxes))
+        end, fun.filter(function(_, elt)
+          return elt.working
+        end, mxes))
         task:insert_result(settings.symbol_good_mx, 1.0, valid_mx)
-        local value =  table.concat(valid_mx, ';')
+        local value = table.concat(valid_mx, ';')
         if mxes[mx_domain] and type(mxes[mx_domain]) == 'table' and mxes[mx_domain].mx_missing then
           value = mx_miss_cache_prefix .. value
         end
         local ret = rspamd_redis_make_request(task,
-          redis_params, -- connect params
-          key, -- hash key
-          true, -- is write
-          redis_cache_cb, --callback
-          'SETEX', -- command
-          {key, tostring(settings.expire), value} -- arguments
+            redis_params, -- connect params
+            key, -- hash key
+            true, -- is write
+            redis_cache_cb, --callback
+            'SETEX', -- command
+            { key, tostring(settings.expire), value } -- arguments
         )
         lua_util.debugm(N, task, "set redis cache key: %s; %s", key, value)
         if not ret then
@@ -230,11 +234,11 @@ local function mx_check(task)
       end)
 
       local max_mx_to_resolve = math.min(#results, settings.max_mx_a_records)
-      lua_util.debugm(N, task,'check %s MX records (%d actually returned)',
+      lua_util.debugm(N, task, 'check %s MX records (%d actually returned)',
           max_mx_to_resolve, #results)
-      for i=1,max_mx_to_resolve do
+      for i = 1, max_mx_to_resolve do
         local mx = results[i]
-        mxes[mx.name] = {checked = false, working = false, ips = {}}
+        mxes[mx.name] = { checked = false, working = false, ips = {} }
         local r = task:get_resolver()
         -- XXX: maybe add ipv6?
         r:resolve('a', {
@@ -282,12 +286,12 @@ local function mx_check(task)
 
     local key = settings.key_prefix .. mx_domain
     local ret = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      key, -- hash key
-      false, -- is write
-      redis_cache_get_cb, --callback
-      'GET', -- command
-      {key} -- arguments
+        redis_params, -- connect params
+        key, -- hash key
+        false, -- is write
+        redis_cache_get_cb, --callback
+        'GET', -- command
+        { key } -- arguments
     )
 
     if not ret then
@@ -327,7 +331,7 @@ if opts then
     type = 'normal',
     callback = mx_check,
     flags = 'empty',
-    augmentations = {string.format("timeout=%f", settings.timeout + rspamd_config:get_dns_timeout() or 0.0)},
+    augmentations = { string.format("timeout=%f", settings.timeout + rspamd_config:get_dns_timeout() or 0.0) },
   })
   rspamd_config:register_symbol({
     name = settings.symbol_no_mx,
@@ -379,7 +383,7 @@ if opts then
   })
 
   if settings.exclude_domains then
-    exclude_domains = rspamd_config:add_map{
+    exclude_domains = rspamd_config:add_map {
       type = 'set',
       description = 'Exclude specific domains from MX checks',
       url = settings.exclude_domains,

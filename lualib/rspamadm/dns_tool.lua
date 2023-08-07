@@ -33,7 +33,7 @@ parser:option "-c --config"
       :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
 
 local spf = parser:command "spf"
-                      :description "Extracts spf records"
+                  :description "Extracts spf records"
 spf:mutex(
     spf:option "-d --domain"
        :description "Domain to use"
@@ -69,14 +69,14 @@ local function red(str)
 end
 
 local function load_config(opts)
-  local _r,err = rspamd_config:load_ucl(opts['config'])
+  local _r, err = rspamd_config:load_ucl(opts['config'])
 
   if not _r then
     rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
     os.exit(1)
   end
 
-  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  _r, err = rspamd_config:parse_rcl({ 'logging', 'worker' })
   if not _r then
     rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
     os.exit(1)
@@ -109,7 +109,7 @@ local function spf_handler(opts)
       os.exit(1)
     end
   elseif opts.domain then
-    task:set_from('smtp', {user = 'user', domain = opts.domain})
+    task:set_from('smtp', { user = 'user', domain = opts.domain })
   else
     io.stderr:write('Neither domain nor from specified\n')
     os.exit(1)
@@ -128,7 +128,9 @@ local function spf_handler(opts)
   end
 
   local function display_spf_results(elt, colored)
-    local dec = function(e) return e end
+    local dec = function(e)
+      return e
+    end
     local policy_decode = function(e)
       if e == rspamd_spf.policy.fail then
         return 'reject'
@@ -144,12 +146,18 @@ local function spf_handler(opts)
     end
 
     if colored then
-      dec = function(e) return highlight(e) end
+      dec = function(e)
+        return highlight(e)
+      end
 
-      if elt.result == rspamd_spf.policy.pass  then
-        dec = function(e) return green(e) end
-      elseif elt.result  == rspamd_spf.policy.fail then
-        dec = function(e) return red(e) end
+      if elt.result == rspamd_spf.policy.pass then
+        dec = function(e)
+          return green(e)
+        end
+      elseif elt.result == rspamd_spf.policy.fail then
+        dec = function(e)
+          return red(e)
+        end
       end
 
     end
@@ -182,7 +190,7 @@ local function spf_handler(opts)
       if result then
         printf('SPF record for %s; digest: %s',
             highlight(opts.domain or opts.from), highlight(record:get_digest()))
-        for _,elt in ipairs(record:get_elts()) do
+        for _, elt in ipairs(record:get_elts()) do
           if result and error_or_addr and elt.str and elt.str == error_or_addr.str then
             printf("%s", highlight('*** Matched ***'))
             display_spf_results(elt, true)
@@ -218,7 +226,7 @@ end
 
 return {
   name = 'dnstool',
-  aliases = {'dns', 'dns_tool'},
+  aliases = { 'dns', 'dns_tool' },
   handler = handler,
   description = parser._description
 }

@@ -18,14 +18,14 @@ parser:flag "-n --number"
 parser:option "--sort"
       :description "Sort order"
       :convert {
-        checked = "checked",
-        matched = "matched",
-        errors = "errors",
-        name = "name"
-      }
+  checked = "checked",
+  matched = "matched",
+  errors = "errors",
+  name = "name"
+}
 
 local function add_data(target, src)
-  for k,v in pairs(src) do
+  for k, v in pairs(src) do
     if type(v) == 'number' then
       if target[k] then
         target[k] = target[k] + v
@@ -33,17 +33,25 @@ local function add_data(target, src)
         target[k] = v
       end
     elseif k == 'ips' then
-      if not target['ips'] then target['ips'] = {} end
+      if not target['ips'] then
+        target['ips'] = {}
+      end
       -- Iterate over IPs
-      for ip,st in pairs(v) do
-        if not target['ips'][ip] then target['ips'][ip] = {} end
+      for ip, st in pairs(v) do
+        if not target['ips'][ip] then
+          target['ips'][ip] = {}
+        end
         add_data(target['ips'][ip], st)
       end
     elseif k == 'flags' then
-      if not target['flags'] then target['flags'] = {} end
+      if not target['flags'] then
+        target['flags'] = {}
+      end
       -- Iterate over Flags
-      for flag,st in pairs(v) do
-        if not target['flags'][flag] then target['flags'][flag] = {} end
+      for flag, st in pairs(v) do
+        if not target['flags'][flag] then
+          target['flags'][flag] = {}
+        end
         add_data(target['flags'][flag], st)
       end
     elseif k == 'keypair' then
@@ -109,8 +117,8 @@ end
 -- Sort by checked
 local function sort_hash_table(tbl, sort_opts, key_key)
   local res = {}
-  for k,v in pairs(tbl) do
-    table.insert(res, {[key_key] = k, data = v})
+  for k, v in pairs(tbl) do
+    table.insert(res, { [key_key] = k, data = v })
   end
 
   local function sort_order(elt)
@@ -145,12 +153,12 @@ local function add_result(dst, src, k)
   if type(src) == 'table' then
     if type(dst) == 'number' then
       -- Convert dst to table
-      dst = {dst}
+      dst = { dst }
     elseif type(dst) == 'nil' then
       dst = {}
     end
 
-    for i,v in ipairs(src) do
+    for i, v in ipairs(src) do
       if dst[i] and k ~= 'fuzzy_stored' then
         dst[i] = dst[i] + v
       else
@@ -193,7 +201,7 @@ local function print_result(r)
   end
   if type(r) == 'table' then
     local res = {}
-    for i,num in ipairs(r) do
+    for i, num in ipairs(r) do
       res[i] = string.format('(%s: %s)', num_to_epoch(i), print_num(num))
     end
 
@@ -210,7 +218,7 @@ return function(args, res)
   opts = parser:parse(args)
 
   if wrk then
-    for _,pr in pairs(wrk) do
+    for _, pr in pairs(wrk) do
       -- processes cycle
       if pr['data'] then
         local id = pr['id']
@@ -225,7 +233,7 @@ return function(args, res)
           end
 
           -- General stats
-          for k,v in pairs(pr['data']) do
+          for k, v in pairs(pr['data']) do
             if k ~= 'keys' and k ~= 'errors_ips' then
               res_db[k] = add_result(res_db[k], v, k)
             elseif k == 'errors_ips' then
@@ -233,7 +241,7 @@ return function(args, res)
               if not res_db['errors_ips'] then
                 res_db['errors_ips'] = {}
               end
-              for ip,nerrors in pairs(v) do
+              for ip, nerrors in pairs(v) do
                 if not res_db['errors_ips'][ip] then
                   res_db['errors_ips'][ip] = nerrors
                 else
@@ -250,7 +258,7 @@ return function(args, res)
               res_db['keys'] = res_keys
             end
             -- Go through keys in input
-            for k,elts in pairs(pr['data']['keys']) do
+            for k, elts in pairs(pr['data']['keys']) do
               -- keys cycle
               if not res_keys[k] then
                 res_keys[k] = {}
@@ -259,7 +267,7 @@ return function(args, res)
               add_data(res_keys[k], elts)
 
               if elts['ips'] then
-                for ip,v in pairs(elts['ips']) do
+                for ip, v in pairs(elts['ips']) do
                   if not res_ips[ip] then
                     res_ips[ip] = {}
                   end
@@ -274,10 +282,10 @@ return function(args, res)
   end
 
   -- General stats
-  for db,st in pairs(res_databases) do
+  for db, st in pairs(res_databases) do
     print(string.format('Statistics for storage %s', db))
 
-    for k,v in pairs(st) do
+    for k, v in pairs(st) do
       if k ~= 'keys' and k ~= 'errors_ips' then
         print(string.format('%s: %s', k, print_result(v)))
       end
@@ -305,7 +313,7 @@ return function(args, res)
           print('\tIPs stat:')
           local sorted_ips = sort_hash_table(key_stat['ips'], opts, 'ip')
 
-          for _,v in ipairs(sorted_ips) do
+          for _, v in ipairs(sorted_ips) do
             print(string.format('\t%s', v['ip']))
             print_stat(v['data'], '\t\t')
             print('')
@@ -315,7 +323,7 @@ return function(args, res)
         if key_stat.flags then
           print('')
           print('\tFlags stat:')
-          for flag,v in pairs(key_stat.flags) do
+          for flag, v in pairs(key_stat.flags) do
             print(string.format('\t[%s]:', flag))
             -- Remove irrelevant fields
             v.checked = nil

@@ -26,36 +26,36 @@ local N = 'p0f'
 
 if confighelp then
   rspamd_config:add_example(nil, N,
-    'Detect remote OS via passive fingerprinting',
-    [[
-p0f {
-  # Enable module
-  enabled = true
+      'Detect remote OS via passive fingerprinting',
+      [[
+  p0f {
+    # Enable module
+    enabled = true
 
-  # Path to the unix socket that p0f listens on
-  socket = '/var/run/p0f.sock';
+    # Path to the unix socket that p0f listens on
+    socket = '/var/run/p0f.sock';
 
-  # Connection timeout
-  timeout = 5s;
+    # Connection timeout
+    timeout = 5s;
 
-  # If defined, insert symbol with lookup results
-  symbol = 'P0F';
+    # If defined, insert symbol with lookup results
+    symbol = 'P0F';
 
-  # Patterns to match against results returned by p0f
-  # Symbol will be yielded on OS string, link type or distance matches
-  patterns = {
-    WINDOWS = '^Windows.*';
-    #DSL = '^DSL$';
-    #DISTANCE10 = '^distance:10$';
+    # Patterns to match against results returned by p0f
+    # Symbol will be yielded on OS string, link type or distance matches
+    patterns = {
+      WINDOWS = '^Windows.*';
+      #DSL = '^DSL$';
+      #DISTANCE10 = '^distance:10$';
+    }
+
+    # Cache lifetime in seconds (default - 2 hours)
+    expire = 7200;
+
+    # Cache key prefix
+    prefix = 'p0f';
   }
-
-  # Cache lifetime in seconds (default - 2 hours)
-  expire = 7200;
-
-  # Cache key prefix
-  prefix = 'p0f';
-}
-]])
+  ]])
   return
 end
 
@@ -90,7 +90,7 @@ if rule then
     priority = lua_util.symbols_priorities.medium,
     flags = 'empty,nostat',
     group = N,
-    augmentations = {string.format("timeout=%f", rule.timeout or 0.0)},
+    augmentations = { string.format("timeout=%f", rule.timeout or 0.0) },
 
   })
 

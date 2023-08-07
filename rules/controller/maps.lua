@@ -26,7 +26,7 @@ local function maybe_fill_maps_cache()
     maps_cache = {}
     maps_aliases = {}
     local maps = rspamd_config:get_maps()
-    for _,m in ipairs(maps) do
+    for _, m in ipairs(maps) do
       -- We get the first url here and that's it
       local url = m:get_uri()
       if url ~= 'static' then
@@ -81,12 +81,12 @@ local function handle_query_map(_, conn, req_params)
   end
 
   local results = {}
-  for _,key in ipairs(keys_to_check) do
-    for uri,m in pairs(maps_cache) do
+  for _, key in ipairs(keys_to_check) do
+    for uri, m in pairs(maps_cache) do
       check_specific_map(key, uri, m, results, req_params.report_misses)
     end
   end
-  conn:send_ucl{
+  conn:send_ucl {
     success = (#results > 0),
     results = results
   }
@@ -106,7 +106,7 @@ local function handle_query_specific_map(_, conn, req_params)
   if req_params.maps then
     local map_names = lua_util.str_split(req_params.maps, ',')
     maps_to_check = {}
-    for _,mn in ipairs(map_names) do
+    for _, mn in ipairs(map_names) do
       if maps_cache[mn] then
         maps_to_check[mn] = maps_cache[mn]
       else
@@ -122,13 +122,13 @@ local function handle_query_specific_map(_, conn, req_params)
   end
 
   local results = {}
-  for _,key in ipairs(keys_to_check) do
-    for uri,m in pairs(maps_to_check) do
+  for _, key in ipairs(keys_to_check) do
+    for uri, m in pairs(maps_to_check) do
       check_specific_map(key, uri, m, results, req_params.report_misses)
     end
   end
 
-  conn:send_ucl{
+  conn:send_ucl {
     success = (#results > 0),
     results = results
   }
@@ -136,13 +136,13 @@ end
 
 local function handle_list_maps(_, conn, _)
   maybe_fill_maps_cache()
-  conn:send_ucl{
+  conn:send_ucl {
     maps = lua_util.keys(maps_cache),
     aliases = maps_aliases
   }
 end
 
-local query_json_schema = ts.shape{
+local query_json_schema = ts.shape {
   maps = ts.array_of(ts.string):is_optional(),
   report_misses = ts.boolean:is_optional(),
   values = ts.array_of(ts.string),
@@ -170,7 +170,7 @@ local function handle_query_json(task, conn)
   local results = {}
 
   if obj.maps then
-    for _,mn in ipairs(obj.maps) do
+    for _, mn in ipairs(obj.maps) do
       if maps_cache[mn] then
         maps_to_check[mn] = maps_cache[mn]
       else
@@ -188,12 +188,12 @@ local function handle_query_json(task, conn)
     maps_to_check = maps_cache
   end
 
-  for _,key in ipairs(obj.values) do
-    for uri,m in pairs(maps_to_check) do
+  for _, key in ipairs(obj.values) do
+    for uri, m in pairs(maps_to_check) do
       check_specific_map(key, uri, m, results, report_misses)
     end
   end
-  conn:send_ucl{
+  conn:send_ucl {
     success = (#results > 0),
     results = results
   }

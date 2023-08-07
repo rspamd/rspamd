@@ -42,7 +42,9 @@ local function log_clean(task, rule, msg)
 end
 
 local function match_patterns(default_sym, found, patterns, dyn_weight)
-  if type(patterns) ~= 'table' then return default_sym, dyn_weight end
+  if type(patterns) ~= 'table' then
+    return default_sym, dyn_weight
+  end
   if not patterns[1] then
     for sym, pat in pairs(patterns) do
       if pat:match(found) then
@@ -71,7 +73,7 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
   local flags
 
   if type(vname) == 'string' then
-    threat_table = {vname}
+    threat_table = { vname }
   elseif type(vname) == 'table' then
     threat_table = vname
   end
@@ -82,7 +84,9 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     patterns = rule.patterns
     symbol = rule.symbol
     threat_info = rule.detection_category .. 'found'
-    if not dyn_weight then dyn_weight = 1.0 end
+    if not dyn_weight then
+      dyn_weight = 1.0
+    end
   elseif is_fail == 'fail' then
     patterns = rule.patterns_fail
     symbol = rule.symbol_fail
@@ -99,7 +103,6 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail, maybe_part)
     threat_info = "Scan has returned that input contains macros"
     dyn_weight = 1.0
   end
-
 
   for _, tm in ipairs(threat_table) do
     local symname, symscore = match_patterns(symbol, tm, patterns, dyn_weight)
@@ -136,7 +139,9 @@ end
 
 local function message_not_too_large(task, content, rule)
   local max_size = tonumber(rule.max_size)
-  if not max_size then return true end
+  if not max_size then
+    return true
+  end
   if #content > max_size then
     rspamd_logger.infox(task, "skip %s check as it is too large: %s (%s is allowed)",
         rule.log_prefix, #content, max_size)
@@ -147,7 +152,9 @@ end
 
 local function message_not_too_small(task, content, rule)
   local min_size = tonumber(rule.min_size)
-  if not min_size then return true end
+  if not min_size then
+    return true
+  end
   if #content < min_size then
     rspamd_logger.infox(task, "skip %s check as it is too small: %s (%s is allowed)",
         rule.log_prefix, #content, min_size)
@@ -171,7 +178,7 @@ local function message_min_words(task, rule)
 
     if not text_part_above_limit then
       rspamd_logger.infox(task, '%s: #words in all text parts is below text_part_min_words limit: %s',
-        rule.log_prefix, rule.text_part_min_words)
+          rule.log_prefix, rule.text_part_min_words)
     end
 
     return text_part_above_limit
@@ -192,7 +199,7 @@ local function dynamic_scan(task, rule)
       --  rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, "result is already reject")
       --  return false
       --elseif metric_result[1] > metric_result[2]*2 then
-      if metric_result[1] > metric_result[2]*2 then
+      if metric_result[1] > metric_result[2] * 2 then
         rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, 'score > 2 * reject_level: ' .. metric_result[1])
         return false
       elseif has_pre_result and metric_action == 'reject' then
@@ -236,7 +243,7 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
 
       else
         lua_util.debugm(rule.name, task, '%s: got cached negative result for %s: %s',
-          rule.log_prefix, key, threat_string[1])
+            rule.log_prefix, key, threat_string[1])
       end
       uncached = false
     else
@@ -251,10 +258,10 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
     local f_dynamic_scan = dynamic_scan(task, rule)
 
     if uncached and
-      f_message_not_too_large and
-      f_message_not_too_small and
-      f_message_min_words and
-      f_dynamic_scan then
+        f_message_not_too_large and
+        f_message_not_too_small and
+        f_message_min_words and
+        f_dynamic_scan then
 
       fn()
 
@@ -272,7 +279,7 @@ local function need_check(task, content, rule, digest, fn, maybe_part)
         false, -- is write
         redis_av_cb, --callback
         'GET', -- command
-        {key} -- arguments)
+        { key } -- arguments)
     ) then
       return true
     end
@@ -284,7 +291,9 @@ end
 
 local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
   local key = digest
-  if not dyn_weight then dyn_weight = 1.0 end
+  if not dyn_weight then
+    dyn_weight = 1.0
+  end
 
   local function redis_set_cb(err)
     -- Do nothing
@@ -293,7 +302,7 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
           rule.detection_category, to_save, key, err)
     else
       lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
-        rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
+          rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
     end
   end
 
@@ -301,7 +310,7 @@ local function save_cache(task, digest, rule, to_save, dyn_weight, maybe_part)
     to_save = table.concat(to_save, '\v')
   end
 
-  local value_tbl = {to_save, dyn_weight}
+  local value_tbl = { to_save, dyn_weight }
   if maybe_part and rule.show_attachments and maybe_part:get_filename() then
     local fname = maybe_part:get_filename()
     table.insert(value_tbl, fname)
@@ -381,24 +390,24 @@ local function gen_extension(fname)
 
   local ext = {}
   for n = 1, 2 do
-      ext[n] = #filename_parts > n and string.lower(filename_parts[#filename_parts + 1 - n]) or nil
+    ext[n] = #filename_parts > n and string.lower(filename_parts[#filename_parts + 1 - n]) or nil
   end
-  return ext[1],ext[2],filename_parts
+  return ext[1], ext[2], filename_parts
 end
 
 local function check_parts_match(task, rule)
 
   local filter_func = function(p)
-    local mtype,msubtype = p:get_type()
+    local mtype, msubtype = p:get_type()
     local detected_ext = p:get_detected_ext()
     local fname = p:get_filename()
     local ext, ext2
 
     if rule.scan_all_mime_parts == false then
-    -- check file extension and filename regex matching
+      -- check file extension and filename regex matching
       --lua_util.debugm(rule.name, task, '%s: filename: |%s|%s|', rule.log_prefix, fname)
       if fname ~= nil then
-        ext,ext2 = gen_extension(fname)
+        ext, ext2 = gen_extension(fname)
         --lua_util.debugm(rule.name, task, '%s: extension, fname: |%s|%s|%s|', rule.log_prefix, ext, ext2, fname)
         if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
             or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
@@ -433,8 +442,8 @@ local function check_parts_match(task, rule)
       if p:is_archive() then
         local arch = p:get_archive()
         local filelist = arch:get_files_full(1000)
-        for _,f in ipairs(filelist) do
-          ext,ext2 = gen_extension(f.name)
+        for _, f in ipairs(filelist) do
+          ext, ext2 = gen_extension(f.name)
           if match_filter(task, rule, ext, rule.mime_parts_filter_ext, 'ext')
               or match_filter(task, rule, ext2, rule.mime_parts_filter_ext, 'ext') then
             lua_util.debugm(rule.name, task, '%s: extension matched in archive: |%s|%s|', rule.log_prefix, ext, ext2)
@@ -488,7 +497,7 @@ local function check_metric_results(task, rule)
 
     if rule.symbol_type == 'postfilter' and metric_action == 'reject' then
       return true, 'result is already reject'
-    elseif metric_result[1] > metric_result[2]*2 then
+    elseif metric_result[1] > metric_result[2] * 2 then
       return true, 'score > 2 * reject_level: ' .. metric_result[1]
     elseif has_pre_result and metric_action == 'reject' then
       return true, 'pre_result reject is set'

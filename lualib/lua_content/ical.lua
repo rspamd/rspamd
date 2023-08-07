@@ -23,11 +23,15 @@ local ical_grammar
 local function gen_grammar()
   if not ical_grammar then
     local wsp = l.S(" \t\v\f")
-    local crlf = (l.P"\r"^-1 * l.P"\n") + l.P"\r"
-    local eol = (crlf * #crlf) + (crlf - (crlf^-1 * wsp))
-    local name = l.C((l.P(1) - (l.P":"))^1) / function(v) return (v:gsub("[\n\r]+%s","")) end
-    local value = l.C((l.P(1) - eol)^0) / function(v) return (v:gsub("[\n\r]+%s","")) end
-    ical_grammar = name * ":" * wsp^0 * value * eol^-1
+    local crlf = (l.P "\r" ^ -1 * l.P "\n") + l.P "\r"
+    local eol = (crlf * #crlf) + (crlf - (crlf ^ -1 * wsp))
+    local name = l.C((l.P(1) - (l.P ":")) ^ 1) / function(v)
+      return (v:gsub("[\n\r]+%s", ""))
+    end
+    local value = l.C((l.P(1) - eol) ^ 0) / function(v)
+      return (v:gsub("[\n\r]+%s", ""))
+    end
+    ical_grammar = name * ":" * wsp ^ 0 * value * eol ^ -1
   end
 
   return ical_grammar
@@ -38,13 +42,15 @@ local exports = {}
 local function extract_text_data(specific)
   local fun = require "fun"
 
-  local tbl = fun.totable(fun.map(function(e) return e[2]:lower() end, specific.elts))
+  local tbl = fun.totable(fun.map(function(e)
+    return e[2]:lower()
+  end, specific.elts))
   return table.concat(tbl, '\n')
 end
 
 
 -- Keys that can have visible urls
-local url_keys = lua_util.list_to_hash{
+local url_keys = lua_util.list_to_hash {
   'description',
   'location',
   'summary',
@@ -55,7 +61,7 @@ local url_keys = lua_util.list_to_hash{
 }
 
 local function process_ical(input, mpart, task)
-  local control={n='\n', r=''}
+  local control = { n = '\n', r = '' }
   local rspamd_url = require "rspamd_url"
   local escaper = l.Ct((gen_grammar() / function(key, value)
     value = value:gsub("\\(.)", control)
@@ -65,17 +71,17 @@ local function process_ical(input, mpart, task)
       local local_urls = rspamd_url.all(task:get_mempool(), value)
 
       if local_urls and #local_urls > 0 then
-        for _,u in ipairs(local_urls) do
+        for _, u in ipairs(local_urls) do
           lua_util.debugm(N, task, 'ical: found URL in ical key "%s": %s',
-                  key, tostring(u))
+              key, tostring(u))
           task:inject_url(u, mpart)
         end
       end
     end
     lua_util.debugm(N, task, 'ical: ical key %s = "%s"',
         key, value)
-    return {key, value}
-  end)^1)
+    return { key, value }
+  end) ^ 1)
 
   local elts = escaper:match(input)
 

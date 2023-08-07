@@ -85,17 +85,17 @@ local function vade_config(opts)
         score = 8.0,
         description = 'VadeSecure decided message to be phishing'
       },
-      commercial =  {
+      commercial = {
         symbol = 'VADE_COMMERCIAL',
         score = 0.0,
         description = 'VadeSecure decided message to be commercial message'
       },
-      community =  {
+      community = {
         symbol = 'VADE_COMMUNITY',
         score = 0.0,
         description = 'VadeSecure decided message to be community message'
       },
-      transactional =  {
+      transactional = {
         symbol = 'VADE_TRANSACTIONAL',
         score = 0.0,
         description = 'VadeSecure decided message to be transactional message'
@@ -250,9 +250,9 @@ local function vade_check(task, content, digest, rule, maybe_part)
 
           http.request(request_data)
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
               'exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and ' ..
               'retransmits exceed')
         end
       end
@@ -261,7 +261,9 @@ local function vade_check(task, content, digest, rule, maybe_part)
         vade_requery()
       else
         -- Parse the response
-        if upstream then upstream:ok() end
+        if upstream then
+          upstream:ok()
+        end
         if code ~= 200 then
           rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
@@ -341,7 +343,7 @@ local function vade_check(task, content, digest, rule, maybe_part)
 end
 
 return {
-  type = {'vadesecure', 'scanner'},
+  type = { 'vadesecure', 'scanner' },
   description = 'VadeSecure Filterd interface',
   configure = vade_config,
   check = vade_check,

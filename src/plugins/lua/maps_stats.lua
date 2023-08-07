@@ -66,7 +66,7 @@ local function process_map(map, ev_base, _)
               true, -- is write
               redis_zrange_cb, --callback
               'ZREMRANGEBYRANK', -- command
-              {key, '0', tostring(-(settings.count) - 1)} -- arguments
+              { key, '0', tostring(-(settings.count) - 1) } -- arguments
           )
         end
       end
@@ -78,14 +78,14 @@ local function process_map(map, ev_base, _)
         true, -- is write
         redis_card_cb, --callback
         'ZCARD', -- command
-        {key} -- arguments
+        { key } -- arguments
     )
 
     if ret and conn then
       local stats = map:get_stats(true)
-      for k,s in pairs(stats) do
+      for k, s in pairs(stats) do
         if s > 0 then
-          conn:add_cmd('ZINCRBY', {key, tostring(s), k})
+          conn:add_cmd('ZINCRBY', { key, tostring(s), k })
         end
       end
     end
@@ -99,7 +99,7 @@ end
 local opts = rspamd_config:get_all_opt(N)
 
 if opts then
-  for k,v in pairs(opts) do
+  for k, v in pairs(opts) do
     settings[k] = v
   end
 end
@@ -107,7 +107,7 @@ end
 redis_params = lua_redis.parse_redis_server(N, opts)
 -- XXX, this is a poor approach as not all maps are defined here...
 local tmaps = rspamd_config:get_maps()
-for _,m in ipairs(tmaps) do
+for _, m in ipairs(tmaps) do
   if m:get_uri() ~= 'static' then
     lua_redis.register_prefix(settings.prefix .. m:get_uri(), N,
         'Maps stats data', {
@@ -118,13 +118,13 @@ for _,m in ipairs(tmaps) do
 end
 
 if redis_params then
-  rspamd_config:add_on_load(function (_, ev_base, worker)
+  rspamd_config:add_on_load(function(_, ev_base, worker)
     local maps = rspamd_config:get_maps()
 
-    for _,m in ipairs(maps) do
+    for _, m in ipairs(maps) do
       rspamd_config:add_periodic(ev_base,
           settings['interval'],
-          function ()
+          function()
             process_map(m, ev_base, worker)
             return true
           end, true)

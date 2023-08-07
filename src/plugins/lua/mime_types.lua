@@ -224,10 +224,10 @@ local function check_mime_type(task)
 
     local ext = {}
     for n = 1, 2 do
-        ext[n] = #parts > n and string.lower(parts[#parts + 1 - n]) or nil
+      ext[n] = #parts > n and string.lower(parts[#parts + 1 - n]) or nil
     end
 
-    return ext[1],ext[2],parts
+    return ext[1], ext[2], parts
   end
 
   local function check_filename(fname, ct, is_archive, part, detected_ext, nfiles)
@@ -243,7 +243,9 @@ local function check_mime_type(task)
 
     -- Decode hex encoded characters
     fname = string.gsub(fname, '%%(%x%x)',
-        function (hex) return string.char(tonumber(hex,16)) end )
+        function(hex)
+          return string.char(tonumber(hex, 16))
+        end)
 
     -- Replace potentially bad characters with '?'
     fname = fname:gsub('[^%s%g]', '?')
@@ -256,7 +258,7 @@ local function check_mime_type(task)
       return
     end
 
-    local ext,ext2,parts = gen_extension(fname)
+    local ext, ext2, parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
 
@@ -272,10 +274,14 @@ local function check_mime_type(task)
           false, part, nil, 1)
     end
 
-    if not ext then return end
+    if not ext then
+      return
+    end
 
     local function check_extension(badness_mult, badness_mult2)
-      if not badness_mult and not badness_mult2 then return end
+      if not badness_mult and not badness_mult2 then
+        return
+      end
       if #parts > 2 then
         -- We need to ensure that next-to-last extension is an extension,
         -- so we check for its length and if it is not a number or date
@@ -317,7 +323,9 @@ local function check_mime_type(task)
         if user_settings.bad_extensions[1] then
           -- Convert to a key-value map
           extra_table = fun.tomap(
-              fun.map(function(e) return e,1.0 end,
+              fun.map(function(e)
+                return e, 1.0
+              end,
                   user_settings.bad_extensions))
         else
           extra_table = user_settings.bad_extensions
@@ -327,7 +335,9 @@ local function check_mime_type(task)
         if user_settings.bad_archive_extensions[1] then
           -- Convert to a key-value map
           extra_archive_table = fun.tomap(fun.map(
-              function(e) return e,1.0 end,
+              function(e)
+                return e, 1.0
+              end,
               user_settings.bad_archive_extensions))
         else
           extra_archive_table = user_settings.bad_archive_extensions
@@ -386,7 +396,7 @@ local function check_mime_type(task)
     if mt and ct and ct ~= 'application/octet-stream' then
       local found
       local mult
-      for _,v in ipairs(mt) do
+      for _, v in ipairs(mt) do
         mult = v.mult
         if ct == v.ct then
           found = true
@@ -404,8 +414,8 @@ local function check_mime_type(task)
   local parts = task:get_parts()
 
   if parts then
-    for _,p in ipairs(parts) do
-      local mtype,subtype = p:get_type()
+    for _, p in ipairs(parts) do
+      local mtype, subtype = p:get_type()
 
       if not mtype then
         lua_util.debugm(N, task, "no content type for part: %s", p:get_id())
@@ -476,7 +486,7 @@ local function check_mime_type(task)
 
             local nfiles = #fl
 
-            for _,f in ipairs(fl) do
+            for _, f in ipairs(fl) do
               if f['encrypted'] then
                 task:insert_result(settings['symbol_encrypted_archive'],
                     1.0, f['name'])
@@ -497,7 +507,7 @@ local function check_mime_type(task)
             if nfiles == 1 and fl[1].name then
               -- We check that extension of the file inside archive is
               -- the same as double extension of the file
-              local _,ext2 = gen_extension(filename)
+              local _, ext2 = gen_extension(filename)
 
               if ext2 and #ext2 > 0 then
                 local enc_ext = gen_extension(fl[1].name)
@@ -525,7 +535,9 @@ local function check_mime_type(task)
 
           if detected_type and detected_type.ct ~= ct then
             local v_detected = map:get_key(detected_type.ct)
-            if not v or v_detected and v_detected > v then v = v_detected end
+            if not v or v_detected and v_detected > v then
+              v = v_detected
+            end
             detected_different = true
           end
           if v then
@@ -567,19 +579,19 @@ local function check_mime_type(task)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('mime_types')
+local opts = rspamd_config:get_all_opt('mime_types')
 if opts then
-  for k,v in pairs(opts) do
+  for k, v in pairs(opts) do
     settings[k] = v
   end
 
   settings.filename_whitelist = lua_maps.rspamd_map_add('mime_types', 'filename_whitelist', 'regexp',
-    'filename whitelist')
+      'filename whitelist')
 
   local function change_extension_map_entry(ext, ct, mult)
     if type(ct) == 'table' then
       local tbl = {}
-      for _,elt in ipairs(ct) do
+      for _, elt in ipairs(ct) do
         table.insert(tbl, {
           ct = elt,
           mult = mult,
@@ -595,22 +607,24 @@ if opts then
   end
 
   -- Transform extension_map
-  for ext,ct in pairs(settings.extension_map) do
+  for ext, ct in pairs(settings.extension_map) do
     change_extension_map_entry(ext, ct, 1.0)
   end
 
   -- Add all extensions
-  for _,pair in ipairs(lua_mime_types.full_extensions_map) do
+  for _, pair in ipairs(lua_mime_types.full_extensions_map) do
     local ext, ct = pair[1], pair[2]
     if not settings.extension_map[ext] then
-        change_extension_map_entry(ext, ct, settings.other_extensions_mult)
+      change_extension_map_entry(ext, ct, settings.other_extensions_mult)
     end
   end
 
   local map_type = 'map'
-  if settings['regexp'] then map_type = 'regexp' end
+  if settings['regexp'] then
+    map_type = 'regexp'
+  end
   map = lua_maps.rspamd_map_add('mime_types', 'file', map_type,
-    'mime types map')
+      'mime types map')
   if map then
     local id = rspamd_config:register_symbol({
       name = 'MIME_TYPES_CALLBACK',

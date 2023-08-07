@@ -68,7 +68,7 @@ local function apply_settings(task, to_apply, id, name)
   end
 
   if to_apply.flags and type(to_apply.flags) == 'table' then
-    for _,fl in ipairs(to_apply.flags) do
+    for _, fl in ipairs(to_apply.flags) do
       task:set_flag(fl)
     end
   end
@@ -77,12 +77,12 @@ local function apply_settings(task, to_apply, id, name)
     -- Add symbols, specified in the settings
     if #to_apply.symbols > 0 then
       -- Array like symbols
-      for _,val in ipairs(to_apply.symbols) do
+      for _, val in ipairs(to_apply.symbols) do
         task:insert_result(val, 1.0)
       end
     else
       -- Object like symbols
-      for k,v in pairs(to_apply.symbols) do
+      for k, v in pairs(to_apply.symbols) do
         if type(v) == 'table' then
           task:insert_result(k, v.score or 1.0, v.options or {})
         elseif tonumber(v) then
@@ -120,7 +120,7 @@ local function check_query_settings(task)
   if query_set then
 
     local parser = ucl.parser()
-    local res,err = parser:parse_text(query_set)
+    local res, err = parser:parse_text(query_set)
     if res then
       if settings_id then
         rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
@@ -129,7 +129,7 @@ local function check_query_settings(task)
       local settings_obj = parser:get_object()
 
       -- Treat as low priority
-      return settings_obj,nil,1
+      return settings_obj, nil, 1
     else
       rspamd_logger.errx(task, 'Parse error: %s', err)
     end
@@ -141,8 +141,8 @@ local function check_query_settings(task)
   if query_maxscore then
     if settings_id then
       rspamd_logger.infox(task, "both settings id '%s' and maxscore '%s' headers are presented, merge them; " ..
-        "settings id has priority",
-        tostring(settings_id), tostring(query_maxscore))
+          "settings id has priority",
+          tostring(settings_id), tostring(query_maxscore))
     end
     -- We have score limits redefined by request
     local ms = tonumber(tostring(query_maxscore))
@@ -174,7 +174,7 @@ local function check_query_settings(task)
     if cached then
       local elt = cached.settings
       if elt['whitelist'] then
-        elt['apply'] = {whitelist = true}
+        elt['apply'] = { whitelist = true }
       end
 
       if elt.apply then
@@ -290,7 +290,9 @@ local function check_settings(task)
 
       if elt then
         local input = elt.extract(task)
-        if not input then return false end
+        if not input then
+          return false
+        end
 
         if elt.check(input) then
           matched[#matched + 1] = atom
@@ -307,7 +309,7 @@ local function check_settings(task)
 
     if res and res > 0 then
       if rule['whitelist'] then
-        rule['apply'] = {whitelist = true}
+        rule['apply'] = { whitelist = true }
       end
 
       return rule
@@ -317,7 +319,7 @@ local function check_settings(task)
   end
 
   -- Check if we have override as query argument
-  local query_apply,id_elt,priority = check_query_settings(task)
+  local query_apply, id_elt, priority = check_query_settings(task)
 
   local function maybe_apply_query_settings()
     if query_apply then
@@ -369,9 +371,9 @@ local function check_settings(task)
   -- Match rules according their order
   local applied = false
 
-  for pri = max_pri,min_pri,-1 do
+  for pri = max_pri, min_pri, -1 do
     if not applied and settings[pri] then
-      for _,s in ipairs(settings[pri]) do
+      for _, s in ipairs(settings[pri]) do
         local matched = {}
 
         local result = check_specific_setting(s.rule, matched)
@@ -434,18 +436,18 @@ end
 
 local function convert_to_table(chk_elt, out)
   if type(chk_elt) == 'string' then
-    return {out}
+    return { out }
   end
 
   return out
 end
 
 local function gen_settings_external_cb(name)
-  return function (result, err_or_data, code, task)
+  return function(result, err_or_data, code, task)
     if result then
       local parser = ucl.parser()
 
-      local res,ucl_err = parser:parse_text(err_or_data)
+      local res, ucl_err = parser:parse_text(err_or_data)
       if not res then
         rspamd_logger.warnx(task, 'cannot parse settings from the external map %s: %s',
             name, ucl_err)
@@ -467,7 +469,7 @@ local function process_ip_condition(ip)
   local out = {}
 
   if type(ip) == "table" then
-    for _,v in ipairs(ip) do
+    for _, v in ipairs(ip) do
       table.insert(out, process_ip_condition(v))
     end
   elseif type(ip) == "string" then
@@ -511,7 +513,7 @@ end
 local function process_email_condition(addr)
   local out = {}
   if type(addr) == "table" then
-    for _,v in ipairs(addr) do
+    for _, v in ipairs(addr) do
       table.insert(out, process_email_condition(v))
     end
   elseif type(addr) == "string" then
@@ -558,7 +560,7 @@ end
 local function process_string_condition(addr)
   local out = {}
   if type(addr) == "table" then
-    for _,v in ipairs(addr) do
+    for _, v in ipairs(addr) do
       table.insert(out, process_string_condition(v))
     end
   elseif type(addr) == "string" then
@@ -613,7 +615,9 @@ end
 -- Used to create a checking closure: if value matches expected somehow, return true
 local function gen_check_closure(expected, check_func)
   return function(value)
-    if not value then return false end
+    if not value then
+      return false
+    end
 
     if type(value) == 'function' then
       value = value()
@@ -622,7 +626,9 @@ local function gen_check_closure(expected, check_func)
     if value then
 
       if not check_func then
-        check_func = function(a, b) return a == b end
+        check_func = function(a, b)
+          return a == b
+        end
       end
 
       local ret
@@ -663,7 +669,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
           check = gen_check_closure(convert_to_table(elt.ip, ips_table), check_ip_setting),
           extract = function(task)
             local ip = task:get_from_ip()
-            if ip and ip:is_valid() then return ip end
+            if ip and ip:is_valid() then
+              return ip
+            end
             return nil
           end,
         }
@@ -680,7 +688,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
           check = gen_check_closure(ips_map, check_map_setting),
           extract = function(task)
             local ip = task:get_from_ip()
-            if ip and ip:is_valid() then return ip end
+            if ip and ip:is_valid() then
+              return ip
+            end
             return nil
           end,
         }
@@ -698,7 +708,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
               check_ip_setting),
           extract = function(task)
             local ip = task:get_client_ip()
-            if ip:is_valid() then return ip end
+            if ip:is_valid() then
+              return ip
+            end
             return nil
           end,
         }
@@ -715,7 +727,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
           check = gen_check_closure(ips_map, check_map_setting),
           extract = function(task)
             local ip = task:get_client_ip()
-            if ip and ip:is_valid() then return ip end
+            if ip and ip:is_valid() then
+              return ip
+            end
             return nil
           end,
         }
@@ -835,7 +849,12 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       lua_util.debugm(N, rspamd_config, 'added authenticated condition to "%s"',
           name)
       checks.authenticated = {
-        check = function(value) if value then return true end return false end,
+        check = function(value)
+          if value then
+            return true
+          end
+          return false
+        end,
         extract = function(task)
           return task:get_user()
         end
@@ -846,7 +865,12 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       lua_util.debugm(N, rspamd_config, 'added local condition to "%s"',
           name)
       checks['local'] = {
-        check = function(value) if value then return true end return false end,
+        check = function(value)
+          if value then
+            return true
+          end
+          return false
+        end,
         extract = function(task)
           local ip = task:get_from_ip()
           if not ip or not ip:is_valid() then
@@ -875,9 +899,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       checks[full_key] = cond
 
       -- Try numeric key
-      for i=1,1000 do
+      for i = 1, 1000 do
         local num_key = generic .. ':' .. tostring(i)
-        if not checks[num_key]  then
+        if not checks[num_key] then
           checks[num_key] = cond
           aliases[num_key] = true
           break
@@ -911,7 +935,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
             if re then
               local cond = {
                 check = function(values)
-                  return fun.any(function(c) return re:match(c) end, values)
+                  return fun.any(function(c)
+                    return re:match(c)
+                  end, values)
                 end,
                 extract = extractor_func(k),
               }
@@ -923,7 +949,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
           elseif type(v) == 'boolean' then
             local cond = {
               check = function(values)
-                if #values == 0 then return (not v) end
+                if #values == 0 then
+                  return (not v)
+                end
                 return v
               end,
               extract = extractor_func(k),
@@ -943,7 +971,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
     process_header_elt('request_header', function(hname)
       return function(task)
         local rh = task:get_request_header(hname)
-        if rh then return {rh} end
+        if rh then
+          return { rh }
+        end
         return {}
       end
     end)
@@ -951,7 +981,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
       return function(task)
         local rh = task:get_header_full(hname)
         if rh then
-          return fun.totable(fun.map(function(h) return h.decoded end, rh))
+          return fun.totable(fun.map(function(h)
+            return h.decoded
+          end, rh))
         end
         return {}
       end
@@ -987,7 +1019,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
     -- Count checks and create Rspamd expression from a set of rules
     local nchecks = 0
-    for k,_ in pairs(checks) do
+    for k, _ in pairs(checks) do
       if not aliases[k] then
         nchecks = nchecks + 1
       end
@@ -1000,10 +1032,14 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
         -- Here we get all keys and concatenate them with '&&'
         local s = ' && '
         -- By De Morgan laws
-        if inverse then s = ' || ' end
+        if inverse then
+          s = ' || '
+        end
         -- Exclude aliases and join all checks by key
         local expr_str = table.concat(lua_util.keys(fun.filter(
-            function(k, _) return not aliases[k] end,
+            function(k, _)
+              return not aliases[k]
+            end,
             checks)), s)
 
         if inverse then
@@ -1030,7 +1066,9 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
 
         rspamd_logger.errx(rspamd_config,
             'use of undefined element "%s" when parsing settings expression, known checks: %s',
-            atom, table.concat(fun.totable(fun.map(function(k, _) return k end, checks)), ','))
+            atom, table.concat(fun.totable(fun.map(function(k, _)
+              return k
+            end, checks)), ','))
 
         return nil
       end
@@ -1123,7 +1161,7 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
         -- In fact, it is useless and evil but who cares...
         if elt.apply and elt.apply.symbols then
           -- Register virtual symbols
-          for k,v in pairs(elt.apply.symbols) do
+          for k, v in pairs(elt.apply.symbols) do
             local rtb = {
               type = 'virtual',
               parent = module_sym_id,
@@ -1153,33 +1191,39 @@ local function process_settings_table(tbl, allow_ids, mempool, is_static)
   settings_initialized = false
   -- filter trash in the input
   local ft = fun.filter(
-    function(_, elt)
-      if type(elt) == "table" then
-        return true
-      end
-      return false
-    end, tbl)
+      function(_, elt)
+        if type(elt) == "table" then
+          return true
+        end
+        return false
+      end, tbl)
 
   -- clear all settings
   max_pri = 0
   local nrules = 0
-  for k in pairs(settings) do settings[k]={} end
+  for k in pairs(settings) do
+    settings[k] = {}
+  end
   -- fill new settings by priority
   fun.for_each(function(k, v)
     local pri = get_priority(v)
-    if pri > max_pri then max_pri = pri end
+    if pri > max_pri then
+      max_pri = pri
+    end
     if not settings[pri] then
       settings[pri] = {}
     end
     local s = process_setting_elt(k, v)
     if s then
-      table.insert(settings[pri], {name = k, rule = s})
+      table.insert(settings[pri], { name = k, rule = s })
       nrules = nrules + 1
     end
   end, ft)
   -- sort settings with equal priorities in alphabetical order
-  for pri,_ in pairs(settings) do
-    table.sort(settings[pri], function(a,b) return a.name < b.name end)
+  for pri, _ in pairs(settings) do
+    table.sort(settings[pri], function(a, b)
+      return a.name < b.name
+    end)
   end
 
   settings_initialized = true
@@ -1194,7 +1238,7 @@ local settings_map_pool
 
 local function process_settings_map(map_text)
   local parser = ucl.parser()
-  local res,err = parser:parse_text(map_text)
+  local res, err = parser:parse_text(map_text)
 
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
@@ -1226,14 +1270,14 @@ local function gen_redis_callback(handler, id)
         for _, d in ipairs(data) do
           if type(d) == 'string' then
             local parser = ucl.parser()
-            local res,ucl_err = parser:parse_text(d)
+            local res, ucl_err = parser:parse_text(d)
             if not res then
               rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
-                ucl_err)
+                  ucl_err)
             else
               local obj = parser:get_object()
               rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
-                task:get_message_id(), id)
+                  task:get_message_id(), id)
               apply_settings(task, obj, nil, 'redis')
               break
             end
@@ -1253,17 +1297,17 @@ local function gen_redis_callback(handler, id)
     if type(key) == 'table' then
       keys = key
     else
-      keys = {key}
+      keys = { key }
     end
     key = keys[1]
 
-    local ret,_,_ = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      key, -- hash key
-      false, -- is write
-      redis_settings_cb, --callback
-      'MGET', -- command
-      keys -- arguments
+    local ret, _, _ = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        false, -- is write
+        redis_settings_cb, --callback
+        'MGET', -- command
+        keys -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, 'Redis MGET failed: %s', ret)
@@ -1279,17 +1323,17 @@ if redis_section then
   if redis_params then
     local handlers = redis_section.handlers
 
-    for id,h in pairs(handlers) do
-      local chunk,err = load(h)
+    for id, h in pairs(handlers) do
+      local chunk, err = load(h)
 
       if not chunk then
         rspamd_logger.errx(rspamd_config, 'Cannot load handler from string: %s',
             tostring(err))
       else
-        local res,func = pcall(chunk)
+        local res, func = pcall(chunk)
         if not res then
           rspamd_logger.errx(rspamd_config, 'Cannot add handler from string: %s',
-            tostring(func))
+              tostring(func))
         else
           redis_key_handlers[id] = func
         end
@@ -1304,7 +1348,7 @@ if redis_section then
       callback = gen_redis_callback(h, id),
       priority = lua_util.symbols_priorities.top,
       flags = 'empty,nostat',
-      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)},
+      augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) },
     })
   end, redis_key_handlers)
 end
@@ -1337,7 +1381,7 @@ elseif set_section and type(set_section) == "table" then
   -- registered BEFORE settings plugin. Otherwise, we can have inconsistent settings expressions
   fun.each(function(_, elt)
     if elt.register_symbols then
-      for k,v in pairs(elt.register_symbols) do
+      for k, v in pairs(elt.register_symbols) do
         local rtb = {
           type = 'virtual',
           parent = module_sym_id,
@@ -1347,7 +1391,7 @@ elseif set_section and type(set_section) == "table" then
         elseif type(k) == 'string' then
           rtb.name = k
           if type(v) == 'table' then
-            for kk,vv in pairs(v) do
+            for kk, vv in pairs(v) do
               -- Enrich table wih extra values
               rtb[kk] = vv
             end
@@ -1358,7 +1402,7 @@ elseif set_section and type(set_section) == "table" then
     end
     if elt.apply and elt.apply.symbols then
       -- Register virtual symbols
-      for k,v in pairs(elt.apply.symbols) do
+      for k, v in pairs(elt.apply.symbols) do
         local rtb = {
           type = 'virtual',
           parent = module_sym_id,
@@ -1372,7 +1416,7 @@ elseif set_section and type(set_section) == "table" then
       end
     end
   end,
-      -- Include only settings, exclude all maps
+  -- Include only settings, exclude all maps
       fun.filter(
           function(_, elt)
             if type(elt) == "table" then
@@ -1382,7 +1426,7 @@ elseif set_section and type(set_section) == "table" then
           end, set_section)
   )
 
-  rspamd_config:add_post_init(function ()
+  rspamd_config:add_post_init(function()
     process_settings_table(set_section, true, settings_map_pool, true)
   end, 100)
 end

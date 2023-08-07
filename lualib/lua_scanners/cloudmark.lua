@@ -84,7 +84,7 @@ local function cloudmark_preload(rule, cfg, ev_base, _)
   http.request({
     ev_base = ev_base,
     config = cfg,
-    url =  cloudmark_url(rule, addr, '/score/v2/max-message-size'),
+    url = cloudmark_url(rule, addr, '/score/v2/max-message-size'),
     callback = max_message_size_cb,
   })
 end
@@ -142,8 +142,8 @@ local function cloudmark_config(opts)
 
   if cloudmark_conf.upstreams then
 
-    cloudmark_conf.symbols = {{ symbol = cloudmark_conf.symbol_spam, score = 5.0 }}
-    cloudmark_conf.preloads = {cloudmark_preload}
+    cloudmark_conf.symbols = { { symbol = cloudmark_conf.symbol_spam, score = 5.0 } }
+    cloudmark_conf.preloads = { cloudmark_preload }
     lua_util.add_debug_alias('external_services', cloudmark_conf.name)
     return cloudmark_conf
   end
@@ -162,7 +162,7 @@ local function table_to_multipart_body(tbl, boundary)
   local seen_data = false
   local out = {}
 
-  for k,v in pairs(tbl) do
+  for k, v in pairs(tbl) do
     if v.data then
       seen_data = true
       table.insert(out, string.format('--%s\r\n', boundary))
@@ -229,7 +229,7 @@ local function parse_cloudmark_reply(task, rule, body)
 
   if rule.add_headers and type(obj.appendHeaders) == 'table' then
     local headers_add = fun.tomap(fun.map(function(h)
-      return h.headerField,{
+      return h.headerField, {
         order = 1, value = h.body
       }
     end, obj.appendHeaders))
@@ -275,7 +275,9 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
     local rcpt_to = task:get_recipients('smtp')
     if rcpt_to then
       request['rcptTo'] = {
-        data = table.concat(fun.totable(fun.map(function(r) return r.addr  end, rcpt_to)), ',')
+        data = table.concat(fun.totable(fun.map(function(r)
+          return r.addr
+        end, rcpt_to)), ',')
       }
     end
 
@@ -325,9 +327,9 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
 
           http.request(request_data)
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits ' ..
               'exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and ' ..
               'retransmits exceed')
           upstream:fail()
         end
@@ -337,7 +339,9 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
         cloudmark_requery()
       else
         -- Parse the response
-        if upstream then upstream:ok() end
+        if upstream then
+          upstream:ok()
+        end
         if code ~= 200 then
           rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
@@ -360,7 +364,7 @@ local function cloudmark_check(task, content, digest, rule, maybe_part)
 end
 
 return {
-  type = {'cloudmark', 'scanner'},
+  type = { 'cloudmark', 'scanner' },
   description = 'Cloudmark cartridge interface',
   configure = cloudmark_config,
   check = cloudmark_check,

@@ -107,7 +107,6 @@ local function kaspersky_check(task, content, digest, rule, maybe_part)
       rspamd_util.close_file(message_fd)
     end)
 
-
     local function kaspersky_callback(err, data)
       if err then
 

@@ -94,8 +94,13 @@ local function normalise_results(tbl, task)
       return type(v) == 'table' and v.score
     end, metric)
 
-    fun.each(function(k, v) v.name = nil; tbl.symbols[k] = v; end, symbols)
-    fun.each(function(k, v) tbl[k] = v end, others)
+    fun.each(function(k, v)
+      v.name = nil;
+      tbl.symbols[k] = v;
+    end, symbols)
+    fun.each(function(k, v)
+      tbl[k] = v
+    end, others)
 
     -- Reset the original metric
     tbl.default = nil
@@ -141,7 +146,7 @@ local function history_save(task)
     return
   end
 
-  local data = task:get_protocol_reply{'metrics', 'basic'}
+  local data = task:get_protocol_reply { 'metrics', 'basic' }
   local prefix = settings.key_prefix .. hostname
 
   if data then
@@ -160,19 +165,19 @@ local function history_save(task)
   end
 
   local ret, conn, _ = lua_redis.rspamd_redis_make_request(task,
-    redis_params, -- connect params
-    nil, -- hash key
-    true, -- is write
-    redis_llen_cb, --callback
-    'LPUSH', -- command
-    {prefix, json} -- arguments
+      redis_params, -- connect params
+      nil, -- hash key
+      true, -- is write
+      redis_llen_cb, --callback
+      'LPUSH', -- command
+      { prefix, json } -- arguments
   )
 
   if ret then
-    conn:add_cmd('LTRIM', {prefix, '0', string.format('%d', settings.nrows-1)})
+    conn:add_cmd('LTRIM', { prefix, '0', string.format('%d', settings.nrows - 1) })
 
     if settings.expire and settings.expire > 0 then
-      conn:add_cmd('EXPIRE', {prefix, string.format('%d', settings.expire)})
+      conn:add_cmd('EXPIRE', { prefix, string.format('%d', settings.expire) })
     end
   end
 end
@@ -188,19 +193,19 @@ local function handle_history_request(task, conn, from, to, reset)
     local function redis_ltrim_cb(err, _)
       if err then
         rspamd_logger.errx(task, 'got error %s when resetting history: %s',
-          err)
+            err)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       else
         conn:send_string('{"success":true}')
       end
     end
     lua_redis.rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      nil, -- hash key
-      true, -- is write
-      redis_ltrim_cb, --callback
-      'LTRIM', -- command
-      {prefix, '0', '0'} -- arguments
+        redis_params, -- connect params
+        nil, -- hash key
+        true, -- is write
+        redis_ltrim_cb, --callback
+        'LTRIM', -- command
+        { prefix, '0', '0' } -- arguments
     )
   else
     local function redis_lrange_cb(err, data)
@@ -211,14 +216,16 @@ local function handle_history_request(task, conn, from, to, reset)
         if settings.compress then
           local t1 = rspamd_util:get_ticks()
 
-          data = fun.totable(fun.filter(function(e) return e ~= nil end,
-            fun.map(function(e)
-              local _,dec = rspamd_util.zstd_decompress(e)
-              if dec then
-                return dec
-              end
-              return nil
-            end, data)))
+          data = fun.totable(fun.filter(function(e)
+            return e ~= nil
+          end,
+              fun.map(function(e)
+                local _, dec = rspamd_util.zstd_decompress(e)
+                if dec then
+                  return dec
+                end
+                return nil
+              end, data)))
           lua_util.debugm(N, task, 'decompress took %s ms',
               (rspamd_util:get_ticks() - t1) * 1000.0)
           collectgarbage()
@@ -226,23 +233,25 @@ local function handle_history_request(task, conn, from, to, reset)
         -- Parse elements using ucl
         local t1 = rspamd_util:get_ticks()
         data = fun.totable(
-          fun.map(function (_, obj) return obj end,
-          fun.filter(function(res, obj)
-              if res then
-                return true
-              end
-              return false
+            fun.map(function(_, obj)
+              return obj
             end,
-            fun.map(function(elt)
-              local parser = ucl.parser()
-              local res,_ = parser:parse_text(elt)
+                fun.filter(function(res, obj)
+                  if res then
+                    return true
+                  end
+                  return false
+                end,
+                    fun.map(function(elt)
+                      local parser = ucl.parser()
+                      local res, _ = parser:parse_text(elt)
 
-              if res then
-                return true, parser:get_object()
-              else
-                return false, nil
-              end
-            end, data))))
+                      if res then
+                        return true, parser:get_object()
+                      else
+                        return false, nil
+                      end
+                    end, data))))
         lua_util.debugm(N, task, 'parse took %s ms',
             (rspamd_util:get_ticks() - t1) * 1000.0)
         collectgarbage()
@@ -254,26 +263,26 @@ local function handle_history_request(task, conn, from, to, reset)
         collectgarbage()
       else
         rspamd_logger.errx(task, 'got error %s when getting history: %s',
-          err)
+            err)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       end
     end
     lua_redis.rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      nil, -- hash key
-      false, -- is write
-      redis_lrange_cb, --callback
-      'LRANGE', -- command
-      {prefix, string.format('%d', from), string.format('%d', to)}, -- arguments
-      {opaque_data = true}
+        redis_params, -- connect params
+        nil, -- hash key
+        false, -- is write
+        redis_lrange_cb, --callback
+        'LRANGE', -- command
+        { prefix, string.format('%d', from), string.format('%d', to) }, -- arguments
+        { opaque_data = true }
     )
   end
 end
 
-local opts =  rspamd_config:get_all_opt('history_redis')
+local opts = rspamd_config:get_all_opt('history_redis')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
-  local res,err = settings_schema:transform(settings)
+  local res, err = settings_schema:transform(settings)
 
   if not res then
     rspamd_logger.warnx(rspamd_config, '%s: plugin is misconfigured: %s', N, err)
@@ -292,7 +301,7 @@ if opts then
       type = 'idempotent',
       callback = history_save,
       flags = 'empty,explicit_disable,ignore_passthrough',
-      augmentations = {string.format("timeout=%f", redis_params.timeout or 0.0)}
+      augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })
     lua_redis.register_prefix(settings.key_prefix .. hostname, N,
         "Redis history", {

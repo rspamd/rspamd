@@ -93,7 +93,7 @@ local function gen_auth_results(task, settings)
         else
           common.symbols[sym] = s
           if not auth_results[auth_type] then
-            auth_results[auth_type] = {key}
+            auth_results[auth_type] = { key }
           else
             table.insert(auth_results[auth_type], key)
           end
@@ -111,7 +111,7 @@ local function gen_auth_results(task, settings)
   -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=fA8VVvJ8;
   -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=f8pM8o90;
 
-  for _,dres in ipairs(dkim_results) do
+  for _, dres in ipairs(dkim_results) do
     local ar_string = 'none'
 
     if dres.result == 'reject' then
@@ -168,7 +168,7 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. ' (policy=' .. lua_util.maybe_smtp_quote_value(opts[2]) .. ')'
           hdr = hdr .. ' header.from=' .. lua_util.maybe_smtp_quote_value(opts[1])
         elseif key ~= 'none' then
-          local t = {opts[1]:match('^([^%s]+) : (.*)$')}
+          local t = { opts[1]:match('^([^%s]+) : (.*)$') }
           if #t > 0 then
             local dom = t[1]
             local rsn = t[2]
@@ -197,7 +197,7 @@ local function gen_auth_results(task, settings)
         -- Main type
         local sender
         local sender_type
-        local smtp_from = task:get_from({'smtp','orig'})
+        local smtp_from = task:get_from({ 'smtp', 'orig' })
 
         if smtp_from and
             smtp_from[1] and
@@ -241,26 +241,25 @@ local function gen_auth_results(task, settings)
           hdr = string.format('%s=%s', auth_type, key)
         end
 
-
         table.insert(hdr_parts, hdr)
       end
     end
   end
 
   local u = task:get_user()
-  local smtp_from = task:get_from({'smtp','orig'})
+  local smtp_from = task:get_from({ 'smtp', 'orig' })
 
   if u and smtp_from then
-    local hdr = {[1] = 'auth=pass'}
+    local hdr = { [1] = 'auth=pass' }
 
     if settings['add_smtp_user'] then
-      table.insert(hdr,'smtp.auth=' .. lua_util.maybe_smtp_quote_value(u))
+      table.insert(hdr, 'smtp.auth=' .. lua_util.maybe_smtp_quote_value(u))
     end
     if smtp_from[1]['addr'] then
-      table.insert(hdr,'smtp.mailfrom=' .. lua_util.maybe_smtp_quote_value(smtp_from[1]['addr']))
+      table.insert(hdr, 'smtp.mailfrom=' .. lua_util.maybe_smtp_quote_value(smtp_from[1]['addr']))
     end
 
-    table.insert(hdr_parts, table.concat(hdr,' '))
+    table.insert(hdr_parts, table.concat(hdr, ' '))
   end
 
   if #hdr_parts > 0 then
@@ -287,12 +286,12 @@ local function parse_ar_element(elt)
     local S = lpeg.S
     local V = lpeg.V
     local C = lpeg.C
-    local space = S(" ")^0
-    local doublequoted = space * P'"' * ((1 - S'"\r\n\f\\') + (P'\\' * 1))^0 * '"' * space
-    local comment = space * P{ "(" * ((1 - S"()") + V(1))^0 * ")" } * space
-    local name = C((1 - S('=(" '))^1) * space
+    local space = S(" ") ^ 0
+    local doublequoted = space * P '"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1)) ^ 0 * '"' * space
+    local comment = space * P { "(" * ((1 - S "()") + V(1)) ^ 0 * ")" } * space
+    local name = C((1 - S('=(" ')) ^ 1) * space
     local pair = lpeg.Cg(name * "=" * space * name) * space
-    aar_elt_grammar = lpeg.Cf(lpeg.Ct("") * (pair + comment + doublequoted)^1, rawset)
+    aar_elt_grammar = lpeg.Cf(lpeg.Ct("") * (pair + comment + doublequoted) ^ 1, rawset)
   end
 
   return aar_elt_grammar:match(elt)
