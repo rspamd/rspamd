@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
+Copyright (c) 2023, Vsevolod Stakhov <vsevolod@rspamd.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ local lupa = require "lupa"
 
 local split_grammar = {}
 local spaces_split_grammar
-local space = lpeg.S' \t\n\v\f\r'
+local space = lpeg.S ' \t\n\v\f\r'
 local nospace = 1 - space
-local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
+local ptrim = space ^ 0 * lpeg.C((space ^ 0 * nospace ^ 1) ^ 0)
 local match = lpeg.match
 
 lupa.configure('{%', '%}', '{=', '=}', '{#', '#}', {
@@ -47,8 +47,8 @@ local function rspamd_str_split(s, sep)
   if not sep then
     if not spaces_split_grammar then
       local _sep = space
-      local elem = lpeg.C((1 - _sep)^0)
-      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      local elem = lpeg.C((1 - _sep) ^ 0)
+      local p = lpeg.Ct(elem * (_sep * elem) ^ 0)
       spaces_split_grammar = p
     end
 
@@ -63,8 +63,8 @@ local function rspamd_str_split(s, sep)
       else
         _sep = sep -- Assume lpeg object
       end
-      local elem = lpeg.C((1 - _sep)^0)
-      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      local elem = lpeg.C((1 - _sep) ^ 0)
+      local p = lpeg.Ct(elem * (_sep * elem) ^ 0)
       gr = p
       split_grammar[sep] = gr
     end
@@ -126,7 +126,7 @@ end
 
 -- modified version from Robert Jay Gould http://lua-users.org/wiki/SimpleRound
 exports.round = function(num, numDecimalPlaces)
-  local mult = 10^(numDecimalPlaces or 0)
+  local mult = 10 ^ (numDecimalPlaces or 0)
   if num >= 0 then
     return math.floor(num * mult + 0.5) / mult
   else
@@ -148,10 +148,10 @@ end
 
 exports.template = function(tmpl, keys)
   local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
+  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit ^ 1) / keys) }
+  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit ^ 1) / keys) * (lpeg.P("}") / "") }
 
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
+  local template_grammar = lpeg.Cs((var + var_braced + 1) ^ 0)
 
   return lpeg.match(template_grammar, tmpl)
 end
@@ -209,7 +209,7 @@ exports.remove_email_aliases = function(email_addr)
     if cap then
       return cap, rspamd_str_split(pluses, '+'), nil
     elseif no_dots_user ~= addr.user then
-      return no_dots_user,{},nil
+      return no_dots_user, {}, nil
     end
 
     return nil
@@ -298,7 +298,9 @@ exports.is_rspamc_or_controller = function(task)
   local ua = task:get_request_header('User-Agent') or ''
   local pwd = task:get_request_header('Password')
   local is_rspamc = false
-  if tostring(ua) == 'rspamc' or pwd then is_rspamc = true end
+  if tostring(ua) == 'rspamc' or pwd then
+    is_rspamc = true
+  end
 
   return is_rspamc
 end
@@ -324,8 +326,8 @@ end
 --]]
 exports.flatten = function(t)
   local res = {}
-  for _,e in fun.iter(t) do
-    for _,v in fun.iter(e) do
+  for _, e in fun.iter(t) do
+    for _, v in fun.iter(e) do
       res[#res + 1] = v
     end
   end
@@ -350,12 +352,16 @@ end
 local function spairs(t, order, lim)
   -- collect the keys
   local keys = {}
-  for k in pairs(t) do keys[#keys+1] = k end
+  for k in pairs(t) do
+    keys[#keys + 1] = k
+  end
 
   -- if order function given, sort by it by passing the table and keys a, b,
   -- otherwise just sort the keys
   if order then
-    table.sort(keys, function(a,b) return order(t, a, b) end)
+    table.sort(keys, function(a, b)
+      return order(t, a, b)
+    end)
   else
     table.sort(keys)
   end
@@ -375,13 +381,13 @@ end
 exports.spairs = spairs
 
 --[[[
--- @function lua_util.disable_module(modname, how)
+-- @function lua_util.disable_module(modname, how[, reason])
 -- Disables a plugin
 -- @param {string} modname name of plugin to disable
 -- @param {string} how 'redis' to disable redis, 'config' to disable startup
+-- @param {string} reason optional reason for failure
 --]]
-
-local function disable_module(modname, how)
+local function disable_module(modname, how, reason)
   if rspamd_plugins_state.enabled[modname] then
     rspamd_plugins_state.enabled[modname] = nil
   end
@@ -392,8 +398,10 @@ local function disable_module(modname, how)
     rspamd_plugins_state.disabled_unconfigured[modname] = {}
   elseif how == 'experimental' then
     rspamd_plugins_state.disabled_experimental[modname] = {}
+  elseif how == 'failed' then
+    rspamd_plugins_state.disabled_failed[modname] = { reason = reason }
   else
-    rspamd_plugins_state.disabled_failed[modname] = {}
+    rspamd_plugins_state.disabled_unknown[modname] = {}
   end
 end
 
@@ -461,9 +469,13 @@ exports.list_to_hash = list_to_hash
 local function nkeys(gen, param, state)
   local n = 0
   if not param then
-    for _,_ in pairs(gen) do n = n + 1 end
+    for _, _ in pairs(gen) do
+      n = n + 1
+    end
   else
-    for _,_ in fun.iter(gen, param, state) do n = n + 1 end
+    for _, _ in fun.iter(gen, param, state) do
+      n = n + 1
+    end
   end
   return n
 end
@@ -497,20 +509,19 @@ local function parse_time_interval(str)
 
   local digit = lpeg.R("09")
   local parser = {}
-  parser.integer =
-  (lpeg.S("+-") ^ -1) *
-      (digit   ^  1)
-  parser.fractional =
-  (lpeg.P(".")   ) *
+  parser.integer = (lpeg.S("+-") ^ -1) *
       (digit ^ 1)
-  parser.number =
-  (parser.integer *
+  parser.fractional = (lpeg.P(".")) *
+      (digit ^ 1)
+  parser.number = (parser.integer *
       (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.time = lpeg.Cf(lpeg.Cc(1) *
       (parser.number / tonumber) *
       ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
-    function (acc, val) return acc * val end)
+      function(acc, val)
+        return acc * val
+      end)
 
   local t = lpeg.match(parser.time, str)
 
@@ -546,20 +557,19 @@ local function dehumanize_number(str)
 
   local digit = lpeg.R("09")
   local parser = {}
-  parser.integer =
-  (lpeg.S("+-") ^ -1) *
-      (digit   ^  1)
-  parser.fractional =
-  (lpeg.P(".")   ) *
+  parser.integer = (lpeg.S("+-") ^ -1) *
       (digit ^ 1)
-  parser.number =
-  (parser.integer *
+  parser.fractional = (lpeg.P(".")) *
+      (digit ^ 1)
+  parser.number = (parser.integer *
       (parser.fractional ^ -1)) +
       (lpeg.S("+-") * parser.fractional)
   parser.humanized_number = lpeg.Cf(lpeg.Cc(1) *
       (parser.number / tonumber) *
       (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
-      function (acc, val) return acc * val end)
+      function(acc, val)
+        return acc * val
+      end)
 
   local t = lpeg.match(parser.humanized_number, str)
 
@@ -575,16 +585,24 @@ exports.dehumanize_number = dehumanize_number
 local function table_cmp(table1, table2)
   local avoid_loops = {}
   local function recurse(t1, t2)
-    if type(t1) ~= type(t2) then return false end
-    if type(t1) ~= "table" then return t1 == t2 end
+    if type(t1) ~= type(t2) then
+      return false
+    end
+    if type(t1) ~= "table" then
+      return t1 == t2
+    end
 
-    if avoid_loops[t1] then return avoid_loops[t1] == t2 end
+    if avoid_loops[t1] then
+      return avoid_loops[t1] == t2
+    end
     avoid_loops[t1] = t2
     -- Copy keys from t2
     local t2keys = {}
     local t2tablekeys = {}
     for k, _ in pairs(t2) do
-      if type(k) == "table" then table.insert(t2tablekeys, k) end
+      if type(k) == "table" then
+        table.insert(t2tablekeys, k)
+      end
       t2keys[k] = true
     end
     -- Let's iterate keys from t1
@@ -601,16 +619,24 @@ local function table_cmp(table1, table2)
             break
           end
         end
-        if not ok then return false end
+        if not ok then
+          return false
+        end
       else
         -- t1 has a key which t2 doesn't have, fail.
-        if v2 == nil then return false end
+        if v2 == nil then
+          return false
+        end
         t2keys[k1] = nil
-        if not recurse(v1, v2) then return false end
+        if not recurse(v1, v2) then
+          return false
+        end
       end
     end
     -- if t2 has a key which t1 doesn't have, fail.
-    if next(t2keys) then return false end
+    if next(t2keys) then
+      return false
+    end
     return true
   end
   return recurse(table1, table2)
@@ -663,7 +689,7 @@ local function override_defaults(def, override)
 
   local res = {}
 
-  for k,v in pairs(override) do
+  for k, v in pairs(override) do
     if type(v) == 'table' then
       if def[k] and type(def[k]) == 'table' then
         -- Recursively override elements
@@ -676,7 +702,7 @@ local function override_defaults(def, override)
     end
   end
 
-  for k,v in pairs(def) do
+  for k, v in pairs(def) do
     if type(res[k]) == 'nil' then
       res[k] = v
     end
@@ -702,7 +728,7 @@ exports.override_defaults = override_defaults
 -- tries its best to extract specific number of urls from a task based on
 -- their characteristics
 --]]
-exports.filter_specific_urls = function (urls, params)
+exports.filter_specific_urls = function(urls, params)
   local cache_key
 
   if params.task and not params.no_cache then
@@ -721,9 +747,13 @@ exports.filter_specific_urls = function (urls, params)
     end
   end
 
-  if not urls then return {} end
+  if not urls then
+    return {}
+  end
 
-  if params.filter then urls = fun.totable(fun.filter(params.filter, urls)) end
+  if params.filter then
+    urls = fun.totable(fun.filter(params.filter, urls))
+  end
 
   -- Filter by tld:
   local tlds = {}
@@ -794,11 +824,11 @@ exports.filter_specific_urls = function (urls, params)
       end
 
       if not eslds[esld] then
-        eslds[esld] = {{str_hash, u, priority}}
+        eslds[esld] = { { str_hash, u, priority } }
         neslds = neslds + 1
       else
         if #eslds[esld] < params.esld_limit then
-          table.insert(eslds[esld], {str_hash, u, priority})
+          table.insert(eslds[esld], { str_hash, u, priority })
         end
       end
 
@@ -808,21 +838,23 @@ exports.filter_specific_urls = function (urls, params)
       local tld = table.concat(fun.totable(fun.tail(parts)), '.')
 
       if not tlds[tld] then
-        tlds[tld] = {{str_hash, u, priority}}
+        tlds[tld] = { { str_hash, u, priority } }
         ntlds = ntlds + 1
       else
-        table.insert(tlds[tld], {str_hash, u, priority})
+        table.insert(tlds[tld], { str_hash, u, priority })
       end
     end
   end
 
-  for _,u in ipairs(urls) do
+  for _, u in ipairs(urls) do
     process_single_url(u)
   end
 
   local limit = params.limit
   limit = limit - nres
-  if limit < 0 then limit = 0 end
+  if limit < 0 then
+    limit = 0
+  end
 
   if limit == 0 then
     res = exports.values(res)
@@ -865,7 +897,7 @@ exports.filter_specific_urls = function (urls, params)
     repeat
       local item_found = false
 
-      for _,lurls in ipairs(eslds) do
+      for _, lurls in ipairs(eslds) do
         if #lurls > 0 then
           local last = table.remove(lurls)
           insert_url(last[1], last[2])
@@ -888,13 +920,15 @@ exports.filter_specific_urls = function (urls, params)
 
   -- Number of tlds < limit
   while limit > 0 do
-    for _,lurls in ipairs(tlds) do
+    for _, lurls in ipairs(tlds) do
       if #lurls > 0 then
         local last = table.remove(lurls)
         insert_url(last[1], last[2])
         limit = limit - 1
       end
-      if limit == 0 then break end
+      if limit == 0 then
+        break
+      end
     end
   end
 
@@ -951,8 +985,10 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
       prefix = prefix
     }
   end
-  for k,v in pairs(default_params) do
-    if type(params[k]) == 'nil' and v ~= nil then params[k] = v end
+  for k, v in pairs(default_params) do
+    if type(params[k]) == 'nil' and v ~= nil then
+      params[k] = v
+    end
   end
   local url_params = {
     emails = params.need_emails,
@@ -973,9 +1009,9 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
         cache_key_suffix = table.concat(params.flags) .. (params.flags_mode or '')
       else
         cache_key_suffix = string.format('%s%s%s',
-          tostring(params.need_emails or false),
-          tostring(params.need_images or false),
-          tostring(params.need_content or false))
+            tostring(params.need_emails or false),
+            tostring(params.need_images or false),
+            tostring(params.need_content or false))
       end
       cache_key = string.format('sp_urls_%d%s', params.limit, cache_key_suffix)
     end
@@ -1010,7 +1046,8 @@ local function deepcopy(orig)
     if getmetatable(orig) then
       setmetatable(copy, deepcopy(getmetatable(orig)))
     end
-  else -- number, string, boolean, etc
+  else
+    -- number, string, boolean, etc
     copy = orig
   end
   return copy
@@ -1083,14 +1120,14 @@ exports.init_debug_logging = function(config)
         end
       end
       if log_config.debug_modules then
-        for _,m in ipairs(log_config.debug_modules) do
+        for _, m in ipairs(log_config.debug_modules) do
           debug_modules[m] = true
           logger.infox(config, 'enable debug for Lua module %s', m)
         end
       end
 
       if #debug_aliases > 0 then
-        for alias,mod in pairs(debug_aliases) do
+        for alias, mod in pairs(debug_aliases) do
           if debug_modules[mod] then
             debug_modules[alias] = true
             logger.infox(config, 'enable debug for Lua module %s (%s aliased)',
@@ -1107,7 +1144,7 @@ exports.enable_debug_logging = function()
 end
 
 exports.enable_debug_modules = function(...)
-  for _,m in ipairs({...}) do
+  for _, m in ipairs({ ... }) do
     debug_modules[m] = true
   end
 end
@@ -1207,7 +1244,7 @@ exports.callback_from_string = function(s)
   local loadstring = loadstring or load
 
   if not s or #s == 0 then
-    return false,'invalid or empty string'
+    return false, 'invalid or empty string'
   end
 
   s = exports.rspamd_str_trim(s)
@@ -1226,10 +1263,10 @@ exports.callback_from_string = function(s)
   local ret, res_or_err = pcall(loadstring(inp))
 
   if not ret or type(res_or_err) ~= 'function' then
-    return false,res_or_err
+    return false, res_or_err
   end
 
-  return ret,res_or_err
+  return ret, res_or_err
 end
 
 ---[[[
@@ -1243,12 +1280,12 @@ exports.keys = function(gen, param, state)
   local i = 1
 
   if param then
-    for k,_ in fun.iter(gen, param, state) do
+    for k, _ in fun.iter(gen, param, state) do
       rawset(keys, i, k)
       i = i + 1
     end
   else
-    for k,_ in pairs(gen) do
+    for k, _ in pairs(gen) do
       rawset(keys, i, k)
       i = i + 1
     end
@@ -1268,12 +1305,12 @@ exports.values = function(gen, param, state)
   local i = 1
 
   if param then
-    for _,v in fun.iter(gen, param, state) do
+    for _, v in fun.iter(gen, param, state) do
       rawset(values, i, v)
       i = i + 1
     end
   else
-    for _,v in pairs(gen) do
+    for _, v in pairs(gen) do
       rawset(values, i, v)
       i = i + 1
     end
@@ -1292,13 +1329,13 @@ end
 exports.distance_sorted = function(t1, t2)
   local ncomp = #t1
   local ndiff = 0
-  local i,j = 1,1
+  local i, j = 1, 1
 
   if ncomp < #t2 then
     ncomp = #t2
   end
 
-  for _=1,ncomp do
+  for _ = 1, ncomp do
     if j > #t2 then
       ndiff = ndiff + ncomp - #t2
       if i > j then
@@ -1339,7 +1376,7 @@ local function table_digest(t)
   local h = cr.create()
 
   if t[1] then
-    for _,e in ipairs(t) do
+    for _, e in ipairs(t) do
       if type(e) == 'table' then
         h:update(table_digest(e))
       else
@@ -1347,7 +1384,7 @@ local function table_digest(t)
       end
     end
   else
-    for k,v in pairs(t) do
+    for k, v in pairs(t) do
       h:update(tostring(k))
 
       if type(v) == 'string' then
@@ -1357,7 +1394,7 @@ local function table_digest(t)
       end
     end
   end
- return h:base32()
+  return h:base32()
 end
 
 exports.table_digest = table_digest
@@ -1388,12 +1425,12 @@ exports.toboolean = function(v)
     elseif false_t[v] == false then
       return false;
     else
-      return false, string.format( 'cannot convert %q to boolean', v);
+      return false, string.format('cannot convert %q to boolean', v);
     end
   elseif type(v) == 'number' then
     return v ~= 0
   else
-    return false, string.format( 'cannot convert %q to boolean', v);
+    return false, string.format('cannot convert %q to boolean', v);
   end
 end
 
@@ -1429,7 +1466,7 @@ exports.config_check_local_or_authed = function(rspamd_config, modname, def_loca
     try_section('options')
   end
 
-  return {check_local, check_authed}
+  return { check_local, check_authed }
 end
 
 ---[[[
@@ -1445,7 +1482,7 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
     ip = task:get_from_ip()
   end
   if not conf then
-    conf = {false, false}
+    conf = { false, false }
   end
   if ((not conf[2] and task:get_user()) or
       (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
@@ -1461,8 +1498,8 @@ end
 -- @param {string} str input string
 -- @return {string} original or quoted string
 --]]]
-local tspecial = lpeg.S"()<>,;:\\\"/[]?= \t\v"
-local special_match = lpeg.P((1 - tspecial)^0 * tspecial^1)
+local tspecial = lpeg.S "()<>,;:\\\"/[]?= \t\v"
+local special_match = lpeg.P((1 - tspecial) ^ 0 * tspecial ^ 1)
 exports.maybe_smtp_quote_value = function(str)
   if special_match:match(str) then
     return string.format('"%s"', str:gsub('"', '\\"'))
@@ -1499,18 +1536,24 @@ end
 -- @param {string} str string to decode
 -- @return {string} hex decoded string (valid hex pairs are decoded, everything else is printed as is)
 --]]]
-exports.unhex = function(str) return str:gsub('(..)', hex_table) end
+exports.unhex = function(str)
+  return str:gsub('(..)', hex_table)
+end
 
 local http_upstream_lists = {}
 local function http_upstreams_by_url(pool, url)
   local rspamd_url = require "rspamd_url"
 
   local cached = http_upstream_lists[url]
-  if cached then return cached end
+  if cached then
+    return cached
+  end
 
   local real_url = rspamd_url.create(pool, url)
 
-  if not real_url then return nil end
+  if not real_url then
+    return nil
+  end
 
   local host = real_url:get_host()
   local proto = real_url:get_protocol() or 'http'
@@ -1578,9 +1621,9 @@ exports.strip_lua_comments = strip_lua_comments
 -- @return A single path string, with components separated by the appropriate separator.
 --
 ---]]]
-local path_sep = package.config:sub(1,1) or '/'
+local path_sep = package.config:sub(1, 1) or '/'
 local function join_path(...)
-  local components = {...}
+  local components = { ... }
 
   -- Join components using separator
   return table.concat(components, path_sep)

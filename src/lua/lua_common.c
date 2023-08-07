@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1008,6 +1008,7 @@ rspamd_lua_init(bool wipe_mem)
 	 *   disabled_explicitly = {},
 	 *   disabled_failed = {},
 	 *   disabled_experimental = {},
+	 *   disabled_unknown = {},
 	 * }
 	 */
 #define ADD_TABLE(name)           \
@@ -1023,6 +1024,7 @@ rspamd_lua_init(bool wipe_mem)
 	ADD_TABLE(disabled_explicitly);
 	ADD_TABLE(disabled_failed);
 	ADD_TABLE(disabled_experimental);
+	ADD_TABLE(disabled_unknown);
 
 #undef ADD_TABLE
 	lua_setglobal(L, rspamd_modules_state_global);
