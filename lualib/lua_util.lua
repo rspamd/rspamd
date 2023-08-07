@@ -380,52 +380,10 @@ end
 
 exports.spairs = spairs
 
---[[[
--- @function lua_util.disable_module(modname, how[, reason])
--- Disables a plugin
--- @param {string} modname name of plugin to disable
--- @param {string} how 'redis' to disable redis, 'config' to disable startup
--- @param {string} reason optional reason for failure
---]]
-local function disable_module(modname, how, reason)
-  if rspamd_plugins_state.enabled[modname] then
-    rspamd_plugins_state.enabled[modname] = nil
-  end
+local lua_cfg_utils = require "lua_cfg_utils"
 
-  if how == 'redis' then
-    rspamd_plugins_state.disabled_redis[modname] = {}
-  elseif how == 'config' then
-    rspamd_plugins_state.disabled_unconfigured[modname] = {}
-  elseif how == 'experimental' then
-    rspamd_plugins_state.disabled_experimental[modname] = {}
-  elseif how == 'failed' then
-    rspamd_plugins_state.disabled_failed[modname] = { reason = reason }
-  else
-    rspamd_plugins_state.disabled_unknown[modname] = {}
-  end
-end
-
-exports.disable_module = disable_module
-
---[[[
--- @function lua_util.push_config_error(module, err)
--- Pushes a configuration error to the state
--- @param {string} module name of module
--- @param {string} err error string
---]]
-local function push_config_error(module, err)
-  if not rspamd_plugins_state.config_errors then
-    rspamd_plugins_state.config_errors = {}
-  end
-
-  if not rspamd_plugins_state.config_errors[module] then
-    rspamd_plugins_state.config_errors[module] = {}
-  end
-
-  table.insert(rspamd_plugins_state.config_errors[module], err)
-end
-
-exports.push_config_error = push_config_error
+exports.config_utils = lua_cfg_utils
+exports.disable_module = lua_cfg_utils.disable_module
 
 --[[[
 -- @function lua_util.disable_module(modname)
@@ -437,7 +395,7 @@ local function check_experimental(modname)
   if rspamd_config:experimental_enabled() then
     return true
   else
-    disable_module(modname, 'experimental')
+    lua_cfg_utils.disable_module(modname, 'experimental')
   end
 
   return false

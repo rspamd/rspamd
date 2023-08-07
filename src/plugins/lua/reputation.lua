@@ -1377,10 +1377,10 @@ if opts['rules'] then
   for k, v in pairs(opts['rules']) do
     if not ((v or E).selector) then
       rspamd_logger.errx(rspamd_config, "no selector defined for rule %s", k)
-      lua_util.push_config_error(N, "no selector defined for rule: " .. k)
+      lua_util.config_utils.push_config_error(N, "no selector defined for rule: " .. k)
     else
       if not parse_rule(k, v) then
-        lua_util.push_config_error(N, "reputation rule is misconfigured: " .. k)
+        lua_util.config_utils.push_config_error(N, "reputation rule is misconfigured: " .. k)
       end
     end
   end

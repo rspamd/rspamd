@@ -354,7 +354,7 @@ local res, err = settings_schema:transform(settings)
 if not res then
   rspamd_logger.warnx(rspamd_config, 'plugin is misconfigured: %s', err)
   local err_msg = string.format("schema error: %s", res)
-  lua_util.push_config_error(N, err_msg)
+  lua_util.config_utils.push_config_error(N, err_msg)
   lua_util.disable_module(N, "failed", err_msg)
   return
 end
