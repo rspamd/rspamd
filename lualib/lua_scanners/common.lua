@@ -381,7 +381,8 @@ local function gen_extension(fname)
 
   local ext = {}
   for n = 1, 2 do
-      ext[n] = #filename_parts > n and string.lower(filename_parts[#filename_parts + 1 - n]) or nil
+      ext[n] = #filename_parts > n 
+        and string.lower(string.gsub(filename_parts[#filename_parts + 1 - n],'[%c%s%p]','')) or nil
   end
   return ext[1],ext[2],filename_parts
 end
@@ -503,6 +504,7 @@ end
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
+exports.gen_extension = gen_extension
 exports.condition_check_and_continue = need_check
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
