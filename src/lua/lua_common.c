@@ -2555,7 +2555,13 @@ bool rspamd_lua_universal_pcall(lua_State *L, gint cbref, const gchar *strloc,
 
 	va_start(ap, err);
 	/* Called function */
-	lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
+	if (cbref > 0) {
+		lua_rawgeti(L, LUA_REGISTRYINDEX, cbref);
+	}
+	else {
+		/* Assume that function was on top of the stack */
+		lua_pushvalue(L, err_idx - 1);
+	}
 	/*
 	 * Possible arguments
 	 * - i - lua_integer, argument - gint64
