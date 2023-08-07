@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -149,6 +149,23 @@ rspamadm_configtest(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 											 cfg,
 											 FALSE)) {
 			ret = FALSE;
+		}
+
+		if (ret) {
+			if (rspamd_lua_require_function(cfg->lua_state, "lua_cfg_utils", "check_configuration_errors")) {
+				GError *err = NULL;
+
+				if (!rspamd_lua_universal_pcall(cfg->lua_state, -1, G_STRLOC, 1, "", &err)) {
+					msg_err_config("call to lua function failed: %s",
+								   lua_tostring(cfg->lua_state, -1));
+					lua_pop(cfg->lua_state, 2);
+					ret = FALSE;
+				}
+				else {
+					ret = lua_toboolean(cfg->lua_state, -1);
+					lua_pop(cfg->lua_state, 2);
+				}
+			}
 		}
 	}
 

@@ -19,6 +19,7 @@ limitations under the License.
 -- This module contains utility functions for configuration of Rspamd modules
 --]]
 
+local rspamd_logger = require "rspamd_logger"
 local exports = {}
 
 --[[[
@@ -62,6 +63,22 @@ exports.push_config_error = function(module, err)
   end
 
   table.insert(rspamd_plugins_state.config_errors[module], err)
+end
+
+exports.check_configuration_errors = function()
+  local ret = true
+
+  if type(rspamd_plugins_state.config_errors) == 'table' then
+    -- We have some errors found during the configuration, so we need to show them
+    for m, errs in pairs(rspamd_plugins_state.config_errors) do
+      for _, err in ipairs(errs) do
+        rspamd_logger.errx(rspamd_config, 'configuration error: module %s: %s', m, err)
+        ret = false
+      end
+    end
+  end
+
+  return ret
 end
 
 return exports
