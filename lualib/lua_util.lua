@@ -627,10 +627,23 @@ exports.table_cmp = table_cmp
 -- Merge two tables
 --]]
 local function table_merge(t1, t2)
-  for k, v in pairs(t2) do
-    t1[k] = v
+  local res = {}
+  local nidx = 1 -- for numeric indicies
+  local it_func = function(k, v)
+    if type(k) == 'number' then
+      res[nidx] = v
+      nidx = nidx + 1
+    else
+      res[k] = v
+    end
   end
-  return t1
+  for k, v in pairs(t1) do
+    it_func(k, v)
+  end
+  for k, v in pairs(t2) do
+    it_func(k, v)
+  end
+  return res
 end
 
 exports.table_merge = table_merge
