@@ -204,6 +204,7 @@ if opts and type(opts) == 'table' then
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
+        lua_util.push_config_error(N, 'cannot add AV rule: "' .. k .. '"')
       else
         rspamd_logger.infox(rspamd_config, 'added antivirus engine %s -> %s', k, m.symbol)
         local t = {

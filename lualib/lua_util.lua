@@ -408,6 +408,26 @@ end
 exports.disable_module = disable_module
 
 --[[[
+-- @function lua_util.push_config_error(module, err)
+-- Pushes a configuration error to the state
+-- @param {string} module name of module
+-- @param {string} err error string
+--]]
+local function push_config_error(module, err)
+  if not rspamd_plugins_state.config_errors then
+    rspamd_plugins_state.config_errors = {}
+  end
+
+  if not rspamd_plugins_state.config_errors[module] then
+    rspamd_plugins_state.config_errors[module] = {}
+  end
+
+  table.insert(rspamd_plugins_state.config_errors[module], err)
+end
+
+exports.push_config_error = push_config_error
+
+--[[[
 -- @function lua_util.disable_module(modname)
 -- Checks experimental plugins state and disable if needed
 -- @param {string} modname name of plugin to check
