@@ -34,7 +34,7 @@ local settings = {
 }
 local redis_params
 
-local settings_schema = lua_redis.generate_schema({
+local settings_schema = lua_redis.enrich_schema({
   helper_url = ts.string,
   helper_timeout = ts.number + ts.string / lua_util.parse_time_interval,
   helper_sync = ts.boolean,

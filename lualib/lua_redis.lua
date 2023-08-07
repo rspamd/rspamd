@@ -24,19 +24,19 @@ local exports = {}
 local E = {}
 local N = "lua_redis"
 
-local common_schema = ts.shape {
-  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional(),
-  db = ts.string:is_optional(),
-  database = ts.string:is_optional(),
-  dbname = ts.string:is_optional(),
-  prefix = ts.string:is_optional(),
-  password = ts.string:is_optional(),
-  expand_keys = ts.boolean:is_optional(),
-  sentinels = (ts.string + ts.array_of(ts.string)):is_optional(),
-  sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional(),
-  sentinel_masters_pattern = ts.string:is_optional(),
-  sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional(),
-  sentinel_password = ts.string:is_optional(),
+local common_schema = {
+  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Connection timeout"),
+  db = ts.string:is_optional():describe("Database number"),
+  database = ts.string:is_optional():describe("Database number"),
+  dbname = ts.string:is_optional():describe("Database number"),
+  prefix = ts.string:is_optional():describe("Key prefix"),
+  password = ts.string:is_optional():describe("Password"),
+  expand_keys = ts.boolean:is_optional():describe("Expand keys"),
+  sentinels = (ts.string + ts.array_of(ts.string)):is_optional():describe("Sentinel servers"),
+  sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
+  sentinel_masters_pattern = ts.string:is_optional():describe("Sentinel masters pattern"),
+  sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
+  sentinel_password = ts.string:is_optional():describe("Sentinel password"),
 }
 
 local read_schema = lutil.table_merge({
@@ -60,18 +60,18 @@ local server_schema = lutil.table_merge({
   server = ts.string + ts.array_of(ts.string),
 }, common_schema)
 
-local generate_schema = function(external)
+local enrich_schema = function(external)
   return ts.one_of {
-    ts.shape(external),
-    ts.shape(lutil.table_merge(read_schema, external)),
-    ts.shape(lutil.table_merge(write_schema, external)),
-    ts.shape(lutil.table_merge(rw_schema, external)),
-    ts.shape(lutil.table_merge(servers_schema, external)),
-    ts.shape(lutil.table_merge(server_schema, external)),
+    ts.shape(external), -- no specific redis parameters
+    ts.shape(lutil.table_merge(read_schema, external)), -- read_servers specified
+    ts.shape(lutil.table_merge(write_schema, external)), -- write_servers specified
+    ts.shape(lutil.table_merge(rw_schema, external)), -- both read and write servers defined
+    ts.shape(lutil.table_merge(servers_schema, external)), -- just servers for both ops
+    ts.shape(lutil.table_merge(server_schema, external)), -- legacy `server` attribute
   }
 end
 
-exports.generate_schema = generate_schema
+exports.enrich_schema = enrich_schema
 
 local function redis_query_sentinel(ev_base, params, initialised)
   local function flatten_redis_table(tbl)

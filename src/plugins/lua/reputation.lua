@@ -1089,14 +1089,14 @@ end
 --]]
 local backends = {
   redis = {
-    schema = lua_redis.generate_schema({
-      prefix = ts.string,
-      expiry = ts.number + ts.string / lua_util.parse_time_interval,
+    schema = lua_redis.enrich_schema({
+      prefix = ts.string:is_optional(),
+      expiry = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
       buckets = ts.array_of(ts.shape {
         time = ts.number + ts.string / lua_util.parse_time_interval,
         name = ts.string,
         mult = ts.number + ts.string / tonumber
-      }),
+      })          :is_optional(),
     }),
     config = {
       expiry = default_expiry,
@@ -1263,7 +1263,7 @@ local function parse_rule(name, tbl)
       rspamd_logger.errx(rspamd_config, "cannot parse whitelist map config for %s: (%s)",
           sel_type,
           rule.config.whitelist)
-      return
+      return false
     end
   end
 
@@ -1362,6 +1362,7 @@ local function parse_rule(name, tbl)
     }
   end
 
+  return true
 end
 
 redis_params = lua_redis.parse_redis_server('reputation')

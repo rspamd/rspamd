@@ -65,7 +65,7 @@ local settings = {
   subject_privacy_length = 16, -- cut the length of the hash
 }
 
-local settings_schema = lua_redis.generate_schema({
+local settings_schema = lua_redis.enrich_schema({
   key_prefix = ts.string,
   expire = (ts.number + ts.string / lua_util.parse_time_interval):is_optional(),
   nrows = ts.number,
