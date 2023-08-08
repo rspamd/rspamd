@@ -927,13 +927,13 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         }
 
         if (item.action === "clean" || item.action === "no action") {
-            item.action = "<div style='font-size:11px' class='badge bg-success'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge text-bg-success'>" + item.action + "</div>";
         } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
-            item.action = "<div style='font-size:11px' class='badge bg-warning'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge text-bg-warning'>" + item.action + "</div>";
         } else if (item.action === "spam" || item.action === "reject") {
-            item.action = "<div style='font-size:11px' class='badge bg-danger'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge text-bg-danger'>" + item.action + "</div>";
         } else {
-            item.action = "<div style='font-size:11px' class='badge bg-info'>" + item.action + "</div>";
+            item.action = "<div style='font-size:11px' class='badge text-bg-info'>" + item.action + "</div>";
         }
 
         var score_content = (item.score < item.required_score)
