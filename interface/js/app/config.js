@@ -124,9 +124,9 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                     var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var $td = '<td><span class="badge bg-secondary">Read</span></td>';
+                        var $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
                         if (!(item.editable === false || rspamd.read_only)) {
-                            $td = $($td).append('&nbsp;<span class="badge bg-success">Write</span>');
+                            $td = $($td).append('&nbsp;<span class="badge text-bg-success">Write</span>');
                         }
                         var $tr = $("<tr>").append($td);
 
