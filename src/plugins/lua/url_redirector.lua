@@ -59,12 +59,13 @@ local settings = {
 }
 
 local function adjust_url(task, orig_url, redir_url)
+  local mempool = task:get_mempool()
   if type(redir_url) == 'string' then
-    redir_url = rspamd_url.create(task:get_mempool(), redir_url, { 'redirect_target' })
+    redir_url = rspamd_url.create(mempool, redir_url, { 'redirect_target' })
   end
 
   if redir_url then
-    orig_url:set_redirected(redir_url)
+    orig_url:set_redirected(redir_url, mempool)
     task:inject_url(redir_url)
     if settings.redirector_symbol then
       task:insert_result(settings.redirector_symbol, 1.0,

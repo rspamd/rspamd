@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -500,10 +500,10 @@ lua_url_get_phished(lua_State *L)
 }
 
 /***
- * @method url:set_redirected(url,[ pool])
+ * @method url:set_redirected(url, pool)
  * Set url as redirected to another url
  * @param {string|url} url new url that is redirecting an old one
- * @param {pool} pool if url is a string this is required for parsing
+ * @param {pool} pool memory pool to allocate memory if needed
  * @return {url} parsed redirected url (if needed)
  */
 static gint
@@ -555,6 +555,12 @@ lua_url_set_redirected(lua_State *L)
 
 		if (redir == NULL) {
 			return luaL_error(L, "url is required as the second argument");
+		}
+
+		pool = rspamd_lua_check_mempool(L, 3);
+
+		if (pool == NULL) {
+			return luaL_error(L, "mempool is required as the third argument");
 		}
 
 		url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
