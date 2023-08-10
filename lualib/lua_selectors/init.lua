@@ -121,7 +121,9 @@ local function process_selector(task, sel)
         end,
             fun.map(function(list_elt)
               local ret, ty = meth.process(list_elt, pt, meth.args)
-              etype = ty
+              if ret then
+                etype = ty
+              end
               return ret
             end, input)))
         if input and etype then
