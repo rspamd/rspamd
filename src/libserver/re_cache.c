@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -924,7 +924,9 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 		if (lua_type(L, -1) != LUA_TTABLE) {
 			txt = lua_check_text_or_string(L, -1);
 
+
 			if (txt) {
+				msg_debug_re_cache("re selector %s returned 1 element", name);
 				sel_data = txt->start;
 				slen = txt->len;
 				*n = 1;
@@ -935,15 +937,20 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 				(*lenvec)[0] = slen;
 				result = TRUE;
 			}
+			else {
+				msg_debug_re_cache("re selector %s returned NULL", name);
+			}
 		}
 		else {
 			*n = rspamd_lua_table_size(L, -1);
+
+			msg_debug_re_cache("re selector %s returned %d elements", name, *n);
 
 			if (*n > 0) {
 				*svec = g_malloc(sizeof(guchar *) * (*n));
 				*lenvec = g_malloc(sizeof(guint) * (*n));
 
-				for (guint i = 0; i < *n; i++) {
+				for (int i = 0; i < *n; i++) {
 					lua_rawgeti(L, -1, i + 1);
 
 					txt = lua_check_text_or_string(L, -1);
@@ -961,9 +968,10 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 					(*lenvec)[i] = slen;
 					lua_pop(L, 1);
 				}
-
-				result = TRUE;
 			}
+
+			/* Empty table is also a valid result */
+			result = TRUE;
 		}
 	}
 
@@ -1252,6 +1260,7 @@ rspamd_re_cache_exec_re(struct rspamd_task *task,
 				}
 			});
 
+			/* URL regexps do not include emails, that's why the code below is commented */
 #if 0
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
 
