@@ -1,42 +1,17 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * Copyright (C) 2002-2015 Igor Sysoev
- * Copyright (C) 2011-2015 Nginx, Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY AUTHOR ''AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL AUTHOR BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "config.h"
@@ -193,8 +168,9 @@ struct url_matcher static_matchers[] = {
 	{"ftp.", "ftp://", url_web_start, url_web_end,
 	 0},
 	/* Likely emails */
-	{"@", "mailto://", url_email_start, url_email_end,
-	 0}};
+	{
+		"@", "mailto://", url_email_start, url_email_end,
+		0}};
 
 struct rspamd_url_flag_name {
 	const gchar *name;
@@ -1817,7 +1793,7 @@ rspamd_url_regen_from_inet_addr(struct rspamd_url *uri, const void *addr, int af
 }
 
 static gboolean
-rspamd_url_is_ip(struct rspamd_url *uri, rspamd_mempool_t *pool)
+rspamd_url_maybe_regenerate_from_ip(struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
 	const gchar *p, *end, *c;
 	gchar *errstr;
@@ -2214,7 +2190,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	struct http_parser_url u;
 	gchar *p;
 	const gchar *end;
-	guint i, complen, ret, flags = 0;
+	guint complen, ret, flags = 0;
 	gsize unquoted_len = 0;
 
 	memset(uri, 0, sizeof(*uri));
@@ -2277,7 +2253,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 					   p + u.field_data[UF_SCHEMA].len + 1,
 					   len - 2 - u.field_data[UF_SCHEMA].len);
 		/* Compensate slashes added */
-		for (i = UF_SCHEMA + 1; i < UF_MAX; i++) {
+		for (int i = UF_SCHEMA + 1; i < UF_MAX; i++) {
 			if (u.field_set & (1 << i)) {
 				u.field_data[i].off += 2;
 			}
@@ -2291,7 +2267,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	uri->urllen = len;
 	uri->flags = flags;
 
-	for (i = 0; i < UF_MAX; i++) {
+	for (guint i = 0; i < UF_MAX; i++) {
 		if (u.field_set & (1 << i)) {
 			guint shift = u.field_data[i].off;
 			complen = u.field_data[i].len;
@@ -2458,7 +2434,7 @@ rspamd_url_parse(struct rspamd_url *uri,
 	rspamd_url_shift(uri, unquoted_len, UF_HOST);
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
-		for (i = 0; i < G_N_ELEMENTS(rspamd_url_protocols); i++) {
+		for (int i = 0; i < G_N_ELEMENTS(rspamd_url_protocols); i++) {
 			if (uri->protocollen == rspamd_url_protocols[i].len) {
 				if (memcmp(uri->string,
 						   rspamd_url_protocols[i].name, uri->protocollen) == 0) {
@@ -2481,21 +2457,50 @@ rspamd_url_parse(struct rspamd_url *uri,
 			/*
 			 * If we have not detected eSLD, but there are no dots in the hostname,
 			 * then we should treat the whole hostname as eSLD - a rule of thumb
+			 *
+			 * We also check that a hostname ends with a permitted character, and all characters are forming
+			 * DNS label. We also need to check for a numeric IP within this check.
 			 */
-			if (uri->hostlen > 0 && memchr(rspamd_url_host_unsafe(uri), '.', uri->hostlen) == NULL) {
-				uri->tldlen = uri->hostlen;
-				uri->tldshift = uri->hostshift;
+			const char *dot_pos = memchr(rspamd_url_host_unsafe(uri), '.', uri->hostlen);
+			bool is_whole_hostname_tld = false;
+
+			if (uri->hostlen > 0 && (dot_pos == NULL || dot_pos == rspamd_url_host_unsafe(uri) + uri->hostlen - 1)) {
+				bool all_chars_domain = true;
+
+				for (int i = 0; i < uri->hostlen; i++) {
+					if (!is_domain(rspamd_url_host_unsafe(uri)[i])) {
+						all_chars_domain = false;
+						break;
+					}
+				}
+
+				if (all_chars_domain) {
+					/* Also check the last character to be either a dot or alphanumeric character */
+					char last_c = rspamd_url_host_unsafe(uri)[uri->hostlen - 1];
+					if (last_c != '.' && !g_ascii_isalnum(last_c)) {
+						all_chars_domain = false;
+					}
+				}
+
+				if (all_chars_domain) {
+					/* Additionally check for a numeric IP as we can have some number here... */
+					rspamd_url_maybe_regenerate_from_ip(uri, pool);
+					uri->tldlen = uri->hostlen;
+					uri->tldshift = uri->hostshift;
+					is_whole_hostname_tld = true;
+				}
 			}
-			else {
+
+			if (!is_whole_hostname_tld) {
 				if (uri->protocol != PROTOCOL_MAILTO) {
 					if (url_scanner->has_tld_file && !(parse_flags & RSPAMD_URL_PARSE_HREF)) {
 						/* Ignore URL's without TLD if it is not a numeric URL */
-						if (!rspamd_url_is_ip(uri, pool)) {
+						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool)) {
 							return URI_ERRNO_TLD_MISSING;
 						}
 					}
 					else {
-						if (!rspamd_url_is_ip(uri, pool)) {
+						if (!rspamd_url_maybe_regenerate_from_ip(uri, pool)) {
 							/* Assume tld equal to host */
 							uri->tldshift = uri->hostshift;
 							uri->tldlen = uri->hostlen;
