@@ -148,6 +148,16 @@ context("URL check functions", function()
       host = "63.143.41.164",
       path = "pro/au.html",
     } },
+    {
+      "http://localhost", true, {
+      host = "localhost",
+      tld = "localhost",
+    } },
+    {
+      "http://localhost.", true, {
+      host = "localhost.",
+      tld = "localhost",
+    } },
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc

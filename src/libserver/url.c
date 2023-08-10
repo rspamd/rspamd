@@ -2474,9 +2474,10 @@ rspamd_url_parse(struct rspamd_url *uri,
 					}
 				}
 
+				char last_c = rspamd_url_host_unsafe(uri)[uri->hostlen - 1];
+
 				if (all_chars_domain) {
 					/* Also check the last character to be either a dot or alphanumeric character */
-					char last_c = rspamd_url_host_unsafe(uri)[uri->hostlen - 1];
 					if (last_c != '.' && !g_ascii_isalnum(last_c)) {
 						all_chars_domain = false;
 					}
@@ -2485,7 +2486,15 @@ rspamd_url_parse(struct rspamd_url *uri,
 				if (all_chars_domain) {
 					/* Additionally check for a numeric IP as we can have some number here... */
 					rspamd_url_maybe_regenerate_from_ip(uri, pool);
-					uri->tldlen = uri->hostlen;
+
+					if (last_c == '.' && uri->hostlen > 1) {
+						/* Skip the last dot */
+						uri->tldlen = uri->hostlen - 1;
+					}
+					else {
+						uri->tldlen = uri->hostlen;
+					}
+
 					uri->tldshift = uri->hostshift;
 					is_whole_hostname_tld = true;
 				}
