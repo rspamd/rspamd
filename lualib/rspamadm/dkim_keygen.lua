@@ -104,14 +104,14 @@ local function print_public_key_dns(opts, base64_pk)
 
 end
 
-local function print_public_key(opts, pk)
+local function print_public_key(opts, pk, need_base64)
   local key_type = opts.type == 'rsa' and 'rsa' or 'ed25519'
-  local base64_pk = tostring(rspamd_util.encode_base64(pk))
+  local base64_pk = need_base64 and tostring(rspamd_util.encode_base64(pk)) or tostring(pk)
   if opts.output == 'plain' then
     io.write(base64_pk)
     io.write("\n")
   elseif opts.output == 'dns' then
-    print_public_key_dns(opts, base64_pk)
+    print_public_key_dns(opts, base64_pk, false)
   elseif opts.output == 'dnskey' then
     io.write(string.format('v=DKIM1; k=%s; p=%s\n', key_type, base64_pk))
   end
@@ -130,7 +130,8 @@ local function gen_rsa_key(opts)
     sk:save("-", opts.priv_output)
   end
 
-  print_public_key(opts, tostring(pk))
+  -- We generate key directly via lua_rsa and it returns unencoded raw data
+  print_public_key(opts, tostring(pk), true)
 end
 
 local function gen_eddsa_key(opts)
@@ -149,7 +150,8 @@ local function gen_eddsa_key(opts)
     io.flush()
   end
 
-  print_public_key(opts, tostring(pk))
+  -- gen_dkim_keypair function returns everything encoded in base64, so no need to do anything
+  print_public_key(opts, tostring(pk), false)
 end
 
 local function handler(args)
