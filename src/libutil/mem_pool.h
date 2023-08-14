@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -226,7 +226,7 @@ struct f_str_tok;
  * @return pointer to newly created string that is copy of src
  */
 gchar *rspamd_mempool_ftokdup_(rspamd_mempool_t *pool,
-							   const struct f_str_tok *src,
+							   struct f_str_tok src,
 							   const gchar *loc)
 	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
 #define rspamd_mempool_ftokdup(pool, src) \

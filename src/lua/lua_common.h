@@ -97,7 +97,7 @@ static inline int lua_absindex(lua_State *L, int i)
 
 extern const luaL_reg null_reg[];
 
-#define RSPAMD_LUA_API_VERSION 12
+#define RSPAMD_LUA_CFG_STATE(cfg) ((lua_State *) ((cfg)->lua_state))
 /**
 * Lua IP address structure
 */

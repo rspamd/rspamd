@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016-2017 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -487,7 +487,7 @@ struct rspamd_config {
 
 	struct rspamd_external_libs_ctx *libs_ctx;  /**< context for external libraries						*/
 	struct rspamd_monitored_ctx *monitored_ctx; /**< context for monitored resources					*/
-	struct rspamd_redis_pool *redis_pool;       /**< redis connection pool								*/
+	void *redis_pool;                           /**< redis connection pool								*/
 
 	struct rspamd_re_cache *re_cache; /**< static regexp cache								*/
 
