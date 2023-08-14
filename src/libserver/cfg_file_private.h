@@ -18,9 +18,6 @@
 #define RSPAMD_CFG_FILE_PRIVATE_H
 
 #include "cfg_file.h"
-#include "../../contrib/mumhash/mum.h"
-#define HASH_CASELESS
-#include "uthash_strcase.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,10 +30,8 @@ struct rspamd_action {
 	enum rspamd_action_type action_type;
 	int flags; /* enum rspamd_action_flags */
 	guint priority;
-	gint lua_handler_ref; /* If special handling is needed */
 	gdouble threshold;
 	gchar *name;
-	struct UT_hash_handle hh; /* Index by name */
 };
 
 #ifdef __cplusplus

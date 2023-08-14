@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -458,7 +458,7 @@ public:
 								  int priority,
 								  symbol_func_t func,
 								  void *user_data,
-								  enum rspamd_symbol_type flags_and_type) -> int;
+								  int flags_and_type) -> int;
 	/**
 	 * A method to add a generic virtual symbol with no function associated
 	 * @param name must have some value, or a fatal error will strike you
@@ -467,7 +467,7 @@ public:
 	 * @return id of a new symbol or -1 in case of failure
 	 */
 	auto add_virtual_symbol(std::string_view name, int parent_id,
-							enum rspamd_symbol_type flags_and_type) -> int;
+							int flags_and_type) -> int;
 
 	/**
 	 * Sets a lua callback to be called on peaks in execution time

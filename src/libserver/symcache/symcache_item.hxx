@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -85,7 +85,7 @@ constexpr static auto item_type_to_str(symcache_item_type t) -> const char *
  * @param type input type as a C enum
  * @return pair of type safe symcache_item_type + the remaining flags or an error
  */
-auto item_type_from_c(enum rspamd_symbol_type type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
+auto item_type_from_c(int type) -> tl::expected<std::pair<symcache_item_type, int>, std::string>;
 
 struct item_condition {
 private:

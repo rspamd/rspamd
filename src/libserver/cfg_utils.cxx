@@ -63,10 +63,12 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 #include "fmt/core.h"
 #include "cxx/util.hxx"
 #include "frozen/unordered_map.h"
 #include "frozen/string.h"
+#include "contrib/ankerl/unordered_dense.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -110,6 +112,58 @@ RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
 {
 	rspamd_config_log_id = rspamd_logger_add_debug_module("config");
 }
+
+struct rspamd_actions_list {
+	using action_ptr = std::shared_ptr<rspamd_action>;
+	std::vector<action_ptr> actions;
+	ankerl::unordered_dense::map<std::string_view, action_ptr> actions_by_name;
+
+	explicit rspamd_actions_list()
+	{
+		actions.reserve(METRIC_ACTION_MAX + 2);
+		actions_by_name.reserve(METRIC_ACTION_MAX + 2);
+	}
+
+	void add_action(action_ptr action)
+	{
+		actions.push_back(action);
+		actions_by_name[action->name] = action;
+		sort();
+	}
+
+	void sort()
+	{
+		std::sort(actions.begin(), actions.end(), [](const action_ptr &a1, const action_ptr &a2) -> bool {
+			if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
+				if (a1->threshold < a2->threshold) {
+					return false;
+				}
+				else if (a1->threshold > a2->threshold) {
+					return true;
+				}
+
+				return false;
+			}
+
+			if (isnan(a1->threshold) && isnan(a2->threshold)) {
+				return false;
+			}
+			else if (isnan(a1->threshold)) {
+				return true;
+			}
+
+			return false;
+		});
+	}
+
+	void clear()
+	{
+		actions.clear();
+		actions_by_name.clear();
+	}
+};
+
+#define RSPAMD_CFG_ACTIONS(cfg) (reinterpret_cast<rspamd_actions_list *>((cfg)->actions))
 
 gboolean
 rspamd_parse_bind_line(struct rspamd_config *cfg,
@@ -181,11 +235,12 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->dns_io_per_server = 16;
 	cfg->unknown_weight = NAN;
 
+	cfg->actions = (void *) new rspamd_actions_list();
+
 	/* Add all internal actions to keep compatibility */
 	for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		struct rspamd_action *action;
 
-		action = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_action);
+		auto &&action = std::make_shared<rspamd_action>();
 		action->threshold = NAN;
 		action->name = rspamd_mempool_strdup(cfg->cfg_pool,
 											 rspamd_action_to_str(static_cast<rspamd_action_type>(i)));
@@ -201,8 +256,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 			action->flags |= RSPAMD_ACTION_HAM;
 		}
 
-		HASH_ADD_KEYPTR(hh, cfg->actions,
-						action->name, strlen(action->name), action);
+		RSPAMD_CFG_ACTIONS(cfg)->add_action(std::move(action));
 	}
 
 	/* Disable timeout */
@@ -366,7 +420,7 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	}
 
 	rspamd_upstreams_library_unref(cfg->ups_ctx);
-	HASH_CLEAR(hh, cfg->actions);
+	delete RSPAMD_CFG_ACTIONS(cfg);
 
 	rspamd_mempool_destructors_enforce(cfg->cfg_pool);
 
@@ -1049,8 +1103,8 @@ rspamd_include_map_handler(const guchar *data, gsize len,
 {
 	auto *cfg = (struct rspamd_config *) ud;
 
-	auto *map_line = rspamd_mempool_ftokdup(cfg->cfg_pool,
-											(rspamd_ftok_t{.len = len + 1, .begin = (char *) data}));
+	auto ftok = rspamd_ftok_t{.len = len + 1, .begin = (char *) data};
+	auto *map_line = rspamd_mempool_ftokdup(cfg->cfg_pool, &ftok);
 
 	auto *cbdata = new rspamd_ucl_map_cbdata{cfg};
 	auto **pcbdata = new rspamd_ucl_map_cbdata *(cbdata);
@@ -1097,8 +1151,6 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 {
 	GHashTableIter it;
 	gpointer k, v;
-	gchar *hostbuf;
-	gsize hostlen;
 
 	ucl_parser_register_variable(parser,
 								 RSPAMD_CONFDIR_MACRO,
@@ -1133,7 +1185,7 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable(parser, RSPAMD_BRANCH_VERSION_MACRO,
 								 RSPAMD_VERSION_BRANCH);
 
-	hostlen = sysconf(_SC_HOST_NAME_MAX);
+	auto hostlen = sysconf(_SC_HOST_NAME_MAX);
 
 	if (hostlen <= 0) {
 		hostlen = 256;
@@ -1142,19 +1194,22 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 		hostlen++;
 	}
 
-	hostbuf = g_alloca(hostlen);
-	memset(hostbuf, 0, hostlen);
-	gethostname(hostbuf, hostlen - 1);
+	auto hostbuf = std::string{};
+	hostbuf.resize(hostlen);
+
+	if (gethostname(hostbuf.data(), hostlen) != 0) {
+		hostbuf = "unknown";
+	}
 
 	/* UCL copies variables, so it is safe to pass an ephemeral buffer here */
 	ucl_parser_register_variable(parser, RSPAMD_HOSTNAME_MACRO,
-								 hostbuf);
+								 hostbuf.c_str());
 
 	if (vars != nullptr) {
 		g_hash_table_iter_init(&it, vars);
 
 		while (g_hash_table_iter_next(&it, &k, &v)) {
-			ucl_parser_register_variable(parser, k, v);
+			ucl_parser_register_variable(parser, (const char *) k, (const char *) v);
 		}
 	}
 }
@@ -1171,10 +1226,10 @@ void rspamd_ucl_add_conf_macros(struct ucl_parser *parser,
 static void
 symbols_classifiers_callback(gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_config *cfg = ud;
+	auto *cfg = (struct rspamd_config *) ud;
 
 	/* Actually, statistics should act like any ordinary symbol */
-	rspamd_symcache_add_symbol(cfg->cache, key, 0, nullptr, nullptr,
+	rspamd_symcache_add_symbol(cfg->cache, (const char *) key, 0, nullptr, nullptr,
 							   SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT, -1);
 }
 
@@ -1188,16 +1243,13 @@ void rspamd_config_insert_classify_symbols(struct rspamd_config *cfg)
 struct rspamd_classifier_config *
 rspamd_config_find_classifier(struct rspamd_config *cfg, const gchar *name)
 {
-	GList *cur;
-	struct rspamd_classifier_config *cf;
-
 	if (name == nullptr) {
 		return nullptr;
 	}
 
-	cur = cfg->classifiers;
+	auto *cur = cfg->classifiers;
 	while (cur) {
-		cf = cur->data;
+		auto *cf = (struct rspamd_classifier_config *) cur->data;
 
 		if (g_ascii_strcasecmp(cf->name, name) == 0) {
 			return cf;
@@ -1212,14 +1264,12 @@ rspamd_config_find_classifier(struct rspamd_config *cfg, const gchar *name)
 gboolean
 rspamd_config_check_statfiles(struct rspamd_classifier_config *cf)
 {
-	struct rspamd_statfile_config *st;
 	gboolean has_other = FALSE, res = FALSE, cur_class = FALSE;
-	GList *cur;
 
 	/* First check classes directly */
-	cur = cf->statfiles;
+	auto *cur = cf->statfiles;
 	while (cur) {
-		st = cur->data;
+		auto *st = (struct rspamd_statfile_config *) cur->data;
 		if (!has_other) {
 			cur_class = st->is_spam;
 			has_other = TRUE;
@@ -1241,7 +1291,7 @@ rspamd_config_check_statfiles(struct rspamd_classifier_config *cf)
 	has_other = FALSE;
 	cur = cf->statfiles;
 	while (cur) {
-		st = cur->data;
+		auto *st = (struct rspamd_statfile_config *) cur->data;
 		if (rspamd_substring_search_caseless(st->symbol,
 											 strlen(st->symbol), "spam", 4) != -1) {
 			st->is_spam = TRUE;
@@ -1890,7 +1940,7 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 {
 	const ucl_object_t *elt;
 	gdouble threshold = NAN;
-	guint flags = 0, std_act, obj_type;
+	int flags = 0, obj_type;
 
 	obj_type = ucl_object_type(obj);
 
@@ -1964,6 +2014,8 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 	act->threshold = threshold;
 	act->flags = flags;
 
+	enum rspamd_action_type std_act;
+
 	if (!(flags & RSPAMD_ACTION_MILTER)) {
 		if (rspamd_action_from_str(act->name, &std_act)) {
 			act->action_type = std_act;
@@ -1981,7 +2033,6 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 							   const gchar *action_name,
 							   const ucl_object_t *obj)
 {
-	struct rspamd_action *act;
 	enum rspamd_action_type std_act;
 	const ucl_object_t *elt;
 	guint priority = ucl_object_get_priority(obj), obj_type;
@@ -2006,13 +2057,15 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 	 * variance of names.
 	 */
 
-	if (rspamd_action_from_str(action_name, (gint *) &std_act)) {
+	if (rspamd_action_from_str(action_name, &std_act)) {
 		action_name = rspamd_action_to_str(std_act);
 	}
 
-	HASH_FIND_STR(cfg->actions, action_name, act);
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto existing_act_it = actions->actions_by_name.find(action_name);
 
-	if (act) {
+	if (existing_act_it != actions->actions_by_name.end()) {
+		auto *act = existing_act_it->second.get();
 		/* Existing element */
 		if (act->priority <= priority) {
 			/* We can replace data */
@@ -2024,7 +2077,7 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 							priority,
 							act->threshold);
 			if (rspamd_config_action_from_ucl(cfg, act, obj, priority)) {
-				rspamd_actions_sort(cfg);
+				actions->sort();
 			}
 			else {
 				return FALSE;
@@ -2040,13 +2093,11 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 	}
 	else {
 		/* Add new element */
-		act = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*act));
+		auto act = std::make_shared<rspamd_action>();
 		act->name = rspamd_mempool_strdup(cfg->cfg_pool, action_name);
 
-		if (rspamd_config_action_from_ucl(cfg, act, obj, priority)) {
-			HASH_ADD_KEYPTR(hh, cfg->actions,
-							act->name, strlen(act->name), act);
-			rspamd_actions_sort(cfg);
+		if (rspamd_config_action_from_ucl(cfg, act.get(), obj, priority)) {
+			actions->add_action(std::move(act));
 		}
 		else {
 			return FALSE;
@@ -2061,11 +2112,11 @@ rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 								   const gchar *action_name,
 								   guint priority)
 {
-	struct rspamd_action *act;
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto maybe_act = rspamd::find_map(actions->actions_by_name, action_name);
 
-	HASH_FIND_STR(cfg->actions, action_name, act);
-
-	if (act) {
+	if (maybe_act) {
+		auto *act = maybe_act.value().get().get();
 		if (priority >= act->priority) {
 			msg_info_config("disable action %s; old priority: %ud, new priority: %ud",
 							action_name,
@@ -2093,23 +2144,23 @@ rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 struct rspamd_action *
 rspamd_config_get_action(struct rspamd_config *cfg, const gchar *name)
 {
-	struct rspamd_action *res = nullptr;
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto maybe_act = rspamd::find_map(actions->actions_by_name, name);
 
-	HASH_FIND_STR(cfg->actions, name, res);
+	if (maybe_act) {
+		return maybe_act.value().get().get();
+	}
 
-	return res;
+	return nullptr;
 }
 
 struct rspamd_action *
 rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 								 enum rspamd_action_type type)
 {
-	struct rspamd_action *cur, *tmp;
-
-	HASH_ITER(hh, cfg->actions, cur, tmp)
-	{
-		if (cur->action_type == type) {
-			return cur;
+	for (const auto &act: RSPAMD_CFG_ACTIONS(cfg)->actions) {
+		if (act->action_type == type) {
+			return act.get();
 		}
 	}
 
@@ -2227,49 +2278,35 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 	return TRUE;
 }
 
+constexpr const auto action_types = frozen::make_unordered_map<frozen::string, enum rspamd_action_type>({
+	{"reject", METRIC_ACTION_REJECT},
+	{"greylist", METRIC_ACTION_GREYLIST},
+	{"add header", METRIC_ACTION_ADD_HEADER},
+	{"add_header", METRIC_ACTION_ADD_HEADER},
+	{"rewrite subject", METRIC_ACTION_REWRITE_SUBJECT},
+	{"rewrite_subject", METRIC_ACTION_REWRITE_SUBJECT},
+	{"soft reject", METRIC_ACTION_SOFT_REJECT},
+	{"soft_reject", METRIC_ACTION_SOFT_REJECT},
+	{"no action", METRIC_ACTION_NOACTION},
+	{"no_action", METRIC_ACTION_NOACTION},
+	{"accept", METRIC_ACTION_NOACTION},
+	{"quarantine", METRIC_ACTION_QUARANTINE},
+	{"discard", METRIC_ACTION_DISCARD},
+
+});
+
 gboolean
-rspamd_action_from_str(const gchar *data, gint *result)
+rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result)
 {
-	guint64 h;
+	auto maybe_action = rspamd::find_map(action_types, std::string_view{data});
 
-	h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
-											data, strlen(data), 0xdeadbabe);
-
-	switch (h) {
-	case 0x9917BFDB46332B8CULL: /* reject */
-		*result = METRIC_ACTION_REJECT;
-		break;
-	case 0x7130EE37D07B3715ULL: /* greylist */
-		*result = METRIC_ACTION_GREYLIST;
-		break;
-	case 0xCA6087E05480C60CULL: /* add_header */
-	case 0x87A3D27783B16241ULL: /* add header */
-		*result = METRIC_ACTION_ADD_HEADER;
-		break;
-	case 0x4963374ED8B90449ULL: /* rewrite_subject */
-	case 0x5C9FC4679C025948ULL: /* rewrite subject */
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-		break;
-	case 0xFC7D6502EE71FDD9ULL: /* soft reject */
-	case 0x73576567C262A82DULL: /* soft_reject */
-		*result = METRIC_ACTION_SOFT_REJECT;
-		break;
-	case 0x207091B927D1EC0DULL: /* no action */
-	case 0xB7D92D002CD46325ULL: /* no_action */
-	case 0x167C0DF4BAA9BCECULL: /* accept */
-		*result = METRIC_ACTION_NOACTION;
-		break;
-	case 0x4E9666ECCD3FC314ULL: /* quarantine */
-		*result = METRIC_ACTION_QUARANTINE;
-		break;
-	case 0x93B346242F7F69B3ULL: /* discard */
-		*result = METRIC_ACTION_DISCARD;
-		break;
-	default:
-		return FALSE;
+	if (maybe_action) {
+		*result = maybe_action.value().get();
+		return true;
 	}
-
-	return TRUE;
+	else {
+		return false;
+	}
 }
 
 const gchar *
@@ -2328,36 +2365,6 @@ rspamd_action_to_str_alt(enum rspamd_action_type action)
 	}
 
 	return "unknown action";
-}
-
-static int
-rspamd_actions_cmp(const struct rspamd_action *a1, const struct rspamd_action *a2)
-{
-	if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
-		if (a1->threshold < a2->threshold) {
-			return -1;
-		}
-		else if (a1->threshold > a2->threshold) {
-			return 1;
-		}
-
-		return 0;
-	}
-
-	if (isnan(a1->threshold) && isnan(a2->threshold)) {
-		return 0;
-	}
-	else if (isnan(a1->threshold)) {
-		return 1;
-	}
-	else {
-		return -1;
-	}
-}
-
-void rspamd_actions_sort(struct rspamd_config *cfg)
-{
-	HASH_SORT(cfg->actions, rspamd_actions_cmp);
 }
 
 static void
@@ -2428,7 +2435,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 
 		DL_DELETE(cfg->setting_ids, elt);
 
-		nelt = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*nelt));
+		nelt = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_config_settings_elt);
 
 		nelt->id = id;
 		nelt->name = rspamd_mempool_strdup(cfg->cfg_pool, name);
@@ -2457,7 +2464,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 		REF_RELEASE(elt);
 	}
 	else {
-		elt = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*elt));
+		elt = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_config_settings_elt);
 
 		elt->id = id;
 		elt->name = rspamd_mempool_strdup(cfg->cfg_pool, name);
@@ -2588,12 +2595,11 @@ struct rspamd_external_libs_ctx *
 rspamd_init_libs(void)
 {
 	struct rlimit rlim;
-	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
 
-	ctx = g_malloc0(sizeof(*ctx));
+	auto *ctx = g_new0(struct rspamd_external_libs_ctx, 1);
 	ctx->crypto_ctx = rspamd_cryptobox_init();
-	ottery_cfg = g_malloc0(ottery_get_sizeof_config());
+	ottery_cfg = (struct ottery_config *) g_malloc0(ottery_get_sizeof_config());
 	ottery_config_init(ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
 
@@ -2603,10 +2609,12 @@ rspamd_init_libs(void)
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
 		ottery_config_disable_entropy_sources(ottery_cfg,
 											  OTTERY_ENTROPY_SRC_RDRAND);
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
-		RAND_set_rand_engine(nullptr);
-#endif
 	}
+
+	g_assert(ottery_init(ottery_cfg) == 0);
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+	RAND_set_rand_engine(nullptr);
+#endif
 
 	/* Configure utf8 library */
 	guint utf8_flags = 0;
@@ -2619,8 +2627,6 @@ rspamd_init_libs(void)
 	}
 
 	rspamd_fast_utf8_library_init(utf8_flags);
-
-	g_assert(ottery_init(ottery_cfg) == 0);
 
 #ifdef HAVE_LOCALE_H
 	if (getenv("LANG") == nullptr) {
@@ -2658,7 +2664,7 @@ rspamd_open_zstd_dictionary(const char *path)
 {
 	struct zstd_dictionary *dict;
 
-	dict = g_malloc0(sizeof(*dict));
+	dict = g_new0(zstd_dictionary, 1);
 	dict->dict = rspamd_file_xmap(path, PROT_READ, &dict->size, TRUE);
 
 	if (dict->dict == nullptr) {
@@ -2688,10 +2694,10 @@ rspamd_free_zstd_dictionary(struct zstd_dictionary *dict)
 }
 
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
-extern void openblas_set_num_threads(int num_threads);
+extern "C" void openblas_set_num_threads(int num_threads);
 #endif
 #ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
-extern void bli_thread_set_num_threads(int num_threads);
+extern "C" void bli_thread_set_num_threads(int num_threads);
 #endif
 
 gboolean
@@ -2716,12 +2722,12 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 		rspamd_free_zstd_dictionary(ctx->out_dict);
 
 		if (ctx->out_zstream) {
-			ZSTD_freeCStream(ctx->out_zstream);
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
 			ctx->out_zstream = nullptr;
 		}
 
 		if (ctx->in_zstream) {
-			ZSTD_freeDStream(ctx->in_zstream);
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
 			ctx->in_zstream = nullptr;
 		}
 
@@ -2785,23 +2791,23 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 
 		/* Init decompression */
 		ctx->in_zstream = ZSTD_createDStream();
-		r = ZSTD_initDStream(ctx->in_zstream);
+		r = ZSTD_initDStream((ZSTD_DCtx *) ctx->in_zstream);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init decompression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeDStream(ctx->in_zstream);
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
 			ctx->in_zstream = nullptr;
 		}
 
 		/* Init compression */
 		ctx->out_zstream = ZSTD_createCStream();
-		r = ZSTD_initCStream(ctx->out_zstream, 1);
+		r = ZSTD_initCStream((ZSTD_CCtx *) ctx->out_zstream, 1);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init compression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeCStream(ctx->out_zstream);
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
 			ctx->out_zstream = nullptr;
 		}
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
@@ -2824,12 +2830,12 @@ rspamd_libs_reset_decompression(struct rspamd_external_libs_ctx *ctx)
 		return FALSE;
 	}
 	else {
-		r = ZSTD_DCtx_reset(ctx->in_zstream, ZSTD_reset_session_only);
+		r = ZSTD_DCtx_reset((ZSTD_DCtx *) ctx->in_zstream, ZSTD_reset_session_only);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init decompression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeDStream(ctx->in_zstream);
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
 			ctx->in_zstream = nullptr;
 
 			return FALSE;
@@ -2849,15 +2855,15 @@ rspamd_libs_reset_compression(struct rspamd_external_libs_ctx *ctx)
 	}
 	else {
 		/* Dictionary will be reused automatically if specified */
-		r = ZSTD_CCtx_reset(ctx->out_zstream, ZSTD_reset_session_only);
+		r = ZSTD_CCtx_reset((ZSTD_CCtx *) ctx->out_zstream, ZSTD_reset_session_only);
 		if (!ZSTD_isError(r)) {
-			r = ZSTD_CCtx_setPledgedSrcSize(ctx->out_zstream, ZSTD_CONTENTSIZE_UNKNOWN);
+			r = ZSTD_CCtx_setPledgedSrcSize((ZSTD_CCtx *) ctx->out_zstream, ZSTD_CONTENTSIZE_UNKNOWN);
 		}
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init compression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeCStream(ctx->out_zstream);
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
 			ctx->out_zstream = nullptr;
 
 			return FALSE;
@@ -2883,11 +2889,11 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		rspamd_free_zstd_dictionary(ctx->out_dict);
 
 		if (ctx->out_zstream) {
-			ZSTD_freeCStream(ctx->out_zstream);
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
 		}
 
 		if (ctx->in_zstream) {
-			ZSTD_freeDStream(ctx->in_zstream);
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
 		}
 
 		rspamd_cryptobox_deinit(ctx->crypto_ctx);

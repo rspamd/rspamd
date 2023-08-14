@@ -50,16 +50,6 @@ struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
 
 /**
- * Types of rspamd bind lines
- */
-enum rspamd_cred_type {
-	CRED_NORMAL,
-	CRED_CONTROL,
-	CRED_LMTP,
-	CRED_DELIVERY
-};
-
-/**
  * Logging type
  */
 enum rspamd_log_type {
@@ -92,17 +82,6 @@ struct script_module {
 	gchar *name; /**< name of module   */
 	gchar *path; /**< path to module   */
 	gchar *digest;
-};
-
-/**
- * Type of lua variable
- */
-enum lua_var_type {
-	LUA_VAR_NUM,
-	LUA_VAR_BOOLEAN,
-	LUA_VAR_STRING,
-	LUA_VAR_FUNCTION,
-	LUA_VAR_UNKNOWN
 };
 
 enum rspamd_symbol_group_flags {
@@ -356,12 +335,12 @@ struct rspamd_config {
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
-	gdouble unknown_weight;        /**< weight of unknown symbols						*/
-	gdouble grow_factor;           /**< grow factor for metric							*/
-	GHashTable *symbols;           /**< weights of symbols in metric					*/
-	const gchar *subject;          /**< subject rewrite string							*/
-	GHashTable *groups;            /**< groups of symbols								*/
-	struct rspamd_action *actions; /**< all actions of the metric						*/
+	gdouble unknown_weight; /**< weight of unknown symbols						*/
+	gdouble grow_factor;    /**< grow factor for metric							*/
+	GHashTable *symbols;    /**< weights of symbols in metric					*/
+	const gchar *subject;   /**< subject rewrite string							*/
+	GHashTable *groups;     /**< groups of symbols								*/
+	void *actions;          /**< all actions of the metric (opaque type)		*/
 
 	gboolean one_shot_mode;              /**< rules add only one symbol							*/
 	gboolean check_text_attachements;    /**< check text attachements as text					*/
@@ -730,7 +709,7 @@ gboolean rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 /*
  * Get action from a string
  */
-gboolean rspamd_action_from_str(const gchar *data, gint *result);
+gboolean rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result);
 
 /*
  * Return textual representation of action enumeration
@@ -738,11 +717,6 @@ gboolean rspamd_action_from_str(const gchar *data, gint *result);
 const gchar *rspamd_action_to_str(enum rspamd_action_type action);
 
 const gchar *rspamd_action_to_str_alt(enum rspamd_action_type action);
-
-/*
- * Resort all actions (needed to operate with thresholds)
- */
-void rspamd_actions_sort(struct rspamd_config *cfg);
 
 /**
  * Parse radix tree or radix map from ucl object

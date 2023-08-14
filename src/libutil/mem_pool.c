@@ -621,7 +621,7 @@ rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *lo
 }
 
 gchar *
-rspamd_mempool_ftokdup_(rspamd_mempool_t *pool, struct f_str_tok src,
+rspamd_mempool_ftokdup_(rspamd_mempool_t *pool, const rspamd_ftok_t *src,
 						const gchar *loc)
 {
 	gchar *newstr;

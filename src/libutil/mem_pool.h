@@ -226,7 +226,7 @@ struct f_str_tok;
  * @return pointer to newly created string that is copy of src
  */
 gchar *rspamd_mempool_ftokdup_(rspamd_mempool_t *pool,
-							   struct f_str_tok src,
+							   const struct f_str_tok *src,
 							   const gchar *loc)
 	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
 #define rspamd_mempool_ftokdup(pool, src) \
