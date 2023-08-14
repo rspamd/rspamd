@@ -36,12 +36,16 @@
 #include <syslog.h>
 #endif
 
-#include <math.h>
+#include <cmath>
 
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
 	std::string key;
 	rspamd_rcl_default_handler_t handler;
+};
+
+struct rspamd_rcl_sections_map {
+	ankerl::unordered_dense::map<std::string, struct rspamd_rcl_section> sections;
 };
 
 struct rspamd_rcl_section {
@@ -80,7 +84,7 @@ struct rspamd_worker_cfg_parser {
 };
 
 static bool rspamd_rcl_process_section(struct rspamd_config *cfg,
-									   struct rspamd_rcl_section *sec,
+									   const struct rspamd_rcl_section &sec,
 									   gpointer ptr, const ucl_object_t *obj, rspamd_mempool_t *pool,
 									   GError **err);
 static bool
@@ -277,39 +281,38 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 {
 	const ucl_object_t *dns, *upstream, *neighbours;
 	auto *cfg = (struct rspamd_config *) ud;
-	struct rspamd_rcl_section *dns_section, *upstream_section, *neighbours_section;
 
 	auto maybe_subsection = rspamd::find_map(section->subsections, "dns");
 
 	dns = ucl_object_lookup(obj, "dns");
 	if (maybe_subsection && dns != nullptr) {
 		if (!rspamd_rcl_section_parse_defaults(cfg,
-											   &maybe_subsection.value().get(), cfg->cfg_pool, dns,
+											   maybe_subsection.value().get(), cfg->cfg_pool, dns,
 											   cfg, err)) {
 			return FALSE;
 		}
 	}
 
-	HASH_FIND_STR(section->subsections, "upstream", upstream_section);
+	maybe_subsection = rspamd::find_map(section->subsections, "upstream");
 
 	upstream = ucl_object_lookup_any(obj, "upstream", "upstreams", nullptr);
-	if (upstream_section != nullptr && upstream != nullptr) {
+	if (maybe_subsection && upstream != nullptr) {
 		if (!rspamd_rcl_section_parse_defaults(cfg,
-											   upstream_section, cfg->cfg_pool,
+											   maybe_subsection.value().get(), cfg->cfg_pool,
 											   upstream, cfg, err)) {
 			return FALSE;
 		}
 	}
 
-	HASH_FIND_STR(section->subsections, "neighbours", neighbours_section);
+	maybe_subsection = rspamd::find_map(section->subsections, "neighbours");
 
 	neighbours = ucl_object_lookup(obj, "neighbours");
-	if (neighbours_section != nullptr && neighbours != nullptr) {
+	if (maybe_subsection && neighbours != nullptr) {
 		const ucl_object_t *cur;
 
 		LL_FOREACH(neighbours, cur)
 		{
-			if (!rspamd_rcl_process_section(cfg, neighbours_section, cfg, cur,
+			if (!rspamd_rcl_process_section(cfg, maybe_subsection.value().get(), cfg, cur,
 											pool, err)) {
 				return FALSE;
 			}
@@ -317,7 +320,7 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	if (rspamd_rcl_section_parse_defaults(cfg,
-										  section, cfg->cfg_pool, obj,
+										  *section, cfg->cfg_pool, obj,
 										  cfg, err)) {
 		/* We need to init this early */
 		rspamd_multipattern_library_init(cfg->hs_cache_dir);
@@ -338,27 +341,23 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						 const gchar *key, gpointer ud,
 						 struct rspamd_rcl_section *section, GError **err)
 {
-	struct rspamd_config *cfg = ud;
-	struct rspamd_symbols_group *gr;
-	const ucl_object_t *val, *elt;
-	struct rspamd_rcl_section *subsection;
-	struct rspamd_rcl_symbol_data sd;
+	auto *cfg = static_cast<rspamd_config *>(ud);
 	const gchar *description = nullptr;
 
 	g_assert(key != nullptr);
 
-	gr = g_hash_table_lookup(cfg->groups, key);
+	auto *gr = static_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, key));
 
 	if (gr == nullptr) {
 		gr = rspamd_config_new_group(cfg, key);
 	}
 
-	if (!rspamd_rcl_section_parse_defaults(cfg, section, pool, obj,
+	if (!rspamd_rcl_section_parse_defaults(cfg, *section, pool, obj,
 										   gr, err)) {
 		return FALSE;
 	}
 
-	if ((elt = ucl_object_lookup(obj, "one_shot")) != nullptr) {
+	if (const auto *elt = ucl_object_lookup(obj, "one_shot"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -373,7 +372,7 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	if ((elt = ucl_object_lookup(obj, "disabled")) != nullptr) {
+	if (const auto *elt = ucl_object_lookup(obj, "disabled"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -388,7 +387,7 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	if ((elt = ucl_object_lookup(obj, "enabled")) != nullptr) {
+	if (const auto *elt = ucl_object_lookup(obj, "enabled"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -403,7 +402,7 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	if ((elt = ucl_object_lookup(obj, "public")) != nullptr) {
+	if (const auto *elt = ucl_object_lookup(obj, "public"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -418,7 +417,7 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	if ((elt = ucl_object_lookup(obj, "private")) != nullptr) {
+	if (const auto *elt = ucl_object_lookup(obj, "private"); elt != nullptr) {
 		if (ucl_object_type(elt) != UCL_BOOLEAN) {
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -433,23 +432,26 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	elt = ucl_object_lookup(obj, "description");
-	if (elt) {
+
+	if (const auto *elt = ucl_object_lookup(obj, "description"); elt != nullptr) {
 		description = ucl_object_tostring(elt);
 
 		gr->description = rspamd_mempool_strdup(cfg->cfg_pool,
 												description);
 	}
 
+	struct rspamd_rcl_symbol_data sd;
 	sd.gr = gr;
 	sd.cfg = cfg;
 
 	/* Handle symbols */
-	val = ucl_object_lookup(obj, "symbols");
-	if (val != nullptr && ucl_object_type(val) == UCL_OBJECT) {
+	if (const auto *val = ucl_object_lookup(obj, "symbols"); val != nullptr && ucl_object_type(val) == UCL_OBJECT) {
 		HASH_FIND_STR(section->subsections, "symbols", subsection);
-		g_assert(subsection != nullptr);
-		if (!rspamd_rcl_process_section(cfg, subsection, &sd, val,
+
+		auto subsection = rspamd::find_map(section->subsections, "symbols");
+
+		g_assert(subsection.has_value());
+		if (!rspamd_rcl_process_section(cfg, subsection.value().get(), &sd, val,
 										pool, err)) {
 
 			return FALSE;
@@ -464,7 +466,7 @@ rspamd_rcl_symbol_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						  const gchar *key, gpointer ud,
 						  struct rspamd_rcl_section *section, GError **err)
 {
-	struct rspamd_rcl_symbol_data *sd = ud;
+	auto *sd = static_cast<rspamd_rcl_symbol_data *>(ud);
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
 	const gchar *description = nullptr;
@@ -638,7 +640,7 @@ rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						   const gchar *key, gpointer ud,
 						   struct rspamd_rcl_section *section, GError **err)
 {
-	struct rspamd_config *cfg = ud;
+	auto *cfg = static_cast<rspamd_config *>(ud);
 	const ucl_object_t *cur;
 	ucl_object_iter_t it;
 
@@ -685,7 +687,7 @@ rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	ucl_object_iterate_free(it);
 
-	return rspamd_rcl_section_parse_defaults(cfg, section, pool, obj, cfg, err);
+	return rspamd_rcl_section_parse_defaults(cfg, *section, pool, obj, cfg, err);
 }
 
 static gboolean
@@ -2537,7 +2539,7 @@ rspamd_rcl_config_get_section(struct rspamd_rcl_section *top,
 
 static bool
 rspamd_rcl_process_section(struct rspamd_config *cfg,
-						   struct rspamd_rcl_section *sec,
+						   const struct rspamd_rcl_section &sec,
 						   gpointer ptr, const ucl_object_t *obj, rspamd_mempool_t *pool,
 						   GError **err)
 {
@@ -2547,9 +2549,9 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 	const gchar *key = nullptr;
 
 	g_assert(obj != nullptr);
-	g_assert(sec->handler != nullptr);
+	g_assert(sec.handler != nullptr);
 
-	if (sec->key_attr != nullptr) {
+	if (sec.key_attr != nullptr) {
 		it = ucl_object_iterate_new(obj);
 
 		while ((cur = ucl_object_iterate_full(it, UCL_ITERATE_EXPLICIT)) != nullptr) {
@@ -2570,7 +2572,7 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 		it = ucl_object_iterate_new(obj);
 
 		while ((cur = ucl_object_iterate_full(it, UCL_ITERATE_EXPLICIT)) != nullptr) {
-			if (!sec->handler(pool, cur, ucl_object_key(cur), ptr, sec, err)) {
+			if (!sec.handler(pool, cur, ucl_object_key(cur), ptr, const_cast<rspamd_rcl_section *>(&sec), err)) {
 				ucl_object_iterate_free(it);
 
 				return false;
@@ -2582,16 +2584,16 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 		return true;
 	}
 	else {
-		if (sec->key_attr != nullptr) {
+		if (sec.key_attr != nullptr) {
 			/* First of all search for required attribute and use it as a key */
-			cur = ucl_object_lookup(obj, sec->key_attr);
+			cur = ucl_object_lookup(obj, sec.key_attr);
 
 			if (cur == nullptr) {
-				if (sec->default_key == nullptr) {
+				if (sec.default_key == nullptr) {
 					g_set_error(err, CFG_RCL_ERROR, EINVAL, "required attribute "
 															"'%s' is missing for section '%s', current key: %s",
-								sec->key_attr,
-								sec->name,
+								sec.key_attr,
+								sec.name,
 								ucl_object_emit(obj, UCL_EMIT_CONFIG));
 
 					return false;
@@ -2599,15 +2601,15 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 				else {
 					msg_info("using default key '%s' for mandatory field '%s' "
 							 "for section '%s'",
-							 sec->default_key, sec->key_attr,
-							 sec->name);
-					key = sec->default_key;
+							 sec.default_key, sec.key_attr,
+							 sec.name);
+					key = sec.default_key;
 				}
 			}
 			else if (ucl_object_type(cur) != UCL_STRING) {
 				g_set_error(err, CFG_RCL_ERROR, EINVAL, "required attribute %s"
 														" is not a string for section %s",
-							sec->key_attr, sec->name);
+							sec.key_attr, sec.name);
 
 				return false;
 			}
@@ -2617,7 +2619,7 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 		}
 	}
 
-	return sec->handler(pool, obj, key, ptr, sec, err);
+	return sec.handler(pool, obj, key, ptr, const_cast<rspamd_rcl_section *>(&sec), err);
 }
 
 gboolean
@@ -2626,9 +2628,6 @@ rspamd_rcl_parse(struct rspamd_rcl_section *top,
 				 gpointer ptr, rspamd_mempool_t *pool,
 				 const ucl_object_t *obj, GError **err)
 {
-	const ucl_object_t *found, *cur_obj;
-	struct rspamd_rcl_section *cur, *tmp, *found_sec;
-
 	if (obj->type != UCL_OBJECT) {
 		g_set_error(err,
 					CFG_RCL_ERROR,
