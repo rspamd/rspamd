@@ -2,7 +2,7 @@
 ADD_SUBDIRECTORY(css)
 SET(LIBRSPAMDSERVERSRC
         ${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.cxx
-        ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/composites/composites.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/composites/composites_manager.cxx
         ${CMAKE_CURRENT_SOURCE_DIR}/dkim.c
