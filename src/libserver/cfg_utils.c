@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2248,14 +2248,25 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 			it = ucl_object_iterate_new(cur_elt);
 
 			while ((cur = ucl_object_iterate_safe(it, true)) != NULL) {
-				str = ucl_object_tostring(cur);
 
-				if (!*target) {
-					*target = rspamd_map_helper_new_radix(
-						rspamd_map_add_fake(cfg, description, map_name));
+
+				if (ucl_object_type(cur) == UCL_STRING) {
+					str = ucl_object_tostring(cur);
+					if (!*target) {
+						*target = rspamd_map_helper_new_radix(
+							rspamd_map_add_fake(cfg, description, map_name));
+					}
+
+					rspamd_map_helper_insert_radix_resolve(*target, str, "");
 				}
-
-				rspamd_map_helper_insert_radix_resolve(*target, str, "");
+				else {
+					g_set_error(err,
+								g_quark_from_static_string("rspamd-config"),
+								EINVAL, "bad element inside array object for %s: expected string, got: %s",
+								ucl_object_key(obj), ucl_object_type_to_string(ucl_object_type(cur)));
+					ucl_object_iterate_free(it);
+					return FALSE;
+				}
 			}
 
 			ucl_object_iterate_free(it);
@@ -2755,11 +2766,11 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 
 	if (ctx != NULL) {
 		if (cfg->local_addrs) {
-			rspamd_config_radix_from_ucl(cfg, cfg->local_addrs,
-										 "Local addresses",
-										 (struct rspamd_radix_map_helper **) ctx->local_addrs,
-										 NULL,
-										 NULL, "local addresses");
+			ret = rspamd_config_radix_from_ucl(cfg, cfg->local_addrs,
+											   "Local addresses",
+											   (struct rspamd_radix_map_helper **) ctx->local_addrs,
+											   NULL,
+											   NULL, "local addresses");
 		}
 
 		rspamd_free_zstd_dictionary(ctx->in_dict);
