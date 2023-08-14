@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2581,24 +2581,27 @@ lua_config_get_metric_action(lua_State *L)
 	return 1;
 }
 
+static void
+lua_config_actions_cb(struct rspamd_action *act, void *cbd)
+{
+	lua_State *L = (lua_State *) cbd;
+
+	if (!isnan(act->threshold)) {
+		lua_pushstring(L, act->name);
+		lua_pushnumber(L, act->threshold);
+		lua_settable(L, -3);
+	}
+}
+
 static gint
 lua_config_get_all_actions(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	struct rspamd_action *act, *tmp;
 
 	if (cfg) {
-		lua_createtable(L, 0, HASH_COUNT(cfg->actions));
-
-		HASH_ITER(hh, cfg->actions, act, tmp)
-		{
-			if (!isnan(act->threshold)) {
-				lua_pushstring(L, act->name);
-				lua_pushnumber(L, act->threshold);
-				lua_settable(L, -3);
-			}
-		}
+		lua_createtable(L, 0, rspamd_config_actions_size(cfg));
+		rspamd_config_actions_foreach(cfg, lua_config_actions_cb, L);
 	}
 	else {
 		return luaL_error(L, "invalid arguments, rspamd_config expected");

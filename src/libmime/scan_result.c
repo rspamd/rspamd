@@ -56,6 +56,20 @@ rspamd_scan_result_dtor(gpointer d)
 	kh_destroy(rspamd_symbols_group_hash, r->sym_groups);
 }
 
+static void
+rspamd_metric_actions_foreach_cb(int i, struct rspamd_action *act, void *cbd)
+{
+	struct rspamd_scan_result *metric_res = (struct rspamd_scan_result *) cbd;
+	metric_res->actions_config[i].flags = RSPAMD_ACTION_RESULT_DEFAULT;
+	if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
+		metric_res->actions_config[i].cur_limit = act->threshold;
+	}
+	else {
+		metric_res->actions_config[i].flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
+	}
+	metric_res->actions_config[i].action = act;
+}
+
 struct rspamd_scan_result *
 rspamd_create_metric_result(struct rspamd_task *task,
 							const gchar *name, gint lua_sym_cbref)
@@ -91,25 +105,13 @@ rspamd_create_metric_result(struct rspamd_task *task,
 	if (task->cfg) {
 		struct rspamd_action *act, *tmp;
 
+		int nact = rspamd_config_actions_size(task->cfg);
 		metric_res->actions_config = rspamd_mempool_alloc0(task->task_pool,
-														   sizeof(struct rspamd_action_config) * HASH_COUNT(task->cfg->actions));
-		i = 0;
+														   sizeof(struct rspamd_action_config) * nact);
 
-		HASH_ITER(hh, task->cfg->actions, act, tmp)
-		{
-			metric_res->actions_config[i].flags = RSPAMD_ACTION_RESULT_DEFAULT;
-			if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
-				metric_res->actions_config[i].cur_limit = act->threshold;
-			}
-			else {
-				metric_res->actions_config[i].flags |= RSPAMD_ACTION_RESULT_NO_THRESHOLD;
-			}
-			metric_res->actions_config[i].action = act;
+		rspamd_config_actions_foreach_enumerate(task->cfg, rspamd_metric_actions_foreach_cb, metric_res);
 
-			i++;
-		}
-
-		metric_res->nactions = i;
+		metric_res->nactions = nact;
 	}
 
 	rspamd_mempool_add_destructor(task->task_pool,

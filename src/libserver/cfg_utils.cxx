@@ -2167,6 +2167,29 @@ rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 	return nullptr;
 }
 
+void rspamd_config_actions_foreach(struct rspamd_config *cfg,
+								   void (*func)(struct rspamd_action *act, void *d),
+								   void *data)
+{
+	for (const auto &act: RSPAMD_CFG_ACTIONS(cfg)->actions) {
+		func(act.get(), data);
+	}
+}
+
+void rspamd_config_actions_foreach_enumerate(struct rspamd_config *cfg,
+											 void (*func)(int idx, struct rspamd_action *act, void *d),
+											 void *data)
+{
+	for (const auto &[idx, act]: rspamd::enumerate(RSPAMD_CFG_ACTIONS(cfg)->actions)) {
+		func(idx, act.get(), data);
+	}
+}
+
+gsize rspamd_config_actions_size(struct rspamd_config *cfg)
+{
+	return RSPAMD_CFG_ACTIONS(cfg)->actions.size();
+}
+
 gboolean
 rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj, const gchar *description,
 							 struct rspamd_radix_map_helper **target, GError **err,

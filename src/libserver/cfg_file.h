@@ -785,6 +785,32 @@ struct rspamd_action *rspamd_config_get_action(struct rspamd_config *cfg,
 struct rspamd_action *rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 													   enum rspamd_action_type type);
 
+/**
+ * Iterate over all actions
+ * @param cfg
+ * @param func
+ * @param data
+ */
+void rspamd_config_actions_foreach(struct rspamd_config *cfg,
+								   void (*func)(struct rspamd_action *act, void *d),
+								   void *data);
+/**
+ * Iterate over all actions with index
+ * @param cfg
+ * @param func
+ * @param data
+ */
+void rspamd_config_actions_foreach_enumerate(struct rspamd_config *cfg,
+											 void (*func)(int idx, struct rspamd_action *act, void *d),
+											 void *data);
+
+/**
+ * Returns number of actions defined in the config
+ * @param cfg
+ * @return
+ */
+gsize rspamd_config_actions_size(struct rspamd_config *cfg);
+
 int rspamd_config_ev_backend_get(struct rspamd_config *cfg);
 const gchar *rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective);
 

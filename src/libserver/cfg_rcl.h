@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -166,20 +166,6 @@ gboolean rspamd_rcl_parse(struct rspamd_rcl_section *top,
 						  gpointer ptr, rspamd_mempool_t *pool,
 						  const ucl_object_t *obj, GError **err);
 
-
-/**
- * Parse default structure for a section
- * @param section section
- * @param cfg config file
- * @param obj object to parse
- * @param ptr ptr to pass
- * @param err error ptr
- * @return TRUE if the object has been parsed
- */
-gboolean rspamd_rcl_section_parse_defaults(struct rspamd_config *cfg,
-										   struct rspamd_rcl_section *section,
-										   rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
-										   GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
  * which itself contains a struct pointer and the offset of a member in a
