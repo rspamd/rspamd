@@ -303,6 +303,7 @@ struct rspamd_config_post_init_script {
 };
 
 struct rspamd_lang_detector;
+struct rspamd_rcl_sections_map;
 
 enum rspamd_config_settings_policy {
 	RSPAMD_SETTINGS_POLICY_DEFAULT = 0,
@@ -391,21 +392,21 @@ struct rspamd_config {
 	GList *script_modules;        /**< linked list of script modules to load				*/
 	GHashTable *explicit_modules; /**< modules that should be always loaded				*/
 
-	GList *filters;                     /**< linked list of all filters							*/
-	GList *workers;                     /**< linked list of all workers params					*/
-	GHashTable *wrk_parsers;            /**< hash for worker config parsers, indexed by worker quarks */
-	ucl_object_t *rcl_obj;              /**< rcl object											*/
-	ucl_object_t *config_comments;      /**< comments saved from the config						*/
-	ucl_object_t *doc_strings;          /**< documentation strings for config options			*/
-	GPtrArray *c_modules;               /**< list of C modules			*/
-	void *composites_manager;           /**< hash of composite symbols indexed by its name		*/
-	GList *classifiers;                 /**< list of all classifiers defined                    */
-	GList *statfiles;                   /**< list of all statfiles in config file order         */
-	GHashTable *classifiers_symbols;    /**< hashtable indexed by symbol name of classifiers    */
-	GHashTable *cfg_params;             /**< all cfg params indexed by its name in this structure */
-	gchar *dynamic_conf;                /**< path to dynamic configuration						*/
-	ucl_object_t *current_dynamic_conf; /**< currently loaded dynamic configuration				*/
-	gint clock_res;                     /**< resolution of clock used							*/
+	GList *filters;                             /**< linked list of all filters							*/
+	GList *workers;                             /**< linked list of all workers params					*/
+	struct rspamd_rcl_sections_map *rcl_parser; /**< parser for RCL config							*/
+	ucl_object_t *rcl_obj;                      /**< rcl object											*/
+	ucl_object_t *config_comments;              /**< comments saved from the config						*/
+	ucl_object_t *doc_strings;                  /**< documentation strings for config options			*/
+	GPtrArray *c_modules;                       /**< list of C modules			*/
+	void *composites_manager;                   /**< hash of composite symbols indexed by its name		*/
+	GList *classifiers;                         /**< list of all classifiers defined                    */
+	GList *statfiles;                           /**< list of all statfiles in config file order         */
+	GHashTable *classifiers_symbols;            /**< hashtable indexed by symbol name of classifiers    */
+	GHashTable *cfg_params;                     /**< all cfg params indexed by its name in this structure */
+	gchar *dynamic_conf;                        /**< path to dynamic configuration						*/
+	ucl_object_t *current_dynamic_conf;         /**< currently loaded dynamic configuration				*/
+	gint clock_res;                             /**< resolution of clock used							*/
 
 	GList *maps;                       /**< maps active										*/
 	gdouble map_timeout;               /**< maps watch timeout									*/

@@ -60,7 +60,7 @@ struct rspamd_rcl_struct_parser {
 	struct rspamd_config *cfg;
 	gpointer user_struct;
 	goffset offset;
-	enum rspamd_rcl_flag flags;
+	int flags; /* enum rspamd_rcl_flag */
 };
 
 
@@ -121,13 +121,18 @@ struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler(
  * @return newly created structure
  */
 struct rspamd_rcl_section *rspamd_rcl_add_section(
-	struct rspamd_rcl_section **top,
-	const gchar *name, const gchar *key_attr,
+	struct rspamd_rcl_sections_map **top,
+	struct rspamd_rcl_section *parent_section,
+	const gchar *name,
+	const gchar *key_attr,
 	rspamd_rcl_handler_t handler,
-	enum ucl_type type, gboolean required, gboolean strict_type);
+	enum ucl_type type,
+	gboolean required,
+	gboolean strict_type);
 
 struct rspamd_rcl_section *rspamd_rcl_add_section_doc(
-	struct rspamd_rcl_section **top,
+	struct rspamd_rcl_sections_map **top,
+	struct rspamd_rcl_section *parent_section,
 	const gchar *name, const gchar *key_attr,
 	rspamd_rcl_handler_t handler,
 	enum ucl_type type, gboolean required,
@@ -353,17 +358,6 @@ void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 									   const gchar *doc_string);
 
 /**
- * Register a default parser for a worker
- * @param cfg config structure
- * @param type type of worker (GQuark)
- * @param func handler function
- * @param ud userdata for handler function
- */
-void rspamd_rcl_register_worker_parser(struct rspamd_rcl_sections_map *sections,
-									   gint type,
-									   gboolean (*func)(ucl_object_t *, gpointer), gpointer ud);
-
-/**
  * Adds new documentation object to the configuration
  * @param doc_target target object where to insert documentation (top object is used if this is NULL)
  * @param doc_object documentation object to insert
@@ -453,7 +447,7 @@ gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *section
  * @param cfg
  */
 void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg);
-void rspamd_rcl_section_free(gpointer p);
+void rspamd_rcl_sections_free(struct rspamd_rcl_sections_map *sections);
 
 void rspamd_config_calculate_cksum(struct rspamd_config *cfg);
 
