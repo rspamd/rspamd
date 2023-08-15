@@ -357,10 +357,10 @@ local pushers = {
       timeout = rule.timeout or settings.timeout,
     }, formatted, sendmail_cb)
   end,
-  json_raw = function(task, formatted, rule)
-    local function json_raw_callback(err, code)
+  json_raw_tcp = function(task, formatted, rule)
+    local function json_raw_tcp_callback(err, code)
       if err then
-        rspamd_logger.errx(task, 'got error %s in json_raw callback', err)
+        rspamd_logger.errx(task, 'got error %s in json_raw_tcp callback', err)
         return maybe_defer(task, rule)
       end
       return true
@@ -370,7 +370,7 @@ local pushers = {
       host=rule.host,
       port=rule.port,
       data=formatted,
-      callback=json_raw_callback,
+      callback=json_raw_tcp_callback,
       read=false,
     })
   end,
@@ -552,18 +552,18 @@ if type(settings.rules) ~= 'table' then
       settings.rules[r.backend:upper()] = r
     end
   end
-  if settings.pusher_enabled.json_raw then
+  if settings.pusher_enabled.json_raw_tcp then
     if not (settings.host and settings.port) then
       rspamd_logger.errx(rspamd_config, 'No host and/or port is specified')
-      settings.pusher_enabled.json_raw = nil
+      settings.pusher_enabled.json_raw_tcp = nil
     else
       local r = {}
-      r.backend = 'json_raw'
+      r.backend = 'json_raw_tcp'
       r.host = settings.host
       r.port = settings.port
       r.defer = settings.defer
-      r.selector = settings.pusher_select.json_raw
-      r.formatter = settings.pusher_format.json_raw
+      r.selector = settings.pusher_select.json_raw_tcp
+      r.formatter = settings.pusher_format.json_raw_tcp
       settings.rules[r.backend:upper()] = r
     end
   end
@@ -590,7 +590,7 @@ local backend_required_elements = {
   redis_pubsub = {
     'channel',
   },
-  json_raw = {
+  json_raw_tcp = {
     'host',
     'port',
   },
