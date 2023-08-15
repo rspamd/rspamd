@@ -26,6 +26,7 @@ local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
+local rspamd_tcp = require "rspamd_tcp"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
@@ -356,6 +357,23 @@ local pushers = {
       timeout = rule.timeout or settings.timeout,
     }, formatted, sendmail_cb)
   end,
+  json_raw_tcp = function(task, formatted, rule)
+    local function json_raw_tcp_callback(err, code)
+      if err then
+        rspamd_logger.errx(task, 'got error %s in json_raw_tcp callback', err)
+        return maybe_defer(task, rule)
+      end
+      return true
+    end
+    rspamd_tcp.request({
+      task=task,
+      host=rule.host,
+      port=rule.port,
+      data=formatted,
+      callback=json_raw_tcp_callback,
+      read=false,
+    })
+  end,
 }
 
 local opts = rspamd_config:get_all_opt(N)
@@ -534,6 +552,21 @@ if type(settings.rules) ~= 'table' then
       settings.rules[r.backend:upper()] = r
     end
   end
+  if settings.pusher_enabled.json_raw_tcp then
+    if not (settings.host and settings.port) then
+      rspamd_logger.errx(rspamd_config, 'No host and/or port is specified')
+      settings.pusher_enabled.json_raw_tcp = nil
+    else
+      local r = {}
+      r.backend = 'json_raw_tcp'
+      r.host = settings.host
+      r.port = settings.port
+      r.defer = settings.defer
+      r.selector = settings.pusher_select.json_raw_tcp
+      r.formatter = settings.pusher_format.json_raw_tcp
+      settings.rules[r.backend:upper()] = r
+    end
+  end
   if not next(settings.pusher_enabled) then
     rspamd_logger.errx(rspamd_config, 'No push backend enabled')
     return
@@ -556,6 +589,10 @@ local backend_required_elements = {
   },
   redis_pubsub = {
     'channel',
+  },
+  json_raw_tcp = {
+    'host',
+    'port',
   },
 }
 local check_element = {
