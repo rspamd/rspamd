@@ -2299,7 +2299,7 @@ lua_task_set_pre_result(lua_State *L)
 			}
 		}
 
-		gint internal_type;
+		enum rspamd_action_type internal_type;
 
 		if (strcmp(act_str, "accept") == 0) {
 			/* Compatibility! */
@@ -5692,7 +5692,7 @@ lua_task_set_settings(lua_State *L)
 				const gchar *act_name = ucl_object_key(cur);
 				struct rspamd_action_config *action_config = NULL;
 				double act_score;
-				int act_type;
+				enum rspamd_action_type act_type;
 
 				if (!rspamd_action_from_str(act_name, &act_type)) {
 					act_type = -1;

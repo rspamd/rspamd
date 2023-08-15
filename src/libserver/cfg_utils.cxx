@@ -270,7 +270,6 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->cfg_params = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 	cfg->debug_modules = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 	cfg->explicit_modules = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
-	cfg->wrk_parsers = g_hash_table_new(g_int_hash, g_int_equal);
 	cfg->trusted_keys = g_hash_table_new(rspamd_str_hash,
 										 rspamd_str_equal);
 
@@ -400,7 +399,6 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	g_hash_table_unref(cfg->classifiers_symbols);
 	g_hash_table_unref(cfg->debug_modules);
 	g_hash_table_unref(cfg->explicit_modules);
-	g_hash_table_unref(cfg->wrk_parsers);
 	g_hash_table_unref(cfg->trusted_keys);
 
 	rspamd_re_cache_unref(cfg->re_cache);

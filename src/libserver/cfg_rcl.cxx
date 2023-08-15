@@ -29,6 +29,9 @@
 #include "libmime/lang_detection.h"
 
 #include <string>
+#include <filesystem>
+#include <memory>
+#include <algorithm>
 #include "contrib/ankerl/unordered_dense.h"
 #include "libutil/cxx/util.hxx"
 
@@ -44,11 +47,10 @@ struct rspamd_rcl_default_handler_data {
 	rspamd_rcl_default_handler_t handler;
 };
 
-struct rspamd_rcl_sections_map {
-	ankerl::unordered_dense::map<std::string, struct rspamd_rcl_section> sections;
-};
+struct rspamd_rcl_sections_map;
 
 struct rspamd_rcl_section {
+	struct rspamd_rcl_sections_map *top;
 	const gchar *name; /**< name of section */
 	const gchar *key_attr;
 	const gchar *default_key;
@@ -63,24 +65,23 @@ struct rspamd_rcl_section {
 	ucl_object_t *doc_ref; /**< reference to the section's documentation */
 };
 
-struct rspamd_worker_param_key {
-	const gchar *name;
-	gpointer ptr;
-};
-
 struct rspamd_worker_param_parser {
 	rspamd_rcl_default_handler_t handler;   /**< handler function									*/
 	struct rspamd_rcl_struct_parser parser; /**< parser attributes									*/
-
-	struct rspamd_worker_param_key key;
 };
 
 struct rspamd_worker_cfg_parser {
-	GHashTable *parsers;                                        /**< parsers hash										*/
-	gint type;                                                  /**< workers quark										*/
-	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud); /**<
+	ankerl::unordered_dense::map<std::pair<std::string, gpointer>, rspamd_worker_param_parser> parsers; /**< parsers hash										*/
+	gint type;                                                                                          /**< workers quark										*/
+	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);                                         /**<
  														 default object parser								*/
 	gpointer def_ud;
+};
+
+struct rspamd_rcl_sections_map {
+	ankerl::unordered_dense::map<std::string, struct rspamd_rcl_section> sections;
+	ankerl::unordered_dense::map<int, struct rspamd_worker_cfg_parser> workers_parser;
+	ankerl::unordered_dense::set<std::string> lua_modules_seen;
 };
 
 static bool rspamd_rcl_process_section(struct rspamd_config *cfg,
@@ -446,8 +447,6 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	/* Handle symbols */
 	if (const auto *val = ucl_object_lookup(obj, "symbols"); val != nullptr && ucl_object_type(val) == UCL_OBJECT) {
-		HASH_FIND_STR(section->subsections, "symbols", subsection);
-
 		auto subsection = rspamd::find_map(section->subsections, "symbols");
 
 		g_assert(subsection.has_value());
@@ -655,13 +654,12 @@ rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else if (type == UCL_OBJECT || type == UCL_FLOAT || type == UCL_INT) {
 			/* Exceptions */
-			struct rspamd_rcl_default_handler_data *sec_cur, *sec_tmp;
-			gboolean default_elt = FALSE;
+			auto default_elt = false;
 
-			HASH_ITER(hh, section->default_parser, sec_cur, sec_tmp)
-			{
-				if (strcmp(ucl_object_key(cur), sec_cur->key) == 0) {
-					default_elt = TRUE;
+			for (const auto &[name, def_elt]: section->default_parser) {
+				if (def_elt.key == ucl_object_key(cur)) {
+					default_elt = true;
+					break;
 				}
 			}
 
@@ -695,50 +693,42 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						  const gchar *key, gpointer ud,
 						  struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur, *cur_obj;
-	ucl_object_t *robj;
-	ucl_object_iter_t it = nullptr;
-	const gchar *worker_type, *worker_bind;
-	struct rspamd_config *cfg = ud;
-	GQuark qtype;
-	struct rspamd_worker_conf *wrk;
-	struct rspamd_worker_cfg_parser *wparser;
-	struct rspamd_worker_param_parser *whandler;
-	struct rspamd_worker_param_key srch;
+	auto *cfg = static_cast<rspamd_config *>(ud);
 
 	g_assert(key != nullptr);
-	worker_type = key;
+	const auto *worker_type = key;
 
-	qtype = g_quark_try_string(worker_type);
-	if (qtype != 0) {
-		wrk = rspamd_config_new_worker(cfg, nullptr);
-		wrk->options = ucl_object_copy(obj);
-		wrk->worker = rspamd_get_worker_by_type(cfg, qtype);
-
-		if (wrk->worker == nullptr) {
-			g_set_error(err,
-						CFG_RCL_ERROR,
-						EINVAL,
-						"unknown worker type: %s",
-						worker_type);
-			return FALSE;
-		}
-
-		wrk->type = qtype;
-
-		if (wrk->worker->worker_init_func) {
-			wrk->ctx = wrk->worker->worker_init_func(cfg);
-		}
-	}
-	else {
+	auto qtype = g_quark_try_string(worker_type);
+	if (qtype == 0) {
 		msg_err_config("unknown worker type: %s", worker_type);
-		return TRUE;
+		return FALSE;
 	}
 
-	val = ucl_object_lookup_any(obj, "bind_socket", "listen", "bind", nullptr);
+	auto *wrk = rspamd_config_new_worker(cfg, nullptr);
+	wrk->options = ucl_object_copy(obj);
+	wrk->worker = rspamd_get_worker_by_type(cfg, qtype);
+
+	if (wrk->worker == nullptr) {
+		g_set_error(err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"unknown worker type: %s",
+					worker_type);
+		return FALSE;
+	}
+
+	wrk->type = qtype;
+
+	if (wrk->worker->worker_init_func) {
+		wrk->ctx = wrk->worker->worker_init_func(cfg);
+	}
+
+	const auto *val = ucl_object_lookup_any(obj, "bind_socket", "listen", "bind", nullptr);
 	/* This name is more logical */
 	if (val != nullptr) {
-		it = ucl_object_iterate_new(val);
+		auto it = ucl_object_iterate_new(val);
+		const ucl_object_t *cur;
+		const char *worker_bind = nullptr;
 
 		while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
 			if (!ucl_object_tostring_safe(cur, &worker_bind)) {
@@ -758,49 +748,55 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		ucl_object_iterate_free(it);
 	}
 
-	if (!rspamd_rcl_section_parse_defaults(cfg, section, cfg->cfg_pool, obj,
+	if (!rspamd_rcl_section_parse_defaults(cfg, *section, cfg->cfg_pool, obj,
 										   wrk, err)) {
 		return FALSE;
 	}
 
 	/* Parse other attributes */
-	wparser = g_hash_table_lookup(cfg->wrk_parsers, &qtype);
+	auto maybe_wparser = rspamd::find_map(section->top->workers_parser, wrk->type);
 
-	if (wparser != nullptr && obj->type == UCL_OBJECT) {
-		it = ucl_object_iterate_new(obj);
+	if (maybe_wparser && obj->type == UCL_OBJECT) {
+		auto &wparser = maybe_wparser.value().get();
+		auto it = ucl_object_iterate_new(obj);
+		const ucl_object_t *cur;
 
 		while ((cur = ucl_object_iterate_full(it, UCL_ITERATE_EXPLICIT)) != nullptr) {
-			srch.name = ucl_object_key(cur);
-			srch.ptr = wrk->ctx; /* XXX: is it valid? Update! no, it is not valid, omfg... */
-			whandler = g_hash_table_lookup(wparser->parsers, &srch);
+			auto srch = std::make_pair(ucl_object_key(cur), (gpointer) wrk->ctx);
+			auto maybe_specific = rspamd::find_map(wparser.parsers, srch);
 
-			if (whandler != nullptr) {
+			if (maybe_specific) {
+				auto &whandler = maybe_specific.value().get();
+				const ucl_object_t *cur_obj;
 
 				LL_FOREACH(cur, cur_obj)
 				{
-					if (!whandler->handler(cfg->cfg_pool,
-										   cur_obj,
-										   &whandler->parser,
-										   section,
-										   err)) {
+					if (!whandler.handler(cfg->cfg_pool,
+										  cur_obj,
+										  (void *) &whandler.parser,
+										  section,
+										  err)) {
 
 						ucl_object_iterate_free(it);
 						return FALSE;
 					}
 
-					if (!(whandler->parser.flags & RSPAMD_CL_FLAG_MULTIPLE)) {
+					if (!(whandler.parser.flags & RSPAMD_CL_FLAG_MULTIPLE)) {
 						break;
 					}
 				}
+			}
+			else {
+				msg_warn_config("unknown worker attribute: %s; worker type: %s", ucl_object_key(cur), worker_type);
 			}
 		}
 
 		ucl_object_iterate_free(it);
 
-		if (wparser->def_obj_parser != nullptr) {
-			robj = ucl_object_ref(obj);
+		if (wparser.def_obj_parser != nullptr) {
+			auto *robj = ucl_object_ref(obj);
 
-			if (!wparser->def_obj_parser(robj, wparser->def_ud)) {
+			if (!wparser.def_obj_parser(robj, wparser.def_ud)) {
 				ucl_object_unref(robj);
 
 				return FALSE;
@@ -820,38 +816,35 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 					   const gchar *key, gpointer ud,
 					   struct rspamd_rcl_section *section, GError **err)
 {
-	struct rspamd_config *cfg = ud;
-	const gchar *lua_src = rspamd_mempool_strdup(pool,
-												 ucl_object_tostring(obj));
-	gchar *cur_dir, *lua_dir, *lua_file;
-	lua_State *L = cfg->lua_state;
-	gint err_idx;
+	namespace fs = std::filesystem;
+	auto *cfg = static_cast<rspamd_config *>(ud);
+	auto lua_src = fs::path{ucl_object_tostring(obj)};
+	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
+	std::error_code ec1, ec2;
 
-	lua_dir = g_path_get_dirname(lua_src);
-	lua_file = g_path_get_basename(lua_src);
+	auto lua_dir = fs::weakly_canonical(lua_src.parent_path(), ec1);
+	auto lua_file = fs::weakly_canonical(lua_src.filename(), ec2);
 
-	if (lua_dir && lua_file) {
-		cur_dir = g_malloc(PATH_MAX);
-		if (getcwd(cur_dir, PATH_MAX) != nullptr && chdir(lua_dir) != -1) {
+	if (ec1 && ec2 && !lua_dir.empty() && !lua_file.empty()) {
+		auto cur_dir = fs::current_path(ec1);
+		if (ec1 && !cur_dir.empty() && ::chdir(lua_dir.c_str()) != -1) {
 			/* Push traceback function */
 			lua_pushcfunction(L, &rspamd_lua_traceback);
-			err_idx = lua_gettop(L);
+			auto err_idx = lua_gettop(L);
 
 			/* Load file */
-			if (luaL_loadfile(L, lua_file) != 0) {
+			if (luaL_loadfile(L, lua_file.c_str()) != 0) {
 				g_set_error(err,
 							CFG_RCL_ERROR,
 							EINVAL,
 							"cannot load lua file %s: %s",
-							lua_src,
+							lua_src.c_str(),
 							lua_tostring(L, -1));
-				if (chdir(cur_dir) == -1) {
-					msg_err_config("cannot chdir to %s: %s", cur_dir,
+				if (::chdir(cur_dir.c_str()) == -1) {
+					msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(),
 								   strerror(errno));
 				}
-				g_free(cur_dir);
-				g_free(lua_dir);
-				g_free(lua_file);
+
 				return FALSE;
 			}
 
@@ -861,18 +854,14 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 							CFG_RCL_ERROR,
 							EINVAL,
 							"cannot init lua file %s: %s",
-							lua_src,
+							lua_src.c_str(),
 							lua_tostring(L, -1));
 				lua_settop(L, 0);
 
-				if (chdir(cur_dir) == -1) {
-					msg_err_config("cannot chdir to %s: %s", cur_dir,
+				if (::chdir(cur_dir.c_str()) == -1) {
+					msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(),
 								   strerror(errno));
 				}
-
-				g_free(cur_dir);
-				g_free(lua_file);
-				g_free(lua_dir);
 
 				return FALSE;
 			}
@@ -881,27 +870,21 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else {
 			g_set_error(err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
-						lua_dir, strerror(errno));
-			if (chdir(cur_dir) == -1) {
-				msg_err_config("cannot chdir to %s: %s", cur_dir, strerror(errno));
+						lua_dir.c_str(), strerror(errno));
+			if (::chdir(cur_dir.c_str()) == -1) {
+				msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(), strerror(errno));
 			}
-			g_free(cur_dir);
-			g_free(lua_dir);
-			g_free(lua_file);
+
 			return FALSE;
 		}
-		if (chdir(cur_dir) == -1) {
-			msg_err_config("cannot chdir to %s: %s", cur_dir, strerror(errno));
+		if (::chdir(cur_dir.c_str()) == -1) {
+			msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(), strerror(errno));
 		}
-		g_free(cur_dir);
-		g_free(lua_dir);
-		g_free(lua_file);
 	}
 	else {
-		g_free(lua_dir);
-		g_free(lua_file);
+
 		g_set_error(err, CFG_RCL_ERROR, ENOENT, "cannot find to %s: %s",
-					lua_src, strerror(errno));
+					lua_src.c_str(), strerror(errno));
 		return FALSE;
 	}
 
@@ -909,111 +892,27 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 }
 
 gboolean
-rspamd_rcl_add_lua_plugins_path(struct rspamd_config *cfg,
+rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
+								struct rspamd_config *cfg,
 								const gchar *path,
 								gboolean main_path,
-								GHashTable *modules_seen,
 								GError **err)
 {
-	struct stat st;
-	struct script_module *cur_mod, *seen_mod;
-	GPtrArray *paths;
-	gchar *fname, *ext_pos;
-	guint i;
+	namespace fs = std::filesystem;
+	auto dir = fs::path{path};
+	std::error_code ec;
 
-	if (stat(path, &st) == -1) {
+	auto add_single_file = [&](const fs::path &fpath) -> bool {
+		auto fname = fpath.filename();
+		auto *cur_mod = rspamd_mempool_alloc_type(cfg->cfg_pool,
+												  struct script_module);
+		cur_mod->path = rspamd_mempool_strdup(cfg->cfg_pool, fpath.c_str());
+		cur_mod->name = rspamd_mempool_strdup(cfg->cfg_pool, fname.c_str());
 
-		if (errno != ENOENT || main_path) {
-			g_set_error(err,
-						CFG_RCL_ERROR,
-						errno,
-						"cannot stat path %s, %s",
-						path,
-						strerror(errno));
-			return FALSE;
-		}
-		else {
-			msg_debug_config("optional plugins path %s is absent, skip it", path);
-
-			return TRUE;
-		}
-	}
-
-	/* Handle directory */
-	if (S_ISDIR(st.st_mode)) {
-		paths = rspamd_glob_path(path, "*.lua", TRUE, err);
-
-		if (!paths) {
-			return FALSE;
-		}
-
-		PTR_ARRAY_FOREACH(paths, i, fname)
-		{
-			cur_mod =
-				rspamd_mempool_alloc(cfg->cfg_pool,
-									 sizeof(struct script_module));
-			cur_mod->path = rspamd_mempool_strdup(cfg->cfg_pool, fname);
-			cur_mod->name = g_path_get_basename(cur_mod->path);
-			rspamd_mempool_add_destructor(cfg->cfg_pool, g_free,
-										  cur_mod->name);
-			ext_pos = strstr(cur_mod->name, ".lua");
-
-			if (ext_pos != nullptr) {
-				*ext_pos = '\0';
-			}
-
-			if (modules_seen) {
-				seen_mod = g_hash_table_lookup(modules_seen, cur_mod->name);
-
-				if (seen_mod != nullptr) {
-					msg_info_config("already seen module %s at %s, skip %s",
-									cur_mod->name, seen_mod->path, cur_mod->path);
-					continue;
-				}
-			}
-
-			if (cfg->script_modules == nullptr) {
-				cfg->script_modules = g_list_append(cfg->script_modules,
-													cur_mod);
-				rspamd_mempool_add_destructor(cfg->cfg_pool,
-											  (rspamd_mempool_destruct_t) g_list_free,
-											  cfg->script_modules);
-			}
-			else {
-				cfg->script_modules = g_list_append(cfg->script_modules,
-													cur_mod);
-			}
-
-			if (modules_seen) {
-				g_hash_table_insert(modules_seen, cur_mod->name, cur_mod);
-			}
-		}
-
-		g_ptr_array_free(paths, TRUE);
-	}
-	else {
-		/* Handle single file */
-		cur_mod =
-			rspamd_mempool_alloc(cfg->cfg_pool, sizeof(struct script_module));
-		cur_mod->path = rspamd_mempool_strdup(cfg->cfg_pool, path);
-		cur_mod->name = g_path_get_basename(cur_mod->path);
-		rspamd_mempool_add_destructor(cfg->cfg_pool, g_free,
-									  cur_mod->name);
-		ext_pos = strstr(cur_mod->name, ".lua");
-
-		if (ext_pos != nullptr) {
-			*ext_pos = '\0';
-		}
-
-		if (modules_seen) {
-			seen_mod = g_hash_table_lookup(modules_seen, cur_mod->name);
-
-			if (seen_mod != nullptr) {
-				msg_info_config("already seen module %s at %s, skip %s",
-								cur_mod->name, seen_mod->path, cur_mod->path);
-
-				return TRUE;
-			}
+		if (sections->lua_modules_seen.contains(fname.string())) {
+			msg_info_config("already seen module %s, skip %s",
+							cur_mod->name, cur_mod->path);
+			return false;
 		}
 
 		if (cfg->script_modules == nullptr) {
@@ -1028,8 +927,36 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_config *cfg,
 												cur_mod);
 		}
 
-		if (modules_seen) {
-			g_hash_table_insert(modules_seen, cur_mod->name, cur_mod);
+		sections->lua_modules_seen.insert(fname.string());
+
+		return true;
+	};
+
+	if (fs::is_regular_file(dir, ec) && dir.has_extension() && dir.extension() == ".lua") {
+		add_single_file(dir);
+	}
+	else if (!fs::is_directory(dir, ec)) {
+		if (!fs::exists(dir) && !main_path) {
+			msg_debug_config("optional plugins path %s is absent, skip it", path);
+
+			return TRUE;
+		}
+
+		g_set_error(err,
+					CFG_RCL_ERROR,
+					errno,
+					"invalid lua path spec %s, %s",
+					path,
+					ec.message().c_str());
+		return FALSE;
+	}
+	else {
+		/* Handle directory */
+		for (const auto &p: fs::recursive_directory_iterator(dir, ec)) {
+			auto fpath = std::string_view{p.path().string()};
+			if (p.is_regular_file() && fpath.ends_with(".lua")) {
+				add_single_file(p.path());
+			}
 		}
 	}
 
@@ -3443,7 +3370,7 @@ void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 }
 
 
-void rspamd_rcl_register_worker_parser(struct rspamd_config *cfg, gint type,
+void rspamd_rcl_register_worker_parser(struct rspamd_rcl_sections_map *sections, gint type,
 									   gboolean (*func)(ucl_object_t *, gpointer), gpointer ud)
 {
 	struct rspamd_worker_cfg_parser *nparser;

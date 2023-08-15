@@ -359,7 +359,8 @@ void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
  * @param func handler function
  * @param ud userdata for handler function
  */
-void rspamd_rcl_register_worker_parser(struct rspamd_config *cfg, gint type,
+void rspamd_rcl_register_worker_parser(struct rspamd_rcl_sections_map *sections,
+									   gint type,
 									   gboolean (*func)(ucl_object_t *, gpointer), gpointer ud);
 
 /**
@@ -425,10 +426,10 @@ ucl_object_t *rspamd_rcl_add_doc_by_example(struct rspamd_config *cfg,
  * @param err
  * @return
  */
-gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_config *cfg,
+gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
+										 struct rspamd_config *cfg,
 										 const gchar *path,
 										 gboolean main_path,
-										 GHashTable *modules_seen,
 										 GError **err);
 
 

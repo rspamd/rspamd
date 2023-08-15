@@ -75,7 +75,6 @@ rspamd_create_metric_result(struct rspamd_task *task,
 							const gchar *name, gint lua_sym_cbref)
 {
 	struct rspamd_scan_result *metric_res;
-	guint i;
 
 	metric_res = rspamd_mempool_alloc0(task->task_pool,
 									   sizeof(struct rspamd_scan_result));
@@ -103,14 +102,10 @@ rspamd_create_metric_result(struct rspamd_task *task,
 	}
 
 	if (task->cfg) {
-		struct rspamd_action *act, *tmp;
-
-		int nact = rspamd_config_actions_size(task->cfg);
+		size_t nact = rspamd_config_actions_size(task->cfg);
 		metric_res->actions_config = rspamd_mempool_alloc0(task->task_pool,
 														   sizeof(struct rspamd_action_config) * nact);
-
 		rspamd_config_actions_foreach_enumerate(task->cfg, rspamd_metric_actions_foreach_cb, metric_res);
-
 		metric_res->nactions = nact;
 	}
 

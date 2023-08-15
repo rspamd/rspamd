@@ -605,14 +605,18 @@ rspamd_mempool_alloc_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment
 gchar *
 rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *loc)
 {
-	gsize len;
+	return rspamd_mempool_strdup_len_(pool, src, strlen(src), loc);
+}
+
+gchar *
+rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, const gchar *loc)
+{
 	gchar *newstr;
 
 	if (src == NULL) {
 		return NULL;
 	}
 
-	len = strlen(src);
 	newstr = rspamd_mempool_alloc_(pool, len + 1, MIN_MEM_ALIGNMENT, loc);
 	memcpy(newstr, src, len);
 	newstr[len] = '\0';

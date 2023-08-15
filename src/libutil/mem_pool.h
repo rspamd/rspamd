@@ -216,6 +216,10 @@ gchar *rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gc
 	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
 #define rspamd_mempool_strdup(pool, src) \
 	rspamd_mempool_strdup_((pool), (src), (G_STRLOC))
+gchar *rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, const gchar *loc)
+	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+#define rspamd_mempool_strdup_len(pool, src, len) \
+	rspamd_mempool_strdup_len_((pool), (src), (len), (G_STRLOC))
 
 struct f_str_tok;
 
