@@ -25,10 +25,15 @@ THE SOFTWARE.
 
 /* stylelint-disable selector-id-pattern */
 
-/* bootstrap 4 overrides */
 :root {
     font-size: 14px;
+
+    /* Tweak bootstrap 5 colors for better accessibility */
+    --bs-danger-rgb: 221, 0, 0;
+    --bs-success-rgb: 40, 139, 69;
 }
+
+/* bootstrap 4 overrides */
 body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
