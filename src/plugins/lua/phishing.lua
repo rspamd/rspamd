@@ -28,6 +28,7 @@ local lua_maps = require "lua_maps"
 --
 local N = 'phishing'
 local symbol = 'PHISHED_URL'
+local phishing_feed_exclusion_symbol = 'PHISHED_EXCLUDED'
 local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
 local phishtank_symbol = 'PHISHED_PHISHTANK'
@@ -36,6 +37,7 @@ local domains = nil
 local phishing_exceptions_maps = {}
 local anchor_exceptions_maps = {}
 local strict_domains_maps = {}
+local phishing_feed_exclusion_map = nil
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
@@ -43,8 +45,10 @@ local phishtank_suffix = 'phishtank.rspamd.com'
 local openphish_premium = false
 -- Published via DNS
 local phishtank_enabled = false
+local phishing_feed_exclusion_hash
 local generic_service_hash
 local openphish_hash
+local phishing_feed_exclusion_data = {}
 local generic_service_data = {}
 local openphish_data = {}
 
@@ -54,9 +58,25 @@ if not (opts and type(opts) == 'table') then
   return
 end
 
+local function is_host_excluded(exclusion_map, host)
+  if exclusion_map and host then
+    local excluded = exclusion_map[host]
+    if excluded then
+      return true
+    end
+    return false
+  end
+end
+
 local function phishing_cb(task)
-  local function check_phishing_map(map, url, phish_symbol)
+  local function check_phishing_map(map, exclusion_map, url, phish_symbol, excl_symbol)
     local host = url:get_host()
+
+    local excl_host = is_host_excluded(exclusion_map, host)
+    if excl_host then
+      task:insert_result(excl_symbol, 0.0, host)
+      return
+    end
 
     if host then
       local elt = map[host]
@@ -130,7 +150,7 @@ local function phishing_cb(task)
     end
   end
 
-  local function check_phishing_dns(dns_suffix, url, phish_symbol)
+  local function check_phishing_dns(dns_suffix, exclusion_map, url, phish_symbol, excl_symbol)
     local function compose_dns_query(elts)
       local cr = require "rspamd_cryptobox_hash"
       local h = cr.create()
@@ -143,6 +163,12 @@ local function phishing_cb(task)
     local host = url:get_host()
     local path = url:get_path()
     local query = url:get_query()
+
+    local excl_host = is_host_excluded(exclusion_map, host)
+    if excl_host then
+      task:insert_result(excl_symbol, 0.0, host)
+      return
+    end
 
     if host and path then
       local function host_host_path_cb(_, _, results, err)
@@ -198,15 +224,15 @@ local function phishing_cb(task)
       -- to emulate continue
       local url = url_iter
       if generic_service_hash then
-        check_phishing_map(generic_service_data, url, generic_service_symbol)
+        check_phishing_map(generic_service_data, phishing_feed_exclusion_data, url, generic_service_symbol, phishing_feed_exclusion_symbol)
       end
 
       if openphish_hash then
-        check_phishing_map(openphish_data, url, openphish_symbol)
+        check_phishing_map(openphish_data, phishing_feed_exclusion_data, url, openphish_symbol, phishing_feed_exclusion_symbol)
       end
 
       if phishtank_enabled then
-        check_phishing_dns(phishtank_suffix, url, phishtank_symbol)
+        check_phishing_dns(phishtank_suffix, phishing_feed_exclusion_data, url, phishtank_symbol, phishing_feed_exclusion_symbol)
       end
 
       if url:is_phished() then
@@ -399,6 +425,26 @@ local function insert_url_from_string(pool, tbl, str, data)
   return false
 end
 
+local function phishing_feed_exclusion_plain_cb(string)
+  local nelts = 0
+  local new_data = {}
+  local rspamd_mempool = require "rspamd_mempool"
+  local pool = rspamd_mempool.create()
+
+  local function phishing_feed_exclusion_elt_parser(cap)
+    if insert_url_from_string(pool, new_data, cap, nil) then
+      nelts = nelts + 1
+    end
+  end
+
+  rspamd_str_split_fun(string, '\n', phishing_feed_exclusion_elt_parser)
+
+  phishing_feed_exclusion_data = new_data
+  rspamd_logger.infox(phishing_feed_exclusion_hash, "parsed %s elements from phishing feed exclusions",
+      nelts)
+  pool:destroy()
+end
+
 local function generic_service_plain_cb(string)
   local nelts = 0
   local new_data = {}
@@ -491,6 +537,22 @@ if opts then
     -- To exclude from domains for dmarc verified messages
     rspamd_config:register_dependency(symbol, 'DMARC_CHECK')
 
+    if opts['phishing_feed_exclusion_symbol'] then
+      phishing_feed_exclusion_symbol = opts['phishing_feed_exclusion_symbol']
+    end
+    if opts['phishing_feed_exclusion_map'] then
+      phishing_feed_exclusion_map = opts['phishing_feed_exclusion_map']
+    end
+
+    if opts['phishing_feed_exclusion_enabled'] then
+      phishing_feed_exclusion_hash = rspamd_config:add_map({
+        type = 'callback',
+        url = phishing_feed_exclusion_map,
+        callback = phishing_feed_exclusion_plain_cb,
+        description = 'Phishing feed exclusions'
+      })
+    end
+
     if opts['generic_service_symbol'] then
       generic_service_symbol = opts['generic_service_symbol']
     end
@@ -555,6 +617,12 @@ if opts then
       type = 'virtual',
       parent = id,
       name = generic_service_symbol,
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = phishing_feed_exclusion_symbol,
     })
 
     rspamd_config:register_symbol({
