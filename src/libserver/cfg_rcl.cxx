@@ -36,6 +36,8 @@
 #include "fmt/core.h"
 #include "libutil/cxx/util.hxx"
 #include "libutil/cxx/file_util.hxx"
+#include "frozen/unordered_set.h"
+#include "frozen/string.h"
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
@@ -701,7 +703,15 @@ rspamd_rcl_actions_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	return rspamd_rcl_section_parse_defaults(cfg, *section, pool, obj, cfg, err);
 }
-
+constexpr const auto known_worker_attributes = frozen::make_unordered_set<frozen::string>({
+	"bind_socket",
+	"listen",
+	"bind",
+	"count",
+	"max_files",
+	"max_core",
+	"enabled",
+});
 static gboolean
 rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						  const gchar *key, gpointer ud,
@@ -800,7 +810,7 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 					}
 				}
 			}
-			else {
+			else if (known_worker_attributes.find(std::string_view{ucl_object_key(cur)}) == known_worker_attributes.end()) {
 				msg_warn_config("unknown worker attribute: %s; worker type: %s", ucl_object_key(cur), worker_type);
 			}
 		}
@@ -834,14 +844,14 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 	auto *cfg = static_cast<rspamd_config *>(ud);
 	auto lua_src = fs::path{ucl_object_tostring(obj)};
 	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
-	std::error_code ec1, ec2;
+	std::error_code ec1;
 
 	auto lua_dir = fs::weakly_canonical(lua_src.parent_path(), ec1);
-	auto lua_file = fs::weakly_canonical(lua_src.filename(), ec2);
+	auto lua_file = lua_src.filename();
 
-	if (ec1 && ec2 && !lua_dir.empty() && !lua_file.empty()) {
+	if (!ec1 && !lua_dir.empty() && !lua_file.empty()) {
 		auto cur_dir = fs::current_path(ec1);
-		if (ec1 && !cur_dir.empty() && ::chdir(lua_dir.c_str()) != -1) {
+		if (!ec1 && !cur_dir.empty() && ::chdir(lua_dir.c_str()) != -1) {
 			/* Push traceback function */
 			lua_pushcfunction(L, &rspamd_lua_traceback);
 			auto err_idx = lua_gettop(L);
@@ -886,13 +896,13 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 			g_set_error(err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
 						lua_dir.c_str(), strerror(errno));
 			if (::chdir(cur_dir.c_str()) == -1) {
-				msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(), strerror(errno));
+				msg_err_config("cannot chdir back to %s: %s", cur_dir.c_str(), strerror(errno));
 			}
 
 			return FALSE;
 		}
 		if (::chdir(cur_dir.c_str()) == -1) {
-			msg_err_config("cannot chdir to %s: %s", cur_dir.c_str(), strerror(errno));
+			msg_err_config("cannot chdir back to %s: %s", cur_dir.c_str(), strerror(errno));
 		}
 	}
 	else {
@@ -918,12 +928,17 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 
 	auto add_single_file = [&](const fs::path &fpath) -> bool {
 		auto fname = fpath.filename();
+		auto modname = fname.string();
+
+		if (fname.has_extension()) {
+			modname = modname.substr(0, modname.size() - fname.extension().native().size());
+		}
 		auto *cur_mod = rspamd_mempool_alloc_type(cfg->cfg_pool,
 												  struct script_module);
 		cur_mod->path = rspamd_mempool_strdup(cfg->cfg_pool, fpath.c_str());
-		cur_mod->name = rspamd_mempool_strdup(cfg->cfg_pool, fname.c_str());
+		cur_mod->name = rspamd_mempool_strdup(cfg->cfg_pool, modname.c_str());
 
-		if (sections->lua_modules_seen.contains(fname.string())) {
+		if (sections->lua_modules_seen.contains(modname)) {
 			msg_info_config("already seen module %s, skip %s",
 							cur_mod->name, cur_mod->path);
 			return false;
@@ -967,7 +982,7 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 	else {
 		/* Handle directory */
 		for (const auto &p: fs::recursive_directory_iterator(dir, ec)) {
-			auto fpath = std::string_view{p.path().string()};
+			auto fpath = p.path().string();
 			if (p.is_regular_file() && fpath.ends_with(".lua")) {
 				add_single_file(p.path());
 			}
@@ -2462,10 +2477,9 @@ rspamd_rcl_process_section(struct rspamd_config *cfg,
 		/* Section has been already processed */
 		return TRUE;
 	}
+
 	g_assert(obj != nullptr);
 	g_assert(sec.handler != nullptr);
-	/* Set processed flag */
-	sec.processed = true;
 
 	if (sec.key_attr) {
 		it = ucl_object_iterate_new(obj);
@@ -3278,7 +3292,7 @@ void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 		return;
 	}
 
-	auto nhandler = handler_it.first->second;
+	auto &nhandler = handler_it.first->second;
 	nhandler.parser.flags = flags;
 	nhandler.parser.offset = offset;
 	nhandler.parser.user_struct = target;

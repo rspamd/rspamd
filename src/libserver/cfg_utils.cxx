@@ -538,6 +538,7 @@ constexpr const auto config_vars = frozen::make_unordered_map<frozen::string, st
 	{"symbols_scores_params", {RSPAMD_LOG_SYMBOLS, RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS | RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES}},
 	{"groups", {RSPAMD_LOG_GROUPS, 0}},
 	{"public_groups", {RSPAMD_LOG_PUBLIC_GROUPS, 0}},
+	{"is_spam", {RSPAMD_LOG_ISSPAM, 0}},
 });
 
 static gboolean
@@ -913,7 +914,7 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 	if (opts & RSPAMD_CONFIG_INIT_SYMCACHE) {
 		/* Init config cache */
-		ret &= rspamd_symcache_init(cfg->cache);
+		ret = rspamd_symcache_init(cfg->cache) && ret;
 
 		/* Init re cache */
 		rspamd_re_cache_init(cfg->re_cache, cfg);
@@ -930,7 +931,12 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
 		/* Config other libraries */
-		ret &= rspamd_config_libs(cfg->libs_ctx, cfg);
+		ret = rspamd_config_libs(cfg->libs_ctx, cfg) && ret;
+
+		if (!ret) {
+			msg_err_config("cannot configure libraries, fatal error");
+			return FALSE;
+		}
 	}
 
 	/* Validate cache */
@@ -956,7 +962,7 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 							" Rspamd features will be broken");
 		}
 
-		ret &= rspamd_symcache_validate(cfg->cache, cfg, FALSE);
+		ret = rspamd_symcache_validate(cfg->cache, cfg, FALSE) && ret;
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
@@ -1048,11 +1054,6 @@ rspamd_worker_conf_dtor(struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
 		struct rspamd_worker_bind_conf *cnf, *tmp;
-
-		LL_FOREACH_SAFE(wcf->bind_conf, cnf, tmp)
-		{
-			g_ptr_array_free(cnf->addrs, TRUE);
-		}
 
 		ucl_object_unref(wcf->options);
 		g_queue_free(wcf->active_workers);
@@ -2733,11 +2734,19 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 
 	if (ctx != nullptr) {
 		if (cfg->local_addrs) {
+			GError *err = nullptr;
 			ret = rspamd_config_radix_from_ucl(cfg, cfg->local_addrs,
 											   "Local addresses",
 											   (struct rspamd_radix_map_helper **) ctx->local_addrs,
-											   nullptr,
+											   &err,
 											   nullptr, "local addresses");
+
+			if (!ret) {
+				msg_err_config("cannot load local addresses: %e", err);
+				g_error_free(err);
+
+				return ret;
+			}
 		}
 
 		rspamd_free_zstd_dictionary(ctx->in_dict);

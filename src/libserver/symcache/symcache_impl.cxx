@@ -42,7 +42,7 @@ auto symcache::init() -> bool
 
 	if (cfg->cache_filename != nullptr) {
 		msg_debug_cache("loading symcache saved data from %s", cfg->cache_filename);
-		res = load_items();
+		load_items();
 	}
 
 	ankerl::unordered_dense::set<int> disabled_ids;

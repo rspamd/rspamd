@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1477,7 +1477,7 @@ rspamd_parse_host_port_priority(const gchar *str,
 
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full(1,
-										  (GDestroyNotify) rspamd_inet_address_free);
+										  pool == NULL ? NULL : (GDestroyNotify) rspamd_inet_address_free);
 
 			if (pool != NULL) {
 				rspamd_mempool_add_destructor(pool,
@@ -1486,7 +1486,7 @@ rspamd_parse_host_port_priority(const gchar *str,
 		}
 
 		if (v4_any) {
-			cur_addr = rspamd_inet_addr_create(AF_INET, pool);
+			cur_addr = rspamd_inet_addr_create(AF_INET, NULL);
 			rspamd_parse_inet_address_ip4("0.0.0.0",
 										  sizeof("0.0.0.0") - 1, &su.s4.sin_addr);
 			memcpy(&cur_addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
@@ -1496,7 +1496,7 @@ rspamd_parse_host_port_priority(const gchar *str,
 			g_ptr_array_add(*addrs, cur_addr);
 		}
 		if (v6_any) {
-			cur_addr = rspamd_inet_addr_create(AF_INET6, pool);
+			cur_addr = rspamd_inet_addr_create(AF_INET6, NULL);
 			rspamd_parse_inet_address_ip6("::",
 										  sizeof("::") - 1, &su.s6.sin6_addr);
 			memcpy(&cur_addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
