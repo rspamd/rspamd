@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -948,11 +948,11 @@ rspamd_dns_resolver_init(rspamd_logger_t *logger,
 									   dns_resolver->ups);
 		cfg->dns_resolver = dns_resolver;
 
-		if (cfg->rcl_obj) {
+		if (cfg->cfg_ucl_obj) {
 			/* Configure additional options */
 			const ucl_object_t *opts_section, *dns_section, *tmp;
 
-			opts_section = ucl_object_lookup(cfg->rcl_obj, "options");
+			opts_section = ucl_object_lookup(cfg->cfg_ucl_obj, "options");
 
 			if (opts_section) {
 				/* TODO: implement a more simple merge logic */

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,7 +33,16 @@ public:
 	virtual ~raii_file() noexcept;
 
 	static auto open(const char *fname, int flags) -> tl::expected<raii_file, error>;
+	static auto open(const std::string &fname, int flags) -> tl::expected<raii_file, error>
+	{
+		return open(fname.c_str(), flags);
+	};
 	static auto create(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>;
+	static auto create(const std::string &fname, int flags, int perms) -> tl::expected<raii_file, error>
+	{
+		return create(fname.c_str(), flags, perms);
+	};
+
 	static auto create_temp(const char *fname, int flags, int perms) -> tl::expected<raii_file, error>;
 	static auto mkstemp(const char *pattern, int flags, int perms) -> tl::expected<raii_file, error>;
 

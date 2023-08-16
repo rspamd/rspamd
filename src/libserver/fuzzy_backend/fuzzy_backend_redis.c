@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -204,7 +204,7 @@ rspamd_fuzzy_backend_init_redis(struct rspamd_fuzzy_backend *bk,
 
 	/* Now try global redis settings */
 	if (!ret) {
-		elt = ucl_object_lookup(cfg->rcl_obj, "redis");
+		elt = ucl_object_lookup(cfg->cfg_ucl_obj, "redis");
 
 		if (elt) {
 			const ucl_object_t *specific_obj;

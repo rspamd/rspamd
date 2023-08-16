@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -298,7 +298,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 			rspamadm_execute_lua_ucl_subr(argc,
 										  argv,
-										  cfg->rcl_obj,
+										  cfg->cfg_ucl_obj,
 										  "plugins_stats",
 										  FALSE);
 
@@ -316,7 +316,7 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 			g_hash_table_iter_init(&it, cfg->symbols);
 			ucl_object_t *sym_ucl = ucl_object_typed_new(UCL_OBJECT);
-			const ucl_object_t *all_symbols_ucl = ucl_object_lookup(cfg->rcl_obj, "symbols");
+			const ucl_object_t *all_symbols_ucl = ucl_object_lookup(cfg->cfg_ucl_obj, "symbols");
 
 			while (g_hash_table_iter_next(&it, &sk, &sv)) {
 				const gchar *sym_name = (const gchar *) sk;
@@ -521,11 +521,11 @@ rspamadm_configdump(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 		/* Output configuration */
 		if (argc == 1) {
-			rspamadm_dump_section_obj(cfg, cfg->rcl_obj, cfg->doc_strings);
+			rspamadm_dump_section_obj(cfg, cfg->cfg_ucl_obj, cfg->doc_strings);
 		}
 		else {
 			for (i = 1; i < argc; i++) {
-				obj = ucl_object_lookup_path(cfg->rcl_obj, argv[i]);
+				obj = ucl_object_lookup_path(cfg->cfg_ucl_obj, argv[i]);
 				doc_obj = ucl_object_lookup_path(cfg->doc_strings, argv[i]);
 
 				if (!obj) {

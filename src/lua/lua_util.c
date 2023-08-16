@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -882,10 +882,10 @@ lua_util_config_from_ucl(lua_State *L)
 		cfg = rspamd_config_new(RSPAMD_CONFIG_INIT_SKIP_LUA);
 		cfg->lua_state = L;
 
-		cfg->rcl_obj = obj;
+		cfg->cfg_ucl_obj = obj;
 		top = rspamd_rcl_config_init(cfg, NULL);
 
-		if (!rspamd_rcl_parse(top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
+		if (!rspamd_rcl_parse(top, cfg, cfg, cfg->cfg_pool, cfg->cfg_ucl_obj, &err)) {
 			msg_err("rcl parse error: %s", err->message);
 			ucl_object_unref(obj);
 			lua_pushnil(L);

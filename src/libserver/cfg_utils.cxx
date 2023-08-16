@@ -390,7 +390,7 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	g_list_free(cfg->classifiers);
 	g_list_free(cfg->workers);
 	rspamd_symcache_destroy(cfg->cache);
-	ucl_object_unref(cfg->rcl_obj);
+	ucl_object_unref(cfg->cfg_ucl_obj);
 	ucl_object_unref(cfg->config_comments);
 	ucl_object_unref(cfg->doc_strings);
 	ucl_object_unref(cfg->neighbours);
@@ -444,7 +444,7 @@ rspamd_config_get_module_opt(struct rspamd_config *cfg,
 {
 	const ucl_object_t *res = nullptr, *sec;
 
-	sec = ucl_obj_get_key(cfg->rcl_obj, module_name);
+	sec = ucl_obj_get_key(cfg->cfg_ucl_obj, module_name);
 	if (sec != nullptr) {
 		res = ucl_obj_get_key(sec, opt_name);
 	}
@@ -1360,7 +1360,7 @@ rspamd_ucl_fin_cb(struct map_cb_data *data, void **target)
 		ucl_object_iter_t it = nullptr;
 
 		for (auto *cur = ucl_object_iterate(obj, &it, true); cur != nullptr; cur = ucl_object_iterate(obj, &it, true)) {
-			ucl_object_replace_key(cbdata->cfg->rcl_obj, (ucl_object_t *) cur,
+			ucl_object_replace_key(cbdata->cfg->cfg_ucl_obj, (ucl_object_t *) cur,
 								   cur->key, cur->keylen, false);
 		}
 
@@ -1883,7 +1883,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 		}
 	}
 
-	conf = ucl_object_lookup(cfg->rcl_obj, module_name);
+	conf = ucl_object_lookup(cfg->cfg_ucl_obj, module_name);
 
 	if (conf == nullptr) {
 		rspamd_plugins_table_push_elt(L, "disabled_unconfigured", module_name);
