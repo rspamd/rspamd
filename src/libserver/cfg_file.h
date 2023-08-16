@@ -856,9 +856,9 @@ gboolean rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 														cfg->cfg_pool->tag.tagname, cfg->checksum, \
 														RSPAMD_LOG_FUNC,                           \
 														__VA_ARGS__)
-#define msg_err_config_forced(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL | RSPAMD_LOG_FORCED,  \
-															   cfg->cfg_pool->tag.tagname, cfg->checksum, \
-															   RSPAMD_LOG_FUNC,                           \
+#define msg_err_config_forced(...) rspamd_default_log_function((gint) G_LOG_LEVEL_CRITICAL | (gint) RSPAMD_LOG_FORCED, \
+															   cfg->cfg_pool->tag.tagname, cfg->checksum,              \
+															   RSPAMD_LOG_FUNC,                                        \
 															   __VA_ARGS__)
 #define msg_warn_config(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,                       \
 														 cfg->cfg_pool->tag.tagname, cfg->checksum, \

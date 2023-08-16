@@ -15,12 +15,13 @@
  */
 #include "config.h"
 
+#include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
+
 #include "cfg_file.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
-#include "scan_result.h"
-#include "lua/lua_common.h"
-#include "lua/lua_thread_pool.h"
+
 #include "maps/map.h"
 #include "maps/map_helpers.h"
 #include "maps/map_private.h"

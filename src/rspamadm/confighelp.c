@@ -233,7 +233,7 @@ rspamadm_confighelp(gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	rspamd_rcl_config_init(cfg, NULL);
 	lua_pushboolean(cfg->lua_state, true);
 	lua_setglobal(cfg->lua_state, "confighelp");
-	rspamd_rcl_add_lua_plugins_path(cfg, plugins_path, FALSE, NULL, NULL);
+	rspamd_rcl_add_lua_plugins_path(cfg->rcl_top_section, cfg, plugins_path, FALSE, NULL);
 
 	/* Init modules to get documentation strings */
 	i = 0;

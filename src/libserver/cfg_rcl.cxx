@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "lua/lua_common.h"
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
 #include "utlist.h"
 #include "cfg_file.h"
-#include "lua/lua_common.h"
 #include "expression.h"
 #include "src/libserver/composites/composites.h"
 #include "libserver/worker_util.h"
@@ -31,7 +32,6 @@
 #include <string>
 #include <filesystem>
 #include <memory>
-#include <algorithm>
 #include "contrib/ankerl/unordered_dense.h"
 #include "fmt/core.h"
 #include "libutil/cxx/util.hxx"
@@ -52,20 +52,20 @@ struct rspamd_rcl_default_handler_data {
 struct rspamd_rcl_sections_map;
 
 struct rspamd_rcl_section {
-	struct rspamd_rcl_sections_map *top;
+	struct rspamd_rcl_sections_map *top{};
 	std::string name; /**< name of section */
 	std::optional<std::string> key_attr;
 	std::optional<std::string> default_key;
-	rspamd_rcl_handler_t handler; /**< handler of section attributes */
-	enum ucl_type type;           /**< type of attribute */
-	bool required;                /**< whether this param is required */
-	bool strict_type;             /**< whether we need strict type */
-	mutable bool processed;       /**< whether this section was processed */
+	rspamd_rcl_handler_t handler{}; /**< handler of section attributes */
+	enum ucl_type type;             /**< type of attribute */
+	bool required{};                /**< whether this param is required */
+	bool strict_type{};             /**< whether we need strict type */
+	mutable bool processed{};       /**< whether this section was processed */
 	ankerl::unordered_dense::map<std::string, std::shared_ptr<struct rspamd_rcl_section>> subsections;
 	ankerl::unordered_dense::map<std::string, struct rspamd_rcl_default_handler_data> default_parser; /**< generic parsing fields */
-	rspamd_rcl_section_fin_t fin;                                                                     /** called at the end of section parsing */
-	gpointer fin_ud;
-	ucl_object_t *doc_ref; /**< reference to the section's documentation */
+	rspamd_rcl_section_fin_t fin{};                                                                   /** called at the end of section parsing */
+	gpointer fin_ud{};
+	ucl_object_t *doc_ref{}; /**< reference to the section's documentation */
 };
 
 struct rspamd_worker_param_parser {
@@ -74,10 +74,19 @@ struct rspamd_worker_param_parser {
 };
 
 struct rspamd_worker_cfg_parser {
-	ankerl::unordered_dense::map<std::pair<std::string, gpointer>, rspamd_worker_param_parser> parsers; /**< parsers hash										*/
-	gint type;                                                                                          /**< workers quark										*/
-	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);                                         /**<
- 														 default object parser								*/
+	struct pair_hash {
+		using is_avalanching = void;
+		template<class T1, class T2>
+		std::size_t operator()(const std::pair<T1, T2> &pair) const
+		{
+			return ankerl::unordered_dense::hash<T1>()(pair.first) ^ ankerl::unordered_dense::hash<T2>()(pair.second);
+		}
+	};
+	ankerl::unordered_dense::map<std::pair<std::string, gpointer>,
+								 rspamd_worker_param_parser, pair_hash>
+		parsers;                                                /**< parsers hash										*/
+	gint type;                                                  /**< workers quark										*/
+	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud); /**< default object parser								*/
 	gpointer def_ud;
 };
 

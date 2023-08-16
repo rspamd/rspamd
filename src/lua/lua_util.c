@@ -858,7 +858,7 @@ lua_util_config_from_ucl(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = NULL, **pcfg;
-	struct rspamd_rcl_section *top;
+	struct rspamd_rcl_sections_map *top;
 	GError *err = NULL;
 	ucl_object_t *obj;
 	const char *str_options = NULL;
@@ -901,6 +901,8 @@ lua_util_config_from_ucl(lua_State *L)
 			rspamd_lua_setclass(L, "rspamd{config}", -1);
 			*pcfg = cfg;
 		}
+
+		rspamd_rcl_sections_free(top);
 	}
 
 	return 1;
