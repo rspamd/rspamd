@@ -2460,6 +2460,8 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 								   "Lua files to load");
 	}
 
+	cfg->rcl_top_section = top;
+
 	return top;
 }
 
