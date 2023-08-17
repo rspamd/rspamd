@@ -810,7 +810,8 @@ rspamd_rcl_worker_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 					}
 				}
 			}
-			else if (known_worker_attributes.find(std::string_view{ucl_object_key(cur)}) == known_worker_attributes.end()) {
+			else if (!(wrk->worker->flags & RSPAMD_WORKER_NO_STRICT_CONFIG) &&
+					 known_worker_attributes.find(std::string_view{ucl_object_key(cur)}) == known_worker_attributes.end()) {
 				msg_warn_config("unknown worker attribute: %s; worker type: %s", ucl_object_key(cur), worker_type);
 			}
 		}

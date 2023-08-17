@@ -68,6 +68,7 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_CONTROLLER = (1 << 6),
 	RSPAMD_WORKER_NO_TERMINATE_DELAY = (1 << 7),
 	RSPAMD_WORKER_OLD_CONFIG = (1 << 8),
+	RSPAMD_WORKER_NO_STRICT_CONFIG = (1 << 9),
 };
 
 struct rspamd_worker_accept_event {
