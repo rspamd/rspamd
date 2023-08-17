@@ -1053,8 +1053,6 @@ static void
 rspamd_worker_conf_dtor(struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
-		struct rspamd_worker_bind_conf *cnf, *tmp;
-
 		ucl_object_unref(wcf->options);
 		g_queue_free(wcf->active_workers);
 		g_hash_table_unref(wcf->params);

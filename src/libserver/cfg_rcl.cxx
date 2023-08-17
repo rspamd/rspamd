@@ -3014,7 +3014,7 @@ rspamd_rcl_parse_struct_pubkey(rspamd_mempool_t *pool,
 
 static void
 rspamd_rcl_insert_string_list_item(gpointer *target, rspamd_mempool_t *pool,
-								   const gchar *src, gboolean is_hash)
+								   std::string_view elt, gboolean is_hash)
 {
 	union {
 		GHashTable *hv;
@@ -3032,11 +3032,11 @@ rspamd_rcl_insert_string_list_item(gpointer *target, rspamd_mempool_t *pool,
 										  (rspamd_mempool_destruct_t) g_hash_table_unref, d.hv);
 		}
 
-		val = rspamd_mempool_strdup(pool, src);
+		val = rspamd_mempool_strdup_len(pool, elt.data(), elt.size());
 		g_hash_table_insert(d.hv, val, val);
 	}
 	else {
-		val = rspamd_mempool_strdup(pool, src);
+		val = rspamd_mempool_strdup_len(pool, elt.data(), elt.size());
 		d.lv = g_list_prepend(d.lv, val);
 	}
 
@@ -3051,50 +3051,49 @@ rspamd_rcl_parse_struct_string_list(rspamd_mempool_t *pool,
 									GError **err)
 {
 	auto *pd = (struct rspamd_rcl_struct_parser *) ud;
-	gpointer *target;
-	gchar *val, **strvec, **cvec;
-	const ucl_object_t *cur;
-	const gsize num_str_len = 32;
-	ucl_object_iter_t iter = nullptr;
-	gboolean is_hash, need_destructor = TRUE;
+	constexpr const auto num_str_len = 32;
+	auto need_destructor = true;
 
 
-	is_hash = pd->flags & RSPAMD_CL_FLAG_STRING_LIST_HASH;
-	target = (gpointer *) (((gchar *) pd->user_struct) + pd->offset);
+	auto is_hash = pd->flags & RSPAMD_CL_FLAG_STRING_LIST_HASH;
+	auto *target = (gpointer *) (((gchar *) pd->user_struct) + pd->offset);
 
 	if (!is_hash && *target != nullptr) {
 		need_destructor = FALSE;
 	}
 
-	iter = ucl_object_iterate_new(obj);
+	auto iter = ucl_object_iterate_new(obj);
+	const auto *cur = obj;
 
 	while ((cur = ucl_object_iterate_safe(iter, true)) != nullptr) {
 		switch (cur->type) {
-		case UCL_STRING:
-			strvec = g_strsplit_set(ucl_object_tostring(cur), ",", -1);
-			cvec = strvec;
+		case UCL_STRING: {
+			rspamd::string_foreach_delim(ucl_object_tostring(cur), ", ", [&](const auto &elt) {
+				rspamd_rcl_insert_string_list_item(target, pool, elt, is_hash);
+			});
 
-			while (*cvec) {
-				rspamd_rcl_insert_string_list_item(target, pool, *cvec, is_hash);
-				cvec++;
-			}
-
-			g_strfreev(strvec);
 			/* Go to the next object */
 			continue;
-		case UCL_INT:
-			val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		}
+		case UCL_INT: {
+			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%L", cur->value.iv);
+			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 			break;
-		case UCL_FLOAT:
-			val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		}
+		case UCL_FLOAT: {
+			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%f", cur->value.dv);
+			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 			break;
-		case UCL_BOOLEAN:
-			val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
+		}
+		case UCL_BOOLEAN: {
+			auto *val = (gchar *) rspamd_mempool_alloc(pool, num_str_len);
 			rspamd_snprintf(val, num_str_len, "%s",
 							((gboolean) cur->value.iv) ? "true" : "false");
+			rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 			break;
+		}
 		default:
 			g_set_error(err,
 						CFG_RCL_ERROR,
@@ -3106,8 +3105,6 @@ rspamd_rcl_parse_struct_string_list(rspamd_mempool_t *pool,
 
 			return FALSE;
 		}
-
-		rspamd_rcl_insert_string_list_item(target, pool, val, is_hash);
 	}
 
 	ucl_object_iterate_free(iter);
@@ -3937,9 +3934,7 @@ rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
 						   const char *default_value,
 						   gboolean required)
 {
-	const ucl_object_t *found, *cur;
-	ucl_object_t *obj;
-	gchar **path_components, **comp;
+	const auto *cur = cfg->doc_strings;
 
 	if (doc_path == nullptr) {
 		/* Assume top object */
@@ -3953,7 +3948,7 @@ rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
 									  required);
 	}
 	else {
-		found = ucl_object_lookup_path(cfg->doc_strings, doc_path);
+		const auto *found = ucl_object_lookup_path(cfg->doc_strings, doc_path);
 
 		if (found != nullptr) {
 			return rspamd_rcl_add_doc_obj((ucl_object_t *) found,
@@ -3967,35 +3962,25 @@ rspamd_rcl_add_doc_by_path(struct rspamd_config *cfg,
 		}
 
 		/* Otherwise we need to insert all components of the path */
-		path_components = g_strsplit_set(doc_path, ".", -1);
-		cur = cfg->doc_strings;
-
-		for (comp = path_components; *comp != nullptr; comp++) {
+		rspamd::string_foreach_delim(doc_path, ".", [&](const std::string_view &elt) {
 			if (ucl_object_type(cur) != UCL_OBJECT) {
-				msg_err_config("Bad path while lookup for '%s' at %s",
-							   doc_path, *comp);
-				g_strfreev(path_components);
-
-				return nullptr;
+				msg_err_config("Bad path while lookup for '%s' at %*s",
+							   doc_path, (int) elt.size(), elt.data());
 			}
-
-			found = ucl_object_lookup(cur, *comp);
-
+			const auto *found = ucl_object_lookup_len(cur, elt.data(), elt.size());
 			if (found == nullptr) {
-				obj = ucl_object_typed_new(UCL_OBJECT);
+				auto *obj = ucl_object_typed_new(UCL_OBJECT);
 				ucl_object_insert_key((ucl_object_t *) cur,
 									  obj,
-									  *comp,
-									  0,
+									  elt.data(),
+									  elt.size(),
 									  true);
 				cur = obj;
 			}
 			else {
 				cur = found;
 			}
-		}
-
-		g_strfreev(path_components);
+		});
 	}
 
 	return rspamd_rcl_add_doc_obj(ucl_object_ref(cur),
