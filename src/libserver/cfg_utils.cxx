@@ -136,14 +136,7 @@ struct rspamd_actions_list {
 	{
 		std::sort(actions.begin(), actions.end(), [](const action_ptr &a1, const action_ptr &a2) -> bool {
 			if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
-				if (a1->threshold < a2->threshold) {
-					return false;
-				}
-				else if (a1->threshold > a2->threshold) {
-					return true;
-				}
-
-				return false;
+				return a1->threshold < a2->threshold;
 			}
 
 			if (isnan(a1->threshold) && isnan(a2->threshold)) {
@@ -923,6 +916,10 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		auto hs_ret = rspamd_re_cache_load_hyperscan(cfg->re_cache,
 													 cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR "/",
 													 true);
+
+		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {
+			msg_debug_config("cannot load hyperscan database, disable it");
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
@@ -1932,16 +1929,15 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 							  const ucl_object_t *obj,
 							  guint priority)
 {
-	const ucl_object_t *elt;
-	gdouble threshold = NAN;
-	int flags = 0, obj_type;
+	auto threshold = NAN;
+	int flags = 0;
 
-	obj_type = ucl_object_type(obj);
+	auto obj_type = ucl_object_type(obj);
 
 	if (obj_type == UCL_OBJECT) {
 		obj_type = ucl_object_type(obj);
 
-		elt = ucl_object_lookup_any(obj, "score", "threshold", nullptr);
+		const auto *elt = ucl_object_lookup_any(obj, "score", "threshold", nullptr);
 
 		if (elt) {
 			threshold = ucl_object_todouble(elt);
@@ -2063,14 +2059,18 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 		/* Existing element */
 		if (act->priority <= priority) {
 			/* We can replace data */
-			msg_info_config("action %s has been already registered with "
-							"priority %ud, override it with new priority: %ud, "
-							"old score: %.2f",
-							action_name,
-							act->priority,
-							priority,
-							act->threshold);
+			auto old_pri = act->priority;
+			auto old_thr = act->threshold;
+
 			if (rspamd_config_action_from_ucl(cfg, act, obj, priority)) {
+				msg_info_config("action %s has been already registered with "
+								"priority %ud, override it with new priority: %ud, "
+								"old threshold: %.2f, new threshold: %.2f",
+								action_name,
+								old_pri,
+								priority,
+								old_thr,
+								act->threshold);
 				actions->sort();
 			}
 			else {
