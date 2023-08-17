@@ -605,6 +605,9 @@ rspamd_mempool_alloc_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment
 gchar *
 rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *loc)
 {
+	if (src == NULL) {
+		return NULL;
+	}
 	return rspamd_mempool_strdup_len_(pool, src, strlen(src), loc);
 }
 
