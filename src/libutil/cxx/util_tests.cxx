@@ -18,6 +18,7 @@
 
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #include "doctest/doctest.h"
+#include <vector>
 
 using namespace rspamd;
 using namespace std::literals::string_view_literals;
