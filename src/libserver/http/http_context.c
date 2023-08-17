@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -210,7 +210,7 @@ rspamd_http_context_create(struct rspamd_config *cfg,
 	const ucl_object_t *http_obj;
 
 	ctx = rspamd_http_context_new_default(cfg, ev_base, ups_ctx);
-	http_obj = ucl_object_lookup(cfg->rcl_obj, "http");
+	http_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "http");
 
 	if (http_obj) {
 		const ucl_object_t *server_obj, *client_obj;

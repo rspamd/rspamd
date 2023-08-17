@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016-2017 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,16 +50,6 @@ struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
 
 /**
- * Types of rspamd bind lines
- */
-enum rspamd_cred_type {
-	CRED_NORMAL,
-	CRED_CONTROL,
-	CRED_LMTP,
-	CRED_DELIVERY
-};
-
-/**
  * Logging type
  */
 enum rspamd_log_type {
@@ -92,17 +82,6 @@ struct script_module {
 	gchar *name; /**< name of module   */
 	gchar *path; /**< path to module   */
 	gchar *digest;
-};
-
-/**
- * Type of lua variable
- */
-enum lua_var_type {
-	LUA_VAR_NUM,
-	LUA_VAR_BOOLEAN,
-	LUA_VAR_STRING,
-	LUA_VAR_FUNCTION,
-	LUA_VAR_UNKNOWN
 };
 
 enum rspamd_symbol_group_flags {
@@ -229,7 +208,7 @@ struct rspamd_worker_conf {
 	guint64 rlimit_maxcore;                    /**< maximum core file size								*/
 	GHashTable *params;                        /**< params for worker									*/
 	GQueue *active_workers;                    /**< linked list of spawned workers						*/
-	gpointer *ctx;                             /**< worker's context									*/
+	gpointer ctx;                              /**< worker's context									*/
 	ucl_object_t *options;                     /**< other worker's options								*/
 	struct rspamd_worker_lua_script *scripts;  /**< registered lua scripts								*/
 	gboolean enabled;
@@ -324,6 +303,7 @@ struct rspamd_config_post_init_script {
 };
 
 struct rspamd_lang_detector;
+struct rspamd_rcl_sections_map;
 
 enum rspamd_config_settings_policy {
 	RSPAMD_SETTINGS_POLICY_DEFAULT = 0,
@@ -356,12 +336,12 @@ struct rspamd_config {
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
-	gdouble unknown_weight;        /**< weight of unknown symbols						*/
-	gdouble grow_factor;           /**< grow factor for metric							*/
-	GHashTable *symbols;           /**< weights of symbols in metric					*/
-	const gchar *subject;          /**< subject rewrite string							*/
-	GHashTable *groups;            /**< groups of symbols								*/
-	struct rspamd_action *actions; /**< all actions of the metric						*/
+	gdouble unknown_weight; /**< weight of unknown symbols						*/
+	gdouble grow_factor;    /**< grow factor for metric							*/
+	GHashTable *symbols;    /**< weights of symbols in metric					*/
+	const gchar *subject;   /**< subject rewrite string							*/
+	GHashTable *groups;     /**< groups of symbols								*/
+	void *actions;          /**< all actions of the metric (opaque type)		*/
 
 	gboolean one_shot_mode;              /**< rules add only one symbol							*/
 	gboolean check_text_attachements;    /**< check text attachements as text					*/
@@ -412,21 +392,21 @@ struct rspamd_config {
 	GList *script_modules;        /**< linked list of script modules to load				*/
 	GHashTable *explicit_modules; /**< modules that should be always loaded				*/
 
-	GList *filters;                     /**< linked list of all filters							*/
-	GList *workers;                     /**< linked list of all workers params					*/
-	GHashTable *wrk_parsers;            /**< hash for worker config parsers, indexed by worker quarks */
-	ucl_object_t *rcl_obj;              /**< rcl object											*/
-	ucl_object_t *config_comments;      /**< comments saved from the config						*/
-	ucl_object_t *doc_strings;          /**< documentation strings for config options			*/
-	GPtrArray *c_modules;               /**< list of C modules			*/
-	void *composites_manager;           /**< hash of composite symbols indexed by its name		*/
-	GList *classifiers;                 /**< list of all classifiers defined                    */
-	GList *statfiles;                   /**< list of all statfiles in config file order         */
-	GHashTable *classifiers_symbols;    /**< hashtable indexed by symbol name of classifiers    */
-	GHashTable *cfg_params;             /**< all cfg params indexed by its name in this structure */
-	gchar *dynamic_conf;                /**< path to dynamic configuration						*/
-	ucl_object_t *current_dynamic_conf; /**< currently loaded dynamic configuration				*/
-	gint clock_res;                     /**< resolution of clock used							*/
+	GList *filters;                                  /**< linked list of all filters							*/
+	GList *workers;                                  /**< linked list of all workers params					*/
+	struct rspamd_rcl_sections_map *rcl_top_section; /**< top section for RCL config							*/
+	ucl_object_t *cfg_ucl_obj;                       /**< ucl object											*/
+	ucl_object_t *config_comments;                   /**< comments saved from the config						*/
+	ucl_object_t *doc_strings;                       /**< documentation strings for config options			*/
+	GPtrArray *c_modules;                            /**< list of C modules			*/
+	void *composites_manager;                        /**< hash of composite symbols indexed by its name		*/
+	GList *classifiers;                              /**< list of all classifiers defined                    */
+	GList *statfiles;                                /**< list of all statfiles in config file order         */
+	GHashTable *classifiers_symbols;                 /**< hashtable indexed by symbol name of classifiers    */
+	GHashTable *cfg_params;                          /**< all cfg params indexed by its name in this structure */
+	gchar *dynamic_conf;                             /**< path to dynamic configuration						*/
+	ucl_object_t *current_dynamic_conf;              /**< currently loaded dynamic configuration				*/
+	gint clock_res;                                  /**< resolution of clock used							*/
 
 	GList *maps;                       /**< maps active										*/
 	gdouble map_timeout;               /**< maps watch timeout									*/
@@ -487,7 +467,7 @@ struct rspamd_config {
 
 	struct rspamd_external_libs_ctx *libs_ctx;  /**< context for external libraries						*/
 	struct rspamd_monitored_ctx *monitored_ctx; /**< context for monitored resources					*/
-	struct rspamd_redis_pool *redis_pool;       /**< redis connection pool								*/
+	void *redis_pool;                           /**< redis connection pool								*/
 
 	struct rspamd_re_cache *re_cache; /**< static regexp cache								*/
 
@@ -730,7 +710,7 @@ gboolean rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 /*
  * Get action from a string
  */
-gboolean rspamd_action_from_str(const gchar *data, gint *result);
+gboolean rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result);
 
 /*
  * Return textual representation of action enumeration
@@ -738,11 +718,6 @@ gboolean rspamd_action_from_str(const gchar *data, gint *result);
 const gchar *rspamd_action_to_str(enum rspamd_action_type action);
 
 const gchar *rspamd_action_to_str_alt(enum rspamd_action_type action);
-
-/*
- * Resort all actions (needed to operate with thresholds)
- */
-void rspamd_actions_sort(struct rspamd_config *cfg);
 
 /**
  * Parse radix tree or radix map from ucl object
@@ -811,6 +786,32 @@ struct rspamd_action *rspamd_config_get_action(struct rspamd_config *cfg,
 struct rspamd_action *rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 													   enum rspamd_action_type type);
 
+/**
+ * Iterate over all actions
+ * @param cfg
+ * @param func
+ * @param data
+ */
+void rspamd_config_actions_foreach(struct rspamd_config *cfg,
+								   void (*func)(struct rspamd_action *act, void *d),
+								   void *data);
+/**
+ * Iterate over all actions with index
+ * @param cfg
+ * @param func
+ * @param data
+ */
+void rspamd_config_actions_foreach_enumerate(struct rspamd_config *cfg,
+											 void (*func)(int idx, struct rspamd_action *act, void *d),
+											 void *data);
+
+/**
+ * Returns number of actions defined in the config
+ * @param cfg
+ * @return
+ */
+gsize rspamd_config_actions_size(struct rspamd_config *cfg);
+
 int rspamd_config_ev_backend_get(struct rspamd_config *cfg);
 const gchar *rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective);
 
@@ -855,9 +856,9 @@ gboolean rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 														cfg->cfg_pool->tag.tagname, cfg->checksum, \
 														RSPAMD_LOG_FUNC,                           \
 														__VA_ARGS__)
-#define msg_err_config_forced(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL | RSPAMD_LOG_FORCED,  \
-															   cfg->cfg_pool->tag.tagname, cfg->checksum, \
-															   RSPAMD_LOG_FUNC,                           \
+#define msg_err_config_forced(...) rspamd_default_log_function((gint) G_LOG_LEVEL_CRITICAL | (gint) RSPAMD_LOG_FORCED, \
+															   cfg->cfg_pool->tag.tagname, cfg->checksum,              \
+															   RSPAMD_LOG_FUNC,                                        \
 															   __VA_ARGS__)
 #define msg_warn_config(...) rspamd_default_log_function(G_LOG_LEVEL_WARNING,                       \
 														 cfg->cfg_pool->tag.tagname, cfg->checksum, \

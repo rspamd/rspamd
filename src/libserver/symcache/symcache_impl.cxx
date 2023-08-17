@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,7 +42,7 @@ auto symcache::init() -> bool
 
 	if (cfg->cache_filename != nullptr) {
 		msg_debug_cache("loading symcache saved data from %s", cfg->cache_filename);
-		res = load_items();
+		load_items();
 	}
 
 	ankerl::unordered_dense::set<int> disabled_ids;
@@ -717,7 +717,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 										int priority,
 										symbol_func_t func,
 										void *user_data,
-										enum rspamd_symbol_type flags_and_type) -> int
+										int flags_and_type) -> int
 {
 	auto real_type_pair_maybe = item_type_from_c(flags_and_type);
 
@@ -786,7 +786,7 @@ auto symcache::add_symbol_with_callback(std::string_view name,
 	return id;
 }
 
-auto symcache::add_virtual_symbol(std::string_view name, int parent_id, enum rspamd_symbol_type flags_and_type) -> int
+auto symcache::add_virtual_symbol(std::string_view name, int parent_id, int flags_and_type) -> int
 {
 	if (name.empty()) {
 		msg_err_cache("cannot register a virtual symbol with no name; qed");

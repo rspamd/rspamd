@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -40,6 +40,15 @@ constexpr auto array_of(Ts &&...t) -> std::array<typename std::decay_t<typename 
 	return {{std::forward<T>(t)...}};
 }
 
+/**
+ * Find a value in a map
+ * @tparam C Map type
+ * @tparam K Key type
+ * @tparam V Value type
+ * @param c Map to search
+ * @param k Key to search
+ * @return Value if found or std::nullopt otherwise
+ */
 template<class C, class K, class V = typename C::mapped_type, typename std::enable_if_t<std::is_constructible_v<typename C::key_type, K> && std::is_constructible_v<typename C::mapped_type, V>, bool> = false>
 constexpr auto find_map(const C &c, const K &k) -> std::optional<std::reference_wrapper<const V>>
 {
@@ -53,8 +62,8 @@ constexpr auto find_map(const C &c, const K &k) -> std::optional<std::reference_
 }
 
 
-template<typename _It>
-inline constexpr auto make_string_view_from_it(_It begin, _It end)
+template<typename It>
+inline constexpr auto make_string_view_from_it(It begin, It end)
 {
 	using result_type = std::string_view;
 
@@ -91,6 +100,47 @@ inline auto string_foreach_line(const S &input, const F &functor)
 	}
 }
 
+/**
+ * Iterate over elements in a string
+ * @tparam S string type
+ * @tparam D delimiter type
+ * @tparam F functor type
+ * @param input string to iterate
+ * @param delim delimiter to use
+ * @param functor functor to call
+ * @param ignore_empty ignore empty elements
+ * @return nothing
+ */
+template<class S, class D, class F,
+		 typename std::enable_if_t<std::is_invocable_v<F, std::string_view> && std::is_constructible_v<std::string_view, S> && std::is_constructible_v<std::string_view, D>, bool> = true>
+inline auto string_foreach_delim(const S &input, const D &delim, const F &functor, const bool ignore_empty = true) -> void
+{
+	size_t first = 0;
+	auto sv_input = std::string_view{input};
+	auto sv_delim = std::string_view{delim};
+
+	while (first < sv_input.size()) {
+		const auto second = sv_input.find_first_of(sv_delim, first);
+
+		if (first != second || !ignore_empty) {
+			functor(sv_input.substr(first, second - first));
+		}
+
+		if (second == std::string_view::npos) {
+			break;
+		}
+
+		first = second + 1;
+	}
+}
+
+/**
+ * Split string on a character
+ * @tparam S string type
+ * @param input string to split
+ * @param chr character to split on
+ * @return pair of strings
+ */
 template<class S, typename std::enable_if_t<std::is_constructible_v<std::string_view, S>, bool> = true>
 inline auto string_split_on(const S &input, std::string_view::value_type chr) -> std::pair<std::string_view, std::string_view>
 {
@@ -111,6 +161,10 @@ inline auto string_split_on(const S &input, std::string_view::value_type chr) ->
 
 /**
  * Enumerate for range loop
+ * @tparam T iterable type
+ * @tparam TIter iterator type
+ * @param iterable iterable object
+ * @return iterator object
  */
 template<typename T,
 		 typename TIter = decltype(std::begin(std::declval<T>())),

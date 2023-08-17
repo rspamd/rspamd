@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -140,7 +140,7 @@ gint regexp_module_config(struct rspamd_config *cfg, bool validate)
 		return TRUE;
 	}
 
-	sec = ucl_object_lookup(cfg->rcl_obj, "regexp");
+	sec = ucl_object_lookup(cfg->cfg_ucl_obj, "regexp");
 	if (sec == NULL) {
 		msg_err_config("regexp module enabled, but no rules are defined");
 		return TRUE;

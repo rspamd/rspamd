@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016-2017 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -68,6 +68,7 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_CONTROLLER = (1 << 6),
 	RSPAMD_WORKER_NO_TERMINATE_DELAY = (1 << 7),
 	RSPAMD_WORKER_OLD_CONFIG = (1 << 8),
+	RSPAMD_WORKER_NO_STRICT_CONFIG = (1 << 9),
 };
 
 struct rspamd_worker_accept_event {
@@ -352,8 +353,8 @@ struct rspamd_external_libs_ctx {
 	void **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
-	SSL_CTX *ssl_ctx;
-	SSL_CTX *ssl_ctx_noverify;
+	void *ssl_ctx;
+	void *ssl_ctx_noverify;
 	struct zstd_dictionary *in_dict;
 	struct zstd_dictionary *out_dict;
 	void *out_zstream;

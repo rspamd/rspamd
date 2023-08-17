@@ -1,11 +1,11 @@
-/*-
+/*
  * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,7 +45,7 @@ private:
 public:
 	explicit fasttext_langdet(struct rspamd_config *cfg)
 	{
-		const auto *ucl_obj = cfg->rcl_obj;
+		const auto *ucl_obj = cfg->cfg_ucl_obj;
 		const auto *opts_section = ucl_object_find_key(ucl_obj, "lang_detection");
 
 		if (opts_section) {

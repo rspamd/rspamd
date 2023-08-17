@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1044,7 +1044,7 @@ lua_config_get_all_opt(lua_State *L)
 		mname = luaL_checkstring(L, 2);
 
 		if (mname) {
-			obj = ucl_obj_get_key(cfg->rcl_obj, mname);
+			obj = ucl_obj_get_key(cfg->cfg_ucl_obj, mname);
 			/* Flatten object */
 			if (obj != NULL && (ucl_object_type(obj) == UCL_OBJECT ||
 								ucl_object_type(obj) == UCL_ARRAY)) {
@@ -1114,8 +1114,8 @@ lua_config_get_ucl(lua_State *L)
 			lua_rawgeti(L, LUA_REGISTRYINDEX, cached->ref);
 		}
 		else {
-			if (cfg->rcl_obj) {
-				ucl_object_push_lua(L, cfg->rcl_obj, true);
+			if (cfg->cfg_ucl_obj) {
+				ucl_object_push_lua(L, cfg->cfg_ucl_obj, true);
 				lua_pushvalue(L, -1);
 				cached = rspamd_mempool_alloc(cfg->cfg_pool, sizeof(*cached));
 				cached->L = L;
@@ -1725,7 +1725,7 @@ lua_config_get_key(lua_State *L)
 
 	name = luaL_checklstring(L, 2, &namelen);
 	if (name && cfg) {
-		val = ucl_object_lookup_len(cfg->rcl_obj, name, namelen);
+		val = ucl_object_lookup_len(cfg->cfg_ucl_obj, name, namelen);
 		if (val != NULL) {
 			ucl_object_push_lua(L, val, val->type != UCL_ARRAY);
 		}
@@ -2581,24 +2581,27 @@ lua_config_get_metric_action(lua_State *L)
 	return 1;
 }
 
+static void
+lua_config_actions_cb(struct rspamd_action *act, void *cbd)
+{
+	lua_State *L = (lua_State *) cbd;
+
+	if (!isnan(act->threshold)) {
+		lua_pushstring(L, act->name);
+		lua_pushnumber(L, act->threshold);
+		lua_settable(L, -3);
+	}
+}
+
 static gint
 lua_config_get_all_actions(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config(L, 1);
-	struct rspamd_action *act, *tmp;
 
 	if (cfg) {
-		lua_createtable(L, 0, HASH_COUNT(cfg->actions));
-
-		HASH_ITER(hh, cfg->actions, act, tmp)
-		{
-			if (!isnan(act->threshold)) {
-				lua_pushstring(L, act->name);
-				lua_pushnumber(L, act->threshold);
-				lua_settable(L, -3);
-			}
-		}
+		lua_createtable(L, 0, rspamd_config_actions_size(cfg));
+		rspamd_config_actions_foreach(cfg, lua_config_actions_cb, L);
 	}
 	else {
 		return luaL_error(L, "invalid arguments, rspamd_config expected");
@@ -4420,7 +4423,7 @@ lua_config_parse_rcl(lua_State *L)
 	GHashTable *excluded = g_hash_table_new_full(rspamd_str_hash, rspamd_str_equal,
 												 g_free, NULL);
 	GError *err = NULL;
-	struct rspamd_rcl_section *top;
+	struct rspamd_rcl_sections_map *top;
 
 	if (cfg) {
 		if (lua_istable(L, 2)) {
@@ -4436,12 +4439,12 @@ lua_config_parse_rcl(lua_State *L)
 
 		top = rspamd_rcl_config_init(cfg, excluded);
 
-		if (!rspamd_rcl_parse(top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
+		if (!rspamd_rcl_parse(top, cfg, cfg, cfg->cfg_pool, cfg->cfg_ucl_obj, &err)) {
 			lua_pushboolean(L, false);
 			lua_pushfstring(L, "failed to load config: %s", err->message);
 			g_error_free(err);
 			g_hash_table_unref(excluded);
-			rspamd_rcl_section_free(top);
+			rspamd_rcl_sections_free(top);
 
 			return 2;
 		}
@@ -4451,7 +4454,7 @@ lua_config_parse_rcl(lua_State *L)
 	}
 
 	g_hash_table_unref(excluded);
-	rspamd_rcl_section_free(top);
+	rspamd_rcl_sections_free(top);
 	lua_pushboolean(L, true);
 
 	return 1;

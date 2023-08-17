@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -61,7 +61,7 @@ worker_t fuzzy_worker = {
 	"fuzzy",     /* Name */
 	init_fuzzy,  /* Init function */
 	start_fuzzy, /* Start function */
-	RSPAMD_WORKER_HAS_SOCKET,
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_NO_STRICT_CONFIG,
 	RSPAMD_WORKER_SOCKET_UDP, /* UDP socket */
 	RSPAMD_WORKER_VER         /* Version info */
 };

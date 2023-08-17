@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -216,6 +216,10 @@ gchar *rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gc
 	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
 #define rspamd_mempool_strdup(pool, src) \
 	rspamd_mempool_strdup_((pool), (src), (G_STRLOC))
+gchar *rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, const gchar *loc)
+	RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+#define rspamd_mempool_strdup_len(pool, src, len) \
+	rspamd_mempool_strdup_len_((pool), (src), (len), (G_STRLOC))
 
 struct f_str_tok;
 

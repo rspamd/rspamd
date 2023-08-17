@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -793,65 +793,66 @@ rspamd_protocol_parse_task_flags(rspamd_mempool_t *pool,
 	return TRUE;
 }
 
-static struct rspamd_rcl_section *control_parser = NULL;
+static struct rspamd_rcl_sections_map *control_parser = NULL;
 
-static void
-rspamd_protocol_control_parser_init(void)
+RSPAMD_CONSTRUCTOR(rspamd_protocol_control_parser_ctor)
 {
-	struct rspamd_rcl_section *sub;
 
-	if (control_parser == NULL) {
-		sub = rspamd_rcl_add_section(&control_parser,
-									 "*",
-									 NULL,
-									 NULL,
-									 UCL_OBJECT,
-									 FALSE,
-									 TRUE);
-		/* Default handlers */
-		rspamd_rcl_add_default_handler(sub,
-									   "ip",
-									   rspamd_rcl_parse_struct_addr,
-									   G_STRUCT_OFFSET(struct rspamd_task, from_addr),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "from",
-									   rspamd_rcl_parse_struct_mime_addr,
-									   G_STRUCT_OFFSET(struct rspamd_task, from_envelope),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "rcpt",
-									   rspamd_rcl_parse_struct_mime_addr,
-									   G_STRUCT_OFFSET(struct rspamd_task, rcpt_envelope),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "helo",
-									   rspamd_rcl_parse_struct_string,
-									   G_STRUCT_OFFSET(struct rspamd_task, helo),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "user",
-									   rspamd_rcl_parse_struct_string,
-									   G_STRUCT_OFFSET(struct rspamd_task, auth_user),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "pass_all",
-									   rspamd_protocol_parse_task_flags,
-									   G_STRUCT_OFFSET(struct rspamd_task, flags),
-									   0,
-									   NULL);
-		rspamd_rcl_add_default_handler(sub,
-									   "json",
-									   rspamd_protocol_parse_task_flags,
-									   G_STRUCT_OFFSET(struct rspamd_task, flags),
-									   0,
-									   NULL);
-	}
+	struct rspamd_rcl_section *sub = rspamd_rcl_add_section(&control_parser, NULL,
+															"*",
+															NULL,
+															NULL,
+															UCL_OBJECT,
+															FALSE,
+															TRUE);
+	/* Default handlers */
+	rspamd_rcl_add_default_handler(sub,
+								   "ip",
+								   rspamd_rcl_parse_struct_addr,
+								   G_STRUCT_OFFSET(struct rspamd_task, from_addr),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "from",
+								   rspamd_rcl_parse_struct_mime_addr,
+								   G_STRUCT_OFFSET(struct rspamd_task, from_envelope),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "rcpt",
+								   rspamd_rcl_parse_struct_mime_addr,
+								   G_STRUCT_OFFSET(struct rspamd_task, rcpt_envelope),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "helo",
+								   rspamd_rcl_parse_struct_string,
+								   G_STRUCT_OFFSET(struct rspamd_task, helo),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "user",
+								   rspamd_rcl_parse_struct_string,
+								   G_STRUCT_OFFSET(struct rspamd_task, auth_user),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "pass_all",
+								   rspamd_protocol_parse_task_flags,
+								   G_STRUCT_OFFSET(struct rspamd_task, flags),
+								   0,
+								   NULL);
+	rspamd_rcl_add_default_handler(sub,
+								   "json",
+								   rspamd_protocol_parse_task_flags,
+								   G_STRUCT_OFFSET(struct rspamd_task, flags),
+								   0,
+								   NULL);
+}
+
+RSPAMD_DESTRUCTOR(rspamd_protocol_control_parser_dtor)
+{
+	rspamd_rcl_sections_free(control_parser);
 }
 
 gboolean
@@ -859,8 +860,6 @@ rspamd_protocol_handle_control(struct rspamd_task *task,
 							   const ucl_object_t *control)
 {
 	GError *err = NULL;
-
-	rspamd_protocol_control_parser_init();
 
 	if (!rspamd_rcl_parse(control_parser, task->cfg, task, task->task_pool,
 						  control, &err)) {

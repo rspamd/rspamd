@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -605,14 +605,21 @@ rspamd_mempool_alloc_shared_(rspamd_mempool_t *pool, gsize size, gsize alignment
 gchar *
 rspamd_mempool_strdup_(rspamd_mempool_t *pool, const gchar *src, const gchar *loc)
 {
-	gsize len;
+	if (src == NULL) {
+		return NULL;
+	}
+	return rspamd_mempool_strdup_len_(pool, src, strlen(src), loc);
+}
+
+gchar *
+rspamd_mempool_strdup_len_(rspamd_mempool_t *pool, const gchar *src, gsize len, const gchar *loc)
+{
 	gchar *newstr;
 
 	if (src == NULL) {
 		return NULL;
 	}
 
-	len = strlen(src);
 	newstr = rspamd_mempool_alloc_(pool, len + 1, MIN_MEM_ALIGNMENT, loc);
 	memcpy(newstr, src, len);
 	newstr[len] = '\0';

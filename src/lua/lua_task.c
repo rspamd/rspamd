@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2299,7 +2299,7 @@ lua_task_set_pre_result(lua_State *L)
 			}
 		}
 
-		gint internal_type;
+		enum rspamd_action_type internal_type;
 
 		if (strcmp(act_str, "accept") == 0) {
 			/* Compatibility! */
@@ -2313,14 +2313,6 @@ lua_task_set_pre_result(lua_State *L)
 		action = rspamd_config_get_action(task->cfg, act_str);
 
 		if (action == NULL) {
-			struct rspamd_action *tmp;
-
-			HASH_ITER(hh, task->cfg->actions, action, tmp)
-			{
-				msg_err_task("known defined action: %s = %f",
-							 action->name, action->threshold);
-			}
-
 			return luaL_error(L, "unknown action %s", act_str);
 		}
 
@@ -5700,7 +5692,7 @@ lua_task_set_settings(lua_State *L)
 				const gchar *act_name = ucl_object_key(cur);
 				struct rspamd_action_config *action_config = NULL;
 				double act_score;
-				int act_type;
+				enum rspamd_action_type act_type;
 
 				if (!rspamd_action_from_str(act_name, &act_type)) {
 					act_type = -1;
@@ -5730,7 +5722,7 @@ lua_task_set_settings(lua_State *L)
 					if (!isnan(act_score)) {
 						struct rspamd_action *new_act;
 
-						HASH_FIND_STR(task->cfg->actions, act_name, new_act);
+						new_act = rspamd_config_get_action(task->cfg, act_name);
 
 						if (new_act == NULL) {
 							/* New action! */

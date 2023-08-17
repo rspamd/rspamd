@@ -97,7 +97,7 @@ static inline int lua_absindex(lua_State *L, int i)
 
 extern const luaL_reg null_reg[];
 
-#define RSPAMD_LUA_API_VERSION 12
+#define RSPAMD_LUA_CFG_STATE(cfg) ((lua_State *) ((cfg)->lua_state))
 /**
 * Lua IP address structure
 */
@@ -426,15 +426,6 @@ double rspamd_lua_normalize(struct rspamd_config *cfg,
 
 /* Config file functions */
 void rspamd_lua_post_load_config(struct rspamd_config *cfg);
-
-gboolean rspamd_lua_handle_param(struct rspamd_task *task,
-								 gchar *mname,
-								 gchar *optname,
-								 enum lua_var_type expected_type,
-								 gpointer *res);
-
-gboolean rspamd_lua_check_condition(struct rspamd_config *cfg,
-									const gchar *condition);
 
 void rspamd_lua_dumpstack(lua_State *L);
 

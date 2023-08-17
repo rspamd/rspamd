@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 struct rspamd_rcl_section;
+struct rspamd_rcl_sections_map;
 struct rspamd_config;
 struct rspamd_rcl_default_handler_data;
 
@@ -59,7 +60,7 @@ struct rspamd_rcl_struct_parser {
 	struct rspamd_config *cfg;
 	gpointer user_struct;
 	goffset offset;
-	enum rspamd_rcl_flag flags;
+	int flags; /* enum rspamd_rcl_flag */
 };
 
 
@@ -120,13 +121,18 @@ struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler(
  * @return newly created structure
  */
 struct rspamd_rcl_section *rspamd_rcl_add_section(
-	struct rspamd_rcl_section **top,
-	const gchar *name, const gchar *key_attr,
+	struct rspamd_rcl_sections_map **top,
+	struct rspamd_rcl_section *parent_section,
+	const gchar *name,
+	const gchar *key_attr,
 	rspamd_rcl_handler_t handler,
-	enum ucl_type type, gboolean required, gboolean strict_type);
+	enum ucl_type type,
+	gboolean required,
+	gboolean strict_type);
 
 struct rspamd_rcl_section *rspamd_rcl_add_section_doc(
-	struct rspamd_rcl_section **top,
+	struct rspamd_rcl_sections_map **top,
+	struct rspamd_rcl_section *parent_section,
 	const gchar *name, const gchar *key_attr,
 	rspamd_rcl_handler_t handler,
 	enum ucl_type type, gboolean required,
@@ -138,18 +144,8 @@ struct rspamd_rcl_section *rspamd_rcl_add_section_doc(
  * Init common sections known to rspamd
  * @return top section
  */
-struct rspamd_rcl_section *rspamd_rcl_config_init(struct rspamd_config *cfg,
-												  GHashTable *skip_sections);
-
-/**
- * Get a section specified by path, it understand paths separated by '/' character
- * @param top top section
- * @param path '/' divided path
- * @return
- */
-struct rspamd_rcl_section *rspamd_rcl_config_get_section(
-	struct rspamd_rcl_section *top,
-	const char *path);
+struct rspamd_rcl_sections_map *rspamd_rcl_config_init(struct rspamd_config *cfg,
+													   GHashTable *skip_sections);
 
 /**
  * Parse configuration
@@ -161,25 +157,11 @@ struct rspamd_rcl_section *rspamd_rcl_config_get_section(
  * @param err error pointer
  * @return
  */
-gboolean rspamd_rcl_parse(struct rspamd_rcl_section *top,
+gboolean rspamd_rcl_parse(struct rspamd_rcl_sections_map *top,
 						  struct rspamd_config *cfg,
 						  gpointer ptr, rspamd_mempool_t *pool,
 						  const ucl_object_t *obj, GError **err);
 
-
-/**
- * Parse default structure for a section
- * @param section section
- * @param cfg config file
- * @param obj object to parse
- * @param ptr ptr to pass
- * @param err error ptr
- * @return TRUE if the object has been parsed
- */
-gboolean rspamd_rcl_section_parse_defaults(struct rspamd_config *cfg,
-										   struct rspamd_rcl_section *section,
-										   rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
-										   GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
  * which itself contains a struct pointer and the offset of a member in a
@@ -376,16 +358,6 @@ void rspamd_rcl_register_worker_option(struct rspamd_config *cfg,
 									   const gchar *doc_string);
 
 /**
- * Register a default parser for a worker
- * @param cfg config structure
- * @param type type of worker (GQuark)
- * @param func handler function
- * @param ud userdata for handler function
- */
-void rspamd_rcl_register_worker_parser(struct rspamd_config *cfg, gint type,
-									   gboolean (*func)(ucl_object_t *, gpointer), gpointer ud);
-
-/**
  * Adds new documentation object to the configuration
  * @param doc_target target object where to insert documentation (top object is used if this is NULL)
  * @param doc_object documentation object to insert
@@ -448,10 +420,10 @@ ucl_object_t *rspamd_rcl_add_doc_by_example(struct rspamd_config *cfg,
  * @param err
  * @return
  */
-gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_config *cfg,
+gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
+										 struct rspamd_config *cfg,
 										 const gchar *path,
 										 gboolean main_path,
-										 GHashTable *modules_seen,
 										 GError **err);
 
 
@@ -475,7 +447,7 @@ gboolean rspamd_rcl_add_lua_plugins_path(struct rspamd_config *cfg,
  * @param cfg
  */
 void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg);
-void rspamd_rcl_section_free(gpointer p);
+void rspamd_rcl_sections_free(struct rspamd_rcl_sections_map *sections);
 
 void rspamd_config_calculate_cksum(struct rspamd_config *cfg);
 

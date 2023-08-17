@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -870,6 +870,20 @@ rspamd_controller_handle_symbols(struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static void
+rspamd_controller_actions_cb(struct rspamd_action *act, void *cbd)
+{
+	ucl_object_t *top = (ucl_object_t *) cbd;
+	ucl_object_t *obj = ucl_object_typed_new(UCL_OBJECT);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromstring(act->name),
+						  "action", 0, false);
+	ucl_object_insert_key(obj,
+						  ucl_object_fromdouble(act->threshold),
+						  "value", 0, false);
+	ucl_array_append(top, obj);
+}
+
 /*
  * Actions command handler:
  * request: /actions
@@ -884,8 +898,7 @@ rspamd_controller_handle_actions(struct rspamd_http_connection_entry *conn_ent,
 								 struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_action *act, *tmp;
-	ucl_object_t *obj, *top;
+	ucl_object_t *top;
 
 	if (!rspamd_controller_check_password(conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -893,18 +906,7 @@ rspamd_controller_handle_actions(struct rspamd_http_connection_entry *conn_ent,
 
 	top = ucl_object_typed_new(UCL_ARRAY);
 
-	HASH_ITER(hh, session->cfg->actions, act, tmp)
-	{
-		obj = ucl_object_typed_new(UCL_OBJECT);
-		ucl_object_insert_key(obj,
-							  ucl_object_fromstring(act->name),
-							  "action", 0, false);
-		ucl_object_insert_key(obj,
-							  ucl_object_fromdouble(act->threshold),
-							  "value", 0, false);
-		ucl_array_append(top, obj);
-	}
-
+	rspamd_config_actions_foreach(session->cfg, rspamd_controller_actions_cb, top);
 	rspamd_controller_send_ucl(conn_ent, top);
 	ucl_object_unref(top);
 
@@ -2086,7 +2088,6 @@ rspamd_controller_handle_learn_common(
 									task);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref(conn_ent->conn);
-	;
 	task->sock = -1;
 	session->task = task;
 
@@ -2301,8 +2302,10 @@ rspamd_controller_handle_saveactions(
 			score = ucl_object_todouble(cur);
 		}
 
-		if ((isnan(session->cfg->actions[act].threshold) != isnan(score)) ||
-			(session->cfg->actions[act].threshold != score)) {
+		struct rspamd_action *cfg_action = rspamd_config_get_action_by_type(ctx->cfg, act);
+
+		if (cfg_action && ((isnan(cfg_action->threshold) != isnan(score)) ||
+						   (cfg_action->threshold != score))) {
 			add_dynamic_action(ctx->cfg, DEFAULT_METRIC, act, score);
 			added++;
 		}

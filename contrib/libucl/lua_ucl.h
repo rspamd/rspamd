@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /* Copyright (c) 2014, Vsevolod Stakhov
  * All rights reserved.
  *
@@ -26,11 +42,16 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include "ucl.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Include C++ guard as Lua headers miss one */
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include "ucl.h"
 
 /**
  * Closure structure for lua function storing inside UCL
@@ -44,7 +65,7 @@ struct ucl_lua_funcdata {
 /**
  * Initialize lua UCL API
  */
-UCL_EXTERN int luaopen_ucl (lua_State *L);
+UCL_EXTERN int luaopen_ucl(lua_State *L);
 
 /**
  * Import UCL object from lua state
@@ -52,7 +73,7 @@ UCL_EXTERN int luaopen_ucl (lua_State *L);
  * @param idx index of object at the lua stack to convert to UCL
  * @return new UCL object or NULL, the caller should unref object after using
  */
-UCL_EXTERN ucl_object_t* ucl_object_lua_import (lua_State *L, int idx);
+UCL_EXTERN ucl_object_t *ucl_object_lua_import(lua_State *L, int idx);
 
 /**
  * Import UCL object from lua state, escaping JSON strings
@@ -60,7 +81,7 @@ UCL_EXTERN ucl_object_t* ucl_object_lua_import (lua_State *L, int idx);
  * @param idx index of object at the lua stack to convert to UCL
  * @return new UCL object or NULL, the caller should unref object after using
  */
-UCL_EXTERN ucl_object_t* ucl_object_lua_import_escape (lua_State *L, int idx);
+UCL_EXTERN ucl_object_t *ucl_object_lua_import_escape(lua_State *L, int idx);
 
 /**
  * Push an object to lua
@@ -68,18 +89,21 @@ UCL_EXTERN ucl_object_t* ucl_object_lua_import_escape (lua_State *L, int idx);
  * @param obj object to push
  * @param allow_array traverse over implicit arrays
  */
-UCL_EXTERN int ucl_object_push_lua (lua_State *L,
-		const ucl_object_t *obj, bool allow_array);
+UCL_EXTERN int ucl_object_push_lua(lua_State *L,
+								   const ucl_object_t *obj, bool allow_array);
 /**
  * Push an object to lua replacing all ucl.null with `false`
  * @param L lua state
  * @param obj object to push
  * @param allow_array traverse over implicit arrays
  */
-UCL_EXTERN int ucl_object_push_lua_filter_nil (lua_State *L,
-											   const ucl_object_t *obj,
-											   bool allow_array);
+UCL_EXTERN int ucl_object_push_lua_filter_nil(lua_State *L,
+											  const ucl_object_t *obj,
+											  bool allow_array);
 
-UCL_EXTERN struct ucl_lua_funcdata* ucl_object_toclosure (const ucl_object_t *obj);
+UCL_EXTERN struct ucl_lua_funcdata *ucl_object_toclosure(const ucl_object_t *obj);
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* LUA_UCL_H_ */

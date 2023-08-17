@@ -15,12 +15,13 @@
  */
 #include "config.h"
 
+#include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
+
 #include "cfg_file.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
-#include "scan_result.h"
-#include "lua/lua_common.h"
-#include "lua/lua_thread_pool.h"
+
 #include "maps/map.h"
 #include "maps/map_helpers.h"
 #include "maps/map_private.h"
@@ -61,6 +62,15 @@
 
 #include "blas-config.h"
 
+#include <string>
+#include <string_view>
+#include <vector>
+#include "fmt/core.h"
+#include "cxx/util.hxx"
+#include "frozen/unordered_map.h"
+#include "frozen/string.h"
+#include "contrib/ankerl/unordered_dense.h"
+
 #define DEFAULT_SCORE 10.0
 
 #define DEFAULT_RLIMIT_NOFILE 2048
@@ -84,7 +94,12 @@
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
-	GString *buf;
+	std::string buf;
+
+	explicit rspamd_ucl_map_cbdata(struct rspamd_config *cfg)
+		: cfg(cfg)
+	{
+	}
 };
 static gchar *rspamd_ucl_read_cb(gchar *chunk,
 								 gint len,
@@ -99,6 +114,51 @@ RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
 	rspamd_config_log_id = rspamd_logger_add_debug_module("config");
 }
 
+struct rspamd_actions_list {
+	using action_ptr = std::shared_ptr<rspamd_action>;
+	std::vector<action_ptr> actions;
+	ankerl::unordered_dense::map<std::string_view, action_ptr> actions_by_name;
+
+	explicit rspamd_actions_list()
+	{
+		actions.reserve(METRIC_ACTION_MAX + 2);
+		actions_by_name.reserve(METRIC_ACTION_MAX + 2);
+	}
+
+	void add_action(action_ptr action)
+	{
+		actions.push_back(action);
+		actions_by_name[action->name] = action;
+		sort();
+	}
+
+	void sort()
+	{
+		std::sort(actions.begin(), actions.end(), [](const action_ptr &a1, const action_ptr &a2) -> bool {
+			if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
+				return a1->threshold < a2->threshold;
+			}
+
+			if (isnan(a1->threshold) && isnan(a2->threshold)) {
+				return false;
+			}
+			else if (isnan(a1->threshold)) {
+				return true;
+			}
+
+			return false;
+		});
+	}
+
+	void clear()
+	{
+		actions.clear();
+		actions_by_name.clear();
+	}
+};
+
+#define RSPAMD_CFG_ACTIONS(cfg) (reinterpret_cast<rspamd_actions_list *>((cfg)->actions))
+
 gboolean
 rspamd_parse_bind_line(struct rspamd_config *cfg,
 					   struct rspamd_worker_conf *cf,
@@ -108,25 +168,29 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 	const gchar *fdname;
 	gboolean ret = TRUE;
 
-	if (str == NULL) {
+	if (str == nullptr) {
 		return FALSE;
 	}
 
-	cnf = g_malloc0(sizeof(struct rspamd_worker_bind_conf));
+	cnf = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_worker_bind_conf);
 
 	cnf->cnt = 1024;
-	cnf->bind_line = g_strdup(str);
+	cnf->bind_line = rspamd_mempool_strdup(cfg->cfg_pool, str);
 
-	if (g_ascii_strncasecmp(str, "systemd:", sizeof("systemd:") - 1) == 0) {
+	auto bind_line = std::string_view{cnf->bind_line};
+
+	if (bind_line.starts_with("systemd:")) {
 		/* The actual socket will be passed by systemd environment */
 		fdname = str + sizeof("systemd:") - 1;
 		cnf->is_systemd = TRUE;
-		cnf->addrs = g_ptr_array_new_full(1, g_free);
+		cnf->addrs = g_ptr_array_new_full(1, nullptr);
+		rspamd_mempool_add_destructor(cfg->cfg_pool,
+									  rspamd_ptr_array_free_hard, cnf->addrs);
 
 		if (fdname[0]) {
-			g_ptr_array_add(cnf->addrs, g_strdup(fdname));
+			g_ptr_array_add(cnf->addrs, rspamd_mempool_strdup(cfg->cfg_pool, fdname));
 			cnf->cnt = cnf->addrs->len;
-			cnf->name = g_strdup(str);
+			cnf->name = rspamd_mempool_strdup(cfg->cfg_pool, str);
 			LL_PREPEND(cf->bind_conf, cnf);
 		}
 		else {
@@ -136,7 +200,7 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 	}
 	else {
 		if (rspamd_parse_host_port_priority(str, &cnf->addrs,
-											NULL, &cnf->name, DEFAULT_BIND_PORT, TRUE, NULL) == RSPAMD_PARSE_ADDR_FAIL) {
+											nullptr, &cnf->name, DEFAULT_BIND_PORT, TRUE, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
@@ -144,15 +208,6 @@ rspamd_parse_bind_line(struct rspamd_config *cfg,
 			cnf->cnt = cnf->addrs->len;
 			LL_PREPEND(cf->bind_conf, cnf);
 		}
-	}
-
-	if (!ret) {
-		if (cnf->addrs) {
-			g_ptr_array_free(cnf->addrs, TRUE);
-		}
-
-		g_free(cnf->name);
-		g_free(cnf);
 	}
 
 	return ret;
@@ -174,15 +229,16 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->dns_io_per_server = 16;
 	cfg->unknown_weight = NAN;
 
+	cfg->actions = (void *) new rspamd_actions_list();
+
 	/* Add all internal actions to keep compatibility */
 	for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		struct rspamd_action *action;
 
-		action = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*action));
+		auto &&action = std::make_shared<rspamd_action>();
 		action->threshold = NAN;
 		action->name = rspamd_mempool_strdup(cfg->cfg_pool,
-											 rspamd_action_to_str(i));
-		action->action_type = i;
+											 rspamd_action_to_str(static_cast<rspamd_action_type>(i)));
+		action->action_type = static_cast<rspamd_action_type>(i);
 
 		if (i == METRIC_ACTION_SOFT_REJECT) {
 			action->flags |= RSPAMD_ACTION_NO_THRESHOLD | RSPAMD_ACTION_HAM;
@@ -194,8 +250,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 			action->flags |= RSPAMD_ACTION_HAM;
 		}
 
-		HASH_ADD_KEYPTR(hh, cfg->actions,
-						action->name, strlen(action->name), action);
+		RSPAMD_CFG_ACTIONS(cfg)->add_action(std::move(action));
 	}
 
 	/* Disable timeout */
@@ -209,7 +264,6 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->cfg_params = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 	cfg->debug_modules = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 	cfg->explicit_modules = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
-	cfg->wrk_parsers = g_hash_table_new(g_int_hash, g_int_equal);
 	cfg->trusted_keys = g_hash_table_new(rspamd_str_hash,
 										 rspamd_str_equal);
 
@@ -233,11 +287,12 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->max_opts_len = 4096;
 
 	/* Default log line */
-	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"
-						  "$if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam "
-						  "($action): [$scores] [$symbols_scores_params]), len: $len, time: $time_real, "
-						  "dns req: $dns_req, digest: <$digest>"
-						  "$if_smtp_rcpts{ rcpts: <$>, }$if_mime_rcpt{ mime_rcpt: <$>, }";
+	cfg->log_format_str = rspamd_mempool_strdup(cfg->cfg_pool,
+												"id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"
+												"$if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam "
+												"($action): [$scores] [$symbols_scores_params]), len: $len, time: $time_real, "
+												"dns req: $dns_req, digest: <$digest>"
+												"$if_smtp_rcpts{ rcpts: <$>, }$if_mime_rcpt{ mime_rcpt: <$>, }");
 	/* Allow non-mime input by default */
 	cfg->allow_raw_input = TRUE;
 	/* Default maximum words processed */
@@ -252,12 +307,12 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->full_gc_iters = DEFAULT_GC_MAXITERS;
 
 	/* Default hyperscan cache */
-	cfg->hs_cache_dir = RSPAMD_DBDIR "/";
+	cfg->hs_cache_dir = rspamd_mempool_strdup(cfg->cfg_pool, RSPAMD_DBDIR "/");
 
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
-		cfg->lua_state = rspamd_lua_init(flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
+		cfg->lua_state = (void *) rspamd_lua_init(flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
 		cfg->own_lua_state = TRUE;
-		cfg->lua_thread_pool = lua_thread_pool_new(cfg->lua_state);
+		cfg->lua_thread_pool = (void *) lua_thread_pool_new(RSPAMD_LUA_CFG_STATE(cfg));
 	}
 
 	cfg->cache = rspamd_symcache_new(cfg);
@@ -269,7 +324,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	 */
 	cfg->enable_shutdown_workaround = TRUE;
 
-	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+	cfg->ssl_ciphers = rspamd_mempool_strdup(cfg->cfg_pool, "HIGH:!anullptr:!kRSA:!PSK:!SRP:!MD5:!RC4");
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
 	cfg->images_cache_size = 256;
@@ -295,27 +350,27 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	struct rspamd_config_settings_elt *set, *stmp;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
-	rspamd_lua_run_config_unload(cfg->lua_state, cfg);
+	rspamd_lua_run_config_unload(RSPAMD_LUA_CFG_STATE(cfg), cfg);
 
 	/* Scripts part */
 	DL_FOREACH_SAFE(cfg->on_term_scripts, sc, sctmp)
 	{
-		luaL_unref(cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
 	}
 
 	DL_FOREACH_SAFE(cfg->on_load_scripts, sc, sctmp)
 	{
-		luaL_unref(cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
 	}
 
 	DL_FOREACH_SAFE(cfg->post_init_scripts, sc, sctmp)
 	{
-		luaL_unref(cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
 	}
 
 	DL_FOREACH_SAFE(cfg->config_unload_scripts, sc, sctmp)
 	{
-		luaL_unref(cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		luaL_unref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX, sc->cbref);
 	}
 
 	DL_FOREACH_SAFE(cfg->setting_ids, set, stmp)
@@ -329,7 +384,7 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	g_list_free(cfg->classifiers);
 	g_list_free(cfg->workers);
 	rspamd_symcache_destroy(cfg->cache);
-	ucl_object_unref(cfg->rcl_obj);
+	ucl_object_unref(cfg->cfg_ucl_obj);
 	ucl_object_unref(cfg->config_comments);
 	ucl_object_unref(cfg->doc_strings);
 	ucl_object_unref(cfg->neighbours);
@@ -338,7 +393,6 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	g_hash_table_unref(cfg->classifiers_symbols);
 	g_hash_table_unref(cfg->debug_modules);
 	g_hash_table_unref(cfg->explicit_modules);
-	g_hash_table_unref(cfg->wrk_parsers);
 	g_hash_table_unref(cfg->trusted_keys);
 
 	rspamd_re_cache_unref(cfg->re_cache);
@@ -348,9 +402,9 @@ void rspamd_config_free(struct rspamd_config *cfg)
 		rspamd_monitored_ctx_destroy(cfg->monitored_ctx);
 	}
 
-	if (cfg->lua_state && cfg->own_lua_state) {
-		lua_thread_pool_free(cfg->lua_thread_pool);
-		rspamd_lua_close(cfg->lua_state);
+	if (RSPAMD_LUA_CFG_STATE(cfg) && cfg->own_lua_state) {
+		lua_thread_pool_free((struct lua_thread_pool *) cfg->lua_thread_pool);
+		rspamd_lua_close(RSPAMD_LUA_CFG_STATE(cfg));
 	}
 
 	if (cfg->redis_pool) {
@@ -358,7 +412,7 @@ void rspamd_config_free(struct rspamd_config *cfg)
 	}
 
 	rspamd_upstreams_library_unref(cfg->ups_ctx);
-	HASH_CLEAR(hh, cfg->actions);
+	delete RSPAMD_CFG_ACTIONS(cfg);
 
 	rspamd_mempool_destructors_enforce(cfg->cfg_pool);
 
@@ -382,10 +436,10 @@ rspamd_config_get_module_opt(struct rspamd_config *cfg,
 							 const gchar *module_name,
 							 const gchar *opt_name)
 {
-	const ucl_object_t *res = NULL, *sec;
+	const ucl_object_t *res = nullptr, *sec;
 
-	sec = ucl_obj_get_key(cfg->rcl_obj, module_name);
-	if (sec != NULL) {
+	sec = ucl_obj_get_key(cfg->cfg_ucl_obj, module_name);
+	if (sec != nullptr) {
 		res = ucl_obj_get_key(sec, opt_name);
 	}
 
@@ -445,173 +499,123 @@ gint rspamd_config_parse_flag(const gchar *str, guint len)
 	return -1;
 }
 
+// A mapping between names and log format types + flags
+constexpr const auto config_vars = frozen::make_unordered_map<frozen::string, std::pair<rspamd_log_format_type, int>>({
+	{"mid", {RSPAMD_LOG_MID, 0}},
+	{"qid", {RSPAMD_LOG_QID, 0}},
+	{"user", {RSPAMD_LOG_USER, 0}},
+	{"ip", {RSPAMD_LOG_IP, 0}},
+	{"len", {RSPAMD_LOG_LEN, 0}},
+	{"dns_req", {RSPAMD_LOG_DNS_REQ, 0}},
+	{"smtp_from", {RSPAMD_LOG_SMTP_FROM, 0}},
+	{"mime_from", {RSPAMD_LOG_MIME_FROM, 0}},
+	{"smtp_rcpt", {RSPAMD_LOG_SMTP_RCPT, 0}},
+	{"mime_rcpt", {RSPAMD_LOG_MIME_RCPT, 0}},
+	{"smtp_rcpts", {RSPAMD_LOG_SMTP_RCPTS, 0}},
+	{"mime_rcpts", {RSPAMD_LOG_MIME_RCPTS, 0}},
+	{"time_real", {RSPAMD_LOG_TIME_REAL, 0}},
+	{"time_virtual", {RSPAMD_LOG_TIME_VIRTUAL, 0}},
+	{"lua", {RSPAMD_LOG_LUA, 0}},
+	{"digest", {RSPAMD_LOG_DIGEST, 0}},
+	{"checksum", {RSPAMD_LOG_DIGEST, 0}},
+	{"filename", {RSPAMD_LOG_FILENAME, 0}},
+	{"forced_action", {RSPAMD_LOG_FORCED_ACTION, 0}},
+	{"settings_id", {RSPAMD_LOG_SETTINGS_ID, 0}},
+	{"mempool_size", {RSPAMD_LOG_MEMPOOL_SIZE, 0}},
+	{"mempool_waste", {RSPAMD_LOG_MEMPOOL_WASTE, 0}},
+	{"action", {RSPAMD_LOG_ACTION, 0}},
+	{"scores", {RSPAMD_LOG_SCORES, 0}},
+	{"symbols", {RSPAMD_LOG_SYMBOLS, 0}},
+	{"symbols_scores", {RSPAMD_LOG_SYMBOLS, RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES}},
+	{"symbols_params", {RSPAMD_LOG_SYMBOLS, RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS}},
+	{"symbols_scores_params", {RSPAMD_LOG_SYMBOLS, RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS | RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES}},
+	{"groups", {RSPAMD_LOG_GROUPS, 0}},
+	{"public_groups", {RSPAMD_LOG_PUBLIC_GROUPS, 0}},
+	{"is_spam", {RSPAMD_LOG_ISSPAM, 0}},
+});
+
 static gboolean
 rspamd_config_process_var(struct rspamd_config *cfg, const rspamd_ftok_t *var,
 						  const rspamd_ftok_t *content)
 {
-	guint flags = RSPAMD_LOG_FLAG_DEFAULT;
-	struct rspamd_log_format *lf;
-	enum rspamd_log_format_type type;
-	rspamd_ftok_t tok;
-	gint id;
+	g_assert(var != nullptr);
 
-	g_assert(var != NULL);
+	auto flags = 0;
+	auto lc_var = std::string{var->begin, var->len};
+	std::transform(lc_var.begin(), lc_var.end(), lc_var.begin(), g_ascii_tolower);
+	auto tok = std::string_view{lc_var};
 
-	if (var->len > 3 && rspamd_lc_cmp(var->begin, "if_", 3) == 0) {
+	if (var->len > 3 && tok.starts_with("if_")) {
 		flags |= RSPAMD_LOG_FMT_FLAG_CONDITION;
-		tok.begin = var->begin + 3;
-		tok.len = var->len - 3;
-	}
-	else {
-		tok.begin = var->begin;
-		tok.len = var->len;
+		tok = tok.substr(3);
 	}
 
-	/* Now compare variable and check what we have */
-	if (rspamd_ftok_cstr_equal(&tok, "mid", TRUE)) {
-		type = RSPAMD_LOG_MID;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "qid", TRUE)) {
-		type = RSPAMD_LOG_QID;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "user", TRUE)) {
-		type = RSPAMD_LOG_USER;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "is_spam", TRUE)) {
-		type = RSPAMD_LOG_ISSPAM;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "action", TRUE)) {
-		type = RSPAMD_LOG_ACTION;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "scores", TRUE)) {
-		type = RSPAMD_LOG_SCORES;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "symbols", TRUE)) {
-		type = RSPAMD_LOG_SYMBOLS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "symbols_scores", TRUE)) {
-		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "symbols_params", TRUE)) {
-		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "symbols_scores_params", TRUE)) {
-		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS | RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "groups", TRUE)) {
-		type = RSPAMD_LOG_GROUPS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "public_groups", TRUE)) {
-		type = RSPAMD_LOG_PUBLIC_GROUPS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "ip", TRUE)) {
-		type = RSPAMD_LOG_IP;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "len", TRUE)) {
-		type = RSPAMD_LOG_LEN;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "dns_req", TRUE)) {
-		type = RSPAMD_LOG_DNS_REQ;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "smtp_from", TRUE)) {
-		type = RSPAMD_LOG_SMTP_FROM;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "mime_from", TRUE)) {
-		type = RSPAMD_LOG_MIME_FROM;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "smtp_rcpt", TRUE)) {
-		type = RSPAMD_LOG_SMTP_RCPT;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "mime_rcpt", TRUE)) {
-		type = RSPAMD_LOG_MIME_RCPT;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "smtp_rcpts", TRUE)) {
-		type = RSPAMD_LOG_SMTP_RCPTS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "mime_rcpts", TRUE)) {
-		type = RSPAMD_LOG_MIME_RCPTS;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "time_real", TRUE)) {
-		type = RSPAMD_LOG_TIME_REAL;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "time_virtual", TRUE)) {
-		type = RSPAMD_LOG_TIME_VIRTUAL;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "lua", TRUE)) {
-		type = RSPAMD_LOG_LUA;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "digest", TRUE) ||
-			 rspamd_ftok_cstr_equal(&tok, "checksum", TRUE)) {
-		type = RSPAMD_LOG_DIGEST;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "filename", TRUE)) {
-		type = RSPAMD_LOG_FILENAME;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "forced_action", TRUE)) {
-		type = RSPAMD_LOG_FORCED_ACTION;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "settings_id", TRUE)) {
-		type = RSPAMD_LOG_SETTINGS_ID;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "mempool_size", TRUE)) {
-		type = RSPAMD_LOG_MEMPOOL_SIZE;
-	}
-	else if (rspamd_ftok_cstr_equal(&tok, "mempool_waste", TRUE)) {
-		type = RSPAMD_LOG_MEMPOOL_WASTE;
+	auto maybe_fmt_var = rspamd::find_map(config_vars, tok);
+
+	if (maybe_fmt_var) {
+		auto &fmt_var = maybe_fmt_var.value().get();
+		auto *log_format = rspamd_mempool_alloc0_type(cfg->cfg_pool, rspamd_log_format);
+
+		log_format->type = fmt_var.first;
+		log_format->flags = fmt_var.second | flags;
+
+		if (log_format->type != RSPAMD_LOG_LUA) {
+			if (content && content->len > 0) {
+				log_format->data = rspamd_mempool_alloc0(cfg->cfg_pool,
+														 sizeof(rspamd_ftok_t));
+				memcpy(log_format->data, content, sizeof(*content));
+				log_format->len = sizeof(*content);
+			}
+		}
+		else {
+			/* Load lua code and ensure that we have function ref returned */
+			if (!content || content->len == 0) {
+				msg_err_config("lua variable needs content: %T", &tok);
+				return FALSE;
+			}
+
+			if (luaL_loadbuffer(RSPAMD_LUA_CFG_STATE(cfg), content->begin, content->len,
+								"lua log variable") != 0) {
+				msg_err_config("error loading lua code: '%T': %s", content,
+							   lua_tostring(RSPAMD_LUA_CFG_STATE(cfg), -1));
+				return FALSE;
+			}
+			if (lua_pcall(RSPAMD_LUA_CFG_STATE(cfg), 0, 1, 0) != 0) {
+				msg_err_config("error executing lua code: '%T': %s", content,
+							   lua_tostring(RSPAMD_LUA_CFG_STATE(cfg), -1));
+				lua_pop(RSPAMD_LUA_CFG_STATE(cfg), 1);
+
+				return FALSE;
+			}
+
+			if (lua_type(RSPAMD_LUA_CFG_STATE(cfg), -1) != LUA_TFUNCTION) {
+				msg_err_config("lua variable should return function: %T", content);
+				lua_pop(RSPAMD_LUA_CFG_STATE(cfg), 1);
+				return FALSE;
+			}
+
+			auto id = luaL_ref(RSPAMD_LUA_CFG_STATE(cfg), LUA_REGISTRYINDEX);
+			log_format->data = GINT_TO_POINTER(id);
+			log_format->len = 0;
+		}
+
+		DL_APPEND(cfg->log_format, log_format);
 	}
 	else {
-		msg_err_config("unknown log variable: %T", &tok);
+		std::string known_formats;
+
+		for (const auto &v: config_vars) {
+			known_formats += std::string_view{v.first.data(), v.first.size()};
+			known_formats += ", ";
+		}
+
+		if (known_formats.size() > 2) {
+			// Remove last comma
+			known_formats.resize(known_formats.size() - 2);
+		}
+		msg_err_config("unknown log variable: %T, known vars are: \"%s\"", var, known_formats.c_str());
 		return FALSE;
 	}
-
-	lf = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*lf));
-	lf->type = type;
-	lf->flags = flags;
-
-	if (type != RSPAMD_LOG_LUA) {
-		if (content && content->len > 0) {
-			lf->data = rspamd_mempool_alloc0(cfg->cfg_pool,
-											 sizeof(rspamd_ftok_t));
-			memcpy(lf->data, content, sizeof(*content));
-			lf->len = sizeof(*content);
-		}
-	}
-	else {
-		/* Load lua code and ensure that we have function ref returned */
-		if (!content || content->len == 0) {
-			msg_err_config("lua variable needs content: %T", &tok);
-			return FALSE;
-		}
-
-		if (luaL_loadbuffer(cfg->lua_state, content->begin, content->len,
-							"lua log variable") != 0) {
-			msg_err_config("error loading lua code: '%T': %s", content,
-						   lua_tostring(cfg->lua_state, -1));
-			return FALSE;
-		}
-		if (lua_pcall(cfg->lua_state, 0, 1, 0) != 0) {
-			msg_err_config("error executing lua code: '%T': %s", content,
-						   lua_tostring(cfg->lua_state, -1));
-			lua_pop(cfg->lua_state, 1);
-
-			return FALSE;
-		}
-
-		if (lua_type(cfg->lua_state, -1) != LUA_TFUNCTION) {
-			msg_err_config("lua variable should return function: %T", content);
-			lua_pop(cfg->lua_state, 1);
-			return FALSE;
-		}
-
-		id = luaL_ref(cfg->lua_state, LUA_REGISTRYINDEX);
-		lf->data = GINT_TO_POINTER(id);
-		lf->len = 0;
-	}
-
-	DL_APPEND(cfg->log_format, lf);
 
 	return TRUE;
 }
@@ -621,7 +625,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 {
 	const gchar *p, *c, *end, *s;
 	gchar *d;
-	struct rspamd_log_format *lf = NULL;
+	struct rspamd_log_format *lf = nullptr;
 	rspamd_ftok_t var, var_content;
 	enum {
 		parse_str,
@@ -631,10 +635,10 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 	} state = parse_str;
 	gint braces = 0;
 
-	g_assert(cfg != NULL);
+	g_assert(cfg != nullptr);
 	c = cfg->log_format_str;
 
-	if (c == NULL) {
+	if (c == nullptr) {
 		return FALSE;
 	}
 
@@ -654,12 +658,12 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 		case parse_dollar:
 			if (p > c) {
 				/* We have string element that we need to store */
-				lf = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*lf));
+				lf = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_log_format);
 				lf->type = RSPAMD_LOG_STRING;
 				lf->data = rspamd_mempool_alloc(cfg->cfg_pool, p - c + 1);
 				/* Filter \r\n from the destination */
 				s = c;
-				d = lf->data;
+				d = (char *) lf->data;
 
 				while (s < p) {
 					if (*s != '\r' && *s != '\n') {
@@ -674,7 +678,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 
 				lf->len = d - (char *) lf->data;
 				DL_APPEND(cfg->log_format, lf);
-				lf = NULL;
+				lf = nullptr;
 			}
 			p++;
 			c = p;
@@ -695,7 +699,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 				var.len = p - c;
 				c = p;
 
-				if (!rspamd_config_process_var(cfg, &var, NULL)) {
+				if (!rspamd_config_process_var(cfg, &var, nullptr)) {
 					return FALSE;
 				}
 
@@ -734,12 +738,12 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 	case parse_str:
 		if (p > c) {
 			/* We have string element that we need to store */
-			lf = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*lf));
+			lf = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_log_format);
 			lf->type = RSPAMD_LOG_STRING;
 			lf->data = rspamd_mempool_alloc(cfg->cfg_pool, p - c + 1);
 			/* Filter \r\n from the destination */
 			s = c;
-			d = lf->data;
+			d = (char *) lf->data;
 
 			while (s < p) {
 				if (*s != '\r' && *s != '\n') {
@@ -754,7 +758,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 
 			lf->len = d - (char *) lf->data;
 			DL_APPEND(cfg->log_format, lf);
-			lf = NULL;
+			lf = nullptr;
 		}
 		break;
 
@@ -762,7 +766,7 @@ rspamd_config_parse_log_format(struct rspamd_config *cfg)
 		var.begin = c;
 		var.len = p - c;
 
-		if (!rspamd_config_process_var(cfg, &var, NULL)) {
+		if (!rspamd_config_process_var(cfg, &var, nullptr)) {
 			return FALSE;
 		}
 		break;
@@ -783,17 +787,12 @@ rspamd_urls_config_dtor(gpointer _unused)
 	rspamd_url_deinit();
 }
 
-/*
- * Perform post load actions
- */
-gboolean
-rspamd_config_post_load(struct rspamd_config *cfg,
-						enum rspamd_post_load_options opts)
+static void
+rspamd_adjust_clocks_resolution(struct rspamd_config *cfg)
 {
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 #endif
-	gboolean ret = TRUE;
 
 #ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
@@ -803,8 +802,6 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 #else
 	clock_getres(CLOCK_REALTIME, &ts);
 #endif
-	rspamd_logger_configure_modules(cfg->debug_modules);
-
 	cfg->clock_res = log10(1000000. / ts.tv_nsec);
 	if (cfg->clock_res < 0) {
 		cfg->clock_res = 0;
@@ -816,15 +813,26 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	/* For gettimeofday */
 	cfg->clock_res = 1;
 #endif
+}
+
+/*
+ * Perform post load actions
+ */
+gboolean
+rspamd_config_post_load(struct rspamd_config *cfg,
+						enum rspamd_post_load_options opts)
+{
+
+	auto ret = TRUE;
+
+	rspamd_adjust_clocks_resolution(cfg);
+	rspamd_logger_configure_modules(cfg->debug_modules);
 
 	if (cfg->one_shot_mode) {
 		msg_info_config("enabling one shot mode (was %d max shots)",
 						cfg->default_max_shots);
 		cfg->default_max_shots = 1;
 	}
-
-	rspamd_regexp_library_init(cfg);
-	rspamd_multipattern_library_init(cfg->hs_cache_dir);
 
 #if defined(WITH_HYPERSCAN) && !defined(__aarch64__) && !defined(__powerpc64__)
 	if (!cfg->disable_hyperscan) {
@@ -836,20 +844,21 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	}
 #endif
 
+	rspamd_regexp_library_init(cfg);
+	rspamd_multipattern_library_init(cfg->hs_cache_dir);
+
 	if (opts & RSPAMD_CONFIG_INIT_URL) {
-		if (cfg->tld_file == NULL) {
+		if (cfg->tld_file == nullptr) {
 			/* Try to guess tld file */
-			GString *fpath = g_string_new(NULL);
+			auto fpath = fmt::format("{0}{1}{2}", RSPAMD_SHAREDIR,
+									 G_DIR_SEPARATOR, "effective_tld_names.dat");
 
-			rspamd_printf_gstring(fpath, "%s%c%s", RSPAMD_SHAREDIR,
-								  G_DIR_SEPARATOR, "effective_tld_names.dat");
-
-			if (access(fpath->str, R_OK) != -1) {
+			if (access(fpath.c_str(), R_OK) != -1) {
 				msg_debug_config("url_tld option is not specified but %s is available,"
 								 " therefore this file is assumed as TLD file for URL"
 								 " extraction",
-								 fpath->str);
-				cfg->tld_file = rspamd_mempool_strdup(cfg->cfg_pool, fpath->str);
+								 fpath.c_str());
+				cfg->tld_file = rspamd_mempool_strdup(cfg->cfg_pool, fpath.c_str());
 			}
 			else {
 				if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
@@ -857,8 +866,6 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 					ret = FALSE;
 				}
 			}
-
-			g_string_free(fpath, TRUE);
 		}
 		else {
 			if (access(cfg->tld_file, R_OK) == -1) {
@@ -870,20 +877,20 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 				else {
 					msg_debug_config("cannot access tld file %s: %s", cfg->tld_file,
 									 strerror(errno));
-					cfg->tld_file = NULL;
+					cfg->tld_file = nullptr;
 				}
 			}
 		}
 
 		if (opts & RSPAMD_CONFIG_INIT_NO_TLD) {
-			rspamd_url_init(NULL);
+			rspamd_url_init(nullptr);
 		}
 		else {
 			rspamd_url_init(cfg->tld_file);
 		}
 
 		rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_urls_config_dtor,
-									  NULL);
+									  nullptr);
 	}
 
 	init_dynamic_config(cfg);
@@ -893,36 +900,46 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	/* Parse format string that we have */
 	if (!rspamd_config_parse_log_format(cfg)) {
 		msg_err_config("cannot parse log format, task logging will not be available");
+		if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
+			ret = FALSE;
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_SYMCACHE) {
 		/* Init config cache */
-		rspamd_symcache_init(cfg->cache);
+		ret = rspamd_symcache_init(cfg->cache) && ret;
 
 		/* Init re cache */
 		rspamd_re_cache_init(cfg->re_cache, cfg);
 
 		/* Try load Hypersan */
-		rspamd_re_cache_load_hyperscan(cfg->re_cache,
-									   cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR "/",
-									   true);
+		auto hs_ret = rspamd_re_cache_load_hyperscan(cfg->re_cache,
+													 cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR "/",
+													 true);
+
+		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {
+			msg_debug_config("cannot load hyperscan database, disable it");
+		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
 		/* Config other libraries */
-		rspamd_config_libs(cfg->libs_ctx, cfg);
+		ret = rspamd_config_libs(cfg->libs_ctx, cfg) && ret;
+
+		if (!ret) {
+			msg_err_config("cannot configure libraries, fatal error");
+			return FALSE;
+		}
 	}
 
 	/* Validate cache */
 	if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
 		/* Check for actions sanity */
-		gboolean seen_controller = FALSE;
-		GList *cur;
-		struct rspamd_worker_conf *wcf;
+		auto seen_controller = FALSE;
 
-		cur = cfg->workers;
+		auto *cur = cfg->workers;
 		while (cur) {
-			wcf = cur->data;
+			auto *wcf = (struct rspamd_worker_conf *) cur->data;
 
 			if (wcf->type == g_quark_from_static_string("controller")) {
 				seen_controller = TRUE;
@@ -942,7 +959,7 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
-		rspamd_lua_run_config_post_init(cfg->lua_state, cfg);
+		rspamd_lua_run_config_post_init(RSPAMD_LUA_CFG_STATE(cfg), cfg);
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
@@ -956,18 +973,18 @@ struct rspamd_classifier_config *
 rspamd_config_new_classifier(struct rspamd_config *cfg,
 							 struct rspamd_classifier_config *c)
 {
-	if (c == NULL) {
+	if (c == nullptr) {
 		c =
-			rspamd_mempool_alloc0(cfg->cfg_pool,
-								  sizeof(struct rspamd_classifier_config));
+			rspamd_mempool_alloc0_type(cfg->cfg_pool,
+									   struct rspamd_classifier_config);
 		c->min_prob_strength = 0.05;
 		c->min_token_hits = 2;
 	}
 
-	if (c->labels == NULL) {
+	if (c->labels == nullptr) {
 		c->labels = g_hash_table_new_full(rspamd_str_hash,
 										  rspamd_str_equal,
-										  NULL,
+										  nullptr,
 										  (GDestroyNotify) g_list_free);
 		rspamd_mempool_add_destructor(cfg->cfg_pool,
 									  (rspamd_mempool_destruct_t) g_hash_table_destroy,
@@ -981,10 +998,9 @@ struct rspamd_statfile_config *
 rspamd_config_new_statfile(struct rspamd_config *cfg,
 						   struct rspamd_statfile_config *c)
 {
-	if (c == NULL) {
+	if (c == nullptr) {
 		c =
-			rspamd_mempool_alloc0(cfg->cfg_pool,
-								  sizeof(struct rspamd_statfile_config));
+			rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_statfile_config);
 	}
 
 	return c;
@@ -1010,7 +1026,7 @@ rspamd_config_new_group(struct rspamd_config *cfg, const gchar *name)
 {
 	struct rspamd_symbols_group *gr;
 
-	gr = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*gr));
+	gr = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_symbols_group);
 	gr->symbols = g_hash_table_new(rspamd_strcase_hash,
 								   rspamd_strcase_equal);
 	rspamd_mempool_add_destructor(cfg->cfg_pool,
@@ -1030,16 +1046,6 @@ static void
 rspamd_worker_conf_dtor(struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
-		struct rspamd_worker_bind_conf *cnf, *tmp;
-
-		LL_FOREACH_SAFE(wcf->bind_conf, cnf, tmp)
-		{
-			g_free(cnf->name);
-			g_free(cnf->bind_line);
-			g_ptr_array_free(cnf->addrs, TRUE);
-			g_free(cnf);
-		}
-
 		ucl_object_unref(wcf->options);
 		g_queue_free(wcf->active_workers);
 		g_hash_table_unref(wcf->params);
@@ -1050,7 +1056,7 @@ rspamd_worker_conf_dtor(struct rspamd_worker_conf *wcf)
 static void
 rspamd_worker_conf_cfg_fin(gpointer d)
 {
-	struct rspamd_worker_conf *wcf = d;
+	auto *wcf = (struct rspamd_worker_conf *) d;
 
 	REF_RELEASE(wcf);
 }
@@ -1059,13 +1065,13 @@ struct rspamd_worker_conf *
 rspamd_config_new_worker(struct rspamd_config *cfg,
 						 struct rspamd_worker_conf *c)
 {
-	if (c == NULL) {
-		c = g_malloc0(sizeof(struct rspamd_worker_conf));
+	if (c == nullptr) {
+		c = g_new0(struct rspamd_worker_conf, 1);
 		c->params = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new();
 #ifdef HAVE_SC_NPROCESSORS_ONLN
-		c->count = MIN(DEFAULT_MAX_WORKERS,
-					   MAX(1, sysconf(_SC_NPROCESSORS_ONLN) - 2));
+		auto nproc = sysconf(_SC_NPROCESSORS_ONLN);
+		c->count = MIN(DEFAULT_MAX_WORKERS, MAX(1, nproc - 2));
 #else
 		c->count = DEFAULT_MAX_WORKERS;
 #endif
@@ -1086,18 +1092,13 @@ static bool
 rspamd_include_map_handler(const guchar *data, gsize len,
 						   const ucl_object_t *args, void *ud)
 {
-	struct rspamd_config *cfg = (struct rspamd_config *) ud;
-	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
-	gchar *map_line;
+	auto *cfg = (struct rspamd_config *) ud;
 
-	map_line = rspamd_mempool_alloc(cfg->cfg_pool, len + 1);
-	rspamd_strlcpy(map_line, data, len + 1);
+	auto ftok = rspamd_ftok_t{.len = len + 1, .begin = (char *) data};
+	auto *map_line = rspamd_mempool_ftokdup(cfg->cfg_pool, &ftok);
 
-	cbdata = g_malloc(sizeof(struct rspamd_ucl_map_cbdata));
-	pcbdata = g_malloc(sizeof(struct rspamd_ucl_map_cbdata *));
-	cbdata->buf = NULL;
-	cbdata->cfg = cfg;
-	*pcbdata = cbdata;
+	auto *cbdata = new rspamd_ucl_map_cbdata{cfg};
+	auto **pcbdata = new rspamd_ucl_map_cbdata *(cbdata);
 
 	return rspamd_map_add(cfg,
 						  map_line,
@@ -1106,7 +1107,7 @@ rspamd_include_map_handler(const guchar *data, gsize len,
 						  rspamd_ucl_fin_cb,
 						  rspamd_ucl_dtor_cb,
 						  (void **) pcbdata,
-						  NULL, RSPAMD_MAP_DEFAULT) != NULL;
+						  nullptr, RSPAMD_MAP_DEFAULT) != nullptr;
 }
 
 /*
@@ -1141,8 +1142,6 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 {
 	GHashTableIter it;
 	gpointer k, v;
-	gchar *hostbuf;
-	gsize hostlen;
 
 	ucl_parser_register_variable(parser,
 								 RSPAMD_CONFDIR_MACRO,
@@ -1177,7 +1176,7 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable(parser, RSPAMD_BRANCH_VERSION_MACRO,
 								 RSPAMD_VERSION_BRANCH);
 
-	hostlen = sysconf(_SC_HOST_NAME_MAX);
+	auto hostlen = sysconf(_SC_HOST_NAME_MAX);
 
 	if (hostlen <= 0) {
 		hostlen = 256;
@@ -1186,19 +1185,22 @@ void rspamd_ucl_add_conf_variables(struct ucl_parser *parser, GHashTable *vars)
 		hostlen++;
 	}
 
-	hostbuf = g_alloca(hostlen);
-	memset(hostbuf, 0, hostlen);
-	gethostname(hostbuf, hostlen - 1);
+	auto hostbuf = std::string{};
+	hostbuf.resize(hostlen);
+
+	if (gethostname(hostbuf.data(), hostlen) != 0) {
+		hostbuf = "unknown";
+	}
 
 	/* UCL copies variables, so it is safe to pass an ephemeral buffer here */
 	ucl_parser_register_variable(parser, RSPAMD_HOSTNAME_MACRO,
-								 hostbuf);
+								 hostbuf.c_str());
 
-	if (vars != NULL) {
+	if (vars != nullptr) {
 		g_hash_table_iter_init(&it, vars);
 
 		while (g_hash_table_iter_next(&it, &k, &v)) {
-			ucl_parser_register_variable(parser, k, v);
+			ucl_parser_register_variable(parser, (const char *) k, (const char *) v);
 		}
 	}
 }
@@ -1215,10 +1217,10 @@ void rspamd_ucl_add_conf_macros(struct ucl_parser *parser,
 static void
 symbols_classifiers_callback(gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_config *cfg = ud;
+	auto *cfg = (struct rspamd_config *) ud;
 
 	/* Actually, statistics should act like any ordinary symbol */
-	rspamd_symcache_add_symbol(cfg->cache, key, 0, NULL, NULL,
+	rspamd_symcache_add_symbol(cfg->cache, (const char *) key, 0, nullptr, nullptr,
 							   SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT, -1);
 }
 
@@ -1232,16 +1234,13 @@ void rspamd_config_insert_classify_symbols(struct rspamd_config *cfg)
 struct rspamd_classifier_config *
 rspamd_config_find_classifier(struct rspamd_config *cfg, const gchar *name)
 {
-	GList *cur;
-	struct rspamd_classifier_config *cf;
-
-	if (name == NULL) {
-		return NULL;
+	if (name == nullptr) {
+		return nullptr;
 	}
 
-	cur = cfg->classifiers;
+	auto *cur = cfg->classifiers;
 	while (cur) {
-		cf = cur->data;
+		auto *cf = (struct rspamd_classifier_config *) cur->data;
 
 		if (g_ascii_strcasecmp(cf->name, name) == 0) {
 			return cf;
@@ -1250,20 +1249,18 @@ rspamd_config_find_classifier(struct rspamd_config *cfg, const gchar *name)
 		cur = g_list_next(cur);
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 gboolean
 rspamd_config_check_statfiles(struct rspamd_classifier_config *cf)
 {
-	struct rspamd_statfile_config *st;
 	gboolean has_other = FALSE, res = FALSE, cur_class = FALSE;
-	GList *cur;
 
 	/* First check classes directly */
-	cur = cf->statfiles;
+	auto *cur = cf->statfiles;
 	while (cur) {
-		st = cur->data;
+		auto *st = (struct rspamd_statfile_config *) cur->data;
 		if (!has_other) {
 			cur_class = st->is_spam;
 			has_other = TRUE;
@@ -1285,7 +1282,7 @@ rspamd_config_check_statfiles(struct rspamd_classifier_config *cf)
 	has_other = FALSE;
 	cur = cf->statfiles;
 	while (cur) {
-		st = cur->data;
+		auto *st = (struct rspamd_statfile_config *) cur->data;
 		if (rspamd_substring_search_caseless(st->symbol,
 											 strlen(st->symbol), "spam", 4) != -1) {
 			st->is_spam = TRUE;
@@ -1317,55 +1314,50 @@ rspamd_ucl_read_cb(gchar *chunk,
 				   struct map_cb_data *data,
 				   gboolean final)
 {
-	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev;
+	auto *cbdata = (struct rspamd_ucl_map_cbdata *) data->cur_data;
+	auto *prev = (struct rspamd_ucl_map_cbdata *) data->prev_data;
 
-	if (cbdata == NULL) {
-		cbdata = g_malloc(sizeof(struct rspamd_ucl_map_cbdata));
-		prev = data->prev_data;
-		cbdata->buf = g_string_sized_new(BUFSIZ);
-		cbdata->cfg = prev->cfg;
+	if (cbdata == nullptr) {
+		cbdata = new rspamd_ucl_map_cbdata{prev->cfg};
 		data->cur_data = cbdata;
 	}
-	g_string_append_len(cbdata->buf, chunk, len);
+	cbdata->buf.append(chunk, len);
 
 	/* Say not to copy any part of this buffer */
-	return NULL;
+	return nullptr;
 }
 
 static void
 rspamd_ucl_fin_cb(struct map_cb_data *data, void **target)
 {
-	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev =
-															   data->prev_data;
-	ucl_object_t *obj;
-	struct ucl_parser *parser;
-	ucl_object_iter_t it = NULL;
-	const ucl_object_t *cur;
-	struct rspamd_config *cfg = data->map->cfg;
+	auto *cbdata = (struct rspamd_ucl_map_cbdata *) data->cur_data;
+	auto *prev = (struct rspamd_ucl_map_cbdata *) data->prev_data;
+	auto *cfg = data->map->cfg;
 
-	if (cbdata == NULL) {
-		msg_err_config("map fin error: new data is NULL");
+	if (cbdata == nullptr) {
+		msg_err_config("map fin error: new data is nullptr");
 		return;
 	}
 
 	/* New data available */
-	parser = ucl_parser_new(0);
-	if (!ucl_parser_add_chunk(parser, cbdata->buf->str,
-							  cbdata->buf->len)) {
+	auto *parser = ucl_parser_new(0);
+	if (!ucl_parser_add_chunk(parser, (unsigned char *) cbdata->buf.data(),
+							  cbdata->buf.size())) {
 		msg_err_config("cannot parse map %s: %s",
 					   data->map->name,
 					   ucl_parser_get_error(parser));
 		ucl_parser_free(parser);
 	}
 	else {
-		obj = ucl_parser_get_object(parser);
-		ucl_parser_free(parser);
-		it = NULL;
+		auto *obj = ucl_parser_get_object(parser);
+		ucl_object_iter_t it = nullptr;
 
-		while ((cur = ucl_object_iterate(obj, &it, true))) {
-			ucl_object_replace_key(cbdata->cfg->rcl_obj, (ucl_object_t *) cur,
+		for (auto *cur = ucl_object_iterate(obj, &it, true); cur != nullptr; cur = ucl_object_iterate(obj, &it, true)) {
+			ucl_object_replace_key(cbdata->cfg->cfg_ucl_obj, (ucl_object_t *) cur,
 								   cur->key, cur->keylen, false);
 		}
+
+		ucl_parser_free(parser);
 		ucl_object_unref(obj);
 	}
 
@@ -1373,25 +1365,15 @@ rspamd_ucl_fin_cb(struct map_cb_data *data, void **target)
 		*target = data->cur_data;
 	}
 
-	if (prev != NULL) {
-		if (prev->buf != NULL) {
-			g_string_free(prev->buf, TRUE);
-		}
-		g_free(prev);
-	}
+	delete prev;
 }
 
 static void
 rspamd_ucl_dtor_cb(struct map_cb_data *data)
 {
-	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data;
+	auto *cbdata = (struct rspamd_ucl_map_cbdata *) data->cur_data;
 
-	if (cbdata != NULL) {
-		if (cbdata->buf != NULL) {
-			g_string_free(cbdata->buf, TRUE);
-		}
-		g_free(cbdata);
-	}
+	delete cbdata;
 }
 
 gboolean
@@ -1399,7 +1381,7 @@ rspamd_check_module(struct rspamd_config *cfg, module_t *mod)
 {
 	gboolean ret = TRUE;
 
-	if (mod != NULL) {
+	if (mod != nullptr) {
 		if (mod->module_version != RSPAMD_CUR_MODULE_VERSION) {
 			msg_err_config("module %s has incorrect version %xd (%xd expected)",
 						   mod->name, (gint) mod->module_version, RSPAMD_CUR_MODULE_VERSION);
@@ -1428,7 +1410,7 @@ rspamd_check_worker(struct rspamd_config *cfg, worker_t *wrk)
 {
 	gboolean ret = TRUE;
 
-	if (wrk != NULL) {
+	if (wrk != nullptr) {
 		if (wrk->worker_version != RSPAMD_CUR_WORKER_VERSION) {
 			msg_err_config("worker %s has incorrect version %xd (%xd expected)",
 						   wrk->name, wrk->worker_version, RSPAMD_CUR_WORKER_VERSION);
@@ -1463,11 +1445,11 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 
 	/* Init all compiled modules */
 
-	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
+	for (pmod = cfg->compiled_modules; pmod != nullptr && *pmod != nullptr; pmod++) {
 		mod = *pmod;
 		if (rspamd_check_module(cfg, mod)) {
 			if (mod->module_init_func(cfg, &mod_ctx) == 0) {
-				g_assert(mod_ctx != NULL);
+				g_assert(mod_ctx != nullptr);
 				g_ptr_array_add(cfg->c_modules, mod_ctx);
 				mod_ctx->mod = mod;
 				mod->ctx_offset = i++;
@@ -1480,7 +1462,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 
 	while (cur) {
 		/* Perform modules configuring */
-		mod_ctx = NULL;
+		mod_ctx = nullptr;
 		PTR_ARRAY_FOREACH(cfg->c_modules, i, cur_ctx)
 		{
 			if (g_ascii_strcasecmp(cur_ctx->mod->name,
@@ -1514,7 +1496,7 @@ rspamd_init_filters(struct rspamd_config *cfg, bool reconfig, bool strict)
 			}
 		}
 
-		if (mod_ctx == NULL) {
+		if (mod_ctx == nullptr) {
 			msg_warn_config("requested unknown module %s", cur->data);
 		}
 
@@ -1533,11 +1515,11 @@ rspamd_config_new_symbol(struct rspamd_config *cfg, const gchar *symbol,
 {
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol *sym_def;
-	gdouble *score_ptr;
+	double *score_ptr;
 
 	sym_def =
-		rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(struct rspamd_symbol));
-	score_ptr = rspamd_mempool_alloc(cfg->cfg_pool, sizeof(gdouble));
+		rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_symbol);
+	score_ptr = rspamd_mempool_alloc_type(cfg->cfg_pool, double);
 
 	if (isnan(score)) {
 		/* In fact, it could be defined later */
@@ -1572,7 +1554,7 @@ rspamd_config_new_symbol(struct rspamd_config *cfg, const gchar *symbol,
 	g_hash_table_insert(cfg->symbols, sym_def->name, sym_def);
 
 	/* Search for symbol group */
-	if (group == NULL) {
+	if (group == nullptr) {
 		group = "ungrouped";
 		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPED;
 	}
@@ -1582,8 +1564,8 @@ rspamd_config_new_symbol(struct rspamd_config *cfg, const gchar *symbol,
 		}
 	}
 
-	sym_group = g_hash_table_lookup(cfg->groups, group);
-	if (sym_group == NULL) {
+	sym_group = reinterpret_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, group));
+	if (sym_group == nullptr) {
 		/* Create new group */
 		sym_group = rspamd_config_new_group(cfg, group);
 	}
@@ -1611,13 +1593,13 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 	struct rspamd_symbols_group *sym_group;
 	guint i;
 
-	g_assert(cfg != NULL);
-	g_assert(symbol != NULL);
+	g_assert(cfg != nullptr);
+	g_assert(symbol != nullptr);
 
-	sym_def = g_hash_table_lookup(cfg->symbols, symbol);
+	sym_def = reinterpret_cast<rspamd_symbol *>(g_hash_table_lookup(cfg->symbols, symbol));
 
-	if (sym_def != NULL) {
-		if (group != NULL) {
+	if (sym_def != nullptr) {
+		if (group != nullptr) {
 			gboolean has_group = FALSE;
 
 			PTR_ARRAY_FOREACH(sym_def->groups, i, sym_group)
@@ -1631,9 +1613,9 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 
 			if (!has_group) {
 				/* Non-empty group has a priority over non-grouped one */
-				sym_group = g_hash_table_lookup(cfg->groups, group);
+				sym_group = reinterpret_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, group));
 
-				if (sym_group == NULL) {
+				if (sym_group == nullptr) {
 					/* Create new group */
 					sym_group = rspamd_config_new_group(cfg, group);
 				}
@@ -1706,12 +1688,12 @@ rspamd_config_add_symbol(struct rspamd_config *cfg,
 
 
 			/* We also check group information in this case */
-			if (group != NULL && sym_def->gr != NULL &&
+			if (group != nullptr && sym_def->gr != nullptr &&
 				strcmp(group, sym_def->gr->name) != 0) {
 
-				sym_group = g_hash_table_lookup(cfg->groups, group);
+				sym_group = reinterpret_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, group));
 
-				if (sym_group == NULL) {
+				if (sym_group == nullptr) {
 					/* Create new group */
 					sym_group = rspamd_config_new_group(cfg, group);
 				}
@@ -1745,13 +1727,13 @@ rspamd_config_add_symbol_group(struct rspamd_config *cfg,
 	struct rspamd_symbols_group *sym_group;
 	guint i;
 
-	g_assert(cfg != NULL);
-	g_assert(symbol != NULL);
-	g_assert(group != NULL);
+	g_assert(cfg != nullptr);
+	g_assert(symbol != nullptr);
+	g_assert(group != nullptr);
 
-	sym_def = g_hash_table_lookup(cfg->symbols, symbol);
+	sym_def = reinterpret_cast<rspamd_symbol *>(g_hash_table_lookup(cfg->symbols, symbol));
 
-	if (sym_def != NULL) {
+	if (sym_def != nullptr) {
 		gboolean has_group = FALSE;
 
 		PTR_ARRAY_FOREACH(sym_def->groups, i, sym_group)
@@ -1765,9 +1747,9 @@ rspamd_config_add_symbol_group(struct rspamd_config *cfg,
 
 		if (!has_group) {
 			/* Non-empty group has a priority over non-grouped one */
-			sym_group = g_hash_table_lookup(cfg->groups, group);
+			sym_group = reinterpret_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, group));
 
-			if (sym_group == NULL) {
+			if (sym_group == nullptr) {
 				/* Create new group */
 				sym_group = rspamd_config_new_group(cfg, group);
 			}
@@ -1791,54 +1773,52 @@ gboolean
 rspamd_config_is_enabled_from_ucl(rspamd_mempool_t *pool,
 								  const ucl_object_t *obj)
 {
-	{
-		const ucl_object_t *enabled;
 
-		enabled = ucl_object_lookup(obj, "enabled");
+	const ucl_object_t *enabled;
 
-		if (enabled) {
-			if (ucl_object_type(enabled) == UCL_BOOLEAN) {
-				return ucl_object_toboolean(enabled);
+	enabled = ucl_object_lookup(obj, "enabled");
+
+	if (enabled) {
+		if (ucl_object_type(enabled) == UCL_BOOLEAN) {
+			return ucl_object_toboolean(enabled);
+		}
+		else if (ucl_object_type(enabled) == UCL_STRING) {
+			gint ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
+
+			if (ret == 0) {
+				return FALSE;
 			}
-			else if (ucl_object_type(enabled) == UCL_STRING) {
-				gint ret = rspamd_config_parse_flag(ucl_object_tostring(enabled), 0);
+			else if (ret == -1) {
 
-				if (ret == 0) {
-					return FALSE;
-				}
-				else if (ret == -1) {
-
-					msg_info_pool_check("wrong value for the `enabled` key");
-					return FALSE;
-				}
-				/* Default return is TRUE here */
+				msg_info_pool_check("wrong value for the `enabled` key");
+				return FALSE;
 			}
+			/* Default return is TRUE here */
 		}
 	}
 
-	{
-		const ucl_object_t *disabled;
 
-		disabled = ucl_object_lookup(obj, "disabled");
+	const ucl_object_t *disabled;
 
-		if (disabled) {
-			if (ucl_object_type(disabled) == UCL_BOOLEAN) {
-				return !ucl_object_toboolean(disabled);
+	disabled = ucl_object_lookup(obj, "disabled");
+
+	if (disabled) {
+		if (ucl_object_type(disabled) == UCL_BOOLEAN) {
+			return !ucl_object_toboolean(disabled);
+		}
+		else if (ucl_object_type(disabled) == UCL_STRING) {
+			gint ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
+
+			if (ret == 0) {
+				return TRUE;
 			}
-			else if (ucl_object_type(disabled) == UCL_STRING) {
-				gint ret = rspamd_config_parse_flag(ucl_object_tostring(disabled), 0);
+			else if (ret == -1) {
 
-				if (ret == 0) {
-					return TRUE;
-				}
-				else if (ret == -1) {
-
-					msg_info_pool_check("wrong value for the `disabled` key");
-					return FALSE;
-				}
-
+				msg_info_pool_check("wrong value for the `disabled` key");
 				return FALSE;
 			}
+
+			return FALSE;
 		}
 	}
 
@@ -1853,7 +1833,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 	const ucl_object_t *conf;
 	GList *cur;
 	struct rspamd_symbols_group *gr;
-	lua_State *L = cfg->lua_state;
+	lua_State *L = RSPAMD_LUA_CFG_STATE(cfg);
 	struct module_ctx *cur_ctx;
 	guint i;
 
@@ -1865,7 +1845,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 		}
 	}
 
-	if (g_hash_table_lookup(cfg->explicit_modules, module_name) != NULL) {
+	if (g_hash_table_lookup(cfg->explicit_modules, module_name) != nullptr) {
 		/* Always load module */
 		rspamd_plugins_table_push_elt(L, "enabled", module_name);
 
@@ -1878,7 +1858,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 		cur = g_list_first(cfg->filters);
 
 		while (cur) {
-			if (strcmp(cur->data, module_name) == 0) {
+			if (strcmp((char *) cur->data, module_name) == 0) {
 				found = TRUE;
 				break;
 			}
@@ -1896,9 +1876,9 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 		}
 	}
 
-	conf = ucl_object_lookup(cfg->rcl_obj, module_name);
+	conf = ucl_object_lookup(cfg->cfg_ucl_obj, module_name);
 
-	if (conf == NULL) {
+	if (conf == nullptr) {
 		rspamd_plugins_table_push_elt(L, "disabled_unconfigured", module_name);
 
 		msg_info_config("%s module %s is enabled but has not been configured",
@@ -1924,7 +1904,7 @@ rspamd_config_is_module_enabled(struct rspamd_config *cfg,
 	}
 
 	/* Now we check symbols group */
-	gr = g_hash_table_lookup(cfg->groups, module_name);
+	gr = reinterpret_cast<rspamd_symbols_group *>(g_hash_table_lookup(cfg->groups, module_name));
 
 	if (gr) {
 		if (gr->flags & RSPAMD_SYMBOL_GROUP_DISABLED) {
@@ -1949,16 +1929,15 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 							  const ucl_object_t *obj,
 							  guint priority)
 {
-	const ucl_object_t *elt;
-	gdouble threshold = NAN;
-	guint flags = 0, std_act, obj_type;
+	auto threshold = NAN;
+	int flags = 0;
 
-	obj_type = ucl_object_type(obj);
+	auto obj_type = ucl_object_type(obj);
 
 	if (obj_type == UCL_OBJECT) {
 		obj_type = ucl_object_type(obj);
 
-		elt = ucl_object_lookup_any(obj, "score", "threshold", NULL);
+		const auto *elt = ucl_object_lookup_any(obj, "score", "threshold", nullptr);
 
 		if (elt) {
 			threshold = ucl_object_todouble(elt);
@@ -1968,9 +1947,9 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 
 		if (elt && ucl_object_type(elt) == UCL_ARRAY) {
 			const ucl_object_t *cur;
-			ucl_object_iter_t it = NULL;
+			ucl_object_iter_t it = nullptr;
 
-			while ((cur = ucl_object_iterate(elt, &it, true)) != NULL) {
+			while ((cur = ucl_object_iterate(elt, &it, true)) != nullptr) {
 				if (ucl_object_type(cur) == UCL_STRING) {
 					const gchar *fl_str = ucl_object_tostring(cur);
 
@@ -2025,6 +2004,8 @@ rspamd_config_action_from_ucl(struct rspamd_config *cfg,
 	act->threshold = threshold;
 	act->flags = flags;
 
+	enum rspamd_action_type std_act;
+
 	if (!(flags & RSPAMD_ACTION_MILTER)) {
 		if (rspamd_action_from_str(act->name, &std_act)) {
 			act->action_type = std_act;
@@ -2042,13 +2023,12 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 							   const gchar *action_name,
 							   const ucl_object_t *obj)
 {
-	struct rspamd_action *act;
 	enum rspamd_action_type std_act;
 	const ucl_object_t *elt;
 	guint priority = ucl_object_get_priority(obj), obj_type;
 
-	g_assert(cfg != NULL);
-	g_assert(action_name != NULL);
+	g_assert(cfg != nullptr);
+	g_assert(action_name != nullptr);
 
 	obj_type = ucl_object_type(obj);
 
@@ -2067,25 +2047,31 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 	 * variance of names.
 	 */
 
-	if (rspamd_action_from_str(action_name, (gint *) &std_act)) {
+	if (rspamd_action_from_str(action_name, &std_act)) {
 		action_name = rspamd_action_to_str(std_act);
 	}
 
-	HASH_FIND_STR(cfg->actions, action_name, act);
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto existing_act_it = actions->actions_by_name.find(action_name);
 
-	if (act) {
+	if (existing_act_it != actions->actions_by_name.end()) {
+		auto *act = existing_act_it->second.get();
 		/* Existing element */
 		if (act->priority <= priority) {
 			/* We can replace data */
-			msg_info_config("action %s has been already registered with "
-							"priority %ud, override it with new priority: %ud, "
-							"old score: %.2f",
-							action_name,
-							act->priority,
-							priority,
-							act->threshold);
+			auto old_pri = act->priority;
+			auto old_thr = act->threshold;
+
 			if (rspamd_config_action_from_ucl(cfg, act, obj, priority)) {
-				rspamd_actions_sort(cfg);
+				msg_info_config("action %s has been already registered with "
+								"priority %ud, override it with new priority: %ud, "
+								"old threshold: %.2f, new threshold: %.2f",
+								action_name,
+								old_pri,
+								priority,
+								old_thr,
+								act->threshold);
+				actions->sort();
 			}
 			else {
 				return FALSE;
@@ -2101,13 +2087,11 @@ rspamd_config_set_action_score(struct rspamd_config *cfg,
 	}
 	else {
 		/* Add new element */
-		act = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*act));
+		auto act = std::make_shared<rspamd_action>();
 		act->name = rspamd_mempool_strdup(cfg->cfg_pool, action_name);
 
-		if (rspamd_config_action_from_ucl(cfg, act, obj, priority)) {
-			HASH_ADD_KEYPTR(hh, cfg->actions,
-							act->name, strlen(act->name), act);
-			rspamd_actions_sort(cfg);
+		if (rspamd_config_action_from_ucl(cfg, act.get(), obj, priority)) {
+			actions->add_action(std::move(act));
 		}
 		else {
 			return FALSE;
@@ -2122,11 +2106,11 @@ rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 								   const gchar *action_name,
 								   guint priority)
 {
-	struct rspamd_action *act;
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto maybe_act = rspamd::find_map(actions->actions_by_name, action_name);
 
-	HASH_FIND_STR(cfg->actions, action_name, act);
-
-	if (act) {
+	if (maybe_act) {
+		auto *act = maybe_act.value().get().get();
 		if (priority >= act->priority) {
 			msg_info_config("disable action %s; old priority: %ud, new priority: %ud",
 							action_name,
@@ -2154,27 +2138,50 @@ rspamd_config_maybe_disable_action(struct rspamd_config *cfg,
 struct rspamd_action *
 rspamd_config_get_action(struct rspamd_config *cfg, const gchar *name)
 {
-	struct rspamd_action *res = NULL;
+	auto actions = RSPAMD_CFG_ACTIONS(cfg);
+	auto maybe_act = rspamd::find_map(actions->actions_by_name, name);
 
-	HASH_FIND_STR(cfg->actions, name, res);
+	if (maybe_act) {
+		return maybe_act.value().get().get();
+	}
 
-	return res;
+	return nullptr;
 }
 
 struct rspamd_action *
 rspamd_config_get_action_by_type(struct rspamd_config *cfg,
 								 enum rspamd_action_type type)
 {
-	struct rspamd_action *cur, *tmp;
-
-	HASH_ITER(hh, cfg->actions, cur, tmp)
-	{
-		if (cur->action_type == type) {
-			return cur;
+	for (const auto &act: RSPAMD_CFG_ACTIONS(cfg)->actions) {
+		if (act->action_type == type) {
+			return act.get();
 		}
 	}
 
-	return NULL;
+	return nullptr;
+}
+
+void rspamd_config_actions_foreach(struct rspamd_config *cfg,
+								   void (*func)(struct rspamd_action *act, void *d),
+								   void *data)
+{
+	for (const auto &act: RSPAMD_CFG_ACTIONS(cfg)->actions) {
+		func(act.get(), data);
+	}
+}
+
+void rspamd_config_actions_foreach_enumerate(struct rspamd_config *cfg,
+											 void (*func)(int idx, struct rspamd_action *act, void *d),
+											 void *data)
+{
+	for (const auto &[idx, act]: rspamd::enumerate(RSPAMD_CFG_ACTIONS(cfg)->actions)) {
+		func(idx, act.get(), data);
+	}
+}
+
+gsize rspamd_config_actions_size(struct rspamd_config *cfg)
+{
+	return RSPAMD_CFG_ACTIONS(cfg)->actions.size();
 }
 
 gboolean
@@ -2183,12 +2190,12 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 							 struct rspamd_worker *worker, const gchar *map_name)
 {
 	ucl_type_t type;
-	ucl_object_iter_t it = NULL;
+	ucl_object_iter_t it = nullptr;
 	const ucl_object_t *cur, *cur_elt;
 	const gchar *str;
 
 	/* Cleanup */
-	*target = NULL;
+	*target = nullptr;
 
 	LL_FOREACH(obj, cur_elt)
 	{
@@ -2206,7 +2213,7 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 											rspamd_radix_fin,
 											rspamd_radix_dtor,
 											(void **) target,
-											worker, RSPAMD_MAP_DEFAULT) == NULL) {
+											worker, RSPAMD_MAP_DEFAULT) == nullptr) {
 					g_set_error(err,
 								g_quark_from_static_string("rspamd-config"),
 								EINVAL, "bad map definition %s for %s", str,
@@ -2234,7 +2241,7 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 										rspamd_radix_fin,
 										rspamd_radix_dtor,
 										(void **) target,
-										worker, RSPAMD_MAP_DEFAULT) == NULL) {
+										worker, RSPAMD_MAP_DEFAULT) == nullptr) {
 				g_set_error(err,
 							g_quark_from_static_string("rspamd-config"),
 							EINVAL, "bad map object for %s", ucl_object_key(obj));
@@ -2247,7 +2254,7 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 			/* List of IP addresses */
 			it = ucl_object_iterate_new(cur_elt);
 
-			while ((cur = ucl_object_iterate_safe(it, true)) != NULL) {
+			while ((cur = ucl_object_iterate_safe(it, true)) != nullptr) {
 
 
 				if (ucl_object_type(cur) == UCL_STRING) {
@@ -2288,49 +2295,35 @@ rspamd_config_radix_from_ucl(struct rspamd_config *cfg, const ucl_object_t *obj,
 	return TRUE;
 }
 
+constexpr const auto action_types = frozen::make_unordered_map<frozen::string, enum rspamd_action_type>({
+	{"reject", METRIC_ACTION_REJECT},
+	{"greylist", METRIC_ACTION_GREYLIST},
+	{"add header", METRIC_ACTION_ADD_HEADER},
+	{"add_header", METRIC_ACTION_ADD_HEADER},
+	{"rewrite subject", METRIC_ACTION_REWRITE_SUBJECT},
+	{"rewrite_subject", METRIC_ACTION_REWRITE_SUBJECT},
+	{"soft reject", METRIC_ACTION_SOFT_REJECT},
+	{"soft_reject", METRIC_ACTION_SOFT_REJECT},
+	{"no action", METRIC_ACTION_NOACTION},
+	{"no_action", METRIC_ACTION_NOACTION},
+	{"accept", METRIC_ACTION_NOACTION},
+	{"quarantine", METRIC_ACTION_QUARANTINE},
+	{"discard", METRIC_ACTION_DISCARD},
+
+});
+
 gboolean
-rspamd_action_from_str(const gchar *data, gint *result)
+rspamd_action_from_str(const gchar *data, enum rspamd_action_type *result)
 {
-	guint64 h;
+	auto maybe_action = rspamd::find_map(action_types, std::string_view{data});
 
-	h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
-											data, strlen(data), 0xdeadbabe);
-
-	switch (h) {
-	case 0x9917BFDB46332B8CULL: /* reject */
-		*result = METRIC_ACTION_REJECT;
-		break;
-	case 0x7130EE37D07B3715ULL: /* greylist */
-		*result = METRIC_ACTION_GREYLIST;
-		break;
-	case 0xCA6087E05480C60CULL: /* add_header */
-	case 0x87A3D27783B16241ULL: /* add header */
-		*result = METRIC_ACTION_ADD_HEADER;
-		break;
-	case 0x4963374ED8B90449ULL: /* rewrite_subject */
-	case 0x5C9FC4679C025948ULL: /* rewrite subject */
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-		break;
-	case 0xFC7D6502EE71FDD9ULL: /* soft reject */
-	case 0x73576567C262A82DULL: /* soft_reject */
-		*result = METRIC_ACTION_SOFT_REJECT;
-		break;
-	case 0x207091B927D1EC0DULL: /* no action */
-	case 0xB7D92D002CD46325ULL: /* no_action */
-	case 0x167C0DF4BAA9BCECULL: /* accept */
-		*result = METRIC_ACTION_NOACTION;
-		break;
-	case 0x4E9666ECCD3FC314ULL: /* quarantine */
-		*result = METRIC_ACTION_QUARANTINE;
-		break;
-	case 0x93B346242F7F69B3ULL: /* discard */
-		*result = METRIC_ACTION_DISCARD;
-		break;
-	default:
-		return FALSE;
+	if (maybe_action) {
+		*result = maybe_action.value().get();
+		return true;
 	}
-
-	return TRUE;
+	else {
+		return false;
+	}
 }
 
 const gchar *
@@ -2391,36 +2384,6 @@ rspamd_action_to_str_alt(enum rspamd_action_type action)
 	return "unknown action";
 }
 
-static int
-rspamd_actions_cmp(const struct rspamd_action *a1, const struct rspamd_action *a2)
-{
-	if (!isnan(a1->threshold) && !isnan(a2->threshold)) {
-		if (a1->threshold < a2->threshold) {
-			return -1;
-		}
-		else if (a1->threshold > a2->threshold) {
-			return 1;
-		}
-
-		return 0;
-	}
-
-	if (isnan(a1->threshold) && isnan(a2->threshold)) {
-		return 0;
-	}
-	else if (isnan(a1->threshold)) {
-		return 1;
-	}
-	else {
-		return -1;
-	}
-}
-
-void rspamd_actions_sort(struct rspamd_config *cfg)
-{
-	HASH_SORT(cfg->actions, rspamd_actions_cmp);
-}
-
 static void
 rspamd_config_settings_elt_dtor(struct rspamd_config_settings_elt *e)
 {
@@ -2457,7 +2420,7 @@ rspamd_config_find_settings_id_ref(struct rspamd_config *cfg,
 		}
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref(
@@ -2489,7 +2452,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 
 		DL_DELETE(cfg->setting_ids, elt);
 
-		nelt = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*nelt));
+		nelt = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_config_settings_elt);
 
 		nelt->id = id;
 		nelt->name = rspamd_mempool_strdup(cfg->cfg_pool, name);
@@ -2518,7 +2481,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 		REF_RELEASE(elt);
 	}
 	else {
-		elt = rspamd_mempool_alloc0(cfg->cfg_pool, sizeof(*elt));
+		elt = rspamd_mempool_alloc0_type(cfg->cfg_pool, struct rspamd_config_settings_elt);
 
 		elt->id = id;
 		elt->name = rspamd_mempool_strdup(cfg->cfg_pool, name);
@@ -2543,7 +2506,7 @@ void rspamd_config_register_settings_id(struct rspamd_config *cfg,
 int rspamd_config_ev_backend_get(struct rspamd_config *cfg)
 {
 #define AUTO_BACKEND (ev_supported_backends() & ~EVBACKEND_IOURING)
-	if (cfg == NULL || cfg->events_backend == NULL) {
+	if (cfg == nullptr || cfg->events_backend == nullptr) {
 		return AUTO_BACKEND;
 	}
 
@@ -2597,9 +2560,9 @@ int rspamd_config_ev_backend_get(struct rspamd_config *cfg)
 const gchar *
 rspamd_config_ev_backend_to_string(int ev_backend, gboolean *effective)
 {
-#define SET_EFFECTIVE(b)                           \
-	do {                                           \
-		if ((effective) != NULL) *(effective) = b; \
+#define SET_EFFECTIVE(b)                              \
+	do {                                              \
+		if ((effective) != nullptr) *(effective) = b; \
 	} while (0)
 
 	if ((ev_backend & EVBACKEND_ALL) == EVBACKEND_ALL) {
@@ -2649,12 +2612,11 @@ struct rspamd_external_libs_ctx *
 rspamd_init_libs(void)
 {
 	struct rlimit rlim;
-	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
 
-	ctx = g_malloc0(sizeof(*ctx));
+	auto *ctx = g_new0(struct rspamd_external_libs_ctx, 1);
 	ctx->crypto_ctx = rspamd_cryptobox_init();
-	ottery_cfg = g_malloc0(ottery_get_sizeof_config());
+	ottery_cfg = (struct ottery_config *) g_malloc0(ottery_get_sizeof_config());
 	ottery_config_init(ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
 
@@ -2664,10 +2626,12 @@ rspamd_init_libs(void)
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
 		ottery_config_disable_entropy_sources(ottery_cfg,
 											  OTTERY_ENTROPY_SRC_RDRAND);
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
-		RAND_set_rand_engine(NULL);
-#endif
 	}
+
+	g_assert(ottery_init(ottery_cfg) == 0);
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+	RAND_set_rand_engine(nullptr);
+#endif
 
 	/* Configure utf8 library */
 	guint utf8_flags = 0;
@@ -2681,10 +2645,8 @@ rspamd_init_libs(void)
 
 	rspamd_fast_utf8_library_init(utf8_flags);
 
-	g_assert(ottery_init(ottery_cfg) == 0);
-
 #ifdef HAVE_LOCALE_H
-	if (getenv("LANG") == NULL) {
+	if (getenv("LANG") == nullptr) {
 		setlocale(LC_ALL, "C");
 		setlocale(LC_CTYPE, "C");
 		setlocale(LC_MESSAGES, "C");
@@ -2719,13 +2681,13 @@ rspamd_open_zstd_dictionary(const char *path)
 {
 	struct zstd_dictionary *dict;
 
-	dict = g_malloc0(sizeof(*dict));
+	dict = g_new0(zstd_dictionary, 1);
 	dict->dict = rspamd_file_xmap(path, PROT_READ, &dict->size, TRUE);
 
-	if (dict->dict == NULL) {
+	if (dict->dict == nullptr) {
 		g_free(dict);
 
-		return NULL;
+		return nullptr;
 	}
 
 	dict->id = -1;
@@ -2733,7 +2695,7 @@ rspamd_open_zstd_dictionary(const char *path)
 	if (dict->id == 0) {
 		g_free(dict);
 
-		return NULL;
+		return nullptr;
 	}
 
 	return dict;
@@ -2749,10 +2711,10 @@ rspamd_free_zstd_dictionary(struct zstd_dictionary *dict)
 }
 
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
-extern void openblas_set_num_threads(int num_threads);
+extern "C" void openblas_set_num_threads(int num_threads);
 #endif
 #ifdef HAVE_BLI_THREAD_SET_NUM_THREADS
-extern void bli_thread_set_num_threads(int num_threads);
+extern "C" void bli_thread_set_num_threads(int num_threads);
 #endif
 
 gboolean
@@ -2762,35 +2724,43 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 	size_t r;
 	gboolean ret = TRUE;
 
-	g_assert(cfg != NULL);
+	g_assert(cfg != nullptr);
 
-	if (ctx != NULL) {
+	if (ctx != nullptr) {
 		if (cfg->local_addrs) {
+			GError *err = nullptr;
 			ret = rspamd_config_radix_from_ucl(cfg, cfg->local_addrs,
 											   "Local addresses",
 											   (struct rspamd_radix_map_helper **) ctx->local_addrs,
-											   NULL,
-											   NULL, "local addresses");
+											   &err,
+											   nullptr, "local addresses");
+
+			if (!ret) {
+				msg_err_config("cannot load local addresses: %e", err);
+				g_error_free(err);
+
+				return ret;
+			}
 		}
 
 		rspamd_free_zstd_dictionary(ctx->in_dict);
 		rspamd_free_zstd_dictionary(ctx->out_dict);
 
 		if (ctx->out_zstream) {
-			ZSTD_freeCStream(ctx->out_zstream);
-			ctx->out_zstream = NULL;
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
+			ctx->out_zstream = nullptr;
 		}
 
 		if (ctx->in_zstream) {
-			ZSTD_freeDStream(ctx->in_zstream);
-			ctx->in_zstream = NULL;
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
+			ctx->in_zstream = nullptr;
 		}
 
 		if (cfg->zstd_input_dictionary) {
 			ctx->in_dict = rspamd_open_zstd_dictionary(
 				cfg->zstd_input_dictionary);
 
-			if (ctx->in_dict == NULL) {
+			if (ctx->in_dict == nullptr) {
 				msg_err_config("cannot open zstd dictionary in %s",
 							   cfg->zstd_input_dictionary);
 			}
@@ -2799,7 +2769,7 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 			ctx->out_dict = rspamd_open_zstd_dictionary(
 				cfg->zstd_output_dictionary);
 
-			if (ctx->out_dict == NULL) {
+			if (ctx->out_dict == nullptr) {
 				msg_err_config("cannot open zstd dictionary in %s",
 							   cfg->zstd_output_dictionary);
 			}
@@ -2813,7 +2783,7 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 			/* Toggle FIPS mode */
 			if (mode == 0) {
 #if defined(OPENSSL_VERSION_MAJOR) && (OPENSSL_VERSION_MAJOR >= 3)
-				if (EVP_set_default_properties(NULL, "fips=yes") != 1) {
+				if (EVP_set_default_properties(nullptr, "fips=yes") != 1) {
 #else
 				if (FIPS_mode_set(1) != 1) {
 #endif
@@ -2830,7 +2800,7 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 #else
 				msg_err_config("FIPS_mode_set failed: %s",
 #endif
-							   ERR_error_string(err, NULL));
+							   ERR_error_string(err, nullptr));
 				ret = FALSE;
 			}
 			else {
@@ -2846,24 +2816,24 @@ rspamd_config_libs(struct rspamd_external_libs_ctx *ctx,
 
 		/* Init decompression */
 		ctx->in_zstream = ZSTD_createDStream();
-		r = ZSTD_initDStream(ctx->in_zstream);
+		r = ZSTD_initDStream((ZSTD_DCtx *) ctx->in_zstream);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init decompression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeDStream(ctx->in_zstream);
-			ctx->in_zstream = NULL;
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
+			ctx->in_zstream = nullptr;
 		}
 
 		/* Init compression */
 		ctx->out_zstream = ZSTD_createCStream();
-		r = ZSTD_initCStream(ctx->out_zstream, 1);
+		r = ZSTD_initCStream((ZSTD_CCtx *) ctx->out_zstream, 1);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init compression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeCStream(ctx->out_zstream);
-			ctx->out_zstream = NULL;
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
+			ctx->out_zstream = nullptr;
 		}
 #ifdef HAVE_OPENBLAS_SET_NUM_THREADS
 		openblas_set_num_threads(cfg->max_blas_threads);
@@ -2881,17 +2851,17 @@ rspamd_libs_reset_decompression(struct rspamd_external_libs_ctx *ctx)
 {
 	gsize r;
 
-	if (ctx->in_zstream == NULL) {
+	if (ctx->in_zstream == nullptr) {
 		return FALSE;
 	}
 	else {
-		r = ZSTD_DCtx_reset(ctx->in_zstream, ZSTD_reset_session_only);
+		r = ZSTD_DCtx_reset((ZSTD_DCtx *) ctx->in_zstream, ZSTD_reset_session_only);
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init decompression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeDStream(ctx->in_zstream);
-			ctx->in_zstream = NULL;
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
+			ctx->in_zstream = nullptr;
 
 			return FALSE;
 		}
@@ -2905,21 +2875,21 @@ rspamd_libs_reset_compression(struct rspamd_external_libs_ctx *ctx)
 {
 	gsize r;
 
-	if (ctx->out_zstream == NULL) {
+	if (ctx->out_zstream == nullptr) {
 		return FALSE;
 	}
 	else {
 		/* Dictionary will be reused automatically if specified */
-		r = ZSTD_CCtx_reset(ctx->out_zstream, ZSTD_reset_session_only);
+		r = ZSTD_CCtx_reset((ZSTD_CCtx *) ctx->out_zstream, ZSTD_reset_session_only);
 		if (!ZSTD_isError(r)) {
-			r = ZSTD_CCtx_setPledgedSrcSize(ctx->out_zstream, ZSTD_CONTENTSIZE_UNKNOWN);
+			r = ZSTD_CCtx_setPledgedSrcSize((ZSTD_CCtx *) ctx->out_zstream, ZSTD_CONTENTSIZE_UNKNOWN);
 		}
 
 		if (ZSTD_isError(r)) {
 			msg_err("cannot init compression stream: %s",
 					ZSTD_getErrorName(r));
-			ZSTD_freeCStream(ctx->out_zstream);
-			ctx->out_zstream = NULL;
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
+			ctx->out_zstream = nullptr;
 
 			return FALSE;
 		}
@@ -2930,7 +2900,7 @@ rspamd_libs_reset_compression(struct rspamd_external_libs_ctx *ctx)
 
 void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 {
-	if (ctx != NULL) {
+	if (ctx != nullptr) {
 		g_free(ctx->ottery_cfg);
 
 #ifdef HAVE_OPENSSL
@@ -2944,11 +2914,11 @@ void rspamd_deinit_libs(struct rspamd_external_libs_ctx *ctx)
 		rspamd_free_zstd_dictionary(ctx->out_dict);
 
 		if (ctx->out_zstream) {
-			ZSTD_freeCStream(ctx->out_zstream);
+			ZSTD_freeCStream((ZSTD_CCtx *) ctx->out_zstream);
 		}
 
 		if (ctx->in_zstream) {
-			ZSTD_freeDStream(ctx->in_zstream);
+			ZSTD_freeDStream((ZSTD_DCtx *) ctx->in_zstream);
 		}
 
 		rspamd_cryptobox_deinit(ctx->crypto_ctx);
@@ -2961,7 +2931,7 @@ gboolean
 rspamd_ip_is_local_cfg(struct rspamd_config *cfg,
 					   const rspamd_inet_addr_t *addr)
 {
-	struct rspamd_radix_map_helper *local_addrs = NULL;
+	struct rspamd_radix_map_helper *local_addrs = nullptr;
 
 	if (cfg && cfg->libs_ctx) {
 		local_addrs = *(struct rspamd_radix_map_helper **) cfg->libs_ctx->local_addrs;
@@ -2972,7 +2942,7 @@ rspamd_ip_is_local_cfg(struct rspamd_config *cfg,
 	}
 
 	if (local_addrs) {
-		if (rspamd_match_radix_map_addr(local_addrs, addr) != NULL) {
+		if (rspamd_match_radix_map_addr(local_addrs, addr) != nullptr) {
 			return TRUE;
 		}
 	}
