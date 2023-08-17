@@ -923,10 +923,6 @@ rspamd_config_post_load(struct rspamd_config *cfg,
 		auto hs_ret = rspamd_re_cache_load_hyperscan(cfg->re_cache,
 													 cfg->hs_cache_dir ? cfg->hs_cache_dir : RSPAMD_DBDIR "/",
 													 true);
-
-		if (hs_ret == RSPAMD_HYPERSCAN_LOAD_ERROR) {
-			ret = FALSE;
-		}
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_LIBS) {
