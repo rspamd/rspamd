@@ -2251,33 +2251,45 @@ rspamd_lua_require_function(lua_State *L, const gchar *modname,
 	lua_remove(L, err_pos);
 
 	/* Now we should have a table with results */
-	if (!lua_istable(L, -1)) {
-		msg_warn("require of %s.%s failed: not a table but %s", modname,
-				 funcname, lua_typename(L, lua_type(L, -1)));
+	if (funcname) {
+		if (!lua_istable(L, -1)) {
+			msg_warn("require of %s.%s failed: not a table but %s", modname,
+					 funcname, lua_typename(L, lua_type(L, -1)));
 
+			lua_pop(L, 1);
+
+			return FALSE;
+		}
+
+		table_pos = lua_gettop(L);
+		lua_pushstring(L, funcname);
+		lua_gettable(L, -2);
+
+		if (lua_type(L, -1) == LUA_TFUNCTION) {
+			/* Remove table, preserve just a function */
+			lua_remove(L, table_pos);
+
+			return TRUE;
+		}
+		else {
+			msg_warn("require of %s.%s failed: not a function but %s", modname,
+					 funcname, lua_typename(L, lua_type(L, -1)));
+		}
+
+		lua_pop(L, 2);
+
+		return FALSE;
+	}
+	else if (lua_isfunction(L, -1)) {
+		return TRUE;
+	}
+	else {
+		msg_warn("require of %s failed: not a function but %s", modname,
+				 lua_typename(L, lua_type(L, -1)));
 		lua_pop(L, 1);
 
 		return FALSE;
 	}
-
-	table_pos = lua_gettop(L);
-	lua_pushstring(L, funcname);
-	lua_gettable(L, -2);
-
-	if (lua_type(L, -1) == LUA_TFUNCTION) {
-		/* Remove table, preserve just a function */
-		lua_remove(L, table_pos);
-
-		return TRUE;
-	}
-	else {
-		msg_warn("require of %s.%s failed: not a function but %s", modname,
-				 funcname, lua_typename(L, lua_type(L, -1)));
-	}
-
-	lua_pop(L, 2);
-
-	return FALSE;
 }
 
 gint rspamd_lua_function_ref_from_str(lua_State *L, const gchar *str, gsize slen,

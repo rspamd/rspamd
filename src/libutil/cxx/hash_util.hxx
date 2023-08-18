@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -59,6 +59,7 @@ struct smart_ptr_equal {
 template<typename T>
 struct smart_ptr_hash {
 	using is_transparent = void; /* We want to find values in a set of shared_ptr by reference */
+	using is_avalanching = void;
 	auto operator()(const std::shared_ptr<T> &a) const
 	{
 		return std::hash<T>()(*a);
@@ -92,7 +93,7 @@ struct smart_str_equal {
 
 struct smart_str_hash {
 	using is_transparent = void;
-	using is_avalanching = typename ankerl::unordered_dense::hash<std::string_view>::is_avalanching;
+	using is_avalanching = void;
 	auto operator()(const std::string &a) const
 	{
 		return ankerl::unordered_dense::hash<std::string>()(a);
