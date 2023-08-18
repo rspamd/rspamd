@@ -3396,35 +3396,20 @@ void rspamd_rcl_sections_free(struct rspamd_rcl_sections_map *sections)
 void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 {
 	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
-	gint err_idx, ret;
-	gchar str[PATH_MAX];
 	static const char *transform_script = "lua_cfg_transform";
 
 	g_assert(L != nullptr);
 
-	rspamd_snprintf(str, sizeof(str), "return require \"%s\"",
-					transform_script);
-
-	if (luaL_dostring(L, str) != 0) {
+	if (!rspamd_lua_require_function(L, transform_script, nullptr)) {
+		/* No function defined */
 		msg_warn_config("cannot execute lua script %s: %s",
-						str, lua_tostring(L, -1));
-		return;
-	}
-	else {
-#if LUA_VERSION_NUM >= 504
-		lua_settop(L, -2);
-#endif
-		if (lua_type(L, -1) != LUA_TFUNCTION) {
-			msg_warn_config("lua script must return "
-							"function and not %s",
-							lua_typename(L, lua_type(L, -1)));
+						transform_script, lua_tostring(L, -1));
 
-			return;
-		}
+		return;
 	}
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
-	err_idx = lua_gettop(L);
+	auto err_idx = lua_gettop(L);
 
 	/* Push function */
 	lua_pushvalue(L, -2);
@@ -3432,7 +3417,7 @@ void rspamd_rcl_maybe_apply_lua_transform(struct rspamd_config *cfg)
 	/* Push the existing config */
 	ucl_object_push_lua(L, cfg->cfg_ucl_obj, true);
 
-	if ((ret = lua_pcall(L, 1, 2, err_idx)) != 0) {
+	if (auto ret = lua_pcall(L, 1, 2, err_idx); ret != 0) {
 		msg_err("call to rspamadm lua script failed (%d): %s", ret,
 				lua_tostring(L, -1));
 		lua_settop(L, 0);
