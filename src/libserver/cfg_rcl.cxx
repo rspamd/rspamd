@@ -68,6 +68,13 @@ struct rspamd_rcl_section {
 	rspamd_rcl_section_fin_t fin{};                                                                   /** called at the end of section parsing */
 	gpointer fin_ud{};
 	ucl_object_t *doc_ref{}; /**< reference to the section's documentation */
+
+	virtual ~rspamd_rcl_section()
+	{
+		if (doc_ref) {
+			ucl_object_unref(doc_ref);
+		}
+	}
 };
 
 struct rspamd_worker_param_parser {
