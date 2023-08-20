@@ -358,7 +358,6 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						 struct rspamd_rcl_section *section, GError **err)
 {
 	auto *cfg = static_cast<rspamd_config *>(ud);
-	const gchar *description = nullptr;
 
 	g_assert(key != nullptr);
 
@@ -450,10 +449,8 @@ rspamd_rcl_group_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 
 	if (const auto *elt = ucl_object_lookup(obj, "description"); elt != nullptr) {
-		description = ucl_object_tostring(elt);
-
 		gr->description = rspamd_mempool_strdup(cfg->cfg_pool,
-												description);
+												ucl_object_tostring(elt));
 	}
 
 	struct rspamd_rcl_symbol_data sd = {
