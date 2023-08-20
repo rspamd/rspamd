@@ -2227,7 +2227,7 @@ rspamd_fuzzy_maybe_load_ratelimits(struct rspamd_fuzzy_storage_ctx *ctx)
 	if (access(path, R_OK) != -1) {
 		struct ucl_parser *parser = ucl_parser_new(UCL_PARSER_NO_IMPLICIT_ARRAYS | UCL_PARSER_DISABLE_MACRO);
 		if (ucl_parser_add_file(parser, path)) {
-			const ucl_object_t *obj = ucl_parser_get_object(parser);
+			ucl_object_t *obj = ucl_parser_get_object(parser);
 			int loaded = 0;
 
 			if (ucl_object_type(obj) == UCL_ARRAY) {
@@ -2274,11 +2274,13 @@ rspamd_fuzzy_maybe_load_ratelimits(struct rspamd_fuzzy_storage_ctx *ctx)
 					}
 				}
 
-				ucl_parser_free(parser);
-
 				msg_info("loaded %d ratelimit objects", loaded);
 			}
+
+			ucl_object_unref(obj);
 		}
+
+		ucl_parser_free(parser);
 	}
 }
 
