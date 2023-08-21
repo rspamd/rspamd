@@ -2,7 +2,7 @@ local sqlite3 = require "rspamd_sqlite3"
 local redis = require "rspamd_redis"
 local util = require "rspamd_util"
 
-local function connect_redis(server, password, db)
+local function connect_redis(server, username, password, db)
   local ret
   local conn, err = redis.connect_sync({
     host = server,
@@ -12,7 +12,16 @@ local function connect_redis(server, password, db)
     return nil, 'Cannot connect: ' .. err
   end
 
-  if password then
+  if username then
+    if password then
+      ret = conn:add_cmd('AUTH', { username, password })
+      if not ret then
+        return nil, 'Cannot queue command'
+      end
+    else
+      return nil, 'Redis requires a password when username is supplied'
+    end
+  elseif password then
     ret = conn:add_cmd('AUTH', { password })
     if not ret then
       return nil, 'Cannot queue command'
@@ -28,8 +37,8 @@ local function connect_redis(server, password, db)
   return conn, nil
 end
 
-local function send_digests(digests, redis_host, redis_password, redis_db)
-  local conn, err = connect_redis(redis_host, redis_password, redis_db)
+local function send_digests(digests, redis_host, redis_username, redis_password, redis_db)
+  local conn, err = connect_redis(redis_host, redis_username, redis_password, redis_db)
   if err then
     print(err)
     return false
@@ -62,8 +71,8 @@ local function send_digests(digests, redis_host, redis_password, redis_db)
   return true
 end
 
-local function send_shingles(shingles, redis_host, redis_password, redis_db)
-  local conn, err = connect_redis(redis_host, redis_password, redis_db)
+local function send_shingles(shingles, redis_host, redis_username, redis_password, redis_db)
+  local conn, err = connect_redis(redis_host, redis_username, redis_password, redis_db)
   if err then
     print("Redis error: " .. err)
     return false
@@ -95,8 +104,8 @@ local function send_shingles(shingles, redis_host, redis_password, redis_db)
   return true
 end
 
-local function update_counters(total, redis_host, redis_password, redis_db)
-  local conn, err = connect_redis(redis_host, redis_password, redis_db)
+local function update_counters(total, redis_host, redis_username, redis_password, redis_db)
+  local conn, err = connect_redis(redis_host, redis_username, redis_password, redis_db)
   if err then
     print(err)
     return false
@@ -135,6 +144,7 @@ return function(_, res)
   local total_digests = 0
   local total_shingles = 0
   local lim_batch = 1000 -- Update each 1000 entries
+  local redis_username = res['redis_username']
   local redis_password = res['redis_password']
   local redis_db = nil
 
@@ -162,14 +172,14 @@ return function(_, res)
       end
     end
     if num_batch_digests >= lim_batch then
-      if not send_digests(digests, res['redis_host'], redis_password, redis_db) then
+      if not send_digests(digests, res['redis_host'], redis_username, redis_password, redis_db) then
         return
       end
       num_batch_digests = 0
       digests = {}
     end
     if num_batch_shingles >= lim_batch then
-      if not send_shingles(shingles, res['redis_host'], redis_password, redis_db) then
+      if not send_shingles(shingles, res['redis_host'], redis_username, redis_password, redis_db) then
         return
       end
       num_batch_shingles = 0
@@ -177,12 +187,12 @@ return function(_, res)
     end
   end
   if digests[1] then
-    if not send_digests(digests, res['redis_host'], redis_password, redis_db) then
+    if not send_digests(digests, res['redis_host'], redis_username, redis_password, redis_db) then
       return
     end
   end
   if shingles[1] then
-    if not send_shingles(shingles, res['redis_host'], redis_password, redis_db) then
+    if not send_shingles(shingles, res['redis_host'], redis_username, redis_password, redis_db) then
       return
     end
   end
@@ -191,7 +201,7 @@ return function(_, res)
       'Migrated %d digests and %d shingles',
       total_digests, total_shingles
   )
-  if not update_counters(total_digests, res['redis_host'], redis_password, redis_db) then
+  if not update_counters(total_digests, res['redis_host'], redis_username, redis_password, redis_db) then
     message = message .. ' but failed to update counters'
   end
   print(message)

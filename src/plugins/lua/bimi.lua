@@ -263,7 +263,13 @@ local function check_bimi_vmc(task, domain, record)
         if redis_params.db then
           db = string.format('/%s', redis_params.db)
         end
-        if redis_params.password then
+        if redis_params.username then
+          if redis_params.password then
+            password = string.format( '%s:%s@', redis_params.username, redis_params.password)
+          else
+            rspamd_logger.warnx(task, "Redis requires a password when username is supplied")
+          end
+        elseif redis_params.password then
           password = string.format(':%s@', redis_params.password)
         end
         local redis_server = string.format('redis://%s%s:%s%s',

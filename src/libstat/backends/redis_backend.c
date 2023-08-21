@@ -45,6 +45,7 @@ struct redis_stat_ctx {
 	gint conf_ref;
 	struct rspamd_stat_async_elt *stat_elt;
 	const gchar *redis_object;
+	const gchar *username;
 	const gchar *password;
 	const gchar *dbname;
 	gdouble timeout;
@@ -363,7 +364,15 @@ gsize rspamd_redis_expand_object(const gchar *pattern,
 static void
 rspamd_redis_maybe_auth(struct redis_stat_ctx *ctx, redisAsyncContext *redis)
 {
-	if (ctx->password) {
+	if (ctx->username) {
+		if (ctx->password) {
+			redisAsyncCommand(redis, NULL, NULL, "AUTH %s %s", ctx->username, ctx->password);
+		}
+		else {
+			msg_warn("Redis requires a password when username is supplied");
+		}
+	}
+	else if (ctx->password) {
 		redisAsyncCommand(redis, NULL, NULL, "AUTH %s", ctx->password);
 	}
 	if (ctx->dbname) {
@@ -1600,6 +1609,14 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	if (lua_type(L, -1) == LUA_TSTRING) {
 		backend->dbname = rspamd_mempool_strdup(cfg->cfg_pool,
 												lua_tostring(L, -1));
+	}
+	lua_pop(L, 1);
+
+	lua_pushstring(L, "username");
+	lua_gettable(L, -2);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		backend->username = rspamd_mempool_strdup(cfg->cfg_pool,
+												  lua_tostring(L, -1));
 	}
 	lua_pop(L, 1);
 

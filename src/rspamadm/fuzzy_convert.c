@@ -21,6 +21,7 @@
 static gchar *source_db = NULL;
 static gchar *redis_host = NULL;
 static gchar *redis_db = NULL;
+static gchar *redis_username = NULL;
 static gchar *redis_password = NULL;
 static int64_t fuzzy_expiry = 0;
 
@@ -46,6 +47,8 @@ static GOptionEntry entries[] = {
 	 "Output redis ip (in format ip:port)", NULL},
 	{"dbname", 'D', 0, G_OPTION_ARG_STRING, &redis_db,
 	 "Database in redis (should be numeric)", NULL},
+	{"username", 'u', 0, G_OPTION_ARG_STRING, &redis_username,
+	 "Username to connect to redis", NULL},
 	{"password", 'p', 0, G_OPTION_ARG_STRING, &redis_password,
 	 "Password to connect to redis", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}};
@@ -63,6 +66,7 @@ rspamadm_fuzzyconvert_help(gboolean full_help, const struct rspamadm_command *cm
 				   "-d: input sqlite\n"
 				   "-h: output redis ip (in format ip:port)\n"
 				   "-D: output redis database\n"
+				   "-u: redis username\n";
 				   "-p: redis password\n";
 	}
 	else {
@@ -117,6 +121,10 @@ rspamadm_fuzzyconvert(gint argc, gchar **argv, const struct rspamadm_command *cm
 	ucl_object_insert_key(obj, ucl_object_fromint(fuzzy_expiry),
 						  "expiry", 0, false);
 
+	if (redis_username) {
+		ucl_object_insert_key(obj, ucl_object_fromstring(redis_username),
+							  "redis_username", 0, false);
+	}
 	if (redis_password) {
 		ucl_object_insert_key(obj, ucl_object_fromstring(redis_password),
 							  "redis_password", 0, false);

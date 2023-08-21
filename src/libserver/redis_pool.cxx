@@ -62,6 +62,7 @@ struct redis_pool_connection {
 	explicit redis_pool_connection(redis_pool *_pool,
 								   redis_pool_elt *_elt,
 								   const std::string &db,
+								   const std::string &username,
 								   const std::string &password,
 								   struct redisAsyncContext *_ctx);
 
@@ -87,6 +88,7 @@ class redis_pool_elt {
 	std::list<redis_pool_connection_ptr> terminating;
 	std::string ip;
 	std::string db;
+	std::string username;
 	std::string password;
 	int port;
 	redis_pool_key_t key;
@@ -100,15 +102,19 @@ public:
 	redis_pool_elt(redis_pool_elt &&other) = default;
 
 	explicit redis_pool_elt(redis_pool *_pool,
-							const gchar *_db, const gchar *_password,
+							const gchar *_db, const gchar *_username,
+							const gchar *_password,
 							const char *_ip, int _port)
 		: pool(_pool), ip(_ip), port(_port),
-		  key(redis_pool_elt::make_key(_db, _password, _ip, _port))
+		  key(redis_pool_elt::make_key(_db, _username, _password, _ip, _port))
 	{
 		is_unix = ip[0] == '.' || ip[0] == '/';
 
 		if (_db) {
 			db = _db;
+		}
+		if( _username ) {
+			username = _username;
 		}
 		if (_password) {
 			password = _password;
@@ -144,8 +150,8 @@ public:
 		conn->elt_pos = std::prev(std::end(terminating));
 	}
 
-	inline static auto make_key(const gchar *db, const gchar *password,
-								const char *ip, int port) -> redis_pool_key_t
+	inline static auto make_key(const gchar *db, const gchar *username,
+								const gchar *password, const char *ip, int port) -> redis_pool_key_t
 	{
 		rspamd_cryptobox_fast_hash_state_t st;
 
@@ -153,6 +159,9 @@ public:
 
 		if (db) {
 			rspamd_cryptobox_fast_hash_update(&st, db, strlen(db));
+		}
+		if (username) {
+			rspamd_cryptobox_fast_hash_update(&st, username, strlen(username));
 		}
 		if (password) {
 			rspamd_cryptobox_fast_hash_update(&st, password, strlen(password));
@@ -232,8 +241,8 @@ public:
 		cfg = _cfg;
 	}
 
-	auto new_connection(const gchar *db, const gchar *password,
-						const char *ip, int port) -> redisAsyncContext *;
+	auto new_connection(const gchar *db, const gchar *username,
+						const gchar *password, const char *ip, int port) -> redisAsyncContext *;
 
 	auto release_connection(redisAsyncContext *ctx,
 							enum rspamd_redis_pool_release_type how) -> void;
@@ -398,6 +407,7 @@ auto redis_pool_connection::schedule_timeout() -> void
 redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 											 redis_pool_elt *_elt,
 											 const std::string &db,
+											 const std::string &username,
 											 const std::string &password,
 											 struct redisAsyncContext *_ctx)
 	: ctx(_ctx), elt(_elt), pool(_pool)
@@ -413,7 +423,16 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 	redisLibevAttach(pool->event_loop, ctx);
 	redisAsyncSetDisconnectCallback(ctx, redis_pool_connection::redis_on_disconnect);
 
-	if (!password.empty()) {
+	if (!username.empty()) {
+		if (!password.empty()) {
+			redisAsyncCommand(ctx, nullptr, nullptr,
+						  "AUTH %s %s", username.c_str(), password.c_str());
+		}
+		else {
+			msg_warn("Redis requires a password when username is supplied");
+		}
+	}
+	else if (!password.empty()) {
 		redisAsyncCommand(ctx, nullptr, nullptr,
 						  "AUTH %s", password.c_str());
 	}
@@ -464,7 +483,7 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 			auto *nctx = redis_async_new();
 			if (nctx) {
 				active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
-																			 db.c_str(), password.c_str(), nctx));
+																			 db.c_str(), username.c_str(), password.c_str(), nctx));
 				active.front()->elt_pos = active.begin();
 			}
 
@@ -475,7 +494,7 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 		auto *nctx = redis_async_new();
 		if (nctx) {
 			active.emplace_front(std::make_unique<redis_pool_connection>(pool, this,
-																		 db.c_str(), password.c_str(), nctx));
+																		 db.c_str(), username.c_str(), password.c_str(), nctx));
 			active.front()->elt_pos = active.begin();
 		}
 
@@ -485,12 +504,12 @@ auto redis_pool_elt::new_connection() -> redisAsyncContext *
 	RSPAMD_UNREACHABLE;
 }
 
-auto redis_pool::new_connection(const gchar *db, const gchar *password,
-								const char *ip, int port) -> redisAsyncContext *
+auto redis_pool::new_connection(const gchar *db, const gchar *username,
+								const gchar *password, const char *ip, int port) -> redisAsyncContext *
 {
 
 	if (!wanna_die) {
-		auto key = redis_pool_elt::make_key(db, password, ip, port);
+		auto key = redis_pool_elt::make_key(db, username, password, ip, port);
 		auto found_elt = elts_by_key.find(key);
 
 		if (found_elt != elts_by_key.end()) {
@@ -501,7 +520,7 @@ auto redis_pool::new_connection(const gchar *db, const gchar *password,
 		else {
 			/* Need to create a pool */
 			auto nelt = elts_by_key.try_emplace(key,
-												this, db, password, ip, port);
+												this, db, username, password, ip, port);
 
 			return nelt.first->second.new_connection();
 		}
@@ -583,13 +602,13 @@ void rspamd_redis_pool_config(void *p,
 
 struct redisAsyncContext *
 rspamd_redis_pool_connect(void *p,
-						  const gchar *db, const gchar *password,
-						  const char *ip, int port)
+						  const gchar *db, const gchar *username,
+						  const gchar *password, const char *ip, int port)
 {
 	g_assert(p != NULL);
 	auto *pool = reinterpret_cast<class rspamd::redis_pool *>(p);
 
-	return pool->new_connection(db, password, ip, port);
+	return pool->new_connection(db, username, password, ip, port);
 }
 
 

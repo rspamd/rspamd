@@ -30,12 +30,14 @@ local common_schema = {
   database = ts.string:is_optional():describe("Database number"),
   dbname = ts.string:is_optional():describe("Database number"),
   prefix = ts.string:is_optional():describe("Key prefix"),
+  username = ts.string:is_optional():describe("Username"),
   password = ts.string:is_optional():describe("Password"),
   expand_keys = ts.boolean:is_optional():describe("Expand keys"),
   sentinels = (ts.string + ts.array_of(ts.string)):is_optional():describe("Sentinel servers"),
   sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
   sentinel_masters_pattern = ts.string:is_optional():describe("Sentinel masters pattern"),
   sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
+  sentinel_username = ts.string:is_optional():describe("Sentinel username"),
   sentinel_password = ts.string:is_optional():describe("Sentinel password"),
 }
 
@@ -153,6 +155,7 @@ local function redis_query_sentinel(ev_base, params, initialised)
         local ret = rspamd_redis.make_request {
           host = addr:get_addr(),
           timeout = params.timeout,
+          username = params.sentinel_username,
           password = params.sentinel_password,
           config = rspamd_config,
           ev_base = ev_base,
@@ -184,6 +187,7 @@ local function redis_query_sentinel(ev_base, params, initialised)
     timeout = params.timeout,
     config = rspamd_config,
     ev_base = ev_base,
+    username = params.sentinel_username,
     password = params.sentinel_password,
     cmd = 'SENTINEL',
     args = { 'masters' },
@@ -365,6 +369,9 @@ local function process_redis_opts(options, redis_params)
     elseif options['database'] then
       redis_params['db'] = tostring(options['database'])
     end
+  end
+  if options['username'] and not redis_params['username'] then
+    redis_params['username'] = options['username']
   end
   if options['password'] and not redis_params['password'] then
     redis_params['password'] = options['password']
@@ -996,6 +1003,10 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     end
   end
 
+  if redis_params['username'] then
+    options['username'] = redis_params['username']
+  end
+
   if redis_params['password'] then
     options['password'] = redis_params['password']
   end
@@ -1086,6 +1097,10 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     end
   end
 
+  if redis_params['username'] then
+    options['username'] = redis_params['username']
+  end
+
   if redis_params['password'] then
     options['password'] = redis_params['password']
   end
@@ -1156,6 +1171,10 @@ local function prepare_redis_call(script)
       args = { 'LOAD', script.script },
       upstream = s
     }
+
+    if script.redis_params['username'] then
+      cur_opts['username'] = script.redis_params['username']
+    end
 
     if script.redis_params['password'] then
       cur_opts['password'] = script.redis_params['password']
@@ -1497,7 +1516,15 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
 
   if conn then
     local need_exec = false
-    if redis_params['password'] then
+    if redis_params['username'] then
+      if redis_params['password'] then
+        conn:add_cmd('AUTH', { redis_params['username'], redis_params['password'] })
+        need_exec = true
+      else
+        logger.warnx('Redis requires a password when username is supplied')
+        return false, nil, addr
+      end
+    elseif redis_params['password'] then
       conn:add_cmd('AUTH', { redis_params['password'] })
       need_exec = true
     end
@@ -1602,6 +1629,10 @@ exports.request = function(redis_params, attrs, req)
     opts.args = req
   end
 
+  if redis_params.username then
+    opts.username = redis_params.username
+  end
+
   if redis_params.password then
     opts.password = redis_params.password
   end
@@ -1700,6 +1731,10 @@ exports.connect = function(redis_params, attrs)
 
   opts.host = addr:get_addr()
   opts.timeout = redis_params.timeout
+
+  if redis_params.username then
+    opts.username = redis_params.username
+  end
 
   if redis_params.password then
     opts.password = redis_params.password

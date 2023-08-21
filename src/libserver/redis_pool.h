@@ -45,6 +45,7 @@ void rspamd_redis_pool_config(void *pool,
  * Create or reuse the specific redis connection
  * @param pool
  * @param db
+ * @param username
  * @param password
  * @param ip
  * @param port
@@ -52,7 +53,7 @@ void rspamd_redis_pool_config(void *pool,
  */
 struct redisAsyncContext *rspamd_redis_pool_connect(
 	void *pool,
-	const gchar *db, const gchar *password,
+	const gchar *db, const gchar *username, const gchar *password,
 	const char *ip, int port);
 
 enum rspamd_redis_pool_release_type {
