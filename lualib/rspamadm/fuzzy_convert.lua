@@ -2,7 +2,7 @@ local sqlite3 = require "rspamd_sqlite3"
 local redis = require "rspamd_redis"
 local util = require "rspamd_util"
 
-local function connect_redis(server, password, db)
+local function connect_redis(server, username, password, db)
   local ret
   local conn, err = redis.connect_sync({
     host = server,
