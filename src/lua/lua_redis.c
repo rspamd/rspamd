@@ -110,9 +110,9 @@ struct lua_redis_userdata {
 };
 
 #define msg_debug_lua_redis(...) rspamd_conditional_debug_fast(NULL, NULL,                                        \
-															   rspamd_lua_redis_log_id, "lua_redis", ud->log_tag, \
-															   G_STRFUNC,                                         \
-															   __VA_ARGS__)
+																 rspamd_lua_redis_log_id, "lua_redis", ud->log_tag, \
+																 G_STRFUNC,                                         \
+																 __VA_ARGS__)
 INIT_LOG_MODULE(lua_redis)
 
 #define LUA_REDIS_SPECIFIC_REPLIED (1 << 0)
@@ -875,7 +875,7 @@ rspamd_lua_redis_prepare_connection(lua_State *L, gint *pcbref, gboolean is_asyn
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
 	const gchar *host = NULL;
-	const gchar *password = NULL, *dbname = NULL, *log_tag = NULL;
+	const gchar *username = NULL, *password = NULL, *dbname = NULL, *log_tag = NULL;
 	gint cbref = -1;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
@@ -970,6 +970,13 @@ rspamd_lua_redis_prepare_connection(lua_State *L, gint *pcbref, gboolean is_asyn
 		}
 		lua_pop(L, 1);
 
+		lua_pushstring(L, "username");
+		lua_gettable(L, -2);
+		if (lua_type(L, -1) == LUA_TSTRING) {
+			username = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
 		lua_pushstring(L, "password");
 		lua_gettable(L, -2);
 		if (lua_type(L, -1) == LUA_TSTRING) {
@@ -1053,7 +1060,7 @@ rspamd_lua_redis_prepare_connection(lua_State *L, gint *pcbref, gboolean is_asyn
 	if (ret) {
 		ud->terminated = 0;
 		ud->ctx = rspamd_redis_pool_connect(ud->pool,
-											dbname, password,
+											dbname, username, password,
 											rspamd_inet_address_to_string(addr->addr),
 											rspamd_inet_address_get_port(addr->addr));
 

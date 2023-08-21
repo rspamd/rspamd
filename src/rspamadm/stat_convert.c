@@ -34,6 +34,7 @@ static gchar *cache_db = NULL;
 /* Outputs */
 static gchar *redis_host = NULL;
 static gchar *redis_db = NULL;
+static gchar *redis_username = NULL;
 static gchar *redis_password = NULL;
 static gboolean reset_previous = FALSE;
 
@@ -70,6 +71,8 @@ static GOptionEntry entries[] = {
 	 "Input learn cache", NULL},
 	{"redis-host", 'h', 0, G_OPTION_ARG_STRING, &redis_host,
 	 "Output redis ip (in format ip:port)", NULL},
+	{"redis-username", 'u', 0, G_OPTION_ARG_STRING, &redis_username,
+	 "Username to connect to redis", NULL},
 	{"redis-password", 'p', 0, G_OPTION_ARG_STRING, &redis_password,
 	 "Password to connect to redis", NULL},
 	{"redis-db", 'd', 0, G_OPTION_ARG_STRING, &redis_db,
@@ -92,6 +95,7 @@ rspamadm_statconvert_help(gboolean full_help, const struct rspamadm_command *cmd
 				   "** Or specify options directly **\n"
 				   "--redis-host: output redis ip (in format ip:port)\n"
 				   "--redis-db: output redis database\n"
+				   "--redis-username: redis username\n"
 				   "--redis-password: redis password\n"
 				   "--cache: sqlite3 file for learn cache\n"
 				   "--spam-db: sqlite3 input file for spam data\n"
@@ -227,6 +231,11 @@ rspamadm_statconvert(gint argc, gchar **argv, const struct rspamadm_command *cmd
 		if (redis_db) {
 			ucl_object_insert_key(redis, ucl_object_fromstring(redis_db),
 								  "dbname", 0, false);
+		}
+
+		if (redis_username) {
+			ucl_object_insert_key(redis, ucl_object_fromstring(redis_username),
+								  "username", 0, false);
 		}
 
 		if (redis_password) {
