@@ -21,7 +21,7 @@ local function connect_redis(server, password, db)
     else
       return nil, 'Redis requires a password when username is supplied'
     end
-  else if password then
+  elseif password then
     ret = conn:add_cmd('AUTH', { password })
     if not ret then
       return nil, 'Cannot queue command'
