@@ -1521,7 +1521,7 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
         conn:add_cmd('AUTH', { redis_params['username'], redis_params['password'] })
         need_exec = true
       else
-        logger.errx('Redis requires a password when username is supplied')
+        logger.warnx('Redis requires a password when username is supplied')
         return false, nil, addr
       end
     elseif redis_params['password'] then

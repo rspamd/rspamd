@@ -369,9 +369,7 @@ rspamd_redis_maybe_auth(struct redis_stat_ctx *ctx, redisAsyncContext *redis)
 			redisAsyncCommand(redis, NULL, NULL, "AUTH %s %s", ctx->username, ctx->password);
 		}
 		else {
-			msg_err("Redis requires a password when username is supplied");
-			redisAsyncFree(ctx);
-			return NULL;
+			msg_warn("Redis requires a password when username is supplied");
 		}
 	}
 	else if (ctx->password) {

@@ -429,9 +429,7 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 						  "AUTH %s %s", username.c_str(), password.c_str());
 		}
 		else {
-			msg_err("Redis requires a password when username is supplied");
-			redisAsyncFree(ctx);
-			return nullptr;
+			msg_warn("Redis requires a password when username is supplied");
 		}
 	}
 	else if (!password.empty()) {
