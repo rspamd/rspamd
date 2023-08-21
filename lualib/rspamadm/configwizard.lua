@@ -249,12 +249,12 @@ local function setup_redis(cfg, changes)
       redis_params['write_servers'] = ws
     end
 
-    if ask_yes_no('Do you have any username set for your Redis?') then
-      local usernm = readline_default("Enter Redis username:", nil)
+    if ask_yes_no('Do you have any username set for your Redis (ACL SETUSER and Redis 6.0+)') then
+      local username = readline_default("Enter Redis username:", nil)
 
-      if usernm then
-        changes.l['redis.conf']['username'] = usernm
-        redis_params['username'] = usernm
+      if username then
+        changes.l['redis.conf'].username = username
+        redis_params.username = username
       end
 
       local passwd = readline_default("Enter Redis password:", nil)

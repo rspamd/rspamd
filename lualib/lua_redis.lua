@@ -37,7 +37,7 @@ local common_schema = {
   sentinel_watch_time = (ts.number + ts.string / lutil.parse_time_interval):is_optional():describe("Sentinel watch time"),
   sentinel_masters_pattern = ts.string:is_optional():describe("Sentinel masters pattern"),
   sentinel_master_maxerrors = (ts.number + ts.string / tonumber):is_optional():describe("Sentinel master max errors"),
-  sentinel_username = ts.string:is_optional():describe("sentinel username"),
+  sentinel_username = ts.string:is_optional():describe("Sentinel username"),
   sentinel_password = ts.string:is_optional():describe("Sentinel password"),
 }
 
