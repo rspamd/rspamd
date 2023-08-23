@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /*-
  * Copyright (c) 2016, Andrew Lewis <nerf@judo.za.org>
  * Copyright (c) 2022, Vsevolod Stakhov <vsevolod@rspamd.com>
@@ -66,7 +82,7 @@ rspamadm_fuzzyconvert_help(gboolean full_help, const struct rspamadm_command *cm
 				   "-d: input sqlite\n"
 				   "-h: output redis ip (in format ip:port)\n"
 				   "-D: output redis database\n"
-				   "-u: redis username\n";
+				   "-u: redis username\n"
 				   "-p: redis password\n";
 	}
 	else {
