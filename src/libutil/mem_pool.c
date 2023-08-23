@@ -284,7 +284,6 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 {
 	rspamd_mempool_t *new_pool;
 	gpointer map;
-	unsigned char uidbuf[10];
 	const gchar hexdigits[] = "0123456789abcdef";
 	unsigned i;
 
@@ -405,12 +404,10 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 	}
 
 	/* Generate new uid */
-	ottery_rand_bytes(uidbuf, sizeof(uidbuf));
-	for (i = 0; i < G_N_ELEMENTS(uidbuf); i++) {
-		new_pool->tag.uid[i * 2] = hexdigits[(uidbuf[i] >> 4) & 0xf];
-		new_pool->tag.uid[i * 2 + 1] = hexdigits[uidbuf[i] & 0xf];
-	}
-	new_pool->tag.uid[19] = '\0';
+	uint64_t uid = rspamd_random_uint64_fast();
+	rspamd_encode_hex_buf((unsigned char *) &uid, sizeof(uid),
+						  new_pool->tag.uid, sizeof(new_pool->tag.uid) - 1);
+	new_pool->tag.uid[sizeof(new_pool->tag.uid) - 1] = '\0';
 
 	mem_pool_stat->pools_allocated++;
 

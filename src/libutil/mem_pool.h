@@ -70,8 +70,8 @@ struct f_str_s;
 #define RSPAMD_ATTR_RETURNS_NONNUL
 #endif
 
-#define MEMPOOL_TAG_LEN 20
-#define MEMPOOL_UID_LEN 20
+#define MEMPOOL_TAG_LEN 16
+#define MEMPOOL_UID_LEN 16
 /* All pointers are aligned as this variable */
 #define MIN_MEM_ALIGNMENT G_MEM_ALIGN
 
