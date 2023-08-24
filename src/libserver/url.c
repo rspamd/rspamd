@@ -38,10 +38,10 @@ typedef struct url_match_s {
 	gchar st;
 } url_match_t;
 
-#define URL_FLAG_NOHTML (1u << 0u)
-#define URL_FLAG_TLD_MATCH (1u << 1u)
-#define URL_FLAG_STAR_MATCH (1u << 2u)
-#define URL_FLAG_REGEXP (1u << 3u)
+#define URL_MATCHER_FLAG_NOHTML (1u << 0u)
+#define URL_MATCHER_FLAG_TLD_MATCH (1u << 1u)
+#define URL_MATCHER_FLAG_STAR_MATCH (1u << 2u)
+#define URL_MATCHER_FLAG_REGEXP (1u << 3u)
 
 struct url_callback_data;
 
@@ -163,8 +163,8 @@ struct url_matcher static_matchers[] = {
 	 0},
 	{"sip:", "", url_web_start, url_web_end,
 	 0},
-	{"www.", "http://", url_web_start, url_web_end,
-	 0},
+	{"www\\.[0-9a-z]", "http://", url_web_start, url_web_end,
+	 URL_MATCHER_FLAG_REGEXP},
 	{"ftp.", "ftp://", url_web_start, url_web_end,
 	 0},
 	/* Likely emails */
@@ -449,10 +449,10 @@ rspamd_url_parse_tld_file(const gchar *fname,
 			continue;
 		}
 
-		flags = URL_FLAG_NOHTML | URL_FLAG_TLD_MATCH;
+		flags = URL_MATCHER_FLAG_NOHTML | URL_MATCHER_FLAG_TLD_MATCH;
 
 		if (linebuf[0] == '*') {
-			flags |= URL_FLAG_STAR_MATCH;
+			flags |= URL_MATCHER_FLAG_STAR_MATCH;
 			p = strchr(linebuf, '.');
 
 			if (p == NULL) {
@@ -486,7 +486,7 @@ rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 	gint n = G_N_ELEMENTS(static_matchers), i;
 
 	for (i = 0; i < n; i++) {
-		if (static_matchers[i].flags & URL_FLAG_REGEXP) {
+		if (static_matchers[i].flags & URL_MATCHER_FLAG_REGEXP) {
 			rspamd_multipattern_add_pattern(url_scanner->search_trie_strict,
 											static_matchers[i].pattern,
 											RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
@@ -503,7 +503,7 @@ rspamd_url_add_static_matchers(struct url_match_scanner *sc)
 
 	if (sc->matchers_full) {
 		for (i = 0; i < n; i++) {
-			if (static_matchers[i].flags & URL_FLAG_REGEXP) {
+			if (static_matchers[i].flags & URL_MATCHER_FLAG_REGEXP) {
 				rspamd_multipattern_add_pattern(url_scanner->search_trie_full,
 												static_matchers[i].pattern,
 												RSPAMD_MULTIPATTERN_ICASE | RSPAMD_MULTIPATTERN_UTF8 |
@@ -1664,7 +1664,7 @@ rspamd_tld_trie_callback(struct rspamd_multipattern *mp,
 							 strnum);
 	ndots = 1;
 
-	if (matcher->flags & URL_FLAG_STAR_MATCH) {
+	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
 		/* Skip one more tld component */
 		ndots++;
 	}
@@ -2595,7 +2595,7 @@ rspamd_tld_trie_find_callback(struct rspamd_multipattern *mp,
 	matcher = &g_array_index(url_scanner->matchers_full, struct url_matcher,
 							 strnum);
 
-	if (matcher->flags & URL_FLAG_STAR_MATCH) {
+	if (matcher->flags & URL_MATCHER_FLAG_STAR_MATCH) {
 		/* Skip one more tld component */
 		ndots = 2;
 	}
@@ -3107,7 +3107,7 @@ static gboolean
 rspamd_url_trie_is_match(struct url_matcher *matcher, const gchar *pos,
 						 const gchar *end, const gchar *newline_pos)
 {
-	if (matcher->flags & URL_FLAG_TLD_MATCH) {
+	if (matcher->flags & URL_MATCHER_FLAG_TLD_MATCH) {
 		/* Immediately check pos for valid chars */
 		if (pos < end) {
 			if (pos != newline_pos && !g_ascii_isspace(*pos) && *pos != '/' && *pos != '?' &&
@@ -3156,7 +3156,7 @@ rspamd_url_trie_callback(struct rspamd_multipattern *mp,
 	matcher = &g_array_index(cb->matchers, struct url_matcher,
 							 strnum);
 
-	if ((matcher->flags & URL_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
+	if ((matcher->flags & URL_MATCHER_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
 		/* Do not try to match non-html like urls in html texts */
 		return 0;
 	}
@@ -3313,7 +3313,7 @@ rspamd_url_trie_generic_callback_common(struct rspamd_multipattern *mp,
 							 strnum);
 	pool = cb->pool;
 
-	if ((matcher->flags & URL_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
+	if ((matcher->flags & URL_MATCHER_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
 		/* Do not try to match non-html like urls in html texts, continue matching */
 		return 0;
 	}

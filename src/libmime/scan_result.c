@@ -52,6 +52,7 @@ rspamd_scan_result_dtor(gpointer d)
 			kh_destroy(rspamd_options_hash, sres->options);
 		}
 	});
+
 	kh_destroy(rspamd_symbols_hash, r->symbols);
 	kh_destroy(rspamd_symbols_group_hash, r->sym_groups);
 }
