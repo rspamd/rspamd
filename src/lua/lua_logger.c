@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,11 +42,8 @@ local e = {
 -- %<number> means numeric arguments and %s means the next argument
 -- for example %1, %2, %s: %s would mean the third argument
 
-rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
+rspamd_logger.info('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
-
--- Legacy interface (can handle merely strings)
-rspamd_logger.info('Old stupid API')
 
 -- Create string using logger API
 local str = rspamd_logger.slog('a=%1, b=%2, c=%3, d=%4, e=%5', a, b, c, d, e)
@@ -229,51 +226,31 @@ lua_common_log_line(GLogLevelFlags level,
 static gint
 lua_logger_err(lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *msg;
-	msg = luaL_checkstring(L, 1);
-	lua_common_log_line(G_LOG_LEVEL_CRITICAL, L, msg, NULL, NULL, 1);
-	return 0;
+	return lua_logger_errx(L);
 }
 
 static gint
 lua_logger_warn(lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *msg;
-	msg = luaL_checkstring(L, 1);
-	lua_common_log_line(G_LOG_LEVEL_WARNING, L, msg, NULL, NULL, 1);
-	return 0;
+	return lua_logger_warnx(L);
 }
 
 static gint
 lua_logger_info(lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *msg;
-	msg = luaL_checkstring(L, 1);
-	lua_common_log_line(G_LOG_LEVEL_INFO, L, msg, NULL, NULL, 1);
-	return 0;
+	return lua_logger_infox(L);
 }
 
 static gint
 lua_logger_message(lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *msg;
-	msg = luaL_checkstring(L, 1);
-	lua_common_log_line(G_LOG_LEVEL_MESSAGE, L, msg, NULL, NULL, 1);
-	return 0;
+	return lua_logger_messagex(L);
 }
 
 static gint
 lua_logger_debug(lua_State *L)
 {
-	LUA_TRACE_POINT;
-	const gchar *msg;
-	msg = luaL_checkstring(L, 1);
-	lua_common_log_line(G_LOG_LEVEL_DEBUG, L, msg, NULL, NULL, 1);
-	return 0;
+	return lua_logger_debugx(L);
 }
 
 static inline bool
@@ -328,7 +305,7 @@ lua_logger_out_str(lua_State *L, gint pos,
 			r = rspamd_strlcpy(outbuf, str, flen + 1);
 		}
 		else {
-			/* Need to escape non printed characters */
+			/* Need to escape non-printed characters */
 			r = 0;
 			s = 0;
 
