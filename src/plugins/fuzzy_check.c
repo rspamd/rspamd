@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2296,7 +2296,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 						tm_split.tm_hour, tm_split.tm_min, tm_split.tm_sec);
 
 		if (is_fuzzy) {
-			msg_info_task(
+			msg_notice_task(
 				"found fuzzy hash(%s) %s (%*xs requested) with weight: "
 				"%.2f, probability %.2f, in list: %s:%d%s; added on %s",
 				type,
@@ -2310,7 +2310,7 @@ fuzzy_insert_result(struct fuzzy_client_session *session,
 				timebuf);
 		}
 		else {
-			msg_info_task(
+			msg_notice_task(
 				"found exact fuzzy hash(%s) %s with weight: "
 				"%.2f, probability %.2f, in list: %s:%d%s; added on %s",
 				type,

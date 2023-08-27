@@ -1091,10 +1091,7 @@ rspamd_find_metric_result(struct rspamd_task *task,
 {
 	struct rspamd_scan_result *res;
 
-	if (name == NULL) {
-		return task->result;
-	}
-	else if (strcmp(name, "default") == 0) {
+	if (name == NULL || strcmp(name, "default") == 0) {
 		return task->result;
 	}
 
