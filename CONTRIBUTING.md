@@ -32,11 +32,11 @@ The best way to ask a question and to get a relevant reply is the mailing list:
 If chat is more your speed, you can join the Rspamd developers and users using Telegram or IRC:
 
 * [Join Rspamd telegram channel](http://t.me/rspamd)
-* [Join Rspamd IRC channel](https://freenode.net/):
-  * server: irc.freenode.net (port 6666)
+* [Join Rspamd IRC channel](https://oftc.net/):
+  * server: ircs://irc.oftc.net:6697
   * channel: #rspamd
  
-Please bear in mind that even though tel is a chat service, sometimes it takes several hours for community members to respond &mdash; please be patient!
+Please bear in mind that even though telegram/irc are chat services, sometimes it takes several hours for community members to respond &mdash; please be patient!
 
 ## How Can I Contribute?
 
@@ -76,7 +76,7 @@ Provide more context by answering these questions:
 
 Include details about your configuration and environment:
 
-* **Which version of Rspamd are you using?** 
+* **Which version of Rspamd are you using?** Use `rspamd --version` to get the detailed information about the version and the compile flags used.
 * **What's the name and version of the OS you're using**?
 * **What hardware are you using, including CPU generation**, e.g. Intel Haswell or ArmV7? If you have `gcc` installed, that could be achieved by the following command: `gcc -march=native -Q --help=target|grep march`. In Linux, you can also check `/proc/cpuinfo` file for the required details.
 
@@ -92,7 +92,7 @@ Include details about your configuration and environment:
     * [Minor] - minor issue/improvement not worth to mention in ChangeLog
     * [Feature] - a significant feature
     * [Fix] - bug fix
-    * [CritFix] - critical bug fix
+    * [CritFix] - critical bug fix worth a new version releasing
     * [Rework] - some significant logic rework
     * [Config] - configuration change
     * [Rules] - rules change
