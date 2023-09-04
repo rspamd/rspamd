@@ -3352,7 +3352,7 @@ enum lua_email_address_type {
  * for get_from/get_recipients
  */
 static enum lua_email_address_type
-lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos)
+lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos, gint last_pos)
 {
 	const gchar *type = NULL;
 	gint ret = LUA_ADDRESS_ANY;
@@ -3360,43 +3360,18 @@ lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos)
 	gsize sz;
 
 	/* Get what value */
+	do {
+		if (lua_type(L, pos) == LUA_TNUMBER) {
+			ret = lua_tonumber(L, pos);
 
-	if (lua_type(L, pos) == LUA_TNUMBER) {
-		ret = lua_tonumber(L, pos);
-
-		if (ret >= LUA_ADDRESS_ANY && ret < LUA_ADDRESS_MAX) {
-			return ret;
-		}
-
-		return LUA_ADDRESS_ANY;
-	}
-	else if (lua_type(L, pos) == LUA_TSTRING) {
-		type = lua_tolstring(L, pos, &sz);
-
-		if (type && sz > 0) {
-			h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
-													type, sz, 0xdeadbabe);
-
-			switch (h) {
-			case 0xDA081341FB600389ULL: /* mime */
-				ret = LUA_ADDRESS_MIME;
-				break;
-			case 0xEEC8A7832F8C43ACULL: /* any */
-				ret = LUA_ADDRESS_ANY;
-				break;
-			case 0x472274D5193B2A80ULL: /* smtp */
-			case 0xEFE0F586CC9F14A9ULL: /* envelope */
-				ret = LUA_ADDRESS_SMTP;
-				break;
-			default:
-				msg_err_task("invalid email type: %*s", (gint) sz, type);
-				break;
+			if (ret >= LUA_ADDRESS_ANY && ret < LUA_ADDRESS_MAX) {
+				return ret;
 			}
+
+			return LUA_ADDRESS_ANY;
 		}
-	}
-	else if (lua_type(L, pos) == LUA_TTABLE) {
-		for (lua_pushnil(L); lua_next(L, pos); lua_pop(L, 1)) {
-			type = lua_tolstring(L, -1, &sz);
+		else if (lua_type(L, pos) == LUA_TSTRING) {
+			type = lua_tolstring(L, pos, &sz);
 
 			if (type && sz > 0) {
 				h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
@@ -3404,21 +3379,14 @@ lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos)
 
 				switch (h) {
 				case 0xDA081341FB600389ULL: /* mime */
-					ret |= LUA_ADDRESS_MIME;
+					ret = LUA_ADDRESS_MIME;
 					break;
 				case 0xEEC8A7832F8C43ACULL: /* any */
-					ret |= LUA_ADDRESS_ANY;
+					ret = LUA_ADDRESS_ANY;
 					break;
 				case 0x472274D5193B2A80ULL: /* smtp */
 				case 0xEFE0F586CC9F14A9ULL: /* envelope */
-					ret |= LUA_ADDRESS_SMTP;
-					break;
-				case 0xAF4DE083D9AD0132: /* raw */
-					ret |= LUA_ADDRESS_RAW;
-					break;
-				case 0xC7AB6C7B7B0F5A8A: /* orig */
-				case 0x1778AE905589E431: /* original */
-					ret |= LUA_ADDRESS_ORIGINAL;
+					ret = LUA_ADDRESS_SMTP;
 					break;
 				default:
 					msg_err_task("invalid email type: %*s", (gint) sz, type);
@@ -3426,7 +3394,41 @@ lua_task_str_to_get_type(lua_State *L, struct rspamd_task *task, gint pos)
 				}
 			}
 		}
-	}
+		else if (lua_type(L, pos) == LUA_TTABLE) {
+			for (lua_pushnil(L); lua_next(L, pos); lua_pop(L, 1)) {
+				type = lua_tolstring(L, -1, &sz);
+
+				if (type && sz > 0) {
+					h = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_XXHASH64,
+															type, sz, 0xdeadbabe);
+
+					switch (h) {
+					case 0xDA081341FB600389ULL: /* mime */
+						ret |= LUA_ADDRESS_MIME;
+						break;
+					case 0xEEC8A7832F8C43ACULL: /* any */
+						ret |= LUA_ADDRESS_ANY;
+						break;
+					case 0x472274D5193B2A80ULL: /* smtp */
+					case 0xEFE0F586CC9F14A9ULL: /* envelope */
+						ret |= LUA_ADDRESS_SMTP;
+						break;
+					case 0xAF4DE083D9AD0132: /* raw */
+						ret |= LUA_ADDRESS_RAW;
+						break;
+					case 0xC7AB6C7B7B0F5A8A: /* orig */
+					case 0x1778AE905589E431: /* original */
+						ret |= LUA_ADDRESS_ORIGINAL;
+						break;
+					default:
+						msg_err_task("invalid email type: %*s", (gint) sz, type);
+						break;
+					}
+				}
+			}
+		}
+		pos++;
+	} while (pos <= last_pos);
 
 	return ret;
 }
@@ -3666,7 +3668,7 @@ lua_task_get_recipients(lua_State *L)
 	if (task) {
 		if (lua_gettop(L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type(L, task, 2);
+			what = lua_task_str_to_get_type(L, task, 2, lua_gettop(L));
 		}
 
 		switch (what & LUA_ADDRESS_MASK) {
@@ -3716,7 +3718,7 @@ lua_task_set_recipients(lua_State *L)
 	if (task && lua_gettop(L) >= 3) {
 
 		/* Get what value */
-		what = lua_task_str_to_get_type(L, task, 2);
+		what = lua_task_str_to_get_type(L, task, 2, -1);
 
 		if (lua_isstring(L, 4)) {
 			how = lua_tostring(L, 4);
@@ -3839,7 +3841,7 @@ lua_task_has_from(lua_State *L)
 	if (task) {
 		if (lua_gettop(L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type(L, task, 2);
+			what = lua_task_str_to_get_type(L, task, 2, lua_gettop(L));
 		}
 
 		switch (what & LUA_ADDRESS_MASK) {
@@ -3898,7 +3900,7 @@ lua_task_has_recipients(lua_State *L)
 	if (task) {
 		if (lua_gettop(L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type(L, task, 2);
+			what = lua_task_str_to_get_type(L, task, 2, lua_gettop(L));
 		}
 
 		switch (what & LUA_ADDRESS_MASK) {
@@ -3946,7 +3948,7 @@ lua_task_get_from(lua_State *L)
 	if (task) {
 		if (lua_gettop(L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type(L, task, 2);
+			what = lua_task_str_to_get_type(L, task, 2, lua_gettop(L));
 		}
 
 		switch (what & LUA_ADDRESS_MASK) {
@@ -4017,7 +4019,7 @@ lua_task_set_from(lua_State *L)
 	gint what = 0;
 
 	if (task && lua_gettop(L) >= 3) {
-		what = lua_task_str_to_get_type(L, task, 2);
+		what = lua_task_str_to_get_type(L, task, 2, -1);
 
 		if (lua_isstring(L, 4)) {
 			how = lua_tostring(L, 4);
