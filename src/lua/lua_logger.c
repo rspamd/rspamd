@@ -460,12 +460,12 @@ lua_logger_out_userdata(lua_State *L, gint pos, gchar *outbuf, gsize len,
 	return r;
 }
 
-#define MOVE_BUF(d, remain, r) \
-	(d) += (r);                \
-	(remain) -= (r);           \
-	if ((remain) == 0) {       \
-		lua_pop(L, 1);         \
-		break;                 \
+#define MOVE_BUF(d, remain, r)  \
+	(d) += (r);                 \
+	(remain) -= (r);            \
+	if ((remain) == 0) {        \
+		lua_settop(L, old_top); \
+		break;                  \
 	}
 
 static gsize
@@ -477,12 +477,13 @@ lua_logger_out_table(lua_State *L, gint pos, gchar *outbuf, gsize len,
 	gsize remain = len, r;
 	gboolean first = TRUE;
 	gconstpointer self = NULL;
-	gint i, tpos, last_seq = -1;
+	gint i, tpos, last_seq = -1, old_top;
 
 	if (!lua_istable(L, pos) || remain == 0) {
 		return 0;
 	}
 
+	old_top = lua_gettop(L);
 	self = lua_topointer(L, pos);
 
 	/* Check if we have seen this pointer */
@@ -538,7 +539,6 @@ lua_logger_out_table(lua_State *L, gint pos, gchar *outbuf, gsize len,
 	/* Get string keys (pairs) */
 	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* 'key' is at index -2 and 'value' is at index -1 */
-
 		if (lua_type(L, -2) == LUA_TNUMBER) {
 			if (last_seq > 0) {
 				lua_pushvalue(L, -2);
@@ -577,7 +577,7 @@ lua_logger_out_table(lua_State *L, gint pos, gchar *outbuf, gsize len,
 		first = FALSE;
 	}
 
-	lua_pop(L, 1);
+	lua_settop(L, old_top);
 
 	r = rspamd_snprintf(d, remain + 1, "}");
 	d += r;
