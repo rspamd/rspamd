@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1658,6 +1658,19 @@ rspamd_print_crash(ucontext_t *uap)
 		msg_err("unw_step_ptr: %d", ret);
 	}
 }
+#elif defined(HAVE_BACKTRACE)
+#include <execinfo.h>
+static void
+rspamd_print_crash(ucontext_t *_uap)
+{
+	void *callstack[128];
+	int i, frames = backtrace(callstack, 128);
+	char **strs = backtrace_symbols(callstack, frames);
+	for (i = 0; i < frames; ++i) {
+		msg_err("%d: %s", i, strs[i]);
+	}
+	free(strs);
+}
 #endif
 
 static struct rspamd_main *saved_main = NULL;
@@ -1684,7 +1697,7 @@ rspamd_crash_sig_handler(int sig, siginfo_t *info, void *ctx)
 			"pid: %P, trace: ",
 			sig, strsignal(sig), pid);
 	(void) uap;
-#ifdef WITH_LIBUNWIND
+#if defined(WITH_LIBUNWIND) || defined(HAVE_BACKTRACE)
 	rspamd_print_crash(uap);
 #endif
 	msg_err("please see Rspamd FAQ to learn how to dump core files and how to "

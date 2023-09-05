@@ -210,6 +210,8 @@ IF (ENABLE_LIBUNWIND MATCHES "ON")
     ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
             ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
     SET(WITH_LIBUNWIND "1")
+ELSE ()
+    CHECK_SYMBOL_EXISTS(backtrace "execinfo.h" HAVE_BACKTRACE)
 ENDIF ()
 
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
@@ -777,7 +779,7 @@ IF (NOT DEBIAN_BUILD)
     ADD_CUSTOM_TARGET(check DEPENDS rspamd-test-cxx rspamd-test)
     ADD_CUSTOM_TARGET(run-test DEPENDS check
             COMMAND test/rspamd-test-cxx
-            COMMAND sh -c 'LUA_PATH="${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
+            COMMAND sh -c 'LUA_PATH= "${CMAKE_SOURCE_DIR}/lualib/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/?.lua\;${CMAKE_SOURCE_DIR}/lualib/?/init.lua\;${CMAKE_SOURCE_DIR}/contrib/lua-?/?.lua"
             test/rspamd-test -p /rspamd/lua')
 ENDIF (NOT DEBIAN_BUILD)
 
