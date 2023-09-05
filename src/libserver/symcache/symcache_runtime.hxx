@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -64,7 +64,7 @@ class symcache_runtime {
 	auto process_symbol(struct rspamd_task *task, symcache &cache, cache_item *item,
 						cache_dynamic_item *dyn_item) -> bool;
 	/* Specific stages of the processing */
-	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, int stage) -> bool;
+	auto process_pre_postfilters(struct rspamd_task *task, symcache &cache, int start_events, unsigned int stage) -> bool;
 	auto process_filters(struct rspamd_task *task, symcache &cache, int start_events) -> bool;
 	auto check_metric_limit(struct rspamd_task *task) -> bool;
 	auto check_item_deps(struct rspamd_task *task, symcache &cache, cache_item *item,
@@ -180,7 +180,7 @@ public:
 	 * @param stage
 	 * @return
 	 */
-	auto process_symbols(struct rspamd_task *task, symcache &cache, int stage) -> bool;
+	auto process_symbols(struct rspamd_task *task, symcache &cache, unsigned int stage) -> bool;
 
 	/**
 	 * Finalize execution of some item in the cache

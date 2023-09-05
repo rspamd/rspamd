@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -279,7 +279,7 @@ auto symcache_runtime::get_dynamic_item(int id) const -> cache_dynamic_item *
 	return nullptr;
 }
 
-auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache, int stage) -> bool
+auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache, unsigned int stage) -> bool
 {
 	msg_debug_cache_task("symbols processing stage at pass: %d", stage);
 
@@ -308,7 +308,7 @@ auto symcache_runtime::process_symbols(struct rspamd_task *task, symcache &cache
 auto symcache_runtime::process_pre_postfilters(struct rspamd_task *task,
 											   symcache &cache,
 											   int start_events,
-											   int stage) -> bool
+											   unsigned int stage) -> bool
 {
 	auto saved_priority = std::numeric_limits<int>::min();
 	auto all_done = true;

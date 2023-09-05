@@ -209,7 +209,7 @@ gboolean rspamd_symcache_validate(struct rspamd_symcache *cache,
  */
 gboolean rspamd_symcache_process_symbols(struct rspamd_task *task,
 										 struct rspamd_symcache *cache,
-										 gint stage);
+										 guint stage);
 
 /**
  * Return statistics about the cache as ucl object (array of objects one per item)

@@ -1662,7 +1662,7 @@ rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_resu
 		}
 	}
 
-	for (guint i = m->nactions - 1; i >= 0; i--) {
+	for (guint i = m->nactions; i-- > 0;) {
 		struct rspamd_action_config *action_lim = &m->actions_config[i];
 
 

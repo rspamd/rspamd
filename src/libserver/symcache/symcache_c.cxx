@@ -687,7 +687,7 @@ void rspamd_symcache_composites_foreach(struct rspamd_task *task,
 gboolean
 rspamd_symcache_process_symbols(struct rspamd_task *task,
 								struct rspamd_symcache *cache,
-								gint stage)
+								guint stage)
 {
 	auto *real_cache = C_API_SYMCACHE(cache);
 
