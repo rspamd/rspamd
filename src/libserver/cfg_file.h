@@ -385,6 +385,7 @@ struct rspamd_config {
 	guint log_flags;                                    /**< logging flags										*/
 	guint log_error_elts;                               /**< number of elements in error logbuf					*/
 	guint log_error_elt_maxlen;                         /**< maximum size of error log element					*/
+	guint log_task_max_elts;                            /**< maximum number of elements in task logging			*/
 	struct rspamd_worker_log_pipe *log_pipes;
 
 	gboolean compat_messages; /**< use old messages in the protocol (array) 			*/

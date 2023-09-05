@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,11 +49,6 @@
 __KHASH_IMPL(rspamd_req_headers_hash, static inline,
 			 rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
 			 rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
-
-/*
- * Do not print more than this amount of elts
- */
-static const int max_log_elts = 7;
 
 static GQuark
 rspamd_task_quark(void)
@@ -669,10 +664,10 @@ rspamd_task_load_message(struct rspamd_task *task,
 	return TRUE;
 }
 
-static gint
+static guint
 rspamd_task_select_processing_stage(struct rspamd_task *task, guint stages)
 {
-	gint st, mask;
+	guint st, mask;
 
 	mask = task->processed_stages;
 
@@ -681,7 +676,7 @@ rspamd_task_select_processing_stage(struct rspamd_task *task, guint stages)
 	}
 	else {
 		for (st = 1; mask != 1; st++) {
-			mask = (unsigned int) mask >> 1;
+			mask = mask >> 1u;
 		}
 	}
 
@@ -703,7 +698,7 @@ rspamd_task_select_processing_stage(struct rspamd_task *task, guint stages)
 gboolean
 rspamd_task_process(struct rspamd_task *task, guint stages)
 {
-	gint st;
+	guint st;
 	gboolean ret = TRUE, all_done = TRUE;
 	GError *stat_error = NULL;
 
@@ -1090,6 +1085,7 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 	struct rspamd_symbols_group *gr;
 	guint i, j;
 	khiter_t k;
+	guint max_log_elts = task->cfg->log_task_max_elts;
 
 	mres = task->result;
 	act = rspamd_check_action_metric(task, NULL, NULL);
@@ -1157,7 +1153,7 @@ rspamd_task_log_metric_res(struct rspamd_task *task,
 							rspamd_printf_fstring(&symbuf, "%*s;",
 												  (gint) opt->optlen, opt->option);
 
-							if (j >= max_log_elts) {
+							if (j >= max_log_elts && opt->next) {
 								rspamd_printf_fstring(&symbuf, "...;");
 								break;
 							}
@@ -1286,6 +1282,7 @@ rspamd_task_write_ialist(struct rspamd_task *task,
 	struct rspamd_email_address *addr;
 	gint i, nchars = 0, wr = 0, cur_chars;
 	gboolean has_orig = FALSE;
+	guint max_log_elts = task->cfg->log_task_max_elts;
 
 	if (addrs && lim <= 0) {
 		lim = addrs->len;
@@ -1314,19 +1311,19 @@ rspamd_task_write_ialist(struct rspamd_task *task,
 			}
 		}
 
+		bool last = i == lim - 1;
+
 		cur_chars = addr->addr_len;
 		varbuf = rspamd_fstring_append(varbuf, addr->addr,
 									   cur_chars);
 		nchars += cur_chars;
 		wr++;
 
-		if (varbuf->len > 0) {
-			if (i != lim - 1) {
-				varbuf = rspamd_fstring_append(varbuf, ",", 1);
-			}
+		if (varbuf->len > 0 && !last) {
+			varbuf = rspamd_fstring_append(varbuf, ",", 1);
 		}
 
-		if (wr >= max_log_elts || nchars >= max_log_elts * 10) {
+		if (!last && (wr >= max_log_elts || nchars >= max_log_elts * 16)) {
 			varbuf = rspamd_fstring_append(varbuf, "...", 3);
 			break;
 		}
@@ -1353,7 +1350,8 @@ rspamd_task_write_addr_list(struct rspamd_task *task,
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	struct rspamd_email_address *addr;
-	gint i;
+	guint max_log_elts = task->cfg->log_task_max_elts;
+	guint i;
 
 	if (lim <= 0) {
 		lim = addrs->len;
@@ -1363,18 +1361,17 @@ rspamd_task_write_addr_list(struct rspamd_task *task,
 
 	for (i = 0; i < lim; i++) {
 		addr = g_ptr_array_index(addrs, i);
+		bool last = i == lim - 1;
 
 		if (addr->addr) {
 			varbuf = rspamd_fstring_append(varbuf, addr->addr, addr->addr_len);
 		}
 
-		if (varbuf->len > 0) {
-			if (i != lim - 1) {
-				varbuf = rspamd_fstring_append(varbuf, ",", 1);
-			}
+		if (varbuf->len > 0 && !last) {
+			varbuf = rspamd_fstring_append(varbuf, ",", 1);
 		}
 
-		if (i >= max_log_elts) {
+		if (!last && i >= max_log_elts) {
 			varbuf = rspamd_fstring_append(varbuf, "...", 3);
 			break;
 		}
@@ -1455,11 +1452,6 @@ rspamd_task_log_variable(struct rspamd_task *task,
 		var.begin = numbuf;
 		break;
 	case RSPAMD_LOG_TIME_REAL:
-		var.begin = rspamd_log_check_time(task->task_timestamp,
-										  task->time_real_finish,
-										  task->cfg->clock_res);
-		var.len = strlen(var.begin);
-		break;
 	case RSPAMD_LOG_TIME_VIRTUAL:
 		var.begin = rspamd_log_check_time(task->task_timestamp,
 										  task->time_real_finish,
@@ -1662,8 +1654,6 @@ void rspamd_task_write_log(struct rspamd_task *task)
 gdouble
 rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_result *m)
 {
-	gint i;
-
 	if (m == NULL) {
 		m = task->result;
 
@@ -1672,7 +1662,7 @@ rspamd_task_get_required_score(struct rspamd_task *task, struct rspamd_scan_resu
 		}
 	}
 
-	for (i = m->nactions - 1; i >= 0; i--) {
+	for (guint i = m->nactions - 1; i >= 0; i--) {
 		struct rspamd_action_config *action_lim = &m->actions_config[i];
 
 

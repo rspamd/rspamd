@@ -279,6 +279,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->history_rows = 200;
 	cfg->log_error_elts = 10;
 	cfg->log_error_elt_maxlen = 1000;
+	cfg->log_task_max_elts = 7;
 	cfg->cache_reload_time = 30.0;
 	cfg->max_lua_urls = 1024;
 	cfg->max_urls = cfg->max_lua_urls * 10;

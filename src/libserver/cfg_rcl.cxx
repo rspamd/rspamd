@@ -1641,6 +1641,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, log_error_elt_maxlen),
 									   RSPAMD_CL_FLAG_UINT,
 									   "Size of each element in error log buffer (1000 by default)");
+		rspamd_rcl_add_default_handler(sub,
+									   "task_max_elts",
+									   rspamd_rcl_parse_struct_integer,
+									   G_STRUCT_OFFSET(struct rspamd_config, log_task_max_elts),
+									   RSPAMD_CL_FLAG_UINT,
+									   "Maximum number of elements in task log entry (7 by default)");
 
 		/* Documentation only options, handled in log_handler to map flags */
 		rspamd_rcl_add_doc_by_path(cfg,
