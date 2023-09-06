@@ -336,7 +336,6 @@ local function check_settings(task)
   end
 
   local min_pri = 1
-  lua_util.debugm(N, task, "hui: %s", id_elt)
   if query_apply then
     if priority >= min_pri then
       -- Do not check lower or equal priorities
