@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -55,8 +55,29 @@ struct rspamd_async_event {
 	void *user_data;
 };
 
-static guint rspamd_event_hash(gconstpointer a);
-static gboolean rspamd_event_equal(gconstpointer a, gconstpointer b);
+static inline bool
+rspamd_event_equal(const struct rspamd_async_event *ev1, const struct rspamd_async_event *ev2)
+{
+	return ev1->fin == ev2->fin && ev1->user_data == ev2->user_data;
+}
+
+static inline guint64
+rspamd_event_hash(const struct rspamd_async_event *ev)
+{
+	union _pointer_fp_thunk {
+		event_finalizer_t f;
+		gpointer p;
+	};
+	struct ev_storage {
+		union _pointer_fp_thunk p;
+		gpointer ud;
+	} st;
+
+	st.p.f = ev->fin;
+	st.ud = ev->user_data;
+
+	return rspamd_cryptobox_fast_hash(&st, sizeof(st), rspamd_hash_seed());
+}
 
 /* Define **SET** of events */
 KHASH_INIT(rspamd_events_hash,
@@ -75,37 +96,6 @@ struct rspamd_async_session {
 	rspamd_mempool_t *pool;
 	guint flags;
 };
-
-static gboolean
-rspamd_event_equal(gconstpointer a, gconstpointer b)
-{
-	const struct rspamd_async_event *ev1 = a, *ev2 = b;
-
-	if (ev1->fin == ev2->fin) {
-		return ev1->user_data == ev2->user_data;
-	}
-
-	return FALSE;
-}
-
-static guint
-rspamd_event_hash(gconstpointer a)
-{
-	const struct rspamd_async_event *ev = a;
-	union _pointer_fp_thunk {
-		event_finalizer_t f;
-		gpointer p;
-	};
-	struct ev_storage {
-		union _pointer_fp_thunk p;
-		gpointer ud;
-	} st;
-
-	st.p.f = ev->fin;
-	st.ud = ev->user_data;
-
-	return rspamd_cryptobox_fast_hash(&st, sizeof(st), rspamd_hash_seed());
-}
 
 static void
 rspamd_session_dtor(gpointer d)
@@ -134,13 +124,7 @@ rspamd_session_create(rspamd_mempool_t *pool,
 	s->user_data = user_data;
 	s->events = kh_init(rspamd_events_hash);
 
-	if (events_count.mean > 4) {
-		kh_resize(rspamd_events_hash, s->events, events_count.mean);
-	}
-	else {
-		kh_resize(rspamd_events_hash, s->events, 4);
-	}
-
+	kh_resize(rspamd_events_hash, s->events, MAX(4, events_count.mean));
 	rspamd_mempool_add_destructor(pool, rspamd_session_dtor, s);
 
 	return s;
