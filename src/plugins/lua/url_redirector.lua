@@ -178,14 +178,16 @@ end
 -- Orig url is the original url object
 -- url should be a new url object...
 local function resolve_cached(task, orig_url, url, key, ntries)
+  local str_url = tostring(url or "")
   local function resolve_url()
     if ntries > settings.nested_limit then
       -- We cannot resolve more, stop
       rspamd_logger.debugm(N, task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
           orig_url, url, ntries)
       cache_url(task, orig_url, url, key, 'nested')
+      local str_orig_url = tostring(orig_url)
       task:insert_result(settings.redirector_symbol_nested, 1.0,
-          string.format('%s->%s:%d', maybe_trim_url(orig_url), maybe_trim_url(url), ntries))
+          string.format('%s->%s:%d', maybe_trim_url(str_orig_url), maybe_trim_url(str_url), ntries))
 
       return
     end
@@ -261,7 +263,7 @@ local function resolve_cached(task, orig_url, url, key, ntries)
       headers = {
         ['User-Agent'] = ua,
       },
-      url = tostring(url),
+      url = str_url,
       task = task,
       method = 'head',
       max_size = settings.max_size,
@@ -278,12 +280,12 @@ local function resolve_cached(task, orig_url, url, key, ntries)
           -- Got cached result
           rspamd_logger.debugm(N, task, 'found cached redirect from %s to %s',
               url, data)
-          if data.sub(1, 1) == '^' then
+          if data:sub(1, 1) == '^' then
             -- Prefixed url stored
             local prefix, new_url = data:match('^%^(%a+):(.+)$')
             if prefix == 'nested' then
               task:insert_result(settings.redirector_symbol_nested, 1.0,
-                  string.format('%s->%s:cached', maybe_trim_url(url), maybe_trim_url(new_url)))
+                  string.format('%s->%s:cached', maybe_trim_url(str_url), maybe_trim_url(new_url)))
             end
             data = new_url
           end
