@@ -339,6 +339,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->heartbeat_interval = 10.0;
 
 	cfg->enable_css_parser = true;
+	cfg->script_modules = g_ptr_array_new();
 
 	REF_INIT_RETAIN(cfg, rspamd_config_free);
 
@@ -398,6 +399,7 @@ void rspamd_config_free(struct rspamd_config *cfg)
 
 	rspamd_re_cache_unref(cfg->re_cache);
 	g_ptr_array_free(cfg->c_modules, TRUE);
+	g_ptr_array_free(cfg->script_modules, TRUE);
 
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy(cfg->monitored_ctx);

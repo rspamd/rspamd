@@ -920,6 +920,15 @@ rspamd_rcl_lua_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 	return TRUE;
 }
 
+static int
+rspamd_lua_mod_sort_fn(gconstpointer a, gconstpointer b)
+{
+	auto *m1 = *(const script_module **) a;
+	auto *m2 = *(const script_module **) b;
+
+	return strcmp(m1->name, m2->name);
+}
+
 gboolean
 rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 								struct rspamd_config *cfg,
@@ -949,18 +958,7 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 			return false;
 		}
 
-		if (cfg->script_modules == nullptr) {
-			cfg->script_modules = g_list_append(cfg->script_modules,
-												cur_mod);
-			rspamd_mempool_add_destructor(cfg->cfg_pool,
-										  (rspamd_mempool_destruct_t) g_list_free,
-										  cfg->script_modules);
-		}
-		else {
-			cfg->script_modules = g_list_append(cfg->script_modules,
-												cur_mod);
-		}
-
+		g_ptr_array_add(cfg->script_modules, cur_mod);
 		sections->lua_modules_seen.insert(fname.string());
 
 		return true;
@@ -993,6 +991,8 @@ rspamd_rcl_add_lua_plugins_path(struct rspamd_rcl_sections_map *sections,
 			}
 		}
 	}
+
+	g_ptr_array_sort(cfg->script_modules, rspamd_lua_mod_sort_fn);
 
 	return TRUE;
 }

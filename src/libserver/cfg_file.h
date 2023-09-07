@@ -390,7 +390,7 @@ struct rspamd_config {
 
 	gboolean compat_messages; /**< use old messages in the protocol (array) 			*/
 
-	GList *script_modules;        /**< linked list of script modules to load				*/
+	GPtrArray *script_modules;    /**< a list of script modules to load				*/
 	GHashTable *explicit_modules; /**< modules that should be always loaded				*/
 
 	GList *filters;                                  /**< linked list of all filters							*/

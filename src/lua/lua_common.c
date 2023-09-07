@@ -1109,25 +1109,20 @@ gboolean
 rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 {
 	struct rspamd_config **pcfg;
-	GList *cur;
 	struct script_module *module;
 	lua_State *L = cfg->lua_state;
-	gint err_idx;
+	gint err_idx, i;
 
 	pcfg = lua_newuserdata(L, sizeof(struct rspamd_config *));
 	rspamd_lua_setclass(L, "rspamd{config}", -1);
 	*pcfg = cfg;
 	lua_setglobal(L, "rspamd_config");
 
-	cur = g_list_first(cfg->script_modules);
-
-	while (cur) {
-		module = cur->data;
-
+	PTR_ARRAY_FOREACH(cfg->script_modules, i, module)
+	{
 		if (module->path) {
 			if (!force_load) {
 				if (!rspamd_config_is_module_enabled(cfg, module->name)) {
-					cur = g_list_next(cur);
 					continue;
 				}
 			}
@@ -1154,7 +1149,6 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 					return FALSE;
 				}
 
-				cur = g_list_next(cur);
 				continue;
 			}
 
@@ -1182,7 +1176,6 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 					return FALSE;
 				}
 
-				cur = g_list_next(cur);
 				continue;
 			}
 
@@ -1202,7 +1195,6 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 					return FALSE;
 				}
 
-				cur = g_list_next(cur);
 				continue;
 			}
 
@@ -1215,8 +1207,6 @@ rspamd_init_lua_filters(struct rspamd_config *cfg, bool force_load, bool strict)
 
 			lua_pop(L, 1); /* Error function */
 		}
-
-		cur = g_list_next(cur);
 	}
 
 	return TRUE;
