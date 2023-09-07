@@ -954,17 +954,20 @@ rspamd_re_cache_process_selector(struct rspamd_task *task,
 					lua_rawgeti(L, -1, i + 1);
 
 					txt = lua_check_text_or_string(L, -1);
-					if (txt) {
+					if (txt && txt->len > 0) {
 						sel_data = txt->start;
 						slen = txt->len;
+						(*svec)[i] = g_malloc(slen);
+						memcpy((*svec)[i], sel_data, slen);
 					}
 					else {
+						/* A hack to avoid malloc(0) */
 						sel_data = "";
 						slen = 0;
+						(*svec)[i] = g_malloc(1);
+						memcpy((*svec)[i], sel_data, 1);
 					}
 
-					(*svec)[i] = g_malloc(slen);
-					memcpy((*svec)[i], sel_data, slen);
 					(*lenvec)[i] = slen;
 					lua_pop(L, 1);
 				}
