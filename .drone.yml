@@ -39,6 +39,7 @@ steps:
         -DCMAKE_VERBOSE_MAKEFILE=ON
         -DENABLE_COVERAGE=ON
         -DENABLE_LIBUNWIND=ON
+        -DENABLE_HYPERSCAN=ON
         -GNinja
         $CI_WORKSPACE
       - ncpu=$(getconf _NPROCESSORS_ONLN)
@@ -69,6 +70,7 @@ steps:
         -DCMAKE_VERBOSE_MAKEFILE=ON
         -DENABLE_CLANG_PLUGIN=ON
         -DENABLE_FULL_DEBUG=ON
+        -DENABLE_HYPERSCAN=ON
         -DSANITIZE=address
         $CI_WORKSPACE
       - ncpu=$(getconf _NPROCESSORS_ONLN)
@@ -281,6 +283,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 4d798e49a5467e97c058b5b9ef2ebef987616117edbf3ed886e53ac13155b2b5
+hmac: f872f03e58aa40d039377909ef889f867b77d82cdd8b87b398096e3a1e954a24
 
 ...
