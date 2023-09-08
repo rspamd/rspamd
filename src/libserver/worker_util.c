@@ -1639,11 +1639,11 @@ rspamd_print_crash(ucontext_t *uap)
 		ret = unw_get_proc_name(&cursor, name, sizeof(name), &off);
 
 		if (ret == 0) {
-			msg_err("%d: %p: %s()+0x%xl",
+			msg_err("%d: %ul: %s()+0x%xl",
 					level, ip, name, (uintptr_t) off);
 		}
 		else {
-			msg_err("%d: %p: <unknown>", level, ip);
+			msg_err("%d: %ul: <unknown>", level, ip);
 		}
 
 		level++;
