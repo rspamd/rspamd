@@ -284,8 +284,6 @@ rspamd_mempool_new_(gsize size, const gchar *tag, gint flags, const gchar *loc)
 {
 	rspamd_mempool_t *new_pool;
 	gpointer map;
-	const gchar hexdigits[] = "0123456789abcdef";
-	unsigned i;
 
 	/* Allocate statistic structure if it is not allocated before */
 	if (mem_pool_stat == NULL) {

@@ -16,8 +16,6 @@ void rspamd_mem_pool_test_func(void)
 	rspamd_mempool_t *pool;
 	rspamd_mempool_stat_t st;
 	char *tmp, *tmp2, *tmp3;
-	pid_t pid;
-	int ret;
 
 	pool = rspamd_mempool_new(sizeof(TEST_BUF), NULL, 0);
 	tmp = rspamd_mempool_alloc(pool, sizeof(TEST_BUF));
