@@ -187,7 +187,7 @@ rspamadm_pw_check(void)
 	guchar *salt_decoded, *key_decoded, *local_key;
 	gsize salt_len, key_len, size;
 	gchar test_password[8192], encrypted_password[8192];
-	gsize plen, term = 0, i;
+	gsize plen, i;
 	gint id;
 	gboolean ret = FALSE;
 

@@ -206,7 +206,6 @@ void rspamd_radix_test_func(void)
 {
 	struct btrie *btrie;
 	rspamd_mempool_t *pool;
-	radix_compressed_t *comp_tree = radix_create_compressed(NULL);
 	struct {
 		guint32 addr;
 		guint32 mask;
