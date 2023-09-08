@@ -1952,7 +1952,7 @@ rspamd_re_cache_compile_timer_cb(EV_P_ ev_timer *w, int revents)
 		return;
 	}
 
-	rspamd_snprintf(path, sizeof(path), "%s%c%P-XXXXXXXXXX", cbdata->cache_dir,
+	rspamd_snprintf(path, sizeof(path), "%s%c%s%P-XXXXXXXXXX", cbdata->cache_dir,
 					G_DIR_SEPARATOR, re_class->hash, our_pid);
 	fd = g_mkstemp_full(path, O_CREAT | O_TRUNC | O_EXCL | O_WRONLY, 00600);
 
