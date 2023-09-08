@@ -483,15 +483,15 @@ public:
 	 * @param ptr
 	 * @return
 	 */
-	auto get_children() const -> std::optional<std::reference_wrapper<const std::vector<cache_item *>>>
+	auto get_children() const -> const std::vector<cache_item *> *
 	{
 		if (std::holds_alternative<normal_item>(specific)) {
 			const auto &filter_data = std::get<normal_item>(specific);
 
-			return std::cref(filter_data.get_childen());
+			return &filter_data.get_childen();
 		}
 
-		return std::nullopt;
+		return nullptr;
 	}
 
 private:

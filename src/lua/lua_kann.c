@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -824,7 +824,7 @@ lua_kann_new_leaf(lua_State *L)
 	kad_node_t *t;
 
 	if (dim >= 1 && dim < KAD_MAX_DIM && lua_istable(L, 2)) {
-		ar = g_new0(int, dim);
+		ar = g_new0(int, KAD_MAX_DIM);
 
 		for (i = 0; i < dim; i++) {
 			lua_rawgeti(L, 2, i + 1);

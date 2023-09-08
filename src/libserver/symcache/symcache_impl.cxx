@@ -81,19 +81,26 @@ auto symcache::init() -> bool
 							if (real_elt) {
 								disabled_ids.insert(real_elt->id);
 
-								for (const auto &cld: real_elt->get_children().value().get()) {
-									msg_debug_cache("symbol %s is a virtual sibling of the disabled symbol %s",
-													cld->get_name().c_str(), it->get_name().c_str());
-									disabled_ids.insert(cld->id);
+								const auto *children = real_elt->get_children();
+								if (children != nullptr) {
+									for (const auto &cld: *children) {
+										msg_debug_cache("symbol %s is a virtual sibling of the disabled symbol %s",
+														cld->get_name().c_str(), it->get_name().c_str());
+										disabled_ids.insert(cld->id);
+									}
 								}
 							}
 						}
 						else {
 							/* Also disable all virtual children of this element */
-							for (const auto &cld: it->get_children().value().get()) {
-								msg_debug_cache("symbol %s is a virtual child of the disabled symbol %s",
-												cld->get_name().c_str(), it->get_name().c_str());
-								disabled_ids.insert(cld->id);
+							const auto *children = it->get_children();
+
+							if (children != nullptr) {
+								for (const auto &cld: *children) {
+									msg_debug_cache("symbol %s is a virtual child of the disabled symbol %s",
+													cld->get_name().c_str(), it->get_name().c_str());
+									disabled_ids.insert(cld->id);
+								}
 							}
 						}
 					}
