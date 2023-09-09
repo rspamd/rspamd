@@ -2295,20 +2295,19 @@ rspamd_fstring_gunzip(rspamd_fstring_t **in)
 	gsize total_out = 0;
 
 	do {
-		strm.next_out = out->str;
-		strm.avail_out = out->allocated;
+		strm.next_out = out->str + total_out;
+		strm.avail_out = out->allocated - total_out;
 
 		ret = inflate(&strm, Z_NO_FLUSH);
 		if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR) {
 			break;
 		}
 
-		gsize out_size = out->allocated - strm.avail_out;
-		if (total_out + out_size > out->allocated) {
-			out = rspamd_fstring_grow(out, total_out + out_size);
+		gsize out_remain = strm.avail_out;
+		total_out = out->allocated - out_remain;
+		if (out_remain == 0 && ret != Z_STREAM_END) {
+			out = rspamd_fstring_grow(out, out->allocated * 2);
 		}
-
-		total_out += out_size;
 
 	} while (ret != Z_STREAM_END);
 
