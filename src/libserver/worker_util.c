@@ -1643,7 +1643,7 @@ rspamd_print_crash(ucontext_t *uap)
 					level, (unsigned long)ip, name, (unsigned long)off);
 		}
 		else {
-			msg_err("%d: %ul: <unknown>", level, ip);
+			msg_err("%d: %0x%xl: <unknown>", level, (unsigned long)ip);
 		}
 
 		level++;
