@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -677,6 +677,8 @@ lua_http_request(lua_State *L)
 		msg = rspamd_http_message_from_url(url);
 
 		if (msg == NULL) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref);
+			msg_err("cannot create HTTP message from url %s", url);
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
@@ -686,6 +688,12 @@ lua_http_request(lua_State *L)
 		lua_gettable(L, 1);
 		url = luaL_checkstring(L, -1);
 		lua_pop(L, 1);
+
+		if (url == NULL) {
+			msg_err("cannot create HTTP message without url");
+			lua_pushboolean(L, FALSE);
+			return 1;
+		}
 
 		lua_pushstring(L, "callback");
 		lua_gettable(L, 1);
@@ -763,7 +771,7 @@ lua_http_request(lua_State *L)
 
 		msg = rspamd_http_message_from_url(url);
 		if (msg == NULL) {
-			msg_err("cannot create HTTP message from url %s", url);
+			msg_err_task_check("cannot create HTTP message from url %s", url);
 			lua_pushboolean(L, FALSE);
 			return 1;
 		}
