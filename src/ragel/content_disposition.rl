@@ -13,8 +13,8 @@
                     (((FWS? qcontent)* FWS?) >Quoted_Str_Start %Quoted_Str_End)
                   DQUOTE) CFWS?;
   token = 0x21..0x27 | 0x2a..0x2b | 0x2c..0x2e | 0x30..0x39 | 0x41..0x5a | 0x5e..0x7e;
-  value = (quoted_string | (token -- '"' | 0x3d | utf8_2c | utf8_3c | utf8_4c)+) >Param_Value_Start %Param_Value_End;
-  attribute = (quoted_string | (token -- '"' | 0x3d)+) >Param_Name_Start %Param_Name_End;
+  value = (quoted_string | (token -- ('"' | 0x3d | utf8_2c | utf8_3c | utf8_4c)+)) >Param_Value_Start %Param_Value_End;
+  attribute = (quoted_string | (token -- ('"' | '='))+) >Param_Name_Start %Param_Name_End;
   parameter = CFWS? attribute FWS? "=" FWS? value CFWS?;
 
   ietf_token = token+;
