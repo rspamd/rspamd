@@ -30,6 +30,7 @@ local check_types = {
   },
   urls = {},
   content_urls = {},
+  numeric_urls = {},
   emails = {},
   replyto = {},
   dkim = {},

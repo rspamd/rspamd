@@ -1,0 +1,3 @@
+Content-type: text/plain
+
+numeric http://1.2.3.4 and not http://example.org ok
