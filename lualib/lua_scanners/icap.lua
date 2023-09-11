@@ -241,13 +241,15 @@ local function icap_check(task, content, digest, rule, maybe_part)
       local function get_req_headers()
 
         local in_client_ip = task:get_from_ip()
-        lua_util.debugm(rule.name, task, 'URL: http://%s/%s | Content-Type: %s/%s',
-            in_client_ip, maybe_part[1], maybe_part[2], maybe_part[3])
-
         local req_hlen = 2
-        table.insert(req_headers, string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, maybe_part[1]))
         table.insert(req_headers, string.format('Date: %s\r\n', rspamd_util.time_to_string(rspamd_util.get_time())))
-        table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part[2], maybe_part[3]))
+        if maybe_part then
+          table.insert(req_headers, string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, maybe_part:get_filename()))
+          table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part:get_detected_type()))
+        else
+          table.insert(req_headers, string.format('GET %s HTTP/1.0\r\n', rule.req_fake_url))
+          table.insert(http_headers, string.format('Content-Type: application/octet-stream\r\n'))
+        end
         if rule.user_agent ~= "none" then
           table.insert(req_headers, string.format("User-Agent: %s\r\n", rule.user_agent))
         end

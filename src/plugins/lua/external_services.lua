@@ -181,19 +181,12 @@ local function add_scanner_rule(sym, opts)
       fun.each(function(p)
         local content = p:get_content()
         if content and #content > 0 then
-          local in_fname = p:get_filename()
-          local in_type, in_stype = p:get_detected_type()
-          local part_info = {in_fname,in_type,in_stype}
-          cfg.check(task, content, p:get_digest(), rule, part_info)
+          cfg.check(task, content, p:get_digest(), rule, p)
         end
       end, common.check_parts_match(task, rule))
 
     else
-      local in_fname = "mail"
-      local in_type = "application"
-      local in_stype = "octet-stream"
-      local part_info = {in_fname,in_type,in_stype}
-      cfg.check(task, task:get_content(), task:get_digest(), rule, part_info)
+      cfg.check(task, task:get_content(), task:get_digest(), rule, nil)
     end
   end
 
