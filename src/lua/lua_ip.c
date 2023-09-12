@@ -87,24 +87,24 @@ LUA_FUNCTION_DEF(ip, to_table);
  * @see ip:to_table() is that this method returns just hex strings for ipv6
  * addresses.
  * @return {table or nil} string octets of IP address or `nil` if IP is invalid
+ * @example
+local ip = rspamd_ip.from_string('fe80::11')
+print(table.concat(ip:str_octets(), "."))
+-- Output:
+-- f.e.8.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.1
  */
 LUA_FUNCTION_DEF(ip, str_octets);
 /***
- * @method ip:str_octets()
+ * @method ip:inversed_str_octets()
  * Converts valid IP address to the table of string octets in reversed order. The difference from
  * @see ip:to_table() is that this method returns just hex strings for ipv6
- * addresses.
+ * addresses in reversed order.
  * @return {table or nil} string octets of IP address or `nil` if IP is invalid
  * @example
-local ip = rspamd_ip.from_string('127.0.0.1')
-for _,o in ipairs(ip:to_table()) do
-    print(o)
-end
+local ip = rspamd_ip.from_string('fe80::11')
+print(table.concat(ip:inversed_str_octets(), "."))
 -- Output:
--- 1
--- 0
--- 0
--- 127
+-- 1.1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f
  */
 LUA_FUNCTION_DEF(ip, inversed_str_octets);
 /***

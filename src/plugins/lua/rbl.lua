@@ -572,6 +572,9 @@ local function gen_rbl_callback(rule)
       if rule.images then
         table.insert(ex_params.flags, 'image')
       end
+      if rule.numeric_urls then
+        table.insert(ex_params.flags, 'numeric')
+      end
     end
 
     local urls = lua_util.extract_specific_urls(ex_params)
@@ -805,7 +808,7 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'replyto'
   end
 
-  if rule.urls or rule.content_urls or rule.images then
+  if rule.urls or rule.content_urls or rule.images or rule.numeric_urls then
     pipeline[#pipeline + 1] = check_urls
     description[#description + 1] = 'urls'
   end

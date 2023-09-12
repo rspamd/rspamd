@@ -75,3 +75,8 @@ SELECTORS COMBINED
   ...  Settings={symbols_enabled = [RBL_SELECTOR_MULTIPLE]}
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_from
   Expect Symbol With Option  RBL_SELECTOR_MULTIPLE  example.org:sel_helo
+
+NUMERIC URLS
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NUMERIC]}
+  Expect Symbol With Exact Options  URIBL_NUMERIC  4.3.2.1:url

@@ -179,7 +179,7 @@ sign:option "-k --key"
     :description "Use specific key of file"
     :argname "<key>"
     :count "1"
-sign:option "-t type"
+sign:option "-t --type"
     :description "ARC or DKIM signing"
     :argname("<arc|dkim>")
     :convert {
