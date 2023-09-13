@@ -20,6 +20,7 @@
 #include "dns.h"
 #include "rspamd.h"
 #include "utlist.h"
+#include "contrib/libev/ev.h"
 #include "contrib/librdns/rdns.h"
 #include "contrib/librdns/dns_private.h"
 #include "contrib/librdns/rdns_ev.h"

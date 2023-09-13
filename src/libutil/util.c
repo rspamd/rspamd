@@ -19,6 +19,7 @@
 
 #include "ottery.h"
 #include "cryptobox.h"
+#include "contrib/libev/ev.h"
 
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
