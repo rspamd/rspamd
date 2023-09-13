@@ -475,14 +475,19 @@ rspamd_lua_rspamd_version_numeric(lua_State *L)
 		type = lua_tostring(L, 1);
 		if (g_ascii_strcasecmp(type, "short") == 0) {
 			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
-						  RSPAMD_VERSION_MINOR_NUM * 100;
+						  RSPAMD_VERSION_MINOR_NUM * 100 +
+						  RSPAMD_VERSION_PATCH_NUM * 10;
 		}
 		else if (g_ascii_strcasecmp(type, "main") == 0) {
 			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
-						  RSPAMD_VERSION_MINOR_NUM * 100;
+						  RSPAMD_VERSION_MINOR_NUM * 100 +
+						  RSPAMD_VERSION_PATCH_NUM * 10;
 		}
 		else if (g_ascii_strcasecmp(type, "major") == 0) {
 			version_num = RSPAMD_VERSION_MAJOR_NUM;
+		}
+		else if (g_ascii_strcasecmp(type, "patch") == 0) {
+			version_num = RSPAMD_VERSION_PATCH_NUM;
 		}
 		else if (g_ascii_strcasecmp(type, "minor") == 0) {
 			version_num = RSPAMD_VERSION_MINOR_NUM;
@@ -511,13 +516,16 @@ rspamd_lua_rspamd_version(lua_State *L)
 				"." RSPAMD_VERSION_MINOR;
 		}
 		else if (g_ascii_strcasecmp(type, "main") == 0) {
-			result = RSPAMD_VERSION_MAJOR "." RSPAMD_VERSION_MINOR;
+			result = RSPAMD_VERSION_MAJOR "." RSPAMD_VERSION_MINOR "." RSPAMD_VERSION_PATCH;
 		}
 		else if (g_ascii_strcasecmp(type, "major") == 0) {
 			result = RSPAMD_VERSION_MAJOR;
 		}
 		else if (g_ascii_strcasecmp(type, "minor") == 0) {
 			result = RSPAMD_VERSION_MINOR;
+		}
+		else if (g_ascii_strcasecmp(type, "patch") == 0) {
+			result = RSPAMD_VERSION_PATCH;
 		}
 		else if (g_ascii_strcasecmp(type, "id") == 0) {
 			result = RID;
