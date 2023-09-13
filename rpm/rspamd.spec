@@ -65,7 +65,7 @@ BuildRequires:    pcre2-devel
 BuildRequires:    ragel
 BuildRequires:    sqlite-devel
 BuildRequires:    systemd
-BuildRequires:    libdwarf-devel
+BuildRequires:    binutils-devel
 Requires(pre):    shadow-utils
 Requires(post):   systemd
 Requires(preun):  systemd

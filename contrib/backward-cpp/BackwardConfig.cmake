@@ -31,15 +31,20 @@ set(STACK_WALKING_BACKTRACE FALSE CACHE BOOL
 set(STACK_WALKING_LIBUNWIND FALSE CACHE BOOL
 	"Use libunwind for stack walking")
 
-set(STACK_DETAILS_AUTO_DETECT TRUE CACHE BOOL
+set(STACK_DETAILS_AUTO_DETECT FALSE CACHE BOOL
 	"Auto detect backward's stack details dependencies")
 
 set(STACK_DETAILS_BACKTRACE_SYMBOL FALSE CACHE BOOL
 	"Use backtrace from (e)glibc for symbols resolution")
 set(STACK_DETAILS_DW FALSE CACHE BOOL
 	"Use libdw to read debug info")
-set(STACK_DETAILS_BFD FALSE CACHE BOOL
-	"Use libbfd to read debug info")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	set(STACK_DETAILS_BFD TRUE CACHE BOOL
+		"Use libbfd to read debug info")
+else()
+	set(STACK_DETAILS_BFD FALSE CACHE BOOL
+		"Use libbfd to read debug info")
+endif()
 set(STACK_DETAILS_DWARF FALSE CACHE BOOL
 	"Use libdwarf/libelf to read debug info")
 
@@ -79,7 +84,7 @@ if (STACK_WALKING_LIBUNWIND)
 
 	# Disable other unwinders if libunwind is found
 	set(STACK_WALKING_UNWIND FALSE)
-	set(STACK_WALKING_BACKTRACE FALSE)	
+	set(STACK_WALKING_BACKTRACE FALSE)
 endif()
 
 if (${STACK_DETAILS_AUTO_DETECT})
@@ -241,7 +246,7 @@ if (NOT TARGET Backward::Backward)
 	)
 	if(BACKWARD_HAS_EXTERNAL_LIBRARIES)
 		set_target_properties(Backward::Backward PROPERTIES
-			INTERFACE_LINK_LIBRARIES "${BACKWARD_LIBRARIES}" 
+			INTERFACE_LINK_LIBRARIES "${BACKWARD_LIBRARIES}"
 		)
 	endif()
 endif()

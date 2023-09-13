@@ -13,7 +13,7 @@ Build-Depends: cmake,
                libsqlite3-dev,
                libssl-dev (>= 1.0),
                libunwind-dev | libunwind-13-dev,
-               libdwarf-dev,
+               binutils-dev,
                perl,
                ragel,
                zlib1g-dev
