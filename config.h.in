@@ -52,10 +52,8 @@
 #cmakedefine HAVE_PATH_MAX       1
 
 /* OSX has broken JIT support in PCRE, disable it */
-#ifndef __APPLE__
 #cmakedefine HAVE_PCRE_JIT       1
 #cmakedefine HAVE_PCRE_JIT_FAST  1
-#endif
 
 #cmakedefine HAVE_PIDFILE        1
 #cmakedefine HAVE_PIDFILE_FILENO 1
