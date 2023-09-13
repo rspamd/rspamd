@@ -1612,14 +1612,16 @@ void rspamd_worker_init_monitored(struct rspamd_worker *worker,
 
 #ifdef WITH_LIBUNWIND
 static void
-rspamd_print_crash(ucontext_t *uap)
+rspamd_print_crash(ucontext_t *_uap)
 {
 	unw_cursor_t cursor;
-	unw_word_t ip, off;
+	unw_context_t uc;
+	unw_word_t ip, off, sp;
 	guint level;
 	gint ret;
 
-	if ((ret = unw_init_local(&cursor, uap)) != 0) {
+	unw_getcontext(&uc);
+	if ((ret = unw_init_local(&cursor, &uc)) != 0) {
 		msg_err("unw_init_local: %d", ret);
 
 		return;
@@ -1640,10 +1642,10 @@ rspamd_print_crash(ucontext_t *uap)
 
 		if (ret == 0) {
 			msg_err("%d: 0x%xl: %s()+0x%xl",
-					level, (unsigned long)ip, name, (unsigned long)off);
+					level, (unsigned long) ip, name, (unsigned long) off);
 		}
 		else {
-			msg_err("%d: %0x%xl: <unknown>", level, (unsigned long)ip);
+			msg_err("%d: %0x%xl: <unknown>", level, (unsigned long) ip);
 		}
 
 		level++;
