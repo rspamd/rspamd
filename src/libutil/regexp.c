@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -164,10 +164,7 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 		rspamd_regexp_library_init(NULL);
 	}
 #if defined(WITH_PCRE2)
-	gsize jsz;
 	static const guint max_recursion_depth = 100000, max_backtrack = 1000000;
-
-	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
 
 	/* Create match context */
 	r->mcontext = pcre2_match_context_create(NULL);
@@ -189,14 +186,20 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	}
 
 #ifdef HAVE_PCRE_JIT
+	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
+	gsize jsz;
+	PCRE2_UCHAR errstr[128];
+	int errcode;
+
 	if (can_jit) {
-		if (pcre2_jit_compile(r->re, jit_flags) < 0) {
-			msg_err("jit compilation of %s is not supported: %d", r->pattern, jit_flags);
+		if ((errcode = pcre2_jit_compile(r->re, jit_flags)) < 0) {
+			pcre2_get_error_message(errcode, errstr, G_N_ELEMENTS(errstr));
+			msg_err("jit compilation is not supported: %s; pattern: \"%s\"", errstr, r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 		else {
 			if (!(pcre2_pattern_info(r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
-				msg_err("jit compilation of %s is not supported", r->pattern);
+				msg_err("cannot exec pcre2_pattern_info(PCRE2_INFO_JITSIZE) on \"%s\"", r->pattern);
 				r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 			}
 		}
@@ -210,17 +213,19 @@ rspamd_regexp_post_process(rspamd_regexp_t *r)
 	}
 
 	if (r->raw_re && r->re != r->raw_re && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
-		if (pcre2_jit_compile(r->raw_re, jit_flags) < 0) {
-			msg_debug("jit compilation of %s is not supported", r->pattern);
+		if ((errcode = pcre2_jit_compile(r->raw_re, jit_flags)) < 0) {
+			pcre2_get_error_message(errcode, errstr, G_N_ELEMENTS(errstr));
+			msg_debug("jit compilation is not supported for raw regexp: %s; pattern: \"%s\"", errstr, r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
-
-		if (!(pcre2_pattern_info(r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
-			msg_debug("jit compilation of raw %s is not supported", r->pattern);
-		}
-		else if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
-			g_assert(r->raw_mcontext != NULL);
-			pcre2_jit_stack_assign(r->raw_mcontext, NULL, global_re_cache->jstack);
+		else {
+			if (!(pcre2_pattern_info(r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
+				msg_err("cannot exec pcre2_pattern_info(PCRE2_INFO_JITSIZE) on \"%s\"", r->pattern);
+			}
+			else if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+				g_assert(r->raw_mcontext != NULL);
+				pcre2_jit_stack_assign(r->raw_mcontext, NULL, global_re_cache->jstack);
+			}
 		}
 	}
 #endif
