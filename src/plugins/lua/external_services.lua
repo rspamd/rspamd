@@ -181,12 +181,12 @@ local function add_scanner_rule(sym, opts)
       fun.each(function(p)
         local content = p:get_content()
         if content and #content > 0 then
-          cfg.check(task, content, p:get_digest(), rule)
+          cfg.check(task, content, p:get_digest(), rule, p)
         end
       end, common.check_parts_match(task, rule))
 
     else
-      cfg.check(task, task:get_content(), task:get_digest(), rule)
+      cfg.check(task, task:get_content(), task:get_digest(), rule, nil)
     end
   end
 
