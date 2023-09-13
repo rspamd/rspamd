@@ -65,6 +65,7 @@ BuildRequires:    pcre2-devel
 BuildRequires:    ragel
 BuildRequires:    sqlite-devel
 BuildRequires:    systemd
+BuildRequires:    libdwarf-devel
 Requires(pre):    shadow-utils
 Requires(post):   systemd
 Requires(preun):  systemd
@@ -136,7 +137,6 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
         -DWANT_SYSTEMD_UNITS=ON \
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
-        -DENABLE_LIBUNWIND=ON \
 %ifarch x86_64 amd64 arm64 aarch64
         -DENABLE_HYPERSCAN=ON \
 %endif

@@ -43,12 +43,6 @@
 #endif
 #include "zlib.h"
 
-#ifdef WITH_LIBUNWIND
-#define UNW_LOCAL_ONLY 1
-#include <libunwind.h>
-#define UNWIND_BACKTRACE_DEPTH 256
-#endif
-
 #ifdef HAVE_UCONTEXT_H
 #include <ucontext.h>
 #elif defined(HAVE_SYS_UCONTEXT_H)
@@ -1610,71 +1604,6 @@ void rspamd_worker_init_monitored(struct rspamd_worker *worker,
 
 #ifdef HAVE_SA_SIGINFO
 
-#ifdef WITH_LIBUNWIND
-static void
-rspamd_print_crash(ucontext_t *_uap)
-{
-	unw_cursor_t cursor;
-	unw_context_t uc;
-	unw_word_t ip, off, sp;
-	guint level;
-	gint ret;
-
-	unw_getcontext(&uc);
-	if ((ret = unw_init_local(&cursor, &uc)) != 0) {
-		msg_err("unw_init_local: %d", ret);
-
-		return;
-	}
-
-	level = 0;
-	ret = 0;
-
-	for (;;) {
-		char name[128];
-
-		if (level >= UNWIND_BACKTRACE_DEPTH) {
-			break;
-		}
-
-		unw_get_reg(&cursor, UNW_REG_IP, &ip);
-		ret = unw_get_proc_name(&cursor, name, sizeof(name), &off);
-
-		if (ret == 0) {
-			msg_err("%d: 0x%xl: %s()+0x%xl",
-					level, (unsigned long) ip, name, (unsigned long) off);
-		}
-		else {
-			msg_err("%d: %0x%xl: <unknown>", level, (unsigned long) ip);
-		}
-
-		level++;
-		ret = unw_step(&cursor);
-
-		if (ret <= 0) {
-			break;
-		}
-	}
-
-	if (ret < 0) {
-		msg_err("unw_step_ptr: %d", ret);
-	}
-}
-#elif defined(HAVE_BACKTRACE)
-#include <execinfo.h>
-static void
-rspamd_print_crash(ucontext_t *_uap)
-{
-	void *callstack[128];
-	int i, frames = backtrace(callstack, 128);
-	char **strs = backtrace_symbols(callstack, frames);
-	for (i = 0; i < frames; ++i) {
-		msg_err("%d: %s", i, strs[i]);
-	}
-	free(strs);
-}
-#endif
-
 static struct rspamd_main *saved_main = NULL;
 static gboolean
 rspamd_crash_propagate(gpointer key, gpointer value, gpointer unused)
@@ -1686,6 +1615,11 @@ rspamd_crash_propagate(gpointer key, gpointer value, gpointer unused)
 
 	return TRUE;
 }
+
+#ifdef BACKWARD_ENABLE
+/* See backtrace.cxx */
+extern void rspamd_print_crash(void);
+#endif
 
 static void
 rspamd_crash_sig_handler(int sig, siginfo_t *info, void *ctx)
@@ -1699,8 +1633,8 @@ rspamd_crash_sig_handler(int sig, siginfo_t *info, void *ctx)
 			"pid: %P, trace: ",
 			sig, strsignal(sig), pid);
 	(void) uap;
-#if defined(WITH_LIBUNWIND) || defined(HAVE_BACKTRACE)
-	rspamd_print_crash(uap);
+#ifdef BACKWARD_ENABLE
+	rspamd_print_crash();
 #endif
 	msg_err("please see Rspamd FAQ to learn how to dump core files and how to "
 			"fill a bug report");

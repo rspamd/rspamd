@@ -111,11 +111,10 @@
 #cmakedefine WITH_PCRE2          1
 #cmakedefine WITH_SNOWBALL       1
 #cmakedefine WITH_SQLITE         1
-#cmakedefine WITH_LIBUNWIND      1
 #cmakedefine WITH_LUA_TRACE      1
 #cmakedefine WITH_LUA_REPL       1
 #cmakedefine WITH_FASTTEXT       1
-#cmakedefine HAVE_BACKTRACE      1
+#cmakedefine BACKWARD_ENABLE     1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 

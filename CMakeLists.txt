@@ -56,7 +56,7 @@ OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]"
 OPTION(ENABLE_PCRE2 "Enable pcre2 instead of pcre  [default: ON]" ON)
 OPTION(ENABLE_JEMALLOC "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_UTILS "Build rspamd internal utils [default: OFF]" OFF)
-OPTION(ENABLE_LIBUNWIND "Use libunwind to print crash traces [default: OFF]" OFF)
+OPTION(ENABLE_LIBUNWIND "Obsoleted [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
 OPTION(ENABLE_FASTTEXT "Link with FastText library [default: OFF]" OFF)
@@ -206,14 +206,6 @@ IF (ENABLE_JEMALLOC MATCHES "ON" AND NOT SANITIZE)
     ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
             ROOT ${JEMALLOC_ROOT_DIR})
     SET(WITH_JEMALLOC "1")
-ENDIF ()
-
-IF (ENABLE_LIBUNWIND MATCHES "ON")
-    ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
-            ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
-    SET(WITH_LIBUNWIND "1")
-ELSE ()
-    CHECK_SYMBOL_EXISTS(backtrace "execinfo.h" HAVE_BACKTRACE)
 ENDIF ()
 
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
@@ -633,6 +625,7 @@ ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
 ADD_SUBDIRECTORY(contrib/fastutf8)
 ADD_SUBDIRECTORY(contrib/google-ced)
+ADD_SUBDIRECTORY(contrib/backward-cpp)
 IF (SYSTEM_FMT MATCHES "OFF")
     INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/contrib/fmt/include")
 ELSE ()
