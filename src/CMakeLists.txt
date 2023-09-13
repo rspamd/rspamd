@@ -165,7 +165,8 @@ IF(ENABLE_STATIC MATCHES "ON")
 			"${RAGEL_ragel_content_disposition_OUTPUTS}"
 			"${RAGEL_ragel_rfc2047_OUTPUTS}"
 			"${RAGEL_ragel_smtp_date_OUTPUTS}"
-			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}"
+			${BACKWARD_ENABLE})
 ELSE()
 	ADD_LIBRARY(rspamd-server SHARED
 			${RSPAMD_CRYPTOBOX}
@@ -182,7 +183,8 @@ ELSE()
 			"${RAGEL_ragel_content_disposition_OUTPUTS}"
 			"${RAGEL_ragel_rfc2047_OUTPUTS}"
 			"${RAGEL_ragel_smtp_date_OUTPUTS}"
-			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}"
+			${BACKWARD_ENABLE})
 ENDIF()
 
 FOREACH(_DEP ${LIBSERVER_DEPENDS})
@@ -229,7 +231,7 @@ ENDIF()
 TARGET_LINK_LIBRARIES(rspamd-server ${RSPAMD_REQUIRED_LIBRARIES})
 ADD_BACKWARD(rspamd-server)
 
-ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c ${CMAKE_CURRENT_BINARY_DIR}/config.h ${BACKWARD_ENABLE})
+ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 ADD_BACKWARD(rspamd)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE CXX)
 SET_TARGET_PROPERTIES(rspamd-server PROPERTIES LINKER_LANGUAGE CXX)
