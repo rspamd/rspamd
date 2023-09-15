@@ -642,12 +642,14 @@ local has_msmail_pri = 'header_exists(X-MSMail-Priority)'
 local has_mimeole = 'header_exists(X-MimeOLE)'
 local has_squirrelmail_in_mailer = 'X-Mailer=/SquirrelMail\\b/H'
 local has_office_version_in_mailer = [[X-Mailer=/^Microsoft (?:Office )?Outlook [12]\d\.0/]]
+local has_x_android_message_id = 'header_exists(X-Android-Message-Id)'
 reconf['MISSING_MIMEOLE'] = {
-  re = string.format('(%s) & !(%s) & !(%s) & !(%s)',
+  re = string.format('(%s) & !(%s) & !(%s) & !(%s) & !(%s)',
       has_msmail_pri,
       has_mimeole,
       has_squirrelmail_in_mailer,
-      has_office_version_in_mailer),
+      has_office_version_in_mailer,
+      has_x_android_message_id),
   score = 2.0,
   description = 'Mime-OLE is needed but absent (e.g. fake Outlook or fake Exchange)',
   group = 'headers'
