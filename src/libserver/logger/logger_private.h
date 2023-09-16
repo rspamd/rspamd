@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -102,6 +102,28 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 						 gpointer arg);
 bool rspamd_log_file_on_fork(rspamd_logger_t *logger, struct rspamd_config *cfg,
 							 gpointer arg, GError **err);
+
+/**
+ * Fills IOV of logger (usable for file/console logging)
+ * Warning: this function is NOT reentrant, do not call it twice from a single moment of execution
+ * @param iov if NULL just returns the number of elements required in IOV array
+ * @param module
+ * @param id
+ * @param function
+ * @param level_flags
+ * @param message
+ * @param mlen
+ * @param rspamd_log
+ * @return number of iov elements being filled
+ */
+gsize rspamd_log_fill_iov(struct iovec *iov,
+						  double ts,
+						  const gchar *module, const gchar *id,
+						  const gchar *function,
+						  gint level_flags,
+						  const gchar *message,
+						  gsize mlen,
+						  rspamd_logger_t *rspamd_log);
 /**
  * Escape log line by replacing unprintable characters to hex escapes like \xNN
  * @param src

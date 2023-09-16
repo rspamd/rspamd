@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,6 +26,8 @@
 static rspamd_logger_t *default_logger = NULL;
 static rspamd_logger_t *emergency_logger = NULL;
 static struct rspamd_log_modules *log_modules = NULL;
+
+static const gchar lf_chr = '\n';
 
 guint rspamd_task_log_id = (guint) -1;
 RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
@@ -1003,4 +1005,196 @@ rspamd_get_log_severity_string(gint level_flags)
 	bitnum = ffs(level_flags) - 1;
 #endif
 	return level_strs[bitnum];
+}
+
+static inline void
+log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
+		 size_t len)
+{
+	time_t sec = (time_t) now;
+	gsize r;
+	struct tm tms;
+
+	rspamd_localtime(sec, &tms);
+	r = strftime(timebuf, len, "%F %H:%M:%S", &tms);
+
+	if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
+		gchar usec_buf[16];
+
+		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
+						now - (gdouble) sec);
+		rspamd_snprintf(timebuf + r, len - r,
+						"%s", usec_buf + 1);
+	}
+}
+
+gsize rspamd_log_fill_iov(struct iovec *iov,
+						  double ts,
+						  const gchar *module,
+						  const gchar *id,
+						  const gchar *function,
+						  gint level_flags,
+						  const gchar *message,
+						  gsize mlen,
+						  rspamd_logger_t *logger)
+{
+	bool log_color = (logger->flags & RSPAMD_LOG_FLAG_COLOR);
+	bool log_severity = (logger->flags & RSPAMD_LOG_FLAG_SEVERITY);
+	bool log_rspamadm = (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM);
+	bool log_systemd = (logger->flags & RSPAMD_LOG_FLAG_SYSTEMD);
+
+	gint r;
+
+	if (iov == NULL) {
+		if (log_rspamadm) {
+			if (logger->log_level == G_LOG_LEVEL_DEBUG) {
+				return 4;
+			}
+			else {
+				return 3; /* No time component */
+			}
+		}
+		else if (log_systemd) {
+			return 3;
+		}
+		else {
+			if (log_color) {
+				return 5;
+			}
+			else {
+				return 4;
+			}
+		}
+	}
+	else {
+		static gchar timebuf[64], modulebuf[64];
+		static gchar tmpbuf[256];
+
+		if (!log_systemd) {
+			log_time(ts, logger, timebuf, sizeof(timebuf));
+		}
+
+		if (!log_rspamadm) {
+			if (!log_systemd) {
+				if (log_color) {
+					if (level_flags & (G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE)) {
+						/* White */
+						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;37m");
+					}
+					else if (level_flags & G_LOG_LEVEL_WARNING) {
+						/* Magenta */
+						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;32m");
+					}
+					else if (level_flags & G_LOG_LEVEL_CRITICAL) {
+						/* Red */
+						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[1;31m");
+					}
+					else {
+						r = 0;
+					}
+				}
+				else {
+					r = 0;
+				}
+
+				if (log_severity) {
+					r += rspamd_snprintf(tmpbuf + r,
+										 sizeof(tmpbuf) - r,
+										 "%s [%s] #%P(%s) ",
+										 timebuf,
+										 rspamd_get_log_severity_string(level_flags),
+										 logger->pid,
+										 logger->process_type);
+				}
+				else {
+					r += rspamd_snprintf(tmpbuf + r,
+										 sizeof(tmpbuf) - r,
+										 "%s #%P(%s) ",
+										 timebuf,
+										 logger->pid,
+										 logger->process_type);
+				}
+			}
+			else {
+				r = 0;
+				r += rspamd_snprintf(tmpbuf + r,
+									 sizeof(tmpbuf) - r,
+									 "(%s) ",
+									 logger->process_type);
+			}
+
+			int mremain, mr;
+			char *m;
+
+			modulebuf[0] = '\0';
+			mremain = sizeof(modulebuf);
+			m = modulebuf;
+
+			if (id != NULL) {
+				guint slen = strlen(id);
+				slen = MIN(RSPAMD_LOG_ID_LEN, slen);
+				mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
+									 id);
+				m += mr;
+				mremain -= mr;
+			}
+			if (module != NULL) {
+				mr = rspamd_snprintf(m, mremain, "%s; ", module);
+				m += mr;
+				mremain -= mr;
+			}
+			if (function != NULL) {
+				mr = rspamd_snprintf(m, mremain, "%s: ", function);
+				m += mr;
+				mremain -= mr;
+			}
+			else {
+				mr = rspamd_snprintf(m, mremain, ": ");
+				m += mr;
+				mremain -= mr;
+			}
+
+			/* Ensure that we have a space at the end */
+			if (m > modulebuf && *(m - 1) != ' ') {
+				*(m - 1) = ' ';
+			}
+
+			/* Construct IOV for log line */
+			iov[0].iov_base = tmpbuf;
+			iov[0].iov_len = r;
+			iov[1].iov_base = modulebuf;
+			iov[1].iov_len = m - modulebuf;
+			iov[2].iov_base = (void *) message;
+			iov[2].iov_len = mlen;
+			iov[3].iov_base = (void *) &lf_chr;
+			iov[3].iov_len = 1;
+
+			if (log_color) {
+				iov[4].iov_base = "\033[0m";
+				iov[4].iov_len = sizeof("\033[0m") - 1;
+
+				return 5;
+			}
+
+			return 4;
+		}
+		else {
+			/* Rspamadm case */
+			int niov = 0;
+
+			if (logger->log_level == G_LOG_LEVEL_DEBUG) {
+				iov[niov].iov_base = (void *) timebuf;
+				iov[niov++].iov_len = strlen(timebuf);
+				iov[niov].iov_base = (void *) " ";
+				iov[niov++].iov_len = 1;
+			}
+
+			iov[niov].iov_base = (void *) message;
+			iov[niov++].iov_len = mlen;
+			iov[niov].iov_base = (void *) &lf_chr;
+			iov[niov++].iov_len = 1;
+
+			return niov;
+		}
+	}
 }

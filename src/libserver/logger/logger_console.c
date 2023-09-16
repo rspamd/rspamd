@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -153,13 +153,8 @@ bool rspamd_log_console_log(const gchar *module, const gchar *id,
 							gpointer arg)
 {
 	struct rspamd_console_logger_priv *priv = (struct rspamd_console_logger_priv *) arg;
-	static gchar timebuf[64], modulebuf[64];
-	gchar tmpbuf[256];
-	gchar *m;
-	struct iovec iov[6];
-	gulong r = 0, mr = 0;
-	size_t mremain;
-	gint fd, niov = 0;
+	gint fd, r;
+	double now;
 
 	if (level_flags & G_LOG_LEVEL_CRITICAL) {
 		fd = priv->crit_fd;
@@ -184,119 +179,13 @@ bool rspamd_log_console_log(const gchar *module, const gchar *id,
 	rspamd_file_lock(fd, FALSE);
 #endif
 
-	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-		log_time(rspamd_get_calendar_ticks(),
-				 rspamd_log, timebuf, sizeof(timebuf));
-	}
-
-	if (priv->log_color) {
-		if (level_flags & (G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE)) {
-			/* White */
-			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;37m");
-		}
-		else if (level_flags & G_LOG_LEVEL_WARNING) {
-			/* Magenta */
-			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;32m");
-		}
-		else if (level_flags & G_LOG_LEVEL_CRITICAL) {
-			/* Red */
-			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[1;31m");
-		}
-	}
-	else {
-		r = 0;
-	}
-
-	if (priv->log_rspamadm) {
-		if (rspamd_log->log_level == G_LOG_LEVEL_DEBUG) {
-			log_time(rspamd_get_calendar_ticks(),
-					 rspamd_log, timebuf, sizeof(timebuf));
-			iov[niov].iov_base = (void *) timebuf;
-			iov[niov++].iov_len = strlen(timebuf);
-			iov[niov].iov_base = (void *) " ";
-			iov[niov++].iov_len = 1;
-		}
-
-		iov[niov].iov_base = (void *) message;
-		iov[niov++].iov_len = mlen;
-		iov[niov].iov_base = (void *) &lf_chr;
-		iov[niov++].iov_len = 1;
-	}
-	else {
-		if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-			if (priv->log_severity) {
-				r += rspamd_snprintf(tmpbuf + r,
-									 sizeof(tmpbuf) - r,
-									 "%s [%s] #%P(%s) ",
-									 timebuf,
-									 rspamd_get_log_severity_string(level_flags),
-									 rspamd_log->pid,
-									 rspamd_log->process_type);
-			}
-			else {
-				r += rspamd_snprintf(tmpbuf + r,
-									 sizeof(tmpbuf) - r,
-									 "%s #%P(%s) ",
-									 timebuf,
-									 rspamd_log->pid,
-									 rspamd_log->process_type);
-			}
-		}
-		else {
-			r += rspamd_snprintf(tmpbuf + r,
-								 sizeof(tmpbuf) - r,
-								 "#%P(%s) ",
-								 rspamd_log->pid,
-								 rspamd_log->process_type);
-		}
-
-		modulebuf[0] = '\0';
-		mremain = sizeof(modulebuf);
-		m = modulebuf;
-
-		if (id != NULL) {
-			guint slen = strlen(id);
-			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
-								 id);
-			m += mr;
-			mremain -= mr;
-		}
-		if (module != NULL) {
-			mr = rspamd_snprintf(m, mremain, "%s; ", module);
-			m += mr;
-			mremain -= mr;
-		}
-		if (function != NULL) {
-			mr = rspamd_snprintf(m, mremain, "%s: ", function);
-			m += mr;
-			mremain -= mr;
-		}
-		else {
-			mr = rspamd_snprintf(m, mremain, ": ");
-			m += mr;
-			mremain -= mr;
-		}
-
-		/* Ensure that we have a space at the end */
-		if (m > modulebuf && *(m - 1) != ' ') {
-			*(m - 1) = ' ';
-		}
-
-		iov[niov].iov_base = tmpbuf;
-		iov[niov++].iov_len = r;
-		iov[niov].iov_base = modulebuf;
-		iov[niov++].iov_len = m - modulebuf;
-		iov[niov].iov_base = (void *) message;
-		iov[niov++].iov_len = mlen;
-		iov[niov].iov_base = (void *) &lf_chr;
-		iov[niov++].iov_len = 1;
-	}
-
-	if (priv->log_color) {
-		iov[niov].iov_base = "\033[0m";
-		iov[niov++].iov_len = sizeof("\033[0m") - 1;
-	}
+	now = rspamd_get_calendar_ticks();
+	gsize niov = rspamd_log_fill_iov(NULL, now, module, id,
+									 function, level_flags, message,
+									 mlen, rspamd_log);
+	struct iovec *iov = g_alloca(sizeof(struct iovec) * niov);
+	rspamd_log_fill_iov(iov, now, module, id, function, level_flags, message,
+						mlen, rspamd_log);
 
 again:
 	r = writev(fd, iov, niov);

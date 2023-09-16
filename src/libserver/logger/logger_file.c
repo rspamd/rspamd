@@ -1,11 +1,11 @@
-/*-
- * Copyright 2020 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,8 +23,6 @@
 #include "logger_private.h"
 
 #define FILE_LOG_QUARK g_quark_from_static_string("file_logger")
-
-static const gchar lf_chr = '\n';
 
 struct rspamd_file_logger_priv {
 	gint fd;
@@ -56,28 +54,6 @@ rspamd_log_calculate_cksum(const gchar *message, size_t mlen)
 {
 	return rspamd_cryptobox_fast_hash(message, mlen, rspamd_hash_seed());
 }
-
-static inline void
-log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
-		 size_t len)
-{
-	time_t sec = (time_t) now;
-	gsize r;
-	struct tm tms;
-
-	rspamd_localtime(sec, &tms);
-	r = strftime(timebuf, len, "%F %H:%M:%S", &tms);
-
-	if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
-		gchar usec_buf[16];
-
-		rspamd_snprintf(usec_buf, sizeof(usec_buf), "%.5f",
-						now - (gdouble) sec);
-		rspamd_snprintf(timebuf + r, len - r,
-						"%s", usec_buf + 1);
-	}
-}
-
 
 /*
  * Write a line to log file (unbuffered)
@@ -399,15 +375,8 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 						 gpointer arg)
 {
 	struct rspamd_file_logger_priv *priv = (struct rspamd_file_logger_priv *) arg;
-	static gchar timebuf[64], modulebuf[64];
-	gchar tmpbuf[256];
-	gchar *m;
 	gdouble now;
-	struct iovec iov[6];
-	gulong r = 0, mr = 0;
 	guint64 cksum;
-	size_t mremain;
-	const gchar *cptype = NULL;
 	gboolean got_time = FALSE;
 
 
@@ -496,84 +465,13 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 		now = rspamd_get_calendar_ticks();
 	}
 
-	/* Format time */
-	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-		log_time(now, rspamd_log, timebuf, sizeof(timebuf));
-	}
+	gsize niov = rspamd_log_fill_iov(NULL, now, module, id, function, level_flags, message,
+									 mlen, rspamd_log);
+	struct iovec *iov = g_alloca(sizeof(struct iovec) * niov);
+	rspamd_log_fill_iov(iov, now, module, id, function, level_flags, message,
+						mlen, rspamd_log);
 
-	cptype = rspamd_log->process_type;
-	r = 0;
-
-	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-		if (priv->log_severity) {
-			r += rspamd_snprintf(tmpbuf + r,
-								 sizeof(tmpbuf) - r,
-								 "%s [%s] #%P(%s) ",
-								 timebuf,
-								 rspamd_get_log_severity_string(level_flags),
-								 rspamd_log->pid,
-								 cptype);
-		}
-		else {
-			r += rspamd_snprintf(tmpbuf + r,
-								 sizeof(tmpbuf) - r,
-								 "%s #%P(%s) ",
-								 timebuf,
-								 rspamd_log->pid,
-								 cptype);
-		}
-	}
-	else {
-		r += rspamd_snprintf(tmpbuf + r,
-							 sizeof(tmpbuf) - r,
-							 "(%s) ",
-							 cptype);
-	}
-
-	modulebuf[0] = '\0';
-	mremain = sizeof(modulebuf);
-	m = modulebuf;
-
-	if (id != NULL) {
-		guint slen = strlen(id);
-		slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-		mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
-							 id);
-		m += mr;
-		mremain -= mr;
-	}
-	if (module != NULL) {
-		mr = rspamd_snprintf(m, mremain, "%s; ", module);
-		m += mr;
-		mremain -= mr;
-	}
-	if (function != NULL) {
-		mr = rspamd_snprintf(m, mremain, "%s: ", function);
-		m += mr;
-		mremain -= mr;
-	}
-	else {
-		mr = rspamd_snprintf(m, mremain, ": ");
-		m += mr;
-		mremain -= mr;
-	}
-
-	/* Ensure that we have a space at the end */
-	if (m > modulebuf && *(m - 1) != ' ') {
-		*(m - 1) = ' ';
-	}
-
-	/* Construct IOV for log line */
-	iov[0].iov_base = tmpbuf;
-	iov[0].iov_len = r;
-	iov[1].iov_base = modulebuf;
-	iov[1].iov_len = m - modulebuf;
-	iov[2].iov_base = (void *) message;
-	iov[2].iov_len = mlen;
-	iov[3].iov_base = (void *) &lf_chr;
-	iov[3].iov_len = 1;
-
-	return file_log_helper(rspamd_log, priv, iov, 4, level_flags);
+	return file_log_helper(rspamd_log, priv, iov, niov, level_flags);
 }
 
 void *
