@@ -854,6 +854,9 @@ set:
 
 			if (lua_cbref != -1) {
 				msg_info_config("added condition for regexp %s", mime_atom->str);
+				/* Add SOM_LEFTMOST_FLAG implicitly */
+				rspamd_regexp_set_flags(mime_atom->d.re->regexp, rspamd_regexp_get_flags(mime_atom->d.re->regexp) |
+																	 RSPAMD_REGEXP_FLAG_LEFTMOST);
 			}
 
 			/* Register new item in the cache */
