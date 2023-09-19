@@ -59,7 +59,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
     var timer_id = [];
-    var locale = null;
+    var locale = (localStorage.getItem("selected_locale") === "custom") ? localStorage.getItem("custom_locale") : null;
     var selData = null; // Graph's dataset selector state
 
     NProgress.configure({
