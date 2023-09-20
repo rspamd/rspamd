@@ -563,7 +563,31 @@ local function gen_rbl_callback(rule)
       no_cache = true,
     }
 
-    if not rule.urls then
+    if rule.numeric_urls then
+      if rule.content_urls then
+        if not rule.images then
+          ex_params.flags_mode = 'explicit'
+          ex_params.flags = {'numeric'}
+          ex_params.filter = function(url)
+            return (bit.band(url:get_flags_num(), url_flag_bits.image) == 0)
+          end
+        else
+          ex_params.filter = function(url)
+            return (bit.band(url:get_flags_num(), url_flag_bits.numeric) ~= 0)
+          end
+        end
+      elseif rule.images then
+        ex_params.filter = function(url)
+          return (bit.band(url:get_flags_num(), url_flag_bits.numeric) ~= 0)
+        end
+      else
+        ex_params.flags_mode = 'explicit'
+        ex_params.flags = {'numeric'}
+        ex_params.filter = function(url)
+          return (bit.band(url:get_flags_num(), url_flag_bits.content) == 0)
+        end
+      end
+    elseif not rule.urls and (rule.content_urls or rule.images) then
       ex_params.flags_mode = 'explicit'
       ex_params.flags = {}
       if rule.content_urls then
@@ -571,9 +595,6 @@ local function gen_rbl_callback(rule)
       end
       if rule.images then
         table.insert(ex_params.flags, 'image')
-      end
-      if rule.numeric_urls then
-        table.insert(ex_params.flags, 'numeric')
       end
     end
 

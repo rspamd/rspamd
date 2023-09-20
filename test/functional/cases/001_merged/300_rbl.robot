@@ -80,3 +80,18 @@ NUMERIC URLS
   Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
   ...  Settings={symbols_enabled = [URIBL_NUMERIC]}
   Expect Symbol With Exact Options  URIBL_NUMERIC  4.3.2.1:url
+
+NUMERIC URLS WITH IMAGES
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NUMERIC_IMAGES]}
+  Expect Symbol With Exact Options  URIBL_NUMERIC_IMAGES  4.3.2.1:url  12.11.10.9:url
+
+NUMERIC URLS WITH CONTENT
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NUMERIC_CONTENT]}
+  Expect Symbol With Exact Options  URIBL_NUMERIC_CONTENT  4.3.2.1:url  8.7.6.5:url
+
+NUMERIC URLS WITH EVERYTHING
+  Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  Settings={symbols_enabled = [URIBL_NUMERIC_EVERYTHING]}
+  Expect Symbol With Exact Options  URIBL_NUMERIC_EVERYTHING  12.11.10.9:url  4.3.2.1:url  8.7.6.5:url
