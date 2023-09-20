@@ -984,37 +984,25 @@ lua_util_encode_base64(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
-	const gchar *s = NULL;
 	gchar *out;
-	gsize inlen, outlen;
-	guint str_lim = 0;
+	gsize outlen;
+	long str_lim = 0;
 	gboolean fold = FALSE;
 
-	if (lua_type(L, 1) == LUA_TSTRING) {
-		s = luaL_checklstring(L, 1, &inlen);
-	}
-	else if (lua_type(L, 1) == LUA_TUSERDATA) {
-		t = lua_check_text(L, 1);
-
-		if (t != NULL) {
-			s = t->start;
-			inlen = t->len;
-		}
-	}
+	t = lua_check_text_or_string(L, 1);
 
 	if (lua_gettop(L) > 1) {
-		str_lim = luaL_checknumber(L, 2);
-
-		fold = !!(str_lim > 0);
+		str_lim = luaL_checkinteger(L, 2);
+		fold = str_lim > 0;
 	}
 
-	if (s == NULL) {
-		lua_pushnil(L);
+	if (t == NULL) {
+		return luaL_error(L, "invalid arguments");
 	}
 	else {
 
 		if (fold) {
-			out = rspamd_encode_base64(s, inlen, str_lim, &outlen);
+			out = rspamd_encode_base64(t->start, t->len, str_lim, &outlen);
 		}
 		else {
 			enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
@@ -1033,16 +1021,11 @@ lua_util_encode_base64(lua_State *L)
 				}
 			}
 
-			out = rspamd_encode_base64_fold(s, inlen, str_lim, &outlen, how);
+			out = rspamd_encode_base64_fold(t->start, t->len, str_lim, &outlen, how);
 		}
 
 		if (out != NULL) {
-			t = lua_newuserdata(L, sizeof(*t));
-			rspamd_lua_setclass(L, "rspamd{text}", -1);
-			t->start = out;
-			t->len = outlen;
-			/* Need destruction */
-			t->flags = RSPAMD_TEXT_FLAG_OWN;
+			lua_new_text(L, out, outlen, TRUE);
 		}
 		else {
 			lua_pushnil(L);
