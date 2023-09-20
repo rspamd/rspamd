@@ -382,7 +382,10 @@ local function setup_dkim_signing(cfg, changes)
     end
     printf("--")
   end
-
+  local function print_public_key(pk)
+    local base64_pk = tostring(rspamd_util.encode_base64(pk))
+    printf('v=DKIM1; k=rsa; p=%s\n', base64_pk)
+  end
   repeat
     if has_domains then
       print_domains()
@@ -406,22 +409,12 @@ local function setup_dkim_signing(cfg, changes)
     if not rspamd_util.file_exists(privkey_file) then
       if ask_yes_no("Do you want to create privkey " .. highlight(privkey_file),
           true) then
-        local pubkey_file = privkey_file .. ".pub"
-        local rspamd_cryptobox = require "rspamd_cryptobox"
-        local sk, pk = rspamd_cryptobox.generate_keypair("rsa", 2048)
-        pk:save_to_file(pubkey_file)
-        sk:save_to_file(privkey_file, tonumber('0600', 8))
-
-        local f = io.open(pubkey_file)
-        if not f then
-          printf("Cannot open pubkey file %s, fatal error", highlight(pubkey_file))
-          os.exit(1)
-        end
-
-        local content = f:read("*all")
-        f:close()
-        print("To make dkim signing working, you need to place the following record in your DNS zone:")
-        print(content)
+        local rsa = require "rspamd_rsa"
+        local sk, pk = rsa.keypair(2048)
+        sk:save(privkey_file, 'pem')
+        print("You need to chown private key file to rspamd user!!")
+        print("To make dkim signing working, to place the following record in your DNS zone:")
+        print_public_key(tostring(pk))
       end
     end
 
@@ -854,4 +847,3 @@ return {
   name = 'configwizard',
   description = parser._description,
 }
-
