@@ -88,7 +88,7 @@ local settings = {
   whitelist_symbols = {}, -- whitelist when specific symbols have been found
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
-  report_time = false, -- Tell when greylisting is epired (appended to `message`)
+  report_time = false, -- Tell when greylisting is expired (appended to `message`)
   check_local = false,
   check_authed = false,
 }
