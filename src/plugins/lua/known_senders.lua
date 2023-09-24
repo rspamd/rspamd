@@ -70,12 +70,13 @@ end
 local function check_redis_key(task, key, key_ty)
   lua_util.debugm(N, task, 'check key %s, type: %s', key, key_ty)
   local function redis_zset_callback(err, data)
+    lua_util.debugm(N, task, 'got data: %s', data)
     if err then
       rspamd_logger.errx(task, 'redis error: %s', err)
     elseif data then
       if type(data) ~= 'userdata' then
         -- non-null reply
-        task:insert_result(settings.symbol, 1.0, { key_ty, key })
+        task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Insert key to zset and trim it's cardinality
@@ -101,12 +102,13 @@ local function check_redis_key(task, key, key_ty)
   end
 
   local function redis_bloom_callback(err, data)
+    lua_util.debugm(N, task, 'got data: %s', data)
     if err then
       rspamd_logger.errx(task, 'redis error: %s', err)
     elseif data then
       if type(data) ~= 'userdata' and data == 1 then
         -- non-null reply equal to `1`
-        task:insert_result(settings.symbol, 1.0, { key_ty, key })
+        task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Reserve bloom filter space
@@ -157,14 +159,14 @@ local function known_senders_callback(task)
   local smtp_from = (task:get_from('smtp') or {})[1]
   local mime_key, smtp_key
   if mime_from and mime_from.addr then
-    if settings.domains.get_key(mime_from.domain) then
+    if settings.domains:get_key(mime_from.domain) then
       mime_key = make_key(mime_from)
     else
       lua_util.debugm(N, task, 'skip mime from domain %s', mime_from.domain)
     end
   end
   if smtp_from and smtp_from.addr then
-    if settings.domains.get_key(smtp_from.domain) then
+    if settings.domains:get_key(smtp_from.domain) then
       smtp_key = make_key(smtp_from)
     else
       lua_util.debugm(N, task, 'skip smtp from domain %s', smtp_from.domain)
@@ -196,6 +198,14 @@ if opts then
   redis_params = lua_redis.parse_redis_server(N, opts)
 
   if redis_params then
+    local map_conf = settings.domains
+    settings.domains = lua_maps.map_add_from_ucl(settings.domains, 'set', 'domains to track senders from')
+    if not settings.domains then
+      rspamd_logger.errx(rspamd_config, "couldn't add map %s, disable module",
+          map_conf)
+      lua_util.disable_module(N, "config")
+      return
+    end
     lua_redis.register_prefix(settings.redis_key, N,
         'Known elements redis key', {
           type = 'zset/bloom filter',
