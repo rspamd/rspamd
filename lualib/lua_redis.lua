@@ -955,7 +955,7 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
       callback(err, data, addr)
     end
   end
-  if not task or not redis_params or not callback or not command then
+  if not task or not redis_params or not command then
     return false, nil, nil
   end
 
@@ -1046,7 +1046,7 @@ exports.redis_make_request = rspamd_redis_make_request
 
 local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
                                            is_write, callback, command, args, extra_opts)
-  if not ev_base or not redis_params or not callback or not command then
+  if not ev_base or not redis_params or not command then
     return false, nil, nil
   end
 
