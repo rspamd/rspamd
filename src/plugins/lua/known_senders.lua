@@ -157,10 +157,18 @@ local function known_senders_callback(task)
   local smtp_from = (task:get_from('smtp') or {})[1]
   local mime_key, smtp_key
   if mime_from and mime_from.addr then
-    mime_key = make_key(mime_from)
+    if settings.domains.get_key(mime_from.domain) then
+      mime_key = make_key(mime_from)
+    else
+      lua_util.debugm(N, task, 'skip mime from domain %s', mime_from.domain)
+    end
   end
   if smtp_from and smtp_from.addr then
-    smtp_key = make_key(smtp_from)
+    if settings.domains.get_key(smtp_from.domain) then
+      smtp_key = make_key(smtp_from)
+    else
+      lua_util.debugm(N, task, 'skip smtp from domain %s', smtp_from.domain)
+    end
   end
 
   if mime_key and smtp_key and mime_key ~= smtp_key then
@@ -197,6 +205,7 @@ if opts then
       type = 'normal',
       callback = known_senders_callback,
       one_shot = true,
+      score = -1.0,
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })
   else
