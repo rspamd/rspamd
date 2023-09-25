@@ -83,7 +83,7 @@ local function check_redis_key(task, key, key_ty)
         task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
         if settings.symbol_unknown then
-          task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
+          task:insert_result(settings.symbol_unknown, 1.0, string.format("%s:%s", key_ty, key))
         end
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Insert key to zset and trim it's cardinality
@@ -118,7 +118,7 @@ local function check_redis_key(task, key, key_ty)
         task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
         if settings.symbol_unknown then
-          task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
+          task:insert_result(settings.symbol_unknown, 1.0, string.format("%s:%s", key_ty, key))
         end
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Reserve bloom filter space
