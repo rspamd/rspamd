@@ -37,6 +37,8 @@ known_senders {
   max_ttl = 30d;
   # Use bloom filters (must be enabled in Redis as a plugin)
   use_bloom = false;
+  # Insert symbol for new senders from the specific domains
+  symbol_unknown = 'UNKNOWN_SENDER';
 }
   ]])
   return
@@ -49,6 +51,7 @@ local settings = {
   max_ttl = 30 * 86400,
   use_bloom = false,
   symbol = 'KNOWN_SENDER',
+  symbol_unknown = 'UNKNOWN_SENDER',
   redis_key = 'rs_known_senders',
 }
 
@@ -59,6 +62,7 @@ local settings_schema = lua_redis.enrich_schema({
   use_bloom = ts.boolean:is_optional(),
   redis_key = ts.string:is_optional(),
   symbol = ts.string:is_optional(),
+  symbol_unknown = ts.string:is_optional(),
 })
 
 local function make_key(input)
@@ -78,6 +82,9 @@ local function check_redis_key(task, key, key_ty)
         -- non-null reply
         task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
+        if settings.symbol_unknown then
+          task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
+        end
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Insert key to zset and trim it's cardinality
         lua_redis.redis_make_request(task,
@@ -110,6 +117,9 @@ local function check_redis_key(task, key, key_ty)
         -- non-null reply equal to `1`
         task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
       else
+        if settings.symbol_unknown then
+          task:insert_result(settings.symbol, 1.0, string.format("%s:%s", key_ty, key))
+        end
         lua_util.debugm(N, task, 'insert key %s, type: %s', key, key_ty)
         -- Reserve bloom filter space
         lua_redis.redis_make_request(task,
@@ -210,7 +220,7 @@ if opts then
         'Known elements redis key', {
           type = 'zset/bloom filter',
         })
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = settings.symbol,
       type = 'normal',
       callback = known_senders_callback,
@@ -218,6 +228,16 @@ if opts then
       score = -1.0,
       augmentations = { string.format("timeout=%f", redis_params.timeout or 0.0) }
     })
+
+    if settings.symbol_unknown and #settings.symbol_unknown > 0 then
+      rspamd_config:register_symbol({
+        name = settings.symbol_unknown,
+        type = 'virtual',
+        parent = id,
+        one_shot = true,
+        score = 0.5,
+      })
+    end
   else
     lua_util.disable_module(N, "redis")
   end
