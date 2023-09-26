@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -871,7 +871,7 @@ void rspamd_normalize_words(GArray *words, rspamd_mempool_t *pool)
 
 void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
 					   const gchar *language,
-					   struct rspamd_lang_detector *d)
+					   struct rspamd_lang_detector *lang_detector)
 {
 	static GHashTable *stemmers = NULL;
 	struct sb_stemmer *stem = NULL;
@@ -894,7 +894,7 @@ void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
 
 			if (stem == NULL) {
 				msg_debug_pool(
-					"<%s> cannot create lemmatizer for %s language",
+					"cannot create lemmatizer for %s language",
 					language);
 				g_hash_table_insert(stemmers, g_strdup(language),
 									GINT_TO_POINTER(-1));
@@ -919,12 +919,11 @@ void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
 				stemmed = sb_stemmer_stem(stem,
 										  tok->normalized.begin, tok->normalized.len);
 
-				dlen = stemmed ? strlen(stemmed) : 0;
+				dlen = sb_stemmer_length(stem);
 
-				if (dlen > 0) {
-					dest = rspamd_mempool_alloc(pool, dlen + 1);
+				if (stemmed != NULL && dlen > 0) {
+					dest = rspamd_mempool_alloc(pool, dlen);
 					memcpy(dest, stemmed, dlen);
-					dest[dlen] = '\0';
 					tok->stemmed.len = dlen;
 					tok->stemmed.begin = dest;
 					tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STEMMED;
@@ -940,8 +939,8 @@ void rspamd_stem_words(GArray *words, rspamd_mempool_t *pool,
 				tok->stemmed.begin = tok->normalized.begin;
 			}
 
-			if (tok->stemmed.len > 0 && d != NULL &&
-				rspamd_language_detector_is_stop_word(d, tok->stemmed.begin, tok->stemmed.len)) {
+			if (tok->stemmed.len > 0 && lang_detector != NULL &&
+				rspamd_language_detector_is_stop_word(lang_detector, tok->stemmed.begin, tok->stemmed.len)) {
 				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STOP_WORD;
 			}
 		}
