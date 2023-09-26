@@ -83,16 +83,20 @@ end
 local function validate_dns(lstr)
   if lstr:match('%.%.') then
     -- two dots in a row
-    return false
+    return false, "two dots in a row"
   end
   if not rspamd_util.is_valid_utf8(lstr) then
     -- invalid utf8 detected
-    return false
+    return false, "invalid utf8"
   end
   for v in lstr:gmatch('[^%.]+') do
-    if v:len() > 63 or v:match('^-') or v:match('-$') then
-      -- too long label or weird labels
-      return false
+    if v:len() > 63 then
+      -- too long label
+      return false, "too long label"
+    end
+    if v:match('^-') or v:match('-$') then
+      -- dash at the beginning or end of label
+      return false, "dash at the beginning or end of label"
     end
   end
   return true
@@ -567,7 +571,7 @@ local function gen_rbl_callback(rule)
       if rule.content_urls then
         if not rule.images then
           ex_params.flags_mode = 'explicit'
-          ex_params.flags = {'numeric'}
+          ex_params.flags = { 'numeric' }
           ex_params.filter = function(url)
             return (bit.band(url:get_flags_num(), url_flag_bits.image) == 0)
           end
@@ -582,7 +586,7 @@ local function gen_rbl_callback(rule)
         end
       else
         ex_params.flags_mode = 'explicit'
-        ex_params.flags = {'numeric'}
+        ex_params.flags = { 'numeric' }
         ex_params.filter = function(url)
           return (bit.band(url:get_flags_num(), url_flag_bits.content) == 0)
         end
@@ -905,7 +909,8 @@ local function gen_rbl_callback(rule)
         if nresolved == 0 then
           -- Emit real RBL requests as there are no ip resolution requests
           for name, req in pairs(resolved_req) do
-            if validate_dns(req.n) then
+            local val_res, val_error = validate_dns(req.n)
+            if val_res then
               lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
                   rule.symbol, name, req.n)
               r:resolve_a({
@@ -915,8 +920,8 @@ local function gen_rbl_callback(rule)
                 forced = req.forced
               })
             else
-              rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s',
-                  req.n, rule.symbol)
+              rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s: %s',
+                  req.n, rule.symbol, val_error)
             end
           end
         end
@@ -924,7 +929,8 @@ local function gen_rbl_callback(rule)
     end
 
     for name, req in pairs(dns_req) do
-      if validate_dns(req.n) then
+      local val_res, val_error = validate_dns(req.n)
+      if val_res then
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
             rule.symbol, name, req.n)
 
@@ -957,8 +963,8 @@ local function gen_rbl_callback(rule)
         end
 
       else
-        rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s',
-            req.n, rule.symbol)
+        rspamd_logger.warnx(task, 'cannot send invalid DNS request %s for %s: %s',
+            req.n, rule.symbol, val_error)
       end
     end
   end
