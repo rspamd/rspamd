@@ -240,8 +240,8 @@ Run Rspamd
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
-  ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout
-  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/configdump.stderr
+  ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout  encoding_errors=ignore
+  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/configdump.stderr  encoding_errors=ignore
   Log  ${configdump}
 
   # Fix directory ownership (maybe do this somewhere else)
@@ -263,8 +263,8 @@ Run Rspamd
   ...  stdout=${RSPAMD_TMPDIR}/rspamd.stdout  stderr=${RSPAMD_TMPDIR}/rspamd.stderr
 
   # Log stdout/stderr
-  ${rspamd_stdout} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout
-  ${rspamd_stderror} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr
+  ${rspamd_stdout} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stdout  encoding_errors=ignore
+  ${rspamd_stderror} =  Get File  ${RSPAMD_TMPDIR}/rspamd.stderr  encoding_errors=ignore
   Log  ${rspamd_stdout}
   Log  ${rspamd_stderror}
 
