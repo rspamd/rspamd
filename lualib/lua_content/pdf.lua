@@ -428,18 +428,23 @@ local function maybe_extract_object_stream(obj, pdf, task)
   if dict.Length and type(obj.stream) == 'table' then
     local len = math.min(obj.stream.len,
         tonumber(maybe_dereference_object(dict.Length, pdf, task)) or 0)
-    local real_stream = obj.stream.data:span(1, len)
+    if len > 0 then
+      local real_stream = obj.stream.data:span(1, len)
 
-    local uncompressed, filter_err = maybe_apply_filter(dict, real_stream, pdf, task)
+      local uncompressed, filter_err = maybe_apply_filter(dict, real_stream, pdf, task)
 
-    if uncompressed then
-      obj.uncompressed = uncompressed
-      lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
-          obj.major, obj.minor, len, uncompressed:len())
-      return obj.uncompressed
+      if uncompressed then
+        obj.uncompressed = uncompressed
+        lua_util.debugm(N, task, 'extracted object %s:%s: (%s -> %s)',
+            obj.major, obj.minor, len, uncompressed:len())
+        return obj.uncompressed
+      else
+        lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s: %s',
+            obj.major, obj.minor, len, dict.Filter, filter_err)
+      end
     else
-      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s; filter = %s: %s',
-          obj.major, obj.minor, len, dict.Filter, filter_err)
+      lua_util.debugm(N, task, 'cannot extract object %s:%s; len = %s',
+          obj.major, obj.minor, len)
     end
   end
 end
