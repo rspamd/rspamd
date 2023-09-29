@@ -1,288 +1,550 @@
 ---
-kind: pipeline
-type: docker
-name: default
-
-platform:
-  os: linux
-
-steps:
-  - name: prepare
-
-    # any image with a root shell can be used here, but Ubuntu used as base
-    # image for build and test images and we need to download it anyway
-    image: ubuntu:22.04
-    pull: if-not-exists
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    commands:
-      - install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install
-
-  - name: build
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
-    image: rspamd/ci:ubuntu-build
-    pull: always
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ prepare ]
-    commands:
-      # build directories should be writable by nobody, for rspamd in functional tests
-      # works as nobody and writes coverage files there
-      - test "$(id -un)" = nobody
-      - cd /rspamd/build
-      - >
-        cmake
-        -DCMAKE_INSTALL_PREFIX=/rspamd/install
-        -DCMAKE_RULE_MESSAGES=OFF
-        -DCMAKE_VERBOSE_MAKEFILE=ON
-        -DENABLE_COVERAGE=ON
-        -DENABLE_LIBUNWIND=ON
-        -DENABLE_HYPERSCAN=ON
-        -GNinja
-        $DRONE_WORKSPACE
-      - ncpu=$(getconf _NPROCESSORS_ONLN)
-      - ninja -j $ncpu install
-      - ninja -j $ncpu rspamd-test
-      - ninja -j $ncpu rspamd-test-cxx
-
-  - name: build-clang
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
-    image: rspamd/ci:fedora-build
-    pull: always
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ prepare ]
-    commands:
-      - test "$(id -un)" = nobody
-      - cd /rspamd/fedora/build
-      - export LDFLAGS='-fuse-ld=lld'
-      #- export CFLAGS='-fsanitize=address,undefined,implicit-integer-truncation'
-      #- export CXXFLAGS='-fsanitize=address,undefined,implicit-integer-truncation'
-      - export ASAN_OPTIONS=detect_leaks=0
-      - >
-        cmake
-        -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install
-        -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
-        -DCMAKE_RULE_MESSAGES=OFF
-        -DCMAKE_VERBOSE_MAKEFILE=ON
-        -DENABLE_CLANG_PLUGIN=ON
-        -DENABLE_FULL_DEBUG=ON
-        -DENABLE_HYPERSCAN=ON
-        -DSANITIZE=address
-        $DRONE_WORKSPACE
-      - ncpu=$(getconf _NPROCESSORS_ONLN)
-      - make -j $ncpu install
-      - make -j $ncpu rspamd-test
-      - make -j $ncpu rspamd-test-cxx
-
-  # We run rspamd-test (unit test) and functional test (runned by robot) in
-  # parallel to save time. To avoid conflict in saving lua coverage we run them
-  # from different directories. For C code coverage counters is saved to .gcda
-  # files and binary contain absolute path to them, so rspamd-test and
-  # processes started by functional test are writing to the same files. On
-  # process exit new coverage data merged with existing content of .gcda file.
-  # Race is possible if rspamd-test and some rspamd process in functional test
-  # will try to write .gcda file simultaneous.  But it is very unlikely and
-  # performance is more important then correct coverage data.
-
-  - name: rspamd-test
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
-    image: rspamd/ci:ubuntu-test
-    pull: always
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ build ]
-    commands:
-      - test "$(id -un)" = nobody
-      - ulimit -c unlimited
-      # rspamd-test and functional test both use luacov.stats.out file and should be started from
-      # different directories (if started in parallel)
-      - cd /rspamd/build/test
-      - set +e
-      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
-      - set -e
-      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
-      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
-      - >
-        if [ $EXIT_CODE -gt 128 ]; then
-        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
-        exit $EXIT_CODE;
-        fi;
-        if [ $EXIT_CODE -ne 0 ]; then
-        exit $EXIT_CODE;
-        fi
-      # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
-      # and writes json report for coveralls.io service
-      - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
-      - set +e
-      - ./rspamd-test-cxx -s; EXIT_CODE=$?
-      - set -e
-      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
-      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
-      - >
-        if [ $EXIT_CODE -gt 128 ]; then
-        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx;
-        exit $EXIT_CODE;
-        fi
-      - exit $EXIT_CODE
-
-  - name: test-fedora-clang
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-test/Dockerfile
-    image: rspamd/ci:fedora-test
-    pull: always
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ build-clang ]
-    commands:
-      - test "$(id -un)" = nobody
-      # Asan reserves 20Tb of virtual memory, limit core size to 2 Gb to avoid writing huge core
-      - ulimit -c 2097152
-      - ulimit -s unlimited
-      # disable leak sanitizer: too many leaks detected, most of them probably FP
-      - export ASAN_OPTIONS="detect_leaks=0:print_stacktrace=1:disable_coredump=0"
-      - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
-      - cd /rspamd/fedora/build/test
-      - set +e
-      - env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
-      - set -e
-      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
-      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
-      - >
-        if [ $EXIT_CODE -gt 128 ]; then
-        gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
-        fi
-      - set +e
-      - ./rspamd-test-cxx -s; EXIT_CODE=$?
-      - set -e
-      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
-      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
-      - >
-        if [ $EXIT_CODE -gt 128 ]; then
-        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx;
-        exit $EXIT_CODE;
-        fi
-      - cat /tmp/ubsan.* || true
-      - exit $EXIT_CODE
-
-  - name: functional
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
-    image: rspamd/ci:ubuntu-test-func
-    pull: always
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ build ]
-    commands:
-      - cd /rspamd/build
-      - ulimit -c unlimited
-      - ulimit -s unlimited
-      # some rspamd processes during this test work as root and some as nobody
-      # use umask to create world-writable files so nobody can write to *.gcda files created by root
-      - umask 0000
-      - set +e
-      - RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?
-      - set -e
-      # upload test results to nginx frontent using WebDAV PUT
-      - >
-        if [ -n "$HTTP_PUT_AUTH" ]; then
-        $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/;
-        fi
-      # core_pattern=/var/tmp/%u.%e.core so one or two cores can be saved for each binary
-      - core_files=$(find /var/tmp/ -name '*.core')
-      # use 'info proc mappings' to find path to executable file for given core
-      # first mapping is usually program executable
-      - >
-        for core in $core_files;
-        do
-        exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}');
-        gdb --batch -ex 'bt' -c $core $exe; echo '---';
-        done
-      - exit $EXIT_CODE
-    environment:
-      HTTP_PUT_AUTH: { from_secret: http_put_auth }
-
-  - name: send-coverage
-    image: rspamd/ci:ubuntu-test
-    pull: if-not-exists
-    volumes:
-      - name: rspamd
-        path: /rspamd
-    depends_on: [ functional, rspamd-test ]
-    commands:
-      - cd /rspamd/build
-      # extract coverage data for C code from .gcda files and save it in a format suitable for coveralls.io
-      - $DRONE_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $DRONE_WORKSPACE --out coverage.c.json
-      # luacov-coveralls reads luacov.stats.out generated by functional tests
-      # (see collect_lua_coverage() in test/functional/lib/rspamd.py)
-      # and writes json report for coveralls.io
-      - luacov-coveralls -o coverage.functional.lua.json --dryrun
-      # * merge coverage for C and Lua code
-      # * remove prefixes from absolute paths (in luacov-coveralls files), filter test, contrib, e. t.c
-      # * upload report to coveralls.io
-      - $DRONE_WORKSPACE/test/tools/merge_coveralls.py --root $DRONE_WORKSPACE --input coverage.c.json unit_test_lua.json coverage.functional.lua.json --token=$COVERALLS_REPO_TOKEN
-    environment:
-      COVERALLS_REPO_TOKEN: { from_secret: coveralls_repo_token }
-    when:
-      branch: [ master ]
-      # don't send coverage report for pull request
-      event: [push, tag]
-
-  - name: eslint
-    image: node:18-alpine
-    pull: if-not-exists
-    failure: ignore
-    commands:
-      - npm install
-      - ./node_modules/.bin/eslint -v
-      - ./node_modules/.bin/eslint ./
-      # Run stylelint checks
-      - ./node_modules/.bin/stylelint -v
-      - npm show stylelint-config-standard version
-      - ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
-
-  - name: perl-tidyall
-    # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
-    image: rspamd/ci:perl-tidyall
-    pull: if-not-exists
-    failure: ignore
-    commands:
-      - tidyall --version
-      - perltidy --version | head -1
-      # checks are configured in .tidyallrc at the top of rspamd repo
-      - tidyall --all --check-only --no-cache --data-dir /tmp/tidyall
-
-  - name: notify
-    image: drillster/drone-email
-    pull: if-not-exists
-    depends_on:
-      - rspamd-test
-      - test-fedora-clang
-      - functional
-      - send-coverage
-      - eslint
-      - perl-tidyall
-    settings:
-      from: noreply@rspamd.com
-      host: { from_secret: email_host }
-      username: { from_secret: email_username }
-      password: { from_secret: email_password }
-    when:
-      status: [ failure ]
-
-volumes:
-  - name: rspamd
-    temp: {}
-
-trigger:
-  event: [push, tag, pull_request, custom]
-
+{
+   "depends_on": [ ],
+   "kind": "pipeline",
+   "name": "default-amd64",
+   "platform": {
+      "arch": "amd64",
+      "os": "linux"
+   },
+   "steps": [
+      {
+         "commands": [
+            "install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install"
+         ],
+         "image": "ubuntu:22.04",
+         "name": "prepare",
+         "pull": "if-not-exists",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "cd /rspamd/build",
+            "cmake -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON  -GNinja $DRONE_WORKSPACE\n",
+            "ncpu=$(getconf _NPROCESSORS_ONLN)",
+            "ninja -j $ncpu install",
+            "ninja -j $ncpu rspamd-test",
+            "ninja -j $ncpu rspamd-test-cxx"
+         ],
+         "depends_on": [
+            "prepare"
+         ],
+         "image": "rspamd/ci:ubuntu-build",
+         "name": "build",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "cd /rspamd/fedora/build",
+            "export LDFLAGS='-fuse-ld=lld'",
+            "export ASAN_OPTIONS=detect_leaks=0",
+            "cmake -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_CLANG_PLUGIN=ON -DENABLE_FULL_DEBUG=ON -DENABLE_HYPERSCAN=ON  -DSANITIZE=address $DRONE_WORKSPACE\n",
+            "ncpu=$(getconf _NPROCESSORS_ONLN)",
+            "make -j $ncpu install",
+            "make -j $ncpu rspamd-test",
+            "make -j $ncpu rspamd-test-cxx"
+         ],
+         "depends_on": [
+            "prepare"
+         ],
+         "image": "rspamd/ci:fedora-build",
+         "name": "build-clang",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "ulimit -c unlimited",
+            "cd /rspamd/build/test",
+            "set +e",
+            "env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test; exit $EXIT_CODE; fi; if [ $EXIT_CODE -ne 0 ]; then exit $EXIT_CODE; fi\n",
+            "luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun",
+            "set +e",
+            "./rspamd-test-cxx -s; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx; exit $EXIT_CODE; fi\n",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build"
+         ],
+         "image": "rspamd/ci:ubuntu-test",
+         "name": "rspamd-test",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "ulimit -c 2097152",
+            "ulimit -s unlimited",
+            "export ASAN_OPTIONS=\"detect_leaks=0:print_stacktrace=1:disable_coredump=0\"",
+            "export UBSAN_OPTIONS=\"print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan\"",
+            "cd /rspamd/fedora/build/test",
+            "set +e",
+            "env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test; fi\n",
+            "set +e",
+            "./rspamd-test-cxx -s; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx; exit $EXIT_CODE; fi\n",
+            "cat /tmp/ubsan.* || true",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build-clang"
+         ],
+         "image": "rspamd/ci:fedora-test",
+         "name": "test-fedora-clang",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "cd /rspamd/build",
+            "ulimit -c unlimited",
+            "ulimit -s unlimited",
+            "umask 0000",
+            "set +e",
+            "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
+            "set -e",
+            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/; fi\n",
+            "core_files=$(find /var/tmp/ -name '*.core')",
+            "for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done\n",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build"
+         ],
+         "environment": {
+            "HTTP_PUT_AUTH": {
+               "from_secret": "http_put_auth"
+            }
+         },
+         "image": "rspamd/ci:ubuntu-test-func",
+         "name": "functional",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "cd /rspamd/build",
+            "$DRONE_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $DRONE_WORKSPACE --out coverage.c.json",
+            "luacov-coveralls -o coverage.functional.lua.json --dryrun",
+            "$DRONE_WORKSPACE/test/tools/merge_coveralls.py --parallel --root $DRONE_WORKSPACE --input coverage.c.json unit_test_lua.json coverage.functional.lua.json --token=$COVERALLS_REPO_TOKEN"
+         ],
+         "depends_on": [
+            "functional",
+            "rspamd-test"
+         ],
+         "environment": {
+            "COVERALLS_REPO_TOKEN": {
+               "from_secret": "coveralls_repo_token"
+            }
+         },
+         "image": "rspamd/ci:ubuntu-test",
+         "name": "send-coverage",
+         "pull": "if-not-exists",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ],
+         "when": {
+            "branch": [
+               "master"
+            ],
+            "event": [
+               "push",
+               "tag"
+            ]
+         }
+      }
+   ],
+   "trigger": {
+      "event": [
+         "push",
+         "tag",
+         "pull_request",
+         "custom"
+      ]
+   },
+   "type": "docker",
+   "volumes": [
+      {
+         "name": "rspamd",
+         "temp": { }
+      }
+   ]
+}
 ---
-kind: signature
-hmac: 13670c504d29a1249b3a06c171016f14377e3c74101935bc23f6c542036562df
-
+{
+   "depends_on": [ ],
+   "kind": "pipeline",
+   "name": "default-arm64",
+   "platform": {
+      "arch": "arm64",
+      "os": "linux"
+   },
+   "steps": [
+      {
+         "commands": [
+            "install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install"
+         ],
+         "image": "ubuntu:22.04",
+         "name": "prepare",
+         "pull": "if-not-exists",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "cd /rspamd/build",
+            "cmake -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -DHYPERSCAN_ROOT_DIR=/vectorscan -GNinja $DRONE_WORKSPACE\n",
+            "ncpu=$(getconf _NPROCESSORS_ONLN)",
+            "ninja -j $ncpu install",
+            "ninja -j $ncpu rspamd-test",
+            "ninja -j $ncpu rspamd-test-cxx"
+         ],
+         "depends_on": [
+            "prepare"
+         ],
+         "image": "rspamd/ci:ubuntu-build",
+         "name": "build",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "cd /rspamd/fedora/build",
+            "export LDFLAGS='-fuse-ld=lld'",
+            "export ASAN_OPTIONS=detect_leaks=0",
+            "cmake -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_CLANG_PLUGIN=ON -DENABLE_FULL_DEBUG=ON -DENABLE_HYPERSCAN=ON -DHYPERSCAN_ROOT_DIR=/vectorscan -DSANITIZE=address $DRONE_WORKSPACE\n",
+            "ncpu=$(getconf _NPROCESSORS_ONLN)",
+            "make -j $ncpu install",
+            "make -j $ncpu rspamd-test",
+            "make -j $ncpu rspamd-test-cxx"
+         ],
+         "depends_on": [
+            "prepare"
+         ],
+         "image": "rspamd/ci:fedora-build",
+         "name": "build-clang",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "ulimit -c unlimited",
+            "cd /rspamd/build/test",
+            "set +e",
+            "env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test; exit $EXIT_CODE; fi; if [ $EXIT_CODE -ne 0 ]; then exit $EXIT_CODE; fi\n",
+            "luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun",
+            "set +e",
+            "./rspamd-test-cxx -s; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx; exit $EXIT_CODE; fi\n",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build"
+         ],
+         "image": "rspamd/ci:ubuntu-test",
+         "name": "rspamd-test",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "test \"$(id -un)\" = nobody",
+            "ulimit -c 2097152",
+            "ulimit -s unlimited",
+            "export ASAN_OPTIONS=\"detect_leaks=0:print_stacktrace=1:disable_coredump=0\"",
+            "export UBSAN_OPTIONS=\"print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan\"",
+            "cd /rspamd/fedora/build/test",
+            "set +e",
+            "env RSPAMD_LUA_EXPENSIVE_TESTS=1 ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test; fi\n",
+            "set +e",
+            "./rspamd-test-cxx -s; EXIT_CODE=$?",
+            "set -e",
+            "if [ $EXIT_CODE -gt 128 ]; then gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test-cxx.core ./rspamd-test-cxx; exit $EXIT_CODE; fi\n",
+            "cat /tmp/ubsan.* || true",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build-clang"
+         ],
+         "image": "rspamd/ci:fedora-test",
+         "name": "test-fedora-clang",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "cd /rspamd/build",
+            "ulimit -c unlimited",
+            "ulimit -s unlimited",
+            "umask 0000",
+            "set +e",
+            "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
+            "set -e",
+            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/; fi\n",
+            "core_files=$(find /var/tmp/ -name '*.core')",
+            "for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done\n",
+            "exit $EXIT_CODE"
+         ],
+         "depends_on": [
+            "build"
+         ],
+         "environment": {
+            "HTTP_PUT_AUTH": {
+               "from_secret": "http_put_auth"
+            }
+         },
+         "image": "rspamd/ci:ubuntu-test-func",
+         "name": "functional",
+         "pull": "always",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ]
+      },
+      {
+         "commands": [
+            "cd /rspamd/build",
+            "$DRONE_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $DRONE_WORKSPACE --out coverage.c.json",
+            "luacov-coveralls -o coverage.functional.lua.json --dryrun",
+            "$DRONE_WORKSPACE/test/tools/merge_coveralls.py --parallel --root $DRONE_WORKSPACE --input coverage.c.json unit_test_lua.json coverage.functional.lua.json --token=$COVERALLS_REPO_TOKEN"
+         ],
+         "depends_on": [
+            "functional",
+            "rspamd-test"
+         ],
+         "environment": {
+            "COVERALLS_REPO_TOKEN": {
+               "from_secret": "coveralls_repo_token"
+            }
+         },
+         "image": "rspamd/ci:ubuntu-test",
+         "name": "send-coverage",
+         "pull": "if-not-exists",
+         "volumes": [
+            {
+               "name": "rspamd",
+               "path": "/rspamd"
+            }
+         ],
+         "when": {
+            "branch": [
+               "master"
+            ],
+            "event": [
+               "push",
+               "tag"
+            ]
+         }
+      }
+   ],
+   "trigger": {
+      "event": [
+         "push",
+         "tag",
+         "pull_request",
+         "custom"
+      ]
+   },
+   "type": "docker",
+   "volumes": [
+      {
+         "name": "rspamd",
+         "temp": { }
+      }
+   ]
+}
+---
+{
+   "depends_on": [
+      "default-amd64",
+      "default-arm64"
+   ],
+   "kind": "pipeline",
+   "name": "close_coveralls",
+   "steps": [
+      {
+         "commands": [
+            "$DRONE_WORKSPACE/test/tools/merge_coveralls.py --parallel-close --token=$COVERALLS_REPO_TOKEN"
+         ],
+         "environment": {
+            "COVERALLS_REPO_TOKEN": {
+               "from_secret": "coveralls_repo_token"
+            }
+         },
+         "image": "rspamd/ci:ubuntu-test-func",
+         "name": "close_coveralls",
+         "pull": "always"
+      }
+   ],
+   "trigger": {
+      "branch": [
+         "master"
+      ],
+      "event": [
+         "push",
+         "tag"
+      ]
+   },
+   "type": "docker"
+}
+---
+{
+   "kind": "pipeline",
+   "name": "default-noarch",
+   "steps": [
+      {
+         "commands": [
+            "tidyall --version",
+            "perltidy --version | head -1",
+            "tidyall --all --check-only --no-cache --data-dir /tmp/tidyall"
+         ],
+         "failure": "ignore",
+         "image": "rspamd/ci:perl-tidyall",
+         "name": "perl-tidyall",
+         "pull": "if-not-exists"
+      },
+      {
+         "commands": [
+            "npm install",
+            "./node_modules/.bin/eslint -v",
+            "./node_modules/.bin/eslint ./",
+            "./node_modules/.bin/stylelint -v",
+            "npm show stylelint-config-standard version",
+            "./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js"
+         ],
+         "failure": "ignore",
+         "image": "node:18-alpine",
+         "name": "eslint",
+         "pull": "if-not-exists"
+      }
+   ],
+   "trigger": {
+      "event": [
+         "push",
+         "tag",
+         "pull_request",
+         "custom"
+      ]
+   },
+   "type": "docker"
+}
+---
+{
+   "depends_on": [
+      "default-amd64",
+      "default-arm64",
+      "default-noarch"
+   ],
+   "kind": "pipeline",
+   "name": "notify",
+   "steps": [
+      {
+         "image": "drillster/drone-email",
+         "name": "notify",
+         "pull": "if-not-exists",
+         "settings": {
+            "from": "noreply@rspamd.com",
+            "host": {
+               "from_secret": "email_host"
+            },
+            "password": {
+               "from_secret": "email_password"
+            },
+            "username": {
+               "from_secret": "email_username"
+            }
+         }
+      }
+   ],
+   "trigger": {
+      "status": [
+         "failure"
+      ]
+   },
+   "type": "docker"
+}
+---
+{
+   "hmac": "5ad01ebb42030e1fa7f8a1ed3a9b14eb6d535b6d62f66a644fe9d614bdc26a2d",
+   "kind": "signature"
+}
 ...
