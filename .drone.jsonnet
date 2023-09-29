@@ -31,8 +31,8 @@ local coveralls_attribs = {
   ],
 };
 
-local coveralls_trigger = {
-  trigger: coveralls_attribs,
+local close_coveralls_trigger = {
+  trigger: coveralls_attribs { status: ['success', 'failure'] },
 };
 
 local coveralls_when = {
@@ -255,7 +255,7 @@ local close_coveralls = {
       },
     },
   ],
-} + coveralls_trigger + docker_pipeline;
+} + close_coveralls_trigger + docker_pipeline;
 
 local noarch_pipeline = {
   name: 'default-noarch',

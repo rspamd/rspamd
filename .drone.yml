@@ -462,6 +462,10 @@
       "event": [
          "push",
          "tag"
+      ],
+      "status": [
+         "success",
+         "failure"
       ]
    },
    "type": "docker"
@@ -544,7 +548,7 @@
 }
 ---
 {
-   "hmac": "e6516adb52533ad1bfedc9ebca429c73cda213b08314d62195f713bb3588b22f",
+   "hmac": "0000000000000000000000000000000000000000000000000000000000000000",
    "kind": "signature"
 }
 ...
