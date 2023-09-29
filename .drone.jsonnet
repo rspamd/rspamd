@@ -3,14 +3,15 @@ local docker_pipeline = {
   type: 'docker',
 };
 
+local default_trigger_events_ex_pr = [
+  'push',
+  'tag',
+  'custom',
+];
+
 local default_trigger = {
   trigger: {
-    event: [
-      'push',
-      'tag',
-      'pull_request',
-      'custom',
-    ],
+    event: default_trigger_events_ex_pr + ['pull_request'],
   },
 };
 
@@ -66,6 +67,7 @@ local notify_pipeline = {
     },
   ],
   trigger: {
+    event: default_trigger_events_ex_pr,
     status: [
       'failure',
     ],
