@@ -194,7 +194,7 @@ local pipeline(arch) = {
         'set +e',
         'RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?',
         'set -e',
-        'if [ -n "$HTTP_PUT_AUTH" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/; fi\n',
+        'if [ -n "$HTTP_PUT_AUTH" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/${DRONE_BUILD_NUMBER}-' + arch + '/; fi\n',
         "core_files=$(find /var/tmp/ -name '*.core')",
         "for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done\n",
         'exit $EXIT_CODE',

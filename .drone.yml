@@ -140,7 +140,7 @@
             "set +e",
             "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
             "set -e",
-            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/; fi\n",
+            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/${DRONE_BUILD_NUMBER}-amd64/; fi\n",
             "core_files=$(find /var/tmp/ -name '*.core')",
             "for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done\n",
             "exit $EXIT_CODE"
@@ -357,7 +357,7 @@
             "set +e",
             "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
             "set -e",
-            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/; fi\n",
+            "if [ -n \"$HTTP_PUT_AUTH\" ]; then $DRONE_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/${DRONE_BUILD_NUMBER}-arm64/; fi\n",
             "core_files=$(find /var/tmp/ -name '*.core')",
             "for core in $core_files; do exe=$(gdb --batch -ex 'info proc mappings' -c $core | tail -1 | awk '{print $5}'); gdb --batch -ex 'bt' -c $core $exe; echo '---'; done\n",
             "exit $EXIT_CODE"
@@ -544,7 +544,7 @@
 }
 ---
 {
-   "hmac": "5ad01ebb42030e1fa7f8a1ed3a9b14eb6d535b6d62f66a644fe9d614bdc26a2d",
+   "hmac": "e6516adb52533ad1bfedc9ebca429c73cda213b08314d62195f713bb3588b22f",
    "kind": "signature"
 }
 ...
