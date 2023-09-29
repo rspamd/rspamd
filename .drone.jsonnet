@@ -3,7 +3,7 @@ local docker_pipeline = {
   type: 'docker',
 };
 
-local trigger = {
+local default_trigger = {
   trigger: {
     event: [
       'push',
@@ -14,6 +14,64 @@ local trigger = {
   },
 };
 
+local platform(arch) = {
+  platform: {
+    os: 'linux',
+    arch: arch,
+  },
+};
+
+local coveralls_attribs = {
+  branch: [
+    'master',
+  ],
+  event: [
+    'push',
+    'tag',
+  ],
+};
+
+local coveralls_trigger = {
+  trigger: coveralls_attribs,
+};
+
+local coveralls_when = {
+  when: coveralls_attribs,
+};
+
+local notify_pipeline = {
+  name: 'notify',
+  depends_on: [
+    'default-amd64',
+    'default-arm64',
+    'default-noarch',
+  ],
+  steps: [
+    {
+      name: 'notify',
+      image: 'drillster/drone-email',
+      pull: 'if-not-exists',
+      settings: {
+        from: 'noreply@rspamd.com',
+        host: {
+          from_secret: 'email_host',
+        },
+        username: {
+          from_secret: 'email_username',
+        },
+        password: {
+          from_secret: 'email_password',
+        },
+      },
+    },
+  ],
+  trigger: {
+    status: [
+      'failure',
+    ],
+  },
+} + docker_pipeline;
+
 local pipeline(arch) = {
   local rspamd_volumes = {
     volumes: [
@@ -23,11 +81,10 @@ local pipeline(arch) = {
       },
     ],
   },
-  name: 'default',
-  platform: {
-    os: 'linux',
-    arch: arch,
-  },
+  local hyperscan_altroot = if (arch) == 'amd64' then '' else '-DHYPERSCAN_ROOT_DIR=/vectorscan',
+  depends_on: [
+  ],
+  name: 'default-' + arch,
   steps: [
     {
       name: 'prepare',
@@ -47,7 +104,7 @@ local pipeline(arch) = {
       commands: [
         'test "$(id -un)" = nobody',
         'cd /rspamd/build',
-        'cmake -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON -GNinja $DRONE_WORKSPACE\n',
+        'cmake -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DENABLE_HYPERSCAN=ON ' + hyperscan_altroot + ' -GNinja $DRONE_WORKSPACE\n',
         'ncpu=$(getconf _NPROCESSORS_ONLN)',
         'ninja -j $ncpu install',
         'ninja -j $ncpu rspamd-test',
@@ -66,7 +123,7 @@ local pipeline(arch) = {
         'cd /rspamd/fedora/build',
         "export LDFLAGS='-fuse-ld=lld'",
         'export ASAN_OPTIONS=detect_leaks=0',
-        'cmake -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_CLANG_PLUGIN=ON -DENABLE_FULL_DEBUG=ON -DENABLE_HYPERSCAN=ON -DSANITIZE=address $DRONE_WORKSPACE\n',
+        'cmake -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_RULE_MESSAGES=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_CLANG_PLUGIN=ON -DENABLE_FULL_DEBUG=ON -DENABLE_HYPERSCAN=ON ' + hyperscan_altroot + ' -DSANITIZE=address $DRONE_WORKSPACE\n',
         'ncpu=$(getconf _NPROCESSORS_ONLN)',
         'make -j $ncpu install',
         'make -j $ncpu rspamd-test',
@@ -160,23 +217,60 @@ local pipeline(arch) = {
         'cd /rspamd/build',
         '$DRONE_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $DRONE_WORKSPACE --out coverage.c.json',
         'luacov-coveralls -o coverage.functional.lua.json --dryrun',
-        '$DRONE_WORKSPACE/test/tools/merge_coveralls.py --root $DRONE_WORKSPACE --input coverage.c.json unit_test_lua.json coverage.functional.lua.json --token=$COVERALLS_REPO_TOKEN',
+        '$DRONE_WORKSPACE/test/tools/merge_coveralls.py --parallel --root $DRONE_WORKSPACE --input coverage.c.json unit_test_lua.json coverage.functional.lua.json --token=$COVERALLS_REPO_TOKEN',
       ],
       environment: {
         COVERALLS_REPO_TOKEN: {
           from_secret: 'coveralls_repo_token',
         },
       },
-      when: {
-        branch: [
-          'master',
-        ],
-        event: [
-          'push',
-          'tag',
-        ],
+    } + coveralls_when + rspamd_volumes,
+  ],
+  volumes: [
+    {
+      name: 'rspamd',
+      temp: {},
+    },
+  ],
+} + platform(arch) + default_trigger + docker_pipeline;
+
+local close_coveralls = {
+  name: 'close_coveralls',
+  depends_on: [
+    'default-amd64',
+    'default-arm64',
+  ],
+  steps: [
+    {
+      name: 'close_coveralls',
+      image: 'rspamd/ci:ubuntu-test-func',
+      pull: 'always',
+      commands: [
+        '$DRONE_WORKSPACE/test/tools/merge_coveralls.py --parallel-close --token=$COVERALLS_REPO_TOKEN',
+      ],
+      environment: {
+        COVERALLS_REPO_TOKEN: {
+          from_secret: 'coveralls_repo_token',
+        },
       },
-    } + rspamd_volumes,
+    },
+  ],
+} + coveralls_trigger + docker_pipeline;
+
+local noarch_pipeline = {
+  name: 'default-noarch',
+  steps: [
+    {
+      name: 'perl-tidyall',
+      image: 'rspamd/ci:perl-tidyall',
+      pull: 'if-not-exists',
+      failure: 'ignore',
+      commands: [
+        'tidyall --version',
+        'perltidy --version | head -1',
+        'tidyall --all --check-only --no-cache --data-dir /tmp/tidyall',
+      ],
+    },
     {
       name: 'eslint',
       image: 'node:18-alpine',
@@ -191,55 +285,8 @@ local pipeline(arch) = {
         './node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js',
       ],
     },
-    {
-      name: 'perl-tidyall',
-      image: 'rspamd/ci:perl-tidyall',
-      pull: 'if-not-exists',
-      failure: 'ignore',
-      commands: [
-        'tidyall --version',
-        'perltidy --version | head -1',
-        'tidyall --all --check-only --no-cache --data-dir /tmp/tidyall',
-      ],
-    },
-    {
-      name: 'notify',
-      image: 'drillster/drone-email',
-      pull: 'if-not-exists',
-      depends_on: [
-        'rspamd-test',
-        'test-fedora-clang',
-        'functional',
-        'send-coverage',
-        'eslint',
-        'perl-tidyall',
-      ],
-      settings: {
-        from: 'noreply@rspamd.com',
-        host: {
-          from_secret: 'email_host',
-        },
-        username: {
-          from_secret: 'email_username',
-        },
-        password: {
-          from_secret: 'email_password',
-        },
-      },
-      when: {
-        status: [
-          'failure',
-        ],
-      },
-    },
   ],
-  volumes: [
-    {
-      name: 'rspamd',
-      temp: {},
-    },
-  ],
-} + trigger + docker_pipeline;
+} + default_trigger + docker_pipeline;
 
 local signature = {
   kind: 'signature',
@@ -248,5 +295,9 @@ local signature = {
 
 [
   pipeline('amd64'),
+  pipeline('arm64'),
+  close_coveralls,
+  noarch_pipeline,
+  notify_pipeline,
   signature,
 ]

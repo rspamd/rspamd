@@ -37,12 +37,14 @@ path_mapping = [
 ]
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--input', required=True, nargs='+', help='input files')
+parser.add_argument('--input', nargs='+', help='input files')
 parser.add_argument('--output', help='output file)')
 parser.add_argument('--root', default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
 parser.add_argument('--install-dir', default="/rspamd/install", help='install root)')
 parser.add_argument('--build-dir', default="/rspamd/build", help='build root)')
 parser.add_argument('--token', help='If present, the file will be uploaded to coveralls)')
+parser.add_argument('--parallel', action='store_true', help='If present, this is a parallel build)')
+parser.add_argument('--parallel-close', action='store_true', help='If present, close parallel build and exit)')
 
 
 def merge_coverage_vectors(c1, c2):
@@ -97,8 +99,36 @@ def prepare_path_mapping():
 
         path_mapping[i] = (new_key, path_mapping[i][1])
 
+def close_parallel_build():
+    j = {'payload':{'status': 'done'}}
+    j['payload']['build_num'] = os.getenv('DRONE_BUILD_NUMBER')
+    query_str = {'repo_token': args.token}
+    try:
+        r = requests.post('https://coveralls.io/webhook', params=query_str, json=j)
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print("Failed to send data to coveralls: %s" % e)
+        sys.exit()
+
+    try:
+        response = r.json()
+        if 'url' in response:
+            print("[coveralls] URL %s" % response['url'])
+        if 'error' in response:
+            print("[coveralls] ERROR: %s" % response['error'])
+    except json.decoder.JSONDecodeError:
+        print("Bad response: '%s'" % r.text)
+
 if __name__ == '__main__':
     args = parser.parse_args()
+
+    if args.parallel_close:
+        close_parallel_build()
+        sys.exit(0)
+
+    if not args.input:
+        print("error: the following arguments are required: --input")
+        sys.exit(1)
 
     repository_root = os.path.abspath(os.path.expanduser(args.root))
     install_dir = os.path.normpath(os.path.expanduser(args.install_dir))
@@ -123,6 +153,8 @@ if __name__ == '__main__':
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
 
+        if args.parallel:
+            j1['parallel'] = True
 
         if os.getenv('CIRCLECI'):
             j1['service_name'] = 'circleci'
