@@ -212,6 +212,10 @@ http_map_error(struct rspamd_http_connection *conn,
 {
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
+	gchar *uri;
+
+	uri = g_malloc(strlen(cbd->bk->uri));
+	rspamd_url_mask_password(uri, cbd->bk->uri);
 
 	map = cbd->map;
 
@@ -219,12 +223,14 @@ http_map_error(struct rspamd_http_connection *conn,
 		cbd->periodic->errored = TRUE;
 		msg_err_map("error reading %s(%s): "
 					"connection with http server terminated incorrectly: %e",
-					cbd->bk->uri,
+					uri,
 					cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 					err);
 
 		rspamd_map_process_periodic(cbd->periodic);
 	}
+
+	g_free(uri);
 
 	MAP_RELEASE(cbd, "http_callback_data");
 }
@@ -308,15 +314,19 @@ http_map_finish(struct rspamd_http_connection *conn,
 	char next_check_date[128];
 	guchar *in = NULL;
 	gsize dlen = 0;
+	gchar *uri;
 
 	map = cbd->map;
 	bk = cbd->bk;
 	data = bk->data.hd;
+	
+	uri = g_malloc(strlen(cbd->bk->uri));
+	rspamd_url_mask_password(uri, cbd->bk->uri);
 
 	if (msg->code == 200) {
 
 		if (cbd->check) {
-			msg_info_map("need to reread map from %s", cbd->bk->uri);
+			msg_info_map("need to reread map from %s", uri);
 			cbd->periodic->need_modify = TRUE;
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
@@ -326,6 +336,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 			rspamd_map_process_periodic(cbd->periodic);
 			MAP_RELEASE(cbd, "http_callback_data");
+			g_free(uri);
 
 			return 0;
 		}
@@ -469,7 +480,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 
 				if (ZSTD_isError(r)) {
 					msg_err_map("%s(%s): cannot decompress data: %s",
-								cbd->bk->uri,
+								uri,
 								rspamd_inet_address_to_string_pretty(cbd->addr),
 								ZSTD_getErrorName(r));
 					ZSTD_freeDStream(zstream);
@@ -489,7 +500,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 			ZSTD_freeDStream(zstream);
 			msg_info_map("%s(%s): read map data %z bytes compressed, "
 						 "%z uncompressed, next check at %s",
-						 cbd->bk->uri,
+						 uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
 						 dlen, zout.pos, next_check_date);
 			map->read_callback(out, zout.pos, &cbd->periodic->cbdata, TRUE);
@@ -498,7 +509,7 @@ http_map_finish(struct rspamd_http_connection *conn,
 		}
 		else {
 			msg_info_map("%s(%s): read map data %z bytes, next check at %s",
-						 cbd->bk->uri,
+						 uri,
 						 rspamd_inet_address_to_string_pretty(cbd->addr),
 						 dlen, next_check_date);
 			rspamd_map_save_http_cached_file(map, bk, cbd->data, in, cbd->data_len);
@@ -568,18 +579,19 @@ http_map_finish(struct rspamd_http_connection *conn,
 	}
 	else {
 		msg_info_map("cannot load map %s from %s: HTTP error %d",
-					 bk->uri, cbd->data->host, msg->code);
+					 uri, cbd->data->host, msg->code);
 		goto err;
 	}
 
 	MAP_RELEASE(cbd, "http_callback_data");
+	g_free(uri);
 	return 0;
 
 err:
 	cbd->periodic->errored = 1;
 	rspamd_map_process_periodic(cbd->periodic);
 	MAP_RELEASE(cbd, "http_callback_data");
-
+	g_free(uri);
 	return 0;
 }
 
@@ -1211,6 +1223,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 	struct rdns_reply_entry *cur_rep;
 	struct rspamd_map *map;
 	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
+	gchar *uri;
 
 	map = cbd->map;
 
@@ -1277,6 +1290,8 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 			cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index(cbd->addrs, idx);
 		}
 
+		uri = g_malloc(strlen(cbd->bk->uri));
+		rspamd_url_mask_password(uri, cbd->bk->uri);
 	retry:
 		msg_debug_map("try open http connection to %s",
 					  rspamd_inet_address_to_string_pretty(cbd->addr));
@@ -1301,7 +1316,7 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 				cbd->addr = (rspamd_inet_addr_t *) g_ptr_array_index(cbd->addrs, idx);
 				msg_info_map("cannot connect to %s to get data for %s: %s, retry with %s (%d of %d)",
 							 rspamd_inet_address_to_string_pretty(prev_addr),
-							 cbd->bk->uri,
+							 uri,
 							 strerror(errno),
 							 rspamd_inet_address_to_string_pretty(cbd->addr),
 							 idx + 1, cbd->addrs->len);
@@ -1312,13 +1327,14 @@ rspamd_map_dns_callback(struct rdns_reply *reply, void *arg)
 				cbd->periodic->errored = TRUE;
 				msg_err_map("error reading %s(%s): "
 							"connection with http server terminated incorrectly: %s",
-							cbd->bk->uri,
+							uri,
 							cbd->addr ? rspamd_inet_address_to_string_pretty(cbd->addr) : "",
 							strerror(errno));
 
 				rspamd_map_process_periodic(cbd->periodic);
 			}
 		}
+		g_free(uri);
 	}
 
 	MAP_RELEASE(cbd, "http_callback_data");
@@ -1331,6 +1347,7 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 	gsize mmap_len, len;
 	gpointer in;
 	struct http_map_data *data;
+	gchar *uri;
 
 	data = bk->data.hd;
 
@@ -1384,15 +1401,19 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		zout.pos = 0;
 		zout.size = outlen;
 
+		uri = g_malloc(strlen(bk->uri));
+		rspamd_url_mask_password(uri, bk->uri);
+
 		while (zin.pos < zin.size) {
 			r = ZSTD_decompressStream(zstream, &zout, &zin);
 
 			if (ZSTD_isError(r)) {
 				msg_err_map("%s: cannot decompress data: %s",
-							bk->uri,
+							uri,
 							ZSTD_getErrorName(r));
 				ZSTD_freeDStream(zstream);
 				g_free(out);
+				g_free(uri);
 				munmap(in, mmap_len);
 				return FALSE;
 			}
@@ -1408,13 +1429,14 @@ rspamd_map_read_cached(struct rspamd_map *map, struct rspamd_map_backend *bk,
 		ZSTD_freeDStream(zstream);
 		msg_info_map("%s: read map data cached %z bytes compressed, "
 					 "%z uncompressed",
-					 bk->uri,
+					 uri,
 					 len, zout.pos);
 		map->read_callback(out, zout.pos, &periodic->cbdata, TRUE);
 		g_free(out);
+		g_free(uri);
 	}
 	else {
-		msg_info_map("%s: read map data cached %z bytes", bk->uri, len);
+		msg_info_map("%s: read map data cached %z bytes", uri, len);
 		map->read_callback(in, len, &periodic->cbdata, TRUE);
 	}
 
@@ -1460,6 +1482,7 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	struct rspamd_config *cfg = map->cfg;
 	gint fd;
 	struct rspamd_http_file_data header;
+	gchar *uri;
 
 	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
 		return FALSE;
@@ -1527,7 +1550,10 @@ rspamd_map_save_http_cached_file(struct rspamd_map *map,
 	rspamd_file_unlock(fd, FALSE);
 	close(fd);
 
-	msg_info_map("saved data from %s in %s, %uz bytes", bk->uri, path, len + sizeof(header) + header.etag_len);
+	uri = g_malloc(strlen(bk->uri));
+	rspamd_url_mask_password(uri, bk->uri);
+	msg_info_map("saved data from %s in %s, %uz bytes", uri, path, len + sizeof(header) + header.etag_len);
+	g_free(uri);
 
 	return TRUE;
 }
@@ -1706,20 +1732,24 @@ rspamd_map_read_http_cached_file(struct rspamd_map *map,
 
 	struct tm tm;
 	gchar ncheck_buf[32], lm_buf[32];
+	gchar *uri;
 
 	rspamd_localtime(map->next_check, &tm);
 	strftime(ncheck_buf, sizeof(ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 	rspamd_localtime(htdata->last_modified, &tm);
 	strftime(lm_buf, sizeof(lm_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 
+	uri = g_malloc(strlen(bk->uri));
+	rspamd_url_mask_password(uri, bk->uri);
 	msg_info_map("read cached data for %s from %s, %uz bytes; next check at: %s;"
 				 " last modified on: %s; etag: %V",
-				 bk->uri,
+				 uri,
 				 path,
 				 (size_t) (st.st_size - header.data_off),
 				 ncheck_buf,
 				 lm_buf,
 				 htdata->etag);
+	g_free(uri);
 
 	return TRUE;
 }
@@ -1736,6 +1766,7 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
 	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE | RSPAMD_HTTP_CLIENT_SHARED;
+	gchar *uri;
 
 	data = bk->data.hd;
 
@@ -1743,15 +1774,18 @@ rspamd_map_common_http_callback(struct rspamd_map *map,
 		/* Read cached data */
 		if (check) {
 			if (data->last_modified < data->cache->last_modified) {
+				uri = g_malloc(strlen(cbd->bk->uri));
+				rspamd_url_mask_password(uri, cbd->bk->uri);
 				msg_info_map("need to reread cached map triggered by %s "
 							 "(%d our modify time, %d cached modify time)",
-							 bk->uri,
+							 uri,
 							 (int) data->last_modified,
 							 (int) data->cache->last_modified);
 				periodic->need_modify = TRUE;
 				/* Reset the whole chain */
 				periodic->cur_backend = 0;
 				rspamd_map_process_periodic(periodic);
+				g_free(uri);
 			}
 			else {
 				if (map->active_http) {
@@ -2516,6 +2550,8 @@ rspamd_map_is_map(const gchar *map_line)
 static void
 rspamd_map_backend_dtor(struct rspamd_map_backend *bk)
 {
+	gchar *uri;
+
 	switch (bk->protocol) {
 	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
@@ -2558,14 +2594,17 @@ rspamd_map_backend_dtor(struct rspamd_map_backend *bk)
 			if (bk->map && bk->map->active_http) {
 				if (g_atomic_int_compare_and_exchange(&data->cache->available, 1, 0)) {
 					if (data->cur_cache_cbd) {
+						uri = g_malloc(strlen(bk->uri));
+						rspamd_url_mask_password(uri, bk->uri);
 						msg_info("clear shared memory cache for a map in %s as backend \"%s\" is closing",
 								 data->cur_cache_cbd->shm->shm_name,
-								 bk->uri);
+								 uri);
 						MAP_RELEASE(data->cur_cache_cbd->shm,
 									"rspamd_http_map_cached_cbdata");
 						ev_timer_stop(data->cur_cache_cbd->event_loop,
 									  &data->cur_cache_cbd->timeout);
 						g_free(data->cur_cache_cbd);
+						g_free(uri);
 						data->cur_cache_cbd = NULL;
 					}
 				}
@@ -2594,6 +2633,7 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 	struct http_parser_url up;
 	const gchar *end, *p;
 	rspamd_ftok_t tok;
+	gchar *uri;
 
 	bk = g_malloc0(sizeof(*bk));
 	REF_INIT_RETAIN(bk, rspamd_map_backend_dtor);
@@ -2603,7 +2643,10 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 	}
 
 	if (bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
-		msg_err_config("fallback backend must be file for %s", bk->uri);
+		uri = g_malloc(strlen(bk->uri));
+		rspamd_url_mask_password(uri, bk->uri);
+		msg_err_config("fallback backend must be file for %s", uri);
+		g_free(uri);
 
 		goto err;
 	}
@@ -2794,15 +2837,20 @@ rspamd_map_add(struct rspamd_config *cfg,
 {
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
+	gchar *uri;
 
 	bk = rspamd_map_parse_backend(cfg, map_line);
 	if (bk == NULL) {
 		return NULL;
 	}
 
+	uri = g_malloc(strlen(bk->uri));
+	rspamd_url_mask_password(uri, bk->uri);
+
 	if (bk->is_fallback) {
-		msg_err_config("cannot add map with fallback only backend: %s", bk->uri);
+		msg_err_config("cannot add map with fallback only backend: %s", uri);
 		REF_RELEASE(bk);
+		g_free(uri);
 
 		return NULL;
 	}
@@ -2821,7 +2869,7 @@ rspamd_map_add(struct rspamd_config *cfg,
 	rspamd_mempool_add_destructor(cfg->cfg_pool, rspamd_ptr_array_free_hard,
 								  map->backends);
 	g_ptr_array_add(map->backends, bk);
-	map->name = rspamd_mempool_strdup(cfg->cfg_pool, map_line);
+	map->name = rspamd_mempool_strdup(cfg->cfg_pool, uri);
 	map->no_file_read = (flags & RSPAMD_MAP_FILE_NO_READ);
 
 	if (bk->protocol == MAP_PROTO_FILE) {
@@ -2836,10 +2884,11 @@ rspamd_map_add(struct rspamd_config *cfg,
 	}
 
 	rspamd_map_calculate_hash(map);
-	msg_info_map("added map %s", bk->uri);
+	msg_info_map("added map %s", uri);
 	bk->map = map;
 
 	cfg->maps = g_list_prepend(cfg->maps, map);
+	g_free(uri);
 
 	return map;
 }
@@ -2867,10 +2916,15 @@ rspamd_map_add_fake(struct rspamd_config *cfg,
 static inline void
 rspamd_map_add_backend(struct rspamd_map *map, struct rspamd_map_backend *bk)
 {
+	gchar *uri;
+
+	uri = g_malloc(strlen(bk->uri));
+	rspamd_url_mask_password(uri, bk->uri);
+
 	if (bk->is_fallback) {
 		if (map->fallback_backend) {
 			msg_warn_map("redefining fallback backend from %s to %s",
-						 map->fallback_backend->uri, bk->uri);
+						 map->fallback_backend->uri, uri);
 		}
 
 		map->fallback_backend = bk;
@@ -2880,6 +2934,7 @@ rspamd_map_add_backend(struct rspamd_map *map, struct rspamd_map_backend *bk)
 	}
 
 	bk->map = map;
+	g_free(uri);
 }
 
 struct rspamd_map *

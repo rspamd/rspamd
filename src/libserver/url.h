@@ -368,6 +368,14 @@ int rspamd_url_cmp(const struct rspamd_url *u1, const struct rspamd_url *u2);
 int rspamd_url_cmp_qsort(const void *u1, const void *u2);
 
 /**
+ * Mask password with *s in url
+ * @param dst
+ * @param src
+ * @return
+ */
+int rspamd_url_mask_password(gchar *dst, gchar *src);
+
+/**
  * Returns a port for some url
  * @param u
  * @return

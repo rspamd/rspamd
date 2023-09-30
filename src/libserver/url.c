@@ -4363,3 +4363,31 @@ int rspamd_url_cmp_qsort(const void *_u1, const void *_u2)
 
 	return rspamd_url_cmp(u1, u2);
 }
+
+int rspamd_url_mask_password(gchar *dst, gchar *src)
+{
+	struct http_parser_url url;
+	const gchar *last = NULL;
+	guint flags = 0;
+	gint ret;
+	gsize len;
+
+	len = strlen(src);
+	rspamd_strlcpy(dst, src, len + 1);
+
+	ret = rspamd_web_parse(&url, src, len, &last,
+				  RSPAMD_URL_PARSE_TEXT, &flags);
+	if (ret != 0) {
+		return 1;
+	}
+	
+	if (url.field_set & (1 << UF_USERINFO)) {
+		for (gchar *p = &dst[url.field_data[UF_USERINFO].off + url.field_data[UF_USERINFO].len + 1];
+			p < &dst[url.field_data[UF_HOST].off - 1];
+			p++) {
+			*p = '*';
+		}
+	}
+	
+	return 0;
+}
