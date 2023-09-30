@@ -3,14 +3,15 @@ local docker_pipeline = {
   type: 'docker',
 };
 
+local default_trigger_events_ex_pr = [
+  'push',
+  'tag',
+  'custom',
+];
+
 local default_trigger = {
   trigger: {
-    event: [
-      'push',
-      'tag',
-      'pull_request',
-      'custom',
-    ],
+    event: default_trigger_events_ex_pr + ['pull_request'],
   },
 };
 
@@ -31,8 +32,8 @@ local coveralls_attribs = {
   ],
 };
 
-local coveralls_trigger = {
-  trigger: coveralls_attribs,
+local close_coveralls_trigger = {
+  trigger: coveralls_attribs { status: ['success', 'failure'] },
 };
 
 local coveralls_when = {
@@ -66,6 +67,7 @@ local notify_pipeline = {
     },
   ],
   trigger: {
+    event: default_trigger_events_ex_pr,
     status: [
       'failure',
     ],
@@ -255,7 +257,7 @@ local close_coveralls = {
       },
     },
   ],
-} + coveralls_trigger + docker_pipeline;
+} + close_coveralls_trigger + docker_pipeline;
 
 local noarch_pipeline = {
   name: 'default-noarch',

@@ -203,8 +203,8 @@
       "event": [
          "push",
          "tag",
-         "pull_request",
-         "custom"
+         "custom",
+         "pull_request"
       ]
    },
    "type": "docker",
@@ -420,8 +420,8 @@
       "event": [
          "push",
          "tag",
-         "pull_request",
-         "custom"
+         "custom",
+         "pull_request"
       ]
    },
    "type": "docker",
@@ -462,6 +462,10 @@
       "event": [
          "push",
          "tag"
+      ],
+      "status": [
+         "success",
+         "failure"
       ]
    },
    "type": "docker"
@@ -501,8 +505,8 @@
       "event": [
          "push",
          "tag",
-         "pull_request",
-         "custom"
+         "custom",
+         "pull_request"
       ]
    },
    "type": "docker"
@@ -536,6 +540,11 @@
       }
    ],
    "trigger": {
+      "event": [
+         "push",
+         "tag",
+         "custom"
+      ],
       "status": [
          "failure"
       ]
@@ -544,7 +553,7 @@
 }
 ---
 {
-   "hmac": "e6516adb52533ad1bfedc9ebca429c73cda213b08314d62195f713bb3588b22f",
+   "hmac": "3f01ceb14c7dd3ba2f5343fc52216843f72212e1cb25f944c2366d57e78d2b79",
    "kind": "signature"
 }
 ...
