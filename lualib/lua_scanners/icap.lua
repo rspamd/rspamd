@@ -243,7 +243,8 @@ local function icap_check(task, content, digest, rule, maybe_part)
         local in_client_ip = task:get_from_ip()
         local req_hlen = 2
         if maybe_part then
-          table.insert(req_headers, string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, maybe_part:get_filename()))
+          table.insert(req_headers, string.format('GET http://%s/%s HTTP/1.0\r\n',
+            in_client_ip, lua_util.url_encode(maybe_part:get_filename())))
           table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part:get_detected_type()))
         else
           table.insert(req_headers, string.format('GET %s HTTP/1.0\r\n', rule.req_fake_url))
