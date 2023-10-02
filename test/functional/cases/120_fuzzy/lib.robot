@@ -53,7 +53,9 @@ Fuzzy Add Test
 
 Fuzzy Delete Test
   [Arguments]  ${message}
-  Run Keyword If  ${RSPAMD_FUZZY_ADD_${message}} == 0  Fail  "Fuzzy Add was not run"
+  IF  ${RSPAMD_FUZZY_ADD_${message}} == 0
+    Fail  "Fuzzy Add was not run"
+  END
   ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  -f  ${RSPAMD_FLAG1_NUMBER}  fuzzy_del
   ...  ${message}
   Check Rspamc  ${result}
@@ -63,7 +65,9 @@ Fuzzy Delete Test
 
 Fuzzy Fuzzy Test
   [Arguments]  ${message}
-  Run Keyword If  ${RSPAMD_FUZZY_ADD_${message}} != 1  Fail  "Fuzzy Add was not run"
+  IF  ${RSPAMD_FUZZY_ADD_${message}} != 1
+    Fail  "Fuzzy Add was not run"
+  END
   @{path_info} =  Path Splitter  ${message}
   @{fuzzy_files} =  List Files In Directory  ${pathinfo}[0]  pattern=${pathinfo}[1].fuzzy*  absolute=1
   FOR  ${i}  IN  @{fuzzy_files}

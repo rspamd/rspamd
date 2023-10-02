@@ -63,7 +63,9 @@ Clickhouse Setup
     Set Directory Ownership    ${RSPAMD_TMPDIR}/clickhouse    clickhouse    clickhouse
     ${result} =    Run Process    su    -s    /bin/sh    clickhouse    -c
     ...    clickhouse-server --daemon --config-file\=${RSPAMD_TMPDIR}/clickhouse-config.xml --pid-file\=${RSPAMD_TMPDIR}/clickhouse/clickhouse.pid
-    Run Keyword If    ${result.rc} != 0    Log    ${result.stderr}
+    IF    ${result.rc} != 0
+      Log    ${result.stderr}
+    END
     Should Be Equal As Integers    ${result.rc}    0
     Wait Until Keyword Succeeds    5 sec    50 ms    TCP Connect    localhost    ${CLICKHOUSE_PORT}
     Set Suite Variable    ${RSPAMD_TMPDIR}    ${RSPAMD_TMPDIR}
@@ -79,7 +81,11 @@ Prepare rspamd
     &{d} =    Run Rspamd    CONFIG=${RSPAMD_TESTDIR}/configs/clickhouse.conf    TMPDIR=${RSPAMD_TMPDIR}
     ${keys} =    Get Dictionary Keys    ${d}
     FOR    ${i}    IN    @{keys}
-        Run Keyword If    '${RSPAMD_SCOPE}' == 'Suite'    Set Suite Variable    ${${i}}    ${d}[${i}]
-        ...    ELSE IF    '${RSPAMD_SCOPE}' == 'Test'     Set Test Variable     ${${i}}    ${d}[${i}]
-        ...    ELSE    Fail    'RSPAMD_SCOPE must be Test or Suite'
+        IF    '${RSPAMD_SCOPE}' == 'Suite'
+          Set Suite Variable    ${${i}}    ${d}[${i}]
+        ELSE IF  '${RSPAMD_SCOPE}' == 'Test'
+          Set Test Variable     ${${i}}    ${d}[${i}]
+        ELSE
+          Fail  'RSPAMD_SCOPE must be Test or Suite'
+        END
     END

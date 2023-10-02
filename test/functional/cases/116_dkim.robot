@@ -44,7 +44,9 @@ DKIM Sign
   Set Suite Variable  ${RAN_SIGNTEST}  1
 
 DKIM Self Verify
-  Run Keyword If  ${RAN_SIGNTEST} == 0  Fail  "Sign test was not run"
+  IF  ${RAN_SIGNTEST} == 0
+    Fail  "Sign test was not run"
+  END
   Scan File  ${SIGNED_MESSAGE}
   Expect Symbol  R_DKIM_ALLOW
 

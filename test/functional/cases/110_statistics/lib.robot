@@ -38,10 +38,14 @@ Learn Test
   Set Suite Variable  ${RSPAMD_STATS_LEARNTEST}  1
 
 Relearn Test
-  Run Keyword If  ${RSPAMD_STATS_LEARNTEST} == 0  Fail  "Learn test was not run"
+  IF  ${RSPAMD_STATS_LEARNTEST} == 0
+    Fail  "Learn test was not run"
+  END
   ${result} =  Run Rspamc  -h  ${RSPAMD_LOCAL_ADDR}:${RSPAMD_PORT_CONTROLLER}  learn_ham  ${MESSAGE_SPAM}
   Check Rspamc  ${result}
   Scan File  ${MESSAGE_SPAM}
   ${pass} =  Run Keyword And Return Status  Expect Symbol  BAYES_HAM
-  Run Keyword If  ${pass}  Pass Execution  What Me Worry
+  IF  ${pass}
+    Pass Execution  What Me Worry
+  END
   Do Not Expect Symbol  BAYES_SPAM
