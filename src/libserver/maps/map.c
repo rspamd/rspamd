@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -2695,6 +2695,59 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 				rspamd_snprintf(hdata->userinfo, len, "Basic %*Bs",
 								(int) up.field_data[UF_USERINFO].len,
 								bk->uri + up.field_data[UF_USERINFO].off);
+
+				msg_debug("added userinfo for the map from the URL: %s", hdata->host);
+			}
+			else {
+				/* Try to obtain authentication data from options in the configuration */
+				const ucl_object_t *auth_obj, *opts_obj;
+
+				opts_obj = ucl_object_lookup(cfg->cfg_ucl_obj, "options");
+				if (opts_obj != NULL) {
+					auth_obj = ucl_object_lookup(opts_obj, "http_auth");
+					if (auth_obj != NULL && ucl_object_type(auth_obj) == UCL_OBJECT) {
+						const ucl_object_t *host_obj;
+
+						/*
+						 * Search first by the full URL and then by the host part
+						 */
+						host_obj = ucl_object_lookup(auth_obj, map_line);
+
+						if (host_obj == NULL) {
+							host_obj = ucl_object_lookup(auth_obj, hdata->host);
+						}
+
+						if (host_obj != NULL && ucl_object_type(host_obj) == UCL_OBJECT) {
+							const ucl_object_t *user_obj, *password_obj;
+
+							user_obj = ucl_object_lookup(host_obj, "user");
+							password_obj = ucl_object_lookup(host_obj, "password");
+
+							if (user_obj != NULL && password_obj != NULL &&
+								ucl_object_type(user_obj) == UCL_STRING &&
+								ucl_object_type(password_obj) == UCL_STRING) {
+
+								gchar *tmpbuf;
+								unsigned tlen;
+
+								/* User + password + ':' */
+								tlen = strlen(ucl_object_tostring(user_obj)) +
+									   strlen(ucl_object_tostring(password_obj)) + 1;
+								tmpbuf = g_malloc(tlen + 1);
+								rspamd_snprintf(tmpbuf, tlen + 1, "%s:%s",
+												ucl_object_tostring(user_obj),
+												ucl_object_tostring(password_obj));
+								/* Base64 encoding is not so greedy, but we add some space for simplicity */
+								tlen *= 2;
+								tlen += sizeof("Basic ") - 1;
+								hdata->userinfo = g_malloc(tlen + 1);
+								rspamd_snprintf(hdata->userinfo, tlen + 1, "Basic %Bs", tmpbuf);
+								g_free(tmpbuf);
+								msg_debug("added userinfo for the map from the configuration: %s", map_line);
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -2709,7 +2762,8 @@ rspamd_map_parse_backend(struct rspamd_config *cfg, const gchar *map_line)
 	}
 
 	bk->id = rspamd_cryptobox_fast_hash_specific(RSPAMD_CRYPTOBOX_T1HA,
-												 bk->uri, strlen(bk->uri), 0xdeadbabe);
+												 bk->uri, strlen(bk->uri),
+												 0xdeadbabe);
 
 	return bk;
 
