@@ -129,7 +129,9 @@ Run Dummy
   ${process} =  Start Process  @{varargs}
   ${pid} =  Get From List  ${varargs}  -1
   ${pass} =  Run Keyword And Return Status  Wait Until Created  ${pid}
-  Run Keyword If  ${pass}  Return From Keyword
+  IF  ${pass}
+    Return From Keyword
+  END
   Wait For Process  ${process}
   ${res} =  Get Process Result  ${process}
   Log To Console  ${res.stdout}

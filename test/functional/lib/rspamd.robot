@@ -17,32 +17,48 @@ Check Pidfile
 
 Check Rspamc
   [Arguments]  ${result}  @{args}  &{kwargs}
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  IF  ${result.rc} != 0
+    Log  ${result.stderr}
+  END
   ${has_rc} =  Evaluate  'rc' in $kwargs
   ${inverse} =  Evaluate  'inverse' in $kwargs
   ${re} =  Evaluate  're' in $kwargs
   ${rc} =  Set Variable If  ${has_rc} == True  ${kwargs}[rc]  0
   FOR  ${i}  IN  @{args}
-    Run Keyword If  ${re} == True  Check Rspamc Match Regexp  ${result.stdout}  ${i}  ${inverse}
-    ...  ELSE  Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
+    IF  ${re} == True
+      Check Rspamc Match Regexp  ${result.stdout}  ${i}  ${inverse}
+    ELSE
+      Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
+    END
   END
-  Run Keyword If  @{args} == @{EMPTY}  Check Rspamc Match Default  ${result.stdout}  ${inverse}
+  IF  @{args} == @{EMPTY}
+    Check Rspamc Match Default  ${result.stdout}  ${inverse}
+  END
   Should Be Equal As Integers  ${result.rc}  ${rc}
 
 Check Rspamc Match Default
   [Arguments]  ${subject}  ${inverse}
-  Run Keyword If  ${inverse} == False  Should Contain  ${subject}  success = true
-  ...  ELSE  Should Not Contain  ${subject}  success = true
+  IF  ${inverse} == False
+    Should Contain  ${subject}  success = true
+  ELSE
+    Should Not Contain  ${subject}  success = true
+  END
 
 Check Rspamc Match Regexp
   [Arguments]  ${subject}  ${re}  ${inverse}
-  Run Keyword If  ${inverse} == False  Should Match Regexp  ${subject}  ${re}
-  ...  ELSE  Should Not Match Regexp ${subject}  ${re}
+  IF  ${inverse} == False
+    Should Match Regexp  ${subject}  ${re}
+  ELSE
+    Should Not Match Regexp ${subject}  ${re}
+  END
 
 Check Rspamc Match String
   [Arguments]  ${subject}  ${str}  ${inverse}
-  Run Keyword If  ${inverse} == False  Should Contain  ${subject}  ${str}
-  ...  ELSE  Should Not Contain  ${subject}  ${str}
+  IF  ${inverse} == False
+    Should Contain  ${subject}  ${str}
+  ELSE
+    Should Not Contain  ${subject}  ${str}
+  END
 
 Do Not Expect Symbol
   [Arguments]  ${symbol}
@@ -140,16 +156,23 @@ Expect Symbol With Score And Exact Options
 Export Rspamd Variables To Environment
   &{all_vars} =  Get Variables  no_decoration=True
   FOR  ${k}  ${v}  IN  &{all_vars}
-    Run Keyword If  '${k}'.startswith("RSPAMD_")  Set Environment Variable  ${k}  ${v}
+    IF  '${k}'.startswith("RSPAMD_")
+      Set Environment Variable  ${k}  ${v}
+    END
   END
 
 Export Scoped Variables
   [Arguments]  ${scope}  &{vars}
   FOR  ${k}  ${v}  IN  &{vars}
-    Run Keyword If  '${scope}' == 'Test'  Set Test Variable  ${${k}}  ${v}
-    ...  ELSE IF  '${scope}' == 'Suite'  Set Suite Variable  ${${k}}  ${v}
-    ...  ELSE IF  '${scope}' == 'Global'  Set Global Variable  ${${k}}  ${v}
-    ...  ELSE  Fail  message="Don't know what to do with scope: ${scope}"
+    IF  '${scope}' == 'Test'
+      Set Test Variable  ${${k}}  ${v}
+    ELSE IF  '${scope}' == 'Suite'
+      Set Suite Variable  ${${k}}  ${v}
+    ELSE IF  '${scope}' == 'Global'
+      Set Global Variable  ${${k}}  ${v}
+    ELSE
+      Fail  message="Don't know what to do with scope: ${scope}"
+    END
   END
 
 Log does not contain segfault record
@@ -160,7 +183,9 @@ Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
   ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  HSET  ${hash}  ${key}  ${value}
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  IF  ${result.rc} != 0
+    Log  ${result.stderr}
+  END
   Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0
 
@@ -168,7 +193,9 @@ Redis SET
   [Arguments]  ${key}  ${value}
   ${result} =  Run Process  redis-cli  -h  ${RSPAMD_REDIS_ADDR}  -p  ${RSPAMD_REDIS_PORT}
   ...  SET  ${key}  ${value}
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  IF  ${result.rc} != 0
+    Log  ${result.stderr}
+  END
   Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0
 
@@ -192,9 +219,9 @@ Rspamd Redis Setup
   Rspamd Setup
 
 Rspamd Teardown
-  # Robot Framework 4.0
-  #Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Run Keyword And Warn On Failure  Check Controller Errors
-  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
+  IF  '${CONTROLLER_ERRORS}' == 'True'
+    Run Keyword And Warn On Failure  Check Controller Errors
+  END
   Shutdown Process With Children  ${RSPAMD_PID}
   Save Run Results  ${RSPAMD_TMPDIR}  configdump.stdout configdump.stderr rspamd.stderr rspamd.stdout rspamd.conf rspamd.log redis.log clickhouse-config.xml
   Log does not contain segfault record
@@ -212,7 +239,9 @@ Run Redis
   Create File  ${RSPAMD_TMPDIR}/redis-server.conf  ${config}
   Log  ${config}
   ${result} =  Run Process  redis-server  ${RSPAMD_TMPDIR}/redis-server.conf
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  IF  ${result.rc} != 0
+    Log  ${result.stderr}
+  END
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/redis.pid  timeout=0.5s
   Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${RSPAMD_REDIS_ADDR}  ${RSPAMD_REDIS_PORT}
@@ -240,8 +269,11 @@ Run Rspamd
   ...  env:ASAN_OPTIONS=quarantine_size_mb=2048:malloc_context_size=20:fast_unwind_on_malloc=0:log_path=${RSPAMD_TMPDIR}/rspamd-asan
   # We need to send output to files (or discard output) to avoid hanging Robot
   ...  stdout=${RSPAMD_TMPDIR}/configdump.stdout  stderr=${RSPAMD_TMPDIR}/configdump.stderr
-  ${configdump} =  Run Keyword If  ${result.rc} == 0  Get File  ${RSPAMD_TMPDIR}/configdump.stdout  encoding_errors=ignore
-  ...  ELSE  Get File  ${RSPAMD_TMPDIR}/configdump.stderr  encoding_errors=ignore
+  IF  ${result.rc} == 0
+    ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stdout  encoding_errors=ignore
+  ELSE
+    ${configdump} =  Get File  ${RSPAMD_TMPDIR}/configdump.stderr  encoding_errors=ignore
+  END
   Log  ${configdump}
 
   # Fix directory ownership (maybe do this somewhere else)
@@ -287,13 +319,18 @@ Run Nginx
   Create File  ${RSPAMD_TMPDIR}/nginx.conf  ${config}
   Log  ${config}
   ${result} =  Run Process  nginx  -c  ${RSPAMD_TMPDIR}/nginx.conf
-  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  IF  ${result.rc} != 0
+    Log  ${result.stderr}
+  END
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${RSPAMD_TMPDIR}/nginx.pid  timeout=0.5s
   Wait Until Keyword Succeeds  5x  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
   ${NGINX_PID} =  Get File  ${RSPAMD_TMPDIR}/nginx.pid
-  Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
-  ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
+  IF  '${NGINX_SCOPE}' == 'Test'
+    Set Test Variable  ${NGINX_PID}
+  ELSE IF  '${NGINX_SCOPE}' == 'Suite'
+    Set Suite Variable  ${NGINX_PID}
+  END
   ${nginx_log} =  Get File  ${RSPAMD_TMPDIR}/nginx.log
   Log  ${nginx_log}
 
@@ -318,24 +355,31 @@ Scan Message With Rspamc
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
   ${len} =  Get Length  ${vargs}
-  ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s
-  ...  ${RSPAMD_TMPDIR}/rspamd.sock  fuzzy_sync
-  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  ${vargs}[0]/rspamd.sock
-  ...  fuzzy_sync
+  IF  $len == 0
+    ${result} =  Run Process  ${RSPAMADM}  control  -s
+    ...  ${RSPAMD_TMPDIR}/rspamd.sock  fuzzy_sync
+  ELSE
+    Run Process  ${RSPAMADM}  control  -s  ${vargs}[0]/rspamd.sock
+    ...  fuzzy_sync
+  END
   Log  ${result.stdout}
   Sleep  0.1s  Try give fuzzy storage time to sync
 
 Run Dummy Http
   ${fileExists} =  File Exists  /tmp/dummy_http.pid
-  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_http.pid
-  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  IF  ${fileExists} is True
+    ${http_pid} =  Get File  /tmp/dummy_http.pid
+    Shutdown Process With Children  ${http_pid}
+  END
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py  -pf  /tmp/dummy_http.pid
   Wait Until Created  /tmp/dummy_http.pid  timeout=2 second
 
 Run Dummy Https
   ${fileExists} =  File Exists  /tmp/dummy_https.pid
-  ${http_pid} =  Run Keyword If  ${fileExists} is True  Get File  /tmp/dummy_https.pid
-  Run Keyword If  ${fileExists} is True  Shutdown Process With Children  ${http_pid}
+  IF  ${fileExists} is True
+    ${http_pid} =  Get File  /tmp/dummy_https.pid
+    Shutdown Process With Children  ${http_pid}
+  END
   ${result} =  Start Process  ${RSPAMD_TESTDIR}/util/dummy_http.py
   ...  -c  ${RSPAMD_TESTDIR}/util/server.pem  -k  ${RSPAMD_TESTDIR}/util/server.pem
   ...  -pf  /tmp/dummy_https.pid  -p  18081
