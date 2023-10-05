@@ -48,7 +48,7 @@ local policies = {
 
 local default_policy = policies.recommended
 
-local policy_schema = ts.shape {
+local schema_fields = {
   min_bytes = ts.number + ts.string / tonumber,
   min_height = ts.number + ts.string / tonumber,
   min_width = ts.number + ts.string / tonumber,
@@ -60,6 +60,11 @@ local policy_schema = ts.shape {
   text_shingles = ts.boolean,
   skip_images = ts.boolean,
 }
+local policy_schema = ts.shape(schema_fields)
+
+local policy_schema_open = ts.shape(schema_fields, {
+  open = true,
+})
 
 local exports = {}
 
@@ -99,6 +104,14 @@ exports.process_rule = function(rule)
 
   if policy then
     processed_rule = lua_util.override_defaults(policy, processed_rule)
+
+    local parsed_policy, err = policy_schema_open:transform(processed_rule)
+
+    if not parsed_policy then
+      rspamd_logger.errx(rspamd_config, 'invalid fuzzy rule default fields: %s', err)
+    else
+      processed_rule = parsed_policy
+    end
   else
     rspamd_logger.warnx(rspamd_config, "unknown policy %s", processed_rule.policy)
   end
