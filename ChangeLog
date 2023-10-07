@@ -1,3 +1,37 @@
+3.7.1: 07 Oct 2023
+  * [CritFix] Fix leak in `gzip` function
+  * [Feature] Add ICAP Content-Type and Filename
+  * [Feature] Add `logging`->`task_max_elts` option
+  * [Feature] Add utility to split string like stuff for C++ code
+  * [Feature] Allow to set HTTP auth parameters for the maps
+  * [Feature] Check for plugin configuration errors on `configtest`
+  * [Feature] `known_senders` plugin
+  * [Feature] Use backward-cpp instead of manual libunwind stuff
+  * [Feature] rbl: support checking numeric URLs in isolation
+  * [Fix] CMakeLists.txt remove whitespace added by linter as it makes tests fail
+  * [Fix] Change Date: header location to conform with RFC
+  * [Fix] Correct format pattern for RE tree tempfile name
+  * [Fix] Correct format string for unw_word_t
+  * [Fix] Do not accept invalid ucl object types
+  * [Fix] Do not pollute public headers with libev internals
+  * [Fix] Do not set output type if list application failed
+  * [Fix] Fix `url:set_redirected` method
+  * [Fix] Fix format string and some length issues
+  * [Fix] Fix grammar definition for content-disposition attributes
+  * [Fix] Fix lua schema enrichment logic for Redis params
+  * [Fix] Fix lua stack corruption when logging large tables
+  * [Fix] Fix merge table utility
+  * [Fix] Fix output of non-RSA DKIM keys
+  * [Fix] Fix some corner cases of single-host urls parsing
+  * [Fix] Fix various issues in the `url_redirector` plugin
+  * [Fix] MISSING_MIMEOLE: avoid matching messages from Android GMail app (#4561)
+  * [Fix] Prevent DNSWL sabotage
+  * [Fix] Try to fix unzip function
+  * [Fix] rbl: really fix dependency registration when symbols_prefixes is used
+  * [Fix] rspamadm mime: arguments beginning with letter `t`
+  * [Rework] Breaking: return back to semver
+  * [Rework] Move rcl logic to C++
+
 3.6: 03 Aug 2023
   * [Conf] Add `one_shot` to some specific multimap rules
   * [Conf] Add language detection configuration
