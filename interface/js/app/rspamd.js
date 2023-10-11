@@ -824,19 +824,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                     self.removeFilter("action");
                 }
                 self.filter();
-            },
-            draw: function () {
-                this._super();
-                var action = this.find("action");
-                if (action instanceof FooTable.Filter) {
-                    if (action.query.val() === "reject -soft") {
-                        this.$action.val("reject");
-                    } else {
-                        this.$action.val(action.query.val());
-                    }
-                } else {
-                    this.$action.val(this.def);
-                }
             }
         });
         /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
