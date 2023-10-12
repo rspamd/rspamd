@@ -151,7 +151,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     if munging_opts.munge_map_condition then
       local accepted, trace = munging_opts.munge_map_condition:process(task)
       if not accepted then
-        lua_util.debugm(task, 'skip munging, maps condition not satisfied: (%s)',
+        lua_util.debugm(N, task, 'skip munging, maps condition not satisfied: (%s)',
             trace)
         -- Excepted
         return
@@ -170,7 +170,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     end
 
     if not rcpt_found then
-      lua_util.debugm(task, 'skip munging, recipients are not in list_map')
+      lua_util.debugm(N, task, 'skip munging, recipients are not in list_map')
       -- Excepted
       return
     end
@@ -178,7 +178,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     local from = task:get_from({ 'mime', 'orig' })
 
     if not from or not from[1] then
-      lua_util.debugm(task, 'skip munging, from is bad')
+      lua_util.debugm(N, task, 'skip munging, from is bad')
       -- Excepted
       return
     end
