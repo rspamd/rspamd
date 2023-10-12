@@ -379,7 +379,13 @@ typedef SSIZE_T ssize_t;
 
 #if BACKWARD_HAS_UNWIND == 1
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
 #include <unwind.h>
+#undef _GNU_SOURCE
+#else
+#include <unwind.h>
+#endif
 // while gcc's unwind.h defines something like that:
 //  extern _Unwind_Ptr _Unwind_GetIP (struct _Unwind_Context *);
 //  extern _Unwind_Ptr _Unwind_GetIPInfo (struct _Unwind_Context *, int *);
