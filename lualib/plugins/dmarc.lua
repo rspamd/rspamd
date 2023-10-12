@@ -188,7 +188,7 @@ exports.gen_munging_callback = function(munging_opts, settings)
     local via_addr = rcpt_found.addr
     local via_name
 
-    if from.name then
+    if from.name != "" then
       via_name = string.format('%s via %s', from.name, via_user)
     else
       via_name = string.format('%s via %s', from.user or 'unknown', via_user)
