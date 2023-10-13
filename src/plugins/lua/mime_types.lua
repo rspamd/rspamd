@@ -55,6 +55,7 @@ local settings = {
     bat = 2,
     chm = 4,
     com = 2,
+    cue = 2,
     exe = 1,
     hta = 2,
     iso = 4,
