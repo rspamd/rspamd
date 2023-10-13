@@ -547,14 +547,17 @@ local headers_unique = {
   ['Subject'] = 0.7
 }
 
-rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
+local multiple_unique_headers_id = rspamd_config:register_symbol {
+  name = 'MULTIPLE_UNIQUE_HEADERS',
   callback = function(task)
     local res = 0
     local max_mult = 0.0
     local res_tbl = {}
+    local found = 0
 
     for hdr, mult in pairs(headers_unique) do
       local hc = task:get_header_count(hdr)
+      found = found + hc
 
       if hc > 1 then
         res = res + 1
@@ -566,16 +569,25 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
     end
 
     if res > 0 then
-      return true, max_mult, table.concat(res_tbl, ',')
+      task:insert_result('MULTIPLE_UNIQUE_HEADERS', max_mult, table.concat(res_tbl, ','))
+    elseif found == 0 then
+      task:insert_result('MISSING_ESSENTIAL_HEADERS', 1.0)
     end
-
-    return false
   end,
 
   score = 7.0,
   group = 'headers',
   one_shot = true,
   description = 'Repeated unique headers'
+}
+
+rspamd_config:register_symbol {
+  name = 'MISSING_ESSENTIAL_HEADERS',
+  score = 7.0,
+  group = 'blankspam',
+  parent = multiple_unique_headers_id,
+  type = 'virtual',
+  description = 'Common headers were entirely absent',
 }
 
 rspamd_config.MISSING_FROM = {
