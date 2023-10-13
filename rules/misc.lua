@@ -853,3 +853,12 @@ rspamd_config:register_symbol {
   score = -2.0,
   one_shot = true
 }
+
+rspamd_config.COMPLETELY_EMPTY = {
+  callback = function(task)
+    return (task:get_size() == 0)
+  end,
+  flags = 'empty',
+  group = 'blankspam',
+  score = 15
+}
