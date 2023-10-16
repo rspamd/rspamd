@@ -792,12 +792,28 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
             },
             $create: function () {
                 this._super();
-                var self = this, $form_grp = $("<div/>", {
-                    class: "form-group"
+                const self = this, $form_grp = $("<div/>", {
+                    class: "form-group d-inline-flex align-items-center"
                 }).append($("<label/>", {
                     class: "sr-only",
                     text: "Action"
                 })).prependTo(self.$form);
+
+                $("<div/>", {
+                    class: "form-check form-check-inline",
+                    title: "Invert action match."
+                }).append(
+                    self.$not = $("<input/>", {
+                        type: "checkbox",
+                        class: "form-check-input",
+                        id: "not_" + table
+                    }).on("change", {self: self}, self._onStatusDropdownChanged),
+                    $("<label/>", {
+                        class: "form-check-label",
+                        for: "not_" + table,
+                        text: "not"
+                    })
+                ).appendTo($form_grp);
 
                 self.$action = $("<select/>", {
                     class: "form-select"
@@ -813,30 +829,23 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                 });
             },
             _onStatusDropdownChanged: function (e) {
-                var self = e.data.self, selected = $(this).val();
+                const self = e.data.self;
+                const selected = self.$action.val();
                 if (selected !== self.def) {
+                    const not = self.$not.is(":checked");
+                    let query = null;
+
                     if (selected === "reject") {
-                        self.addFilter("action", "reject -soft", ["action"]);
+                        query = not ? "-reject OR soft" : "reject -soft";
                     } else {
-                        self.addFilter("action", selected, ["action"]);
+                        query = not ? selected.replace(/(\b\w+\b)/g, "-$1") : selected;
                     }
+
+                    self.addFilter("action", query, ["action"]);
                 } else {
                     self.removeFilter("action");
                 }
                 self.filter();
-            },
-            draw: function () {
-                this._super();
-                var action = this.find("action");
-                if (action instanceof FooTable.Filter) {
-                    if (action.query.val() === "reject -soft") {
-                        this.$action.val("reject");
-                    } else {
-                        this.$action.val(action.query.val());
-                    }
-                } else {
-                    this.$action.val(this.def);
-                }
             }
         });
         /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
