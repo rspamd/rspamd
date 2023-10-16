@@ -291,10 +291,11 @@ local function process_rua(dmarc_domain, rua)
   local addrs = {}
   for _, rua_part in ipairs(parts) do
     local u = rspamd_url.create(pool, rua_part:gsub('!%d+[kmg]?$', ''))
+    local u2 = rspamd_url.create(pool, dmarc_domain)
     if u and (u:get_protocol() or '') == 'mailto' and u:get_user() then
       -- Check each address for sanity
-      if dmarc_domain == u:get_tld() or dmarc_domain == u:get_host() then
-        -- Same domain - always include
+      if u:get_tld() == u2:get_tld() then
+        -- Same eSLD - always include
         table.insert(addrs, u)
       else
         -- We need to check authority
@@ -341,18 +342,15 @@ end
 -- Validate reporting domain, extracting rua and checking 3rd party report domains
 -- This function returns a full dmarc record processed + rua as a list of url objects
 local function validate_reporting_domain(reporting_domain)
-  -- Now check the domain policy
-  -- DMARC domain is a esld for the reporting domain
-  local dmarc_domain = rspamd_util.get_tld(reporting_domain)
   local is_ok, results = rspamd_dns.request({
     config = rspamd_config,
     session = rspamadm_session,
     type = 'txt',
-    name = '_dmarc.' .. dmarc_domain,
+    name = '_dmarc.' .. reporting_domain,
   })
 
   if not is_ok or not results then
-    logger.errx('cannot resolve _dmarc.%s: %s', dmarc_domain, results)
+    logger.errx('cannot resolve _dmarc.%s: %s', reporting_domain, results)
     return nil
   end
 
@@ -360,7 +358,7 @@ local function validate_reporting_domain(reporting_domain)
     local processed, rec = dmarc_common.dmarc_check_record(rspamd_config, r, false)
     if processed and rec.rua then
       -- We need to check or alter rua if needed
-      local processed_rua = process_rua(dmarc_domain, rec.rua)
+      local processed_rua = process_rua(reporting_domain, rec.rua)
       if processed_rua then
         rec = rec.raw_elts
         rec.rua = processed_rua
