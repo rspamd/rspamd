@@ -287,6 +287,14 @@ local noarch_pipeline = {
         './node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js',
       ],
     },
+    {
+      name: 'luacheck',
+      image: 'pipelinecomponents/luacheck',
+      pull: 'if-not-exists',
+      commands: [
+        'luacheck -q --no-color .',
+      ],
+    },
   ],
 } + default_trigger + docker_pipeline;
 
