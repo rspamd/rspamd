@@ -307,7 +307,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
 
     -- Dmarc domain key must include dmarc domain, rua and period
     local dmarc_domain_key = table.concat(
-        { settings.reporting.redis_keys.report_prefix, dmarc_esld, policy.rua, period },
+        { settings.reporting.redis_keys.report_prefix, policy.domain, policy.rua, period },
         settings.reporting.redis_keys.join_char)
     local report_data = dmarc_common.dmarc_report(task, settings, {
       spf_ok = spf_ok and 'pass' or 'fail',
