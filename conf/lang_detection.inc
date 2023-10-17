@@ -9,7 +9,7 @@
 # parameters defined inside this section
 
 # Path to the languages shared data
-# languages = "${RSPAMD_SHAREDIR}/languages"
+# languages = "${SHAREDIR}/languages"
 
 # Limit in words to treat text as short for language detection
 # short_text_limit = 10
@@ -21,7 +21,7 @@
 # languages_disable = ["fr", "es"]
 
 # Use the following fasttext model for language detection (if Fasttext support is compiled in)
-# fasttext_model = "${RSPAMD_SHAREDIR}/languages/fasttext_model.ftz"
+# fasttext_model = "${SHAREDIR}/languages/fasttext_model.ftz"
 
 # Prefer fasttext over all other methods
 # prefer_fasttext = true;
