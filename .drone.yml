@@ -499,6 +499,14 @@
          "image": "node:18-alpine",
          "name": "eslint",
          "pull": "if-not-exists"
+      },
+      {
+         "commands": [
+            "luacheck -q --no-color ."
+         ],
+         "image": "pipelinecomponents/luacheck",
+         "name": "luacheck",
+         "pull": "if-not-exists"
       }
    ],
    "trigger": {
@@ -553,7 +561,7 @@
 }
 ---
 {
-   "hmac": "3f01ceb14c7dd3ba2f5343fc52216843f72212e1cb25f944c2366d57e78d2b79",
+   "hmac": "6c89d1423ccbddbfac9e2b67f24192018670209a293cfee308880a16a2f2b372",
    "kind": "signature"
 }
 ...
