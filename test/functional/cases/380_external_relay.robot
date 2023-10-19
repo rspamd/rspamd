@@ -46,3 +46,11 @@ EXTERNAL RELAY LOCAL
   ...  IP=127.0.0.1
   Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
   ...  IP=4.31.198.44  HOSTNAME=mail.ietf.org  HELO=mail.ietf.org
+
+EXTERNAL RELAY HOSTNAME MAP REGEXP
+  Scan File  ${RSPAMD_TESTDIR}/messages/received6.eml
+  ...  Settings={symbols_enabled [EXTERNAL_RELAY_TEST, EXTERNAL_RELAY_HOSTNAME_MAP_REGEXP]}
+  ...  Hostname=lame.example.net  IP=192.0.2.10
+  Expect Symbol With Exact Options  EXTERNAL_RELAY_TEST
+  ...  IP=192.0.2.1  HOSTNAME=mail.example.org  HELO=mail.example.org
+
