@@ -18,6 +18,7 @@
 
 #ifdef WITH_HYPERSCAN
 #include <string>
+#include <filesystem>
 #include "contrib/ankerl/unordered_dense.h"
 #include "contrib/ankerl/svector.h"
 #include "fmt/core.h"
@@ -103,41 +104,6 @@ private:
 		cleanup_maybe();
 	}
 
-	/* Have to duplicate raii_file methods to use raw filenames */
-	static auto get_dir(std::string_view fname) -> std::string_view
-	{
-		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
-
-		if (sep_pos == std::string::npos) {
-			return std::string_view{fname};
-		}
-
-		while (sep_pos >= 1 && fname[sep_pos - 1] == G_DIR_SEPARATOR) {
-			sep_pos--;
-		}
-
-		return std::string_view{fname.data(), sep_pos};
-	}
-
-	static auto get_extension(std::string_view fname) -> std::string_view
-	{
-		auto sep_pos = fname.rfind(G_DIR_SEPARATOR);
-
-		if (sep_pos == std::string::npos) {
-			sep_pos = 0;
-		}
-
-		auto filename = std::string_view{fname.data() + sep_pos};
-		auto dot_pos = filename.find('.');
-
-		if (dot_pos == std::string::npos) {
-			return std::string_view{};
-		}
-		else {
-			return std::string_view{filename.data() + dot_pos + 1, filename.size() - dot_pos - 1};
-		}
-	}
-
 public:
 	hs_known_files_cache(const hs_known_files_cache &) = delete;
 	hs_known_files_cache(hs_known_files_cache &&) = delete;
@@ -176,69 +142,72 @@ public:
 
 	void add_cached_file(const char *fname)
 	{
-		auto mut_fname = std::string{fname};
-		std::size_t sz;
+		auto fpath = std::filesystem::path{fname};
+		std::error_code ec;
 
-		rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
-		mut_fname.resize(sz);
+		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (mut_fname.empty()) {
+		if (!ec) {
+			msg_err_hyperscan("invalid path: \"%s\", error message: %s", fname, ec.message().c_str());
+			return;
+		}
+
+		if (fpath.empty()) {
 			msg_err_hyperscan("attempt to add an empty hyperscan file!");
 			return;
 		}
 
-		if (access(mut_fname.c_str(), R_OK) == -1) {
-			msg_err_hyperscan("attempt to add non existing hyperscan file: %s, %s", mut_fname.c_str(),
+		if (!std::filesystem::exists(fpath)) {
+			msg_err_hyperscan("attempt to add non existing hyperscan file: %s, %s", fpath.c_str(),
 							  strerror(errno));
 			return;
 		}
 
-		auto dir = hs_known_files_cache::get_dir(mut_fname);
-		auto ext = hs_known_files_cache::get_extension(mut_fname);
+		auto dir = fpath.parent_path();
+		auto ext = fpath.extension();
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
 						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
-			cache_dirs.emplace_back(std::string{dir});
+			cache_dirs.emplace_back(dir.string());
 		}
 		if (std::find_if(cache_extensions.begin(), cache_extensions.end(),
 						 [&](const auto &item) { return item == ext; }) == std::end(cache_extensions)) {
-			cache_extensions.emplace_back(std::string{ext});
+			cache_extensions.emplace_back(ext.string());
 		}
 
-		auto is_known = known_cached_files.insert(mut_fname);
+		auto is_known = known_cached_files.insert(fpath.string());
 		msg_debug_hyperscan("added %s hyperscan file: %s",
 							is_known.second ? "new" : "already known",
-							mut_fname.c_str());
+							fpath.c_str());
 	}
 
 	void delete_cached_file(const char *fname)
 	{
-		auto mut_fname = std::string{fname};
-		std::size_t sz;
+		auto fpath = std::filesystem::path{fname};
+		std::error_code ec;
 
-		rspamd_normalize_path_inplace(mut_fname.data(), mut_fname.size(), &sz);
-		mut_fname.resize(sz);
+		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (mut_fname.empty()) {
+		if (!ec) {
+			msg_err_hyperscan("invalid path to remove: \"%s\", error message: %s",
+							  fname, ec.message().c_str());
+			return;
+		}
+
+		if (fpath.empty()) {
 			msg_err_hyperscan("attempt to remove an empty hyperscan file!");
 			return;
 		}
 
-		if (access(mut_fname.c_str(), R_OK) != -1) {
-			if (unlink(mut_fname.c_str()) == -1) {
-				msg_err_hyperscan("cannot remove hyperscan file %s: %s",
-								  mut_fname.c_str(), strerror(errno));
-			}
-			else {
-				msg_debug_hyperscan("removed hyperscan file %s", mut_fname.c_str());
-			}
+		if (unlink(fpath.c_str()) == -1) {
+			msg_err_hyperscan("cannot remove hyperscan file %s: %s",
+							  fpath.c_str(), strerror(errno));
 		}
 		else {
-			msg_err_hyperscan("attempt to remove non-existent hyperscan file %s: %s",
-							  mut_fname.c_str(), strerror(errno));
+			msg_debug_hyperscan("removed hyperscan file %s", fpath.c_str());
 		}
 
-		known_cached_files.erase(mut_fname);
+		known_cached_files.erase(fpath.string());
 	}
 
 	auto cleanup_maybe() -> void
