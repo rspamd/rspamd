@@ -123,6 +123,7 @@ local function icap_config(opts)
     http_headers_enabled = true,
     use_http_result_header = true,
     use_http_3xx_as_threat = false,
+    use_specific_content_type = false, -- Use content type from a part where possible
   }
 
   icap_conf = lua_util.override_defaults(icap_conf, opts)
@@ -243,8 +244,14 @@ local function icap_check(task, content, digest, rule, maybe_part)
         local in_client_ip = task:get_from_ip()
         local req_hlen = 2
         if maybe_part then
-          table.insert(req_headers, string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, maybe_part:get_filename()))
-          table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part:get_detected_type()))
+          table.insert(req_headers,
+              string.format('GET http://%s/%s HTTP/1.0\r\n', in_client_ip, maybe_part:get_filename()))
+          if rule.use_specific_content_type then
+            table.insert(http_headers, string.format('Content-Type: %s/%s\r\n', maybe_part:get_detected_type()))
+            --else
+            -- To test: what content type is better for icap servers?
+            --table.insert(http_headers, 'Content-Type: text/plain\r\n')
+          end
         else
           table.insert(req_headers, string.format('GET %s HTTP/1.0\r\n', rule.req_fake_url))
           table.insert(http_headers, string.format('Content-Type: application/octet-stream\r\n'))
@@ -488,11 +495,13 @@ local function icap_check(task, content, digest, rule, maybe_part)
         elseif headers.http and string.find(headers.http, '^HTTP%/[12]%.. [4]%d%d') then
           threat_table_add(
               string.format("pseudo-virus (blocked): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
-        elseif rule.use_http_3xx_as_threat and headers.http and string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d')
+        elseif rule.use_http_3xx_as_threat and
+            headers.http and
+            string.find(headers.http, '^HTTP%/[12]%.. [3]%d%d')
         then
-
           threat_table_add(
-              string.format("pseudo-virus (redirect): %s", string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
+              string.format("pseudo-virus (redirect): %s",
+                  string.gsub(headers.http, 'HTTP%/[12]%.. ', '')), false)
         end
 
         if #threat_table > 0 then
