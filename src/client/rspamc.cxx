@@ -365,27 +365,35 @@ struct fmt::formatter<rspamd_action_type> : fmt::formatter<string_view> {
 template<typename... T>
 static inline void rspamc_print(std::FILE *f, fmt::format_string<T...> fmt, T &&...args)
 {
-	static auto try_print_exception = 1;
+	static auto try_print_exception = true;
+	auto wanna_die = false;
+
 	try {
 		fmt::print(f, fmt, std::forward<T>(args)...);
 	} catch (const fmt::format_error &err) {
 		if (try_print_exception) {
-			if (fprintf(f, "Format error: %s\n", err.what()) < 0) {
-				try_print_exception = 0;
+			if (fprintf(stderr, "Format error: %s\n", err.what()) < 0) {
+				try_print_exception = false;
 			}
 		}
 	} catch (std::system_error &err) {
+		wanna_die = true;
 		if (try_print_exception) {
-			if (fprintf(f, "System error: %s\n", err.what()) < 0) {
-				try_print_exception = 0;
+			if (fprintf(stderr, "System error: %s\n", err.what()) < 0) {
+				try_print_exception = false;
 			}
 		}
 	} catch (...) {
+		wanna_die = true;
 		if (try_print_exception) {
-			if (fprintf(f, "Unknown format error\n") < 0) {
-				try_print_exception = 0;
+			if (fprintf(stderr, "Unknown format error\n") < 0) {
+				try_print_exception = false;
 			}
 		}
+	}
+
+	if (wanna_die) {
+		exit(EXIT_FAILURE);
 	}
 }
 
