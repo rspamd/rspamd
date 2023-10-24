@@ -53,7 +53,7 @@ local settings = {
 
   bad_extensions = {
     cue = 2,
-    exe = 2,
+    exe = 1,
     iso = 4,
     jar = 2,
     -- In contrast to HTML MIME parts, dedicated HTML attachments are considered harmful
