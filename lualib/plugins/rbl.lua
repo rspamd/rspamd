@@ -107,6 +107,7 @@ local rule_schema_tbl = {
   ipv6 = ts.boolean:is_optional(),
   is_whitelist = ts.boolean:is_optional(),
   local_exclude_ip_map = ts.string:is_optional(),
+  matcher = ts.one_of { "equality", "luapattern" }:is_optional(),
   monitored_address = ts.string:is_optional(),
   no_ip = ts.boolean:is_optional(),
   process_script = ts.string:is_optional(),
@@ -197,6 +198,21 @@ local function convert_checks(rule)
     rspamd_logger.warnx(rspamd_config, 'rbl rule %s has no check enabled, enable default `from` check',
         rule.symbol)
     rule.from = true
+  end
+
+  if rule.returncodes and not rule.matcher then
+    for _, v in pairs(rule.returncodes) do
+      for _, e in ipairs(v) do
+        if e:find('%', 1, true) then
+          rspamd_logger.warnx(rspamd_config, 'implicitly enabling luapattern matcher for rule %s', rule.symbol)
+          rule.matcher = 'luapattern'
+          break
+        end
+      end
+      if rule.matcher then
+        break
+      end
+    end
   end
 
   return rule

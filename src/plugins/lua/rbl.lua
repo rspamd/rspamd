@@ -215,7 +215,17 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   end
 end
 
-local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt)
+local matchers = {}
+
+matchers.equality = function(to_match, pattern)
+  return to_match == pattern
+end
+
+matchers.luapattern = function(to_match, pattern)
+  return string.find(to_match, '^' .. pattern .. '$') and true or false
+end
+
+local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
   local function make_option(ip, label)
     if ip then
       return string.format('%s:%s:%s',
@@ -293,7 +303,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
     elseif rbl.returncodes then
       for s, codes in pairs(rbl.returncodes) do
         for _, v in ipairs(codes) do
-          if string.find(ipstr, '^' .. v .. '$') then
+          if match(ipstr, v) then
             foundrc = true
             insert_results(s)
             break
@@ -858,6 +868,11 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'selector'
   end
 
+  if not rule.matcher then
+    rule.matcher = 'equality'
+  end
+  local match = matchers[rule.matcher]
+
   local callback_f = function(task)
     -- DNS requests to issue (might be hashed afterwards)
     local dns_req = {}
@@ -865,7 +880,7 @@ local function gen_rbl_callback(rule)
 
     local function gen_rbl_dns_callback(resolve_table_elt)
       return function(_, to_resolve, results, err)
-        rbl_dns_process(task, rule, to_resolve, results, err, resolve_table_elt)
+        rbl_dns_process(task, rule, to_resolve, results, err, resolve_table_elt, match)
       end
     end
 
