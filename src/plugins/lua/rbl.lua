@@ -21,6 +21,7 @@ end
 
 local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
+local rspamd_regexp = require 'rspamd_regexp'
 local rspamd_util = require 'rspamd_util'
 local rspamd_ip = require "rspamd_ip"
 local fun = require 'fun'
@@ -223,6 +224,18 @@ end
 
 matchers.luapattern = function(to_match, pattern)
   return string.find(to_match, '^' .. pattern .. '$') and true or false
+end
+
+matchers.regexp = function(to_match, pattern)
+  local re = rspamd_regexp.get_cached(pattern)
+  if not re then
+    re = rspamd_regexp.create_cached(pattern)
+    if not re then
+      rspamd_logger.errx('regexp did not compile: %s', pattern)
+      return false
+    end
+  end
+  return re:match(to_match)
 end
 
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
