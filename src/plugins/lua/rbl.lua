@@ -247,6 +247,10 @@ matchers.regexp = function(_, to_match, _, map)
   return map and map:get_key(to_match) or false
 end
 
+matchers.glob = function(_, to_match, _, map)
+  return map and map:get_key(to_match) or false
+end
+
 local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
   local function make_option(ip, label)
     if ip then
@@ -1009,6 +1013,12 @@ local function gen_rbl_callback(rule)
   return callback_f, string.format('checks: %s', table.concat(description, ','))
 end
 
+local map_match_types = {
+  glob = true,
+  radix = true,
+  regexp = true,
+}
+
 local function add_rbl(key, rbl, global_opts)
   if not rbl.symbol then
     rbl.symbol = key:upper()
@@ -1087,7 +1097,7 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   local match_type = rbl.matcher
-  if match_type and rbl.returncodes and (match_type == 'radix' or match_type == 'regexp') then
+  if match_type and rbl.returncodes and map_match_types[match_type] then
     if not rbl.returncodes_maps then
       rbl.returncodes_maps = {}
     end
