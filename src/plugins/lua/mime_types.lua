@@ -63,7 +63,6 @@ local settings = {
     shtml = 1,
     -- Have you ever seen that in legit email?
     ace = 4,
-    app = 1,
     arj = 2,
     aspx = 1,
     asx = 2,
