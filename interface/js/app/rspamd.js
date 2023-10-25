@@ -59,6 +59,8 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
     var timer_id = [];
+    let pageSizeTimerId = null;
+    let pageSizeInvocationCounter = 0;
     var locale = (localStorage.getItem("selected_locale") === "custom") ? localStorage.getItem("custom_locale") : null;
     var selData = null; // Graph's dataset selector state
 
@@ -261,15 +263,26 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         sessionStorage.setItem("Password", password);
     }
 
-    function set_page_size(table, page_size, callback) {
+    function set_page_size(table, page_size, changeTablePageSize) {
         var n = parseInt(page_size, 10); // HTML Input elements return string representing a number
-        if (n !== ui.page_size[table] && n > 0) {
+        if (n > 0) {
             ui.page_size[table] = n;
-            if (callback) {
-                return callback(n);
+
+            if (changeTablePageSize &&
+                $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
+
+                clearTimeout(pageSizeTimerId);
+                const t = FooTable.get("#historyTable_" + table);
+                if (t) {
+                    pageSizeInvocationCounter = 0;
+                    // Wait for input finish
+                    pageSizeTimerId = setTimeout(() => t.pageSize(n), 1000);
+                } else if (++pageSizeInvocationCounter < 10) {
+                    // Wait for FooTable instance ready
+                    pageSizeTimerId = setTimeout(() => set_page_size(table, n, true), 1000);
+                }
             }
         }
-        return null;
     }
 
     function sort_symbols(o, compare_function) {
@@ -753,9 +766,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
             var order = this.value;
             change_symbols_order(order);
         });
-        $("#" + table + "_page_size").change(function () {
-            set_page_size(table, this.value, function (n) { tables[table].pageSize(n); });
-        });
+        $("#" + table + "_page_size").change((e) => set_page_size(table, e.target.value, true));
         $(document).on("click", ".btn-sym-order-" + table + " input", function () {
             var order = this.value;
             $("#selSymOrder_" + table).val(order);
