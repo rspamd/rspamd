@@ -894,10 +894,10 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'selector'
   end
 
-  if not rule.matcher then
-    rule.matcher = 'equality'
+  if not rule.returncodes_matcher then
+    rule.returncodes_matcher = 'equality'
   end
-  local match = matchers[rule.matcher]
+  local match = matchers[rule.returncodes_matcher]
 
   local callback_f = function(task)
     -- DNS requests to issue (might be hashed afterwards)
@@ -1096,7 +1096,7 @@ local function add_rbl(key, rbl, global_opts)
         def_type, rbl.symbol)
   end
 
-  local match_type = rbl.matcher
+  local match_type = rbl.returncodes_matcher
   if match_type and rbl.returncodes and map_match_types[match_type] then
     if not rbl.returncodes_maps then
       rbl.returncodes_maps = {}

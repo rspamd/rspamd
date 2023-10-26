@@ -107,7 +107,6 @@ local rule_schema_tbl = {
   ipv6 = ts.boolean:is_optional(),
   is_whitelist = ts.boolean:is_optional(),
   local_exclude_ip_map = ts.string:is_optional(),
-  matcher = ts.one_of { "equality", "glob", "luapattern", "radix", "regexp" }:is_optional(),
   monitored_address = ts.string:is_optional(),
   no_ip = ts.boolean:is_optional(),
   process_script = ts.string:is_optional(),
@@ -131,6 +130,7 @@ local rule_schema_tbl = {
   return_codes = return_codes_schema:is_optional(),
   returnbits = return_bits_schema:is_optional(),
   returncodes = return_codes_schema:is_optional(),
+  returncodes_matcher = ts.one_of { "equality", "glob", "luapattern", "radix", "regexp" }:is_optional(),
   selector = ts.one_of { ts.string, ts.table }:is_optional(),
   selector_flatten = ts.boolean:is_optional(),
   symbol = ts.string:is_optional(),
@@ -200,16 +200,16 @@ local function convert_checks(rule)
     rule.from = true
   end
 
-  if rule.returncodes and not rule.matcher then
+  if rule.returncodes and not rule.returncodes_matcher then
     for _, v in pairs(rule.returncodes) do
       for _, e in ipairs(v) do
         if e:find('%', 1, true) then
-          rspamd_logger.warnx(rspamd_config, 'implicitly enabling luapattern matcher for rule %s', rule.symbol)
-          rule.matcher = 'luapattern'
+          rspamd_logger.info(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', rule.symbol)
+          rule.returncodes_matcher = 'luapattern'
           break
         end
       end
-      if rule.matcher then
+      if rule.returncodes_matcher then
         break
       end
     end
