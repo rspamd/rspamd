@@ -1,3 +1,12 @@
+3.7.2: 26 Oct 2023
+  * [Feature] rbl: support checking returncodes by CIDR
+  * [Feature] rbl: support checking returncodes by regex
+  * [Feature] rbl: support globbed return codes
+  * [Fix] DMARC reporting: fix reporting for subdomains
+  * [Fix] Deal with fmtlib exceptions properly
+  * [Fix] backport fix for dlfcn.h from backward-cpp
+  * [Rules] Blank spam detection
+
 3.7.1: 07 Oct 2023
   * [CritFix] Fix leak in `gzip` function
   * [Feature] Add ICAP Content-Type and Filename
