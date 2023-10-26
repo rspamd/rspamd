@@ -215,7 +215,43 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   end
 end
 
-local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt)
+local matchers = {}
+
+matchers.radix = function(_, _, real_ip, map)
+  return map and map:get_key(real_ip) or false
+end
+
+matchers.equality = function(codes, to_match)
+  if type(codes) ~= 'table' then return codes == to_match end
+  for _, ip in ipairs(codes) do
+    if to_match == ip then
+      return true
+    end
+  end
+  return false
+end
+
+matchers.luapattern = function(codes, to_match)
+  if type(codes) ~= 'table' then
+    return string.find(to_match, '^' .. codes .. '$') and true or false
+  end
+  for _, pattern in ipairs(codes) do
+    if string.find(to_match, '^' .. pattern .. '$') then
+      return true
+    end
+  end
+  return false
+end
+
+matchers.regexp = function(_, to_match, _, map)
+  return map and map:get_key(to_match) or false
+end
+
+matchers.glob = function(_, to_match, _, map)
+  return map and map:get_key(to_match) or false
+end
+
+local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_table_elt, match)
   local function make_option(ip, label)
     if ip then
       return string.format('%s:%s:%s',
@@ -274,6 +310,8 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
     return
   end
 
+  local returncodes_maps = rbl.returncodes_maps or {}
+
   for _, result in ipairs(results) do
     local ipstr = result:to_string()
     lua_util.debugm(N, task, '%s DNS result %s', to_resolve, ipstr)
@@ -292,12 +330,10 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
       end
     elseif rbl.returncodes then
       for s, codes in pairs(rbl.returncodes) do
-        for _, v in ipairs(codes) do
-          if string.find(ipstr, '^' .. v .. '$') then
-            foundrc = true
-            insert_results(s)
-            break
-          end
+        local res = match(codes, ipstr, result, returncodes_maps[s])
+        if res then
+          foundrc = true
+          insert_results(s)
         end
       end
     end
@@ -858,6 +894,11 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'selector'
   end
 
+  if not rule.returncodes_matcher then
+    rule.returncodes_matcher = 'equality'
+  end
+  local match = matchers[rule.returncodes_matcher]
+
   local callback_f = function(task)
     -- DNS requests to issue (might be hashed afterwards)
     local dns_req = {}
@@ -865,7 +906,7 @@ local function gen_rbl_callback(rule)
 
     local function gen_rbl_dns_callback(resolve_table_elt)
       return function(_, to_resolve, results, err)
-        rbl_dns_process(task, rule, to_resolve, results, err, resolve_table_elt)
+        rbl_dns_process(task, rule, to_resolve, results, err, resolve_table_elt, match)
       end
     end
 
@@ -972,6 +1013,12 @@ local function gen_rbl_callback(rule)
   return callback_f, string.format('checks: %s', table.concat(description, ','))
 end
 
+local map_match_types = {
+  glob = true,
+  radix = true,
+  regexp = true,
+}
+
 local function add_rbl(key, rbl, global_opts)
   if not rbl.symbol then
     rbl.symbol = key:upper()
@@ -1047,6 +1094,19 @@ local function add_rbl(key, rbl, global_opts)
         'RBL whitelist for ' .. rbl.symbol)
     rspamd_logger.infox(rspamd_config, 'added %s whitelist for RBL %s',
         def_type, rbl.symbol)
+  end
+
+  local match_type = rbl.returncodes_matcher
+  if match_type and rbl.returncodes and map_match_types[match_type] then
+    if not rbl.returncodes_maps then
+      rbl.returncodes_maps = {}
+    end
+    for label, v in pairs(rbl.returncodes) do
+      if type(v) ~= 'table' then
+        v = {v}
+      end
+      rbl.returncodes_maps[label] = lua_maps.map_add_from_ucl(v, match_type, string.format('%s_%s RBL returncodes', label, rbl.symbol))
+    end
   end
 
   if rbl.url_compose_map then

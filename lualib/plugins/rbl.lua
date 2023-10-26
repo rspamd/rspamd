@@ -130,6 +130,7 @@ local rule_schema_tbl = {
   return_codes = return_codes_schema:is_optional(),
   returnbits = return_bits_schema:is_optional(),
   returncodes = return_codes_schema:is_optional(),
+  returncodes_matcher = ts.one_of { "equality", "glob", "luapattern", "radix", "regexp" }:is_optional(),
   selector = ts.one_of { ts.string, ts.table }:is_optional(),
   selector_flatten = ts.boolean:is_optional(),
   symbol = ts.string:is_optional(),
@@ -197,6 +198,21 @@ local function convert_checks(rule)
     rspamd_logger.warnx(rspamd_config, 'rbl rule %s has no check enabled, enable default `from` check',
         rule.symbol)
     rule.from = true
+  end
+
+  if rule.returncodes and not rule.returncodes_matcher then
+    for _, v in pairs(rule.returncodes) do
+      for _, e in ipairs(v) do
+        if e:find('%', 1, true) then
+          rspamd_logger.info(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', rule.symbol)
+          rule.returncodes_matcher = 'luapattern'
+          break
+        end
+      end
+      if rule.returncodes_matcher then
+        break
+      end
+    end
   end
 
   return rule
