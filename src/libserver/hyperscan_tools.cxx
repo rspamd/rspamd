@@ -147,7 +147,7 @@ public:
 
 		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (!ec && ec.value() != 0) {
+		if (ec && ec.value() != 0) {
 			msg_err_hyperscan("invalid path: \"%s\", error message: %s", fname, ec.message().c_str());
 			return;
 		}
@@ -177,7 +177,7 @@ public:
 
 		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (!ec && ec.value() != 0) {
+		if (ec && ec.value() != 0) {
 			msg_err_hyperscan("invalid path to remove: \"%s\", error message: %s",
 							  fname, ec.message().c_str());
 			return;
