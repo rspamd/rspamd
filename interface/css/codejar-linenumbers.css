@@ -1,0 +1,17 @@
+.codejar-linenumbers-inner-wrap {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    bottom: 0px;
+    overflow: hidden;
+}
+
+.codejar-linenumbers {
+    mix-blend-mode: initial;
+    height: 100%;
+}
+
+.codejar-linenumber {
+    position: relative;
+    top: 0px;
+}

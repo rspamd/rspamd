@@ -10,6 +10,7 @@
         "**/*.min.css",
         "**/*.js",
         "interface/css/d3evolution.css",
+        "interface/css/codejar-linenumbers.css",
         "interface/css/nprogress.css",
         "interface/css/prism.css"
     ],
