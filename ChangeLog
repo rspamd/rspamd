@@ -1,3 +1,6 @@
+3.7.3: 27 Oct 2023
+  * [Fix] Emergency fix for the hyperscan path error
+
 3.7.2: 26 Oct 2023
   * [Feature] rbl: support checking returncodes by CIDR
   * [Feature] rbl: support checking returncodes by regex
