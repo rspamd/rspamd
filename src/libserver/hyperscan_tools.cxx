@@ -147,19 +147,8 @@ public:
 
 		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (!ec) {
+		if (!ec && ec.value() != 0) {
 			msg_err_hyperscan("invalid path: \"%s\", error message: %s", fname, ec.message().c_str());
-			return;
-		}
-
-		if (fpath.empty()) {
-			msg_err_hyperscan("attempt to add an empty hyperscan file!");
-			return;
-		}
-
-		if (!std::filesystem::exists(fpath)) {
-			msg_err_hyperscan("attempt to add non existing hyperscan file: %s, %s", fpath.c_str(),
-							  strerror(errno));
 			return;
 		}
 
@@ -188,7 +177,7 @@ public:
 
 		fpath = std::filesystem::canonical(fpath, ec);
 
-		if (!ec) {
+		if (!ec && ec.value() != 0) {
 			msg_err_hyperscan("invalid path to remove: \"%s\", error message: %s",
 							  fname, ec.message().c_str());
 			return;
