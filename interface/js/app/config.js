@@ -181,7 +181,6 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                         mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
 
                         $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map + '">' +
-                            rspamd.escapeHTML(data[0].data) +
                             "</" + editor[mode].elt + ">").appendTo("#modalBody");
 
                         if (editor[mode].codejar) {
@@ -189,6 +188,9 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                                 document.querySelector("#editor"),
                                 withLineNumbers((el) => Prism.highlightElement(el))
                             );
+                            jar.updateCode(data[0].data);
+                        } else {
+                            document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
                         }
 
                         var icon = "fa-edit";
