@@ -1042,27 +1042,41 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 	bool log_severity = (logger->flags & RSPAMD_LOG_FLAG_SEVERITY);
 	bool log_rspamadm = (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM);
 	bool log_systemd = (logger->flags & RSPAMD_LOG_FLAG_SYSTEMD);
+	bool log_json = (logger->flags & RSPAMD_LOG_FLAG_JSON);
+
+	if (log_json) {
+		/* Some sanity to avoid too many branches */
+		log_color = false;
+		log_severity = true;
+		log_systemd = false;
+	}
 
 	gint r;
 
 	if (iov == NULL) {
-		if (log_rspamadm) {
-			if (logger->log_level == G_LOG_LEVEL_DEBUG) {
-				return 4;
-			}
-			else {
-				return 3; /* No time component */
-			}
-		}
-		else if (log_systemd) {
-			return 3;
+		/* This is the case when we just return a number of IOV required for the logging */
+		if (log_json) {
+			return 3; /* Preamble, message, "}\n" */
 		}
 		else {
-			if (log_color) {
-				return 5;
+			if (log_rspamadm) {
+				if (logger->log_level == G_LOG_LEVEL_DEBUG) {
+					return 4;
+				}
+				else {
+					return 3; /* No time component */
+				}
+			}
+			else if (log_systemd) {
+				return 3;
 			}
 			else {
-				return 4;
+				if (log_color) {
+					return 5;
+				}
+				else {
+					return 4;
+				}
 			}
 		}
 	}
@@ -1070,11 +1084,35 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 		static gchar timebuf[64], modulebuf[64];
 		static gchar tmpbuf[256];
 
-		if (!log_systemd) {
+		if (!log_json && !log_systemd) {
 			log_time(ts, logger, timebuf, sizeof(timebuf));
 		}
 
-		if (!log_rspamadm) {
+		if (G_UNLIKELY(log_json)) {
+			/* Perform JSON logging */
+			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %L, "
+														"\"pid\": %P, "
+														"\"severity\": \"%s\", "
+														"\"worker_type\": \"%s\", "
+														"\"id\": \"%s\", "
+														"\"module\": \"%s\", "
+														"\"function\": \"%s\", "
+														"\"message\": \"",
+								(gint64) (ts * 1e6),
+								logger->pid,
+								rspamd_get_log_severity_string(level_flags),
+								logger->process_type,
+								id,
+								module,
+								function);
+			iov[0].iov_base = tmpbuf;
+			iov[0].iov_len = r;
+			iov[1].iov_base = (void *) message;
+			iov[1].iov_len = mlen;
+			iov[2].iov_base = (void *) "\"}\n";
+			iov[2].iov_len = sizeof("\"}\n") - 1;
+		}
+		else if (G_LIKELY(!log_rspamadm)) {
 			if (!log_systemd) {
 				if (log_color) {
 					if (level_flags & (G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE)) {

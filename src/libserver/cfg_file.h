@@ -59,14 +59,15 @@ enum rspamd_log_type {
 };
 
 enum rspamd_log_cfg_flags {
-	RSPAMD_LOG_FLAG_DEFAULT = 0,
-	RSPAMD_LOG_FLAG_SYSTEMD = (1 << 0),
-	RSPAMD_LOG_FLAG_COLOR = (1 << 1),
-	RSPAMD_LOG_FLAG_RE_CACHE = (1 << 2),
-	RSPAMD_LOG_FLAG_USEC = (1 << 3),
-	RSPAMD_LOG_FLAG_RSPAMADM = (1 << 4),
-	RSPAMD_LOG_FLAG_ENFORCED = (1 << 5),
-	RSPAMD_LOG_FLAG_SEVERITY = (1 << 6),
+	RSPAMD_LOG_FLAG_DEFAULT = 0u,
+	RSPAMD_LOG_FLAG_SYSTEMD = (1u << 0u),
+	RSPAMD_LOG_FLAG_COLOR = (1u << 1u),
+	RSPAMD_LOG_FLAG_RE_CACHE = (1u << 2u),
+	RSPAMD_LOG_FLAG_USEC = (1u << 3u),
+	RSPAMD_LOG_FLAG_RSPAMADM = (1u << 4u),
+	RSPAMD_LOG_FLAG_ENFORCED = (1u << 5u),
+	RSPAMD_LOG_FLAG_SEVERITY = (1u << 6u),
+	RSPAMD_LOG_FLAG_JSON = (1u << 7u),
 };
 
 struct rspamd_worker_log_pipe {

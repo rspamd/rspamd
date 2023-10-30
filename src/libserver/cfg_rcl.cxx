@@ -283,6 +283,11 @@ rspamd_rcl_logging_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		cfg->log_flags |= RSPAMD_LOG_FLAG_SYSTEMD;
 	}
 
+	val = ucl_object_lookup_any(obj, "json", "log_json", nullptr);
+	if (val && ucl_object_toboolean(val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_JSON;
+	}
+
 	val = ucl_object_lookup(obj, "log_re_cache");
 	if (val && ucl_object_toboolean(val)) {
 		cfg->log_flags |= RSPAMD_LOG_FLAG_RE_CACHE;

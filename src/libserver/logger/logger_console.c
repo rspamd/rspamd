@@ -28,10 +28,6 @@ static const gchar lf_chr = '\n';
 struct rspamd_console_logger_priv {
 	gint fd;
 	gint crit_fd;
-	gboolean log_severity;
-	gboolean log_color;
-	gboolean log_rspamadm;
-	gboolean log_tty;
 };
 
 /* Copy & paste :( */
@@ -63,11 +59,8 @@ rspamd_log_console_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 	struct rspamd_console_logger_priv *priv;
 
 	priv = g_malloc0(sizeof(*priv));
-	priv->log_color = (logger->flags & RSPAMD_LOG_FLAG_COLOR);
-	priv->log_severity = (logger->flags & RSPAMD_LOG_FLAG_SEVERITY);
-	priv->log_rspamadm = (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM);
 
-	if (priv->log_rspamadm) {
+	if (logger->flags & RSPAMD_LOG_FLAG_RSPAMADM) {
 		priv->fd = dup(STDOUT_FILENO);
 		priv->crit_fd = dup(STDERR_FILENO);
 	}
@@ -85,12 +78,11 @@ rspamd_log_console_init(rspamd_logger_t *logger, struct rspamd_config *cfg,
 		return NULL;
 	}
 
-	if (isatty(priv->fd)) {
-		priv->log_tty = true;
-	}
-	else if (priv->log_color) {
-		/* Disable colors for not a tty */
-		priv->log_color = false;
+	if (!isatty(priv->fd)) {
+		if (logger->flags & RSPAMD_LOG_FLAG_COLOR) {
+			/* Disable colors for not a tty */
+			logger->flags &= ~RSPAMD_LOG_FLAG_COLOR;
+		}
 	}
 
 	return priv;
@@ -160,7 +152,8 @@ bool rspamd_log_console_log(const gchar *module, const gchar *id,
 		fd = priv->crit_fd;
 	}
 	else {
-		if (priv->log_rspamadm && (level_flags & G_LOG_LEVEL_WARNING)) {
+		/* Use stderr if we are in rspamadm mode and severity is more than WARNING */
+		if ((rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM) && (level_flags & G_LOG_LEVEL_WARNING)) {
 			fd = priv->crit_fd;
 		}
 		else {
