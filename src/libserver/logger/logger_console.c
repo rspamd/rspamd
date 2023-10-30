@@ -173,15 +173,15 @@ bool rspamd_log_console_log(const gchar *module, const gchar *id,
 #endif
 
 	now = rspamd_get_calendar_ticks();
-	gsize niov = rspamd_log_fill_iov(NULL, now, module, id,
-									 function, level_flags, message,
-									 mlen, rspamd_log);
-	struct iovec *iov = g_alloca(sizeof(struct iovec) * niov);
-	rspamd_log_fill_iov(iov, now, module, id, function, level_flags, message,
+
+	struct rspamd_logger_iov_ctx iov_ctx;
+	memset(&iov_ctx, 0, sizeof(iov_ctx));
+	rspamd_log_fill_iov(&iov_ctx, now, module, id,
+						function, level_flags, message,
 						mlen, rspamd_log);
 
 again:
-	r = writev(fd, iov, niov);
+	r = writev(fd, iov_ctx.iov, iov_ctx.niov);
 
 	if (r == -1) {
 		if (errno == EAGAIN || errno == EINTR) {
@@ -195,6 +195,7 @@ again:
 			rspamd_file_unlock(fd, FALSE);
 		}
 
+		rspamd_log_iov_free(&iov_ctx);
 		return false;
 	}
 
@@ -205,5 +206,6 @@ again:
 		rspamd_file_unlock(fd, FALSE);
 	}
 
+	rspamd_log_iov_free(&iov_ctx);
 	return true;
 }

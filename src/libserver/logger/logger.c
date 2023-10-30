@@ -1028,15 +1028,15 @@ log_time(gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
 	}
 }
 
-gsize rspamd_log_fill_iov(struct iovec *iov,
-						  double ts,
-						  const gchar *module,
-						  const gchar *id,
-						  const gchar *function,
-						  gint level_flags,
-						  const gchar *message,
-						  gsize mlen,
-						  rspamd_logger_t *logger)
+void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
+						 double ts,
+						 const gchar *module,
+						 const gchar *id,
+						 const gchar *function,
+						 gint level_flags,
+						 const gchar *message,
+						 gsize mlen,
+						 rspamd_logger_t *logger)
 {
 	bool log_color = (logger->flags & RSPAMD_LOG_FLAG_COLOR);
 	bool log_severity = (logger->flags & RSPAMD_LOG_FLAG_SEVERITY);
@@ -1051,192 +1051,289 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 		log_systemd = false;
 	}
 
-	gint r;
+	glong r;
 
-	if (iov == NULL) {
+	if (iov_ctx->niov == 0) {
 		/* This is the case when we just return a number of IOV required for the logging */
 		if (log_json) {
-			return 3; /* Preamble, message, "}\n" */
+			iov_ctx->niov = 3; /* Preamble, message, "}\n" */
 		}
 		else {
 			if (log_rspamadm) {
 				if (logger->log_level == G_LOG_LEVEL_DEBUG) {
-					return 4;
+					iov_ctx->niov = 4;
 				}
 				else {
-					return 3; /* No time component */
+					iov_ctx->niov = 3; /* No time component */
 				}
 			}
 			else if (log_systemd) {
-				return 3;
+				iov_ctx->niov = 3;
 			}
 			else {
 				if (log_color) {
-					return 5;
+					iov_ctx->niov = 5;
 				}
 				else {
-					return 4;
+					iov_ctx->niov = 4;
 				}
 			}
 		}
+
+		g_assert(iov_ctx->niov <= G_N_ELEMENTS(iov_ctx->iov));
 	}
-	else {
-		static gchar timebuf[64], modulebuf[64];
-		static gchar tmpbuf[256];
 
-		if (!log_json && !log_systemd) {
-			log_time(ts, logger, timebuf, sizeof(timebuf));
+	static gchar timebuf[64], modulebuf[64];
+	static gchar tmpbuf[256];
+
+	if (!log_json && !log_systemd) {
+		log_time(ts, logger, timebuf, sizeof(timebuf));
+	}
+
+	if (G_UNLIKELY(log_json)) {
+		/* Perform JSON logging */
+		guint slen = id ? strlen(id) : strlen("(NULL)");
+		slen = MIN(RSPAMD_LOG_ID_LEN, slen);
+		r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %L, "
+													"\"pid\": %P, "
+													"\"severity\": \"%s\", "
+													"\"worker_type\": \"%s\", "
+													"\"id\": \"%*.s\", "
+													"\"module\": \"%s\", "
+													"\"function\": \"%s\", "
+													"\"message\": \"",
+							(gint64) (ts * 1e6),
+							logger->pid,
+							rspamd_get_log_severity_string(level_flags),
+							logger->process_type,
+							slen, id,
+							module,
+							function);
+		iov_ctx->iov[0].iov_base = tmpbuf;
+		iov_ctx->iov[0].iov_len = r;
+		/* TODO: is it possible to have other 'bad' symbols here? */
+		if (rspamd_memcspn(message, "\"\\\r\n\b\t\v", mlen) == mlen) {
+			iov_ctx->iov[1].iov_base = (void *) message;
+			iov_ctx->iov[1].iov_len = mlen;
 		}
+		else {
+			/* We need to do JSON escaping of the quotes */
+			const char *p, *end = message + mlen;
+			long escaped_len;
 
-		if (G_UNLIKELY(log_json)) {
-			/* Perform JSON logging */
-			guint slen = id ? strlen(id) : strlen("(NULL)");
-			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %L, "
-														"\"pid\": %P, "
-														"\"severity\": \"%s\", "
-														"\"worker_type\": \"%s\", "
-														"\"id\": \"%*.s\", "
-														"\"module\": \"%s\", "
-														"\"function\": \"%s\", "
-														"\"message\": \"",
-								(gint64) (ts * 1e6),
-								logger->pid,
-								rspamd_get_log_severity_string(level_flags),
-								logger->process_type,
-								slen, id,
-								module,
-								function);
-			iov[0].iov_base = tmpbuf;
-			iov[0].iov_len = r;
-			iov[1].iov_base = (void *) message;
-			iov[1].iov_len = mlen;
-			iov[2].iov_base = (void *) "\"}\n";
-			iov[2].iov_len = sizeof("\"}\n") - 1;
+			for (p = message, escaped_len = 0; p < end; p++, escaped_len++) {
+				switch (*p) {
+				case '\v':
+				case '\0':
+					escaped_len += 5;
+					break;
+				case '\\':
+				case '"':
+				case '\n':
+				case '\r':
+				case '\b':
+				case '\t':
+					escaped_len++;
+					break;
+				default:
+					break;
+				}
+			}
 
-			return 3;
+
+			struct rspamd_logger_iov_thrash_stack *thrash_stack_elt = g_malloc(
+				sizeof(struct rspamd_logger_iov_thrash_stack) +
+				escaped_len);
+
+			char *dst = ((char *) thrash_stack_elt) + sizeof(struct rspamd_logger_iov_thrash_stack);
+			char *d;
+
+			thrash_stack_elt->prev = iov_ctx->thrash_stack;
+			iov_ctx->thrash_stack = thrash_stack_elt;
+
+			for (p = message, d = dst; p < end; p++, d++) {
+				switch (*p) {
+				case '\n':
+					*d++ = '\\';
+					*d = 'n';
+					break;
+				case '\r':
+					*d++ = '\\';
+					*d = 'r';
+					break;
+				case '\b':
+					*d++ = '\\';
+					*d = 'b';
+					break;
+				case '\t':
+					*d++ = '\\';
+					*d = 't';
+					break;
+				case '\f':
+					*d++ = '\\';
+					*d = 'f';
+					break;
+				case '\0':
+					*d++ = '\\';
+					*d++ = 'u';
+					*d++ = '0';
+					*d++ = '0';
+					*d++ = '0';
+					*d = '0';
+					break;
+				case '\v':
+					*d++ = '\\';
+					*d++ = 'u';
+					*d++ = '0';
+					*d++ = '0';
+					*d++ = '0';
+					*d = 'B';
+					break;
+				case '\\':
+					*d++ = '\\';
+					*d = '\\';
+					break;
+				case '"':
+					*d++ = '\\';
+					*d = '"';
+					break;
+				default:
+					*d = *p;
+					break;
+				}
+			}
+
+			iov_ctx->iov[1].iov_base = dst;
+			iov_ctx->iov[1].iov_len = d - dst;
 		}
-		else if (G_LIKELY(!log_rspamadm)) {
-			if (!log_systemd) {
-				if (log_color) {
-					if (level_flags & (G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE)) {
-						/* White */
-						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;37m");
-					}
-					else if (level_flags & G_LOG_LEVEL_WARNING) {
-						/* Magenta */
-						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;32m");
-					}
-					else if (level_flags & G_LOG_LEVEL_CRITICAL) {
-						/* Red */
-						r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[1;31m");
-					}
-					else {
-						r = 0;
-					}
+		iov_ctx->iov[2].iov_base = (void *) "\"}\n";
+		iov_ctx->iov[2].iov_len = sizeof("\"}\n") - 1;
+	}
+	else if (G_LIKELY(!log_rspamadm)) {
+		if (!log_systemd) {
+			if (log_color) {
+				if (level_flags & (G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE)) {
+					/* White */
+					r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;37m");
+				}
+				else if (level_flags & G_LOG_LEVEL_WARNING) {
+					/* Magenta */
+					r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[0;32m");
+				}
+				else if (level_flags & G_LOG_LEVEL_CRITICAL) {
+					/* Red */
+					r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "\033[1;31m");
 				}
 				else {
 					r = 0;
 				}
-
-				if (log_severity) {
-					r += rspamd_snprintf(tmpbuf + r,
-										 sizeof(tmpbuf) - r,
-										 "%s [%s] #%P(%s) ",
-										 timebuf,
-										 rspamd_get_log_severity_string(level_flags),
-										 logger->pid,
-										 logger->process_type);
-				}
-				else {
-					r += rspamd_snprintf(tmpbuf + r,
-										 sizeof(tmpbuf) - r,
-										 "%s #%P(%s) ",
-										 timebuf,
-										 logger->pid,
-										 logger->process_type);
-				}
 			}
 			else {
 				r = 0;
+			}
+
+			if (log_severity) {
 				r += rspamd_snprintf(tmpbuf + r,
 									 sizeof(tmpbuf) - r,
-									 "(%s) ",
+									 "%s [%s] #%P(%s) ",
+									 timebuf,
+									 rspamd_get_log_severity_string(level_flags),
+									 logger->pid,
 									 logger->process_type);
 			}
-
-			int mremain, mr;
-			char *m;
-
-			modulebuf[0] = '\0';
-			mremain = sizeof(modulebuf);
-			m = modulebuf;
-
-			if (id != NULL) {
-				guint slen = strlen(id);
-				slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-				mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
-									 id);
-				m += mr;
-				mremain -= mr;
-			}
-			if (module != NULL) {
-				mr = rspamd_snprintf(m, mremain, "%s; ", module);
-				m += mr;
-				mremain -= mr;
-			}
-			if (function != NULL) {
-				mr = rspamd_snprintf(m, mremain, "%s: ", function);
-				m += mr;
-				mremain -= mr;
-			}
 			else {
-				mr = rspamd_snprintf(m, mremain, ": ");
-				m += mr;
-				mremain -= mr;
+				r += rspamd_snprintf(tmpbuf + r,
+									 sizeof(tmpbuf) - r,
+									 "%s #%P(%s) ",
+									 timebuf,
+									 logger->pid,
+									 logger->process_type);
 			}
-
-			/* Ensure that we have a space at the end */
-			if (m > modulebuf && *(m - 1) != ' ') {
-				*(m - 1) = ' ';
-			}
-
-			/* Construct IOV for log line */
-			iov[0].iov_base = tmpbuf;
-			iov[0].iov_len = r;
-			iov[1].iov_base = modulebuf;
-			iov[1].iov_len = m - modulebuf;
-			iov[2].iov_base = (void *) message;
-			iov[2].iov_len = mlen;
-			iov[3].iov_base = (void *) &lf_chr;
-			iov[3].iov_len = 1;
-
-			if (log_color) {
-				iov[4].iov_base = "\033[0m";
-				iov[4].iov_len = sizeof("\033[0m") - 1;
-
-				return 5;
-			}
-
-			return 4;
 		}
 		else {
-			/* Rspamadm case */
-			int niov = 0;
-
-			if (logger->log_level == G_LOG_LEVEL_DEBUG) {
-				iov[niov].iov_base = (void *) timebuf;
-				iov[niov++].iov_len = strlen(timebuf);
-				iov[niov].iov_base = (void *) " ";
-				iov[niov++].iov_len = 1;
-			}
-
-			iov[niov].iov_base = (void *) message;
-			iov[niov++].iov_len = mlen;
-			iov[niov].iov_base = (void *) &lf_chr;
-			iov[niov++].iov_len = 1;
-
-			return niov;
+			r = 0;
+			r += rspamd_snprintf(tmpbuf + r,
+								 sizeof(tmpbuf) - r,
+								 "(%s) ",
+								 logger->process_type);
 		}
+
+		glong mremain, mr;
+		char *m;
+
+		modulebuf[0] = '\0';
+		mremain = sizeof(modulebuf);
+		m = modulebuf;
+
+		if (id != NULL) {
+			guint slen = strlen(id);
+			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
+			mr = rspamd_snprintf(m, mremain, "<%*.s>; ", slen,
+								 id);
+			m += mr;
+			mremain -= mr;
+		}
+		if (module != NULL) {
+			mr = rspamd_snprintf(m, mremain, "%s; ", module);
+			m += mr;
+			mremain -= mr;
+		}
+		if (function != NULL) {
+			mr = rspamd_snprintf(m, mremain, "%s: ", function);
+			m += mr;
+			mremain -= mr;
+		}
+		else {
+			mr = rspamd_snprintf(m, mremain, ": ");
+			m += mr;
+			mremain -= mr;
+		}
+
+		/* Ensure that we have a space at the end */
+		if (m > modulebuf && *(m - 1) != ' ') {
+			*(m - 1) = ' ';
+		}
+
+		/* Construct IOV for log line */
+		iov_ctx->iov[0].iov_base = tmpbuf;
+		iov_ctx->iov[0].iov_len = r;
+		iov_ctx->iov[1].iov_base = modulebuf;
+		iov_ctx->iov[1].iov_len = m - modulebuf;
+		iov_ctx->iov[2].iov_base = (void *) message;
+		iov_ctx->iov[2].iov_len = mlen;
+		iov_ctx->iov[3].iov_base = (void *) &lf_chr;
+		iov_ctx->iov[3].iov_len = 1;
+
+		if (log_color) {
+			iov_ctx->iov[4].iov_base = "\033[0m";
+			iov_ctx->iov[4].iov_len = sizeof("\033[0m") - 1;
+		}
+	}
+	else {
+		/* Rspamadm case */
+		int niov = 0;
+
+		if (logger->log_level == G_LOG_LEVEL_DEBUG) {
+			iov_ctx->iov[niov].iov_base = (void *) timebuf;
+			iov_ctx->iov[niov++].iov_len = strlen(timebuf);
+			iov_ctx->iov[niov].iov_base = (void *) " ";
+			iov_ctx->iov[niov++].iov_len = 1;
+		}
+
+		iov_ctx->iov[niov].iov_base = (void *) message;
+		iov_ctx->iov[niov++].iov_len = mlen;
+		iov_ctx->iov[niov].iov_base = (void *) &lf_chr;
+		iov_ctx->iov[niov++].iov_len = 1;
+	}
+}
+
+void rspamd_log_iov_free(struct rspamd_logger_iov_ctx *iov_ctx)
+{
+	struct rspamd_logger_iov_thrash_stack *st = iov_ctx->thrash_stack;
+
+	while (st) {
+		struct rspamd_logger_iov_thrash_stack *nst = st->prev;
+		g_free(st);
+		st = nst;
 	}
 }

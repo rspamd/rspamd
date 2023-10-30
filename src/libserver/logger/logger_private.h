@@ -103,10 +103,20 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 bool rspamd_log_file_on_fork(rspamd_logger_t *logger, struct rspamd_config *cfg,
 							 gpointer arg, GError **err);
 
+struct rspamd_logger_iov_thrash_stack {
+	struct rspamd_logger_iov_thrash_stack *prev;
+	char data[0];
+};
+#define RSPAMD_LOGGER_MAX_IOV 8
+struct rspamd_logger_iov_ctx {
+	struct iovec iov[RSPAMD_LOGGER_MAX_IOV];
+	int niov;
+	struct rspamd_logger_iov_thrash_stack *thrash_stack;
+};
 /**
  * Fills IOV of logger (usable for file/console logging)
  * Warning: this function is NOT reentrant, do not call it twice from a single moment of execution
- * @param iov if NULL just returns the number of elements required in IOV array
+ * @param iov filled by this function
  * @param module
  * @param id
  * @param function
@@ -116,14 +126,20 @@ bool rspamd_log_file_on_fork(rspamd_logger_t *logger, struct rspamd_config *cfg,
  * @param rspamd_log
  * @return number of iov elements being filled
  */
-gsize rspamd_log_fill_iov(struct iovec *iov,
-						  double ts,
-						  const gchar *module, const gchar *id,
-						  const gchar *function,
-						  gint level_flags,
-						  const gchar *message,
-						  gsize mlen,
-						  rspamd_logger_t *rspamd_log);
+void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
+						 double ts,
+						 const gchar *module, const gchar *id,
+						 const gchar *function,
+						 gint level_flags,
+						 const gchar *message,
+						 gsize mlen,
+						 rspamd_logger_t *rspamd_log);
+
+/**
+ * Frees IOV context
+ * @param iov_ctx
+ */
+void rspamd_log_iov_free(struct rspamd_logger_iov_ctx *iov_ctx);
 /**
  * Escape log line by replacing unprintable characters to hex escapes like \xNN
  * @param src
