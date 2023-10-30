@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -838,7 +838,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 {
 	struct rspamd_worker *worker;
 	static struct rspamd_srv_command cmd;
-	struct rspamd_main *srv;
+	struct rspamd_main *rspamd_main;
 	struct rspamd_srv_reply_data *rdata;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
@@ -851,7 +851,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 
 	if (revents == EV_READ) {
 		worker = (struct rspamd_worker *) w->data;
-		srv = worker->srv;
+		rspamd_main = worker->srv;
 		iov.iov_base = &cmd;
 		iov.iov_len = sizeof(cmd);
 		memset(&msg, 0, sizeof(msg));
@@ -864,8 +864,8 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 
 		if (r == -1) {
 			if (errno != EAGAIN) {
-				msg_err("cannot read from worker's srv pipe: %s",
-						strerror(errno));
+				msg_err_main("cannot read from worker's srv pipe: %s",
+							 strerror(errno));
 			}
 			else {
 				return;
@@ -876,18 +876,18 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 			 * Usually this means that a worker is dead, so do not try to read
 			 * anything
 			 */
-			msg_err("cannot read from worker's srv pipe connection closed; command = %s",
-					rspamd_srv_command_to_string(cmd.type));
+			msg_err_main("cannot read from worker's srv pipe connection closed; command = %s",
+						 rspamd_srv_command_to_string(cmd.type));
 			ev_io_stop(EV_A_ w);
 		}
 		else if (r != sizeof(cmd)) {
-			msg_err("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
-					(gint) r, (gint) sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
+			msg_err_main("cannot read from worker's srv pipe incomplete command: %d != %d; command = %s",
+						 (gint) r, (gint) sizeof(cmd), rspamd_srv_command_to_string(cmd.type));
 		}
 		else {
 			rdata = g_malloc0(sizeof(*rdata));
 			rdata->worker = worker;
-			rdata->srv = srv;
+			rdata->srv = rspamd_main;
 			rdata->rep.id = cmd.id;
 			rdata->rep.type = cmd.type;
 			rdata->fd = -1;
@@ -899,19 +899,19 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 
 			switch (cmd.type) {
 			case RSPAMD_SRV_SOCKETPAIR:
-				spair = g_hash_table_lookup(srv->spairs, cmd.cmd.spair.pair_id);
+				spair = g_hash_table_lookup(rspamd_main->spairs, cmd.cmd.spair.pair_id);
 				if (spair == NULL) {
 					spair = g_malloc(sizeof(gint) * 2);
 
 					if (rspamd_socketpair(spair, cmd.cmd.spair.af) == -1) {
 						rdata->rep.reply.spair.code = errno;
-						msg_err("cannot create socket pair: %s", strerror(errno));
+						msg_err_main("cannot create socket pair: %s", strerror(errno));
 					}
 					else {
 						nid = g_malloc(sizeof(cmd.cmd.spair.pair_id));
 						memcpy(nid, cmd.cmd.spair.pair_id,
 							   sizeof(cmd.cmd.spair.pair_id));
-						g_hash_table_insert(srv->spairs, nid, spair);
+						g_hash_table_insert(rspamd_main->spairs, nid, spair);
 						rdata->rep.reply.spair.code = 0;
 						rdata->fd = cmd.cmd.spair.pair_num ? spair[1] : spair[0];
 					}
@@ -923,13 +923,18 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				break;
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
 				/* Load RE cache to provide it for new forks */
-				if (rspamd_re_cache_is_hs_loaded(srv->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
+				if (rspamd_re_cache_is_hs_loaded(rspamd_main->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
 					cmd.cmd.hs_loaded.forced) {
 					rspamd_re_cache_load_hyperscan(
-						srv->cfg->re_cache,
+						rspamd_main->cfg->re_cache,
 						cmd.cmd.hs_loaded.cache_dir,
 						false);
 				}
+
+				/* After getting this notice, we can clean up old hyperscan files */
+				rspamd_hyperscan_notice_loaded();
+				msg_info_main("received hyperscan cache loaded from %s",
+							  cmd.cmd.hs_loaded.cache_dir);
 
 				/* Broadcast command to all workers */
 				memset(&wcmd, 0, sizeof(wcmd));
@@ -938,7 +943,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 							   cmd.cmd.hs_loaded.cache_dir,
 							   sizeof(wcmd.cmd.hs_loaded.cache_dir));
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
-				rspamd_control_broadcast_cmd(srv, &wcmd, rfd,
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
@@ -950,26 +955,26 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 							   sizeof(wcmd.cmd.monitored_change.tag));
 				wcmd.cmd.monitored_change.alive = cmd.cmd.monitored_change.alive;
 				wcmd.cmd.monitored_change.sender = cmd.cmd.monitored_change.sender;
-				rspamd_control_broadcast_cmd(srv, &wcmd, rfd,
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, 0);
 				break;
 			case RSPAMD_SRV_LOG_PIPE:
 				memset(&wcmd, 0, sizeof(wcmd));
 				wcmd.type = RSPAMD_CONTROL_LOG_PIPE;
 				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
-				rspamd_control_broadcast_cmd(srv, &wcmd, rfd,
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_log_pipe_io_handler, NULL, 0);
 				break;
 			case RSPAMD_SRV_ON_FORK:
 				rdata->rep.reply.on_fork.status = 0;
-				rspamd_control_handle_on_fork(&cmd, srv);
+				rspamd_control_handle_on_fork(&cmd, rspamd_main);
 				break;
 			case RSPAMD_SRV_HEARTBEAT:
 				worker->hb.last_event = ev_time();
 				rdata->rep.reply.heartbeat.status = 0;
 				break;
 			case RSPAMD_SRV_HEALTH:
-				rspamd_fill_health_reply(srv, &rdata->rep);
+				rspamd_fill_health_reply(rspamd_main, &rdata->rep);
 				break;
 			case RSPAMD_SRV_NOTICE_HYPERSCAN_CACHE:
 #ifdef WITH_HYPERSCAN
@@ -984,11 +989,11 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				/* Ensure that memcpy is safe */
 				G_STATIC_ASSERT(sizeof(wcmd.cmd.fuzzy_blocked) == sizeof(cmd.cmd.fuzzy_blocked));
 				memcpy(&wcmd.cmd.fuzzy_blocked, &cmd.cmd.fuzzy_blocked, sizeof(wcmd.cmd.fuzzy_blocked));
-				rspamd_control_broadcast_cmd(srv, &wcmd, rfd,
+				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
 				break;
 			default:
-				msg_err("unknown command type: %d", cmd.type);
+				msg_err_main("unknown command type: %d", cmd.type);
 				break;
 			}
 
@@ -1008,7 +1013,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 		rdata = (struct rspamd_srv_reply_data *) w->data;
 		worker = rdata->worker;
 		worker->tmp_data = NULL; /* Avoid race */
-		srv = rdata->srv;
+		rspamd_main = rdata->srv;
 
 		memset(&msg, 0, sizeof(msg));
 
@@ -1032,13 +1037,13 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 		r = sendmsg(w->fd, &msg, 0);
 
 		if (r == -1) {
-			msg_err("cannot write to worker's srv pipe when writing reply: %s; command = %s",
-					strerror(errno), rspamd_srv_command_to_string(rdata->rep.type));
+			msg_err_main("cannot write to worker's srv pipe when writing reply: %s; command = %s",
+						 strerror(errno), rspamd_srv_command_to_string(rdata->rep.type));
 		}
 		else if (r != sizeof(rdata->rep)) {
-			msg_err("cannot write to worker's srv pipe: %d != %d; command = %s",
-					(int) r, (int) sizeof(rdata->rep),
-					rspamd_srv_command_to_string(rdata->rep.type));
+			msg_err_main("cannot write to worker's srv pipe: %d != %d; command = %s",
+						 (int) r, (int) sizeof(rdata->rep),
+						 rspamd_srv_command_to_string(rdata->rep.type));
 		}
 
 		g_free(rdata);

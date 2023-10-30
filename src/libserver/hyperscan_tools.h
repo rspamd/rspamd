@@ -1,11 +1,11 @@
-/*-
- * Copyright 2022 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -59,6 +59,11 @@ void rspamd_hyperscan_free(rspamd_hyperscan_t *db, bool invalid);
  * @param fname
  */
 void rspamd_hyperscan_notice_known(const char *fname);
+
+/**
+ * Notice that hyperscan files are all loaded (e.g. in the main process), so we can cleanup old files on termination
+ */
+void rspamd_hyperscan_notice_loaded(void);
 
 /**
  * Cleans up old files. This method should be called on config free (in the main process)
