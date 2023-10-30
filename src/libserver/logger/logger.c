@@ -1094,7 +1094,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		/* Perform JSON logging */
 		guint slen = id ? strlen(id) : strlen("(NULL)");
 		slen = MIN(RSPAMD_LOG_ID_LEN, slen);
-		r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %L, "
+		r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %f, "
 													"\"pid\": %P, "
 													"\"severity\": \"%s\", "
 													"\"worker_type\": \"%s\", "
@@ -1102,7 +1102,7 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 													"\"module\": \"%s\", "
 													"\"function\": \"%s\", "
 													"\"message\": \"",
-							(gint64) (ts * 1e6),
+							ts,
 							logger->pid,
 							rspamd_get_log_severity_string(level_flags),
 							logger->process_type,
