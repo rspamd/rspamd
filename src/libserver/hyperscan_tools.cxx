@@ -94,6 +94,7 @@ private:
 	ankerl::svector<std::string, 4> cache_dirs;
 	ankerl::svector<std::string, 8> cache_extensions;
 	ankerl::unordered_dense::set<std::string> known_cached_files;
+	bool loaded = false;
 
 private:
 	hs_known_files_cache() = default;
@@ -203,7 +204,7 @@ public:
 	{
 		auto env_cleanup_disable = std::getenv("RSPAMD_NO_CLEANUP");
 		/* We clean dir merely if we are running from the main process */
-		if (rspamd_current_worker == nullptr && env_cleanup_disable == nullptr) {
+		if (rspamd_current_worker == nullptr && env_cleanup_disable == nullptr && loaded) {
 			const auto *log_func = RSPAMD_LOG_FUNC;
 			auto cleanup_dir = [&](std::string_view dir) -> void {
 				for (const auto &ext: cache_extensions) {
@@ -259,6 +260,14 @@ public:
 		else if (rspamd_current_worker == nullptr && env_cleanup_disable != nullptr) {
 			msg_debug_hyperscan("disable hyperscan cleanup: env variable RSPAMD_NO_CLEANUP is set");
 		}
+		else if (!loaded) {
+			msg_debug_hyperscan("disable hyperscan cleanup: not loaded");
+		}
+	}
+
+	auto notice_loaded() -> void
+	{
+		loaded = true;
 	}
 };
 
@@ -599,6 +608,11 @@ void rspamd_hyperscan_notice_known(const char *fname)
 void rspamd_hyperscan_cleanup_maybe(void)
 {
 	rspamd::util::hs_known_files_cache::get().cleanup_maybe();
+}
+
+void rspamd_hyperscan_notice_loaded(void)
+{
+	rspamd::util::hs_known_files_cache::get().notice_loaded();
 }
 
 #endif// WITH_HYPERSCAN
