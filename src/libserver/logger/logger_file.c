@@ -465,13 +465,15 @@ bool rspamd_log_file_log(const gchar *module, const gchar *id,
 		now = rspamd_get_calendar_ticks();
 	}
 
-	gsize niov = rspamd_log_fill_iov(NULL, now, module, id, function, level_flags, message,
-									 mlen, rspamd_log);
-	struct iovec *iov = g_alloca(sizeof(struct iovec) * niov);
-	rspamd_log_fill_iov(iov, now, module, id, function, level_flags, message,
+	struct rspamd_logger_iov_ctx iov_ctx;
+	memset(&iov_ctx, 0, sizeof(iov_ctx));
+	rspamd_log_fill_iov(&iov_ctx, now, module, id, function, level_flags, message,
 						mlen, rspamd_log);
 
-	return file_log_helper(rspamd_log, priv, iov, niov, level_flags);
+	bool ret = file_log_helper(rspamd_log, priv, iov_ctx.iov, iov_ctx.niov, level_flags);
+	rspamd_log_iov_free(&iov_ctx);
+
+	return ret;
 }
 
 void *
