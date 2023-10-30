@@ -1090,11 +1090,13 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 
 		if (G_UNLIKELY(log_json)) {
 			/* Perform JSON logging */
+			guint slen = id ? strlen(id) : strlen("(NULL)");
+			slen = MIN(RSPAMD_LOG_ID_LEN, slen);
 			r = rspamd_snprintf(tmpbuf, sizeof(tmpbuf), "{\"ts\": %L, "
 														"\"pid\": %P, "
 														"\"severity\": \"%s\", "
 														"\"worker_type\": \"%s\", "
-														"\"id\": \"%s\", "
+														"\"id\": \"%*.s\", "
 														"\"module\": \"%s\", "
 														"\"function\": \"%s\", "
 														"\"message\": \"",
@@ -1102,7 +1104,7 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 								logger->pid,
 								rspamd_get_log_severity_string(level_flags),
 								logger->process_type,
-								id,
+								slen, id,
 								module,
 								function);
 			iov[0].iov_base = tmpbuf;
@@ -1111,6 +1113,8 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 			iov[1].iov_len = mlen;
 			iov[2].iov_base = (void *) "\"}\n";
 			iov[2].iov_len = sizeof("\"}\n") - 1;
+
+			return 3;
 		}
 		else if (G_LIKELY(!log_rspamadm)) {
 			if (!log_systemd) {
