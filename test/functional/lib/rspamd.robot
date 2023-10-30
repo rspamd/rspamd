@@ -163,16 +163,20 @@ Export Rspamd Variables To Environment
 
 Export Scoped Variables
   [Arguments]  ${scope}  &{vars}
-  FOR  ${k}  ${v}  IN  &{vars}
-    IF  '${scope}' == 'Test'
+  IF  '${scope}' == 'Test'
+    FOR  ${k}  ${v}  IN  &{vars}
       Set Test Variable  ${${k}}  ${v}
-    ELSE IF  '${scope}' == 'Suite'
-      Set Suite Variable  ${${k}}  ${v}
-    ELSE IF  '${scope}' == 'Global'
-      Set Global Variable  ${${k}}  ${v}
-    ELSE
-      Fail  message="Don't know what to do with scope: ${scope}"
     END
+  ELSE IF  '${scope}' == 'Suite'
+    FOR  ${k}  ${v}  IN  &{vars}
+      Set Suite Variable  ${${k}}  ${v}
+    END
+  ELSE IF  '${scope}' == 'Global'
+    FOR  ${k}  ${v}  IN  &{vars}
+      Set Global Variable  ${${k}}  ${v}
+    END
+  ELSE
+    Fail  message="Don't know what to do with scope: ${scope}"
   END
 
 Log does not contain segfault record
