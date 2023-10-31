@@ -542,7 +542,28 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
       return res, 'string_list'
     end,
     ['description'] = 'Apply a list of method calls to the userdata object',
-  }
+  },
+  -- Apply method to list of userdata and use it as a filter, excluding elements for which method returns false/nil
+  ['filter_method'] = {
+    ['types'] = {
+      ['userdata_list'] = true
+    },
+    ['process'] = function(inp, t, args)
+      local meth = args[1]
+
+      if not meth then
+        logger.errx('invalid method name: %s', args[1])
+        return nil
+      end
+
+      return fun.filter(function(val)
+        return val[meth](val)
+      end, inp), 'userdata_list'
+    end,
+    ['description'] = 'Apply method to list of userdata and use it as a filter,' ..
+        ' excluding elements for which method returns false/nil',
+    ['args_schema'] = { ts.string }
+  },
 }
 
 transform_function.match = transform_function.regexp
