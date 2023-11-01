@@ -17,6 +17,7 @@
 #define RSPAMD_MIME_STRING_HXX
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <memory>

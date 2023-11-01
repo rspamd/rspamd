@@ -20,6 +20,7 @@
 #include "libserver/mempool_vars_internal.h"
 #include "upstream.h"
 #include "contrib/ankerl/unordered_dense.h"
+#include <algorithm>
 #include <vector>
 
 namespace rspamd::stat::http {
