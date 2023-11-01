@@ -249,7 +249,7 @@ public:
 			};
 
 			for (const auto &dir: cache_dirs) {
-				msg_debug_hyperscan("cleaning up directory %s", dir.c_str());
+				msg_info_hyperscan("cleaning up directory %s", dir.c_str());
 				cleanup_dir(dir);
 			}
 
@@ -258,10 +258,10 @@ public:
 			known_cached_files.clear();
 		}
 		else if (rspamd_current_worker == nullptr && env_cleanup_disable != nullptr) {
-			msg_debug_hyperscan("disable hyperscan cleanup: env variable RSPAMD_NO_CLEANUP is set");
+			msg_info_hyperscan("disable hyperscan cleanup: env variable RSPAMD_NO_CLEANUP is set");
 		}
 		else if (!loaded) {
-			msg_debug_hyperscan("disable hyperscan cleanup: not loaded");
+			msg_info_hyperscan("disable hyperscan cleanup: not loaded");
 		}
 	}
 
