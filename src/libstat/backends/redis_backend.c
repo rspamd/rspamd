@@ -38,6 +38,7 @@ INIT_LOG_MODULE(stat_redis)
 #define REDIS_DEFAULT_USERS_OBJECT "%s%l%r"
 #define REDIS_DEFAULT_TIMEOUT 0.5
 #define REDIS_STAT_TIMEOUT 30
+#define REDIS_MAX_USERS 1000
 
 struct redis_stat_ctx {
 	lua_State *L;
@@ -54,6 +55,7 @@ struct redis_stat_ctx {
 	gboolean new_schema;
 	gboolean enable_signatures;
 	guint expiry;
+	guint max_users;
 	gint cbref_user;
 };
 
@@ -955,8 +957,10 @@ rspamd_redis_stat_keys(redisAsyncContext *c, gpointer r, gpointer priv)
 		if (more) {
 			/* Get more stat keys */
 			redisAsyncCommand(cbdata->redis, rspamd_redis_stat_keys, redis_elt,
-							  "SSCAN %s_keys %s COUNT 1000",
-							  cbdata->elt->ctx->stcf->symbol, more_elt->str);
+							  "SSCAN %s_keys %s COUNT %d",
+							  cbdata->elt->ctx->stcf->symbol,
+							  more_elt->str,
+							  cbdata->elt->ctx->max_users);
 
 			cbdata->inflight += 1;
 		}
@@ -1072,15 +1076,16 @@ rspamd_redis_async_stat_cb(struct rspamd_stat_async_elt *elt, gpointer d)
 	cbdata->inflight = 1;
 	cbdata->cur = ucl_object_typed_new(UCL_OBJECT);
 	cbdata->elt = redis_elt;
-	cbdata->cur_keys = g_ptr_array_sized_new(1000);
+	cbdata->cur_keys = g_ptr_array_sized_new(ctx->max_users);
 	redis_elt->cbdata = cbdata;
 
 	/* XXX: deal with timeouts maybe */
 	/* Get keys in redis that match our symbol */
 	rspamd_redis_maybe_auth(ctx, cbdata->redis);
 	redisAsyncCommand(cbdata->redis, rspamd_redis_stat_keys, redis_elt,
-					  "SSCAN %s_keys 0 COUNT 1000",
-					  ctx->stcf->symbol);
+					  "SSCAN %s_keys 0 COUNT %d",
+					  ctx->stcf->symbol,
+					  ctx->max_users);
 }
 
 static void
@@ -1532,6 +1537,14 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 	else {
 		backend->expiry = 0;
 	}
+
+	elt = ucl_object_lookup(obj, "max_users");
+	if (elt) {
+		backend->max_users = ucl_object_toint(elt);
+	}
+	else {
+		backend->max_users = REDIS_MAX_USERS;
+	}
 }
 
 gpointer
@@ -1549,6 +1562,7 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	backend = g_malloc0(sizeof(*backend));
 	backend->L = L;
 	backend->timeout = REDIS_DEFAULT_TIMEOUT;
+	backend->max_users = REDIS_MAX_USERS;
 
 	/* First search in backend configuration */
 	obj = ucl_object_lookup(st->classifier->cfg->opts, "backend");
