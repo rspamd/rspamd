@@ -151,9 +151,7 @@ local function gen_check_rcvd_conditions(rbl, received_total)
     end
     if ((rh.real_ip:get_version() == 6 and rbl.ipv6) or
         (rh.real_ip:get_version() == 4 and rbl.ipv4)) and
-        ((rbl.exclude_private_ips and not rh.real_ip:is_local()) or
-            not rbl.exclude_private_ips) and ((rbl.exclude_local_ips and
-        not is_excluded_ip(rh.real_ip)) or not rbl.exclude_local_ips) then
+        ((rbl.exclude_local and not rh.real_ip:is_local() or is_excluded_ip(rh.real_ip)) or not rbl.exclude_local) then
       return true
     else
       return false
@@ -845,7 +843,7 @@ local function gen_rbl_callback(rule)
     description[#description + 1] = 'user'
   end
 
-  if rule.exclude_local or rule.exclude_private_ips then
+  if rule.exclude_local then
     pipeline[#pipeline + 1] = check_local
     description[#description + 1] = 'local'
   end
