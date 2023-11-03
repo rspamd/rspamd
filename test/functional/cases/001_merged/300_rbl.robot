@@ -93,5 +93,6 @@ NUMERIC URLS WITH CONTENT
 
 NUMERIC URLS WITH EVERYTHING
   Scan File  ${RSPAMD_TESTDIR}/messages/numeric_urls.eml
+  ...  IP=127.0.0.1
   ...  Settings={symbols_enabled = [URIBL_NUMERIC_EVERYTHING]}
   Expect Symbol With Exact Options  URIBL_NUMERIC_EVERYTHING  12.11.10.9:url  4.3.2.1:url  8.7.6.5:url
