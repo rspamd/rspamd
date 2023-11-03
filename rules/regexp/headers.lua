@@ -949,6 +949,16 @@ reconf['XM_UA_NO_VERSION'] = {
   group = 'experimental'
 }
 
+-- Detects messages missing both X-Mailer and User-Agent header
+local has_ua = 'header_exists(User-Agent)'
+local has_xmailer = 'header_exists(X-Mailer)'
+reconf['MISSING_XM_UA'] = {
+  re = string.format('!%s && !%s', has_xmailer, has_ua),
+  score = 0.0,
+  description = 'Message has neither X-Mailer nor User-Agent header',
+  group = 'headers',
+}
+
 -- X-Mailer for old MUA versions which are forged by spammers
 local old_x_mailers = {
   -- Outlook Express 6.0 was last included in Windows XP (EOL 2014).  Windows
