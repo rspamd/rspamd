@@ -56,6 +56,7 @@ local settings = {
     exe = 1,
     iso = 4,
     jar = 2,
+    zpaq = 2,
     -- In contrast to HTML MIME parts, dedicated HTML attachments are considered harmful
     htm = 1,
     html = 1,
@@ -218,6 +219,7 @@ local settings = {
     rar = 1,
     xz = 1,
     zip = 1,
+    zpaq = 1,
   },
 
   -- Not really archives
