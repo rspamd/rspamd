@@ -157,6 +157,7 @@ local function configure_module()
                 name = name,
                 callback = cb,
                 flags = 'empty',
+                group = N,
               })
               for _, a in ipairs(atoms) do
                 rspamd_config:register_dependency(name, a)
@@ -206,6 +207,7 @@ local function configure_module()
           t.name = 'FORCE_ACTION_' .. name
           t.callback = cb
           t.flags = 'empty, ignore_passthrough'
+          t.group = N
           rspamd_config:register_symbol(t)
           if t.type == 'normal' then
             for _, a in ipairs(atoms) do
