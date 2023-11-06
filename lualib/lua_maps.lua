@@ -553,17 +553,17 @@ exports.rspamd_maybe_check_map = rspamd_maybe_check_map
 -- @function lua_maps.fill_config_maps(mname, options, defs)
 -- Fill maps that could be defined in defs, from the config in the options
 -- Defs is a table indexed by a map's parameter name and defining it's config,
--- for example:
-defs = {
-  my_map = {
-    type = 'map',
-    description = 'my cool map',
-    optional = true,
-  }
-}
--- Then this function will look for opts.my_map parameter and try to replace it's with
+-- @example
+-- defs = {
+--   my_map = {
+--     type = 'map',
+--     description = 'my cool map',
+--     optional = true,
+--   }
+-- }
+-- --[[ Then this function will look for opts.my_map parameter and try to replace it's with
 -- a map with the specific type, description but not failing if it was empty.
--- It will also set options.my_map_orig to the original value defined in the map
+-- It will also set options.my_map_orig to the original value defined in the map --]]
 --]]
 exports.fill_config_maps = function(mname, opts, map_defs)
   assert(type(opts) == 'table')
