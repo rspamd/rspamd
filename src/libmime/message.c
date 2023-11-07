@@ -707,8 +707,10 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 			}
 
 			if (ret != 0) {
-				task->flags |= RSPAMD_TASK_FLAG_SKIP;
-				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
+				if (!task->cfg->disable_gtube_actions) {
+					task->flags |= RSPAMD_TASK_FLAG_SKIP;
+					task->flags |= RSPAMD_TASK_FLAG_GTUBE;
+				}
 				msg_info_task(
 					"gtube %s pattern has been found in part of length %uz",
 					rspamd_action_to_str(act),
@@ -886,18 +888,18 @@ rspamd_message_process_text_part_maybe(struct rspamd_task *task,
 
 		action = rspamd_config_get_action_by_type(task->cfg, act);
 
-		if (action) {
+		rspamd_task_insert_result(task, GTUBE_SYMBOL, 1, NULL);
+
+		if (action && !task->cfg->disable_gtube_actions) {
 			score = action->threshold;
 
 			rspamd_add_passthrough_result(task, action,
 										  RSPAMD_PASSTHROUGH_CRITICAL,
 										  score, "Gtube pattern",
 										  "GTUBE", 0, NULL);
+
+			return TRUE;
 		}
-
-		rspamd_task_insert_result(task, GTUBE_SYMBOL, 0, NULL);
-
-		return TRUE;
 	}
 
 	/* Post process part */

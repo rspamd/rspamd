@@ -1883,6 +1883,12 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Enable test GTUBE like patterns (not for production!)");
 		rspamd_rcl_add_default_handler(sub,
+									   "disable_gtube_actions",
+									   rspamd_rcl_parse_struct_boolean,
+									   G_STRUCT_OFFSET(struct rspamd_config, disable_gtube_actions),
+									   0,
+									   "Disable setting actions by GTUBE and GTUBE like patterns");
+		rspamd_rcl_add_default_handler(sub,
 									   "enable_css_parser",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_css_parser),

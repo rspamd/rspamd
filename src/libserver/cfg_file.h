@@ -359,6 +359,7 @@ struct rspamd_config {
 	gboolean soft_reject_on_timeout;     /**< If true emit soft reject on task timeout (if not reject) */
 	gboolean public_groups_only;         /**< Output merely public groups everywhere				*/
 	gboolean enable_test_patterns;       /**< Enable test patterns								*/
+	gboolean disable_gtube_actions;      /**< Disable actions triggered by GTUBE-alike test patterns */
 	gboolean enable_css_parser;          /**< Enable css parsing in HTML							*/
 
 	gsize max_cores_size;       /**< maximum size occupied by rspamd core files			*/
