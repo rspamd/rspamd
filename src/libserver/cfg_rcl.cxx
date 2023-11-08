@@ -347,6 +347,35 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
+	const auto *gtube_patterns = ucl_object_lookup(obj, "gtube_patterns");
+	if (gtube_patterns != nullptr && ucl_object_type(gtube_patterns) == UCL_STRING) {
+		const auto *gtube_st = ucl_object_tostring(gtube_patterns);
+
+		if (g_ascii_strcasecmp(gtube_st, "all") == 0) {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_ALL;
+		}
+		else if (g_ascii_strcasecmp(gtube_st, "reject") == 0) {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_REJECT;
+		}
+		else if (g_ascii_strcasecmp(gtube_st, "disable") == 0) {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_DISABLED;
+		}
+		else {
+			g_set_error(err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"invalid GTUBE patterns policy: %s",
+						gtube_st);
+			return FALSE;
+		}
+	}
+	else if (auto *enable_test_patterns = ucl_object_lookup(obj, "enable_test_patterns"); enable_test_patterns != nullptr) {
+		/* Legacy setting */
+		if (!!ucl_object_toboolean(enable_test_patterns)) {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_ALL;
+		}
+	}
+
 	if (rspamd_rcl_section_parse_defaults(cfg,
 										  *section, cfg->cfg_pool, obj,
 										  cfg, err)) {
@@ -1876,12 +1905,6 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, public_groups_only),
 									   0,
 									   "Output merely public groups everywhere");
-		rspamd_rcl_add_default_handler(sub,
-									   "enable_test_patterns",
-									   rspamd_rcl_parse_struct_boolean,
-									   G_STRUCT_OFFSET(struct rspamd_config, enable_test_patterns),
-									   0,
-									   "Enable test GTUBE like patterns (not for production!)");
 		rspamd_rcl_add_default_handler(sub,
 									   "enable_css_parser",
 									   rspamd_rcl_parse_struct_boolean,

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -638,7 +638,7 @@ rspamd_multipattern_gtube_cb(struct rspamd_multipattern *mp,
 	struct rspamd_task *task = (struct rspamd_task *) context;
 
 	if (strnum > 0) {
-		if (task->cfg->enable_test_patterns) {
+		if (task->cfg->gtube_patterns_policy == RSPAMD_GTUBE_ALL) {
 			return strnum + 1;
 		}
 
@@ -656,7 +656,7 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 	enum rspamd_action_type act = METRIC_ACTION_NOACTION;
 	g_assert(part != NULL);
 
-	if (gtube_matcher == NULL) {
+	if (gtube_matcher == NULL && task->cfg->gtube_patterns_policy != RSPAMD_GTUBE_DISABLED) {
 		gtube_matcher = rspamd_multipattern_create(RSPAMD_MULTIPATTERN_DEFAULT);
 
 		rspamd_multipattern_add_pattern(gtube_matcher,
@@ -683,7 +683,8 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 	}
 
 	if (part->utf_content.len >= sizeof(gtube_pattern_reject) &&
-		part->utf_content.len <= max_check_size) {
+		part->utf_content.len <= max_check_size &&
+		task->cfg->gtube_patterns_policy != RSPAMD_GTUBE_DISABLED) {
 		if ((ret = rspamd_multipattern_lookup(gtube_matcher, part->utf_content.begin,
 											  part->utf_content.len,
 											  rspamd_multipattern_gtube_cb, task, NULL)) > 0) {
@@ -693,15 +694,12 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 				act = METRIC_ACTION_REJECT;
 				break;
 			case 2:
-				g_assert(task->cfg->enable_test_patterns);
 				act = METRIC_ACTION_ADD_HEADER;
 				break;
 			case 3:
-				g_assert(task->cfg->enable_test_patterns);
 				act = METRIC_ACTION_REWRITE_SUBJECT;
 				break;
 			case 4:
-				g_assert(task->cfg->enable_test_patterns);
 				act = METRIC_ACTION_NOACTION;
 				break;
 			}

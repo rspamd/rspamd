@@ -286,6 +286,7 @@ rspamd_config_new(enum rspamd_config_init_flags flags)
 	cfg->max_recipients = 1024;
 	cfg->max_blas_threads = 1;
 	cfg->max_opts_len = 4096;
+	cfg->gtube_patterns_policy = RSPAMD_GTUBE_REJECT;
 
 	/* Default log line */
 	cfg->log_format_str = rspamd_mempool_strdup(cfg->cfg_pool,
