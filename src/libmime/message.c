@@ -654,9 +654,10 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 	static const gsize max_check_size = 8 * 1024;
 	gint ret;
 	enum rspamd_action_type act = METRIC_ACTION_NOACTION;
+	enum rspamd_gtube_patterns_policy policy = task->cfg ? task->cfg->gtube_patterns_policy : RSPAMD_GTUBE_REJECT;
 	g_assert(part != NULL);
 
-	if (gtube_matcher == NULL && task->cfg->gtube_patterns_policy != RSPAMD_GTUBE_DISABLED) {
+	if (gtube_matcher == NULL && policy != RSPAMD_GTUBE_DISABLED) {
 		gtube_matcher = rspamd_multipattern_create(RSPAMD_MULTIPATTERN_DEFAULT);
 
 		rspamd_multipattern_add_pattern(gtube_matcher,
@@ -684,7 +685,7 @@ rspamd_check_gtube(struct rspamd_task *task, struct rspamd_mime_text_part *part)
 
 	if (part->utf_content.len >= sizeof(gtube_pattern_reject) &&
 		part->utf_content.len <= max_check_size &&
-		task->cfg->gtube_patterns_policy != RSPAMD_GTUBE_DISABLED) {
+		policy != RSPAMD_GTUBE_DISABLED) {
 		if ((ret = rspamd_multipattern_lookup(gtube_matcher, part->utf_content.begin,
 											  part->utf_content.len,
 											  rspamd_multipattern_gtube_cb, task, NULL)) > 0) {
