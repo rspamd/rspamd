@@ -1847,7 +1847,7 @@ lua_task_create(lua_State *L)
 
 	if (lua_type(L, 1) == LUA_TUSERDATA) {
 		gpointer p;
-		p = rspamd_lua_check_udata_maybe(L, 2, "rspamd{config}");
+		p = rspamd_lua_check_udata_maybe(L, 1, "rspamd{config}");
 
 		if (p) {
 			cfg = *(struct rspamd_config **) p;
