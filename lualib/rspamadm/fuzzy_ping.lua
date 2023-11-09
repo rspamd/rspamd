@@ -33,16 +33,14 @@ parser:option "-r --rule"
       :description "Storage to ping (must be configured in Rspamd configuration)"
       :argname("<name>")
       :default("rspamd.com")
-parser:option "-f --flood"
-      :description "Flood mode (send requests as fast as possible)"
-      :argname("<count>")
-      :convert(tonumber)
-      :default(10)
 parser:option "-t --timeout"
       :description "Timeout for requests"
       :argname("<timeout>")
       :convert(tonumber)
       :default(5)
+parser:option "-s --server"
+      :description "Override server to ping"
+      :argname("<name>")
 parser:option "-n --number"
       :description "Timeout for requests"
       :argname("<number>")
@@ -90,18 +88,73 @@ local function print_storages(rules)
   end
 end
 
+local function print_results(results)
+  for _, res in ipairs(results) do
+    if res.success then
+      print(highlight('Server %s: %s ms', res.server, res.latency))
+    else
+      print(highlight('Server %s: %s', res.server, res.error))
+    end
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
   load_config(opts)
 
   if opts.list then
-    local storages = rspamd_plugins.fuzzy_check.list_storages(rspamd_config)
-    print_storages(storages)
+    print_storages(rspamd_plugins.fuzzy_check.list_storages(rspamd_config))
     os.exit(0)
   end
 
+  -- Perform ping using a fake task from async stuff provided by rspamadm
+  local rspamd_task = require "rspamd_task"
 
+  local task = rspamd_task.create(rspamd_config, rspamadm_ev_base)
+  task:set_session(rspamadm_session)
+  task:set_resolver(rspamadm_dns_resolver)
+
+  local replied = 0
+  local results = {}
+
+  local function gen_ping_fuzzy_cb(num)
+    return function(success, server, latency_or_err)
+      if not success then
+        results[num] = {
+          success = false,
+          error = latency_or_err,
+          server = server,
+        }
+      else
+        results[num] = {
+          success = true,
+          latency = latency_or_err,
+          server = server,
+        }
+      end
+
+      if replied == opts.number - 1 then
+        print_results(results)
+      else
+        replied = replied + 1
+      end
+    end
+  end
+
+  local function ping_fuzzy(num)
+    local ret, err = rspamd_plugins.fuzzy_check.ping_storage(task, gen_ping_fuzzy_cb(num),
+        opts.rule, opts.timeout, opts.server)
+
+    if not ret then
+      rspamd_logger.errx('cannot ping fuzzy storage: %s', err)
+      os.exit(1)
+    end
+  end
+
+  for i = 1, opts.number do
+    ping_fuzzy(i)
+  end
 end
 
 return {
