@@ -195,6 +195,7 @@ static gint fuzzy_lua_learn_handler(lua_State *L);
 static gint fuzzy_lua_unlearn_handler(lua_State *L);
 static gint fuzzy_lua_gen_hashes_handler(lua_State *L);
 static gint fuzzy_lua_hex_hashes_handler(lua_State *L);
+static gint fuzzy_lua_list_storages(lua_State *L);
 
 module_t fuzzy_check_module = {
 	"fuzzy_check",
@@ -1222,6 +1223,9 @@ gint fuzzy_check_module_config(struct rspamd_config *cfg, bool validate)
 		lua_settable(L, -3);
 		lua_pushstring(L, "hex_hashes");
 		lua_pushcfunction(L, fuzzy_lua_hex_hashes_handler);
+		lua_settable(L, -3);
+		lua_pushstring(L, "list_storages");
+		lua_pushcfunction(L, fuzzy_lua_list_storages);
 		lua_settable(L, -3);
 		/* Finish fuzzy_check key */
 		lua_settable(L, -3);
@@ -4240,4 +4244,62 @@ fuzzy_attach_controller(struct module_ctx *ctx, GHashTable *commands)
 	g_hash_table_insert(commands, "/fuzzydelhash", cmd);
 
 	return 0;
+}
+
+static void
+lua_upstream_str_inserter(struct upstream *up, guint idx, void *ud)
+{
+	lua_State *L = (lua_State *) ud;
+
+	lua_pushstring(L, rspamd_upstream_name(up));
+	lua_rawseti(L, -2, idx + 1);
+}
+
+static gint
+fuzzy_lua_list_storages(lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config(L, 1);
+
+	if (cfg == NULL) {
+		return luaL_error(L, "invalid arguments");
+	}
+
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context(cfg);
+	struct fuzzy_rule *rule;
+	guint i;
+
+	lua_createtable(L, 0, fuzzy_module_ctx->fuzzy_rules->len);
+	PTR_ARRAY_FOREACH(fuzzy_module_ctx->fuzzy_rules, i, rule)
+	{
+		lua_newtable(L);
+
+		lua_pushboolean(L, rule->read_only);
+		lua_setfield(L, -2, "read_only");
+
+		/* Push servers */
+		lua_createtable(L, rspamd_upstreams_count(rule->servers), 0);
+		rspamd_upstreams_foreach(rule->servers, lua_upstream_str_inserter, L);
+		lua_setfield(L, -2, "servers");
+
+		/* Push flags */
+		GHashTableIter it;
+
+		lua_createtable(L, 0, g_hash_table_size(rule->mappings));
+		gpointer k, v;
+		struct fuzzy_mapping *map;
+
+		g_hash_table_iter_init(&it, rule->mappings);
+		while (g_hash_table_iter_next(&it, &k, &v)) {
+			map = v;
+
+			lua_pushinteger(L, map->fuzzy_flag);
+			lua_setfield(L, -2, map->symbol);
+		}
+		lua_setfield(L, -2, "flags");
+
+		/* Final table */
+		lua_setfield(L, -2, rule->name);
+	}
+
+	return 1;
 }
