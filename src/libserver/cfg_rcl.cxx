@@ -31,6 +31,7 @@
 
 #include <string>
 #include <filesystem>
+#include <algorithm>// for std::transform
 #include <memory>
 #include "contrib/ankerl/unordered_dense.h"
 #include "fmt/core.h"
@@ -344,6 +345,41 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 											pool, err)) {
 				return FALSE;
 			}
+		}
+	}
+
+	const auto *gtube_patterns = ucl_object_lookup(obj, "gtube_patterns");
+	if (gtube_patterns != nullptr && ucl_object_type(gtube_patterns) == UCL_STRING) {
+		auto gtube_st = std::string{ucl_object_tostring(gtube_patterns)};
+		std::transform(gtube_st.begin(), gtube_st.end(), gtube_st.begin(), [](const auto c) -> int {
+			if (c <= 'Z' && c >= 'A')
+				return c - ('Z' - 'z');
+			return c;
+		});
+
+
+		if (gtube_st == "all") {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_ALL;
+		}
+		else if (gtube_st == "reject") {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_REJECT;
+		}
+		else if (gtube_st == "disabled" || gtube_st == "disable") {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_DISABLED;
+		}
+		else {
+			g_set_error(err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"invalid GTUBE patterns policy: %s",
+						gtube_st.c_str());
+			return FALSE;
+		}
+	}
+	else if (auto *enable_test_patterns = ucl_object_lookup(obj, "enable_test_patterns"); enable_test_patterns != nullptr) {
+		/* Legacy setting */
+		if (!!ucl_object_toboolean(enable_test_patterns)) {
+			cfg->gtube_patterns_policy = RSPAMD_GTUBE_ALL;
 		}
 	}
 
@@ -1877,12 +1913,6 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   0,
 									   "Output merely public groups everywhere");
 		rspamd_rcl_add_default_handler(sub,
-									   "enable_test_patterns",
-									   rspamd_rcl_parse_struct_boolean,
-									   G_STRUCT_OFFSET(struct rspamd_config, enable_test_patterns),
-									   0,
-									   "Enable test GTUBE like patterns (not for production!)");
-		rspamd_rcl_add_default_handler(sub,
 									   "enable_css_parser",
 									   rspamd_rcl_parse_struct_boolean,
 									   G_STRUCT_OFFSET(struct rspamd_config, enable_css_parser),
@@ -2159,6 +2189,16 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, events_backend),
 									   0,
 									   "Events backend to use: kqueue, epoll, select, poll or auto (default: auto)");
+
+		rspamd_rcl_add_doc_by_path(cfg,
+								   "options",
+								   "Swtich mode of gtube patterns: disable, reject, all",
+								   "gtube_patterns",
+								   UCL_STRING,
+								   nullptr,
+								   0,
+								   "reject",
+								   0);
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc(&top, sub, "neighbours", "name",

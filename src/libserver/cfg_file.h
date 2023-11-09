@@ -312,6 +312,12 @@ enum rspamd_config_settings_policy {
 	RSPAMD_SETTINGS_POLICY_IMPLICIT_DENY = 2,
 };
 
+enum rspamd_gtube_patterns_policy {
+	RSPAMD_GTUBE_DISABLED = 0, /* Disabled */
+	RSPAMD_GTUBE_REJECT,       /* Reject message with GTUBE pattern */
+	RSPAMD_GTUBE_ALL           /* Check all GTUBE like patterns */
+};
+
 struct rspamd_config_settings_elt {
 	guint32 id;
 	enum rspamd_config_settings_policy policy;
@@ -344,22 +350,22 @@ struct rspamd_config {
 	GHashTable *groups;     /**< groups of symbols								*/
 	void *actions;          /**< all actions of the metric (opaque type)		*/
 
-	gboolean one_shot_mode;              /**< rules add only one symbol							*/
-	gboolean check_text_attachements;    /**< check text attachements as text					*/
-	gboolean check_all_filters;          /**< check all filters									*/
-	gboolean allow_raw_input;            /**< scan messages with invalid mime					*/
-	gboolean disable_hyperscan;          /**< disable hyperscan usage							*/
-	gboolean vectorized_hyperscan;       /**< use vectorized hyperscan matching					*/
-	gboolean enable_shutdown_workaround; /**< enable workaround for legacy SA clients (exim)		*/
-	gboolean ignore_received;            /**< Ignore data from the first received header			*/
-	gboolean enable_sessions_cache;      /**< Enable session cache for debug						*/
-	gboolean enable_experimental;        /**< Enable experimental plugins						*/
-	gboolean disable_pcre_jit;           /**< Disable pcre JIT									*/
-	gboolean own_lua_state;              /**< True if we have created lua_state internally		*/
-	gboolean soft_reject_on_timeout;     /**< If true emit soft reject on task timeout (if not reject) */
-	gboolean public_groups_only;         /**< Output merely public groups everywhere				*/
-	gboolean enable_test_patterns;       /**< Enable test patterns								*/
-	gboolean enable_css_parser;          /**< Enable css parsing in HTML							*/
+	gboolean one_shot_mode;                                  /**< rules add only one symbol							*/
+	gboolean check_text_attachements;                        /**< check text attachements as text					*/
+	gboolean check_all_filters;                              /**< check all filters									*/
+	gboolean allow_raw_input;                                /**< scan messages with invalid mime					*/
+	gboolean disable_hyperscan;                              /**< disable hyperscan usage							*/
+	gboolean vectorized_hyperscan;                           /**< use vectorized hyperscan matching					*/
+	gboolean enable_shutdown_workaround;                     /**< enable workaround for legacy SA clients (exim)		*/
+	gboolean ignore_received;                                /**< Ignore data from the first received header			*/
+	gboolean enable_sessions_cache;                          /**< Enable session cache for debug						*/
+	gboolean enable_experimental;                            /**< Enable experimental plugins						*/
+	gboolean disable_pcre_jit;                               /**< Disable pcre JIT									*/
+	gboolean own_lua_state;                                  /**< True if we have created lua_state internally		*/
+	gboolean soft_reject_on_timeout;                         /**< If true emit soft reject on task timeout (if not reject) */
+	gboolean public_groups_only;                             /**< Output merely public groups everywhere				*/
+	enum rspamd_gtube_patterns_policy gtube_patterns_policy; /**< Enable test patterns								*/
+	gboolean enable_css_parser;                              /**< Enable css parsing in HTML							*/
 
 	gsize max_cores_size;       /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;      /**< maximum number of core files						*/
