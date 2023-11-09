@@ -31,6 +31,7 @@
 
 #include <string>
 #include <filesystem>
+#include <algorithm>// for std::transform
 #include <memory>
 #include "contrib/ankerl/unordered_dense.h"
 #include "fmt/core.h"
@@ -349,15 +350,21 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	const auto *gtube_patterns = ucl_object_lookup(obj, "gtube_patterns");
 	if (gtube_patterns != nullptr && ucl_object_type(gtube_patterns) == UCL_STRING) {
-		const auto *gtube_st = ucl_object_tostring(gtube_patterns);
+		auto gtube_st = std::string{ucl_object_tostring(gtube_patterns)};
+		std::transform(gtube_st.begin(), gtube_st.end(), gtube_st.begin(), [](const auto c) -> int {
+			if (c <= 'Z' && c >= 'A')
+				return c - ('Z' - 'z');
+			return c;
+		});
 
-		if (g_ascii_strcasecmp(gtube_st, "all") == 0) {
+
+		if (gtube_st == "all") {
 			cfg->gtube_patterns_policy = RSPAMD_GTUBE_ALL;
 		}
-		else if (g_ascii_strcasecmp(gtube_st, "reject") == 0) {
+		else if (gtube_st == "reject") {
 			cfg->gtube_patterns_policy = RSPAMD_GTUBE_REJECT;
 		}
-		else if (g_ascii_strcasecmp(gtube_st, "disable") == 0) {
+		else if (gtube_st == "disabled" || gtube_st == "disable") {
 			cfg->gtube_patterns_policy = RSPAMD_GTUBE_DISABLED;
 		}
 		else {
@@ -365,7 +372,7 @@ rspamd_rcl_options_handler(rspamd_mempool_t *pool, const ucl_object_t *obj,
 						CFG_RCL_ERROR,
 						EINVAL,
 						"invalid GTUBE patterns policy: %s",
-						gtube_st);
+						gtube_st.c_str());
 			return FALSE;
 		}
 	}
@@ -2182,6 +2189,16 @@ rspamd_rcl_config_init(struct rspamd_config *cfg, GHashTable *skip_sections)
 									   G_STRUCT_OFFSET(struct rspamd_config, events_backend),
 									   0,
 									   "Events backend to use: kqueue, epoll, select, poll or auto (default: auto)");
+
+		rspamd_rcl_add_doc_by_path(cfg,
+								   "options",
+								   "Swtich mode of gtube patterns: disable, reject, all",
+								   "gtube_patterns",
+								   UCL_STRING,
+								   nullptr,
+								   0,
+								   "reject",
+								   0);
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc(&top, sub, "neighbours", "name",
