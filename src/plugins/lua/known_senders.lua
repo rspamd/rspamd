@@ -57,6 +57,7 @@ local settings = {
 
 local settings_schema = lua_redis.enrich_schema({
   domains = lua_maps.map_schema,
+  enabled = ts.boolean:is_optional(),
   max_senders = (ts.integer + ts.string / tonumber):is_optional(),
   max_ttl = (ts.integer + ts.string / tonumber):is_optional(),
   use_bloom = ts.boolean:is_optional(),
@@ -199,7 +200,7 @@ end
 local opts = rspamd_config:get_all_opt('known_senders')
 if opts then
   settings = lua_util.override_defaults(settings, opts)
-  local res, err = settings_schema:transform(opts)
+  local res, err = settings_schema:transform(settings)
   if not res then
     rspamd_logger.errx(rspamd_config, 'cannot parse known_senders options: %1', err)
   else
