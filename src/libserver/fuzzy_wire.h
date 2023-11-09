@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef RSPAMD_FUZZY_STORAGE_H
 #define RSPAMD_FUZZY_STORAGE_H
 
@@ -21,7 +37,8 @@ extern "C" {
 #define FUZZY_WRITE 1
 #define FUZZY_DEL 2
 #define FUZZY_STAT 3
-#define FUZZY_CLIENT_MAX 3
+#define FUZZY_PING 4
+#define FUZZY_CLIENT_MAX 4
 /* Internal commands */
 #define FUZZY_REFRESH 100 /* Update expire */
 #define FUZZY_DUP 101     /* Skip duplicate in update queue */

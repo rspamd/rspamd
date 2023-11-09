@@ -1337,6 +1337,17 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		result.v1.flag = session->ctx->stat.fuzzy_hashes;
 		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 	}
+	else if (cmd->cmd == FUZZY_PING) {
+		/* Obtain milliseconds since midnight */
+		double now = rspamd_get_calendar_ticks();
+		double millis = now - (int64_t) now;
+		now = ((int64_t) now % 86400) + millis;
+
+		result.v1.prob = 1.0f;
+		result.v1.flag = now * 1000;
+		result.v1.value = result.v1.flag - cmd->value; /* This is transmitted time from our PoV */
+		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+	}
 	else {
 		if (rspamd_fuzzy_check_write(session)) {
 			/* Check whitelist */
