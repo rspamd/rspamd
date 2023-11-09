@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+import dummy_killer
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -131,8 +132,7 @@ async def main():
 
     # Write the PID to the specified PID file, if provided
     if args.pidfile:
-        with open(args.pidfile, "w") as f:
-            f.write(str(os.getpid()))
+        dummy_killer.write_pid(args.pidfile)
 
     # Start the server
     server.bind(args.port, args.bind)
