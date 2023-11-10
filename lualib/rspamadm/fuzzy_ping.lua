@@ -33,6 +33,10 @@ parser:option "-r --rule"
       :description "Storage to ping (must be configured in Rspamd configuration)"
       :argname("<name>")
       :default("rspamd.com")
+parser:flag "-f --flood"
+      :description "Flood mode (no waiting for replies)"
+parser:flag "-S --silent"
+      :description "Silent mode (statistics only)"
 parser:option "-t --timeout"
       :description "Timeout for requests"
       :argname("<timeout>")
@@ -75,6 +79,10 @@ local function highlight(fmt, ...)
   return ansicolors.white .. string.format(fmt, ...) .. ansicolors.reset
 end
 
+local function highlight_err(fmt, ...)
+  return ansicolors.red .. string.format(fmt, ...) .. ansicolors.reset
+end
+
 local function print_storages(rules)
   for n, rule in pairs(rules) do
     print(highlight('Rule: %s', n))
@@ -88,13 +96,78 @@ local function print_storages(rules)
   end
 end
 
+local function std_mean(tbl)
+  local function mean()
+    local sum = 0
+    local count = 0
+
+    for _, v in ipairs(tbl) do
+      sum = sum + v
+      count = count + 1
+    end
+
+    return (sum / count)
+  end
+
+  local m
+  local vm
+  local sum = 0
+  local count = 0
+  local result
+
+  m = mean(tbl)
+
+  for _, v in ipairs(tbl) do
+    vm = v - m
+    sum = sum + (vm * vm)
+    count = count + 1
+  end
+
+  result = math.sqrt(sum / (count - 1))
+
+  return result, m
+end
+
+local function maxmin(tbl)
+  local max = -math.huge
+  local min = math.huge
+
+  for _, v in ipairs(tbl) do
+    max = math.max(max, v)
+    min = math.min(min, v)
+  end
+
+  return max, min
+end
+
 local function print_results(results)
+  local servers = {}
+  local err_servers = {}
   for _, res in ipairs(results) do
     if res.success then
-      print(highlight('Server %s: %s ms', res.server, res.latency))
+      if servers[res.server] then
+        table.insert(servers[res.server], res.latency)
+      else
+        servers[res.server] = { res.latency }
+      end
     else
-      print(highlight('Server %s: %s', res.server, res.error))
+      if err_servers[res.server] then
+        err_servers[res.server] = err_servers[res.server] + 1
+      else
+        err_servers[res.server] = 1
+      end
     end
+  end
+
+  for s, l in pairs(servers) do
+    local total = #l + (err_servers[s] or 0)
+    print(highlight('Summary for %s: %d packets transmitted, %d packets received, %.1f%% packet loss',
+        s, total, #l, (total - #l) * 100.0 / total))
+    local mean, std = std_mean(l)
+    local max, min = maxmin(l)
+    print(string.format('round-trip min/avg/max/std-dev = %.2f/%.2f/%.2f/%.2f ms',
+        min, mean,
+        max, std))
   end
 end
 
@@ -118,21 +191,29 @@ local function handler(args)
 
   local replied = 0
   local results = {}
+  local ping_fuzzy
 
   local function gen_ping_fuzzy_cb(num)
     return function(success, server, latency_or_err)
-      rspamd_logger.errx(task, 'pinged %s: %s', server, latency_or_err)
       if not success then
+        if not opts.silent then
+          print(highlight_err('error from %s: %s', server, latency_or_err))
+        end
         results[num] = {
           success = false,
           error = latency_or_err,
-          server = server,
+          server = tostring(server),
         }
       else
+        if not opts.silent then
+          local adjusted_latency = math.floor(latency_or_err * 1000) * 1.0 / 1000;
+          print(highlight('reply from %s: %s ms', server, adjusted_latency))
+
+        end
         results[num] = {
           success = true,
           latency = latency_or_err,
-          server = server,
+          server = tostring(server),
         }
       end
 
@@ -140,22 +221,29 @@ local function handler(args)
         print_results(results)
       else
         replied = replied + 1
+        if not opts.flood then
+          ping_fuzzy(replied + 1)
+        end
       end
     end
   end
 
-  local function ping_fuzzy(num)
+  ping_fuzzy = function(num)
     local ret, err = rspamd_plugins.fuzzy_check.ping_storage(task, gen_ping_fuzzy_cb(num),
         opts.rule, opts.timeout, opts.server)
 
     if not ret then
-      rspamd_logger.errx('cannot ping fuzzy storage: %s', err)
-      os.exit(1)
+      print(highlight_err('error from %s: %s', opts.server, err))
+      opts.number = opts.number - 1 -- To avoid issues with waiting for other replies
     end
   end
 
-  for i = 1, opts.number do
-    ping_fuzzy(i)
+  if opts.flood then
+    for i = 1, opts.number do
+      ping_fuzzy(i)
+    end
+  else
+    ping_fuzzy(1)
   end
 end
 
