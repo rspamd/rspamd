@@ -156,6 +156,10 @@ local function print_results(results)
       else
         err_servers[res.server] = 1
       end
+      -- For the case if no successful replies are detected
+      if not servers[res.server] then
+        servers[res.server] = {}
+      end
     end
   end
 
