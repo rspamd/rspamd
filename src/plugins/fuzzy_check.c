@@ -2762,7 +2762,7 @@ fuzzy_check_io_callback(gint fd, short what, void *arg)
 
 
 static void
-fuzzy_lua_fin(void *ud)
+fuzzy_controller_lua_fin(void *ud)
 {
 	struct fuzzy_learn_session *session = ud;
 
@@ -2793,7 +2793,7 @@ fuzzy_controller_timer_callback(gint fd, short what, void *arg)
 						   session->rule->retransmits);
 
 		if (session->session) {
-			rspamd_session_remove_event(session->session, fuzzy_lua_fin,
+			rspamd_session_remove_event(session->session, fuzzy_controller_lua_fin,
 										session);
 		}
 		else {
@@ -3019,7 +3019,7 @@ fuzzy_controller_io_callback(gint fd, short what, void *arg)
 	}
 	else {
 		/* Lua handler */
-		rspamd_session_remove_event(session->session, fuzzy_lua_fin, session);
+		rspamd_session_remove_event(session->session, fuzzy_controller_lua_fin, session);
 	}
 
 	return;
@@ -3782,7 +3782,7 @@ fuzzy_check_send_lua_learn(struct fuzzy_rule *rule,
 										rule->io_timeout);
 
 				rspamd_session_add_event(task->s,
-										 fuzzy_lua_fin,
+										 fuzzy_controller_lua_fin,
 										 s,
 										 M);
 
@@ -4415,7 +4415,7 @@ fuzzy_lua_session_is_completed(struct fuzzy_lua_session *session)
 
 	if (nreplied == session->commands->len) {
 
-		rspamd_session_remove_event(session->task->s, fuzzy_io_fin, session);
+		rspamd_session_remove_event(session->task->s, fuzzy_lua_session_fin, session);
 
 		return TRUE;
 	}
@@ -4426,14 +4426,11 @@ fuzzy_lua_session_is_completed(struct fuzzy_lua_session *session)
 static gint
 fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 {
-	struct rspamd_task *task;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	struct fuzzy_cmd_io *io = NULL;
 	gint r, ret;
 	guchar buf[2048], *p;
-
-	task = session->task;
 
 	if ((r = read(session->fd, buf, sizeof(buf) - 1)) == -1) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
@@ -4544,7 +4541,7 @@ fuzzy_lua_io_callback(gint fd, short what, void *arg)
 									 &session->ev, EV_READ);
 	}
 	else if (ret == return_error) {
-		rspamd_session_remove_event(session->task->s, fuzzy_io_fin, session);
+		rspamd_session_remove_event(session->task->s, fuzzy_lua_session_fin, session);
 	}
 	else {
 		/* Read something from network */
