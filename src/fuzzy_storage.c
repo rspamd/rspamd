@@ -1337,6 +1337,11 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		result.v1.flag = session->ctx->stat.fuzzy_hashes;
 		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 	}
+	else if (cmd->cmd == FUZZY_PING) {
+		result.v1.prob = 1.0f;
+		result.v1.value = cmd->value;
+		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
+	}
 	else {
 		if (rspamd_fuzzy_check_write(session)) {
 			/* Check whitelist */

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -288,6 +288,8 @@ wait_session_events(void)
 	while (rspamd_session_events_pending(rspamadm_session) > 0) {
 		ev_loop(rspamd_main->event_loop, EVRUN_ONCE);
 	}
+
+	msg_debug("finished events waiting, terminating session");
 }
 
 gint lua_repl_thread_call(struct thread_entry *thread, gint narg, gpointer ud, lua_thread_error_t error_func)

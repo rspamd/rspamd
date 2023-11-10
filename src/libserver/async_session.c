@@ -196,18 +196,16 @@ void rspamd_session_remove_event_full(struct rspamd_async_session *session,
 	search_ev.user_data = ud;
 	k = kh_get(rspamd_events_hash, session->events, &search_ev);
 	if (k == kh_end(session->events)) {
-		gchar t;
 
-		msg_err_session("cannot find event: %p(%p) from %s", fin, ud, event_source);
-		kh_foreach(session->events, found_ev, t, {
+		msg_err_session("cannot find event: %p(%p) from %s (%d total events)", fin, ud,
+						event_source, (int) kh_size(session->events));
+		kh_foreach_key(session->events, found_ev, {
 			msg_err_session("existing event %s (%s): %p(%p)",
 							found_ev->subsystem,
 							found_ev->event_source,
 							found_ev->fin,
 							found_ev->user_data);
 		});
-
-		(void) t;
 
 		g_assert_not_reached();
 	}
