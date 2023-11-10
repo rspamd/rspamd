@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -604,6 +604,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	ev_break(rspamd_main->event_loop, EVBREAK_ALL);
 
 end:
+	rspamd_session_destroy(rspamadm_session);
 	g_option_context_free(context);
 	rspamd_dns_resolver_deinit(resolver);
 	REF_RELEASE(rspamd_main->cfg);
