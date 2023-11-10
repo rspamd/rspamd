@@ -122,8 +122,18 @@ public:
 
 	void add_cached_file(const raii_file &file)
 	{
-		auto dir = file.get_dir();
-		auto ext = file.get_extension();
+		auto fpath = std::filesystem::path{file.get_name()};
+		std::error_code ec;
+
+		fpath = std::filesystem::canonical(fpath, ec);
+
+		if (ec && ec.value() != 0) {
+			msg_err_hyperscan("invalid path: \"%s\", error message: %s", fpath.c_str(), ec.message().c_str());
+			return;
+		}
+
+		auto dir = fpath.parent_path();
+		auto ext = fpath.extension();
 
 		if (std::find_if(cache_dirs.begin(), cache_dirs.end(),
 						 [&](const auto &item) { return item == dir; }) == std::end(cache_dirs)) {
@@ -134,11 +144,10 @@ public:
 			cache_extensions.emplace_back(std::string{ext});
 		}
 
-		auto is_known = known_cached_files.insert(file.get_name());
-		msg_debug_hyperscan("added %s hyperscan file: %*s",
+		auto is_known = known_cached_files.insert(fpath.string());
+		msg_debug_hyperscan("added %s hyperscan file: %s",
 							is_known.second ? "new" : "already known",
-							(int) file.get_name().size(),
-							file.get_name().data());
+							fpath.c_str());
 	}
 
 	void add_cached_file(const char *fname)
@@ -210,7 +219,7 @@ public:
 				for (const auto &ext: cache_extensions) {
 					glob_t globbuf;
 
-					auto glob_pattern = fmt::format("{}{}*.{}",
+					auto glob_pattern = fmt::format("{}{}*{}",
 													dir, G_DIR_SEPARATOR_S, ext);
 					msg_debug_hyperscan_lambda("perform glob for pattern: %s",
 											   glob_pattern.c_str());
