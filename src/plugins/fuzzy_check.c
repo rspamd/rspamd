@@ -4617,7 +4617,7 @@ fuzzy_lua_ping_storage(lua_State *L)
 	if (lua_type(L, 5) == LUA_TSTRING) {
 		const gchar *server_name = lua_tostring(L, 5);
 		enum rspamd_parse_host_port_result res;
-		GPtrArray *addrs;
+		GPtrArray *addrs = g_ptr_array_new();
 
 		/* We resolve address synchronously here! Why? Because it is an override... */
 		res = rspamd_parse_host_port_priority(server_name, &addrs, 0, NULL,
