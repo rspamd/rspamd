@@ -4423,6 +4423,39 @@ fuzzy_lua_session_is_completed(struct fuzzy_lua_session *session)
 	return FALSE;
 }
 
+static void
+fuzzy_lua_push_result(struct fuzzy_lua_session *session, gdouble latency)
+{
+	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(session->L, TRUE);
+	rspamd_lua_ip_push(session->L, session->addr);
+	lua_pushnumber(session->L, latency);
+
+	/* TODO: check results maybe? */
+	lua_pcall(session->L, 3, 0, 0);
+}
+
+#ifdef __GNUC__
+static void
+fuzzy_lua_push_error(struct fuzzy_lua_session *session, const gchar *err_fmt, ...) __attribute__((format(printf, 2, 3)));
+#endif
+
+static void
+fuzzy_lua_push_error(struct fuzzy_lua_session *session, const gchar *err_fmt, ...)
+{
+	va_list v;
+
+	va_start(v, err_fmt);
+	lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
+	lua_pushboolean(session->L, FALSE);
+	rspamd_lua_ip_push(session->L, session->addr);
+	lua_pushvfstring(session->L, err_fmt, v);
+	va_end(v);
+
+	/* TODO: check results maybe? */
+	lua_pcall(session->L, 3, 0, 0);
+}
+
 static gint
 fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 {
@@ -4437,6 +4470,7 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 			return 0;
 		}
 		else {
+			fuzzy_lua_push_error(session, "cannot read from socket: %s", strerror(errno));
 			return -1;
 		}
 	}
@@ -4448,30 +4482,17 @@ fuzzy_lua_try_read(struct fuzzy_lua_session *session)
 		while ((rep = fuzzy_process_reply(&p, &r,
 										  session->commands, session->rule, &cmd, &io)) != NULL) {
 
-			lua_rawgeti(session->L, LUA_REGISTRYINDEX, session->cbref);
-
 			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_PING) {
-					/* ret, addr, latency */
-					lua_pushboolean(session->L, TRUE);
-					rspamd_lua_ip_push(session->L, session->addr);
-					lua_pushnumber(session->L, fuzzy_milliseconds_since_midnight() - rep->v1.value);
+					fuzzy_lua_push_result(session, fuzzy_milliseconds_since_midnight() - rep->v1.value);
 				}
 				else {
-					/* TODO: unsupported */
-					lua_pushboolean(session->L, FALSE);
-					rspamd_lua_ip_push(session->L, session->addr);
-					lua_pushstring(session->L, "unsupported");
+					fuzzy_lua_push_error(session, "unsupported");
 				}
 			}
 			else {
-				lua_pushboolean(session->L, FALSE);
-				rspamd_lua_ip_push(session->L, session->addr);
-				lua_pushfstring(session->L, "invalid reply from server: %d", rep->v1.value);
+				fuzzy_lua_push_error(session, "invalid reply from server: %d", rep->v1.value);
 			}
-
-			/* TODO: check results maybe? */
-			lua_pcall(session->L, 3, 0, 0);
 
 			ret = 1;
 		}
@@ -4506,6 +4527,7 @@ fuzzy_lua_io_callback(gint fd, short what, void *arg)
 				if (what & EV_WRITE) {
 					/* Retransmit attempt */
 					if (!fuzzy_cmd_vector_to_wire(fd, session->commands)) {
+						fuzzy_lua_push_error(session, "cannot write to socket");
 						ret = return_error;
 					}
 					else {
@@ -4524,6 +4546,7 @@ fuzzy_lua_io_callback(gint fd, short what, void *arg)
 	}
 	else if (what & EV_WRITE) {
 		if (!fuzzy_cmd_vector_to_wire(fd, session->commands)) {
+			fuzzy_lua_push_error(session, "cannot write to socket");
 			ret = return_error;
 		}
 		else {
@@ -4532,6 +4555,7 @@ fuzzy_lua_io_callback(gint fd, short what, void *arg)
 	}
 	else {
 		/* Timeout */
+		fuzzy_lua_push_error(session, "timeout waiting for the reply");
 		ret = return_error;
 	}
 

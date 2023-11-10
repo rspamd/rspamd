@@ -111,6 +111,7 @@ local function handler(args)
   -- Perform ping using a fake task from async stuff provided by rspamadm
   local rspamd_task = require "rspamd_task"
 
+  -- TODO: this task is not cleared at the end, do something about it some day
   local task = rspamd_task.create(rspamd_config, rspamadm_ev_base)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
@@ -120,6 +121,7 @@ local function handler(args)
 
   local function gen_ping_fuzzy_cb(num)
     return function(success, server, latency_or_err)
+      rspamd_logger.errx(task, 'pinged %s: %s', server, latency_or_err)
       if not success then
         results[num] = {
           success = false,
