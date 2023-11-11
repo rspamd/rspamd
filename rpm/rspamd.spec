@@ -158,8 +158,10 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %else
         -DENABLE_LUAJIT=OFF \
 %endif
-        -DENABLE_BLAS=ON \
-        -DENABLE_FASTTEXT=ON
+%ifarch x86_64
+        -DENABLE_FASTTEXT=ON \
+%endif
+        -DENABLE_BLAS=ON
 make %{?_smp_mflags}
 
 %install
