@@ -34,7 +34,9 @@ BuildRequires:    lapack-devel
 BuildRequires:    libicu-devel
 BuildRequires:    libsodium-devel
 BuildRequires:    libunwind-devel
+%ifarch x86_64
 BuildRequires:    fasttext-devel
+%endif
 %if 0%{getenv:ASAN}
 %if 0%{?el7}
 BuildRequires:    devtoolset-10-libasan-devel
