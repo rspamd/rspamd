@@ -34,9 +34,6 @@ BuildRequires:    lapack-devel
 BuildRequires:    libicu-devel
 BuildRequires:    libsodium-devel
 BuildRequires:    libunwind-devel
-%ifarch x86_64
-BuildRequires:    fasttext-devel
-%endif
 %if 0%{getenv:ASAN}
 %if 0%{?el7}
 BuildRequires:    devtoolset-10-libasan-devel
@@ -160,9 +157,8 @@ rm -f %{_builddir}/luajit-build/lib/*.so || true
 %else
         -DENABLE_LUAJIT=OFF \
 %endif
-%ifarch x86_64
         -DENABLE_FASTTEXT=ON \
-%endif
+        -DFASTTEXT_ROOT_DIR=/fasttext \
         -DENABLE_BLAS=ON
 make %{?_smp_mflags}
 
