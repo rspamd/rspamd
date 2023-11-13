@@ -1120,11 +1120,11 @@ rspamd_handle_child_fork(struct rspamd_worker *wrk,
 	setrlimit(RLIMIT_STACK, &rlim);
 
 	if (cf->bind_conf) {
-		setproctitle("%s process (%s)", cf->worker->name,
-					 cf->bind_conf->bind_line);
+		rspamd_setproctitle("%s process (%s)", cf->worker->name,
+							cf->bind_conf->bind_line);
 	}
 	else {
-		setproctitle("%s process", cf->worker->name);
+		rspamd_setproctitle("%s process", cf->worker->name);
 	}
 
 	if (rspamd_main->pfh) {

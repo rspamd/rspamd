@@ -1,11 +1,11 @@
-/*-
- * Copyright 2019 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -828,10 +828,10 @@ lua_worker_spawn_process(lua_State *L)
 		ev_loop_destroy(cbdata->event_loop);
 
 		if (proctitle) {
-			setproctitle("lua process: %s", proctitle);
+			rspamd_setproctitle("lua process: %s", proctitle);
 		}
 		else {
-			setproctitle("lua process: unnamed");
+			rspamd_setproctitle("lua process: unnamed");
 		}
 
 		cbdata->event_loop = ev_loop_new(EVFLAG_SIGNALFD);
