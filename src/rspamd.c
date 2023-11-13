@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1125,7 +1125,7 @@ rspamd_stat_update_handler(struct ev_loop *loop, ev_timer *w, int revents)
 						(new_spam - old_spam) / w->repeat,
 						(new_ham - old_ham) / w->repeat,
 						cnt > 0 ? sum / cnt : 0);
-		setproctitle("%s", proctitle);
+		rspamd_setproctitle("%s", proctitle);
 	}
 
 	memcpy(&old_stat, &cur_stat, sizeof(cur_stat));
@@ -1439,7 +1439,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	}
 
 #ifndef HAVE_SETPROCTITLE
-	init_title(rspamd_main->server_pool, argc, argv, env);
+	rspamd_init_title(rspamd_main->server_pool, argc, argv, env);
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs();
@@ -1584,7 +1584,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	sigprocmask(SIG_BLOCK, &signals.sa_mask, NULL);
 
 	/* Set title */
-	setproctitle("main process");
+	rspamd_setproctitle("main process");
 
 	/* Open control socket if needed */
 	control_fd = -1;

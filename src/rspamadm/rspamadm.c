@@ -470,7 +470,7 @@ gint main(gint argc, gchar **argv, gchar **env)
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	setproctitle("rspamdadm");
+	rspamd_setproctitle("rspamdadm");
 
 	L = cfg->lua_state;
 	rspamd_lua_set_path(L, NULL, ucl_vars);

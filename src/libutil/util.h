@@ -126,16 +126,11 @@ void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(gint,
 void rspamd_signals_init(struct sigaction *sa, void (*sig_handler)(gint));
 #endif
 
-#ifndef HAVE_SETPROCTITLE
-
 /*
  * Process title utility functions
  */
-gint init_title(rspamd_mempool_t *pool, gint argc, gchar *argv[], gchar *envp[]);
-
-gint setproctitle(const gchar *fmt, ...);
-
-#endif
+gint rspamd_init_title(rspamd_mempool_t *pool, gint argc, gchar *argv[], gchar *envp[]);
+gint rspamd_setproctitle(const gchar *fmt, ...);
 
 #ifndef HAVE_PIDFILE
 /*

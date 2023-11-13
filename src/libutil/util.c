@@ -533,9 +533,7 @@ void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(gint))
 static gchar *title_buffer = NULL;
 static size_t title_buffer_size = 0;
 static gchar *title_progname, *title_progname_full;
-#endif
 
-#ifdef LINUX
 static void
 rspamd_title_dtor(gpointer d)
 {
@@ -548,12 +546,14 @@ rspamd_title_dtor(gpointer d)
 
 	g_free(env);
 }
-#endif
+#endif /* ifdef LINUX */
 
-gint init_title(rspamd_mempool_t *pool,
-				gint argc, gchar *argv[], gchar *envp[])
+#endif /* ifndef HAVE_SETPROCTITLE */
+
+gint rspamd_init_title(rspamd_mempool_t *pool,
+					   gint argc, gchar *argv[], gchar *envp[])
 {
-#ifdef LINUX
+#if defined(LINUX) && !defined(HAVE_SETPROCTITLE)
 	gchar *begin_of_buffer = 0, *end_of_buffer = 0;
 	gint i;
 
@@ -614,8 +614,20 @@ gint init_title(rspamd_mempool_t *pool,
 	return 0;
 }
 
-gint setproctitle(const gchar *fmt, ...)
+gint rspamd_setproctitle(const gchar *fmt, ...)
 {
+#ifdef HAVE_SETPROCTITLE
+	if (fmt) {
+		static char titlebuf[4096];
+		va_list ap;
+
+		va_start(ap, fmt);
+		rspamd_vsnprintf(titlebuf, sizeof(titlebuf), fmt, ap);
+		va_end(ap);
+
+		setproctitle("%s", titlebuf);
+	}
+#else
 #if defined(LINUX)
 	if (!title_buffer || !title_buffer_size) {
 		errno = ENOMEM;
@@ -669,11 +681,12 @@ gint setproctitle(const gchar *fmt, ...)
 	g_set_prgname(dest->str);
 	g_string_free(dest, TRUE);
 
-#endif
+#endif /* defined(LINUX) */
+
+#endif /* HAVE_SETPROCTITLE */
 	return 0;
 }
 
-#endif
 
 #ifndef HAVE_PIDFILE
 static gint _rspamd_pidfile_remove(rspamd_pidfh_t *pfh, gint freeit);
