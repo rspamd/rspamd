@@ -40,7 +40,7 @@ class fasttext_langdet {
 private:
 	fasttext::FastText ft;
 	std::string model_fname;
-	bool loaded;
+	bool loaded = false;
 
 public:
 	explicit fasttext_langdet(struct rspamd_config *cfg)
@@ -124,10 +124,11 @@ public:
 		return predictions;
 	}
 
-	auto model_info(void) const -> std::string
+	auto model_info(void) const -> const std::string
 	{
 		if (!loaded) {
-			return "fasttext model is not loaded";
+			static const auto not_loaded = std::string{"fasttext model is not loaded"};
+			return not_loaded;
 		}
 		else {
 			return fmt::format("fasttext model {}: {} languages, {} tokens", model_fname,
