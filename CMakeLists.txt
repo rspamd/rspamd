@@ -242,8 +242,7 @@ ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
         ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 
 if (ENABLE_FASTTEXT MATCHES "ON")
-    ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext.h
-            INCLUDE_SUFFIXES include/fasttext
+    ProcessPackage(FASTTEXT LIBRARY fasttext INCLUDE fasttext/fasttext.h
             ROOT ${FASTTEXT_ROOT_DIR} MODULES fasttext)
     SET(WITH_FASTTEXT "1")
 endif ()
