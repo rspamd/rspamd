@@ -66,6 +66,8 @@ if __name__ == "__main__":
     p0f_status = 'ok'
     p0f_os = 'linux'
 
+    os.umask(0000)
+
     alen = len(sys.argv)
     if alen > 1:
         SOCK = sys.argv[1]
