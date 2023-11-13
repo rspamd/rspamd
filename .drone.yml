@@ -136,7 +136,6 @@
             "cd /rspamd/build",
             "ulimit -c unlimited",
             "ulimit -s unlimited",
-            "umask 0000",
             "set +e",
             "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
             "set -e",
@@ -353,7 +352,6 @@
             "cd /rspamd/build",
             "ulimit -c unlimited",
             "ulimit -s unlimited",
-            "umask 0000",
             "set +e",
             "RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?",
             "set -e",
@@ -561,7 +559,7 @@
 }
 ---
 {
-   "hmac": "6c89d1423ccbddbfac9e2b67f24192018670209a293cfee308880a16a2f2b372",
+   "hmac": "1fb0cd2235d6c518d809751b4b263601285c5554863c89c19bd325af38207bce",
    "kind": "signature"
 }
 ...
