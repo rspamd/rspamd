@@ -159,15 +159,6 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             };
             let mode = "advanced";
 
-            // CodeJar requires ES6
-            if (!window.CodeJar ||
-                // Required to restore cursor position
-                (typeof window.getSelection().setBaseAndExtent !== "function")) {
-                mode = "basic";
-                $("input[name=editorMode][value='basic']").closest(".btn").button("toggle");
-                $("input[name=editorMode][value='advanced']").closest(".btn").addClass("disabled").prop("title", "Not supported by web browser");
-            }
-
             // Modal form for maps
             $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
                 var checked_server = rspamd.getSelector("selSrv");

@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-/* global jQuery:false, FooTable:false, Visibility:false */
+/* global jQuery, FooTable, Visibility */
 
 define(["jquery", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload", "app/selectors"],
