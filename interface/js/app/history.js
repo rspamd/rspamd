@@ -22,7 +22,7 @@
  THE SOFTWARE.
  */
 
-/* global d3:false FooTable:false */
+/* global d3, FooTable */
 
 define(["jquery", "footable"],
     function ($) {

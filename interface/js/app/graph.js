@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-/* global d3:false, FooTable:false */
+/* global d3, FooTable */
 
 define(["jquery", "d3evolution", "d3pie", "footable"],
     function ($, D3Evolution, D3Pie) {

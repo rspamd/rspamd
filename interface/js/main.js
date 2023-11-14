@@ -1,4 +1,4 @@
-/* global d3:true, require:false, requirejs:false */ // eslint-disable-line no-unused-vars
+/* global d3:writable, require, requirejs */ // eslint-disable-line no-unused-vars
 
 requirejs.config({
     baseUrl: "js/lib",

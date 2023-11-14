@@ -22,7 +22,7 @@
  THE SOFTWARE.
  */
 
-/* global d3:false */
+/* global d3 */
 
 define(["jquery", "d3pie"],
     function ($, D3Pie) {
