@@ -1,3 +1,25 @@
+3.7.4: 14 Nov 2023
+  * [Enhancement] Add composite rule for suspicious URLs in suspicious messages
+  * [Fix] Another try to fix setproctitle
+  * [Fix] Do not cleanup hyperscan files unless new ones are loaded
+  * [Fix] Fix various issues with canonicalisation of the paths
+  * [Fix] Properly set config field when creating tasks from Lua
+  * [Fix] Set loaded variable explicitly
+  * [Fix] known_senders: fix config handling
+  * [Fix] rbl: fix `exclude_local`
+  * [Minor] Add missing <algorithm> include for gcc 14
+  * [Minor] Add rule for messages missing both X-Mailer and User-Agent header
+  * [Minor] Bundle fasttext as linux distributives are just useless
+  * [Minor] Enable fasttext on RPM based linux
+  * [Minor] Forgot it in one more place
+  * [Minor] Improve FREEMAIL_AFF capture rates
+  * [Minor] Limit fasttext to amd64 only
+  * [Minor] Properly search for fasttext include
+  * [Minor] Treat *.zpaq attachments as archives and harmful
+  * [Minor] Update to 3.7.4
+  * [Minor] force_actions: set a group for symbols
+  * [WebUI] Update map editor
+
 3.7.3: 27 Oct 2023
   * [Fix] Emergency fix for the hyperscan path error
 
