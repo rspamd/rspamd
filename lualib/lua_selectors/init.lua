@@ -243,7 +243,7 @@ local function make_grammar()
   local utf8_high = l.R("\194\223") * cont
       + l.R("\224\239") * cont * cont
       + l.R("\240\244") * cont * cont * cont
-  local atom_start = (l.R("az") + l.R("AZ") + l.R("09") + utf8_high) ^ 1
+  local atom_start = (l.R("az") + l.R("AZ") + l.R("09") + utf8_high + l.S "-") ^ 1
   local atom_end = (l.R("az") + l.R("AZ") + l.R("09") + l.S "-_" + utf8_high) ^ 1
   local atom_mid = (1 - l.S("'\r\n\f\\,)(}{= " .. '"')) ^ 1
   local atom_argument = l.C(atom_start * atom_mid ^ 0 * atom_end ^ 0) -- We allow more characters for the arguments
