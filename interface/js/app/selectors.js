@@ -91,56 +91,55 @@ define(["jquery", "app/rspamd"],
             if (!$("#selectorsSelArea").is(".is-valid, .is-invalid")) checkSelectors();
         };
 
-        (() => {
-            function toggleSidebar(side) {
-                $("#sidebar-" + side).toggleClass("collapsed");
-                var contentClass = "col-lg-6";
-                var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
-                        $("#sidebar-right").hasClass("collapsed");
-                switch (openSidebarsCount) {
-                    case 1:
-                        contentClass = "col-lg-9";
-                        break;
-                    case 2:
-                        contentClass = "col-lg-12";
-                        break;
-                    default:
-                }
-                $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
-                    .addClass(contentClass);
+
+        function toggleSidebar(side) {
+            $("#sidebar-" + side).toggleClass("collapsed");
+            var contentClass = "col-lg-6";
+            var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
+                    $("#sidebar-right").hasClass("collapsed");
+            switch (openSidebarsCount) {
+                case 1:
+                    contentClass = "col-lg-9";
+                    break;
+                case 2:
+                    contentClass = "col-lg-12";
+                    break;
+                default:
             }
-            $("#sidebar-tab-left>a").click(function () {
-                toggleSidebar("left");
-                return false;
-            });
-            $("#sidebar-tab-right>a").click(function () {
-                toggleSidebar("right");
-                return false;
-            });
+            $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
+                .addClass(contentClass);
+        }
+        $("#sidebar-tab-left>a").click(function () {
+            toggleSidebar("left");
+            return false;
+        });
+        $("#sidebar-tab-right>a").click(function () {
+            toggleSidebar("right");
+            return false;
+        });
 
-            $("#selectorsMsgClean").on("click", function () {
-                $("#selectorsChkMsgBtn").attr("disabled", true);
-                $("#selectorsMsgArea").val("");
-                return false;
-            });
-            $("#selectorsClean").on("click", function () {
-                $("#selectorsSelArea").val("");
-                checkSelectors();
-                return false;
-            });
-            $("#selectorsChkMsgBtn").on("click", function () {
-                $("#selectorsResArea").val("");
-                checkMsg($("#selectorsMsgArea").val());
-                return false;
-            });
+        $("#selectorsMsgClean").on("click", function () {
+            $("#selectorsChkMsgBtn").attr("disabled", true);
+            $("#selectorsMsgArea").val("");
+            return false;
+        });
+        $("#selectorsClean").on("click", function () {
+            $("#selectorsSelArea").val("");
+            checkSelectors();
+            return false;
+        });
+        $("#selectorsChkMsgBtn").on("click", function () {
+            $("#selectorsResArea").val("");
+            checkMsg($("#selectorsMsgArea").val());
+            return false;
+        });
 
-            $("#selectorsMsgArea").on("input", function () {
-                enable_disable_check_btn();
-            });
-            $("#selectorsSelArea").on("input", function () {
-                checkSelectors();
-            });
-        })();
+        $("#selectorsMsgArea").on("input", function () {
+            enable_disable_check_btn();
+        });
+        $("#selectorsSelArea").on("input", function () {
+            checkSelectors();
+        });
 
         return ui;
     });

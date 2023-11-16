@@ -240,72 +240,71 @@ define(["jquery", "app/rspamd"],
             });
         }
 
-        (() => {
-            rspamd.set_page_size("scan", $("#scan_page_size").val());
-            rspamd.bindHistoryTableEventHandlers("scan", 3);
 
-            $("#cleanScanHistory").off("click");
-            $("#cleanScanHistory").on("click", function (e) {
-                e.preventDefault();
-                if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
-                    return;
-                }
-                rspamd.destroyTable("scan");
-                rspamd.symbols.scan.length = 0;
-                $("#cleanScanHistory").attr("disabled", true);
-            });
+        rspamd.set_page_size("scan", $("#scan_page_size").val());
+        rspamd.bindHistoryTableEventHandlers("scan", 3);
 
-            function enable_disable_scan_btn() {
-                $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
+        $("#cleanScanHistory").off("click");
+        $("#cleanScanHistory").on("click", function (e) {
+            e.preventDefault();
+            if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
+                return;
             }
+            rspamd.destroyTable("scan");
+            rspamd.symbols.scan.length = 0;
+            $("#cleanScanHistory").attr("disabled", true);
+        });
+
+        function enable_disable_scan_btn() {
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
+        }
+        enable_disable_scan_btn();
+        $("textarea").on("input", function () {
             enable_disable_scan_btn();
-            $("textarea").on("input", function () {
-                enable_disable_scan_btn();
-            });
+        });
 
-            $("#scanClean").on("click", function () {
-                $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
-                $("#scanForm")[0].reset();
-                $("#scanResult").hide();
-                $("#scanOutput tbody").remove();
-                $("html, body").animate({scrollTop:0}, 1000);
-                return false;
-            });
+        $("#scanClean").on("click", function () {
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
+            $("#scanForm")[0].reset();
+            $("#scanResult").hide();
+            $("#scanOutput tbody").remove();
+            $("html, body").animate({scrollTop:0}, 1000);
+            return false;
+        });
 
-            $(".card-close-btn").on("click", function () {
-                $(this).closest(".card").slideUp();
-            });
+        $(".card-close-btn").on("click", function () {
+            $(this).closest(".card").slideUp();
+        });
 
-            $("[data-upload]").on("click", function () {
-                var source = $(this).data("upload");
-                var data = $("#scanMsgSource").val();
-                var headers = {};
-                if ($.trim(data).length > 0) {
-                    if (source === "scan") {
-                        headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
-                            var value = $("#scan-opt-" + header.toLowerCase()).val();
-                            if (value !== "") o[header] = value;
-                            return o;
-                        }, {});
-                        if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
-                        scanText(data, headers);
-                    } else if (source === "compute-fuzzy") {
-                        getFuzzyHashes(data);
-                    } else {
-                        if (source === "fuzzy") {
-                            headers = {
-                                flag: $("#fuzzyFlagText").val(),
-                                weight: $("#fuzzyWeightText").val()
-                            };
-                        }
-                        uploadText(data, source, headers);
-                    }
+        $("[data-upload]").on("click", function () {
+            var source = $(this).data("upload");
+            var data = $("#scanMsgSource").val();
+            var headers = {};
+            if ($.trim(data).length > 0) {
+                if (source === "scan") {
+                    headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
+                        var value = $("#scan-opt-" + header.toLowerCase()).val();
+                        if (value !== "") o[header] = value;
+                        return o;
+                    }, {});
+                    if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
+                    scanText(data, headers);
+                } else if (source === "compute-fuzzy") {
+                    getFuzzyHashes(data);
                 } else {
-                    rspamd.alertMessage("alert-error", "Message source field cannot be blank");
+                    if (source === "fuzzy") {
+                        headers = {
+                            flag: $("#fuzzyFlagText").val(),
+                            weight: $("#fuzzyWeightText").val()
+                        };
+                    }
+                    uploadText(data, source, headers);
                 }
-                return false;
-            });
-        })();
+            } else {
+                rspamd.alertMessage("alert-error", "Message source field cannot be blank");
+            }
+            return false;
+        });
 
         return ui;
     });

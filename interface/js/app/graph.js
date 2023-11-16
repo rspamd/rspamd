@@ -199,6 +199,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                 graphs.graph = initGraph();
             }
 
+
             rspamd.query("graph", {
                 success: function (req_data) {
                     var data = null;
@@ -243,17 +244,16 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             });
         };
 
-        (() => {
-            // Handling mouse events on overlapping elements
-            $("#rrd-pie").mouseover(function () {
-                $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
-                $("#rrd-table_toggle").css("z-index", "300");
-            });
-            $("#rrd-table_toggle").mouseover(function () {
-                $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
-                $("#rrd-table_toggle").css("z-index", "0");
-            });
-        })();
+
+        // Handling mouse events on overlapping elements
+        $("#rrd-pie").mouseover(function () {
+            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
+            $("#rrd-table_toggle").css("z-index", "300");
+        });
+        $("#rrd-table_toggle").mouseover(function () {
+            $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
+            $("#rrd-table_toggle").css("z-index", "0");
+        });
 
         return ui;
     });

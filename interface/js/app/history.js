@@ -379,36 +379,6 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             });
         };
 
-        (() => {
-            rspamd.set_page_size("history", $("#history_page_size").val());
-            rspamd.bindHistoryTableEventHandlers("history", 8);
-
-            $("#updateHistory").off("click");
-            $("#updateHistory").on("click", function (e) {
-                e.preventDefault();
-                ui.getHistory();
-            });
-
-            // @reset history log
-            $("#resetHistory").off("click");
-            $("#resetHistory").on("click", function (e) {
-                e.preventDefault();
-                if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
-                    return;
-                }
-                rspamd.destroyTable("history");
-                rspamd.destroyTable("errors");
-
-                rspamd.query("historyreset", {
-                    success: function () {
-                        ui.getHistory();
-                        ui.getErrors();
-                    },
-                    errorMessage: "Cannot reset history log"
-                });
-            });
-        })();
-
         function initErrorsTable(rows) {
             rspamd.tables.errors = FooTable.init("#errorsLog", {
                 columns: [
@@ -478,6 +448,35 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 ui.getErrors();
             });
         };
+
+
+        rspamd.set_page_size("history", $("#history_page_size").val());
+        rspamd.bindHistoryTableEventHandlers("history", 8);
+
+        $("#updateHistory").off("click");
+        $("#updateHistory").on("click", function (e) {
+            e.preventDefault();
+            ui.getHistory();
+        });
+
+        // @reset history log
+        $("#resetHistory").off("click");
+        $("#resetHistory").on("click", function (e) {
+            e.preventDefault();
+            if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
+                return;
+            }
+            rspamd.destroyTable("history");
+            rspamd.destroyTable("errors");
+
+            rspamd.query("historyreset", {
+                success: function () {
+                    ui.getHistory();
+                    ui.getErrors();
+                },
+                errorMessage: "Cannot reset history log"
+            });
+        });
 
         return ui;
     });

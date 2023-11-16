@@ -242,19 +242,18 @@ define(["jquery", "app/rspamd", "footable"],
                 });
         };
 
-        (() => {
-            $("#updateSymbols").on("click", function (e) {
-                e.preventDefault();
-                var checked_server = rspamd.getSelector("selSrv");
-                rspamd.query("symbols", {
-                    success: function (data) {
-                        var items = process_symbols_data(data[0].data)[0];
-                        rspamd.tables.symbols.rows.load(items);
-                    },
-                    server: (checked_server === "All SERVERS") ? "local" : checked_server
-                });
+
+        $("#updateSymbols").on("click", function (e) {
+            e.preventDefault();
+            var checked_server = rspamd.getSelector("selSrv");
+            rspamd.query("symbols", {
+                success: function (data) {
+                    var items = process_symbols_data(data[0].data)[0];
+                    rspamd.tables.symbols.rows.load(items);
+                },
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
-        })();
+        });
 
         return ui;
     });

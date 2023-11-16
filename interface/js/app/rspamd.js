@@ -439,150 +439,6 @@ function ($, NProgress) {
 
     // Public functions
     ui.alertMessage = alertMessage;
-    (() => {
-        (function initSettings() {
-            var selected_locale = null;
-            var custom_locale = null;
-            const localeTextbox = ".popover #settings-popover #locale";
-
-            function validateLocale(saveToLocalStorage) {
-                function toggle_form_group_class(remove, add) {
-                    $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
-                }
-
-                var now = new Date();
-
-                if (custom_locale.length) {
-                    try {
-                        now.toLocaleString(custom_locale);
-
-                        if (saveToLocalStorage) localStorage.setItem("custom_locale", custom_locale);
-                        locale = (selected_locale === "custom") ? custom_locale : null;
-                        toggle_form_group_class("invalid", "valid");
-                    } catch (err) {
-                        locale = null;
-                        toggle_form_group_class("valid", "invalid");
-                    }
-                } else {
-                    if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
-                    locale = null;
-                    $(localeTextbox).removeClass("is-valid is-invalid");
-                }
-
-                // Display date example
-                $(".popover #settings-popover #date-example").text(
-                    (locale)
-                        ? now.toLocaleString(locale)
-                        : now.toLocaleString()
-                );
-            }
-
-            $("#settings").popover({
-                container: "body",
-                placement: "bottom",
-                html: true,
-                sanitize: false,
-                content: function () {
-                    // Using .clone() has the side-effect of producing elements with duplicate id attributes.
-                    return $("#settings-popover").clone();
-                }
-            // Restore the tooltip of the element that the popover is attached to.
-            }).attr("title", function () {
-                return $(this).attr("data-original-title");
-            });
-            $("#settings").on("click", function (e) {
-                e.preventDefault();
-            });
-            $("#settings").on("inserted.bs.popover", function () {
-                selected_locale = localStorage.getItem("selected_locale") || "browser";
-                custom_locale = localStorage.getItem("custom_locale") || "";
-                validateLocale();
-
-                $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
-                $(localeTextbox).val(custom_locale);
-
-                ajaxSetup(localStorage.getItem("ajax_timeout"), true);
-            });
-            $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
-                selected_locale = this.value;
-                localStorage.setItem("selected_locale", selected_locale);
-                validateLocale();
-            });
-            $(document).on("input", localeTextbox, function () {
-                custom_locale = $(localeTextbox).val();
-                validateLocale(true);
-            });
-            $(document).on("input", ajaxTimeoutBox, function () {
-                ajaxSetup($(ajaxTimeoutBox).val(), false, true);
-            });
-            $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
-                ajaxSetup(null, true, true);
-            });
-
-            // Dismiss Bootstrap popover by clicking outside
-            $("body").on("click", function (e) {
-                $(".popover").each(function () {
-                    if (
-                        // Popover's descendant
-                        $(this).has(e.target).length ||
-                        // Button (or icon within a button) that triggers the popover.
-                        $(e.target).closest("button").attr("aria-describedby") === this.id
-                    ) return;
-                    $("#settings").popover("hide");
-                });
-            });
-        }());
-
-        $("#selData").change(function () {
-            tabClick("#throughput_nav");
-        });
-
-        $(document).ajaxStart(function () {
-            $("#refresh > svg").addClass("fa-spin");
-        });
-        $(document).ajaxComplete(function () {
-            setTimeout(function () {
-                $("#refresh > svg").removeClass("fa-spin");
-            }, 1000);
-        });
-
-        $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
-            tabClick("#" + $(this).attr("id"));
-        });
-        $("#refresh, #disconnect").on("click", function (e) {
-            e.preventDefault();
-            tabClick("#" + $(this).attr("id"));
-        });
-        $(".dropdown-menu a").click(function (e) {
-            e.preventDefault();
-            var classList = $(this).attr("class");
-            var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
-            $(".dropdown-menu a.active." + menuClass).removeClass("active");
-            $(this).addClass("active");
-            tabClick("#autoRefresh");
-        });
-
-        $("#selSrv").change(function () {
-            checked_server = this.value;
-            $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
-            if (checked_server === "All SERVERS") {
-                $("#learnServers").show();
-            } else {
-                $("#learnServers").hide();
-            }
-            tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
-        });
-
-        // Radio buttons
-        $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
-            if (!this.disabled) {
-                checked_server = this.value;
-                tabClick("#status_nav");
-            }
-        });
-
-        $("#loading").addClass("d-none");
-    })();
 
     ui.connect = function () {
         // Prevent locking out of the WebUI if timeout is too low.
@@ -1077,6 +933,150 @@ function ($, NProgress) {
         }
         return null;
     };
+
+
+    (function initSettings() {
+        var selected_locale = null;
+        var custom_locale = null;
+        const localeTextbox = ".popover #settings-popover #locale";
+
+        function validateLocale(saveToLocalStorage) {
+            function toggle_form_group_class(remove, add) {
+                $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
+            }
+
+            var now = new Date();
+
+            if (custom_locale.length) {
+                try {
+                    now.toLocaleString(custom_locale);
+
+                    if (saveToLocalStorage) localStorage.setItem("custom_locale", custom_locale);
+                    locale = (selected_locale === "custom") ? custom_locale : null;
+                    toggle_form_group_class("invalid", "valid");
+                } catch (err) {
+                    locale = null;
+                    toggle_form_group_class("valid", "invalid");
+                }
+            } else {
+                if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
+                locale = null;
+                $(localeTextbox).removeClass("is-valid is-invalid");
+            }
+
+            // Display date example
+            $(".popover #settings-popover #date-example").text(
+                (locale)
+                    ? now.toLocaleString(locale)
+                    : now.toLocaleString()
+            );
+        }
+
+        $("#settings").popover({
+            container: "body",
+            placement: "bottom",
+            html: true,
+            sanitize: false,
+            content: function () {
+                // Using .clone() has the side-effect of producing elements with duplicate id attributes.
+                return $("#settings-popover").clone();
+            }
+        // Restore the tooltip of the element that the popover is attached to.
+        }).attr("title", function () {
+            return $(this).attr("data-original-title");
+        });
+        $("#settings").on("click", function (e) {
+            e.preventDefault();
+        });
+        $("#settings").on("inserted.bs.popover", function () {
+            selected_locale = localStorage.getItem("selected_locale") || "browser";
+            custom_locale = localStorage.getItem("custom_locale") || "";
+            validateLocale();
+
+            $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
+            $(localeTextbox).val(custom_locale);
+
+            ajaxSetup(localStorage.getItem("ajax_timeout"), true);
+        });
+        $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
+            selected_locale = this.value;
+            localStorage.setItem("selected_locale", selected_locale);
+            validateLocale();
+        });
+        $(document).on("input", localeTextbox, function () {
+            custom_locale = $(localeTextbox).val();
+            validateLocale(true);
+        });
+        $(document).on("input", ajaxTimeoutBox, function () {
+            ajaxSetup($(ajaxTimeoutBox).val(), false, true);
+        });
+        $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
+            ajaxSetup(null, true, true);
+        });
+
+        // Dismiss Bootstrap popover by clicking outside
+        $("body").on("click", function (e) {
+            $(".popover").each(function () {
+                if (
+                    // Popover's descendant
+                    $(this).has(e.target).length ||
+                    // Button (or icon within a button) that triggers the popover.
+                    $(e.target).closest("button").attr("aria-describedby") === this.id
+                ) return;
+                $("#settings").popover("hide");
+            });
+        });
+    }());
+
+    $("#selData").change(function () {
+        tabClick("#throughput_nav");
+    });
+
+    $(document).ajaxStart(function () {
+        $("#refresh > svg").addClass("fa-spin");
+    });
+    $(document).ajaxComplete(function () {
+        setTimeout(function () {
+            $("#refresh > svg").removeClass("fa-spin");
+        }, 1000);
+    });
+
+    $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
+        tabClick("#" + $(this).attr("id"));
+    });
+    $("#refresh, #disconnect").on("click", function (e) {
+        e.preventDefault();
+        tabClick("#" + $(this).attr("id"));
+    });
+    $(".dropdown-menu a").click(function (e) {
+        e.preventDefault();
+        var classList = $(this).attr("class");
+        var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
+        $(".dropdown-menu a.active." + menuClass).removeClass("active");
+        $(this).addClass("active");
+        tabClick("#autoRefresh");
+    });
+
+    $("#selSrv").change(function () {
+        checked_server = this.value;
+        $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
+        if (checked_server === "All SERVERS") {
+            $("#learnServers").show();
+        } else {
+            $("#learnServers").hide();
+        }
+        tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
+    });
+
+    // Radio buttons
+    $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
+        if (!this.disabled) {
+            checked_server = this.value;
+            tabClick("#status_nav");
+        }
+    });
+
+    $("#loading").addClass("d-none");
 
     return ui;
 });
