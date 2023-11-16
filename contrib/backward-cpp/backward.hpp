@@ -4222,6 +4222,8 @@ public:
     #else
       error_addr = reinterpret_cast<void *>(uctx->uc_mcontext.pc);
     #endif
+#elif defined(__loongarch__)
+    error_addr = reinterpret_cast<void *>(uctx->uc_mcontext.__pc);
 #elif defined(__mips__)
     error_addr = reinterpret_cast<void *>(
         reinterpret_cast<struct sigcontext *>(&uctx->uc_mcontext)->sc_pc);
