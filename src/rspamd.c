@@ -1279,6 +1279,8 @@ get_cpu_architecture(void)
 	return "ARM64";
 #elif defined(__arm__) || defined(_M_ARM)
 	return "ARM";
+#elif defined(__loongarch__) || defined(__loongarch64)
+	return "LOONGARCH64";
 #elif defined(__mips__)
 	return "MIPS";
 #elif defined(__powerpc__) || defined(_M_PPC)

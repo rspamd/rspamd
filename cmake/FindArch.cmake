@@ -35,6 +35,8 @@ set(archdetect_c_code "
     #else
         #error cmake_ARCH ppc
     #endif
+#elif defined(__loongarch__) || defined(__loongarch64)
+    #error cmake_ARCH loongarch64
 #endif
 
 #error cmake_ARCH unknown
