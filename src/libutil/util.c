@@ -533,10 +533,16 @@ void rspamd_signals_init(struct sigaction *signals, void (*sig_handler)(gint))
 static gchar *title_buffer = NULL;
 static size_t title_buffer_size = 0;
 static gchar *title_progname, *title_progname_full;
+gchar **old_environ = NULL;
 
 static void
 rspamd_title_dtor(gpointer d)
 {
+	/* Restore old environment */
+	if (old_environ != NULL) {
+		environ = old_environ;
+	}
+
 	gchar **env = (gchar **) d;
 	guint i;
 
@@ -603,12 +609,14 @@ gint rspamd_init_title(rspamd_mempool_t *pool,
 		program_invocation_short_name = title_progname;
 	}
 
+	old_environ = environ;
 	environ = new_environ;
 	title_buffer = begin_of_buffer;
 	title_buffer_size = end_of_buffer - begin_of_buffer;
 
 	rspamd_mempool_add_destructor(pool,
-								  rspamd_title_dtor, new_environ);
+								  rspamd_title_dtor,
+								  new_environ);
 #endif
 
 	return 0;
