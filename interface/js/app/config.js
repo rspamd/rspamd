@@ -22,12 +22,14 @@
  THE SOFTWARE.
  */
 
-define(["jquery", "codejar", "linenumbers", "prism"],
-    function ($, CodeJar, withLineNumbers, Prism) {
+/* global require */
+
+define(["jquery", "app/rspamd"],
+    function ($, rspamd) {
         "use strict";
         var ui = {};
 
-        ui.getActions = function getActions(rspamd, checked_server) {
+        ui.getActions = function getActions(checked_server) {
             rspamd.query("actions", {
                 success: function (data) {
                     $("#actionsFormField").empty();
@@ -63,7 +65,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             });
         };
 
-        ui.saveActions = function (rspamd, server) {
+        ui.saveActions = function (server) {
             function descending(arr) {
                 var desc = true;
                 var filtered = arr.filter(function (el) {
@@ -113,7 +115,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             }
         };
 
-        ui.getMaps = function (rspamd, checked_server) {
+        ui.getMaps = function (checked_server) {
             var $listmaps = $("#listMaps");
             $listmaps.closest(".card").hide();
             rspamd.query("maps", {
@@ -142,107 +144,108 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             });
         };
 
-        ui.setup = function (rspamd) {
-            var jar = {};
-            const editor = {
-                advanced: {
-                    codejar: true,
-                    elt: "div",
-                    class: "editor language-clike",
-                    readonly_attr: {contenteditable: false},
+
+        var jar = {};
+        const editor = {
+            advanced: {
+                codejar: true,
+                elt: "div",
+                class: "editor language-clike",
+                readonly_attr: {contenteditable: false},
+            },
+            basic: {
+                elt: "textarea",
+                class: "form-control map-textarea",
+                readonly_attr: {readonly: true},
+            }
+        };
+        let mode = "advanced";
+
+        // Modal form for maps
+        $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
+            var checked_server = rspamd.getSelector("selSrv");
+            var item = $(this).data("item");
+            rspamd.query("getmap", {
+                headers: {
+                    Map: item.map
                 },
-                basic: {
-                    elt: "textarea",
-                    class: "form-control map-textarea",
-                    readonly_attr: {readonly: true},
-                }
-            };
-            let mode = "advanced";
+                success: function (data) {
+                    // Highlighting a large amount of text is unresponsive
+                    mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
 
-            // Modal form for maps
-            $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
-                var checked_server = rspamd.getSelector("selSrv");
-                var item = $(this).data("item");
-                rspamd.query("getmap", {
-                    headers: {
-                        Map: item.map
-                    },
-                    success: function (data) {
-                        // Highlighting a large amount of text is unresponsive
-                        mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
+                    $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map + '">' +
+                        "</" + editor[mode].elt + ">").appendTo("#modalBody");
 
-                        $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map + '">' +
-                            "</" + editor[mode].elt + ">").appendTo("#modalBody");
-
-                        if (editor[mode].codejar) {
+                    if (editor[mode].codejar) {
+                        require(["codejar", "linenumbers", "prism"], function (CodeJar, withLineNumbers, Prism) {
                             jar = new CodeJar(
                                 document.querySelector("#editor"),
                                 withLineNumbers((el) => Prism.highlightElement(el))
                             );
                             jar.updateCode(data[0].data);
-                        } else {
-                            document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
-                        }
+                        });
+                    } else {
+                        document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
+                    }
 
-                        var icon = "fa-edit";
-                        if (item.editable === false || rspamd.read_only) {
-                            $("#editor").attr(editor[mode].readonly_attr);
-                            icon = "fa-eye";
-                            $("#modalSaveGroup").hide();
-                        } else {
-                            $("#modalSaveGroup").show();
-                        }
-                        $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
-                        $("#modalTitle").html(item.uri);
+                    var icon = "fa-edit";
+                    if (item.editable === false || rspamd.read_only) {
+                        $("#editor").attr(editor[mode].readonly_attr);
+                        icon = "fa-eye";
+                        $("#modalSaveGroup").hide();
+                    } else {
+                        $("#modalSaveGroup").show();
+                    }
+                    $("#modalDialog .modal-header").find("[data-fa-i2svg]").addClass(icon);
+                    $("#modalTitle").html(item.uri);
 
-                        $("#modalDialog").modal("show");
-                    },
-                    errorMessage: "Cannot receive maps data",
-                    server: (checked_server === "All SERVERS") ? "local" : checked_server
-                });
-                return false;
+                    $("#modalDialog").modal("show");
+                },
+                errorMessage: "Cannot receive maps data",
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
-            $("#modalDialog").on("hidden.bs.modal", function () {
-                if (editor[mode].codejar) {
-                    jar.destroy();
-                    $(".codejar-wrap").remove();
-                } else {
-                    $("#editor").remove();
-                }
-            });
-
-            $("#saveActionsBtn").on("click", function () {
-                ui.saveActions(rspamd);
-            });
-            $("#saveActionsClusterBtn").on("click", function () {
-                ui.saveActions(rspamd, "All SERVERS");
-            });
-
-            function saveMap(server) {
-                rspamd.query("savemap", {
-                    success: function () {
-                        rspamd.alertMessage("alert-success", "Map data successfully saved");
-                        $("#modalDialog").modal("hide");
-                    },
-                    errorMessage: "Save map error",
-                    method: "POST",
-                    headers: {
-                        Map: $("#editor").data("id"),
-                    },
-                    params: {
-                        data: editor[mode].codejar ? jar.toString() : $("#editor").val(),
-                        dataType: "text",
-                    },
-                    server: server
-                });
+            return false;
+        });
+        $("#modalDialog").on("hidden.bs.modal", function () {
+            if (editor[mode].codejar) {
+                jar.destroy();
+                $(".codejar-wrap").remove();
+            } else {
+                $("#editor").remove();
             }
-            $("#modalSave").on("click", function () {
-                saveMap();
+        });
+
+        $("#saveActionsBtn").on("click", function () {
+            ui.saveActions();
+        });
+        $("#saveActionsClusterBtn").on("click", function () {
+            ui.saveActions("All SERVERS");
+        });
+
+        function saveMap(server) {
+            rspamd.query("savemap", {
+                success: function () {
+                    rspamd.alertMessage("alert-success", "Map data successfully saved");
+                    $("#modalDialog").modal("hide");
+                },
+                errorMessage: "Save map error",
+                method: "POST",
+                headers: {
+                    Map: $("#editor").data("id"),
+                },
+                params: {
+                    data: editor[mode].codejar ? jar.toString() : $("#editor").val(),
+                    dataType: "text",
+                },
+                server: server
             });
-            $("#modalSaveAll").on("click", function () {
-                saveMap("All SERVERS");
-            });
-        };
+        }
+        $("#modalSave").on("click", function () {
+            saveMap();
+        });
+        $("#modalSaveAll").on("click", function () {
+            saveMap("All SERVERS");
+        });
 
         return ui;
     });

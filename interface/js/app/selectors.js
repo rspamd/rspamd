@@ -1,5 +1,5 @@
-define(["jquery"],
-    function ($) {
+define(["jquery", "app/rspamd"],
+    function ($, rspamd) {
         "use strict";
         var ui = {};
 
@@ -10,12 +10,12 @@ define(["jquery"],
             ));
         }
 
-        function get_server(rspamd) {
+        function get_server() {
             var checked_server = rspamd.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
-        function checkMsg(rspamd, data) {
+        function checkMsg(data) {
             var selector = $("#selectorsSelArea").val();
             rspamd.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
                 data: data,
@@ -30,17 +30,17 @@ define(["jquery"],
                         rspamd.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
-                server: get_server(rspamd)
+                server: get_server()
             });
         }
 
-        function checkSelectors(rspamd) {
+        function checkSelectors() {
             function toggle_form_group_class(remove, add) {
                 $("#selectorsSelArea").removeClass("is-" + remove).addClass("is-" + add);
                 enable_disable_check_btn();
             }
             var selector = $("#selectorsSelArea").val();
-            if (selector.length) {
+            if (selector.length && !rspamd.read_only ) {
                 rspamd.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
                     success: function (json) {
@@ -50,7 +50,7 @@ define(["jquery"],
                             toggle_form_group_class("valid", "invalid");
                         }
                     },
-                    server: get_server(rspamd)
+                    server: get_server()
                 });
             } else {
                 $("#selectorsSelArea").removeClass("is-valid is-invalid");
@@ -58,7 +58,7 @@ define(["jquery"],
             }
         }
 
-        function buildLists(rspamd) {
+        function buildLists() {
             function build_table_from_json(json, table_id) {
                 Object.keys(json).forEach(function (key) {
                     var td = $("<td/>");
@@ -76,7 +76,7 @@ define(["jquery"],
                         var json = neighbours_status[0].data;
                         build_table_from_json(json, "#selectorsTable-" + list);
                     },
-                    server: get_server(rspamd)
+                    server: get_server()
                 });
             }
 
@@ -84,61 +84,62 @@ define(["jquery"],
             getList("transforms");
         }
 
-        ui.displayUI = function (rspamd) {
-            buildLists(rspamd);
-            checkSelectors(rspamd);
+        ui.displayUI = function () {
+            if (!rspamd.read_only &&
+                !$("#selectorsTable-extractors>tbody>tr").length &&
+                !$("#selectorsTable-transforms>tbody>tr").length) buildLists();
+            if (!$("#selectorsSelArea").is(".is-valid, .is-invalid")) checkSelectors();
         };
 
-        ui.setup = function (rspamd) {
-            function toggleSidebar(side) {
-                $("#sidebar-" + side).toggleClass("collapsed");
-                var contentClass = "col-lg-6";
-                var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
-                        $("#sidebar-right").hasClass("collapsed");
-                switch (openSidebarsCount) {
-                    case 1:
-                        contentClass = "col-lg-9";
-                        break;
-                    case 2:
-                        contentClass = "col-lg-12";
-                        break;
-                    default:
-                }
-                $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
-                    .addClass(contentClass);
+
+        function toggleSidebar(side) {
+            $("#sidebar-" + side).toggleClass("collapsed");
+            var contentClass = "col-lg-6";
+            var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
+                    $("#sidebar-right").hasClass("collapsed");
+            switch (openSidebarsCount) {
+                case 1:
+                    contentClass = "col-lg-9";
+                    break;
+                case 2:
+                    contentClass = "col-lg-12";
+                    break;
+                default:
             }
-            $("#sidebar-tab-left>a").click(function () {
-                toggleSidebar("left");
-                return false;
-            });
-            $("#sidebar-tab-right>a").click(function () {
-                toggleSidebar("right");
-                return false;
-            });
+            $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
+                .addClass(contentClass);
+        }
+        $("#sidebar-tab-left>a").click(function () {
+            toggleSidebar("left");
+            return false;
+        });
+        $("#sidebar-tab-right>a").click(function () {
+            toggleSidebar("right");
+            return false;
+        });
 
-            $("#selectorsMsgClean").on("click", function () {
-                $("#selectorsChkMsgBtn").attr("disabled", true);
-                $("#selectorsMsgArea").val("");
-                return false;
-            });
-            $("#selectorsClean").on("click", function () {
-                $("#selectorsSelArea").val("");
-                checkSelectors(rspamd);
-                return false;
-            });
-            $("#selectorsChkMsgBtn").on("click", function () {
-                $("#selectorsResArea").val("");
-                checkMsg(rspamd, $("#selectorsMsgArea").val());
-                return false;
-            });
+        $("#selectorsMsgClean").on("click", function () {
+            $("#selectorsChkMsgBtn").attr("disabled", true);
+            $("#selectorsMsgArea").val("");
+            return false;
+        });
+        $("#selectorsClean").on("click", function () {
+            $("#selectorsSelArea").val("");
+            checkSelectors();
+            return false;
+        });
+        $("#selectorsChkMsgBtn").on("click", function () {
+            $("#selectorsResArea").val("");
+            checkMsg($("#selectorsMsgArea").val());
+            return false;
+        });
 
-            $("#selectorsMsgArea").on("input", function () {
-                enable_disable_check_btn();
-            });
-            $("#selectorsSelArea").on("input", function () {
-                checkSelectors(rspamd);
-            });
-        };
+        $("#selectorsMsgArea").on("input", function () {
+            enable_disable_check_btn();
+        });
+        $("#selectorsSelArea").on("input", function () {
+            checkSelectors();
+        });
 
         return ui;
     });

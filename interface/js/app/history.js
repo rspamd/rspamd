@@ -22,15 +22,15 @@
  THE SOFTWARE.
  */
 
-/* global d3, FooTable */
+/* global FooTable */
 
-define(["jquery", "footable"],
-    function ($) {
+define(["jquery", "app/rspamd", "d3", "footable"],
+    function ($, rspamd, d3) {
         "use strict";
         var ui = {};
         var prevVersion = null;
 
-        function process_history_legacy(rspamd, data) {
+        function process_history_legacy(data) {
             var items = [];
 
             var compare = function (e1, e2) {
@@ -41,7 +41,7 @@ define(["jquery", "footable"],
 
             $.each(data, function (i, item) {
                 item.time = rspamd.unix_time_format(item.unix_time);
-                rspamd.preprocess_item(rspamd, item);
+                rspamd.preprocess_item(item);
                 item.symbols = Object.keys(item.symbols)
                     .map(function (key) {
                         return item.symbols[key];
@@ -292,7 +292,7 @@ define(["jquery", "footable"],
             legacy: columns_legacy
         };
 
-        function process_history_data(rspamd, data) {
+        function process_history_data(data) {
             var process_functions = {
                 2: rspamd.process_history_v2,
                 legacy: process_history_legacy
@@ -306,7 +306,7 @@ define(["jquery", "footable"],
                 }
             }
 
-            return pf(rspamd, data, "history");
+            return pf(data, "history");
         }
 
         function get_history_columns(data) {
@@ -322,7 +322,7 @@ define(["jquery", "footable"],
             return func();
         }
 
-        ui.getHistory = function (rspamd, tables) {
+        ui.getHistory = function () {
             rspamd.query("history", {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
@@ -355,18 +355,18 @@ define(["jquery", "footable"],
                             data = [].concat.apply([], neighbours_data);
                             $("#legacy-history-badge").show();
                         }
-                        var o = process_history_data(rspamd, data);
+                        var o = process_history_data(data);
                         var items = o.items;
                         rspamd.symbols.history = o.symbols;
 
-                        if (Object.prototype.hasOwnProperty.call(tables, "history") &&
+                        if (Object.prototype.hasOwnProperty.call(rspamd.tables, "history") &&
                             version === prevVersion) {
-                            tables.history.rows.load(items);
+                            rspamd.tables.history.rows.load(items);
                         } else {
                             rspamd.destroyTable("history");
                             // Is there a way to get an event when the table is destroyed?
                             setTimeout(function () {
-                                rspamd.initHistoryTable(rspamd, data, items, "history", get_history_columns(data), false);
+                                rspamd.initHistoryTable(data, items, "history", get_history_columns(data), false);
                             }, 200);
                         }
                         prevVersion = version;
@@ -379,38 +379,8 @@ define(["jquery", "footable"],
             });
         };
 
-        ui.setup = function (rspamd, tables) {
-            rspamd.set_page_size("history", $("#history_page_size").val());
-            rspamd.bindHistoryTableEventHandlers("history", 8);
-
-            $("#updateHistory").off("click");
-            $("#updateHistory").on("click", function (e) {
-                e.preventDefault();
-                ui.getHistory(rspamd, tables);
-            });
-
-            // @reset history log
-            $("#resetHistory").off("click");
-            $("#resetHistory").on("click", function (e) {
-                e.preventDefault();
-                if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
-                    return;
-                }
-                rspamd.destroyTable("history");
-                rspamd.destroyTable("errors");
-
-                rspamd.query("historyreset", {
-                    success: function () {
-                        ui.getHistory(rspamd, tables);
-                        ui.getErrors(rspamd, tables);
-                    },
-                    errorMessage: "Cannot reset history log"
-                });
-            });
-        };
-
-        function initErrorsTable(rspamd, tables, rows) {
-            tables.errors = FooTable.init("#errorsLog", {
+        function initErrorsTable(rows) {
+            rspamd.tables.errors = FooTable.init("#errorsLog", {
                 columns: [
                     {
                         sorted: true,
@@ -443,7 +413,7 @@ define(["jquery", "footable"],
             });
         }
 
-        ui.getErrors = function (rspamd, tables) {
+        ui.getErrors = function () {
             if (rspamd.read_only) return;
 
             rspamd.query("errors", {
@@ -464,10 +434,10 @@ define(["jquery", "footable"],
                             }
                         };
                     });
-                    if (Object.prototype.hasOwnProperty.call(tables, "errors")) {
-                        tables.errors.rows.load(rows);
+                    if (Object.prototype.hasOwnProperty.call(rspamd.tables, "errors")) {
+                        rspamd.tables.errors.rows.load(rows);
                     } else {
-                        initErrorsTable(rspamd, tables, rows);
+                        initErrorsTable(rows);
                     }
                 }
             });
@@ -475,9 +445,38 @@ define(["jquery", "footable"],
             $("#updateErrors").off("click");
             $("#updateErrors").on("click", function (e) {
                 e.preventDefault();
-                ui.getErrors(rspamd, tables);
+                ui.getErrors();
             });
         };
+
+
+        rspamd.set_page_size("history", $("#history_page_size").val());
+        rspamd.bindHistoryTableEventHandlers("history", 8);
+
+        $("#updateHistory").off("click");
+        $("#updateHistory").on("click", function (e) {
+            e.preventDefault();
+            ui.getHistory();
+        });
+
+        // @reset history log
+        $("#resetHistory").off("click");
+        $("#resetHistory").on("click", function (e) {
+            e.preventDefault();
+            if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
+                return;
+            }
+            rspamd.destroyTable("history");
+            rspamd.destroyTable("errors");
+
+            rspamd.query("historyreset", {
+                success: function () {
+                    ui.getHistory();
+                    ui.getErrors();
+                },
+                errorMessage: "Cannot reset history log"
+            });
+        });
 
         return ui;
     });

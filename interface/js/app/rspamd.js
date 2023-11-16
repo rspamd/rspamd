@@ -23,13 +23,11 @@
  THE SOFTWARE.
  */
 
-/* global jQuery, FooTable, Visibility */
+/* global jQuery, FooTable, require, Visibility */
 
-define(["jquery", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
-    "app/symbols", "app/history", "app/upload", "app/selectors"],
-// eslint-disable-next-line max-params
-function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
-    tab_symbols, tab_history, tab_upload, tab_selectors) {
+define(["jquery", "nprogress", "stickytabs", "visibility",
+    "bootstrap", "fontawesome"],
+function ($, NProgress) {
     "use strict";
     var ui = {
         chartLegend: [
@@ -62,7 +60,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     let pageSizeTimerId = null;
     let pageSizeInvocationCounter = 0;
     var locale = (localStorage.getItem("selected_locale") === "custom") ? localStorage.getItem("custom_locale") : null;
-    var selData = null; // Graph's dataset selector state
 
     NProgress.configure({
         minimum: 0.01,
@@ -109,6 +106,12 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         stopTimers();
         cleanCredentials();
         ui.connect();
+    }
+
+    // Get selectors' current state
+    function getSelector(id) {
+        var e = document.getElementById(id);
+        return e.options[e.selectedIndex].value;
     }
 
     function tabClick(id) {
@@ -164,19 +167,20 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
         switch (tab_id) {
             case "#status_nav":
-                (function () {
+                require(["app/stats"], (module) => {
                     var refreshInterval = $(".dropdown-menu a.active.preset").data("value");
                     setAutoRefresh(refreshInterval, "status",
-                        function () { return tab_stat.statWidgets(ui, graphs, checked_server); });
-                    if (id !== "#autoRefresh") tab_stat.statWidgets(ui, graphs, checked_server);
+                        function () { return module.statWidgets(graphs, checked_server); });
+                    if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
 
                     $(".preset").show();
                     $(".history").hide();
                     $(".dynamic").hide();
-                }());
+                });
                 break;
             case "#throughput_nav":
-                (function () {
+                require(["app/graph"], (module) => {
+                    const selData = getSelector("selData"); // Graph's dataset selector state
                     var step = {
                         day: 60000,
                         week: 300000
@@ -188,26 +192,34 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                         refreshInterval = null;
                     }
                     setAutoRefresh(refreshInterval, "throughput",
-                        function () { return tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData); });
-                    if (id !== "#autoRefresh") tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
+                        function () { return module.draw(graphs, neighbours, checked_server, selData); });
+                    if (id !== "#autoRefresh") module.draw(graphs, neighbours, checked_server, selData);
 
                     $(".preset").hide();
                     $(".history").hide();
                     $(".dynamic").show();
-                }());
+                });
                 break;
             case "#configuration_nav":
-                tab_config.getActions(ui, checked_server);
-                tab_config.getMaps(ui, checked_server);
+                require(["app/config"], (module) => {
+                    module.getActions(checked_server);
+                    module.getMaps(checked_server);
+                });
                 break;
             case "#symbols_nav":
-                tab_symbols.getSymbols(ui, tables, checked_server);
+                require(["app/symbols"], (module) => module.getSymbols(checked_server));
+                break;
+            case "#scan_nav":
+                require(["app/upload"]);
+                break;
+            case "#selectors_nav":
+                require(["app/selectors"], (module) => module.displayUI());
                 break;
             case "#history_nav":
-                (function () {
+                require(["app/history"], (module) => {
                     function getHistoryAndErrors() {
-                        tab_history.getHistory(ui, tables);
-                        tab_history.getErrors(ui, tables);
+                        module.getHistory();
+                        module.getErrors();
                     }
                     var refreshInterval = $(".dropdown-menu a.active.history").data("value");
                     setAutoRefresh(refreshInterval, "history",
@@ -217,7 +229,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                     $(".preset").hide();
                     $(".history").show();
                     $(".dynamic").hide();
-                }());
+                });
                 break;
             case "#disconnect":
                 disconnect();
@@ -235,12 +247,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
     function getPassword() {
         return sessionStorage.getItem("Password");
-    }
-
-    // Get selectors' current state
-    function getSelector(id) {
-        var e = document.getElementById(id);
-        return e.options[e.selectedIndex].value;
     }
 
     function get_compare_function(table) {
@@ -319,7 +325,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                         $('#selSrv [value="' + e.name + '"]').prop("disabled", true);
                     }
                 });
-                if (!ui.read_only) tab_selectors.displayUI(ui);
             },
             complete: function () {
                 ajaxSetup(localStorage.getItem("ajax_timeout"));
@@ -434,157 +439,6 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
     // Public functions
     ui.alertMessage = alertMessage;
-    ui.setup = function () {
-        (function initSettings() {
-            var selected_locale = null;
-            var custom_locale = null;
-            const localeTextbox = ".popover #settings-popover #locale";
-
-            function validateLocale(saveToLocalStorage) {
-                function toggle_form_group_class(remove, add) {
-                    $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
-                }
-
-                var now = new Date();
-
-                if (custom_locale.length) {
-                    try {
-                        now.toLocaleString(custom_locale);
-
-                        if (saveToLocalStorage) localStorage.setItem("custom_locale", custom_locale);
-                        locale = (selected_locale === "custom") ? custom_locale : null;
-                        toggle_form_group_class("invalid", "valid");
-                    } catch (err) {
-                        locale = null;
-                        toggle_form_group_class("valid", "invalid");
-                    }
-                } else {
-                    if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
-                    locale = null;
-                    $(localeTextbox).removeClass("is-valid is-invalid");
-                }
-
-                // Display date example
-                $(".popover #settings-popover #date-example").text(
-                    (locale)
-                        ? now.toLocaleString(locale)
-                        : now.toLocaleString()
-                );
-            }
-
-            $("#settings").popover({
-                container: "body",
-                placement: "bottom",
-                html: true,
-                sanitize: false,
-                content: function () {
-                    // Using .clone() has the side-effect of producing elements with duplicate id attributes.
-                    return $("#settings-popover").clone();
-                }
-            // Restore the tooltip of the element that the popover is attached to.
-            }).attr("title", function () {
-                return $(this).attr("data-original-title");
-            });
-            $("#settings").on("click", function (e) {
-                e.preventDefault();
-            });
-            $("#settings").on("inserted.bs.popover", function () {
-                selected_locale = localStorage.getItem("selected_locale") || "browser";
-                custom_locale = localStorage.getItem("custom_locale") || "";
-                validateLocale();
-
-                $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
-                $(localeTextbox).val(custom_locale);
-
-                ajaxSetup(localStorage.getItem("ajax_timeout"), true);
-            });
-            $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
-                selected_locale = this.value;
-                localStorage.setItem("selected_locale", selected_locale);
-                validateLocale();
-            });
-            $(document).on("input", localeTextbox, function () {
-                custom_locale = $(localeTextbox).val();
-                validateLocale(true);
-            });
-            $(document).on("input", ajaxTimeoutBox, function () {
-                ajaxSetup($(ajaxTimeoutBox).val(), false, true);
-            });
-            $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
-                ajaxSetup(null, true, true);
-            });
-
-            // Dismiss Bootstrap popover by clicking outside
-            $("body").on("click", function (e) {
-                $(".popover").each(function () {
-                    if (
-                        // Popover's descendant
-                        $(this).has(e.target).length ||
-                        // Button (or icon within a button) that triggers the popover.
-                        $(e.target).closest("button").attr("aria-describedby") === this.id
-                    ) return;
-                    $("#settings").popover("hide");
-                });
-            });
-        }());
-
-        $("#selData").change(function () {
-            selData = this.value;
-            tabClick("#throughput_nav");
-        });
-
-        $(document).ajaxStart(function () {
-            $("#refresh > svg").addClass("fa-spin");
-        });
-        $(document).ajaxComplete(function () {
-            setTimeout(function () {
-                $("#refresh > svg").removeClass("fa-spin");
-            }, 1000);
-        });
-
-        $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
-            tabClick("#" + $(this).attr("id"));
-        });
-        $("#refresh, #disconnect").on("click", function (e) {
-            e.preventDefault();
-            tabClick("#" + $(this).attr("id"));
-        });
-        $(".dropdown-menu a").click(function (e) {
-            e.preventDefault();
-            var classList = $(this).attr("class");
-            var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
-            $(".dropdown-menu a.active." + menuClass).removeClass("active");
-            $(this).addClass("active");
-            tabClick("#autoRefresh");
-        });
-
-        $("#selSrv").change(function () {
-            checked_server = this.value;
-            $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
-            if (checked_server === "All SERVERS") {
-                $("#learnServers").show();
-            } else {
-                $("#learnServers").hide();
-            }
-            tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
-        });
-
-        // Radio buttons
-        $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
-            if (!this.disabled) {
-                checked_server = this.value;
-                tabClick("#status_nav");
-            }
-        });
-        tab_config.setup(ui);
-        tab_history.setup(ui, tables);
-        tab_selectors.setup(ui);
-        tab_symbols.setup(ui, tables);
-        tab_upload.setup(ui, tables);
-        selData = tab_graph.setup(ui);
-
-        $("#loading").addClass("d-none");
-    };
 
     ui.connect = function () {
         // Prevent locking out of the WebUI if timeout is too low.
@@ -749,6 +603,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
 
     // Scan and History shared functions
 
+    ui.tables = tables;
     ui.unix_time_format = unix_time_format;
     ui.set_page_size = set_page_size;
 
@@ -782,7 +637,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     };
 
 
-    ui.initHistoryTable = function (rspamd, data, items, table, columns, expandFirst) {
+    ui.initHistoryTable = function (data, items, table, columns, expandFirst) {
         /* eslint-disable no-underscore-dangle */
         FooTable.Cell.extend("collapse", function () {
             // call the original method
@@ -911,7 +766,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         });
     };
 
-    ui.preprocess_item = function (rspamd, item) {
+    ui.preprocess_item = function (item) {
         function escape_HTML_array(arr) {
             arr.forEach(function (d, i) { arr[i] = ui.escapeHTML(d); });
         }
@@ -968,7 +823,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         };
     };
 
-    ui.process_history_v2 = function (rspamd, data, table) {
+    ui.process_history_v2 = function (data, table) {
         // Display no more than rcpt_lim recipients
         var rcpt_lim = 3;
         var items = [];
@@ -1014,7 +869,7 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
                     return null;
                 }
 
-                rspamd.preprocess_item(rspamd, item);
+                ui.preprocess_item(item);
                 Object.values(item.symbols).forEach(function (sym) {
                     sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
 
@@ -1078,6 +933,150 @@ function ($, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
         }
         return null;
     };
+
+
+    (function initSettings() {
+        var selected_locale = null;
+        var custom_locale = null;
+        const localeTextbox = ".popover #settings-popover #locale";
+
+        function validateLocale(saveToLocalStorage) {
+            function toggle_form_group_class(remove, add) {
+                $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
+            }
+
+            var now = new Date();
+
+            if (custom_locale.length) {
+                try {
+                    now.toLocaleString(custom_locale);
+
+                    if (saveToLocalStorage) localStorage.setItem("custom_locale", custom_locale);
+                    locale = (selected_locale === "custom") ? custom_locale : null;
+                    toggle_form_group_class("invalid", "valid");
+                } catch (err) {
+                    locale = null;
+                    toggle_form_group_class("valid", "invalid");
+                }
+            } else {
+                if (saveToLocalStorage) localStorage.setItem("custom_locale", null);
+                locale = null;
+                $(localeTextbox).removeClass("is-valid is-invalid");
+            }
+
+            // Display date example
+            $(".popover #settings-popover #date-example").text(
+                (locale)
+                    ? now.toLocaleString(locale)
+                    : now.toLocaleString()
+            );
+        }
+
+        $("#settings").popover({
+            container: "body",
+            placement: "bottom",
+            html: true,
+            sanitize: false,
+            content: function () {
+                // Using .clone() has the side-effect of producing elements with duplicate id attributes.
+                return $("#settings-popover").clone();
+            }
+        // Restore the tooltip of the element that the popover is attached to.
+        }).attr("title", function () {
+            return $(this).attr("data-original-title");
+        });
+        $("#settings").on("click", function (e) {
+            e.preventDefault();
+        });
+        $("#settings").on("inserted.bs.popover", function () {
+            selected_locale = localStorage.getItem("selected_locale") || "browser";
+            custom_locale = localStorage.getItem("custom_locale") || "";
+            validateLocale();
+
+            $('.popover #settings-popover input:radio[name="locale"]').val([selected_locale]);
+            $(localeTextbox).val(custom_locale);
+
+            ajaxSetup(localStorage.getItem("ajax_timeout"), true);
+        });
+        $(document).on("change", '.popover #settings-popover input:radio[name="locale"]', function () {
+            selected_locale = this.value;
+            localStorage.setItem("selected_locale", selected_locale);
+            validateLocale();
+        });
+        $(document).on("input", localeTextbox, function () {
+            custom_locale = $(localeTextbox).val();
+            validateLocale(true);
+        });
+        $(document).on("input", ajaxTimeoutBox, function () {
+            ajaxSetup($(ajaxTimeoutBox).val(), false, true);
+        });
+        $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
+            ajaxSetup(null, true, true);
+        });
+
+        // Dismiss Bootstrap popover by clicking outside
+        $("body").on("click", function (e) {
+            $(".popover").each(function () {
+                if (
+                    // Popover's descendant
+                    $(this).has(e.target).length ||
+                    // Button (or icon within a button) that triggers the popover.
+                    $(e.target).closest("button").attr("aria-describedby") === this.id
+                ) return;
+                $("#settings").popover("hide");
+            });
+        });
+    }());
+
+    $("#selData").change(function () {
+        tabClick("#throughput_nav");
+    });
+
+    $(document).ajaxStart(function () {
+        $("#refresh > svg").addClass("fa-spin");
+    });
+    $(document).ajaxComplete(function () {
+        setTimeout(function () {
+            $("#refresh > svg").removeClass("fa-spin");
+        }, 1000);
+    });
+
+    $('a[data-bs-toggle="tab"]').on("shown.bs.tab", function () {
+        tabClick("#" + $(this).attr("id"));
+    });
+    $("#refresh, #disconnect").on("click", function (e) {
+        e.preventDefault();
+        tabClick("#" + $(this).attr("id"));
+    });
+    $(".dropdown-menu a").click(function (e) {
+        e.preventDefault();
+        var classList = $(this).attr("class");
+        var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
+        $(".dropdown-menu a.active." + menuClass).removeClass("active");
+        $(this).addClass("active");
+        tabClick("#autoRefresh");
+    });
+
+    $("#selSrv").change(function () {
+        checked_server = this.value;
+        $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
+        if (checked_server === "All SERVERS") {
+            $("#learnServers").show();
+        } else {
+            $("#learnServers").hide();
+        }
+        tabClick("#" + $("#tablist > .nav-item > .nav-link.active").attr("id"));
+    });
+
+    // Radio buttons
+    $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
+        if (!this.disabled) {
+            checked_server = this.value;
+            tabClick("#status_nav");
+        }
+    });
+
+    $("#loading").addClass("d-none");
 
     return ui;
 });

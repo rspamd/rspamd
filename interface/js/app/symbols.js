@@ -24,12 +24,12 @@
 
 /* global FooTable */
 
-define(["jquery", "footable"],
-    function ($) {
+define(["jquery", "app/rspamd", "footable"],
+    function ($, rspamd) {
         "use strict";
         var ui = {};
 
-        function saveSymbols(rspamd, action, id, server) {
+        function saveSymbols(action, id, server) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
             var url = action;
             var values = [];
@@ -57,7 +57,7 @@ define(["jquery", "footable"],
             var digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
             return (digits === 0 || digits > 4) ? 0.1 : 1.0 / Math.pow(10, digits);
         }
-        function process_symbols_data(rspamd, data) {
+        function process_symbols_data(data) {
             var items = [];
             var lookup = {};
             var freqs = [];
@@ -138,11 +138,11 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        ui.getSymbols = function (rspamd, tables, checked_server) {
+        ui.getSymbols = function (checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
                     var data = json[0].data;
-                    var items = process_symbols_data(rspamd, data);
+                    var items = process_symbols_data(data);
 
                     /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
@@ -195,7 +195,7 @@ define(["jquery", "footable"],
                     });
                     /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
-                    tables.symbols = FooTable.init("#symbolsTable", {
+                    rspamd.tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
                             {sorted:true, direction:"ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
                             {name:"symbol", title:"Symbol", style:{"font-size":"11px"}},
@@ -238,23 +238,22 @@ define(["jquery", "footable"],
                 .on("click", ":button", function () {
                     var value = $(this).data("save");
                     if (!value) return;
-                    saveSymbols(rspamd, "./savesymbols", "symbolsTable", value);
+                    saveSymbols("./savesymbols", "symbolsTable", value);
                 });
         };
 
-        ui.setup = function (rspamd, tables) {
-            $("#updateSymbols").on("click", function (e) {
-                e.preventDefault();
-                var checked_server = rspamd.getSelector("selSrv");
-                rspamd.query("symbols", {
-                    success: function (data) {
-                        var items = process_symbols_data(rspamd, data[0].data)[0];
-                        tables.symbols.rows.load(items);
-                    },
-                    server: (checked_server === "All SERVERS") ? "local" : checked_server
-                });
+
+        $("#updateSymbols").on("click", function (e) {
+            e.preventDefault();
+            var checked_server = rspamd.getSelector("selSrv");
+            rspamd.query("symbols", {
+                success: function (data) {
+                    var items = process_symbols_data(data[0].data)[0];
+                    rspamd.tables.symbols.rows.load(items);
+                },
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
-        };
+        });
 
         return ui;
     });
