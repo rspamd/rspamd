@@ -22,10 +22,8 @@
  THE SOFTWARE.
  */
 
-/* global d3 */
-
-define(["jquery", "d3pie"],
-    function ($, D3Pie) {
+define(["jquery", "app/rspamd", "d3pie", "d3"],
+    function ($, rspamd, D3Pie, d3) {
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
@@ -222,7 +220,7 @@ define(["jquery", "d3pie"],
             }
         }
 
-        function getChart(rspamd, graphs, checked_server) {
+        function getChart(graphs, checked_server) {
             if (!graphs.chart) {
                 graphs.chart = new D3Pie("chart", {
                     labels: {
@@ -264,7 +262,7 @@ define(["jquery", "d3pie"],
 
         // Public API
         var ui = {
-            statWidgets: function (rspamd, graphs, checked_server) {
+            statWidgets: function (graphs, checked_server) {
                 rspamd.query("stat", {
                     success: function (neighbours_status) {
                         var neighbours_sum = {
@@ -354,7 +352,7 @@ define(["jquery", "d3pie"],
                                 to_Credentials["All SERVERS"].data = neighbours_sum;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                                 displayStatWidgets(checked_server);
-                                getChart(rspamd, graphs, checked_server);
+                                getChart(graphs, checked_server);
                             });
                         }, promises.length ? 100 : 0);
                     },

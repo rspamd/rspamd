@@ -23,10 +23,10 @@
  THE SOFTWARE.
  */
 
-/* global d3, FooTable */
+/* global FooTable */
 
-define(["jquery", "d3evolution", "d3pie", "footable"],
-    function ($, D3Evolution, D3Pie) {
+define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
+    function ($, rspamd, D3Evolution, D3Pie, d3) {
         "use strict";
 
         var rrd_pie_config = {
@@ -59,7 +59,7 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
         var ui = {};
         var prevUnit = "msg/s";
 
-        ui.draw = function (rspamd, graphs, tables, neighbours, checked_server, type) {
+        ui.draw = function (graphs, neighbours, checked_server, type) {
             var graph_options = {
                 title: "Rspamd throughput",
                 width: 1060,
@@ -126,7 +126,7 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
             }
 
             function initSummaryTable(rows, unit) {
-                tables.rrd_summary = FooTable.init("#rrd-table", {
+                rspamd.tables.rrd_summary = FooTable.init("#rrd-table", {
                     sorting: {
                         enabled: true
                     },
@@ -152,8 +152,8 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
             }
 
             function drawRrdTable(rows, unit) {
-                if (Object.prototype.hasOwnProperty.call(tables, "rrd_summary")) {
-                    $.each(tables.rrd_summary.rows.all, function (i, row) {
+                if (Object.prototype.hasOwnProperty.call(rspamd.tables, "rrd_summary")) {
+                    $.each(rspamd.tables.rrd_summary.rows.all, function (i, row) {
                         row.val(rows[i], false, true);
                     });
                 } else {
@@ -243,7 +243,7 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
             });
         };
 
-        ui.setup = function (rspamd) {
+        (() => {
             // Handling mouse events on overlapping elements
             $("#rrd-pie").mouseover(function () {
                 $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
@@ -253,9 +253,7 @@ define(["jquery", "d3evolution", "d3pie", "footable"],
                 $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
                 $("#rrd-table_toggle").css("z-index", "0");
             });
-
-            return rspamd.getSelector("selData");
-        };
+        })();
 
         return ui;
     });

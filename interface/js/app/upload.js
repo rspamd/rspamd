@@ -22,8 +22,10 @@
  THE SOFTWARE.
  */
 
-define(["jquery"],
-    function ($) {
+/* global require */
+
+define(["jquery", "app/rspamd"],
+    function ($, rspamd) {
         "use strict";
         var ui = {};
 
@@ -32,7 +34,7 @@ define(["jquery"],
         }
 
         // @upload text
-        function uploadText(rspamd, data, source, headers) {
+        function uploadText(data, source, headers) {
             var url = null;
             if (source === "spam") {
                 url = "learnspam";
@@ -139,13 +141,13 @@ define(["jquery"],
             }];
         }
 
-        function get_server(rspamd) {
+        function get_server() {
             var checked_server = rspamd.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
         // @upload text
-        function scanText(rspamd, tables, data, headers) {
+        function scanText(data, headers) {
             rspamd.query("checkv2", {
                 data: data,
                 params: {
@@ -169,20 +171,22 @@ define(["jquery"],
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
 
                         var rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
-                        var o = rspamd.process_history_v2(rspamd, {rows:[json]}, "scan");
+                        var o = rspamd.process_history_v2({rows:[json]}, "scan");
                         var items = o.items;
                         rspamd.symbols.scan.push(o.symbols[0]);
 
-                        if (Object.prototype.hasOwnProperty.call(tables, "scan")) {
-                            tables.scan.rows.load(items, true);
+                        if (Object.prototype.hasOwnProperty.call(rspamd.tables, "scan")) {
+                            rspamd.tables.scan.rows.load(items, true);
                             scrollTop(rows_total);
                         } else {
                             rspamd.destroyTable("scan");
-                            // Is there a way to get an event when the table is destroyed?
-                            setTimeout(function () {
-                                rspamd.initHistoryTable(rspamd, data, items, "scan", columns_v2(), true);
-                                scrollTop(rows_total);
-                            }, 200);
+                            require(["footable"], function () {
+                                // Is there a way to get an event when the table is destroyed?
+                                setTimeout(function () {
+                                    rspamd.initHistoryTable(data, items, "scan", columns_v2(), true);
+                                    scrollTop(rows_total);
+                                }, 200);
+                            });
                         }
                     } else {
                         rspamd.alertMessage("alert-error", "Cannot scan data");
@@ -200,11 +204,11 @@ define(["jquery"],
                         rspamd.alertMessage("alert-error", "Cannot tokenize message: no text data");
                     }
                 },
-                server: get_server(rspamd)
+                server: get_server()
             });
         }
 
-        function getFuzzyHashes(rspamd, data) {
+        function getFuzzyHashes(data) {
             function fillHashTable(rules) {
                 $("#hashTable tbody").empty();
                 for (const [rule, hashes] of Object.entries(rules)) {
@@ -232,11 +236,11 @@ define(["jquery"],
                         rspamd.alertMessage("alert-error", "Unexpected error processing message");
                     }
                 },
-                server: get_server(rspamd)
+                server: get_server()
             });
         }
 
-        ui.setup = function (rspamd, tables) {
+        (() => {
             rspamd.set_page_size("scan", $("#scan_page_size").val());
             rspamd.bindHistoryTableEventHandlers("scan", 3);
 
@@ -284,9 +288,9 @@ define(["jquery"],
                             return o;
                         }, {});
                         if ($("#scan-opt-pass-all").prop("checked")) headers.Pass = "all";
-                        scanText(rspamd, tables, data, headers);
+                        scanText(data, headers);
                     } else if (source === "compute-fuzzy") {
-                        getFuzzyHashes(rspamd, data);
+                        getFuzzyHashes(data);
                     } else {
                         if (source === "fuzzy") {
                             headers = {
@@ -294,14 +298,14 @@ define(["jquery"],
                                 weight: $("#fuzzyWeightText").val()
                             };
                         }
-                        uploadText(rspamd, data, source, headers);
+                        uploadText(data, source, headers);
                     }
                 } else {
                     rspamd.alertMessage("alert-error", "Message source field cannot be blank");
                 }
                 return false;
             });
-        };
+        })();
 
         return ui;
     });

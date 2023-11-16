@@ -22,12 +22,14 @@
  THE SOFTWARE.
  */
 
-define(["jquery", "codejar", "linenumbers", "prism"],
-    function ($, CodeJar, withLineNumbers, Prism) {
+/* global require */
+
+define(["jquery", "app/rspamd"],
+    function ($, rspamd) {
         "use strict";
         var ui = {};
 
-        ui.getActions = function getActions(rspamd, checked_server) {
+        ui.getActions = function getActions(checked_server) {
             rspamd.query("actions", {
                 success: function (data) {
                     $("#actionsFormField").empty();
@@ -63,7 +65,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             });
         };
 
-        ui.saveActions = function (rspamd, server) {
+        ui.saveActions = function (server) {
             function descending(arr) {
                 var desc = true;
                 var filtered = arr.filter(function (el) {
@@ -113,7 +115,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             }
         };
 
-        ui.getMaps = function (rspamd, checked_server) {
+        ui.getMaps = function (checked_server) {
             var $listmaps = $("#listMaps");
             $listmaps.closest(".card").hide();
             rspamd.query("maps", {
@@ -142,7 +144,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             });
         };
 
-        ui.setup = function (rspamd) {
+        (() => {
             var jar = {};
             const editor = {
                 advanced: {
@@ -175,11 +177,13 @@ define(["jquery", "codejar", "linenumbers", "prism"],
                             "</" + editor[mode].elt + ">").appendTo("#modalBody");
 
                         if (editor[mode].codejar) {
-                            jar = new CodeJar(
-                                document.querySelector("#editor"),
-                                withLineNumbers((el) => Prism.highlightElement(el))
-                            );
-                            jar.updateCode(data[0].data);
+                            require(["codejar", "linenumbers", "prism"], function (CodeJar, withLineNumbers, Prism) {
+                                jar = new CodeJar(
+                                    document.querySelector("#editor"),
+                                    withLineNumbers((el) => Prism.highlightElement(el))
+                                );
+                                jar.updateCode(data[0].data);
+                            });
                         } else {
                             document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
                         }
@@ -212,10 +216,10 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             });
 
             $("#saveActionsBtn").on("click", function () {
-                ui.saveActions(rspamd);
+                ui.saveActions();
             });
             $("#saveActionsClusterBtn").on("click", function () {
-                ui.saveActions(rspamd, "All SERVERS");
+                ui.saveActions("All SERVERS");
             });
 
             function saveMap(server) {
@@ -242,7 +246,7 @@ define(["jquery", "codejar", "linenumbers", "prism"],
             $("#modalSaveAll").on("click", function () {
                 saveMap("All SERVERS");
             });
-        };
+        })();
 
         return ui;
     });
