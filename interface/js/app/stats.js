@@ -29,13 +29,13 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
         function msToTime(seconds) {
             if (!Number.isFinite(seconds)) return "???";
             /* eslint-disable no-bitwise */
-            var years = seconds / 31536000 >> 0; // 3600*24*365
-            var months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
-            var days = seconds % 31536000 % 2628000 / 86400 >> 0; // 24*3600
-            var hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
-            var minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
+            const years = seconds / 31536000 >> 0; // 3600*24*365
+            const months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
+            const days = seconds % 31536000 % 2628000 / 86400 >> 0; // 24*3600
+            const hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
+            const minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             /* eslint-enable no-bitwise */
-            var out = null;
+            let out = null;
             if (years > 0) {
                 if (months > 0) {
                     out = years + "yr " + months + "mth";
@@ -55,20 +55,20 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
         }
 
         function displayStatWidgets(checked_server) {
-            var servers = JSON.parse(sessionStorage.getItem("Credentials"));
-            var data = {};
+            const servers = JSON.parse(sessionStorage.getItem("Credentials"));
+            let data = {};
             if (servers && servers[checked_server]) {
                 data = servers[checked_server].data;
             }
 
-            var stat_w = [];
+            const stat_w = [];
             $("#statWidgets").empty().hide();
             $.each(data, function (i, item) {
-                var widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
+                const widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
                 function widget(k, v, cls) {
-                    var c = (typeof cls === "undefined") ? "" : cls;
-                    var titleAtt = d3.format(",")(v) + " " + k;
+                    const c = (typeof cls === "undefined") ? "" : cls;
+                    const titleAtt = d3.format(",")(v) + " " + k;
                     return '<div class="card stat-box d-inline-block text-center shadow-sm me-3 px-3">' +
                       '<div class="widget overflow-hidden p-2' + c + '" title="' + titleAtt +
                       '"><strong class="d-block mt-2 mb-1 fw-bold">' +
@@ -77,8 +77,8 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
                 if (i === "auth" || i === "error") return; // Skip to the next iteration
                 if (i === "uptime" || i === "version") {
-                    var cls = "border-end ";
-                    var val = item;
+                    let cls = "border-end ";
+                    let val = item;
                     if (i === "uptime") {
                         cls = "";
                         val = msToTime(item);
@@ -106,11 +106,11 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
-                var row_class = "danger";
-                var glyph_status = "fas fa-times";
-                var version = "???";
-                var uptime = "???";
-                var short_id = "???";
+                let row_class = "danger";
+                let glyph_status = "fas fa-times";
+                let version = "???";
+                let uptime = "???";
+                let short_id = "???";
                 let scan_times = {
                     data: "???",
                     title: ""
@@ -176,7 +176,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
             function addStatfiles(server, statfiles) {
                 $.each(statfiles, function (i, statfile) {
-                    var cls = "";
+                    let cls = "";
                     switch (statfile.symbol) {
                         case "BAYES_SPAM":
                             cls = "symbol-positive";
@@ -196,7 +196,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
             }
 
             function addFuzzyStorage(server, storages) {
-                var i = 0;
+                let i = 0;
                 $.each(storages, function (storage, hashes) {
                     $("#fuzzyTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
@@ -242,11 +242,11 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                 });
             }
 
-            var data = [];
-            var creds = JSON.parse(sessionStorage.getItem("Credentials"));
+            const data = [];
+            const creds = JSON.parse(sessionStorage.getItem("Credentials"));
             // Controller doesn't return the 'actions' object until at least one message is scanned
             if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
-                var actions = creds[checked_server].data.actions;
+                const actions = creds[checked_server].data.actions;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
                     .forEach(function (action) {
@@ -261,11 +261,11 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
         }
 
         // Public API
-        var ui = {
+        const ui = {
             statWidgets: function (graphs, checked_server) {
                 rspamd.query("stat", {
                     success: function (neighbours_status) {
-                        var neighbours_sum = {
+                        const neighbours_sum = {
                             version: neighbours_status[0].data.version,
                             uptime: 0,
                             scanned: 0,
@@ -279,9 +279,9 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                                 "soft reject": 0,
                             }
                         };
-                        var status_count = 0;
-                        var promises = [];
-                        var to_Credentials = {
+                        let status_count = 0;
+                        const promises = [];
+                        const to_Credentials = {
                             "All SERVERS": {
                                 name: "All SERVERS",
                                 url: "",
@@ -292,10 +292,10 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                         };
 
                         function process_node_stat(e) {
-                            var data = neighbours_status[e].data;
+                            const data = neighbours_status[e].data;
                             // Controller doesn't return the 'actions' object until at least one message is scanned
                             if (data.scanned) {
-                                for (var action in neighbours_sum.actions) {
+                                for (const action in neighbours_sum.actions) {
                                     if ({}.hasOwnProperty.call(neighbours_sum.actions, action)) {
                                         neighbours_sum.actions[action] += data.actions[action];
                                     }
@@ -309,7 +309,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
                         // Get config_id, version and uptime using /auth query for Rspamd 2.5 and earlier
                         function get_legacy_stat(e) {
-                            var alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
+                            const alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
                             promises.push($.ajax({
                                 url: neighbours_status[e].url + "auth",
                                 headers: {Password:rspamd.getPassword()},
@@ -331,7 +331,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                             }));
                         }
 
-                        for (var e in neighbours_status) {
+                        for (const e in neighbours_status) {
                             if ({}.hasOwnProperty.call(neighbours_status, e)) {
                                 to_Credentials[neighbours_status[e].name] = neighbours_status[e];
                                 if (neighbours_status[e].status === true) {

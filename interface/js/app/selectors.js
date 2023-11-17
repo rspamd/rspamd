@@ -1,7 +1,7 @@
 define(["jquery", "app/rspamd"],
     function ($, rspamd) {
         "use strict";
-        var ui = {};
+        const ui = {};
 
         function enable_disable_check_btn() {
             $("#selectorsChkMsgBtn").prop("disabled", (
@@ -11,17 +11,17 @@ define(["jquery", "app/rspamd"],
         }
 
         function get_server() {
-            var checked_server = rspamd.getSelector("selSrv");
+            const checked_server = rspamd.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
         function checkMsg(data) {
-            var selector = $("#selectorsSelArea").val();
+            const selector = $("#selectorsSelArea").val();
             rspamd.query("plugins/selectors/check_message?selector=" + encodeURIComponent(selector), {
                 data: data,
                 method: "POST",
                 success: function (neighbours_status) {
-                    var json = neighbours_status[0].data;
+                    const json = neighbours_status[0].data;
                     if (json.success) {
                         rspamd.alertMessage("alert-success", "Message successfully processed");
                         $("#selectorsResArea")
@@ -39,7 +39,7 @@ define(["jquery", "app/rspamd"],
                 $("#selectorsSelArea").removeClass("is-" + remove).addClass("is-" + add);
                 enable_disable_check_btn();
             }
-            var selector = $("#selectorsSelArea").val();
+            const selector = $("#selectorsSelArea").val();
             if (selector.length && !rspamd.read_only ) {
                 rspamd.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
@@ -61,8 +61,8 @@ define(["jquery", "app/rspamd"],
         function buildLists() {
             function build_table_from_json(json, table_id) {
                 Object.keys(json).forEach(function (key) {
-                    var td = $("<td/>");
-                    var tr = $("<tr/>")
+                    const td = $("<td/>");
+                    const tr = $("<tr/>")
                         .append(td.clone().html("<code>" + key + "</code>"))
                         .append(td.clone().html(json[key].description));
                     $(table_id + " tbody").append(tr);
@@ -73,7 +73,7 @@ define(["jquery", "app/rspamd"],
                 rspamd.query("plugins/selectors/list_" + list, {
                     method: "GET",
                     success: function (neighbours_status) {
-                        var json = neighbours_status[0].data;
+                        const json = neighbours_status[0].data;
                         build_table_from_json(json, "#selectorsTable-" + list);
                     },
                     server: get_server()
@@ -94,8 +94,8 @@ define(["jquery", "app/rspamd"],
 
         function toggleSidebar(side) {
             $("#sidebar-" + side).toggleClass("collapsed");
-            var contentClass = "col-lg-6";
-            var openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
+            let contentClass = "col-lg-6";
+            const openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
                     $("#sidebar-right").hasClass("collapsed");
             switch (openSidebarsCount) {
                 case 1:

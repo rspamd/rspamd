@@ -27,13 +27,13 @@
 define(["jquery", "app/rspamd", "d3", "footable"],
     function ($, rspamd, d3) {
         "use strict";
-        var ui = {};
-        var prevVersion = null;
+        const ui = {};
+        let prevVersion = null;
 
         function process_history_legacy(data) {
-            var items = [];
+            const items = [];
 
-            var compare = function (e1, e2) {
+            const compare = function (e1, e2) {
                 return e1.name.localeCompare(e2.name);
             };
 
@@ -287,20 +287,20 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             }];
         }
 
-        var columns = {
+        const columns = {
             2: columns_v2,
             legacy: columns_legacy
         };
 
         function process_history_data(data) {
-            var process_functions = {
+            const process_functions = {
                 2: rspamd.process_history_v2,
                 legacy: process_history_legacy
             };
-            var pf = process_functions.legacy;
+            let pf = process_functions.legacy;
 
             if (data.version) {
-                var strkey = data.version.toString();
+                const strkey = data.version.toString();
                 if (process_functions[strkey]) {
                     pf = process_functions[strkey];
                 }
@@ -310,10 +310,10 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         }
 
         function get_history_columns(data) {
-            var func = columns.legacy;
+            let func = columns.legacy;
 
             if (data.version) {
-                var strkey = data.version.toString();
+                const strkey = data.version.toString();
                 if (columns[strkey]) {
                     func = columns[strkey];
                 }
@@ -326,7 +326,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             rspamd.query("history", {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
-                        var dv = neighbours_data.some(function (e) {
+                        const dv = neighbours_data.some(function (e) {
                             return e.version !== neighbours_data[0].version;
                         });
                         if (dv) {
@@ -337,12 +337,12 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         return false;
                     }
 
-                    var neighbours_data = req_data
+                    const neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d) { return d.data; });
                     if (neighbours_data.length && !differentVersions(neighbours_data)) {
-                        var data = {};
-                        var version = neighbours_data[0].version;
+                        let data = {};
+                        const version = neighbours_data[0].version;
                         if (version) {
                             data.rows = [].concat.apply([], neighbours_data
                                 .map(function (e) {
@@ -355,8 +355,8 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                             data = [].concat.apply([], neighbours_data);
                             $("#legacy-history-badge").show();
                         }
-                        var o = process_history_data(data);
-                        var items = o.items;
+                        const o = process_history_data(data);
+                        const items = o.items;
                         rspamd.symbols.history = o.symbols;
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "history") &&
@@ -418,14 +418,14 @@ define(["jquery", "app/rspamd", "d3", "footable"],
 
             rspamd.query("errors", {
                 success: function (data) {
-                    var neighbours_data = data
+                    const neighbours_data = data
                         .filter(function (d) {
                             return d.status;
                         }) // filter out unavailable neighbours
                         .map(function (d) {
                             return d.data;
                         });
-                    var rows = [].concat.apply([], neighbours_data);
+                    const rows = [].concat.apply([], neighbours_data);
                     $.each(rows, function (i, item) {
                         item.ts = {
                             value: rspamd.unix_time_format(item.ts),

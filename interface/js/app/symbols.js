@@ -27,12 +27,12 @@
 define(["jquery", "app/rspamd", "footable"],
     function ($, rspamd) {
         "use strict";
-        var ui = {};
+        const ui = {};
 
         function saveSymbols(action, id, server) {
-            var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
-            var url = action;
-            var values = [];
+            const inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
+            const url = action;
+            const values = [];
             $(inputs).each(function () {
                 values.push({
                     name: $(this).attr("id").substring(5),
@@ -54,20 +54,20 @@ define(["jquery", "app/rspamd", "footable"],
             });
         }
         function decimalStep(number) {
-            var digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
+            const digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
             return (digits === 0 || digits > 4) ? 0.1 : 1.0 / Math.pow(10, digits);
         }
         function process_symbols_data(data) {
-            var items = [];
-            var lookup = {};
-            var freqs = [];
-            var distinct_groups = [];
-            var selected_server = rspamd.getSelector("selSrv");
+            const items = [];
+            const lookup = {};
+            const freqs = [];
+            const distinct_groups = [];
+            const selected_server = rspamd.getSelector("selSrv");
 
             data.forEach(function (group) {
                 group.rules.forEach(function (item) {
-                    var max = 20;
-                    var min = -20;
+                    let max = 20;
+                    let min = -20;
                     if (item.weight > max) {
                         max = item.weight * 2;
                     }
@@ -75,7 +75,7 @@ define(["jquery", "app/rspamd", "footable"],
                     if (item.weight < min) {
                         min = item.weight * 2;
                     }
-                    var label_class = "";
+                    let label_class = "";
                     if (item.weight < 0) {
                         label_class = "scorebar-ham";
                     } else if (item.weight > 0) {
@@ -112,13 +112,13 @@ define(["jquery", "app/rspamd", "footable"],
             });
 
             // For better mean calculations
-            var avg_freq = freqs.sort(function (a, b) {
+            const avg_freq = freqs.sort(function (a, b) {
                 return Number(a) < Number(b);
             }).reduce(function (f1, acc) {
                 return f1 + acc;
             }) / (freqs.length !== 0 ? freqs.length : 1.0);
-            var mult = 1.0;
-            var exp = 0.0;
+            let mult = 1.0;
+            let exp = 0.0;
 
             if (avg_freq > 0.0) {
                 while (mult * avg_freq < 1.0) {
@@ -141,8 +141,8 @@ define(["jquery", "app/rspamd", "footable"],
         ui.getSymbols = function (checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
-                    var data = json[0].data;
-                    var items = process_symbols_data(data);
+                    const data = json[0].data;
+                    const items = process_symbols_data(data);
 
                     /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
@@ -154,7 +154,7 @@ define(["jquery", "app/rspamd", "footable"],
                         },
                         $create: function () {
                             this._super();
-                            var self = this, $form_grp = $("<div/>", {
+                            const self = this, $form_grp = $("<div/>", {
                                 class: "form-group"
                             }).append($("<label/>", {
                                 class: "sr-only",
@@ -175,7 +175,7 @@ define(["jquery", "app/rspamd", "footable"],
                             });
                         },
                         _onStatusDropdownChanged: function (e) {
-                            var self = e.data.self, selected = $(this).val();
+                            const self = e.data.self, selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
                             } else {
@@ -185,7 +185,7 @@ define(["jquery", "app/rspamd", "footable"],
                         },
                         draw: function () {
                             this._super();
-                            var group = this.find("group");
+                            const group = this.find("group");
                             if (group instanceof FooTable.Filter) {
                                 this.$group.val(group.query.val());
                             } else {
@@ -236,7 +236,7 @@ define(["jquery", "app/rspamd", "footable"],
             $("#symbolsTable")
                 .off("click", ":button")
                 .on("click", ":button", function () {
-                    var value = $(this).data("save");
+                    const value = $(this).data("save");
                     if (!value) return;
                     saveSymbols("./savesymbols", "symbolsTable", value);
                 });
@@ -245,10 +245,10 @@ define(["jquery", "app/rspamd", "footable"],
 
         $("#updateSymbols").on("click", function (e) {
             e.preventDefault();
-            var checked_server = rspamd.getSelector("selSrv");
+            const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {
                 success: function (data) {
-                    var items = process_symbols_data(data[0].data)[0];
+                    const items = process_symbols_data(data[0].data)[0];
                     rspamd.tables.symbols.rows.load(items);
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server

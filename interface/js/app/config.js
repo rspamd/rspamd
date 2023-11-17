@@ -27,16 +27,16 @@
 define(["jquery", "app/rspamd"],
     function ($, rspamd) {
         "use strict";
-        var ui = {};
+        const ui = {};
 
         ui.getActions = function getActions(checked_server) {
             rspamd.query("actions", {
                 success: function (data) {
                     $("#actionsFormField").empty();
-                    var items = [];
+                    const items = [];
                     $.each(data[0].data, function (i, item) {
-                        var actionsOrder = ["greylist", "add header", "rewrite subject", "reject"];
-                        var idx = actionsOrder.indexOf(item.action);
+                        const actionsOrder = ["greylist", "add header", "rewrite subject", "reject"];
+                        const idx = actionsOrder.indexOf(item.action);
                         if (idx >= 0) {
                             items.push({
                                 idx: idx,
@@ -67,11 +67,11 @@ define(["jquery", "app/rspamd"],
 
         ui.saveActions = function (server) {
             function descending(arr) {
-                var desc = true;
-                var filtered = arr.filter(function (el) {
+                let desc = true;
+                const filtered = arr.filter(function (el) {
                     return el !== null;
                 });
-                for (var i = 0; i < filtered.length - 1; i++) {
+                for (let i = 0; i < filtered.length - 1; i++) {
                     if (filtered[i + 1] >= filtered[i]) {
                         desc = false;
                         break;
@@ -80,9 +80,9 @@ define(["jquery", "app/rspamd"],
                 return desc;
             }
 
-            var elts = (function () {
-                var values = [];
-                var inputs = $("#actionsForm :input[data-id=\"action\"]");
+            const elts = (function () {
+                const values = [];
+                const inputs = $("#actionsForm :input[data-id=\"action\"]");
                 // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
                 values[0] = parseFloat(inputs[3].value);
                 values[1] = parseFloat(inputs[2].value);
@@ -92,7 +92,7 @@ define(["jquery", "app/rspamd"],
                 return JSON.stringify(values);
             }());
             // String to array for comparison
-            var eltsArray = JSON.parse(elts);
+            const eltsArray = JSON.parse(elts);
             if (eltsArray[0] < 0) {
                 rspamd.alertMessage("alert-modal alert-error", "Spam can not be negative");
             } else if (eltsArray[1] < 0) {
@@ -116,23 +116,23 @@ define(["jquery", "app/rspamd"],
         };
 
         ui.getMaps = function (checked_server) {
-            var $listmaps = $("#listMaps");
+            const $listmaps = $("#listMaps");
             $listmaps.closest(".card").hide();
             rspamd.query("maps", {
                 success: function (json) {
-                    var data = json[0].data;
+                    const data = json[0].data;
                     $listmaps.empty();
                     $("#modalBody").empty();
-                    var $tbody = $("<tbody>");
+                    const $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
+                        let $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
                         if (!(item.editable === false || rspamd.read_only)) {
                             $td = $($td).append('&nbsp;<span class="badge text-bg-success">Write</span>');
                         }
-                        var $tr = $("<tr>").append($td);
+                        const $tr = $("<tr>").append($td);
 
-                        var $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' + item.uri + "</span>").data("item", item);
+                        const $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
@@ -145,7 +145,7 @@ define(["jquery", "app/rspamd"],
         };
 
 
-        var jar = {};
+        let jar = {};
         const editor = {
             advanced: {
                 codejar: true,
@@ -163,8 +163,8 @@ define(["jquery", "app/rspamd"],
 
         // Modal form for maps
         $(document).on("click", "[data-bs-toggle=\"modal\"]", function () {
-            var checked_server = rspamd.getSelector("selSrv");
-            var item = $(this).data("item");
+            const checked_server = rspamd.getSelector("selSrv");
+            const item = $(this).data("item");
             rspamd.query("getmap", {
                 headers: {
                     Map: item.map
@@ -188,7 +188,7 @@ define(["jquery", "app/rspamd"],
                         document.querySelector("#editor").innerHTML = rspamd.escapeHTML(data[0].data);
                     }
 
-                    var icon = "fa-edit";
+                    let icon = "fa-edit";
                     if (item.editable === false || rspamd.read_only) {
                         $("#editor").attr(editor[mode].readonly_attr);
                         icon = "fa-eye";
