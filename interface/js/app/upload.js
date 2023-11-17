@@ -27,7 +27,7 @@
 define(["jquery", "app/rspamd"],
     function ($, rspamd) {
         "use strict";
-        var ui = {};
+        const ui = {};
 
         function cleanTextUpload(source) {
             $("#" + source + "TextSource").val("");
@@ -35,7 +35,7 @@ define(["jquery", "app/rspamd"],
 
         // @upload text
         function uploadText(data, source, headers) {
-            var url = null;
+            let url = null;
             if (source === "spam") {
                 url = "learnspam";
             } else if (source === "ham") {
@@ -142,7 +142,7 @@ define(["jquery", "app/rspamd"],
         }
 
         function get_server() {
-            var checked_server = rspamd.getSelector("selSrv");
+            const checked_server = rspamd.getSelector("selSrv");
             return (checked_server === "All SERVERS") ? "local" : checked_server;
         }
 
@@ -166,13 +166,13 @@ define(["jquery", "app/rspamd"],
                         });
                     }
 
-                    var json = neighbours_status[0].data;
+                    const json = neighbours_status[0].data;
                     if (json.action) {
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
 
-                        var rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
-                        var o = rspamd.process_history_v2({rows:[json]}, "scan");
-                        var items = o.items;
+                        const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
+                        const o = rspamd.process_history_v2({rows:[json]}, "scan");
+                        const items = o.items;
                         rspamd.symbols.scan.push(o.symbols[0]);
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "scan")) {
@@ -228,7 +228,7 @@ define(["jquery", "app/rspamd"],
                 },
                 method: "POST",
                 success: function (neighbours_status) {
-                    var json = neighbours_status[0].data;
+                    const json = neighbours_status[0].data;
                     if (json.success) {
                         rspamd.alertMessage("alert-success", "Message successfully processed");
                         fillHashTable(json.hashes);
@@ -277,13 +277,13 @@ define(["jquery", "app/rspamd"],
         });
 
         $("[data-upload]").on("click", function () {
-            var source = $(this).data("upload");
-            var data = $("#scanMsgSource").val();
-            var headers = {};
+            const source = $(this).data("upload");
+            const data = $("#scanMsgSource").val();
+            let headers = {};
             if ($.trim(data).length > 0) {
                 if (source === "scan") {
                     headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
-                        var value = $("#scan-opt-" + header.toLowerCase()).val();
+                        const value = $("#scan-opt-" + header.toLowerCase()).val();
                         if (value !== "") o[header] = value;
                         return o;
                     }, {});

@@ -41,7 +41,6 @@
         "no-negated-condition": "off",
         "no-plusplus": "off",
         "no-ternary": "off",
-        "no-var": "off",
         "object-curly-newline": ["error", { "consistent": true }],
         "object-property-newline": ["error", { "allowAllPropertiesOnSameLine": true }],
         "object-shorthand": "off",

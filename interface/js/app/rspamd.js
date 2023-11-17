@@ -29,7 +29,7 @@ define(["jquery", "nprogress", "stickytabs", "visibility",
     "bootstrap", "fontawesome"],
 function ($, NProgress) {
     "use strict";
-    var ui = {
+    const ui = {
         chartLegend: [
             {label: "reject", color: "#FF0000"},
             {label: "soft reject", color: "#BF8040"},
@@ -52,14 +52,14 @@ function ($, NProgress) {
     const defaultAjaxTimeout = 20000;
 
     const ajaxTimeoutBox = ".popover #settings-popover #ajax-timeout";
-    var graphs = {};
-    var tables = {};
-    var neighbours = []; // list of clusters
-    var checked_server = "All SERVERS";
-    var timer_id = [];
+    const graphs = {};
+    const tables = {};
+    let neighbours = []; // list of clusters
+    let checked_server = "All SERVERS";
+    const timer_id = [];
     let pageSizeTimerId = null;
     let pageSizeInvocationCounter = 0;
-    var locale = (localStorage.getItem("selected_locale") === "custom") ? localStorage.getItem("custom_locale") : null;
+    let locale = (localStorage.getItem("selected_locale") === "custom") ? localStorage.getItem("custom_locale") : null;
 
     NProgress.configure({
         minimum: 0.01,
@@ -85,7 +85,7 @@ function ($, NProgress) {
     }
 
     function stopTimers() {
-        for (var key in timer_id) {
+        for (const key in timer_id) {
             if (!{}.hasOwnProperty.call(timer_id, key)) continue;
             Visibility.stop(timer_id[key]);
         }
@@ -110,14 +110,14 @@ function ($, NProgress) {
 
     // Get selectors' current state
     function getSelector(id) {
-        var e = document.getElementById(id);
+        const e = document.getElementById(id);
         return e.options[e.selectedIndex].value;
     }
 
     function tabClick(id) {
-        var tab_id = id;
+        let tab_id = id;
         if ($(id).attr("disabled")) return;
-        var navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
+        let navBarControls = $("#selSrv, #navBar li, #navBar a, #navBar button");
         if (id !== "#autoRefresh") navBarControls.attr("disabled", true).addClass("disabled", true);
 
         stopTimers();
@@ -137,7 +137,7 @@ function ($, NProgress) {
                     return;
                 }
 
-                var timeLeft = interval;
+                let timeLeft = interval;
                 $("#countdown").text("00:00");
                 timer_id.countdown = Visibility.every(1000, 1000, function () {
                     timeLeft -= 1000;
@@ -168,7 +168,7 @@ function ($, NProgress) {
         switch (tab_id) {
             case "#status_nav":
                 require(["app/stats"], (module) => {
-                    var refreshInterval = $(".dropdown-menu a.active.preset").data("value");
+                    const refreshInterval = $(".dropdown-menu a.active.preset").data("value");
                     setAutoRefresh(refreshInterval, "status",
                         function () { return module.statWidgets(graphs, checked_server); });
                     if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
@@ -181,11 +181,11 @@ function ($, NProgress) {
             case "#throughput_nav":
                 require(["app/graph"], (module) => {
                     const selData = getSelector("selData"); // Graph's dataset selector state
-                    var step = {
+                    const step = {
                         day: 60000,
                         week: 300000
                     };
-                    var refreshInterval = step[selData] || 3600000;
+                    let refreshInterval = step[selData] || 3600000;
                     $("#dynamic-item").text((refreshInterval / 60000) + " min");
 
                     if (!$(".dropdown-menu a.active.dynamic").data("value")) {
@@ -221,7 +221,7 @@ function ($, NProgress) {
                         module.getHistory();
                         module.getErrors();
                     }
-                    var refreshInterval = $(".dropdown-menu a.active.history").data("value");
+                    const refreshInterval = $(".dropdown-menu a.active.history").data("value");
                     setAutoRefresh(refreshInterval, "history",
                         function () { return getHistoryAndErrors(); });
                     if (id !== "#autoRefresh") getHistoryAndErrors();
@@ -250,7 +250,7 @@ function ($, NProgress) {
     }
 
     function get_compare_function(table) {
-        var compare_functions = {
+        const compare_functions = {
             magnitude: function (e1, e2) {
                 return Math.abs(e2.score) - Math.abs(e1.score);
             },
@@ -270,7 +270,7 @@ function ($, NProgress) {
     }
 
     function set_page_size(table, page_size, changeTablePageSize) {
-        var n = parseInt(page_size, 10); // HTML Input elements return string representing a number
+        const n = parseInt(page_size, 10); // HTML Input elements return string representing a number
         if (n > 0) {
             ui.page_size[table] = n;
 
@@ -302,7 +302,7 @@ function ($, NProgress) {
     }
 
     function unix_time_format(tm) {
-        var date = new Date(tm ? tm * 1000 : 0);
+        const date = new Date(tm ? tm * 1000 : 0);
         return (locale)
             ? date.toLocaleString(locale)
             : date.toLocaleString();
@@ -347,7 +347,7 @@ function ($, NProgress) {
     }
 
     function alertMessage(alertClass, alertText) {
-        var a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
+        const a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
                 "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
                 "<strong>" + alertText + "</strong>");
         $(".notification-area").append(a);
@@ -363,19 +363,19 @@ function ($, NProgress) {
         neighbours_status[ind].checked = false;
         neighbours_status[ind].data = {};
         neighbours_status[ind].status = false;
-        var req_params = {
+        const req_params = {
             jsonp: false,
             data: o.data,
             headers: $.extend({Password:getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             xhr: function () {
-                var xhr = $.ajaxSettings.xhr();
+                const xhr = $.ajaxSettings.xhr();
                 // Download progress
                 if (req_url !== "neighbours") {
                     xhr.addEventListener("progress", function (e) {
                         if (e.lengthComputable) {
                             neighbours_status[ind].percentComplete = e.loaded / e.total;
-                            var percentComplete = neighbours_status.reduce(function (prev, curr) {
+                            const percentComplete = neighbours_status.reduce(function (prev, curr) {
                                 return curr.percentComplete ? curr.percentComplete + prev : prev;
                             }, 0);
                             NProgress.set(percentComplete / neighbours_status.length);
@@ -400,7 +400,7 @@ function ($, NProgress) {
                     o.error(neighbours_status[ind],
                         jqXHR, textStatus, errorThrown);
                 } else if (o.errorOnceId) {
-                    var alert_status = o.errorOnceId + neighbours_status[ind].name;
+                    const alert_status = o.errorOnceId + neighbours_status[ind].name;
                     if (!(alert_status in sessionStorage)) {
                         sessionStorage.setItem(alert_status, true);
                         errorMessage();
@@ -473,7 +473,7 @@ function ($, NProgress) {
 
                 $("#connectForm").off("submit").on("submit", function (e) {
                     e.preventDefault();
-                    var password = $("#connectPassword").val();
+                    const password = $("#connectPassword").val();
 
                     function invalidFeedback(tooltip) {
                         $("#connectPassword")
@@ -493,7 +493,7 @@ function ($, NProgress) {
                             Password: password
                         },
                         success: function (json) {
-                            var data = json[0].data;
+                            const data = json[0].data;
                             $("#connectPassword").val("");
                             if (data.auth === "ok") {
                                 sessionStorage.setItem("read_only", data.read_only);
@@ -546,7 +546,7 @@ function ($, NProgress) {
      */
     ui.query = function (url, options) {
         // Force options to be an object
-        var o = options || {};
+        const o = options || {};
         Object.keys(o).forEach(function (option) {
             if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
                 "success"]
@@ -555,7 +555,7 @@ function ($, NProgress) {
             }
         });
 
-        var neighbours_status = [{
+        let neighbours_status = [{
             name: "local",
             host: "local",
             url: "",
@@ -564,7 +564,7 @@ function ($, NProgress) {
         if (o.server === "All SERVERS") {
             queryServer(neighbours_status, 0, "neighbours", {
                 success: function (json) {
-                    var data = json[0].data;
+                    const data = json[0].data;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
                             local: {
@@ -610,20 +610,20 @@ function ($, NProgress) {
     ui.bindHistoryTableEventHandlers = function (table, symbolsCol) {
         function change_symbols_order(order) {
             $(".btn-sym-" + table + "-" + order).addClass("active").siblings().removeClass("active");
-            var compare_function = get_compare_function(table);
+            const compare_function = get_compare_function(table);
             $.each(tables[table].rows.all, function (i, row) {
-                var cell_val = sort_symbols(ui.symbols[table][i], compare_function);
+                const cell_val = sort_symbols(ui.symbols[table][i], compare_function);
                 row.cells[symbolsCol].val(cell_val, false, true);
             });
         }
 
         $("#selSymOrder_" + table).unbind().change(function () {
-            var order = this.value;
+            const order = this.value;
             change_symbols_order(order);
         });
         $("#" + table + "_page_size").change((e) => set_page_size(table, e.target.value, true));
         $(document).on("click", ".btn-sym-order-" + table + " input", function () {
-            var order = this.value;
+            const order = this.value;
             $("#selSymOrder_" + table).val(order);
             change_symbols_order(order);
         });
@@ -739,8 +739,8 @@ function ($, NProgress) {
             on: {
                 "expand.ft.row": function (e, ft, row) {
                     setTimeout(function () {
-                        var detail_row = row.$el.next();
-                        var order = getSelector("selSymOrder_" + table);
+                        const detail_row = row.$el.next();
+                        const order = getSelector("selSymOrder_" + table);
                         detail_row.find(".btn-sym-" + table + "-" + order)
                             .addClass("active").siblings().removeClass("active");
                     }, 5);
@@ -750,8 +750,8 @@ function ($, NProgress) {
     };
 
     ui.escapeHTML = function (string) {
-        var htmlEscaper = /[&<>"'/`=]/g;
-        var htmlEscapes = {
+        const htmlEscaper = /[&<>"'/`=]/g;
+        const htmlEscapes = {
             "&": "&amp;",
             "<": "&lt;",
             ">": "&gt;",
@@ -771,7 +771,7 @@ function ($, NProgress) {
             arr.forEach(function (d, i) { arr[i] = ui.escapeHTML(d); });
         }
 
-        for (var prop in item) {
+        for (const prop in item) {
             if (!{}.hasOwnProperty.call(item, prop)) continue;
             switch (prop) {
                 case "rcpt_mime":
@@ -780,7 +780,7 @@ function ($, NProgress) {
                     break;
                 case "symbols":
                     Object.keys(item.symbols).forEach(function (key) {
-                        var sym = item.symbols[key];
+                        const sym = item.symbols[key];
                         if (!sym.name) {
                             sym.name = key;
                         }
@@ -811,7 +811,7 @@ function ($, NProgress) {
             item.action = "<div style='font-size:11px' class='badge text-bg-info'>" + item.action + "</div>";
         }
 
-        var score_content = (item.score < item.required_score)
+        const score_content = (item.score < item.required_score)
             ? "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>"
             : "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
 
@@ -825,22 +825,22 @@ function ($, NProgress) {
 
     ui.process_history_v2 = function (data, table) {
         // Display no more than rcpt_lim recipients
-        var rcpt_lim = 3;
-        var items = [];
-        var unsorted_symbols = [];
-        var compare_function = get_compare_function(table);
+        const rcpt_lim = 3;
+        const items = [];
+        const unsorted_symbols = [];
+        const compare_function = get_compare_function(table);
 
         $("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']").show();
 
         $.each(data.rows,
             function (i, item) {
                 function more(p) {
-                    var l = item[p].length;
+                    const l = item[p].length;
                     return (l > rcpt_lim) ? " … (" + l + ")" : "";
                 }
                 function format_rcpt(smtp, mime) {
-                    var full = "";
-                    var shrt = "";
+                    let full = "";
+                    let shrt = "";
                     if (smtp) {
                         full = "[" + item.rcpt_smtp.join(", ") + "] ";
                         shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp") + "]";
@@ -899,7 +899,7 @@ function ($, NProgress) {
                 item.id = item["message-id"];
 
                 if (table === "history") {
-                    var rcpt = {};
+                    let rcpt = {};
                     if (!item.rcpt_mime.length) {
                         rcpt = format_rcpt(true, false);
                     } else if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
@@ -921,8 +921,8 @@ function ($, NProgress) {
     };
 
     ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {
-        var i = (typeof iteration === "undefined") ? 10 : iteration;
-        var num_rows = $("#historyTable_" + table + " > tbody > tr:not(.footable-detail-row)").length;
+        let i = (typeof iteration === "undefined") ? 10 : iteration;
+        const num_rows = $("#historyTable_" + table + " > tbody > tr:not(.footable-detail-row)").length;
         if (num_rows === ui.page_size[table] ||
             num_rows === rows_total) {
             return callback();
@@ -936,8 +936,8 @@ function ($, NProgress) {
 
 
     (function initSettings() {
-        var selected_locale = null;
-        var custom_locale = null;
+        let selected_locale = null;
+        let custom_locale = null;
         const localeTextbox = ".popover #settings-popover #locale";
 
         function validateLocale(saveToLocalStorage) {
@@ -945,7 +945,7 @@ function ($, NProgress) {
                 $(localeTextbox).removeClass("is-" + remove).addClass("is-" + add);
             }
 
-            var now = new Date();
+            const now = new Date();
 
             if (custom_locale.length) {
                 try {
@@ -1050,8 +1050,8 @@ function ($, NProgress) {
     });
     $(".dropdown-menu a").click(function (e) {
         e.preventDefault();
-        var classList = $(this).attr("class");
-        var menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
+        const classList = $(this).attr("class");
+        const menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
         $(".dropdown-menu a.active." + menuClass).removeClass("active");
         $(this).addClass("active");
         tabClick("#autoRefresh");

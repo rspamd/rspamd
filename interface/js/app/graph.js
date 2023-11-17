@@ -29,7 +29,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
     function ($, rspamd, D3Evolution, D3Pie, d3) {
         "use strict";
 
-        var rrd_pie_config = {
+        const rrd_pie_config = {
             cornerRadius: 2,
             size: {
                 canvasWidth: 400,
@@ -56,11 +56,11 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             },
         };
 
-        var ui = {};
-        var prevUnit = "msg/s";
+        const ui = {};
+        let prevUnit = "msg/s";
 
         ui.draw = function (graphs, neighbours, checked_server, type) {
-            var graph_options = {
+            const graph_options = {
                 title: "Rspamd throughput",
                 width: 1060,
                 height: 370,
@@ -73,7 +73,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             };
 
             function initGraph() {
-                var graph = new D3Evolution("graph", $.extend({}, graph_options, {
+                const graph = new D3Evolution("graph", $.extend({}, graph_options, {
                     yScale: rspamd.getSelector("selYScale"),
                     type: rspamd.getSelector("selType"),
                     interpolate: rspamd.getSelector("selInterpolate"),
@@ -96,16 +96,16 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function getRrdSummary(json, scaleFactor) {
-                var xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
-                var timeInterval = xExtents[1] - xExtents[0];
+                const xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
+                const timeInterval = xExtents[1] - xExtents[0];
 
-                var total = 0;
-                var rows = json.map(function (curr, i) {
+                let total = 0;
+                const rows = json.map(function (curr, i) {
                     // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
-                    var avg = d3.mean(curr, function (d) { return d.y; });
+                    const avg = d3.mean(curr, function (d) { return d.y; });
                     // To find an integral on the whole time interval we need to convert nulls to zeroes
-                    var value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0; // eslint-disable-line no-bitwise
-                    var yExtents = d3.extent(curr, function (d) { return d.y; });
+                    const value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0; // eslint-disable-line no-bitwise
+                    const yExtents = d3.extent(curr, function (d) { return d.y; });
 
                     total += value;
                     return {
@@ -162,13 +162,13 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function updateWidgets(data) {
-                var rrd_summary = {rows:[]};
-                var unit = "msg/s";
+                let rrd_summary = {rows:[]};
+                let unit = "msg/s";
 
                 if (data) {
                     // Autoranging
-                    var scaleFactor = 1;
-                    var yMax = d3.max(d3.merge(data), function (d) { return d.y; });
+                    let scaleFactor = 1;
+                    const yMax = d3.max(d3.merge(data), function (d) { return d.y; });
                     if (yMax < 1) {
                         scaleFactor = 60;
                         unit = "msg/min";
@@ -202,15 +202,15 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
 
             rspamd.query("graph", {
                 success: function (req_data) {
-                    var data = null;
-                    var neighbours_data = req_data
+                    let data = null;
+                    const neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d) { return d.data; });
 
                     if (neighbours_data.length === 1) {
                         data = neighbours_data[0];
                     } else {
-                        var time_match = true;
+                        let time_match = true;
                         neighbours_data.reduce(function (res, curr, _, arr) {
                             if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
