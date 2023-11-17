@@ -1,6 +1,7 @@
 import signal
 import os
 import atexit
+import tempfile
 
 def setup_killer(server, method = None):
     def default_method():
@@ -18,9 +19,10 @@ def setup_killer(server, method = None):
 
 
 def write_pid(path):
-    with open(path, 'w+') as f:
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
         f.write(str(os.getpid()))
         f.close()
+        os.rename(f.name, path)
 
     def cleanup():
         os.remove(path)

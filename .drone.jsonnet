@@ -192,7 +192,6 @@ local pipeline(arch) = {
         'cd /rspamd/build',
         'ulimit -c unlimited',
         'ulimit -s unlimited',
-        'umask 0000',
         'set +e',
         'RSPAMD_INSTALLROOT=/rspamd/install robot --removekeywords wuks --exclude isbroken $DRONE_WORKSPACE/test/functional/cases; EXIT_CODE=$?',
         'set -e',

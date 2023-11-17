@@ -180,7 +180,7 @@ SETTINGS ID - VIRTUAL HOSTNAME
   Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - VIRTUAL SELECTOR
-  Scan File  ${MESSAGE}  Rcpt=user3@example.com
+  Scan File  ${MESSAGE}  Rcpt=test3@example.com
   Expect Symbol With Score  SIMPLE_VIRTUAL  10
   Expect Symbol With Score  EXPLICIT_VIRTUAL  10
   Do Not Expect Symbol  SIMPLE_TEST
@@ -190,7 +190,7 @@ SETTINGS ID - VIRTUAL SELECTOR
   Do Not Expect Symbol  SIMPLE_PRE
 
 SETTINGS ID - ANGLED RECIPIENT
-  Scan File  ${MESSAGE}  Rcpt=<user3@example.com>
+  Scan File  ${MESSAGE}  Rcpt=<test3@example.com>
   Expect Symbol With Score  SIMPLE_VIRTUAL  10
   Expect Symbol With Score  EXPLICIT_VIRTUAL  10
   Do Not Expect Symbol  SIMPLE_TEST
