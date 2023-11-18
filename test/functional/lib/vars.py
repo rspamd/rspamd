@@ -1,6 +1,8 @@
+import shutil
 import socket
 
 CONTROLLER_ERRORS = True
+HAVE_MILTERTEST = shutil.which('miltertest') and True or False
 RSPAMD_EXTERNAL_RELAY_ENABLED = False
 RSPAMD_KEY_PVT1 = 'ekd3x36tfa5gd76t6pa8hqif3ott7n1siuux68exbkk7ukscte9y'
 RSPAMD_KEY_PUB1 = 'm8kneubpcjsb8sbsoj7jy7azj9fdd3xmj63txni86a8ye9ncomny'

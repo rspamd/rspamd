@@ -1,6 +1,7 @@
 *** Settings ***
 Suite Setup     Rspamd Setup
 Suite Teardown  Rspamd Teardown
+Test Tags       miltertest
 Library         Process
 Library         ${RSPAMD_TESTDIR}/lib/rspamd.py
 Resource        ${RSPAMD_TESTDIR}/lib/rspamd.robot
@@ -21,6 +22,7 @@ MULTIPLE SIGNATURES
 *** Keywords ***
 Milter Test
   [Arguments]  ${mtlua}
+  Skip If  not ${HAVE_MILTERTEST}  msg=miltertest not installed
   ${result} =  Run Process  miltertest  -Dport\=${RSPAMD_PORT_PROXY}  -Dhost\=${RSPAMD_LOCAL_ADDR}  -s  ${RSPAMD_TESTDIR}/lua/miltertest/${mtlua}
   ...  cwd=${RSPAMD_TESTDIR}/lua/miltertest
   Should Match Regexp  ${result.stderr}  ^$
