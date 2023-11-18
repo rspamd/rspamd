@@ -411,6 +411,9 @@ rspamd_parse_kv_list(
 		/* Examine the state */
 		switch (data->state) {
 		case map_read_key:
+		case map_read_key_slashed:
+		case map_read_key_quoted:
+		case map_read_key_after_slash:
 			if (p - c > 0) {
 				/* Store a single key */
 				MAP_STORE_KEY;
