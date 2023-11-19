@@ -132,7 +132,8 @@ define(["jquery", "app/rspamd"],
                         }
                         const $tr = $("<tr>").append($td);
 
-                        const $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' + item.uri + "</span>").data("item", item);
+                        const $span = $('<span class="map-link" data-bs-toggle="modal" data-bs-target="#modalDialog">' +
+                            item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
@@ -173,8 +174,8 @@ define(["jquery", "app/rspamd"],
                     // Highlighting a large amount of text is unresponsive
                     mode = (new Blob([data[0].data]).size > 5120) ? "basic" : $("input[name=editorMode]:checked").val();
 
-                    $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map + '">' +
-                        "</" + editor[mode].elt + ">").appendTo("#modalBody");
+                    $("<" + editor[mode].elt + ' id="editor" class="' + editor[mode].class + '" data-id="' + item.map +
+                        '"></' + editor[mode].elt + ">").appendTo("#modalBody");
 
                     if (editor[mode].codejar) {
                         require(["codejar", "linenumbers", "prism"], function (CodeJar, withLineNumbers, Prism) {

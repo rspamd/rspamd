@@ -548,8 +548,8 @@ function ($, NProgress) {
         // Force options to be an object
         const o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
-                "success"]
+            if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server",
+                "statusCode", "success"]
                 .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
             }
@@ -902,7 +902,10 @@ function ($, NProgress) {
                     let rcpt = {};
                     if (!item.rcpt_mime.length) {
                         rcpt = format_rcpt(true, false);
-                    } else if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
+                    } else if (
+                        $(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 ||
+                        $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0
+                    ) {
                         rcpt = format_rcpt(true, true);
                     } else {
                         rcpt = format_rcpt(false, true);

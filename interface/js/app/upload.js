@@ -256,7 +256,8 @@ define(["jquery", "app/rspamd"],
         });
 
         function enable_disable_scan_btn() {
-            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").prop("disabled", ($.trim($("textarea").val()).length === 0));
+            $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)")
+                .prop("disabled", ($.trim($("textarea").val()).length === 0));
         }
         enable_disable_scan_btn();
         $("textarea").on("input", function () {
