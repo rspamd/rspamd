@@ -136,7 +136,9 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                             if (max) {
                                 const f = d3.format(".3f");
                                 scan_times = {
-                                    data: "<small>" + f(min) + "/</small>" + f(d3.mean(val.data.scan_times)) + "<small>/" + f(max) + "</small>",
+                                    data: "<small>" + f(min) + "/</small>" +
+                                        f(d3.mean(val.data.scan_times)) +
+                                        "<small>/" + f(max) + "</small>",
                                     title: ' title="min/avg/max"'
                                 };
                             } else {
@@ -150,7 +152,8 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                 }
 
                 $("#clusterTable tbody").append('<tr class="' + row_class + '">' +
-                '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" value="' + key + '"></td>' +
+                '<td class="align-middle"><input type="radio" class="form-check m-auto" name="clusterName" value="' +
+                    key + '"></td>' +
                 "<td>" + key + "</td>" +
                 "<td>" + val.host + "</td>" +
                 '<td class="text-center"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +

@@ -104,7 +104,8 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                     // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
                     const avg = d3.mean(curr, function (d) { return d.y; });
                     // To find an integral on the whole time interval we need to convert nulls to zeroes
-                    const value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0; // eslint-disable-line no-bitwise
+                    // eslint-disable-next-line no-bitwise
+                    const value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0;
                     const yExtents = d3.extent(curr, function (d) { return d.y; });
 
                     total += value;

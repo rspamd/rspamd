@@ -51,7 +51,7 @@
         "@stylistic/dot-location": ["error", "property"],
         "@stylistic/function-call-argument-newline": "off",
         "@stylistic/indent": ["error", 4, { "SwitchCase": 1 }],
-        "@stylistic/max-len": ["error", { "code": 120 }],
+        "@stylistic/max-len": ["error", { "code": 128 }],
         "@stylistic/max-statements-per-line": ["error", { "max": 2 }],
         "@stylistic/multiline-ternary": ["error", "always-multiline"],
         "@stylistic/newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
@@ -78,7 +78,6 @@
 
         "@stylistic/function-paren-newline": "off",
         "@stylistic/key-spacing": "off",
-        "@stylistic/max-len": "off",
         "@stylistic/one-var-declaration-per-line": "off"
     }
 }
