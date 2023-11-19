@@ -40,7 +40,7 @@ define(["jquery", "app/rspamd"],
                 enable_disable_check_btn();
             }
             const selector = $("#selectorsSelArea").val();
-            if (selector.length && !rspamd.read_only ) {
+            if (selector.length && !rspamd.read_only) {
                 rspamd.query("plugins/selectors/check_selector?selector=" + encodeURIComponent(selector), {
                     method: "GET",
                     success: function (json) {

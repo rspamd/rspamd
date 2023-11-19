@@ -3,76 +3,82 @@
         "browser": true,
         "es6": true
     },
-    "extends": "eslint:all",
+    "extends": [
+        "eslint:all",
+        "plugin:@stylistic/all-extends"
+    ],
     "globals": {
         "define": false
     },
+    "plugins": [
+      "@stylistic"
+    ],
     "rules": {
-        "array-bracket-newline": ["error", "consistent"],
-        "array-element-newline": "off",
-        "brace-style": ["error", "1tbs", { "allowSingleLine": true }],
         "camelcase": "off",
         "capitalized-comments": "off",
-        "comma-dangle": ["error", "only-multiline"],
         "curly": ["error", "multi-line"],
-        "dot-location": ["error", "property"],
         "func-names": "off",
         // "func-style": ["error", "declaration"],
-        "function-call-argument-newline": "off",
         "id-length": ["error", { "min": 1 }],
-        "indent": ["error", 4, { "SwitchCase": 1 }],
-        // "max-len": ["error", { "code": 120 }],
-        // "key-spacing": ["error", {
+        // "@stylistic/key-spacing": ["error", {
         //     "singleLine": { "afterColon": false }
         // }],
         "line-comment-position": "off",
         "logical-assignment-operators": ["error", "never"],
         "max-params": ["warn", 6],
         "max-statements": ["warn", 55],
-        "max-statements-per-line": ["error", { "max": 2 }],
         "multiline-comment-style": "off",
-        "multiline-ternary": ["error", "always-multiline"],
-        "newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
         "no-continue": "off",
-        "no-extra-parens": ["error", "functions"],
-        "no-implicit-globals": "off",
         "no-inline-comments": "off",
         "no-magic-numbers": "off",
         "no-negated-condition": "off",
         "no-plusplus": "off",
         "no-ternary": "off",
-        "object-curly-newline": ["error", { "consistent": true }],
-        "object-property-newline": ["error", { "allowAllPropertiesOnSameLine": true }],
         "object-shorthand": "off",
         "one-var": "off",
-        "padded-blocks": "off",
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
         "prefer-named-capture-group": "off",
         "prefer-object-has-own": "off",
         "prefer-spread": "off",
         "prefer-template": "off",
-        "quote-props" : ["error", "consistent-as-needed"],
-        "quotes": ["error", "double", { "avoidEscape": true }],
-        "require-jsdoc": "off",
         "require-unicode-regexp": "off",
-        "space-before-function-paren": ["error", {
+
+        "@stylistic/array-bracket-newline": ["error", "consistent"],
+        "@stylistic/array-element-newline": "off",
+        "@stylistic/brace-style": ["error", "1tbs", { "allowSingleLine": true }],
+        "@stylistic/comma-dangle": ["error", "only-multiline"],
+        "@stylistic/dot-location": ["error", "property"],
+        "@stylistic/function-call-argument-newline": "off",
+        "@stylistic/indent": ["error", 4, { "SwitchCase": 1 }],
+        "@stylistic/max-len": ["error", { "code": 120 }],
+        "@stylistic/max-statements-per-line": ["error", { "max": 2 }],
+        "@stylistic/multiline-ternary": ["error", "always-multiline"],
+        "@stylistic/newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
+        "@stylistic/no-extra-parens": ["error", "functions"],
+        "@stylistic/object-property-newline": ["error", { "allowAllPropertiesOnSameLine": true }],
+        "@stylistic/padded-blocks": "off",
+        "@stylistic/quote-props" : ["error", "consistent-as-needed"],
+        "@stylistic/quotes": ["error", "double", { "avoidEscape": true }],
+        "@stylistic/semi": ["error", "always"],
+        "@stylistic/space-before-function-paren": ["error", {
             "anonymous": "always",
             "named": "never"
         }],
-        "vars-on-top": "off",
 
 
         // Temporarily disabled rules
         "func-style": "off",
-        "function-paren-newline": "off",
-        "key-spacing": "off",
-        "max-len": "off",
         "max-lines": "off",
         "max-lines-per-function": "off",
         "no-invalid-this": "off",
         "prefer-exponentiation-operator": "off",
         "sort-keys": "off",
-        "sort-vars": "off"
+        "sort-vars": "off",
+
+        "@stylistic/function-paren-newline": "off",
+        "@stylistic/key-spacing": "off",
+        "@stylistic/max-len": "off",
+        "@stylistic/one-var-declaration-per-line": "off"
     }
 }

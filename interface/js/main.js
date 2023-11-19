@@ -22,7 +22,7 @@ requirejs.config({
     shim: {
         app: {deps:["jquery"]},
         codejar: {exports: "CodeJar", deps:["linenumbers"]},
-        bootstrap: {exports:"bootstrap", deps:["jquery"]},  // Popovers require jQuery
+        bootstrap: {exports:"bootstrap", deps:["jquery"]}, // Popovers require jQuery
         d3: {exports:"d3"},
         d3evolution: {exports:"D3Evolution", deps:["d3.global", "jquery"]},
         d3pie: {exports:"D3Pie", deps:["d3.global", "jquery"]},
@@ -64,5 +64,5 @@ requirejs.onError = function (e) {
 // Load main UI
 require(["app/rspamd"], (rspamd) => {
     "use strict";
-    rspamd.connect()
+    rspamd.connect();
 });
