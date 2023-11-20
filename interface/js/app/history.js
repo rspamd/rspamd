@@ -33,9 +33,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         function process_history_legacy(data) {
             const items = [];
 
-            const compare = function (e1, e2) {
-                return e1.name.localeCompare(e2.name);
-            };
+            function compare(e1, e2) { return e1.name.localeCompare(e2.name); }
 
             $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
 
