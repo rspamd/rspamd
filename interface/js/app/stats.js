@@ -58,7 +58,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
             const servers = JSON.parse(sessionStorage.getItem("Credentials"));
             let data = {};
             if (servers && servers[checked_server]) {
-                data = servers[checked_server].data;
+                ({data} = servers[checked_server]);
             }
 
             const stat_w = [];
@@ -122,7 +122,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                         uptime = msToTime(val.data.uptime);
                     }
                     if ("version" in val.data) {
-                        version = val.data.version;
+                        ({version} = val.data);
                     }
                     if (key === "All SERVERS") {
                         short_id = "";
@@ -249,7 +249,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
             const creds = JSON.parse(sessionStorage.getItem("Credentials"));
             // Controller doesn't return the 'actions' object until at least one message is scanned
             if (creds && creds[checked_server] && creds[checked_server].data.scanned) {
-                const actions = creds[checked_server].data.actions;
+                const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
                     .forEach(function (action) {
@@ -295,7 +295,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                         };
 
                         function process_node_stat(e) {
-                            const data = neighbours_status[e].data;
+                            const {data} = neighbours_status[e];
                             // Controller doesn't return the 'actions' object until at least one message is scanned
                             if (data.scanned) {
                                 for (const action in neighbours_sum.actions) {

@@ -492,7 +492,7 @@ function ($, NProgress) {
                             Password: password
                         },
                         success: function (json) {
-                            const data = json[0].data;
+                            const [{data}] = json;
                             $("#connectPassword").val("");
                             if (data.auth === "ok") {
                                 sessionStorage.setItem("read_only", data.read_only);
@@ -563,7 +563,7 @@ function ($, NProgress) {
         if (o.server === "All SERVERS") {
             queryServer(neighbours_status, 0, "neighbours", {
                 success: function (json) {
-                    const data = json[0].data;
+                    const [{data}] = json;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
                             local: {
@@ -695,7 +695,7 @@ function ($, NProgress) {
                 });
             },
             _onStatusDropdownChanged: function (e) {
-                const self = e.data.self;
+                const {self} = e.data;
                 const selected = self.$action.val();
                 if (selected !== self.def) {
                     const not = self.$not.is(":checked");
@@ -1054,7 +1054,7 @@ function ($, NProgress) {
     $(".dropdown-menu a").click(function (e) {
         e.preventDefault();
         const classList = $(this).attr("class");
-        const menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
+        const [menuClass] = (/\b(?:dynamic|history|preset)\b/).exec(classList);
         $(".dropdown-menu a.active." + menuClass).removeClass("active");
         $(this).addClass("active");
         tabClick("#autoRefresh");

@@ -34,7 +34,6 @@
         "object-shorthand": "off",
         "one-var": ["error", { "initialized": "never" }],
         "prefer-arrow-callback": "off",
-        "prefer-destructuring": "off",
         "prefer-named-capture-group": "off",
         "prefer-object-has-own": "off",
         "prefer-spread": "off",

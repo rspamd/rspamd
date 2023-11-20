@@ -340,7 +340,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         .map(function (d) { return d.data; });
                     if (neighbours_data.length && !differentVersions(neighbours_data)) {
                         let data = {};
-                        const version = neighbours_data[0].version;
+                        const [{version}] = neighbours_data;
                         if (version) {
                             data.rows = [].concat.apply([], neighbours_data
                                 .map(function (e) {
@@ -354,7 +354,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                             $("#legacy-history-badge").show();
                         }
                         const o = process_history_data(data);
-                        const items = o.items;
+                        const {items} = o;
                         rspamd.symbols.history = o.symbols;
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "history") &&

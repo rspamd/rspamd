@@ -172,7 +172,7 @@ define(["jquery", "app/rspamd"],
 
                         const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
                         const o = rspamd.process_history_v2({rows: [json]}, "scan");
-                        const items = o.items;
+                        const {items} = o;
                         rspamd.symbols.scan.push(o.symbols[0]);
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "scan")) {

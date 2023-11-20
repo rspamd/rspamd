@@ -120,7 +120,7 @@ define(["jquery", "app/rspamd"],
             $listmaps.closest(".card").hide();
             rspamd.query("maps", {
                 success: function (json) {
-                    const data = json[0].data;
+                    const [{data}] = json;
                     $listmaps.empty();
                     $("#modalBody").empty();
                     const $tbody = $("<tbody>");

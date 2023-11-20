@@ -141,14 +141,14 @@ define(["jquery", "app/rspamd", "footable"],
         ui.getSymbols = function (checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
-                    const data = json[0].data;
+                    const [{data}] = json;
                     const items = process_symbols_data(data);
 
                     /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct: function (instance) {
                             this._super(instance);
-                            this.groups = items[1];
+                            [,this.groups] = items;
                             this.def = "Any group";
                             this.$group = null;
                         },
@@ -176,7 +176,7 @@ define(["jquery", "app/rspamd", "footable"],
                             });
                         },
                         _onStatusDropdownChanged: function (e) {
-                            const self = e.data.self;
+                            const {self} = e.data;
                             const selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
@@ -254,7 +254,7 @@ define(["jquery", "app/rspamd", "footable"],
             const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {
                 success: function (data) {
-                    const items = process_symbols_data(data[0].data)[0];
+                    const [items] = process_symbols_data(data[0].data);
                     rspamd.tables.symbols.rows.load(items);
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
