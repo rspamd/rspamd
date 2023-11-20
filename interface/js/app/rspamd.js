@@ -276,7 +276,6 @@ function ($, NProgress) {
 
             if (changeTablePageSize &&
                 $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
-
                 clearTimeout(pageSizeTimerId);
                 const t = FooTable.get("#historyTable_" + table);
                 if (t) {

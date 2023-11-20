@@ -54,7 +54,7 @@
         "@stylistic/newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
         "@stylistic/no-extra-parens": ["error", "functions"],
         "@stylistic/object-property-newline": ["error", { "allowAllPropertiesOnSameLine": true }],
-        "@stylistic/padded-blocks": "off",
+        "@stylistic/padded-blocks": ["error", "never"],
         "@stylistic/quote-props" : ["error", "consistent-as-needed"],
         "@stylistic/quotes": ["error", "double", { "avoidEscape": true }],
         "@stylistic/semi": ["error", "always"],
