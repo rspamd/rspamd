@@ -20,9 +20,6 @@
         "func-names": "off",
         // "func-style": ["error", "declaration"],
         "id-length": ["error", { "min": 1 }],
-        // "@stylistic/key-spacing": ["error", {
-        //     "singleLine": { "afterColon": false }
-        // }],
         "line-comment-position": "off",
         "logical-assignment-operators": ["error", "never"],
         "max-params": ["warn", 6],
@@ -77,7 +74,6 @@
         "sort-vars": "off",
 
         "@stylistic/function-paren-newline": "off",
-        "@stylistic/key-spacing": "off",
         "@stylistic/one-var-declaration-per-line": "off"
     }
 }

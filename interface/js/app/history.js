@@ -59,7 +59,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 items.push(item);
             });
 
-            return {items:items};
+            return {items: items};
         }
 
         function columns_v2() {
@@ -382,22 +382,23 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         function initErrorsTable(rows) {
             rspamd.tables.errors = FooTable.init("#errorsLog", {
                 columns: [
-                    {
-                        sorted: true,
+                    {sorted: true,
                         direction: "DESC",
                         name: "ts",
                         title: "Time",
                         style: {"font-size": "11px", "width": 300, "maxWidth": 300},
-                        sortValue: function (val) { return Number(val.options.sortValue); }
-                    },
-                    {name:"type",
-                        title:"Worker type",
-                        breakpoints:"xs sm",
-                        style:{"font-size":"11px", "width":150, "maxWidth":150}},
-                    {name:"pid", title:"PID", breakpoints:"xs sm", style:{"font-size":"11px", "width":110, "maxWidth":110}},
-                    {name:"module", title:"Module", style:{"font-size":"11px"}},
-                    {name:"id", title:"Internal ID", style:{"font-size":"11px"}},
-                    {name:"message", title:"Message", breakpoints:"xs sm", style:{"font-size":"11px"}},
+                        sortValue: function (val) { return Number(val.options.sortValue); }},
+                    {name: "type",
+                        title: "Worker type",
+                        breakpoints: "xs sm",
+                        style: {"font-size": "11px", "width": 150, "maxWidth": 150}},
+                    {name: "pid",
+                        title: "PID",
+                        breakpoints: "xs sm",
+                        style: {"font-size": "11px", "width": 110, "maxWidth": 110}},
+                    {name: "module", title: "Module", style: {"font-size": "11px"}},
+                    {name: "id", title: "Internal ID", style: {"font-size": "11px"}},
+                    {name: "message", title: "Message", breakpoints: "xs sm", style: {"font-size": "11px"}},
                 ],
                 rows: rows,
                 paging: {

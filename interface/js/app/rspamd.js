@@ -339,7 +339,7 @@ function ($, NProgress) {
 
                 $("#preloader").addClass("d-none");
                 $("#navBar, #mainUI").removeClass("d-none");
-                $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
+                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
@@ -366,7 +366,7 @@ function ($, NProgress) {
         const req_params = {
             jsonp: false,
             data: o.data,
-            headers: $.extend({Password:getPassword()}, o.headers),
+            headers: $.extend({Password: getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             xhr: function () {
                 const xhr = $.ajaxSettings.xhr();
@@ -853,7 +853,7 @@ function ($, NProgress) {
                         full += item.rcpt_mime.join(", ");
                         shrt += item.rcpt_mime.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_mime");
                     }
-                    return {full:full, shrt:shrt};
+                    return {full: full, shrt: shrt};
                 }
 
                 function get_symbol_class(name, score) {
@@ -920,7 +920,7 @@ function ($, NProgress) {
                 items.push(item);
             });
 
-        return {items:items, symbols:unsorted_symbols};
+        return {items: items, symbols: unsorted_symbols};
     };
 
     ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {

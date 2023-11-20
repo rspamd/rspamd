@@ -315,7 +315,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                             const alerted = "alerted_stats_legacy_" + neighbours_status[e].name;
                             promises.push($.ajax({
                                 url: neighbours_status[e].url + "auth",
-                                headers: {Password:rspamd.getPassword()},
+                                headers: {Password: rspamd.getPassword()},
                                 success: function (data) {
                                     sessionStorage.removeItem(alerted);
                                     ["config_id", "version", "uptime"].forEach(function (p) {

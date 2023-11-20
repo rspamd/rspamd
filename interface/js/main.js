@@ -20,17 +20,17 @@ requirejs.config({
         stickytabs: "jquery.stickytabs.min"
     },
     shim: {
-        app: {deps:["jquery"]},
-        codejar: {exports: "CodeJar", deps:["linenumbers"]},
-        bootstrap: {exports:"bootstrap", deps:["jquery"]}, // Popovers require jQuery
-        d3: {exports:"d3"},
-        d3evolution: {exports:"D3Evolution", deps:["d3.global", "jquery"]},
-        d3pie: {exports:"D3Pie", deps:["d3.global", "jquery"]},
-        fontawesome: {exports: "FontAwesome", deps:["fontawesome_solid"]},
-        footable: {deps:["bootstrap", "jquery"]},
-        linenumbers: {exports: "withLineNumbers", deps:["prism"]},
+        app: {deps: ["jquery"]},
+        codejar: {exports: "CodeJar", deps: ["linenumbers"]},
+        bootstrap: {exports: "bootstrap", deps: ["jquery"]}, // Popovers require jQuery
+        d3: {exports: "d3"},
+        d3evolution: {exports: "D3Evolution", deps: ["d3.global", "jquery"]},
+        d3pie: {exports: "D3Pie", deps: ["d3.global", "jquery"]},
+        fontawesome: {exports: "FontAwesome", deps: ["fontawesome_solid"]},
+        footable: {deps: ["bootstrap", "jquery"]},
+        linenumbers: {exports: "withLineNumbers", deps: ["prism"]},
         prism: {exports: "Prism"},
-        stickytabs: {deps:["jquery"]}
+        stickytabs: {deps: ["jquery"]}
     },
     waitSeconds: 30,
 });
