@@ -32,7 +32,7 @@
         "no-plusplus": "off",
         "no-ternary": "off",
         "object-shorthand": "off",
-        "one-var": "off",
+        "one-var": ["error", { "initialized": "never" }],
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
         "prefer-named-capture-group": "off",
@@ -71,9 +71,7 @@
         "no-invalid-this": "off",
         "prefer-exponentiation-operator": "off",
         "sort-keys": "off",
-        "sort-vars": "off",
 
-        "@stylistic/function-paren-newline": "off",
-        "@stylistic/one-var-declaration-per-line": "off"
+        "@stylistic/function-paren-newline": "off"
     }
 }

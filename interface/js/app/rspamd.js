@@ -658,7 +658,8 @@ function ($, NProgress) {
             },
             $create: function () {
                 this._super();
-                const self = this, $form_grp = $("<div/>", {
+                const self = this;
+                const $form_grp = $("<div/>", {
                     class: "form-group d-inline-flex align-items-center"
                 }).append($("<label/>", {
                     class: "sr-only",

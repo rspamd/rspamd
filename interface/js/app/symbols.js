@@ -154,7 +154,8 @@ define(["jquery", "app/rspamd", "footable"],
                         },
                         $create: function () {
                             this._super();
-                            const self = this, $form_grp = $("<div/>", {
+                            const self = this;
+                            const $form_grp = $("<div/>", {
                                 class: "form-group"
                             }).append($("<label/>", {
                                 class: "sr-only",
@@ -175,7 +176,8 @@ define(["jquery", "app/rspamd", "footable"],
                             });
                         },
                         _onStatusDropdownChanged: function (e) {
-                            const self = e.data.self, selected = $(this).val();
+                            const self = e.data.self;
+                            const selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
                             } else {
