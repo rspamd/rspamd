@@ -135,7 +135,7 @@ struct rspamd_fuzzy_cmd_extension {
 
 struct rspamd_fuzzy_stat_entry {
 	const gchar *name;
-	guint32 fuzzy_cnt;
+	guint64 fuzzy_cnt;
 };
 
 RSPAMD_PACKED(fuzzy_peer_cmd)

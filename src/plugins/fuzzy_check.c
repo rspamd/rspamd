@@ -2448,24 +2448,36 @@ fuzzy_check_try_read(struct fuzzy_client_session *session)
 					fuzzy_insert_result(session, rep, cmd, io, rep->v1.flag);
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
-					/* Just set pool variable to extract it in further */
+					/*
+					 * We store fuzzy stat in the following way:
+					 * 1) We store fuzzy hashes as a hash of rspamd_fuzzy_stat_entry
+					 * 2) We store the resulting hash table inside pool variable `fuzzy_stat`
+					 */
 					struct rspamd_fuzzy_stat_entry *pval;
-					GList *res;
+					GHashTable *stats_hash;
 
-					pval = rspamd_mempool_alloc(task->task_pool, sizeof(*pval));
-					pval->fuzzy_cnt = rep->v1.flag;
-					pval->name = session->rule->name;
+					stats_hash = (GHashTable *) rspamd_mempool_get_variable(task->task_pool,
+																			RSPAMD_MEMPOOL_FUZZY_STAT);
 
-					res = rspamd_mempool_get_variable(task->task_pool, "fuzzy_stat");
-
-					if (res == NULL) {
-						res = g_list_append(NULL, pval);
-						rspamd_mempool_set_variable(task->task_pool, "fuzzy_stat",
-													res, (rspamd_mempool_destruct_t) g_list_free);
+					if (stats_hash == NULL) {
+						stats_hash = g_hash_table_new(rspamd_str_hash, rspamd_str_equal);
+						rspamd_mempool_set_variable(task->task_pool, RSPAMD_MEMPOOL_FUZZY_STAT,
+													stats_hash,
+													(rspamd_mempool_destruct_t) g_hash_table_destroy);
 					}
-					else {
-						res = g_list_append(res, pval);
+
+					pval = g_hash_table_lookup(stats_hash, session->rule->name);
+
+					if (pval == NULL) {
+						pval = rspamd_mempool_alloc(task->task_pool,
+													sizeof(*pval));
+						pval->name = rspamd_mempool_strdup(task->task_pool,
+														   session->rule->name);
+						/* Safe, as pval->name is owned by the pool */
+						g_hash_table_insert(stats_hash, (char *) pval->name, pval);
 					}
+
+					pval->fuzzy_cnt = (((guint64) rep->v1.value) << 32) + rep->v1.flag;
 				}
 			}
 			else if (rep->v1.value == 403) {

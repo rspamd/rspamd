@@ -33,6 +33,7 @@
 #include "unix-std.h"
 #include "utlist.h"
 #include "libmime/lang_detection.h"
+#include "mempool_vars_internal.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -2602,14 +2603,15 @@ rspamd_controller_stat_fin_task(void *ud)
 		ucl_object_insert_key(top, cbdata->stat, "statfiles", 0, false);
 	}
 
-	GList *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, "fuzzy_stat");
+	GHashTable *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, RSPAMD_MEMPOOL_FUZZY_STAT);
 
 	if (fuzzy_elts) {
 		ar = ucl_object_typed_new(UCL_OBJECT);
 
-		for (GList *cur = fuzzy_elts; cur != NULL; cur = g_list_next(cur)) {
-			entry = cur->data;
+		GHashTableIter it;
 
+		g_hash_table_iter_init(&it, fuzzy_elts);
+		while (g_hash_table_iter_next(&it, NULL, (gpointer *) &entry)) {
 			if (entry->name) {
 				ucl_object_insert_key(ar, ucl_object_fromint(entry->fuzzy_cnt),
 									  entry->name, 0, true);
@@ -3053,14 +3055,16 @@ rspamd_controller_metrics_fin_task(void *ud)
 		rspamd_fstring_free(users);
 	}
 
-	GList *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, "fuzzy_stat");
+	GHashTable *fuzzy_elts = rspamd_mempool_get_variable(cbdata->task->task_pool, RSPAMD_MEMPOOL_FUZZY_STAT);
 
 	if (fuzzy_elts) {
 		rspamd_printf_fstring(&output, "# HELP rspamd_fuzzy_stat Fuzzy stat labelled by storage.\n");
 		rspamd_printf_fstring(&output, "# TYPE rspamd_fuzzy_stat gauge\n");
-		for (GList *cur = fuzzy_elts; cur != NULL; cur = g_list_next(cur)) {
-			entry = cur->data;
 
+		GHashTableIter it;
+
+		g_hash_table_iter_init(&it, fuzzy_elts);
+		while (g_hash_table_iter_next(&it, NULL, (gpointer *) &entry)) {
 			if (entry->name) {
 				rspamd_printf_fstring(&output, "rspamd_fuzzy_stat{storage=\"%s\"} %ud\n",
 									  entry->name, entry->fuzzy_cnt);
