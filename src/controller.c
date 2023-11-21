@@ -3066,7 +3066,7 @@ rspamd_controller_metrics_fin_task(void *ud)
 		g_hash_table_iter_init(&it, fuzzy_elts);
 		while (g_hash_table_iter_next(&it, NULL, (gpointer *) &entry)) {
 			if (entry->name) {
-				rspamd_printf_fstring(&output, "rspamd_fuzzy_stat{storage=\"%s\"} %ud\n",
+				rspamd_printf_fstring(&output, "rspamd_fuzzy_stat{storage=\"%s\"} %uL\n",
 									  entry->name, entry->fuzzy_cnt);
 			}
 		}
