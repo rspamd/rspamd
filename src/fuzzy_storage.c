@@ -1333,8 +1333,9 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
 		result.v1.prob = 1.0f;
-		result.v1.value = 0;
-		result.v1.flag = session->ctx->stat.fuzzy_hashes;
+		/* Store high qword in value and low qword in flag */
+		result.v1.value = (gint32) ((guint64) session->ctx->stat.fuzzy_hashes >> 32);
+		result.v1.flag = session->ctx->stat.fuzzy_hashes & G_MAXUINT32;
 		rspamd_fuzzy_make_reply(cmd, &result, session, send_flags);
 	}
 	else if (cmd->cmd == FUZZY_PING) {
