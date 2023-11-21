@@ -1332,7 +1332,8 @@ rspamd_fuzzy_process_command(struct fuzzy_session *session)
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
-		result.v1.prob = 1.0f;
+		/* Store approximation (if needed) */
+		result.v1.prob = session->ctx->stat.fuzzy_hashes;
 		/* Store high qword in value and low qword in flag */
 		result.v1.value = (gint32) ((guint64) session->ctx->stat.fuzzy_hashes >> 32);
 		result.v1.flag = (guint32) (session->ctx->stat.fuzzy_hashes & G_MAXUINT32);
