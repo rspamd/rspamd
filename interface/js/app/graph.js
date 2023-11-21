@@ -132,12 +132,12 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                         enabled: true
                     },
                     columns: [
-                        {name:"label", title:"Action"},
-                        {name:"value", title:"Messages", defaultContent:""},
-                        {name:"min", title:"Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
-                        {name:"avg", title:"Average, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
-                        {name:"max", title:"Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
-                        {name:"last", title:"Last, " + unit},
+                        {name: "label", title: "Action"},
+                        {name: "value", title: "Messages", defaultContent: ""},
+                        {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                        {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                        {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                        {name: "last", title: "Last, " + unit},
                     ],
                     rows: rows.map(function (curr, i) {
                         return {
@@ -163,7 +163,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function updateWidgets(data) {
-                let rrd_summary = {rows:[]};
+                let rrd_summary = {rows: []};
                 let unit = "msg/s";
 
                 if (data) {
@@ -209,7 +209,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                         .map(function (d) { return d.data; });
 
                     if (neighbours_data.length === 1) {
-                        data = neighbours_data[0];
+                        [data] = neighbours_data;
                     } else {
                         let time_match = true;
                         neighbours_data.reduce(function (res, curr, _, arr) {
@@ -241,7 +241,7 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                 complete: function () { $("#refresh").removeAttr("disabled").removeClass("disabled"); },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
-                data: {type:type}
+                data: {type: type}
             });
         };
 

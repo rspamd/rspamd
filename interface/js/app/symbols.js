@@ -141,20 +141,21 @@ define(["jquery", "app/rspamd", "footable"],
         ui.getSymbols = function (checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
-                    const data = json[0].data;
+                    const [{data}] = json;
                     const items = process_symbols_data(data);
 
                     /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct: function (instance) {
                             this._super(instance);
-                            this.groups = items[1];
+                            [,this.groups] = items;
                             this.def = "Any group";
                             this.$group = null;
                         },
                         $create: function () {
                             this._super();
-                            const self = this, $form_grp = $("<div/>", {
+                            const self = this;
+                            const $form_grp = $("<div/>", {
                                 class: "form-group"
                             }).append($("<label/>", {
                                 class: "sr-only",
@@ -175,7 +176,8 @@ define(["jquery", "app/rspamd", "footable"],
                             });
                         },
                         _onStatusDropdownChanged: function (e) {
-                            const self = e.data.self, selected = $(this).val();
+                            const {self} = e.data;
+                            const selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
                             } else {
@@ -197,17 +199,17 @@ define(["jquery", "app/rspamd", "footable"],
 
                     rspamd.tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
-                            {sorted:true, direction:"ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
-                            {name:"symbol", title:"Symbol", style:{"font-size":"11px"}},
-                            {name:"description", title:"Description", breakpoints:"xs sm", style:{"font-size":"11px"}},
-                            {name:"weight", title:"Score", style:{"font-size":"11px"}},
-                            {name:"frequency",
-                                title:"Frequency",
-                                breakpoints:"xs sm",
-                                style:{"font-size":"11px"},
-                                sortValue:function (value) { return Number(value).toFixed(2); }},
-                            {name:"time", title:"Avg. time", breakpoints:"xs sm", style:{"font-size":"11px"}},
-                            {name:"save", title:"Save", style:{"font-size":"11px"}},
+                            {sorted: true, direction: "ASC", name: "group", title: "Group", style: {"font-size": "11px"}},
+                            {name: "symbol", title: "Symbol", style: {"font-size": "11px"}},
+                            {name: "description", title: "Description", breakpoints: "xs sm", style: {"font-size": "11px"}},
+                            {name: "weight", title: "Score", style: {"font-size": "11px"}},
+                            {name: "frequency",
+                                title: "Frequency",
+                                breakpoints: "xs sm",
+                                style: {"font-size": "11px"},
+                                sortValue: function (value) { return Number(value).toFixed(2); }},
+                            {name: "time", title: "Avg. time", breakpoints: "xs sm", style: {"font-size": "11px"}},
+                            {name: "save", title: "Save", style: {"font-size": "11px"}},
                         ],
                         rows: items[0],
                         paging: {
@@ -252,7 +254,7 @@ define(["jquery", "app/rspamd", "footable"],
             const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {
                 success: function (data) {
-                    const items = process_symbols_data(data[0].data)[0];
+                    const [items] = process_symbols_data(data[0].data);
                     rspamd.tables.symbols.rows.load(items);
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server

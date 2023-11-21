@@ -171,8 +171,8 @@ define(["jquery", "app/rspamd"],
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
 
                         const rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
-                        const o = rspamd.process_history_v2({rows:[json]}, "scan");
-                        const items = o.items;
+                        const o = rspamd.process_history_v2({rows: [json]}, "scan");
+                        const {items} = o;
                         rspamd.symbols.scan.push(o.symbols[0]);
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "scan")) {
@@ -269,7 +269,7 @@ define(["jquery", "app/rspamd"],
             $("#scanForm")[0].reset();
             $("#scanResult").hide();
             $("#scanOutput tbody").remove();
-            $("html, body").animate({scrollTop:0}, 1000);
+            $("html, body").animate({scrollTop: 0}, 1000);
             return false;
         });
 

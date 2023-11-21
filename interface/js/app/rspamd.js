@@ -276,7 +276,6 @@ function ($, NProgress) {
 
             if (changeTablePageSize &&
                 $("#historyTable_" + table + " tbody").is(":parent")) { // Table is not empty
-
                 clearTimeout(pageSizeTimerId);
                 const t = FooTable.get("#historyTable_" + table);
                 if (t) {
@@ -339,7 +338,7 @@ function ($, NProgress) {
 
                 $("#preloader").addClass("d-none");
                 $("#navBar, #mainUI").removeClass("d-none");
-                $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
+                $(".nav-tabs-sticky").stickyTabs({initialTab: "#status_nav"});
             },
             errorMessage: "Cannot get server status",
             server: "All SERVERS"
@@ -366,7 +365,7 @@ function ($, NProgress) {
         const req_params = {
             jsonp: false,
             data: o.data,
-            headers: $.extend({Password:getPassword()}, o.headers),
+            headers: $.extend({Password: getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             xhr: function () {
                 const xhr = $.ajaxSettings.xhr();
@@ -493,7 +492,7 @@ function ($, NProgress) {
                             Password: password
                         },
                         success: function (json) {
-                            const data = json[0].data;
+                            const [{data}] = json;
                             $("#connectPassword").val("");
                             if (data.auth === "ok") {
                                 sessionStorage.setItem("read_only", data.read_only);
@@ -564,7 +563,7 @@ function ($, NProgress) {
         if (o.server === "All SERVERS") {
             queryServer(neighbours_status, 0, "neighbours", {
                 success: function (json) {
-                    const data = json[0].data;
+                    const [{data}] = json;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
                             local: {
@@ -658,7 +657,8 @@ function ($, NProgress) {
             },
             $create: function () {
                 this._super();
-                const self = this, $form_grp = $("<div/>", {
+                const self = this;
+                const $form_grp = $("<div/>", {
                     class: "form-group d-inline-flex align-items-center"
                 }).append($("<label/>", {
                     class: "sr-only",
@@ -695,7 +695,7 @@ function ($, NProgress) {
                 });
             },
             _onStatusDropdownChanged: function (e) {
-                const self = e.data.self;
+                const {self} = e.data;
                 const selected = self.$action.val();
                 if (selected !== self.def) {
                     const not = self.$not.is(":checked");
@@ -853,7 +853,7 @@ function ($, NProgress) {
                         full += item.rcpt_mime.join(", ");
                         shrt += item.rcpt_mime.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_mime");
                     }
-                    return {full:full, shrt:shrt};
+                    return {full: full, shrt: shrt};
                 }
 
                 function get_symbol_class(name, score) {
@@ -920,7 +920,7 @@ function ($, NProgress) {
                 items.push(item);
             });
 
-        return {items:items, symbols:unsorted_symbols};
+        return {items: items, symbols: unsorted_symbols};
     };
 
     ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {
@@ -1054,7 +1054,7 @@ function ($, NProgress) {
     $(".dropdown-menu a").click(function (e) {
         e.preventDefault();
         const classList = $(this).attr("class");
-        const menuClass = (/\b(?:dynamic|history|preset)\b/).exec(classList)[0];
+        const [menuClass] = (/\b(?:dynamic|history|preset)\b/).exec(classList);
         $(".dropdown-menu a.active." + menuClass).removeClass("active");
         $(this).addClass("active");
         tabClick("#autoRefresh");

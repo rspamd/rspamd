@@ -18,11 +18,8 @@
         "capitalized-comments": "off",
         "curly": ["error", "multi-line"],
         "func-names": "off",
-        // "func-style": ["error", "declaration"],
+        "func-style": ["error", "declaration"],
         "id-length": ["error", { "min": 1 }],
-        // "@stylistic/key-spacing": ["error", {
-        //     "singleLine": { "afterColon": false }
-        // }],
         "line-comment-position": "off",
         "logical-assignment-operators": ["error", "never"],
         "max-params": ["warn", 6],
@@ -35,9 +32,8 @@
         "no-plusplus": "off",
         "no-ternary": "off",
         "object-shorthand": "off",
-        "one-var": "off",
+        "one-var": ["error", { "initialized": "never" }],
         "prefer-arrow-callback": "off",
-        "prefer-destructuring": "off",
         "prefer-named-capture-group": "off",
         "prefer-object-has-own": "off",
         "prefer-spread": "off",
@@ -57,7 +53,7 @@
         "@stylistic/newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
         "@stylistic/no-extra-parens": ["error", "functions"],
         "@stylistic/object-property-newline": ["error", { "allowAllPropertiesOnSameLine": true }],
-        "@stylistic/padded-blocks": "off",
+        "@stylistic/padded-blocks": ["error", "never"],
         "@stylistic/quote-props" : ["error", "consistent-as-needed"],
         "@stylistic/quotes": ["error", "double", { "avoidEscape": true }],
         "@stylistic/semi": ["error", "always"],
@@ -68,16 +64,12 @@
 
 
         // Temporarily disabled rules
-        "func-style": "off",
         "max-lines": "off",
         "max-lines-per-function": "off",
         "no-invalid-this": "off",
         "prefer-exponentiation-operator": "off",
         "sort-keys": "off",
-        "sort-vars": "off",
 
-        "@stylistic/function-paren-newline": "off",
-        "@stylistic/key-spacing": "off",
-        "@stylistic/one-var-declaration-per-line": "off"
+        "@stylistic/function-paren-newline": "off"
     }
 }

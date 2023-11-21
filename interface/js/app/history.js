@@ -33,9 +33,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         function process_history_legacy(data) {
             const items = [];
 
-            const compare = function (e1, e2) {
-                return e1.name.localeCompare(e2.name);
-            };
+            function compare(e1, e2) { return e1.name.localeCompare(e2.name); }
 
             $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
 
@@ -59,7 +57,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 items.push(item);
             });
 
-            return {items:items};
+            return {items: items};
         }
 
         function columns_v2() {
@@ -342,7 +340,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         .map(function (d) { return d.data; });
                     if (neighbours_data.length && !differentVersions(neighbours_data)) {
                         let data = {};
-                        const version = neighbours_data[0].version;
+                        const [{version}] = neighbours_data;
                         if (version) {
                             data.rows = [].concat.apply([], neighbours_data
                                 .map(function (e) {
@@ -356,7 +354,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                             $("#legacy-history-badge").show();
                         }
                         const o = process_history_data(data);
-                        const items = o.items;
+                        const {items} = o;
                         rspamd.symbols.history = o.symbols;
 
                         if (Object.prototype.hasOwnProperty.call(rspamd.tables, "history") &&
@@ -382,22 +380,23 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         function initErrorsTable(rows) {
             rspamd.tables.errors = FooTable.init("#errorsLog", {
                 columns: [
-                    {
-                        sorted: true,
+                    {sorted: true,
                         direction: "DESC",
                         name: "ts",
                         title: "Time",
                         style: {"font-size": "11px", "width": 300, "maxWidth": 300},
-                        sortValue: function (val) { return Number(val.options.sortValue); }
-                    },
-                    {name:"type",
-                        title:"Worker type",
-                        breakpoints:"xs sm",
-                        style:{"font-size":"11px", "width":150, "maxWidth":150}},
-                    {name:"pid", title:"PID", breakpoints:"xs sm", style:{"font-size":"11px", "width":110, "maxWidth":110}},
-                    {name:"module", title:"Module", style:{"font-size":"11px"}},
-                    {name:"id", title:"Internal ID", style:{"font-size":"11px"}},
-                    {name:"message", title:"Message", breakpoints:"xs sm", style:{"font-size":"11px"}},
+                        sortValue: function (val) { return Number(val.options.sortValue); }},
+                    {name: "type",
+                        title: "Worker type",
+                        breakpoints: "xs sm",
+                        style: {"font-size": "11px", "width": 150, "maxWidth": 150}},
+                    {name: "pid",
+                        title: "PID",
+                        breakpoints: "xs sm",
+                        style: {"font-size": "11px", "width": 110, "maxWidth": 110}},
+                    {name: "module", title: "Module", style: {"font-size": "11px"}},
+                    {name: "id", title: "Internal ID", style: {"font-size": "11px"}},
+                    {name: "message", title: "Message", breakpoints: "xs sm", style: {"font-size": "11px"}},
                 ],
                 rows: rows,
                 paging: {
