@@ -27,7 +27,7 @@
 
 define(["jquery", "nprogress", "stickytabs", "visibility",
     "bootstrap", "fontawesome"],
-function ($, NProgress) {
+($, NProgress) => {
     "use strict";
     const ui = {
         chartLegend: [
@@ -92,8 +92,8 @@ function ($, NProgress) {
     }
 
     function disconnect() {
-        [graphs, tables].forEach(function (o) {
-            Object.keys(o).forEach(function (key) {
+        [graphs, tables].forEach((o) => {
+            Object.keys(o).forEach((key) => {
                 o[key].destroy();
                 delete o[key];
             });
@@ -139,7 +139,7 @@ function ($, NProgress) {
 
                 let timeLeft = interval;
                 $("#countdown").text("00:00");
-                timer_id.countdown = Visibility.every(1000, 1000, function () {
+                timer_id.countdown = Visibility.every(1000, 1000, () => {
                     timeLeft -= 1000;
                     $("#countdown").text(new Date(timeLeft).toISOString().substr(14, 5));
                     if (timeLeft <= 0) Visibility.stop(timer_id.countdown);
@@ -151,7 +151,7 @@ function ($, NProgress) {
 
             countdown(refreshInterval);
             if (!refreshInterval) return;
-            timer_id[timer] = Visibility.every(refreshInterval, function () {
+            timer_id[timer] = Visibility.every(refreshInterval, () => {
                 countdown(refreshInterval);
                 if ($("#refresh").attr("disabled")) return;
                 $("#refresh").attr("disabled", true).addClass("disabled", true);
@@ -170,7 +170,7 @@ function ($, NProgress) {
                 require(["app/stats"], (module) => {
                     const refreshInterval = $(".dropdown-menu a.active.preset").data("value");
                     setAutoRefresh(refreshInterval, "status",
-                        function () { return module.statWidgets(graphs, checked_server); });
+                        () => module.statWidgets(graphs, checked_server));
                     if (id !== "#autoRefresh") module.statWidgets(graphs, checked_server);
 
                     $(".preset").show();
@@ -192,7 +192,7 @@ function ($, NProgress) {
                         refreshInterval = null;
                     }
                     setAutoRefresh(refreshInterval, "throughput",
-                        function () { return module.draw(graphs, neighbours, checked_server, selData); });
+                        () => module.draw(graphs, neighbours, checked_server, selData));
                     if (id !== "#autoRefresh") module.draw(graphs, neighbours, checked_server, selData);
 
                     $(".preset").hide();
@@ -223,7 +223,7 @@ function ($, NProgress) {
                     }
                     const refreshInterval = $(".dropdown-menu a.active.history").data("value");
                     setAutoRefresh(refreshInterval, "history",
-                        function () { return getHistoryAndErrors(); });
+                        () => getHistoryAndErrors());
                     if (id !== "#autoRefresh") getHistoryAndErrors();
 
                     $(".preset").hide();
@@ -237,7 +237,7 @@ function ($, NProgress) {
             default:
         }
 
-        setTimeout(function () {
+        setTimeout(() => {
             // Do not enable Refresh button until AJAX requests to all neighbours are finished
             if (tab_id === "#history_nav") navBarControls = $(navBarControls).not("#refresh");
 
@@ -292,11 +292,9 @@ function ($, NProgress) {
 
     function sort_symbols(o, compare_function) {
         return Object.keys(o)
-            .map(function (key) {
-                return o[key];
-            })
+            .map((key) => o[key])
             .sort(compare_function)
-            .map(function (e) { return e.str; })
+            .map((e) => e.str)
             .join("<br>\n");
     }
 
@@ -316,7 +314,7 @@ function ($, NProgress) {
             success: function (neighbours_status) {
                 $("#selSrv").empty();
                 $("#selSrv").append($('<option value="All SERVERS">All SERVERS</option>'));
-                neighbours_status.forEach(function (e) {
+                neighbours_status.forEach((e) => {
                     $("#selSrv").append($('<option value="' + e.name + '">' + e.name + "</option>"));
                     if (checked_server === e.name) {
                         $('#selSrv [value="' + e.name + '"]').prop("selected", true);
@@ -351,7 +349,7 @@ function ($, NProgress) {
                 "<strong>" + alertText + "</strong>");
         $(".notification-area").append(a);
 
-        setTimeout(function () {
+        setTimeout(() => {
             $(a).fadeTo(500, 0).slideUp(500, function () {
                 $(this).alert("close");
             });
@@ -371,12 +369,11 @@ function ($, NProgress) {
                 const xhr = $.ajaxSettings.xhr();
                 // Download progress
                 if (req_url !== "neighbours") {
-                    xhr.addEventListener("progress", function (e) {
+                    xhr.addEventListener("progress", (e) => {
                         if (e.lengthComputable) {
                             neighbours_status[ind].percentComplete = e.loaded / e.total;
-                            const percentComplete = neighbours_status.reduce(function (prev, curr) {
-                                return curr.percentComplete ? curr.percentComplete + prev : prev;
-                            }, 0);
+                            const percentComplete = neighbours_status
+                                .reduce((prev, curr) => (curr.percentComplete ? curr.percentComplete + prev : prev), 0);
                             NProgress.set(percentComplete / neighbours_status.length);
                         }
                     }, false);
@@ -409,8 +406,8 @@ function ($, NProgress) {
                 }
             },
             complete: function (jqXHR) {
-                if (neighbours_status.every(function (elt) { return elt.checked; })) {
-                    if (neighbours_status.some(function (elt) { return elt.status; })) {
+                if (neighbours_status.every((elt) => elt.checked)) {
+                    if (neighbours_status.some((elt) => elt.status)) {
                         if (o.success) {
                             o.success(neighbours_status, jqXHR);
                         } else {
@@ -429,7 +426,7 @@ function ($, NProgress) {
             req_params.method = o.method;
         }
         if (o.params) {
-            $.each(o.params, function (k, v) {
+            $.each(o.params, (k, v) => {
                 req_params[k] = v;
             });
         }
@@ -470,7 +467,7 @@ function ($, NProgress) {
                     })
                     .modal("show");
 
-                $("#connectForm").off("submit").on("submit", function (e) {
+                $("#connectForm").off("submit").on("submit", (e) => {
                     e.preventDefault();
                     const password = $("#connectPassword").val();
 
@@ -546,7 +543,7 @@ function ($, NProgress) {
     ui.query = function (url, options) {
         // Force options to be an object
         const o = options || {};
-        Object.keys(o).forEach(function (option) {
+        Object.keys(o).forEach((option) => {
             if (["complete", "data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server",
                 "statusCode", "success"]
                 .indexOf(option) < 0) {
@@ -575,14 +572,14 @@ function ($, NProgress) {
                         neighbours = data;
                     }
                     neighbours_status = [];
-                    $.each(neighbours, function (ind) {
+                    $.each(neighbours, (ind) => {
                         neighbours_status.push({
                             name: ind,
                             host: neighbours[ind].host,
                             url: neighbours[ind].url,
                         });
                     });
-                    $.each(neighbours_status, function (ind) {
+                    $.each(neighbours_status, (ind) => {
                         queryServer(neighbours_status, ind, url, o);
                     });
                 },
@@ -610,7 +607,7 @@ function ($, NProgress) {
         function change_symbols_order(order) {
             $(".btn-sym-" + table + "-" + order).addClass("active").siblings().removeClass("active");
             const compare_function = get_compare_function(table);
-            $.each(tables[table].rows.all, function (i, row) {
+            $.each(tables[table].rows.all, (i, row) => {
                 const cell_val = sort_symbols(ui.symbols[table][i], compare_function);
                 row.cells[symbolsCol].val(cell_val, false, true);
             });
@@ -690,7 +687,7 @@ function ($, NProgress) {
                         text: self.def
                     })).appendTo($form_grp);
 
-                $.each(self.actions, function (i, action) {
+                $.each(self.actions, (i, action) => {
                     self.$action.append($("<option/>").text(action));
                 });
             },
@@ -738,7 +735,7 @@ function ($, NProgress) {
             },
             on: {
                 "expand.ft.row": function (e, ft, row) {
-                    setTimeout(function () {
+                    setTimeout(() => {
                         const detail_row = row.$el.next();
                         const order = getSelector("selSymOrder_" + table);
                         detail_row.find(".btn-sym-" + table + "-" + order)
@@ -761,14 +758,12 @@ function ($, NProgress) {
             "`": "&#x60;",
             "=": "&#x3D;"
         };
-        return String(string).replace(htmlEscaper, function (match) {
-            return htmlEscapes[match];
-        });
+        return String(string).replace(htmlEscaper, (match) => htmlEscapes[match]);
     };
 
     ui.preprocess_item = function (item) {
         function escape_HTML_array(arr) {
-            arr.forEach(function (d, i) { arr[i] = ui.escapeHTML(d); });
+            arr.forEach((d, i) => { arr[i] = ui.escapeHTML(d); });
         }
 
         for (const prop in item) {
@@ -779,7 +774,7 @@ function ($, NProgress) {
                     escape_HTML_array(item[prop]);
                     break;
                 case "symbols":
-                    Object.keys(item.symbols).forEach(function (key) {
+                    Object.keys(item.symbols).forEach((key) => {
                         const sym = item.symbols[key];
                         if (!sym.name) {
                             sym.name = key;
@@ -833,7 +828,7 @@ function ($, NProgress) {
         $("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']").show();
 
         $.each(data.rows,
-            function (i, item) {
+            (i, item) => {
                 function more(p) {
                     const l = item[p].length;
                     return (l > rcpt_lim) ? " … (" + l + ")" : "";
@@ -870,7 +865,7 @@ function ($, NProgress) {
                 }
 
                 ui.preprocess_item(item);
-                Object.values(item.symbols).forEach(function (sym) {
+                Object.values(item.symbols).forEach((sym) => {
                     sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
 
                     if (sym.description) {
@@ -930,7 +925,7 @@ function ($, NProgress) {
             num_rows === rows_total) {
             return callback();
         } else if (--i) {
-            setTimeout(function () {
+            setTimeout(() => {
                 ui.waitForRowsDisplayed(table, rows_total, callback, i);
             }, 500);
         }
@@ -988,10 +983,10 @@ function ($, NProgress) {
         }).attr("title", function () {
             return $(this).attr("data-original-title");
         });
-        $("#settings").on("click", function (e) {
+        $("#settings").on("click", (e) => {
             e.preventDefault();
         });
-        $("#settings").on("inserted.bs.popover", function () {
+        $("#settings").on("inserted.bs.popover", () => {
             selected_locale = localStorage.getItem("selected_locale") || "browser";
             custom_locale = localStorage.getItem("custom_locale") || "";
             validateLocale();
@@ -1006,19 +1001,19 @@ function ($, NProgress) {
             localStorage.setItem("selected_locale", selected_locale);
             validateLocale();
         });
-        $(document).on("input", localeTextbox, function () {
+        $(document).on("input", localeTextbox, () => {
             custom_locale = $(localeTextbox).val();
             validateLocale(true);
         });
-        $(document).on("input", ajaxTimeoutBox, function () {
+        $(document).on("input", ajaxTimeoutBox, () => {
             ajaxSetup($(ajaxTimeoutBox).val(), false, true);
         });
-        $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", function () {
+        $(document).on("click", ".popover #settings-popover #ajax-timeout-restore", () => {
             ajaxSetup(null, true, true);
         });
 
         // Dismiss Bootstrap popover by clicking outside
-        $("body").on("click", function (e) {
+        $("body").on("click", (e) => {
             $(".popover").each(function () {
                 if (
                     // Popover's descendant
@@ -1031,15 +1026,15 @@ function ($, NProgress) {
         });
     }());
 
-    $("#selData").change(function () {
+    $("#selData").change(() => {
         tabClick("#throughput_nav");
     });
 
-    $(document).ajaxStart(function () {
+    $(document).ajaxStart(() => {
         $("#refresh > svg").addClass("fa-spin");
     });
-    $(document).ajaxComplete(function () {
-        setTimeout(function () {
+    $(document).ajaxComplete(() => {
+        setTimeout(() => {
             $("#refresh > svg").removeClass("fa-spin");
         }, 1000);
     });
