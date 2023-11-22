@@ -25,7 +25,7 @@
 /* global FooTable */
 
 define(["jquery", "app/rspamd", "d3", "footable"],
-    function ($, rspamd, d3) {
+    ($, rspamd, d3) => {
         "use strict";
         const ui = {};
         let prevVersion = null;
@@ -37,15 +37,13 @@ define(["jquery", "app/rspamd", "d3", "footable"],
 
             $("#selSymOrder_history, label[for='selSymOrder_history']").hide();
 
-            $.each(data, function (i, item) {
+            $.each(data, (i, item) => {
                 item.time = rspamd.unix_time_format(item.unix_time);
                 rspamd.preprocess_item(item);
                 item.symbols = Object.keys(item.symbols)
-                    .map(function (key) {
-                        return item.symbols[key];
-                    })
+                    .map((key) => item.symbols[key])
                     .sort(compare)
-                    .map(function (e) { return e.name; })
+                    .map((e) => e.name)
                     .join(", ");
                 item.time = {
                     value: rspamd.unix_time_format(item.unix_time),
@@ -324,9 +322,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             rspamd.query("history", {
                 success: function (req_data) {
                     function differentVersions(neighbours_data) {
-                        const dv = neighbours_data.some(function (e) {
-                            return e.version !== neighbours_data[0].version;
-                        });
+                        const dv = neighbours_data.some((e) => e.version !== neighbours_data[0].version);
                         if (dv) {
                             rspamd.alertMessage("alert-error",
                                 "Neighbours history backend versions do not match. Cannot display history.");
@@ -336,16 +332,14 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                     }
 
                     const neighbours_data = req_data
-                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                        .map(function (d) { return d.data; });
+                        .filter((d) => d.status) // filter out unavailable neighbours
+                        .map((d) => d.data);
                     if (neighbours_data.length && !differentVersions(neighbours_data)) {
                         let data = {};
                         const [{version}] = neighbours_data;
                         if (version) {
                             data.rows = [].concat.apply([], neighbours_data
-                                .map(function (e) {
-                                    return e.rows;
-                                }));
+                                .map((e) => e.rows));
                             data.version = version;
                             $("#legacy-history-badge").hide();
                         } else {
@@ -363,7 +357,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         } else {
                             rspamd.destroyTable("history");
                             // Is there a way to get an event when the table is destroyed?
-                            setTimeout(function () {
+                            setTimeout(() => {
                                 rspamd.initHistoryTable(data, items, "history", get_history_columns(data), false);
                             }, 200);
                         }
@@ -421,14 +415,10 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             rspamd.query("errors", {
                 success: function (data) {
                     const neighbours_data = data
-                        .filter(function (d) {
-                            return d.status;
-                        }) // filter out unavailable neighbours
-                        .map(function (d) {
-                            return d.data;
-                        });
+                        .filter((d) => d.status) // filter out unavailable neighbours
+                        .map((d) => d.data);
                     const rows = [].concat.apply([], neighbours_data);
-                    $.each(rows, function (i, item) {
+                    $.each(rows, (i, item) => {
                         item.ts = {
                             value: rspamd.unix_time_format(item.ts),
                             options: {
@@ -445,7 +435,7 @@ define(["jquery", "app/rspamd", "d3", "footable"],
             });
 
             $("#updateErrors").off("click");
-            $("#updateErrors").on("click", function (e) {
+            $("#updateErrors").on("click", (e) => {
                 e.preventDefault();
                 ui.getErrors();
             });
@@ -456,14 +446,14 @@ define(["jquery", "app/rspamd", "d3", "footable"],
         rspamd.bindHistoryTableEventHandlers("history", 8);
 
         $("#updateHistory").off("click");
-        $("#updateHistory").on("click", function (e) {
+        $("#updateHistory").on("click", (e) => {
             e.preventDefault();
             ui.getHistory();
         });
 
         // @reset history log
         $("#resetHistory").off("click");
-        $("#resetHistory").on("click", function (e) {
+        $("#resetHistory").on("click", (e) => {
             e.preventDefault();
             if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                 return;

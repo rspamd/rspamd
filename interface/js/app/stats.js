@@ -23,7 +23,7 @@
  */
 
 define(["jquery", "app/rspamd", "d3pie", "d3"],
-    function ($, rspamd, D3Pie, d3) {
+    ($, rspamd, D3Pie, d3) => {
         "use strict";
         // @ ms to date
         function msToTime(seconds) {
@@ -63,7 +63,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
             const stat_w = [];
             $("#statWidgets").empty().hide();
-            $.each(data, function (i, item) {
+            $.each(data, (i, item) => {
                 const widgetsOrder = ["scanned", "no action", "greylist", "add header", "rewrite subject", "reject", "learned"];
 
                 function widget(k, v, cls) {
@@ -87,14 +87,14 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                       val + "</strong>" + i + "</div>")
                         .appendTo("#statWidgets");
                 } else if (i === "actions") {
-                    $.each(item, function (action, count) {
+                    $.each(item, (action, count) => {
                         stat_w[widgetsOrder.indexOf(action)] = widget(action, count);
                     });
                 } else {
                     stat_w[widgetsOrder.indexOf(i)] = widget(i, item, " text-capitalize");
                 }
             });
-            $.each(stat_w, function (i, item) {
+            $.each(stat_w, (i, item) => {
                 $(item).appendTo("#statWidgets");
             });
             $("#statWidgets > div:not(.stat-box)")
@@ -105,7 +105,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
-            $.each(servers, function (key, val) {
+            $.each(servers, (key, val) => {
                 let row_class = "danger";
                 let glyph_status = "fas fa-times";
                 let version = "???";
@@ -178,7 +178,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
             });
 
             function addStatfiles(server, statfiles) {
-                $.each(statfiles, function (i, statfile) {
+                $.each(statfiles, (i, statfile) => {
                     let cls = "";
                     switch (statfile.symbol) {
                         case "BAYES_SPAM":
@@ -200,7 +200,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
             function addFuzzyStorage(server, storages) {
                 let i = 0;
-                $.each(storages, function (storage, hashes) {
+                $.each(storages, (storage, hashes) => {
                     $("#fuzzyTable tbody").append("<tr>" +
                       (i === 0 ? '<td rowspan="' + Object.keys(storages).length + '">' + server + "</td>" : "") +
                       "<td>" + storage + "</td>" +
@@ -211,7 +211,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
 
             $("#bayesTable tbody, #fuzzyTable tbody").empty();
             if (checked_server === "All SERVERS") {
-                $.each(servers, function (server, val) {
+                $.each(servers, (server, val) => {
                     if (server !== "All SERVERS") {
                         addStatfiles(server, val.data.statfiles);
                         addFuzzyStorage(server, val.data.fuzzy_hashes);
@@ -252,9 +252,9 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                 const {actions} = creds[checked_server].data;
 
                 ["no action", "soft reject", "add header", "rewrite subject", "greylist", "reject"]
-                    .forEach(function (action) {
+                    .forEach((action) => {
                         data.push({
-                            color: rspamd.chartLegend.find(function (item) { return item.label === action; }).color,
+                            color: rspamd.chartLegend.find((item) => item.label === action).color,
                             label: action,
                             value: actions[action]
                         });
@@ -304,7 +304,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                                     }
                                 }
                             }
-                            ["learned", "scanned", "uptime"].forEach(function (p) {
+                            ["learned", "scanned", "uptime"].forEach((p) => {
                                 neighbours_sum[p] += data[p];
                             });
                             status_count++;
@@ -318,7 +318,7 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                                 headers: {Password: rspamd.getPassword()},
                                 success: function (data) {
                                     sessionStorage.removeItem(alerted);
-                                    ["config_id", "version", "uptime"].forEach(function (p) {
+                                    ["config_id", "version", "uptime"].forEach((p) => {
                                         neighbours_status[e].data[p] = data[p];
                                     });
                                     process_node_stat(e);
@@ -349,8 +349,8 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                                 }
                             }
                         }
-                        setTimeout(function () {
-                            $.when.apply($, promises).always(function () {
+                        setTimeout(() => {
+                            $.when.apply($, promises).always(() => {
                                 neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
                                 to_Credentials["All SERVERS"].data = neighbours_sum;
                                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));

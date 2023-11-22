@@ -41,7 +41,7 @@ document.title = window.location.hostname +
     " - Rspamd Web Interface";
 
 // Ugly hack to get d3pie work with requirejs
-define("d3.global", ["d3"], function (d3global) { // eslint-disable-line strict
+define("d3.global", ["d3"], (d3global) => { // eslint-disable-line strict
     d3 = d3global;
 });
 

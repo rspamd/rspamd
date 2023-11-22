@@ -25,7 +25,7 @@
 /* global require */
 
 define(["jquery", "app/rspamd"],
-    function ($, rspamd) {
+    ($, rspamd) => {
         "use strict";
         const ui = {};
 
@@ -49,7 +49,7 @@ define(["jquery", "app/rspamd"],
             function server() {
                 if (rspamd.getSelector("selSrv") === "All SERVERS" &&
                     rspamd.getSelector("selLearnServers") === "random") {
-                    const servers = $("#selSrv option").slice(1).map(function (_, o) { return o.value; });
+                    const servers = $("#selSrv option").slice(1).map((_, o) => o.value);
                     return servers[Math.floor(Math.random() * servers.length)];
                 }
                 return null;
@@ -158,7 +158,7 @@ define(["jquery", "app/rspamd"],
                 success: function (neighbours_status) {
                     function scrollTop(rows_total) {
                         // Is there a way to get an event when all rows are loaded?
-                        rspamd.waitForRowsDisplayed("scan", rows_total, function () {
+                        rspamd.waitForRowsDisplayed("scan", rows_total, () => {
                             $("#cleanScanHistory").removeAttr("disabled", true);
                             $("html, body").animate({
                                 scrollTop: $("#scanResult").offset().top
@@ -180,9 +180,9 @@ define(["jquery", "app/rspamd"],
                             scrollTop(rows_total);
                         } else {
                             rspamd.destroyTable("scan");
-                            require(["footable"], function () {
+                            require(["footable"], () => {
                                 // Is there a way to get an event when the table is destroyed?
-                                setTimeout(function () {
+                                setTimeout(() => {
                                     rspamd.initHistoryTable(data, items, "scan", columns_v2(), true);
                                     scrollTop(rows_total);
                                 }, 200);
@@ -212,7 +212,7 @@ define(["jquery", "app/rspamd"],
             function fillHashTable(rules) {
                 $("#hashTable tbody").empty();
                 for (const [rule, hashes] of Object.entries(rules)) {
-                    hashes.forEach(function (hash, i) {
+                    hashes.forEach((hash, i) => {
                         $("#hashTable tbody").append("<tr>" +
                           (i === 0 ? '<td rowspan="' + Object.keys(hashes).length + '">' + rule + "</td>" : "") +
                           "<td>" + hash + "</td></tr>");
@@ -245,7 +245,7 @@ define(["jquery", "app/rspamd"],
         rspamd.bindHistoryTableEventHandlers("scan", 3);
 
         $("#cleanScanHistory").off("click");
-        $("#cleanScanHistory").on("click", function (e) {
+        $("#cleanScanHistory").on("click", (e) => {
             e.preventDefault();
             if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
                 return;
@@ -260,11 +260,11 @@ define(["jquery", "app/rspamd"],
                 .prop("disabled", ($.trim($("textarea").val()).length === 0));
         }
         enable_disable_scan_btn();
-        $("textarea").on("input", function () {
+        $("textarea").on("input", () => {
             enable_disable_scan_btn();
         });
 
-        $("#scanClean").on("click", function () {
+        $("#scanClean").on("click", () => {
             $("#scan button:not(#cleanScanHistory, #scanOptionsToggle)").attr("disabled", true);
             $("#scanForm")[0].reset();
             $("#scanResult").hide();
@@ -283,7 +283,7 @@ define(["jquery", "app/rspamd"],
             let headers = {};
             if ($.trim(data).length > 0) {
                 if (source === "scan") {
-                    headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce(function (o, header) {
+                    headers = ["IP", "User", "From", "Rcpt", "Helo", "Hostname"].reduce((o, header) => {
                         const value = $("#scan-opt-" + header.toLowerCase()).val();
                         if (value !== "") o[header] = value;
                         return o;

@@ -1,5 +1,5 @@
 define(["jquery", "app/rspamd"],
-    function ($, rspamd) {
+    ($, rspamd) => {
         "use strict";
         const ui = {};
 
@@ -60,7 +60,7 @@ define(["jquery", "app/rspamd"],
 
         function buildLists() {
             function build_table_from_json(json, table_id) {
-                Object.keys(json).forEach(function (key) {
+                Object.keys(json).forEach((key) => {
                     const td = $("<td/>");
                     const tr = $("<tr/>")
                         .append(td.clone().html("<code>" + key + "</code>"))
@@ -109,35 +109,35 @@ define(["jquery", "app/rspamd"],
             $("#content").removeClass("col-lg-12 col-lg-9 col-lg-6")
                 .addClass(contentClass);
         }
-        $("#sidebar-tab-left>a").click(function () {
+        $("#sidebar-tab-left>a").click(() => {
             toggleSidebar("left");
             return false;
         });
-        $("#sidebar-tab-right>a").click(function () {
+        $("#sidebar-tab-right>a").click(() => {
             toggleSidebar("right");
             return false;
         });
 
-        $("#selectorsMsgClean").on("click", function () {
+        $("#selectorsMsgClean").on("click", () => {
             $("#selectorsChkMsgBtn").attr("disabled", true);
             $("#selectorsMsgArea").val("");
             return false;
         });
-        $("#selectorsClean").on("click", function () {
+        $("#selectorsClean").on("click", () => {
             $("#selectorsSelArea").val("");
             checkSelectors();
             return false;
         });
-        $("#selectorsChkMsgBtn").on("click", function () {
+        $("#selectorsChkMsgBtn").on("click", () => {
             $("#selectorsResArea").val("");
             checkMsg($("#selectorsMsgArea").val());
             return false;
         });
 
-        $("#selectorsMsgArea").on("input", function () {
+        $("#selectorsMsgArea").on("input", () => {
             enable_disable_check_btn();
         });
-        $("#selectorsSelArea").on("input", function () {
+        $("#selectorsSelArea").on("input", () => {
             checkSelectors();
         });
 

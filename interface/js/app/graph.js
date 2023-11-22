@@ -26,7 +26,7 @@
 /* global FooTable */
 
 define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
-    function ($, rspamd, D3Evolution, D3Pie, d3) {
+    ($, rspamd, D3Evolution, D3Pie, d3) => {
         "use strict";
 
         const rrd_pie_config = {
@@ -96,17 +96,17 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
             }
 
             function getRrdSummary(json, scaleFactor) {
-                const xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
+                const xExtents = d3.extent(d3.merge(json), (d) => d.x);
                 const timeInterval = xExtents[1] - xExtents[0];
 
                 let total = 0;
-                const rows = json.map(function (curr, i) {
+                const rows = json.map((curr, i) => {
                     // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
-                    const avg = d3.mean(curr, function (d) { return d.y; });
+                    const avg = d3.mean(curr, (d) => d.y);
                     // To find an integral on the whole time interval we need to convert nulls to zeroes
                     // eslint-disable-next-line no-bitwise
-                    const value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0;
-                    const yExtents = d3.extent(curr, function (d) { return d.y; });
+                    const value = d3.mean(curr, (d) => Number(d.y)) * timeInterval / scaleFactor ^ 0;
+                    const yExtents = d3.extent(curr, (d) => d.y);
 
                     total += value;
                     return {
@@ -139,22 +139,20 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                         {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
                         {name: "last", title: "Last, " + unit},
                     ],
-                    rows: rows.map(function (curr, i) {
-                        return {
-                            options: {
-                                style: {
-                                    color: graph_options.legend.entries[i].color
-                                }
-                            },
-                            value: curr
-                        };
-                    }, [])
+                    rows: rows.map((curr, i) => ({
+                        options: {
+                            style: {
+                                color: graph_options.legend.entries[i].color
+                            }
+                        },
+                        value: curr
+                    }), [])
                 });
             }
 
             function drawRrdTable(rows, unit) {
                 if (Object.prototype.hasOwnProperty.call(rspamd.tables, "rrd_summary")) {
-                    $.each(rspamd.tables.rrd_summary.rows.all, function (i, row) {
+                    $.each(rspamd.tables.rrd_summary.rows.all, (i, row) => {
                         row.val(rows[i], false, true);
                     });
                 } else {
@@ -169,12 +167,12 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                 if (data) {
                     // Autoranging
                     let scaleFactor = 1;
-                    const yMax = d3.max(d3.merge(data), function (d) { return d.y; });
+                    const yMax = d3.max(d3.merge(data), (d) => d.y);
                     if (yMax < 1) {
                         scaleFactor = 60;
                         unit = "msg/min";
-                        data.forEach(function (s) {
-                            s.forEach(function (d) {
+                        data.forEach((s) => {
+                            s.forEach((d) => {
                                 if (d.y !== null) { d.y *= scaleFactor; }
                             });
                         });
@@ -205,14 +203,14 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                 success: function (req_data) {
                     let data = null;
                     const neighbours_data = req_data
-                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                        .map(function (d) { return d.data; });
+                        .filter((d) => d.status) // filter out unavailable neighbours
+                        .map((d) => d.data);
 
                     if (neighbours_data.length === 1) {
                         [data] = neighbours_data;
                     } else {
                         let time_match = true;
-                        neighbours_data.reduce(function (res, curr, _, arr) {
+                        neighbours_data.reduce((res, curr, _, arr) => {
                             if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
                                 time_match = false;
@@ -224,16 +222,10 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
                         });
 
                         if (time_match) {
-                            data = neighbours_data.reduce(function (res, curr) {
-                                return curr.map(function (action, j) {
-                                    return action.map(function (d, i) {
-                                        return {
-                                            x: d.x,
-                                            y: (res[j][i].y === null) ? d.y : res[j][i].y + d.y
-                                        };
-                                    });
-                                });
-                            });
+                            data = neighbours_data.reduce((res, curr) => curr.map((action, j) => action.map((d, i) => ({
+                                x: d.x,
+                                y: (res[j][i].y === null) ? d.y : res[j][i].y + d.y
+                            }))));
                         }
                     }
                     updateWidgets(data);
@@ -247,11 +239,11 @@ define(["jquery", "app/rspamd", "d3evolution", "d3pie", "d3", "footable"],
 
 
         // Handling mouse events on overlapping elements
-        $("#rrd-pie").mouseover(function () {
+        $("#rrd-pie").mouseover(() => {
             $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "200");
             $("#rrd-table_toggle").css("z-index", "300");
         });
-        $("#rrd-table_toggle").mouseover(function () {
+        $("#rrd-table_toggle").mouseover(() => {
             $("#rrd-pie,#rrd-pie-tooltip").css("z-index", "0");
             $("#rrd-table_toggle").css("z-index", "0");
         });

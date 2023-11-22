@@ -25,7 +25,7 @@
 /* global FooTable */
 
 define(["jquery", "app/rspamd", "footable"],
-    function ($, rspamd) {
+    ($, rspamd) => {
         "use strict";
         const ui = {};
 
@@ -64,8 +64,8 @@ define(["jquery", "app/rspamd", "footable"],
             const distinct_groups = [];
             const selected_server = rspamd.getSelector("selSrv");
 
-            data.forEach(function (group) {
-                group.rules.forEach(function (item) {
+            data.forEach((group) => {
+                group.rules.forEach((item) => {
                     let max = 20;
                     let min = -20;
                     if (item.weight > max) {
@@ -112,11 +112,9 @@ define(["jquery", "app/rspamd", "footable"],
             });
 
             // For better mean calculations
-            const avg_freq = freqs.sort(function (a, b) {
-                return Number(a) < Number(b);
-            }).reduce(function (f1, acc) {
-                return f1 + acc;
-            }) / (freqs.length !== 0 ? freqs.length : 1.0);
+            const avg_freq = freqs
+                .sort((a, b) => Number(a) < Number(b))
+                .reduce((f1, acc) => f1 + acc) / (freqs.length !== 0 ? freqs.length : 1.0);
             let mult = 1.0;
             let exp = 0.0;
 
@@ -126,7 +124,7 @@ define(["jquery", "app/rspamd", "footable"],
                     exp++;
                 }
             }
-            $.each(items, function (i, item) {
+            $.each(items, (i, item) => {
                 item.frequency = Number(item.frequency) * mult;
 
                 if (exp > 0) {
@@ -171,7 +169,7 @@ define(["jquery", "app/rspamd", "footable"],
                                     text: self.def
                                 })).appendTo($form_grp);
 
-                            $.each(self.groups, function (i, group) {
+                            $.each(self.groups, (i, group) => {
                                 self.$group.append($("<option/>").text(group));
                             });
                         },
@@ -249,7 +247,7 @@ define(["jquery", "app/rspamd", "footable"],
         };
 
 
-        $("#updateSymbols").on("click", function (e) {
+        $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
             const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {

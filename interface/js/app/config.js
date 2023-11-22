@@ -25,7 +25,7 @@
 /* global require */
 
 define(["jquery", "app/rspamd"],
-    function ($, rspamd) {
+    ($, rspamd) => {
         "use strict";
         const ui = {};
 
@@ -34,7 +34,7 @@ define(["jquery", "app/rspamd"],
                 success: function (data) {
                     $("#actionsFormField").empty();
                     const items = [];
-                    $.each(data[0].data, function (i, item) {
+                    $.each(data[0].data, (i, item) => {
                         const actionsOrder = ["greylist", "add header", "rewrite subject", "reject"];
                         const idx = actionsOrder.indexOf(item.action);
                         if (idx >= 0) {
@@ -52,14 +52,10 @@ define(["jquery", "app/rspamd"],
                         }
                     });
 
-                    items.sort(function (a, b) {
-                        return a.idx - b.idx;
-                    });
+                    items.sort((a, b) => a.idx - b.idx);
 
                     $("#actionsFormField").html(
-                        items.map(function (e) {
-                            return e.html;
-                        }).join(""));
+                        items.map((e) => e.html).join(""));
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
@@ -68,9 +64,7 @@ define(["jquery", "app/rspamd"],
         ui.saveActions = function (server) {
             function descending(arr) {
                 let desc = true;
-                const filtered = arr.filter(function (el) {
-                    return el !== null;
-                });
+                const filtered = arr.filter((el) => el !== null);
                 for (let i = 0; i < filtered.length - 1; i++) {
                     if (filtered[i + 1] >= filtered[i]) {
                         desc = false;
@@ -125,7 +119,7 @@ define(["jquery", "app/rspamd"],
                     $("#modalBody").empty();
                     const $tbody = $("<tbody>");
 
-                    $.each(data, function (i, item) {
+                    $.each(data, (i, item) => {
                         let $td = '<td><span class="badge text-bg-secondary">Read</span></td>';
                         if (!(item.editable === false || rspamd.read_only)) {
                             $td = $($td).append('&nbsp;<span class="badge text-bg-success">Write</span>');
@@ -178,7 +172,7 @@ define(["jquery", "app/rspamd"],
                         '"></' + editor[mode].elt + ">").appendTo("#modalBody");
 
                     if (editor[mode].codejar) {
-                        require(["codejar", "linenumbers", "prism"], function (CodeJar, withLineNumbers, Prism) {
+                        require(["codejar", "linenumbers", "prism"], (CodeJar, withLineNumbers, Prism) => {
                             jar = new CodeJar(
                                 document.querySelector("#editor"),
                                 withLineNumbers((el) => Prism.highlightElement(el))
@@ -207,7 +201,7 @@ define(["jquery", "app/rspamd"],
             });
             return false;
         });
-        $("#modalDialog").on("hidden.bs.modal", function () {
+        $("#modalDialog").on("hidden.bs.modal", () => {
             if (editor[mode].codejar) {
                 jar.destroy();
                 $(".codejar-wrap").remove();
@@ -216,10 +210,10 @@ define(["jquery", "app/rspamd"],
             }
         });
 
-        $("#saveActionsBtn").on("click", function () {
+        $("#saveActionsBtn").on("click", () => {
             ui.saveActions();
         });
-        $("#saveActionsClusterBtn").on("click", function () {
+        $("#saveActionsClusterBtn").on("click", () => {
             ui.saveActions("All SERVERS");
         });
 
@@ -241,10 +235,10 @@ define(["jquery", "app/rspamd"],
                 server: server
             });
         }
-        $("#modalSave").on("click", function () {
+        $("#modalSave").on("click", () => {
             saveMap();
         });
-        $("#modalSaveAll").on("click", function () {
+        $("#modalSaveAll").on("click", () => {
             saveMap("All SERVERS");
         });
 
