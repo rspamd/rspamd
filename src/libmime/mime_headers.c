@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1198,9 +1198,36 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 					nhdr->name = hdr_elt->name;
 					nhdr->value = rspamd_mempool_alloc(task->task_pool,
 													   raw_len + 1);
-					nhdr->raw_len = rspamd_strlcpy(nhdr->value, raw_value,
-												   raw_len + 1);
-					nhdr->raw_value = nhdr->value;
+					rspamd_strlcpy(nhdr->value, raw_value, raw_len + 1);
+					/* TODO: unfold header value, sigh */
+
+					/* Deal with the raw value */
+					size_t namelen = strlen(hdr_elt->name);
+					char *rawbuf = rspamd_mempool_alloc(task->task_pool, namelen +
+																			 raw_len +
+																			 sizeof(": \r\n"));
+					/* Name: value<newline> */
+					nhdr->raw_value = rawbuf;
+					memcpy(rawbuf, hdr_elt->name, namelen);
+					rawbuf += namelen;
+					memcpy(rawbuf, ": ", sizeof(": ") - 1);
+					nhdr->separator = rspamd_mempool_strdup(task->task_pool, " ");
+					rawbuf += sizeof(": ") - 1;
+					memcpy(rawbuf, raw_value, raw_len);
+
+					if (MESSAGE_FIELD(task, nlines_type) == RSPAMD_TASK_NEWLINES_LF) {
+						rawbuf[raw_len++] = '\n';
+					}
+					else {
+						rawbuf[raw_len++] = '\r';
+
+						if (MESSAGE_FIELD(task, nlines_type) == RSPAMD_TASK_NEWLINES_CRLF) {
+							rawbuf[raw_len++] = '\n';
+						}
+					}
+
+					rawbuf[raw_len] = '\0';
+					nhdr->raw_len = raw_len;
 					nhdr->decoded = rspamd_mime_header_decode(task->task_pool,
 															  raw_value, raw_len, NULL);
 
