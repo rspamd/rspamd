@@ -1127,7 +1127,6 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 		 */
 		hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
 		hdr_elt->modified_chain = NULL;
-		gint new_chain_length = 0;
 
 		PTR_ARRAY_FOREACH(existing_ar, i, cur_hdr)
 		{
@@ -1141,7 +1140,6 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 				nhdr->ord_next = NULL;
 
 				DL_APPEND(hdr_elt->modified_chain, nhdr);
-				new_chain_length++;
 			}
 		}
 
