@@ -1028,7 +1028,8 @@ rspamd_message_headers_new(void)
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
 										const gchar *hdr_name,
-										const ucl_object_t *obj)
+										const ucl_object_t *obj,
+										struct rspamd_mime_header **order_ptr)
 {
 	khiter_t k;
 	khash_t(rspamd_mime_headers_htb) *htb = &hdrs->htb;
@@ -1048,6 +1049,10 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 			k = kh_put(rspamd_mime_headers_htb, htb, hdr_elt->name, &r);
 
 			kh_value(htb, k) = hdr_elt;
+
+			if (order_ptr) {
+				DL_APPEND(*order_ptr, hdr_elt);
+			}
 		}
 		else {
 			hdr_elt = kh_value(htb, k);
