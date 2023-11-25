@@ -6750,7 +6750,10 @@ lua_task_modify_header(lua_State *L)
 			ucl_object_t *mods = ucl_object_lua_import(L, 3);
 
 			rspamd_message_set_modified_header(task,
-											   MESSAGE_FIELD_CHECK(task, raw_headers), hname, mods);
+											   MESSAGE_FIELD(task, raw_headers),
+											   hname,
+											   mods,
+											   &(MESSAGE_FIELD(task, headers_order)));
 			ucl_object_unref(mods);
 
 			lua_pushboolean(L, true);

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2021 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -157,6 +157,51 @@ TEST_SUITE("rspamd_utils")
 			auto final_crc = rspamd_cryptobox_fast_hash(fstr->str, fstr->len, 0);
 			CHECK(crc == final_crc);
 			rspamd_fstring_free(fstr);
+		}
+	}
+
+	TEST_CASE("rspamd_message_header_unfold_inplace")
+	{
+		std::vector<std::pair<std::string, std::string>> cases{
+			{"abc", "abc"},
+			{"abc\r\n def", "abc def"},
+			{"abc\r\n\tdef", "abc def"},
+			{"abc\r\n\tdef\r\n\tghi", "abc def ghi"},
+			{"abc\r\n\tdef\r\n\tghi\r\n", "abc def ghi"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\t", "abc def ghi"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl", "abc def ghi jkl"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n", "abc def ghi jkl"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\t", "abc def ghi jkl"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno", "abc def ghi jkl mno"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n", "abc def ghi jkl mno"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\t", "abc def ghi jkl mno"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr", "abc def ghi jkl mno pqr"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n", "abc def ghi jkl mno pqr"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\t", "abc def ghi jkl mno pqr"},
+			{"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\tstu", "abc def ghi jkl mno pqr stu"},
+			// Newline at the end
+			{
+				"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\tstu\r\n", "abc def ghi jkl mno pqr stu"},
+			// Spaces at the end
+			{
+				"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\tstu\r\n\t", "abc def ghi jkl mno pqr stu"},
+			// Multiple spaces at the end
+			{
+				"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\tstu\r\n\t   ", "abc def ghi jkl mno pqr stu"},
+			// Multiple spaces in middle
+			{
+				"abc\r\n\tdef\r\n\tghi\r\n\tjkl\r\n\tmno\r\n\tpqr\r\n\tstu   \r\n\t   a", "abc def ghi jkl mno pqr stu    a"},
+		};
+
+		for (const auto &c: cases) {
+			SUBCASE(("unfold header " + c.second).c_str())
+			{
+				auto *cpy = new char[c.first.size()];
+				memcpy(cpy, c.first.data(), c.first.size());
+				auto nlen = rspamd_message_header_unfold_inplace(cpy, c.first.size());
+				CHECK(std::string{cpy, nlen} == c.second);
+				delete[] cpy;
+			}
 		}
 	}
 }

@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -143,7 +143,8 @@ rspamd_message_get_header_from_hash(struct rspamd_mime_headers_table *hdrs,
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
 										const gchar *hdr_name,
-										const ucl_object_t *obj);
+										const ucl_object_t *obj,
+										struct rspamd_mime_header **order_ptr);
 
 /**
  * Cleans up hash table of the headers
@@ -183,6 +184,14 @@ bool rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *,
  * @return new length of the input
  */
 gsize rspamd_strip_smtp_comments_inplace(gchar *input, gsize len);
+
+/**
+ * Unfold header in place
+ * @param hdr header value
+ * @param len length of the header
+ * @return new unfolded length
+ */
+gsize rspamd_message_header_unfold_inplace(char *hdr, gsize len);
 
 #ifdef __cplusplus
 }

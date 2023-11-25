@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -1025,10 +1025,81 @@ rspamd_message_headers_new(void)
 	return nhdrs;
 }
 
+gsize rspamd_message_header_unfold_inplace(char *hdr, gsize len)
+{
+	/*
+	 * t - tortoise (destination)
+	 * h - hare (source)
+	 */
+	char *t = hdr, *h = hdr, *end = (hdr + len);
+	enum {
+		copy_chars,
+		folding_cr,
+		folding_lf,
+		folding_ws,
+	} state = copy_chars;
+
+	while (h < end) {
+		switch (state) {
+		case copy_chars:
+			if (*h == '\r') {
+				state = folding_cr;
+				h++;
+			}
+			else if (*h == '\n') {
+				state = folding_lf;
+				h++;
+			}
+			else {
+				*t++ = *h++;
+			}
+			break;
+		case folding_cr:
+			if (*h == '\n') {
+				state = folding_lf;
+				h++;
+			}
+			else if (g_ascii_isspace(*h)) {
+				state = folding_ws;
+				h++;
+			}
+			else {
+				/* It is weird, not like a folding, so we need to revert back */
+				*t++ = '\r';
+				state = copy_chars;
+			}
+			break;
+		case folding_lf:
+			if (g_ascii_isspace(*h)) {
+				state = folding_ws;
+				h++;
+			}
+			else {
+				/* It is weird, not like a folding, so we need to revert back */
+				*t++ = '\n';
+				state = copy_chars;
+			}
+			break;
+		case folding_ws:
+			if (!g_ascii_isspace(*h)) {
+				*t++ = ' ';
+				state = copy_chars;
+			}
+			else {
+				h++;
+			}
+			break;
+		}
+	}
+
+	return t - hdr;
+}
+
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
 										const gchar *hdr_name,
-										const ucl_object_t *obj)
+										const ucl_object_t *obj,
+										struct rspamd_mime_header **order_ptr)
 {
 	khiter_t k;
 	khash_t(rspamd_mime_headers_htb) *htb = &hdrs->htb;
@@ -1048,6 +1119,10 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 			k = kh_put(rspamd_mime_headers_htb, htb, hdr_elt->name, &r);
 
 			kh_value(htb, k) = hdr_elt;
+
+			if (order_ptr) {
+				DL_APPEND(*order_ptr, hdr_elt);
+			}
 		}
 		else {
 			hdr_elt = kh_value(htb, k);
@@ -1127,7 +1202,6 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 		 */
 		hdr_elt->flags |= RSPAMD_HEADER_MODIFIED;
 		hdr_elt->modified_chain = NULL;
-		gint new_chain_length = 0;
 
 		PTR_ARRAY_FOREACH(existing_ar, i, cur_hdr)
 		{
@@ -1141,7 +1215,6 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 				nhdr->ord_next = NULL;
 
 				DL_APPEND(hdr_elt->modified_chain, nhdr);
-				new_chain_length++;
 			}
 		}
 
@@ -1198,9 +1271,38 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 					nhdr->name = hdr_elt->name;
 					nhdr->value = rspamd_mempool_alloc(task->task_pool,
 													   raw_len + 1);
-					nhdr->raw_len = rspamd_strlcpy(nhdr->value, raw_value,
-												   raw_len + 1);
-					nhdr->raw_value = nhdr->value;
+					/* Strlcpy will ensure that value will have no embedded \0 */
+					rspamd_strlcpy(nhdr->value, raw_value, raw_len + 1);
+					gsize value_len = rspamd_message_header_unfold_inplace(nhdr->value, raw_len);
+					nhdr->value[value_len] = '\0';
+
+					/* Deal with the raw value */
+					size_t namelen = strlen(hdr_elt->name);
+					char *rawbuf = rspamd_mempool_alloc(task->task_pool, namelen +
+																			 raw_len +
+																			 sizeof(": \r\n"));
+					/* Name: value<newline> */
+					nhdr->raw_value = rawbuf;
+					memcpy(rawbuf, hdr_elt->name, namelen);
+					rawbuf += namelen;
+					memcpy(rawbuf, ": ", sizeof(": ") - 1);
+					nhdr->separator = rspamd_mempool_strdup(task->task_pool, " ");
+					rawbuf += sizeof(": ") - 1;
+					memcpy(rawbuf, raw_value, raw_len);
+
+					if (MESSAGE_FIELD(task, nlines_type) == RSPAMD_TASK_NEWLINES_LF) {
+						rawbuf[raw_len++] = '\n';
+					}
+					else {
+						rawbuf[raw_len++] = '\r';
+
+						if (MESSAGE_FIELD(task, nlines_type) == RSPAMD_TASK_NEWLINES_CRLF) {
+							rawbuf[raw_len++] = '\n';
+						}
+					}
+
+					rawbuf[raw_len] = '\0';
+					nhdr->raw_len = raw_len;
 					nhdr->decoded = rspamd_mime_header_decode(task->task_pool,
 															  raw_value, raw_len, NULL);
 
