@@ -185,6 +185,14 @@ bool rspamd_mime_headers_foreach(const struct rspamd_mime_headers_table *,
  */
 gsize rspamd_strip_smtp_comments_inplace(gchar *input, gsize len);
 
+/**
+ * Unfold header in place
+ * @param hdr header value
+ * @param len length of the header
+ * @return new unfolded length
+ */
+gsize rspamd_message_header_unfold_inplace(char *hdr, gsize len);
+
 #ifdef __cplusplus
 }
 #endif

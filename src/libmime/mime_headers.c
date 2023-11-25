@@ -1025,6 +1025,76 @@ rspamd_message_headers_new(void)
 	return nhdrs;
 }
 
+gsize rspamd_message_header_unfold_inplace(char *hdr, gsize len)
+{
+	/*
+	 * t - tortoise (destination)
+	 * h - hare (source)
+	 */
+	char *t = hdr, *h = hdr, *end = (hdr + len);
+	enum {
+		copy_chars,
+		folding_cr,
+		folding_lf,
+		folding_ws,
+	} state = copy_chars;
+
+	while (h < end) {
+		switch (state) {
+		case copy_chars:
+			if (*h == '\r') {
+				state = folding_cr;
+				h++;
+			}
+			else if (*h == '\n') {
+				state = folding_lf;
+				h++;
+			}
+			else {
+				*t++ = *h++;
+			}
+			break;
+		case folding_cr:
+			if (*h == '\n') {
+				state = folding_lf;
+				h++;
+			}
+			else if (g_ascii_isspace(*h)) {
+				state = folding_ws;
+				h++;
+			}
+			else {
+				/* It is weird, not like a folding, so we need to revert back */
+				*t++ = '\r';
+				state = copy_chars;
+			}
+			break;
+		case folding_lf:
+			if (g_ascii_isspace(*h)) {
+				state = folding_ws;
+				h++;
+			}
+			else {
+				/* It is weird, not like a folding, so we need to revert back */
+				*t++ = '\n';
+				state = copy_chars;
+			}
+			break;
+		case folding_ws:
+			if (!g_ascii_isspace(*h)) {
+				*t++ = ' ';
+				state = copy_chars;
+			}
+			else {
+				h++;
+			}
+			break;
+		}
+	}
+
+	return t - hdr;
+}
+
 void rspamd_message_set_modified_header(struct rspamd_task *task,
 										struct rspamd_mime_headers_table *hdrs,
 										const gchar *hdr_name,
@@ -1201,8 +1271,10 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 					nhdr->name = hdr_elt->name;
 					nhdr->value = rspamd_mempool_alloc(task->task_pool,
 													   raw_len + 1);
+					/* Strlcpy will ensure that value will have no embedded \0 */
 					rspamd_strlcpy(nhdr->value, raw_value, raw_len + 1);
-					/* TODO: unfold header value, sigh */
+					gsize value_len = rspamd_message_header_unfold_inplace(nhdr->value, raw_len);
+					nhdr->value[value_len] = '\0';
 
 					/* Deal with the raw value */
 					size_t namelen = strlen(hdr_elt->name);
