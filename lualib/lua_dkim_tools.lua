@@ -268,7 +268,7 @@ local function prepare_dkim_signing(N, task, settings)
           'signing_table: cannot get data when no header from is presented')
       return false, {}
     end
-    local sign_entry = settings.signing_table:get_key(hfrom[1].addr)
+    local sign_entry = settings.signing_table:get_key(hfrom[1].addr:lower())
 
     if sign_entry then
       -- Check opendkim style entries
