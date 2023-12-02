@@ -64,6 +64,7 @@ files['/**/lualib/redis_scripts/**'].globals = {
   'redis',
   'KEYS',
   'cjson',
+  'cmsgpack',
 }
 
 files['/**/src/rspamadm/*'].globals = {
