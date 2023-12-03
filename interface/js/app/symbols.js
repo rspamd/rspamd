@@ -53,10 +53,7 @@ define(["jquery", "app/rspamd", "footable"],
                 server: server
             });
         }
-        function decimalStep(number) {
-            const digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
-            return (digits === 0 || digits > 4) ? 0.1 : 1.0 / Math.pow(10, digits);
-        }
+
         function process_symbols_data(data) {
             const items = [];
             const lookup = {};
@@ -66,15 +63,12 @@ define(["jquery", "app/rspamd", "footable"],
 
             data.forEach((group) => {
                 group.rules.forEach((item) => {
-                    let max = 20;
-                    let min = -20;
-                    if (item.weight > max) {
-                        max = item.weight * 2;
-                    }
+                    const formatter = new Intl.NumberFormat("en", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 6,
+                        useGrouping: false
+                    });
                     item.group = group.group;
-                    if (item.weight < min) {
-                        min = item.weight * 2;
-                    }
                     let label_class = "";
                     if (item.weight < 0) {
                         label_class = "scorebar-ham";
@@ -82,10 +76,8 @@ define(["jquery", "app/rspamd", "footable"],
                         label_class = "scorebar-spam";
                     }
                     item.weight = "<input class=\"form-control input-sm mb-disabled " + label_class +
-                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" type=\"number\" class=\"input\" min=\"" +
-                    min + "\" max=\"" +
-                    max + "\" step=\"" + decimalStep(item.weight) +
-                    "\" tabindex=\"1\" value=\"" + Number(item.weight).toFixed(3) +
+                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" type=\"number\"" +
+                    " step=\"0.01\" tabindex=\"1\" value=\"" + formatter.format(item.weight) +
                     "\" id=\"_sym_" + item.symbol + "\"></input>";
                     if (!item.time) {
                         item.time = 0;
