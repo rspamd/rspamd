@@ -30,7 +30,7 @@ define(["jquery", "app/rspamd", "footable"],
         const ui = {};
 
         function saveSymbols(action, id, server) {
-            const inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
+            const inputs = $("#" + id + ' :input[data-role="numerictextbox"]');
             const url = action;
             const values = [];
             $(inputs).each(function () {
@@ -75,10 +75,9 @@ define(["jquery", "app/rspamd", "footable"],
                     } else if (item.weight > 0) {
                         label_class = "scorebar-spam";
                     }
-                    item.weight = "<input class=\"form-control input-sm mb-disabled " + label_class +
-                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" type=\"number\"" +
-                    " step=\"0.01\" tabindex=\"1\" value=\"" + formatter.format(item.weight) +
-                    "\" id=\"_sym_" + item.symbol + "\"></input>";
+                    item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
+                        '" data-role="numerictextbox" autocomplete="off" type="number" step="0.01" tabindex="1" ' +
+                        'value="' + formatter.format(item.weight) + '" id="_sym_' + item.symbol + '"></input>';
                     if (!item.time) {
                         item.time = 0;
                     }
@@ -93,12 +92,10 @@ define(["jquery", "app/rspamd", "footable"],
                         distinct_groups.push(item.group);
                     }
                     item.save =
-                        "<button data-save=\"" + selected_server +
-                        "\" title=\"Save changes to the selected server\" " +
-                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>&nbsp;" +
-                        "<button data-save=\"All SERVERS" +
-                        "\" title=\"Save changes to all servers\" " +
-                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
+                        '<button data-save="' + selected_server + '" title="Save changes to the selected server" ' +
+                        'type="button" class="btn btn-primary btn-sm mb-disabled">Save</button>&nbsp;' +
+                        '<button data-save="All SERVERS" title="Save changes to all servers" ' +
+                        'type="button" class="btn btn-primary btn-sm mb-disabled">Save in cluster</button>';
                     items.push(item);
                 });
             });
