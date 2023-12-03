@@ -75,7 +75,7 @@ define(["jquery", "app/rspamd", "footable"],
                     } else if (item.weight > 0) {
                         label_class = "scorebar-spam";
                     }
-                    item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
+                    item.weight = '<input class="form-control input-sm mb-disabled scorebar ' + label_class +
                         '" data-role="numerictextbox" autocomplete="off" type="number" step="0.01" tabindex="1" ' +
                         'value="' + formatter.format(item.weight) + '" id="_sym_' + item.symbol + '"></input>';
                     if (!item.time) {
@@ -232,6 +232,15 @@ define(["jquery", "app/rspamd", "footable"],
                     const value = $(this).data("save");
                     if (!value) return;
                     saveSymbols("./savesymbols", "symbolsTable", value);
+                })
+                .on("input", ".scorebar", ({target}) => {
+                    const t = $(target);
+                    t.removeClass("scorebar-ham scorebar-spam");
+                    if (target.value < 0) {
+                        t.addClass("scorebar-ham");
+                    } else if (target.value > 0) {
+                        t.addClass("scorebar-spam");
+                    }
                 });
         };
 
