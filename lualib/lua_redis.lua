@@ -1207,9 +1207,9 @@ local function load_script_task(script, task, is_write)
       else
         opt.upstream:ok()
         logger.infox(task,
-            "uploaded redis script to %s with id %s, sha: %s",
+            "uploaded redis script to %s %s %s, sha: %s",
             opt.upstream:get_addr():to_string(true),
-            script.id, data)
+            script.filename and "from file" or "with id", script.filename or script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
       end
       script.in_flight = script.in_flight - 1
@@ -1244,16 +1244,18 @@ local function load_script_taskless(script, cfg, ev_base, is_write)
     opt.is_write = is_write
     opt.callback = function(err, data)
       if err then
-        logger.errx(cfg, 'cannot upload script to %s: %s; registered from: %s:%s',
+        logger.errx(cfg, 'cannot upload script to %s: %s; registered from: %s:%s, filename: %s',
             opt.upstream:get_addr():to_string(true),
-            err, script.caller.short_src, script.caller.currentline)
+            err, script.caller.short_src, script.caller.currentline, script.filename)
         opt.upstream:fail()
         script.fatal_error = err
       else
         opt.upstream:ok()
         logger.infox(cfg,
-            "uploaded redis script to %s with id %s, sha: %s",
-            opt.upstream:get_addr():to_string(true), script.id, data)
+            "uploaded redis script to %s %s %s, sha: %s",
+            opt.upstream:get_addr():to_string(true),
+            script.filename and "from file" or "with id", script.filename or script.id,
+            data)
         script.sha = data -- We assume that sha is the same on all servers
         script.fatal_error = nil
       end
@@ -1284,7 +1286,7 @@ local function load_redis_script(script, cfg, ev_base, _)
   end
 end
 
-local function add_redis_script(script, redis_params, caller_level)
+local function add_redis_script(script, redis_params, caller_level, maybe_filename)
   if not caller_level then
     caller_level = 2
   end
@@ -1296,7 +1298,8 @@ local function add_redis_script(script, redis_params, caller_level)
     redis_params = redis_params,
     script = script,
     waitq = {}, -- callbacks pending for script being loaded
-    id = #redis_scripts + 1
+    id = #redis_scripts + 1,
+    filename = maybe_filename,
   }
 
   -- Register on load function
@@ -1333,25 +1336,26 @@ local function load_redis_script_from_file(filename, redis_params, dir)
   if not dir then
     dir = rspamd_paths.LUALIBDIR
   end
+  local path = filename
   if filename:sub(1, 1) ~= package.config:sub(1, 1) then
     -- Relative path
-    filename = lua_util.join_path(dir, "redis_scripts", filename)
+    path = lua_util.join_path(dir, "redis_scripts", filename)
   end
   -- Read file contents
-  local file = io.open(filename, "r")
+  local file = io.open(path, "r")
   if not file then
-    rspamd_logger.errx("failed to open Redis script file: %s", filename)
+    rspamd_logger.errx("failed to open Redis script file: %s", path)
     return nil
   end
   local script = file:read("*all")
   if not script then
-    rspamd_logger.errx("failed to load Redis script file: %s", filename)
+    rspamd_logger.errx("failed to load Redis script file: %s", path)
     return nil
   end
   file:close()
   script = lua_util.strip_lua_comments(script)
 
-  return add_redis_script(script, redis_params, 3)
+  return add_redis_script(script, redis_params, 3, filename)
 end
 
 exports.load_redis_script_from_file = load_redis_script_from_file
