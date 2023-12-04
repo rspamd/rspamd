@@ -1289,6 +1289,7 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 					nhdr->separator = rspamd_mempool_strdup(task->task_pool, " ");
 					rawbuf += sizeof(": ") - 1;
 					memcpy(rawbuf, raw_value, raw_len);
+					nhdr->raw_len = raw_len;
 
 					if (MESSAGE_FIELD(task, nlines_type) == RSPAMD_TASK_NEWLINES_LF) {
 						rawbuf[raw_len++] = '\n';
@@ -1302,9 +1303,10 @@ void rspamd_message_set_modified_header(struct rspamd_task *task,
 					}
 
 					rawbuf[raw_len] = '\0';
-					nhdr->raw_len = raw_len;
+
 					nhdr->decoded = rspamd_mime_header_decode(task->task_pool,
-															  raw_value, raw_len, NULL);
+															  raw_value, nhdr->raw_len,
+															  NULL);
 
 					/* Now find a position to insert a value */
 					struct rspamd_mime_header **pos = &hdr_elt->modified_chain;
