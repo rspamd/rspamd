@@ -19,15 +19,30 @@ limitations under the License.
 local exports = {}
 local lua_redis = require "lua_redis"
 local logger = require "rspamd_logger"
+local lua_util = require "lua_util"
+
+local N = "stat_redis"
 
 local function gen_classify_functor(redis_params, classify_script_id)
-  return function(task, expanded_key, stat_tokens)
-    -- TODO: write this function
+  return function(task, expanded_key, id, is_spam, stat_tokens, callback)
+
+    local function classify_redis_cb(err, data)
+      lua_util.debugm(N, task, 'classify redis cb: %s, %s', err, data)
+      if err then
+        callback(task, false, err)
+      else
+        callback(task, true, data[1], data[2], data[3])
+      end
+    end
+
+    lua_redis.exec_redis_script(classify_script_id,
+        { task = task, is_write = false, key = expanded_key },
+        classify_redis_cb, { expanded_key, stat_tokens })
   end
 end
 
 local function gen_learn_functor(redis_params, learn_script_id)
-  return function(task, expanded_key, stat_tokens)
+  return function(task, expanded_key, id, is_spam, stat_tokens, callback)
     -- TODO: write this function
   end
 end

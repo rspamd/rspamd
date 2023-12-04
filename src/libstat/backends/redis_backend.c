@@ -1248,12 +1248,14 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	st_elt = g_malloc0(sizeof(*st_elt));
 	st_elt->event_loop = ctx->event_loop;
 	st_elt->ctx = backend;
+#if 0
 	backend->stat_elt = rspamd_stat_ctx_register_async(
 		rspamd_redis_async_stat_cb,
 		rspamd_redis_async_stat_fin,
 		st_elt,
 		REDIS_STAT_TIMEOUT);
 	st_elt->async = backend->stat_elt;
+#endif
 
 	return (gpointer) backend;
 }
@@ -1284,6 +1286,7 @@ rspamd_redis_runtime(struct rspamd_task *task,
 	rt->task = task;
 	rt->ctx = ctx;
 	rt->redis_object_expanded = object_expanded;
+	rt->stcf = stcf;
 
 	rspamd_mempool_add_destructor(task->task_pool, rspamd_redis_fin, rt);
 
@@ -1382,6 +1385,7 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	gint err_idx = lua_gettop(L);
 
 	/* Function arguments */
+	lua_rawgeti(L, LUA_REGISTRYINDEX, rt->ctx->cbref_classify);
 	rspamd_lua_task_push(L, task);
 	lua_pushstring(L, rt->redis_object_expanded);
 	lua_pushinteger(L, id);
