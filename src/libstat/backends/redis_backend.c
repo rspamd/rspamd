@@ -32,8 +32,6 @@ INIT_LOG_MODULE(stat_redis)
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *) (p)
 #define REDIS_RUNTIME(p) (struct redis_stat_runtime *) (p)
-#define REDIS_BACKEND_TYPE "redis"
-#define REDIS_DEFAULT_PORT 6379
 #define REDIS_DEFAULT_OBJECT "%s%l"
 #define REDIS_DEFAULT_USERS_OBJECT "%s%l%r"
 #define REDIS_DEFAULT_TIMEOUT 0.5
@@ -63,7 +61,7 @@ struct redis_stat_runtime {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_task *task;
 	struct rspamd_statfile_config *stcf;
-	GArray *results;
+	GPtrArray *tokens;
 	gchar *redis_object_expanded;
 	guint64 learned;
 	gint id;
@@ -1080,6 +1078,10 @@ rspamd_redis_fin(gpointer data)
 	if (rt->err) {
 		g_error_free(rt->err);
 	}
+
+	if (rt->tokens) {
+		g_ptr_array_unref(rt->tokens);
+	}
 }
 
 
@@ -1268,7 +1270,6 @@ rspamd_redis_runtime(struct rspamd_task *task,
 	struct redis_stat_ctx *ctx = REDIS_CTX(c);
 	struct redis_stat_runtime *rt;
 	char *object_expanded = NULL;
-	rspamd_inet_addr_t *addr;
 
 	g_assert(ctx != NULL);
 	g_assert(stcf != NULL);
@@ -1281,6 +1282,9 @@ rspamd_redis_runtime(struct rspamd_task *task,
 					 stcf->symbol);
 		return NULL;
 	}
+
+	/* Look for the cached results */
+
 
 	rt = rspamd_mempool_alloc0(task->task_pool, sizeof(*rt));
 	rt->task = task;
@@ -1356,6 +1360,21 @@ rspamd_redis_classified(lua_State *L)
 	struct rspamd_task *task = lua_check_task(L, 1);
 	struct redis_stat_runtime *rt = REDIS_RUNTIME(rspamd_mempool_get_variable(task->task_pool, cookie));
 	/* TODO: write it */
+
+	if (rt == NULL) {
+		msg_err_task("internal error: cannot find runtime for cookie %s", cookie);
+
+		return 0;
+	}
+
+	bool result = lua_toboolean(L, 2);
+
+	if (result) {
+	}
+	else {
+	}
+
+	return 0;
 }
 
 gboolean
@@ -1407,6 +1426,8 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 		lua_settop(L, err_idx - 1);
 		return FALSE;
 	}
+
+	rt->tokens = g_ptr_array_ref(tokens);
 
 	lua_settop(L, err_idx - 1);
 	return TRUE;
