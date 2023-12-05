@@ -487,11 +487,8 @@
       {
          "commands": [
             "npm install",
-            "./node_modules/.bin/eslint -v",
-            "npm show @stylistic/eslint-plugin version",
+            "npm ls",
             "./node_modules/.bin/eslint ./",
-            "./node_modules/.bin/stylelint -v",
-            "npm show stylelint-config-standard version",
             "./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js"
          ],
          "failure": "ignore",
@@ -560,7 +557,7 @@
 }
 ---
 {
-   "hmac": "4ca5db457ae3dab86f7e81d57f72268fae0bcf446dfaf91482032e6545736524",
+   "hmac": "2351718d9a562ea71ff344fb39fcf4ad5dae5b9694219b933c1b63a8b87d2aa5",
    "kind": "signature"
 }
 ...
