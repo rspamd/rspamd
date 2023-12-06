@@ -389,6 +389,14 @@ void rspamd_mempool_set_variable(rspamd_mempool_t *pool,
  */
 gpointer rspamd_mempool_get_variable(rspamd_mempool_t *pool,
 									 const gchar *name);
+/**
+ * Steal memory pool variable
+ * @param pool
+ * @param name
+ * @return
+ */
+gpointer rspamd_mempool_steal_variable(rspamd_mempool_t *pool,
+									   const gchar *name);
 
 /**
  * Removes variable from memory pool

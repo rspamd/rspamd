@@ -1226,6 +1226,31 @@ rspamd_mempool_get_variable(rspamd_mempool_t *pool, const gchar *name)
 	return NULL;
 }
 
+gpointer
+rspamd_mempool_steal_variable(rspamd_mempool_t *pool, const gchar *name)
+{
+	if (pool->priv->variables == NULL) {
+		return NULL;
+	}
+
+	khiter_t it;
+	gint hv = rspamd_cryptobox_fast_hash(name, strlen(name),
+										 RSPAMD_MEMPOOL_VARS_HASH_SEED);
+
+	it = kh_get(rspamd_mempool_vars_hash, pool->priv->variables, hv);
+
+	if (it != kh_end(pool->priv->variables)) {
+		struct rspamd_mempool_variable *pvar;
+
+		pvar = &kh_val(pool->priv->variables, it);
+		kh_del(rspamd_mempool_vars_hash, pool->priv->variables, it);
+
+		return pvar->data;
+	}
+
+	return NULL;
+}
+
 void rspamd_mempool_remove_variable(rspamd_mempool_t *pool, const gchar *name)
 {
 	if (pool->priv->variables != NULL) {
