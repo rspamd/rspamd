@@ -34,7 +34,12 @@ Process message callback
 
 Lua batch mode
   ${result} =  Run Process  ${RSPAMADM}  lua  -b  ${RSPAMD_TESTDIR}/lua/rspamadm/test_batch.lua
-  Should Match Regexp  ${result.stderr}  ^$
+  Should Be Equal  ${result.stderr}  hello world
+  Should Match Regexp  ${result.stdout}  ^$
   Should Be Equal As Integers  ${result.rc}  0
-  Should Be Equal  ${result.stdout}  hello world
 
+Verbose mode
+  ${result} =  Run Process  ${RSPAMADM}  -v  lua  ${RSPAMD_TESTDIR}/lua/rspamadm/test_verbose.lua
+  Should Match Regexp  ${result.stderr}  ^$
+  Should Match Regexp  ${result.stdout}  hello world\n
+  Should Be Equal As Integers  ${result.rc}  0
