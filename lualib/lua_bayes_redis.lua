@@ -31,7 +31,7 @@ local function gen_classify_functor(redis_params, classify_script_id)
       if err then
         callback(task, false, err)
       else
-        callback(task, true, data[1], data[2], data[3])
+        callback(task, true, data[1], data[2], data[3], data[4])
       end
     end
 
