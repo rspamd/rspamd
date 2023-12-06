@@ -102,12 +102,14 @@ public:
 										   bool is_spam) -> std::optional<redis_stat_runtime<T> *>
 	{
 		auto var_name = fmt::format("{}_{}", redis_object_expanded, is_spam ? "S" : "H");
-		auto *res = rspamd_mempool_steal_variable(task->task_pool, var_name.c_str());
+		auto *res = rspamd_mempool_get_variable(task->task_pool, var_name.c_str());
 
 		if (res) {
+			msg_debug_bayes("recovered runtime from mempool at %s", var_name.c_str());
 			return reinterpret_cast<redis_stat_runtime<T> *>(res);
 		}
 		else {
+			msg_debug_bayes("no runtime at %s", var_name.c_str());
 			return std::nullopt;
 		}
 	}
@@ -139,6 +141,7 @@ public:
 		auto var_name = fmt::format("{}_{}", redis_object_expanded, is_spam ? "S" : "H");
 		/* We do not set destructor for the variable, as it should be already added on creation */
 		rspamd_mempool_set_variable(task->task_pool, var_name.c_str(), (gpointer) this, nullptr);
+		msg_debug_bayes("saved runtime in mempool at %s", var_name.c_str());
 	}
 };
 
