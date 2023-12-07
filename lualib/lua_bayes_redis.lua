@@ -42,8 +42,19 @@ local function gen_classify_functor(redis_params, classify_script_id)
 end
 
 local function gen_learn_functor(redis_params, learn_script_id)
-  return function(task, expanded_key, id, is_spam, stat_tokens, callback)
-    -- TODO: write this function
+  return function(task, expanded_key, id, is_spam, symbol, is_unlearn, stat_tokens, callback)
+    local function learn_redis_cb(err, data)
+      lua_util.debugm(N, task, 'learn redis cb: %s, %s', err, data)
+      if err then
+        callback(task, false, err)
+      else
+        callback(task, true)
+      end
+    end
+
+    lua_redis.exec_redis_script(learn_script_id,
+        { task = task, is_write = false, key = expanded_key },
+        learn_redis_cb, { expanded_key, is_spam, symbol, is_unlearn, stat_tokens })
   end
 end
 
