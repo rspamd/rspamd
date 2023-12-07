@@ -7,9 +7,9 @@
 -- key5 - set of tokens encoded in messagepack array of int64_t
 
 local prefix = KEYS[1]
-local is_spam = KEYS[2]
+local is_spam = KEYS[2] == 'true' and true or false
 local symbol = KEYS[3]
-local is_unlearn = KEYS[4]
+local is_unlearn = KEYS[4] == 'true' and true or false
 local input_tokens = cmsgpack.unpack(KEYS[5])
 
 local prefix_underscore = prefix .. '_'

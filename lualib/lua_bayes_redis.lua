@@ -54,7 +54,7 @@ local function gen_learn_functor(redis_params, learn_script_id)
 
     lua_redis.exec_redis_script(learn_script_id,
         { task = task, is_write = false, key = expanded_key },
-        learn_redis_cb, { expanded_key, is_spam, symbol, is_unlearn, stat_tokens })
+        learn_redis_cb, { expanded_key, tostring(is_spam), symbol, tostring(is_unlearn), stat_tokens })
   end
 end
 
