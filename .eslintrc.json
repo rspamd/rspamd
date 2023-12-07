@@ -67,6 +67,7 @@
         "no-invalid-this": "off",
         "sort-keys": "off",
 
-        "@stylistic/function-paren-newline": "off"
+        "@stylistic/function-paren-newline": "off",
+        "@stylistic/indent-binary-ops": "off"
     }
 }

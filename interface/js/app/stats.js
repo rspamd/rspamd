@@ -70,9 +70,9 @@ define(["jquery", "app/rspamd", "d3pie", "d3"],
                     const c = (typeof cls === "undefined") ? "" : cls;
                     const titleAtt = d3.format(",")(v) + " " + k;
                     return '<div class="card stat-box d-inline-block text-center shadow-sm me-3 px-3">' +
-                      '<div class="widget overflow-hidden p-2' + c + '" title="' + titleAtt +
-                      '"><strong class="d-block mt-2 mb-1 fw-bold">' +
-                    d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
+                        '<div class="widget overflow-hidden p-2' + c + '" title="' + titleAtt +
+                        '"><strong class="d-block mt-2 mb-1 fw-bold">' +
+                        d3.format(".3~s")(v) + "</strong>" + k + "</div></div>";
                 }
 
                 if (i === "auth" || i === "error") return; // Skip to the next iteration
