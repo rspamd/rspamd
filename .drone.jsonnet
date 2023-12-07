@@ -279,11 +279,8 @@ local noarch_pipeline = {
       failure: 'ignore',
       commands: [
         'npm install',
-        './node_modules/.bin/eslint -v',
-        'npm show @stylistic/eslint-plugin version',
+        'npm ls',
         './node_modules/.bin/eslint ./',
-        './node_modules/.bin/stylelint -v',
-        'npm show stylelint-config-standard version',
         './node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js',
       ],
     },
