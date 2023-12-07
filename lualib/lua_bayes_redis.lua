@@ -21,7 +21,7 @@ local lua_redis = require "lua_redis"
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
-local N = "stat_redis"
+local N = "bayes"
 
 local function gen_classify_functor(redis_params, classify_script_id)
   return function(task, expanded_key, id, is_spam, stat_tokens, callback)
@@ -52,7 +52,7 @@ end
 --- @param classifier_ucl ucl of the classifier config
 --- @param statfile_ucl ucl of the statfile config
 --- @return a pair of (classify_functor, learn_functor) or `nil` in case of error
-exports.lua_bayes_init_classifier = function(classifier_ucl, statfile_ucl)
+exports.lua_bayes_init_classifier = function(classifier_ucl, statfile_ucl, symbol, stat_periodic_cb)
   local redis_params
 
   if classifier_ucl.backend then
@@ -78,6 +78,24 @@ exports.lua_bayes_init_classifier = function(classifier_ucl, statfile_ucl)
 
   local classify_script_id = lua_redis.load_redis_script_from_file("bayes_classify.lua", redis_params)
   local learn_script_id = lua_redis.load_redis_script_from_file("bayes_learn.lua", redis_params)
+  local stat_script_id = lua_redis.load_redis_script_from_file("bayes_stat.lua", redis_params)
+  local max_users = classifier_ucl.max_users or 1000
+
+  rspamd_config:add_on_load(function(_, ev_base, _)
+
+    rspamd_config:add_periodic(ev_base, 0.0, function(cfg, _)
+
+      local function stat_redis_cb(err, data)
+        -- TODO: write this function
+
+      end
+
+      lua_redis.exec_redis_script(stat_script_id,
+          { ev_base = ev_base, cfg = cfg, is_write = false },
+          stat_redis_cb, { symbol, max_users })
+      return 30.0 -- TODO: make configurable
+    end)
+  end)
 
   return gen_classify_functor(redis_params, classify_script_id), gen_learn_functor(redis_params, learn_script_id)
 end

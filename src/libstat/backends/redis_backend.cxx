@@ -43,7 +43,6 @@ INIT_LOG_MODULE(stat_redis)
 struct redis_stat_ctx {
 	lua_State *L;
 	struct rspamd_statfile_config *stcf;
-	struct rspamd_stat_async_elt *stat_elt;
 	const char *redis_object = REDIS_DEFAULT_OBJECT;
 	bool enable_users = false;
 	bool store_tokens = false;
@@ -143,27 +142,6 @@ public:
 		rspamd_mempool_set_variable(task->task_pool, var_name.c_str(), (gpointer) this, nullptr);
 		msg_debug_bayes("saved runtime in mempool at %s", var_name.c_str());
 	}
-};
-
-/* Used to get statistics from redis */
-struct rspamd_redis_stat_cbdata;
-
-struct rspamd_redis_stat_elt {
-	struct redis_stat_ctx *ctx;
-	struct rspamd_stat_async_elt *async;
-	struct ev_loop *event_loop;
-	ucl_object_t *stat;
-	struct rspamd_redis_stat_cbdata *cbdata;
-};
-
-struct rspamd_redis_stat_cbdata {
-	struct rspamd_redis_stat_elt *elt;
-	redisAsyncContext *redis;
-	ucl_object_t *cur;
-	GPtrArray *cur_keys;
-	struct upstream *selected;
-	guint inflight;
-	gboolean wanna_die;
 };
 
 #define GET_TASK_ELT(task, elt) (task == nullptr ? nullptr : (task)->elt)
@@ -1132,6 +1110,21 @@ rspamd_redis_async_stat_fin(struct rspamd_stat_async_elt *elt, gpointer d)
 
 #endif
 
+static int
+rspamd_redis_stat_cb(lua_State *L)
+{
+	const auto *cookie = lua_tostring(L, lua_upvalueindex(1));
+	auto *cfg = lua_check_config(L, 1);
+	auto *backend = REDIS_CTX(rspamd_mempool_get_variable(cfg->cfg_pool, cookie));
+
+	if (backend == nullptr) {
+		msg_err("internal error: cookie %s is not found", cookie);
+
+		return 0;
+	}
+
+	return 0;
+}
 
 static bool
 rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
@@ -1239,8 +1232,18 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 	/* Push arguments */
 	ucl_object_push_lua(L, classifier_obj, false);
 	ucl_object_push_lua(L, statfile_obj, false);
+	lua_pushstring(L, backend->stcf->symbol);
 
-	if (lua_pcall(L, 2, 2, err_idx) != 0) {
+	/* Store backend in random cookie */
+	char *cookie = (char *) rspamd_mempool_alloc(cfg->cfg_pool, 16);
+	rspamd_random_hex(cookie, 16);
+	cookie[15] = '\0';
+	rspamd_mempool_set_variable(cfg->cfg_pool, cookie, backend, nullptr);
+	/* Callback */
+	lua_pushstring(L, cookie);
+	lua_pushcclosure(L, &rspamd_redis_stat_cb, 1);
+
+	if (lua_pcall(L, 4, 2, err_idx) != 0) {
 		msg_err("call to lua_bayes_init_classifier "
 				"script failed: %s",
 				lua_tostring(L, -1));
@@ -1289,9 +1292,6 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	st->stcf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 	backend->stcf = st->stcf;
 
-	auto *st_elt = g_new0(struct rspamd_redis_stat_elt, 1);
-	st_elt->event_loop = ctx->event_loop;
-	st_elt->ctx = backend;
 #if 0
 	backend->stat_elt = rspamd_stat_ctx_register_async(
 		rspamd_redis_async_stat_cb,
@@ -1629,13 +1629,7 @@ rspamd_redis_get_stat(gpointer runtime,
 	struct rspamd_redis_stat_elt *st;
 	redisAsyncContext *redis;
 
-	if (rt->ctx->stat_elt) {
-		st = (struct rspamd_redis_stat_elt *) rt->ctx->stat_elt->ud;
-
-		if (st->stat) {
-			return ucl_object_ref(st->stat);
-		}
-	}
+	/* TODO: write extraction */
 
 	return nullptr;
 }
