@@ -1051,7 +1051,7 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 				return 4;
 			}
 			else {
-				return 3; /* No time component */
+				return 2; /* No time component */
 			}
 		}
 		else if (log_systemd) {
