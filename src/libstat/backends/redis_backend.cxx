@@ -53,6 +53,8 @@ struct redis_stat_ctx {
 	int cbref_classify = -1;
 	int cbref_learn = -1;
 
+	ucl_object_t *cur_stat = nullptr;
+
 	explicit redis_stat_ctx(lua_State *_L)
 		: L(_L)
 	{
@@ -404,6 +406,29 @@ rspamd_redis_stat_cb(lua_State *L)
 		return 0;
 	}
 
+	auto *cur_obj = ucl_object_lua_import(L, 2);
+	msg_debug_bayes_cfg("got stat object for %s", backend->stcf->symbol);
+	/* Enrich with some default values that are meaningless for redis */
+	ucl_object_insert_key(cur_obj,
+						  ucl_object_typed_new(UCL_INT), "used", 0, false);
+	ucl_object_insert_key(cur_obj,
+						  ucl_object_typed_new(UCL_INT), "total", 0, false);
+	ucl_object_insert_key(cur_obj,
+						  ucl_object_typed_new(UCL_INT), "size", 0, false);
+	ucl_object_insert_key(cur_obj,
+						  ucl_object_fromstring(backend->stcf->symbol),
+						  "symbol", 0, false);
+	ucl_object_insert_key(cur_obj, ucl_object_fromstring("redis"),
+						  "type", 0, false);
+	ucl_object_insert_key(cur_obj, ucl_object_fromint(0),
+						  "languages", 0, false);
+
+	if (backend->cur_stat) {
+		ucl_object_unref(backend->cur_stat);
+	}
+
+	backend->cur_stat = cur_obj;
+
 	return 0;
 }
 
@@ -502,8 +527,8 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	auto err_idx = lua_gettop(L);
 
 	/* Obtain function */
-	if (!rspamd_lua_require_function(L, "lua_bayes_redis", "lua_bayes_init_classifier")) {
-		msg_err_config("cannot require lua_bayes_redis.lua_bayes_init_classifier");
+	if (!rspamd_lua_require_function(L, "lua_bayes_redis", "lua_bayes_init_statfile")) {
+		msg_err_config("cannot require lua_bayes_redis.lua_bayes_init_statfile");
 		lua_settop(L, err_idx - 1);
 
 		return nullptr;
@@ -513,17 +538,21 @@ rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 	ucl_object_push_lua(L, st->classifier->cfg->opts, false);
 	ucl_object_push_lua(L, st->stcf->opts, false);
 	lua_pushstring(L, backend->stcf->symbol);
+	lua_pushboolean(L, backend->stcf->is_spam);
+	auto **pev_base = (struct ev_loop **) lua_newuserdata(L, sizeof(struct ev_loop *));
+	*pev_base = ctx->event_loop;
+	rspamd_lua_setclass(L, "rspamd{ev_base}", -1);
 
 	/* Store backend in random cookie */
 	char *cookie = (char *) rspamd_mempool_alloc(cfg->cfg_pool, 16);
 	rspamd_random_hex(cookie, 16);
 	cookie[15] = '\0';
 	rspamd_mempool_set_variable(cfg->cfg_pool, cookie, backend.get(), nullptr);
-	/* Callback */
+	/* Callback + 1 upvalue */
 	lua_pushstring(L, cookie);
 	lua_pushcclosure(L, &rspamd_redis_stat_cb, 1);
 
-	if (lua_pcall(L, 4, 2, err_idx) != 0) {
+	if (lua_pcall(L, 6, 2, err_idx) != 0) {
 		msg_err("call to lua_bayes_init_classifier "
 				"script failed: %s",
 				lua_tostring(L, -1));
@@ -942,12 +971,8 @@ rspamd_redis_get_stat(gpointer runtime,
 					  gpointer ctx)
 {
 	auto *rt = REDIS_RUNTIME(runtime);
-	struct rspamd_redis_stat_elt *st;
-	redisAsyncContext *redis;
 
-	/* TODO: write extraction */
-
-	return nullptr;
+	return ucl_object_ref(rt->ctx->cur_stat);
 }
 
 gpointer
