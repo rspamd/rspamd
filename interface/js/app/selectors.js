@@ -96,7 +96,7 @@ define(["jquery", "app/rspamd"],
             $("#sidebar-" + side).toggleClass("collapsed");
             let contentClass = "col-lg-6";
             const openSidebarsCount = $("#sidebar-left").hasClass("collapsed") +
-                    $("#sidebar-right").hasClass("collapsed");
+                $("#sidebar-right").hasClass("collapsed");
             switch (openSidebarsCount) {
                 case 1:
                     contentClass = "col-lg-9";

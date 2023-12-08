@@ -345,8 +345,8 @@ define(["jquery", "nprogress", "stickytabs", "visibility",
 
     function alertMessage(alertClass, alertText) {
         const a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
-                "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
-                "<strong>" + alertText + "</strong>");
+            "<button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"alert\" title=\"Dismiss\"></button>" +
+            "<strong>" + alertText + "</strong>");
         $(".notification-area").append(a);
 
         setTimeout(() => {
