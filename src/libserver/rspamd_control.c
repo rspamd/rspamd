@@ -922,6 +922,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				}
 				break;
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
+#ifdef WITH_HYPERSCAN
 				/* Load RE cache to provide it for new forks */
 				if (rspamd_re_cache_is_hs_loaded(rspamd_main->cfg->re_cache) != RSPAMD_HYPERSCAN_LOADED_FULL ||
 					cmd.cmd.hs_loaded.forced) {
@@ -932,7 +933,9 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				}
 
 				/* After getting this notice, we can clean up old hyperscan files */
+
 				rspamd_hyperscan_notice_loaded();
+
 				msg_info_main("received hyperscan cache loaded from %s",
 							  cmd.cmd.hs_loaded.cache_dir);
 
@@ -945,6 +948,7 @@ rspamd_srv_handler(EV_P_ ev_io *w, int revents)
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd(rspamd_main, &wcmd, rfd,
 											 rspamd_control_ignore_io_handler, NULL, worker->pid);
+#endif
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
 				/* Broadcast command to all workers */

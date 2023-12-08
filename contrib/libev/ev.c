@@ -843,6 +843,8 @@ struct signalfd_siginfo
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("tb1 0,%%r0,128" : : : "memory")
     #elif defined __sh__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ (""         : : : "memory")
+    #elif defined __loongarch__ || __loongarch64
+      #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("dbar %0 ": : "I"(0) : "memory")
     #endif
   #endif
 #endif
