@@ -146,7 +146,7 @@ public:
 		}
 
 		for (auto [idx, val]: *results) {
-			tok = (rspamd_token_t *) g_ptr_array_index(tokens, idx);
+			tok = (rspamd_token_t *) g_ptr_array_index(tokens, idx - 1);
 			tok->values[id] = val;
 		}
 
@@ -679,7 +679,7 @@ rspamd_redis_classified(lua_State *L)
 			rt->learned = learned;
 			redis_stat_runtime<float>::result_type *res;
 
-			res = new redis_stat_runtime<float>::result_type(lua_objlen(L, tokens_pos));
+			res = new redis_stat_runtime<float>::result_type();
 
 			for (lua_pushnil(L); lua_next(L, tokens_pos); lua_pop(L, 1)) {
 				lua_rawgeti(L, -1, 1);
@@ -715,6 +715,9 @@ rspamd_redis_classified(lua_State *L)
 			filler_func(opposite_rt_maybe.value(), L, lua_tointeger(L, 4), 6);
 		}
 
+		/* Mark task as being processed */
+		task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS | RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
+
 		/* Process all tokens */
 		g_assert(rt->tokens != nullptr);
 		rt->process_tokens(rt->tokens);
@@ -747,13 +750,14 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 
 	if (!rt->need_redis_call) {
 		/* No need to do anything, as it is already done in the opposite class processing */
+		/* However, we need to store id as it is needed for further tokens processing */
+		rt->id = id;
 
 		return TRUE;
 	}
 
 	gsize tokens_len;
 	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, tokens, &tokens_len);
-
 	rt->id = id;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);

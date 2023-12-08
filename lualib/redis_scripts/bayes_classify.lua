@@ -7,8 +7,8 @@ local prefix = KEYS[1]
 local output_spam = {}
 local output_ham = {}
 
-local learned_ham = redis.call('HGET', prefix, 'learns_ham') or 0
-local learned_spam = redis.call('HGET', prefix, 'learns_spam') or 0
+local learned_ham = tonumber(redis.call('HGET', prefix, 'learns_ham')) or 0
+local learned_spam = tonumber(redis.call('HGET', prefix, 'learns_spam')) or 0
 local prefix_underscore = prefix .. '_'
 
 -- Output is a set of pairs (token_index, token_count), tokens that are not
