@@ -1052,37 +1052,6 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 	}
 
 	glong r;
-
-	if (iov_ctx->niov == 0) {
-		/* This is the case when we just return a number of IOV required for the logging */
-		if (log_json) {
-			iov_ctx->niov = 3; /* Preamble, message, "}\n" */
-		}
-		else {
-			if (log_rspamadm) {
-				if (logger->log_level == G_LOG_LEVEL_DEBUG) {
-					iov_ctx->niov = 4;
-				}
-				else {
-					iov_ctx->niov = 3; /* No time component */
-				}
-			}
-			else if (log_systemd) {
-				iov_ctx->niov = 3;
-			}
-			else {
-				if (log_color) {
-					iov_ctx->niov = 5;
-				}
-				else {
-					iov_ctx->niov = 4;
-				}
-			}
-		}
-
-		g_assert(iov_ctx->niov <= G_N_ELEMENTS(iov_ctx->iov));
-	}
-
 	static gchar timebuf[64], modulebuf[64];
 	static gchar tmpbuf[256];
 
@@ -1208,6 +1177,8 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		}
 		iov_ctx->iov[2].iov_base = (void *) "\"}\n";
 		iov_ctx->iov[2].iov_len = sizeof("\"}\n") - 1;
+
+		iov_ctx->niov = 3;
 	}
 	else if (G_LIKELY(!log_rspamadm)) {
 		if (!log_systemd) {
@@ -1304,9 +1275,13 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		iov_ctx->iov[3].iov_base = (void *) &lf_chr;
 		iov_ctx->iov[3].iov_len = 1;
 
+		iov_ctx->niov = 4;
+
 		if (log_color) {
 			iov_ctx->iov[4].iov_base = "\033[0m";
 			iov_ctx->iov[4].iov_len = sizeof("\033[0m") - 1;
+
+			iov_ctx->niov = 5;
 		}
 	}
 	else {
@@ -1324,7 +1299,12 @@ void rspamd_log_fill_iov(struct rspamd_logger_iov_ctx *iov_ctx,
 		iov_ctx->iov[niov++].iov_len = mlen;
 		iov_ctx->iov[niov].iov_base = (void *) &lf_chr;
 		iov_ctx->iov[niov++].iov_len = 1;
+
+		iov_ctx->niov = niov;
 	}
+
+	// this is kind of "after-the-fact" check, but it's mostly for debugging-only
+	g_assert(iov_ctx->niov <= G_N_ELEMENTS(iov_ctx->iov));
 }
 
 void rspamd_log_iov_free(struct rspamd_logger_iov_ctx *iov_ctx)
