@@ -24,6 +24,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <optional>
 
 #define msg_debug_stat_redis(...) rspamd_conditional_debug_fast(nullptr, nullptr,                                                 \
 																rspamd_stat_redis_log_id, "stat_redis", task->task_pool->tag.uid, \
@@ -47,13 +48,30 @@ struct redis_stat_ctx {
 	bool enable_users = false;
 	bool store_tokens = false;
 	bool enable_signatures = false;
-	unsigned expiry;
-	unsigned max_users = REDIS_MAX_USERS;
 	int cbref_user = -1;
 
 	int cbref_classify = -1;
 	int cbref_learn = -1;
-	int conf_ref = -1;
+
+	explicit redis_stat_ctx(lua_State *_L)
+		: L(_L)
+	{
+	}
+
+	~redis_stat_ctx()
+	{
+		if (cbref_user != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref_user);
+		}
+
+		if (cbref_classify != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref_classify);
+		}
+
+		if (cbref_learn != -1) {
+			luaL_unref(L, LUA_REGISTRYINDEX, cbref_learn);
+		}
+	}
 };
 
 
@@ -152,22 +170,6 @@ static GQuark
 rspamd_redis_stat_quark(void)
 {
 	return g_quark_from_static_string(M);
-}
-
-static inline struct upstream_list *
-rspamd_redis_get_servers(struct redis_stat_ctx *ctx,
-						 const gchar *what)
-{
-	lua_State *L = ctx->L;
-	struct upstream_list *res;
-
-	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->conf_ref);
-	lua_pushstring(L, what);
-	lua_gettable(L, -2);
-	res = *((struct upstream_list **) lua_touserdata(L, -1));
-	lua_settop(L, 0);
-
-	return res;
 }
 
 /*
@@ -405,7 +407,7 @@ rspamd_redis_stat_cb(lua_State *L)
 	return 0;
 }
 
-static bool
+static void
 rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 								   const ucl_object_t *statfile_obj,
 								   const ucl_object_t *classifier_obj,
@@ -480,45 +482,18 @@ rspamd_redis_parse_classifier_opts(struct redis_stat_ctx *backend,
 	else {
 		backend->enable_signatures = FALSE;
 	}
-
-	elt = ucl_object_lookup_any(classifier_obj, "expiry", "expire", nullptr);
-	if (elt) {
-		backend->expiry = ucl_object_toint(elt);
-	}
-	else {
-		backend->expiry = 0;
-	}
-
-	elt = ucl_object_lookup(classifier_obj, "max_users");
-	if (elt) {
-		backend->max_users = ucl_object_toint(elt);
-	}
-	else {
-		backend->max_users = REDIS_MAX_USERS;
-	}
-
-	return true;
 }
 
 gpointer
 rspamd_redis_init(struct rspamd_stat_ctx *ctx,
 				  struct rspamd_config *cfg, struct rspamd_statfile *st)
 {
-	gint conf_ref = -1;
 	auto *L = RSPAMD_LUA_CFG_STATE(cfg);
 
-	auto backend = std::make_unique<struct redis_stat_ctx>();
-	backend->L = L;
-	backend->max_users = REDIS_MAX_USERS;
-
-	backend->conf_ref = conf_ref;
-
+	auto backend = std::make_unique<struct redis_stat_ctx>(L);
 	lua_settop(L, 0);
 
-	if (!rspamd_redis_parse_classifier_opts(backend.get(), st->stcf->opts, st->classifier->cfg->opts, cfg)) {
-		msg_err_config("cannot init redis backend for %s", st->stcf->symbol);
-		return nullptr;
-	}
+	rspamd_redis_parse_classifier_opts(backend.get(), st->stcf->opts, st->classifier->cfg->opts, cfg);
 
 	st->stcf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 	backend->stcf = st->stcf;
@@ -633,21 +608,6 @@ rspamd_redis_runtime(struct rspamd_task *task,
 void rspamd_redis_close(gpointer p)
 {
 	struct redis_stat_ctx *ctx = REDIS_CTX(p);
-	lua_State *L = ctx->L;
-
-	/* TODO: move to dtor */
-	if (ctx->conf_ref) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->conf_ref);
-	}
-
-	if (ctx->cbref_learn) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->cbref_learn);
-	}
-
-	if (ctx->cbref_classify) {
-		luaL_unref(L, LUA_REGISTRYINDEX, ctx->cbref_classify);
-	}
-
 	delete ctx;
 }
 
