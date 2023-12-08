@@ -8,8 +8,8 @@ local input_tokens = cmsgpack.unpack(KEYS[2])
 local output_spam = {}
 local output_ham = {}
 
-local learned_ham = redis.call('HGET', prefix, 'learned_ham') or 0
-local learned_spam = redis.call('HGET', prefix, 'learned_spam') or 0
+local learned_ham = redis.call('HGET', prefix, 'learns_ham') or 0
+local learned_spam = redis.call('HGET', prefix, 'learns_spam') or 0
 local prefix_underscore = prefix .. '_'
 
 -- Output is a set of pairs (token_index, token_count), tokens that are not
