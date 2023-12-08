@@ -4,7 +4,7 @@
 -- key2 - boolean is_spam
 -- key3 - string symbol
 -- key4 - boolean is_unlearn
--- key5 - set of tokens encoded in messagepack array of int64_t
+-- key5 - set of tokens encoded in messagepack array of strings
 
 local prefix = KEYS[1]
 local is_spam = KEYS[2] == 'true' and true or false
@@ -21,5 +21,5 @@ redis.call('HSET', prefix, 'version', '2') -- new schema
 redis.call('HINCRBY', prefix, learned_key, is_unlearn and -1 or 1) -- increase or decrease learned count
 
 for _, token in ipairs(input_tokens) do
-  redis.call('HINCRBY', prefix_underscore .. tostring(token), hash_key, 1)
+  redis.call('HINCRBY', prefix_underscore .. token, hash_key, 1)
 end

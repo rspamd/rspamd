@@ -657,13 +657,13 @@ void rspamd_redis_close(gpointer p)
 static char *
 rspamd_redis_serialize_tokens(struct rspamd_task *task, GPtrArray *tokens, gsize *ser_len)
 {
-	/* Each token is int64_t that requires 9 bytes + 4 bytes array len + 1 byte array magic */
-	gsize req_len = tokens->len * 9 + 5, i;
-	gchar *buf, *p;
+	/* Each token is int64_t that requires 10 bytes (2 int32_t) + 4 bytes array len + 1 byte array magic */
+	char max_int64_str[] = "18446744073709551615";
+	auto req_len = tokens->len * sizeof(max_int64_str) + 5;
 	rspamd_token_t *tok;
 
-	buf = (gchar *) rspamd_mempool_alloc(task->task_pool, req_len);
-	p = buf;
+	auto *buf = (gchar *) rspamd_mempool_alloc(task->task_pool, req_len);
+	auto *p = buf;
 
 	/* Array */
 	*p++ = (gchar) 0xdd;
@@ -673,13 +673,15 @@ rspamd_redis_serialize_tokens(struct rspamd_task *task, GPtrArray *tokens, gsize
 	*p++ = (gchar) ((tokens->len >> 8) & 0xff);
 	*p++ = (gchar) (tokens->len & 0xff);
 
+	int i;
 	PTR_ARRAY_FOREACH(tokens, i, tok)
 	{
-		*p++ = (gchar) 0xd3;
+		char numbuf[sizeof(max_int64_str)];
+		auto r = rspamd_snprintf(numbuf, sizeof(numbuf), "%uL", tok->data);
+		*p++ = (gchar) ((r & 0xff) | 0xa0);
 
-		guint64 val = GUINT64_TO_BE(tok->data);
-		memcpy(p, &val, sizeof(val));
-		p += sizeof(val);
+		memcpy(p, &numbuf, r);
+		p += r;
 	}
 
 	*ser_len = p - buf;

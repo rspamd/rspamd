@@ -1,10 +1,9 @@
 -- Lua script to perform bayes classification
 -- This script accepts the following parameters:
 -- key1 - prefix for bayes tokens (e.g. for per-user classification)
--- key2 - set of tokens encoded in messagepack array of int64_t
+-- key2 - set of tokens encoded in messagepack array of strings
 
 local prefix = KEYS[1]
-local input_tokens = cmsgpack.unpack(KEYS[2])
 local output_spam = {}
 local output_ham = {}
 
@@ -17,8 +16,9 @@ local prefix_underscore = prefix .. '_'
 -- This optimisation will save a lot of space for sparse tokens, and in Bayes that assumption is normally held
 
 if learned_ham > 0 and learned_spam > 0 then
+  local input_tokens = cmsgpack.unpack(KEYS[2])
   for i, token in ipairs(input_tokens) do
-    local token_data = redis.call('HMGET', prefix_underscore .. tostring(token), 'H', 'S')
+    local token_data = redis.call('HMGET', prefix_underscore .. token, 'H', 'S')
 
     if token_data then
       local ham_count = token_data[1]
