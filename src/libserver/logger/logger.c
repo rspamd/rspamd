@@ -1055,7 +1055,7 @@ gsize rspamd_log_fill_iov(struct iovec *iov,
 			}
 		}
 		else if (log_systemd) {
-			return 3;
+			return 4;
 		}
 		else {
 			if (log_color) {
