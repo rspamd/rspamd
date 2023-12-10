@@ -1586,14 +1586,14 @@ rspamd_get_calendar_ticks(void)
 	return res;
 }
 
-void rspamd_random_hex(guchar *buf, guint64 len)
+void rspamd_random_hex(gchar *buf, guint64 len)
 {
 	static const gchar hexdigests[16] = "0123456789abcdef";
 	gint64 i;
 
 	g_assert(len > 0);
 
-	ottery_rand_bytes(buf, ceil(len / 2.0));
+	ottery_rand_bytes((void *) buf, ceil(len / 2.0));
 
 	for (i = (gint64) len - 1; i >= 0; i -= 2) {
 		buf[i] = hexdigests[buf[i / 2] & 0xf];

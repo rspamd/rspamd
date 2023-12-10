@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -113,7 +113,7 @@ public:
 		if (_db) {
 			db = _db;
 		}
-		if( _username ) {
+		if (_username) {
 			username = _username;
 		}
 		if (_password) {
@@ -418,7 +418,7 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 	pool->register_context(ctx, this);
 	ctx->data = this;
 	memset(tag, 0, sizeof(tag));
-	rspamd_random_hex((guchar *) tag, sizeof(tag) - 1);
+	rspamd_random_hex(tag, sizeof(tag) - 1);
 
 	redisLibevAttach(pool->event_loop, ctx);
 	redisAsyncSetDisconnectCallback(ctx, redis_pool_connection::redis_on_disconnect);
@@ -426,7 +426,7 @@ redis_pool_connection::redis_pool_connection(redis_pool *_pool,
 	if (!username.empty()) {
 		if (!password.empty()) {
 			redisAsyncCommand(ctx, nullptr, nullptr,
-						  "AUTH %s %s", username.c_str(), password.c_str());
+							  "AUTH %s %s", username.c_str(), password.c_str());
 		}
 		else {
 			msg_warn("Redis requires a password when username is supplied");

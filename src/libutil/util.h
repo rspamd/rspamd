@@ -377,7 +377,7 @@ guint64 rspamd_hash_seed(void);
  * @param buf
  * @param len
  */
-void rspamd_random_hex(guchar *buf, guint64 len);
+void rspamd_random_hex(gchar *buf, guint64 len);
 
 /**
  * Returns
