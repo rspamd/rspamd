@@ -111,18 +111,17 @@ exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol,
         logger.warn(cfg, 'cannot get bayes statistics for %s: %s', symbol, err)
       else
         local new_cursor = data[1]
+        current_data.users = current_data.users + data[2]
+        current_data.revision = current_data.revision + data[3]
         if new_cursor == 0 then
           -- Done iteration
-          final_data = current_data
+          final_data = lua_util.shallowcopy(current_data)
           current_data = {
             users = 0,
             revision = 0,
           }
+          lua_util.debugm(N, cfg, 'final data: %s', final_data)
           stat_periodic_cb(cfg, final_data)
-        else
-          -- Collect more data
-          current_data.users = current_data.users + data[2]
-          current_data.revision = current_data.revision + data[3]
         end
 
         cursor = new_cursor
