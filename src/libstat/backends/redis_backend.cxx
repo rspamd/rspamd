@@ -603,9 +603,11 @@ rspamd_redis_runtime(struct rspamd_task *task,
 																					object_expanded, stcf->is_spam);
 
 		if (maybe_existing) {
-			/* Update stcf to correspond to what we have been asked */
-			maybe_existing.value()->stcf = stcf;
-			return maybe_existing.value();
+			auto *rt = maybe_existing.value();
+			/* Update stcf and ctx to correspond to what we have been asked */
+			rt->stcf = stcf;
+			rt->ctx = ctx;
+			return rt;
 		}
 	}
 
