@@ -66,20 +66,33 @@ end
 exports.lua_bayes_init_statfile = function(classifier_ucl, statfile_ucl, symbol, is_spam, ev_base, stat_periodic_cb)
   local redis_params
 
-  if classifier_ucl.backend then
-    redis_params = lua_redis.try_load_redis_servers(classifier_ucl.backend, rspamd_config, true)
+  -- Try load from statfile options
+  if statfile_ucl.redis then
+    redis_params = lua_redis.try_load_redis_servers(statfile_ucl.redis, rspamd_config, true)
   end
 
-  -- Try load from statfile options
   if not redis_params then
     if statfile_ucl then
       redis_params = lua_redis.try_load_redis_servers(statfile_ucl, rspamd_config, true)
     end
   end
 
-  -- Load directly from classifier config
+  -- Try load from classifier config
+  if not redis_params and classifier_ucl.backend then
+    redis_params = lua_redis.try_load_redis_servers(classifier_ucl.backend, rspamd_config, true)
+  end
+
+  if not redis_params and classifier_ucl.redis then
+    redis_params = lua_redis.try_load_redis_servers(classifier_ucl.redis, rspamd_config, true)
+  end
+
   if not redis_params then
-    redis_params = lua_redis.try_load_redis_servers(classifier_ucl, rspamd_config, false, "statistics")
+    redis_params = lua_redis.try_load_redis_servers(classifier_ucl, rspamd_config, true)
+  end
+
+  -- Try load global options
+  if not redis_params then
+    redis_params = lua_redis.try_load_redis_servers(rspamd_config:get_all_opt('redis'), rspamd_config, true)
   end
 
   if not redis_params then
