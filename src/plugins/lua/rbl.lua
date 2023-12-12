@@ -1117,11 +1117,11 @@ local function add_rbl(key, rbl, global_opts)
     end
   end
 
-  if not rbl.whitelist and global_opts.url_whitelist and
+  if not rbl.whitelist and not rbl.ignore_url_whitelist and (global_opts.url_whitelist or rbl.url_whitelist) and
       (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) and
       not (rbl.from or rbl.received) then
     local def_type = 'set'
-    rbl.whitelist = lua_maps.map_add_from_ucl(global_opts.url_whitelist, def_type,
+    rbl.whitelist = lua_maps.map_add_from_ucl(rbl.url_whitelist or global_opts.url_whitelist, def_type,
         'RBL url whitelist for ' .. rbl.symbol)
     rspamd_logger.infox(rspamd_config, 'added URL whitelist for RBL %s',
         rbl.symbol)
