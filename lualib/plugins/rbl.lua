@@ -203,8 +203,8 @@ local function convert_checks(rule)
   if rule.returncodes and not rule.returncodes_matcher then
     for _, v in pairs(rule.returncodes) do
       for _, e in ipairs(v) do
-        if e:find('%', 1, true) then
-          rspamd_logger.info(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', rule.symbol)
+        if e:find('%', 1, true) or e:find('[%.%d%x:]%[', 1, false) then
+          rspamd_logger.warn(rspamd_config, 'implicitly enabling luapattern returncodes_matcher for rule %s', rule.symbol)
           rule.returncodes_matcher = 'luapattern'
           break
         end
