@@ -1,11 +1,11 @@
-/*-
- * Copyright 2016 Vsevolod Stakhov
+/*
+ * Copyright 2023 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -137,6 +137,7 @@ struct rspamd_proxy_ctx {
 	GArray *cmp_refs;
 	/* Maximum count for retries */
 	guint max_retries;
+	gboolean encrypted_only;
 	/* If we have self_scanning backends, we need to work as a normal worker */
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
@@ -784,6 +785,14 @@ init_rspamd_proxy(struct rspamd_config *cfg)
 									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, key),
 									  0,
 									  "Server's keypair");
+	rspamd_rcl_register_worker_option(cfg,
+									  type,
+									  "encrypted_only",
+									  rspamd_rcl_parse_struct_boolean,
+									  ctx,
+									  G_STRUCT_OFFSET(struct rspamd_proxy_ctx, encrypted_only),
+									  0,
+									  "Allow only encrypted connections");
 	rspamd_rcl_register_worker_option(cfg,
 									  type,
 									  "upstream",
@@ -2261,13 +2270,18 @@ proxy_accept_socket(EV_P_ ev_io *w, int revents)
 	}
 
 	if (!ctx->milter) {
+		int http_opts = 0;
+
+		if (ctx->encrypted_only && !rspamd_inet_address_is_local(addr)) {
+			http_opts |= RSPAMD_HTTP_REQUIRE_ENCRYPTION;
+		}
 		session->client_conn = rspamd_http_connection_new_server(
 			ctx->http_ctx,
 			nfd,
 			NULL,
 			proxy_client_error_handler,
 			proxy_client_finish_handler,
-			0);
+			http_opts);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key(session->client_conn, ctx->key);
