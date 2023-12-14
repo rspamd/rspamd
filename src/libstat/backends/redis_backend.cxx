@@ -646,11 +646,12 @@ void rspamd_redis_close(gpointer p)
  * Serialise stat tokens to message pack
  */
 static char *
-rspamd_redis_serialize_tokens(struct rspamd_task *task, GPtrArray *tokens, gsize *ser_len)
+rspamd_redis_serialize_tokens(struct rspamd_task *task, const gchar *prefix, GPtrArray *tokens, gsize *ser_len)
 {
 	/* Each token is int64_t that requires 10 bytes (2 int32_t) + 4 bytes array len + 1 byte array magic */
 	char max_int64_str[] = "18446744073709551615";
-	auto req_len = tokens->len * sizeof(max_int64_str) + 5;
+	auto prefix_len = strlen(prefix);
+	auto req_len = tokens->len * (sizeof(max_int64_str) + prefix_len + 1) + 5;
 	rspamd_token_t *tok;
 
 	auto *buf = (gchar *) rspamd_mempool_alloc(task->task_pool, req_len);
@@ -667,8 +668,8 @@ rspamd_redis_serialize_tokens(struct rspamd_task *task, GPtrArray *tokens, gsize
 	int i;
 	PTR_ARRAY_FOREACH(tokens, i, tok)
 	{
-		char numbuf[sizeof(max_int64_str)];
-		auto r = rspamd_snprintf(numbuf, sizeof(numbuf), "%uL", tok->data);
+		char *numbuf = (char *) g_alloca(sizeof(max_int64_str) + prefix_len + 1);
+		auto r = rspamd_snprintf(numbuf, sizeof(numbuf), "%s_%uL", tok->data);
 		*p++ = (gchar) ((r & 0xff) | 0xa0);
 
 		memcpy(p, &numbuf, r);

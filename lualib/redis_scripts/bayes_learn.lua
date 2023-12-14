@@ -12,7 +12,6 @@ local symbol = KEYS[3]
 local is_unlearn = KEYS[4] == 'true' and true or false
 local input_tokens = cmsgpack.unpack(KEYS[5])
 
-local prefix_underscore = prefix .. '_'
 local hash_key = is_spam and 'S' or 'H'
 local learned_key = is_spam and 'learns_spam' or 'learns_ham'
 
@@ -21,5 +20,5 @@ redis.call('HSET', prefix, 'version', '2') -- new schema
 redis.call('HINCRBY', prefix, learned_key, is_unlearn and -1 or 1) -- increase or decrease learned count
 
 for _, token in ipairs(input_tokens) do
-  redis.call('HINCRBY', prefix_underscore .. token, hash_key, 1)
+  redis.call('HINCRBY', token, hash_key, 1)
 end
