@@ -668,8 +668,9 @@ rspamd_redis_serialize_tokens(struct rspamd_task *task, const gchar *prefix, GPt
 	int i;
 	PTR_ARRAY_FOREACH(tokens, i, tok)
 	{
-		char *numbuf = (char *) g_alloca(sizeof(max_int64_str) + prefix_len + 1);
-		auto r = rspamd_snprintf(numbuf, sizeof(numbuf), "%s_%uL", tok->data);
+		auto numbuf_len = sizeof(max_int64_str) + prefix_len + 1;
+		auto *numbuf = (char *) g_alloca(numbuf_len);
+		auto r = rspamd_snprintf(numbuf, numbuf_len, "%s_%uL", tok->data);
 		*p++ = (gchar) ((r & 0xff) | 0xa0);
 
 		memcpy(p, &numbuf, r);
