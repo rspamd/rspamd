@@ -789,7 +789,7 @@ rspamd_redis_process_tokens(struct rspamd_task *task,
 	}
 
 	gsize tokens_len;
-	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, tokens, &tokens_len);
+	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
 	rt->id = id;
 
 	lua_pushcfunction(L, &rspamd_lua_traceback);
@@ -876,7 +876,7 @@ rspamd_redis_learn_tokens(struct rspamd_task *task,
 	}
 
 	gsize tokens_len;
-	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, tokens, &tokens_len);
+	gchar *tokens_buf = rspamd_redis_serialize_tokens(task, rt->redis_object_expanded, tokens, &tokens_len);
 
 	rt->id = id;
 
