@@ -673,7 +673,7 @@ rspamd_redis_serialize_tokens(struct rspamd_task *task, const gchar *prefix, GPt
 		auto r = rspamd_snprintf(numbuf, numbuf_len, "%s_%uL", prefix, tok->data);
 		*p++ = (gchar) ((r & 0xff) | 0xa0);
 
-		memcpy(p, &numbuf, r);
+		memcpy(p, numbuf, r);
 		p += r;
 	}
 
