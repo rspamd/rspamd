@@ -30,6 +30,8 @@ define(["jquery", "app/rspamd", "footable"],
         const ui = {};
 
         function saveSymbols(action, id, server) {
+            $("#save-alert button").attr("disabled", true);
+
             const inputs = $("#" + id + ' :input[data-role="numerictextbox"]');
             const url = action;
             const values = [];
@@ -42,8 +44,10 @@ define(["jquery", "app/rspamd", "footable"],
 
             rspamd.query(url, {
                 success: function () {
+                    $("#save-alert").addClass("d-none");
                     rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
+                complete: () => $("#save-alert button").removeAttr("disabled", true),
                 errorMessage: "Save symbols error",
                 method: "POST",
                 params: {
@@ -59,7 +63,6 @@ define(["jquery", "app/rspamd", "footable"],
             const lookup = {};
             const freqs = [];
             const distinct_groups = [];
-            const selected_server = rspamd.getSelector("selSrv");
 
             data.forEach((group) => {
                 group.rules.forEach((item) => {
@@ -91,11 +94,6 @@ define(["jquery", "app/rspamd", "footable"],
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
                     }
-                    item.save =
-                        '<button data-save="' + selected_server + '" title="Save changes to the selected server" ' +
-                        'type="button" class="btn btn-primary btn-sm mb-disabled">Save</button>&nbsp;' +
-                        '<button data-save="All SERVERS" title="Save changes to all servers" ' +
-                        'type="button" class="btn btn-primary btn-sm mb-disabled">Save in cluster</button>';
                     items.push(item);
                 });
             });
@@ -126,6 +124,7 @@ define(["jquery", "app/rspamd", "footable"],
         }
         // @get symbols into modal form
         ui.getSymbols = function (checked_server) {
+            $("#save-alert").addClass("d-none");
             rspamd.query("symbols", {
                 success: function (json) {
                     const [{data}] = json;
@@ -196,7 +195,6 @@ define(["jquery", "app/rspamd", "footable"],
                                 style: {"font-size": "11px"},
                                 sortValue: function (value) { return Number(value).toFixed(2); }},
                             {name: "time", title: "Avg. time", breakpoints: "xs sm", style: {"font-size": "11px"}},
-                            {name: "save", title: "Save", style: {"font-size": "11px"}},
                         ],
                         rows: items[0],
                         paging: {
@@ -227,12 +225,6 @@ define(["jquery", "app/rspamd", "footable"],
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
             $("#symbolsTable")
-                .off("click", ":button")
-                .on("click", ":button", function () {
-                    const value = $(this).data("save");
-                    if (!value) return;
-                    saveSymbols("./savesymbols", "symbolsTable", value);
-                })
                 .on("input", ".scorebar", ({target}) => {
                     const t = $(target);
                     t.removeClass("scorebar-ham scorebar-spam");
@@ -241,12 +233,17 @@ define(["jquery", "app/rspamd", "footable"],
                     } else if (target.value > 0) {
                         t.addClass("scorebar-spam");
                     }
+                    $("#save-alert").removeClass("d-none");
                 });
+            $("#save-alert button")
+                .off("click")
+                .on("click", ({target}) => saveSymbols("./savesymbols", "symbolsTable", $(target).data("save")));
         };
 
 
         $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
+            $("#save-alert").addClass("d-none");
             const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {
                 success: function (data) {
