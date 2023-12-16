@@ -28,23 +28,22 @@ define(["jquery", "app/rspamd", "footable"],
     ($, rspamd) => {
         "use strict";
         const ui = {};
+        let altered = {};
 
-        function saveSymbols(action, id, server) {
+        function clear_altered() {
+            $("#save-alert").addClass("d-none");
+            altered = {};
+        }
+
+        function saveSymbols(server) {
             $("#save-alert button").attr("disabled", true);
 
-            const inputs = $("#" + id + ' :input[data-role="numerictextbox"]');
-            const url = action;
             const values = [];
-            $(inputs).each(function () {
-                values.push({
-                    name: $(this).attr("id").substring(5),
-                    value: parseFloat($(this).val())
-                });
-            });
+            Object.entries(altered).forEach(([key, value]) => values.push({name: key, value: value}));
 
-            rspamd.query(url, {
+            rspamd.query("./savesymbols", {
                 success: function () {
-                    $("#save-alert").addClass("d-none");
+                    clear_altered();
                     rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
                 complete: () => $("#save-alert button").removeAttr("disabled", true),
@@ -79,7 +78,7 @@ define(["jquery", "app/rspamd", "footable"],
                         label_class = "scorebar-spam";
                     }
                     item.weight = '<input class="form-control input-sm mb-disabled scorebar ' + label_class +
-                        '" data-role="numerictextbox" autocomplete="off" type="number" step="0.01" tabindex="1" ' +
+                        '" autocomplete="off" type="number" step="0.01" tabindex="1" ' +
                         'value="' + formatter.format(item.weight) + '" id="_sym_' + item.symbol + '"></input>';
                     if (!item.time) {
                         item.time = 0;
@@ -124,7 +123,7 @@ define(["jquery", "app/rspamd", "footable"],
         }
         // @get symbols into modal form
         ui.getSymbols = function (checked_server) {
-            $("#save-alert").addClass("d-none");
+            clear_altered();
             rspamd.query("symbols", {
                 success: function (json) {
                     const [{data}] = json;
@@ -224,26 +223,12 @@ define(["jquery", "app/rspamd", "footable"],
                 },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
-            $("#symbolsTable")
-                .on("input", ".scorebar", ({target}) => {
-                    const t = $(target);
-                    t.removeClass("scorebar-ham scorebar-spam");
-                    if (target.value < 0) {
-                        t.addClass("scorebar-ham");
-                    } else if (target.value > 0) {
-                        t.addClass("scorebar-spam");
-                    }
-                    $("#save-alert").removeClass("d-none");
-                });
-            $("#save-alert button")
-                .off("click")
-                .on("click", ({target}) => saveSymbols("./savesymbols", "symbolsTable", $(target).data("save")));
         };
 
 
         $("#updateSymbols").on("click", (e) => {
             e.preventDefault();
-            $("#save-alert").addClass("d-none");
+            clear_altered();
             const checked_server = rspamd.getSelector("selSrv");
             rspamd.query("symbols", {
                 success: function (data) {
@@ -253,6 +238,24 @@ define(["jquery", "app/rspamd", "footable"],
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
         });
+
+        $("#symbolsTable")
+            .on("input", ".scorebar", ({target}) => {
+                const t = $(target);
+                t.removeClass("scorebar-ham scorebar-spam");
+                if (target.value < 0) {
+                    t.addClass("scorebar-ham");
+                } else if (target.value > 0) {
+                    t.addClass("scorebar-spam");
+                }
+            })
+            .on("change", ".scorebar", ({target}) => {
+                altered[$(target).attr("id").substring(5)] = parseFloat(target.value);
+                $("#save-alert").removeClass("d-none");
+            });
+
+        $("#save-alert button")
+            .on("click", ({target}) => saveSymbols($(target).data("save")));
 
         return ui;
     });
