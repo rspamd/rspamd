@@ -172,9 +172,10 @@ LUA_FUNCTION_DEF(html_tag, get_content_length);
 LUA_FUNCTION_DEF(html_tag, get_style);
 
 /***
- * @method html_tag:get_style()
- * Returns style calculated for the element
- * @return {table} table associated with the style
+ * @method html_tag:get_attribute(name)
+ * Returns value of attribute for the element
+ * Refer to `html_components_map` in `src/libserver/html/html.cxx` for recognised names
+ * @return {string|nil} value of the attribute
  */
 LUA_FUNCTION_DEF(html_tag, get_attribute);
 
