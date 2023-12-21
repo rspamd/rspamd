@@ -512,7 +512,7 @@ local function ratelimit_cb(task)
               bucket.burst, bucket.rate,
               data[2], data[3], data[4], lim_key)
 
-          if not settings.symbol and not bucket.skip_soft_reject then
+          if not (bucket.symbol or settings.symbol) and not bucket.skip_soft_reject then
             if not bucket.message then
               task:set_pre_result('soft reject',
                   message_func(task, lim_name, prefix, bucket, lim_key), N)
