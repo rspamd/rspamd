@@ -420,6 +420,7 @@ end
 local function ratelimit_cb(task)
   if not settings.allow_local and
       rspamd_lua_utils.is_rspamc_or_controller(task) then
+    lua_util.debugm(N, task, 'skip ratelimit for local request')
     return
   end
 
