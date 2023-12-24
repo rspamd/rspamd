@@ -93,6 +93,12 @@ define(["jquery", "app/rspamd"],
                     "minwidth": 82
                 }
             }, {
+                name: "passthrough_module",
+                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
+                style: {
+                    "font-size": "11px"
+                }
+            }, {
                 name: "score",
                 title: "Score",
                 style: {
