@@ -78,33 +78,23 @@ define(["jquery", "app/rspamd"],
                 name: "id",
                 title: "ID",
                 style: {
-                    "font-size": "11px",
-                    "minWidth": 130,
-                    "overflow": "hidden",
-                    "textOverflow": "ellipsis",
-                    "wordBreak": "break-all",
-                    "whiteSpace": "normal"
+                    minWidth: 130,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    wordBreak: "break-all",
+                    whiteSpace: "normal"
                 }
             }, {
                 name: "action",
                 title: "Action",
-                style: {
-                    "font-size": "11px",
-                    "minwidth": 82
-                }
+                style: {minwidth: 82}
             }, {
                 name: "passthrough_module",
-                title: '<div title="The module that has set the pre-result">Pass-through module</div>',
-                style: {
-                    "font-size": "11px"
-                }
+                title: '<div title="The module that has set the pre-result">Pass-through module</div>'
             }, {
                 name: "score",
                 title: "Score",
-                style: {
-                    "font-size": "11px",
-                    "maxWidth": 110
-                },
+                style: {maxWidth: 110},
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "symbols",
@@ -121,28 +111,18 @@ define(["jquery", "app/rspamd"],
                             "</div>" +
                         "</div>",
                 breakpoints: "all",
-                style: {
-                    "font-size": "11px",
-                    "width": 550,
-                    "maxWidth": 550
-                }
+                style: {width: 550, maxWidth: 550}
             }, {
                 name: "time_real",
                 title: "Scan time",
                 breakpoints: "xs sm md",
-                style: {
-                    "font-size": "11px",
-                    "maxWidth": 72
-                },
+                style: {maxWidth: 72},
                 sortValue: function (val) { return Number(val); }
             }, {
                 sorted: true,
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                style: {
-                    "font-size": "11px"
-                },
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }];
         }

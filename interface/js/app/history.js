@@ -63,19 +63,17 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 name: "id",
                 title: "ID",
                 style: {
-                    "font-size": "11px",
-                    "minWidth": 130,
-                    "overflow": "hidden",
-                    "textOverflow": "ellipsis",
-                    "wordBreak": "break-all",
-                    "whiteSpace": "normal"
+                    minWidth: 130,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    wordBreak: "break-all",
+                    whiteSpace: "normal"
                 }
             }, {
                 name: "ip",
                 title: "IP address",
                 breakpoints: "xs sm md",
                 style: {
-                    "font-size": "11px",
                     "minWidth": "calc(7.6em + 8px)",
                     "word-break": "break-all"
                 }
@@ -84,7 +82,6 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 title: "[Envelope From] From",
                 breakpoints: "xs sm md",
                 style: {
-                    "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 200,
                     "word-wrap": "break-word"
@@ -96,7 +93,6 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 filterable: false,
                 classes: "d-none d-xl-table-cell",
                 style: {
-                    "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 200,
                     "word-wrap": "break-word"
@@ -105,31 +101,23 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 name: "rcpt_mime",
                 title: "[Envelope To] To/Cc/Bcc",
                 breakpoints: "all",
-                style: {
-                    "font-size": "11px",
-                    "word-wrap": "break-word"
-                }
+                style: {"word-wrap": "break-word"}
             }, {
                 name: "subject",
                 title: "Subject",
                 breakpoints: "xs sm md",
                 style: {
-                    "font-size": "11px",
                     "word-break": "break-all",
                     "minWidth": 150
                 }
             }, {
                 name: "action",
                 title: "Action",
-                style: {
-                    "font-size": "11px",
-                    "minwidth": 82
-                }
+                style: {minwidth: 82}
             }, {
                 name: "score",
                 title: "Score",
                 style: {
-                    "font-size": "11px",
                     "maxWidth": 110,
                     "text-align": "right",
                     "white-space": "nowrap"
@@ -150,28 +138,18 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                             "</div>" +
                         "</div>",
                 breakpoints: "all",
-                style: {
-                    "font-size": "11px",
-                    "width": 550,
-                    "maxWidth": 550
-                }
+                style: {width: 550, maxWidth: 550}
             }, {
                 name: "size",
                 title: "Msg size",
                 breakpoints: "xs sm md",
-                style: {
-                    "font-size": "11px",
-                    "minwidth": 50,
-                },
+                style: {minwidth: 50},
                 formatter: d3.format(".3~s")
             }, {
                 name: "time_real",
                 title: "Scan time",
                 breakpoints: "xs sm md",
-                style: {
-                    "font-size": "11px",
-                    "maxWidth": 72
-                },
+                style: {maxWidth: 72},
                 sortValue: function (val) { return Number(val); }
             }, {
                 classes: "history-col-time",
@@ -179,16 +157,12 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                style: {
-                    "font-size": "11px"
-                },
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "user",
                 title: "Authenticated user",
                 breakpoints: "xs sm md",
                 style: {
-                    "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 130,
                     "word-wrap": "break-word"
@@ -201,85 +175,55 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                 name: "id",
                 title: "ID",
                 style: {
-                    "font-size": "11px",
-                    "width": 300,
-                    "maxWidth": 300,
-                    "overflow": "hidden",
-                    "textOverflow": "ellipsis",
-                    "wordBreak": "keep-all",
-                    "whiteSpace": "nowrap"
+                    width: 300,
+                    maxWidth: 300,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    wordBreak: "keep-all",
+                    whiteSpace: "nowrap"
                 }
             }, {
                 name: "ip",
                 title: "IP address",
                 breakpoints: "xs sm",
-                style: {
-                    "font-size": "11px",
-                    "width": 150,
-                    "maxWidth": 150
-                }
+                style: {width: 150, maxWidth: 150}
             }, {
                 name: "action",
                 title: "Action",
-                style: {
-                    "font-size": "11px",
-                    "width": 110,
-                    "maxWidth": 110
-                }
+                style: {width: 110, maxWidth: 110}
             }, {
                 name: "score",
                 title: "Score",
-                style: {
-                    "font-size": "11px",
-                    "maxWidth": 110
-                },
+                style: {maxWidth: 110},
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "symbols",
                 title: "Symbols",
                 breakpoints: "all",
-                style: {
-                    "font-size": "11px",
-                    "width": 550,
-                    "maxWidth": 550
-                }
+                style: {width: 550, maxWidth: 550}
             }, {
                 name: "size",
                 title: "Message size",
                 breakpoints: "xs sm",
-                style: {
-                    "font-size": "11px",
-                    "width": 120,
-                    "maxWidth": 120
-                },
+                style: {width: 120, maxWidth: 120},
                 formatter: d3.format(".3~s")
             }, {
                 name: "scan_time",
                 title: "Scan time",
                 breakpoints: "xs sm",
-                style: {
-                    "font-size": "11px",
-                    "maxWidth": 80
-                },
+                style: {maxWidth: 80},
                 sortValue: function (val) { return Number(val); }
             }, {
                 sorted: true,
                 direction: "DESC",
                 name: "time",
                 title: "Time",
-                style: {
-                    "font-size": "11px"
-                },
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "user",
                 title: "Authenticated user",
                 breakpoints: "xs sm",
-                style: {
-                    "font-size": "11px",
-                    "width": 200,
-                    "maxWidth": 200
-                }
+                style: {width: 200, maxWidth: 200}
             }];
         }
 
@@ -378,19 +322,19 @@ define(["jquery", "app/rspamd", "d3", "footable"],
                         direction: "DESC",
                         name: "ts",
                         title: "Time",
-                        style: {"font-size": "11px", "width": 300, "maxWidth": 300},
+                        style: {width: 300, maxWidth: 300},
                         sortValue: function (val) { return Number(val.options.sortValue); }},
                     {name: "type",
                         title: "Worker type",
                         breakpoints: "xs sm",
-                        style: {"font-size": "11px", "width": 150, "maxWidth": 150}},
+                        style: {width: 150, maxWidth: 150}},
                     {name: "pid",
                         title: "PID",
                         breakpoints: "xs sm",
-                        style: {"font-size": "11px", "width": 110, "maxWidth": 110}},
-                    {name: "module", title: "Module", style: {"font-size": "11px"}},
-                    {name: "id", title: "Internal ID", style: {"font-size": "11px"}},
-                    {name: "message", title: "Message", breakpoints: "xs sm", style: {"font-size": "11px"}},
+                        style: {width: 110, maxWidth: 110}},
+                    {name: "module", title: "Module"},
+                    {name: "id", title: "Internal ID"},
+                    {name: "message", title: "Message", breakpoints: "xs sm"},
                 ],
                 rows: rows,
                 paging: {
