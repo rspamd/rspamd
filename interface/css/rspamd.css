@@ -304,6 +304,10 @@ table#symbolsTable input[type="number"] {
 .status-table thead th:last-child {
     border-right: none;
 }
+.footable-header,
+.footable tr:not(.footable-detail-row) > td {
+    font-size: 11px;
+}
 .status-table tr:last-child td:first-child {
     border-radius: 0 0 0 calc(.25rem - 1px);
 }

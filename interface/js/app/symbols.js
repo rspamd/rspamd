@@ -184,16 +184,15 @@ define(["jquery", "app/rspamd", "footable"],
 
                     rspamd.tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
-                            {sorted: true, direction: "ASC", name: "group", title: "Group", style: {"font-size": "11px"}},
-                            {name: "symbol", title: "Symbol", style: {"font-size": "11px"}},
-                            {name: "description", title: "Description", breakpoints: "xs sm", style: {"font-size": "11px"}},
-                            {name: "weight", title: "Score", style: {"font-size": "11px"}},
+                            {sorted: true, direction: "ASC", name: "group", title: "Group"},
+                            {name: "symbol", title: "Symbol"},
+                            {name: "description", title: "Description", breakpoints: "xs sm"},
+                            {name: "weight", title: "Score"},
                             {name: "frequency",
                                 title: "Frequency",
                                 breakpoints: "xs sm",
-                                style: {"font-size": "11px"},
                                 sortValue: function (value) { return Number(value).toFixed(2); }},
-                            {name: "time", title: "Avg. time", breakpoints: "xs sm", style: {"font-size": "11px"}},
+                            {name: "time", title: "Avg. time", breakpoints: "xs sm"},
                         ],
                         rows: items[0],
                         paging: {
