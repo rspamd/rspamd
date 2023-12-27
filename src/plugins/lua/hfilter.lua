@@ -137,7 +137,7 @@ local checks_hellohost_map
 local checks_hello = [[
 /^[^\.]+$/i 5 # for helo=COMPUTER, ANNA, etc... Without dot in helo
 /^(dsl)?(device|speedtouch)\.lan$/i 5
-/\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|user|veloxzon)$ 5
+/\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|user|veloxzon)$/i 5
 ]]
 local checks_hello_map
 
